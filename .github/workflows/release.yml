@@ -1,0 +1,344 @@
+name: GitHub Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build (for example, v3.0.0)
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24'
+  npm_config_audit: 'false'
+  npm_config_fund: 'false'
+
+jobs:
+  prepare:
+    name: Validate release
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Validate tag and package version
+        id: release
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          case "$RELEASE_TAG" in
+            v[0-9]*) ;;
+            *) echo "Release tag must start with v followed by a number." >&2; exit 1 ;;
+          esac
+
+          version="$(node -p "require('./package.json').version")"
+          if [[ "$RELEASE_TAG" != "v$version" ]]; then
+            echo "Tag $RELEASE_TAG does not match package.json version $version." >&2
+            exit 1
+          fi
+
+          git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}"
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  build-linux:
+    name: Linux packages
+    needs: prepare
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Linux packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes rpm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Package AppImage, DEB, and RPM
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/electron-builder \
+            --linux AppImage deb rpm \
+            --config electron-builder.config.cjs \
+            -c.directories.output=release-linux \
+            --publish never
+
+          mkdir -p release-assets
+          find release-linux -maxdepth 1 -type f \
+            \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \) \
+            -exec cp {} release-assets/ \;
+          test "$(find release-assets -maxdepth 1 -type f | wc -l)" -eq 3
+          find release-assets -maxdepth 1 -type f -print
+
+      - name: Save Linux packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-linux
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 1
+
+  build-arch:
+    name: Arch Linux package
+    needs: prepare
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    steps:
+      - name: Install Arch build tools
+        run: pacman -Syu --noconfirm git electron43 libarchive nodejs npm python zstd
+
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Package for Arch Linux
+        run: |
+          set -euo pipefail
+          packaging/linux/arch/build-local.sh
+          mkdir -p release-assets
+          package="$(find packaging/linux/arch -maxdepth 1 -type f -name 'orchard-*.pkg.tar.*' -print -quit)"
+          test -n "$package"
+          cp "$package" release-assets/
+          find release-assets -maxdepth 1 -type f -print
+
+      - name: Save Arch Linux package
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-arch
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 1
+
+  build-windows:
+    name: Windows installer
+    needs: prepare
+    runs-on: windows-2025
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Package NSIS installer
+        shell: pwsh
+        run: |
+          & ./node_modules/.bin/electron-builder.cmd `
+            --win nsis `
+            --config electron-builder.config.cjs `
+            -c.directories.output=release-windows `
+            --publish never
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          $installers = @(Get-ChildItem release-windows -File -Filter '*.exe')
+          if ($installers.Count -eq 0) { throw 'The Windows installer was not created.' }
+          $installers | Copy-Item -Destination release-assets
+          Get-ChildItem release-assets -File
+
+      - name: Save Windows installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-windows
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 1
+
+  build-macos:
+    name: macOS ${{ matrix.arch }} ZIP
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            file_arch: arm64
+            runner: macos-15
+          - arch: x64
+            file_arch: x86_64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application and native audio analyzer
+        run: npm run build
+
+      - name: Verify native architecture
+        run: |
+          file native/build/Release/orchard_audio_analysis.node
+          file native/build/Release/orchard_audio_analysis.node | grep -q '${{ matrix.file_arch }}'
+
+      - name: Package unsigned macOS ZIP
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/electron-builder \
+            --mac zip \
+            --${{ matrix.arch }} \
+            --config electron-builder.config.cjs \
+            -c.directories.output=release-macos \
+            --publish never
+
+          mkdir -p release-assets
+          find release-macos -maxdepth 1 -type f -name '*.zip' \
+            -exec cp {} release-assets/ \;
+          test "$(find release-assets -maxdepth 1 -type f -name '*.zip' | wc -l)" -eq 1
+          find release-assets -maxdepth 1 -type f -print
+
+      - name: Save macOS ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-macos-${{ matrix.arch }}
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish GitHub Release
+    needs:
+      - prepare
+      - build-linux
+      - build-arch
+      - build-windows
+      - build-macos
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Check out release notes
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Download release packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          test -n "$(find release-assets -maxdepth 1 -type f -print -quit)"
+          (
+            cd release-assets
+            find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 \
+              | sort -z \
+              | xargs -0 sha256sum > SHA256SUMS.txt
+          )
+          cat release-assets/SHA256SUMS.txt
+
+      - name: Create release and attach packages
+        run: |
+          set -euo pipefail
+          mapfile -d '' assets < <(find release-assets -maxdepth 1 -type f -print0 | sort -z)
+          test "${#assets[@]}" -gt 0
+
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Orchard $RELEASE_VERSION" \
+              --notes-file build/release-notes.md
+          else
+            release_flags=(--latest)
+            if [[ "$RELEASE_TAG" == *-* ]]; then
+              release_flags=(--prerelease --latest=false)
+            fi
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "Orchard $RELEASE_VERSION" \
+              --notes-file build/release-notes.md \
+              "${release_flags[@]}"
+          fi

@@ -75,7 +75,7 @@ Create distributable artifacts for the current platform:
 npm run make
 ```
 
-Release automation publishes Linux AppImage, Debian, RPM, and Arch packages; a Windows NSIS installer; and an unsigned universal macOS zip. It also publishes a new Android APK for the Orchard Connect companion when that app changes. The desktop updater reads from `ORCHARD_UPDATE_URL` when set, otherwise it uses the default downloads host in `electron-builder.config.cjs`.
+GitHub release automation publishes Linux AppImage, Debian, RPM, and Arch packages; a Windows NSIS installer; and unsigned macOS zips for Apple Silicon and Intel. Tagged builds run in GitHub Actions and attach the packages directly to the matching GitHub Release. The desktop updater reads from `ORCHARD_UPDATE_URL` when set, otherwise it uses the default downloads host in `electron-builder.config.cjs`.
 
 Build the universal macOS zip from Linux with:
 
@@ -83,7 +83,7 @@ Build the universal macOS zip from Linux with:
 npm run make:mac
 ```
 
-The build cross-compiles Orchard's native audio analyzer with a pinned [OSXCross](https://github.com/tpoechtrager/osxcross) toolchain and a checksummed macOS 15.5 SDK from [alexey-lysiuk/macos-sdk](https://github.com/alexey-lysiuk/macos-sdk), then merges Apple Silicon and Intel Electron bundles. Review Apple's Xcode license before enabling the SDK-based cross-build in your environment. Tagged CI releases publish the resulting unsigned universal zip. Because it is not signed or notarized, macOS will block the first launch; after trying to open Orchard, use **System Settings → Privacy & Security → Open Anyway** if you trust the downloaded build.
+The local command cross-compiles Orchard's native audio analyzer with a pinned [OSXCross](https://github.com/tpoechtrager/osxcross) toolchain and a checksummed macOS 15.5 SDK from [alexey-lysiuk/macos-sdk](https://github.com/alexey-lysiuk/macos-sdk), then merges Apple Silicon and Intel Electron bundles. Review Apple's Xcode license before enabling the SDK-based cross-build in your environment. Tagged GitHub releases instead compile each architecture on a native macOS runner. Because the GitHub artifacts are not signed or notarized, macOS will block the first launch; after trying to open Orchard, use **System Settings → Privacy & Security → Open Anyway** if you trust the downloaded build.
 
 To create an application payload for a distro-provided Electron 43 runtime:
 
