@@ -198,7 +198,7 @@ jobs:
           & ./node_modules/.bin/electron-builder.cmd `
             --win nsis `
             --config electron-builder.config.cjs `
-            -c.directories.output=release-windows `
+            --config.directories.output=release-windows `
             --publish never
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
