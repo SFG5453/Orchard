@@ -1,6 +1,7 @@
 export const ORCHARD_RELEASES = [
   {
     version: '3.0.1',
+    codename: 'Crystal Current',
     date: 'July 19, 2026',
     sections: [
       {
