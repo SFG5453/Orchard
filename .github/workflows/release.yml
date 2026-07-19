@@ -67,6 +67,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build native audio analyzer
+        run: npm run build:native
+
       - name: Run tests
         run: npm test
 
