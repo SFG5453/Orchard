@@ -1,0 +1,18 @@
+{
+  "name": "@orchard/song-links-worker",
+  "version": "0.1.0",
+  "description": "Cloudflare Worker and D1-backed music link resolver for Orchard.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run",
+    "d1:create": "wrangler d1 create orchard-song-links",
+    "d1:migrate:local": "wrangler d1 execute orchard-song-links --local --file=./schema.sql",
+    "d1:migrate:remote": "wrangler d1 execute orchard-song-links --remote --file=./schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4.24.3"
+  }
+}

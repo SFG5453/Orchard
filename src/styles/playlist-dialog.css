@@ -1,0 +1,257 @@
+.playlist-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-height: min(680px, calc(100vh - 48px));
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #141214;
+  color: var(--text);
+}
+
+.playlist-dialog__header {
+  display: flex;
+  min-height: 68px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.playlist-dialog__title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.playlist-dialog__track {
+  max-width: 360px;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-dialog__create {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.playlist-dialog__create label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.playlist-dialog__create-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.playlist-dialog__create input {
+  width: 100%;
+  height: 38px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  font: inherit;
+}
+
+.playlist-dialog__create input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(47, 223, 147, 0.14);
+}
+
+.playlist-dialog__create input::placeholder {
+  color: var(--muted);
+}
+
+.playlist-dialog__create button {
+  min-width: 76px;
+  height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--primary);
+  color: #101010;
+  font-weight: 700;
+}
+
+.playlist-dialog__create button:disabled {
+  opacity: 0.38;
+}
+
+.playlist-dialog__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 18px 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(255, 118, 118, 0.24);
+  border-radius: 7px;
+  background: rgba(160, 42, 42, 0.12);
+  color: #ffb2b2;
+  font-size: 12px;
+}
+
+.playlist-dialog__list {
+  max-height: 410px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.playlist-dialog__status {
+  display: flex;
+  min-height: 92px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 20px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.playlist-dialog__playlist {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 44px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.playlist-dialog__playlist:hover,
+.playlist-dialog__playlist:focus-visible {
+  outline: none;
+  background: rgba(255, 255, 255, 0.065);
+}
+
+.playlist-dialog__playlist:disabled {
+  opacity: 0.5;
+}
+
+.playlist-dialog__playlist:disabled .playlist-dialog__copy span,
+.playlist-dialog__playlist:disabled > .q-icon {
+  color: var(--primary);
+}
+
+.playlist-dialog__cover {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.playlist-dialog__cover--empty {
+  background: var(--panel-soft);
+  color: var(--muted);
+}
+
+.playlist-dialog__copy {
+  min-width: 0;
+}
+
+.playlist-dialog__copy strong,
+.playlist-dialog__copy span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-delete-dialog {
+  width: min(420px, calc(100vw - 32px));
+  padding: 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #141214;
+  color: var(--text);
+}
+
+.playlist-delete-dialog__copy strong {
+  font-size: 16px;
+}
+
+.playlist-delete-dialog__copy p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.playlist-delete-dialog .playlist-dialog__error {
+  margin-right: 0;
+  margin-left: 0;
+}
+
+.playlist-delete-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.playlist-delete-dialog__actions button {
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted-strong);
+}
+
+.playlist-delete-dialog__actions button:hover,
+.playlist-delete-dialog__actions button:focus-visible {
+  outline: none;
+  border-color: #76504a;
+  color: var(--text);
+}
+
+.playlist-delete-dialog__actions .playlist-delete-dialog__confirm {
+  border-color: #7a4038;
+  background: #6f302a;
+  color: #fff;
+}
+
+.playlist-delete-dialog__actions button:disabled {
+  opacity: 0.5;
+}
+
+.playlist-dialog__copy strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.playlist-dialog__copy span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 560px) {
+  .playlist-dialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 24px);
+  }
+
+  .playlist-dialog__header,
+  .playlist-dialog__create {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+}

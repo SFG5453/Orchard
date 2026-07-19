@@ -1,0 +1,230 @@
+.replay-view {
+  display: grid;
+  gap: 22px;
+}
+
+.replay-toolbar,
+.replay-summary,
+.replay-lists {
+  display: grid;
+  gap: 14px;
+}
+
+.replay-toolbar {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.replay-periods,
+.replay-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.replay-periods__button,
+.replay-action {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--muted-strong);
+}
+
+.replay-periods__button:hover,
+.replay-periods__button:focus-visible,
+.replay-action:hover,
+.replay-action:focus-visible {
+  outline: none;
+  border-color: rgba(103, 217, 139, 0.34);
+  background: rgba(103, 217, 139, 0.09);
+  color: var(--text);
+}
+
+.replay-periods__button--active {
+  border-color: rgba(103, 217, 139, 0.44);
+  background: rgba(103, 217, 139, 0.13);
+  color: var(--text);
+}
+
+.replay-action:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.replay-action:disabled:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.replay-action--muted {
+  color: var(--muted);
+}
+
+.replay-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(12, 12, 12, 0.74);
+}
+
+.replay-summary div {
+  min-width: 0;
+  padding: 14px 16px;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.replay-summary div:last-child {
+  border-right: 0;
+}
+
+.replay-summary span,
+.replay-count,
+.replay-rank-row em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.replay-summary strong {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 21px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replay-section {
+  min-width: 0;
+}
+
+.replay-row {
+  position: relative;
+  isolation: isolate;
+}
+
+.replay-row::before,
+.replay-rank-row::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0 auto 0 0;
+  width: var(--replay-fill);
+  background: rgba(103, 217, 139, 0.075);
+  content: "";
+}
+
+.replay-row--track {
+  grid-template-columns: 30px minmax(0, 1fr) minmax(90px, 0.62fr) 68px 58px;
+}
+
+.replay-count {
+  text-align: right;
+}
+
+.replay-empty {
+  min-height: 176px;
+}
+
+.replay-lists {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.replay-rank-list {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(12, 12, 12, 0.7);
+}
+
+.replay-rank-row {
+  position: relative;
+  display: grid;
+  min-height: 42px;
+  grid-template-columns: 34px minmax(0, 1fr) 70px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  isolation: isolate;
+}
+
+.replay-rank-row:last-child {
+  border-bottom: 0;
+}
+
+.replay-rank-row > span:first-child {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.replay-rank-row strong {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replay-rank-row em {
+  text-align: right;
+}
+
+.replay-rank-row--album {
+  grid-template-columns: 28px 34px minmax(0, 1fr) 70px;
+}
+
+.replay-rank-cover {
+  width: 34px;
+  height: 34px;
+  overflow: hidden;
+  border-radius: 5px;
+}
+
+.replay-mini-empty {
+  min-height: 104px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 980px) {
+  .replay-toolbar,
+  .replay-lists {
+    grid-template-columns: 1fr;
+  }
+
+  .replay-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .replay-summary div {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+}
+
+@media (max-width: 720px) {
+  .replay-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .replay-row--track {
+    grid-template-columns: 28px minmax(0, 1fr) 58px;
+  }
+
+  .replay-row--track .table-album,
+  .replay-count {
+    display: none;
+  }
+}

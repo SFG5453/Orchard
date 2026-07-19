@@ -1,0 +1,216 @@
+.app-shell--right-panel-hidden .player-bar {
+  right: 12px !important;
+}
+
+.app-shell--right-panel-hidden .page {
+  padding-right: 28px;
+  padding-left: 28px;
+}
+
+.app-shell--narrow-window .window-titlebar {
+  grid-template-columns: 216px minmax(0, 1fr) 132px;
+}
+
+.app-shell--narrow-window .sidebar-inner {
+  padding-right: 10px;
+  padding-left: 10px;
+}
+
+.app-shell--narrow-window .sidebar-search-input {
+  padding-right: 8px;
+  padding-left: 8px;
+}
+
+.app-shell--narrow-window .nav-link {
+  gap: 8px;
+  padding: 0 8px;
+}
+
+.app-shell--narrow-window .library-link {
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
+  padding-right: 6px;
+  padding-left: 6px;
+}
+
+.app-shell--narrow-window .library-link__cover,
+.app-shell--narrow-window .library-link__cover--empty {
+  width: 28px;
+  height: 28px;
+}
+
+.app-shell--narrow-window .page {
+  margin-right: 5px;
+  margin-left: 5px;
+  padding: 20px 24px 52px;
+}
+
+.app-shell--narrow-window .player-bar {
+  left: calc(216px + 10px) !important;
+  right: 10px !important;
+  grid-template-columns: minmax(130px, 1fr) auto minmax(150px, 1.15fr);
+}
+
+.app-shell--narrow-window .player-sleep-timer,
+.app-shell--narrow-window .volume-wrap {
+  display: none;
+}
+
+.app-shell--mini-sidebar .window-titlebar {
+  grid-template-columns: 68px minmax(0, 1fr) 132px;
+}
+
+.sidebar-mini {
+  display: flex;
+  height: 100%;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 58px 8px 10px;
+  background: #050605;
+}
+
+.app-shell--native-titlebar .sidebar-mini {
+  padding-top: 10px;
+}
+
+.sidebar-mini__button {
+  position: relative;
+  display: grid;
+  width: 42px;
+  height: 38px;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #9ea6a0;
+  cursor: pointer;
+}
+
+.sidebar-mini__button:hover,
+.sidebar-mini__button:focus-visible {
+  outline: none;
+  background: rgba(255, 255, 255, 0.05);
+  color: #f1f4f2;
+}
+
+.sidebar-mini__button--active {
+  background: rgba(255, 255, 255, 0.07);
+  color: rgb(var(--player-accent-soft-rgb, 93, 240, 180));
+}
+
+.sidebar-mini__button:disabled {
+  background: transparent;
+  color: #4f5651;
+  cursor: default;
+}
+
+.sidebar-mini__button .q-icon {
+  font-size: 20px;
+}
+
+.sidebar-mini__spacer {
+  flex: 1 1 auto;
+}
+
+.sidebar-mini__count {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: rgb(var(--player-accent-rgb, 47, 223, 147));
+  color: #041006;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 15px;
+}
+
+.app-shell--mini-sidebar .page {
+  margin-top: 54px;
+  padding: 18px 18px 48px;
+}
+
+.app-shell--mini-sidebar .topbar,
+.app-shell--mini-sidebar .topbar--home {
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.app-shell--mini-sidebar .topbar-copy h1 {
+  font-size: 22px;
+}
+
+.app-shell--mini-sidebar .media-rail,
+.app-shell--mini-sidebar .media-rail--more {
+  grid-auto-columns: 134px;
+}
+
+.app-shell--mini-sidebar .playlist-rail {
+  grid-auto-columns: 176px;
+}
+
+.app-shell--mini-sidebar .detail-hero {
+  grid-template-columns: 150px minmax(0, 1fr);
+  min-height: 236px;
+  padding: 22px;
+}
+
+.app-shell--mini-sidebar .detail-hero__copy h2 {
+  font-size: 30px;
+}
+
+.app-shell--mini-sidebar .table-head--with-album,
+.app-shell--mini-sidebar .table-row--with-album {
+  grid-template-columns: 34px minmax(0, 1fr) 48px;
+}
+
+.app-shell--mini-sidebar .table-album {
+  display: none;
+}
+
+.app-shell--mini-sidebar .player-bar {
+  left: calc(68px + 8px) !important;
+  right: 8px !important;
+  bottom: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  gap: 7px 8px;
+  padding: 7px 10px;
+}
+
+.app-shell--mini-sidebar .player-track {
+  min-width: 0;
+}
+
+.app-shell--mini-sidebar .player-controls {
+  justify-content: flex-end;
+}
+
+.app-shell--mini-sidebar .player-control--secondary {
+  display: none;
+}
+
+.app-shell--mini-sidebar .progress-wrap {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 820px) {
+  .app-shell--mini-sidebar .player-track {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .app-shell--mini-sidebar .mini-cover,
+  .app-shell--mini-sidebar .mini-cover--empty,
+  .app-shell--mini-sidebar .mini-cover-button {
+    width: 34px;
+    height: 34px;
+  }
+
+  .app-shell--mini-sidebar .topbar-controls {
+    display: none;
+  }
+}

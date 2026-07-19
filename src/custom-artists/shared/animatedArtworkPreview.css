@@ -1,0 +1,21 @@
+.custom-artist-animated-artwork {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 140ms ease;
+}
+
+.media-card__art.custom-artist-animated-artwork-host,
+.media-card__art--empty.custom-artist-animated-artwork-host {
+    position: relative;
+    overflow: hidden;
+}
+
+.media-card--animated-artwork .custom-artist-animated-artwork.is-visible {
+    opacity: 1;
+}

@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# PROVIDE: orchard_artwork
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="orchard_artwork"
+rcvar="orchard_artwork_enable"
+command="/usr/sbin/daemon"
+procname="/usr/local/bin/node"
+pidfile="/var/run/${name}.pid"
+command_args="-f -p ${pidfile} -T orchard-artwork /usr/local/bin/node /usr/local/libexec/orchard-artwork/server.mjs"
+
+load_rc_config "$name"
+: ${orchard_artwork_enable:="NO"}
+
+run_rc_command "$1"

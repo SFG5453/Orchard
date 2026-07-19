@@ -1,0 +1,51 @@
+.description-dialog-card {
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 56px));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.description-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.description-dialog__header h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.description-dialog__close {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-alt);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.description-dialog__close:hover,
+.description-dialog__close:focus-visible {
+  border-color: rgba(211, 136, 114, 0.65);
+}
+
+.description-dialog__body {
+  max-height: min(560px, calc(100vh - 156px));
+  overflow: auto;
+  padding: 18px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}

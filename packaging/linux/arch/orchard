@@ -1,0 +1,4 @@
+#!/bin/sh
+
+export ORCHARD_DISTRIBUTION_PACKAGE="Arch Linux"
+exec /usr/bin/electron43 /usr/lib/orchard/app.asar "$@"

@@ -1,0 +1,95 @@
+.explicit-badge {
+  display: inline-grid;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  place-items: center;
+  border: 1px solid #677068;
+  border-radius: 2px;
+  color: #aeb6b0;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 750;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.explicit-title,
+.detail-title-line {
+  display: flex !important;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.explicit-title__text,
+.explicit-title > :first-child,
+.detail-title-line h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.explicit-title__text {
+  white-space: nowrap;
+}
+
+.detail-page--collection .detail-title-line {
+  order: 2;
+}
+
+.detail-title-line h2 {
+  margin: 0;
+  order: 0 !important;
+}
+
+.detail-title-line .explicit-badge {
+  width: 15px;
+  height: 15px;
+  flex-basis: 15px;
+  font-size: 9px;
+}
+
+.table-copy .explicit-title,
+.queue-preview__copy .explicit-title,
+.song-action-menu__copy .explicit-title,
+.video-player__copy .explicit-title {
+  width: 100%;
+}
+
+.table-copy .table-link--title,
+.table-copy .explicit-title > strong,
+.queue-preview__copy .explicit-title__text,
+.song-action-menu__copy .explicit-title__text,
+.video-player__copy .explicit-title__text {
+  flex: 1 1 auto;
+}
+
+.player-track__title-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.player-track__title-line .mini-title {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.stream-bitrate {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-width: 32px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border: 1px solid rgba(var(--player-accent-rgb), 0.45);
+  border-radius: 5px;
+  background: rgba(var(--player-accent-rgb), 0.12);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1;
+}

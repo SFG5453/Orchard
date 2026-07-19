@@ -1,0 +1,203 @@
+.song-share-dialog-layer {
+  position: fixed;
+  z-index: 13000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.song-share-dialog {
+  position: relative;
+  width: min(430px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #121012;
+  color: var(--text);
+}
+
+.song-share-dialog__close {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.song-share-dialog__close:hover,
+.song-share-dialog__close:focus-visible {
+  outline: none;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+
+.song-share-dialog__track {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 18px 52px 16px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.song-share-dialog__cover {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 7px;
+}
+
+.song-share-dialog__cover--empty {
+  background: var(--panel-soft);
+  color: var(--muted);
+}
+
+.song-share-dialog__copy {
+  min-width: 0;
+}
+
+.song-share-dialog__copy strong,
+.song-share-dialog__copy span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-share-dialog__copy strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.song-share-dialog__copy span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.song-share-dialog__actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.song-share-dialog__actions button,
+.song-share-dialog__service {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-alt);
+  color: var(--muted-strong);
+}
+
+.song-share-dialog__actions button {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.song-share-dialog__actions button:hover,
+.song-share-dialog__actions button:focus-visible,
+.song-share-dialog__service:hover,
+.song-share-dialog__service:focus-visible {
+  outline: none;
+  border-color: var(--line-strong);
+  background: var(--panel-soft);
+  color: var(--text);
+}
+
+.song-share-dialog__actions button:disabled {
+  opacity: 0.42;
+}
+
+.song-share-dialog__status,
+.song-share-dialog__empty {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  padding: 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.song-share-dialog__status--error {
+  color: var(--error);
+}
+
+.song-share-dialog__services {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.song-share-dialog__service {
+  display: grid;
+  width: 100%;
+  min-height: 48px;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.song-share-dialog__service-mark {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #080808;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.song-share-dialog__service-mark img {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.song-share-dialog__service-copy {
+  min-width: 0;
+}
+
+.song-share-dialog__service-copy strong,
+.song-share-dialog__service-copy span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-share-dialog__service-copy strong {
+  font-size: 13px;
+}
+
+.song-share-dialog__service-copy span,
+.song-share-dialog__service-action {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 520px) {
+  .song-share-dialog__actions {
+    grid-template-columns: 1fr;
+  }
+}

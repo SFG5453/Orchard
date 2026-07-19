@@ -1,0 +1,179 @@
+/* Home and collection pages share a compact record-store rhythm. */
+.home-view {
+  display: grid;
+  min-width: 0;
+  gap: 42px;
+}
+
+.home-view .shelf-section {
+  min-width: 0;
+  margin: 0;
+}
+
+.home-view .section-header,
+.detail-page--collection .section-header {
+  min-height: 30px;
+  margin-bottom: 14px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.home-view .section-header h2,
+.detail-page--collection .section-header h2 {
+  color: #edf1ee;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.home-view .section-header__actions,
+.detail-page--collection .section-header__actions {
+  color: #6f7871;
+  font-size: 10px;
+}
+
+.home-view .shelf-nav,
+.detail-page--collection .shelf-nav {
+  display: flex;
+  gap: 3px;
+}
+
+.home-view .shelf-nav button,
+.detail-page--collection .shelf-nav button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  background: #0b0e0c;
+  color: #8f9891;
+}
+
+.home-view .shelf-nav button:hover,
+.home-view .shelf-nav button:focus-visible,
+.detail-page--collection .shelf-nav button:hover,
+.detail-page--collection .shelf-nav button:focus-visible {
+  border-color: rgba(var(--player-accent-rgb), 0.35);
+  color: #fff;
+}
+
+.home-view .media-rail::-webkit-scrollbar,
+.detail-page--collection .media-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.home-view .media-rail,
+.detail-page--collection .shelf-section .media-rail {
+  display: grid;
+  grid-template-columns: none;
+  grid-auto-columns: clamp(142px, 13vw, 184px);
+  grid-auto-flow: column;
+  gap: 14px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  padding: 0 24px 7px 0;
+  scrollbar-width: none;
+}
+
+.home-view .media-card,
+.detail-page--collection .shelf-section .media-card {
+  min-width: 0;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.home-view .media-card:focus-visible,
+.detail-page--collection .media-card:focus-visible {
+  outline: 1px solid rgba(var(--player-accent-rgb), 0.54);
+  outline-offset: 3px;
+}
+
+.home-view .media-card__art,
+.home-view .media-card__art--empty,
+.detail-page--collection .shelf-section .media-card__art,
+.detail-page--collection .shelf-section .media-card__art--empty {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  background: #0d110e;
+}
+
+.home-view .media-card:hover .media-card__art,
+.detail-page--collection .media-card:hover .media-card__art {
+  border-color: rgba(var(--player-accent-rgb), 0.32);
+}
+
+.home-view .media-card__title,
+.detail-page--collection .shelf-section .media-card__title {
+  margin-top: 2px;
+  color: #dfe4e0;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.home-view .media-card__meta,
+.home-view .media-card__stat,
+.detail-page--collection .shelf-section .media-card__meta,
+.detail-page--collection .shelf-section .media-card__stat {
+  color: #747d76;
+  font-size: 9px;
+}
+
+.home-shelf--history .media-rail {
+  grid-auto-columns: clamp(250px, 24vw, 320px);
+  gap: 8px;
+}
+
+.home-shelf--history .media-card {
+  display: grid;
+  min-height: 64px;
+  grid-template-columns: 50px minmax(0, 1fr);
+  grid-template-rows: 1fr 1fr;
+  align-items: center;
+  gap: 0 10px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: 6px;
+  background: #0a0d0b;
+}
+
+.home-shelf--history .media-card:hover,
+.home-shelf--history .media-card:focus-visible {
+  border-color: rgba(var(--player-accent-rgb), 0.3);
+  background: #0d120f;
+}
+
+.home-shelf--history .media-card__art,
+.home-shelf--history .media-card__art--empty {
+  width: 50px;
+  height: 50px;
+  grid-row: 1 / 3;
+  border-radius: 4px;
+}
+
+.home-shelf--history .media-card__title {
+  align-self: end;
+  margin: 0;
+}
+
+.home-shelf--history .media-card__meta {
+  align-self: start;
+}
+
+@media (max-width: 760px) {
+  .home-view {
+    gap: 34px;
+  }
+
+  .home-view .media-rail {
+    grid-auto-columns: 142px;
+  }
+
+  .home-shelf--history .media-rail {
+    grid-auto-columns: min(280px, calc(100vw - 54px));
+  }
+
+}

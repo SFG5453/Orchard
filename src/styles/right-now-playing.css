@@ -1,0 +1,49 @@
+.right-now-playing .queue-preview__item {
+  display: block;
+  min-height: 0;
+  width: 100%;
+  padding: 0;
+  border-left: 0;
+  border-radius: 0;
+  text-align: left;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.right-now-playing .queue-preview__item:hover {
+  background: transparent;
+}
+
+.right-now-playing .queue-preview__cover,
+.right-now-playing .queue-preview__cover--video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 7px;
+  overflow: hidden;
+  object-fit: cover;
+}
+
+.right-now-playing .queue-preview__copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  margin-top: 12px;
+}
+
+.right-now-playing .queue-preview__copy strong {
+  display: flex;
+  align-items: center;
+  color: #f0f2f0;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.right-now-playing .queue-preview__copy small {
+  display: block;
+  overflow: hidden;
+  color: #929a94;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

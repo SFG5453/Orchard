@@ -1,0 +1,53 @@
+.welcome-support-dialog {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 48px 28px 28px;
+  background: #050505;
+}
+
+.welcome-support-dialog .support-view {
+  width: min(1120px, 100%);
+  height: calc(100vh - 76px);
+}
+
+.welcome-support-dialog__close {
+  position: fixed;
+  z-index: 2;
+  top: 14px;
+  right: 16px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #b8beb9;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.welcome-support-dialog__close:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  transform: scale(1.05);
+}
+
+@media (max-width: 760px) {
+  .welcome-window {
+    padding: 16px;
+  }
+
+  .welcome-window__stage {
+    width: calc(100vw - 32px);
+    min-height: calc(100vh - 32px);
+    border-radius: 16px;
+    padding: 20px 24px;
+  }
+
+  .welcome-window__sound-grid,
+  .welcome-window__connect-grid {
+    grid-template-columns: 1fr;
+  }
+}

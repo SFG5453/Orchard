@@ -1,0 +1,51 @@
+FROM docker.io/library/debian:13-slim
+
+ARG ACT_RUNNER_VERSION=0.2.13
+ARG NODE_VERSION=22.12.0
+
+RUN printf 'APT::Cache-Start "134217728";\n' > /etc/apt/apt.conf.d/99orchard-cache \
+  && apt-get -o APT::Cache-Start=134217728 update \
+  && DEBIAN_FRONTEND=noninteractive apt-get -o APT::Cache-Start=134217728 \
+    install --yes --no-install-recommends \
+    bash \
+    binutils \
+    bzip2 \
+    ca-certificates \
+    curl \
+    file \
+    git \
+    gzip \
+    rpm \
+    tar \
+    xz-utils \
+    zstd \
+  && node_archive="node-v${NODE_VERSION}-linux-x64.tar.xz" \
+  && node_base_url="https://nodejs.org/dist/v${NODE_VERSION}" \
+  && curl --fail --location --silent --show-error \
+    "${node_base_url}/${node_archive}" --output "/tmp/${node_archive}" \
+  && curl --fail --location --silent --show-error \
+    "${node_base_url}/SHASUMS256.txt" --output /tmp/node-SHASUMS256.txt \
+  && cd /tmp \
+  && grep " ${node_archive}$" node-SHASUMS256.txt | sha256sum --check - \
+  && tar -xJf "${node_archive}" --strip-components=1 -C /usr/local \
+  && archive="act_runner-${ACT_RUNNER_VERSION}-linux-amd64.xz" \
+  && base_url="https://gitea.com/gitea/act_runner/releases/download/v${ACT_RUNNER_VERSION}" \
+  && curl --fail --location --silent --show-error \
+    "${base_url}/${archive}" --output "/tmp/${archive}" \
+  && curl --fail --location --silent --show-error \
+    "${base_url}/${archive}.sha256" --output "/tmp/${archive}.sha256" \
+  && cd /tmp \
+  && sha256sum --check "${archive}.sha256" \
+  && xz --decompress "${archive}" \
+  && install -m 0755 "${archive%.xz}" /usr/local/bin/act_runner \
+  && rm -rf /var/lib/apt/lists/* "/tmp/${archive}.sha256" \
+    "/tmp/${node_archive}" /tmp/node-SHASUMS256.txt
+
+RUN useradd --create-home --home-dir /var/lib/act-runner --shell /bin/bash act-runner \
+  && install -d -o act-runner -g act-runner /var/lib/act-runner/work
+
+USER act-runner
+WORKDIR /var/lib/act-runner
+
+ENTRYPOINT ["/usr/local/bin/act_runner"]
+CMD ["daemon", "--config", "/var/lib/act-runner/config.yaml"]

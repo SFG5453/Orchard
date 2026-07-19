@@ -1,0 +1,49 @@
+pkgname=orchard
+pkgver=3.0.0
+pkgrel=1
+pkgdesc='YouTube Music client backed by InnerTube'
+arch=('x86_64')
+url='https://sfg545.dev/orchard'
+license=('MIT')
+depends=('electron43')
+makedepends=('nodejs' 'npm')
+options=('!strip')
+source=(
+  "orchard-${pkgver}.tar.gz"
+  'orchard'
+  'dev.sfg.orchard.desktop'
+)
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+build() {
+  cd "${srcdir}/orchard-${pkgver}"
+  npm ci --ignore-scripts
+  ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm rebuild
+  if [[ -f dist/index.html ]]; then
+    node scripts/package-system-electron.mjs \
+      --electron-dist=/usr/lib/electron43 \
+      --output="${srcdir}/system-electron"
+  else
+    npm run package:linux-system -- \
+      --electron-dist=/usr/lib/electron43 \
+      --output="${srcdir}/system-electron"
+  fi
+}
+
+package() {
+  install -Dm644 "${srcdir}/system-electron/app.asar" \
+    "${pkgdir}/usr/lib/orchard/app.asar"
+
+  if [[ -d "${srcdir}/system-electron/app.asar.unpacked" ]]; then
+    cp -a "${srcdir}/system-electron/app.asar.unpacked" \
+      "${pkgdir}/usr/lib/orchard/app.asar.unpacked"
+  fi
+
+  install -Dm755 "${srcdir}/orchard" "${pkgdir}/usr/bin/orchard"
+  install -Dm644 "${srcdir}/dev.sfg.orchard.desktop" \
+    "${pkgdir}/usr/share/applications/dev.sfg.orchard.desktop"
+  install -Dm644 "${srcdir}/orchard-${pkgver}/build/icon.png" \
+    "${pkgdir}/usr/share/icons/hicolor/512x512/apps/dev.sfg.orchard.png"
+  install -Dm644 "${srcdir}/orchard-${pkgver}/LICENSE" \
+    "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

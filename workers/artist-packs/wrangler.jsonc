@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "orchard-artist-packs",
+  "main": "src/index.js",
+  "compatibility_date": "2026-06-29",
+  "workers_dev": true,
+  "preview_urls": true,
+  "r2_buckets": [
+    {
+      "binding": "PACK_BUCKET",
+      "bucket_name": "orchard"
+    }
+  ],
+  "vars": {
+    "PACK_PREFIX": "artist-packs"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.01 }
+  }
+}

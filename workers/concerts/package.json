@@ -1,0 +1,17 @@
+{
+  "name": "@orchard/concerts-worker",
+  "version": "0.1.0",
+  "description": "Ticketmaster-backed nearby concert discovery for Orchard.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --test && wrangler types --check && wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --local",
+    "test": "node --test",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "wrangler": "^4.103.0"
+  }
+}

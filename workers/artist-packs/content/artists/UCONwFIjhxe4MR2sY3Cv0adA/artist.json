@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "artistId": "UCONwFIjhxe4MR2sY3Cv0adA",
+  "artistName": "Kehlani",
+  "displayName": "Lani Tsunami",
+  "layout": "kehlani",
+  "assets": {
+    "thumbnail": "assets/kehlani-profile.webp",
+    "profile": "assets/kehlani-profile.webp"
+  },
+  "search": {
+    "canonicalQuery": "Kehlani"
+  },
+  "banner": {
+    "type": "albumWall",
+    "sources": ["album", "single", "ep"],
+    "limit": 12
+  },
+  "idlePreview": {
+    "tracks": [
+      {
+        "id": "a_1swz0QXd8",
+        "title": "Nights Like This (feat. Ty Dolla $ign)",
+        "artist": "Kehlani",
+        "artists": ["Kehlani"],
+        "album": "Nights Like This"
+      }
+    ]
+  },
+  "features": {
+    "hoverPreviews": true,
+    "animatedArtwork": true,
+    "highlightWords": ["Kehlani Ashley Parrish"]
+  },
+  "theme": {
+    "cssVariables": {
+      "--custom-artist-accent": "#dca4b0",
+      "--custom-artist-ink": "#1e0c1b",
+      "--custom-artist-ink-soft": "#2d1329"
+    }
+  }
+}

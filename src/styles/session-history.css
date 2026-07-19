@@ -1,0 +1,26 @@
+.session-history__row {
+  grid-template-columns: 58px minmax(0, 1fr) 98px 34px;
+}
+
+.session-history__time,
+.session-history__action {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-history__action {
+  color: #b7c0ba;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .session-history__row {
+    grid-template-columns: minmax(0, 1fr) 34px;
+  }
+
+  .session-history__time,
+  .session-history__action {
+    display: none;
+  }
+}

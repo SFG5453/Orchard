@@ -1,0 +1,91 @@
+.app-shell--profile-camera {
+  overflow: hidden;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.custom-artist-profile-spotlight {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  --custom-artist-profile-accent: #66d8ff;
+  pointer-events: none;
+}
+
+.custom-artist-profile-spotlight::before {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 10, 9, 0.92);
+  opacity: 0;
+  transition: opacity 220ms ease;
+  content: '';
+}
+
+.custom-artist-profile-spotlight--active::before {
+  opacity: 1;
+}
+
+.custom-artist-profile-spotlight--leaving {
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.custom-artist-profile-spotlight__frame {
+  position: fixed;
+  display: grid;
+  padding: 4px;
+  overflow: hidden;
+  isolation: isolate;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 22px 70px rgba(0, 0, 0, 0.55),
+    0 0 34px color-mix(in srgb, var(--custom-artist-profile-accent) 38%, transparent);
+}
+
+.custom-artist-profile-spotlight__frame::before {
+  position: absolute;
+  inset: -50%;
+  z-index: 0;
+  background:
+    conic-gradient(
+      from 0deg,
+      color-mix(in srgb, var(--custom-artist-profile-accent) 18%, white),
+      var(--custom-artist-profile-accent),
+      color-mix(in srgb, var(--custom-artist-profile-accent) 68%, black),
+      var(--custom-artist-profile-accent),
+      color-mix(in srgb, var(--custom-artist-profile-accent) 24%, white),
+      var(--custom-artist-profile-accent)
+    );
+  animation: custom-artist-profile-accent-spin 1.45s linear infinite;
+  content: '';
+}
+
+.custom-artist-profile-spotlight__art {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  background: #0a0d0b;
+}
+
+.custom-artist-profile-spotlight__clone {
+  width: 100% !important;
+  height: 100% !important;
+  border: 0 !important;
+  border-radius: inherit !important;
+  box-shadow: none !important;
+}
+
+.custom-artist-profile-spotlight__clone .q-img__container,
+.custom-artist-profile-spotlight__clone .q-img__image {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+@keyframes custom-artist-profile-accent-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

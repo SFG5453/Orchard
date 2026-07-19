@@ -1,0 +1,39 @@
+.nav-link__count {
+  min-width: 18px;
+  margin-left: auto;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--primary);
+  color: #07120c;
+  font-size: 9px;
+  font-weight: 800;
+  text-align: center;
+}
+
+@media (max-width: 1050px) {
+  .support-view {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .support-form__row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 780px) {
+  .support-view {
+    display: block;
+    height: auto;
+    min-height: 560px;
+    overflow: visible;
+  }
+
+  .support-inbox {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .support-workspace {
+    min-height: 500px;
+  }
+}

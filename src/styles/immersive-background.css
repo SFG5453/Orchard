@@ -1,0 +1,28 @@
+/* Keep immersive artwork continuous across the shell. Readability comes from
+   one viewport-wide veil instead of separate rectangular panel fills. */
+.immersive-background::after {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 7, 4, 0.34);
+  content: '';
+}
+
+.app-shell--immersive .page,
+.app-shell--immersive .sidebar,
+.app-shell--immersive .sidebar .q-drawer__content,
+.app-shell--immersive .sidebar-mini,
+.app-shell--immersive .lyrics-sidebar,
+.app-shell--immersive .lyrics-sidebar__inner,
+.app-shell--immersive .q-drawer {
+  background: transparent !important;
+}
+
+.app-shell--immersive .sidebar,
+.app-shell--immersive .lyrics-sidebar,
+.app-shell--immersive .q-drawer {
+  backdrop-filter: none;
+}
+
+html[data-theme-resolved='light'] .immersive-background::after {
+  background: rgba(248, 250, 248, 0.7);
+}

@@ -1,0 +1,190 @@
+.account-actions {
+  padding: 0;
+}
+
+.account-menu-wrap {
+  width: 100%;
+}
+
+.account-actions .q-btn,
+.account-profile {
+  display: grid;
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid rgba(47, 223, 147, 0.08);
+  border-radius: 3px;
+  background: #0b0f0c;
+  color: #cbd5ce;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.account-profile {
+  grid-template-columns: 20px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+}
+
+.account-profile__copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+  text-align: left;
+}
+
+.account-profile__copy strong,
+.account-profile__copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-profile__copy strong {
+  color: #cbd5ce;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.account-profile__copy span {
+  color: #5d6760;
+  font-size: 9px;
+}
+
+.account-profile:hover,
+.account-actions .q-btn:hover {
+  border-color: rgba(47, 223, 147, 0.16);
+  background: #101712;
+}
+
+.account-profile__avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  background: rgba(var(--player-accent-rgb), 0.1);
+  color: rgb(var(--player-accent-soft-rgb));
+  object-fit: cover;
+}
+
+span.account-profile__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.account-profile__avatar .q-icon {
+  font-size: 14px;
+}
+
+.account-menu {
+  width: 200px;
+  border: 1px solid rgba(47, 223, 147, 0.1);
+  border-radius: 3px;
+  background: #0b0f0c;
+  color: #cbd5ce;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.32);
+}
+
+.account-menu__identity {
+  display: grid;
+  gap: 1px;
+  padding: 8px 10px;
+}
+
+.account-menu__identity strong {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.account-menu__identity span {
+  overflow: hidden;
+  color: #5d6760;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu__action {
+  display: grid;
+  width: 100%;
+  min-height: 32px;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: #cbd5ce;
+  font-size: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-menu__action:hover,
+.account-menu__action:focus-visible {
+  background: #101712;
+  color: #ffffff;
+  outline: none;
+}
+
+.account-menu__action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.account-menu__action .q-icon {
+  color: #5d6760;
+  font-size: 14px;
+}
+
+.device-card {
+  padding: 8px;
+  border: 1px solid rgba(47, 223, 147, 0.08);
+  border-radius: 3px;
+  background: #0b0f0c;
+}
+
+.app-shell--immersive .sidebar,
+.app-shell--immersive .sidebar .q-drawer__content {
+  border-right-color: rgba(var(--player-accent-rgb, 47, 223, 147), 0.08);
+  background: rgba(3, 7, 4, 0.58);
+}
+
+.app-shell--immersive .sidebar-mini {
+  background: rgba(3, 7, 4, 0.58) !important;
+}
+
+.sidebar-mini {
+  background: #050806 !important;
+}
+
+.sidebar-mini__button {
+  position: relative !important;
+  border-radius: 3px !important;
+}
+
+.sidebar-mini__button::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  border-radius: 0 1px 1px 0;
+  background: transparent;
+  content: '';
+}
+
+.sidebar-mini__button:hover {
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+.sidebar-mini__button--active {
+  background: #101712 !important;
+  color: rgb(var(--player-accent-soft-rgb)) !important;
+}
+
+.sidebar-mini__button--active::before {
+  background: rgb(var(--player-accent-rgb)) !important;
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@orchard/artist-packs-worker",
+  "version": "0.1.0",
+  "description": "Serves Orchard hosted artist page packs.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "wrangler": "^4.103.0"
+  }
+}

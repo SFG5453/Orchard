@@ -1,0 +1,57 @@
+.compact-settings-menu {
+  width: 320px;
+  background: #0d110e;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #d9ddda;
+  padding: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.compact-settings-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  padding-bottom: 8px;
+}
+
+.compact-settings-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.compact-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.compact-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  gap: 12px;
+}
+
+.compact-settings-row--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.compact-settings-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #aeb5b0;
+}
+
+.compact-settings-menu-popup {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}

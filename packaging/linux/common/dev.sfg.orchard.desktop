@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Orchard
+Comment=YouTube Music client backed by InnerTube
+Exec=orchard %U
+Icon=dev.sfg.orchard
+Terminal=false
+Type=Application
+Categories=Audio;AudioVideo;Player;
+StartupWMClass=Orchard

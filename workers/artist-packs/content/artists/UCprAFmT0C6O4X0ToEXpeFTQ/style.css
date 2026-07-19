@@ -1,0 +1,250 @@
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"] {
+    --kdot-red: var(--custom-artist-accent, #e11d2f);
+    --kdot-red-dark: #5d0711;
+    --kdot-ink: var(--custom-artist-ink, #090607);
+    --kdot-ink-soft: var(--custom-artist-ink-soft, #16090b);
+    --kdot-paper: #f2eee8;
+    --kdot-gold: #d8b56d;
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot {
+    background:
+        linear-gradient(180deg, rgba(225, 29, 47, 0.28), rgba(9, 6, 7, 0.92) 420px),
+        var(--kdot-red-dark);
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"] .detail-title-line h2 {
+    color: var(--kdot-red);
+    font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+    font-size: 9rem;
+    font-weight: 900;
+    line-height: 0.78;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    text-shadow:
+        0 2px 0 var(--kdot-paper),
+        0 8px 26px rgba(0, 0, 0, 0.52);
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .detail-hero--artist {
+    display: grid;
+    grid-template-columns: minmax(0, 0.92fr) clamp(230px, 25vw, 350px);
+    min-height: clamp(470px, 58vh, 720px);
+    align-items: end;
+    gap: clamp(26px, 5vw, 70px);
+    isolation: isolate;
+    overflow: hidden;
+    padding: clamp(44px, 6vw, 88px) clamp(28px, 7vw, 104px);
+    border-bottom: 5px solid var(--kdot-red);
+    background-color: var(--kdot-red-dark) !important;
+    background-image:
+        linear-gradient(90deg, rgba(9, 6, 7, 0.96) 0%, rgba(9, 6, 7, 0.76) 38%, rgba(93, 7, 17, 0.18) 100%),
+        var(--detail-hero-artwork) !important;
+    background-position: center;
+    background-size: cover;
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .detail-hero--artist::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        repeating-linear-gradient(
+            90deg,
+            rgba(242, 238, 232, 0.045) 0,
+            rgba(242, 238, 232, 0.045) 1px,
+            transparent 1px,
+            transparent 16px
+        );
+    mix-blend-mode: screen;
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .detail-hero__copy,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .detail-hero__art {
+    position: relative;
+    z-index: 1;
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .detail-hero__copy {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    max-width: 760px;
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .detail-hero__art {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    margin: 0 0 10px;
+    border: 4px solid var(--kdot-red);
+    border-radius: 8px;
+    box-shadow:
+        -14px 14px 0 rgba(225, 29, 47, 0.28),
+        0 18px 42px rgba(0, 0, 0, 0.48);
+    background: var(--kdot-ink);
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .detail-art,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .detail-art--empty {
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--kdot-ink-soft);
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"] .detail-art img,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"] .detail-art .q-img__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    filter: contrast(1.08) saturate(0.92);
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .detail-subtitle,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .detail-description,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .detail-meta {
+    color: rgba(242, 238, 232, 0.86);
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .action-button {
+    border-color: rgba(242, 238, 232, 0.2);
+    background: rgba(9, 6, 7, 0.78);
+    color: var(--kdot-paper);
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .action-button--primary {
+    border-color: var(--kdot-red);
+    background: var(--kdot-red);
+    color: var(--kdot-paper);
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .artist-highlight {
+    color: var(--kdot-paper);
+    background: linear-gradient(180deg, transparent 58%, rgba(225, 29, 47, 0.58) 58%);
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .table-card--artist,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .shelf-section {
+    background: rgba(13, 8, 9, 0.86);
+    border: 1px solid transparent;
+    border-radius: 8px;
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .artist-track-heading,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .section-header {
+    border-bottom: 1px solid rgba(225, 29, 47, 0.32);
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .artist-track-heading h2,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .section-header h2 {
+    color: var(--kdot-red);
+    font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+    font-size: 1.55rem;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .section-header__actions,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .artist-track-heading span {
+    color: rgba(242, 238, 232, 0.62);
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .table-card--artist .table-row,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .table-card--artist .table-row--with-album {
+    border-color: rgba(242, 238, 232, 0.09);
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .table-card--artist .table-row:hover,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .table-card--artist .table-row:focus-visible,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .table-card--artist .table-row--active {
+    background: rgba(225, 29, 47, 0.16);
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .table-card--artist .table-copy strong,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .table-card--artist .table-link--title,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .media-card__title {
+    color: var(--kdot-paper);
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .table-card--artist .table-index,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .table-card--artist .table-album,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .table-card--artist .table-time,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .media-card__meta,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .media-card__stat {
+    color: rgba(242, 238, 232, 0.56);
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .media-rail {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-auto-flow: dense;
+    gap: 14px;
+    padding: 8px 0;
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"] .shelf-nav {
+    display: none !important;
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .media-card {
+    background: #100809;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 8px;
+    gap: 6px;
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .media-card:hover,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .media-card:focus-visible {
+    border-color: rgba(225, 29, 47, 0.56);
+    background: #18090c;
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .media-card__art,
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .media-card__art--empty {
+    background: var(--kdot-ink-soft);
+    border-radius: 5px;
+}
+
+.detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .media-rail > .media-card:first-child {
+    grid-column: span 2;
+    grid-row: span 2;
+}
+
+@media (max-width: 900px) {
+    .detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .detail-hero--artist {
+        grid-template-columns: minmax(0, 1fr);
+        min-height: 0;
+        padding: 30px 22px 38px;
+        background-position: 62% center;
+    }
+
+    .detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .detail-hero__copy {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .detail-hero__art {
+        grid-column: 1;
+        grid-row: 1;
+        max-width: 210px;
+        box-shadow: -8px 8px 0 rgba(225, 29, 47, 0.28);
+    }
+
+    .detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"] .detail-title-line h2 {
+        font-size: 4.8rem;
+    }
+
+    .detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .media-rail {
+        grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    }
+
+    .detail-page--artist[data-artist-id="UCprAFmT0C6O4X0ToEXpeFTQ"].detail-page--layout-kdot .media-rail > .media-card:first-child {
+        grid-column: span 1;
+        grid-row: span 1;
+    }
+}

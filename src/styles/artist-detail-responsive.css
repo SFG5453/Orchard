@@ -1,0 +1,46 @@
+@media (max-width: 760px) {
+  .detail-page--artist {
+    gap: 32px;
+  }
+
+  .detail-page--artist .detail-hero--artist {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+    padding-top: 0;
+  }
+
+  .detail-page--artist .detail-hero--album-wall {
+    padding: 24px 20px 30px;
+  }
+
+  .custom-artist-album-wall {
+    inset: 2% -16% 42% 20%;
+    grid-template-columns: repeat(4, minmax(54px, 1fr));
+    opacity: 0.42;
+  }
+
+  .detail-page--artist .detail-hero__art {
+    max-width: 170px;
+  }
+
+  .detail-page--artist .detail-hero__copy h2 {
+    font-size: clamp(34px, 11vw, 48px);
+  }
+
+  .detail-page--artist .table-card--artist .table-row,
+  .detail-page--artist .table-card--artist .table-row--with-album {
+    grid-template-columns: 30px minmax(0, 1fr) 30px;
+    gap: 8px;
+    padding-right: 2px;
+    padding-left: 2px;
+  }
+
+  .detail-page--artist .table-card--artist .table-album,
+  .detail-page--artist .table-card--artist .table-time {
+    display: none;
+  }
+
+  .detail-page--artist .media-rail {
+    grid-auto-columns: 142px;
+  }
+}

@@ -1,0 +1,74 @@
+/* Custom artist full-bleed hero layout */
+.detail-page--artist.detail-page--layout-cider .detail-hero--artist {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-start;
+    grid-template-columns: none;
+    position: relative;
+    min-height: 50vh;
+    padding: 3rem 4rem;
+    overflow: hidden;
+    border-bottom: none;
+}
+
+.detail-page--artist.detail-page--layout-cider .detail-hero__art {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    z-index: 0;
+    margin: 0;
+}
+
+.detail-page--artist.detail-page--layout-cider .detail-art,
+.detail-page--artist.detail-page--layout-cider .detail-art--empty {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    border: none;
+    overflow: hidden;
+}
+
+.detail-page--artist.detail-page--layout-cider .detail-art img,
+.detail-page--artist.detail-page--layout-cider .detail-art .q-img__image {
+    object-fit: cover;
+    object-position: center 20%;
+    width: 100%;
+    height: 100%;
+    filter: brightness(0.55) saturate(1.2);
+}
+
+.detail-page--artist.detail-page--layout-cider .detail-hero__art::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 70%;
+    background: linear-gradient(to top, var(--body-bg, #1a1d1b) 0%, transparent 100%);
+    pointer-events: none;
+}
+
+.detail-page--artist.detail-page--layout-cider .detail-hero__copy {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 900px;
+    align-self: flex-end;
+}
+
+.detail-page--artist.detail-page--layout-cider .detail-subtitle,
+.detail-page--artist.detail-page--layout-cider .detail-meta {
+    color: rgba(255, 255, 255, 0.85);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.detail-page--artist.detail-page--layout-cider .detail-description {
+    color: rgba(255, 255, 255, 0.65);
+    text-shadow: 0 1px 5px rgba(0, 0, 0, 0.5);
+}

@@ -1,0 +1,371 @@
+
+.library-link__cover,
+.library-link__cover--empty {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+}
+
+.page {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: calc(100vh - 150px);
+  margin: 55px 7px 96px;
+  padding: 22px 34px 54px;
+  border: 1px solid rgba(91, 122, 99, 0.3);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(9, 15, 10, 0.98), rgba(7, 11, 8, 0.98));
+}
+
+.topbar,
+.topbar--home {
+  display: grid;
+  align-items: stretch;
+  gap: 24px;
+  margin-bottom: 30px;
+}
+
+.viewport-toolbar {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.viewport-toolbar__left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.viewport-toolbar__left > .q-btn {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  border: 1px solid rgba(103, 217, 139, 0.13);
+  color: #d9ddda;
+}
+
+.topbar-copy,
+.topbar--home .topbar-copy {
+  display: block;
+  flex: none;
+}
+
+.topbar-copy h1 {
+  font-size: 27px;
+}
+
+.topbar-controls,
+.topbar--home .topbar-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.content-shell,
+.content-shell--home {
+  display: block;
+}
+
+.side-column,
+.content-shell--home .side-column {
+  display: none;
+}
+
+.playlist-showcase {
+  margin-bottom: 25px;
+}
+
+.playlist-rail {
+  grid-auto-columns: clamp(200px, 22vw, 280px);
+  gap: 14px;
+  padding: 0 24px 10px 0;
+}
+
+.playlist-card {
+  aspect-ratio: 0.76;
+  border-radius: 12px;
+}
+
+.playlist-card__title {
+  top: auto;
+  bottom: 34px;
+  font-size: 12px;
+}
+
+.media-rail {
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 18px 13px;
+}
+
+.lyrics-sidebar__inner {
+  display: flex;
+  overflow: hidden;
+  flex-direction: column;
+  gap: 10px;
+  padding: 61px 10px 12px;
+}
+
+.right-queue {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.right-queue .queue-preview {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.player-bar {
+  left: calc(232px + 18px) !important;
+  right: calc(288px + 18px) !important;
+  bottom: 10px;
+  min-height: 68px;
+  border-radius: 10px;
+}
+
+@media (max-width: 1023px) {
+  .player-bar {
+    right: 14px !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .page {
+    margin: 48px 0 148px;
+    padding: 24px 18px 50px;
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+  }
+
+  .player-bar {
+    left: 10px !important;
+    right: 10px !important;
+  }
+}
+
+/* Final reference proportions */
+.window-titlebar {
+  grid-template-columns: 240px minmax(0, 1fr) 132px;
+}
+
+.sidebar-group--playlists {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.shelf-nav {
+  display: flex;
+  gap: 7px;
+}
+
+.shelf-nav button {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 50%;
+  background: rgba(3, 5, 3, 0.66);
+  color: #b8beb9;
+  cursor: pointer;
+}
+
+.playlist-rail {
+  grid-auto-columns: clamp(220px, 18vw, 280px);
+  gap: 14px;
+  overflow-x: auto;
+}
+
+.media-rail,
+.media-rail--more {
+  display: grid;
+  grid-template-columns: none;
+  grid-auto-columns: clamp(148px, 12.5vw, 198px);
+  grid-auto-flow: column;
+  gap: 14px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  padding-bottom: 9px;
+  scrollbar-width: none;
+}
+
+.media-rail::-webkit-scrollbar,
+.playlist-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.player-bar {
+  left: calc(240px + 12px) !important;
+  right: calc(240px + 12px) !important;
+  bottom: 10px;
+  min-height: 58px;
+  padding: 6px 12px;
+  border-radius: 9px;
+}
+
+.player-track {
+  grid-template-columns: 38px minmax(0, 1fr);
+}
+
+.mini-cover,
+.mini-cover--empty {
+  width: 38px;
+  height: 38px;
+}
+
+.lyrics-sidebar__inner {
+  padding-right: 8px;
+  padding-left: 8px;
+}
+
+.right-queue .queue-preview__item {
+  grid-template-columns: 14px 28px minmax(0, 1fr);
+}
+
+.right-queue .queue-preview__cover,
+.right-queue .queue-preview__cover--empty {
+  width: 28px;
+  height: 28px;
+}
+
+@media (max-width: 1023px) {
+  .player-bar {
+    right: 12px !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .media-rail,
+  .media-rail--more {
+    grid-auto-columns: 148px;
+  }
+
+  .player-bar {
+    left: 10px !important;
+    right: 10px !important;
+  }
+}
+
+/* Screenshot-matched Cider shell */
+.window-titlebar {
+  grid-template-columns: 232px minmax(0, 1fr) 132px;
+  height: 48px;
+  padding: 0;
+  border-bottom-color: rgba(255, 255, 255, 0.055);
+}
+
+.titlebar-transport {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-transport {
+  gap: 0;
+  padding: 0 8px;
+}
+
+.titlebar-transport .q-btn {
+  width: 27px;
+  min-width: 27px;
+  height: 27px;
+  min-height: 27px;
+  color: #d7dad8;
+}
+
+.titlebar-transport .q-icon {
+  font-size: 16px;
+}
+
+.window-titlebar__brand {
+  display: grid;
+  place-items: center;
+}
+
+.titlebar-orchard-mark {
+  display: block;
+  width: 23px;
+  height: 23px;
+  object-fit: contain;
+}
+
+.window-titlebar__controls {
+  justify-content: flex-end;
+}
+
+.window-titlebar__controls button {
+  width: 42px;
+}
+
+.sidebar-inner {
+  gap: 12px;
+  padding-top: 61px;
+}
+
+.sidebar-search-form {
+  padding: 0 0 5px;
+}
+
+.sidebar-search-input {
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: #171a18;
+  padding: 0 9px;
+}
+
+.sidebar-search-input .q-field__control {
+  height: 32px;
+  min-height: 32px;
+}
+
+.sidebar-search-input .q-field__native,
+.sidebar-search-input .q-field__input {
+  color: #d8dbd9;
+  font-size: 11px;
+}
+
+.sidebar-search-input .q-icon {
+  color: #8d948f;
+  font-size: 16px;
+}
+
+.sidebar-group {
+  gap: 1px;
+}
+
+.sidebar-label {
+  padding-top: 7px;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.nav-link {
+  min-height: 30px;
+  font-size: 11px;
+}
+
+.nav-link .q-icon {
+  font-size: 15px;
+}
+
+.library-link {
+  min-height: 29px;
+  grid-template-columns: 24px minmax(0, 1fr);
+}
+
+.library-link__cover,
+.library-link__cover--empty {
+  width: 24px;
+  height: 24px;
+}

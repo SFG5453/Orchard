@@ -1,0 +1,65 @@
+.migration-banner {
+  position: sticky;
+  z-index: 1100;
+  top: 46px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 12px 14px;
+  border: 1px solid rgba(245, 178, 66, 0.48);
+  border-radius: 10px;
+  background: rgba(48, 34, 10, 0.96);
+  color: #f4cf86;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+
+.migration-banner > .q-icon {
+  flex: 0 0 auto;
+  font-size: 22px;
+}
+
+.migration-banner__copy {
+  min-width: 0;
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.migration-banner__error {
+  display: block;
+  margin-top: 2px;
+  color: rgba(244, 207, 134, 0.72);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.migration-banner .q-btn {
+  flex: 0 0 auto;
+  color: inherit;
+}
+
+.app-shell--native-titlebar .migration-banner {
+  top: 12px;
+}
+
+html[data-theme-resolved='light'] .migration-banner {
+  background: rgba(255, 247, 226, 0.98);
+  color: #76520e;
+}
+
+@media (max-width: 720px) {
+  .migration-banner {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .migration-banner__copy {
+    width: calc(100% - 38px);
+  }
+
+  .migration-banner .q-btn {
+    margin-left: 34px;
+  }
+}

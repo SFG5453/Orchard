@@ -1,0 +1,70 @@
+.collection-action-layer {
+  position: fixed;
+  z-index: 12000;
+  inset: 0;
+}
+
+.collection-action-menu {
+  position: absolute;
+  width: 248px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: #141214;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.28);
+  color: var(--text);
+}
+
+.collection-action-menu__title {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.collection-action-menu__title strong,
+.collection-action-menu__title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-action-menu__title strong {
+  font-size: 13px;
+}
+
+.collection-action-menu__title span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.collection-action-menu__items {
+  padding: 5px;
+}
+
+.collection-action-menu__items button {
+  display: grid;
+  width: 100%;
+  min-height: 36px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-strong);
+  text-align: left;
+}
+
+.collection-action-menu__items button:hover,
+.collection-action-menu__items button:focus-visible {
+  outline: none;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+
+.collection-action-menu__items .q-icon {
+  color: var(--muted);
+  font-size: 18px;
+}

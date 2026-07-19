@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "artistId": "UCo1DYcm1IZ9v3UPkpiAcgtg",
+  "artistName": "Tyler, The Creator",
+  "displayName": "Tyler",
+  "layout": "igor",
+  "assets": {
+    "thumbnail": "assets/tyler-profile.webp",
+    "profile": "assets/tyler-profile.webp"
+  },
+  "search": {
+    "canonicalQuery": "Tyler, The Creator",
+    "aliases": ["Tyler The Creator", "Tyler, the Creator", "Tyler"]
+  },
+  "banner": {
+    "type": "albumWall",
+    "sources": ["album", "single", "ep"],
+    "limit": 12
+  },
+  "idlePreview": {
+    "tracks": [
+      {
+        "id": "EZE62LpaqHg",
+        "title": "See You Again (feat. Kali Uchis)",
+        "artist": "Tyler, The Creator",
+        "artists": ["Tyler, The Creator"],
+        "album": "Flower Boy"
+      }
+    ]
+  },
+  "features": {
+    "hoverPreviews": true,
+    "animatedArtwork": true,
+    "highlightWords": ["Tyler Gregory Okonma"]
+  },
+  "theme": {
+    "cssVariables": {
+      "--custom-artist-accent": "#ffafcc",
+      "--custom-artist-ink": "#0a0a0a",
+      "--custom-artist-ink-soft": "#141414"
+    }
+  }
+}

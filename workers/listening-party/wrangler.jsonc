@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "orchard-listening-party",
+  "main": "src/index.js",
+  "compatibility_date": "2026-06-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PARTY_ROOM",
+        "class_name": "ListeningPartyRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ListeningPartyRoom"]
+    }
+  ],
+  "vars": {
+    "ALLOWED_ORIGIN": "*",
+    "ROOM_TTL_SECONDS": "43200",
+    "MAX_PARTICIPANTS": "12"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.01 }
+  }
+}

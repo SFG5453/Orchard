@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "artistId": "UCZONOh3FvcDpTcsnDRsr7OQ",
+  "artistName": "Jhené Aiko",
+  "displayName": "Jhené",
+  "layout": "jhene-aiko",
+  "assets": {
+    "thumbnail": "assets/jhene-aiko-profile.webp",
+    "profile": "assets/jhene-aiko-profile.webp"
+  },
+  "search": {
+    "canonicalQuery": "Jhené Aiko",
+    "aliases": ["Jhene Aiko", "Jhene"]
+  },
+  "banner": {
+    "type": "albumWall",
+    "sources": ["album", "single", "ep"],
+    "limit": 12
+  },
+  "idlePreview": {
+    "tracks": [
+      {
+        "id": "l6zyxURZkqo",
+        "title": "Stay Ready (What A Life) (feat. Kendrick Lamar)",
+        "artist": "Jhené Aiko",
+        "artists": ["Jhené Aiko"],
+        "album": "Sail Out"
+      }
+    ]
+  },
+  "features": {
+    "hoverPreviews": true,
+    "animatedArtwork": true,
+    "highlightWords": ["Jhené Aiko"]
+  },
+  "theme": {
+    "cssVariables": {
+      "--custom-artist-accent": "#cda1db",
+      "--custom-artist-ink": "#100617",
+      "--custom-artist-ink-soft": "#1b0d26"
+    }
+  }
+}

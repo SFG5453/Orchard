@@ -1,0 +1,23 @@
+{
+  "name": "@orchard/support-worker",
+  "version": "1.0.0",
+  "description": "Private two-way support inbox for Orchard.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit && wrangler types --check && wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --local --test-scheduled",
+    "discord:register": "node scripts/register-discord-commands.mjs",
+    "migrate:local": "wrangler d1 migrations apply orchard-support --local",
+    "migrate:remote": "wrangler d1 migrations apply orchard-support --remote",
+    "test": "vitest run",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.16.18",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9",
+    "wrangler": "^4.103.0"
+  }
+}

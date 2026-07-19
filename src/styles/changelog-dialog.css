@@ -1,0 +1,384 @@
+.changelog-dialog {
+  width: min(920px, calc(100vw - 24px));
+  max-height: min(760px, calc(100vh - 48px));
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--panel-alt);
+  color: var(--text);
+}
+
+.changelog-dialog__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 18px 16px 22px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.changelog-dialog__heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.changelog-dialog__title {
+  color: #f0f4f1;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.changelog-dialog__subtitle {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.changelog-dialog__count {
+  display: grid;
+  min-width: 72px;
+  justify-items: end;
+  padding-right: 2px;
+}
+
+.changelog-dialog__count strong {
+  color: rgb(var(--player-accent-soft-rgb));
+  font-size: 19px;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.changelog-dialog__count span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.changelog-dialog__content {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.changelog-tabs {
+  display: grid;
+  align-content: start;
+  max-height: calc(min(760px, 100vh - 48px) - 68px);
+  overflow-y: auto;
+  padding: 12px;
+  border-right: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.16);
+  scrollbar-width: thin;
+}
+
+.changelog-tabs button {
+  position: relative;
+  display: grid;
+  min-height: 58px;
+  gap: 3px;
+  align-content: center;
+  padding: 9px 10px 9px 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.changelog-tabs button::before {
+  position: absolute;
+  top: 11px;
+  bottom: 11px;
+  left: 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: transparent;
+  content: '';
+}
+
+.changelog-tabs button:hover,
+.changelog-tabs button:focus-visible,
+.changelog-tabs .changelog-tab--active {
+  border-color: rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.035);
+  color: #edf1ee;
+}
+
+.changelog-tabs button:focus-visible {
+  outline: 1px solid rgba(var(--player-accent-rgb), 0.62);
+  outline-offset: 1px;
+}
+
+.changelog-tabs .changelog-tab--active::before {
+  background: rgb(var(--player-accent-rgb));
+}
+
+.changelog-tab__version {
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changelog-tab__date {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changelog-tab--active .changelog-tab__date {
+  color: rgb(var(--player-accent-soft-rgb));
+}
+
+.changelog-dialog__body {
+  max-height: calc(min(760px, 100vh - 48px) - 68px);
+  overflow-y: auto;
+  padding: 22px 24px;
+}
+
+.changelog-release {
+  display: grid;
+  gap: 18px;
+}
+
+.changelog-release__summary {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.changelog-release__summary > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.changelog-release__summary strong {
+  color: #f0f3f1;
+  font-size: 17px;
+  font-weight: 750;
+}
+
+.changelog-release__summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.changelog-release__status {
+  flex: 0 0 auto;
+  color: rgb(var(--player-accent-soft-rgb));
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.changelog-release__sections {
+  display: grid;
+  gap: 12px;
+}
+
+.changelog-release__section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 15px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.changelog-release__section-heading {
+  display: grid;
+  grid-template-columns: 18px auto minmax(0, 1fr);
+  align-content: start;
+  align-items: center;
+  gap: 8px;
+  color: #cdd4cf;
+}
+
+.changelog-release__section-heading .q-icon {
+  color: rgb(var(--player-accent-soft-rgb));
+  font-size: 17px;
+}
+
+.changelog-release__section-heading strong {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changelog-release__section-heading span {
+  justify-self: end;
+  color: #6d766f;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.changelog-release__items {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 22px;
+  color: #b9c1bb;
+  font-size: 13px;
+  line-height: 1.48;
+}
+
+.changelog-release__items li {
+  padding-left: 2px;
+}
+
+.changelog-release__items li::marker {
+  color: rgba(var(--player-accent-rgb), 0.74);
+}
+
+html[data-theme-resolved='light'] .changelog-dialog__header {
+  background: #f8faf8;
+}
+
+html[data-theme-resolved='light'] .changelog-dialog__title,
+html[data-theme-resolved='light'] .changelog-release__summary strong {
+  color: var(--text);
+}
+
+html[data-theme-resolved='light'] .changelog-tabs {
+  background: #f6f8f6;
+}
+
+html[data-theme-resolved='light'] .changelog-tabs button:hover,
+html[data-theme-resolved='light'] .changelog-tabs button:focus-visible,
+html[data-theme-resolved='light'] .changelog-tabs .changelog-tab--active {
+  border-color: var(--line);
+  background: #fff;
+  color: var(--text);
+}
+
+html[data-theme-resolved='light'] .changelog-release__summary {
+  border-bottom-color: var(--line);
+}
+
+html[data-theme-resolved='light'] .changelog-release__section {
+  border-color: var(--line);
+  background: #f8faf8;
+}
+
+html[data-theme-resolved='light'] .changelog-release__section-heading {
+  color: var(--muted-strong);
+}
+
+html[data-theme-resolved='light'] .changelog-release__section-heading span {
+  color: var(--muted);
+}
+
+html[data-theme-resolved='light'] .changelog-release__items {
+  color: var(--muted-strong);
+}
+
+@media (max-width: 820px) {
+  .changelog-dialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .changelog-dialog__header {
+    padding: 16px 14px 14px 16px;
+  }
+
+  .changelog-dialog__heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .changelog-dialog__count {
+    justify-items: start;
+  }
+
+  .changelog-dialog__content {
+    grid-template-columns: 1fr;
+  }
+
+  .changelog-tabs {
+    display: flex;
+    max-height: none;
+    min-height: 54px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .changelog-tabs button {
+    min-width: 140px;
+    min-height: 48px;
+    flex: 0 0 auto;
+  }
+
+  .changelog-dialog__body {
+    max-height: calc(100vh - 188px);
+    padding: 16px;
+  }
+
+  .changelog-release__summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .changelog-release__section {
+    gap: 11px;
+    padding: 13px;
+  }
+}
+
+/* Single-release layout overrides */
+.changelog-dialog--single {
+  width: min(580px, calc(100vw - 24px));
+  max-height: min(640px, calc(100vh - 48px));
+}
+
+.changelog-dialog--single .changelog-dialog__header {
+  padding: 14px 18px 12px 22px;
+}
+
+.changelog-dialog--single .changelog-dialog__content {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.changelog-dialog--single .changelog-dialog__body {
+  max-height: calc(min(640px, 100vh - 48px) - 60px);
+  padding: 20px 24px;
+}
+
+@media (max-width: 820px) {
+  .changelog-dialog--single {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .changelog-dialog--single .changelog-dialog__header {
+    padding: 14px 14px 12px 16px;
+  }
+
+  .changelog-dialog--single .changelog-dialog__body {
+    max-height: calc(100vh - 110px);
+    padding: 16px;
+  }
+}

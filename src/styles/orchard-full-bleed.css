@@ -1,0 +1,123 @@
+/* Full-bleed center surface, backported from Orchard v3 with bounded content. */
+:root {
+  --orchard-titlebar-height: 48px;
+  --orchard-player-height: 92px;
+  --orchard-content-max-width: 1560px;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.app-shell,
+.app-shell.q-layout {
+  width: 100%;
+  height: 100dvh;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+.app-shell > .q-page-container {
+  height: 100%;
+  max-height: 100%;
+  padding-bottom: 0 !important;
+  overflow: hidden;
+}
+
+.page {
+  height: calc(100vh - var(--orchard-titlebar-height)) !important;
+  max-height: calc(100vh - var(--orchard-titlebar-height));
+  min-height: 0;
+  margin: var(--orchard-titlebar-height) 0 0;
+  padding: 26px clamp(22px, 3vw, 46px) calc(var(--orchard-player-height) + 32px);
+  border: 0;
+  border-top: 1px solid rgba(202, 255, 223, 0.055);
+  border-bottom: 1px solid rgba(202, 255, 223, 0.07);
+  border-radius: 0;
+  box-shadow: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.page::before {
+  inset: -100px 0;
+}
+
+.page > :where(.topbar, .message-line, .content-shell, .detail-page, .search-view, .settings-view, .support-view, .auth-gate) {
+  width: min(100%, var(--orchard-content-max-width));
+  margin-right: auto;
+  margin-left: auto;
+}
+
+/* Native titlebars do not consume Orchard's custom 48px titlebar slot. */
+.app-shell--native-titlebar .page {
+  height: 100vh !important;
+  max-height: 100vh;
+  margin-top: 0;
+}
+
+/* The player is a floating overlay, so the side rails continue to the
+   viewport edge instead of reserving an empty footer-sized strip. */
+.sidebar,
+.lyrics-sidebar {
+  bottom: 0 !important;
+  height: 100vh !important;
+  min-height: 100vh;
+  max-height: 100vh;
+}
+
+.sidebar .q-drawer__content,
+.lyrics-sidebar .q-drawer__content,
+.sidebar-inner,
+.lyrics-sidebar__inner {
+  height: 100% !important;
+  min-height: 0;
+  max-height: 100vh;
+}
+
+/* Browse heroes can use the full center width, while their copy and artwork
+   keep the existing clamp-based proportions instead of stretching. */
+.page--browse {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.page--browse > .topbar,
+.page--browse > .message-line {
+  width: min(calc(100% - clamp(36px, 5.6vw, 84px)), var(--orchard-content-max-width));
+}
+
+.page--browse > .detail-page {
+  width: min(100%, 1680px);
+  padding: 0 clamp(18px, 2.8vw, 42px) 64px;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --orchard-player-height: 148px;
+  }
+
+  .page {
+    margin-bottom: 0;
+    padding: 24px 18px calc(var(--orchard-player-height) + 24px);
+  }
+
+  .page--browse > .topbar,
+  .page--browse > .message-line {
+    width: calc(100% - 36px);
+  }
+
+  .page--browse > .detail-page {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+}

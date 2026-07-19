@@ -1,0 +1,130 @@
+{
+  "schema": 1,
+  "artistId": "UCprAFmT0C6O4X0ToEXpeFTQ",
+  "officialChannelId": "UC3lBXcrKFnFAFkfVk5WuKcQ",
+  "artistName": "Kendrick Lamar",
+  "displayName": "K. Dot",
+  "layout": "kdot",
+  "assets": {
+    "thumbnail": "assets/kendrick-profile.webp",
+    "profile": "assets/kendrick-profile.webp",
+    "easterEggAudio": "assets/not-like-us-sting.mp3"
+  },
+  "search": {
+    "canonicalQuery": "Kendrick Lamar",
+    "aliases": [
+      "K. Dot",
+      "Kendrick",
+      "Kung Fu Kenny"
+    ]
+  },
+  "banner": {
+    "type": "albumWall",
+    "sources": ["album", "single", "ep"],
+    "limit": 12
+  },
+  "idlePreview": {
+    "tracks": [
+      {
+        "id": "0nF69UTw99E",
+        "title": "Money Trees (feat. Jay Rock)",
+        "artist": "Kendrick Lamar",
+        "artists": ["Kendrick Lamar"],
+        "album": "good kid, m.A.A.d. city"
+      }
+    ]
+  },
+  "features": {
+    "hoverPreviews": true,
+    "animatedArtwork": true,
+    "highlightWords": [
+      "Pulitzer Prize",
+      "Compton",
+      "Kendrick Lamar Duckworth"
+    ],
+    "keyEasterEgg": {
+      "keys": [
+        "2",
+        "2",
+        "3",
+        "2"
+      ],
+      "audioAsset": "easterEggAudio",
+      "targetTrack": {
+        "id": "T6eK-2OQtew",
+        "title": "Not Like Us",
+        "artist": "Kendrick Lamar",
+        "artists": [
+          "Kendrick Lamar"
+        ],
+        "album": "Not Like Us",
+        "thumbnail": "https://i.ytimg.com/vi/T6eK-2OQtew/hqdefault.jpg",
+        "type": "song",
+        "mediaKind": "audio"
+      }
+    }
+  },
+  "theme": {
+    "cssVariables": {
+      "--custom-artist-accent": "#e11d2f",
+      "--custom-artist-ink": "#090607",
+      "--custom-artist-ink-soft": "#16090b"
+    }
+  },
+  "previews": {
+    "MPREb_wCND3crJyDP": {
+      "label": "GNX - tv off",
+      "videoId": "Rh3bJKkEhk8",
+      "start": 116,
+      "duration": 30
+    },
+    "MPREb_6IWMYM68N3w": {
+      "label": "Mr. Morale & The Big Steppers - Savior",
+      "videoId": "HMIrpcNtk9E",
+      "start": 21,
+      "duration": 30
+    },
+    "MPREb_kvF2OjEx8UG": {
+      "label": "Black Panther The Album - All The Stars",
+      "videoId": "vdXsLt0o_9g",
+      "start": 59,
+      "duration": 30
+    },
+    "MPREb_FQT8RhNisCl": {
+      "label": "DAMN. COLLECTORS EDITION. - DNA.",
+      "videoId": "Fb3j_yuFh1s",
+      "start": 109,
+      "duration": 30
+    },
+    "MPREb_ijcPSPM2Isl": {
+      "label": "untitled unmastered. - untitled 02 | 06.23.2014.",
+      "videoId": "_GghFQ8ryEU",
+      "start": 43,
+      "duration": 30
+    },
+    "MPREb_3jGuGO44ziy": {
+      "label": "To Pimp A Butterfly - Alright",
+      "videoId": "67vr-3kpX3Q",
+      "start": 17,
+      "duration": 30
+    },
+    "MPREb_6OR990vuECL": {
+      "label": "good kid, m.A.A.d. city - m.A.A.d city",
+      "videoId": "pTd2FE6Fi7o",
+      "start": 9,
+      "duration": 30
+    },
+    "MPREb_eN4Fsj0UXGZ": {
+      "label": "Section.80 - A.D.H.D",
+      "videoId": "s4z2CE_21fA",
+      "start": 21,
+      "duration": 30
+    },
+    "MPREb_c9CwYNmw9Lo": {
+      "label": "Overly Dedicated - Ignorance Is Bliss",
+      "videoId": "LqJ1eqdqxJs",
+      "start": 24,
+      "duration": 30
+    }
+  }
+}

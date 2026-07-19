@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "artistId": "UCR28YDxjDE3ogQROaNdnRbQ",
+  "artistName": "YoungBoy Never Broke Again",
+  "displayName": "Lil Top",
+  "layout": "slime",
+  "assets": {
+    "thumbnail": "assets/profile.png",
+    "profile": "assets/profile.png"
+  },
+  "search": {
+    "canonicalQuery": "YoungBoy Never Broke Again",
+    "aliases": ["Lil Top", "NBA YoungBoy"]
+  },
+  "banner": {
+    "type": "albumWall",
+    "sources": ["album", "single", "ep"],
+    "limit": 12
+  },
+  "idlePreview": {
+    "tracks": [
+      {
+        "id": "91CGXp4RIRw",
+        "title": "Big Truck",
+        "artist": "YoungBoy Never Broke Again",
+        "artists": ["YoungBoy Never Broke Again"],
+        "album": "Don't Try This At Home"
+      }
+    ]
+  },
+  "features": {
+    "hoverPreviews": true,
+    "animatedArtwork": true,
+    "highlightWords": ["Kentrell DeSean Gaulden"]
+  },
+  "theme": {
+    "cssVariables": {
+      "--custom-artist-accent": "#39ff14",
+      "--custom-artist-accent-dark": "#043d12",
+      "--custom-artist-ink": "#020503",
+      "--custom-artist-ink-soft": "#0a1309"
+    }
+  },
+  "previews": {
+    "MPREb_hQzZRSf9l9i": {
+      "label": "Slime Cry - Bruce Wayne",
+      "videoId": "2wI4_-aMSk0",
+      "start": 83,
+      "duration": 30
+    },
+    "MPREb_FezJyWUV7mJ": {
+      "label": "MASA - Myself Pt. 2",
+      "videoId": "2hIwvUDrbH4",
+      "start": 14,
+      "duration": 30
+    },
+    "MPREb_41BrTGRol4A": {
+      "label": "More Leaks - Out My Mind",
+      "videoId": "hSxcriRZl_o",
+      "start": 10,
+      "duration": 30
+    },
+    "MPREb_NXVyhpRkSev": {
+      "label": "Richest Opp - Fuck The Industry Pt. 2",
+      "videoId": "NKgQ6fAP8ng",
+      "start": 10,
+      "duration": 30
+    },
+    "MPREb_Y4g7YJRBUHm": {
+      "label": "Sincerely, Kentrell - Bad Morning",
+      "videoId": "249kxCTS2os",
+      "start": 14,
+      "duration": 30
+    },
+    "MPREb_A9dv6EgMDLF": {
+      "label": "AI YoungBoy 2 - Ranada",
+      "videoId": "dbPiKjtiGkY",
+      "start": 11,
+      "duration": 30
+    }
+  }
+}

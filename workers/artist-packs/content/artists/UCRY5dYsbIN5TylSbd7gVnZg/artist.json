@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "artistId": "UCRY5dYsbIN5TylSbd7gVnZg",
+  "artistName": "Kanye West",
+  "displayName": "Ye",
+  "layout": "kanye",
+  "assets": {
+    "thumbnail": "assets/kanye-profile.webp",
+    "profile": "assets/kanye-profile.webp"
+  },
+  "search": {
+    "canonicalQuery": "Kanye West",
+    "aliases": ["Ye", "Yeezy", "Kanye"]
+  },
+  "banner": {
+    "type": "albumWall",
+    "sources": ["album", "single", "ep"],
+    "limit": 12
+  },
+  "idlePreview": {
+    "tracks": [
+      {
+        "id": "wuO4_P_8p-Q",
+        "title": "Father Stretch My Hands Pt. 1",
+        "artist": "Kanye West",
+        "artists": ["Kanye West"],
+        "album": "The Life Of Pablo",
+        "start": 26
+      }
+    ]
+  },
+  "features": {
+    "hoverPreviews": true,
+    "animatedArtwork": true,
+    "highlightWords": ["Ye"]
+  },
+  "theme": {
+    "cssVariables": {
+      "--custom-artist-accent": "#ff6a00",
+      "--custom-artist-ink": "#0f0f0f",
+      "--custom-artist-ink-soft": "#1f1f1f"
+    }
+  },
+  "previews": {
+    "MPREb_KCNeTnK02S7": {
+      "label": "Graduation - Good Life",
+      "videoId": "U-N8gJ4HdYc",
+      "start": 42,
+      "duration": 30
+    },
+    "MPREb_DycSiwjOPMo": {
+      "label": "The College Dropout - Through The Wire",
+      "videoId": "AE8y25CcE6s",
+      "start": 58,
+      "duration": 30
+    },
+    "MPREb_1RQBOijcxbh": {
+      "label": "Late Registration - Touch The Sky",
+      "videoId": "B95OUKk7alM",
+      "start": 33,
+      "duration": 30
+    },
+    "MPREb_TeXtApchIhq": {
+      "label": "My Beautiful Dark Twisted Fantasy - POWER",
+      "videoId": "chPDTUjnWgA",
+      "start": 26,
+      "duration": 30
+    },
+    "MPREb_q6UQ3uJuSJX": {
+      "label": "Watch The Throne - Otis",
+      "videoId": "UgKguykIX9M",
+      "start": 16,
+      "duration": 30
+    },
+    "MPREb_ZIbQK9RFLQY": {
+      "label": "The Life Of Pablo - Father Stretch My Hands Pt. 1",
+      "videoId": "wuO4_P_8p-Q",
+      "start": 26,
+      "duration": 30
+    }
+  }
+}

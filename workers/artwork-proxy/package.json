@@ -1,0 +1,15 @@
+{
+  "name": "@orchard/artwork-proxy-worker",
+  "version": "0.1.0",
+  "description": "Streams cached animated WebP artwork from Orchard's converter.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "wrangler": "^4.103.0"
+  }
+}

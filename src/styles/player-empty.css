@@ -1,0 +1,17 @@
+.player-bar--empty {
+  --player-artwork: none;
+}
+
+.player-bar--empty .mini-cover--empty {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.32);
+}
+
+.player-bar--empty .mini-title {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.player-bar--empty .mini-subtitle {
+  color: rgba(255, 255, 255, 0.4);
+}

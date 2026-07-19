@@ -1,0 +1,157 @@
+.setup-guide__body {
+  display: grid;
+  gap: 14px;
+  padding-top: 15px;
+}
+
+.setup-guide__meter {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.setup-guide__tick {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.setup-guide__tick--done {
+  background: rgba(var(--player-accent-rgb), 0.82);
+}
+
+.setup-guide__items {
+  display: grid;
+  gap: 6px;
+}
+
+.setup-guide__item {
+  display: grid;
+  min-height: 58px;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 6px;
+  background: #0d110e;
+  color: #d9ddda;
+  cursor: pointer;
+  text-align: left;
+}
+
+.setup-guide__item:hover,
+.setup-guide__item:focus-visible {
+  border-color: rgba(var(--player-accent-rgb), 0.32);
+  background: #111612;
+  outline: none;
+}
+
+.setup-guide__item:focus-visible {
+  box-shadow: 0 0 0 1px rgba(var(--player-accent-rgb), 0.68);
+}
+
+.setup-guide__item .q-icon {
+  color: #7f8a83;
+  font-size: 19px;
+}
+
+.setup-guide__item--done .q-icon {
+  color: rgb(var(--player-accent-rgb));
+}
+
+.setup-guide__item strong {
+  display: block;
+  color: #e7ebe8;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.setup-guide__item small {
+  display: block;
+  margin-top: 2px;
+  color: #79817b;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.diagnostics-section__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 0;
+}
+
+.diagnostics-section__actions > span,
+.backup-section__message {
+  margin: 0;
+  color: #b7c2bb;
+  font-size: 11px;
+}
+
+.diagnostics-list {
+  display: grid;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.diagnostics-list__item {
+  display: grid;
+  min-height: 56px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.diagnostics-list__status {
+  color: #aeb5b0;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.diagnostics-list__status--ok {
+  color: rgb(var(--player-accent-rgb));
+}
+
+.diagnostics-list__status--warning {
+  color: #d8c68a;
+}
+
+.diagnostics-list__status--error {
+  color: #e0a49c;
+}
+
+.backup-section__row {
+  position: relative;
+}
+
+.backup-section__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.backup-section__message {
+  padding-top: 12px;
+}
+
+@media (max-width: 780px) {
+  .settings-index {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .setup-guide__meter {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .diagnostics-list__item {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 9px 0;
+  }
+}

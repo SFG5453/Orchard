@@ -1,0 +1,18 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "orchard-song-links",
+	"main": "src/index.js",
+	"compatibility_date": "2026-06-17",
+	"workers_dev": true,
+	"preview_urls": true,
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "orchard-song-links",
+			"database_id": "00000000-0000-0000-0000-000000000000"
+		}
+	],
+	"vars": {
+		"ARTWORK_API_ORIGIN": "https://artwork.example.com"
+	}
+}

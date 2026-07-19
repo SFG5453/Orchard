@@ -1,0 +1,383 @@
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] {
+    --jhene-accent: var(--custom-artist-accent, #cda1db);
+    --jhene-ink: var(--custom-artist-ink, #100617);
+    --jhene-ink-soft: var(--custom-artist-ink-soft, #1b0d26);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .detail-title-line h2 {
+    color: var(--jhene-accent);
+    text-shadow: 0 0 20px rgba(205, 161, 219, 0.3), 0 0 40px rgba(16, 6, 23, 0.5);
+    font-family: "Playfair Display", "Didot", "Bodoni MT", "Georgia", serif;
+    font-size: 5.5rem;
+    font-style: italic;
+    font-weight: 300;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"].detail-page--layout-jhene-aiko .detail-hero--artist {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(190px, 24vw, 320px);
+    min-height: clamp(360px, 46vh, 520px);
+    align-items: end;
+    gap: clamp(26px, 5vw, 68px);
+    isolation: isolate;
+    padding: clamp(42px, 5vw, 70px) clamp(34px, 7vw, 96px);
+    border-bottom: 1px solid rgba(205, 161, 219, 0.12);
+    background-color: var(--jhene-ink) !important;
+    background-image:
+        linear-gradient(90deg, rgba(16, 6, 23, 0.98) 0%, rgba(16, 6, 23, 0.85) 30%, rgba(16, 6, 23, 0.3) 60%, rgba(16, 6, 23, 0.05) 100%),
+        linear-gradient(180deg, rgba(16, 6, 23, 0.1) 0%, rgba(16, 6, 23, 0.9) 100%),
+        var(--detail-hero-artwork) !important;
+    background-position: center, center, center center;
+    background-size: cover;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"].detail-page--layout-jhene-aiko .detail-hero--album-wall {
+    background-image:
+        radial-gradient(circle at 70% 30%, rgba(205, 161, 219, 0.18), transparent 45%),
+        linear-gradient(90deg, rgba(16, 6, 23, 0.96) 0%, rgba(16, 6, 23, 0.82) 40%, rgba(16, 6, 23, 0.45) 100%) !important;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"].detail-page--layout-jhene-aiko .custom-artist-album-wall {
+    inset: -5% -2% -8% 36%;
+    opacity: 0.8;
+    mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"].detail-page--layout-jhene-aiko .custom-artist-album-wall__tile {
+    border-color: rgba(205, 161, 219, 0.15);
+    box-shadow:
+        0 20px 48px rgba(10, 3, 15, 0.6),
+        0 0 20px rgba(205, 161, 219, 0.06);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"].detail-page--layout-jhene-aiko .detail-hero--artist::before,
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"].detail-page--layout-jhene-aiko .detail-hero--artist::after {
+    display: none;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"].detail-page--layout-jhene-aiko .detail-hero__art {
+    position: relative;
+    z-index: 1;
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    max-width: 320px;
+    margin: 0;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"].detail-page--layout-jhene-aiko .detail-hero__art::after {
+    display: none;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"].detail-page--layout-jhene-aiko .detail-art,
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"].detail-page--layout-jhene-aiko .detail-art--empty {
+    aspect-ratio: 1;
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid rgba(205, 161, 219, 0.2);
+    border-radius: 8px;
+    background: var(--jhene-ink);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .detail-art img,
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .detail-art .q-img__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 20%;
+    filter: brightness(0.85) contrast(1.02) saturate(0.95);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"].detail-page--layout-jhene-aiko .detail-hero__copy {
+    position: relative;
+    z-index: 1;
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    max-width: 720px;
+}
+
+@media (max-width: 900px) {
+    .detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"].detail-page--layout-jhene-aiko .detail-hero--artist {
+        grid-template-columns: minmax(0, 1fr);
+        min-height: 0;
+        padding: 28px 22px 34px;
+    }
+
+    .detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"].detail-page--layout-jhene-aiko .detail-hero__art {
+        grid-column: 1;
+        grid-row: 1;
+        max-width: 190px;
+    }
+
+    .detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"].detail-page--layout-jhene-aiko .detail-hero__copy {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"].detail-page--layout-jhene-aiko .custom-artist-album-wall {
+        inset: 0 -18% 44% 14%;
+        opacity: 0.44;
+    }
+}
+
+/* Jhené Aiko shelf sections: Albums, Singles & EPs, Videos */
+
+@keyframes jhene-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .section-header {
+    position: relative;
+    border-bottom: none;
+    padding-bottom: 12px;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .section-header::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(205, 161, 219, 0.25) 20%,
+        rgba(205, 161, 219, 0.4) 50%,
+        rgba(205, 161, 219, 0.25) 80%,
+        transparent 100%
+    );
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .section-header h2 {
+    color: #ebd7f0;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    font-size: 12px;
+    text-shadow: 0 0 10px rgba(205, 161, 219, 0.2);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .section-header__actions span {
+    color: rgba(205, 161, 219, 0.5);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .section-more-button {
+    color: rgba(205, 161, 219, 0.7);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .section-more-button:hover {
+    color: var(--jhene-accent);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .shelf-nav {
+    display: none;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-rail {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    grid-auto-flow: dense;
+    grid-auto-columns: unset;
+    gap: 14px;
+    overflow: visible;
+    padding: 0;
+    scrollbar-width: auto;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-card {
+    position: relative;
+    padding: 8px;
+    border-radius: 6px;
+    background: var(--jhene-ink-soft);
+    border: 1px solid rgba(205, 161, 219, 0.08);
+    transition: transform 0.28s cubic-bezier(0.25, 0.8, 0.25, 1),
+                box-shadow 0.28s cubic-bezier(0.25, 0.8, 0.25, 1),
+                border-color 0.28s ease;
+    will-change: transform;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(205, 161, 219, 0.25);
+    box-shadow:
+        0 10px 24px rgba(10, 3, 15, 0.65),
+        0 0 16px rgba(205, 161, 219, 0.08);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-card__art,
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-card__art--empty {
+    border-radius: 4px;
+    border: 1px solid rgba(205, 161, 219, 0.06);
+    overflow: hidden;
+    position: relative;
+    background: var(--jhene-ink);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-card__art::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        105deg,
+        transparent 30%,
+        rgba(205, 161, 219, 0.06) 48%,
+        rgba(235, 215, 240, 0.12) 50%,
+        rgba(205, 161, 219, 0.06) 52%,
+        transparent 70%
+    );
+    background-size: 200% 100%;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 1;
+    border-radius: 4px;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-card:hover .media-card__art::after {
+    opacity: 1;
+    animation: jhene-shimmer 1.8s ease-in-out infinite;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-card--animated-artwork:hover .media-card__art::after,
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-card--animated-artwork:focus-visible .media-card__art::after {
+    opacity: 0;
+    animation: none;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-card__title {
+    color: #ebd7f0;
+    font-weight: 500;
+    transition: color 0.25s ease;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-card:hover .media-card__title {
+    color: #ffffff;
+    text-shadow: 0 0 8px rgba(205, 161, 219, 0.15);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-card__meta {
+    color: rgba(205, 161, 219, 0.55);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-card:hover .media-card__meta {
+    color: rgba(205, 161, 219, 0.75);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-card__stat {
+    color: rgba(205, 161, 219, 0.4);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: 0;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-card:hover .media-card__stat {
+    color: rgba(205, 161, 219, 0.6);
+}
+
+/* Featured hero card (first item in each section) */
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-rail > .media-card:first-child {
+    grid-column: span 2;
+    grid-row: span 2;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 8px;
+    isolation: isolate;
+    border: none;
+    background: var(--jhene-ink);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-rail > .media-card:first-child .media-card__art,
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-rail > .media-card:first-child .media-card__art--empty {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: unset;
+    border-radius: 8px;
+    border: none;
+    z-index: 0;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-rail > .media-card:first-child .media-card__art::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        to top,
+        rgba(16, 6, 23, 0.94) 0%,
+        rgba(16, 6, 23, 0.6) 35%,
+        rgba(27, 13, 38, 0.15) 60%,
+        transparent 100%
+    );
+    z-index: 1;
+    pointer-events: none;
+    border-radius: 8px;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-rail > .media-card:first-child .media-card__title {
+    position: absolute;
+    bottom: 34px;
+    left: 18px;
+    right: 18px;
+    z-index: 2;
+    font-size: 15px;
+    font-weight: 500;
+    color: #fff;
+    text-shadow: 0 2px 10px rgba(10, 3, 15, 0.7);
+    line-height: 1.25;
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-rail > .media-card:first-child .media-card__meta {
+    position: absolute;
+    bottom: 18px;
+    left: 18px;
+    right: 18px;
+    z-index: 2;
+    color: rgba(235, 215, 240, 0.8);
+    font-size: 10.5px;
+    text-shadow: 0 1px 5px rgba(10, 3, 15, 0.6);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-rail > .media-card:first-child .media-card__stat {
+    position: absolute;
+    bottom: 6px;
+    left: 18px;
+    z-index: 2;
+    color: rgba(205, 161, 219, 0.7);
+    text-shadow: 0 1px 4px rgba(10, 3, 15, 0.5);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-rail > .media-card:first-child:hover {
+    transform: scale(1.015);
+    box-shadow:
+        0 14px 36px rgba(10, 3, 15, 0.75),
+        0 0 22px rgba(205, 161, 219, 0.12);
+}
+
+.detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-rail > .media-card:first-child .media-card__art::after {
+    z-index: 2;
+    border-radius: 8px;
+}
+
+@media (max-width: 640px) {
+    .detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-rail {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 12px;
+    }
+
+    .detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-rail > .media-card:first-child {
+        grid-column: span 2;
+        grid-row: span 2;
+    }
+
+    .detail-page--artist[data-artist-id="UCZONOh3FvcDpTcsnDRsr7OQ"] .shelf-section .media-rail > .media-card:first-child .media-card__title {
+        font-size: 13px;
+        bottom: 28px;
+    }
+}

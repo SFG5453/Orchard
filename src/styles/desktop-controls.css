@@ -1,0 +1,72 @@
+.app-shell--compact-window {
+  min-height: 100vh;
+  overflow: hidden;
+  background: #050605;
+}
+
+.app-shell--compact-window .q-page-container,
+.app-shell--compact-window .sidebar,
+.app-shell--compact-window .lyrics-sidebar,
+.app-shell--compact-window .right-panel,
+.app-shell--compact-window .immersive-background,
+.app-shell--compact-window .video-player {
+  display: none !important;
+}
+
+.app-shell--compact-window .window-titlebar {
+  grid-template-columns: minmax(0, 1fr) 132px;
+  height: 42px;
+}
+
+.app-shell--compact-window .window-titlebar__brand {
+  position: static;
+  width: auto;
+  justify-content: start;
+  padding-left: 14px;
+  transform: none;
+}
+
+.app-shell--compact-window .titlebar-transport {
+  display: none;
+}
+
+.app-shell--compact-window .player-bar {
+  top: 50px;
+  right: 8px !important;
+  bottom: auto;
+  left: 8px !important;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  gap: 9px 10px;
+  min-height: 108px;
+  padding: 9px 11px;
+  border-radius: 8px;
+}
+
+.app-shell--compact-window .player-track {
+  min-width: 0;
+}
+
+.app-shell--compact-window .player-controls {
+  justify-content: end;
+}
+
+.app-shell--compact-window .progress-wrap {
+  grid-column: 1 / -1;
+}
+
+.app-shell--compact-window .volume-wrap,
+.app-shell--compact-window .player-sleep-timer,
+.app-shell--compact-window .player-controls .q-btn[aria-label='Open fullscreen player'] {
+  display: none;
+}
+
+.app-shell--compact-window .mini-title,
+.app-shell--compact-window .mini-subtitle {
+  max-width: 160px;
+}
+
+.app-shell--native-titlebar .sidebar-inner {
+  padding-top: 13px;
+}

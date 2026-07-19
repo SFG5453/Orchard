@@ -1,0 +1,206 @@
+.live-shows-dialog {
+  width: min(460px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #141214;
+  color: var(--text);
+}
+
+.live-shows-dialog__header {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 14px 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.live-shows-dialog__header strong,
+.live-shows-dialog__header span {
+  display: block;
+}
+
+.live-shows-dialog__header strong {
+  font-size: 16px;
+}
+
+.live-shows-dialog__header span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.live-shows-dialog__form {
+  padding: 18px 18px 12px;
+}
+
+.live-shows-dialog__form label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.live-shows-dialog__location-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.live-shows-dialog input {
+  min-width: 0;
+  height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  font: inherit;
+}
+
+.live-shows-dialog input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(47, 223, 147, 0.14);
+}
+
+.live-shows-dialog button {
+  font: inherit;
+}
+
+.live-shows-dialog__location-row button,
+.live-shows-dialog__current {
+  min-height: 40px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  font-weight: 650;
+}
+
+.live-shows-dialog__location-row button {
+  min-width: 82px;
+  padding: 0 15px;
+  border-color: transparent;
+  background: var(--primary);
+  color: #101010;
+}
+
+.live-shows-dialog button:disabled {
+  opacity: 0.45;
+}
+
+.live-shows-dialog__divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.live-shows-dialog__divider::before,
+.live-shows-dialog__divider::after {
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+  content: '';
+}
+
+.live-shows-dialog__current {
+  display: flex;
+  width: calc(100% - 36px);
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 12px 18px 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.live-shows-dialog__current:hover,
+.live-shows-dialog__current:focus-visible {
+  outline: none;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.live-shows-dialog__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 14px 18px 0;
+  color: #ffb2b2;
+  font-size: 12px;
+}
+
+.live-shows-dialog__privacy {
+  margin: 15px 18px 18px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.search-media-card--event .search-media-card__art {
+  aspect-ratio: 4 / 3;
+}
+
+.search-shelf--events {
+  overflow: visible;
+}
+
+.search-shelf--events .shelf-nav {
+  display: none;
+}
+
+.search-shelf--events .search-media-rail {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  grid-auto-columns: unset;
+  grid-auto-flow: row;
+  gap: 22px 14px;
+  overflow: visible;
+  padding: 0 0 28px;
+}
+
+.search-shelf--events .search-media-card {
+  width: 100%;
+}
+
+.search-shelf--events .search-media-card strong,
+.search-shelf--events .search-media-card > span:last-child {
+  display: -webkit-box;
+  overflow: hidden;
+  text-overflow: unset;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+}
+
+.search-shelf--events .search-media-card strong {
+  -webkit-line-clamp: 2;
+}
+
+.search-shelf--events .search-media-card > span:last-child {
+  -webkit-line-clamp: 1;
+}
+
+html[data-theme-resolved='light'] .live-shows-dialog {
+  border-color: var(--line);
+  background: #fff;
+}
+
+@media (max-width: 760px) {
+  .search-shelf--events .search-media-rail {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .live-shows-dialog__location-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .search-shelf--events .search-media-rail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

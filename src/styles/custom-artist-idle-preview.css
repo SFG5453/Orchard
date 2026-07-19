@@ -1,0 +1,109 @@
+.idle-preview-mini-player {
+  position: fixed;
+  z-index: 7600;
+  top: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #0c0c0c;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  pointer-events: auto;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.idle-preview-mini-player:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.app-shell--native-titlebar .idle-preview-mini-player {
+  top: 12px;
+}
+
+.idle-preview-mini-player__cover-wrap {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.idle-preview-mini-player__cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.idle-preview-mini-player__cover--empty {
+  display: grid;
+  place-items: center;
+  background: var(--panel-soft);
+  color: var(--muted);
+}
+
+.idle-preview-mini-player__loader {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.idle-preview-mini-player__copy {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.idle-preview-mini-player__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.idle-preview-mini-player__artist {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.idle-preview-mini-player__mute-btn {
+  flex-shrink: 0;
+  color: var(--muted-strong);
+  opacity: 0.85;
+  transition: color 140ms ease, opacity 140ms ease;
+}
+
+.idle-preview-mini-player__mute-btn:hover {
+  color: #ffffff;
+  opacity: 1;
+}
+
+.idle-preview-mini-player-enter-active,
+.idle-preview-mini-player-leave-active {
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.idle-preview-mini-player-enter-from,
+.idle-preview-mini-player-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -6px);
+}

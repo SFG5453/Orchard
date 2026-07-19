@@ -1,0 +1,405 @@
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] {
+    --sza-blue: var(--custom-artist-accent, #58a6ff);
+    --sza-ink: var(--custom-artist-ink, #071018);
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .detail-title-line h2 {
+    color: var(--sza-blue);
+    text-shadow: 0 0 18px rgba(88, 166, 255, 0.38), 0 0 36px rgba(8, 34, 61, 0.42);
+    font-family: "Brush Script MT", "Apple Chancery", "Snell Roundhand", cursive;
+    font-size: 5.75rem;
+    font-style: italic;
+    font-weight: 400;
+    line-height: 0.95;
+    margin-bottom: 0.5rem;
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"].detail-page--layout-sos .detail-hero--artist {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(190px, 24vw, 320px);
+    min-height: clamp(360px, 46vh, 520px);
+    align-items: end;
+    gap: clamp(26px, 5vw, 68px);
+    isolation: isolate;
+    padding: clamp(42px, 5vw, 70px) clamp(34px, 7vw, 96px);
+    border-bottom: 1px solid rgba(114, 176, 218, 0.14);
+    background-color: var(--sza-ink) !important;
+    background-image:
+        linear-gradient(90deg, rgba(4, 10, 17, 0.96) 0%, rgba(4, 12, 20, 0.78) 44%, rgba(6, 28, 47, 0.48) 100%),
+        linear-gradient(180deg, rgba(4, 10, 17, 0.2) 0%, rgba(4, 10, 17, 0.88) 100%),
+        var(--detail-hero-artwork) !important;
+    background-position: center 42%;
+    background-size: cover;
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"].detail-page--layout-sos .detail-hero--artist::before,
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"].detail-page--layout-sos .detail-hero--artist::after {
+    display: none;
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"].detail-page--layout-sos .detail-hero__art {
+    position: relative;
+    z-index: 1;
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    max-width: 320px;
+    margin: 0;
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"].detail-page--layout-sos .detail-hero__art::after {
+    display: none;
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"].detail-page--layout-sos .detail-art,
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"].detail-page--layout-sos .detail-art--empty {
+    aspect-ratio: 1;
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid rgba(129, 184, 220, 0.22);
+    border-radius: 8px;
+    background: var(--sza-ink);
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .detail-art img,
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .detail-art .q-img__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 28%;
+    filter: brightness(0.78) saturate(1.05);
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"].detail-page--layout-sos .detail-hero__copy {
+    position: relative;
+    z-index: 1;
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    max-width: 720px;
+}
+
+@media (max-width: 900px) {
+    .detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"].detail-page--layout-sos .detail-hero--artist {
+        grid-template-columns: minmax(0, 1fr);
+        min-height: 0;
+        padding: 28px 22px 34px;
+    }
+
+    .detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"].detail-page--layout-sos .detail-hero__art {
+        grid-column: 1;
+        grid-row: 1;
+        max-width: 190px;
+    }
+
+    .detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"].detail-page--layout-sos .detail-hero__copy {
+        grid-column: 1;
+        grid-row: 2;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════
+   SZA – Shelf sections (Albums, Singles & EPs, Videos)
+   Wrapped grid with featured hero card + glassmorphic
+   ═══════════════════════════════════════════════════════ */
+
+/* -- Keyframes ---------------------------------------- */
+@keyframes sza-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+/* -- Section header ----------------------------------- */
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .section-header {
+    position: relative;
+    border-bottom: none;
+    padding-bottom: 12px;
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .section-header::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(88, 166, 255, 0.45) 20%,
+        rgba(56, 189, 248, 0.6) 50%,
+        rgba(88, 166, 255, 0.45) 80%,
+        transparent 100%
+    );
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .section-header h2 {
+    color: #bfe0ff;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 12px;
+    text-shadow: 0 0 14px rgba(88, 166, 255, 0.3);
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .section-header__actions span {
+    color: rgba(88, 166, 255, 0.55);
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .section-more-button {
+    color: rgba(136, 200, 255, 0.7);
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .section-more-button:hover {
+    color: #58a6ff;
+}
+
+/* -- Hide shelf nav (no scroll needed) ---------------- */
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .shelf-nav {
+    display: none;
+}
+
+/* -- Media rail → Wrapped grid ------------------------ */
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-rail {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    grid-auto-flow: dense;
+    grid-auto-columns: unset;
+    gap: 14px;
+    overflow: visible;
+    padding: 0;
+    scrollbar-width: auto;
+}
+
+/* -- Media cards (opaque base) ------------------ */
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card {
+    position: relative;
+    padding: 8px;
+    border-radius: 10px;
+    background: linear-gradient(
+        135deg,
+        #081c34 0%,
+        #061222 100%
+    );
+    border: 1px solid rgba(88, 166, 255, 0.1);
+    transition: transform 0.32s cubic-bezier(0.23, 1, 0.32, 1),
+                box-shadow 0.32s cubic-bezier(0.23, 1, 0.32, 1),
+                border-color 0.32s ease;
+    will-change: transform;
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card:hover {
+    transform: translateY(-4px) scale(1.015);
+    border-color: rgba(88, 166, 255, 0.3);
+    box-shadow:
+        0 12px 32px rgba(4, 12, 24, 0.6),
+        0 0 20px rgba(88, 166, 255, 0.08),
+        inset 0 1px 0 rgba(136, 200, 255, 0.08);
+}
+
+/* Glow ring on hover */
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 11px;
+    background: linear-gradient(
+        135deg,
+        rgba(88, 166, 255, 0.25),
+        rgba(56, 189, 248, 0.15),
+        rgba(88, 166, 255, 0.05),
+        transparent
+    );
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    z-index: -1;
+    pointer-events: none;
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card:hover::before {
+    opacity: 1;
+}
+
+/* -- Artwork ------------------------------------------ */
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card__art,
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card__art--empty {
+    border-radius: 6px;
+    border-color: rgba(88, 166, 255, 0.12);
+    overflow: hidden;
+    position: relative;
+}
+
+/* Shimmer sweep on hover */
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card__art::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        105deg,
+        transparent 30%,
+        rgba(136, 200, 255, 0.12) 48%,
+        rgba(200, 230, 255, 0.18) 50%,
+        rgba(136, 200, 255, 0.12) 52%,
+        transparent 70%
+    );
+    background-size: 200% 100%;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 1;
+    border-radius: 6px;
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card:hover .media-card__art::after {
+    opacity: 1;
+    animation: sza-shimmer 1.6s ease-in-out infinite;
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card--animated-artwork:hover .media-card__art::after,
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card--animated-artwork:focus-visible .media-card__art::after {
+    opacity: 0;
+    animation: none;
+}
+
+/* -- Title, meta, stat -------------------------------- */
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card__title {
+    color: #d4eaff;
+    font-weight: 650;
+    transition: color 0.25s ease;
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card:hover .media-card__title {
+    color: #ffffff;
+    text-shadow: 0 0 10px rgba(88, 166, 255, 0.2);
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card__meta {
+    color: rgba(136, 200, 255, 0.5);
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card:hover .media-card__meta {
+    color: rgba(136, 200, 255, 0.7);
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card__stat {
+    color: rgba(88, 166, 255, 0.4);
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-card:hover .media-card__stat {
+    color: rgba(88, 166, 255, 0.65);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Featured hero card (first item in each section)
+   ═══════════════════════════════════════════════════════ */
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-rail > .media-card:first-child {
+    grid-column: span 2;
+    grid-row: span 2;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 12px;
+    isolation: isolate;
+}
+
+/* Art fills the entire featured card */
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-rail > .media-card:first-child .media-card__art,
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-rail > .media-card:first-child .media-card__art--empty {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: unset;
+    border-radius: 12px;
+    border: none;
+    z-index: 0;
+}
+
+/* Deep gradient scrim over featured artwork */
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-rail > .media-card:first-child .media-card__art::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        to top,
+        rgba(4, 10, 22, 0.92) 0%,
+        rgba(4, 12, 26, 0.55) 35%,
+        rgba(6, 18, 36, 0.15) 60%,
+        transparent 100%
+    );
+    z-index: 1;
+    pointer-events: none;
+    border-radius: 12px;
+}
+
+/* Title overlay at bottom of featured card */
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-rail > .media-card:first-child .media-card__title {
+    position: absolute;
+    bottom: 34px;
+    left: 16px;
+    right: 16px;
+    z-index: 2;
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+    line-height: 1.25;
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-rail > .media-card:first-child .media-card__meta {
+    position: absolute;
+    bottom: 18px;
+    left: 16px;
+    right: 16px;
+    z-index: 2;
+    color: rgba(180, 215, 255, 0.75);
+    font-size: 10px;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-rail > .media-card:first-child .media-card__stat {
+    position: absolute;
+    bottom: 6px;
+    left: 16px;
+    z-index: 2;
+    color: rgba(88, 166, 255, 0.65);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Featured card hover */
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-rail > .media-card:first-child:hover {
+    transform: scale(1.015);
+    box-shadow:
+        0 16px 48px rgba(4, 12, 24, 0.7),
+        0 0 32px rgba(88, 166, 255, 0.12);
+}
+
+/* Featured card shimmer (keep ::after from base) */
+.detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-rail > .media-card:first-child .media-card__art::after {
+    z-index: 2;
+    border-radius: 12px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Responsive
+   ═══════════════════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+    .detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-rail {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 10px;
+    }
+
+    .detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-rail > .media-card:first-child {
+        grid-column: span 2;
+        grid-row: span 2;
+    }
+
+    .detail-page--artist[data-artist-id="UCeKDV9JgivrXehVluw5bKFA"] .shelf-section .media-rail > .media-card:first-child .media-card__title {
+        font-size: 13px;
+        bottom: 28px;
+    }
+}

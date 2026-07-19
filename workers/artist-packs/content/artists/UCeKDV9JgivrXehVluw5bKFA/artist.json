@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "artistId": "UCeKDV9JgivrXehVluw5bKFA",
+  "artistName": "SZA",
+  "displayName": "Solána",
+  "layout": "sos",
+  "assets": {
+    "thumbnail": "assets/profile.webp",
+    "profile": "assets/profile.webp"
+  },
+  "search": {
+    "canonicalQuery": "SZA",
+    "aliases": ["Solana", "Solána"]
+  },
+  "banner": {
+    "type": "albumWall",
+    "sources": ["album", "single", "ep"],
+    "limit": 12
+  },
+  "idlePreview": {
+    "tracks": [
+      {
+        "id": "qJ7wOEz6OUE",
+        "title": "Broken Clocks",
+        "artist": "SZA",
+        "artists": ["SZA"],
+        "album": "Broken Clocks"
+      }
+    ]
+  },
+  "features": {
+    "hoverPreviews": true,
+    "animatedArtwork": true,
+    "highlightWords": ["Solána Imani Rowe"]
+  },
+  "theme": {
+    "cssVariables": {
+      "--custom-artist-accent": "#66d8ff",
+      "--custom-artist-ink": "#071018",
+      "--custom-artist-ink-soft": "#0f1d28"
+    }
+  },
+  "previews": {
+    "MPREb_B1iAQAffw1o": {
+      "label": "SOS Deluxe - Kill Bill",
+      "videoId": "AdEKgwUqPKI",
+      "start": 31,
+      "duration": 30
+    },
+    "MPREb_5ruOkUYLVZL": {
+      "label": "SOS - Kill Bill",
+      "videoId": "AdEKgwUqPKI",
+      "start": 31,
+      "duration": 30
+    },
+    "MPREb_r3jEPg0hFsW": {
+      "label": "Ctrl Deluxe - Broken Clocks",
+      "videoId": "qJ7wOEz6OUE",
+      "start": 142,
+      "duration": 30
+    },
+    "MPREb_hij2TtkPGUq": {
+      "label": "Ctrl - Broken Clocks",
+      "videoId": "qJ7wOEz6OUE",
+      "start": 142,
+      "duration": 30
+    },
+    "MPREb_kvF2OjEx8UG": {
+      "label": "Black Panther - All The Stars",
+      "videoId": "vdXsLt0o_9g",
+      "start": 39,
+      "duration": 17
+    },
+    "MPREb_t4BmWlN6roS": {
+      "label": "Z - Green Mile",
+      "videoId": "le68cmYtNps",
+      "start": 50,
+      "duration": 40
+    }
+  }
+}

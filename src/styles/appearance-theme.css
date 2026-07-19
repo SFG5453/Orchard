@@ -1,0 +1,183 @@
+html[data-theme-resolved='oled'] {
+  --bg: #000;
+  --panel: #000;
+  --panel-alt: #050505;
+  --panel-soft: #0b0b0b;
+  --line: #181818;
+  --line-strong: #292929;
+}
+
+html[data-theme-resolved='oled'] .window-titlebar,
+html[data-theme-resolved='oled'] .sidebar,
+html[data-theme-resolved='oled'] .lyrics-sidebar,
+html[data-theme-resolved='oled'] .right-panel,
+html[data-theme-resolved='oled'] .right-panel__inner,
+html[data-theme-resolved='oled'] .player-bar {
+  background-color: #000;
+}
+
+html[data-theme-resolved='oled'] .page,
+html[data-theme-resolved='oled'] .q-page-container {
+  background-color: #000;
+}
+
+html[data-theme-resolved='light'] {
+  --bg: #f4f6f4;
+  --panel: #fff;
+  --panel-alt: #eef1ee;
+  --panel-soft: #e4e8e5;
+  --line: #d8ddd9;
+  --line-strong: #bfc7c1;
+  --text: #141714;
+  --muted: #687069;
+  --muted-strong: #343a35;
+}
+
+html[data-theme-resolved='light'] .window-titlebar {
+  border-bottom-color: rgba(18, 24, 19, 0.12);
+  background: #f8faf8;
+}
+
+html[data-theme-resolved='light'] .sidebar,
+html[data-theme-resolved='light'] .sidebar-inner,
+html[data-theme-resolved='light'] .lyrics-sidebar,
+html[data-theme-resolved='light'] .lyrics-sidebar__inner,
+html[data-theme-resolved='light'] .right-panel,
+html[data-theme-resolved='light'] .right-panel__inner,
+html[data-theme-resolved='light'] .q-drawer,
+html[data-theme-resolved='light'] .q-drawer__content {
+  border-color: var(--line);
+  background: #f8faf8;
+  color: var(--text);
+}
+
+html[data-theme-resolved='light'] .page,
+html[data-theme-resolved='light'] .q-page-container {
+  background: var(--bg);
+  color: var(--text);
+}
+
+html[data-theme-resolved='light'] .player-bar {
+  border-color: rgba(18, 24, 19, 0.12);
+  background:
+    linear-gradient(
+      90deg,
+      rgba(var(--player-accent-rgb), 0.12),
+      rgba(255, 255, 255, 0.98) 26%,
+      rgba(255, 255, 255, 0.98) 74%,
+      rgba(var(--player-accent-rgb), 0.1)
+    ),
+    #fff;
+  box-shadow: 0 10px 28px rgba(23, 31, 25, 0.14);
+  color: var(--text);
+}
+
+html[data-theme-resolved='light'] .settings-index {
+  border-right-color: var(--line);
+}
+
+html[data-theme-resolved='light'] .settings-index a,
+html[data-theme-resolved='light'] .settings-color-control,
+html[data-theme-resolved='light'] .settings-slider output {
+  color: var(--muted);
+}
+
+html[data-theme-resolved='light'] .settings-section__heading,
+html[data-theme-resolved='light'] .settings-row,
+html[data-theme-resolved='light'] .settings-action-row,
+html[data-theme-resolved='light'] .settings-connect {
+  border-color: var(--line);
+}
+
+html[data-theme-resolved='light'] .settings-section__heading h2,
+html[data-theme-resolved='light'] .settings-row__copy label,
+html[data-theme-resolved='light'] .settings-row__copy > span,
+html[data-theme-resolved='light'] .settings-connect__copy > span {
+  color: var(--text);
+}
+
+html[data-theme-resolved='light'] .settings-section__heading p,
+html[data-theme-resolved='light'] .settings-row__copy p {
+  color: var(--muted);
+}
+
+html[data-theme-resolved='light'] .settings-option,
+html[data-theme-resolved='light'] .settings-button,
+html[data-theme-resolved='light'] .settings-link-button,
+html[data-theme-resolved='light'] .settings-connect__qr-panel summary,
+html[data-theme-resolved='light'] .settings-color-control input {
+  border-color: var(--line);
+  background: #fff;
+  color: var(--muted-strong);
+}
+
+html[data-theme-resolved='light'] .settings-option:hover:not(:disabled),
+html[data-theme-resolved='light'] .settings-option:focus-visible,
+html[data-theme-resolved='light'] .settings-button:hover,
+html[data-theme-resolved='light'] .settings-link-button:hover {
+  background: var(--panel-alt);
+  color: var(--text);
+}
+
+html[data-theme-resolved='light'] .settings-option--active {
+  border-color: rgba(var(--player-accent-rgb), 0.5);
+  background: rgba(var(--player-accent-rgb), 0.12);
+  color: #17231a;
+}
+
+html[data-theme-resolved='light'] .settings-cache-menu__action {
+  color: var(--muted-strong);
+}
+
+html[data-theme-resolved='light'] .settings-cache-menu__action:hover,
+html[data-theme-resolved='light'] .settings-cache-menu__action:focus-visible {
+  background: var(--panel-alt);
+  color: var(--text);
+}
+
+html[data-theme-resolved='light'] .settings-cache-menu__action--danger {
+  border-top-color: var(--line);
+  color: #98483e;
+}
+
+html[data-theme-resolved='light'] .nav-link--active,
+html[data-theme-resolved='light'] .library-link--active,
+html[data-theme-resolved='light'] .account-profile,
+html[data-theme-resolved='light'] .sidebar-search-input,
+html[data-theme-resolved='light'] .right-panel__tab--active {
+  background: var(--panel-soft);
+  color: var(--text);
+}
+
+html[data-theme-resolved='light'] .table-row:hover,
+html[data-theme-resolved='light'] .media-card:hover,
+html[data-theme-resolved='light'] .nav-link:hover,
+html[data-theme-resolved='light'] .library-link:hover {
+  background: rgba(18, 24, 19, 0.055);
+}
+
+html[data-theme-resolved='light'] .q-menu,
+html[data-theme-resolved='light'] .q-dialog__inner > div,
+html[data-theme-resolved='light'] .song-action-menu,
+html[data-theme-resolved='light'] .collection-action-menu,
+html[data-theme-resolved='light'] .playlist-dialog,
+html[data-theme-resolved='light'] .song-share-dialog,
+html[data-theme-resolved='light'] .about-dialog,
+html[data-theme-resolved='light'] .changelog-dialog,
+html[data-theme-resolved='light'] .update-dialog {
+  border-color: var(--line);
+  background: #fff;
+  color: var(--text);
+}
+
+html[data-theme-resolved='light'] .app-shell--immersive .page {
+  background:
+    radial-gradient(circle at 50% -20%, rgba(var(--player-accent-rgb), 0.1), transparent 48%),
+    rgba(244, 247, 244, 0.82);
+}
+
+html[data-theme-resolved='light'] .app-shell--immersive .window-titlebar,
+html[data-theme-resolved='light'] .app-shell--immersive .sidebar .q-drawer__content,
+html[data-theme-resolved='light'] .app-shell--immersive .lyrics-sidebar__inner {
+  background: rgba(248, 250, 248, 0.76);
+}

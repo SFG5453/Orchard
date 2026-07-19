@@ -1,0 +1,52 @@
+.support-github-auth {
+  align-items: center;
+  background: rgba(var(--player-accent-rgb), 0.045);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto 1fr auto;
+  padding: 13px 14px;
+}
+
+.support-github-auth > .q-icon {
+  color: var(--text);
+  font-size: 22px;
+}
+
+.support-github-auth strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.support-github-auth p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 3px 0 0;
+}
+
+.support-github-auth code {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  padding: 2px 5px;
+}
+
+@media (max-width: 700px) {
+  .support-github-auth {
+    align-items: start;
+    grid-template-columns: auto 1fr;
+  }
+
+  .support-github-auth > button,
+  .support-github-auth > .q-spinner {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
