@@ -10,6 +10,11 @@ function trackDurationSeconds(item = {}) {
   return parts.reduce((total, part) => total * 60 + part, 0);
 }
 
+function isUnavailableTrackError(error) {
+  return /\b(?:unavailable|not available|no playable (?:audio |video )?format|video unavailable|private video|removed by uploader)\b/i
+    .test(String(error?.message || error || ''));
+}
+
 export function installPlaybackResolve(ctx) {
   let preloadPromise = null;
   let preloadTrackId = '';
@@ -103,6 +108,27 @@ export function installPlaybackResolve(ctx) {
     return true;
   };
 
+  ctx.removeUnavailableQueueTrack = function removeUnavailableQueueTrack(item) {
+    const index = ctx.queue.value.findIndex((track) => track?.id === item?.id);
+    if (index < 0) return false;
+
+    ctx.queue.value = [
+      ...ctx.queue.value.slice(0, index),
+      ...ctx.queue.value.slice(index + 1)
+    ];
+    if (ctx.shuffleEnabled.value && ctx.shuffleSourceQueue.value.length) {
+      const sourceIndex = ctx.shuffleSourceQueue.value.findIndex((track) => track?.id === item?.id);
+      if (sourceIndex >= 0) {
+        ctx.shuffleSourceQueue.value = [
+          ...ctx.shuffleSourceQueue.value.slice(0, sourceIndex),
+          ...ctx.shuffleSourceQueue.value.slice(sourceIndex + 1)
+        ];
+      }
+    }
+    if (index === 0) ctx.clearNextPreload({ force: true });
+    return true;
+  };
+
   ctx.prepareCorsMediaElement = function prepareCorsMediaElement(element) {
     if (element) element.crossOrigin = 'anonymous';
   };
@@ -149,6 +175,10 @@ export function installPlaybackResolve(ctx) {
         return true;
       } catch (error) {
         if (requestId === ctx.nextPreloadRequest) ctx.nextTrackPreload.value = null;
+        if (requestId === ctx.nextPreloadRequest && isUnavailableTrackError(error)) {
+          ctx.removeUnavailableQueueTrack(next);
+          void ctx.preloadNextTrack();
+        }
         return false;
       }
     })();

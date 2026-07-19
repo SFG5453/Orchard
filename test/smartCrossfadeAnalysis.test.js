@@ -4,7 +4,7 @@ import test from 'node:test';
 import { createSmartCrossfadeAnalyzer } from '../src/audio/crossfade/smartCrossfadeAnalysis.js';
 
 test('smart crossfade retries native availability after a transient failure', async () => {
-  const stored = { analysisVersion: 4, duration: 240, mixOutTime: 190 };
+  const stored = { analysisVersion: 5, duration: 240, mixOutTime: 190 };
   let availabilityChecks = 0;
   let decodeCalls = 0;
   const logs = [];

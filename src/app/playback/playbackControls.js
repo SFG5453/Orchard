@@ -4,6 +4,11 @@ import { reliablePlaybackDuration } from './playbackDuration.js';
 
 const LYRIC_AUTO_SCROLL_RESUME_DELAY_MS = 1800;
 
+function isUnavailableTrackError(error) {
+  return /\b(?:unavailable|not available|no playable (?:audio |video )?format|video unavailable|private video|removed by uploader)\b/i
+    .test(String(error?.message || error || ''));
+}
+
 export function playbackNeedsFreshStream(media, playbackError = '') {
   return Boolean(
     playbackError || media?.ended || media?.error || media?.networkState === 3
@@ -208,13 +213,31 @@ export function installPlaybackControls(ctx) {
       return;
     }
 
-    const resolved = ctx.preloadedTrackMatches(next) ? ctx.nextTrackPreload.value?.resolved : null;
-    ctx.playTrack(next, {
-      queueSource: [next, ...remainingQueue],
-      queueAlreadyShuffled: ctx.shuffleEnabled.value,
-      resolved,
-      sessionAction: options.fromEnded ? 'ended' : 'manual'
-    });
+    while (next) {
+      let resolved = ctx.preloadedTrackMatches(next) ? ctx.nextTrackPreload.value?.resolved : null;
+      if (!resolved) {
+        try {
+          resolved = await ctx.resolvePlayableTrack(next);
+        } catch (error) {
+          if (!isUnavailableTrackError(error)) {
+            ctx.playbackError.value = error.message;
+            return;
+          }
+          ctx.removeUnavailableQueueTrack?.(next);
+          [next, ...remainingQueue] = ctx.queue.value;
+          continue;
+        }
+      }
+
+      ctx.playTrack(next, {
+        queueSource: [next, ...remainingQueue],
+        queueAlreadyShuffled: ctx.shuffleEnabled.value,
+        resolved,
+        sessionAction: options.fromEnded ? 'ended' : 'manual'
+      });
+      return;
+    }
+    ctx.clearNextPreload();
   };
 
   ctx.maybeStartAutoCrossfade = async function maybeStartAutoCrossfade(options = {}) {

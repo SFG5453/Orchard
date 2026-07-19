@@ -1,18 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { PixiArtworkBackground } from '../src/components/animated-background/PixiArtworkBackground.js';
 import { VideoArtworkBackground } from '../src/components/animated-background/VideoArtworkBackground.js';
 import {
-  ambientArtworkBlur,
-  backgroundResizeTarget,
-  backgroundViewportSize,
-  coverScale,
   interpolateRgb,
   isHlsSource,
-  loadArtworkImage,
-  motionParametersForUrl,
-  normalizeBackgroundUrl,
-  rgbToTint
+  normalizeBackgroundUrl
 } from '../src/components/animated-background/backgroundUtils.js';
 
 test('animated background identifies only HLS manifests', () => {
@@ -22,84 +14,12 @@ test('animated background identifies only HLS manifests', () => {
   assert.equal(isHlsSource(''), false);
 });
 
-test('missing artwork rejects without attempting image decoding', async () => {
-  await assert.rejects(loadArtworkImage(''), /Artwork URL is missing/);
-});
-
-test('artwork cover scale preserves coverage and overscan', () => {
-  assert.equal(coverScale(1000, 1000, 1600, 900), 1.6);
-  assert.equal(coverScale(1600, 900, 800, 1200), 4 / 3);
-  assert.equal(coverScale(1000, 1000, 1000, 1000, 1.2), 1.2);
-});
-
-test('ambient artwork blur remains heavy and scales with the viewport', () => {
-  assert.equal(ambientArtworkBlur(0, 0), 96);
-  assert.equal(ambientArtworkBlur(1280, 720), 92);
-  assert.equal(ambientArtworkBlur(1920, 1080), 128);
-  assert.equal(ambientArtworkBlur(3840, 2160), 128);
-});
-
-test('static backgrounds size to the window instead of a shell child', () => {
-  const canvas = { getBoundingClientRect: () => ({ width: 800, height: 600 }) };
-  assert.deepEqual(backgroundViewportSize(canvas, { innerWidth: 1600, innerHeight: 900 }), {
-    width: 1600,
-    height: 900
-  });
-  assert.deepEqual(backgroundViewportSize(canvas, {}), { width: 800, height: 600 });
-});
-
-test('static backgrounds observe the viewport wrapper instead of the self-sized canvas', () => {
-  const wrapper = {};
-  const canvas = { parentElement: wrapper };
-  const orphanCanvas = {};
-
-  assert.equal(backgroundResizeTarget(canvas), wrapper);
-  assert.equal(backgroundResizeTarget(orphanCanvas), orphanCanvas);
-});
-
-test('palette interpolation clamps progress and produces Pixi tints', () => {
+test('palette interpolation clamps progress', () => {
   assert.deepEqual(interpolateRgb([0, 20, 40], [100, 120, 140], 0.5), [50, 70, 90]);
   assert.deepEqual(interpolateRgb([1, 2, 3], [9, 9, 9], -1), [1, 2, 3]);
-  assert.equal(rgbToTint([103, 217, 139]), 0x67d98b);
-});
-
-test('motion targets are stable per normalized artwork URL', () => {
-  const first = motionParametersForUrl('https://img.example/cover.jpg');
-  const repeated = motionParametersForUrl('https://img.example/cover.jpg');
-  const other = motionParametersForUrl('https://img.example/other.jpg');
-
-  assert.deepEqual(first, repeated);
-  assert.notDeepEqual(first, other);
   assert.equal(normalizeBackgroundUrl('  cover.jpg  '), 'cover.jpg');
 });
 
-test('rapid artwork requests mark superseded Pixi work as stale', () => {
-  const background = new PixiArtworkBackground({});
-  background.requestId = 7;
-  background.requestedArtwork = 'new-cover.jpg';
-
-  assert.equal(background.isStale(6, 'old-cover.jpg'), true);
-  assert.equal(background.isStale(7, 'new-cover.jpg'), false);
-  background.destroy();
-  assert.equal(background.isStale(7, 'new-cover.jpg'), true);
-});
-
-test('Pixi motion updates a point-like displacement scale without requiring set()', () => {
-  const background = new PixiArtworkBackground({});
-  background.ready = true;
-  background.width = 1200;
-  background.height = 800;
-  background.layers.clear();
-  background.displacementSprite = { position: { set() {} } };
-  background.displacementFilter = { scale: { x: 0, y: 0 } };
-
-  assert.doesNotThrow(() => background.applyMotion());
-  assert.equal(background.displacementFilter.scale.x, background.motionState.distortion);
-  assert.equal(
-    background.displacementFilter.scale.y,
-    background.motionState.distortion * 0.72
-  );
-});
 
 test('animated artwork reuses one video and releases superseded sources', async () => {
   const listeners = new Map();

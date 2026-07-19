@@ -19,8 +19,8 @@ export const IMMERSIVE_BACKGROUND_INTENSITY_OPTIONS = [
 ];
 
 export const IMMERSIVE_BACKGROUND_MOTION_OPTIONS = [
-  { label: 'Animated', value: 'animated' },
-  { label: 'Static', value: 'static' }
+  { label: 'Animated artwork', value: 'animated' },
+  { label: 'Artwork warp', value: 'static' }
 ];
 
 export const THEME_PREFERENCE_OPTIONS = [

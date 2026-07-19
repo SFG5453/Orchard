@@ -57,3 +57,37 @@ test('restarting ended video playback refreshes the active media kind', () => {
   assert.equal(calls[0].options.mediaKind, 'video');
   assert.equal(calls[0].options.refreshStream, true);
 });
+
+test('advancing past an unavailable track removes it and plays the following queue item', async () => {
+  const unavailable = { id: 'unavailable-track' };
+  const playable = { id: 'playable-track' };
+  const played = [];
+  const ctx = {
+    activeTrack: { value: { id: 'current-track' } },
+    autoplayEnabled: { value: false },
+    clearNextPreload: () => {},
+    nextTrackPreload: { value: null },
+    playbackError: { value: '' },
+    preloadedTrackMatches: () => false,
+    queue: { value: [unavailable, playable] },
+    removeUnavailableQueueTrack(track) {
+      this.queue.value = this.queue.value.filter((item) => item.id !== track.id);
+    },
+    repeatMode: { value: 'off' },
+    resolvePlayableTrack: async (track) => {
+      if (track.id === unavailable.id) throw new Error('No playable audio format was returned by YouTube');
+      return { id: track.id, streamUrl: 'https://example.test/stream' };
+    },
+    shuffleEnabled: { value: false },
+    playTrack: (track, options) => played.push({ track, options })
+  };
+
+  installPlaybackControls(ctx);
+  await ctx.playNext({ fromEnded: true });
+
+  assert.deepEqual(ctx.queue.value, [playable]);
+  assert.equal(played.length, 1);
+  assert.equal(played[0].track, playable);
+  assert.deepEqual(played[0].options.queueSource, [playable]);
+  assert.equal(played[0].options.resolved.id, playable.id);
+});

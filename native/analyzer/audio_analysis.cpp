@@ -50,6 +50,21 @@ double Average(const std::vector<double>& values, size_t start, size_t end) {
   return std::accumulate(values.begin() + start, values.begin() + end, 0.0) / (end - start);
 }
 
+// A quiet passage is not an outro when the track subsequently returns to a
+// sustained, material level. This prevents transitions from cutting a bridge
+// or breakdown before a later chorus/drop.
+bool RampsUpAfter(
+  const std::vector<double>& levels,
+  size_t start,
+  size_t sustain_windows,
+  double threshold
+) {
+  for (size_t index = start; index + sustain_windows <= levels.size(); ++index) {
+    if (Average(levels, index, index + sustain_windows) >= threshold) return true;
+  }
+  return false;
+}
+
 // Unnormalized radix-2 Cooley-Tukey FFT. Internal callers must provide a
 // non-empty power-of-two frame; the transform intentionally works in place.
 void Fft(std::vector<std::complex<double>>& values) {
@@ -175,6 +190,8 @@ double FindMixOutTime(
     static_cast<size_t>(duration * 0.55 / window_seconds)
   );
   const size_t context_windows = static_cast<size_t>(2.0 / window_seconds);
+  const size_t ramp_windows = std::max<size_t>(1, std::round(1.5 / window_seconds));
+  const double ramp_threshold = std::max(silence_threshold * 2, envelope.reference * 0.55);
   size_t best_index = 0;
   double best_duration = 0;
 
@@ -194,6 +211,7 @@ double FindMixOutTime(
       const double after_peak = *std::max_element(levels.begin() + end, levels.begin() + after_end);
       if (before_peak >= silence_threshold * 2 &&
           after_peak >= silence_threshold * 2 &&
+          !RampsUpAfter(levels, end, ramp_windows, ramp_threshold) &&
           silence_duration > best_duration) {
         best_index = index;
         best_duration = silence_duration;
@@ -345,6 +363,8 @@ void BuildStructure(const EnvelopeResult& envelope, AnalysisResult& result) {
     : envelope.audible_start;
   const size_t first_window = static_cast<size_t>(envelope.audible_start / envelope.window_seconds);
   const size_t four_seconds = std::max<size_t>(1, 4.0 / envelope.window_seconds);
+  const size_t ramp_windows = std::max<size_t>(1, std::round(1.5 / envelope.window_seconds));
+  const double ramp_threshold = envelope.reference * 0.55;
   size_t strong_window = first_window;
   for (size_t index = first_window; index + four_seconds <= envelope.levels.size(); ++index) {
     if (Average(envelope.levels, index, index + four_seconds) >= envelope.reference * 0.62) {
@@ -369,7 +389,8 @@ void BuildStructure(const EnvelopeResult& envelope, AnalysisResult& result) {
   for (size_t index = search_start; index + four_seconds < envelope.levels.size(); ++index) {
     const double tail_average = Average(envelope.levels, index, envelope.levels.size());
     if (Average(envelope.levels, index, index + four_seconds) < envelope.reference * 0.68 &&
-        tail_average < envelope.reference * 0.72) {
+        tail_average < envelope.reference * 0.72 &&
+        !RampsUpAfter(envelope.levels, index + four_seconds, ramp_windows, ramp_threshold)) {
       raw_outro = index * envelope.window_seconds;
       break;
     }

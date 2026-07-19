@@ -8,7 +8,7 @@ import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
 
 const require = createRequire(import.meta.url);
 const { AUDIO_ANALYSIS } = IPC_CHANNELS;
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 5;
 const MAX_CACHE_ITEMS = 600;
 
 function errorDetails(error) {

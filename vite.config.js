@@ -43,7 +43,7 @@ export default defineConfig({
             },
             {
               name: 'animated-background',
-              test: /node_modules[\\/](?:@pixi|pixi\.js|@vibrant|node-vibrant|gsap)[\\/]/,
+              test: /node_modules[\\/](?:@vibrant|node-vibrant|gsap)[\\/]/,
               priority: 25
             },
             {

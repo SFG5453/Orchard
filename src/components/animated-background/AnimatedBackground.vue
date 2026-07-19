@@ -1,7 +1,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { gsap } from 'gsap';
-import { PixiArtworkBackground } from './PixiArtworkBackground.js';
+import { KawarpArtworkBackground } from './KawarpArtworkBackground.js';
 import { VideoArtworkBackground } from './VideoArtworkBackground.js';
 import { useBackgroundVisibility } from './useBackgroundVisibility.js';
 
@@ -16,7 +16,7 @@ const props = defineProps({
 const rootRef = ref(null);
 const canvasRef = ref(null);
 const videoRef = ref(null);
-let pixiBackground = null;
+let kawarpBackground = null;
 let videoBackground = null;
 let visibility = null;
 let windowVisible = true;
@@ -43,16 +43,23 @@ function hideVideo() {
 
 function syncPlayback() {
   if (!mounted) return;
-  pixiBackground?.setEnabled(props.enabled);
-  pixiBackground?.setPlaying(props.playing);
-  pixiBackground?.setMotionEnabled(props.motionEnabled);
+  kawarpBackground?.setEnabled(props.enabled);
+  kawarpBackground?.setPlaying(props.playing);
+  kawarpBackground?.setMotionEnabled(props.motionEnabled);
   videoBackground?.setPlaybackAllowed(playbackAllowed());
 }
 
 function syncSources() {
   if (!mounted) return;
-  pixiBackground?.setArtwork(props.enabled ? props.artworkUrl : '');
-  videoBackground?.setSource(props.enabled ? props.animatedArtworkUrl : '');
+  kawarpBackground?.setArtwork(props.enabled ? props.artworkUrl : '');
+  // Static mode must not leave animated artwork paused on its final frame.
+  // That reads as a flat image plane instead of an ambient background.
+  videoBackground?.setSource(props.enabled && props.motionEnabled ? props.animatedArtworkUrl : '');
+}
+
+function resizeBackground() {
+  kawarpBackground?.resize();
+  syncPlayback();
 }
 
 watch(
@@ -66,7 +73,7 @@ watch(() => [props.playing, props.motionEnabled], syncPlayback);
 
 onMounted(() => {
   mounted = true;
-  pixiBackground = new PixiArtworkBackground(canvasRef.value);
+  kawarpBackground = new KawarpArtworkBackground(canvasRef.value);
   videoBackground = new VideoArtworkBackground(videoRef.value, {
     onReady: revealVideo,
     onFallback: hideVideo
@@ -74,30 +81,32 @@ onMounted(() => {
   visibility = useBackgroundVisibility(rootRef.value, {
     onVisibility(value) {
       windowVisible = value;
-      pixiBackground?.setVisible(value);
+      kawarpBackground?.setVisible(value);
       syncPlayback();
     },
     onReducedMotion(value) {
       reducedMotion = value;
-      pixiBackground?.setReducedMotion(value);
+      kawarpBackground?.setReducedMotion(value);
       syncPlayback();
     }
   });
   visibility.start();
+  kawarpBackground.initialize();
   syncSources();
   syncPlayback();
-  void pixiBackground.initialize();
+  window.addEventListener('resize', resizeBackground);
 });
 
 onBeforeUnmount(() => {
   mounted = false;
+  window.removeEventListener('resize', resizeBackground);
   visibility?.destroy();
   videoBackground?.destroy();
-  pixiBackground?.destroy();
+  kawarpBackground?.destroy();
   gsap.killTweensOf(videoRef.value);
   visibility = null;
   videoBackground = null;
-  pixiBackground = null;
+  kawarpBackground = null;
 });
 </script>
 

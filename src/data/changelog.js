@@ -1,13 +1,15 @@
 export const ORCHARD_RELEASES = [
   {
-    version: '3.0.1',
-    codename: 'Crystal Current',
+    version: '3.0.2',
+    codename: 'Afterglow',
     date: 'July 19, 2026',
     sections: [
       {
         title: 'Fixed',
         items: [
-          'Premium-only songs now recognize YouTube\'s HE-AAC streams and retry with the signed-in browser account when another player identity omits entitled playback formats.'
+          'Smart crossfade now keeps playing when a quiet section ramps back up later in the song.',
+          'Unavailable tracks are removed from the queue when Orchard advances to them.',
+          "Reintroduced Kawarp For Immersive Backgrounds"
         ]
       }
     ]

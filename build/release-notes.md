@@ -1,4 +1,8 @@
-## Orchard 3.0.1 "Crystal Current"
+## Orchard 3.0.2 "Afterglow"
+
+### Improved
+- Reintroduced Kawarp For Immersive Backgrounds, since Pixi was complicated
 
 ### Fixed
-- Premium-only songs now recognize YouTube's HE-AAC streams and retry with the signed-in browser account when another player identity omits entitled playback formats.
+- Smart crossfade now keeps playing when a quiet section ramps back up later in the song
+- "Unavailable tracks are now removed from the queue when Orchard advances to them."
