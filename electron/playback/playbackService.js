@@ -50,6 +50,30 @@ const upstreamFailureCooldownMs = 10 * 60_000;
 function formatMimeFamily(format) {
   return (format?.mime_type || format?.mimeType || '').split(';', 1)[0].trim().toLowerCase();
 }
+
+function directStreamingFormats(info = {}) {
+  const streamingData = info.streaming_data || info.streamingData || {};
+  return [
+    ...(streamingData.formats || []),
+    ...(streamingData.adaptive_formats || streamingData.adaptiveFormats || [])
+  ];
+}
+
+function requireDirectStreamingFormats(info) {
+  if (directStreamingFormats(info).length) return info;
+
+  const playability = info?.playability_status || info?.playabilityStatus || {};
+  const reason = playability.reason || '';
+  const status = playability.status || '';
+  const error = new Error(
+    reason ||
+    (status ? `YouTube returned ${status} without direct playback formats` : 'InnerTube returned no direct playback formats')
+  );
+  error.info = playability;
+  error.noStreamingFormats = true;
+  throw error;
+}
+
 function streamExpiresAt(url) { try { return Number(new URL(url).searchParams.get('expire')) * 1000 || Date.now() + 45 * 60_000; } catch { return Date.now() + 45 * 60_000; } }
 export function createPlaybackService({
   authState,
@@ -183,23 +207,44 @@ export function createPlaybackService({
     const browserYtPromise = getBrowserInnertube();
     const browserYt = preferBrowserAuth && browserYtPromise ? await browserYtPromise : null;
     const primaryYt = options.yt || browserYt || await getGuestInnertube();
-    const browserPlaybackOptions = hasBrowserLoginCookie()
+    const browserPlaybackOptions = () => hasBrowserLoginCookie()
       ? { poToken: authState.browser.poToken }
       : {};
 
     try {
       return {
         yt: primaryYt,
-        info: options.info || await basicPlaybackInfo(primaryYt, videoId, browserYt === primaryYt ? browserPlaybackOptions : {})
+        info: requireDirectStreamingFormats(
+          options.info || await basicPlaybackInfo(primaryYt, videoId, browserYt === primaryYt ? browserPlaybackOptions() : {})
+        )
       };
     } catch (error) {
-      const browserYt = browserYtPromise ? await browserYtPromise : null;
-      if (browserYt && primaryYt !== browserYt && isBotCheckPlaybackError(error)) {
-        pauseAndroidVrFallback(error);
+      let fallbackBrowserYt = browserYtPromise ? await browserYtPromise : null;
+      const shouldRetryBrowser = error.noStreamingFormats ||
+        isAgeGatePlaybackError(error) ||
+        isBotCheckPlaybackError(error);
+
+      if (error.noStreamingFormats && hasBrowserLoginCookie()) {
+        try {
+          await refreshBrowserAuth();
+          fallbackBrowserYt = await getBrowserInnertube() || fallbackBrowserYt;
+        } catch {
+          // The captured browser client can still recover if refreshing cookies fails.
+        }
+      }
+
+      if (
+        fallbackBrowserYt &&
+        shouldRetryBrowser &&
+        (primaryYt !== fallbackBrowserYt || error.noStreamingFormats)
+      ) {
+        if (primaryYt !== fallbackBrowserYt) pauseAndroidVrFallback(error);
         try {
           return {
-            yt: browserYt,
-            info: await basicPlaybackInfo(browserYt, videoId, browserPlaybackOptions)
+            yt: fallbackBrowserYt,
+            info: requireDirectStreamingFormats(
+              await basicPlaybackInfo(fallbackBrowserYt, videoId, browserPlaybackOptions())
+            )
           };
         } catch (browserError) {
           error = browserError;
@@ -210,7 +255,7 @@ export function createPlaybackService({
       if (primaryYt !== guestYt && canFallbackToGuest(error)) {
         return {
           yt: guestYt,
-          info: await basicPlaybackInfo(guestYt, videoId)
+          info: requireDirectStreamingFormats(await basicPlaybackInfo(guestYt, videoId))
         };
       }
 
