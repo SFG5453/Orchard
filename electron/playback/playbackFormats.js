@@ -1,6 +1,7 @@
 // Selects compatible YouTube audio/video formats from renderer capability hints.
 const fallbackMimePreference = [
   'audio/mp4; codecs="mp4a.40.2"',
+  'audio/mp4; codecs="mp4a.40.5"',
   'audio/webm; codecs="opus"',
   'audio/webm; codecs="vorbis"'
 ];
@@ -264,6 +265,8 @@ function formatMatchesMime(format, mime) {
 }
 
 export function chooseAudioFormatFromFormats(formats, supportedMimes = []) {
+  if (!formats.length) return undefined;
+
   const browserSupportedMimes = supportedMimes.filter((item) => item.support);
   const preferredMimes = [
     ...browserSupportedMimes,

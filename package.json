@@ -1,6 +1,6 @@
 {
   "name": "orchard",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "A Quasar, Vue, Socket.IO, Electron YouTube Music client backed by InnerTube.",
   "homepage": "https://github.com/sfg5453/orchard",
   "repository": {
