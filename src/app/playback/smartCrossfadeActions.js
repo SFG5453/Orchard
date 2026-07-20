@@ -1,5 +1,9 @@
 import { ref } from 'vue';
 import { createSmartCrossfadeAnalyzer } from '../../audio/crossfade/smartCrossfadeAnalysis.js';
+import {
+  createBpmMetadataClient,
+  mergeBpmMetadata
+} from '../../audio/crossfade/bpmMetadata.js';
 
 function errorDetails(error) {
   return {
@@ -71,6 +75,9 @@ export function installSmartCrossfadeActions(ctx) {
   ctx.smartCrossfadeAnalyzer = createSmartCrossfadeAnalyzer({
     decodeAudio: ctx.audioAnalyzer.decodeAudio
   });
+  ctx.bpmMetadata = createBpmMetadataClient({
+    report: (event, details) => ctx.smartCrossfadeAnalyzer.report(`bpm-${event}`, details)
+  });
 
   ctx.resetCrossfadeAnalysis = function resetCrossfadeAnalysis(trackId = '') {
     ctx.crossfadeAnalysisRequest += 1;
@@ -102,6 +109,7 @@ export function installSmartCrossfadeActions(ctx) {
     target.value = emptyAnalysis(track.id);
     const targetName = requestKey === 'crossfadeAnalysisRequest' ? 'current' : 'next';
     ctx.smartCrossfadeAnalyzer.report('track-request', { trackId: track.id, target: targetName });
+    const bpmMetadataPromise = ctx.bpmMetadata.lookup(track);
 
     try {
       let analysis;
@@ -124,9 +132,11 @@ export function installSmartCrossfadeActions(ctx) {
         }
       }
       if (controller.signal.aborted || requestId !== ctx[requestKey]) return;
+      const bpmMetadata = await bpmMetadataPromise;
+      if (controller.signal.aborted || requestId !== ctx[requestKey]) return;
       target.value = {
         ...emptyAnalysis(track.id, 'ready'),
-        ...analysis,
+        ...mergeBpmMetadata(analysis, bpmMetadata),
         trackId: track.id,
         status: 'ready'
       };
@@ -147,6 +157,24 @@ export function installSmartCrossfadeActions(ctx) {
           trackId: track.id,
           target: targetName,
           staleRequest: requestId !== ctx[requestKey]
+        });
+        return;
+      }
+      const bpmMetadata = await bpmMetadataPromise;
+      if (controller.signal.aborted || requestId !== ctx[requestKey]) return;
+      if (bpmMetadata) {
+        target.value = {
+          ...emptyAnalysis(track.id, 'ready'),
+          ...mergeBpmMetadata({}, bpmMetadata),
+          trackId: track.id,
+          status: 'ready'
+        };
+        ctx.crossfadeAnalysisByTrack.set(track.id, target.value);
+        ctx.smartCrossfadeAnalyzer.report('track-ready-from-bpm', {
+          trackId: track.id,
+          target: targetName,
+          bpm: Number(target.value.bpm) || 0,
+          key: target.value.key || ''
         });
         return;
       }

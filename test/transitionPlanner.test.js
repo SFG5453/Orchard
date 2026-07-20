@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { mergeBpmMetadata } from '../src/audio/crossfade/bpmMetadata.js';
 import { planTransition } from '../src/audio/crossfade/transitionPlanner.js';
 
 test('smart transitions honor analyzed content end and structural boundaries', () => {
@@ -67,6 +68,36 @@ test('same-tempo phrase switches use an eight-beat transition', () => {
   assert.equal(plan.handoffDuration, 2);
   assert.equal(plan.incomingCueTime, 2.2);
   assert.equal(plan.shouldStart, true);
+});
+
+test('catalog-only tempo cannot authorize a beat-aligned phrase switch', () => {
+  const catalogAnalysis = mergeBpmMetadata({}, {
+    bpm: 120,
+    tempoConfidence: 0.82,
+    key: 'C',
+    keyConfidence: 0.82,
+    source: 'GetSongBPM'
+  });
+  const plan = planTransition({
+    analysis: {
+      ...catalogAnalysis,
+      contentEndTime: 180,
+      downbeats: []
+    },
+    currentTime: 170,
+    currentTrack: { id: 'current', durationSeconds: 200 },
+    duration: 200,
+    mode: 'smart',
+    nextAnalysis: {
+      ...catalogAnalysis,
+      downbeats: []
+    },
+    nextTrack: { id: 'next', durationSeconds: 200 }
+  });
+
+  assert.notEqual(plan.transitionStyle, 'dj_switch');
+  assert.equal(catalogAnalysis.beatConfidence, 0);
+  assert.equal(catalogAnalysis.tempoConfidence, 0.82);
 });
 
 test('DJ transitions prefer the analyzed interior mix-in downbeat', () => {
