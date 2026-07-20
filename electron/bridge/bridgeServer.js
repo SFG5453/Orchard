@@ -8,6 +8,8 @@ import { registerYouTubeHistoryBridge } from './youtubeHistoryBridge.js';
 import { registerYouTubeLikesBridge } from './youtubeLikesBridge.js';
 import { registerArtistGenreBridge } from './artistGenreBridge.js';
 import { playbackAudioBitrate } from '../playback/playbackFormats.js';
+import { isAgeGatePlaybackError } from '../playback/playbackErrors.js';
+import { isAgeGateRiskTrack } from '../playback/musicVideoFallback.js';
 /** Starts the renderer-only loopback transport and returns its owned close handle. */
 export async function startBridgeServer({
   bridgeError,
@@ -18,6 +20,7 @@ export async function startBridgeServer({
   fetchFeed,
   fetchMusicLibraryCategory,
   fetchMusicLibraryFeed,
+  findMusicVideoFallback,
   getBrowserInnertube,
   getGuestInnertube,
   getInnertube,
@@ -128,11 +131,20 @@ export async function startBridgeServer({
 
   async function resolveTrackRequest({ videoId, supportedMimes = [], supportedVideoMimes = [], mediaKind = 'audio', preload = false, refreshStream = false, avoidItags = [], avoidMimeTypes = [], ...trackHint }) {
     const preferBrowserPlayback = playback.androidVrCooldownActive();
-    const yt = await musicClientForPlayback(preferBrowserPlayback);
+    const [yt, searchYt] = await Promise.all([
+      musicClientForPlayback(preferBrowserPlayback),
+      getGuestInnertube()
+    ]);
     const wantsVideo = mediaKind === 'video';
     const resolvedVideoId = wantsVideo
       ? videoId
-      : await preferredAudioTrack(yt, { ...trackHint, videoId });
+      : await preferredAudioTrack(searchYt, { ...trackHint, videoId });
+    let musicVideoFallbackPromise;
+
+    function findMusicVideoFallbackOnce() {
+      musicVideoFallbackPromise ||= findMusicVideoFallback(searchYt, { ...trackHint, videoId });
+      return musicVideoFallbackPromise;
+    }
 
     async function resolveCandidate(candidateId, { playAsVideo = false } = {}) {
       const resolvedInfo = await playback.playbackInfo(candidateId, {
@@ -140,6 +152,12 @@ export async function startBridgeServer({
         preferBrowserAuth: preferBrowserPlayback
       });
       const normalizedInfo = normalizeTrackInfo(candidateId, resolvedInfo.info);
+      const fallbackTargetDuration = playAsVideo
+        ? Number(trackHint.fallbackTargetDurationSeconds || trackHint.durationSeconds || 0)
+        : 0;
+      if (fallbackTargetDuration && Math.abs(normalizedInfo.durationSeconds - fallbackTargetDuration) > 5) {
+        throw new Error('The matching music video differs from the song by more than five seconds');
+      }
       const streamAsVideo = wantsVideo || playAsVideo;
       const stream = await resolveStream(candidateId, {
         supportedMimes: streamAsVideo ? supportedVideoMimes : supportedMimes,
@@ -172,18 +190,58 @@ export async function startBridgeServer({
       };
     }
 
+    async function resolveMusicVideoFallback(fallback, reason) {
+      console.warn(`Using ${reason} music video ${fallback.id} for age-gated track ${videoId}`);
+      return {
+        ...await resolveCandidate(fallback.id, { playAsVideo: true }),
+        id: trackHint.originalVideoId || videoId,
+        musicVideoAudioFallback: true,
+        musicVideoFallbackId: fallback.id
+      };
+    }
+
+    if (!wantsVideo && isAgeGateRiskTrack(trackHint)) {
+      const fallback = await findMusicVideoFallbackOnce();
+      if (fallback) {
+        try {
+          return await resolveMusicVideoFallback(fallback, 'proactive');
+        } catch (fallbackError) {
+          console.warn(`Proactive music-video fallback ${fallback.id} failed: ${fallbackError.message}`);
+        }
+      }
+    }
+
     try {
-      return await resolveCandidate(resolvedVideoId);
+      const resolved = await resolveCandidate(resolvedVideoId, {
+        playAsVideo: Boolean(trackHint.musicVideoAudioFallback)
+      });
+      if (!trackHint.musicVideoAudioFallback) return resolved;
+
+      return {
+        ...resolved,
+        id: trackHint.originalVideoId || videoId,
+        musicVideoAudioFallback: true,
+        musicVideoFallbackId: videoId
+      };
     } catch (error) {
-      if (wantsVideo || !error.ageGateBlocked) throw error;
-      const alternateAudioId = await preferredAudioTrack(yt, {
+      if (wantsVideo || !isAgeGatePlaybackError(error)) throw error;
+      const fallback = await findMusicVideoFallbackOnce();
+      if (fallback) {
+        try {
+          return await resolveMusicVideoFallback(fallback, 'duration-matched');
+        } catch (fallbackError) {
+          console.warn(`Duration-matched music-video fallback ${fallback.id} failed: ${fallbackError.message}`);
+        }
+      }
+
+      const alternateAudioId = await preferredAudioTrack(searchYt, {
         ...trackHint, videoId, preferAudioOnly: true, retryAlternateAudio: true, excludedVideoIds: [resolvedVideoId]
       });
       if (alternateAudioId !== videoId && alternateAudioId !== resolvedVideoId) {
         try {
           return await resolveCandidate(alternateAudioId);
         } catch (alternateError) {
-          if (!alternateError.ageGateBlocked) throw alternateError;
+          if (!isAgeGatePlaybackError(alternateError)) throw alternateError;
           error = alternateError;
         }
       }

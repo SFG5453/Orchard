@@ -37,9 +37,11 @@ export function installPlaybackResolve(ctx) {
   ctx.trackResolvePayload = function trackResolvePayload(item, options = {}) {
     if (!ctx.isPlayableTrack(item)) return null;
     const mediaKind = ctx.shouldPlayAsVideo(item, options) ? 'video' : 'audio';
+    const usesMusicVideoFallback = Boolean(item.musicVideoAudioFallback && item.musicVideoFallbackId);
 
     return {
-      videoId: item.id,
+      videoId: usesMusicVideoFallback ? item.musicVideoFallbackId : item.id,
+      originalVideoId: item.id,
       title: item.title,
       artist: item.artist || item.artists?.[0] || '',
       artists: item.artists || [],
@@ -50,6 +52,8 @@ export function installPlaybackResolve(ctx) {
       type: item.type || '',
       musicVideoType: item.musicVideoType || '',
       isAudioOnly: Boolean(item.isAudioOnly),
+      musicVideoAudioFallback: usesMusicVideoFallback,
+      fallbackTargetDurationSeconds: Number(item.fallbackTargetDurationSeconds || 0),
       mediaKind,
       preload: Boolean(options.preload),
       refreshStream: Boolean(options.refreshStream),
@@ -85,6 +89,8 @@ export function installPlaybackResolve(ctx) {
       streamExpiresAt: resolved.streamExpiresAt || 0,
       playbackSource: resolved.playbackSource || 'youtube',
       externalSource: resolved.externalSource || '',
+      musicVideoAudioFallback: Boolean(resolved.musicVideoAudioFallback),
+      musicVideoFallbackId: resolved.musicVideoFallbackId || '',
       thumbnail: item.thumbnail || resolved.thumbnail,
       isLive: Boolean(resolved.isLive || item.isLive),
       durationSeconds: item.durationSeconds || resolved.durationSeconds || 0,
@@ -236,7 +242,7 @@ export function installPlaybackResolve(ctx) {
       if (stalePlayRequest()) return;
       ctx.activeMediaKind.value = resolved.mediaKind || (wantsVideo ? 'video' : 'audio');
       ctx.activeTrack.value = ctx.activeTrackFromResolved(trackItem, resolved);
-      ctx.videoPlayerMinimized.value = false;
+      ctx.videoPlayerMinimized.value = Boolean(resolved.musicVideoAudioFallback);
       ctx.resetCrossfadeAnalysis();
       if (ctx.activeTrackIsVideo.value) {
         ctx.clearNextPreload();

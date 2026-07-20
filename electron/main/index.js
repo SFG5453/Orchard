@@ -47,6 +47,7 @@ import { createYouTubeLikesService } from '../catalog/youtubeLikes.js';
 import { setupMigrationNotice } from '../integrations/migrationNotice.js';
 import { setupOrchardUpdates } from '../integrations/updater.js';
 import { createPreferredAudioTrack, createTrackInfoNormalizer } from '../playback/playbackFormats.js';
+import { createMusicVideoFallback } from '../playback/musicVideoFallback.js';
 import { createPlaybackService } from '../playback/playbackService.js';
 import { registerAppHandlers } from '../platform/appHandlers.js';
 import { registerClipboardHandlers } from '../platform/clipboard.js';
@@ -215,6 +216,7 @@ const {
   searchArtistShelfFallback
 } = searchUtils;
 const preferredAudioTrack = createPreferredAudioTrack({ normalizedLookupText, shelfItems });
+const findMusicVideoFallback = createMusicVideoFallback({ normalizedLookupText, shelfItems });
 const futureAlbums = createFutureAlbums({
   dedupeMediaItems,
   formatMillisDuration,
@@ -288,6 +290,7 @@ async function startBridge() {
     fetchBrowserMusicHome,
     fetchFeed, fetchMusicLibraryCategory,
     fetchMusicLibraryFeed,
+    findMusicVideoFallback,
     getBrowserInnertube,
     getGuestInnertube,
     getInnertube,
