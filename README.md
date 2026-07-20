@@ -75,7 +75,7 @@ Create distributable artifacts for the current platform:
 npm run make
 ```
 
-GitHub release automation publishes Linux AppImage, Debian, RPM, and Arch packages; a Windows NSIS installer; and unsigned macOS zips for Apple Silicon and Intel. Tagged builds run in GitHub Actions and attach the packages directly to the matching GitHub Release. The desktop updater reads from `ORCHARD_UPDATE_URL` when set, otherwise it uses the default downloads host in `electron-builder.config.cjs`.
+Release automation publishes Linux AppImage, Debian, RPM, and Arch packages; a Windows NSIS installer; and unsigned macOS zips for Apple Silicon and Intel. Tagged builds run in GitHub Actions and upload the packages and updater manifests to the Orchard R2 bucket. The desktop updater reads from `ORCHARD_UPDATE_URL` when set, otherwise it uses the default downloads host in `electron-builder.config.cjs`.
 
 Build the universal macOS zip from Linux with:
 

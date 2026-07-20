@@ -1,4 +1,4 @@
-name: GitHub Release
+name: R2 Release
 
 on:
   push:
@@ -111,9 +111,10 @@ jobs:
 
           mkdir -p release-assets
           find release-linux -maxdepth 1 -type f \
-            \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \) \
+            \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.yml' -o -name '*.blockmap' \) \
             -exec cp {} release-assets/ \;
-          test "$(find release-assets -maxdepth 1 -type f | wc -l)" -eq 3
+          test "$(find release-assets -maxdepth 1 -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \) | wc -l)" -eq 3
+          test -f release-assets/latest-linux.yml
           find release-assets -maxdepth 1 -type f -print
 
       - name: Save Linux packages
@@ -206,6 +207,8 @@ jobs:
           $installers = @(Get-ChildItem release-windows -File -Filter '*.exe')
           if ($installers.Count -eq 0) { throw 'The Windows installer was not created.' }
           $installers | Copy-Item -Destination release-assets
+          Get-ChildItem release-windows -File | Where-Object { $_.Extension -in '.yml', '.blockmap' } | Copy-Item -Destination release-assets
+          if (-not (Test-Path release-assets/latest.yml)) { throw 'Windows update metadata was not created.' }
           Get-ChildItem release-assets -File
 
       - name: Save Windows installer
@@ -266,8 +269,9 @@ jobs:
             --publish never
 
           mkdir -p release-assets
-          find release-macos -maxdepth 1 -type f -name '*.zip' \
+          find release-macos -maxdepth 1 -type f \( -name '*.zip' -o -name '*.blockmap' \) \
             -exec cp {} release-assets/ \;
+          cp release-macos/latest-mac.yml "release-assets/latest-mac-${{ matrix.arch }}.yml"
           test "$(find release-assets -maxdepth 1 -type f -name '*.zip' | wc -l)" -eq 1
           find release-assets -maxdepth 1 -type f -print
 
@@ -280,7 +284,7 @@ jobs:
           retention-days: 1
 
   publish:
-    name: Publish GitHub Release
+    name: Publish to Orchard R2
     needs:
       - prepare
       - build-linux
@@ -288,24 +292,38 @@ jobs:
       - build-windows
       - build-macos
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
     env:
-      GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
     steps:
-      - name: Check out release notes
+      - name: Check out release utilities
         uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare.outputs.tag }}
 
-      - name: Download release packages
+      - name: Verify upload tools
+        run: |
+          aws --version
+          node --version
+
+      - name: Download release artifacts
         uses: actions/download-artifact@v8
         with:
           pattern: release-*
           path: release-assets
           merge-multiple: true
+
+      - name: Merge macOS update metadata
+        run: |
+          set -euo pipefail
+          node scripts/merge-macos-update-metadata.mjs \
+            release-assets/latest-mac-x64.yml \
+            release-assets/latest-mac-arm64.yml \
+            release-assets/latest-mac.yml
+          rm release-assets/latest-mac-x64.yml release-assets/latest-mac-arm64.yml
 
       - name: Generate checksums
         run: |
@@ -319,29 +337,22 @@ jobs:
           )
           cat release-assets/SHA256SUMS.txt
 
-      - name: Create release and attach packages
+      - name: Upload versioned release artifacts
         run: |
           set -euo pipefail
-          mapfile -d '' assets < <(find release-assets -maxdepth 1 -type f -print0 | sort -z)
-          test "${#assets[@]}" -gt 0
+          test -n "$(find release-assets -maxdepth 1 -type f -print -quit)"
+          aws s3 cp release-assets/ "s3://$R2_BUCKET/orchard/" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --exclude 'latest*.yml' \
+            --recursive
 
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "${assets[@]}" \
-              --repo "$GITHUB_REPOSITORY" \
-              --clobber
-            gh release edit "$RELEASE_TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "Orchard $RELEASE_VERSION" \
-              --notes-file build/release-notes.md
-          else
-            release_flags=(--latest)
-            if [[ "$RELEASE_TAG" == *-* ]]; then
-              release_flags=(--prerelease --latest=false)
-            fi
-            gh release create "$RELEASE_TAG" "${assets[@]}" \
-              --repo "$GITHUB_REPOSITORY" \
-              --verify-tag \
-              --title "Orchard $RELEASE_VERSION" \
-              --notes-file build/release-notes.md \
-              "${release_flags[@]}"
-          fi
+      - name: Publish updater manifests
+        run: |
+          set -euo pipefail
+          for manifest in latest.yml latest-linux.yml latest-mac.yml; do
+            test -f "release-assets/$manifest"
+            aws s3 cp "release-assets/$manifest" "s3://$R2_BUCKET/orchard/$manifest" \
+              --endpoint-url "$R2_ENDPOINT" \
+              --content-type application/yaml \
+              --cache-control no-cache
+          done
