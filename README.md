@@ -133,6 +133,10 @@ local network.
 - `npm run build:frontend` checks renderer-only changes; `npm run build` also rebuilds the native analyzer.
 - Worker and service READMEs contain their own provisioning, secrets, and deployment instructions.
 
+## Attribution
+
+BPM and musical-key metadata provided by [GetSongBPM](https://getsongbpm.com).
+
 ## License
 
 [MIT](LICENSE).
