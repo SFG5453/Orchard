@@ -116,10 +116,17 @@ export function chooseBestMatch(results, query) {
       if (!song) return null;
       const titleScore = textMatchScore(song.title, query.title);
       const artistScore = query.artist ? textMatchScore(song.artist, query.artist) : 1;
-      if (titleScore < 0.45 || artistScore < 0.35) return null;
+      const score = query.artist ? (titleScore * 0.7) + (artistScore * 0.3) : titleScore;
+      if (query.artist) {
+        // Reject candidates where both fields only share a few generic tokens.
+        // A usable match needs meaningful agreement in each field and jointly.
+        if (titleScore < 0.6 || artistScore < 0.55 || score < 0.72) return null;
+      } else if (titleScore < 0.6) {
+        return null;
+      }
       return {
         song,
-        score: query.artist ? (titleScore * 0.7) + (artistScore * 0.3) : titleScore
+        score
       };
     })
     .filter(Boolean)

@@ -74,7 +74,8 @@ export function normalizeBpmMetadata(value) {
   return {
     bpm,
     beatInterval: 60 / bpm,
-    beatConfidence: 0.82,
+    // Catalog data confirms tempo, not beat phase or downbeat placement.
+    tempoConfidence: 0.82,
     key: normalizeMusicalKey(value?.key),
     keyConfidence: value?.key ? 0.82 : 0,
     title,
@@ -96,6 +97,11 @@ function calibratedBpm(catalogBpm, analyzedBpm) {
 export function mergeBpmMetadata(analysis = {}, metadata = null) {
   if (!metadata) return analysis;
   const analyzedBpm = Number(analysis?.bpm) || 0;
+  const beatConfidence = Number(analysis?.beatConfidence) || 0;
+  const tempoConfidence = Math.max(
+    Number(analysis?.tempoConfidence) || beatConfidence,
+    Number(metadata?.tempoConfidence) || 0.82
+  );
   const bpm = calibratedBpm(Number(metadata.bpm), analyzedBpm);
   const catalogKey = normalizeMusicalKey(metadata.key);
   return {
@@ -104,7 +110,8 @@ export function mergeBpmMetadata(analysis = {}, metadata = null) {
     ...(analysis?.key && catalogKey && analysis.key !== catalogKey ? { analyzedKey: analysis.key } : {}),
     bpm,
     beatInterval: 60 / bpm,
-    beatConfidence: Math.max(Number(analysis?.beatConfidence) || 0, Number(metadata.beatConfidence) || 0.82),
+    beatConfidence,
+    tempoConfidence,
     key: catalogKey || analysis?.key || '',
     keyConfidence: catalogKey
       ? Math.max(Number(analysis?.keyConfidence) || 0, Number(metadata.keyConfidence) || 0.82)
@@ -159,6 +166,7 @@ export function createBpmMetadataClient({
   async function requestMetadata(query) {
     if (typeof fetcher !== 'function') return null;
     if (Date.now() < unavailableUntil) return null;
+    const unavailableAtStart = unavailableUntil;
     const url = new URL(endpoint);
     url.searchParams.set('title', query.title);
     if (query.artist) url.searchParams.set('artist', query.artist);
@@ -177,7 +185,9 @@ export function createBpmMetadataClient({
         return null;
       }
       const metadata = normalizeBpmMetadata(await response.json());
-      unavailableUntil = 0;
+      // Do not let a request that started before a concurrent failure erase
+      // the newer cooldown established by that failure.
+      if (unavailableUntil === unavailableAtStart) unavailableUntil = 0;
       report(metadata ? 'request-ready' : 'request-invalid', {
         bpm: Number(metadata?.bpm) || 0,
         hasKey: Boolean(metadata?.key)

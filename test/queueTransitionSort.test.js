@@ -81,10 +81,10 @@ test('Best mix loads BPM service metadata before sorting an unanalyzed queue', a
     { id: 'followup', title: 'Followup', artist: 'Artist' }
   ];
   const bpm = new Map([
-    ['active', { bpm: 100, beatConfidence: 0.82, key: 'C major', keyConfidence: 0.82 }],
-    ['rough', { bpm: 145, beatConfidence: 0.82, key: 'F♯ major', keyConfidence: 0.82 }],
-    ['smooth', { bpm: 102, beatConfidence: 0.82, key: 'G major', keyConfidence: 0.82 }],
-    ['followup', { bpm: 105, beatConfidence: 0.82, key: 'D major', keyConfidence: 0.82 }]
+    ['active', { bpm: 100, tempoConfidence: 0.82, key: 'C major', keyConfidence: 0.82 }],
+    ['rough', { bpm: 145, tempoConfidence: 0.82, key: 'F♯ major', keyConfidence: 0.82 }],
+    ['smooth', { bpm: 102, tempoConfidence: 0.82, key: 'G major', keyConfidence: 0.82 }],
+    ['followup', { bpm: 105, tempoConfidence: 0.82, key: 'D major', keyConfidence: 0.82 }]
   ]);
   let preloadCalls = 0;
   let lookupTracks = [];
@@ -124,7 +124,7 @@ test('Best mix only looks up and reorders the next 50 queued songs', async () =>
   const originalTail = queue.slice(50).map((track) => track.id);
   const bpm = new Map(queue.slice(0, 50).map((track, index) => [
     track.id,
-    { bpm: index === 0 ? 160 : 100 + index, beatConfidence: 0.82 }
+    { bpm: index === 0 ? 160 : 100 + index, tempoConfidence: 0.82 }
   ]));
   let lookupTracks = [];
   const ctx = {
@@ -138,7 +138,7 @@ test('Best mix only looks up and reorders the next 50 queued songs', async () =>
       lookupMany: async (tracks) => {
         lookupTracks = tracks;
         return new Map([
-          ['active', { bpm: 100, beatConfidence: 0.82 }],
+          ['active', { bpm: 100, tempoConfidence: 0.82 }],
           ...bpm
         ]);
       }

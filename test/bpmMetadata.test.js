@@ -32,13 +32,29 @@ test('normalizes GetSongBPM key notation for transition planning', () => {
 test('merges catalog BPM and key while keeping the analyzed beat octave', () => {
   const merged = mergeBpmMetadata(
     { bpm: 109, beatConfidence: 0.7, key: 'G major', keyConfidence: 0.5 },
-    { bpm: 220, beatConfidence: 0.82, key: 'Em', keyConfidence: 0.82, source: 'GetSongBPM' }
+    { bpm: 220, tempoConfidence: 0.82, key: 'Em', keyConfidence: 0.82, source: 'GetSongBPM' }
   );
   assert.equal(merged.bpm, 110);
   assert.equal(merged.analyzedBpm, 109);
   assert.equal(merged.key, 'E minor');
   assert.equal(merged.analyzedKey, 'G major');
   assert.equal(merged.bpmSource, 'GetSongBPM');
+  assert.equal(merged.beatConfidence, 0.7);
+  assert.equal(merged.tempoConfidence, 0.82);
+});
+
+test('catalog tempo does not invent beat-grid confidence', () => {
+  const merged = mergeBpmMetadata({}, {
+    bpm: 120,
+    tempoConfidence: 0.82,
+    key: 'C',
+    keyConfidence: 0.82,
+    source: 'GetSongBPM'
+  });
+
+  assert.equal(merged.bpm, 120);
+  assert.equal(merged.beatConfidence, 0);
+  assert.equal(merged.tempoConfidence, 0.82);
 });
 
 test('deduplicates lookups and loads queue metadata with bounded concurrency', async () => {
@@ -94,6 +110,51 @@ test('retries transient BPM lookup failures after the recovery window', async ()
     now += 30_001;
     assert.equal((await client.lookup(track)).bpm, 120);
     assert.equal(calls, 2);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test('preserves a concurrent rate-limit cooldown after an earlier request succeeds', async () => {
+  const originalNow = Date.now;
+  let now = originalNow();
+  let calls = 0;
+  let releaseSuccess;
+  const successGate = new Promise((resolve) => { releaseSuccess = resolve; });
+  Date.now = () => now;
+  try {
+    const client = createBpmMetadataClient({
+      endpoint: 'https://bpm.example/bpm',
+      storage: null,
+      report(event) {
+        if (event === 'request-miss') releaseSuccess();
+      },
+      fetcher: async (url) => {
+        calls += 1;
+        const title = new URL(url).searchParams.get('title');
+        if (title === 'Limited') return new Response(null, { status: 429 });
+        await successGate;
+        return Response.json({ title, artist: 'Artist', bpm: 120, key: 'C' });
+      }
+    });
+
+    await client.lookupMany([
+      { id: 'limited', title: 'Limited', artist: 'Artist' },
+      { id: 'success', title: 'Success', artist: 'Artist' }
+    ], { concurrency: 2 });
+
+    assert.equal(
+      await client.lookup({ id: 'blocked', title: 'Blocked', artist: 'Artist' }),
+      null
+    );
+    assert.equal(calls, 2);
+
+    now += 30_001;
+    assert.equal(
+      (await client.lookup({ id: 'recovered', title: 'Recovered', artist: 'Artist' })).bpm,
+      120
+    );
+    assert.equal(calls, 3);
   } finally {
     Date.now = originalNow;
   }

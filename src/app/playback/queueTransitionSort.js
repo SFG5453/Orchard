@@ -88,7 +88,8 @@ export function transitionCost(left = {}, right = {}) {
   const tempoRatio = normalizedTempoRatio(left.bpm, right.bpm);
   if (tempoRatio) {
     const weight = 4 * Math.sqrt(
-      confidence(left.beatConfidence, 0.35) * confidence(right.beatConfidence, 0.35)
+      confidence(left.tempoConfidence ?? left.beatConfidence, 0.35) *
+      confidence(right.tempoConfidence ?? right.beatConfidence, 0.35)
     );
     const cost = Math.min(1.5, Math.abs(Math.log2(tempoRatio)) / Math.log2(1.2));
     weightedCost += cost * weight;
@@ -222,7 +223,9 @@ export function installQueueTransitionSort(ctx) {
     const vocalSource = sources.find((source) => finiteOrNull(source?.vocalProbability, -0.001) !== null);
     return {
       bpm: Number(tempoSource?.bpm || tempoSource?.tempo || learnedTempo) || 0,
-      beatConfidence: Number(tempoSource?.beatConfidence) || (tempoSource ? 0.35 : (learnedTempo ? 0.25 : 0)),
+      tempoConfidence: Number(tempoSource?.tempoConfidence ?? tempoSource?.beatConfidence) ||
+        (tempoSource ? 0.35 : (learnedTempo ? 0.25 : 0)),
+      beatConfidence: Number(tempoSource?.beatConfidence) || 0,
       key: keySource?.key || '',
       keyConfidence: Number(keySource?.keyConfidence) || (keySource ? 0.35 : 0),
       loudnessLufs: loudnessSource?.loudnessLufs ?? null,

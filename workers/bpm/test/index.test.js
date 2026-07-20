@@ -66,6 +66,17 @@ test('ranks an exact title and artist above a weaker candidate', () => {
   assert.equal(result.id, 'o2r0L');
 });
 
+test('rejects candidates with only weak title and artist token overlap', () => {
+  const result = chooseBestMatch([{
+    ...masterOfPuppets,
+    id: 'weak',
+    title: 'Love Song',
+    artist: { name: 'John Doe' }
+  }], { title: 'Love Story', artist: 'John Smith' });
+
+  assert.equal(result, null);
+});
+
 test('sends the API key in a header and returns the best song', async () => {
   let captured;
   const song = await lookupSong('secret-test-key', {
