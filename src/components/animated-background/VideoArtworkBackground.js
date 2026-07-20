@@ -58,7 +58,7 @@ export class VideoArtworkBackground {
 
     let Hls;
     try {
-      ({ default: Hls } = await import('hls.js'));
+      ({ default: Hls } = await import('hls.js/light'));
     } catch (error) {
       this.fail(requestId, error);
       return;

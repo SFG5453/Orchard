@@ -1,6 +1,7 @@
 <script>
 import sfg545AvatarUrl from '../../assets/sfg545.gif';
 import reallyUnusualAvatarUrl from '../../assets/ReallyUnusual.png';
+import julianRamierezAvatarUrl from '../../assets/julian-ramierez.jpg';
 
 export default {
   name: 'AboutDialog',
@@ -8,7 +9,8 @@ export default {
   data() {
     return {
       sfg545AvatarUrl,
-      reallyUnusualAvatarUrl
+      reallyUnusualAvatarUrl,
+      julianRamierezAvatarUrl
     };
   },
   setup(props) {
@@ -52,10 +54,18 @@ export default {
           <div
             class="about-dialog__contributor"
             tabindex="0"
-            aria-label="ReallyUnusual - Primary (and only) Tester"
+            aria-label="ReallyUnusual - Primary Tester"
           >
             <img :src="reallyUnusualAvatarUrl" alt="" />
-            <span>ReallyUnusual - Primary (and only) Tester</span>
+            <span>ReallyUnusual - Primary Tester</span>
+          </div>
+          <div
+            class="about-dialog__contributor"
+            tabindex="0"
+            aria-label="Julian Ramierez - Tester and Mobile App Developer"
+          >
+            <img :src="julianRamierezAvatarUrl" alt="" />
+            <span>Julian Ramierez - Tester and Mobile App Developer</span>
           </div>
         </div>
         <q-btn
