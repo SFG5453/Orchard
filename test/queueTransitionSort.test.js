@@ -93,14 +93,7 @@ test('Best mix loads BPM service metadata before sorting an unanalyzed queue', a
     queue: ref(queue),
     shuffleEnabled: ref(false),
     shuffleSourceQueue: ref([]),
-    crossfadeAnalysis: ref({
-      status: 'ready',
-      trackId: 'active',
-      bpm: 100,
-      beatConfidence: 0.82,
-      key: 'C major',
-      keyConfidence: 0.82
-    }),
+    crossfadeAnalysis: ref({}),
     crossfadeAnalysisByTrack: new Map(),
     bpmMetadata: {
       lookupMany: async (tracks) => {
@@ -116,7 +109,7 @@ test('Best mix loads BPM service metadata before sorting an unanalyzed queue', a
   installQueueTransitionSort(ctx);
   await ctx.toggleTransitionQueueSort();
 
-  assert.deepEqual(lookupTracks.map((track) => track.id), ['rough', 'smooth', 'followup']);
+  assert.deepEqual(lookupTracks.map((track) => track.id), ['active', 'rough', 'smooth', 'followup']);
   assert.equal(ctx.queue.value[0].id, 'smooth');
   assert.equal(ctx.transitionQueueSorted.value, true);
   assert.equal(preloadCalls, 1);
@@ -158,6 +151,11 @@ test('Best mix only looks up and reorders the next 50 queued songs', async () =>
   installQueueTransitionSort(ctx);
   await ctx.toggleTransitionQueueSort();
 
-  assert.equal(lookupTracks.length, 50);
+  assert.equal(lookupTracks.length, 51);
+  assert.equal(lookupTracks[0].id, 'active');
+  assert.deepEqual(
+    lookupTracks.slice(1).map((track) => track.id),
+    queue.slice(0, 50).map((track) => track.id)
+  );
   assert.deepEqual(ctx.queue.value.slice(50).map((track) => track.id), originalTail);
 });

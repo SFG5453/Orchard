@@ -73,6 +73,32 @@ test('deduplicates lookups and loads queue metadata with bounded concurrency', a
   assert.equal(calls, 2);
 });
 
+test('retries transient BPM lookup failures after the recovery window', async () => {
+  const originalNow = Date.now;
+  let now = originalNow();
+  let calls = 0;
+  Date.now = () => now;
+  try {
+    const client = createBpmMetadataClient({
+      endpoint: 'https://bpm.example/bpm',
+      storage: null,
+      fetcher: async () => {
+        calls += 1;
+        if (calls === 1) return new Response(null, { status: 503 });
+        return Response.json({ title: 'Recovered', artist: 'Artist', bpm: 120, key: 'C' });
+      }
+    });
+    const track = { id: 'song', title: 'Recovered', artist: 'Artist' };
+
+    assert.equal(await client.lookup(track), null);
+    now += 30_001;
+    assert.equal((await client.lookup(track)).bpm, 120);
+    assert.equal(calls, 2);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
 test('reuses fresh BPM metadata from persistent storage without a network request', async () => {
   const query = { title: 'Master of Puppets', artist: 'Metallica' };
   let calls = 0;

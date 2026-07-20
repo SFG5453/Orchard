@@ -205,14 +205,15 @@ export function createBpmMetadataClient({
 
     const request = requestMetadata(query)
       .then((metadata) => {
+        if (!metadata) return null;
         cache.set(key, metadata);
-        if (metadata) cacheTimes.set(key, Date.now());
+        cacheTimes.set(key, Date.now());
         if (cache.size > MAX_CACHE_ENTRIES) {
           const oldestKey = cache.keys().next().value;
           cache.delete(oldestKey);
           cacheTimes.delete(oldestKey);
         }
-        if (metadata) schedulePersist();
+        schedulePersist();
         return metadata;
       })
       .finally(() => pending.delete(key));

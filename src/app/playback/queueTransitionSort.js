@@ -284,10 +284,12 @@ export function installQueueTransitionSort(ctx) {
       const snapshot = [...ctx.queue.value];
       const sortableTracks = snapshot.slice(0, BEST_MIX_TRACK_LIMIT);
       const untouchedTracks = snapshot.slice(BEST_MIX_TRACK_LIMIT);
+      const catalogTracks = [ctx.activeTrack.value, ...sortableTracks]
+        .filter((track) => track?.id);
       const [tempoByTrack, cachedByTrack, bpmByTrack] = await Promise.all([
         learnedTempoMap(),
         cachedAnalysisMap([ctx.activeTrack.value, ...sortableTracks]),
-        ctx.bpmMetadata?.lookupMany?.(sortableTracks) || Promise.resolve(new Map())
+        ctx.bpmMetadata?.lookupMany?.(catalogTracks) || Promise.resolve(new Map())
       ]);
       if (queueSignature !== ctx.queue.value.map((track) => track.id).join(',')) return;
       const analysisByTrack = new Map(sortableTracks.map((track) => [
