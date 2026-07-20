@@ -98,8 +98,8 @@ export default {
                   class="right-queue-sort"
                   :class="{ 'right-queue-sort--active': transitionQueueSorted }"
                   :aria-pressed="transitionQueueSorted"
-                  :aria-label="transitionQueueSorted ? 'Restore previous queue order' : 'Sort analyzed songs by audio compatibility'"
-                  :title="transitionQueueSorted ? 'Restore previous queue order' : 'Uses analyzed BPM, key, energy, loudness, and vocal density'"
+                  :aria-label="transitionQueueSorted ? 'Restore previous queue order' : 'Sort the queue by musical compatibility'"
+                  :title="transitionQueueSorted ? 'Restore previous queue order' : 'Uses BPM, key, energy, loudness, and vocal density'"
                   :disabled="transitionQueueSortBusy"
                   @click="toggleTransitionQueueSort"
                 >

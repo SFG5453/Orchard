@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { ref } from 'vue';
 
 import {
   bestTransitionOrder,
+  installQueueTransitionSort,
   transitionCost
 } from '../src/app/playback/queueTransitionSort.js';
 
@@ -69,4 +71,93 @@ test('unanalyzed tracks keep their positions and split sortable segments', () =>
   const result = bestTransitionOrder(queue, analyses, { bpm: 128, key: 'D major' });
   assert.equal(result.ordered[1].id, 'unknown');
   assert.deepEqual(ids(result.ordered), ['known-a', 'unknown', 'known-b', 'known-c']);
+});
+
+test('Best mix loads BPM service metadata before sorting an unanalyzed queue', async () => {
+  const activeTrack = { id: 'active', title: 'Active', artist: 'Artist' };
+  const queue = [
+    { id: 'rough', title: 'Rough', artist: 'Artist' },
+    { id: 'smooth', title: 'Smooth', artist: 'Artist' },
+    { id: 'followup', title: 'Followup', artist: 'Artist' }
+  ];
+  const bpm = new Map([
+    ['active', { bpm: 100, beatConfidence: 0.82, key: 'C major', keyConfidence: 0.82 }],
+    ['rough', { bpm: 145, beatConfidence: 0.82, key: 'F♯ major', keyConfidence: 0.82 }],
+    ['smooth', { bpm: 102, beatConfidence: 0.82, key: 'G major', keyConfidence: 0.82 }],
+    ['followup', { bpm: 105, beatConfidence: 0.82, key: 'D major', keyConfidence: 0.82 }]
+  ]);
+  let preloadCalls = 0;
+  let lookupTracks = [];
+  const ctx = {
+    activeTrack: ref(activeTrack),
+    queue: ref(queue),
+    shuffleEnabled: ref(false),
+    shuffleSourceQueue: ref([]),
+    crossfadeAnalysis: ref({
+      status: 'ready',
+      trackId: 'active',
+      bpm: 100,
+      beatConfidence: 0.82,
+      key: 'C major',
+      keyConfidence: 0.82
+    }),
+    crossfadeAnalysisByTrack: new Map(),
+    bpmMetadata: {
+      lookupMany: async (tracks) => {
+        lookupTracks = tracks;
+        return bpm;
+      }
+    },
+    clearNextPreload() {},
+    preloadNextTrack: async () => { preloadCalls += 1; },
+    showShareMessage() {}
+  };
+
+  installQueueTransitionSort(ctx);
+  await ctx.toggleTransitionQueueSort();
+
+  assert.deepEqual(lookupTracks.map((track) => track.id), ['rough', 'smooth', 'followup']);
+  assert.equal(ctx.queue.value[0].id, 'smooth');
+  assert.equal(ctx.transitionQueueSorted.value, true);
+  assert.equal(preloadCalls, 1);
+});
+
+test('Best mix only looks up and reorders the next 50 queued songs', async () => {
+  const queue = Array.from({ length: 55 }, (_, index) => ({
+    id: `track-${index}`,
+    title: `Track ${index}`,
+    artist: 'Artist'
+  }));
+  const originalTail = queue.slice(50).map((track) => track.id);
+  const bpm = new Map(queue.slice(0, 50).map((track, index) => [
+    track.id,
+    { bpm: index === 0 ? 160 : 100 + index, beatConfidence: 0.82 }
+  ]));
+  let lookupTracks = [];
+  const ctx = {
+    activeTrack: ref({ id: 'active', title: 'Active', artist: 'Artist' }),
+    queue: ref(queue),
+    shuffleEnabled: ref(false),
+    shuffleSourceQueue: ref([]),
+    crossfadeAnalysis: ref({}),
+    crossfadeAnalysisByTrack: new Map(),
+    bpmMetadata: {
+      lookupMany: async (tracks) => {
+        lookupTracks = tracks;
+        return new Map([
+          ['active', { bpm: 100, beatConfidence: 0.82 }],
+          ...bpm
+        ]);
+      }
+    },
+    clearNextPreload() {},
+    preloadNextTrack: async () => {},
+    showShareMessage() {}
+  };
+
+  installQueueTransitionSort(ctx);
+  await ctx.toggleTransitionQueueSort();
+
+  assert.equal(lookupTracks.length, 50);
+  assert.deepEqual(ctx.queue.value.slice(50).map((track) => track.id), originalTail);
 });

@@ -1,6 +1,8 @@
 import { ref, watch } from 'vue';
 import { loadLearnedAudioProfiles } from '../../audio/engine/audioProfileStore.js';
 
+const BEST_MIX_TRACK_LIMIT = 50;
+
 const KEY_INDEX = new Map([
   ['C', 0], ['C♯', 1], ['D♭', 1], ['D', 2], ['D♯', 3], ['E♭', 3],
   ['E', 4], ['F', 5], ['F♯', 6], ['G♭', 6], ['G', 7], ['G♯', 8],
@@ -206,13 +208,13 @@ export function installQueueTransitionSort(ctx) {
   ctx.transitionQueueExpectedIds = [];
   let learnedTempoPromise = null;
 
-  function analysisFor(track, learnedTempo, cached = {}) {
+  function analysisFor(track, learnedTempo, cached = {}, bpmMetadata = {}) {
     const smart = ctx.crossfadeAnalysisByTrack?.get(track?.id) || {};
     const activeAnalysis = track?.id === ctx.activeTrack.value?.id &&
       ctx.crossfadeAnalysis.value?.status === 'ready'
       ? ctx.crossfadeAnalysis.value
       : {};
-    const sources = [smart, activeAnalysis, cached, track || {}];
+    const sources = [smart, activeAnalysis, bpmMetadata, cached, track || {}];
     const tempoSource = sources.find((source) => Number(source?.bpm || source?.tempo) > 0);
     const keySource = sources.find((source) => parsedKey(source?.key));
     const loudnessSource = sources.find((source) => finiteOrNull(source?.loudnessLufs, -69) !== null);
@@ -279,27 +281,36 @@ export function installQueueTransitionSort(ctx) {
     const queueSignature = ctx.queue.value.map((track) => track.id).join(',');
     ctx.transitionQueueSortBusy.value = true;
     try {
-      const [tempoByTrack, cachedByTrack] = await Promise.all([
+      const snapshot = [...ctx.queue.value];
+      const sortableTracks = snapshot.slice(0, BEST_MIX_TRACK_LIMIT);
+      const untouchedTracks = snapshot.slice(BEST_MIX_TRACK_LIMIT);
+      const [tempoByTrack, cachedByTrack, bpmByTrack] = await Promise.all([
         learnedTempoMap(),
-        cachedAnalysisMap([ctx.activeTrack.value, ...ctx.queue.value])
+        cachedAnalysisMap([ctx.activeTrack.value, ...sortableTracks]),
+        ctx.bpmMetadata?.lookupMany?.(sortableTracks) || Promise.resolve(new Map())
       ]);
       if (queueSignature !== ctx.queue.value.map((track) => track.id).join(',')) return;
-      const snapshot = [...ctx.queue.value];
-      const analysisByTrack = new Map(snapshot.map((track) => [
+      const analysisByTrack = new Map(sortableTracks.map((track) => [
         track.id,
-        analysisFor(track, tempoByTrack.get(track.id), cachedByTrack.get(track.id))
+        analysisFor(
+          track,
+          tempoByTrack.get(track.id),
+          cachedByTrack.get(track.id),
+          bpmByTrack.get(track.id)
+        )
       ]));
       const currentAnalysis = analysisFor(
         ctx.activeTrack.value,
         tempoByTrack.get(ctx.activeTrack.value?.id),
-        cachedByTrack.get(ctx.activeTrack.value?.id)
+        cachedByTrack.get(ctx.activeTrack.value?.id),
+        bpmByTrack.get(ctx.activeTrack.value?.id)
       );
-      const result = bestTransitionOrder(snapshot, analysisByTrack, currentAnalysis);
+      const result = bestTransitionOrder(sortableTracks, analysisByTrack, currentAnalysis);
       if (!result.comparisons) {
-        ctx.showShareMessage?.('Best mix needs BPM or key analysis for more songs. Queue left unchanged.');
+        ctx.showShareMessage?.('Best mix could not find BPM or key data for enough songs. Queue left unchanged.');
         return;
       }
-      const sorted = result.ordered;
+      const sorted = [...result.ordered, ...untouchedTracks];
       if (sorted.every((track, index) => track.id === snapshot[index]?.id)) {
         ctx.showShareMessage?.('This queue already has the smoothest known order.');
         return;
@@ -307,7 +318,9 @@ export function installQueueTransitionSort(ctx) {
       ctx.transitionQueueSortSnapshot = snapshot;
       ctx.transitionQueueSorted.value = true;
       applyQueueOrder(sorted);
-      ctx.showShareMessage?.(`Sorted ${sorted.length} songs for smoother transitions.`);
+      ctx.showShareMessage?.(
+        `Sorted the next ${sortableTracks.length} songs for smoother transitions.`
+      );
     } finally {
       ctx.transitionQueueSortBusy.value = false;
     }
