@@ -28,7 +28,7 @@ test('native analyzer returns transition-ready musical features', async () => {
   const track = syntheticTrack();
   const result = await native.analyze(track.samples, track.sampleRate, track.duration);
 
-  assert.equal(result.analysisVersion, 5);
+  assert.equal(result.analysisVersion, 6);
   assert.ok(result.bpm >= 110 && result.bpm <= 130, `unexpected BPM: ${result.bpm}`);
   assert.ok(result.beatConfidence > 0);
   assert.ok(result.beats.length > 60);
@@ -126,4 +126,36 @@ test('native analyzer does not classify a quiet bridge before a final chorus as 
 
   const result = await native.analyze(samples, sampleRate, duration);
   assert.ok(result.outroStartTime >= 90, `unexpected outro: ${result.outroStartTime}`);
+});
+
+test('native analyzer keeps a moderately quieter outro as an early transition anchor', async () => {
+  const duration = 100;
+  const sampleRate = 11025;
+  const samples = new Float32Array(duration * sampleRate);
+  for (let index = 0; index < samples.length; index += 1) {
+    const time = index / sampleRate;
+    if (time >= 90) continue;
+    const gain = time >= 60 && time < 70 ? 0.1 : 0.2;
+    samples[index] = Math.sin(2 * Math.PI * 220 * time) * gain;
+  }
+
+  const result = await native.analyze(samples, sampleRate, duration);
+  assert.ok(result.outroStartTime < 70, `unexpected late outro: ${result.outroStartTime}`);
+});
+
+test('native analyzer retains a useful late gap before resumed audio', async () => {
+  const duration = 100;
+  const sampleRate = 11025;
+  const samples = new Float32Array(duration * sampleRate);
+  for (let index = 0; index < samples.length; index += 1) {
+    const time = index / sampleRate;
+    if (time >= 84 && time < 88) continue;
+    samples[index] = Math.sin(2 * Math.PI * 220 * time) * 0.2;
+  }
+
+  const result = await native.analyze(samples, sampleRate, duration);
+  assert.ok(
+    result.mixOutTime >= 83.9 && result.mixOutTime <= 84.1,
+    `unexpected mix-out: ${result.mixOutTime}`
+  );
 });

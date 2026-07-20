@@ -190,13 +190,14 @@ function analyzeContentEnd(samples, sampleRate, duration) {
     for (let index = start; index < end; index += 1) sum += (samples[index] || 0) ** 2;
     cliffLevels.push(Math.sqrt(sum / Math.max(1, end - start)));
   }
-  const rampThreshold = Math.max(silenceThreshold * 2, reference * 0.55);
-  const rampWindows = Math.max(1, Math.floor(1.5 / cliffWindowSeconds));
-  const rampsUpAfter = (start) => {
-    for (let index = start; index + rampWindows <= cliffLevels.length; index += 1) {
-      const sustainedLevel = cliffLevels.slice(index, index + rampWindows)
-        .reduce((sum, value) => sum + value, 0) / rampWindows;
-      if (sustainedLevel >= rampThreshold) return true;
+  const recoveryWindows = Math.max(1, Math.floor(3 / cliffWindowSeconds));
+  const hasMaterialRecovery = (start, quietLevel) => {
+    if (reference <= 0 || quietLevel >= reference * 0.38) return false;
+    const recoveryThreshold = Math.max(reference * 0.72, quietLevel * 1.8);
+    for (let index = start; index + recoveryWindows <= cliffLevels.length; index += 1) {
+      const sustainedLevel = cliffLevels.slice(index, index + recoveryWindows)
+        .reduce((sum, value) => sum + value, 0) / recoveryWindows;
+      if (sustainedLevel >= recoveryThreshold) return true;
     }
     return false;
   };
@@ -214,9 +215,12 @@ function analyzeContentEnd(samples, sampleRate, duration) {
     const silenceDuration = (end - index) * cliffWindowSeconds;
     const beforePeak = Math.max(...cliffLevels.slice(Math.max(0, index - contextWindows), index), 0);
     const afterPeak = Math.max(...cliffLevels.slice(end, end + contextWindows), 0);
+    const quietLevel = cliffLevels.slice(index, end)
+      .reduce((sum, value) => sum + value, 0) / Math.max(1, end - index);
+    const earlyGap = index * cliffWindowSeconds < detectedContentEnd * 0.8;
     if (silenceDuration >= 0.3 && end * cliffWindowSeconds <= duration - 4 &&
         beforePeak >= silenceThreshold * 2 && afterPeak >= silenceThreshold * 2 &&
-        !rampsUpAfter(end) &&
+        (!earlyGap || !hasMaterialRecovery(end, quietLevel)) &&
         silenceDuration > bestDuration) {
       bestIndex = index;
       bestDuration = silenceDuration;
@@ -330,7 +334,7 @@ self.onmessage = (event) => {
     const pcm = prepared.pcm;
     const analysisSampleRate = prepared.sampleRate;
     const result = {
-      analysisVersion: 5,
+      analysisVersion: 6,
       duration,
       ...analyzeKey(pcm, analysisSampleRate),
       ...analyzePickup(pcm, analysisSampleRate, duration),

@@ -50,17 +50,36 @@ double Average(const std::vector<double>& values, size_t start, size_t end) {
   return std::accumulate(values.begin() + start, values.begin() + end, 0.0) / (end - start);
 }
 
-// A quiet passage is not an outro when the track subsequently returns to a
-// sustained, material level. This prevents transitions from cutting a bridge
-// or breakdown before a later chorus/drop.
-bool RampsUpAfter(
+// Only a genuinely deep quiet passage followed by a sustained recovery is a
+// comeback. Treating every later loud window as a ramp-up pushes ordinary,
+// gently varying outros all the way to the file's end.
+bool HasMaterialRecovery(
   const std::vector<double>& levels,
   size_t start,
   size_t sustain_windows,
-  double threshold
+  double reference,
+  double quiet_level
 ) {
+  if (reference <= 0 || quiet_level >= reference * 0.38) return false;
+  const double threshold = std::max(reference * 0.72, quiet_level * 1.8);
   for (size_t index = start; index + sustain_windows <= levels.size(); ++index) {
     if (Average(levels, index, index + sustain_windows) >= threshold) return true;
+  }
+  return false;
+}
+
+bool HasQuietThenRecovery(
+  const std::vector<double>& levels,
+  size_t start,
+  size_t sustain_windows,
+  double reference
+) {
+  if (reference <= 0) return false;
+  bool found_quiet = false;
+  for (size_t index = start; index + sustain_windows <= levels.size(); ++index) {
+    const double average = Average(levels, index, index + sustain_windows);
+    if (average < reference * 0.38) found_quiet = true;
+    else if (found_quiet && average >= reference * 0.72) return true;
   }
   return false;
 }
@@ -190,8 +209,7 @@ double FindMixOutTime(
     static_cast<size_t>(duration * 0.55 / window_seconds)
   );
   const size_t context_windows = static_cast<size_t>(2.0 / window_seconds);
-  const size_t ramp_windows = std::max<size_t>(1, std::round(1.5 / window_seconds));
-  const double ramp_threshold = std::max(silence_threshold * 2, envelope.reference * 0.55);
+  const size_t recovery_windows = std::max<size_t>(1, std::round(3.0 / window_seconds));
   size_t best_index = 0;
   double best_duration = 0;
 
@@ -209,9 +227,19 @@ double FindMixOutTime(
       const size_t after_end = std::min(levels.size(), end + context_windows);
       const double before_peak = *std::max_element(levels.begin() + before_start, levels.begin() + index);
       const double after_peak = *std::max_element(levels.begin() + end, levels.begin() + after_end);
+      const double quiet_level = Average(levels, index, end);
+      // Late gaps often separate an outro/hidden track and remain useful mix
+      // points. Earlier gaps are protected when the main arrangement returns.
+      const bool early_gap = index * window_seconds < envelope.content_end * 0.8;
       if (before_peak >= silence_threshold * 2 &&
           after_peak >= silence_threshold * 2 &&
-          !RampsUpAfter(levels, end, ramp_windows, ramp_threshold) &&
+          (!early_gap || !HasMaterialRecovery(
+            levels,
+            end,
+            recovery_windows,
+            envelope.reference,
+            quiet_level
+          )) &&
           silence_duration > best_duration) {
         best_index = index;
         best_duration = silence_duration;
@@ -363,8 +391,8 @@ void BuildStructure(const EnvelopeResult& envelope, AnalysisResult& result) {
     : envelope.audible_start;
   const size_t first_window = static_cast<size_t>(envelope.audible_start / envelope.window_seconds);
   const size_t four_seconds = std::max<size_t>(1, 4.0 / envelope.window_seconds);
-  const size_t ramp_windows = std::max<size_t>(1, std::round(1.5 / envelope.window_seconds));
-  const double ramp_threshold = envelope.reference * 0.55;
+  const size_t quiet_windows = std::max<size_t>(1, std::round(3.0 / envelope.window_seconds));
+  const size_t recovery_windows = std::max<size_t>(1, std::round(3.0 / envelope.window_seconds));
   size_t strong_window = first_window;
   for (size_t index = first_window; index + four_seconds <= envelope.levels.size(); ++index) {
     if (Average(envelope.levels, index, index + four_seconds) >= envelope.reference * 0.62) {
@@ -387,10 +415,21 @@ void BuildStructure(const EnvelopeResult& envelope, AnalysisResult& result) {
     std::max(result.intro_end_time, envelope.content_end * 0.6) / envelope.window_seconds
   );
   for (size_t index = search_start; index + four_seconds < envelope.levels.size(); ++index) {
+    const double section_average = Average(envelope.levels, index, index + four_seconds);
     const double tail_average = Average(envelope.levels, index, envelope.levels.size());
-    if (Average(envelope.levels, index, index + four_seconds) < envelope.reference * 0.68 &&
-        tail_average < envelope.reference * 0.72 &&
-        !RampsUpAfter(envelope.levels, index + four_seconds, ramp_windows, ramp_threshold)) {
+    if (section_average >= envelope.reference * 0.68 ||
+        tail_average >= envelope.reference * 0.72) {
+      continue;
+    }
+    // A candidate may begin just before a breakdown because its four-second
+    // average straddles the energy drop. Look for the complete quiet/recovery
+    // sequence instead of judging only the candidate's first window.
+    if (!HasQuietThenRecovery(
+      envelope.levels,
+      index,
+      std::max(quiet_windows, recovery_windows),
+      envelope.reference
+    )) {
       raw_outro = index * envelope.window_seconds;
       break;
     }

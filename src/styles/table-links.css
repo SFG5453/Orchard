@@ -306,8 +306,8 @@
 .immersive-background__video {
   object-fit: cover;
   opacity: 0;
-  filter: blur(56px) saturate(1.08);
-  transform: scale(1.14);
+  filter: blur(92px) saturate(1.18);
+  transform: scale(1.24);
 }
 
 .app-shell--immersive .immersive-background {
