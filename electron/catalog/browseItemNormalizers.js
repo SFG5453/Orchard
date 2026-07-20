@@ -1,4 +1,5 @@
 // Normalizes individual raw browse renderers into Orchard catalog items.
+import { isUploadedMusicItem } from './musicItemTypes.js';
 export function createBrowseItemNormalizers({
   asText,
   bestThumbnail,
@@ -60,7 +61,7 @@ export function createBrowseItemNormalizers({
     const artistBrowseIds = artistRuns.map((run) => run.navigationEndpoint?.browseEndpoint?.browseId).filter(Boolean);
     const artistName = artistNames[0] || fallbackArtist || '';
 
-    return {
+    const normalized = {
       id: watchEndpoint?.videoId || renderer.playlistItemData?.videoId || null,
       browseId: browsePayload?.browseId || null,
       browsePayload: browsePayload ? { ...browsePayload } : null,
@@ -83,6 +84,11 @@ export function createBrowseItemNormalizers({
       thumbnail: bestThumbnail(thumbnail),
       index: asText(renderer.index) || String(index + 1)
     };
+
+    return {
+      ...normalized,
+      isUpload: isUploadedMusicItem({ ...normalized, menu: renderer.menu })
+    };
   }
 
   function normalizeRawTwoRowItem(item, index = 0) {
@@ -102,7 +108,7 @@ export function createBrowseItemNormalizers({
     const thumbnail = renderer.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail || renderer.thumbnail || [];
     const hasVideo = Boolean(watchEndpoint?.videoId);
 
-    return {
+    const normalized = {
       id: watchEndpoint?.videoId || null,
       browseId: browsePayload?.browseId || null,
       browsePayload: browsePayload ? { ...browsePayload } : null,
@@ -132,6 +138,11 @@ export function createBrowseItemNormalizers({
       itemCount: textParts(asText(renderer.subtitle)).find((part) => /\b(songs?|tracks?|videos?)\b/i.test(part)) || '',
       thumbnail: bestThumbnail(thumbnail),
       index: String(index + 1)
+    };
+
+    return {
+      ...normalized,
+      isUpload: isUploadedMusicItem({ ...normalized, menu: renderer.menu })
     };
   }
 

@@ -16,6 +16,7 @@ export function createPlaybackStreamCache() {
       avoidItags: opts.avoidItags || [],
       avoidMimeTypes: opts.avoidMimeTypes || [],
       preferInlineVideo: Boolean(opts.preferInlineVideo),
+      requiresAuth: Boolean(opts.requiresAuth),
       lowPriority: Boolean(opts.lowPriority),
       refreshStream: Boolean(opts.refreshStream)
     };

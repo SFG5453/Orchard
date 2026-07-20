@@ -91,7 +91,10 @@ const authService = createAuthService({
   accountSummary,
   allowDevTools,
   getMainWindow: () => mainWindow,
-  onAuthState: (state) => bridge?.emit('auth:state', state)
+  onAuthState: (state) => bridge?.emit('auth:state', state),
+  youtubeMusicClientUserAgent,
+  youtubeMusicClientVersion,
+  youtubeMusicOrigin
 });
 const {
   authState,

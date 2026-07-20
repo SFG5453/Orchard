@@ -130,7 +130,7 @@ export async function startBridgeServer({
   }
 
   async function resolveTrackRequest({ videoId, supportedMimes = [], supportedVideoMimes = [], mediaKind = 'audio', preload = false, refreshStream = false, avoidItags = [], avoidMimeTypes = [], ...trackHint }) {
-    const preferBrowserPlayback = playback.androidVrCooldownActive();
+    const preferBrowserPlayback = Boolean(trackHint.isUpload || playback.androidVrCooldownActive());
     const [yt, searchYt] = await Promise.all([
       musicClientForPlayback(preferBrowserPlayback),
       getGuestInnertube()
@@ -164,6 +164,7 @@ export async function startBridgeServer({
         supportedAudioMimes: supportedMimes,
         mediaKind: streamAsVideo ? 'video' : 'audio',
         preferInlineVideo: playAsVideo,
+        requiresAuth: Boolean(trackHint.isUpload),
         lowPriority: Boolean(preload),
         refreshStream: Boolean(refreshStream),
         avoidItags,

@@ -94,7 +94,7 @@ export function createPreferredAudioTrack({ normalizedLookupText, shelfItems }) 
     const alreadyPreferredAudio = target.musicVideoType === 'MUSIC_VIDEO_TYPE_ATV' || target.isAudioOnly;
     const excludedVideoIds = new Set([target.videoId, ...(target.excludedVideoIds || [])].filter(Boolean));
 
-    if (!target.videoId || !target.preferAudioOnly || (alreadyPreferredAudio && !target.retryAlternateAudio)) {
+    if (target.isUpload || !target.videoId || !target.preferAudioOnly || (alreadyPreferredAudio && !target.retryAlternateAudio)) {
       return target.videoId;
     }
 

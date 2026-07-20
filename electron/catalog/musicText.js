@@ -1,4 +1,5 @@
 // Centralizes text, thumbnail, duration, and track normalization for catalog modules.
+import { isUploadedMusicItem } from './musicItemTypes.js';
 export function bestThumbnail(thumbnails = []) {
   const list = Array.isArray(thumbnails) ? thumbnails : thumbnails?.contents || thumbnails?.thumbnails || [];
   const sorted = [...list].sort((a, b) => (b.width || 0) - (a.width || 0));
@@ -232,7 +233,7 @@ export function normalizeTrack(item) {
     asText(item.author?.name) ||
     'Untitled';
 
-  return {
+  const normalized = {
     id: item.id || item.video_id || payload.videoId || null,
     browseId: payload.browseId || null,
     browsePayload: payload.browseId ? { ...payload } : null,
@@ -252,5 +253,14 @@ export function normalizeTrack(item) {
     views: item.views || '',
     itemCount: asText(item.item_count || item.itemCount || item.song_count || item.video_count || item.video_count_short),
     thumbnail: bestThumbnail(thumbnails)
+  };
+
+  return {
+    ...normalized,
+    isUpload: isUploadedMusicItem({
+      ...normalized,
+      entityId: item.entityId || item.entity_id,
+      menu: item.menu
+    })
   };
 }

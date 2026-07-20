@@ -41,6 +41,29 @@ test('continues to report the selected format bitrate for audio playback', () =>
   assert.equal(playbackAudioBitrate(stream, 'audio'), 128_000);
 });
 
+test('keeps the account-owned video ID for an uploaded track', async () => {
+  let searches = 0;
+  const preferredAudioTrack = createPreferredAudioTrack({
+    normalizedLookupText: (value) => String(value).toLowerCase(),
+    shelfItems: (items) => items
+  });
+  const yt = { music: { search: async () => {
+    searches += 1;
+    return { songs: [] };
+  } } };
+
+  const selected = await preferredAudioTrack(yt, {
+    videoId: 'private-upload-id',
+    title: 'Uploaded song',
+    artist: 'Local artist',
+    isUpload: true,
+    preferAudioOnly: true
+  });
+
+  assert.equal(selected, 'private-upload-id');
+  assert.equal(searches, 0);
+});
+
 test('selects another exact audio-only ID after an age gate', async () => {
   const preferredAudioTrack = createPreferredAudioTrack({
     normalizedLookupText: (value) => String(value).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(),

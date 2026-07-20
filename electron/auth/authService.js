@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { Innertube, UniversalCache } from 'youtubei.js';
 import { createAccountProfileProbe } from './accountProfileProbe.js';
+import { createBrowserMusicFetch } from './browserMusicApi.js';
 import { collectYouTubeAuthCookie, hasYouTubeLoginCookie } from './youtubeAuthCookies.js';
 
 const require = createRequire(import.meta.url);
@@ -23,7 +24,15 @@ function createYoutubeCache(scope) {
  * @param {object} dependencies Main-process UI and state callbacks.
  * @returns {object} Authentication state plus browse/playback client factories.
  */
-export function createAuthService({ accountSummary, allowDevTools = false, getMainWindow, onAuthState }) {
+export function createAuthService({
+  accountSummary,
+  allowDevTools = false,
+  getMainWindow,
+  onAuthState,
+  youtubeMusicClientUserAgent,
+  youtubeMusicClientVersion,
+  youtubeMusicOrigin
+}) {
   const accountProfile = createAccountProfileProbe({
     allowDevTools,
     BrowserWindow,
@@ -53,6 +62,12 @@ export function createAuthService({ accountSummary, allowDevTools = false, getMa
       poToken: ''
     }
   };
+  const browserMusicFetch = createBrowserMusicFetch({
+    authState,
+    youtubeMusicClientUserAgent,
+    youtubeMusicClientVersion,
+    youtubeMusicOrigin
+  });
 
   function getInnertube() {
     if (!innertubePromise) {
@@ -98,7 +113,8 @@ export function createAuthService({ accountSummary, allowDevTools = false, getMa
         cookie: authState.browser.cookie,
         visitor_data: authState.browser.visitorData || undefined,
         on_behalf_of_user: authState.browser.dataSyncId || undefined,
-        po_token: authState.browser.poToken || undefined
+        po_token: authState.browser.poToken || undefined,
+        fetch: browserMusicFetch
       });
     }
 

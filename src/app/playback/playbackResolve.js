@@ -54,6 +54,7 @@ export function installPlaybackResolve(ctx) {
       isAudioOnly: Boolean(item.isAudioOnly),
       musicVideoAudioFallback: usesMusicVideoFallback,
       fallbackTargetDurationSeconds: Number(item.fallbackTargetDurationSeconds || 0),
+      isUpload: Boolean(item.isUpload),
       mediaKind,
       preload: Boolean(options.preload),
       refreshStream: Boolean(options.refreshStream),

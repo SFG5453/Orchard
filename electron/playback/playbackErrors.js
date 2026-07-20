@@ -25,6 +25,10 @@ export function isBotCheckPlaybackError(error) {
   return /sign in to confirm (?:you(?:'|’)?re|you are) not a bot|not a bot|unusual traffic/i.test(errorText(error));
 }
 
+export function isPrivatePlaybackError(error) {
+  return /(?:this )?video (?:is|has been set to) private|private video/i.test(errorText(error));
+}
+
 export function canFallbackToGuest(error) {
   const status = responseStatus(error);
   return isAgeGatePlaybackError(error) ||

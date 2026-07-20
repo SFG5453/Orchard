@@ -3,7 +3,8 @@ import test from 'node:test';
 import {
   canFallbackToGuest,
   isAgeGatePlaybackError,
-  isBotCheckPlaybackError
+  isBotCheckPlaybackError,
+  isPrivatePlaybackError
 } from '../electron/playback/playbackErrors.js';
 import { createPlaybackService } from '../electron/playback/playbackService.js';
 
@@ -112,10 +113,41 @@ test('playback info refreshes and retries a browser session missing premium form
   assert.equal(authRefreshes, 1);
 });
 
+test('playback info retries the browser account for a private upload', async () => {
+  const primary = {
+    getBasicInfo: async () => {
+      throw new Error('This video is private');
+    }
+  };
+  const browserInfo = {
+    streaming_data: {
+      adaptive_formats: [{ mime_type: 'audio/webm; codecs="opus"' }]
+    }
+  };
+  const browser = { getBasicInfo: async () => browserInfo };
+  let authRefreshes = 0;
+  const playback = createPlaybackService({
+    authState: { browser: { poToken: 'token' } },
+    cookieWithPlaybackDefaults: () => 'SAPISID=cookie',
+    getBrowserInnertube: () => browser,
+    getGuestInnertube: async () => ({ getBasicInfo: async () => ({}) }),
+    hasBrowserLoginCookie: () => true,
+    refreshBrowserAuth: async () => { authRefreshes += 1; },
+    youtubeWebOrigin: 'https://www.youtube.com'
+  });
+
+  const result = await playback.playbackInfo('private-upload-id', { yt: primary });
+
+  assert.equal(result.yt, browser);
+  assert.equal(result.info, browserInfo);
+  assert.equal(authRefreshes, 1);
+});
+
 test('playback fallback recognizes direct auth status and YouTube challenges', () => {
   assert.equal(canFallbackToGuest({ status: 403, message: 'Forbidden' }), true);
   assert.equal(isAgeGatePlaybackError(new Error('Sign in to confirm your age')), true);
   assert.equal(isBotCheckPlaybackError(new Error("Sign in to confirm you're not a bot")), true);
+  assert.equal(isPrivatePlaybackError(new Error('This video is private')), true);
 });
 
 test('unrelated request failures do not silently switch playback identity', () => {

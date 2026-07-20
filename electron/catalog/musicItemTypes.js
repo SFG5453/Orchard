@@ -4,6 +4,33 @@ export function musicPageType(item = {}) {
   return payload.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType || '';
 }
 
+function hasPrivatelyOwnedMarker(value, seen = new Set()) {
+  if (!value || typeof value !== 'object' || seen.has(value)) return false;
+  seen.add(value);
+
+  return Object.entries(value).some(([key, nested]) => {
+    const normalizedKey = key.replaceAll('_', '').toLowerCase();
+    if (normalizedKey === 'musicdeleteprivatelyownedentitycommand') return true;
+    if (normalizedKey === 'entityid' && /^[a-z]+_po_/i.test(String(nested || ''))) return true;
+    if (normalizedKey === 'type' && /deleteprivatelyownedentity/i.test(String(nested || ''))) return true;
+    return hasPrivatelyOwnedMarker(nested, seen);
+  });
+}
+
+export function isUploadedMusicItem(item = {}) {
+  if (item.isUpload) return true;
+  if (/^[a-z]+_po_/i.test(String(item.entityId || item.entity_id || ''))) return true;
+  if (hasPrivatelyOwnedMarker(item.menu)) return true;
+
+  return [
+    item.browseId,
+    item.browsePayload?.browseId,
+    item.albumId,
+    item.artistBrowseId,
+    ...(item.artistBrowseIds || [])
+  ].some((browseId) => /^FEmusic_library_privately_owned_(?:artist|release)/.test(browseId || ''));
+}
+
 export function isKnownArtistItem(item = {}) {
   const pageType = musicPageType(item);
   const browseId = item.browsePayload?.browseId || item.browseId || item.endpoint?.payload?.browseId || '';

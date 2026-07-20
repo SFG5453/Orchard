@@ -24,7 +24,8 @@ import {
 import {
   canFallbackToGuest,
   isAgeGatePlaybackError,
-  isBotCheckPlaybackError
+  isBotCheckPlaybackError,
+  isPrivatePlaybackError
 } from './playbackErrors.js';
 import { createSongCache } from './songCache.js';
 import { createPlaybackStreamCache } from './playbackStreamCache.js';
@@ -222,9 +223,10 @@ export function createPlaybackService({
       let fallbackBrowserYt = browserYtPromise ? await browserYtPromise : null;
       const shouldRetryBrowser = error.noStreamingFormats ||
         isAgeGatePlaybackError(error) ||
-        isBotCheckPlaybackError(error);
+        isBotCheckPlaybackError(error) ||
+        isPrivatePlaybackError(error);
 
-      if (error.noStreamingFormats && hasBrowserLoginCookie()) {
+      if ((error.noStreamingFormats || isPrivatePlaybackError(error)) && hasBrowserLoginCookie()) {
         try {
           await refreshBrowserAuth();
           fallbackBrowserYt = await getBrowserInnertube() || fallbackBrowserYt;
@@ -393,8 +395,9 @@ export function createPlaybackService({
       return cached;
     }
     const wantsVideo = options.mediaKind === 'video';
-    const avoidAndroidVr = androidVrRapidResolveActive(options);
-    const canTryAndroidVr = (!wantsVideo || !avoidAndroidVr) && !androidVrCooldownActive();
+    const requiresAuth = Boolean(options.requiresAuth);
+    const avoidAndroidVr = requiresAuth || androidVrRapidResolveActive(options);
+    const canTryAndroidVr = !requiresAuth && (!wantsVideo || !avoidAndroidVr) && !androidVrCooldownActive();
     if (canTryAndroidVr) {
       try {
         const cacheEntry = await resolveAndroidVrStream(videoId, {
@@ -415,7 +418,8 @@ export function createPlaybackService({
         }
       }
     }
-    const preferBrowserPlayback = androidVrCooldownActive() || (wantsVideo && avoidAndroidVr);
+    const hasPrefetchedPlayback = Boolean(options.playbackClient && options.playbackInfo);
+    const preferBrowserPlayback = Boolean(!hasPrefetchedPlayback && (requiresAuth || androidVrCooldownActive() || (wantsVideo && avoidAndroidVr)));
     const { yt, info } = await playbackInfo(videoId, {
       yt: preferBrowserPlayback ? null : options.playbackClient,
       info: preferBrowserPlayback ? null : options.playbackInfo,
