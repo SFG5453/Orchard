@@ -9,6 +9,12 @@ export const ORCHARD_RELEASES = [
         items: [
           'Julian Ramierez joins Orchard as a tester and the new mobile app developer. (coming soon!)',
         ]
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Replaced the fake Youtube Shuffle All button with a real shuffle button in the Library songs menu.'
+        ]
       }
     ]
   }

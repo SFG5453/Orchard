@@ -95,3 +95,30 @@ test('loads, paginates, and deduplicates a raw music library category', async ()
     ['FEmusic_library_landing', 'library-albums', 'next-page']
   );
 });
+
+test('omits the YouTube Music shuffle action from library song data', async () => {
+  const shuffleAction = { id: null, title: 'Shuffle all', type: 'track' };
+  const song = { id: 'song-id', title: 'A saved song', type: 'track' };
+  const landing = {
+    chips: [{
+      chipCloudChipRenderer: {
+        text: { runs: [{ text: 'Songs' }] },
+        navigationEndpoint: { browseEndpoint: { browseId: 'library-songs' } }
+      }
+    }]
+  };
+  const pages = {
+    FEmusic_library_landing: landing,
+    'library-songs': { items: [shuffleAction, song] }
+  };
+  const yt = {
+    actions: {
+      execute: async (_path, request) => ({ data: pages[request.browseId] })
+    }
+  };
+
+  assert.deepEqual(
+    await mainFeeds().fetchMusicLibraryCategory(yt, 'Songs'),
+    [song]
+  );
+});

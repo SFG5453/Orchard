@@ -136,8 +136,11 @@ export function createMainFeeds({
       request = continuation ? { continuation } : null;
     }
 
+    const categoryItems = title.trim().toLowerCase() === 'songs'
+      ? items.filter((item) => item.id)
+      : items;
     const seen = new Set();
-    return items.filter((item) => {
+    return categoryItems.filter((item) => {
       const key = item.browseId || item.browsePayload?.browseId || item.id || `${item.type}:${item.title}`;
       if (!key || seen.has(key)) return false;
       seen.add(key);

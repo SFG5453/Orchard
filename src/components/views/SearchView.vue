@@ -67,15 +67,33 @@ export default {
       title: 'Nothing here yet',
       detail: 'Items added to your library will appear here.'
     }));
+    const isSongsLibrary = computed(() => librarySection.value?.key === 'library-songs');
+    const libraryItems = computed(() => {
+      const items = librarySection.value?.items || [];
+      return isSongsLibrary.value ? items.filter(props.app.isPlayableTrack) : items;
+    });
+    const shuffleLibrarySongs = () => {
+      const tracks = libraryItems.value;
+      if (!tracks.length) return;
+
+      props.app.playCollection({
+        kind: 'playlist',
+        title: 'Songs',
+        tracks
+      }, { shuffle: true });
+    };
 
     return {
       ...props.app,
       librarySection,
       libraryEmptyState,
+      isSongsLibrary,
+      libraryItems,
       isLibraryCategory: computed(() => Boolean(librarySection.value)),
       isLiveShowsSearch: computed(() => props.app.searchResult.value.source === 'ticketmaster'),
       isCustomArtistItem,
-      openSearchItem
+      openSearchItem,
+      shuffleLibrarySongs
     };
   }
 };
@@ -93,7 +111,7 @@ export default {
           <template v-else-if="loading">Updating results as you type…</template>
           <template v-else-if="isLiveShowsSearch && flatResults.length">{{ flatResults.length }} upcoming Ticketmaster events</template>
           <template v-else-if="isLiveShowsSearch">No upcoming Ticketmaster events found.</template>
-          <template v-else-if="isLibraryCategory">{{ librarySection.items.length }} {{ librarySection.items.length === 1 ? 'item' : 'items' }}</template>
+          <template v-else-if="isLibraryCategory">{{ libraryItems.length }} {{ libraryItems.length === 1 ? 'item' : 'items' }}</template>
           <template v-else-if="flatResults.length">{{ flatResults.length }} results across {{ searchCategorySections.length }} categories</template>
           <template v-else>Find songs, albums, artists, videos, and playlists.</template>
         </p>
@@ -125,7 +143,7 @@ export default {
       </div>
     </div>
 
-    <template v-else-if="flatResults.length">
+    <template v-else-if="isLibraryCategory ? libraryItems.length : flatResults.length">
       <section v-if="!isLibraryCategory && !isLiveShowsSearch && searchTopResults.length" class="search-top-results" aria-labelledby="search-top-heading">
         <div class="section-header">
           <h2 id="search-top-heading">Top matches</h2>
@@ -220,7 +238,19 @@ export default {
 
         <div class="media-rail search-media-rail">
           <button
-            v-for="item in isLibraryCategory ? section.items : sectionPreviewItems(section)"
+            v-if="isSongsLibrary"
+            type="button"
+            class="search-media-card search-media-card--shuffle"
+            @click="shuffleLibrarySongs"
+          >
+            <span class="search-media-card__art search-media-card__art--empty">
+              <q-icon name="shuffle" />
+            </span>
+            <strong>Shuffle all</strong>
+            <span>Song</span>
+          </button>
+          <button
+            v-for="item in isLibraryCategory ? libraryItems : sectionPreviewItems(section)"
             :key="`${section.key}-${item.id || itemBrowseId(item) || item.title}`"
             type="button"
             class="search-media-card"
