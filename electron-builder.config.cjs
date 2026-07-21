@@ -48,8 +48,8 @@ module.exports = {
     syncDesktopName: true
   },
   deb: {
-    compression: 'xz',
-    fpm: ['--deb-compression-level', '9']
+    compression: 'zst',
+    fpm: ['--deb-compression-level', '10']
   },
   rpm: {
     compression: 'xzmt',
