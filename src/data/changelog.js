@@ -1,5 +1,19 @@
 export const ORCHARD_RELEASES = [
   {
+    version: '3.1.0',
+    codename: 'Overt Japes',
+    date: 'July 21, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'Improved automated transitions with dynamic long-preroll crossfade logic and smarter cue point detection.',
+          'Restored visual mixing animations and adapted Smart Crossfade overlay UI for Orchard 3.x.'
+        ]
+      }
+    ]
+  },
+  {
     version: '3.0.3',
     codename: 'Boulevard Heiresses',
     date: 'July 20, 2026',
