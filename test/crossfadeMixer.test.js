@@ -66,13 +66,14 @@ test('DJ filters stage an incoming bed before the dominance handoff', () => {
     endTime: 110
   });
   assert.ok(toNode.gain.gain.events.some((event) =>
-    event.type === 'ramp' && event.value === 0.28 && event.time === 102
+    event.type === 'ramp' && event.value === 0.28 && event.time === 104
   ));
   const incomingCurve = toNode.gain.gain.events.find((event) => event.type === 'curve');
   const dominanceIndex = Math.ceil((incomingCurve.values.length - 1) * 0.58);
   assert.ok(Math.abs(incomingCurve.first - 0.28) < 0.0001);
   assert.ok(incomingCurve.values[dominanceIndex] > 0.999);
   assert.ok(incomingCurve.values.slice(dominanceIndex).every((value) => value > 0.999));
+  // 4s preroll is NOT a long preroll (<=6s), so original filter values apply
   assert.ok(toNode.highPass.frequency.events.some((event) =>
     event.type === 'set' && event.value === 1600 && event.time === 100
   ));
@@ -108,10 +109,41 @@ test('same-beat blends use the gentler incoming filter', () => {
 
   assert.equal(timing.handoffStart, 37);
   assert.equal(timing.promotionTime, 42.8);
+  // 17s preroll is a long preroll (>6s), so uses 500Hz HP cutoff
   assert.ok(toNode.highPass.frequency.events.some((event) =>
-    event.type === 'set' && event.value === 900 && event.time === 20
+    event.type === 'set' && event.value === 500 && event.time === 20
   ));
+  // Long preroll uses 0.20 bed gain
   assert.ok(toNode.gain.gain.events.some((event) =>
-    event.type === 'ramp' && event.value === 0.28 && event.time === 22
+    event.type === 'ramp' && Math.abs(event.value - 0.20) < 0.001
   ));
+});
+
+test('DJ styles schedule DJ gains and filters even when handoffStart equals startTime', () => {
+  const fromAudio = {};
+  const toAudio = {};
+  const fromNode = mixNode();
+  const toNode = mixNode();
+  const nodes = new Map([[fromAudio, fromNode], [toAudio, toNode]]);
+  const mixer = createCrossfadeMixer({
+    connectElement: (audio) => nodes.get(audio),
+    currentTime: () => 50
+  });
+
+  const timing = mixer.scheduleCrossfade({
+    fromAudio,
+    toAudio,
+    targetVolume: 1,
+    duration: 8,
+    handoffStartSeconds: 0,
+    handoffDuration: 8,
+    transitionStyle: 'dj_blend',
+    bassSwap: true,
+    leadTime: 0
+  });
+
+  assert.equal(timing.startTime, 50);
+  assert.equal(timing.handoffStart, 50);
+  assert.ok(toNode.highPass.frequency.events.some((event) => event.type === 'set' && event.value === 350));
+  assert.ok(toNode.gain.gain.events.some((event) => event.type === 'curve' && event.time === 50));
 });

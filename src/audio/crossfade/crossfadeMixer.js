@@ -3,7 +3,7 @@ function clamp01(value) {
 }
 
 const DJ_DOMINANCE_PROGRESS = 0.58;
-const DJ_BED_FADE_IN_SECONDS = 2;
+const DJ_BED_FADE_IN_SECONDS = 4;
 
 function equalPowerCurves(size = 64) {
   const fadeOut = new Float32Array(size);
@@ -39,39 +39,78 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     return values;
   }
 
-  function scheduleDjFilters(fromNode, toNode, startTime, handoffTime, duration, style) {
+  function scheduleDjFilters(fromNode, toNode, startTime, handoffTime, duration, style, bassSwap = false) {
+    const prerollSeconds = handoffTime - startTime;
+    const isLongPreroll = prerollSeconds > 6;
     const outgoingStart = Math.min(20000, fromNode.lowPass.context.sampleRate * 0.45);
     fromNode.lowPass.frequency.cancelScheduledValues(startTime);
     fromNode.lowPass.frequency.setValueAtTime(outgoingStart, startTime);
     fromNode.lowPass.frequency.setValueAtTime(outgoingStart, handoffTime);
     toNode.highPass.frequency.cancelScheduledValues(startTime);
-    const incomingCutoff = style === 'dj_filter' ? 1600 : 900;
+    // For long prerolls, start HP filter higher to fully isolate bass during
+    // the preroll, preventing muddy low-end clashing in the long overlap.
+    const incomingCutoff = isLongPreroll ? 500 : (bassSwap ? 350 : (style === 'dj_filter' ? 1600 : 900));
     toNode.highPass.frequency.setValueAtTime(incomingCutoff, startTime);
-    toNode.highPass.frequency.setValueAtTime(incomingCutoff, handoffTime);
+    if (isLongPreroll && prerollSeconds > 10) {
+      // During a long preroll, progressively open the HP filter from the
+      // initial cutoff down to 350Hz so the incoming track gradually gains
+      // warmth before the main handoff.
+      const preOpenTime = startTime + prerollSeconds * 0.5;
+      toNode.highPass.frequency.setValueCurveAtTime(
+        filterCurve(incomingCutoff, 350),
+        preOpenTime,
+        prerollSeconds * 0.5
+      );
+    } else {
+      toNode.highPass.frequency.setValueAtTime(incomingCutoff, handoffTime);
+    }
+    // Outgoing LP sweep: for long prerolls use a gentler cutoff endpoint (300Hz)
+    // to retain some body in the outgoing track's tail fade.
+    const outgoingEndFreq = isLongPreroll ? 300 : 200;
     fromNode.lowPass.frequency.setValueCurveAtTime(
-      filterCurve(outgoingStart, 200),
+      filterCurve(outgoingStart, outgoingEndFreq),
       handoffTime,
       duration
     );
     toNode.highPass.frequency.setValueCurveAtTime(
-      filterCurve(incomingCutoff, 20),
+      filterCurve(isLongPreroll ? 350 : incomingCutoff, 20),
       handoffTime,
       duration
     );
   }
 
   function scheduleDjGains(fromNode, toNode, target, startTime, handoffTime, duration, style) {
-    const bedGain = target * (style === 'dj_switch' ? 0.22 : 0.28);
-    const bedReadyTime = Math.min(handoffTime, startTime + DJ_BED_FADE_IN_SECONDS);
+    const prerollSeconds = handoffTime - startTime;
+    const isLongPreroll = prerollSeconds > 6;
+    const bedGain = target * (style === 'dj_switch' ? 0.22 : (isLongPreroll ? 0.20 : 0.28));
+    const bedFadeSeconds = isLongPreroll ? Math.min(prerollSeconds * 0.4, DJ_BED_FADE_IN_SECONDS) : DJ_BED_FADE_IN_SECONDS;
+    const bedReadyTime = Math.min(handoffTime, startTime + bedFadeSeconds);
+    // Outgoing: hold full volume, then gently reduce during preroll before
+    // the main handoff fade. For long prerolls (>6s), reduce to ~0.88 of
+    // target by the handoff point to create a gradual energy taper.
+    const outgoingPreHandoff = isLongPreroll ? target * 0.88 : target;
     fromNode.gain.gain.cancelScheduledValues(startTime);
     fromNode.gain.gain.setValueAtTime(target, startTime);
-    fromNode.gain.gain.setValueAtTime(target, handoffTime);
+    if (isLongPreroll) {
+      fromNode.gain.gain.linearRampToValueAtTime(outgoingPreHandoff, handoffTime);
+    } else {
+      fromNode.gain.gain.setValueAtTime(target, handoffTime);
+    }
     toNode.gain.gain.cancelScheduledValues(startTime);
     toNode.gain.gain.setValueAtTime(0, startTime);
-    toNode.gain.gain.linearRampToValueAtTime(bedGain, bedReadyTime);
-    toNode.gain.gain.setValueAtTime(bedGain, handoffTime);
-    scheduleGain(fromNode, CURVES.fadeOut, target, handoffTime, duration);
-    scheduleGain(toNode, CURVES.djFadeIn, target, handoffTime, duration, bedGain);
+    if (handoffTime > startTime) {
+      toNode.gain.gain.linearRampToValueAtTime(bedGain, bedReadyTime);
+      toNode.gain.gain.setValueAtTime(bedGain, handoffTime);
+    }
+    scheduleGain(fromNode, CURVES.fadeOut, outgoingPreHandoff, handoffTime, duration);
+    scheduleGain(
+      toNode,
+      CURVES.djFadeIn,
+      target,
+      handoffTime,
+      duration,
+      handoffTime > startTime ? bedGain : 0
+    );
   }
 
   function scheduleCrossfade({
@@ -82,6 +121,7 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     handoffDuration = duration,
     handoffStartSeconds = 0,
     transitionStyle = 'equal_power',
+    bassSwap = false,
     leadTime = 0.05
   }) {
     const fromNode = connectElement(fromAudio);
@@ -97,7 +137,7 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     const target = clamp01(targetVolume);
 
     const djStyle = ['dj_switch', 'dj_filter', 'dj_blend'].includes(transitionStyle);
-    if (djStyle && handoffStart > startTime) {
+    if (djStyle) {
       scheduleDjGains(
         fromNode,
         toNode,
@@ -118,7 +158,8 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
         startTime,
         handoffStart,
         fadeDuration,
-        transitionStyle
+        transitionStyle,
+        bassSwap
       );
     }
 

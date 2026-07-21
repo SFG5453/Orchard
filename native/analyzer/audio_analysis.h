@@ -42,6 +42,12 @@ struct TempoResult {
   std::vector<double> downbeats;
 };
 
+struct MixCuePoint {
+  double time = 0;
+  double score = 0;
+  std::string type;
+};
+
 struct AnalysisResult {
   double duration = 0;
   double bpm = 0;
@@ -70,6 +76,12 @@ struct AnalysisResult {
   double peak_dbfs = -70;
   double dynamic_range_db = 0;
   std::vector<EnergyPoint> energy_curve;
+  std::vector<EnergyPoint> low_energy_curve;
+  std::vector<EnergyPoint> mid_energy_curve;
+  std::vector<EnergyPoint> high_energy_curve;
+  std::vector<double> vocal_activity_mask;
+  std::vector<MixCuePoint> mix_in_candidates;
+  std::vector<MixCuePoint> mix_out_candidates;
   double vocal_probability = 0;
 };
 

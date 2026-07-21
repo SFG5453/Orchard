@@ -152,6 +152,17 @@ function timedValueAtOrBefore(values = [], target = 0, fallback = target) {
 }
 
 function incomingCuePoint(analysis = {}) {
+  const candidates = Array.isArray(analysis.mixInCandidates) ? analysis.mixInCandidates : [];
+  if (candidates.length > 0) {
+    const dropCandidate = candidates.find((c) => c.type === 'main_drop' || c.type === 'intro_drop');
+    if (dropCandidate && Number.isFinite(Number(dropCandidate.time)) && Number(dropCandidate.time) >= 0) {
+      return Number(dropCandidate.time);
+    }
+    const best = [...candidates].sort((left, right) => (right.score || 0) - (left.score || 0))[0];
+    if (best && Number.isFinite(Number(best.time)) && Number(best.time) >= 0) {
+      return Number(best.time);
+    }
+  }
   const interval = Number(analysis.beatInterval) || (Number(analysis.bpm) > 0 ? 60 / analysis.bpm : 0);
   const downbeats = Array.isArray(analysis.downbeats) ? analysis.downbeats : [];
   const analyzedMixIn = Number(analysis.mixInTime);
@@ -165,7 +176,18 @@ function incomingCuePoint(analysis = {}) {
       Number(analysis.firstBeat) ||
       0
   );
-  return downbeats.find((beat) => Number(beat) >= pickup) ?? pickup;
+  if (pickup > 0 && pickup < (Number(analysis.duration) || 300) - 10) {
+    const handoff = downbeats.find((beat) => Number(beat) >= pickup);
+    if (handoff !== undefined) return handoff;
+  }
+  const phrases = Array.isArray(analysis.phraseBoundaries) ? analysis.phraseBoundaries : [];
+  if (phrases.length > 1 && Number(phrases[1]) > 4) {
+    return Number(phrases[1]);
+  }
+  if (downbeats.length >= 8) {
+    return Number(downbeats[Math.min(8, downbeats.length - 1)]) || 0;
+  }
+  return pickup;
 }
 
 function incomingStartPoint(analysis = {}) {
@@ -197,33 +219,43 @@ function phraseSwitch(analysis = {}, nextAnalysis = {}, length = 0) {
   }
 
   const beatSeconds = 60 / currentBpm;
-  const vocalConflict = Number(analysis.vocalProbability) >= 0.62 &&
-    Number(nextAnalysis.vocalProbability) >= 0.62;
-  const transitionBeats = Math.abs(1 - ratio) <= 0.03 && !vocalConflict ? 8 : 16;
-  const requestedOverlap = beatSeconds * transitionBeats;
-  if (length <= requestedOverlap) return null;
+  const incomingPlaybackRate = Math.round(clamp(1 / ratio, 0.9, 1.1) * 100) / 100;
+  const incomingHandoffTime = incomingCuePoint(nextAnalysis);
+  const introDropTime = incomingHandoffTime / Math.max(0.8, incomingPlaybackRate);
+  const tailBeats = 16;
+  const tailSeconds = clamp(tailBeats * beatSeconds, 4, 10);
+  const requestedOverlap = introDropTime + tailSeconds;
+  if (length <= requestedOverlap * 0.5) return null;
+  const maximumOverlap = length * 0.4;
+  const actualOverlap = Math.min(requestedOverlap, maximumOverlap);
   const alignedEnd = timedValueAtOrBefore(analysis.downbeats, length, length);
   const transitionEnd = length - alignedEnd <= beatSeconds * 4.5 ? alignedEnd : length;
-  const rawTransitionStart = transitionEnd - requestedOverlap;
+  const rawTransitionStart = transitionEnd - actualOverlap;
   const transitionStart = clamp(
     nearestTimedValue(analysis.downbeats, rawTransitionStart, beatSeconds * 0.75) ?? rawTransitionStart,
     0,
     transitionEnd - beatSeconds * 4
   );
   const overlap = transitionEnd - transitionStart;
-  const handoffDuration = Math.min(overlap, beatSeconds * (transitionBeats === 8 ? 4 : 8));
+  const rawHandoffStart = Math.max(0, overlap - tailSeconds);
+  const handoffStartSeconds = Math.round(rawHandoffStart / beatSeconds) * beatSeconds;
+  const handoffDuration = clamp(overlap - handoffStartSeconds, tailSeconds * 0.5, overlap);
+  const transitionBeats = Math.round(overlap / beatSeconds);
+  const incomingCueTime = incomingHandoffTime;
 
   return {
     transitionStart,
     transitionEnd,
     fadeSeconds: overlap,
     handoffDuration,
-    handoffStartSeconds: overlap - handoffDuration,
-    incomingCueTime: incomingCuePoint(nextAnalysis),
-    incomingPlaybackRate: Math.round(clamp(1 / ratio, 0.9, 1.1) * 100) / 100,
+    handoffStartSeconds,
+    incomingCueTime,
+    incomingHandoffTime,
+    incomingPlaybackRate,
     pickupSeconds: Math.max(0, Number(nextAnalysis.audibleStartTime ?? nextAnalysis.pickupTime) || 0),
     transitionBeats,
-    transitionStyle: 'dj_switch'
+    bassSwap: true,
+    transitionStyle: 'dj_blend'
   };
 }
 
@@ -346,9 +378,13 @@ export function planTransition({
   const currentBpm = Number(analysis.bpm) || 0;
   const nextBpm = Number(nextAnalysis.bpm) || 0;
   const handoffBpm = currentBpm || nextBpm;
+  const currentConfidence = Number(analysis.beatConfidence) || 0;
+  const nextConfidence = Number(nextAnalysis.beatConfidence) || 0;
   const sameBeatBlend = currentBpm > 0 && nextBpm > 0 &&
-    Math.abs(1 - normalizedTempoRatio(currentBpm, nextBpm)) <= 0.02;
+    Math.abs(1 - normalizedTempoRatio(currentBpm, nextBpm)) <= 0.05 &&
+    (currentConfidence >= 0.2 || nextConfidence >= 0.2);
   const handoffBeats = sameBeatBlend ? 16 : 8;
+  const beatSeconds = handoffBpm > 0 ? 60 / handoffBpm : 0.5;
   const handoffSeconds = handoffBpm > 0
     ? clamp((handoffBeats * 60) / handoffBpm, 4, sameBeatBlend ? 12 : 10)
     : 7;
@@ -356,38 +392,86 @@ export function planTransition({
   const pickupSeconds = Number.isFinite(analyzedPickup) && analyzedPickup >= 0
     ? analyzedPickup
     : 0;
-  const incomingCueTime = incomingStartPoint(nextAnalysis);
   const incomingHandoffTime = incomingCuePoint(nextAnalysis);
+  const rawIncomingCueTime = incomingStartPoint(nextAnalysis);
   const analyzedIncomingHandoff = Number(nextAnalysis.mixInTime);
   const hasIncomingPreroll = Number.isFinite(analyzedIncomingHandoff) &&
-    analyzedIncomingHandoff > incomingCueTime + 0.5;
+    analyzedIncomingHandoff > rawIncomingCueTime + 0.5;
+  const incomingCueTime = hasIncomingPreroll ? rawIncomingCueTime : incomingHandoffTime;
   const introPreroll = Math.max(
     0,
     (hasIncomingPreroll ? incomingHandoffTime - incomingCueTime : 0) /
       Math.max(0.8, incomingPlaybackRate)
   );
-  const desiredOverlap = Math.max(overlap, introPreroll + handoffSeconds * 0.42);
-  const actualOverlap = clamp(
-    desiredOverlap,
-    Math.min(handoffSeconds, maximumOverlap),
-    maximumOverlap
-  );
-  const targetStart = Math.max(0, mixEnd - actualOverlap);
-  const transitionStart = alignedTransitionStart(
-    analysis,
-    targetStart,
-    mixEnd - 0.05,
-    desiredOverlap > overlap + 0.5
-  );
+
+  let handoffStartSeconds;
+  let handoffDuration;
+  let transitionStart;
+
+  if (sameBeatBlend && beatSeconds > 0) {
+    // AutoMix-style 3-phase transition for matching/near-matching BPM:
+    //   Phase 1: Silent preroll — incoming plays from 0:00 at bed gain, HP-filtered
+    //   Phase 2: Crossfade handoff — volume & filter swap around intro drop
+    //   Phase 3: Tail fade — outgoing continues fading after promotion
+    //
+    // The incoming track is cued from its start (incomingCueTime = 0 or pickup)
+    // and plays its full intro underneath. The incomingHandoffTime (intro drop,
+    // ~16s / 32 beats for dance/pop) determines when the main handoff occurs.
+    // Total overlap ≈ incomingHandoffTime + tail (~7s) ≈ 20-23s for typical
+    // dance tracks at 124 BPM.
+
+    const introDropTime = incomingHandoffTime / Math.max(0.8, incomingPlaybackRate);
+    const tailBeats = 16;
+    const tailSeconds = clamp(tailBeats * beatSeconds, 4, 10);
+    const totalOverlap = clamp(
+      introDropTime + tailSeconds,
+      Math.min(12, maximumOverlap),
+      maximumOverlap
+    );
+
+    const targetStart = Math.max(0, mixEnd - totalOverlap);
+    transitionStart = alignedTransitionStart(
+      analysis,
+      targetStart,
+      mixEnd - 0.05,
+      true
+    );
+
+    const alignedOverlap = mixEnd - transitionStart;
+
+    // handoffStartSeconds = time within the overlap when the main volume/filter
+    // swap begins (i.e. when the incoming track reaches its intro drop).
+    // handoffDuration = how long the volume swap takes after that point.
+    const rawHandoffStart = Math.max(0, alignedOverlap - tailSeconds);
+    handoffStartSeconds = Math.round(rawHandoffStart / beatSeconds) * beatSeconds;
+    handoffDuration = clamp(alignedOverlap - handoffStartSeconds, tailSeconds * 0.5, alignedOverlap);
+  } else {
+    const desiredOverlap = Math.max(overlap, introPreroll + handoffSeconds * 0.42);
+    const actualOverlap = clamp(
+      desiredOverlap,
+      Math.min(handoffSeconds, maximumOverlap),
+      maximumOverlap
+    );
+    const targetStart = Math.max(0, mixEnd - actualOverlap);
+    transitionStart = alignedTransitionStart(
+      analysis,
+      targetStart,
+      mixEnd - 0.05,
+      desiredOverlap > overlap + 0.5
+    );
+    const alignedOverlap = mixEnd - transitionStart;
+    handoffDuration = Math.min(handoffSeconds, alignedOverlap);
+    handoffStartSeconds = hasIncomingPreroll
+      ? clamp(
+          introPreroll - handoffDuration * 0.58,
+          0,
+          Math.max(0, alignedOverlap - handoffDuration)
+        )
+      : Math.max(0, alignedOverlap - handoffDuration);
+  }
+
   const alignedOverlap = mixEnd - transitionStart;
-  const handoffDuration = Math.min(handoffSeconds, alignedOverlap);
-  const handoffStartSeconds = hasIncomingPreroll
-    ? clamp(
-        introPreroll - handoffDuration * 0.58,
-        0,
-        Math.max(0, alignedOverlap - handoffDuration)
-      )
-    : Math.max(0, alignedOverlap - handoffDuration);
+  const hasBassContent = (analysis.lowEnergyCurve?.length || 0) > 0 || (nextAnalysis.lowEnergyCurve?.length || 0) > 0;
   return {
     shouldStart: playbackTime >= transitionStart,
     markerVisible: true,
@@ -401,6 +485,7 @@ export function planTransition({
     incomingPlaybackRate,
     pickupSeconds,
     transitionBeats,
+    bassSwap: sameBeatBlend || hasBassContent,
     transitionStyle: sameBeatBlend ? 'dj_blend' : 'dj_filter',
     reason: playbackTime >= transitionStart ? 'smart-duration' : 'before-smart-duration'
   };
