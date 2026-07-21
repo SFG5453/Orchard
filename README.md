@@ -52,9 +52,7 @@ It signs in through an embedded browser session and uses browser-backed InnerTub
 
 Orchard reproduces beat-matched, phrase-aligned AutoMix transitions with 3-phase volume curves, progressive filter sweeps, downbeat quantization, and bass swaps — inspired by [Apple Music's AutoMix](https://x.com/actuallyaridan/status/1936085699104473205).
 
-<div align="center">
-  <video src="docs/automix-crossfade.mp4" controls width="100%"></video>
-</div>
+https://github.com/user-attachments/assets/96391b60-1b48-4be7-aec3-eb0cd9ea6960
 
 ### Library and discovery
 
