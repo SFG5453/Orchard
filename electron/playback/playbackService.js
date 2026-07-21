@@ -15,6 +15,7 @@ import {
 import {
   parseRangeHeader,
   pipeWebBody,
+  proxyHeadResponseHeaders,
   proxyResponseHeaders,
   rangeNotSatisfiable,
   upstreamRangeHeader,
@@ -491,6 +492,11 @@ export function createPlaybackService({
     const range = parseRangeHeader(rangeHeader, totalLength);
     if (!range.ok) return rangeNotSatisfiable(res, totalLength);
     if (await songCache.serve({ videoId, stream, range, req, res })) return;
+    if (req.method === 'HEAD') {
+      res.writeHead(200, proxyHeadResponseHeaders(contentType, totalLength));
+      res.end();
+      return;
+    }
     const fallbackUserAgent = stream.userAgent || youtubeWebUserAgent;
     const upstreamRequest = upstreamStreamRequest(stream.url, {
       fallbackUserAgent,
@@ -510,7 +516,7 @@ export function createPlaybackService({
     }
     const headers = proxyResponseHeaders(upstream, contentType, totalLength, range.wantsRange);
     res.writeHead(upstream.status, headers);
-    if (req.method === 'HEAD' || !upstream.body) {
+    if (!upstream.body) {
       res.end();
       return;
     }

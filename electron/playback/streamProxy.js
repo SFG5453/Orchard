@@ -57,6 +57,18 @@ function cleanContentType(contentType, upstreamContentType = '') {
     : contentType;
 }
 
+export function proxyHeadResponseHeaders(contentType, totalLength) {
+  const headers = {
+    'Content-Type': cleanContentType(contentType),
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'no-store',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Expose-Headers': 'Accept-Ranges, Content-Length, Content-Range'
+  };
+  if (totalLength) headers['Content-Length'] = String(totalLength);
+  return headers;
+}
+
 export function proxyResponseHeaders(upstream, contentType, totalLength, wantsRange) {
   const upstreamContentType = upstream.headers.get('content-type');
   const responseContentType = cleanContentType(contentType, upstreamContentType);
@@ -64,7 +76,8 @@ export function proxyResponseHeaders(upstream, contentType, totalLength, wantsRa
     'Content-Type': responseContentType,
     'Accept-Ranges': upstream.headers.get('accept-ranges') || 'bytes',
     'Cache-Control': 'no-store',
-    'Access-Control-Allow-Origin': '*'
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Expose-Headers': 'Accept-Ranges, Content-Length, Content-Range'
   };
   const contentLength = upstream.headers.get('content-length');
   const contentRange = upstream.headers.get('content-range');

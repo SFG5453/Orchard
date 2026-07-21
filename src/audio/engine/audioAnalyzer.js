@@ -1,5 +1,6 @@
 import { AudioContext as StandardizedAudioContext } from 'standardized-audio-context';
 import { createCrossfadeMixer } from '../crossfade/crossfadeMixer.js';
+import { downloadAudioFile } from './audioFetch.js';
 
 function clamp01(value) {
   const number = Number(value);
@@ -149,14 +150,11 @@ export function createAudioAnalyzer(options = {}) {
   }
 
   async function decodeAudio(url, signal) {
-    // Offline analysis intentionally buffers and duplicates the encoded file before decoding.
     const ctx = audioContext();
     if (!ctx) return null;
 
-    const response = await fetch(url, { signal });
-    if (!response.ok) throw new Error(`Audio analysis fetch failed with HTTP ${response.status}`);
-    const data = await response.arrayBuffer();
-    return ctx.decodeAudioData(data.slice(0));
+    const data = await downloadAudioFile(url, { signal });
+    return ctx.decodeAudioData(data);
   }
 
   function average(values) {
