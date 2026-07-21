@@ -112,7 +112,7 @@ const {
   startAccountSwitch,
   startBrowserSignIn
 } = authService;
-const youtubeLikes = createYouTubeLikesService({ ensureSignedIn, refreshBrowserAuth });
+const youtubeLikes = createYouTubeLikesService({ ensureSignedIn, refreshBrowserAuth, getBrowserInnertube });
 const resolveLyrics = createLyricsResolver({ musicClientForBrowse });
 const browserMusicApi = createBrowserMusicApi({
   authState,

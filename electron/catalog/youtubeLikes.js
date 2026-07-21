@@ -38,14 +38,30 @@ function likedFromInfo(info) {
   return false;
 }
 
-export function createYouTubeLikesService({ ensureSignedIn, refreshBrowserAuth }) {
+function isAuthenticationCredentialError(error) {
+  return Number(error?.status) === 401 || /\b401\b|required authentication credential/i.test(error?.message || '');
+}
+
+export function createYouTubeLikesService({ ensureSignedIn, refreshBrowserAuth, getBrowserInnertube }) {
   async function trackInfo(id) {
     const cleanId = videoId(id);
     if (!cleanId) throw new Error('A YouTube video ID is required.');
 
     await refreshBrowserAuth();
     const yt = await ensureSignedIn();
-    return { yt, info: await yt.music.getInfo(cleanId), videoId: cleanId };
+
+    try {
+      return { yt, info: await yt.music.getInfo(cleanId), videoId: cleanId };
+    } catch (error) {
+      if (!isAuthenticationCredentialError(error)) throw error;
+
+      await refreshBrowserAuth();
+      const browserYt = await getBrowserInnertube();
+      if (browserYt && browserYt !== yt) {
+        return { yt: browserYt, info: await browserYt.music.getInfo(cleanId), videoId: cleanId };
+      }
+      throw error;
+    }
   }
 
   async function status({ videoId: id } = {}) {

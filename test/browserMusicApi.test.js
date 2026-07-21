@@ -47,7 +47,7 @@ test('browser player requests use the authenticated YouTube Music origin and ide
   assert.equal(body.context.user.onBehalfOfUser, 'page-id');
 });
 
-test('non-player requests pass through unchanged', async () => {
+test('non-API requests pass through unchanged', async () => {
   const calls = [];
   const browserFetch = createBrowserMusicFetch({
     authState: { browser: { cookie: 'SAPISID=secret' } },
@@ -65,4 +65,38 @@ test('non-player requests pass through unchanged', async () => {
 
   assert.equal(calls[0].input, 'https://www.youtube.com/player.js');
   assert.equal(calls[0].init, init);
+});
+
+test('browser next requests use authenticated YouTube Music origin', async () => {
+  let captured;
+  const browserFetch = createBrowserMusicFetch({
+    authState: {
+      browser: {
+        cookie: 'SAPISID=secret',
+        visitorData: 'visitor',
+        dataSyncId: 'page-id'
+      }
+    },
+    fetchImpl: async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response('{}');
+    },
+    youtubeMusicClientUserAgent: 'Orchard test agent',
+    youtubeMusicClientVersion: '1.test',
+    youtubeMusicOrigin: 'https://music.youtube.com'
+  });
+
+  await browserFetch('https://www.youtube.com/youtubei/v1/next?prettyPrint=false&alt=json', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      context: { client: { clientName: 'WEB', clientVersion: 'old' } },
+      videoId: 'test123'
+    })
+  });
+
+  const headers = new Headers(captured.init.headers);
+  assert.equal(captured.url, 'https://music.youtube.com/youtubei/v1/next?prettyPrint=false&alt=json');
+  assert.match(headers.get('Authorization'), /^SAPISIDHASH \d+_[a-f0-9]{40}$/);
+  assert.ok(headers.get('Cookie').includes('SAPISID=secret'));
 });

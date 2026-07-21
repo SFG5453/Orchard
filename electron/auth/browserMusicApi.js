@@ -31,7 +31,7 @@ export function createBrowserMusicFetch({
 }) {
   return async function browserMusicFetch(input, init = {}) {
     const requestUrl = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
-    if (!/\/youtubei\/v1\/player\/?$/.test(requestUrl.pathname)) {
+    if (!/\/youtubei\/v1\//.test(requestUrl.pathname)) {
       return fetchImpl(input, init);
     }
 
