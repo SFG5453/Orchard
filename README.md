@@ -1,142 +1,207 @@
+<div align="center">
+  <img src="public/orchard-logo.png" alt="Orchard logo" width="128">
+
 # Orchard
 
-Orchard is an MIT-licensed, unofficial desktop YouTube Music client built with Electron, Vue 3, Quasar, Vite, Socket.IO, and `youtubei.js`. It signs in through an embedded browser session, talks to YouTube Music through browser-backed InnerTube requests, and layers a native-feeling music player around the catalog.
+**A power-user desktop client for YouTube Music.**
+
+Real shuffle, Best Mix queue sorting, smart crossfade, advanced audio controls, Replay, Orchard Connect, listening parties, lyrics, Last.fm, Discord Rich Presence, and more.
+
+[![Latest release](https://img.shields.io/github/v/release/SFG5453/Orchard?display_name=tag\&sort=semver)](https://sfg545.dev/orchard)
+[![License](https://img.shields.io/github/license/SFG5453/Orchard)](LICENSE)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-informational)](https://sfg545.dev/orchard)
+
+[Download Orchard](https://sfg545.dev/orchard) · [Report an issue](https://github.com/SFG5453/Orchard/issues) · [View the source](https://github.com/SFG5453/Orchard)
+
+</div>
+
+---
+
+Orchard is an open-source, unofficial YouTube Music desktop client built for people who want more control over playback, queues, audio, discovery, and connected devices than the website provides.
+
+It signs in through an embedded browser session and uses browser-backed InnerTube requests to access YouTube Music. Orchard is not affiliated with or endorsed by YouTube or Google.
+
+## Why Orchard?
+
+* **A better queue:** true shuffle, persistent playback state, autoplay, queue history, and **Best Mix** sorting using BPM and musical-key data.
+* **A serious audio stack:** smart or fixed crossfade, automatic EQ, a manual ten-band equalizer, dynamic leveling, per-track gain memory, output-device routing, and a live spectrum.
+* **Built for desktop:** media keys, tray controls, fullscreen playback, Discord Rich Presence, Last.fm scrobbling, local song caching, and automatic updates.
+* **More ways to listen:** local Replay statistics, Release Radar, personalized radio, listening parties, Orchard Connect, live-show discovery, lyrics, and shareable song links.
 
 ## Features
 
-- Browser-based YouTube Music sign-in, account switching, and cached sign-in restore
-- Home, search, library, playlist, album, artist, podcast, and section-more browsing
-- Pins, personalized radio, release radar, recently played, and local Replay stats
-- Queue management with shuffle, repeat, autoplay, playback history, and persistent restore
-- Audio and video playback with age-gate fallback warnings, media keys, desktop controls, tray behavior, and fullscreen player
-- Synced and unsynced lyrics with provider status
-- Smart or fixed crossfade, sleep timer, and queue transition planning
-- Orchard Audio Engine with automatic EQ, manual ten-band EQ, presets, dynamic leveling, per-track gain memory, live spectrum, profile import/export, and output-device routing
-- Song Cache for replaying cached tracks from disk and prefetching the current queue
-- Appearance controls for immersive artwork backgrounds, accent color source, OLED mode, system theme following, and installable artist packs
-- Song and collection sharing through Orchard Song Links, with direct or search links for supported music services
-- Peer-to-peer listening parties with synchronized playback and host-controlled queues
-- Orchard Connect for approving LAN-paired web or Android controllers
-- Discord Rich Presence with animated Apple Music artwork when available
-- Last.fm now-playing updates and scrobbling with encrypted local account sessions, plus optional YouTube listening-history updates
-- Ticketmaster-backed live-show discovery by city, postal code, or location
-- Private support reports with optional diagnostics, screenshots, conversation replies, and unread reply notifications
-- Update checks, setup checklist, diagnostics, and backup/restore tools
+### Playback and queues
 
-## Getting Started
+* Real shuffle, repeat, autoplay, queue history, and persistent queue restore
+* **Best Mix** queue ordering with local analysis and catalog BPM/key metadata
+* Smart and fixed crossfade modes with transition planning
+* Audio and video playback with media keys, desktop controls, tray behavior, and fullscreen mode
+* Sleep timer and playback-history tracking
+* Song Cache for replaying tracks from disk and prefetching the active queue
 
-Building Orchard requires Node.js and npm, Python, and a C++17 toolchain supported by `node-gyp`. Install the JavaScript dependencies first:
+### Orchard Audio Engine
+
+* Automatic EQ and manual ten-band EQ
+* Built-in presets and profile import/export
+* Dynamic leveling and remembered per-track gain
+* Live spectrum visualization
+* Output-device routing
+* Native audio analysis through an N-API addon
+
+### Library and discovery
+
+* Home, search, library, playlist, album, artist, podcast, and expanded-section browsing
+* Pins, personalized radio, recently played, and Release Radar
+* Local Replay summaries for top tracks, artists, albums, and listening time
+* Nearby live-show discovery powered by Ticketmaster
+* Synced and unsynced lyrics with provider status
+
+### Social and connected listening
+
+* Peer-to-peer listening parties with synchronized playback and host-controlled queues
+* Orchard Connect for approved LAN-paired web and Android controllers
+* Discord Rich Presence, including animated artwork when available
+* Last.fm now-playing updates and scrobbling
+* Optional YouTube listening-history updates
+* Shareable Orchard Song Links for songs and collections
+
+### Appearance and reliability
+
+* Immersive artwork backgrounds, OLED mode, system-theme following, and artwork-derived accents
+* Installable artist packs with custom artwork, layouts, aliases, and page effects
+* Account switching and cached sign-in restore
+* Setup checks, diagnostics, backup/restore, and private support reports
+* Automatic update checks for bundled desktop packages
+
+## Download
+
+Get the latest release from **[sfg545.dev/orchard](https://sfg545.dev/orchard)**.
+
+| Platform | Available packages                                            |
+| -------- | ------------------------------------------------------------- |
+| Windows  | NSIS installer                                                |
+| Linux    | AppImage, Debian package, RPM package, and Arch Linux package |
+| macOS    | ZIP packages for Apple Silicon and Intel                      |
+
+Release files and `SHA256SUMS.txt` are also published at [downloads.sfg545.dev/orchard](https://downloads.sfg545.dev/orchard/).
+
+> [!NOTE]
+> Current Windows and macOS builds are unsigned. Your operating system may display a warning during the first launch. Only install Orchard from the official website or this repository, and verify the published checksum when possible.
+
+## Building from source
+
+### Requirements
+
+* Node.js 24 and npm
+* Python
+* A C++17 toolchain supported by `node-gyp`
+
+Clone the repository and install the locked dependencies:
 
 ```bash
-npm install
+git clone https://github.com/SFG5453/Orchard.git
+cd Orchard
+npm ci
 ```
 
-Run the desktop app in development:
+Run Orchard in development mode:
 
 ```bash
 npm run dev
 ```
 
-This starts Vite on `127.0.0.1:5173` and launches Electron against the dev server.
+This builds the native audio analyzer, starts Vite on `127.0.0.1:5173`, and launches Electron against the development server.
 
-Build the native audio analyzer and renderer:
+Build the complete application:
 
 ```bash
 npm run build
 ```
 
-For a renderer-only build, use `npm run build:frontend`.
-
-Run the root application test suite:
+Run the test suite:
 
 ```bash
 npm test
 ```
 
-Launch the locally built app:
+Launch the locally built application:
 
 ```bash
 npm run start
 ```
 
-This runs the full native and renderer build first, then opens Electron against the generated `dist/` files.
+### Useful commands
 
-## Packaging
+| Command                  | Purpose                                                |
+| ------------------------ | ------------------------------------------------------ |
+| `npm run build:native`   | Build the native audio-analysis addon                  |
+| `npm run build:frontend` | Build only the Vue renderer                            |
+| `npm run test:native`    | Run the audio, transition, and related native tests    |
+| `npm run package`        | Create an unpacked Electron application                |
+| `npm run make`           | Create distributable packages for the current platform |
+| `npm run make:mac`       | Cross-build a universal macOS ZIP from Linux           |
 
-Create an unpacked Electron Builder package for the current platform:
+## Orchard Connect for Android
 
-```bash
-npm run package
-```
+The native Kotlin companion is located in [`mobile/orchard-connect`](mobile/orchard-connect). It supports Android 7.0 (API 24) and newer.
 
-Create distributable artifacts for the current platform:
-
-```bash
-npm run make
-```
-
-Release automation publishes Linux AppImage, Debian, RPM, and Arch packages; a Windows NSIS installer; and unsigned macOS zips for Apple Silicon and Intel. Tagged builds run in GitHub Actions and upload the packages and updater manifests to the Orchard R2 bucket. The desktop updater reads from `ORCHARD_UPDATE_URL` when set, otherwise it uses the default downloads host in `electron-builder.config.cjs`.
-
-Build the universal macOS zip from Linux with:
+Build a debug APK with JDK 17 and Android SDK API 36:
 
 ```bash
-npm run make:mac
+cd mobile/orchard-connect/android
+./gradlew assembleDebug
 ```
 
-The local command cross-compiles Orchard's native audio analyzer with a pinned [OSXCross](https://github.com/tpoechtrager/osxcross) toolchain and a checksummed macOS 15.5 SDK from [alexey-lysiuk/macos-sdk](https://github.com/alexey-lysiuk/macos-sdk), then merges Apple Silicon and Intel Electron bundles. Review Apple's Xcode license before enabling the SDK-based cross-build in your environment. Tagged GitHub releases instead compile each architecture on a native macOS runner. Because the GitHub artifacts are not signed or notarized, macOS will block the first launch; after trying to open Orchard, use **System Settings → Privacy & Security → Open Anyway** if you trust the downloaded build.
+Pair it by opening **Settings → Orchard Connect** in the desktop app, scanning the QR code, and approving the device. Both devices must be reachable on the same local network.
 
-To create an application payload for a distro-provided Electron 43 runtime:
+## Project structure
 
-```bash
-npm run package:linux-system -- --electron-dist=/usr/lib/electron43
+```text
+src/                         Vue renderer and application state
+src/audio/                   Live audio engine and Smart Crossfade pipeline
+electron/main/               Electron composition root
+electron/preload/            Sandboxed renderer bridge
+electron/audio/              Native analysis and audio services
+electron/auth/               Browser-backed YouTube authentication
+electron/connect/            Orchard Connect server and pairing UI
+electron/playback/           Stream resolution, proxying, and playback services
+native/                      C++ audio analyzer and N-API bindings
+mobile/orchard-connect/      Native Android/Kotlin companion
+workers/                     Cloudflare Workers and Durable Objects
+services/artwork-converter/  Animated-artwork conversion service
+packaging/                   Linux packaging and runner assets
+scripts/                     Build, launch, and release utilities
+test/                        Node test suite
 ```
 
-To build the Arch Linux package locally:
+The renderer reaches privileged desktop functionality only through the sandboxed preload surface. Catalog and playback requests use a loopback Socket.IO bridge. Orchard Connect is a separate paired-device service that intentionally listens on the local network.
 
-```bash
-packaging/linux/arch/build-local.sh
-```
+## Contributing
 
-These system-runtime builds expect Electron 43 at `/usr/lib/electron43`. Distro packages disable Orchard's bundled updater because updates are owned by the package manager.
+Bug reports, feature requests, and pull requests are welcome in the main Orchard repository.
 
-## Project Structure
+Before submitting a code change:
 
-- `src/` is renderer-only; application installers are grouped by domain under `src/app/`
-- `src/audio/` separates the live Web Audio engine from offline Smart Crossfade analysis and its worker
-- `src/components/` groups window chrome, controls, dialogs, player UI, settings, and browse views
-- `electron/main/` is the Electron composition root, while `electron/preload/` contains the isolated context bridge
-- `electron/audio/`, `auth/`, `bridge/`, `catalog/`, `connect/`, `playback/`, `platform/`, and `integrations/` keep main-process responsibilities explicit
-- `shared/` contains process-neutral compatibility contracts such as Electron IPC channel names
-- `native/binding/` owns N-API conversion and worker dispatch; `native/analyzer/` owns offline audio DSP
-- `mobile/orchard-connect/` contains the native Android/Kotlin Orchard Connect companion
-- `workers/song-links/` contains the Cloudflare Worker and D1 schema for Orchard share pages
-- `workers/listening-party/` contains the Durable Object used for party rooms and WebRTC signaling
-- `workers/artwork-proxy/` contains the Cloudflare Worker that validates and proxies animated artwork conversion
-- `workers/support/` contains the private support Worker, D1/R2 integration, Discord commands, and issue mirroring
-- `workers/concerts/` contains the Ticketmaster-backed live-shows Worker
-- `workers/lastfm/` contains the credential-protected Last.fm authentication and scrobbling Worker
-- `workers/artist-packs/` serves hosted artist packs from R2, while `workers/artist-metadata/` caches confirmed iTunes genre matches in D1
-- `services/artwork-converter/` contains the Node/FFmpeg service used by the artwork proxy
-- `packaging/` contains Linux packaging assets and runner container files
-- `scripts/` contains local launch and packaging helpers
+1. Create a focused branch.
+2. Keep unrelated changes out of the same pull request.
+3. Run `npm test`.
+4. Run `npm run build:frontend` for renderer-only work, or `npm run build` when native code is affected.
+5. Explain what changed and how it was tested.
 
-The renderer reaches privileged desktop APIs only through the sandboxed preload
-surface. Catalog and playback requests use a loopback Socket.IO bridge; Orchard
-Connect is a separate paired-device service that intentionally listens on the
-local network.
+Use the [Issues tab](https://github.com/SFG5453/Orchard/issues) for all public bug reports and feature requests. Private reports with optional diagnostics and screenshots can be submitted through Orchard's in-app Support System.
 
-## Notes
+## Service dependencies
 
-- Orchard is a desktop app, not a headless service.
-- Sign-in, playback, browsing, live shows, sharing, updates, and support depend on external services and network access.
-- Orchard is not affiliated with or endorsed by YouTube or Google.
-- `npm run build:frontend` checks renderer-only changes; `npm run build` also rebuilds the native analyzer.
-- Worker and service READMEs contain their own provisioning, secrets, and deployment instructions.
+Some Orchard features depend on external services and may stop working when those services change. This includes YouTube Music sign-in, catalog access, playback, live-show discovery, sharing, scrobbling, updates, and support.
 
-## Attribution
+BPM and musical-key metadata is provided by [GetSongBPM](https://getsongbpm.com).
 
-BPM and musical-key metadata provided by [GetSongBPM](https://getsongbpm.com).
+## Acknowledgements
+
+The Orchard logo was created with the assistance of ChatGPT image generation.
 
 ## License
 
-[MIT](LICENSE).
+Orchard is available under the [MIT License](LICENSE).
+
+Copyright © 2025–2026 SFG545.
