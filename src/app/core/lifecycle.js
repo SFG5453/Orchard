@@ -236,6 +236,7 @@ export function installLifecycle(ctx) {
     }
     ctx.stopCrossfadeClock();
     ctx.autoCrossfade.cancel();
+    ctx.dismissSmartCrossfadeMix?.();
     ctx.setCurrentAudioVolume();
   });
 
@@ -378,6 +379,7 @@ export function installLifecycle(ctx) {
     ctx.crossfadeAnalysisAbort?.abort();
     ctx.nextCrossfadeAnalysisAbort?.abort();
     ctx.stopCrossfadeClock();
+    ctx.dismissSmartCrossfadeMix?.();
     ctx.autoplayRequest += 1;
     ctx.autoCrossfade.cancel();
     ctx.finishYouTubeHistory?.();

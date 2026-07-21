@@ -183,6 +183,24 @@ export function installState(ctx) {
   ctx.changelogDialogOpen = ref(false);
   ctx.updateDialogOpen = ref(false);
   ctx.fullscreenPlayerOpen = ref(false);
+  ctx.smartCrossfadeMix = ref({
+    id: 0,
+    visible: false,
+    durationMs: 0,
+    fadeDurationMs: 0,
+    style: 'equal_power',
+    styleLabel: 'Smart mix',
+    from: { id: '', title: '', artist: '', artwork: '' },
+    to: { id: '', title: '', artist: '', artwork: '' },
+    fromBpm: 0,
+    toBpm: 0,
+    fromKey: '',
+    toKey: '',
+    tempoShift: 0,
+    transitionBeats: 0
+  });
+  ctx.smartCrossfadeMixTimer = 0;
+  ctx.smartCrossfadeMixSequence = 0;
   ctx.compactWindow = ref(false);
   ctx.rightPanelMode = ref('queue');
   ctx.narrowWindow = computed(() => ctx.viewportWidth.value < 1180 && !ctx.compactWindow.value);
