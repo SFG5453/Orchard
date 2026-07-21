@@ -215,6 +215,7 @@ export function installPlaybackResolve(ctx) {
       ? item
       : { ...item, playbackFallbackTried: false, streamRefreshTried: false };
     ctx.autoCrossfade.cancel();
+    ctx.dismissSmartCrossfadeMix?.();
     ctx.clearPlaybackStallRecovery?.();
     if (ctx.activeTrack.value?.id && ctx.activeTrack.value.id !== trackItem.id) {
       ctx.markPlaylistTrackPlayed?.(ctx.activeTrack.value);

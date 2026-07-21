@@ -31,6 +31,7 @@ const PodcastsView = defineAsyncComponent(() => import('../views/PodcastsView.vu
 const ReplayView = defineAsyncComponent(() => import('../views/ReplayView.vue'));
 const ReleaseRadarView = defineAsyncComponent(() => import('../views/ReleaseRadarView.vue'));
 const SettingsView = defineAsyncComponent(() => import('../settings/SettingsView.vue'));
+const SmartCrossfadeMixOverlay = defineAsyncComponent(() => import('../player/SmartCrossfadeMixOverlay.vue'));
 const UpdateDialog = defineAsyncComponent(() => import('../dialogs/UpdateDialog.vue'));
 const ListeningPartyDialog = defineAsyncComponent(() => import('../dialogs/ListeningPartyDialog.vue'));
 
@@ -61,6 +62,7 @@ export default {
     SearchView,
     SectionMoreView,
     SettingsView,
+    SmartCrossfadeMixOverlay,
     SupportView,
     UpdateDialog,
     SongActionMenu,
@@ -105,6 +107,7 @@ export default {
     />
 
     <FullscreenPlayer v-if="fullscreenPlayerOpen" :app="app" />
+    <SmartCrossfadeMixOverlay :app="app" />
     <Transition name="playback-status-popup">
       <div
         v-if="playbackStatusPopup"
