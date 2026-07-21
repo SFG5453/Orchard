@@ -49,11 +49,11 @@ module.exports = {
   },
   deb: {
     compression: 'zst',
-    fpm: ['--deb-compression-level', '10']
+    fpm: ['--deb-compression-level', '7']
   },
   rpm: {
     compression: 'xzmt',
-    fpm: ['--rpm-compression-level', '9']
+    fpm: ['--rpm-compression-level', '6']
   },
   win: {
     target: ['nsis'],
