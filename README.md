@@ -48,6 +48,12 @@ It signs in through an embedded browser session and uses browser-backed InnerTub
 * Output-device routing
 * Native audio analysis through an N-API addon
 
+### Smart Crossfade
+
+Orchard reproduces beat-matched, phrase-aligned AutoMix transitions with 3-phase volume curves, progressive filter sweeps, downbeat quantization, and bass swaps — inspired by [Apple Music's AutoMix](https://x.com/actuallyaridan/status/1936085699104473205).
+
+https://github.com/user-attachments/assets/96391b60-1b48-4be7-aec3-eb0cd9ea6960
+
 ### Library and discovery
 
 * Home, search, library, playlist, album, artist, podcast, and expanded-section browsing

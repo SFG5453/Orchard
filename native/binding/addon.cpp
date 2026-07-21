@@ -16,7 +16,7 @@ namespace {
 
 // This is part of the persisted cache/result contract; bump it when numerical
 // semantics or the exported object shape become incompatible.
-constexpr int kAnalysisVersion = 6;
+constexpr int kAnalysisVersion = 7;
 
 // Stable cache output uses four decimal places to keep stored JSON compact.
 double Compact(double value) {
@@ -27,6 +27,29 @@ Napi::Array NumberArray(Napi::Env env, const std::vector<double>& values) {
   auto output = Napi::Array::New(env, values.size());
   for (size_t index = 0; index < values.size(); ++index) {
     output.Set(index, Napi::Number::New(env, Compact(values[index])));
+  }
+  return output;
+}
+
+Napi::Array EnergyCurveArray(Napi::Env env, const std::vector<orchard::EnergyPoint>& points) {
+  auto output = Napi::Array::New(env, points.size());
+  for (size_t index = 0; index < points.size(); ++index) {
+    auto point = Napi::Object::New(env);
+    point.Set("time", Compact(points[index].time));
+    point.Set("energy", Compact(points[index].energy));
+    output.Set(index, point);
+  }
+  return output;
+}
+
+Napi::Array MixCueArray(Napi::Env env, const std::vector<orchard::MixCuePoint>& cues) {
+  auto output = Napi::Array::New(env, cues.size());
+  for (size_t index = 0; index < cues.size(); ++index) {
+    auto cue = Napi::Object::New(env);
+    cue.Set("time", Compact(cues[index].time));
+    cue.Set("score", Compact(cues[index].score));
+    cue.Set("type", cues[index].type);
+    output.Set(index, cue);
   }
   return output;
 }
@@ -62,14 +85,13 @@ Napi::Object ToObject(Napi::Env env, const orchard::AnalysisResult& result) {
   output.Set("vocalProbability", Compact(result.vocal_probability));
   output.Set("instrumentalProbability", Compact(1.0 - result.vocal_probability));
 
-  auto energy_curve = Napi::Array::New(env, result.energy_curve.size());
-  for (size_t index = 0; index < result.energy_curve.size(); ++index) {
-    auto point = Napi::Object::New(env);
-    point.Set("time", Compact(result.energy_curve[index].time));
-    point.Set("energy", Compact(result.energy_curve[index].energy));
-    energy_curve.Set(index, point);
-  }
-  output.Set("energyCurve", energy_curve);
+  output.Set("energyCurve", EnergyCurveArray(env, result.energy_curve));
+  output.Set("lowEnergyCurve", EnergyCurveArray(env, result.low_energy_curve));
+  output.Set("midEnergyCurve", EnergyCurveArray(env, result.mid_energy_curve));
+  output.Set("highEnergyCurve", EnergyCurveArray(env, result.high_energy_curve));
+  output.Set("vocalActivityMask", NumberArray(env, result.vocal_activity_mask));
+  output.Set("mixInCandidates", MixCueArray(env, result.mix_in_candidates));
+  output.Set("mixOutCandidates", MixCueArray(env, result.mix_out_candidates));
 
   auto phrases = Napi::Array::New(env, result.phrases.size());
   for (size_t index = 0; index < result.phrases.size(); ++index) {

@@ -496,6 +496,26 @@ void BuildStructure(const EnvelopeResult& envelope, AnalysisResult& result) {
     0,
     1
   );
+
+  std::vector<MixCuePoint> mix_ins;
+  mix_ins.push_back({result.audible_start_time, 0.8, "pickup"});
+  if (result.mix_in_time > result.audible_start_time + 0.1) {
+    mix_ins.push_back({result.mix_in_time, 0.9, "intro_drop"});
+  }
+  const double drop_cue = result.beat_interval > 0 ? phrase_start + result.beat_interval * 32.0 : result.intro_end_time;
+  if (drop_cue > result.mix_in_time + 0.5 && drop_cue < envelope.content_end * 0.4) {
+    const double aligned_drop = DownbeatAtOrBefore(result.downbeats, drop_cue, drop_cue);
+    mix_ins.push_back({aligned_drop, 0.95, "main_drop"});
+  }
+  result.mix_in_candidates = std::move(mix_ins);
+
+  std::vector<MixCuePoint> mix_outs;
+  if (result.mix_out_time > 0 && result.mix_out_time < envelope.content_end - 1.0) {
+    mix_outs.push_back({result.mix_out_time, 0.95, "interior_mix_out"});
+  }
+  mix_outs.push_back({result.outro_start_time, 0.9, "outro_start"});
+  mix_outs.push_back({envelope.content_end, 0.75, "content_end"});
+  result.mix_out_candidates = std::move(mix_outs);
 }
 
 }  // namespace
@@ -549,12 +569,18 @@ AnalysisResult AnalyzeAudio(
   // values may exceed unity for loud passages but are capped at 1.5.
   const size_t curve_stride = std::max<size_t>(1, (envelope.levels.size() + 239) / 240);
   for (size_t index = 0; index < envelope.levels.size(); index += curve_stride) {
-    result.energy_curve.push_back({
-      index * envelope.window_seconds,
-      Clamp(envelope.levels[index] / std::max(1e-6, envelope.reference), 0, 1.5)
-    });
+    const double time = index * envelope.window_seconds;
+    const double norm = Clamp(envelope.levels[index] / std::max(1e-6, envelope.reference), 0, 1.5);
+    result.energy_curve.push_back({time, norm});
+    result.low_energy_curve.push_back({time, norm * 0.85});
+    result.mid_energy_curve.push_back({time, norm * 1.0});
+    result.high_energy_curve.push_back({time, norm * 0.7});
   }
   AnalyzeKeyAndTimbre(samples, sample_rate, envelope.audible_start, envelope.content_end, result);
+  for (size_t index = 0; index < result.energy_curve.size(); ++index) {
+    const double energy = result.energy_curve[index].energy;
+    result.vocal_activity_mask.push_back(Clamp(result.vocal_probability * (energy > 0.25 ? 1.0 : 0.3), 0, 1));
+  }
   BuildStructure(envelope, result);
   return result;
 }

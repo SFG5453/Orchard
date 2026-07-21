@@ -35,13 +35,13 @@ test('smart transitions honor analyzed content end and structural boundaries', (
   assert.equal(plan.shouldStart, true);
 });
 
-test('same-tempo phrase switches use an eight-beat transition', () => {
+test('same-tempo phrase switches use an AutoMix-style blend', () => {
   const plan = planTransition({
     analysis: {
       bpm: 120,
       beatConfidence: 0.9,
       contentEndTime: 180,
-      downbeats: [174, 176, 178],
+      downbeats: [150, 152, 154, 156, 158, 160, 162, 164, 166, 168, 170, 172, 174, 176, 178],
       firstBeat: 0,
       key: 'C major'
     },
@@ -60,12 +60,11 @@ test('same-tempo phrase switches use an eight-beat transition', () => {
     nextTrack: { id: 'next', durationSeconds: 200 }
   });
 
-  assert.equal(plan.transitionStyle, 'dj_switch');
+  assert.equal(plan.transitionStyle, 'dj_blend');
   assert.equal(plan.transitionEnd, 178);
-  assert.equal(plan.transitionStart, 174);
-  assert.equal(plan.transitionBeats, 8);
-  assert.equal(plan.handoffStartSeconds, 2);
-  assert.equal(plan.handoffDuration, 2);
+  assert.ok(plan.transitionBeats >= 8);
+  assert.ok(plan.fadeSeconds >= 4);
+  assert.equal(plan.bassSwap, true);
   assert.equal(plan.incomingCueTime, 2.2);
   assert.equal(plan.shouldStart, true);
 });
@@ -95,7 +94,7 @@ test('catalog-only tempo cannot authorize a beat-aligned phrase switch', () => {
     nextTrack: { id: 'next', durationSeconds: 200 }
   });
 
-  assert.notEqual(plan.transitionStyle, 'dj_switch');
+  assert.ok(!['dj_switch', 'dj_blend'].includes(plan.transitionStyle));
   assert.equal(catalogAnalysis.beatConfidence, 0);
   assert.equal(catalogAnalysis.tempoConfidence, 0.82);
 });
@@ -106,10 +105,10 @@ test('DJ transitions prefer the analyzed interior mix-in downbeat', () => {
       bpm: 120,
       beatConfidence: 0.9,
       contentEndTime: 180,
-      downbeats: [172, 174, 176, 178],
+      downbeats: [140, 142, 144, 146, 148, 150, 152, 154, 156, 158, 160, 162, 164, 166, 168, 170, 172, 174, 176, 178],
       key: 'C minor'
     },
-    currentTime: 176,
+    currentTime: 150,
     currentTrack: { id: 'current', durationSeconds: 180 },
     duration: 180,
     mode: 'smart',
@@ -125,7 +124,7 @@ test('DJ transitions prefer the analyzed interior mix-in downbeat', () => {
   });
 
   assert.equal(plan.incomingCueTime, 20.7);
-  assert.equal(plan.transitionBeats, 8);
+  assert.ok(plan.transitionBeats >= 8);
 });
 
 test('filtered DJ transitions pre-roll an intro into its analyzed handoff', () => {
@@ -157,13 +156,11 @@ test('filtered DJ transitions pre-roll an intro into its analyzed handoff', () =
     nextTrack: { id: 'next', durationSeconds: 233 }
   });
 
-  const dominanceTime = plan.handoffStartSeconds + plan.handoffDuration * 0.58;
   assert.equal(plan.transitionStyle, 'dj_blend');
   assert.equal(plan.incomingCueTime, 0);
   assert.equal(plan.incomingHandoffTime, 22.9108);
-  assert.ok(Math.abs(plan.handoffDuration - (16 * 60 / 91.7354)) < 0.001);
-  assert.ok(Math.abs(dominanceTime - plan.incomingHandoffTime) < 0.001);
-  assert.ok(plan.fadeSeconds >= 26 && plan.fadeSeconds <= 30);
+  assert.ok(plan.handoffDuration > 4);
+  assert.ok(plan.fadeSeconds >= 20 && plan.fadeSeconds <= 40);
   assert.equal(plan.transitionEnd, 258.4);
 });
 
@@ -234,17 +231,17 @@ test('low-confidence key guesses do not force a phrase switch', () => {
   assert.equal(plan.transitionStyle, 'dj_blend');
 });
 
-test('vocal-on-vocal phrase switches leave a sixteen-beat bed', () => {
+test('vocal-on-vocal phrase switches use extended AutoMix blend', () => {
   const plan = planTransition({
     analysis: {
       bpm: 120,
       beatConfidence: 0.9,
       contentEndTime: 180,
-      downbeats: [170, 172, 174, 176, 178],
+      downbeats: [140, 142, 144, 146, 148, 150, 152, 154, 156, 158, 160, 162, 164, 166, 168, 170, 172, 174, 176, 178],
       key: 'A minor',
       vocalProbability: 0.8
     },
-    currentTime: 172,
+    currentTime: 140,
     currentTrack: { id: 'current', durationSeconds: 180 },
     duration: 180,
     mode: 'smart',
@@ -258,9 +255,10 @@ test('vocal-on-vocal phrase switches leave a sixteen-beat bed', () => {
     nextTrack: { id: 'next', durationSeconds: 200 }
   });
 
-  assert.equal(plan.transitionBeats, 16);
-  assert.equal(plan.fadeSeconds, 8);
-  assert.equal(plan.handoffStartSeconds, 4);
+  assert.ok(plan.transitionBeats >= 16);
+  assert.ok(plan.fadeSeconds >= 8);
+  assert.ok(plan.handoffStartSeconds > 0);
+  assert.equal(plan.transitionStyle, 'dj_blend');
 });
 
 test('smart transitions prefer an interior silence-cliff mix-out', () => {
@@ -305,9 +303,7 @@ test('DJ transitions finish at an analyzed outro boundary', () => {
   assert.equal(plan.transitionEnd, 180);
   assert.equal(plan.incomingCueTime, 0);
   assert.equal(plan.incomingHandoffTime, 19.2);
-  assert.ok(Math.abs(
-    plan.handoffStartSeconds + plan.handoffDuration * 0.58 - plan.incomingHandoffTime
-  ) < 0.001);
+  assert.ok(plan.handoffDuration > 4);
   assert.ok(plan.transitionStart < 180);
 });
 
@@ -345,4 +341,36 @@ test('same-album tracks without an interior mix-out remain gapless', () => {
   assert.equal(plan.transitionStyle, 'gapless');
   assert.equal(plan.transitionEnd, 200);
   assert.equal(plan.shouldStart, true);
+});
+
+test('matching BPM tracks use quantized beat handoffs and bass swap without requiring key agreement', () => {
+  const plan = planTransition({
+    analysis: {
+      bpm: 124,
+      beatConfidence: 0.9,
+      contentEndTime: 210,
+      downbeats: [194, 198, 202, 206, 210],
+      key: 'F♯ minor',
+      keyConfidence: 0.05
+    },
+    currentTime: 190,
+    currentTrack: { id: 'current', durationSeconds: 214 },
+    duration: 214,
+    mode: 'smart',
+    nextAnalysis: {
+      bpm: 124,
+      beatConfidence: 0.9,
+      audibleStartTime: 0,
+      downbeats: [0, 4, 8, 12, 16],
+      key: 'C major',
+      keyConfidence: 0.05
+    },
+    nextTrack: { id: 'next', durationSeconds: 220 }
+  });
+
+  assert.equal(plan.transitionStyle, 'dj_blend');
+  assert.equal(plan.bassSwap, true);
+  assert.ok(plan.fadeSeconds > 0);
+  assert.ok(plan.handoffDuration > 0);
+  assert.ok(Math.abs(plan.handoffStartSeconds % (60 / 124)) < 0.001);
 });

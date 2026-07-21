@@ -28,7 +28,7 @@ test('native analyzer returns transition-ready musical features', async () => {
   const track = syntheticTrack();
   const result = await native.analyze(track.samples, track.sampleRate, track.duration);
 
-  assert.equal(result.analysisVersion, 6);
+  assert.equal(result.analysisVersion, 7);
   assert.ok(result.bpm >= 110 && result.bpm <= 130, `unexpected BPM: ${result.bpm}`);
   assert.ok(result.beatConfidence > 0);
   assert.ok(result.beats.length > 60);
@@ -52,6 +52,12 @@ test('native analyzer returns transition-ready musical features', async () => {
   assert.ok(Number.isFinite(result.loudnessLufs));
   assert.ok(Number.isFinite(result.dynamicRangeDb));
   assert.ok(result.energyCurve.length > 20 && result.energyCurve.length <= 240);
+  assert.ok(result.lowEnergyCurve.length > 0);
+  assert.ok(result.midEnergyCurve.length > 0);
+  assert.ok(result.highEnergyCurve.length > 0);
+  assert.ok(result.vocalActivityMask.length > 0);
+  assert.ok(result.mixInCandidates.length > 0);
+  assert.ok(result.mixOutCandidates.length > 0);
   assert.ok(result.vocalProbability >= 0 && result.vocalProbability <= 1);
   assert.ok(Math.abs(result.vocalProbability + result.instrumentalProbability - 1) < 0.001);
 });

@@ -50,7 +50,7 @@ test('audio analysis service caches native results across service restarts', asy
       sampleRate: audio.sampleRate,
       samples: audio.samples.buffer
     });
-    assert.equal(analyzed.analysisVersion, 6);
+    assert.equal(analyzed.analysisVersion, 7);
 
     const memoryHit = await firstIpc.invoke('audio-analysis:analyze', { trackId: 'cached-track' });
     assert.deepEqual(memoryHit, analyzed);
@@ -75,7 +75,7 @@ test('audio analysis service retries a native addon that was unavailable at star
   const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-retry-'));
   const cachePath = path.join(directory, 'cache.json');
   const ipc = fakeIpcMain();
-  const expected = { analysisVersion: 6, duration: 8, mixOutTime: 7.5 };
+  const expected = { analysisVersion: 7, duration: 8, mixOutTime: 7.5 };
   let loadAttempts = 0;
   const logs = [];
   const service = setupAudioAnalysisService({
@@ -85,7 +85,7 @@ test('audio analysis service retries a native addon that was unavailable at star
     loadNativeAddon() {
       loadAttempts += 1;
       if (loadAttempts === 1) throw new Error('Native module is not ready yet');
-      return { analysisVersion: 6, analyze: async () => expected };
+      return { analysisVersion: 7, analyze: async () => expected };
     },
     logger: (event, details) => logs.push({ event, details })
   });
