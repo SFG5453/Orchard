@@ -43,7 +43,7 @@ module.exports = {
     target: ['AppImage', 'deb', 'rpm'],
     category: 'Audio',
     icon: 'build/icon.png',
-    maintainer: 'SFG545 <khyrenjoseph253@gmail.com>',
+    maintainer: 'SFG545 <sfg@sfg545.dev>',
     vendor: 'SFG545',
     syncDesktopName: true
   },
