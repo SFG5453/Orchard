@@ -1,16 +1,12 @@
 import { ref } from 'vue';
-import { createSmartCrossfadeAnalyzer } from '../../audio/crossfade/smartCrossfadeAnalysis.js';
+import {
+  ANALYSIS_PRIORITIES,
+  createSmartCrossfadeAnalyzer
+} from '../../audio/crossfade/smartCrossfadeAnalysis.js';
 import {
   createBpmMetadataClient,
   mergeBpmMetadata
 } from '../../audio/crossfade/bpmMetadata.js';
-
-function errorDetails(error) {
-  return {
-    errorName: String(error?.name || 'Error'),
-    errorMessage: String(error?.message || error || 'Unknown error').slice(0, 1000)
-  };
-}
 
 function emptyAnalysis(trackId = '', status = trackId ? 'loading' : 'idle') {
   return {
@@ -44,26 +40,6 @@ function emptyAnalysis(trackId = '', status = trackId ? 'loading' : 'idle') {
   };
 }
 
-function retryPause(signal, delay = 600) {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new DOMException('Smart Crossfade analysis was cancelled', 'AbortError'));
-      return;
-    }
-    const cleanup = () => signal?.removeEventListener('abort', onAbort);
-    const onAbort = () => {
-      window.clearTimeout(timer);
-      cleanup();
-      reject(new DOMException('Smart Crossfade analysis was cancelled', 'AbortError'));
-    };
-    const timer = window.setTimeout(() => {
-      cleanup();
-      resolve();
-    }, delay);
-    signal?.addEventListener('abort', onAbort, { once: true });
-  });
-}
-
 export function installSmartCrossfadeActions(ctx) {
   ctx.crossfadeAnalysisByTrack = new Map();
   ctx.crossfadeAnalysis = ref(emptyAnalysis());
@@ -72,10 +48,12 @@ export function installSmartCrossfadeActions(ctx) {
   ctx.nextCrossfadeAnalysisRequest = 0;
   ctx.crossfadeAnalysisAbort = null;
   ctx.nextCrossfadeAnalysisAbort = null;
-  ctx.smartCrossfadeAnalyzer = createSmartCrossfadeAnalyzer({
+  const analyzerFactory = ctx.createSmartCrossfadeAnalyzer || createSmartCrossfadeAnalyzer;
+  const bpmClientFactory = ctx.createBpmMetadataClient || createBpmMetadataClient;
+  ctx.smartCrossfadeAnalyzer = analyzerFactory({
     decodeAudio: ctx.audioAnalyzer.decodeAudio
   });
-  ctx.bpmMetadata = createBpmMetadataClient({
+  ctx.bpmMetadata = bpmClientFactory({
     report: (event, details) => ctx.smartCrossfadeAnalyzer.report(`bpm-${event}`, details)
   });
 
@@ -109,41 +87,40 @@ export function installSmartCrossfadeActions(ctx) {
     target.value = emptyAnalysis(track.id);
     const targetName = requestKey === 'crossfadeAnalysisRequest' ? 'current' : 'next';
     ctx.smartCrossfadeAnalyzer.report('track-request', { trackId: track.id, target: targetName });
-    const bpmMetadataPromise = ctx.bpmMetadata.lookup(track);
+    const metadataState = { settled: false, value: null };
+    const bpmMetadataPromise = ctx.bpmMetadata.lookup(track)
+      .then((metadata) => {
+        metadataState.settled = true;
+        metadataState.value = metadata;
+        return metadata;
+      })
+      .catch(() => {
+        metadataState.settled = true;
+        return null;
+      });
 
-    try {
-      let analysis;
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        try {
-          analysis = await ctx.smartCrossfadeAnalyzer.analyze(track.id, streamUrl, {
-            duration: fallbackDuration,
-            signal: controller.signal
-          });
-          break;
-        } catch (error) {
-          if (error?.name === 'AbortError' || attempt === 1) throw error;
-          ctx.smartCrossfadeAnalyzer.report('track-retry', {
-            trackId: track.id,
-            target: targetName,
-            attempt: attempt + 2,
-            ...errorDetails(error)
-          });
-          await retryPause(controller.signal);
-        }
-      }
-      if (controller.signal.aborted || requestId !== ctx[requestKey]) return;
-      const bpmMetadata = await bpmMetadataPromise;
-      if (controller.signal.aborted || requestId !== ctx[requestKey]) return;
+    function publish(analysis, metadata = null) {
       target.value = {
         ...emptyAnalysis(track.id, 'ready'),
-        ...mergeBpmMetadata(analysis, bpmMetadata),
+        ...mergeBpmMetadata(analysis, metadata),
         trackId: track.id,
         status: 'ready'
       };
+      ctx.crossfadeAnalysisByTrack.delete(track.id);
       ctx.crossfadeAnalysisByTrack.set(track.id, target.value);
-      if (ctx.crossfadeAnalysisByTrack.size > 120) {
+      while (ctx.crossfadeAnalysisByTrack.size > 120) {
         ctx.crossfadeAnalysisByTrack.delete(ctx.crossfadeAnalysisByTrack.keys().next().value);
       }
+    }
+
+    try {
+      const analysis = await ctx.smartCrossfadeAnalyzer.analyze(track.id, streamUrl, {
+        duration: fallbackDuration,
+        priority: targetName === 'current' ? ANALYSIS_PRIORITIES.current : ANALYSIS_PRIORITIES.next,
+        signal: controller.signal
+      });
+      if (controller.signal.aborted || requestId !== ctx[requestKey]) return;
+      publish(analysis, metadataState.settled ? metadataState.value : null);
       ctx.smartCrossfadeAnalyzer.report('track-ready', {
         trackId: track.id,
         target: targetName,
@@ -151,6 +128,21 @@ export function installSmartCrossfadeActions(ctx) {
         mixOutTime: Number(target.value.mixOutTime) || 0,
         contentEndTime: Number(target.value.contentEndTime) || 0
       });
+
+      if (!metadataState.settled) {
+        void bpmMetadataPromise.then((metadata) => {
+          if (!metadata || controller.signal.aborted || requestId !== ctx[requestKey] ||
+              target.value?.trackId !== track.id || target.value?.status !== 'ready') return;
+          publish(target.value, metadata);
+          ctx.smartCrossfadeAnalyzer.report('track-metadata-enriched', {
+            trackId: track.id,
+            target: targetName,
+            analyzedBpm: Number(target.value.analyzedBpm) || 0,
+            catalogBpm: Number(target.value.catalogBpm) || 0,
+            bpmSource: target.value.bpmSource || ''
+          });
+        }).catch(() => {});
+      }
     } catch (error) {
       if (error?.name === 'AbortError' || requestId !== ctx[requestKey]) {
         ctx.smartCrossfadeAnalyzer.report('track-cancelled', {
@@ -182,7 +174,8 @@ export function installSmartCrossfadeActions(ctx) {
       ctx.smartCrossfadeAnalyzer.report('track-unavailable', {
         trackId: track.id,
         target: targetName,
-        ...errorDetails(error)
+        errorName: String(error?.name || 'Error'),
+        errorMessage: String(error?.message || error || 'Unknown error')
       });
     }
   }

@@ -382,10 +382,21 @@ export function createPlaybackService({
   async function resolveStream(videoId, options = {}) {
     const cacheKey = streamCache.key(videoId, options);
     const cached = streamCache.getStream(cacheKey);
+    const explicitItag = options.itag ? String(options.itag) : '';
+    const refreshedItag = options.refreshStream ? explicitItag : '';
     const avoidedItags = new Set((options.avoidItags || []).map(String));
     for (const [key, until] of upstreamFailures) {
       if (until <= Date.now()) upstreamFailures.delete(key);
-      else if (key.startsWith(`${videoId}:${options.mediaKind === 'video' ? 'video' : 'audio'}:`)) avoidedItags.add(key.split(':').pop());
+      else if (key.startsWith(`${videoId}:${options.mediaKind === 'video' ? 'video' : 'audio'}:`)) {
+        const failedItag = key.split(':').pop();
+        // A proxy retry is allowed to refresh the failed format once. Other
+        // requests must not silently substitute another format under an URL
+        // whose explicit itag identifies a different byte stream.
+        if (failedItag !== refreshedItag) avoidedItags.add(failedItag);
+      }
+    }
+    if (explicitItag && avoidedItags.has(explicitItag)) {
+      throw new Error(`Requested stream format ${explicitItag} is temporarily unavailable`);
     }
     if (
       !options.refreshStream &&
@@ -403,6 +414,7 @@ export function createPlaybackService({
       try {
         const cacheEntry = await resolveAndroidVrStream(videoId, {
           ...options,
+          avoidItags: [...avoidedItags],
           useBrowserAuth: androidVrCooldownActive()
         });
         if (!await validateUpstreamStreamUrl(cacheEntry.url, { fallbackUserAgent: cacheEntry.userAgent || youtubeWebUserAgent })) throw new Error('Android VR stream probes failed');
@@ -482,10 +494,11 @@ export function createPlaybackService({
     const requestUrl = new URL(req.url, 'http://127.0.0.1');
     const mediaKind = requestUrl.searchParams.get('media') === 'video' ? 'video' : 'audio';
     const requestedItag = requestUrl.searchParams.get('itag');
+    const effectiveItag = requestedItag || retryOptions?.itag || null;
     const requestedCacheKey = streamCache.key(videoId, { mediaKind, itag: requestedItag });
     const fallbackCacheKey = streamCache.key(videoId, { mediaKind });
     const cachedOptions = retryOptions || streamCache.getOptions(requestedCacheKey) || streamCache.getOptions(fallbackCacheKey) || {};
-    const stream = await resolveStream(videoId, { ...cachedOptions, itag: requestedItag, mediaKind });
+    const stream = await resolveStream(videoId, { ...cachedOptions, itag: effectiveItag, mediaKind });
     const totalLength = Number(stream.format.contentLength || 0);
     const contentType = stream.format.mimeType || 'audio/mp4';
     const rangeHeader = req.headers.range || '';
@@ -503,17 +516,23 @@ export function createPlaybackService({
       rangeHeader: upstreamRangeHeader(range, totalLength)
     });
     const upstream = await fetch(upstreamRequest.url, { headers: upstreamRequest.headers });
+    const failureKey = `${videoId}:${mediaKind}:${stream.format.itag}`;
     if ([403, 410, 429, 500, 502, 503, 504].includes(upstream.status) && allowRetry) {
       await upstream.body?.cancel().catch(() => {});
-      upstreamFailures.set(`${videoId}:${mediaKind}:${stream.format.itag}`, Date.now() + upstreamFailureCooldownMs);
+      upstreamFailures.set(failureKey, Date.now() + upstreamFailureCooldownMs);
       streamCache.deleteKey(streamCache.key(videoId, { mediaKind }));
       streamCache.deleteKey(streamCache.key(videoId, { mediaKind, itag: stream.format.itag }));
-      req.url = `${requestUrl.pathname}?media=${mediaKind}`;
-      return proxyStream(videoId, req, res, false, { ...cachedOptions, mediaKind });
+      return proxyStream(videoId, req, res, false, {
+        ...cachedOptions,
+        itag: String(stream.format.itag),
+        mediaKind,
+        refreshStream: true
+      });
     }
     if (!upstream.ok && upstream.status !== 206) {
       throw new Error(`Upstream stream failed with HTTP ${upstream.status}`);
     }
+    upstreamFailures.delete(failureKey);
     const headers = proxyResponseHeaders(upstream, contentType, totalLength, range.wantsRange);
     res.writeHead(upstream.status, headers);
     if (!upstream.body) {

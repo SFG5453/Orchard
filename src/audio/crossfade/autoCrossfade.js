@@ -180,13 +180,11 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       analyzer?.setVolume?.(fromAudio, targetVolume);
       analyzer?.setVolume?.(toAudio, 0);
       const incomingCueTime = Math.max(0, Number(transition?.incomingCueTime) || 0);
-      const handoffStartSeconds = Math.max(0, Number(transition?.handoffStartSeconds) || 0);
       const incomingRate = Math.max(
         0.8,
         Math.min(1.2, Number(transition?.incomingPlaybackRate) || 1)
       );
-      const startCueTime = Math.max(0, incomingCueTime - handoffStartSeconds * incomingRate);
-      toAudio.currentTime = startCueTime;
+      toAudio.currentTime = incomingCueTime;
       fromAudio.preservesPitch = true;
       fromAudio.mozPreservesPitch = true;
       fromAudio.webkitPreservesPitch = true;

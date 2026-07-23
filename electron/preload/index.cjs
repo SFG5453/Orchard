@@ -70,6 +70,7 @@ contextBridge.exposeInMainWorld('orchardCrypto', {
 contextBridge.exposeInMainWorld('orchardAudioAnalysis', {
   available: () => ipcRenderer.invoke('audio-analysis:available'),
   get: (trackId) => ipcRenderer.invoke('audio-analysis:get', trackId),
+  store: (trackId, result) => ipcRenderer.invoke('audio-analysis:store', { trackId, result }),
   debug: (event, details = {}) => ipcRenderer.invoke('audio-analysis:debug', { event, details }),
   analyze: (trackId, samples, sampleRate, duration) => ipcRenderer.invoke('audio-analysis:analyze', {
     trackId,

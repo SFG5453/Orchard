@@ -17,8 +17,7 @@ export function createPlaybackStreamCache() {
       avoidMimeTypes: opts.avoidMimeTypes || [],
       preferInlineVideo: Boolean(opts.preferInlineVideo),
       requiresAuth: Boolean(opts.requiresAuth),
-      lowPriority: Boolean(opts.lowPriority),
-      refreshStream: Boolean(opts.refreshStream)
+      lowPriority: Boolean(opts.lowPriority)
     };
   }
 
@@ -28,7 +27,11 @@ export function createPlaybackStreamCache() {
   }
 
   function cacheStream(videoId, cacheKey, stream, opts = {}) {
-    set(cacheKey, stream, opts);
+    const requestedItag = opts.itag ? String(opts.itag) : '';
+    const resolvedItag = stream?.format?.itag ? String(stream.format.itag) : '';
+    if (!requestedItag || requestedItag === resolvedItag) {
+      set(cacheKey, stream, opts);
+    }
     set(key(videoId, { ...opts, itag: stream.format.itag }), stream, opts);
 
     if (!stream.audioUrl || !stream.audioFormat) return;

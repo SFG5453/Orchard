@@ -2,13 +2,19 @@ import { createRequire } from 'node:module';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
+import {
+  AUDIO_ANALYSIS_VERSION,
+  isValidLocalAnalysis,
+  localAnalysisWithSource,
+  safeAudioAnalysisDiagnostics
+} from '../../shared/audioAnalysis.js';
 
 // Owns native-addon loading, analysis request de-duplication, and the persisted
 // result cache. `stop()` removes every IPC handler and flushes pending cache data.
 
 const require = createRequire(import.meta.url);
 const { AUDIO_ANALYSIS } = IPC_CHANNELS;
-const CACHE_VERSION = 7;
+const CACHE_VERSION = AUDIO_ANALYSIS_VERSION;
 const MAX_CACHE_ITEMS = 600;
 
 function errorDetails(error) {
@@ -70,7 +76,7 @@ export function setupAudioAnalysisService({
 
   function log(event, details = {}) {
     try {
-      logger(event, details);
+      logger(event, safeAudioAnalysisDiagnostics(details));
     } catch {
       // Diagnostics must never interrupt playback or analysis.
     }
@@ -109,7 +115,7 @@ export function setupAudioAnalysisService({
       if (stored?.version !== CACHE_VERSION || !Array.isArray(stored.items)) return;
       stored.items.slice(-MAX_CACHE_ITEMS).forEach((item) => {
         const trackId = cleanTrackId(item?.trackId);
-        if (!trackId || item?.result?.analysisVersion !== CACHE_VERSION) return;
+        if (!trackId || !isValidLocalAnalysis(item?.result)) return;
         cache.set(trackId, {
           lastUsed: Number(item.lastUsed) || 0,
           result: item.result
@@ -121,6 +127,10 @@ export function setupAudioAnalysisService({
   function cached(trackId) {
     const entry = cache.get(trackId);
     if (!entry) return null;
+    if (!isValidLocalAnalysis(entry.result)) {
+      cache.delete(trackId);
+      return null;
+    }
     cache.delete(trackId);
     cache.set(trackId, { ...entry, lastUsed: Date.now() });
     return entry.result;
@@ -167,7 +177,24 @@ export function setupAudioAnalysisService({
     const details = payload?.details && typeof payload.details === 'object'
       ? payload.details
       : {};
-    log(`renderer:${event}`, details);
+    log(`renderer:${event}`, safeAudioAnalysisDiagnostics(details));
+    return true;
+  });
+
+  ipcMain.handle(AUDIO_ANALYSIS.STORE, async (_event, payload = {}) => {
+    await cacheReady;
+    const trackId = cleanTrackId(payload.trackId);
+    const source = payload?.result?.analysisSource === 'local-native' ? 'local-native' : 'local-worker';
+    const result = localAnalysisWithSource(payload.result, source);
+    if (!trackId || !result) {
+      log('cache-store-invalid', { trackId, bpm: Number(payload?.result?.bpm) || 0 });
+      throw new Error('A complete local audio analysis is required for caching.');
+    }
+    cache.delete(trackId);
+    cache.set(trackId, { lastUsed: Date.now(), result });
+    while (cache.size > MAX_CACHE_ITEMS) cache.delete(cache.keys().next().value);
+    schedulePersist();
+    log('cache-store-ready', { trackId, bpm: result.bpm, analysisSource: result.analysisSource });
     return true;
   });
 
@@ -219,7 +246,12 @@ export function setupAudioAnalysisService({
       throw error;
     }
     const task = nativeTask
-      .then((result) => {
+      .then((rawResult) => {
+        const result = localAnalysisWithSource(rawResult, 'local-native');
+        if (!result) {
+          log('native-analysis-invalid', { trackId, bpm: Number(rawResult?.bpm) || 0 });
+          throw new Error('Native audio analysis returned an invalid BPM.');
+        }
         cache.set(trackId, { lastUsed: Date.now(), result });
         while (cache.size > MAX_CACHE_ITEMS) cache.delete(cache.keys().next().value);
         schedulePersist();
@@ -251,6 +283,7 @@ export function setupAudioAnalysisService({
       ipcMain.removeHandler(AUDIO_ANALYSIS.AVAILABLE);
       ipcMain.removeHandler(AUDIO_ANALYSIS.GET);
       ipcMain.removeHandler(AUDIO_ANALYSIS.DEBUG);
+      ipcMain.removeHandler(AUDIO_ANALYSIS.STORE);
       ipcMain.removeHandler(AUDIO_ANALYSIS.ANALYZE);
       if (cache.size) await persist().catch(() => {});
     }

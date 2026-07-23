@@ -219,7 +219,7 @@ function phraseSwitch(analysis = {}, nextAnalysis = {}, length = 0) {
   }
 
   const beatSeconds = 60 / currentBpm;
-  const incomingPlaybackRate = Math.round(clamp(1 / ratio, 0.9, 1.1) * 100) / 100;
+  const incomingPlaybackRate = Math.round(clamp(1 / ratio, 0.9, 1.1) * 10000) / 10000;
   const incomingHandoffTime = incomingCuePoint(nextAnalysis);
   const introDropTime = incomingHandoffTime / Math.max(0.8, incomingPlaybackRate);
   const tailBeats = 16;
@@ -241,7 +241,10 @@ function phraseSwitch(analysis = {}, nextAnalysis = {}, length = 0) {
   const handoffStartSeconds = Math.round(rawHandoffStart / beatSeconds) * beatSeconds;
   const handoffDuration = clamp(overlap - handoffStartSeconds, tailSeconds * 0.5, overlap);
   const transitionBeats = Math.round(overlap / beatSeconds);
-  const incomingCueTime = incomingHandoffTime;
+  const incomingCueTime = Math.max(
+    0,
+    incomingHandoffTime - handoffStartSeconds * incomingPlaybackRate
+  );
 
   return {
     transitionStart,
@@ -278,7 +281,7 @@ function adaptiveOverlap(analysis = {}, nextAnalysis = {}) {
     overlap: clamp(transitionBeats * beatSeconds, AUTO_MIN_SECONDS, AUTO_MAX_SECONDS),
     transitionBeats,
     incomingPlaybackRate: ratio >= 0.9 && ratio <= 1.1
-      ? Math.round(clamp(1 / ratio, 0.9, 1.1) * 100) / 100
+      ? Math.round(clamp(1 / ratio, 0.9, 1.1) * 10000) / 10000
       : 1
   };
 }
@@ -404,6 +407,7 @@ export function planTransition({
       Math.max(0.8, incomingPlaybackRate)
   );
 
+  let finalIncomingCueTime = incomingCueTime;
   let handoffStartSeconds;
   let handoffDuration;
   let transitionStart;
@@ -443,7 +447,21 @@ export function planTransition({
     // swap begins (i.e. when the incoming track reaches its intro drop).
     // handoffDuration = how long the volume swap takes after that point.
     const rawHandoffStart = Math.max(0, alignedOverlap - tailSeconds);
-    handoffStartSeconds = Math.round(rawHandoffStart / beatSeconds) * beatSeconds;
+    let handoffStartSecs = Math.round(rawHandoffStart / beatSeconds) * beatSeconds;
+
+    // Ensure we cue the incoming track so its drop exactly aligns with the handoff.
+    // The incoming track will advance by handoffStartSecs * incomingPlaybackRate.
+    let requiredCueTime = incomingHandoffTime - (handoffStartSecs * incomingPlaybackRate);
+
+    if (requiredCueTime < 0) {
+      // Intro is too short. Reduce handoffStartSecs to match available intro beats.
+      const maxHandoffBeats = Math.floor(incomingHandoffTime / (beatSeconds * incomingPlaybackRate));
+      handoffStartSecs = maxHandoffBeats * beatSeconds;
+      requiredCueTime = incomingHandoffTime - (handoffStartSecs * incomingPlaybackRate);
+    }
+
+    handoffStartSeconds = handoffStartSecs;
+    finalIncomingCueTime = Math.max(0, requiredCueTime);
     handoffDuration = clamp(alignedOverlap - handoffStartSeconds, tailSeconds * 0.5, alignedOverlap);
   } else {
     const desiredOverlap = Math.max(overlap, introPreroll + handoffSeconds * 0.42);
@@ -480,7 +498,7 @@ export function planTransition({
     fadeSeconds: alignedOverlap,
     handoffDuration,
     handoffStartSeconds,
-    incomingCueTime,
+    incomingCueTime: finalIncomingCueTime,
     incomingHandoffTime,
     incomingPlaybackRate,
     pickupSeconds,
