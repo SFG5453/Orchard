@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 
 import {
   bestTransitionOrder,
@@ -113,6 +113,191 @@ test('Best mix loads BPM service metadata before sorting an unanalyzed queue', a
   assert.equal(ctx.queue.value[0].id, 'smooth');
   assert.equal(ctx.transitionQueueSorted.value, true);
   assert.equal(preloadCalls, 1);
+});
+
+test('Best mix locally analyzes cache misses through the authenticated resolver with queue priorities', async () => {
+  const activeTrack = {
+    id: 'active',
+    title: 'Active',
+    artist: 'Artist',
+    streamUrl: 'http://127.0.0.1/stream/active'
+  };
+  const queue = [
+    { id: 'rough', title: 'Rough', artist: 'Artist', durationSeconds: 180 },
+    { id: 'smooth', title: 'Smooth', artist: 'Artist', durationSeconds: 181 },
+    { id: 'followup', title: 'Followup', artist: 'Artist', durationSeconds: 182 }
+  ];
+  const local = new Map([
+    ['active', { bpm: 100, bpmSource: 'local-native', beatConfidence: 0.9, key: 'C major' }],
+    ['rough', { bpm: 145, bpmSource: 'local-worker', beatConfidence: 0.9, key: 'F♯ major' }],
+    ['smooth', { bpm: 102, bpmSource: 'local-worker', beatConfidence: 0.9, key: 'G major' }],
+    ['followup', { bpm: 105, bpmSource: 'local-worker', beatConfidence: 0.9, key: 'D major' }]
+  ]);
+  const requests = [];
+  const resolved = [];
+  const ctx = {
+    activeTrack: ref(activeTrack),
+    queue: ref(queue),
+    shuffleEnabled: ref(false),
+    shuffleSourceQueue: ref([]),
+    crossfadeAnalysis: ref({}),
+    crossfadeAnalysisByTrack: new Map(),
+    smartCrossfadeAnalyzer: {
+      async analyze(trackId, streamSource, options) {
+        requests.push({ trackId, priority: options.priority, streamSourceType: typeof streamSource });
+        if (typeof streamSource === 'function') await streamSource();
+        return local.get(trackId);
+      },
+      report() {}
+    },
+    resolvePlayableTrack: async (track, options) => {
+      resolved.push({ trackId: track.id, options });
+      return { streamUrl: `http://127.0.0.1/stream/${track.id}` };
+    },
+    bpmMetadata: {
+      lookupMany: async () => new Map([
+        ['active', { bpm: 170, source: 'GetSongBPM' }],
+        ['rough', { bpm: 90, source: 'GetSongBPM' }],
+        ['smooth', { bpm: 150, source: 'GetSongBPM' }],
+        ['followup', { bpm: 80, source: 'GetSongBPM' }]
+      ])
+    },
+    clearNextPreload() {},
+    preloadNextTrack: async () => {},
+    showShareMessage() {}
+  };
+
+  installQueueTransitionSort(ctx);
+  await ctx.toggleTransitionQueueSort();
+
+  assert.deepEqual(requests.map(({ trackId, priority }) => [trackId, priority]), [
+    ['active', 0],
+    ['rough', 1],
+    ['smooth', 2],
+    ['followup', 2]
+  ]);
+  assert.equal(requests[0].streamSourceType, 'string');
+  assert.deepEqual(resolved.map((entry) => entry.trackId), ['rough', 'smooth', 'followup']);
+  assert.ok(resolved.every((entry) => entry.options.preload && entry.options.mediaKind === 'audio'));
+  assert.equal(ctx.queue.value[0].id, 'smooth');
+});
+
+test('Best mix does not wait for optional catalog metadata when local analysis is sufficient', async () => {
+  const queue = [
+    { id: 'rough', title: 'Rough', artist: 'Artist' },
+    { id: 'smooth', title: 'Smooth', artist: 'Artist' }
+  ];
+  const ctx = {
+    activeTrack: ref({ id: 'active', streamUrl: 'local-active' }),
+    queue: ref(queue),
+    shuffleEnabled: ref(false),
+    shuffleSourceQueue: ref([]),
+    crossfadeAnalysis: ref({}),
+    crossfadeAnalysisByTrack: new Map(),
+    smartCrossfadeAnalyzer: {
+      async analyze(trackId) {
+        return trackId === 'active'
+          ? { bpm: 100, bpmSource: 'local-native' }
+          : trackId === 'smooth'
+            ? { bpm: 102, bpmSource: 'local-worker' }
+            : { bpm: 145, bpmSource: 'local-worker' };
+      },
+      report() {}
+    },
+    resolvePlayableTrack: async (track) => ({ streamUrl: `local-${track.id}` }),
+    bpmMetadata: { lookupMany: () => new Promise(() => {}) },
+    clearNextPreload() {},
+    preloadNextTrack: async () => {},
+    showShareMessage() {}
+  };
+
+  installQueueTransitionSort(ctx);
+  await Promise.race([
+    ctx.toggleTransitionQueueSort(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Best mix waited for catalog metadata')), 100))
+  ]);
+
+  assert.equal(ctx.queue.value[0].id, 'smooth');
+});
+
+test('Best mix stays enabled when the existing order is already optimal', async () => {
+  const queue = [
+    { id: 'first', title: 'First', artist: 'Artist' },
+    { id: 'second', title: 'Second', artist: 'Artist' }
+  ];
+  const ctx = {
+    activeTrack: ref({ id: 'active' }),
+    queue: ref(queue),
+    shuffleEnabled: ref(false),
+    shuffleSourceQueue: ref([]),
+    crossfadeAnalysis: ref({}),
+    crossfadeAnalysisByTrack: new Map(),
+    bpmMetadata: {
+      lookupMany: async () => new Map([
+        ['active', { bpm: 100 }],
+        ['first', { bpm: 101 }],
+        ['second', { bpm: 102 }]
+      ])
+    },
+    clearNextPreload() {},
+    preloadNextTrack: async () => {},
+    showShareMessage() {}
+  };
+
+  installQueueTransitionSort(ctx);
+  await ctx.toggleTransitionQueueSort();
+
+  assert.equal(ctx.transitionQueueSorted.value, true);
+  assert.deepEqual(ctx.transitionQueueExpectedIds, ['first', 'second']);
+});
+
+test('Best mix survives song consumption and reprocesses appended refill tracks', async () => {
+  const analyses = new Map([
+    ['active', { bpm: 100, bpmSource: 'local-native' }],
+    ['first', { bpm: 101, bpmSource: 'local-worker' }],
+    ['second', { bpm: 102, bpmSource: 'local-worker' }],
+    ['refill', { bpm: 103, bpmSource: 'local-worker' }]
+  ]);
+  const requests = [];
+  const ctx = {
+    activeTrack: ref({ id: 'active', streamUrl: 'local-active' }),
+    queue: ref([
+      { id: 'first', title: 'First' },
+      { id: 'second', title: 'Second' }
+    ]),
+    shuffleEnabled: ref(false),
+    shuffleSourceQueue: ref([]),
+    crossfadeAnalysis: ref({}),
+    crossfadeAnalysisByTrack: new Map(),
+    smartCrossfadeAnalyzer: {
+      async analyze(trackId) {
+        requests.push(trackId);
+        return analyses.get(trackId);
+      },
+      report() {}
+    },
+    resolvePlayableTrack: async (track) => ({ streamUrl: `local-${track.id}` }),
+    bpmMetadata: { lookupMany: async () => new Map() },
+    clearNextPreload() {},
+    preloadNextTrack: async () => {},
+    showShareMessage() {}
+  };
+
+  installQueueTransitionSort(ctx);
+  await ctx.toggleTransitionQueueSort();
+  assert.equal(ctx.transitionQueueSorted.value, true);
+
+  ctx.queue.value = [ctx.queue.value[1]];
+  await nextTick();
+  assert.equal(ctx.transitionQueueSorted.value, true);
+
+  ctx.queue.value = [...ctx.queue.value, { id: 'refill', title: 'Refill' }];
+  await nextTick();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(ctx.transitionQueueSorted.value, true);
+  assert.ok(requests.includes('refill'));
+  assert.deepEqual(new Set(ctx.transitionQueueExpectedIds), new Set(['second', 'refill']));
 });
 
 test('Best mix only looks up and reorders the next 50 queued songs', async () => {

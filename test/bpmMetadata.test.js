@@ -29,18 +29,53 @@ test('normalizes GetSongBPM key notation for transition planning', () => {
   assert.equal(normalizeMusicalKey('2m'), '');
 });
 
-test('merges catalog BPM and key while keeping the analyzed beat octave', () => {
+test('uses a trusted catalog match for octave calibration without copying its exact BPM', () => {
   const merged = mergeBpmMetadata(
-    { bpm: 109, beatConfidence: 0.7, key: 'G major', keyConfidence: 0.5 },
-    { bpm: 220, tempoConfidence: 0.82, key: 'Em', keyConfidence: 0.82, source: 'GetSongBPM' }
+    {
+      bpm: 109,
+      bpmSource: 'local-native',
+      beatConfidence: 0.7,
+      key: 'G major',
+      keyConfidence: 0.5
+    },
+    {
+      bpm: 220,
+      tempoConfidence: 0.82,
+      key: 'Em',
+      keyConfidence: 0.82,
+      matchConfidence: 0.95,
+      source: 'GetSongBPM'
+    }
   );
-  assert.equal(merged.bpm, 110);
+  assert.equal(merged.bpm, 218);
   assert.equal(merged.analyzedBpm, 109);
   assert.equal(merged.key, 'E minor');
   assert.equal(merged.analyzedKey, 'G major');
-  assert.equal(merged.bpmSource, 'GetSongBPM');
+  assert.equal(merged.bpmSource, 'local-native');
   assert.equal(merged.beatConfidence, 0.7);
-  assert.equal(merged.tempoConfidence, 0.82);
+  assert.equal(merged.tempoConfidence, 0.7);
+  assert.equal(merged.catalogBpm, 220);
+});
+
+test('uses a trustworthy catalog match only to calibrate half-time and double-time ambiguity', () => {
+  const halfTime = mergeBpmMetadata(
+    { bpm: 60, bpmSource: 'local-worker', beatConfidence: 0.8 },
+    { bpm: 120, matchConfidence: 0.95, source: 'GetSongBPM' }
+  );
+  const weakMismatch = mergeBpmMetadata(
+    { bpm: 60, bpmSource: 'local-worker', beatConfidence: 0.8 },
+    { bpm: 120, matchConfidence: 0.4, source: 'GetSongBPM' }
+  );
+  const doubleTime = mergeBpmMetadata(
+    { bpm: 180, bpmSource: 'local-native', beatConfidence: 0.8 },
+    { bpm: 90, matchConfidence: 0.95, source: 'GetSongBPM' }
+  );
+
+  assert.equal(halfTime.bpm, 120);
+  assert.equal(halfTime.analyzedBpm, 60);
+  assert.equal(halfTime.bpmSource, 'local-worker');
+  assert.equal(weakMismatch.bpm, 60);
+  assert.equal(doubleTime.bpm, 90);
 });
 
 test('catalog tempo does not invent beat-grid confidence', () => {
@@ -183,4 +218,31 @@ test('reuses fresh BPM metadata from persistent storage without a network reques
   assert.equal(metadata.bpm, 220);
   assert.equal(metadata.key, 'E minor');
   assert.equal(calls, 0);
+});
+
+test('negatively caches GetSongBPM misses without affecting later local analysis', async () => {
+  let calls = 0;
+  const saved = [];
+  const client = createBpmMetadataClient({
+    endpoint: 'https://bpm.example/bpm',
+    fetcher: async () => {
+      calls += 1;
+      return new Response(null, { status: 404 });
+    },
+    storage: {
+      load: async () => [],
+      save: async (records) => saved.push(records)
+    }
+  });
+  const track = { id: 'missing', title: 'Uncatalogued Song', artist: 'Artist' };
+
+  assert.equal(await client.lookup(track), null);
+  assert.equal(await client.lookup(track), null);
+  assert.equal(calls, 1);
+  await new Promise((resolve) => setTimeout(resolve, 275));
+  assert.ok(saved.at(-1)?.some((record) => record.miss && record.key === bpmCacheKey(track)));
+
+  const local = mergeBpmMetadata({ bpm: 123, bpmSource: 'local-native' }, await client.lookup(track));
+  assert.equal(local.bpm, 123);
+  assert.equal(local.bpmSource, 'local-native');
 });

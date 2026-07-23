@@ -85,17 +85,24 @@ test('the active track is promoted at mix dominance instead of mix start', async
     setVolume() {}
   };
   const crossfade = createAutoCrossfade({ analyzer, settings: { mode: 'smart' } });
+  const incomingAudio = audio();
 
   try {
     const result = crossfade.start({
       fromAudio: audio(110),
-      toAudio: audio(),
-      transition: { fadeSeconds: 1, incomingPlaybackRate: 1 },
+      toAudio: incomingAudio,
+      transition: {
+        fadeSeconds: 1,
+        handoffStartSeconds: 0.4,
+        incomingCueTime: 2.25,
+        incomingPlaybackRate: 1
+      },
       volume: 1,
       onPromote: () => events.push('promote'),
       onComplete: () => events.push('complete')
     });
     await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(incomingAudio.currentTime, 2.25);
     assert.deepEqual(events, []);
     assert.equal(clock.runNext(), true);
     assert.deepEqual(events, ['promote']);

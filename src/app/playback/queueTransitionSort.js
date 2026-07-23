@@ -1,4 +1,5 @@
 import { ref, watch } from 'vue';
+import { ANALYSIS_PRIORITIES } from '../../audio/crossfade/smartCrossfadeAnalysis.js';
 import { loadLearnedAudioProfiles } from '../../audio/engine/audioProfileStore.js';
 
 const BEST_MIX_TRACK_LIMIT = 50;
@@ -68,6 +69,14 @@ function finiteOrNull(value, minimum = -Infinity) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) && number > minimum ? number : null;
+}
+
+function trackDurationSeconds(track = {}) {
+  const direct = Number(track.durationSeconds) || 0;
+  if (direct > 0) return direct;
+  const parts = String(track.duration || '').trim().split(':').map(Number);
+  if (!parts.length || parts.some((part) => !Number.isFinite(part))) return 0;
+  return parts.reduce((total, part) => total * 60 + part, 0);
 }
 
 function edgeEnergy(curve, fromEnd) {
@@ -202,12 +211,30 @@ function isOrderedSubset(currentIds, expectedIds) {
   return true;
 }
 
+function isOrderedQueueWithAppendedTracks(currentIds, expectedIds) {
+  const expected = new Set(expectedIds);
+  const retained = [];
+  let sawAddition = false;
+  for (const id of currentIds) {
+    if (!expected.has(id)) {
+      sawAddition = true;
+      continue;
+    }
+    // Refill and Autoplay append. An expected item after a new item means the
+    // queue was manually inserted/reordered instead of naturally extended.
+    if (sawAddition) return false;
+    retained.push(id);
+  }
+  return sawAddition && retained.length > 0 && isOrderedSubset(retained, expectedIds);
+}
+
 export function installQueueTransitionSort(ctx) {
   ctx.transitionQueueSorted = ref(false);
   ctx.transitionQueueSortBusy = ref(false);
   ctx.transitionQueueSortSnapshot = [];
   ctx.transitionQueueExpectedIds = [];
   let learnedTempoPromise = null;
+  let refreshRequested = false;
 
   function analysisFor(track, learnedTempo, cached = {}, bpmMetadata = {}) {
     const smart = ctx.crossfadeAnalysisByTrack?.get(track?.id) || {};
@@ -215,7 +242,8 @@ export function installQueueTransitionSort(ctx) {
       ctx.crossfadeAnalysis.value?.status === 'ready'
       ? ctx.crossfadeAnalysis.value
       : {};
-    const sources = [smart, activeAnalysis, bpmMetadata, cached, track || {}];
+    // Every local source outranks optional catalog enrichment.
+    const sources = [smart, activeAnalysis, cached, bpmMetadata, track || {}];
     const tempoSource = sources.find((source) => Number(source?.bpm || source?.tempo) > 0);
     const keySource = sources.find((source) => parsedKey(source?.key));
     const loudnessSource = sources.find((source) => finiteOrNull(source?.loudnessLufs, -69) !== null);
@@ -252,6 +280,55 @@ export function installQueueTransitionSort(ctx) {
     return new Map(entries.filter(([, analysis]) => analysis));
   }
 
+  function analysisStream(track) {
+    if (track?.id === ctx.activeTrack.value?.id && track.streamUrl) return track.streamUrl;
+    const prepared = ctx.nextTrackPreload?.value;
+    if (prepared?.track?.id === track?.id && prepared.resolved?.streamUrl) {
+      return prepared.resolved.streamUrl;
+    }
+    return async () => {
+      const resolved = await ctx.resolvePlayableTrack(track, {
+        mediaKind: 'audio',
+        preload: true
+      });
+      return resolved?.streamUrl || '';
+    };
+  }
+
+  async function localAnalysisMap(tracks) {
+    const analyze = ctx.smartCrossfadeAnalyzer?.analyze;
+    if (typeof analyze !== 'function' || typeof ctx.resolvePlayableTrack !== 'function') {
+      return cachedAnalysisMap(tracks);
+    }
+    const unique = Array.from(new Map(
+      tracks.filter((track) => track?.id).map((track) => [track.id, track])
+    ).values());
+    const activeId = ctx.activeTrack.value?.id;
+    const nextId = ctx.queue.value[0]?.id;
+    const entries = await Promise.all(unique.map(async (track) => {
+      const priority = track.id === activeId
+        ? ANALYSIS_PRIORITIES.current
+        : track.id === nextId ? ANALYSIS_PRIORITIES.next : ANALYSIS_PRIORITIES.background;
+      try {
+        const analysis = await analyze.call(
+          ctx.smartCrossfadeAnalyzer,
+          track.id,
+          analysisStream(track),
+          { duration: trackDurationSeconds(track), priority }
+        );
+        return analysis ? [track.id, analysis] : null;
+      } catch (error) {
+        ctx.smartCrossfadeAnalyzer.report?.('background-track-failed', {
+          trackId: track.id,
+          errorName: String(error?.name || 'Error'),
+          errorMessage: String(error?.message || error || 'Unknown error')
+        });
+        return null;
+      }
+    }));
+    return new Map(entries.filter(Boolean));
+  }
+
   function applyQueueOrder(queue) {
     ctx.transitionQueueExpectedIds = queue.map((track) => track.id);
     ctx.queue.value = queue;
@@ -274,11 +351,7 @@ export function installQueueTransitionSort(ctx) {
     ctx.showShareMessage?.('Restored the previous queue order.');
   };
 
-  ctx.toggleTransitionQueueSort = async function toggleTransitionQueueSort() {
-    if (ctx.transitionQueueSorted.value) {
-      ctx.restoreTransitionQueueOrder();
-      return;
-    }
+  async function sortTransitionQueue({ refresh = false } = {}) {
     if (ctx.transitionQueueSortBusy.value || ctx.queue.value.length < 2) return;
 
     const queueSignature = ctx.queue.value.map((track) => track.id).join(',');
@@ -289,46 +362,95 @@ export function installQueueTransitionSort(ctx) {
       const untouchedTracks = snapshot.slice(BEST_MIX_TRACK_LIMIT);
       const catalogTracks = [ctx.activeTrack.value, ...sortableTracks]
         .filter((track) => track?.id);
-      const [tempoByTrack, cachedByTrack, bpmByTrack] = await Promise.all([
+      if (!refresh) {
+        ctx.showShareMessage?.(
+          `Preparing local BPM analysis for ${sortableTracks.length} queued songs…`
+        );
+      }
+      const bpmState = { settled: false, value: new Map() };
+      const bpmPromise = Promise.resolve(
+        ctx.bpmMetadata?.lookupMany?.(catalogTracks) || new Map()
+      ).then((metadata) => {
+        bpmState.settled = true;
+        bpmState.value = metadata;
+        return metadata;
+      }).catch(() => {
+        bpmState.settled = true;
+        return new Map();
+      });
+      const [tempoByTrack, localByTrack] = await Promise.all([
         learnedTempoMap(),
-        cachedAnalysisMap([ctx.activeTrack.value, ...sortableTracks]),
-        ctx.bpmMetadata?.lookupMany?.(catalogTracks) || Promise.resolve(new Map())
+        localAnalysisMap(catalogTracks)
       ]);
+      const localEvidenceCount = sortableTracks.filter((track) => hasMusicalAnalysis(
+        analysisFor(track, tempoByTrack.get(track.id), localByTrack.get(track.id), {})
+      )).length;
+      // Catalog metadata must not delay a queue that has enough local evidence,
+      // but it remains a useful fallback when local analysis could not compare anything.
+      const bpmByTrack = bpmState.settled
+        ? bpmState.value
+        : localEvidenceCount >= 2 ? new Map() : await bpmPromise;
       if (queueSignature !== ctx.queue.value.map((track) => track.id).join(',')) return;
       const analysisByTrack = new Map(sortableTracks.map((track) => [
         track.id,
         analysisFor(
           track,
           tempoByTrack.get(track.id),
-          cachedByTrack.get(track.id),
+          localByTrack.get(track.id),
           bpmByTrack.get(track.id)
         )
       ]));
       const currentAnalysis = analysisFor(
         ctx.activeTrack.value,
         tempoByTrack.get(ctx.activeTrack.value?.id),
-        cachedByTrack.get(ctx.activeTrack.value?.id),
+        localByTrack.get(ctx.activeTrack.value?.id),
         bpmByTrack.get(ctx.activeTrack.value?.id)
       );
       const result = bestTransitionOrder(sortableTracks, analysisByTrack, currentAnalysis);
       if (!result.comparisons) {
-        ctx.showShareMessage?.('Best mix could not find BPM or key data for enough songs. Queue left unchanged.');
+        if (!refresh) {
+          ctx.showShareMessage?.('Best mix could not find BPM or key data for enough songs. Queue left unchanged.');
+        }
         return;
       }
       const sorted = [...result.ordered, ...untouchedTracks];
+      if (!refresh) ctx.transitionQueueSortSnapshot = snapshot;
+      ctx.transitionQueueSorted.value = true;
       if (sorted.every((track, index) => track.id === snapshot[index]?.id)) {
-        ctx.showShareMessage?.('This queue already has the smoothest known order.');
+        ctx.transitionQueueExpectedIds = snapshot.map((track) => track.id);
+        if (!refresh) {
+          ctx.showShareMessage?.('Best mix is on. This queue already has the smoothest known order.');
+        }
         return;
       }
-      ctx.transitionQueueSortSnapshot = snapshot;
-      ctx.transitionQueueSorted.value = true;
       applyQueueOrder(sorted);
-      ctx.showShareMessage?.(
-        `Sorted the next ${sortableTracks.length} songs for smoother transitions.`
-      );
+      if (!refresh) {
+        ctx.showShareMessage?.(
+          `Best mix is on. Sorted the next ${sortableTracks.length} songs for smoother transitions.`
+        );
+      }
     } finally {
       ctx.transitionQueueSortBusy.value = false;
+      const shouldRefresh = refreshRequested && ctx.transitionQueueSorted.value;
+      refreshRequested = false;
+      if (shouldRefresh) void sortTransitionQueue({ refresh: true });
     }
+  }
+
+  function refreshTransitionQueueSort() {
+    if (ctx.transitionQueueSortBusy.value) {
+      refreshRequested = true;
+      return;
+    }
+    void sortTransitionQueue({ refresh: true });
+  }
+
+  ctx.toggleTransitionQueueSort = async function toggleTransitionQueueSort() {
+    if (ctx.transitionQueueSorted.value) {
+      ctx.restoreTransitionQueueOrder();
+      return;
+    }
+    return sortTransitionQueue();
   };
 
   watch(() => ctx.queue.value.map((track) => track.id), (currentIds) => {
@@ -336,6 +458,11 @@ export function installQueueTransitionSort(ctx) {
     if (currentIds.join(',') === ctx.transitionQueueExpectedIds.join(',')) return;
     if (isOrderedSubset(currentIds, ctx.transitionQueueExpectedIds)) {
       ctx.transitionQueueExpectedIds = currentIds;
+      return;
+    }
+    if (isOrderedQueueWithAppendedTracks(currentIds, ctx.transitionQueueExpectedIds)) {
+      ctx.transitionQueueExpectedIds = currentIds;
+      refreshTransitionQueueSort();
       return;
     }
     ctx.transitionQueueSorted.value = false;

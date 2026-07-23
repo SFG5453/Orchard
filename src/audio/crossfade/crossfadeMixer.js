@@ -50,16 +50,22 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     // For long prerolls, start HP filter higher to fully isolate bass during
     // the preroll, preventing muddy low-end clashing in the long overlap.
     const incomingCutoff = isLongPreroll ? 500 : (bassSwap ? 350 : (style === 'dj_filter' ? 1600 : 900));
+    let incomingHandoffTime = handoffTime;
     toNode.highPass.frequency.setValueAtTime(incomingCutoff, startTime);
     if (isLongPreroll && prerollSeconds > 10) {
       // During a long preroll, progressively open the HP filter from the
       // initial cutoff down to 350Hz so the incoming track gradually gains
       // warmth before the main handoff.
       const preOpenTime = startTime + prerollSeconds * 0.5;
+      const preOpenDuration = prerollSeconds * 0.5;
+      // Reuse the curve's computed end as the next curve's start. Recomputing
+      // the boundary from handoffTime can differ by a floating-point epsilon,
+      // which Web Audio treats as an overlapping automation event.
+      incomingHandoffTime = preOpenTime + preOpenDuration;
       toNode.highPass.frequency.setValueCurveAtTime(
         filterCurve(incomingCutoff, 350),
         preOpenTime,
-        prerollSeconds * 0.5
+        preOpenDuration
       );
     } else {
       toNode.highPass.frequency.setValueAtTime(incomingCutoff, handoffTime);
@@ -74,7 +80,7 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     );
     toNode.highPass.frequency.setValueCurveAtTime(
       filterCurve(isLongPreroll ? 350 : incomingCutoff, 20),
-      handoffTime,
+      incomingHandoffTime,
       duration
     );
   }

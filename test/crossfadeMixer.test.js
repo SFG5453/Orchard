@@ -119,6 +119,33 @@ test('same-beat blends use the gentler incoming filter', () => {
   ));
 });
 
+test('long-preroll filter curves share an exact boundary', () => {
+  const fromAudio = {};
+  const toAudio = {};
+  const fromNode = mixNode();
+  const toNode = mixNode();
+  const nodes = new Map([[fromAudio, fromNode], [toAudio, toNode]]);
+  const mixer = createCrossfadeMixer({
+    connectElement: (audio) => nodes.get(audio),
+    currentTime: () => 0.016000000000000007
+  });
+
+  mixer.scheduleCrossfade({
+    fromAudio,
+    toAudio,
+    targetVolume: 1,
+    duration: 24,
+    handoffStartSeconds: 17.1234,
+    handoffDuration: 6,
+    transitionStyle: 'dj_blend',
+    leadTime: 0
+  });
+
+  const curves = toNode.highPass.frequency.events.filter((event) => event.type === 'curve');
+  assert.equal(curves.length, 2);
+  assert.equal(curves[0].time + curves[0].duration, curves[1].time);
+});
+
 test('DJ styles schedule DJ gains and filters even when handoffStart equals startTime', () => {
   const fromAudio = {};
   const toAudio = {};

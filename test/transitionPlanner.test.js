@@ -65,7 +65,11 @@ test('same-tempo phrase switches use an AutoMix-style blend', () => {
   assert.ok(plan.transitionBeats >= 8);
   assert.ok(plan.fadeSeconds >= 4);
   assert.equal(plan.bassSwap, true);
-  assert.equal(plan.incomingCueTime, 2.2);
+  assert.ok(Math.abs(plan.incomingCueTime - 0.2) < 0.000001);
+  assert.ok(Math.abs(
+    plan.incomingCueTime + plan.handoffStartSeconds * plan.incomingPlaybackRate -
+      plan.incomingHandoffTime
+  ) < 0.001);
   assert.equal(plan.shouldStart, true);
 });
 
@@ -123,7 +127,10 @@ test('DJ transitions prefer the analyzed interior mix-in downbeat', () => {
     nextTrack: { id: 'next', durationSeconds: 210 }
   });
 
-  assert.equal(plan.incomingCueTime, 20.7);
+  assert.ok(Math.abs(
+    plan.incomingCueTime + plan.handoffStartSeconds * plan.incomingPlaybackRate -
+      plan.incomingHandoffTime
+  ) < 0.001);
   assert.ok(plan.transitionBeats >= 8);
 });
 
@@ -157,8 +164,12 @@ test('filtered DJ transitions pre-roll an intro into its analyzed handoff', () =
   });
 
   assert.equal(plan.transitionStyle, 'dj_blend');
-  assert.equal(plan.incomingCueTime, 0);
+  assert.ok(Math.abs(plan.incomingCueTime - 0.11730915568035627) < 0.000001);
   assert.equal(plan.incomingHandoffTime, 22.9108);
+  assert.ok(Math.abs(
+    plan.incomingCueTime + plan.handoffStartSeconds * plan.incomingPlaybackRate -
+      plan.incomingHandoffTime
+  ) < 0.001);
   assert.ok(plan.handoffDuration > 4);
   assert.ok(plan.fadeSeconds >= 20 && plan.fadeSeconds <= 40);
   assert.equal(plan.transitionEnd, 258.4);
