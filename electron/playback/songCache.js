@@ -8,6 +8,7 @@ const cacheDirectoryName = 'song-cache';
 const minCacheSizeMb = 128;
 const maxCacheSizeMb = 4096;
 const defaultCacheSizeMb = 512;
+const defaultMaxWriteLagBytes = 8 * 1024 * 1024;
 
 export function normalizeSongCacheSettings(settings = {}) {
   const rawSize = Number(settings.maxSizeMb);
@@ -25,9 +26,31 @@ export function normalizeSongCacheSettings(settings = {}) {
 export function createSongCache(options = {}) {
   let settings = normalizeSongCacheSettings(options);
   const directory = options.directory || defaultSongCacheDirectory();
+  const createCacheWriteStream = options.createWriteStream || fs.createWriteStream;
+  const configuredMaxWriteLagBytes = Number(options.maxWriteLagBytes);
+  const maxWriteLagBytes = Number.isFinite(configuredMaxWriteLagBytes) && configuredMaxWriteLagBytes > 0
+    ? Math.floor(configuredMaxWriteLagBytes)
+    : defaultMaxWriteLagBytes;
+  const activeWrites = new Set();
+  let directoryReady = null;
 
   async function ensureDirectory() {
-    await fs.promises.mkdir(directory, { recursive: true });
+    if (!directoryReady) {
+      directoryReady = fs.promises.mkdir(directory, { recursive: true })
+        .then(() => removePartialFiles())
+        .catch((error) => {
+          directoryReady = null;
+          throw error;
+        });
+    }
+    await directoryReady;
+  }
+
+  async function removePartialFiles() {
+    const entries = await fs.promises.readdir(directory, { withFileTypes: true });
+    await Promise.all(entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.part'))
+      .map((entry) => fs.promises.unlink(path.join(directory, entry.name)).catch(() => {})));
   }
 
   function cachePath(videoId, stream) {
@@ -108,42 +131,84 @@ export function createSongCache(options = {}) {
       return false;
     }
 
-    await ensureDirectory();
     const totalLength = Number(stream.format.contentLength || 0);
     const filePath = cachePath(videoId, stream);
-    const tempPath = `${filePath}.${process.pid}.${Date.now()}.part`;
-    const writer = fs.createWriteStream(tempPath);
-    let written = 0;
+    if (activeWrites.has(filePath)) return false;
+    activeWrites.add(filePath);
 
     try {
-      const reader = upstream.body.getReader();
-      while (!res.destroyed) {
-        const chunk = await reader.read();
-        if (chunk.done) break;
-        if (!chunk.value?.byteLength) continue;
-        written += chunk.value.byteLength;
-        if (!res.write(chunk.value)) await onceDrain(res);
-        if (!writer.write(chunk.value)) await onceDrain(writer);
-      }
-      writer.end();
-      await new Promise((resolve, reject) => writer.once('finish', resolve).once('error', reject));
-
-      if (written === totalLength && !res.destroyed) {
-        await fs.promises.rename(tempPath, filePath);
-        await writeMetadata(filePath, videoId, stream).catch(() => {});
-        await prune();
-      } else {
-        await fs.promises.unlink(tempPath).catch(() => {});
-      }
-    } catch (error) {
-      writer.destroy();
-      await fs.promises.unlink(tempPath).catch(() => {});
-      if (!res.destroyed) res.destroy(error);
-    } finally {
-      if (!res.destroyed) res.end();
+      await ensureDirectory();
+    } catch {
+      activeWrites.delete(filePath);
+      return false;
     }
 
+    const tempPath = `${filePath}.${process.pid}.${Date.now()}.part`;
+    const [playbackBody, cacheBody] = upstream.body.tee();
+    const cacheController = new AbortController();
+    let cachedBytes = 0;
+    let playbackBytes = 0;
+    const cacheTask = storeBody(
+      cacheBody,
+      tempPath,
+      filePath,
+      totalLength,
+      cacheController.signal,
+      (written) => { cachedBytes = written; }
+    )
+      .finally(() => activeWrites.delete(filePath));
+
+    try {
+      const playbackComplete = await pipeResponseBody(playbackBody, res, (length) => {
+        playbackBytes += length;
+        if (playbackBytes - cachedBytes > maxWriteLagBytes) cacheController.abort();
+      });
+      if (!playbackComplete) cacheController.abort();
+    } catch (error) {
+      cacheController.abort();
+      if (!res.destroyed) res.destroy(error);
+    }
+    await cacheTask;
+
     return true;
+
+    async function storeBody(body, temporaryPath, destinationPath, expectedLength, signal, onProgress) {
+      let writer;
+      let reader;
+      let written = 0;
+      const cancel = () => void reader?.cancel().catch(() => {});
+      try {
+        if (signal.aborted) throw new Error('Song cache write was cancelled');
+        reader = body.getReader();
+        signal.addEventListener('abort', cancel, { once: true });
+        writer = createCacheWriteStream(temporaryPath);
+        // Write callbacks carry failures to this task; this listener also keeps
+        // a late stream error from becoming an uncaught process error.
+        writer.on('error', () => {});
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          if (!chunk.value?.byteLength) continue;
+          written += chunk.value.byteLength;
+          await writeChunk(writer, chunk.value);
+          onProgress(written);
+        }
+        await finishWriter(writer);
+
+        if (signal.aborted) throw new Error('Song cache write was cancelled');
+        if (written !== expectedLength) throw new Error('Song cache received an incomplete stream');
+        await fs.promises.rename(temporaryPath, destinationPath);
+        await writeMetadata(destinationPath, videoId, stream).catch(() => {});
+        await prune();
+      } catch {
+        writer?.destroy();
+        await reader?.cancel().catch(() => {});
+        await fs.promises.unlink(temporaryPath).catch(() => {});
+      } finally {
+        signal.removeEventListener('abort', cancel);
+        reader?.releaseLock();
+      }
+    }
   }
 
   async function prune() {
@@ -310,4 +375,44 @@ function defaultSongCacheDirectory() {
 
 function onceDrain(stream) {
   return new Promise((resolve) => stream.once('drain', resolve));
+}
+
+async function pipeResponseBody(body, res, onChunk) {
+  const reader = body.getReader();
+  let complete = false;
+  try {
+    while (!res.destroyed) {
+      const chunk = await reader.read();
+      if (chunk.done) {
+        complete = true;
+        break;
+      }
+      if (chunk.value?.byteLength) {
+        onChunk(chunk.value.byteLength);
+        if (!res.write(chunk.value)) await onceDrain(res);
+      }
+    }
+  } finally {
+    if (!complete) await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+  if (!res.destroyed) res.end();
+  return complete;
+}
+
+function writeChunk(writer, chunk) {
+  return new Promise((resolve, reject) => {
+    writer.write(chunk, (error) => error ? reject(error) : resolve());
+  });
+}
+
+function finishWriter(writer) {
+  return new Promise((resolve, reject) => {
+    const onError = (error) => reject(error);
+    writer.once('error', onError);
+    writer.end(() => {
+      writer.removeListener('error', onError);
+      resolve();
+    });
+  });
 }
