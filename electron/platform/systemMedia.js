@@ -109,26 +109,54 @@ function configureMprisInterfaces(dbus) {
     }
 
     update(nextState = {}) {
-      const previous = this.state;
-      this.state = { ...previous, ...nextState };
-
-      const changed = {};
-      for (const property of [
+      const properties = [
         'PlaybackStatus',
         'LoopStatus',
         'Shuffle',
-        'Metadata',
         'Volume',
         'CanGoNext',
         'CanGoPrevious',
         'CanPlay',
         'CanPause',
         'CanSeek'
-      ]) {
-        if (this[property] !== undefined) changed[property] = this[property];
+      ];
+
+      const oldValues = {};
+      for (const property of properties) {
+        oldValues[property] = this[property];
       }
 
-      Interface.emitPropertiesChanged(this, changed);
+      const prevTrack = this.state.track || {};
+      const prevDuration = this.state.durationSeconds;
+
+      this.state = { ...this.state, ...nextState };
+
+      const changed = {};
+      for (const property of properties) {
+        if (this[property] !== undefined && this[property] !== oldValues[property]) {
+          changed[property] = this[property];
+        }
+      }
+
+      const newTrack = this.state.track || {};
+      const newDuration = this.state.durationSeconds;
+
+      const metadataChanged =
+        prevTrack.id !== newTrack.id ||
+        prevTrack.title !== newTrack.title ||
+        prevTrack.album !== newTrack.album ||
+        prevTrack.thumbnail !== newTrack.thumbnail ||
+        String(prevTrack.artist) !== String(newTrack.artist) ||
+        String(prevTrack.artists) !== String(newTrack.artists) ||
+        prevDuration !== newDuration;
+
+      if (metadataChanged) {
+        changed.Metadata = this.Metadata;
+      }
+
+      if (Object.keys(changed).length > 0) {
+        Interface.emitPropertiesChanged(this, changed);
+      }
     }
 
     Next() { this.emitCommand({ type: 'next' }); }

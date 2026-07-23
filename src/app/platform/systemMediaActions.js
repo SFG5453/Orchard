@@ -54,9 +54,15 @@ export function installSystemMediaActions(ctx) {
     }
   };
 
+  let lastSyncAt = 0;
   ctx.queueSystemMediaSync = function queueSystemMediaSync() {
-    window.clearTimeout(ctx.systemMediaSyncTimer);
-    ctx.systemMediaSyncTimer = window.setTimeout(ctx.syncSystemMediaState, 180);
+    if (ctx.systemMediaSyncTimer) return;
+    const delay = Math.max(0, 180 - (Date.now() - lastSyncAt));
+    ctx.systemMediaSyncTimer = window.setTimeout(() => {
+      ctx.systemMediaSyncTimer = 0;
+      lastSyncAt = Date.now();
+      ctx.syncSystemMediaState();
+    }, delay);
   };
 
   ctx.handleSystemMediaCommand = function handleSystemMediaCommand(command = {}) {
