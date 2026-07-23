@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue';
 
 const SUPPORT_ENDPOINT = 'https://support.sfg545.dev';
-const SUPPORT_ISSUES_URL = 'https://github.com/SFGOS/Orchard-issues/issues';
+const SUPPORT_ISSUES_URL = 'https://github.com/SFG5453/Orchard/issues';
 const SUPPORT_IDENTITY_KEY = 'orchard:support-identity';
 const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
 const screenshotTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
