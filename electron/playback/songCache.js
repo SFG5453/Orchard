@@ -8,6 +8,7 @@ const cacheDirectoryName = 'song-cache';
 const minCacheSizeMb = 128;
 const maxCacheSizeMb = 4096;
 const defaultCacheSizeMb = 512;
+const defaultMaxWriteLagBytes = 8 * 1024 * 1024;
 
 export function normalizeSongCacheSettings(settings = {}) {
   const rawSize = Number(settings.maxSizeMb);
@@ -26,6 +27,10 @@ export function createSongCache(options = {}) {
   let settings = normalizeSongCacheSettings(options);
   const directory = options.directory || defaultSongCacheDirectory();
   const createCacheWriteStream = options.createWriteStream || fs.createWriteStream;
+  const configuredMaxWriteLagBytes = Number(options.maxWriteLagBytes);
+  const maxWriteLagBytes = Number.isFinite(configuredMaxWriteLagBytes) && configuredMaxWriteLagBytes > 0
+    ? Math.floor(configuredMaxWriteLagBytes)
+    : defaultMaxWriteLagBytes;
   const activeWrites = new Set();
   let directoryReady = null;
 
@@ -141,11 +146,23 @@ export function createSongCache(options = {}) {
     const tempPath = `${filePath}.${process.pid}.${Date.now()}.part`;
     const [playbackBody, cacheBody] = upstream.body.tee();
     const cacheController = new AbortController();
-    const cacheTask = storeBody(cacheBody, tempPath, filePath, totalLength, cacheController.signal)
+    let cachedBytes = 0;
+    let playbackBytes = 0;
+    const cacheTask = storeBody(
+      cacheBody,
+      tempPath,
+      filePath,
+      totalLength,
+      cacheController.signal,
+      (written) => { cachedBytes = written; }
+    )
       .finally(() => activeWrites.delete(filePath));
 
     try {
-      const playbackComplete = await pipeResponseBody(playbackBody, res);
+      const playbackComplete = await pipeResponseBody(playbackBody, res, (length) => {
+        playbackBytes += length;
+        if (playbackBytes - cachedBytes > maxWriteLagBytes) cacheController.abort();
+      });
       if (!playbackComplete) cacheController.abort();
     } catch (error) {
       cacheController.abort();
@@ -155,28 +172,30 @@ export function createSongCache(options = {}) {
 
     return true;
 
-    async function storeBody(body, temporaryPath, destinationPath, expectedLength, signal) {
+    async function storeBody(body, temporaryPath, destinationPath, expectedLength, signal, onProgress) {
       let writer;
       let reader;
       let written = 0;
       const cancel = () => void reader?.cancel().catch(() => {});
       try {
         if (signal.aborted) throw new Error('Song cache write was cancelled');
+        reader = body.getReader();
+        signal.addEventListener('abort', cancel, { once: true });
         writer = createCacheWriteStream(temporaryPath);
         // Write callbacks carry failures to this task; this listener also keeps
         // a late stream error from becoming an uncaught process error.
         writer.on('error', () => {});
-        reader = body.getReader();
-        signal.addEventListener('abort', cancel, { once: true });
         while (true) {
           const chunk = await reader.read();
           if (chunk.done) break;
           if (!chunk.value?.byteLength) continue;
           written += chunk.value.byteLength;
           await writeChunk(writer, chunk.value);
+          onProgress(written);
         }
         await finishWriter(writer);
 
+        if (signal.aborted) throw new Error('Song cache write was cancelled');
         if (written !== expectedLength) throw new Error('Song cache received an incomplete stream');
         await fs.promises.rename(temporaryPath, destinationPath);
         await writeMetadata(destinationPath, videoId, stream).catch(() => {});
@@ -358,7 +377,7 @@ function onceDrain(stream) {
   return new Promise((resolve) => stream.once('drain', resolve));
 }
 
-async function pipeResponseBody(body, res) {
+async function pipeResponseBody(body, res, onChunk) {
   const reader = body.getReader();
   let complete = false;
   try {
@@ -368,7 +387,10 @@ async function pipeResponseBody(body, res) {
         complete = true;
         break;
       }
-      if (chunk.value?.byteLength && !res.write(chunk.value)) await onceDrain(res);
+      if (chunk.value?.byteLength) {
+        onChunk(chunk.value.byteLength);
+        if (!res.write(chunk.value)) await onceDrain(res);
+      }
     }
   } finally {
     if (!complete) await reader.cancel().catch(() => {});

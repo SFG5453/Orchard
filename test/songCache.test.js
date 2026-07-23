@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Writable } from 'node:stream';
@@ -10,6 +10,20 @@ import { createSongCache } from '../electron/playback/songCache.js';
 
 function responseBody(bytes) {
   return new Response(Uint8Array.from(bytes)).body;
+}
+
+function chunkedResponseBody(chunks) {
+  let index = 0;
+  return new ReadableStream({
+    pull(controller) {
+      if (index >= chunks.length) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(Uint8Array.from(chunks[index]));
+      index += 1;
+    }
+  });
 }
 
 function fakeResponse() {
@@ -102,6 +116,42 @@ test('song cache write failures never interrupt the playback response', async ()
     assert.equal(request.res.ended, true);
     assert.deepEqual(Buffer.concat(request.res.chunks), Buffer.from([9, 8, 7, 6]));
     assert.equal((await cache.list()).entries.length, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('song cache abandons a write that falls too far behind playback', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'orchard-song-cache-lag-'));
+  let writes = 0;
+  const cache = createSongCache({
+    directory,
+    maxWriteLagBytes: 4,
+    createWriteStream() {
+      return new Writable({
+        write(_chunk, _encoding, callback) {
+          writes += 1;
+          setTimeout(callback, 20);
+        }
+      });
+    }
+  });
+  const bytes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  const request = cacheRequest(bytes);
+  request.upstream.body = chunkedResponseBody([
+    bytes.slice(0, 4),
+    bytes.slice(4, 8),
+    bytes.slice(8)
+  ]);
+
+  try {
+    assert.equal(await cache.pipeAndStore(request), true);
+    assert.equal(request.res.destroyed, false);
+    assert.equal(request.res.ended, true);
+    assert.deepEqual(Buffer.concat(request.res.chunks), Buffer.from(bytes));
+    assert.equal(writes, 1);
+    assert.equal((await cache.list()).entries.length, 0);
+    assert.deepEqual(await readdir(directory), []);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
