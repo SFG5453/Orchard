@@ -215,6 +215,7 @@ const {
   mergeTrackMetadata,
   normalizeSearch,
   normalizedLookupText,
+  searchCatalog,
   searchTrackAlbumMetadata,
   searchArtistShelfFallback
 } = searchUtils;
@@ -323,6 +324,7 @@ async function startBridge() {
     resolveMusicCollectionWithFallback,
     resolveStream,
     restoreCachedSignIn,
+    searchCatalog,
     shelfItems,
     signOutAuth,
     startAccountSwitch,

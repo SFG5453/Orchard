@@ -8,6 +8,9 @@ function abbreviatedNumber(value) {
 }
 
 function searchPopularity(item) {
+  const suppliedPopularity = Number(item?.searchPopularity || 0);
+  if (Number.isFinite(suppliedPopularity) && suppliedPopularity > 0) return suppliedPopularity;
+
   const directViews = abbreviatedNumber(item?.views);
   if (directViews) return directViews;
 
@@ -36,13 +39,12 @@ function topMatchRelevance(item, query) {
   const aliasMatches = (item?.searchAliases || [])
     .map(normalizedRankingText)
     .some((alias) => alias === normalizedQuery);
-  if (aliasMatches) return 86;
+  if (aliasMatches) return 100;
 
-  const isPhraseQuery = normalizedQuery.includes(' ');
-  if (normalizedTitle === normalizedQuery) return isPhraseQuery ? 70 : 40;
-  if (normalizedTitle.startsWith(`${normalizedQuery} `)) return 34;
-  if (normalizedTitle.split(' ').some((part) => part.startsWith(normalizedQuery))) return 28;
-  if (normalizedTitle.includes(normalizedQuery)) return 18;
+  if (normalizedTitle === normalizedQuery) return 90;
+  if (normalizedTitle.startsWith(`${normalizedQuery} `)) return 80;
+  if (normalizedTitle.split(' ').some((part) => part.startsWith(normalizedQuery))) return 70;
+  if (normalizedTitle.includes(normalizedQuery)) return 60;
 
   const haystack = normalizedRankingText([
     normalizedTitle,
@@ -52,12 +54,12 @@ function topMatchRelevance(item, query) {
     item?.subtitle,
     item?.album
   ].filter(Boolean).join(' '));
-  if (haystack.includes(normalizedQuery)) return 24;
+  if (haystack.includes(normalizedQuery)) return 65;
 
   const queryTokens = normalizedQuery.split(' ').filter(Boolean);
   const haystackTokens = new Set(haystack.split(' ').filter(Boolean));
-  if (queryTokens.length > 1 && queryTokens.every((token) => haystackTokens.has(token))) return 20;
-  if (queryTokens.some((token) => [...haystackTokens].some((candidate) => candidate.startsWith(token)))) return 12;
+  if (queryTokens.length > 1 && queryTokens.every((token) => haystackTokens.has(token))) return 55;
+  if (queryTokens.some((token) => [...haystackTokens].some((candidate) => candidate.startsWith(token)))) return 20;
 
   return 0;
 }
@@ -83,10 +85,10 @@ export function sortByTopMatch(items = [], query = '') {
       relevance: topMatchRelevance(item, query)
     }))
     .filter(({ relevance }) => relevance > 0)
-    .sort((left, right) => {
-      const leftScore = left.relevance + Math.log10(left.popularity + 1) * 10;
-      const rightScore = right.relevance + Math.log10(right.popularity + 1) * 10;
-      return rightScore - leftScore || right.popularity - left.popularity || left.index - right.index;
-    })
+    .sort((left, right) =>
+      right.relevance - left.relevance ||
+      right.popularity - left.popularity ||
+      left.index - right.index
+    )
     .map(({ item }) => item);
 }

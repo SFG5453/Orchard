@@ -49,6 +49,7 @@ export async function startBridgeServer({
   resolveMusicCollectionWithFallback,
   resolveStream,
   restoreCachedSignIn,
+  searchCatalog,
   shelfItems,
   signOutAuth,
   startAccountSwitch,
@@ -294,8 +295,11 @@ export async function startBridgeServer({
     socket.on('music:search', async ({ query, filter = 'songs' }, reply) => {
       try {
         const yt = await getGuestInnertube();
-        const search = await yt.music.search(query, filter === 'all' ? undefined : { type: filter.slice(0, -1) });
-        reply({ ok: true, data: normalizeSearch(search, query) });
+        const loadTrackPopularity = async (videoId) => {
+          const info = await yt.getBasicInfo(videoId);
+          return info?.basic_info?.view_count || 0;
+        };
+        reply({ ok: true, data: await searchCatalog(yt.music, query, filter, loadTrackPopularity) });
       } catch (error) {
         reply({ ok: false, error: bridgeError(error) });
       }

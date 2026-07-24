@@ -9,17 +9,17 @@ export function createSearchUtils({
   shelfItems,
   textParts
 }) {
+  const trackPopularityCache = new Map();
+
   function searchCreditMatches(item, query) {
     const normalizedQuery = normalizedLookupText(query);
     if (!normalizedQuery) return false;
 
     const credits = [
+      item.artist,
       ...(item.artists || []),
-      item.subtitle,
-      item.album
     ]
-      .filter(Boolean)
-      .flatMap((value) => String(value).split(/[•·,]/));
+      .filter(Boolean);
 
     return credits.some((credit) => normalizedLookupText(credit) === normalizedQuery);
   }
@@ -145,6 +145,113 @@ export function createSearchUtils({
         }))
         .filter((section) => section.items.length > 0)
     };
+  }
+
+  function mergeSearchResults(primary = { sections: [] }, supplements = []) {
+    const sectionOrder = ['songs', 'videos', 'albums', 'artists', 'playlists'];
+    const sections = new Map(
+      (primary.sections || []).map((section) => [section.key, { ...section, items: [...(section.items || [])] }])
+    );
+
+    for (const result of supplements) {
+      for (const supplement of result?.sections || []) {
+        const current = sections.get(supplement.key);
+        sections.set(supplement.key, {
+          ...(current || supplement),
+          items: dedupeMediaItems([
+            ...(supplement.items || []),
+            ...(current?.items || [])
+          ])
+        });
+      }
+    }
+
+    return {
+      ...primary,
+      sections: [...sections.values()]
+        .filter((section) => section.items.length > 0)
+        .sort((left, right) => {
+          const leftIndex = sectionOrder.indexOf(left.key);
+          const rightIndex = sectionOrder.indexOf(right.key);
+          return (leftIndex < 0 ? sectionOrder.length : leftIndex) -
+            (rightIndex < 0 ? sectionOrder.length : rightIndex);
+        })
+    };
+  }
+
+  async function cachedTrackPopularity(videoId, loadTrackPopularity) {
+    if (!videoId || !loadTrackPopularity) return 0;
+    if (trackPopularityCache.has(videoId)) return trackPopularityCache.get(videoId);
+
+    const pending = Promise.resolve(loadTrackPopularity(videoId))
+      .then((value) => {
+        const popularity = Number(value || 0);
+        return Number.isFinite(popularity) && popularity > 0 ? popularity : 0;
+      })
+      .catch(() => {
+        trackPopularityCache.delete(videoId);
+        return 0;
+      });
+    trackPopularityCache.set(videoId, pending);
+
+    if (trackPopularityCache.size > 500) {
+      const oldest = trackPopularityCache.keys().next().value;
+      trackPopularityCache.delete(oldest);
+    }
+
+    return pending;
+  }
+
+  async function hydrateExactTrackPopularity(result, query, loadTrackPopularity) {
+    if (!loadTrackPopularity) return result;
+
+    const normalizedQuery = normalizedLookupText(query);
+    if (!normalizedQuery) return result;
+
+    const songs = result.sections?.find((section) => section.key === 'songs');
+    const candidates = (songs?.items || [])
+      .filter((item) => item.id && normalizedLookupText(item.title) === normalizedQuery)
+      .slice(0, 12);
+    if (!candidates.length) return result;
+
+    const popularity = new Map(await Promise.all(candidates.map(async (item) => [
+      item.id,
+      await cachedTrackPopularity(item.id, loadTrackPopularity)
+    ])));
+
+    return {
+      ...result,
+      sections: result.sections.map((section) => section.key !== 'songs' ? section : {
+        ...section,
+        items: section.items.map((item) => popularity.has(item.id)
+          ? { ...item, searchPopularity: popularity.get(item.id) }
+          : item)
+      })
+    };
+  }
+
+  async function searchCatalog(collection, query, filter = 'songs', loadTrackPopularity) {
+    if (filter !== 'all') {
+      const search = await collection.search(query, { type: filter.slice(0, -1) });
+      const result = normalizeSearch(search, query);
+      return filter === 'songs'
+        ? hydrateExactTrackPopularity(result, query, loadTrackPopularity)
+        : result;
+    }
+
+    const [primary, songs, artists] = await Promise.allSettled([
+      collection.search(query),
+      collection.search(query, { type: 'song' }),
+      collection.search(query, { type: 'artist' })
+    ]);
+    if (primary.status === 'rejected') throw primary.reason;
+
+    const supplements = [songs, artists]
+      .filter((result) => result.status === 'fulfilled' && result.value)
+      .map((result) => normalizeSearch(result.value, query));
+
+    const result = mergeSearchResults(normalizeSearch(primary.value, query), supplements);
+    return hydrateExactTrackPopularity(result, query, loadTrackPopularity);
   }
 
   async function completeFilteredSearchItems(search, maxRequests = 6) {
@@ -454,8 +561,10 @@ export function createSearchUtils({
     isSingleOrEpRelease,
     itemMatchesReleaseSection,
     mergeTrackMetadata,
+    mergeSearchResults,
     normalizeSearch,
     normalizedLookupText,
+    searchCatalog,
     searchTrackAlbumMetadata,
     searchArtistShelfFallback
   };
