@@ -17,6 +17,12 @@ export function hasYouTubeLoginCookie(cookie = '') {
   return Boolean(cookies.SAPISID || cookies['__Secure-3PAPISID']);
 }
 
+export function youtubeAccountIdentity(cookie = '', dataSyncId = '') {
+  const cookies = parseCookieString(cookie);
+  const signingCookie = cookies.SAPISID || cookies['__Secure-3PAPISID'] || '';
+  return `${String(dataSyncId || '').trim()}\n${signingCookie}`;
+}
+
 export function normalizeYouTubeAuthCookie(cookie = '') {
   const normalized = String(cookie || '').trim();
   const cookies = parseCookieString(normalized);

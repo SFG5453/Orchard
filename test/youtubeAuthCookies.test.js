@@ -4,7 +4,8 @@ import {
   collectYouTubeAuthCookie,
   hasYouTubeLoginCookie,
   normalizeYouTubeAuthCookie,
-  parseCookieString
+  parseCookieString,
+  youtubeAccountIdentity
 } from '../electron/auth/youtubeAuthCookies.js';
 
 test('parseCookieString preserves cookie values containing equals signs', () => {
@@ -19,6 +20,17 @@ test('hasYouTubeLoginCookie accepts either supported signing cookie', () => {
   assert.equal(hasYouTubeLoginCookie('__Secure-3PAPISID=fallback'), true);
   assert.equal(hasYouTubeLoginCookie('SID=unrelated'), false);
   assert.equal(hasYouTubeLoginCookie('NOTSAPISID=substring'), false);
+});
+
+test('youtubeAccountIdentity ignores unrelated cookie changes', () => {
+  assert.equal(
+    youtubeAccountIdentity('SAPISID=primary; PREF=first', 'brand-channel'),
+    youtubeAccountIdentity('PREF=second; SAPISID=primary', 'brand-channel')
+  );
+  assert.notEqual(
+    youtubeAccountIdentity('SAPISID=primary; PREF=first', 'brand-channel'),
+    youtubeAccountIdentity('SAPISID=primary; PREF=first', 'personal-channel')
+  );
 });
 
 test('normalizeYouTubeAuthCookie aliases the secure signing cookie for youtubei.js', () => {
