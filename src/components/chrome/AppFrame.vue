@@ -99,6 +99,7 @@ export default {
     }"
   >
     <AnimatedBackground
+      v-if="immersiveBackgroundsEnabled"
       :artwork-url="immersiveArtworkImage"
       :animated-artwork-url="immersiveArtworkVideo"
       :enabled="immersiveBackgroundsEnabled"
