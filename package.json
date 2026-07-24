@@ -65,7 +65,7 @@
     "music-tempo": "^1.0.3",
     "node-addon-api": "^8.9.0",
     "qrcode": "^1.5.4",
-    "quasar": "^2.22.0",
+    "quasar": "^2.23.1",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "standardized-audio-context": "^25.3.77",
