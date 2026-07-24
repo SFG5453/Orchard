@@ -244,3 +244,47 @@ test('graphics controller tracks restart state and uses Electron relaunch', (t) 
   controller.restart();
   assert.deepEqual(app.calls, [['relaunch'], ['quit']]);
 });
+
+test('Linux graphics controller restores the inherited GPU environment before restarting into Automatic', (t) => {
+  const filePath = temporaryPreferencesPath(t);
+  writeStoredGraphicsMode(filePath, GRAPHICS_MODES.INTEGRATED);
+  const environment = {
+    DRI_PRIME: '1',
+    KEEP_ME: 'yes',
+    __GLX_VENDOR_LIBRARY_NAME: 'nvidia',
+    __NV_PRIME_RENDER_OFFLOAD: '1',
+    __NV_PRIME_RENDER_OFFLOAD_PROVIDER: 'NVIDIA-G0',
+    __VK_LAYER_NV_optimus: 'NVIDIA_only'
+  };
+  const inheritedEnvironment = { ...environment };
+  const app = fakeApp();
+  const controller = createGraphicsModeController({
+    app,
+    environment,
+    filePath,
+    linuxGraphicsDevices: [{
+      bootVga: false,
+      deviceId: '0x1638',
+      pciAddress: '0000:09:00.0',
+      renderNodePath: '/dev/dri/renderD129',
+      subsystemVendorId: '0x1458',
+      topology: ['0000:00:08.1', '0000:09:00.0'],
+      vendorId: '0x1002'
+    }],
+    platform: 'linux'
+  });
+
+  assert.equal(environment.DRI_PRIME, 'pci-0000_09_00_0');
+  assert.equal(environment.__NV_PRIME_RENDER_OFFLOAD, undefined);
+
+  controller.setMode(GRAPHICS_MODES.AUTOMATIC);
+  controller.restart();
+
+  assert.deepEqual(environment, inheritedEnvironment);
+  assert.deepEqual(app.calls, [
+    ['appendSwitch', 'render-node-override', '/dev/dri/renderD129'],
+    ['appendSwitch', 'force_low_power_gpu'],
+    ['relaunch'],
+    ['quit']
+  ]);
+});

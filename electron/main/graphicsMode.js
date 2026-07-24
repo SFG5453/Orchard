@@ -22,6 +22,10 @@ const LINUX_GPU_OFFLOAD_ENVIRONMENT = Object.freeze([
   '__NV_PRIME_RENDER_OFFLOAD_PROVIDER',
   '__VK_LAYER_NV_optimus'
 ]);
+const LINUX_GPU_ENVIRONMENT = Object.freeze([
+  'DRI_PRIME',
+  ...LINUX_GPU_OFFLOAD_ENVIRONMENT
+]);
 
 function readText(filePath) {
   try {
@@ -148,6 +152,23 @@ export function configureLinuxIntegratedGpuEnvironment(device, environment = pro
   return selector;
 }
 
+function captureLinuxGpuEnvironment(environment) {
+  return new Map(LINUX_GPU_ENVIRONMENT.map((name) => [
+    name,
+    {
+      present: Object.hasOwn(environment, name),
+      value: environment[name]
+    }
+  ]));
+}
+
+function restoreLinuxGpuEnvironment(environment, snapshot) {
+  for (const [name, original] of snapshot) {
+    if (original.present) environment[name] = original.value;
+    else delete environment[name];
+  }
+}
+
 export function applyStartupGraphicsMode({
   app,
   environment = process.env,
@@ -187,6 +208,9 @@ export function createGraphicsModeController({
   linuxGraphicsDevices,
   platform = process.platform
 }) {
+  const originalLinuxGpuEnvironment = platform === 'linux'
+    ? captureLinuxGpuEnvironment(environment)
+    : null;
   const linuxIntegratedGpu = platform === 'linux'
     ? selectLinuxIntegratedGpu(linuxGraphicsDevices || readLinuxGraphicsDevices())
     : null;
@@ -231,6 +255,11 @@ export function createGraphicsModeController({
       return state();
     },
     restart() {
+      if (platform === 'linux' &&
+          selectedMode === GRAPHICS_MODES.AUTOMATIC &&
+          originalLinuxGpuEnvironment) {
+        restoreLinuxGpuEnvironment(environment, originalLinuxGpuEnvironment);
+      }
       app.relaunch();
       app.quit();
     }
