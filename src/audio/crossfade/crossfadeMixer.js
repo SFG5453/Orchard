@@ -1,7 +1,3 @@
-function clamp01(value) {
-  return Math.max(0, Math.min(1, Number(value) || 0));
-}
-
 const DJ_DOMINANCE_PROGRESS = 0.58;
 const DJ_BED_FADE_IN_SECONDS = 4;
 
@@ -22,11 +18,16 @@ function equalPowerCurves(size = 64) {
 const CURVES = equalPowerCurves();
 
 export function createCrossfadeMixer({ connectElement, currentTime }) {
+  function mixParam(node) {
+    return node.mixGain.gain;
+  }
+
   function scheduleGain(node, curve, scale, startTime, duration, floor = 0) {
     const values = Float32Array.from(curve, (value) => floor + value * (scale - floor));
-    node.gain.gain.cancelScheduledValues(startTime);
-    node.gain.gain.setValueAtTime(values[0], startTime);
-    node.gain.gain.setValueCurveAtTime(values, startTime, duration);
+    const gain = mixParam(node);
+    gain.cancelScheduledValues(startTime);
+    gain.setValueAtTime(values[0], startTime);
+    gain.setValueCurveAtTime(values, startTime, duration);
   }
 
   function filterCurve(start, end, size = 64) {
@@ -95,18 +96,20 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     // the main handoff fade. For long prerolls (>6s), reduce to ~0.88 of
     // target by the handoff point to create a gradual energy taper.
     const outgoingPreHandoff = isLongPreroll ? target * 0.88 : target;
-    fromNode.gain.gain.cancelScheduledValues(startTime);
-    fromNode.gain.gain.setValueAtTime(target, startTime);
+    const fromGain = mixParam(fromNode);
+    const toGain = mixParam(toNode);
+    fromGain.cancelScheduledValues(startTime);
+    fromGain.setValueAtTime(target, startTime);
     if (isLongPreroll) {
-      fromNode.gain.gain.linearRampToValueAtTime(outgoingPreHandoff, handoffTime);
+      fromGain.linearRampToValueAtTime(outgoingPreHandoff, handoffTime);
     } else {
-      fromNode.gain.gain.setValueAtTime(target, handoffTime);
+      fromGain.setValueAtTime(target, handoffTime);
     }
-    toNode.gain.gain.cancelScheduledValues(startTime);
-    toNode.gain.gain.setValueAtTime(0, startTime);
+    toGain.cancelScheduledValues(startTime);
+    toGain.setValueAtTime(0, startTime);
     if (handoffTime > startTime) {
-      toNode.gain.gain.linearRampToValueAtTime(bedGain, bedReadyTime);
-      toNode.gain.gain.setValueAtTime(bedGain, handoffTime);
+      toGain.linearRampToValueAtTime(bedGain, bedReadyTime);
+      toGain.setValueAtTime(bedGain, handoffTime);
     }
     scheduleGain(fromNode, CURVES.fadeOut, outgoingPreHandoff, handoffTime, duration);
     scheduleGain(
@@ -122,7 +125,6 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
   function scheduleCrossfade({
     fromAudio,
     toAudio,
-    targetVolume,
     duration,
     handoffDuration = duration,
     handoffStartSeconds = 0,
@@ -140,7 +142,9 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
       0.05,
       Math.min(overlapDuration - (handoffStart - startTime), Number(handoffDuration) || overlapDuration)
     );
-    const target = clamp01(targetVolume);
+    // The mix envelope stays normalized. Overall playback volume lives on a
+    // separate master gain so slider changes can take effect mid-transition.
+    const target = 1;
 
     const djStyle = ['dj_switch', 'dj_filter', 'dj_blend'].includes(transitionStyle);
     if (djStyle) {
@@ -181,6 +185,9 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     const node = connectElement(element);
     if (!node) return;
     const now = currentTime();
+    const gain = mixParam(node);
+    gain.cancelScheduledValues(now);
+    gain.setTargetAtTime(1, now, 0.02);
     node.lowPass.frequency.cancelScheduledValues(now);
     node.highPass.frequency.cancelScheduledValues(now);
     node.lowPass.frequency.setTargetAtTime(

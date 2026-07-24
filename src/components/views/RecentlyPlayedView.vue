@@ -21,7 +21,7 @@ export default {
         :key="`recently-played-${item.id}-${index}`"
         type="button"
         class="table-row recently-played-view__row"
-        @click="playTrack(item, { queueSource: history })"
+        @click="playHistoryTrack(item)"
         @keydown="onSongActionKeydown($event, item)"
         @contextmenu="openSongActionMenu(item, $event)"
       >

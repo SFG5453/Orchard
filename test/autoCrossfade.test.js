@@ -37,7 +37,10 @@ function audio(currentTime = 0) {
     currentTime,
     duration: 120,
     load() {},
-    pause() {},
+    pauseCalls: 0,
+    pause() {
+      this.pauseCalls += 1;
+    },
     play: async () => {},
     removeAttribute() {},
     volume: 1
@@ -109,6 +112,101 @@ test('the active track is promoted at mix dominance instead of mix start', async
     assert.equal(clock.runNext(), true);
     assert.equal(await result, true);
     assert.deepEqual(events, ['promote', 'complete']);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('volume changes update both master gains while a transition is active', async () => {
+  const originalWindow = globalThis.window;
+  const clock = fakeClock();
+  globalThis.window = clock.window;
+  const volumes = [];
+  const analyzer = {
+    connectElement() {},
+    currentTime: () => 10,
+    resetMixElement() {},
+    resume: async () => {},
+    scheduleCrossfade: () => ({
+      startTime: 10,
+      handoffStart: 11,
+      promotionTime: 12,
+      endTime: 13
+    }),
+    setVolume(element, value) {
+      volumes.push({ element, value });
+    }
+  };
+  const crossfade = createAutoCrossfade({ analyzer });
+  const outgoing = audio(110);
+  const incoming = audio();
+
+  try {
+    const result = crossfade.start({
+      fromAudio: outgoing,
+      toAudio: incoming,
+      transition: { fadeSeconds: 3 },
+      volume: 0.8
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    crossfade.setTargetVolume(0.35);
+
+    assert.deepEqual(volumes.slice(-2), [
+      { element: outgoing, value: 0.35 },
+      { element: incoming, value: 0.35 }
+    ]);
+    crossfade.cancel();
+    assert.equal(await result, false);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('canceling while the incoming play request is pending cannot restart the transition', async () => {
+  const originalWindow = globalThis.window;
+  const clock = fakeClock();
+  globalThis.window = clock.window;
+  let releasePlay;
+  let scheduled = 0;
+  const analyzer = {
+    connectElement() {},
+    currentTime: () => 10,
+    resetMixElement() {},
+    resume: async () => {},
+    scheduleCrossfade: () => {
+      scheduled += 1;
+      return {
+        startTime: 10,
+        handoffStart: 11,
+        promotionTime: 12,
+        endTime: 13
+      };
+    },
+    setVolume() {}
+  };
+  const crossfade = createAutoCrossfade({ analyzer });
+  const outgoing = audio(110);
+  const incoming = audio();
+  incoming.play = () => new Promise((resolve) => {
+    releasePlay = resolve;
+  });
+
+  try {
+    const result = crossfade.start({
+      fromAudio: outgoing,
+      toAudio: incoming,
+      transition: { fadeSeconds: 3 },
+      volume: 0.8
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    crossfade.cancel();
+    releasePlay();
+
+    assert.equal(await result, false);
+    assert.equal(scheduled, 0);
+    assert.equal(incoming.pauseCalls, 1);
   } finally {
     globalThis.window = originalWindow;
   }

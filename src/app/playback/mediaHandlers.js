@@ -175,6 +175,7 @@ export function installMediaHandlers(ctx) {
 
   ctx.onAudioPause = function onAudioPause(event) {
     if (!ctx.isCurrentAudioEvent(event)) return;
+    if (ctx.autoCrossfade?.isActive?.()) ctx.cancelActiveCrossfade?.();
     ctx.clearPlaybackStallRecovery();
     ctx.reportYouTubeHistoryProgress?.({ force: true });
     ctx.buffering.value = false;

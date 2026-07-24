@@ -57,6 +57,7 @@ export function createAudioAnalyzer(options = {}) {
     const directGain = ctx.createGain();
     const normalizedGain = ctx.createGain();
     const gain = ctx.createGain();
+    const mixGain = ctx.createGain();
     const lowPass = ctx.createBiquadFilter();
     const highPass = ctx.createBiquadFilter();
     lowPass.type = 'lowpass';
@@ -75,6 +76,7 @@ export function createAudioAnalyzer(options = {}) {
     directGain.gain.value = 1;
     normalizedGain.gain.value = 0;
     gain.gain.value = clamp01(element.volume);
+    mixGain.gain.value = 1;
 
     const processor = options.createProcessor?.({ context: ctx, source, element });
     if (processor?.output) processor.output.connect(analyser);
@@ -84,7 +86,8 @@ export function createAudioAnalyzer(options = {}) {
     directGain.connect(gain);
     normalizer.connect(normalizedGain);
     normalizedGain.connect(gain);
-    gain.connect(lowPass);
+    gain.connect(mixGain);
+    mixGain.connect(lowPass);
     lowPass.connect(highPass);
     highPass.connect(ctx.destination);
     element.volume = 1;
@@ -95,6 +98,7 @@ export function createAudioAnalyzer(options = {}) {
       gain,
       highPass,
       lowPass,
+      mixGain,
       normalizedGain,
       normalizer,
       data: new Uint8Array(analyser.frequencyBinCount),

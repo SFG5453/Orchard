@@ -80,6 +80,7 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
   let activeFromAudio = null;
   let activeToAudio = null;
   let targetVolume = 1;
+  let transitionSequence = 0;
 
   function isActive() {
     return active;
@@ -87,6 +88,9 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
 
   function setTargetVolume(value) {
     targetVolume = clamp01(value);
+    if (!active) return;
+    analyzer?.setVolume?.(activeFromAudio, targetVolume);
+    analyzer?.setVolume?.(activeToAudio, targetVolume);
   }
 
   function setFadeSeconds(value) {
@@ -133,6 +137,7 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
   }
 
   function cancel() {
+    transitionSequence += 1;
     window.clearTimeout(completeTimer);
     window.clearTimeout(promoteTimer);
     window.clearTimeout(tempoStartTimer);
@@ -163,22 +168,39 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
     if (!playbackTransition) return false;
     transition = playbackTransition;
 
+    const sequence = ++transitionSequence;
+    setTargetVolume(volume);
     active = true;
     activeFromAudio = fromAudio;
     activeToAudio = toAudio;
-    setTargetVolume(volume);
     let promoted = false;
     let promotionError = null;
+    activeCleanup = () => {
+      if (promoted) {
+        analyzer?.setVolume?.(fromAudio, 0);
+        analyzer?.setVolume?.(toAudio, targetVolume);
+        fromAudio.pause();
+      } else {
+        analyzer?.setVolume?.(fromAudio, targetVolume);
+        analyzer?.setVolume?.(toAudio, 0);
+        toAudio.pause();
+      }
+      analyzer?.resetMixElement?.(fromAudio);
+      analyzer?.resetMixElement?.(toAudio);
+      fromAudio.playbackRate = 1;
+      toAudio.playbackRate = 1;
+    };
 
     try {
       analyzer?.connectElement(fromAudio);
       analyzer?.connectElement(toAudio);
       await analyzer?.resume?.();
+      if (!active || sequence !== transitionSequence) return false;
 
       fromAudio.volume = 1;
       toAudio.volume = 1;
       analyzer?.setVolume?.(fromAudio, targetVolume);
-      analyzer?.setVolume?.(toAudio, 0);
+      analyzer?.setVolume?.(toAudio, targetVolume);
       const incomingCueTime = Math.max(0, Number(transition?.incomingCueTime) || 0);
       const incomingRate = Math.max(
         0.8,
@@ -199,6 +221,7 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
         ? Math.min(requestedFadeSeconds, Math.max(0.05, remainingSeconds))
         : requestedFadeSeconds;
       await toAudio.play();
+      if (!active || sequence !== transitionSequence) return false;
       const timing = analyzer?.scheduleCrossfade?.({
         fromAudio,
         toAudio,
@@ -242,24 +265,8 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
         }, delayMs);
       }
 
-      activeCleanup = () => {
-        if (promoted) {
-          analyzer?.setVolume?.(fromAudio, 0);
-          analyzer?.setVolume?.(toAudio, targetVolume);
-          fromAudio.pause();
-        } else {
-          analyzer?.setVolume?.(fromAudio, targetVolume);
-          analyzer?.setVolume?.(toAudio, 0);
-          toAudio.pause();
-        }
-        analyzer?.resetMixElement?.(fromAudio);
-        analyzer?.resetMixElement?.(toAudio);
-        fromAudio.playbackRate = 1;
-        toAudio.playbackRate = 1;
-      };
-
       const promote = () => {
-        if (promoted || !active) return;
+        if (promoted || !active || sequence !== transitionSequence) return;
         onPromote?.();
         promoted = true;
       };
@@ -297,7 +304,7 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       window.clearTimeout(promoteTimer);
       promoteTimer = 0;
       if (promotionError) throw promotionError;
-      if (!active) return false;
+      if (!active || sequence !== transitionSequence) return false;
       promote();
 
       if (active) {
@@ -326,6 +333,7 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       onComplete?.();
       return true;
     } catch (error) {
+      if (sequence !== transitionSequence) return false;
       activeCleanup?.();
       active = false;
       window.clearTimeout(completeTimer);

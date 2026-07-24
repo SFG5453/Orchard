@@ -15,6 +15,9 @@ function audioParam() {
     setValueAtTime(value, time) {
       this.events.push({ type: 'set', value, time });
     },
+    setTargetAtTime(value, time, constant) {
+      this.events.push({ type: 'target', value, time, constant });
+    },
     setValueCurveAtTime(values, time, duration) {
       this.events.push({
         type: 'curve',
@@ -32,6 +35,7 @@ function mixNode() {
   const context = { sampleRate: 48000 };
   return {
     gain: { gain: audioParam() },
+    mixGain: { gain: audioParam() },
     highPass: { context, frequency: audioParam() },
     lowPass: { context, frequency: audioParam() }
   };
@@ -65,10 +69,10 @@ test('DJ filters stage an incoming bed before the dominance handoff', () => {
     promotionTime: 107.48,
     endTime: 110
   });
-  assert.ok(toNode.gain.gain.events.some((event) =>
+  assert.ok(toNode.mixGain.gain.events.some((event) =>
     event.type === 'ramp' && event.value === 0.28 && event.time === 104
   ));
-  const incomingCurve = toNode.gain.gain.events.find((event) => event.type === 'curve');
+  const incomingCurve = toNode.mixGain.gain.events.find((event) => event.type === 'curve');
   const dominanceIndex = Math.ceil((incomingCurve.values.length - 1) * 0.58);
   assert.ok(Math.abs(incomingCurve.first - 0.28) < 0.0001);
   assert.ok(incomingCurve.values[dominanceIndex] > 0.999);
@@ -114,7 +118,7 @@ test('same-beat blends use the gentler incoming filter', () => {
     event.type === 'set' && event.value === 500 && event.time === 20
   ));
   // Long preroll uses 0.20 bed gain
-  assert.ok(toNode.gain.gain.events.some((event) =>
+  assert.ok(toNode.mixGain.gain.events.some((event) =>
     event.type === 'ramp' && Math.abs(event.value - 0.20) < 0.001
   ));
 });
@@ -172,5 +176,22 @@ test('DJ styles schedule DJ gains and filters even when handoffStart equals star
   assert.equal(timing.startTime, 50);
   assert.equal(timing.handoffStart, 50);
   assert.ok(toNode.highPass.frequency.events.some((event) => event.type === 'set' && event.value === 350));
-  assert.ok(toNode.gain.gain.events.some((event) => event.type === 'curve' && event.time === 50));
+  assert.ok(toNode.mixGain.gain.events.some((event) => event.type === 'curve' && event.time === 50));
+});
+
+test('resetting a mix cancels its envelope without changing the master volume', () => {
+  const element = {};
+  const node = mixNode();
+  const mixer = createCrossfadeMixer({
+    connectElement: () => node,
+    currentTime: () => 42
+  });
+
+  mixer.resetElement(element);
+
+  assert.deepEqual(node.mixGain.gain.events.slice(0, 2), [
+    { type: 'cancel', time: 42 },
+    { type: 'target', value: 1, time: 42, constant: 0.02 }
+  ]);
+  assert.deepEqual(node.gain.gain.events, []);
 });

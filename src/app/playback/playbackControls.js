@@ -44,6 +44,13 @@ export function installPlaybackControls(ctx) {
     );
   };
 
+  ctx.cancelActiveCrossfade = function cancelActiveCrossfade() {
+    const wasActive = Boolean(ctx.autoCrossfade?.isActive?.());
+    ctx.autoCrossfade?.cancel?.();
+    if (ctx.smartCrossfadeMix?.value?.visible) ctx.dismissSmartCrossfadeMix();
+    return wasActive;
+  };
+
   ctx.recoverPrematureAudioEnd = function recoverPrematureAudioEnd(media) {
     const track = ctx.activeTrack.value;
     const expected = reliablePlaybackDuration(ctx, media, track);
@@ -156,11 +163,13 @@ export function installPlaybackControls(ctx) {
       ctx.sendListeningPartyRequest({ action: ctx.isPlaying.value ? 'pause' : 'play' });
       return;
     }
+    ctx.cancelActiveCrossfade();
     const media = ctx.currentPlaybackElement();
     if (ctx.activeTrack.value && (!media?.src || playbackNeedsFreshStream(media, ctx.playbackError.value))) {
       ctx.playTrack(ctx.activeTrack.value, {
         mediaKind: ctx.activeMediaKind.value,
         queueSource: [ctx.activeTrack.value, ...ctx.queue.value],
+        queueAlreadyShuffled: Boolean(ctx.shuffleEnabled?.value),
         refreshStream: true,
         skipHistory: true
       });
@@ -190,6 +199,11 @@ export function installPlaybackControls(ctx) {
     ctx.seek((ctx.currentPlaybackElement()?.currentTime || ctx.currentTime.value || 0) + offsetSeconds);
   };
 
+  ctx.playHistoryTrack = function playHistoryTrack(track) {
+    if (!track?.id) return;
+    ctx.playTrack(track, { queueSource: [track] });
+  };
+
   ctx.minimizeVideoPlayer = function minimizeVideoPlayer() {
     ctx.videoPlayerMinimized.value = true;
   };
@@ -214,10 +228,12 @@ export function installPlaybackControls(ctx) {
 
   ctx.playNext = async function playNext(options = {}) {
     if (!options.fromListeningPartyRequest && !options.fromEnded && ctx.requestListeningPartyHostControl?.({ action: 'next' })) return;
+    ctx.cancelActiveCrossfade();
     if (ctx.repeatMode.value === 'one' && ctx.activeTrack.value && !options.skipRepeatOne) {
       await ctx.playTrack(ctx.activeTrack.value, {
         mediaKind: ctx.activeMediaKind.value,
         queueSource: [ctx.activeTrack.value, ...ctx.queue.value],
+        queueAlreadyShuffled: Boolean(ctx.shuffleEnabled?.value),
         refreshStream: true,
         skipHistory: true
       });
@@ -397,6 +413,7 @@ export function installPlaybackControls(ctx) {
 
   ctx.playPrevious = function playPrevious(options = {}) {
     if (!options.fromListeningPartyRequest && ctx.requestListeningPartyHostControl?.({ action: 'previous' })) return;
+    ctx.cancelActiveCrossfade();
     const playlistContext = ctx.playbackPlaylistContext.value;
     if (playlistContext && !ctx.shuffleEnabled.value && !playlistContext.shuffled) {
       const { activeIndex, previousTrack } = playlistPreviousState(playlistContext.allTracks, ctx.activeTrack.value?.id);
@@ -458,6 +475,7 @@ export function installPlaybackControls(ctx) {
       ctx.sendListeningPartyRequest({ action: 'seek', currentTime: Number(value) || 0 });
       return;
     }
+    ctx.cancelActiveCrossfade();
     const media = ctx.currentPlaybackElement();
     if (!media || !ctx.duration.value || ctx.activeTrackIsLive.value) return;
     const target = Math.max(0, Math.min(Number(value) || 0, ctx.duration.value));

@@ -15,6 +15,23 @@ function isUnavailableTrackError(error) {
     .test(String(error?.message || error || ''));
 }
 
+export function playbackQueueSourceMatches(source, queue = [], activeTrack = null) {
+  if (!Array.isArray(source)) return false;
+  if (source === queue) return true;
+  if (
+    source.length === queue.length &&
+    source.every((track, index) => track?.id === queue[index]?.id)
+  ) {
+    return true;
+  }
+  return Boolean(
+    activeTrack?.id &&
+    source.length === queue.length + 1 &&
+    source[0]?.id === activeTrack.id &&
+    source.slice(1).every((track, index) => track?.id === queue[index]?.id)
+  );
+}
+
 export function installPlaybackResolve(ctx) {
   let preloadPromise = null;
   let preloadTrackId = '';
@@ -214,8 +231,11 @@ export function installPlaybackResolve(ctx) {
     const trackItem = options.recoveryAttempt
       ? item
       : { ...item, playbackFallbackTried: false, streamRefreshTried: false };
-    ctx.autoCrossfade.cancel();
-    ctx.dismissSmartCrossfadeMix?.();
+    if (ctx.cancelActiveCrossfade) ctx.cancelActiveCrossfade();
+    else {
+      ctx.autoCrossfade.cancel();
+      ctx.dismissSmartCrossfadeMix?.();
+    }
     ctx.clearPlaybackStallRecovery?.();
     if (ctx.activeTrack.value?.id && ctx.activeTrack.value.id !== trackItem.id) {
       ctx.markPlaylistTrackPlayed?.(ctx.activeTrack.value);
@@ -256,11 +276,7 @@ export function installPlaybackResolve(ctx) {
         const queueStart = queueSource.findIndex((track) => track.id === trackItem.id);
         const isPlayFromQueue = Boolean(
           options.queueAlreadyShuffled ||
-          (options.queueSource && (
-            options.queueSource === ctx.queue.value ||
-            (options.queueSource.length === ctx.queue.value.length &&
-             options.queueSource.every((t, i) => t?.id === ctx.queue.value[i]?.id))
-          ))
+          playbackQueueSourceMatches(options.queueSource, ctx.queue.value, ctx.activeTrack.value)
         );
 
         let seededQueue;

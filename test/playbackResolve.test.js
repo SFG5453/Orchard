@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { installPlaybackResolve } from '../src/app/playback/playbackResolve.js';
+import {
+  installPlaybackResolve,
+  playbackQueueSourceMatches
+} from '../src/app/playback/playbackResolve.js';
 
 function playbackContext() {
   const ctx = {
@@ -47,4 +50,18 @@ test('keeps song identity while preserving resolved fallback stream metadata', (
   assert.equal(active.youtubeVideoId, 'video-id');
   assert.equal(active.musicVideoAudioFallback, true);
   assert.equal(active.musicVideoFallbackId, 'video-id');
+});
+
+test('recognizes a persisted active track followed by its saved queue', () => {
+  const activeTrack = { id: 'active' };
+  const queue = [{ id: 'second' }, { id: 'third' }];
+
+  assert.equal(
+    playbackQueueSourceMatches([activeTrack, ...queue], queue, activeTrack),
+    true
+  );
+  assert.equal(
+    playbackQueueSourceMatches([activeTrack, queue[1], queue[0]], queue, activeTrack),
+    false
+  );
 });

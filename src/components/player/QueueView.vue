@@ -96,7 +96,7 @@ export default {
                     :key="`history-${item.id}`"
                     type="button"
                     class="table-row"
-                    @click="playTrack(item, { queueSource: history })"
+                    @click="playHistoryTrack(item)"
                     @keydown="onSongActionKeydown($event, item)"
                     @contextmenu="openSongActionMenu(item, $event)"
                   >
