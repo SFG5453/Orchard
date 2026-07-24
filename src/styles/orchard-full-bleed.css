@@ -121,3 +121,24 @@ body,
     padding-left: 18px;
   }
 }
+
+/* Support is a two-pane workspace, so its own dividers define the center
+   surface instead of the general-purpose bounded content wrapper. */
+.page--support {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.page--support > .topbar,
+.page--support > .message-line {
+  width: min(calc(100% - clamp(36px, 5.6vw, 84px)), var(--orchard-content-max-width));
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.page--support > .support-view {
+  width: 100%;
+  max-width: none;
+  margin-right: 0;
+  margin-left: 0;
+}

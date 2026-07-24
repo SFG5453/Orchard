@@ -1,5 +1,5 @@
 <script>
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
 export default {
   name: 'SupportView',
@@ -10,6 +10,8 @@ export default {
     const title = ref('');
     const body = ref('');
     const includeDiagnostics = ref(false);
+    const diagnosticsCollecting = ref(false);
+    const diagnosticsSnapshot = ref(null);
     const screenshot = ref(null);
     const screenshotPreview = ref('');
     const replyBody = ref('');
@@ -18,11 +20,15 @@ export default {
     const fileInput = ref(null);
     const replyFileInput = ref(null);
 
-    const diagnosticsPreview = computed(() => (
-      props.app.diagnostics.value.report
-        ? JSON.stringify(props.app.diagnostics.value.report, null, 2)
-        : 'Diagnostics will be collected when the report is sent.'
-    ));
+    let diagnosticsRequest = null;
+    const diagnosticsPreview = computed(() => {
+      if (diagnosticsSnapshot.value) {
+        return JSON.stringify(diagnosticsSnapshot.value, null, 2);
+      }
+      return diagnosticsCollecting.value
+        ? 'Collecting diagnostics…'
+        : 'Diagnostics could not be prepared. Refresh to try again.';
+    });
     const reportClosed = computed(() => !['open', 'waiting_on_user'].includes(
       props.app.supportActiveReport.value?.status
     ));
@@ -80,14 +86,45 @@ export default {
       input?.click();
     }
 
+    async function refreshDiagnosticsPreview() {
+      if (diagnosticsRequest) return diagnosticsRequest;
+
+      diagnosticsCollecting.value = true;
+      diagnosticsRequest = (async () => {
+        try {
+          await props.app.collectDiagnostics();
+          const report = props.app.diagnostics.value.report;
+          const snapshot = report
+            ? JSON.parse(JSON.stringify(report))
+            : null;
+          diagnosticsSnapshot.value = includeDiagnostics.value ? snapshot : null;
+          if (includeDiagnostics.value && !diagnosticsSnapshot.value) {
+            props.app.supportMessage.value = 'Could not prepare diagnostics for review.';
+          }
+        } catch (error) {
+          diagnosticsSnapshot.value = null;
+          props.app.supportMessage.value = error.message || 'Could not prepare diagnostics for review.';
+        } finally {
+          diagnosticsCollecting.value = false;
+          diagnosticsRequest = null;
+        }
+      })();
+
+      return diagnosticsRequest;
+    }
+
     async function submitReport() {
       try {
-        if (includeDiagnostics.value) await props.app.collectDiagnostics();
+        if (includeDiagnostics.value && !diagnosticsSnapshot.value) {
+          await refreshDiagnosticsPreview();
+        }
+        if (includeDiagnostics.value && !diagnosticsSnapshot.value) return;
+
         const sent = await props.app.submitSupportReport({
           type: reportType.value,
           title: title.value,
           body: body.value,
-          diagnostics: includeDiagnostics.value ? props.app.diagnostics.value.report : null,
+          diagnostics: includeDiagnostics.value ? diagnosticsSnapshot.value : null,
           screenshot: screenshot.value
         });
         if (!sent) return;
@@ -100,6 +137,14 @@ export default {
         props.app.supportMessage.value = error.message || 'Could not send the report.';
       }
     }
+
+    watch(includeDiagnostics, (enabled) => {
+      if (enabled) {
+        void refreshDiagnosticsPreview();
+      } else {
+        diagnosticsSnapshot.value = null;
+      }
+    });
 
     async function submitReply() {
       if (!replyBody.value.trim()) return;
@@ -139,6 +184,7 @@ export default {
       composing,
       deleteReport,
       diagnosticsPreview,
+      diagnosticsCollecting,
       fileInput,
       imageFromTransfer,
       includeDiagnostics,
@@ -152,6 +198,7 @@ export default {
       replyScreenshot,
       reportClosed,
       reportType,
+      refreshDiagnosticsPreview,
       screenshot,
       screenshotPreview,
       showInbox,
@@ -241,9 +288,22 @@ export default {
           <input v-model="includeDiagnostics" type="checkbox" />
           <span>Include sanitized diagnostics</span>
         </label>
-        <details v-if="includeDiagnostics" class="support-diagnostics-preview">
-          <summary>Preview diagnostics</summary>
-          <pre>{{ diagnosticsPreview }}</pre>
+        <details v-if="includeDiagnostics" open class="support-diagnostics-preview">
+          <summary>Review diagnostics</summary>
+          <div class="support-diagnostics-preview__notice">
+            <span>
+              {{ diagnosticsCollecting
+                ? 'Preparing the private attachment…'
+                : 'Only the data shown below will be attached to this report.' }}
+            </span>
+            <button
+              type="button"
+              class="support-text-button support-diagnostics-preview__refresh"
+              :disabled="diagnosticsCollecting || supportSubmitting"
+              @click="refreshDiagnosticsPreview"
+            >Refresh</button>
+          </div>
+          <pre aria-live="polite">{{ diagnosticsPreview }}</pre>
         </details>
 
         <section class="support-github-auth" aria-labelledby="support-github-title">
@@ -278,7 +338,7 @@ export default {
 
         <div class="support-form__footer">
           <p>Cookies, authentication headers, playback URLs, diagnostics, screenshots, and music account identifiers are never posted publicly.</p>
-          <button type="submit" class="support-primary-button" :disabled="supportSubmitting">
+          <button type="submit" class="support-primary-button" :disabled="supportSubmitting || diagnosticsCollecting">
             <q-spinner v-if="supportSubmitting" size="16px" />
             <q-icon v-else name="send" />
             Send report
