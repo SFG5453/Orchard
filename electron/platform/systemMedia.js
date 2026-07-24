@@ -248,23 +248,30 @@ function configureMprisInterfaces(dbus) {
   return { MediaPlayerInterface, PlayerInterface };
 }
 
-export function createSystemMediaService({ emitCommand }) {
+export function createSystemMediaService({
+  emitCommand,
+  loadDbus = () => require('@particle/dbus-next'),
+  platform = process.platform
+}) {
   let bus = null;
   let player = null;
   let startPromise = null;
 
   async function start() {
-    if (process.platform !== 'linux') return false;
+    if (platform !== 'linux') return false;
     if (startPromise) return startPromise;
 
     startPromise = (async () => {
-      const dbus = require('@particle/dbus-next');
+      const dbus = loadDbus();
       const { MediaPlayerInterface, PlayerInterface } = configureMprisInterfaces(dbus);
       bus = dbus.sessionBus();
       player = new PlayerInterface(emitCommand);
-      await bus.requestName(SERVICE_NAME);
       bus.export(OBJECT_PATH, new MediaPlayerInterface(emitCommand));
       bus.export(OBJECT_PATH, player);
+      // Export the complete MPRIS object before announcing the well-known name.
+      // Consumers such as Plasma introspect as soon as NameOwnerChanged fires and
+      // may permanently discard a player whose interfaces are not ready yet.
+      await bus.requestName(SERVICE_NAME);
       return true;
     })().catch((error) => {
       console.warn(`System media integration disabled: ${error.message}`);
