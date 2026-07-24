@@ -35,6 +35,10 @@ contextBridge.exposeInMainWorld('orchardApp', {
   captureScreenshot: () => ipcRenderer.invoke('app:capture-screenshot'),
   diagnostics: () => ipcRenderer.invoke('app:diagnostics'),
   finishWelcome: () => ipcRenderer.invoke('app:finish-welcome'),
+  graphicsMode: (value) => value === undefined
+    ? ipcRenderer.invoke('app:graphics-mode')
+    : ipcRenderer.invoke('app:graphics-mode', value),
+  restart: () => ipcRenderer.invoke('app:restart'),
   showWelcome: () => ipcRenderer.invoke('app:show-welcome')
 });
 

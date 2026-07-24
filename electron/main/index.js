@@ -56,6 +56,7 @@ import { registerScreenshotCapture } from '../platform/screenshotCapture.js';
 import { setupSystemMediaHandlers } from '../platform/systemMedia.js';
 import { welcomeRequiredAtLaunch } from '../platform/welcomeState.js';
 import { configureWindowOpenHandler, registerDevToolsShortcut, registerWindowControls } from '../platform/windowControls.js';
+import { createGraphicsModeController, GRAPHICS_MODE_FILENAME } from './graphicsMode.js';
 import { resolveRuntimePaths } from './runtimePaths.js';
 
 const require = createRequire(import.meta.url);
@@ -63,6 +64,10 @@ const { app, BrowserWindow, Menu, Tray, clipboard, globalShortcut, ipcMain, nati
 const isDev = !app.isPackaged && Boolean(process.env.VITE_DEV_SERVER_URL);
 const allowDevTools = !app.isPackaged;
 const runtimePaths = resolveRuntimePaths({ app, isDev });
+const graphicsMode = createGraphicsModeController({
+  app,
+  filePath: path.join(app.getPath('userData'), GRAPHICS_MODE_FILENAME)
+});
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 if (process.platform === 'linux') {
@@ -458,6 +463,7 @@ app.whenReady().then(async () => {
     clearDiscordPresence,
     ipcMain,
     isDev,
+    graphicsMode,
     resolveDiscordSongLink,
     resolveDiscordSongLinkDetails,
     setDiscordPresence,

@@ -6,6 +6,7 @@ const { APP, DISCORD, SONG_LINKS } = IPC_CHANNELS;
 export function registerAppHandlers({
   app,
   clearDiscordPresence,
+  graphicsMode,
   ipcMain,
   isDev,
   resolveDiscordSongLink,
@@ -32,6 +33,12 @@ export function registerAppHandlers({
     node: process.versions.node,
     dev: isDev
   }));
+  ipcMain.handle(APP.GRAPHICS_MODE, (_event, value) => {
+    return value === undefined ? graphicsMode.state() : graphicsMode.setMode(value);
+  });
+  ipcMain.handle(APP.RESTART, () => {
+    graphicsMode.restart();
+  });
   ipcMain.handle(APP.FINISH_WELCOME, () => {
     showMainWindow();
   });

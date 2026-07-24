@@ -397,6 +397,7 @@ export function installReadinessActions(ctx) {
     ctx.customAccentColor.value = preferences.customAccentColor;
     ctx.discordRpcEnabled.value = preferences.discordRpcEnabled;
     ctx.discordRpcActivityName.value = preferences.discordRpcActivityName;
+    ctx.graphicsMode.value = preferences.graphicsMode;
     ctx.immersiveBackgroundsEnabled.value = preferences.immersiveBackgroundsEnabled;
     ctx.immersiveBackgroundIntensity.value = preferences.immersiveBackgroundIntensity;
     ctx.immersiveBackgroundMotion.value = preferences.immersiveBackgroundMotion;

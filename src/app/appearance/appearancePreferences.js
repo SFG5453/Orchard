@@ -1,10 +1,19 @@
+import {
+  GRAPHICS_MODES,
+  GRAPHICS_MODE_OPTIONS,
+  normalizeGraphicsMode
+} from '../../../shared/graphicsMode.js';
+
 export const APPEARANCE_DEFAULTS = {
   accentColorSource: 'artwork',
   customAccentColor: '#2fdf93',
+  graphicsMode: GRAPHICS_MODES.AUTOMATIC,
   immersiveBackgroundIntensity: 'balanced',
   immersiveBackgroundMotion: 'animated',
   themePreference: 'dark'
 };
+
+export { GRAPHICS_MODE_OPTIONS, normalizeGraphicsMode };
 
 export const ACCENT_COLOR_SOURCE_OPTIONS = [
   { label: 'Artwork', value: 'artwork' },
