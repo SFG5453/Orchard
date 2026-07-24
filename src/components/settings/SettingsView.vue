@@ -186,6 +186,52 @@ export default {
           <p>Choose how artwork shapes the listening view.</p>
         </div>
 
+        <div class="settings-row settings-row--options">
+          <div class="settings-row__copy">
+            <label id="settings-graphics-mode-label">Graphics mode</label>
+            <p id="settings-graphics-mode-description">
+              Automatic uses Electron defaults. Integrated GPU prefers lower-power graphics. Changes require a restart.
+            </p>
+            <p v-if="graphicsModePlatform === 'linux' && graphicsModeIntegratedSupported">
+              On Linux, Orchard selects the detected integrated adapter directly.
+            </p>
+            <p v-else-if="graphicsModeStatusReady && !graphicsModeIntegratedSupported">
+              Integrated GPU selection is unavailable on this platform.
+            </p>
+            <p v-if="graphicsModeMessage" aria-live="polite">{{ graphicsModeMessage }}</p>
+          </div>
+          <div
+            class="settings-option-group"
+            role="group"
+            aria-labelledby="settings-graphics-mode-label"
+            aria-describedby="settings-graphics-mode-description"
+          >
+            <button
+              v-for="option in graphicsModeOptions"
+              :key="option.value"
+              type="button"
+              class="settings-option"
+              :class="{ 'settings-option--active': graphicsMode === option.value }"
+              :aria-pressed="graphicsMode === option.value"
+              :disabled="option.value === 'integrated' && graphicsModeStatusReady && !graphicsModeIntegratedSupported"
+              @click="graphicsMode = option.value"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="graphicsModeRestartRequired" class="settings-action-row">
+          <div class="settings-row__copy">
+            <span>Restart required</span>
+            <p>Restart Orchard to apply {{ graphicsModeOptions.find((option) => option.value === graphicsMode)?.label || 'the selected graphics mode' }}.</p>
+          </div>
+          <button type="button" class="settings-button" @click="restartOrchard">
+            <q-icon name="restart_alt" />
+            Restart Orchard
+          </button>
+        </div>
+
         <div class="settings-row">
           <div class="settings-row__copy">
             <label for="settings-immersive">Immersive backgrounds</label>

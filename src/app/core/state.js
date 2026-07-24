@@ -10,12 +10,14 @@ import orchardLogoUrl from '../../assets/orchard-logo.png';
 import {
   ACCENT_COLOR_SOURCE_OPTIONS,
   APPEARANCE_DEFAULTS,
+  GRAPHICS_MODE_OPTIONS,
   IMMERSIVE_BACKGROUND_INTENSITY_OPTIONS,
   IMMERSIVE_BACKGROUND_MOTION_OPTIONS,
   THEME_PREFERENCE_OPTIONS,
   immersiveBackgroundOpacity,
   normalizeAccentColorSource,
   normalizeCustomAccentColor,
+  normalizeGraphicsMode,
   normalizeImmersiveBackgroundIntensity,
   normalizeImmersiveBackgroundMotion,
   normalizeThemePreference
@@ -54,6 +56,7 @@ export function installState(ctx) {
     volume: 0.85
   };
   ctx.accentColorSourceOptions = ACCENT_COLOR_SOURCE_OPTIONS;
+  ctx.graphicsModeOptions = GRAPHICS_MODE_OPTIONS;
   ctx.immersiveBackgroundIntensityOptions = IMMERSIVE_BACKGROUND_INTENSITY_OPTIONS;
   ctx.immersiveBackgroundMotionOptions = IMMERSIVE_BACKGROUND_MOTION_OPTIONS;
   ctx.themePreferenceOptions = THEME_PREFERENCE_OPTIONS;
@@ -90,6 +93,7 @@ export function installState(ctx) {
         ? preferences.discordRpcEnabled
         : ctx.DEFAULT_USER_PREFERENCES.discordRpcEnabled,
       discordRpcActivityName: ctx.normalizeDiscordRpcActivityName(preferences.discordRpcActivityName),
+      graphicsMode: normalizeGraphicsMode(preferences.graphicsMode),
       immersiveBackgroundsEnabled: typeof preferences.immersiveBackgroundsEnabled === 'boolean'
         ? preferences.immersiveBackgroundsEnabled
         : ctx.DEFAULT_USER_PREFERENCES.immersiveBackgroundsEnabled,
@@ -341,6 +345,16 @@ export function installState(ctx) {
   ctx.youtubeHistoryEnabled = ref(ctx.initialUserPreferences.youtubeHistoryEnabled);
   ctx.discordRpcEnabled = ref(ctx.initialUserPreferences.discordRpcEnabled);
   ctx.discordRpcActivityName = ref(ctx.initialUserPreferences.discordRpcActivityName);
+  ctx.graphicsMode = ref(ctx.initialUserPreferences.graphicsMode);
+  ctx.graphicsModeApplied = ref(ctx.initialUserPreferences.graphicsMode);
+  ctx.graphicsModeIntegratedSupported = ref(false);
+  ctx.graphicsModePlatform = ref('');
+  ctx.graphicsModeStatusReady = ref(false);
+  ctx.graphicsModeMessage = ref('');
+  ctx.graphicsModeRestartRequired = computed(() => (
+    ctx.graphicsModeStatusReady.value &&
+    ctx.graphicsMode.value !== ctx.graphicsModeApplied.value
+  ));
   ctx.immersiveBackgroundsEnabled = ref(ctx.initialUserPreferences.immersiveBackgroundsEnabled);
   ctx.immersiveBackgroundIntensity = ref(ctx.initialUserPreferences.immersiveBackgroundIntensity);
   ctx.immersiveBackgroundMotion = ref(ctx.initialUserPreferences.immersiveBackgroundMotion);
@@ -372,6 +386,7 @@ export function installState(ctx) {
     ctx.customAccentColor.value = defaults.customAccentColor;
     ctx.discordRpcEnabled.value = defaults.discordRpcEnabled;
     ctx.discordRpcActivityName.value = defaults.discordRpcActivityName;
+    ctx.graphicsMode.value = defaults.graphicsMode;
     ctx.immersiveBackgroundsEnabled.value = defaults.immersiveBackgroundsEnabled;
     ctx.immersiveBackgroundIntensity.value = defaults.immersiveBackgroundIntensity;
     ctx.immersiveBackgroundMotion.value = defaults.immersiveBackgroundMotion;

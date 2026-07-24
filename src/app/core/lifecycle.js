@@ -108,6 +108,7 @@ export function installLifecycle(ctx) {
     ctx.youtubeHistoryEnabled,
     ctx.discordRpcEnabled,
     ctx.discordRpcActivityName,
+    ctx.graphicsMode,
     ctx.immersiveBackgroundsEnabled,
     ctx.immersiveBackgroundIntensity,
     ctx.immersiveBackgroundMotion,
@@ -150,6 +151,7 @@ export function installLifecycle(ctx) {
       youtubeHistoryEnabled: ctx.youtubeHistoryEnabled.value,
       discordRpcEnabled: ctx.discordRpcEnabled.value,
       discordRpcActivityName: ctx.discordRpcActivityName.value,
+      graphicsMode: ctx.graphicsMode.value,
       immersiveBackgroundsEnabled: ctx.immersiveBackgroundsEnabled.value,
       immersiveBackgroundIntensity: ctx.immersiveBackgroundIntensity.value,
       immersiveBackgroundMotion: ctx.immersiveBackgroundMotion.value,
@@ -248,6 +250,41 @@ export function installLifecycle(ctx) {
   watch(ctx.discordRpcActivityName, () => {
     ctx.queueDiscordPresenceSync();
   });
+
+  watch(ctx.graphicsMode, async (value) => {
+    const normalized = ctx.normalizeUserPreferences({ graphicsMode: value }).graphicsMode;
+    if (normalized !== value) {
+      ctx.graphicsMode.value = normalized;
+      return;
+    }
+
+    try {
+      const state = await window.orchardApp?.graphicsMode?.(normalized);
+      if (!state) {
+        ctx.graphicsModeApplied.value = normalized;
+        ctx.graphicsModeStatusReady.value = true;
+        return;
+      }
+
+      ctx.graphicsModeApplied.value = state.appliedMode;
+      ctx.graphicsModeIntegratedSupported.value = Boolean(state.integratedGpuSupported);
+      ctx.graphicsModePlatform.value = state.platform || '';
+      ctx.graphicsModeStatusReady.value = true;
+      ctx.graphicsModeMessage.value = '';
+      if (state.selectedMode !== normalized) ctx.graphicsMode.value = state.selectedMode;
+    } catch (error) {
+      ctx.graphicsModeStatusReady.value = true;
+      ctx.graphicsModeMessage.value = error.message || 'Could not save the graphics mode.';
+    }
+  }, { immediate: true });
+
+  ctx.restartOrchard = async function restartOrchard() {
+    try {
+      await window.orchardApp?.restart?.();
+    } catch (error) {
+      ctx.graphicsModeMessage.value = error.message || 'Could not restart Orchard.';
+    }
+  };
 
   watch([ctx.songCacheEnabled, ctx.songCacheMaxSizeMb], () => {
     ctx.syncSongCacheSettings();

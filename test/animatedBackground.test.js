@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { KawarpArtworkBackground } from '../src/components/animated-background/KawarpArtworkBackground.js';
 import { VideoArtworkBackground } from '../src/components/animated-background/VideoArtworkBackground.js';
 import {
   interpolateRgb,
@@ -20,6 +21,45 @@ test('palette interpolation clamps progress', () => {
   assert.equal(normalizeBackgroundUrl('  cover.jpg  '), 'cover.jpg');
 });
 
+test('static artwork renders one frame without starting the WebGL animation loop', () => {
+  let renderCount = 0;
+  let startCount = 0;
+  let stopCount = 0;
+  const background = new KawarpArtworkBackground({});
+  background.renderer = {
+    renderFrame() { renderCount += 1; },
+    start() { startCount += 1; },
+    stop() { stopCount += 1; }
+  };
+  background.source = 'cover.jpg';
+  background.motionEnabled = false;
+  background.playing = true;
+
+  background.syncPlayback();
+
+  assert.equal(startCount, 0);
+  assert.equal(stopCount, 1);
+  assert.equal(renderCount, 1);
+});
+
+test('animated artwork only runs while playback is active', () => {
+  let startCount = 0;
+  const background = new KawarpArtworkBackground({});
+  background.renderer = {
+    renderFrame() {},
+    start() { startCount += 1; },
+    stop() {}
+  };
+  background.source = 'cover.jpg';
+  background.motionEnabled = true;
+
+  background.syncPlayback();
+  assert.equal(startCount, 0);
+
+  background.playing = true;
+  background.syncPlayback();
+  assert.equal(startCount, 1);
+});
 
 test('animated artwork reuses one video and releases superseded sources', async () => {
   const listeners = new Map();

@@ -10,6 +10,8 @@ export const IPC_CHANNELS = Object.freeze({
     CAPTURE_SCREENSHOT: 'app:capture-screenshot',
     DIAGNOSTICS: 'app:diagnostics',
     FINISH_WELCOME: 'app:finish-welcome',
+    GRAPHICS_MODE: 'app:graphics-mode',
+    RESTART: 'app:restart',
     SHOW_WELCOME: 'app:show-welcome'
   }),
   AUDIO_ANALYSIS: Object.freeze({

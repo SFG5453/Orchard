@@ -107,11 +107,8 @@ export class KawarpArtworkBackground {
   }
 
   shouldAnimate() {
-    // A static artwork source still benefits from Kawarp's ambient domain warp.
-    // The Static setting disables the separate artwork-video layer, not the
-    // canvas effect; Animated retains the previous playback-gated behavior.
     return this.enabled && this.visible && !this.reducedMotion &&
-      (!this.motionEnabled || this.playing);
+      this.motionEnabled && this.playing;
   }
 
   renderStill() {
