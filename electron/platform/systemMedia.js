@@ -101,10 +101,10 @@ function configureMprisInterfaces(dbus) {
   });
 
   class PlayerInterface extends Interface {
-    constructor(emitCommand) {
+    constructor(emitCommand, initialState = {}) {
       super('org.mpris.MediaPlayer2.Player');
       this.emitCommand = emitCommand;
-      this.state = {};
+      this.state = { ...initialState };
       this.Variant = dbus.Variant;
     }
 
@@ -257,7 +257,7 @@ export function createSystemMediaService({
   let player = null;
   let startPromise = null;
 
-  async function start() {
+  async function start(initialState = {}) {
     if (platform !== 'linux') return false;
     if (startPromise) return startPromise;
 
@@ -265,12 +265,14 @@ export function createSystemMediaService({
       const dbus = loadDbus();
       const { MediaPlayerInterface, PlayerInterface } = configureMprisInterfaces(dbus);
       bus = dbus.sessionBus();
-      player = new PlayerInterface(emitCommand);
+      player = new PlayerInterface(emitCommand, initialState);
       bus.export(OBJECT_PATH, new MediaPlayerInterface(emitCommand));
       bus.export(OBJECT_PATH, player);
-      // Export the complete MPRIS object before announcing the well-known name.
-      // Consumers such as Plasma introspect as soon as NameOwnerChanged fires and
-      // may permanently discard a player whose interfaces are not ready yet.
+      // Export the complete MPRIS object with its initial playback state before
+      // announcing the well-known name. Consumers such as Plasma can read the
+      // player immediately when NameOwnerChanged fires; publishing the initial
+      // state afterward creates a window where they can cache an empty player
+      // and miss the first PropertiesChanged signal.
       await bus.requestName(SERVICE_NAME);
       return true;
     })().catch((error) => {
@@ -285,7 +287,7 @@ export function createSystemMediaService({
 
   return {
     async publish(state) {
-      if (!await start()) return false;
+      if (!await start(state)) return false;
       player?.update(state);
       return Boolean(player);
     },
