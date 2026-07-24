@@ -1,12 +1,38 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  accountIndexFromPageAuth,
   collectYouTubeAuthCookie,
+  delegatedSessionIdFromPageAuth,
   hasYouTubeLoginCookie,
   normalizeYouTubeAuthCookie,
   parseCookieString,
   youtubeAccountIdentity
 } from '../electron/auth/youtubeAuthCookies.js';
+
+test('delegatedSessionIdFromPageAuth selects the channel identity from YouTube page auth', () => {
+  assert.equal(
+    delegatedSessionIdFromPageAuth({ dataSyncId: 'delegated-channel||user-session' }),
+    'delegated-channel'
+  );
+  assert.equal(
+    delegatedSessionIdFromPageAuth({ dataSyncId: 'user-session||' }),
+    ''
+  );
+  assert.equal(
+    delegatedSessionIdFromPageAuth({
+      dataSyncId: 'stale-channel||user-session',
+      delegatedSessionId: 'current-channel'
+    }),
+    'current-channel'
+  );
+});
+
+test('accountIndexFromPageAuth normalizes YouTube multi-login indexes', () => {
+  assert.equal(accountIndexFromPageAuth('2'), 2);
+  assert.equal(accountIndexFromPageAuth(0), 0);
+  assert.equal(accountIndexFromPageAuth('invalid'), 0);
+});
 
 test('parseCookieString preserves cookie values containing equals signs', () => {
   assert.deepEqual(parseCookieString('SID=one==; SAPISID=two'), {

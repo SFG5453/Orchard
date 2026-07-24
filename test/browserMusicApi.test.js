@@ -9,7 +9,8 @@ test('browser player requests use the authenticated YouTube Music origin and ide
       browser: {
         cookie: 'SAPISID=secret',
         visitorData: 'visitor',
-        dataSyncId: 'page-id'
+        dataSyncId: 'page-id',
+        accountIndex: 2
       }
     },
     fetchImpl: async (input, init) => {
@@ -39,8 +40,8 @@ test('browser player requests use the authenticated YouTube Music origin and ide
   assert.match(headers.get('Authorization'), /^SAPISIDHASH \d+_[a-f0-9]{40}$/);
   assert.equal(headers.get('Cookie'), 'SAPISID=secret; SOCS=CAI; PREF=f2=8000000&hl=en');
   assert.equal(headers.get('X-Origin'), 'https://music.youtube.com');
-  assert.equal(headers.get('X-Goog-AuthUser'), null);
-  assert.equal(headers.get('X-Goog-PageId'), null);
+  assert.equal(headers.get('X-Goog-AuthUser'), '2');
+  assert.equal(headers.get('X-Goog-PageId'), 'page-id');
   assert.equal(body.context.client.clientName, 'WEB_REMIX');
   assert.equal(body.context.client.clientVersion, '1.test');
   assert.equal(body.context.client.visitorData, 'visitor');

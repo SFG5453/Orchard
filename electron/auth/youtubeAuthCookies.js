@@ -30,6 +30,22 @@ export function normalizeYouTubeAuthCookie(cookie = '') {
   return `${normalized}; SAPISID=${cookies['__Secure-3PAPISID']}`;
 }
 
+export function delegatedSessionIdFromPageAuth({ dataSyncId = '', delegatedSessionId = '' } = {}) {
+  const explicit = String(delegatedSessionId || '').trim();
+  if (explicit) return explicit;
+
+  const normalized = String(dataSyncId || '').trim();
+  const separatorIndex = normalized.indexOf('||');
+  if (separatorIndex <= 0 || !normalized.slice(separatorIndex + 2)) return '';
+  return normalized.slice(0, separatorIndex);
+}
+
+export function accountIndexFromPageAuth(value) {
+  const normalized = String(value ?? '').trim();
+  if (!/^\d+$/.test(normalized)) return 0;
+  return Number.parseInt(normalized, 10);
+}
+
 export async function collectYouTubeAuthCookie(authSession) {
   const cookieParts = new Map();
   const urls = ['https://music.youtube.com', 'https://www.youtube.com', 'https://youtube.com'];

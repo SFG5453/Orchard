@@ -10,7 +10,9 @@ import {
   observeAuthSwitchIdentity
 } from './authWindowNavigation.js';
 import {
+  accountIndexFromPageAuth,
   collectYouTubeAuthCookie,
+  delegatedSessionIdFromPageAuth,
   hasYouTubeLoginCookie,
   youtubeAccountIdentity
 } from './youtubeAuthCookies.js';
@@ -68,6 +70,7 @@ export function createAuthService({
       cookie: '',
       visitorData: '',
       dataSyncId: '',
+      accountIndex: 0,
       poToken: ''
     }
   };
@@ -121,6 +124,7 @@ export function createAuthService({
         generate_session_locally: true,
         cookie: authState.browser.cookie,
         visitor_data: authState.browser.visitorData || undefined,
+        account_index: authState.browser.accountIndex,
         on_behalf_of_user: authState.browser.dataSyncId || undefined,
         po_token: authState.browser.poToken || undefined,
         fetch: browserMusicFetch
@@ -212,7 +216,7 @@ export function createAuthService({
   }
 
   function browserIdentity() {
-    return `${authState.browser.cookie}\n${authState.browser.dataSyncId}\n${authState.browser.poToken}`;
+    return `${authState.browser.cookie}\n${authState.browser.accountIndex}\n${authState.browser.dataSyncId}\n${authState.browser.poToken}`;
   }
 
   function browserSwitchIdentity() {
@@ -250,14 +254,6 @@ export function createAuthService({
     }
   }
 
-  function normalizeDataSyncId(value = '') {
-    const normalized = String(value || '').trim();
-    if (!normalized || normalized.toLowerCase() === 'null') return '';
-    if (!normalized.includes('||')) return normalized;
-    if (normalized.endsWith('||')) return normalized.split('||')[0];
-    return normalized.split('||').pop() || '';
-  }
-
   async function collectBrowserCookies() {
     const authSession = electronSession.fromPartition(browserAuthPartition);
     authState.browser.cookie = await collectYouTubeAuthCookie(authSession);
@@ -278,35 +274,35 @@ export function createAuthService({
           const legacy = window.yt && window.yt.config_ ? window.yt.config_ : {};
           return {
             visitorData: (cfg && cfg.get('VISITOR_DATA')) || legacy.VISITOR_DATA || findScriptValue('VISITOR_DATA') || '',
-            dataSyncId:
-              (cfg && cfg.get('DELEGATED_SESSION_ID')) ||
-              legacy.DELEGATED_SESSION_ID ||
-              findScriptValue('DELEGATED_SESSION_ID') ||
-              (cfg && cfg.get('DATASYNC_ID')) ||
-              legacy.DATASYNC_ID ||
-              findScriptValue('DATASYNC_ID') ||
-              '',
+            delegatedSessionId: (cfg && cfg.get('DELEGATED_SESSION_ID')) || legacy.DELEGATED_SESSION_ID || findScriptValue('DELEGATED_SESSION_ID') || '',
+            dataSyncId: (cfg && cfg.get('DATASYNC_ID')) || legacy.DATASYNC_ID || findScriptValue('DATASYNC_ID') || '',
+            accountIndex: (cfg && cfg.get('SESSION_INDEX')) ?? legacy.SESSION_INDEX ?? findScriptValue('SESSION_INDEX'),
             poToken: (cfg && cfg.get('PO_TOKEN')) || findScriptValue('PO_TOKEN') || ''
           };
         })()
       `);
 
       if (pageAuth?.visitorData) authState.browser.visitorData = pageAuth.visitorData;
-      if (pageAuth?.dataSyncId) authState.browser.dataSyncId = normalizeDataSyncId(pageAuth.dataSyncId);
+      if (pageAuth?.delegatedSessionId || pageAuth?.dataSyncId) {
+        authState.browser.dataSyncId = delegatedSessionIdFromPageAuth(pageAuth);
+      }
+      if (pageAuth?.accountIndex !== undefined && pageAuth?.accountIndex !== null && pageAuth?.accountIndex !== '') {
+        authState.browser.accountIndex = accountIndexFromPageAuth(pageAuth.accountIndex);
+      }
       if (pageAuth?.poToken) authState.browser.poToken = pageAuth.poToken;
     } catch (error) {
       console.warn(`Could not capture YouTube page auth values: ${error.message}`);
     }
   }
 
-  async function refreshBrowserAuth(webContents) {
+  async function refreshBrowserAuth(webContents, { forceAccountRefresh = false } = {}) {
     const previousIdentity = browserIdentity();
     if (webContents) await captureBrowserPageAuth(webContents);
     const wasSigningIn = authState.status === 'starting' || authState.status === 'pending';
     const wasSignedIn = publicAuthState().signedIn;
     await collectBrowserCookies();
     const identityChanged = browserIdentity() !== previousIdentity;
-    if (identityChanged) {
+    if (identityChanged || forceAccountRefresh) {
       browserInnertubePromise = null;
       browserInnertubeIdentity = '';
     }
@@ -315,7 +311,7 @@ export function createAuthService({
       authState.status = 'signed_in';
       authState.pending = null;
       authState.error = '';
-      if (identityChanged || !usefulAccountProfile(authState.user)) {
+      if (identityChanged || forceAccountRefresh || !usefulAccountProfile(authState.user)) {
         authState.user = accountProfile.cached() || { name: 'Signed in', byline: 'YouTube Music', thumbnail: null };
         const identity = browserIdentity();
         void Promise.resolve(getBrowserInnertube())
@@ -489,7 +485,7 @@ export function createAuthService({
     if (yt.session.logged_in) await yt.session.signOut();
     await yt.session.oauth.removeCache();
     await electronSession.fromPartition(browserAuthPartition).clearStorageData({ storages: ['cookies'] });
-    authState.browser = { cookie: '', visitorData: '', dataSyncId: '', poToken: '' };
+    authState.browser = { cookie: '', visitorData: '', dataSyncId: '', accountIndex: 0, poToken: '' };
     browserInnertubePromise = null;
     browserInnertubeIdentity = '';
     authState.status = 'signed_out';

@@ -49,8 +49,9 @@ export function createBrowserMusicFetch({
     headers.set('X-Origin', youtubeMusicOrigin);
     headers.set('X-YouTube-Client-Name', '67');
     headers.set('X-YouTube-Client-Version', youtubeMusicClientVersion);
-    headers.delete('X-Goog-AuthUser');
-    headers.delete('X-Goog-PageId');
+    headers.set('X-Goog-AuthUser', String(authState.browser.accountIndex || 0));
+    if (authState.browser.dataSyncId) headers.set('X-Goog-PageId', authState.browser.dataSyncId);
+    else headers.delete('X-Goog-PageId');
 
     let body = init.body;
     if (typeof body === 'string') {
@@ -121,7 +122,9 @@ export function createBrowserMusicApi({
         'Origin': youtubeMusicOrigin,
         'Referer': `${youtubeMusicOrigin}/`,
         'User-Agent': youtubeMusicClientUserAgent,
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'X-Goog-AuthUser': String(authState.browser.accountIndex || 0),
+        ...(authState.browser.dataSyncId ? { 'X-Goog-PageId': authState.browser.dataSyncId } : {})
       },
       body: JSON.stringify({
         ...browserMusicContext(),
@@ -167,7 +170,9 @@ export function createBrowserMusicApi({
         Origin: youtubeMusicOrigin,
         Referer: `${youtubeMusicOrigin}/`,
         'User-Agent': youtubeMusicClientUserAgent,
-        'X-Origin': youtubeMusicOrigin
+        'X-Origin': youtubeMusicOrigin,
+        'X-Goog-AuthUser': String(authState.browser.accountIndex || 0),
+        ...(authState.browser.dataSyncId ? { 'X-Goog-PageId': authState.browser.dataSyncId } : {})
       }
     });
 

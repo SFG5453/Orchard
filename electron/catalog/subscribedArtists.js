@@ -56,7 +56,7 @@ export function createSubscribedArtistsService({ authState, cachePath }) {
 
   function browserIdentity() {
     const browser = authState.browser || {};
-    return `${browser.cookie || ''}\n${browser.dataSyncId || ''}\n${browser.poToken || ''}`;
+    return `${browser.cookie || ''}\n${browser.accountIndex || 0}\n${browser.dataSyncId || ''}\n${browser.poToken || ''}`;
   }
 
   async function subscriptionClient() {
@@ -75,6 +75,7 @@ export function createSubscribedArtistsService({ authState, cachePath }) {
         generate_session_locally: true,
         cookie: browser.cookie,
         visitor_data: browser.visitorData || undefined,
+        account_index: browser.accountIndex || 0,
         on_behalf_of_user: browser.dataSyncId || undefined,
         po_token: browser.poToken || undefined
       });
