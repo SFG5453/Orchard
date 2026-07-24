@@ -240,6 +240,9 @@ export function installPlaybackResolve(ctx) {
     if (ctx.activeTrack.value?.id && ctx.activeTrack.value.id !== trackItem.id) {
       ctx.markPlaylistTrackPlayed?.(ctx.activeTrack.value);
     }
+    if (options.resetPlaylistCycle && ctx.playbackPlaylistContext.value) {
+      ctx.playbackPlaylistContext.value.playedTrackIds = [];
+    }
     if (ctx.activeTrack.value?.id) ctx.finishYouTubeHistory?.();
     const wantsVideo = requestedVideo;
 

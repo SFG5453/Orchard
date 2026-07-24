@@ -93,6 +93,48 @@ test('advancing past an unavailable track removes it and plays the following que
   assert.equal(played[0].options.resolved.id, playable.id);
 });
 
+test('repeat queue wraps from the final playlist track to the first track', async () => {
+  const first = { id: 'first-track' };
+  const middle = { id: 'middle-track' };
+  const final = { id: 'final-track' };
+  const played = [];
+  const ctx = {
+    activeTrack: { value: final },
+    autoplayEnabled: { value: false },
+    clearNextPreload() {},
+    history: { value: [] },
+    isPlayableTrack: (track) => Boolean(track?.id),
+    nextTrackPreload: { value: null },
+    playbackError: { value: '' },
+    playbackPlaylistContext: {
+      value: {
+        allTracks: [first, middle, final],
+        browseId: 'playlist-id'
+      }
+    },
+    preloadedTrackMatches: () => false,
+    queue: { value: [] },
+    repeatMode: { value: 'queue' },
+    resolvePlayableTrack: async (track) => ({
+      id: track.id,
+      streamUrl: `https://example.test/${track.id}`
+    }),
+    shuffleEnabled: { value: true },
+    shuffleItems: (tracks) => [...tracks],
+    playTrack: (track, options) => played.push({ track, options })
+  };
+
+  installPlaybackControls(ctx);
+  await ctx.playNext({ fromEnded: true });
+
+  assert.equal(played.length, 1);
+  assert.equal(played[0].track, first);
+  assert.deepEqual(played[0].options.queueSource, [first, middle, final]);
+  assert.equal(played[0].options.queueAlreadyShuffled, true);
+  assert.equal(played[0].options.resetHistory, true);
+  assert.equal(played[0].options.resetPlaylistCycle, true);
+});
+
 test('seeking cancels an active transition before moving the current deck', () => {
   const media = { currentTime: 105 };
   let canceled = 0;

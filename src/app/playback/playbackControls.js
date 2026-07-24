@@ -214,10 +214,15 @@ export function installPlaybackControls(ctx) {
 
   ctx.repeatQueueSource = function repeatQueueSource() {
     const seen = new Set();
-    const ordered = [
-      ...ctx.history.value.slice().reverse(),
-      ctx.activeTrack.value
-    ].filter(ctx.isPlayableTrack);
+    const playlistTracks = ctx.playbackPlaylistContext?.value?.allTracks;
+    const activeTrackId = ctx.activeTrack.value?.id;
+    const hasActivePlaylistTrack = activeTrackId && playlistTracks?.some((track) => track.id === activeTrackId);
+    const ordered = hasActivePlaylistTrack
+      ? playlistTracks.filter(ctx.isPlayableTrack)
+      : [
+          ...ctx.history.value.slice().reverse(),
+          ctx.activeTrack.value
+        ].filter(ctx.isPlayableTrack);
 
     return ordered.filter((track) => {
       if (seen.has(track.id)) return false;
@@ -240,10 +245,21 @@ export function installPlaybackControls(ctx) {
       return;
     }
 
+    let restartingRepeatQueue = false;
     let [next, ...remainingQueue] = ctx.queue.value;
     if (!next && ctx.repeatMode.value === 'queue' && ctx.activeTrack.value) {
       const repeatQueue = ctx.repeatQueueSource();
-      [next, ...remainingQueue] = (ctx.shuffleEnabled.value ? ctx.shuffleItems(repeatQueue) : repeatQueue);
+      const repeatedQueue = ctx.shuffleEnabled.value ? ctx.shuffleItems(repeatQueue) : repeatQueue;
+      if (
+        repeatedQueue.length > 1 &&
+        repeatedQueue[0]?.id === ctx.activeTrack.value.id
+      ) {
+        const nextTrackIndex = repeatedQueue.findIndex((track) => track.id !== ctx.activeTrack.value.id);
+        [repeatedQueue[0], repeatedQueue[nextTrackIndex]] = [repeatedQueue[nextTrackIndex], repeatedQueue[0]];
+      }
+      ctx.queue.value = repeatedQueue;
+      [next, ...remainingQueue] = repeatedQueue;
+      restartingRepeatQueue = Boolean(next);
     }
     if (!next && ctx.autoplayEnabled.value) {
       await ctx.ensureAutoplayQueue({ force: true });
@@ -273,6 +289,8 @@ export function installPlaybackControls(ctx) {
       ctx.playTrack(next, {
         queueSource: [next, ...remainingQueue],
         queueAlreadyShuffled: ctx.shuffleEnabled.value,
+        resetHistory: restartingRepeatQueue,
+        resetPlaylistCycle: restartingRepeatQueue,
         resolved,
         sessionAction: options.fromEnded ? 'ended' : 'manual'
       });
