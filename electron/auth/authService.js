@@ -4,7 +4,16 @@ import path from 'node:path';
 import { Innertube, UniversalCache } from 'youtubei.js';
 import { createAccountProfileProbe } from './accountProfileProbe.js';
 import { createBrowserMusicFetch } from './browserMusicApi.js';
-import { collectYouTubeAuthCookie, hasYouTubeLoginCookie } from './youtubeAuthCookies.js';
+import {
+  isAuthSwitchDestinationUrl,
+  loadAuthWindowUrl,
+  observeAuthSwitchIdentity
+} from './authWindowNavigation.js';
+import {
+  collectYouTubeAuthCookie,
+  hasYouTubeLoginCookie,
+  youtubeAccountIdentity
+} from './youtubeAuthCookies.js';
 
 const require = createRequire(import.meta.url);
 const { app, BrowserWindow, session: electronSession } = require('electron');
@@ -48,7 +57,7 @@ export function createAuthService({
   let authEventsBound = false;
   let browserAuthWindow;
   let browserAuthMode = '';
-  let identityBeforeSwitch = '';
+  let authSwitchIdentity = {};
   let authRefreshTimer;
   const authState = {
     status: 'signed_out',
@@ -206,6 +215,22 @@ export function createAuthService({
     return `${authState.browser.cookie}\n${authState.browser.dataSyncId}\n${authState.browser.poToken}`;
   }
 
+  function browserSwitchIdentity() {
+    return youtubeAccountIdentity(authState.browser.cookie, authState.browser.dataSyncId);
+  }
+
+  function refreshSwitchedBrowserAccount() {
+    browserInnertubePromise = null;
+    browserInnertubeIdentity = '';
+    authState.user = { name: 'Signed in', byline: 'YouTube Music', thumbnail: null };
+    publishAuthState();
+
+    const identity = browserIdentity();
+    void Promise.resolve(getBrowserInnertube())
+      .then((yt) => refreshBrowserAccountSummary(yt, identity))
+      .catch((error) => console.warn(`Could not refresh switched browser account: ${error.message}`));
+  }
+
   function usefulAccountProfile(profile) {
     return Boolean(profile?.thumbnail || profile?.channelId || (profile?.name && profile.name !== 'Signed in'));
   }
@@ -253,7 +278,14 @@ export function createAuthService({
           const legacy = window.yt && window.yt.config_ ? window.yt.config_ : {};
           return {
             visitorData: (cfg && cfg.get('VISITOR_DATA')) || legacy.VISITOR_DATA || findScriptValue('VISITOR_DATA') || '',
-            dataSyncId: (cfg && cfg.get('DATASYNC_ID')) || legacy.DATASYNC_ID || findScriptValue('DATASYNC_ID') || '',
+            dataSyncId:
+              (cfg && cfg.get('DELEGATED_SESSION_ID')) ||
+              legacy.DELEGATED_SESSION_ID ||
+              findScriptValue('DELEGATED_SESSION_ID') ||
+              (cfg && cfg.get('DATASYNC_ID')) ||
+              legacy.DATASYNC_ID ||
+              findScriptValue('DATASYNC_ID') ||
+              '',
             poToken: (cfg && cfg.get('PO_TOKEN')) || findScriptValue('PO_TOKEN') || ''
           };
         })()
@@ -298,14 +330,14 @@ export function createAuthService({
   async function openBrowserAuthWindow({ mode, title, url }) {
     if (browserAuthWindow && !browserAuthWindow.isDestroyed()) {
       browserAuthMode = mode;
-      if (mode === 'switch') identityBeforeSwitch = browserIdentity();
-      await browserAuthWindow.loadURL(url);
+      authSwitchIdentity = {};
+      await loadAuthWindowUrl(browserAuthWindow, url);
       browserAuthWindow.focus();
       return publicAuthState();
     }
 
     browserAuthMode = mode;
-    if (mode === 'switch') identityBeforeSwitch = browserIdentity();
+    authSwitchIdentity = {};
 
     browserAuthWindow = new BrowserWindow({
       width: 1120,
@@ -321,7 +353,11 @@ export function createAuthService({
     });
 
     browserAuthWindow.webContents.setWindowOpenHandler(({ url }) => {
-      browserAuthWindow?.loadURL(url);
+      const window = browserAuthWindow;
+      if (window && !window.isDestroyed()) {
+        void loadAuthWindowUrl(window, url)
+          .catch((error) => console.warn(`Could not open browser auth page: ${error.message}`));
+      }
       return { action: 'deny' };
     });
 
@@ -329,19 +365,28 @@ export function createAuthService({
       const url = browserAuthWindow?.webContents.getURL() || '';
       if (/https?:\/\/([^/]+\.)?(youtube|google)\.com/i.test(url)) {
         await refreshBrowserAuth(browserAuthWindow.webContents);
-        if (browserAuthMode === 'switch' && browserIdentity() !== identityBeforeSwitch) {
-          browserAuthMode = '';
-          browserAuthWindow?.close();
-          scheduleAuthRefresh();
+        if (browserAuthMode === 'switch') {
+          const chooserWasLoaded = Boolean(authSwitchIdentity.ready);
+          authSwitchIdentity = observeAuthSwitchIdentity(authSwitchIdentity, browserSwitchIdentity());
+          if (authSwitchIdentity.completed || (chooserWasLoaded && isAuthSwitchDestinationUrl(url))) {
+            browserAuthMode = '';
+            refreshSwitchedBrowserAccount();
+            browserAuthWindow?.close();
+            scheduleAuthRefresh();
+          }
         }
       }
     });
 
     browserAuthWindow.on('closed', async () => {
-      const completedSwitch = browserAuthMode === 'switch' && browserIdentity() !== identityBeforeSwitch;
+      const closedMode = browserAuthMode;
       browserAuthWindow = null;
       browserAuthMode = '';
       await refreshBrowserAuth();
+      const completedSwitch = closedMode === 'switch' &&
+        authSwitchIdentity.ready &&
+        browserSwitchIdentity() !== authSwitchIdentity.baseline;
+      authSwitchIdentity = {};
       if (!hasBrowserLoginCookie() && authState.status === 'starting') {
         authState.status = 'signed_out';
         authState.error = 'Browser sign-in was closed before YouTube cookies were captured.';
@@ -350,7 +395,7 @@ export function createAuthService({
       if (completedSwitch) scheduleAuthRefresh();
     });
 
-    await browserAuthWindow.loadURL(url);
+    await loadAuthWindowUrl(browserAuthWindow, url);
     return publicAuthState();
   }
 
