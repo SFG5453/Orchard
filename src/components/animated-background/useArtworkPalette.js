@@ -1,8 +1,21 @@
-import { Vibrant } from 'node-vibrant/browser';
+import { BasicPipeline, Vibrant } from '@vibrant/core';
+import { DefaultGenerator } from '@vibrant/generator-default';
+import { BrowserImage } from '@vibrant/image-browser';
+import { MMCQ } from '@vibrant/quantizer-mmcq';
 import { interpolateRgb } from './backgroundUtils.js';
 
 const PALETTE_CACHE_LIMIT = 36;
 const paletteCache = new Map();
+const palettePipeline = new BasicPipeline()
+  .filter.register('default', (r, g, b, a) => a >= 125 && !(r > 250 && g > 250 && b > 250))
+  .quantizer.register('mmcq', MMCQ)
+  .generator.register('default', DefaultGenerator);
+
+Vibrant.DefaultOpts.ImageClass = BrowserImage;
+Vibrant.DefaultOpts.quantizer = 'mmcq';
+Vibrant.DefaultOpts.generators = ['default'];
+Vibrant.DefaultOpts.filters = ['default'];
+Vibrant.use(palettePipeline);
 
 export const FALLBACK_ARTWORK_PALETTE = Object.freeze({
   dominant: Object.freeze([72, 84, 69]),

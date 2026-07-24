@@ -1,15 +1,13 @@
-## Orchard 3.2.0 "Astrology Tenn"
+## Orchard 3.2.1 "Hounds Vicar"
 
 ### New & improved
-- Smart Crossfade analysis now prioritizes current and upcoming tracks, runs work concurrently without duplicate jobs, retries temporary network failures, and caches validated native or worker results.
-- Best Mix now favors local audio analysis, uses confidence-aware BPM and key metadata, and automatically re-sorts when tracks are added to the queue.
-- Beat-matched transitions now align incoming drops more accurately with finer tempo adjustments and safer Web Audio automation.
+- Support is now a full-width, two-pane workspace with more room to compose reports and review existing conversations.
+- Sanitized diagnostics can now be collected, reviewed, and refreshed before submission, so the private attachment contains exactly the snapshot shown in Orchard.
 
 ### Fixed
-- Song cache writes no longer interrupt playback when storage is slow or unavailable. Orchard also limits cache write lag, removes abandoned partial files, and prevents duplicate writes.
-- Desktop media widgets now refresh track metadata after automatic track changes without sending redundant updates.
-- Playback proxy retries now preserve the requested stream format instead of silently substituting a different format.
-- The Support view's Current issues link now opens the [public Orchard issue tracker](https://github.com/SFG5453/Orchard/issues).
+- Linux media controls now publish their complete MPRIS interface and initial playback state before announcing the service, preventing Plasma and other clients from discovering an empty player.
+- Pausing, seeking, skipping, or refreshing playback now cleanly cancels an active crossfade. In-flight transitions can no longer restart after cancellation, and volume changes remain synchronized across both decks.
+- Resuming a persisted shuffled queue now preserves its saved order, while playing a track from history no longer enqueues the rest of listening history.
 
 ### Maintenance
-- Updated the maintainer email used by Linux packages.
+- Resolved all dependency audit findings and removed the unused Node/Jimp image-processing chain from Orchard's browser palette extraction.

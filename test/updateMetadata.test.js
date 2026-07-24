@@ -22,7 +22,7 @@ test('rejects mismatched macOS update versions', () => {
   assert.throws(
     () => mergeMacUpdateMetadata(
       metadata('3.1.0', 'Orchard-3.1.0-mac-x64.zip', 'x64hash'),
-      metadata('3.2.0', 'Orchard-3.2.0-mac-arm64.zip', 'arm64hash')
+      metadata('3.2.1', 'Orchard-3.2.1-mac-arm64.zip', 'arm64hash')
     ),
     /versions do not match/
   );
