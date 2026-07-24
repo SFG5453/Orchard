@@ -101,10 +101,10 @@ function configureMprisInterfaces(dbus) {
   });
 
   class PlayerInterface extends Interface {
-    constructor(emitCommand) {
+    constructor(emitCommand, initialState = {}) {
       super('org.mpris.MediaPlayer2.Player');
       this.emitCommand = emitCommand;
-      this.state = {};
+      this.state = { ...initialState };
       this.Variant = dbus.Variant;
     }
 
@@ -248,23 +248,32 @@ function configureMprisInterfaces(dbus) {
   return { MediaPlayerInterface, PlayerInterface };
 }
 
-export function createSystemMediaService({ emitCommand }) {
+export function createSystemMediaService({
+  emitCommand,
+  loadDbus = () => require('@particle/dbus-next'),
+  platform = process.platform
+}) {
   let bus = null;
   let player = null;
   let startPromise = null;
 
-  async function start() {
-    if (process.platform !== 'linux') return false;
+  async function start(initialState = {}) {
+    if (platform !== 'linux') return false;
     if (startPromise) return startPromise;
 
     startPromise = (async () => {
-      const dbus = require('@particle/dbus-next');
+      const dbus = loadDbus();
       const { MediaPlayerInterface, PlayerInterface } = configureMprisInterfaces(dbus);
       bus = dbus.sessionBus();
-      player = new PlayerInterface(emitCommand);
-      await bus.requestName(SERVICE_NAME);
+      player = new PlayerInterface(emitCommand, initialState);
       bus.export(OBJECT_PATH, new MediaPlayerInterface(emitCommand));
       bus.export(OBJECT_PATH, player);
+      // Export the complete MPRIS object with its initial playback state before
+      // announcing the well-known name. Consumers such as Plasma can read the
+      // player immediately when NameOwnerChanged fires; publishing the initial
+      // state afterward creates a window where they can cache an empty player
+      // and miss the first PropertiesChanged signal.
+      await bus.requestName(SERVICE_NAME);
       return true;
     })().catch((error) => {
       console.warn(`System media integration disabled: ${error.message}`);
@@ -278,7 +287,7 @@ export function createSystemMediaService({ emitCommand }) {
 
   return {
     async publish(state) {
-      if (!await start()) return false;
+      if (!await start(state)) return false;
       player?.update(state);
       return Boolean(player);
     },
