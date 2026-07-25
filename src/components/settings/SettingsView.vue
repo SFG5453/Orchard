@@ -122,7 +122,10 @@ export default {
         >
           <div class="settings-row__copy">
             <label for="settings-ai-smart-crossfade">AI Smart Crossfade analysis</label>
-            <p>Use bundled HTDemucs stems and All-In-One functional sections to choose safer transition points.</p>
+            <p>
+              Use bundled HTDemucs stems and All-In-One functional sections to choose safer transition points.
+              Estimated additional memory during analysis: 1–1.5 GB.
+            </p>
           </div>
           <q-toggle
             id="settings-ai-smart-crossfade"

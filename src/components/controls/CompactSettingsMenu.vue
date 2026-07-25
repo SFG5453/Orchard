@@ -108,7 +108,9 @@ export default {
           class="compact-settings-row"
           :class="{ 'compact-settings-row--disabled': !crossfadeEnabled || crossfadeMode !== 'smart' }"
         >
-          <label for="compact-ai-crossfade-toggle" class="compact-settings-label">AI analysis</label>
+          <label for="compact-ai-crossfade-toggle" class="compact-settings-label">
+            AI analysis (~1–1.5 GB RAM)
+          </label>
           <q-toggle
             id="compact-ai-crossfade-toggle"
             v-model="aiSmartCrossfadeEnabled"
