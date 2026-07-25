@@ -4,6 +4,11 @@ import {
   localAnalysisWithSource,
   safeAudioAnalysisDiagnostics
 } from '../../../shared/audioAnalysis.js';
+import {
+  markAiAudioAnalysisUnavailable,
+  mergeAiAudioAnalysis,
+  withoutAiAudioAnalysis
+} from '../../../shared/aiAudioAnalysis.js';
 
 export const ANALYSIS_PREPARATION_CONCURRENCY = 4;
 export const ANALYSIS_PRIORITIES = Object.freeze({ current: 0, next: 1, background: 2 });
@@ -71,7 +76,8 @@ export function createSmartCrossfadeAnalyzer({
   retryLimit = DEFAULT_RETRY_LIMIT,
   retryBaseMs = DEFAULT_RETRY_BASE_MS,
   retryMaxMs = DEFAULT_RETRY_MAX_MS,
-  random = Math.random
+  random = Math.random,
+  aiEnabled = false
 } = {}) {
   const cache = new Map();
   const cacheLookups = new Map();
@@ -84,6 +90,9 @@ export function createSmartCrossfadeAnalyzer({
   let activeJobs = 0;
   let worker = null;
   let nativeAvailability = null;
+  let aiCapabilitiesPromise = null;
+  let aiEnabledState = aiEnabled === true;
+  let analysisModeGeneration = 0;
   let destroyed = false;
   let pumpTimer = 0;
   let networkFailureStreak = 0;
@@ -150,6 +159,26 @@ export function createSmartCrossfadeAnalyzer({
     return check;
   }
 
+  function aiCapabilities() {
+    if (typeof nativeBridge?.aiCapabilities !== 'function' ||
+        typeof nativeBridge?.analyzeAi !== 'function') {
+      return Promise.resolve({ available: false });
+    }
+    if (aiCapabilitiesPromise) return aiCapabilitiesPromise;
+    aiCapabilitiesPromise = Promise.resolve()
+      .then(() => nativeBridge.aiCapabilities())
+      .then((capabilities) => ({
+        ...capabilities,
+        available: Boolean(capabilities?.available),
+        modelSignature: String(capabilities?.modelSignature || '')
+      }))
+      .catch((error) => {
+        report('onnx-capabilities-failed', errorDetails(error));
+        return { available: false };
+      });
+    return aiCapabilitiesPromise;
+  }
+
   function workerRequest({ channels, duration, prepareOnly, sampleRate, signal }) {
     if (signal?.aborted) return Promise.reject(abortError());
     const id = ++nextRequestId;
@@ -178,19 +207,39 @@ export function createSmartCrossfadeAnalyzer({
       return cache.get(key);
     }
     if (typeof nativeBridge?.get !== 'function') return null;
-    if (cacheLookups.has(key)) return cacheLookups.get(key);
+    const generation = analysisModeGeneration;
+    const aiEnabledForLookup = aiEnabledState;
+    const lookupKey = `${generation}:${key}`;
+    if (cacheLookups.has(lookupKey)) return cacheLookups.get(lookupKey);
     const lookup = Promise.resolve()
-      .then(() => nativeBridge.get(key))
-      .then((stored) => {
+      .then(() => nativeBridge.get(key, aiEnabledForLookup))
+      .then(async (stored) => {
         if (!stored) return null;
-        const valid = localAnalysisWithSource(stored, 'cache');
+        let valid = localAnalysisWithSource(stored, 'cache');
         if (!valid) {
           report('disk-cache-invalid', { trackId: key, bpm: Number(stored?.bpm) || 0 });
           return null;
         }
+        if (!aiEnabledForLookup) {
+          valid = withoutAiAudioAnalysis(valid);
+        } else {
+          const capabilities = await aiCapabilities();
+          if (!capabilities.available) {
+            valid = withoutAiAudioAnalysis(valid);
+          } else if (valid.aiModelSignature !== capabilities.modelSignature) {
+            report('disk-cache-ai-mismatch', {
+              trackId: key,
+              cachedModelSignature: valid.aiModelSignature || '',
+              modelSignature: capabilities.modelSignature
+            });
+            return null;
+          }
+        }
+        if (generation !== analysisModeGeneration) return null;
         report('disk-cache-hit', {
           trackId: key,
-          cachedBpmSource: valid.cachedBpmSource || valid.analysisSource
+          cachedBpmSource: valid.cachedBpmSource || valid.analysisSource,
+          aiEnabled: aiEnabledForLookup
         });
         cache.set(key, valid);
         return valid;
@@ -199,8 +248,8 @@ export function createSmartCrossfadeAnalyzer({
         report('disk-cache-read-failed', { trackId: key, ...errorDetails(error) });
         return null;
       })
-      .finally(() => cacheLookups.delete(key));
-    cacheLookups.set(key, lookup);
+      .finally(() => cacheLookups.delete(lookupKey));
+    cacheLookups.set(lookupKey, lookup);
     return lookup;
   }
 
@@ -292,6 +341,64 @@ export function createSmartCrossfadeAnalyzer({
     }
   }
 
+  async function enrichWithAi(key, buffer, baseAnalysis, signal) {
+    if (!aiEnabledState) return withoutAiAudioAnalysis(baseAnalysis);
+    const capabilities = await aiCapabilities();
+    if (!capabilities.available || signal.aborted || !aiEnabledState) {
+      if (signal.aborted) throw abortError();
+      return withoutAiAudioAnalysis(baseAnalysis);
+    }
+    const startedAt = Date.now();
+    report('onnx-call-start', {
+      trackId: key,
+      modelSignature: capabilities.modelSignature
+    });
+    try {
+      const channels = Array.from({ length: Math.min(2, buffer.numberOfChannels) }, (_, index) =>
+        new Float32Array(buffer.getChannelData(index)).buffer
+      );
+      const neural = await cancellableWait(nativeBridge.analyzeAi(
+        key,
+        channels,
+        buffer.sampleRate,
+        Number(buffer.duration) || Number(baseAnalysis.duration) || 0
+      ), signal);
+      const merged = mergeAiAudioAnalysis(baseAnalysis, neural, capabilities.modelSignature);
+      if (typeof nativeBridge?.store === 'function') {
+        try {
+          await nativeBridge.store(key, merged);
+        } catch (error) {
+          report('onnx-cache-store-failed', { trackId: key, ...errorDetails(error) });
+        }
+      }
+      report('onnx-call-ready', {
+        trackId: key,
+        elapsedMs: Date.now() - startedAt,
+        modelSignature: capabilities.modelSignature,
+        structureConfidence: Number(merged.aiStructureConfidence) || 0,
+        phraseCount: merged.phrases?.length || 0
+      });
+      return aiEnabledState ? merged : withoutAiAudioAnalysis(merged);
+    } catch (error) {
+      if (error?.name === 'AbortError') throw error;
+      const fallback = markAiAudioAnalysisUnavailable(baseAnalysis, capabilities.modelSignature);
+      if (typeof nativeBridge?.store === 'function') {
+        try {
+          await nativeBridge.store(key, fallback);
+        } catch {
+          // The deterministic result remains usable in memory when persistence fails.
+        }
+      }
+      report('onnx-call-failed', {
+        trackId: key,
+        elapsedMs: Date.now() - startedAt,
+        modelSignature: capabilities.modelSignature,
+        ...errorDetails(error)
+      });
+      return aiEnabledState ? fallback : withoutAiAudioAnalysis(fallback);
+    }
+  }
+
   async function analyzeBuffer(key, buffer, durationHint, signal) {
     if (signal.aborted) throw abortError();
     const channels = Array.from({ length: buffer.numberOfChannels }, (_, index) =>
@@ -299,54 +406,63 @@ export function createSmartCrossfadeAnalyzer({
     );
     const duration = Number(buffer.duration) || Number(durationHint) || 0;
     const useNative = await nativeAvailable();
+    let baseAnalysis;
     if (!useNative) {
-      return fallbackAnalysis(key, channels, buffer.sampleRate, duration, signal, 'native-unavailable');
-    }
-
-    const prepareStartedAt = Date.now();
-    report('native-prepare-start', { trackId: key });
-    const { prepared } = await workerRequest({
-      channels,
-      duration,
-      prepareOnly: true,
-      sampleRate: buffer.sampleRate,
-      signal
-    });
-    report('native-prepare-ready', {
-      trackId: key,
-      elapsedMs: Date.now() - prepareStartedAt,
-      sampleRate: Number(prepared.sampleRate) || 0,
-      sampleCount: prepared.samples?.byteLength / Float32Array.BYTES_PER_ELEMENT || 0
-    });
-
-    try {
-      const startedAt = Date.now();
-      report('native-call-start', { trackId: key });
-      const raw = await cancellableWait(nativeBridge.analyze(
+      baseAnalysis = await fallbackAnalysis(
         key,
-        prepared.samples,
-        prepared.sampleRate,
-        prepared.duration
-      ), signal);
-      const analysis = localAnalysisWithSource(raw, 'local-native');
-      if (!analysis) {
-        report('native-call-invalid', { trackId: key, bpm: Number(raw?.bpm) || 0 });
-        throw new Error('Native audio analysis returned an invalid BPM');
-      }
-      report('native-call-ready', { trackId: key, elapsedMs: Date.now() - startedAt, bpm: analysis.bpm });
-      return analysis;
-    } catch (error) {
-      if (error?.name === 'AbortError') throw error;
-      report('native-call-failed', { trackId: key, ...errorDetails(error) });
-      return fallbackAnalysis(
-        key,
-        [prepared.samples],
-        prepared.sampleRate,
+        channels,
+        buffer.sampleRate,
         duration,
         signal,
-        'native-call-failed'
+        'native-unavailable'
       );
+    } else {
+      const prepareStartedAt = Date.now();
+      report('native-prepare-start', { trackId: key });
+      const { prepared } = await workerRequest({
+        channels,
+        duration,
+        prepareOnly: true,
+        sampleRate: buffer.sampleRate,
+        signal
+      });
+      report('native-prepare-ready', {
+        trackId: key,
+        elapsedMs: Date.now() - prepareStartedAt,
+        sampleRate: Number(prepared.sampleRate) || 0,
+        sampleCount: prepared.samples?.byteLength / Float32Array.BYTES_PER_ELEMENT || 0
+      });
+
+      try {
+        const startedAt = Date.now();
+        report('native-call-start', { trackId: key });
+        const raw = await cancellableWait(nativeBridge.analyze(
+          key,
+          prepared.samples,
+          prepared.sampleRate,
+          prepared.duration
+        ), signal);
+        const analysis = localAnalysisWithSource(raw, 'local-native');
+        if (!analysis) {
+          report('native-call-invalid', { trackId: key, bpm: Number(raw?.bpm) || 0 });
+          throw new Error('Native audio analysis returned an invalid BPM');
+        }
+        report('native-call-ready', { trackId: key, elapsedMs: Date.now() - startedAt, bpm: analysis.bpm });
+        baseAnalysis = analysis;
+      } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        report('native-call-failed', { trackId: key, ...errorDetails(error) });
+        baseAnalysis = await fallbackAnalysis(
+          key,
+          [prepared.samples],
+          prepared.sampleRate,
+          duration,
+          signal,
+          'native-call-failed'
+        );
+      }
     }
+    return enrichWithAi(key, buffer, baseAnalysis, signal);
   }
 
   async function execute(job) {
@@ -495,5 +611,15 @@ export function createSmartCrossfadeAnalyzer({
     cache.clear();
   }
 
-  return { analyze, destroy, report };
+  function setAiEnabled(value) {
+    const enabled = value === true;
+    if (enabled === aiEnabledState) return;
+    aiEnabledState = enabled;
+    analysisModeGeneration += 1;
+    cache.clear();
+    cacheLookups.clear();
+    report('onnx-setting-changed', { enabled });
+  }
+
+  return { analyze, destroy, report, setAiEnabled };
 }

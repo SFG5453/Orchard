@@ -38,6 +38,7 @@ export function installState(ctx) {
   ctx.USER_PREFERENCES_STORAGE_KEY = 'orchard:user-preferences';
   ctx.DEFAULT_USER_PREFERENCES = {
     ...APPEARANCE_DEFAULTS,
+    aiSmartCrossfadeEnabled: false,
     autoplayEnabled: true,
     crossfadeEnabled: true,
     crossfadeMode: AUTO_CROSSFADE_DEFAULTS.mode,
@@ -71,6 +72,9 @@ export function installState(ctx) {
   ctx.normalizeUserPreferences = function normalizeUserPreferences(preferences = {}) {
     return {
       accentColorSource: normalizeAccentColorSource(preferences.accentColorSource),
+      aiSmartCrossfadeEnabled: typeof preferences.aiSmartCrossfadeEnabled === 'boolean'
+        ? preferences.aiSmartCrossfadeEnabled
+        : ctx.DEFAULT_USER_PREFERENCES.aiSmartCrossfadeEnabled,
       autoplayEnabled: typeof preferences.autoplayEnabled === 'boolean'
         ? preferences.autoplayEnabled
         : ctx.DEFAULT_USER_PREFERENCES.autoplayEnabled,
@@ -333,6 +337,7 @@ export function installState(ctx) {
   ctx.customAccentColor = ref(ctx.initialUserPreferences.customAccentColor);
   ctx.autoplayLoading = ref(false);
   ctx.autoplayError = ref('');
+  ctx.aiSmartCrossfadeEnabled = ref(ctx.initialUserPreferences.aiSmartCrossfadeEnabled);
   ctx.crossfadeEnabled = ref(ctx.initialUserPreferences.crossfadeEnabled);
   ctx.crossfadeMode = ref(ctx.initialUserPreferences.crossfadeMode);
   ctx.crossfadeModeOptions = [
@@ -376,6 +381,7 @@ export function installState(ctx) {
   ctx.resetUserPreferences = function resetUserPreferences() {
     const defaults = ctx.normalizeUserPreferences(ctx.DEFAULT_USER_PREFERENCES);
     ctx.accentColorSource.value = defaults.accentColorSource;
+    ctx.aiSmartCrossfadeEnabled.value = defaults.aiSmartCrossfadeEnabled;
     ctx.autoplayEnabled.value = defaults.autoplayEnabled;
     ctx.crossfadeEnabled.value = defaults.crossfadeEnabled;
     ctx.crossfadeMode.value = defaults.crossfadeMode;

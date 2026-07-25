@@ -51,7 +51,8 @@ export function installSmartCrossfadeActions(ctx) {
   const analyzerFactory = ctx.createSmartCrossfadeAnalyzer || createSmartCrossfadeAnalyzer;
   const bpmClientFactory = ctx.createBpmMetadataClient || createBpmMetadataClient;
   ctx.smartCrossfadeAnalyzer = analyzerFactory({
-    decodeAudio: ctx.audioAnalyzer.decodeAudio
+    decodeAudio: ctx.audioAnalyzer.decodeAudio,
+    aiEnabled: ctx.aiSmartCrossfadeEnabled?.value === true
   });
   ctx.bpmMetadata = bpmClientFactory({
     report: (event, details) => ctx.smartCrossfadeAnalyzer.report(`bpm-${event}`, details)

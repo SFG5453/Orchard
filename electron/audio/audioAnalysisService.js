@@ -8,6 +8,7 @@ import {
   localAnalysisWithSource,
   safeAudioAnalysisDiagnostics
 } from '../../shared/audioAnalysis.js';
+import { createOnnxSmartCrossfadeAnalyzer } from './onnxSmartCrossfade.js';
 
 // Owns native-addon loading, analysis request de-duplication, and the persisted
 // result cache. `stop()` removes every IPC handler and flushes pending cache data.
@@ -64,11 +65,14 @@ export function setupAudioAnalysisService({
   cachePath,
   ipcMain,
   nativeModulePath,
+  modelSearchPaths = [],
   loadNativeAddon = require,
+  onnxAnalyzerFactory = createOnnxSmartCrossfadeAnalyzer,
   logger = stdoutLogger
 }) {
   const cache = new Map();
   const inFlight = new Map();
+  const aiInFlight = new Map();
   let nativeAddon = null;
   let nativeLoadAttempts = 0;
   let saveTimer = null;
@@ -79,6 +83,26 @@ export function setupAudioAnalysisService({
       logger(event, safeAudioAnalysisDiagnostics(details));
     } catch {
       // Diagnostics must never interrupt playback or analysis.
+    }
+  }
+
+  const onnxAnalyzer = onnxAnalyzerFactory({
+    modelSearchPaths,
+    logger: (event, details) => log(event, details)
+  });
+
+  async function aiCapabilities() {
+    try {
+      return await onnxAnalyzer.status();
+    } catch (error) {
+      log('onnx-status-failed', errorDetails(error));
+      return {
+        available: false,
+        pipeline: '',
+        modelSignature: '',
+        sampleRate: 0,
+        channels: 0
+      };
     }
   }
 
@@ -124,11 +148,14 @@ export function setupAudioAnalysisService({
     })
     .catch(() => {});
 
-  function cached(trackId) {
+  function cached(trackId, modelSignature = '') {
     const entry = cache.get(trackId);
     if (!entry) return null;
     if (!isValidLocalAnalysis(entry.result)) {
       cache.delete(trackId);
+      return null;
+    }
+    if (modelSignature && entry.result.aiModelSignature !== modelSignature) {
       return null;
     }
     cache.delete(trackId);
@@ -166,10 +193,91 @@ export function setupAudioAnalysisService({
 
   ipcMain.handle(AUDIO_ANALYSIS.GET, async (_event, value) => {
     await cacheReady;
-    const trackId = cleanTrackId(value);
-    const result = trackId ? cached(trackId) : null;
-    log('cache-result', { trackId, hit: Boolean(result) });
+    const request = value && typeof value === 'object'
+      ? value
+      : { trackId: value, aiEnabled: false };
+    const trackId = cleanTrackId(request.trackId);
+    const aiEnabled = request.aiEnabled === true;
+    const ai = aiEnabled ? await aiCapabilities() : { available: false, modelSignature: '' };
+    const requiredModelSignature = ai.available ? ai.modelSignature : '';
+    const result = trackId ? cached(trackId, requiredModelSignature) : null;
+    log('cache-result', {
+      trackId,
+      hit: Boolean(result),
+      aiEnabled,
+      aiModelSignature: requiredModelSignature
+    });
     return result;
+  });
+
+  ipcMain.handle(AUDIO_ANALYSIS.AI_CAPABILITIES, async () => {
+    const capabilities = await aiCapabilities();
+    log('onnx-capabilities', capabilities);
+    return capabilities;
+  });
+
+  ipcMain.handle(AUDIO_ANALYSIS.AI_ANALYZE, async (_event, payload = {}) => {
+    const trackId = cleanTrackId(payload.trackId);
+    const capabilities = await aiCapabilities();
+    if (!trackId) throw new Error('A track ID is required for ONNX audio analysis.');
+    if (!capabilities.available) throw new Error('Smart Crossfade ONNX models are unavailable.');
+    if (aiInFlight.has(trackId)) {
+      log('onnx-in-flight-reused', { trackId });
+      return aiInFlight.get(trackId);
+    }
+    const channels = Array.isArray(payload.channels)
+      ? payload.channels.map(floatSamples)
+      : [];
+    const sampleRate = Number(payload.sampleRate);
+    const duration = Number(payload.duration);
+    const maximumSamples = sampleRate * 60 * 30;
+    if (!channels.length || channels.length > 2 || channels.some((channel) => !channel?.length) ||
+        channels.some((channel) => channel.length !== channels[0].length) ||
+        !Number.isFinite(sampleRate) || sampleRate < 8_000 || sampleRate > 192_000 ||
+        !Number.isFinite(duration) || duration <= 0 || duration > 60 * 30 ||
+        !Number.isFinite(maximumSamples) || channels[0].length > maximumSamples) {
+      log('onnx-request-invalid', {
+        trackId,
+        channels: channels.length,
+        sampleCount: channels[0]?.length || 0,
+        sampleRate,
+        duration
+      });
+      throw new Error('Invalid PCM data for Smart Crossfade ONNX analysis.');
+    }
+
+    const startedAt = Date.now();
+    log('onnx-analysis-start', {
+      trackId,
+      channels: channels.length,
+      sampleCount: channels[0].length,
+      sampleRate,
+      duration,
+      modelSignature: capabilities.modelSignature
+    });
+    const task = Promise.resolve()
+      .then(() => onnxAnalyzer.analyze({ channels, duration, sampleRate }))
+      .then((result) => {
+        log('onnx-analysis-ready', {
+          trackId,
+          elapsedMs: Date.now() - startedAt,
+          modelSignature: capabilities.modelSignature,
+          structureConfidence: Number(result?.aiStructureConfidence) || 0,
+          phraseCount: result?.phrases?.length || 0
+        });
+        return result;
+      })
+      .catch((error) => {
+        log('onnx-analysis-failed', {
+          trackId,
+          elapsedMs: Date.now() - startedAt,
+          ...errorDetails(error)
+        });
+        throw error;
+      })
+      .finally(() => aiInFlight.delete(trackId));
+    aiInFlight.set(trackId, task);
+    return task;
   });
 
   ipcMain.handle(AUDIO_ANALYSIS.DEBUG, async (_event, payload = {}) => {
@@ -184,7 +292,9 @@ export function setupAudioAnalysisService({
   ipcMain.handle(AUDIO_ANALYSIS.STORE, async (_event, payload = {}) => {
     await cacheReady;
     const trackId = cleanTrackId(payload.trackId);
-    const source = payload?.result?.analysisSource === 'local-native' ? 'local-native' : 'local-worker';
+    const source = ['local-native', 'local-onnx'].includes(payload?.result?.analysisSource)
+      ? payload.result.analysisSource
+      : 'local-worker';
     const result = localAnalysisWithSource(payload.result, source);
     if (!trackId || !result) {
       log('cache-store-invalid', { trackId, bpm: Number(payload?.result?.bpm) || 0 });
@@ -281,6 +391,8 @@ export function setupAudioAnalysisService({
       clearTimeout(saveTimer);
       saveTimer = null;
       ipcMain.removeHandler(AUDIO_ANALYSIS.AVAILABLE);
+      ipcMain.removeHandler(AUDIO_ANALYSIS.AI_CAPABILITIES);
+      ipcMain.removeHandler(AUDIO_ANALYSIS.AI_ANALYZE);
       ipcMain.removeHandler(AUDIO_ANALYSIS.GET);
       ipcMain.removeHandler(AUDIO_ANALYSIS.DEBUG);
       ipcMain.removeHandler(AUDIO_ANALYSIS.STORE);

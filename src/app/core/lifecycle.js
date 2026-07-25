@@ -99,6 +99,7 @@ export function installLifecycle(ctx) {
 
   watch([
     ctx.accentColorSource,
+    ctx.aiSmartCrossfadeEnabled,
     ctx.autoplayEnabled,
     ctx.crossfadeEnabled,
     ctx.crossfadeMode,
@@ -142,6 +143,7 @@ export function installLifecycle(ctx) {
     }).songCacheMaxSizeMb;
     ctx.writeUserPreferences({
       accentColorSource: ctx.accentColorSource.value,
+      aiSmartCrossfadeEnabled: ctx.aiSmartCrossfadeEnabled.value,
       autoplayEnabled: ctx.autoplayEnabled.value,
       crossfadeEnabled: ctx.crossfadeEnabled.value,
       crossfadeMode: ctx.crossfadeMode.value,
@@ -217,6 +219,25 @@ export function installLifecycle(ctx) {
   watch(ctx.crossfadeMode, (mode) => {
     ctx.autoCrossfade.setMode(mode);
     if (mode !== 'smart') return;
+    const active = ctx.activeTrack.value;
+    const prepared = ctx.nextTrackPreload.value;
+    if (active?.id && active.streamUrl) {
+      void ctx.analyzeCurrentCrossfadeTrack(active, active.streamUrl, ctx.duration.value);
+    }
+    if (prepared?.track?.id && prepared.resolved?.streamUrl) {
+      void ctx.analyzeNextCrossfadeTrack(
+        prepared.track,
+        prepared.resolved.streamUrl,
+        prepared.track.durationSeconds || 0
+      );
+    }
+  }, { immediate: true });
+
+  watch(ctx.aiSmartCrossfadeEnabled, (enabled) => {
+    ctx.smartCrossfadeAnalyzer.setAiEnabled?.(enabled);
+    if (ctx.crossfadeMode.value !== 'smart') return;
+    ctx.resetCrossfadeAnalysis(ctx.activeTrack.value?.id || '');
+    ctx.resetNextCrossfadeAnalysis(ctx.nextTrackPreload.value?.track?.id || '');
     const active = ctx.activeTrack.value;
     const prepared = ctx.nextTrackPreload.value;
     if (active?.id && active.streamUrl) {

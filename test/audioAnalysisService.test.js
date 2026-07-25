@@ -206,3 +206,56 @@ test('audio analysis service rejects invalid BPM and redacts sensitive diagnosti
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('audio analysis cache requires the active model signature only when AI is enabled', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-ai-cache-'));
+  const ipc = fakeIpcMain();
+  const service = setupAudioAnalysisService({
+    cachePath: path.join(directory, 'cache.json'),
+    ipcMain: ipc,
+    nativeModulePath: 'missing-native-addon',
+    loadNativeAddon: () => { throw new Error('native unavailable'); },
+    onnxAnalyzerFactory: () => ({
+      status: async () => ({
+        available: true,
+        modelSignature: 'models@one',
+        pipeline: 'all-in-one-htdemucs'
+      }),
+      analyze: async () => ({ aiAnalysisStatus: 'ready' })
+    }),
+    logger: () => {}
+  });
+  const base = {
+    analysisVersion: 7,
+    duration: 120,
+    bpm: 120,
+    beatInterval: 0.5,
+    beats: [0, 0.5],
+    downbeats: [0],
+    phraseBoundaries: [0, 16]
+  };
+
+  try {
+    await ipc.invoke('audio-analysis:store', { trackId: 'base', result: base });
+    assert.ok(await ipc.invoke('audio-analysis:get', {
+      trackId: 'base',
+      aiEnabled: false
+    }));
+    assert.equal(await ipc.invoke('audio-analysis:get', {
+      trackId: 'base',
+      aiEnabled: true
+    }), null);
+
+    await ipc.invoke('audio-analysis:store', {
+      trackId: 'enriched',
+      result: { ...base, aiModelSignature: 'models@one' }
+    });
+    assert.ok(await ipc.invoke('audio-analysis:get', {
+      trackId: 'enriched',
+      aiEnabled: true
+    }));
+  } finally {
+    await service.stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

@@ -2,6 +2,7 @@ node_modules/
 dist/
 build/artist-packs/
 native/build/
+models/smart-crossfade/
 release/
 release-macos/
 packaging/linux/arch/*.tar.gz

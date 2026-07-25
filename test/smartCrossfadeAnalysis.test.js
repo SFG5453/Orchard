@@ -355,3 +355,65 @@ test('analysis diagnostics redact credentials and signed stream queries', async 
     analyzer.destroy();
   }
 });
+
+test('AI analysis runs only when enabled and disabling restores deterministic cues', async () => {
+  let stored = null;
+  let aiCalls = 0;
+  const getModes = [];
+  const base = validAnalysis({
+    mixInTime: 20,
+    mixOutTime: 110,
+    phrases: [{ start: 0, end: 20, type: 'native_intro', confidence: 0.8 }]
+  });
+  const analyzer = createSmartCrossfadeAnalyzer({
+    aiEnabled: true,
+    decodeAudio: async () => audioBuffer(),
+    nativeBridge: bridge({
+      aiCapabilities: async () => ({
+        available: true,
+        modelSignature: 'models@one'
+      }),
+      analyzeAi: async () => {
+        aiCalls += 1;
+        return {
+          aiAnalysisStatus: 'ready',
+          aiStructureConfidence: 0.9,
+          phrases: [
+            { start: 0, end: 12, type: 'intro', confidence: 0.9 },
+            { start: 12, end: 100, type: 'verse', confidence: 0.8 },
+            { start: 100, end: 120, type: 'outro', confidence: 0.9 }
+          ],
+          phraseBoundaries: [0, 12, 100, 120],
+          mixInTime: 12,
+          mixOutTime: 100
+        };
+      },
+      get: async (_trackId, enabled) => {
+        getModes.push(enabled);
+        return stored;
+      },
+      store: async (_trackId, result) => {
+        stored = result;
+        return true;
+      }
+    }),
+    workerFactory: workerFactory(base)
+  });
+
+  try {
+    const enriched = await analyzer.analyze('ai-track', 'url');
+    assert.equal(aiCalls, 1);
+    assert.equal(enriched.aiModelSignature, 'models@one');
+    assert.equal(enriched.mixInTime, 12);
+
+    analyzer.setAiEnabled(false);
+    const deterministic = await analyzer.analyze('ai-track', 'unused-url');
+    assert.equal(aiCalls, 1);
+    assert.equal(deterministic.aiModelSignature, undefined);
+    assert.equal(deterministic.mixInTime, 20);
+    assert.equal(deterministic.mixOutTime, 110);
+    assert.deepEqual(getModes, [true, false]);
+  } finally {
+    analyzer.destroy();
+  }
+});

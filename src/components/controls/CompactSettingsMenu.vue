@@ -31,6 +31,7 @@ export default {
 
     return {
       eqMode,
+      aiSmartCrossfadeEnabled: props.app.aiSmartCrossfadeEnabled,
       crossfadeEnabled: props.app.crossfadeEnabled,
       crossfadeMode: props.app.crossfadeMode,
       crossfadeModeOptions: props.app.crossfadeModeOptions,
@@ -102,6 +103,20 @@ export default {
               {{ option.label }}
             </button>
           </div>
+        </div>
+        <div
+          class="compact-settings-row"
+          :class="{ 'compact-settings-row--disabled': !crossfadeEnabled || crossfadeMode !== 'smart' }"
+        >
+          <label for="compact-ai-crossfade-toggle" class="compact-settings-label">AI analysis</label>
+          <q-toggle
+            id="compact-ai-crossfade-toggle"
+            v-model="aiSmartCrossfadeEnabled"
+            :disable="!crossfadeEnabled || crossfadeMode !== 'smart'"
+            color="primary"
+            dense
+            aria-label="Toggle AI Smart Crossfade analysis"
+          />
         </div>
       </div>
 

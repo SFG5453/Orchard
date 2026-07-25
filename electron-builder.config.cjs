@@ -23,7 +23,15 @@ module.exports = {
     'package.json'
   ],
   asarUnpack: [
-    'native/build/Release/*.node'
+    'native/build/Release/*.node',
+    'node_modules/onnxruntime-node/bin/**/*'
+  ],
+  extraResources: [
+    {
+      from: 'models/smart-crossfade',
+      to: 'smart-crossfade-models',
+      filter: ['**/*']
+    }
   ],
   electronFuses: {
     runAsNode: false,

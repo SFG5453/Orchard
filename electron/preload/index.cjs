@@ -73,7 +73,17 @@ contextBridge.exposeInMainWorld('orchardCrypto', {
 // structured-clone boundary and is shape/size checked again in the main process.
 contextBridge.exposeInMainWorld('orchardAudioAnalysis', {
   available: () => ipcRenderer.invoke('audio-analysis:available'),
-  get: (trackId) => ipcRenderer.invoke('audio-analysis:get', trackId),
+  aiCapabilities: () => ipcRenderer.invoke('audio-analysis:ai-capabilities'),
+  analyzeAi: (trackId, channels, sampleRate, duration) => ipcRenderer.invoke('audio-analysis:ai-analyze', {
+    trackId,
+    channels,
+    sampleRate,
+    duration
+  }),
+  get: (trackId, aiEnabled = false) => ipcRenderer.invoke('audio-analysis:get', {
+    trackId,
+    aiEnabled: aiEnabled === true
+  }),
   store: (trackId, result) => ipcRenderer.invoke('audio-analysis:store', { trackId, result }),
   debug: (event, details = {}) => ipcRenderer.invoke('audio-analysis:debug', { event, details }),
   analyze: (trackId, samples, sampleRate, duration) => ipcRenderer.invoke('audio-analysis:analyze', {

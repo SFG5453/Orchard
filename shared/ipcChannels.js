@@ -15,6 +15,8 @@ export const IPC_CHANNELS = Object.freeze({
     SHOW_WELCOME: 'app:show-welcome'
   }),
   AUDIO_ANALYSIS: Object.freeze({
+    AI_ANALYZE: 'audio-analysis:ai-analyze',
+    AI_CAPABILITIES: 'audio-analysis:ai-capabilities',
     ANALYZE: 'audio-analysis:analyze',
     AVAILABLE: 'audio-analysis:available',
     DEBUG: 'audio-analysis:debug',

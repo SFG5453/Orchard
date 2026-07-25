@@ -52,5 +52,15 @@ if (existsSync(unpacked)) {
   await cp(unpacked, path.join(outputDir, 'app.asar.unpacked'), { recursive: true });
 }
 
+const smartCrossfadeModels = path.join(resources, 'smart-crossfade-models');
+if (!existsSync(smartCrossfadeModels)) {
+  throw new Error('Packaged Smart Crossfade model resources are missing.');
+}
+await cp(
+  smartCrossfadeModels,
+  path.join(outputDir, 'smart-crossfade-models'),
+  { recursive: true }
+);
+
 await rm(stageDir, { recursive: true, force: true });
 console.log(`System Electron payload written to ${outputDir}`);

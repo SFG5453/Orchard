@@ -73,6 +73,48 @@ test('same-tempo phrase switches use an AutoMix-style blend', () => {
   assert.equal(plan.shouldStart, true);
 });
 
+test('AI-assisted plans score All-In-One functional section handoffs', () => {
+  const plan = planTransition({
+    analysis: {
+      aiAnalysisStatus: 'ready',
+      aiStructureConfidence: 0.86,
+      bpm: 120,
+      beatConfidence: 0.9,
+      contentEndTime: 180,
+      downbeats: [160, 162, 164, 166, 168, 170, 172, 174, 176, 178],
+      phrases: [
+        { start: 0, end: 160, type: 'chorus' },
+        { start: 160, end: 180, type: 'outro' }
+      ],
+      key: 'C major'
+    },
+    currentTime: 178,
+    currentTrack: { id: 'current', durationSeconds: 180 },
+    duration: 180,
+    mode: 'smart',
+    nextAnalysis: {
+      aiAnalysisStatus: 'ready',
+      aiStructureConfidence: 0.82,
+      bpm: 120,
+      beatConfidence: 0.9,
+      mixInTime: 12,
+      downbeats: [0, 2, 4, 6, 8, 10, 12],
+      phrases: [
+        { start: 0, end: 16, type: 'intro' },
+        { start: 16, end: 180, type: 'verse' }
+      ],
+      key: 'C major'
+    },
+    nextTrack: { id: 'next', durationSeconds: 180 }
+  });
+
+  assert.equal(plan.neuralAssisted, true);
+  assert.equal(plan.outgoingSection, 'outro');
+  assert.equal(plan.incomingSection, 'intro');
+  assert.equal(plan.sectionCompatibility, 1);
+  assert.ok(plan.transitionConfidence > 0.8);
+});
+
 test('catalog-only tempo cannot authorize a beat-aligned phrase switch', () => {
   const catalogAnalysis = mergeBpmMetadata({}, {
     bpm: 120,

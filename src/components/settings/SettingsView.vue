@@ -116,6 +116,23 @@ export default {
           </div>
         </div>
 
+        <div
+          class="settings-row"
+          :class="{ 'settings-row--disabled': !crossfadeEnabled || crossfadeMode !== 'smart' }"
+        >
+          <div class="settings-row__copy">
+            <label for="settings-ai-smart-crossfade">AI Smart Crossfade analysis</label>
+            <p>Use bundled HTDemucs stems and All-In-One functional sections to choose safer transition points.</p>
+          </div>
+          <q-toggle
+            id="settings-ai-smart-crossfade"
+            v-model="aiSmartCrossfadeEnabled"
+            :disable="!crossfadeEnabled || crossfadeMode !== 'smart'"
+            color="primary"
+            aria-label="AI Smart Crossfade analysis"
+          />
+        </div>
+
         <div class="settings-row settings-row--slider" :class="{ 'settings-row--disabled': !crossfadeEnabled }">
           <div class="settings-row__copy">
             <label for="settings-crossfade-length">Crossfade length</label>

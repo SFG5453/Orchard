@@ -387,6 +387,7 @@ export function installReadinessActions(ctx) {
   ctx.applyImportedPreferences = function applyImportedPreferences() {
     const preferences = ctx.readUserPreferences();
     ctx.accentColorSource.value = preferences.accentColorSource;
+    ctx.aiSmartCrossfadeEnabled.value = preferences.aiSmartCrossfadeEnabled;
     ctx.autoplayEnabled.value = preferences.autoplayEnabled;
     ctx.crossfadeEnabled.value = preferences.crossfadeEnabled;
     ctx.crossfadeMode.value = preferences.crossfadeMode;

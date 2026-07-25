@@ -113,6 +113,103 @@ function trustedKey(analysis = {}) {
   return key;
 }
 
+function vocalActivityAt(analysis = {}, time = 0) {
+  const activity = Array.isArray(analysis.vocalActivityMask)
+    ? analysis.vocalActivityMask.map(Number).filter(Number.isFinite)
+    : [];
+  if (!activity.length) {
+    return {
+      localized: false,
+      value: clamp(analysis.vocalProbability, 0, 1)
+    };
+  }
+  const frameSeconds = Number(analysis.vocalActivityFrameSeconds);
+  const duration = Number(analysis.duration) || 0;
+  const position = Number.isFinite(frameSeconds) && frameSeconds > 0
+    ? Math.floor(Math.max(0, Number(time) || 0) / frameSeconds)
+    : Math.floor(
+        clamp(
+          duration > 0 ? Math.max(0, Number(time) || 0) / duration : 0,
+          0,
+          0.999999
+        ) * activity.length
+      );
+  const radius = Number.isFinite(frameSeconds) && frameSeconds > 0
+    ? Math.max(1, Math.round(2 / frameSeconds))
+    : Math.max(1, Math.round(activity.length * 0.015));
+  const start = Math.max(0, position - radius);
+  const end = Math.min(activity.length, position + radius + 1);
+  let maximum = 0;
+  for (let index = start; index < end; index += 1) {
+    maximum = Math.max(maximum, clamp(activity[index], 0, 1));
+  }
+  return { localized: true, value: maximum };
+}
+
+function functionalSectionAt(analysis = {}, time = 0) {
+  const phrases = Array.isArray(analysis.phrases) ? analysis.phrases : [];
+  const position = Math.max(0, Number(time) || 0);
+  const active = phrases.find((phrase) =>
+    Number(phrase?.start) <= position && Number(phrase?.end) > position
+  );
+  const previous = [...phrases].reverse().find((phrase) => Number(phrase?.start) <= position);
+  return String(active?.type || previous?.type || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '');
+}
+
+function functionalSectionCompatibility(outgoing, incoming) {
+  if (!outgoing || !incoming) return 0.5;
+  if (outgoing === 'outro' && incoming === 'intro') return 1;
+  if (outgoing === 'outro' || incoming === 'intro') return 0.85;
+  if (['inst', 'instrumental', 'bridge'].includes(outgoing)) return 0.78;
+  if (outgoing === incoming) return 0.68;
+  if (outgoing === 'chorus' && ['verse', 'pre-chorus'].includes(incoming)) return 0.62;
+  return 0.5;
+}
+
+function transitionIntelligence(analysis, nextAnalysis, outgoingTime, incomingTime) {
+  const outgoingVocal = vocalActivityAt(analysis, outgoingTime);
+  const incomingVocal = vocalActivityAt(nextAnalysis, incomingTime);
+  const vocalConflict = Math.min(outgoingVocal.value, incomingVocal.value);
+  const outgoingSection = functionalSectionAt(analysis, Math.max(0, outgoingTime - 0.05));
+  const incomingSection = functionalSectionAt(nextAnalysis, incomingTime);
+  const sectionCompatibility = functionalSectionCompatibility(
+    outgoingSection,
+    incomingSection
+  );
+  const ratio = normalizedTempoRatio(analysis.bpm, nextAnalysis.bpm);
+  const tempoScore = clamp(1 - Math.abs(1 - ratio) / 0.18, 0, 1);
+  const distance = keyDistance(trustedKey(analysis), trustedKey(nextAnalysis));
+  const keyScore = distance === null ? 0.5 : clamp(1 - distance / 7, 0, 1);
+  const structureConfidence = (
+    clamp(analysis.aiStructureConfidence, 0, 1) +
+    clamp(nextAnalysis.aiStructureConfidence, 0, 1)
+  ) * 0.5;
+  const neuralAssisted = analysis.aiAnalysisStatus === 'ready' ||
+    nextAnalysis.aiAnalysisStatus === 'ready';
+  const structureScore = neuralAssisted
+    ? sectionCompatibility * (0.5 + structureConfidence * 0.5)
+    : 0.5;
+  const transitionConfidence = clamp(
+    tempoScore * 0.4 +
+    keyScore * 0.18 +
+    (1 - vocalConflict) * 0.22 +
+    structureScore * 0.2,
+    0,
+    1
+  );
+  return {
+    neuralAssisted,
+    outgoingSection,
+    incomingSection,
+    sectionCompatibility,
+    transitionConfidence,
+    vocalConflict,
+    localizedVocalActivity: outgoingVocal.localized || incomingVocal.localized
+  };
+}
+
 function nearestTimedValue(values = [], target = 0, tolerance = Infinity) {
   const candidates = values
     .map(Number)
@@ -262,7 +359,7 @@ function phraseSwitch(analysis = {}, nextAnalysis = {}, length = 0) {
   };
 }
 
-function adaptiveOverlap(analysis = {}, nextAnalysis = {}) {
+function adaptiveOverlap(analysis = {}, nextAnalysis = {}, intelligence = null) {
   const currentBpm = Number(analysis.bpm) || 0;
   const nextBpm = Number(nextAnalysis.bpm) || 0;
   if (!currentBpm || !nextBpm) {
@@ -271,8 +368,10 @@ function adaptiveOverlap(analysis = {}, nextAnalysis = {}) {
 
   const ratio = normalizedTempoRatio(currentBpm, nextBpm);
   const distance = keyDistance(trustedKey(analysis), trustedKey(nextAnalysis));
-  const vocalConflict = Number(analysis.vocalProbability) >= 0.62 &&
-    Number(nextAnalysis.vocalProbability) >= 0.62;
+  const vocalConflict = intelligence
+    ? intelligence.vocalConflict >= 0.62
+    : Number(analysis.vocalProbability) >= 0.62 &&
+      Number(nextAnalysis.vocalProbability) >= 0.62;
   const transitionBeats = !vocalConflict &&
     (Math.abs(1 - ratio) > 0.07 || (distance !== null && distance > 4)) ? 24 : 16;
   const beatSeconds = 60 / currentBpm;
@@ -360,17 +459,30 @@ export function planTransition({
     : preferredMixAnchor;
   const switchPlan = phraseSwitch(analysis, nextAnalysis, mixAnchor);
   if (switchPlan) {
+    const intelligence = transitionIntelligence(
+      analysis,
+      nextAnalysis,
+      switchPlan.transitionEnd,
+      switchPlan.incomingHandoffTime
+    );
+    const localizedVocalClash = intelligence.localizedVocalActivity &&
+      intelligence.vocalConflict >= 0.72;
     return {
       shouldStart: playbackTime >= switchPlan.transitionStart,
       markerVisible: true,
       ...switchPlan,
+      ...(localizedVocalClash
+        ? {
+            transitionStyle: 'dj_filter'
+          }
+        : {}),
+      ...intelligence,
       reason: playbackTime >= switchPlan.transitionStart
-        ? 'smart-phrase-switch'
-        : 'before-phrase-switch'
+        ? (localizedVocalClash ? 'smart-ai-vocal-safe-switch' : 'smart-phrase-switch')
+        : (localizedVocalClash ? 'before-ai-vocal-safe-switch' : 'before-phrase-switch')
     };
   }
 
-  const { overlap, incomingPlaybackRate, transitionBeats } = adaptiveOverlap(analysis, nextAnalysis);
   const mixEnd = mixAnchor;
   const nextLength = trackDurationSeconds(nextTrack);
   const maximumOverlap = Math.min(
@@ -396,6 +508,17 @@ export function planTransition({
     ? analyzedPickup
     : 0;
   const incomingHandoffTime = incomingCuePoint(nextAnalysis);
+  const intelligence = transitionIntelligence(
+    analysis,
+    nextAnalysis,
+    mixEnd,
+    incomingHandoffTime
+  );
+  const { overlap, incomingPlaybackRate, transitionBeats } = adaptiveOverlap(
+    analysis,
+    nextAnalysis,
+    intelligence
+  );
   const rawIncomingCueTime = incomingStartPoint(nextAnalysis);
   const analyzedIncomingHandoff = Number(nextAnalysis.mixInTime);
   const hasIncomingPreroll = Number.isFinite(analyzedIncomingHandoff) &&
@@ -505,6 +628,7 @@ export function planTransition({
     transitionBeats,
     bassSwap: sameBeatBlend || hasBassContent,
     transitionStyle: sameBeatBlend ? 'dj_blend' : 'dj_filter',
+    ...intelligence,
     reason: playbackTime >= transitionStart ? 'smart-duration' : 'before-smart-duration'
   };
 }
