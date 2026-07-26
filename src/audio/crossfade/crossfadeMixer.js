@@ -22,6 +22,16 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     return node.mixGain.gain;
   }
 
+  function prepareIncomingElement(element) {
+    const node = connectElement(element);
+    if (!node) return false;
+    const now = currentTime();
+    const gain = mixParam(node);
+    gain.cancelScheduledValues(now);
+    gain.setValueAtTime(0, now);
+    return true;
+  }
+
   function scheduleGain(node, curve, scale, startTime, duration, floor = 0) {
     const values = Float32Array.from(curve, (value) => floor + value * (scale - floor));
     const gain = mixParam(node);
@@ -205,5 +215,5 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     node.highPass.frequency.setTargetAtTime(20, now, 0.02);
   }
 
-  return { resetElement, scheduleCrossfade };
+  return { prepareIncomingElement, resetElement, scheduleCrossfade };
 }

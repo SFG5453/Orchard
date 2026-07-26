@@ -215,6 +215,9 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       toAudio.webkitPreservesPitch = true;
       fromAudio.playbackRate = 1;
       toAudio.playbackRate = incomingRate;
+      if (analyzer?.prepareIncomingMixElement?.(toAudio) === false) {
+        throw new Error('Web Audio crossfade is unavailable');
+      }
       const requestedFadeSeconds = transition?.fadeSeconds || config.fadeSeconds;
       const remainingSeconds = Number(fromAudio.duration) - Number(fromAudio.currentTime);
       const fadeSeconds = Number.isFinite(remainingSeconds) && remainingSeconds > 0

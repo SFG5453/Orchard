@@ -488,6 +488,7 @@ export function createAudioAnalyzer(options = {}) {
     decodeAudio,
     destroy,
     measure,
+    prepareIncomingMixElement: mixer.prepareIncomingElement,
     resume,
     samples,
     resetMixElement: mixer.resetElement,

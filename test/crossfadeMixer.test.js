@@ -247,3 +247,19 @@ test('resetting a mix cancels its envelope without changing the master volume', 
   ]);
   assert.deepEqual(node.gain.gain.events, []);
 });
+
+test('preparing an incoming element silences its mix before playback starts', () => {
+  const element = {};
+  const node = mixNode();
+  const mixer = createCrossfadeMixer({
+    connectElement: () => node,
+    currentTime: () => 7.5
+  });
+
+  assert.equal(mixer.prepareIncomingElement(element), true);
+  assert.deepEqual(node.mixGain.gain.events, [
+    { type: 'cancel', time: 7.5 },
+    { type: 'set', value: 0, time: 7.5 }
+  ]);
+  assert.deepEqual(node.gain.gain.events, []);
+});

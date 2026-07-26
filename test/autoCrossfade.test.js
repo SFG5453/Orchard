@@ -211,3 +211,56 @@ test('canceling while the incoming play request is pending cannot restart the tr
     globalThis.window = originalWindow;
   }
 });
+
+test('the incoming mix is silent before its media element starts playing', async () => {
+  const originalWindow = globalThis.window;
+  const clock = fakeClock();
+  globalThis.window = clock.window;
+  const events = [];
+  const analyzer = {
+    connectElement() {},
+    currentTime: () => 10,
+    prepareIncomingMixElement(element) {
+      events.push({ type: 'prepare', element });
+      return true;
+    },
+    resetMixElement() {},
+    resume: async () => {},
+    scheduleCrossfade: () => {
+      events.push({ type: 'schedule' });
+      return {
+        startTime: 10,
+        handoffStart: 11,
+        promotionTime: 12,
+        endTime: 13
+      };
+    },
+    setVolume() {}
+  };
+  const crossfade = createAutoCrossfade({ analyzer });
+  const outgoing = audio(110);
+  const incoming = audio();
+  incoming.play = async () => {
+    events.push({ type: 'play' });
+  };
+
+  try {
+    const result = crossfade.start({
+      fromAudio: outgoing,
+      toAudio: incoming,
+      transition: { fadeSeconds: 3 },
+      volume: 0.8
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(events, [
+      { type: 'prepare', element: incoming },
+      { type: 'play' },
+      { type: 'schedule' }
+    ]);
+    crossfade.cancel();
+    assert.equal(await result, false);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
