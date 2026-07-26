@@ -75,11 +75,13 @@ contextBridge.exposeInMainWorld('orchardAudioAnalysis', {
   available: () => ipcRenderer.invoke('audio-analysis:available'),
   aiCapabilities: () => ipcRenderer.invoke('audio-analysis:ai-capabilities'),
   clear: () => ipcRenderer.invoke('audio-analysis:clear'),
-  analyzeAi: (trackId, channels, sampleRate, duration) => ipcRenderer.invoke('audio-analysis:ai-analyze', {
+  analyzeAi: (trackId, channels, sampleRate, duration, windows = {}) => ipcRenderer.invoke('audio-analysis:ai-analyze', {
     trackId,
     channels,
     sampleRate,
-    duration
+    duration,
+    headDuration: Number(windows.headDuration) || 0,
+    tailDuration: Number(windows.tailDuration) || 0
   }),
   get: (trackId, aiEnabled = false) => ipcRenderer.invoke('audio-analysis:get', {
     trackId,

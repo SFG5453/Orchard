@@ -1,6 +1,9 @@
 const MAX_PHRASES = 256;
 const MAX_ACTIVITY_FRAMES = 2400;
 
+export const SMART_CROSSFADE_HEAD_SECONDS = 32;
+export const SMART_CROSSFADE_TAIL_SECONDS = 40;
+
 function clamp(value, minimum = 0, maximum = 1) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.max(minimum, Math.min(maximum, number)) : minimum;

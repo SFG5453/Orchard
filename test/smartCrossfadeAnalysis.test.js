@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createSmartCrossfadeAnalyzer } from '../src/audio/crossfade/smartCrossfadeAnalysis.js';
+import {
+  aiAnalysisPcmWindows,
+  createSmartCrossfadeAnalyzer
+} from '../src/audio/crossfade/smartCrossfadeAnalysis.js';
 
 function validAnalysis(overrides = {}) {
   return {
@@ -67,6 +70,41 @@ function bridge(overrides = {}) {
 }
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+test('AI PCM transport trims long tracks to the head and tail windows', () => {
+  const sampleRate = 100;
+  const samples = Float32Array.from({ length: sampleRate * 100 }, (_, index) => index);
+  const pcm = aiAnalysisPcmWindows({
+    duration: 100,
+    sampleRate,
+    numberOfChannels: 1,
+    getChannelData: () => samples
+  });
+  const transported = new Float32Array(pcm.channels[0]);
+
+  assert.equal(pcm.headDuration, 32);
+  assert.equal(pcm.tailDuration, 40);
+  assert.equal(transported.length, sampleRate * 72);
+  assert.equal(transported[0], 0);
+  assert.equal(transported[sampleRate * 32 - 1], sampleRate * 32 - 1);
+  assert.equal(transported[sampleRate * 32], sampleRate * 60);
+  assert.equal(transported.at(-1), sampleRate * 100 - 1);
+});
+
+test('AI PCM transport keeps short tracks whole', () => {
+  const sampleRate = 100;
+  const samples = Float32Array.from({ length: sampleRate * 48 }, (_, index) => index);
+  const pcm = aiAnalysisPcmWindows({
+    duration: 48,
+    sampleRate,
+    numberOfChannels: 1,
+    getChannelData: () => samples
+  });
+
+  assert.equal(pcm.headDuration, 0);
+  assert.equal(pcm.tailDuration, 0);
+  assert.deepEqual(new Float32Array(pcm.channels[0]), samples);
+});
 
 test('smart crossfade reads persistent cache before checking native availability', async () => {
   const stored = {
@@ -443,6 +481,91 @@ test('AI analysis runs only when enabled and disabling restores deterministic cu
     assert.equal(deterministic.mixInTime, 20);
     assert.equal(deterministic.mixOutTime, 110);
     assert.deepEqual(getModes, [true, false]);
+  } finally {
+    analyzer.destroy();
+  }
+});
+
+test('transient AI inference failures are not cached and retry on the next analysis', async () => {
+  let aiCalls = 0;
+  let decodeCalls = 0;
+  const stored = [];
+  const analyzer = createSmartCrossfadeAnalyzer({
+    aiEnabled: true,
+    decodeAudio: async () => {
+      decodeCalls += 1;
+      return audioBuffer();
+    },
+    nativeBridge: bridge({
+      aiCapabilities: async () => ({
+        available: true,
+        modelSignature: 'models@retry'
+      }),
+      analyzeAi: async () => {
+        aiCalls += 1;
+        if (aiCalls === 1) throw new Error('ONNX ran out of memory');
+        return {
+          aiAnalysisStatus: 'ready',
+          aiStructureConfidence: 0.8,
+          phrases: [{ start: 0, end: 120, type: 'song', confidence: 0.8 }]
+        };
+      },
+      store: async (_trackId, result) => {
+        stored.push(result);
+        return true;
+      }
+    }),
+    workerFactory: workerFactory()
+  });
+
+  try {
+    const first = await analyzer.analyze('retry-ai', 'first-url');
+    assert.equal(first.aiAnalysisStatus, 'unavailable');
+    const second = await analyzer.analyze('retry-ai', 'second-url');
+    assert.equal(second.aiAnalysisStatus, 'ready');
+    assert.equal(aiCalls, 2);
+    assert.equal(decodeCalls, 2);
+    assert.equal(stored.some((result) => result.aiAnalysisStatus === 'unavailable'), false);
+  } finally {
+    analyzer.destroy();
+  }
+});
+
+test('AI-enabled reads reject a persisted unavailable result with the active signature', async () => {
+  let decodeCalls = 0;
+  let aiCalls = 0;
+  const analyzer = createSmartCrossfadeAnalyzer({
+    aiEnabled: true,
+    decodeAudio: async () => {
+      decodeCalls += 1;
+      return audioBuffer();
+    },
+    nativeBridge: bridge({
+      aiCapabilities: async () => ({
+        available: true,
+        modelSignature: 'models@active'
+      }),
+      analyzeAi: async () => {
+        aiCalls += 1;
+        return {
+          aiAnalysisStatus: 'ready',
+          aiStructureConfidence: 0.8,
+          phrases: [{ start: 0, end: 120, type: 'song', confidence: 0.8 }]
+        };
+      },
+      get: async () => validAnalysis({
+        aiAnalysisStatus: 'unavailable',
+        aiModelSignature: 'models@active'
+      })
+    }),
+    workerFactory: workerFactory()
+  });
+
+  try {
+    const result = await analyzer.analyze('stale-ai-failure', 'url');
+    assert.equal(result.aiAnalysisStatus, 'ready');
+    assert.equal(decodeCalls, 1);
+    assert.equal(aiCalls, 1);
   } finally {
     analyzer.destroy();
   }

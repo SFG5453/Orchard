@@ -281,13 +281,85 @@ test('audio analysis cache requires the active model signature only when AI is e
     }), null);
 
     await ipc.invoke('audio-analysis:store', {
+      trackId: 'failed-ai',
+      result: {
+        ...base,
+        aiAnalysisStatus: 'unavailable',
+        aiModelSignature: 'models@one'
+      }
+    });
+    assert.equal(await ipc.invoke('audio-analysis:get', {
+      trackId: 'failed-ai',
+      aiEnabled: true
+    }), null);
+
+    await ipc.invoke('audio-analysis:store', {
       trackId: 'enriched',
-      result: { ...base, aiModelSignature: 'models@one' }
+      result: {
+        ...base,
+        aiAnalysisStatus: 'ready',
+        aiModelSignature: 'models@one'
+      }
     });
     assert.ok(await ipc.invoke('audio-analysis:get', {
       trackId: 'enriched',
       aiEnabled: true
     }));
+  } finally {
+    await service.stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('audio analysis service forwards pretrimmed edge-window metadata', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-ai-windows-'));
+  const ipc = fakeIpcMain();
+  let received = null;
+  const service = setupAudioAnalysisService({
+    cachePath: path.join(directory, 'cache.json'),
+    ipcMain: ipc,
+    nativeModulePath: 'missing-native-addon',
+    loadNativeAddon: () => { throw new Error('native unavailable'); },
+    onnxAnalyzerFactory: () => ({
+      status: async () => ({
+        available: true,
+        modelSignature: 'models@one',
+        pipeline: 'all-in-one-mix'
+      }),
+      analyze: async (input) => {
+        received = input;
+        return { aiAnalysisStatus: 'ready' };
+      }
+    }),
+    logger: () => {}
+  });
+  const sampleRate = 8_000;
+  const headDuration = 32;
+  const tailDuration = 40;
+  const samples = new Float32Array((headDuration + tailDuration) * sampleRate);
+
+  try {
+    await ipc.invoke('audio-analysis:ai-analyze', {
+      trackId: 'windowed-track',
+      channels: [samples.buffer],
+      duration: 120,
+      headDuration,
+      sampleRate,
+      tailDuration
+    });
+    assert.equal(received.duration, 120);
+    assert.equal(received.headDuration, 32);
+    assert.equal(received.tailDuration, 40);
+    assert.equal(received.channels[0].length, 72 * sampleRate);
+
+    await assert.rejects(ipc.invoke('audio-analysis:ai-analyze', {
+      trackId: 'invalid-windowed-track',
+      channels: [new Float32Array(10).buffer],
+      duration: 120,
+      headDuration,
+      sampleRate,
+      tailDuration
+    }), /invalid PCM data/i);
   } finally {
     await service.stop();
     await rm(directory, { recursive: true, force: true });

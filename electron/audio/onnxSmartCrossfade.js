@@ -5,11 +5,17 @@ import {
   extractAllInOneMixSpectrogram,
   postprocessAllInOne
 } from './allInOnePipeline.js';
+import {
+  SMART_CROSSFADE_HEAD_SECONDS,
+  SMART_CROSSFADE_TAIL_SECONDS
+} from '../../shared/aiAudioAnalysis.js';
 
 export const SMART_CROSSFADE_MODEL_SCHEMA_VERSION = 1;
 export const SMART_CROSSFADE_MODEL_MANIFEST = 'manifest.json';
-export const SMART_CROSSFADE_HEAD_SECONDS = 32;
-export const SMART_CROSSFADE_TAIL_SECONDS = 40;
+export {
+  SMART_CROSSFADE_HEAD_SECONDS,
+  SMART_CROSSFADE_TAIL_SECONDS
+};
 
 function cleanText(value, maximum = 100) {
   return String(value || '').trim().slice(0, maximum);
@@ -259,8 +265,18 @@ export function createOnnxSmartCrossfadeAnalyzer({
     const channels = tensorChannels(input.channels);
     const sampleRate = Number(input.sampleRate);
     const duration = Number(input.duration);
+    const suppliedHeadDuration = Number(input.headDuration) || 0;
+    const suppliedTailDuration = Number(input.tailDuration) || 0;
+    const hasSuppliedEdges = suppliedHeadDuration !== 0 || suppliedTailDuration !== 0;
     if (!channels || !Number.isFinite(sampleRate) || sampleRate < 8_000 ||
-        !Number.isFinite(duration) || duration <= 0 || duration > 60 * 30) {
+        !Number.isFinite(duration) || duration <= 0 || duration > 60 * 30 ||
+        (hasSuppliedEdges && (
+          suppliedHeadDuration <= 0 ||
+          suppliedTailDuration <= 0 ||
+          suppliedHeadDuration > SMART_CROSSFADE_HEAD_SECONDS ||
+          suppliedTailDuration > SMART_CROSSFADE_TAIL_SECONDS ||
+          suppliedHeadDuration + suppliedTailDuration >= duration
+        ))) {
       throw new Error('Invalid decoded audio for Smart Crossfade ONNX analysis.');
     }
 
@@ -272,10 +288,33 @@ export function createOnnxSmartCrossfadeAnalyzer({
       }
     };
     const decodedDuration = channels[0].length / sampleRate;
-    const analyzedDuration = Math.min(duration, decodedDuration);
     const edgeDuration = SMART_CROSSFADE_HEAD_SECONDS + SMART_CROSSFADE_TAIL_SECONDS;
     let analysis;
-    if (analyzedDuration <= edgeDuration) {
+    if (hasSuppliedEdges) {
+      const headSamples = Math.round(suppliedHeadDuration * sampleRate);
+      const tailSamples = Math.round(suppliedTailDuration * sampleRate);
+      if (headSamples + tailSamples !== channels[0].length) {
+        throw new Error('Invalid edge windows for Smart Crossfade ONNX analysis.');
+      }
+      const head = await analyzeWindow(active, {
+        channels: channels.map((channel) => channel.slice(0, headSamples)),
+        duration: suppliedHeadDuration,
+        sampleRate
+      }, report);
+      const tail = await analyzeWindow(active, {
+        channels: channels.map((channel) => channel.slice(headSamples)),
+        duration: suppliedTailDuration,
+        sampleRate
+      }, report);
+      analysis = combineEdgeAnalyses({
+        duration,
+        head,
+        headDuration: suppliedHeadDuration,
+        tail,
+        tailDuration: suppliedTailDuration
+      });
+    } else if (Math.min(duration, decodedDuration) <= edgeDuration) {
+      const analyzedDuration = Math.min(duration, decodedDuration);
       analysis = await analyzeWindow(active, {
         channels,
         duration: analyzedDuration,
@@ -303,7 +342,7 @@ export function createOnnxSmartCrossfadeAnalyzer({
         sampleRate
       }, report);
       analysis = combineEdgeAnalyses({
-        duration: analyzedDuration,
+        duration: Math.min(duration, decodedDuration),
         head,
         headDuration: headSamples / sampleRate,
         tail,

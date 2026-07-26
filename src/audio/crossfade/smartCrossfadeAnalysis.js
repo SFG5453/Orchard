@@ -7,6 +7,8 @@ import {
 import {
   markAiAudioAnalysisUnavailable,
   mergeAiAudioAnalysis,
+  SMART_CROSSFADE_HEAD_SECONDS,
+  SMART_CROSSFADE_TAIL_SECONDS,
   withoutAiAudioAnalysis
 } from '../../../shared/aiAudioAnalysis.js';
 
@@ -17,6 +19,53 @@ const MAX_MEMORY_CACHE_ITEMS = 80;
 const DEFAULT_RETRY_LIMIT = 2;
 const DEFAULT_RETRY_BASE_MS = 1_000;
 const DEFAULT_RETRY_MAX_MS = 15_000;
+
+export function aiAnalysisPcmWindows(buffer) {
+  const sampleRate = Number(buffer?.sampleRate) || 0;
+  const duration = Number(buffer?.duration) || 0;
+  const channelCount = Math.min(2, Number(buffer?.numberOfChannels) || 0);
+  if (sampleRate <= 0 || channelCount <= 0) {
+    throw new Error('Decoded audio is unavailable for Smart Crossfade AI analysis.');
+  }
+  const sourceChannels = Array.from({ length: channelCount }, (_, index) =>
+    buffer.getChannelData(index)
+  );
+  const sampleCount = Math.min(...sourceChannels.map((channel) => channel.length));
+  const headSamples = Math.min(
+    sampleCount,
+    Math.round(SMART_CROSSFADE_HEAD_SECONDS * sampleRate)
+  );
+  const tailSamples = Math.min(
+    Math.max(0, sampleCount - headSamples),
+    Math.round(SMART_CROSSFADE_TAIL_SECONDS * sampleRate)
+  );
+  const trimToEdges = sampleCount > headSamples + tailSamples && tailSamples > 0;
+
+  if (!trimToEdges) {
+    return {
+      channels: sourceChannels.map((channel) =>
+        new Float32Array(channel.subarray(0, sampleCount)).buffer
+      ),
+      duration,
+      headDuration: 0,
+      sampleRate,
+      tailDuration: 0
+    };
+  }
+
+  return {
+    channels: sourceChannels.map((channel) => {
+      const window = new Float32Array(headSamples + tailSamples);
+      window.set(channel.subarray(0, headSamples));
+      window.set(channel.subarray(sampleCount - tailSamples, sampleCount), headSamples);
+      return window.buffer;
+    }),
+    duration,
+    headDuration: headSamples / sampleRate,
+    sampleRate,
+    tailDuration: tailSamples / sampleRate
+  };
+}
 
 function abortError() {
   return new DOMException('Smart Crossfade analysis was cancelled', 'AbortError');
@@ -203,8 +252,13 @@ export function createSmartCrossfadeAnalyzer({
 
   async function readCached(key) {
     if (cache.has(key)) {
-      report('memory-cache-hit', { trackId: key });
-      return cache.get(key);
+      const stored = cache.get(key);
+      if (!aiEnabledState || stored.aiAnalysisStatus !== 'unavailable') {
+        report('memory-cache-hit', { trackId: key });
+        return stored;
+      }
+      cache.delete(key);
+      report('memory-cache-ai-retry', { trackId: key });
     }
     if (typeof nativeBridge?.get !== 'function') return null;
     const generation = analysisModeGeneration;
@@ -226,8 +280,13 @@ export function createSmartCrossfadeAnalyzer({
           const capabilities = await aiCapabilities();
           if (!capabilities.available) {
             valid = withoutAiAudioAnalysis(valid);
-          } else if (valid.aiModelSignature !== capabilities.modelSignature) {
-            report('disk-cache-ai-mismatch', {
+          } else if (
+            valid.aiModelSignature !== capabilities.modelSignature ||
+            valid.aiAnalysisStatus !== 'ready'
+          ) {
+            report(valid.aiModelSignature !== capabilities.modelSignature
+              ? 'disk-cache-ai-mismatch'
+              : 'disk-cache-ai-incomplete', {
               trackId: key,
               cachedModelSignature: valid.aiModelSignature || '',
               modelSignature: capabilities.modelSignature
@@ -354,14 +413,16 @@ export function createSmartCrossfadeAnalyzer({
       modelSignature: capabilities.modelSignature
     });
     try {
-      const channels = Array.from({ length: Math.min(2, buffer.numberOfChannels) }, (_, index) =>
-        new Float32Array(buffer.getChannelData(index)).buffer
-      );
+      const pcm = aiAnalysisPcmWindows(buffer);
       const neural = await cancellableWait(nativeBridge.analyzeAi(
         key,
-        channels,
-        buffer.sampleRate,
-        Number(buffer.duration) || Number(baseAnalysis.duration) || 0
+        pcm.channels,
+        pcm.sampleRate,
+        pcm.duration || Number(baseAnalysis.duration) || 0,
+        {
+          headDuration: pcm.headDuration,
+          tailDuration: pcm.tailDuration
+        }
       ), signal);
       const merged = mergeAiAudioAnalysis(baseAnalysis, neural, capabilities.modelSignature);
       if (typeof nativeBridge?.store === 'function') {
@@ -382,13 +443,6 @@ export function createSmartCrossfadeAnalyzer({
     } catch (error) {
       if (error?.name === 'AbortError') throw error;
       const fallback = markAiAudioAnalysisUnavailable(baseAnalysis, capabilities.modelSignature);
-      if (typeof nativeBridge?.store === 'function') {
-        try {
-          await nativeBridge.store(key, fallback);
-        } catch {
-          // The deterministic result remains usable in memory when persistence fails.
-        }
-      }
       report('onnx-call-failed', {
         trackId: key,
         elapsedMs: Date.now() - startedAt,
@@ -478,7 +532,10 @@ export function createSmartCrossfadeAnalyzer({
       if (!url) throw new Error('No authenticated audio stream was resolved for analysis');
       const buffer = await decodeWithBackoff(job.key, url, controller.signal);
       const analysis = await analyzeBuffer(job.key, buffer, job.duration, controller.signal);
-      if (job.generation === analysisModeGeneration) remember(job.key, analysis);
+      if (job.generation === analysisModeGeneration &&
+          (!aiEnabledState || analysis.aiAnalysisStatus !== 'unavailable')) {
+        remember(job.key, analysis);
+      }
       return analysis;
     } finally {
       activeControllers.delete(controller);

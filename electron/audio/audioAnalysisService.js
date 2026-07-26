@@ -8,6 +8,10 @@ import {
   localAnalysisWithSource,
   safeAudioAnalysisDiagnostics
 } from '../../shared/audioAnalysis.js';
+import {
+  SMART_CROSSFADE_HEAD_SECONDS,
+  SMART_CROSSFADE_TAIL_SECONDS
+} from '../../shared/aiAudioAnalysis.js';
 import { createOnnxSmartCrossfadeAnalyzer } from './onnxSmartCrossfade.js';
 
 // Owns native-addon loading, analysis request de-duplication, and the persisted
@@ -156,7 +160,10 @@ export function setupAudioAnalysisService({
       cache.delete(trackId);
       return null;
     }
-    if (modelSignature && entry.result.aiModelSignature !== modelSignature) {
+    if (modelSignature && (
+      entry.result.aiModelSignature !== modelSignature ||
+      entry.result.aiAnalysisStatus !== 'ready'
+    )) {
       return null;
     }
     cache.delete(trackId);
@@ -243,18 +250,34 @@ export function setupAudioAnalysisService({
       : [];
     const sampleRate = Number(payload.sampleRate);
     const duration = Number(payload.duration);
+    const headDuration = Number(payload.headDuration) || 0;
+    const tailDuration = Number(payload.tailDuration) || 0;
+    const hasEdgeWindows = headDuration !== 0 || tailDuration !== 0;
+    const maximumHeadDuration = SMART_CROSSFADE_HEAD_SECONDS;
+    const maximumTailDuration = SMART_CROSSFADE_TAIL_SECONDS;
+    const expectedWindowSamples = Math.round((headDuration + tailDuration) * sampleRate);
     const maximumSamples = sampleRate * 60 * 30;
     if (!channels.length || channels.length > 2 || channels.some((channel) => !channel?.length) ||
         channels.some((channel) => channel.length !== channels[0].length) ||
         !Number.isFinite(sampleRate) || sampleRate < 8_000 || sampleRate > 192_000 ||
         !Number.isFinite(duration) || duration <= 0 || duration > 60 * 30 ||
-        !Number.isFinite(maximumSamples) || channels[0].length > maximumSamples) {
+        !Number.isFinite(maximumSamples) || channels[0].length > maximumSamples ||
+        (hasEdgeWindows && (
+          headDuration <= 0 ||
+          tailDuration <= 0 ||
+          headDuration > maximumHeadDuration ||
+          tailDuration > maximumTailDuration ||
+          headDuration + tailDuration >= duration ||
+          channels[0].length !== expectedWindowSamples
+        ))) {
       log('onnx-request-invalid', {
         trackId,
         channels: channels.length,
         sampleCount: channels[0]?.length || 0,
         sampleRate,
-        duration
+        duration,
+        headDuration,
+        tailDuration
       });
       throw new Error('Invalid PCM data for Smart Crossfade ONNX analysis.');
     }
@@ -266,10 +289,18 @@ export function setupAudioAnalysisService({
       sampleCount: channels[0].length,
       sampleRate,
       duration,
+      headDuration,
+      tailDuration,
       modelSignature: capabilities.modelSignature
     });
     const task = Promise.resolve()
-      .then(() => onnxAnalyzer.analyze({ channels, duration, sampleRate }))
+      .then(() => onnxAnalyzer.analyze({
+        channels,
+        duration,
+        headDuration,
+        sampleRate,
+        tailDuration
+      }))
       .then((result) => {
         log('onnx-analysis-ready', {
           trackId,
