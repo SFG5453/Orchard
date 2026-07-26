@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { Innertube, UniversalCache } from 'youtubei.js';
 import { createAccountProfileProbe } from './accountProfileProbe.js';
+import { createBrowserAccountSelectionStore } from './browserAccountSelection.js';
 import { createBrowserMusicFetch } from './browserMusicApi.js';
 import {
   isAuthSwitchDestinationUrl,
@@ -50,6 +51,8 @@ export function createAuthService({
     partition: browserAuthPartition,
     userDataPath: app.getPath('userData')
   });
+  const browserAccountSelection = createBrowserAccountSelectionStore(app.getPath('userData'));
+  const savedBrowserAccount = browserAccountSelection.cached();
   let innertubePromise;
   let innertubeInstance;
   let browserInnertubePromise;
@@ -68,9 +71,9 @@ export function createAuthService({
     user: null,
     browser: {
       cookie: '',
-      visitorData: '',
-      dataSyncId: '',
-      accountIndex: 0,
+      visitorData: savedBrowserAccount.visitorData,
+      dataSyncId: savedBrowserAccount.dataSyncId,
+      accountIndex: savedBrowserAccount.accountIndex,
       poToken: ''
     }
   };
@@ -259,6 +262,18 @@ export function createAuthService({
     authState.browser.cookie = await collectYouTubeAuthCookie(authSession);
   }
 
+  function saveBrowserAccountSelection() {
+    browserAccountSelection.save(authState.browser);
+  }
+
+  function clearBrowserAccountSelection() {
+    browserAccountSelection.clear();
+    authState.browser.visitorData = '';
+    authState.browser.dataSyncId = '';
+    authState.browser.accountIndex = 0;
+    authState.browser.poToken = '';
+  }
+
   async function captureBrowserPageAuth(webContents) {
     try {
       const pageAuth = await webContents.executeJavaScript(`
@@ -308,6 +323,7 @@ export function createAuthService({
     }
 
     if (hasBrowserLoginCookie()) {
+      saveBrowserAccountSelection();
       authState.status = 'signed_in';
       authState.pending = null;
       authState.error = '';
@@ -397,6 +413,7 @@ export function createAuthService({
 
   async function startBrowserSignIn() {
     accountProfile.clear();
+    clearBrowserAccountSelection();
     authState.status = 'starting';
     authState.pending = null;
     authState.error = '';
@@ -485,6 +502,7 @@ export function createAuthService({
     if (yt.session.logged_in) await yt.session.signOut();
     await yt.session.oauth.removeCache();
     await electronSession.fromPartition(browserAuthPartition).clearStorageData({ storages: ['cookies'] });
+    browserAccountSelection.clear();
     authState.browser = { cookie: '', visitorData: '', dataSyncId: '', accountIndex: 0, poToken: '' };
     browserInnertubePromise = null;
     browserInnertubeIdentity = '';
