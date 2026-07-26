@@ -59,6 +59,45 @@ test('restarting ended video playback refreshes the active media kind', () => {
   assert.equal(calls[0].options.queueAlreadyShuffled, false);
 });
 
+test('pausing after a crossfade cannot be reinterpreted as restarting the track', () => {
+  let pauseCalls = 0;
+  let playCalls = 0;
+  let restartCalls = 0;
+  const media = {
+    paused: false,
+    src: 'http://127.0.0.1/current',
+    pause() {
+      pauseCalls += 1;
+      this.paused = true;
+    },
+    play() {
+      playCalls += 1;
+      return Promise.resolve();
+    }
+  };
+  const ctx = {
+    activeTrack: { value: { id: 'crossfaded-track' } },
+    activeTrackIsVideo: { value: false },
+    currentPlaybackElement: () => media,
+    isPlaying: { value: true },
+    listeningParty: { value: { status: 'offline' } },
+    listeningPartyIsHost: { value: true },
+    playbackError: { value: 'Previous crossfade cleanup error' },
+    playTrack: () => {
+      restartCalls += 1;
+    },
+    queue: { value: [] }
+  };
+
+  installPlaybackControls(ctx);
+  ctx.togglePlayback();
+
+  assert.equal(pauseCalls, 1);
+  assert.equal(playCalls, 0);
+  assert.equal(restartCalls, 0);
+  assert.equal(ctx.isPlaying.value, false);
+});
+
 test('advancing past an unavailable track removes it and plays the following queue item', async () => {
   const unavailable = { id: 'unavailable-track' };
   const playable = { id: 'playable-track' };

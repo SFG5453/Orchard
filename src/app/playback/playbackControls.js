@@ -163,8 +163,17 @@ export function installPlaybackControls(ctx) {
       ctx.sendListeningPartyRequest({ action: ctx.isPlaying.value ? 'pause' : 'play' });
       return;
     }
+    const mediaBeforeCrossfadeCancel = ctx.currentPlaybackElement();
+    const shouldPause = ctx.isPlaying.value === true || mediaBeforeCrossfadeCancel?.paused === false;
     ctx.cancelActiveCrossfade();
     const media = ctx.currentPlaybackElement();
+    const videoAudio = ctx.activeTrackIsVideo?.value ? ctx.videoAudioRef?.value : null;
+    if (shouldPause) {
+      media?.pause();
+      videoAudio?.pause();
+      ctx.isPlaying.value = false;
+      return;
+    }
     if (ctx.activeTrack.value && (!media?.src || playbackNeedsFreshStream(media, ctx.playbackError.value))) {
       ctx.playTrack(ctx.activeTrack.value, {
         mediaKind: ctx.activeMediaKind.value,
@@ -176,23 +185,17 @@ export function installPlaybackControls(ctx) {
       return;
     }
     if (!media?.src) return;
-    const videoAudio = ctx.activeTrackIsVideo.value ? ctx.videoAudioRef.value : null;
 
-    if (media.paused) {
-      ctx.playbackError.value = '';
-      ctx.audioAnalyzer.resume().catch(() => {});
-      ctx.syncVideoCompanionAudio();
-      const playRequest = videoAudio?.src
-        ? Promise.all([media.play(), videoAudio.play()])
-        : media.play();
-      playRequest.catch((error) => {
-        if (ctx.isInterruptedPlaybackRequest(error)) return;
-        ctx.playbackError.value = error.message;
-      });
-    } else {
-      media.pause();
-      videoAudio?.pause();
-    }
+    ctx.playbackError.value = '';
+    ctx.audioAnalyzer.resume().catch(() => {});
+    ctx.syncVideoCompanionAudio();
+    const playRequest = videoAudio?.src
+      ? Promise.all([media.play(), videoAudio.play()])
+      : media.play();
+    playRequest.catch((error) => {
+      if (ctx.isInterruptedPlaybackRequest(error)) return;
+      ctx.playbackError.value = error.message;
+    });
   };
 
   ctx.seekRelative = function seekRelative(offsetSeconds) {

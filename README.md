@@ -19,7 +19,7 @@ Real shuffle, Best Mix queue sorting, smart crossfade, advanced audio controls, 
 
 Orchard is an open-source, unofficial YouTube Music desktop client built for people who want more control over playback, queues, audio, discovery, and connected devices than the website provides.
 
-It signs in through an embedded browser session and uses browser-backed InnerTube requests to access YouTube Music. Orchard is not affiliated with or endorsed by YouTube or Google.
+It signs in through an embedded browser session and uses browser-backed InnerTube requests to access YouTube Music. Orchard is an independent project and is not affiliated with, endorsed by, or sponsored by YouTube, Google, or Apple.
 
 ## Why Orchard?
 
@@ -50,7 +50,7 @@ It signs in through an embedded browser session and uses browser-backed InnerTub
 
 ### Smart Crossfade
 
-Orchard reproduces beat-matched, phrase-aligned AutoMix transitions with 3-phase volume curves, progressive filter sweeps, downbeat quantization, and bass swaps — inspired by [Apple Music's AutoMix](https://x.com/actuallyaridan/status/1936085699104473205).
+Orchard reproduces beat-matched, phrase-aligned AutoMix transitions with 3-phase volume curves, progressive filter sweeps, downbeat quantization, and bass swaps — inspired by [Apple Music's AutoMix](https://x.com/actuallyaridan/status/1936085699104473205). Apple Music is referenced only as an example; Orchard is an independent project and is not affiliated with Apple.
 
 Release builds include a pinned [ONNX model suite](docs/smart-crossfade-models.md):
 HTDemucs for stems and All-In-One for functional structure. A playback setting
