@@ -4,6 +4,7 @@ const MAX_OVERLAY_MS = 4800;
 const STYLE_LABELS = {
   dj_blend: 'Beat blend',
   dj_filter: 'Filter mix',
+  dj_quick: 'AI 4-beat mix',
   dj_switch: 'Phrase switch',
   equal_power: 'Smart fade',
   gapless: 'Gapless handoff'

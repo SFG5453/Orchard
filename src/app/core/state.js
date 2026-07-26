@@ -38,7 +38,7 @@ export function installState(ctx) {
   ctx.USER_PREFERENCES_STORAGE_KEY = 'orchard:user-preferences';
   ctx.DEFAULT_USER_PREFERENCES = {
     ...APPEARANCE_DEFAULTS,
-    aiSmartCrossfadeEnabled: false,
+    aiSmartCrossfadeEnabled: true,
     autoplayEnabled: true,
     crossfadeEnabled: true,
     crossfadeMode: AUTO_CROSSFADE_DEFAULTS.mode,

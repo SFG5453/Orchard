@@ -42,7 +42,8 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
 
   function scheduleDjFilters(fromNode, toNode, startTime, handoffTime, duration, style, bassSwap = false) {
     const prerollSeconds = handoffTime - startTime;
-    const isLongPreroll = prerollSeconds > 6;
+    const isLongPreroll = prerollSeconds > 6 ||
+      (style === 'dj_quick' && prerollSeconds > 0.5);
     const outgoingStart = Math.min(20000, fromNode.lowPass.context.sampleRate * 0.45);
     fromNode.lowPass.frequency.cancelScheduledValues(startTime);
     fromNode.lowPass.frequency.setValueAtTime(outgoingStart, startTime);
@@ -52,6 +53,7 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     // the preroll, preventing muddy low-end clashing in the long overlap.
     const incomingCutoff = isLongPreroll ? 500 : (bassSwap ? 350 : (style === 'dj_filter' ? 1600 : 900));
     let incomingHandoffTime = handoffTime;
+    let incomingHandoffCutoff = incomingCutoff;
     toNode.highPass.frequency.setValueAtTime(incomingCutoff, startTime);
     if (isLongPreroll && prerollSeconds > 10) {
       // During a long preroll, progressively open the HP filter from the
@@ -63,6 +65,7 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
       // the boundary from handoffTime can differ by a floating-point epsilon,
       // which Web Audio treats as an overlapping automation event.
       incomingHandoffTime = preOpenTime + preOpenDuration;
+      incomingHandoffCutoff = 350;
       toNode.highPass.frequency.setValueCurveAtTime(
         filterCurve(incomingCutoff, 350),
         preOpenTime,
@@ -80,7 +83,7 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
       duration
     );
     toNode.highPass.frequency.setValueCurveAtTime(
-      filterCurve(isLongPreroll ? 350 : incomingCutoff, 20),
+      filterCurve(incomingHandoffCutoff, 20),
       incomingHandoffTime,
       duration
     );
@@ -88,8 +91,12 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
 
   function scheduleDjGains(fromNode, toNode, target, startTime, handoffTime, duration, style) {
     const prerollSeconds = handoffTime - startTime;
-    const isLongPreroll = prerollSeconds > 6;
-    const bedGain = target * (style === 'dj_switch' ? 0.22 : (isLongPreroll ? 0.20 : 0.28));
+    const isLongPreroll = prerollSeconds > 6 ||
+      (style === 'dj_quick' && prerollSeconds > 0.5);
+    const bedGain = target * (
+      style === 'dj_quick' ? 0.18 :
+        (style === 'dj_switch' ? 0.22 : (isLongPreroll ? 0.20 : 0.28))
+    );
     const bedFadeSeconds = isLongPreroll ? Math.min(prerollSeconds * 0.4, DJ_BED_FADE_IN_SECONDS) : DJ_BED_FADE_IN_SECONDS;
     const bedReadyTime = Math.min(handoffTime, startTime + bedFadeSeconds);
     // Outgoing: hold full volume, then gently reduce during preroll before
@@ -146,7 +153,7 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     // separate master gain so slider changes can take effect mid-transition.
     const target = 1;
 
-    const djStyle = ['dj_switch', 'dj_filter', 'dj_blend'].includes(transitionStyle);
+    const djStyle = ['dj_switch', 'dj_filter', 'dj_blend', 'dj_quick'].includes(transitionStyle);
     if (djStyle) {
       scheduleDjGains(
         fromNode,

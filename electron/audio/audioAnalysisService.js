@@ -77,6 +77,7 @@ export function setupAudioAnalysisService({
   let nativeLoadAttempts = 0;
   let saveTimer = null;
   let savePromise = Promise.resolve();
+  let cacheGeneration = 0;
 
   function log(event, details = {}) {
     try {
@@ -189,6 +190,18 @@ export function setupAudioAnalysisService({
     const available = Boolean(addon());
     log('availability-result', { available, loadAttempts: nativeLoadAttempts });
     return available;
+  });
+
+  ipcMain.handle(AUDIO_ANALYSIS.CLEAR, async () => {
+    await cacheReady;
+    const cleared = cache.size;
+    cacheGeneration += 1;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    cache.clear();
+    await persist();
+    log('cache-cleared', { cleared });
+    return { cleared };
   });
 
   ipcMain.handle(AUDIO_ANALYSIS.GET, async (_event, value) => {
@@ -347,6 +360,7 @@ export function setupAudioAnalysisService({
     }
 
     const startedAt = Date.now();
+    const requestGeneration = cacheGeneration;
     log('native-analysis-start', { trackId, sampleCount: samples.length, sampleRate, duration });
     let nativeTask;
     try {
@@ -362,9 +376,11 @@ export function setupAudioAnalysisService({
           log('native-analysis-invalid', { trackId, bpm: Number(rawResult?.bpm) || 0 });
           throw new Error('Native audio analysis returned an invalid BPM.');
         }
-        cache.set(trackId, { lastUsed: Date.now(), result });
-        while (cache.size > MAX_CACHE_ITEMS) cache.delete(cache.keys().next().value);
-        schedulePersist();
+        if (requestGeneration === cacheGeneration) {
+          cache.set(trackId, { lastUsed: Date.now(), result });
+          while (cache.size > MAX_CACHE_ITEMS) cache.delete(cache.keys().next().value);
+          schedulePersist();
+        }
         log('native-analysis-ready', {
           trackId,
           elapsedMs: Date.now() - startedAt,
@@ -393,6 +409,7 @@ export function setupAudioAnalysisService({
       ipcMain.removeHandler(AUDIO_ANALYSIS.AVAILABLE);
       ipcMain.removeHandler(AUDIO_ANALYSIS.AI_CAPABILITIES);
       ipcMain.removeHandler(AUDIO_ANALYSIS.AI_ANALYZE);
+      ipcMain.removeHandler(AUDIO_ANALYSIS.CLEAR);
       ipcMain.removeHandler(AUDIO_ANALYSIS.GET);
       ipcMain.removeHandler(AUDIO_ANALYSIS.DEBUG);
       ipcMain.removeHandler(AUDIO_ANALYSIS.STORE);

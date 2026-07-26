@@ -58,6 +58,8 @@ export function installSmartCrossfadeActions(ctx) {
   ctx.nextCrossfadeAnalysisRequest = 0;
   ctx.crossfadeAnalysisAbort = null;
   ctx.nextCrossfadeAnalysisAbort = null;
+  ctx.smartCrossfadeCacheClearing = ref(false);
+  ctx.smartCrossfadeCacheMessage = ref('');
   const analyzerFactory = ctx.createSmartCrossfadeAnalyzer || createSmartCrossfadeAnalyzer;
   const bpmClientFactory = ctx.createBpmMetadataClient || createBpmMetadataClient;
   ctx.smartCrossfadeAnalyzer = analyzerFactory({
@@ -94,6 +96,41 @@ export function installSmartCrossfadeActions(ctx) {
     ctx.nextCrossfadeAnalysisAbort?.abort();
     ctx.nextCrossfadeAnalysisAbort = null;
     ctx.nextCrossfadeAnalysis.value = emptyAnalysis(trackId);
+  };
+
+  ctx.clearSmartCrossfadeAnalysisCache = async function clearSmartCrossfadeAnalysisCache() {
+    if (ctx.smartCrossfadeCacheClearing.value) return;
+    ctx.smartCrossfadeCacheClearing.value = true;
+    ctx.smartCrossfadeCacheMessage.value = 'Clearing analysis cache...';
+    ctx.resetCrossfadeAnalysis(ctx.activeTrack?.value?.id || '');
+    ctx.resetNextCrossfadeAnalysis(ctx.nextTrackPreload?.value?.track?.id || '');
+
+    try {
+      const result = await ctx.smartCrossfadeAnalyzer.clear();
+      ctx.crossfadeAnalysisByTrack.clear();
+      const cleared = Number(result?.cleared) || 0;
+      ctx.smartCrossfadeCacheMessage.value = cleared
+        ? `Cleared ${cleared} saved ${cleared === 1 ? 'analysis' : 'analyses'}. Reanalyzing current tracks...`
+        : 'Analysis cache cleared. Reanalyzing current tracks...';
+
+      const active = ctx.activeTrack?.value;
+      const prepared = ctx.nextTrackPreload?.value;
+      if (active?.id && active.streamUrl) {
+        void ctx.analyzeCurrentCrossfadeTrack(active, active.streamUrl, ctx.duration?.value || 0);
+      }
+      if (prepared?.track?.id && prepared.resolved?.streamUrl) {
+        void ctx.analyzeNextCrossfadeTrack(
+          prepared.track,
+          prepared.resolved.streamUrl,
+          prepared.track.durationSeconds || 0
+        );
+      }
+    } catch (error) {
+      ctx.smartCrossfadeCacheMessage.value =
+        String(error?.message || error || 'Could not clear the analysis cache.');
+    } finally {
+      ctx.smartCrossfadeCacheClearing.value = false;
+    }
   };
 
   // Each target owns one AbortController. Request counters are the final stale-

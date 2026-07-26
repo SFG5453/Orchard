@@ -123,8 +123,8 @@ export default {
           <div class="settings-row__copy">
             <label for="settings-ai-smart-crossfade">AI Smart Crossfade analysis</label>
             <p>
-              Use bundled HTDemucs stems and All-In-One functional sections to choose safer transition points.
-              Estimated additional memory during analysis: 1–1.5 GB.
+              Use the bundled mix-native model to verify beats, downbeats, and functional sections.
+              Clean matches can use a quiet preroll into a one-bar, four-beat takeover.
             </p>
           </div>
           <q-toggle
@@ -134,6 +134,25 @@ export default {
             color="primary"
             aria-label="AI Smart Crossfade analysis"
           />
+        </div>
+
+        <div class="settings-action-row">
+          <div class="settings-row__copy">
+            <span>Smart Crossfade analysis cache</span>
+            <p>
+              Remove saved beat, structure, and AI results. Orchard will analyze the current and next tracks again.
+            </p>
+            <p v-if="smartCrossfadeCacheMessage" aria-live="polite">{{ smartCrossfadeCacheMessage }}</p>
+          </div>
+          <button
+            type="button"
+            class="settings-button"
+            :disabled="smartCrossfadeCacheClearing"
+            @click="clearSmartCrossfadeAnalysisCache"
+          >
+            <q-icon name="delete_sweep" />
+            {{ smartCrossfadeCacheClearing ? 'Clearing...' : 'Clear analysis cache' }}
+          </button>
         </div>
 
         <div class="settings-row settings-row--slider" :class="{ 'settings-row--disabled': !crossfadeEnabled }">

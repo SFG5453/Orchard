@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -67,6 +67,40 @@ test('audio analysis service caches native results across service restarts', asy
     assert.deepEqual(diskHit, analyzed);
     await secondService.stop();
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('audio analysis service clears memory and persisted analysis cache', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-clear-'));
+  const cachePath = path.join(directory, 'cache.json');
+  const ipc = fakeIpcMain();
+  const service = setupAudioAnalysisService({
+    cachePath,
+    ipcMain: ipc,
+    nativeModulePath: 'missing-native-addon',
+    loadNativeAddon: () => { throw new Error('native unavailable'); },
+    logger: () => {}
+  });
+  const result = {
+    analysisVersion: 7,
+    duration: 120,
+    bpm: 120,
+    beatInterval: 0.5,
+    beats: [0, 0.5],
+    downbeats: [0],
+    phraseBoundaries: [0, 16]
+  };
+
+  try {
+    await ipc.invoke('audio-analysis:store', { trackId: 'clear-me', result });
+    assert.ok(await ipc.invoke('audio-analysis:get', 'clear-me'));
+    assert.deepEqual(await ipc.invoke('audio-analysis:clear'), { cleared: 1 });
+    assert.equal(await ipc.invoke('audio-analysis:get', 'clear-me'), null);
+    const persisted = JSON.parse(await readFile(cachePath, 'utf8'));
+    assert.deepEqual(persisted.items, []);
+  } finally {
+    await service.stop();
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -219,7 +253,7 @@ test('audio analysis cache requires the active model signature only when AI is e
       status: async () => ({
         available: true,
         modelSignature: 'models@one',
-        pipeline: 'all-in-one-htdemucs'
+        pipeline: 'all-in-one-mix'
       }),
       analyze: async () => ({ aiAnalysisStatus: 'ready' })
     }),

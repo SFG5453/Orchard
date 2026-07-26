@@ -57,6 +57,7 @@ function workerFactory(result = validAnalysis()) {
 function bridge(overrides = {}) {
   return {
     available: async () => false,
+    clear: async () => ({ cleared: 0 }),
     get: async () => null,
     store: async () => true,
     analyze: async () => validAnalysis(),
@@ -170,6 +171,35 @@ test('duplicate requests share one uncached preparation job', async () => {
     releaseDecode();
     const [left, right] = await Promise.all([first, second]);
     assert.strictEqual(left, right);
+  } finally {
+    analyzer.destroy();
+  }
+});
+
+test('clearing analysis cancels stale work and clears both cache layers', async () => {
+  let clearCalls = 0;
+  const analyzer = createSmartCrossfadeAnalyzer({
+    decodeAudio: (_url, signal) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => {
+        reject(new DOMException('Smart Crossfade analysis was cancelled', 'AbortError'));
+      }, { once: true });
+    }),
+    nativeBridge: bridge({
+      clear: async () => {
+        clearCalls += 1;
+        return { cleared: 7 };
+      }
+    }),
+    workerFactory: workerFactory()
+  });
+
+  try {
+    const stale = analyzer.analyze('stale-track', 'url');
+    await tick();
+    const result = await analyzer.clear();
+    await assert.rejects(stale, { name: 'AbortError' });
+    assert.deepEqual(result, { cleared: 7 });
+    assert.equal(clearCalls, 1);
   } finally {
     analyzer.destroy();
   }

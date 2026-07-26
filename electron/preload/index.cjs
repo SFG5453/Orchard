@@ -74,6 +74,7 @@ contextBridge.exposeInMainWorld('orchardCrypto', {
 contextBridge.exposeInMainWorld('orchardAudioAnalysis', {
   available: () => ipcRenderer.invoke('audio-analysis:available'),
   aiCapabilities: () => ipcRenderer.invoke('audio-analysis:ai-capabilities'),
+  clear: () => ipcRenderer.invoke('audio-analysis:clear'),
   analyzeAi: (trackId, channels, sampleRate, duration) => ipcRenderer.invoke('audio-analysis:ai-analyze', {
     trackId,
     channels,

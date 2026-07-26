@@ -179,6 +179,58 @@ test('DJ styles schedule DJ gains and filters even when handoffStart equals star
   assert.ok(toNode.mixGain.gain.events.some((event) => event.type === 'curve' && event.time === 50));
 });
 
+test('AI quick mixes isolate a quiet preroll before the four-beat takeover', () => {
+  const fromAudio = {};
+  const toAudio = {};
+  const fromNode = mixNode();
+  const toNode = mixNode();
+  const nodes = new Map([[fromAudio, fromNode], [toAudio, toNode]]);
+  const mixer = createCrossfadeMixer({
+    connectElement: (audio) => nodes.get(audio),
+    currentTime: () => 12
+  });
+
+  const timing = mixer.scheduleCrossfade({
+    fromAudio,
+    toAudio,
+    duration: 8,
+    handoffStartSeconds: 6,
+    handoffDuration: 2,
+    transitionStyle: 'dj_quick',
+    bassSwap: true,
+    leadTime: 0
+  });
+
+  assert.deepEqual(timing, {
+    startTime: 12,
+    handoffStart: 18,
+    promotionTime: 19.16,
+    endTime: 20
+  });
+  assert.ok(fromNode.mixGain.gain.events.some((event) =>
+    event.type === 'ramp' && event.value === 0.88 && event.time === 18
+  ));
+  assert.ok(fromNode.mixGain.gain.events.some((event) =>
+    event.type === 'curve' && event.time === 18 && event.duration === 2
+  ));
+  assert.ok(toNode.mixGain.gain.events.some((event) =>
+    event.type === 'ramp' && event.value === 0.18
+  ));
+  assert.ok(toNode.mixGain.gain.events.some((event) =>
+    event.type === 'curve' && event.time === 18 && event.duration === 2
+  ));
+  assert.ok(toNode.highPass.frequency.events.some((event) =>
+    event.type === 'set' && event.value === 500 && event.time === 12
+  ));
+  assert.ok(toNode.highPass.frequency.events.some((event) =>
+    event.type === 'curve' &&
+      event.first === 500 &&
+      event.last === 20 &&
+      event.time === 18 &&
+      event.duration === 2
+  ));
+});
+
 test('resetting a mix cancels its envelope without changing the master volume', () => {
   const element = {};
   const node = mixNode();

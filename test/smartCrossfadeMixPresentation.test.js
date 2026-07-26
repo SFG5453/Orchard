@@ -44,3 +44,18 @@ test('smart crossfade presentation exposes both decks and analysis metadata', ()
   assert.equal(mix.tempoShift, -3);
   assert.equal(mix.transitionBeats, 16);
 });
+
+test('smart crossfade presentation labels AI four-beat transitions', () => {
+  const mix = createSmartCrossfadeMixPresentation({
+    fromTrack: { id: 'from', title: 'First' },
+    toTrack: { id: 'to', title: 'Second' },
+    transition: {
+      fadeSeconds: 2,
+      transitionStyle: 'dj_quick',
+      transitionBeats: 4
+    }
+  });
+
+  assert.equal(mix.styleLabel, 'AI 4-beat mix');
+  assert.equal(mix.transitionBeats, 4);
+});

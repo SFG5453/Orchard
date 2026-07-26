@@ -29,7 +29,7 @@ test('trusted neural structure can be removed without losing deterministic cues'
   const base = deterministicAnalysis();
   const merged = mergeAiAudioAnalysis(base, {
     aiAnalysisStatus: 'ready',
-    aiPipeline: 'all-in-one-htdemucs',
+    aiPipeline: 'all-in-one-mix',
     aiStructureConfidence: 0.82,
     phrases: [
       { start: 0, end: 16, type: 'intro', confidence: 0.9 },

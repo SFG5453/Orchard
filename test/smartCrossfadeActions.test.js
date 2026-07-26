@@ -23,12 +23,13 @@ function localAnalysis() {
   };
 }
 
-function context({ analyze, lookup }) {
+function context({ analyze, clear = async () => ({ cleared: 0 }), lookup }) {
   const logs = [];
   return {
     audioAnalyzer: { decodeAudio: async () => null },
     createSmartCrossfadeAnalyzer: () => ({
       analyze,
+      clear,
       destroy() {},
       report: (event, details) => logs.push({ event, details })
     }),
@@ -53,6 +54,32 @@ test('exposes cached BPM labels for right-panel tracks', () => {
   assert.equal(ctx.trackBpmLabel({ id: 'cached', title: 'Cached' }), '128 BPM');
   assert.equal(ctx.trackBpmLabel({ id: 'direct', tempo: 98 }), '98 BPM');
   assert.equal(ctx.trackBpmLabel({ id: 'unknown' }), '');
+});
+
+test('clearing Smart Crossfade analysis resets memory and reanalyzes the active track', async () => {
+  let analysisCalls = 0;
+  const ctx = context({
+    analyze: async () => {
+      analysisCalls += 1;
+      return localAnalysis();
+    },
+    clear: async () => ({ cleared: 3 }),
+    lookup: async () => null
+  });
+  ctx.activeTrack = { value: { id: 'active', streamUrl: 'stream' } };
+  ctx.nextTrackPreload = { value: null };
+  ctx.duration = { value: 180 };
+  installSmartCrossfadeActions(ctx);
+  ctx.crossfadeAnalysisByTrack.set('old', localAnalysis());
+
+  await ctx.clearSmartCrossfadeAnalysisCache();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(ctx.crossfadeAnalysisByTrack.has('old'), false);
+  assert.equal(analysisCalls, 1);
+  assert.equal(ctx.crossfadeAnalysis.value.trackId, 'active');
+  assert.equal(ctx.crossfadeAnalysis.value.status, 'ready');
+  assert.match(ctx.smartCrossfadeCacheMessage.value, /Cleared 3 saved analyses/);
 });
 
 test('GetSongBPM 404 does not block successful local analysis', async () => {

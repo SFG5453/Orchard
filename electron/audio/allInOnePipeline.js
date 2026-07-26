@@ -13,14 +13,12 @@ export const ALL_IN_ONE_LABELS = Object.freeze([
   'chorus'
 ]);
 
-export const HTDEMUCS_SAMPLE_RATE = 44_100;
-export const HTDEMUCS_SEGMENT_SAMPLES = 343_980;
-export const HTDEMUCS_STEMS = Object.freeze(['drums', 'bass', 'other', 'vocals']);
+export const ALL_IN_ONE_SAMPLE_RATE = 44_100;
 
 const ALL_IN_ONE_FRAME_SIZE = 2048;
 const ALL_IN_ONE_HOP_SIZE = 441;
-const ALL_IN_ONE_FPS = HTDEMUCS_SAMPLE_RATE / ALL_IN_ONE_HOP_SIZE;
-const DEFAULT_VOCAL_FRAME_SECONDS = 0.5;
+const ALL_IN_ONE_FPS = ALL_IN_ONE_SAMPLE_RATE / ALL_IN_ONE_HOP_SIZE;
+const ALL_IN_ONE_INPUT_PLANES = 4;
 
 function clamp(value, minimum, maximum) {
   const number = Number(value);
@@ -45,7 +43,7 @@ function average(left, right) {
   return output;
 }
 
-export function resampleAudioChannels(channels, sourceRate, targetRate = HTDEMUCS_SAMPLE_RATE) {
+export function resampleAudioChannels(channels, sourceRate, targetRate = ALL_IN_ONE_SAMPLE_RATE) {
   const input = channels
     .slice(0, 2)
     .map((channel) => channel instanceof Float32Array ? channel : new Float32Array(channel));
@@ -75,93 +73,6 @@ export function resampleAudioChannels(channels, sourceRate, targetRate = HTDEMUC
   return output.length === 1 ? [output[0], output[0]] : output;
 }
 
-function overlapWindow(length, overlap) {
-  const window = new Float32Array(length);
-  window.fill(1);
-  for (let index = 0; index < overlap; index += 1) {
-    const value = overlap <= 1 ? 1 : index / (overlap - 1);
-    window[index] = value;
-    window[length - index - 1] = value;
-  }
-  return window;
-}
-
-/**
- * Runs the fixed-window four-stem HTDemucs ONNX export and keeps only the
- * mono stems needed by All-In-One. Neural inference is offline and deliberately
- * serialized by its owning service; this function must never run on an audio
- * render callback.
- */
-export async function separateHtdemucs({
-  channels,
-  inputName = 'mix',
-  onProgress = () => {},
-  ort,
-  outputName = 'stems',
-  sampleRate,
-  session
-}) {
-  if (!ort?.Tensor || !session?.run) throw new Error('An ONNX Runtime session is required.');
-  const stereo = resampleAudioChannels(channels, sampleRate, HTDEMUCS_SAMPLE_RATE);
-  if (stereo.length !== 2 || !stereo[0].length) throw new Error('HTDemucs requires decoded audio.');
-
-  const totalSamples = stereo[0].length;
-  const overlap = Math.floor(HTDEMUCS_SEGMENT_SAMPLES / 4);
-  const stride = HTDEMUCS_SEGMENT_SAMPLES - overlap;
-  const chunkCount = Math.max(1, Math.ceil(totalSamples / stride));
-  const window = overlapWindow(HTDEMUCS_SEGMENT_SAMPLES, overlap);
-  const stems = Array.from({ length: HTDEMUCS_STEMS.length }, () => new Float32Array(totalSamples));
-  const weights = new Float32Array(totalSamples);
-
-  for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
-    const start = chunkIndex * stride;
-    if (start >= totalSamples) break;
-    const end = Math.min(start + HTDEMUCS_SEGMENT_SAMPLES, totalSamples);
-    const chunkLength = end - start;
-    const input = new Float32Array(2 * HTDEMUCS_SEGMENT_SAMPLES);
-    input.set(stereo[0].subarray(start, end), 0);
-    input.set(stereo[1].subarray(start, end), HTDEMUCS_SEGMENT_SAMPLES);
-
-    const results = await session.run({
-      [inputName]: new ort.Tensor('float32', input, [1, 2, HTDEMUCS_SEGMENT_SAMPLES])
-    });
-    const separated = results[outputName]?.data;
-    if (!(separated instanceof Float32Array) ||
-        separated.length < HTDEMUCS_STEMS.length * 2 * HTDEMUCS_SEGMENT_SAMPLES) {
-      throw new Error(`HTDemucs output "${outputName}" has an unexpected shape.`);
-    }
-
-    for (let sample = 0; sample < chunkLength; sample += 1) {
-      const weight = window[sample];
-      weights[start + sample] += weight;
-      for (let stem = 0; stem < HTDEMUCS_STEMS.length; stem += 1) {
-        const left = separated[(stem * 2) * HTDEMUCS_SEGMENT_SAMPLES + sample] || 0;
-        const right = separated[(stem * 2 + 1) * HTDEMUCS_SEGMENT_SAMPLES + sample] || 0;
-        stems[stem][start + sample] += (left + right) * 0.5 * weight;
-      }
-    }
-    onProgress({
-      stage: 'demucs',
-      completed: chunkIndex + 1,
-      total: chunkCount
-    });
-  }
-
-  for (let sample = 0; sample < totalSamples; sample += 1) {
-    const weight = Math.max(1e-8, weights[sample]);
-    for (const stem of stems) stem[sample] /= weight;
-  }
-  return {
-    sampleRate: HTDEMUCS_SAMPLE_RATE,
-    stems: {
-      drums: stems[0],
-      bass: stems[1],
-      other: stems[2],
-      vocals: stems[3]
-    }
-  };
-}
-
 function nearestBin(frequency, binWidth, maximumBin) {
   return Math.max(1, Math.min(maximumBin, Math.round(frequency / binWidth)));
 }
@@ -175,7 +86,7 @@ export function createAllInOneFilterbank({
   fftSize = ALL_IN_ONE_FRAME_SIZE,
   fmax = 17_000,
   fmin = 30,
-  sampleRate = HTDEMUCS_SAMPLE_RATE
+  sampleRate = ALL_IN_ONE_SAMPLE_RATE
 } = {}) {
   const maximumBin = fftSize / 2 - 1;
   const binWidth = sampleRate / fftSize;
@@ -211,33 +122,9 @@ export function createAllInOneFilterbank({
   return filters;
 }
 
-function monoStemOrder(stems) {
-  return [
-    stems.bass,
-    stems.drums,
-    stems.other,
-    stems.vocals
-  ].map((stem) => stem instanceof Float32Array ? stem : new Float32Array(stem || 0));
-}
-
-export function extractAllInOneSpectrogram({
-  onProgress = () => {},
-  sampleRate = HTDEMUCS_SAMPLE_RATE,
-  stems
-}) {
-  if (sampleRate !== HTDEMUCS_SAMPLE_RATE) {
-    throw new Error(`All-In-One expects ${HTDEMUCS_SAMPLE_RATE} Hz stems.`);
-  }
-  const ordered = monoStemOrder(stems);
-  const sampleCount = Math.min(...ordered.map((stem) => stem.length));
-  if (!Number.isFinite(sampleCount) || sampleCount <= 0) throw new Error('All-In-One requires four stems.');
-  const frames = Math.max(1, Math.ceil(sampleCount / ALL_IN_ONE_HOP_SIZE));
-  const filters = createAllInOneFilterbank();
-  if (filters.length !== 81) {
-    throw new Error(`All-In-One filterbank has ${filters.length} bands instead of 81.`);
-  }
-
-  const output = new Float32Array(ordered.length * frames * filters.length);
+function extractLogSpectrogram(stem, filters) {
+  const frames = Math.max(1, Math.ceil(stem.length / ALL_IN_ONE_HOP_SIZE));
+  const output = new Float32Array(frames * filters.length);
   const fft = new FFT(ALL_IN_ONE_FRAME_SIZE);
   const fftInput = new Float64Array(ALL_IN_ONE_FRAME_SIZE);
   const spectrum = fft.createComplexArray();
@@ -247,31 +134,60 @@ export function extractAllInOneSpectrogram({
     window[index] = 0.5 - 0.5 * Math.cos(2 * Math.PI * index / (window.length - 1));
   }
 
-  for (let stemIndex = 0; stemIndex < ordered.length; stemIndex += 1) {
-    const stem = ordered[stemIndex];
-    for (let frame = 0; frame < frames; frame += 1) {
-      const frameStart = frame * ALL_IN_ONE_HOP_SIZE - ALL_IN_ONE_FRAME_SIZE / 2;
-      for (let sample = 0; sample < ALL_IN_ONE_FRAME_SIZE; sample += 1) {
-        const sourceIndex = frameStart + sample;
-        fftInput[sample] = (sourceIndex >= 0 && sourceIndex < stem.length ? stem[sourceIndex] : 0) *
-          window[sample];
-      }
-      fft.realTransform(spectrum, fftInput);
-      for (let bin = 0; bin < magnitudes.length; bin += 1) {
-        const real = spectrum[bin * 2] || 0;
-        const imaginary = spectrum[bin * 2 + 1] || 0;
-        magnitudes[bin] = Math.hypot(real, imaginary);
-      }
-      const frameOffset = (stemIndex * frames + frame) * filters.length;
-      filters.forEach((filter, band) => {
-        let value = 0;
-        for (const entry of filter) value += (magnitudes[entry.bin] || 0) * entry.value;
-        output[frameOffset + band] = Math.log10(1 + value);
-      });
+  for (let frame = 0; frame < frames; frame += 1) {
+    const frameStart = frame * ALL_IN_ONE_HOP_SIZE - ALL_IN_ONE_FRAME_SIZE / 2;
+    for (let sample = 0; sample < ALL_IN_ONE_FRAME_SIZE; sample += 1) {
+      const sourceIndex = frameStart + sample;
+      fftInput[sample] = (sourceIndex >= 0 && sourceIndex < stem.length ? stem[sourceIndex] : 0) *
+        window[sample];
     }
-    onProgress({ stage: 'spectrogram', completed: stemIndex + 1, total: ordered.length });
+    fft.realTransform(spectrum, fftInput);
+    for (let bin = 0; bin < magnitudes.length; bin += 1) {
+      const real = spectrum[bin * 2] || 0;
+      const imaginary = spectrum[bin * 2 + 1] || 0;
+      magnitudes[bin] = Math.hypot(real, imaginary);
+    }
+    const frameOffset = frame * filters.length;
+    filters.forEach((filter, band) => {
+      let value = 0;
+      for (const entry of filter) value += (magnitudes[entry.bin] || 0) * entry.value;
+      output[frameOffset + band] = Math.log10(1 + value);
+    });
   }
   return { data: output, frames, bands: filters.length };
+}
+
+/**
+ * Runs All-In-One directly on the stereo mix. The model's four input planes
+ * receive the same mix spectrogram, avoiding the heavyweight separation pass
+ * while preserving the neural beat, downbeat, boundary, and section heads.
+ */
+export function extractAllInOneMixSpectrogram({
+  channels,
+  onProgress = () => {},
+  sampleRate
+}) {
+  const stereo = resampleAudioChannels(channels, sampleRate, ALL_IN_ONE_SAMPLE_RATE);
+  if (stereo.length !== 2 || !stereo[0].length) {
+    throw new Error('All-In-One mix analysis requires decoded audio.');
+  }
+  const mono = average(stereo[0], stereo[1]);
+  const filters = createAllInOneFilterbank();
+  if (filters.length !== 81) {
+    throw new Error(`All-In-One filterbank has ${filters.length} bands instead of 81.`);
+  }
+  const spectrogram = extractLogSpectrogram(mono, filters);
+  const planeLength = spectrogram.data.length;
+  const output = new Float32Array(planeLength * ALL_IN_ONE_INPUT_PLANES);
+  for (let index = 0; index < ALL_IN_ONE_INPUT_PLANES; index += 1) {
+    output.set(spectrogram.data, index * planeLength);
+  }
+  onProgress({ stage: 'spectrogram', completed: 1, total: 1 });
+  return {
+    data: output,
+    frames: spectrogram.frames,
+    bands: spectrogram.bands
+  };
 }
 
 function prefixSums(values) {
@@ -414,38 +330,11 @@ function structuralCues(phrases, duration) {
   };
 }
 
-export function analyzeSeparatedStemActivity(stems, sampleRate = HTDEMUCS_SAMPLE_RATE) {
-  const ordered = monoStemOrder(stems);
-  const sampleCount = Math.min(...ordered.map((stem) => stem.length));
-  const frameSamples = Math.max(1, Math.round(sampleRate * DEFAULT_VOCAL_FRAME_SECONDS));
-  const vocalActivityMask = [];
-  let vocalSum = 0;
-  for (let start = 0; start < sampleCount; start += frameSamples) {
-    const end = Math.min(sampleCount, start + frameSamples);
-    const energies = new Float64Array(ordered.length);
-    for (let stem = 0; stem < ordered.length; stem += 1) {
-      let squareSum = 0;
-      for (let sample = start; sample < end; sample += 1) {
-        squareSum += (ordered[stem][sample] || 0) ** 2;
-      }
-      energies[stem] = Math.sqrt(squareSum / Math.max(1, end - start));
-    }
-    const total = energies.reduce((sum, value) => sum + value, 0);
-    const vocal = clamp(total > 1e-7 ? energies[3] / total * 2.2 : 0, 0, 1);
-    vocalActivityMask.push(vocal);
-    vocalSum += vocal;
-  }
-  return {
-    vocalActivityFrameSeconds: DEFAULT_VOCAL_FRAME_SECONDS,
-    vocalActivityMask,
-    vocalProbability: vocalActivityMask.length ? vocalSum / vocalActivityMask.length : 0
-  };
-}
-
 export function postprocessAllInOne({
   config = {},
   duration,
   outputs,
+  pipeline = 'all-in-one-mix',
   stemActivity = {}
 }) {
   const fps = Number(config.fps) || ALL_IN_ONE_FPS;
@@ -476,7 +365,7 @@ export function postprocessAllInOne({
 
   return {
     aiAnalysisStatus: 'ready',
-    aiPipeline: 'all-in-one-htdemucs',
+    aiPipeline: pipeline,
     aiStructureConfidence: cues.structureConfidence,
     aiBeatActivationConfidence: beatConfidence,
     aiDownbeatActivationConfidence: downbeatConfidence,

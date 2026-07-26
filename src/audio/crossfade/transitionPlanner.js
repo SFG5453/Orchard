@@ -4,6 +4,16 @@ const AUTO_MIN_SECONDS = 8;
 const AUTO_MAX_SECONDS = 18;
 const AUTO_PREROLL_MAX_SECONDS = 32;
 const AUTO_FALLBACK_SECONDS = 12;
+const AI_QUICK_TRANSITION_BEATS = 4;
+const AI_QUICK_PREROLL_BEATS = 12;
+const AI_QUICK_OUTRO_SKIP_BEATS = 12;
+const AI_QUICK_TOTAL_BEATS = AI_QUICK_PREROLL_BEATS + AI_QUICK_TRANSITION_BEATS;
+const AI_QUICK_MIN_BEAT_CONFIDENCE = 0.55;
+const AI_QUICK_MIN_DOWNBEAT_CONFIDENCE = 0.52;
+const AI_QUICK_MIN_STRUCTURE_CONFIDENCE = 0.38;
+const AI_QUICK_MIN_TRANSITION_CONFIDENCE = 0.77;
+const AI_QUICK_MAX_VOCAL_CONFLICT = 0.5;
+const AI_INSTRUMENTAL_SECTIONS = new Set(['break', 'inst', 'instrumental', 'solo']);
 const KEY_INDEX = new Map([
   ['C', 0], ['C♯', 1], ['D♭', 1], ['D', 2], ['D♯', 3], ['E♭', 3],
   ['E', 4], ['F', 5], ['F♯', 6], ['G♭', 6], ['G', 7], ['G♯', 8],
@@ -158,25 +168,73 @@ function functionalSectionAt(analysis = {}, time = 0) {
     .replace(/[^a-z0-9_-]/g, '');
 }
 
-function functionalSectionCompatibility(outgoing, incoming) {
+function functionalSectionCompatibility(outgoing, incoming, incomingCueType = '') {
+  const outgoingInstrumental = AI_INSTRUMENTAL_SECTIONS.has(outgoing) || outgoing === 'bridge';
+  const incomingInstrumental = AI_INSTRUMENTAL_SECTIONS.has(incoming) || incoming === 'bridge';
+  const incomingDrop = ['intro_drop', 'main_drop'].includes(incomingCueType);
   if (!outgoing || !incoming) return 0.5;
-  if (outgoing === 'outro' && incoming === 'intro') return 1;
+  if (outgoing === 'outro' && (incoming === 'intro' || incomingInstrumental)) return 1;
   if (outgoing === 'outro' || incoming === 'intro') return 0.85;
-  if (['inst', 'instrumental', 'bridge'].includes(outgoing)) return 0.78;
+  if (outgoingInstrumental && incomingDrop) return 0.9;
+  if (outgoingInstrumental && incomingInstrumental) return 0.9;
+  if (incomingInstrumental) return 0.82;
+  if (outgoingInstrumental) return 0.78;
   if (outgoing === incoming) return 0.68;
   if (outgoing === 'chorus' && ['verse', 'pre-chorus'].includes(incoming)) return 0.62;
   return 0.5;
 }
 
+function cueTypeAt(analysis = {}, time = 0) {
+  const position = Math.max(0, Number(time) || 0);
+  const interval = Number(analysis.beatInterval) ||
+    (Number(analysis.bpm) > 0 ? 60 / Number(analysis.bpm) : 0.5);
+  const tolerance = Math.max(0.25, interval * 0.75);
+  const cue = (Array.isArray(analysis.mixInCandidates) ? analysis.mixInCandidates : [])
+    .filter((candidate) =>
+      Number.isFinite(Number(candidate?.time)) &&
+      Math.abs(Number(candidate.time) - position) <= tolerance
+    )
+    .sort((left, right) => (Number(right.score) || 0) - (Number(left.score) || 0))[0];
+  return String(cue?.type || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '');
+}
+
+function aiSectionAdjustedVocalActivity(activity, analysis, section) {
+  if (
+    analysis.aiAnalysisStatus !== 'ready' ||
+    Number(analysis.aiStructureConfidence) < AI_QUICK_MIN_STRUCTURE_CONFIDENCE ||
+    !AI_INSTRUMENTAL_SECTIONS.has(section)
+  ) {
+    return activity;
+  }
+  return {
+    ...activity,
+    // The mix-native neural model is the more reliable signal in a functional
+    // break/solo than the broad-band deterministic vocal proxy.
+    value: Math.min(activity.value, 0.04)
+  };
+}
+
 function transitionIntelligence(analysis, nextAnalysis, outgoingTime, incomingTime) {
-  const outgoingVocal = vocalActivityAt(analysis, outgoingTime);
-  const incomingVocal = vocalActivityAt(nextAnalysis, incomingTime);
-  const vocalConflict = Math.min(outgoingVocal.value, incomingVocal.value);
   const outgoingSection = functionalSectionAt(analysis, Math.max(0, outgoingTime - 0.05));
   const incomingSection = functionalSectionAt(nextAnalysis, incomingTime);
+  const incomingCueType = cueTypeAt(nextAnalysis, incomingTime);
+  const outgoingVocal = aiSectionAdjustedVocalActivity(
+    vocalActivityAt(analysis, outgoingTime),
+    analysis,
+    outgoingSection
+  );
+  const incomingVocal = aiSectionAdjustedVocalActivity(
+    vocalActivityAt(nextAnalysis, incomingTime),
+    nextAnalysis,
+    incomingSection
+  );
+  const vocalConflict = Math.min(outgoingVocal.value, incomingVocal.value);
   const sectionCompatibility = functionalSectionCompatibility(
     outgoingSection,
-    incomingSection
+    incomingSection,
+    incomingCueType
   );
   const ratio = normalizedTempoRatio(analysis.bpm, nextAnalysis.bpm);
   const tempoScore = clamp(1 - Math.abs(1 - ratio) / 0.18, 0, 1);
@@ -203,6 +261,7 @@ function transitionIntelligence(analysis, nextAnalysis, outgoingTime, incomingTi
     neuralAssisted,
     outgoingSection,
     incomingSection,
+    incomingCueType,
     sectionCompatibility,
     transitionConfidence,
     vocalConflict,
@@ -359,6 +418,118 @@ function phraseSwitch(analysis = {}, nextAnalysis = {}, length = 0) {
   };
 }
 
+function aiQuickTransition(analysis = {}, nextAnalysis = {}, length = 0) {
+  if (
+    analysis.aiAnalysisStatus !== 'ready' ||
+    nextAnalysis.aiAnalysisStatus !== 'ready'
+  ) {
+    return null;
+  }
+
+  const currentBpm = Number(analysis.bpm) || 0;
+  const nextBpm = Number(nextAnalysis.bpm) || 0;
+  const currentAiBeatConfidence = Number(analysis.aiBeatActivationConfidence) || 0;
+  const nextAiBeatConfidence = Number(nextAnalysis.aiBeatActivationConfidence) || 0;
+  const currentAiDownbeatConfidence = Number(analysis.aiDownbeatActivationConfidence) || 0;
+  const nextAiDownbeatConfidence = Number(nextAnalysis.aiDownbeatActivationConfidence) || 0;
+  const currentStructureConfidence = Number(analysis.aiStructureConfidence) || 0;
+  const nextStructureConfidence = Number(nextAnalysis.aiStructureConfidence) || 0;
+  const ratio = normalizedTempoRatio(currentBpm, nextBpm);
+  if (
+    !currentBpm ||
+    !nextBpm ||
+    currentAiBeatConfidence < AI_QUICK_MIN_BEAT_CONFIDENCE ||
+    nextAiBeatConfidence < AI_QUICK_MIN_BEAT_CONFIDENCE ||
+    currentAiDownbeatConfidence < AI_QUICK_MIN_DOWNBEAT_CONFIDENCE ||
+    nextAiDownbeatConfidence < AI_QUICK_MIN_DOWNBEAT_CONFIDENCE ||
+    currentStructureConfidence < AI_QUICK_MIN_STRUCTURE_CONFIDENCE ||
+    nextStructureConfidence < AI_QUICK_MIN_STRUCTURE_CONFIDENCE ||
+    ratio < 0.9 ||
+    ratio > 1.1
+  ) {
+    return null;
+  }
+
+  const beatSeconds = 60 / currentBpm;
+  const outgoingDownbeats = Array.isArray(analysis.downbeats) ? analysis.downbeats : [];
+  const incomingDownbeats = Array.isArray(nextAnalysis.downbeats) ? nextAnalysis.downbeats : [];
+  const transitionEndTarget = Math.max(
+    0,
+    length - AI_QUICK_OUTRO_SKIP_BEATS * beatSeconds
+  );
+  const transitionEnd = nearestTimedValue(
+    outgoingDownbeats,
+    transitionEndTarget,
+    beatSeconds * 2.1
+  );
+  if (transitionEnd === null) return null;
+
+  const targetStart = transitionEnd - AI_QUICK_TOTAL_BEATS * beatSeconds;
+  const transitionStart = nearestTimedValue(
+    outgoingDownbeats,
+    targetStart,
+    beatSeconds * 0.75
+  );
+  if (transitionStart === null || transitionStart < 0 || transitionStart >= transitionEnd) {
+    return null;
+  }
+
+  const transitionDuration = transitionEnd - transitionStart;
+  const measuredTotalBeats = transitionDuration / beatSeconds;
+  if (Math.abs(measuredTotalBeats - AI_QUICK_TOTAL_BEATS) > 0.75) return null;
+
+  const requestedIncomingCue = incomingCuePoint(nextAnalysis);
+  const nextBeatSeconds = 60 / nextBpm;
+  const incomingHandoffTime = nearestTimedValue(
+    incomingDownbeats,
+    requestedIncomingCue,
+    nextBeatSeconds * 1.5
+  );
+  if (incomingHandoffTime === null) return null;
+
+  const handoffDuration = AI_QUICK_TRANSITION_BEATS * beatSeconds;
+  const handoffStartSeconds = transitionDuration - handoffDuration;
+  const incomingPlaybackRate = Math.round(clamp(1 / ratio, 0.9, 1.1) * 10000) / 10000;
+  const incomingCueTime = incomingHandoffTime -
+    handoffStartSeconds * incomingPlaybackRate;
+  if (handoffStartSeconds <= 0 || incomingCueTime < 0) return null;
+
+  const intelligence = transitionIntelligence(
+    analysis,
+    nextAnalysis,
+    Math.max(0, transitionEnd - 0.05),
+    incomingHandoffTime
+  );
+  if (
+    !intelligence.localizedVocalActivity ||
+    intelligence.sectionCompatibility < 0.78 ||
+    intelligence.transitionConfidence < AI_QUICK_MIN_TRANSITION_CONFIDENCE ||
+    intelligence.vocalConflict > AI_QUICK_MAX_VOCAL_CONFLICT
+  ) {
+    return null;
+  }
+
+  return {
+    transitionStart,
+    transitionEnd,
+    fadeSeconds: transitionDuration,
+    handoffDuration,
+    handoffStartSeconds,
+    incomingCueTime,
+    incomingHandoffTime,
+    incomingPlaybackRate,
+    pickupSeconds: Math.max(
+      0,
+      Number(nextAnalysis.audibleStartTime ?? nextAnalysis.pickupTime) || 0
+    ),
+    transitionBeats: AI_QUICK_TRANSITION_BEATS,
+    bassSwap: true,
+    transitionStyle: 'dj_quick',
+    aiSelectedTransition: true,
+    ...intelligence
+  };
+}
+
 function adaptiveOverlap(analysis = {}, nextAnalysis = {}, intelligence = null) {
   const currentBpm = Number(analysis.bpm) || 0;
   const nextBpm = Number(nextAnalysis.bpm) || 0;
@@ -457,6 +628,18 @@ export function planTransition({
     preferredMixAnchor < finalMixAnchor - 1
     ? finalMixAnchor
     : preferredMixAnchor;
+  const quickPlan = aiQuickTransition(analysis, nextAnalysis, finalMixAnchor);
+  if (quickPlan) {
+    return {
+      shouldStart: playbackTime >= quickPlan.transitionStart,
+      markerVisible: true,
+      ...quickPlan,
+      reason: playbackTime >= quickPlan.transitionStart
+        ? 'smart-ai-four-beat'
+        : 'before-ai-four-beat'
+    };
+  }
+
   const switchPlan = phraseSwitch(analysis, nextAnalysis, mixAnchor);
   if (switchPlan) {
     const intelligence = transitionIntelligence(

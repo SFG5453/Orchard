@@ -319,6 +319,13 @@ export function installPlaybackControls(ctx) {
     }
     const mediaCurrentTime = Number(fromAudio.currentTime);
     const mediaDuration = reliablePlaybackDuration(ctx, fromAudio);
+    const aiAnalysisPending = !options.force &&
+      ctx.crossfadeMode.value === 'smart' &&
+      ctx.aiSmartCrossfadeEnabled?.value === true &&
+      [ctx.crossfadeAnalysis.value, ctx.nextCrossfadeAnalysis.value]
+        .some((analysis) => analysis?.status === 'loading');
+    if (aiAnalysisPending) return false;
+
     const forceFadeSeconds = options.reason === 'ended-handoff'
       ? 0.05
       : Math.min(1, ctx.crossfadeSeconds.value || 1);

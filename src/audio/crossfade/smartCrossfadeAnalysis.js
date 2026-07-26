@@ -478,7 +478,7 @@ export function createSmartCrossfadeAnalyzer({
       if (!url) throw new Error('No authenticated audio stream was resolved for analysis');
       const buffer = await decodeWithBackoff(job.key, url, controller.signal);
       const analysis = await analyzeBuffer(job.key, buffer, job.duration, controller.signal);
-      remember(job.key, analysis);
+      if (job.generation === analysisModeGeneration) remember(job.key, analysis);
       return analysis;
     } finally {
       activeControllers.delete(controller);
@@ -516,7 +516,7 @@ export function createSmartCrossfadeAnalyzer({
         .then(job.resolve, job.reject)
         .finally(() => {
           activeJobs -= 1;
-          jobs.delete(job.key);
+          if (jobs.get(job.key) === job) jobs.delete(job.key);
           pump();
         });
     }
@@ -547,6 +547,7 @@ export function createSmartCrossfadeAnalyzer({
       duration: options.duration,
       priority,
       sequence: ++nextSequence,
+      generation: analysisModeGeneration,
       state: 'queued',
       promise,
       resolve,
@@ -592,6 +593,22 @@ export function createSmartCrossfadeAnalyzer({
     }
   }
 
+  async function clear() {
+    analysisModeGeneration += 1;
+    cache.clear();
+    cacheLookups.clear();
+    queued.splice(0).forEach((job) => {
+      job.reject(abortError());
+    });
+    jobs.clear();
+    activeControllers.forEach((controller) => controller.abort());
+    const result = typeof nativeBridge?.clear === 'function'
+      ? await nativeBridge.clear()
+      : { cleared: 0 };
+    report('analysis-cache-cleared', { cleared: Number(result?.cleared) || 0 });
+    return result;
+  }
+
   function destroy() {
     destroyed = true;
     clearTimeout(pumpTimer);
@@ -621,5 +638,5 @@ export function createSmartCrossfadeAnalyzer({
     report('onnx-setting-changed', { enabled });
   }
 
-  return { analyze, destroy, report, setAiEnabled };
+  return { analyze, clear, destroy, report, setAiEnabled };
 }

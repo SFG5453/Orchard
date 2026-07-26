@@ -115,6 +115,181 @@ test('AI-assisted plans score All-In-One functional section handoffs', () => {
   assert.ok(plan.transitionConfidence > 0.8);
 });
 
+test('AI selects an exact four-beat quick mix for a clean one-bar handoff', () => {
+  const quietVocals = Array.from({ length: 240 }, () => 0.08);
+  const plan = planTransition({
+    analysis: {
+      aiAnalysisStatus: 'ready',
+      aiBeatActivationConfidence: 0.93,
+      aiDownbeatActivationConfidence: 0.91,
+      aiStructureConfidence: 0.9,
+      bpm: 120,
+      beatConfidence: 0.22,
+      contentEndTime: 180,
+      duration: 180,
+      downbeats: [158, 160, 162, 164, 166, 168, 170, 172, 174, 176, 178],
+      phrases: [
+        { start: 0, end: 160, type: 'chorus' },
+        { start: 160, end: 180, type: 'outro' }
+      ],
+      vocalActivityMask: quietVocals,
+      vocalActivityFrameSeconds: 0.75,
+      key: 'C major'
+    },
+    currentTime: 166,
+    currentTrack: { id: 'current', durationSeconds: 180 },
+    duration: 180,
+    mode: 'smart',
+    nextAnalysis: {
+      aiAnalysisStatus: 'ready',
+      aiBeatActivationConfidence: 0.92,
+      aiDownbeatActivationConfidence: 0.89,
+      aiStructureConfidence: 0.88,
+      bpm: 120,
+      beatConfidence: 0.39,
+      duration: 180,
+      mixInTime: 12,
+      downbeats: [0, 2, 4, 6, 8, 10, 12, 14],
+      phrases: [
+        { start: 0, end: 16, type: 'intro' },
+        { start: 16, end: 180, type: 'verse' }
+      ],
+      vocalActivityMask: quietVocals,
+      vocalActivityFrameSeconds: 0.75,
+      key: 'C major'
+    },
+    nextTrack: { id: 'next', durationSeconds: 180 }
+  });
+
+  assert.equal(plan.transitionStyle, 'dj_quick');
+  assert.equal(plan.transitionBeats, 4);
+  assert.equal(plan.transitionStart, 166);
+  assert.equal(plan.transitionEnd, 174);
+  assert.equal(plan.fadeSeconds, 8);
+  assert.equal(plan.handoffStartSeconds, 6);
+  assert.equal(plan.handoffDuration, 2);
+  assert.equal(plan.incomingCueTime, 6);
+  assert.equal(plan.incomingHandoffTime, 12);
+  assert.equal(plan.bassSwap, true);
+  assert.equal(plan.aiSelectedTransition, true);
+  assert.equal(plan.reason, 'smart-ai-four-beat');
+  assert.equal(plan.shouldStart, true);
+});
+
+test('AI keeps the longer vocal-safe fallback when localized vocals clash', () => {
+  const activeVocals = Array.from({ length: 240 }, () => 0.92);
+  const plan = planTransition({
+    analysis: {
+      aiAnalysisStatus: 'ready',
+      aiBeatActivationConfidence: 0.93,
+      aiDownbeatActivationConfidence: 0.91,
+      aiStructureConfidence: 0.9,
+      bpm: 120,
+      beatConfidence: 0.92,
+      contentEndTime: 180,
+      duration: 180,
+      downbeats: [168, 170, 172, 174, 176, 178],
+      phrases: [
+        { start: 0, end: 160, type: 'chorus' },
+        { start: 160, end: 180, type: 'outro' }
+      ],
+      vocalActivityMask: activeVocals,
+      vocalActivityFrameSeconds: 0.75,
+      key: 'C major'
+    },
+    currentTime: 170,
+    currentTrack: { id: 'current', durationSeconds: 180 },
+    duration: 180,
+    mode: 'smart',
+    nextAnalysis: {
+      aiAnalysisStatus: 'ready',
+      aiBeatActivationConfidence: 0.92,
+      aiDownbeatActivationConfidence: 0.89,
+      aiStructureConfidence: 0.88,
+      bpm: 120,
+      beatConfidence: 0.91,
+      duration: 180,
+      mixInTime: 12,
+      downbeats: [0, 2, 4, 6, 8, 10, 12, 14],
+      phrases: [
+        { start: 0, end: 16, type: 'intro' },
+        { start: 16, end: 180, type: 'verse' }
+      ],
+      vocalActivityMask: activeVocals,
+      vocalActivityFrameSeconds: 0.75,
+      key: 'C major'
+    },
+    nextTrack: { id: 'next', durationSeconds: 180 }
+  });
+
+  assert.notEqual(plan.transitionStyle, 'dj_quick');
+  assert.ok(plan.transitionBeats >= 8);
+  assert.equal(plan.aiSelectedTransition, undefined);
+});
+
+test('AI quick mix reproduces the measured CN TOWER reference envelope', () => {
+  const quietVocals = Array.from({ length: 500 }, () => 0.08);
+  const plan = planTransition({
+    analysis: {
+      aiAnalysisStatus: 'ready',
+      aiBeatActivationConfidence: 0.6467,
+      aiDownbeatActivationConfidence: 0.5959,
+      aiStructureConfidence: 0.4004,
+      bpm: 126.7046,
+      beatConfidence: 0.2201,
+      contentEndTime: 241.8898,
+      duration: 241.8898,
+      downbeats: [
+        223.3752, 225.2694, 227.1635, 229.0577, 230.9519,
+        232.846, 234.7402, 236.6344, 238.5286, 240.4227
+      ],
+      phrases: [
+        { start: 211.64, end: 226.78, type: 'chorus' },
+        { start: 226.78, end: 241.87, type: 'break' }
+      ],
+      vocalActivityMask: quietVocals,
+      vocalActivityFrameSeconds: 0.5,
+      key: 'C minor'
+    },
+    currentTime: 229,
+    currentTrack: { id: 'cn-tower', durationSeconds: 241.8898 },
+    duration: 241.8898,
+    mode: 'smart',
+    nextAnalysis: {
+      aiAnalysisStatus: 'ready',
+      aiBeatActivationConfidence: 0.7139,
+      aiDownbeatActivationConfidence: 0.6705,
+      aiStructureConfidence: 0.5768,
+      bpm: 123.7447,
+      beatConfidence: 0.3901,
+      duration: 222.5806,
+      mixInTime: 16.4419,
+      downbeats: [
+        0.926, 2.8655, 4.805, 6.7445, 8.684,
+        10.6234, 12.5629, 14.5024, 16.4419, 18.3813
+      ],
+      phrases: [
+        { start: 0, end: 21.29, type: 'inst' },
+        { start: 21.29, end: 38.7, type: 'verse' }
+      ],
+      vocalActivityMask: quietVocals,
+      vocalActivityFrameSeconds: 0.5,
+      key: 'B minor'
+    },
+    nextTrack: { id: 'whisper-my-name', durationSeconds: 222.5806 }
+  });
+
+  assert.equal(plan.transitionStyle, 'dj_quick');
+  assert.equal(plan.transitionBeats, 4);
+  assert.ok(Math.abs(plan.transitionStart - 229.0577) < 0.0001);
+  assert.ok(Math.abs(plan.transitionEnd - 236.6344) < 0.0001);
+  assert.ok(Math.abs(plan.fadeSeconds - 7.5767) < 0.0001);
+  assert.ok(Math.abs(plan.handoffStartSeconds - 5.6825) < 0.0001);
+  assert.ok(Math.abs(plan.handoffDuration - 1.8942) < 0.0001);
+  assert.ok(Math.abs(plan.incomingCueTime - 10.6236) < 0.001);
+  assert.equal(plan.reason, 'before-ai-four-beat');
+});
+
 test('catalog-only tempo cannot authorize a beat-aligned phrase switch', () => {
   const catalogAnalysis = mergeBpmMetadata({}, {
     bpm: 120,
