@@ -40,6 +40,16 @@ function emptyAnalysis(trackId = '', status = trackId ? 'loading' : 'idle') {
   };
 }
 
+export function bpmLabelFromSources(...sources) {
+  for (const source of sources) {
+    const bpm = Number(source?.bpm || source?.tempo);
+    if (Number.isFinite(bpm) && bpm >= 20 && bpm <= 400) {
+      return `${Math.round(bpm)} BPM`;
+    }
+  }
+  return '';
+}
+
 export function installSmartCrossfadeActions(ctx) {
   ctx.crossfadeAnalysisByTrack = new Map();
   ctx.crossfadeAnalysis = ref(emptyAnalysis());
@@ -57,6 +67,20 @@ export function installSmartCrossfadeActions(ctx) {
   ctx.bpmMetadata = bpmClientFactory({
     report: (event, details) => ctx.smartCrossfadeAnalyzer.report(`bpm-${event}`, details)
   });
+
+  ctx.trackBpmLabel = function trackBpmLabel(track = {}) {
+    const trackId = track?.id;
+    return bpmLabelFromSources(
+      trackId && ctx.crossfadeAnalysis?.value?.trackId === trackId
+        ? ctx.crossfadeAnalysis.value
+        : null,
+      trackId && ctx.nextCrossfadeAnalysis?.value?.trackId === trackId
+        ? ctx.nextCrossfadeAnalysis.value
+        : null,
+      trackId ? ctx.crossfadeAnalysisByTrack.get(trackId) : null,
+      track
+    );
+  };
 
   ctx.resetCrossfadeAnalysis = function resetCrossfadeAnalysis(trackId = '') {
     ctx.crossfadeAnalysisRequest += 1;

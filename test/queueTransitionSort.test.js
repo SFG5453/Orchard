@@ -113,6 +113,7 @@ test('Best mix loads BPM service metadata before sorting an unanalyzed queue', a
   assert.equal(ctx.queue.value[0].id, 'smooth');
   assert.equal(ctx.transitionQueueSorted.value, true);
   assert.equal(preloadCalls, 1);
+  assert.equal(ctx.crossfadeAnalysisByTrack.get('smooth').bpm, 102);
 });
 
 test('Best mix locally analyzes cache misses through the authenticated resolver with queue priorities', async () => {

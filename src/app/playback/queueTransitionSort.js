@@ -406,6 +406,20 @@ export function installQueueTransitionSort(ctx) {
         localByTrack.get(ctx.activeTrack.value?.id),
         bpmByTrack.get(ctx.activeTrack.value?.id)
       );
+      if (ctx.crossfadeAnalysisByTrack) {
+        analysisByTrack.forEach((analysis, trackId) => {
+          if (!hasMusicalAnalysis(analysis)) return;
+          ctx.crossfadeAnalysisByTrack.delete(trackId);
+          ctx.crossfadeAnalysisByTrack.set(trackId, analysis);
+        });
+        if (ctx.activeTrack.value?.id && hasMusicalAnalysis(currentAnalysis)) {
+          ctx.crossfadeAnalysisByTrack.delete(ctx.activeTrack.value.id);
+          ctx.crossfadeAnalysisByTrack.set(ctx.activeTrack.value.id, currentAnalysis);
+        }
+        while (ctx.crossfadeAnalysisByTrack.size > 120) {
+          ctx.crossfadeAnalysisByTrack.delete(ctx.crossfadeAnalysisByTrack.keys().next().value);
+        }
+      }
       const result = bestTransitionOrder(sortableTracks, analysisByTrack, currentAnalysis);
       if (!result.comparisons) {
         if (!refresh) {

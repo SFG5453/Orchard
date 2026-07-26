@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { installSmartCrossfadeActions } from '../src/app/playback/smartCrossfadeActions.js';
+import {
+  bpmLabelFromSources,
+  installSmartCrossfadeActions
+} from '../src/app/playback/smartCrossfadeActions.js';
 
 function localAnalysis() {
   return {
@@ -33,6 +36,24 @@ function context({ analyze, lookup }) {
     logs
   };
 }
+
+test('formats the first valid analyzed or track tempo for display', () => {
+  assert.equal(bpmLabelFromSources({ bpm: 0 }, { tempo: 123.6 }), '124 BPM');
+  assert.equal(bpmLabelFromSources({ bpm: 12 }, { tempo: 500 }), '');
+});
+
+test('exposes cached BPM labels for right-panel tracks', () => {
+  const ctx = context({
+    analyze: async () => localAnalysis(),
+    lookup: async () => null
+  });
+  installSmartCrossfadeActions(ctx);
+  ctx.crossfadeAnalysisByTrack.set('cached', { bpm: 127.7 });
+
+  assert.equal(ctx.trackBpmLabel({ id: 'cached', title: 'Cached' }), '128 BPM');
+  assert.equal(ctx.trackBpmLabel({ id: 'direct', tempo: 98 }), '98 BPM');
+  assert.equal(ctx.trackBpmLabel({ id: 'unknown' }), '');
+});
 
 test('GetSongBPM 404 does not block successful local analysis', async () => {
   const ctx = context({

@@ -82,7 +82,12 @@ export default {
                   <span class="explicit-title__text">{{ activeTrack.title }}</span>
                   <ExplicitBadge :explicit="activeTrack.explicit" />
                 </strong>
-                <small>{{ activeArtist }}</small>
+                <div class="queue-preview__meta">
+                  <small>{{ activeArtist }}</small>
+                  <span v-if="trackBpmLabel(activeTrack)" class="queue-preview__bpm">
+                    {{ trackBpmLabel(activeTrack) }}
+                  </span>
+                </div>
               </div>
             </button>
           </div>
@@ -141,6 +146,7 @@ export default {
                   </strong>
                   <small>{{ itemMeta(item) }}</small>
                 </div>
+                <span class="queue-preview__bpm">{{ trackBpmLabel(item) }}</span>
                 <button
                   type="button"
                   class="right-queue-remove"
