@@ -193,9 +193,16 @@ TransitionResult RenderTransition(
       const auto from_bass = std::cos(handover * kPi * 0.5f);
       const auto to_bass = std::sin(handover * kPi * 0.5f);
 
-      const auto from_mixed = from_high[index] + from_bass * (from[index] - from_high[index]);
-      const auto to_mixed = to_high[index] + to_bass * (to[index] - to_high[index]);
-      destination[index] = from_mixed * fade_out + to_mixed * fade_in;
+      // The two bands are mixed independently. Above the crossover the tracks
+      // crossfade; below it they only ever hand over, so the low end holds a
+      // constant full level across the whole overlap instead of following the
+      // outgoing fade down and dipping before the swap. This is what an EQ kill
+      // on a mixer does, and it is why the groove stays solid through a mix.
+      const auto from_low = from[index] - from_high[index];
+      const auto to_low = to[index] - to_high[index];
+      destination[index] =
+        from_high[index] * fade_out + to_high[index] * fade_in +
+        from_low * from_bass + to_low * to_bass;
     }
   }
 

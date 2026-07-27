@@ -36,8 +36,15 @@ struct TransitionConfig {
   // the finished transition runs on.
   double beats = 32;
   // Point in the overlap, as a fraction, where the low end hands over from the
-  // outgoing to the incoming track. Callers should quantize this to a downbeat.
-  double bass_swap = 0.5;
+  // outgoing to the incoming track. Callers should quantize this to a downbeat,
+  // so the effective swap lands on the nearest one rather than exactly here.
+  //
+  // Later than the midpoint by choice: the equal-power fades cross at 0.5, and
+  // handing the low end over at the same instant makes the incoming track
+  // arrive early, because it gains the bass while still fading up. Holding the
+  // low end on the outgoing track past the crossover was judged better by ear
+  // on real material than 0.55.
+  double bass_swap = 0.7;
   // Corner frequency of the bass handover. Everything below it belongs to
   // exactly one track at a time, which is what keeps the overlap from turning
   // to mud when two kick drums collide.
