@@ -35,21 +35,28 @@ Biquad HighPass(double cutoff, double sample_rate) {
   return filter;
 }
 
+// Two identical Butterworth sections in series: a fourth-order Linkwitz-Riley
+// high-pass at 24 dB/octave, the slope DJ mixers use for a bass kill. A single
+// 12 dB/octave section leaves the incoming low end only about 15 dB down at
+// the crossover, which is audible as bass arriving before the swap.
+//
 // Direct form I, run forward only. The resulting phase shift is identical on
 // every channel and on both tracks, so it does not smear the stereo image or
 // misalign the two sides of the mix against each other.
 std::vector<float> ApplyHighPass(const std::vector<float>& input, const Biquad& filter) {
-  std::vector<float> output(input.size(), 0.0f);
-  float x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-  for (size_t index = 0; index < input.size(); ++index) {
-    const float x0 = input[index];
-    const float y0 =
-      filter.b0 * x0 + filter.b1 * x1 + filter.b2 * x2 - filter.a1 * y1 - filter.a2 * y2;
-    output[index] = y0;
-    x2 = x1;
-    x1 = x0;
-    y2 = y1;
-    y1 = y0;
+  std::vector<float> output(input);
+  for (int section = 0; section < 2; ++section) {
+    float x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (size_t index = 0; index < output.size(); ++index) {
+      const float x0 = output[index];
+      const float y0 =
+        filter.b0 * x0 + filter.b1 * x1 + filter.b2 * x2 - filter.a1 * y1 - filter.a2 * y2;
+      output[index] = y0;
+      x2 = x1;
+      x1 = x0;
+      y2 = y1;
+      y1 = y0;
+    }
   }
   return output;
 }
@@ -178,10 +185,13 @@ TransitionResult RenderTransition(
       const auto fade_in = std::sin(static_cast<float>(progress) * kPi * 0.5f);
 
       // Exactly one track owns the low end at any instant; the handover is a
-      // short ramp centred on the swap point.
+      // short ramp centred on the swap point. Equal power again, for the same
+      // reason as the main fade: the two low ends are uncorrelated, so linear
+      // gains would leave them summing 3 dB down at the midpoint and put an
+      // audible hole in the bass exactly where it changes hands.
       const auto handover = Smooth((static_cast<double>(index) - swap_point) / swap_ramp + 0.5);
-      const auto from_bass = 1.0f - handover;
-      const auto to_bass = handover;
+      const auto from_bass = std::cos(handover * kPi * 0.5f);
+      const auto to_bass = std::sin(handover * kPi * 0.5f);
 
       const auto from_mixed = from_high[index] + from_bass * (from[index] - from_high[index]);
       const auto to_mixed = to_high[index] + to_bass * (to[index] - to_high[index]);
