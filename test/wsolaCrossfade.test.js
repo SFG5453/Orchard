@@ -29,8 +29,8 @@ function fakeClock() {
   };
 }
 
-function fakeAnalyzer() {
-  const calls = { ramps: [], volumes: [], buffers: [] };
+function fakeAnalyzer({ connected = true } = {}) {
+  const calls = { fades: [], volumes: [], buffers: [] };
   let now = 100;
   return {
     calls,
@@ -42,8 +42,10 @@ function fakeAnalyzer() {
     setVolume(element, value) {
       calls.volumes.push({ element, value });
     },
-    rampVolume(element, value, at) {
-      calls.ramps.push({ element, value, at });
+    fadeVolume(element, from, to, at, seconds) {
+      if (!connected) return false;
+      calls.fades.push({ element, from, to, at, seconds });
+      return true;
     },
     playPcmBuffer({ channels, sampleRate, when, offset, volume }) {
       const seconds = channels[0].length / sampleRate - offset;
@@ -51,9 +53,13 @@ function fakeAnalyzer() {
         startTime: Math.max(now, when),
         endTime: Math.max(now, when) + seconds,
         volumeCalls: [],
+        fades: [],
         stopped: false,
         setVolume(value) {
           this.volumeCalls.push(value);
+        },
+        fade(from, to, at, fadeSeconds) {
+          this.fades.push({ from, to, at, seconds: fadeSeconds });
         },
         stop() {
           this.stopped = true;
@@ -140,7 +146,6 @@ test('prepare slices both tracks and forwards the plan to the native bridge', as
     }
   });
 
-  // Slice windows must land inside the 60s fake decode.
   const plan = {
     ...readyPlan({ transitionStart: 40 }),
     outgoingSlice: { start: 38.5, end: 49.1, anchor: 1.5 },
@@ -205,21 +210,43 @@ test('start schedules the overlap on the context clock and promotes at the swap'
 
     assert.equal(engine.isActive(), true);
     const buffer = analyzer.calls.buffers[0];
-    // 0.6s early: the buffer is scheduled ahead, not started immediately.
     assert.ok(Math.abs(buffer.when - 100.6) < 0.01, `when=${buffer.when}`);
     assert.equal(buffer.offset, 0);
     assert.equal(buffer.volume, 0.8);
-    // The outgoing element is muted exactly at the buffer start.
-    const outgoingMute = analyzer.calls.ramps.find((ramp) => ramp.element === fromAudio && ramp.value === 0);
-    assert.ok(Math.abs(outgoingMute.at - buffer.when) < 0.01);
-    // The incoming element shadows the buffer from the mix-in point.
+    // Handing over must be complementary and simultaneous: the element fades
+    // out over exactly the window the buffer fades in. Any gap where both
+    // carry the same audio at full gain is the comb filtering that made the
+    // transition sound like static.
+    const outgoingFade = analyzer.calls.fades.find((fade) => fade.element === fromAudio);
+    const bufferIn = buffer.handle.fades[0];
+    assert.deepEqual(
+      [outgoingFade.from, outgoingFade.to],
+      [0.8, 0],
+      'outgoing element must fade down, not mute asymptotically'
+    );
+    assert.deepEqual([bufferIn.from, bufferIn.to], [0, 0.8]);
+    assert.ok(Math.abs(outgoingFade.at - bufferIn.at) < 1e-9, 'fades must start together');
+    assert.equal(outgoingFade.seconds, bufferIn.seconds);
+    assert.ok(outgoingFade.seconds <= 0.02, `handoff window too wide: ${outgoingFade.seconds}s`);
+
     assert.ok(Math.abs(toAudio.currentTime - plan.incomingCueTime) < 0.01);
     assert.equal(toAudio.paused, false);
-    // The incoming unmute is scheduled just before the buffer ends.
-    const incomingUnmute = analyzer.calls.ramps.find((ramp) => ramp.element === toAudio && ramp.value === 0.8);
-    assert.ok(Math.abs(incomingUnmute.at - (buffer.handle.endTime - 0.05)) < 0.01);
 
-    // Run: drift check, promote at the swap, final drift check, completion.
+    const incomingFade = analyzer.calls.fades.find((fade) => fade.element === toAudio);
+    const bufferOut = buffer.handle.fades[1];
+    assert.deepEqual([incomingFade.from, incomingFade.to], [0, 0.8]);
+    assert.deepEqual([bufferOut.from, bufferOut.to], [0.8, 0]);
+    assert.ok(Math.abs(incomingFade.at - bufferOut.at) < 1e-9, 'fades must start together');
+    assert.ok(
+      Math.abs(incomingFade.at + incomingFade.seconds - buffer.handle.endTime) < 1e-9,
+      'the exchange must complete exactly as the buffer ends'
+    );
+
+    // No drift-correcting seek may land near the handoff; the element needs
+    // settled playback before it becomes audible.
+    const lastCorrection = plan.overlapSeconds * 0.375;
+    assert.ok(lastCorrection < plan.overlapSeconds - 1);
+
     analyzer.advance(0.6 + 8 * 0.75);
     while (events.length === 0 && await clock.runNext()) { /* advance */ }
     assert.deepEqual(events, ['promote']);
@@ -295,4 +322,37 @@ test('start refuses when called too late for a clean downbeat', async () => {
   assert.equal(didStart, false);
   assert.equal(engine.isActive(), false);
   assert.equal(analyzer.calls.buffers.length, 0);
+});
+
+test('start refuses when the elements are outside the audio graph', async () => {
+  const clock = fakeClock();
+  const originalWindow = globalThis.window;
+  globalThis.window = clock.window;
+  try {
+    // fadeVolume returning false means the scheduled handoff would never
+    // happen, leaving the outgoing element audible under the buffer.
+    const analyzer = fakeAnalyzer({ connected: false });
+    const engine = createWsolaCrossfade({ analyzer, bridge: {} });
+    const plan = readyPlan({ transitionStart: 200, overlapSeconds: 8 });
+    const fromAudio = fakeElement(199.4);
+    const toAudio = fakeElement(0);
+    const errors = [];
+
+    const didStart = await engine.start({
+      fromAudio,
+      toAudio,
+      plan,
+      render: renderFor(plan),
+      volume: 1,
+      onError: (error) => errors.push(error.message)
+    });
+
+    assert.equal(didStart, false);
+    assert.equal(engine.isActive(), false);
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /audio graph/);
+    assert.ok(analyzer.calls.buffers[0].handle.stopped, 'the scheduled buffer must be torn down');
+  } finally {
+    globalThis.window = originalWindow;
+  }
 });

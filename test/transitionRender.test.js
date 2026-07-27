@@ -33,7 +33,6 @@ function rms(samples, from = 0, to = samples.length) {
   return Math.sqrt(total / Math.max(1, to - from));
 }
 
-// Amplitude of one frequency over a window, by single-bin DFT.
 function amplitudeAt(samples, from, length, frequency) {
   let real = 0;
   let imaginary = 0;
@@ -187,8 +186,6 @@ test('refuses pairings it cannot render transparently', async () => {
 });
 
 test('aligns the two tracks on their anchors', async () => {
-  // Offsetting the incoming anchor by one beat must shift which part of the
-  // incoming track lands at the start of the overlap.
   const beat = 60 / 126;
   const incoming = track({ bass: 85, tone: 330 });
   const aligned = await native.renderTransition(

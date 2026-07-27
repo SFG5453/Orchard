@@ -187,8 +187,6 @@ Napi::Value Analyze(const Napi::CallbackInfo& info) {
   return promise;
 }
 
-// Owns the planar PCM snapshot and stretched result for the worker's lifetime.
-// Mirrors AnalysisWorker: no shared mutable DSP state, no cancellation hook.
 class StretchWorker final : public Napi::AsyncWorker {
  public:
   StretchWorker(
@@ -207,12 +205,10 @@ class StretchWorker final : public Napi::AsyncWorker {
   }
 
   void Execute() override {
-    // libuv worker-pool thread: do not create or retain JavaScript/Napi values.
     result_ = orchard::WsolaStretch(channels_, sample_rate_, config_);
   }
 
   void OnOK() override {
-    // Environment thread: each channel is copied into its own Float32Array.
     const auto env = Env();
     auto output = Napi::Array::New(env, result_.size());
     for (size_t channel = 0; channel < result_.size(); ++channel) {
@@ -333,7 +329,6 @@ bool ReadSource(Napi::Env env, const Napi::Value& value, orchard::TransitionSour
   return true;
 }
 
-// Owns the PCM snapshots and rendered overlap for the worker's lifetime.
 class TransitionWorker final : public Napi::AsyncWorker {
  public:
   TransitionWorker(
@@ -352,7 +347,6 @@ class TransitionWorker final : public Napi::AsyncWorker {
   }
 
   void Execute() override {
-    // libuv worker-pool thread: do not create or retain JavaScript/Napi values.
     result_ = orchard::RenderTransition(outgoing_, incoming_, config_);
   }
 
@@ -421,7 +415,6 @@ Napi::Value RenderTransition(const Napi::CallbackInfo& info) {
   return promise;
 }
 
-// Exposes the version marker, analysis, time-stretch, and transition renderer.
 Napi::Object Initialize(Napi::Env env, Napi::Object exports) {
   exports.Set("analysisVersion", kAnalysisVersion);
   exports.Set("analyze", Napi::Function::New(env, Analyze));

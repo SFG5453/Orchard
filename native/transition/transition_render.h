@@ -32,8 +32,6 @@ struct TransitionSource {
 
 struct TransitionConfig {
   double sample_rate = 44100;
-  // Overlap length in beats of the incoming track's grid, which is the grid
-  // the finished transition runs on.
   double beats = 32;
   // Point in the overlap, as a fraction, where the low end hands over from the
   // outgoing to the incoming track. Callers should quantize this to a downbeat,
@@ -49,7 +47,6 @@ struct TransitionConfig {
   // exactly one track at a time, which is what keeps the overlap from turning
   // to mud when two kick drums collide.
   double bass_crossover_hz = 200;
-  // Duration of the low-end handover ramp.
   double bass_swap_seconds = 0.75;
   // Fraction of the outgoing audio over which it glides onto the incoming
   // tempo instead of starting there.
@@ -66,9 +63,7 @@ struct TransitionConfig {
 
 struct TransitionResult {
   std::vector<std::vector<float>> channels;
-  // Time-scaling applied to the outgoing track; 1 when the tempos matched.
   double stretch_ratio = 1;
-  // Tempo the rendered overlap runs at, equal to the incoming track's.
   double bpm = 0;
   bool rendered = false;
   // Empty when `rendered`; otherwise why the pairing was refused, so callers

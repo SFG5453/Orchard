@@ -7,10 +7,6 @@
 // audible playback to the incoming element the instant the buffer ends. The
 // elements keep playing silently underneath so a cancel at any point can
 // restore ordinary playback without re-buffering.
-//
-// Lifecycle per pairing: plan (pure, every tick) -> prepare (decode + IPC
-// render, once, well before the transition) -> start (schedule everything on
-// the context clock) -> promote at the bass swap -> complete at buffer end.
 import { planWsolaTransition } from './wsolaPlanner.js';
 
 // How far ahead of the transition preparation may begin. Decoding two tracks
@@ -27,9 +23,21 @@ export const WSOLA_START_LEAD_SECONDS = 1.2;
 // front of the overlap; past it the caller should use the ordinary crossfade.
 const MAX_LATE_START_SECONDS = 0.35;
 
-// The incoming element runs muted during the overlap and only needs to be
-// exactly placed by the end of it; corrections stay inaudible while muted.
-const DRIFT_TOLERANCE_SECONDS = 0.08;
+// The incoming element runs muted during the overlap; corrections are
+// inaudible while muted, but each one is a seek the element needs time to
+// settle after, so they are kept well clear of the handoff.
+const DRIFT_TOLERANCE_SECONDS = 0.04;
+
+// Length of the fades that hand audio between the rendered buffer and a media
+// element, at each end of the overlap.
+//
+// Deliberately tiny. Both sides carry the same audio at the handoff, but a
+// media element's position is only accurate to tens of milliseconds, so any
+// window where both are audible is two near-copies of the same signal offset
+// in time -- comb filtering, heard as a metallic rasp over the transition.
+// Ten milliseconds is long enough to avoid a click and short enough that the
+// residual is a single transient rather than an audible effect.
+const HANDOFF_FADE_SECONDS = 0.01;
 
 function pairKey(fromTrackId, toTrackId) {
   return `${String(fromTrackId || '')}>${String(toTrackId || '')}`;
@@ -190,9 +198,7 @@ export function createWsolaCrossfade({
       if (Math.abs(state.fromAudio.currentTime - expected) > DRIFT_TOLERANCE_SECONDS) {
         try {
           state.fromAudio.currentTime = expected;
-        } catch {
-          // Seek failures leave the element where it was; volume still returns.
-        }
+        } catch {}
       }
       analyzer.setVolume(state.fromAudio, targetVolume);
       state.toAudio.pause();
@@ -243,9 +249,15 @@ export function createWsolaCrossfade({
       };
       session = state;
 
-      // The outgoing element goes silent exactly as the buffer takes over; it
-      // keeps playing muted so a cancel can restore it instantly.
-      analyzer.rampVolume(fromAudio, 0, when, 0.05);
+      // Hand over from the outgoing element to the buffer with complementary
+      // fades over the same instant, so the two never both carry the outgoing
+      // track at full gain. The element keeps playing muted afterwards so a
+      // cancel can restore it instantly.
+      const connected = analyzer.fadeVolume(
+        fromAudio, targetVolume, 0, when, HANDOFF_FADE_SECONDS
+      );
+      if (!connected) throw new Error('Transition elements are outside the audio graph');
+      handle.fade(0, targetVolume, when, HANDOFF_FADE_SECONDS);
 
       // The incoming element shadows the buffer's incoming side, muted. It
       // only has to be exactly placed by the time the buffer ends.
@@ -267,28 +279,31 @@ export function createWsolaCrossfade({
         if (Math.abs(toAudio.currentTime - expected) > DRIFT_TOLERANCE_SECONDS) {
           try {
             toAudio.currentTime = expected;
-          } catch {
-            // A failed muted seek only risks a small offset at handoff.
-          }
+          } catch {}
         }
       };
 
       const swapAt = state.overlapStartTime +
         transitionPlan.overlapSeconds * transitionPlan.bassSwapFraction;
       const endAt = handle.endTime;
+      // Both corrections sit in the first two thirds of the overlap: each one
+      // is a seek, and the element needs settled, steady playback well before
+      // it becomes audible.
+      schedule(state.overlapStartTime + transitionPlan.overlapSeconds * 0.15, correctDrift);
       schedule((state.overlapStartTime + swapAt) / 2, correctDrift);
       schedule(Math.max(now, swapAt), () => {
         if (state.promoted) return;
         state.promoted = true;
-        // Past the swap the outgoing element can never come back; release it.
         fromAudio.pause();
         onPromote?.();
       });
-      schedule(endAt - 0.3, correctDrift);
-      // The element takes over slightly before the buffer's final samples;
-      // both carry identical incoming audio, so the short overlap is a
-      // seam-masking equal exchange rather than a double-play.
-      analyzer.rampVolume(toAudio, targetVolume, endAt - 0.05, 0.08);
+      // Hand back to the element as the buffer's last samples play out, with
+      // the same complementary pair of fades used at the start. Both carry the
+      // incoming track here, so the exchange is level-preserving.
+      handle.fade(targetVolume, 0, endAt - HANDOFF_FADE_SECONDS, HANDOFF_FADE_SECONDS);
+      analyzer.fadeVolume(
+        toAudio, 0, targetVolume, endAt - HANDOFF_FADE_SECONDS, HANDOFF_FADE_SECONDS
+      );
 
       await new Promise((resolve) => {
         state.finish = resolve;

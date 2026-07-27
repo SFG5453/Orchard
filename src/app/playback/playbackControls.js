@@ -355,8 +355,6 @@ export function installPlaybackControls(ctx) {
       return 'hold';
     }
     if (engine.preparationStatus(fromTrackId, next.id) !== 'ready') {
-      // Inside the start window without a finished render: hold while the
-      // start is still achievable, otherwise let the legacy engine recover.
       return untilStart > -0.2 ? 'hold' : 'fallback';
     }
 

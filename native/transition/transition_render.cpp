@@ -77,7 +77,6 @@ bool Ragged(const std::vector<std::vector<float>>& channels) {
   return false;
 }
 
-// Smoothstep, so the low-end handover eases in and out instead of cornering.
 float Smooth(double progress) {
   const auto clamped = static_cast<float>(std::clamp(progress, 0.0, 1.0));
   return clamped * clamped * (3.0f - 2.0f * clamped);
@@ -179,8 +178,6 @@ TransitionResult RenderTransition(
     for (size_t index = 0; index < overlap_samples; ++index) {
       const double progress =
         static_cast<double>(index) / static_cast<double>(overlap_samples);
-      // Equal power, so the perceived level stays flat across the overlap
-      // rather than dipping in the middle the way a linear fade does.
       const auto fade_out = std::cos(static_cast<float>(progress) * kPi * 0.5f);
       const auto fade_in = std::sin(static_cast<float>(progress) * kPi * 0.5f);
 
@@ -193,11 +190,6 @@ TransitionResult RenderTransition(
       const auto from_bass = std::cos(handover * kPi * 0.5f);
       const auto to_bass = std::sin(handover * kPi * 0.5f);
 
-      // The two bands are mixed independently. Above the crossover the tracks
-      // crossfade; below it they only ever hand over, so the low end holds a
-      // constant full level across the whole overlap instead of following the
-      // outgoing fade down and dipping before the swap. This is what an EQ kill
-      // on a mixer does, and it is why the groove stays solid through a mix.
       const auto from_low = from[index] - from_high[index];
       const auto to_low = to[index] - to_high[index];
       destination[index] =

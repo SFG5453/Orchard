@@ -153,14 +153,26 @@ export function createAudioAnalyzer(options = {}) {
     node.gain.gain.setValueAtTime(clamp01(value), now);
   }
 
-  // Scheduled, click-free counterpart to setVolume, for callers that need an
-  // element muted or restored at an exact context time (transition handoffs).
-  function rampVolume(element, value, at = 0, fadeSeconds = 0.03) {
+  /**
+   * Scheduled linear fade between two known gains, for handoffs that must land
+   * at an exact context time. `from` is explicit because an AudioParam's value
+   * at a future scheduled instant cannot be read back.
+   *
+   * Linear rather than equal-power on purpose: these fades hand over between
+   * two sources carrying the *same* audio, which sum coherently, so linear
+   * gains hold a constant level where equal-power would bulge in the middle.
+   * @returns {boolean} False when the element is outside the graph, so callers
+   * can refuse rather than schedule a fade that silently never happens.
+   */
+  function fadeVolume(element, from, to, at = 0, fadeSeconds = 0.01) {
     const node = connectElement(element);
-    if (!node) return;
+    if (!node) return false;
+    const param = node.gain.gain;
     const start = Math.max(currentTime(), Number(at) || 0);
-    node.gain.gain.cancelScheduledValues(start);
-    node.gain.gain.setTargetAtTime(clamp01(value), start, Math.max(0.005, fadeSeconds / 3));
+    param.cancelScheduledValues(start);
+    param.setValueAtTime(clamp01(from), start);
+    param.linearRampToValueAtTime(clamp01(to), start + Math.max(0.001, fadeSeconds));
+    return true;
   }
 
   async function decodeAudio(url, signal) {
@@ -522,6 +534,12 @@ export function createAudioAnalyzer(options = {}) {
         gain.gain.cancelScheduledValues(now);
         gain.gain.setValueAtTime(clamp01(value), now);
       },
+      fade(from, to, at, fadeSeconds = 0.01) {
+        const start = Math.max(ctx.currentTime, Number(at) || 0);
+        gain.gain.cancelScheduledValues(start);
+        gain.gain.setValueAtTime(clamp01(from), start);
+        gain.gain.linearRampToValueAtTime(clamp01(to), start + Math.max(0.001, fadeSeconds));
+      },
       stop(fadeSeconds = 0.03) {
         if (stopped) return;
         stopped = true;
@@ -532,9 +550,7 @@ export function createAudioAnalyzer(options = {}) {
         gain.gain.setTargetAtTime(0, now, Math.max(0.005, fadeSeconds / 3));
         try {
           source.stop(now + Math.max(0.01, fadeSeconds));
-        } catch {
-          // Already ended; the gain ramp is sufficient.
-        }
+        } catch {}
       }
     };
   }
@@ -553,9 +569,9 @@ export function createAudioAnalyzer(options = {}) {
     currentTime,
     decodeAudio,
     destroy,
+    fadeVolume,
     measure,
     playPcmBuffer,
-    rampVolume,
     resume,
     samples,
     resetMixElement: mixer.resetElement,

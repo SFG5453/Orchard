@@ -36,8 +36,6 @@ test('plans a sixteen-beat overlap ending at the outgoing mix-out', () => {
   assert.equal(plan.ok, true, plan.reason);
   assert.equal(plan.beats, 16);
   const outgoingOverlap = 16 * (60 / 126);
-  // Start lands on a downbeat at or before (mix-out - overlap), so the
-  // overlap never runs past the point where the outgoing content ends.
   assert.ok(plan.transitionStart <= 220 - outgoingOverlap + 0.001);
   const bar = (60 / 126) * 4;
   assert.ok(Math.abs(plan.transitionStart % bar) < 0.01 ||
@@ -97,7 +95,6 @@ test('quantizes the bass swap onto a bar of the shared grid', () => {
     nextDuration: 200
   });
   assert.equal(plan.ok, true, plan.reason);
-  // 0.7 of 16 beats is beat 11.2; the nearest bar boundary is beat 12.
   assert.equal(plan.bassSwapFraction, 0.75);
 });
 
