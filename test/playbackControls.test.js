@@ -231,3 +231,93 @@ test('playing from history does not enqueue the rest of listening history', () =
     options: { queueSource: [selected] }
   }]);
 });
+
+// A WSOLA overlap already contains the incoming track, so the legacy engine
+// must never start its own fade on the same standby element underneath it.
+function crossfadeRoutingContext({ wsolaActive, wsolaPlan }) {
+  const legacyStarts = [];
+  const fromAudio = { currentTime: 200, duration: 240, pause() {}, play: async () => {} };
+  const toAudio = { currentTime: 0, src: 'http://127.0.0.1/next', pause() {}, play: async () => {} };
+  const ctx = {
+    activeAudioDeck: { value: 'main' },
+    activeTrack: { value: { id: 'from', durationSeconds: 240 } },
+    activeTrackIsVideo: { value: false },
+    crossfadeAnalysis: { value: { status: 'ready', bpm: 126 } },
+    nextCrossfadeAnalysis: { value: { status: 'ready', bpm: 126 } },
+    crossfadeEnabled: { value: true },
+    crossfadeMode: { value: 'smart' },
+    crossfadeSeconds: { value: 6 },
+    currentAudio: () => fromAudio,
+    standbyAudio: () => toAudio,
+    currentTime: { value: 200 },
+    duration: { value: 240 },
+    isPlaying: { value: true },
+    isSeeking: { value: false },
+    listeningParty: { value: { status: 'offline' } },
+    listeningPartyIsHost: { value: true },
+    playbackError: { value: '' },
+    queue: { value: [{ id: 'to', durationSeconds: 200 }] },
+    repeatMode: { value: 'off' },
+    sleepTimerMode: { value: 'off' },
+    sleepTimerVolumeFactor: { value: 1 },
+    volume: { value: 1 },
+    preloadedTrackMatches: () => true,
+    preloadNextTrack: async () => true,
+    nextTrackPreload: { value: { resolved: { streamUrl: 'http://127.0.0.1/next' } } },
+    activeTrackFromResolved: (track) => track,
+    // Backing state for the real mix overlay, which installPlaybackControls
+    // provides itself.
+    smartCrossfadeMix: { value: { visible: false } },
+    smartCrossfadeMixSequence: 0,
+    nowArtworkImage: { value: '' },
+    fullscreenPlayerOpen: { value: false },
+    autoCrossfade: {
+      isActive: () => false,
+      cancel: () => {},
+      transitionPlan: () => ({ shouldStart: true, transitionStart: 190, fadeSeconds: 20 }),
+      start: async (options) => {
+        legacyStarts.push(options);
+        return true;
+      }
+    },
+    wsolaCrossfade: {
+      isActive: () => wsolaActive,
+      cancel: () => {},
+      plan: () => wsolaPlan,
+      preparationStatus: () => 'idle',
+      preparedTransition: () => null,
+      prepare: async () => null,
+      start: async () => false
+    }
+  };
+  installPlaybackControls(ctx);
+  return { ctx, legacyStarts };
+}
+
+test('an active WSOLA overlap blocks the legacy crossfade instead of doubling it', async () => {
+  const { ctx, legacyStarts } = crossfadeRoutingContext({
+    wsolaActive: true,
+    wsolaPlan: { ok: true, transitionStart: 200 }
+  });
+
+  assert.equal(await ctx.maybeStartAutoCrossfade(), false);
+  assert.equal(await ctx.maybeStartAutoCrossfade({ force: true, reason: 'ended-handoff' }), false);
+  assert.deepEqual(legacyStarts, [], 'legacy engine started under a live WSOLA overlap');
+});
+
+test('a refused WSOLA pairing still falls back to the legacy crossfade', async () => {
+  const originalWindow = globalThis.window;
+  // The mix overlay schedules its own dismissal on the real window timer.
+  globalThis.window = { setTimeout: () => 1, clearTimeout: () => {} };
+  try {
+    const { ctx, legacyStarts } = crossfadeRoutingContext({
+      wsolaActive: false,
+      wsolaPlan: { ok: false, reason: 'tempo-distance' }
+    });
+
+    assert.equal(await ctx.maybeStartAutoCrossfade(), true);
+    assert.equal(legacyStarts.length, 1);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});

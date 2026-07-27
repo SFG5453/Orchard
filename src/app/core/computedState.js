@@ -228,14 +228,27 @@ export function installComputedState(ctx) {
       };
     }
 
-    const plan = ctx.autoCrossfade.transitionPlan({
-      analysis: ctx.crossfadeAnalysis.value,
-      currentTime: 0,
-      currentTrack: ctx.activeTrack.value,
-      duration: length,
-      nextAnalysis: ctx.nextCrossfadeAnalysis.value,
-      nextTrack
-    });
+    // The marker must describe the engine that will actually run. A qualifying
+    // WSOLA pairing overrides the legacy plan, whose Apple-style overlap starts
+    // many seconds earlier and would put the marker in the wrong place.
+    const wsolaPlan = ctx.crossfadeMode.value === 'smart'
+      ? ctx.wsolaCrossfade?.plan({
+        analysis: ctx.crossfadeAnalysis.value,
+        nextAnalysis: ctx.nextCrossfadeAnalysis.value,
+        duration: length,
+        nextDuration: Number(nextTrack.durationSeconds) || 0
+      })
+      : null;
+    const plan = wsolaPlan?.ok
+      ? { transitionStart: wsolaPlan.transitionStart, markerVisible: true }
+      : ctx.autoCrossfade.transitionPlan({
+        analysis: ctx.crossfadeAnalysis.value,
+        currentTime: 0,
+        currentTrack: ctx.activeTrack.value,
+        duration: length,
+        nextAnalysis: ctx.nextCrossfadeAnalysis.value,
+        nextTrack
+      });
     const start = length > 0
       ? Math.max(0, Math.min(100, (Number(plan.transitionStart) / length) * 100))
       : 100;

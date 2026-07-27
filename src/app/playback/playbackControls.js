@@ -325,7 +325,11 @@ export function installPlaybackControls(ctx) {
   // pairing is refused or preparation failed.
   async function maybeRunWsolaTransition({ next, fromAudio, toAudio, playbackTime, mediaDuration }) {
     const engine = ctx.wsolaCrossfade;
-    if (!engine || engine.isActive()) return 'fallback';
+    if (!engine) return 'fallback';
+    // An overlap already playing must hold, never fall back: the rendered
+    // buffer already contains the incoming track, so letting the legacy engine
+    // start its own fade on the same standby element plays it a second time.
+    if (engine.isActive()) return 'hold';
     const plan = engine.plan({
       analysis: ctx.crossfadeAnalysis.value,
       nextAnalysis: ctx.nextCrossfadeAnalysis.value,
@@ -448,6 +452,9 @@ export function installPlaybackControls(ctx) {
     }
     if (ctx.repeatMode.value === 'one') return false;
     if (ctx.activeTrackIsVideo.value) return false;
+    // Covers the forced end-of-track handoff too: only one engine may ever own
+    // the standby element, or the incoming track is heard from both.
+    if (ctx.wsolaCrossfade?.isActive?.()) return false;
 
     const next = ctx.queue.value[0];
     const fromAudio = ctx.currentAudio();
