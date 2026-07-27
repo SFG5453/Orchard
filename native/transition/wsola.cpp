@@ -28,14 +28,41 @@ int ResolveFrameSize(const WsolaConfig& config, double sample_rate) {
   return std::max(4, derived - (derived % 2));
 }
 
-std::vector<float> Downmix(const std::vector<std::vector<float>>& channels, size_t length) {
+std::vector<float> CorrelationGuide(
+  const std::vector<std::vector<float>>& channels,
+  size_t length
+) {
   std::vector<float> mono(length, 0.0f);
   if (channels.empty()) return mono;
   const auto scale = 1.0f / static_cast<float>(channels.size());
+  std::vector<double> channel_energy(channels.size(), 0.0);
+  double mono_energy = 0.0;
   for (const auto& channel : channels) {
     for (size_t index = 0; index < length; ++index) {
       mono[index] += channel[index] * scale;
     }
+  }
+  for (size_t channel = 0; channel < channels.size(); ++channel) {
+    for (size_t index = 0; index < length; ++index) {
+      const auto value = channels[channel][index];
+      channel_energy[channel] += static_cast<double>(value) * value;
+    }
+  }
+  for (const auto value : mono) {
+    mono_energy += static_cast<double>(value) * value;
+  }
+
+  // Wide stereo masters can carry nearly opposite-phase material. Their mono
+  // sum is then mostly quantization noise, which makes the similarity search
+  // jump between arbitrary offsets and produces a fluttering/glitchy stretch.
+  // Keep the shared offset search, but guide it with the loudest channel when
+  // the downmix has lost more than 20 dB of the available signal energy.
+  const auto loudest = static_cast<size_t>(std::distance(
+    channel_energy.begin(),
+    std::max_element(channel_energy.begin(), channel_energy.end())
+  ));
+  if (!channel_energy.empty() && mono_energy < channel_energy[loudest] * 0.01) {
+    return channels[loudest];
   }
   return mono;
 }
@@ -93,7 +120,7 @@ std::vector<std::vector<float>> WsolaStretch(
   if (input_length < static_cast<size_t>(frame)) return {};
 
   const auto window = HannWindow(frame);
-  const auto mono = Downmix(channels, input_length);
+  const auto mono = CorrelationGuide(channels, input_length);
 
   // Allocated against the slowest ratio in play so a glide cannot overrun the
   // buffer; the unused tail is trimmed once the window accumulator is known.

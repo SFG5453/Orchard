@@ -1,7 +1,24 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { installMediaHandlers } from '../src/app/playback/mediaHandlers.js';
-import { installPlaybackControls, playbackNeedsFreshStream } from '../src/app/playback/playbackControls.js';
+import {
+  installPlaybackControls,
+  playbackNeedsFreshStream,
+  queueAfterTransitionPromotion
+} from '../src/app/playback/playbackControls.js';
+
+test('transition promotion preserves queue edits made during the overlap', () => {
+  const editedQueue = [
+    { id: 'new-first' },
+    { id: 'incoming' },
+    { id: 'moved-last' }
+  ];
+
+  assert.deepEqual(
+    queueAfterTransitionPromotion(editedQueue, 'incoming'),
+    [{ id: 'new-first' }, { id: 'moved-last' }]
+  );
+});
 
 test('paused playback leaves buffering so the play control is usable again', () => {
   let stallRecoveryCleared = false;

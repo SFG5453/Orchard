@@ -30,7 +30,7 @@ function fakeClock() {
 }
 
 function fakeAnalyzer({ connected = true } = {}) {
-  const calls = { fades: [], volumes: [], buffers: [] };
+  const calls = { fades: [], mixVolumes: [], resets: [], volumes: [], buffers: [] };
   let now = 100;
   return {
     calls,
@@ -41,6 +41,13 @@ function fakeAnalyzer({ connected = true } = {}) {
     resume: async () => {},
     setVolume(element, value) {
       calls.volumes.push({ element, value });
+    },
+    setMixVolume(element, value) {
+      calls.mixVolumes.push({ element, value });
+      return connected;
+    },
+    resetMixElement(element) {
+      calls.resets.push(element);
     },
     fadeVolume(element, from, to, at, seconds) {
       if (!connected) return false;
@@ -221,10 +228,10 @@ test('start schedules the overlap on the context clock and promotes at the swap'
     const bufferIn = buffer.handle.fades[0];
     assert.deepEqual(
       [outgoingFade.from, outgoingFade.to],
-      [0.8, 0],
-      'outgoing element must fade down, not mute asymptotically'
+      [1, 0],
+      'outgoing mix envelope must fade down, not mute asymptotically'
     );
-    assert.deepEqual([bufferIn.from, bufferIn.to], [0, 0.8]);
+    assert.deepEqual([bufferIn.from, bufferIn.to], [0, 1]);
     assert.ok(Math.abs(outgoingFade.at - bufferIn.at) < 1e-9, 'fades must start together');
     assert.equal(outgoingFade.seconds, bufferIn.seconds);
     assert.ok(outgoingFade.seconds <= 0.02, `handoff window too wide: ${outgoingFade.seconds}s`);
@@ -234,8 +241,8 @@ test('start schedules the overlap on the context clock and promotes at the swap'
 
     const incomingFade = analyzer.calls.fades.find((fade) => fade.element === toAudio);
     const bufferOut = buffer.handle.fades[1];
-    assert.deepEqual([incomingFade.from, incomingFade.to], [0, 0.8]);
-    assert.deepEqual([bufferOut.from, bufferOut.to], [0.8, 0]);
+    assert.deepEqual([incomingFade.from, incomingFade.to], [0, 1]);
+    assert.deepEqual([bufferOut.from, bufferOut.to], [1, 0]);
     assert.ok(Math.abs(incomingFade.at - bufferOut.at) < 1e-9, 'fades must start together');
     assert.ok(
       Math.abs(incomingFade.at + incomingFade.seconds - buffer.handle.endTime) < 1e-9,
@@ -297,11 +304,51 @@ test('cancel before the swap restores the outgoing element at the stretched posi
 
     assert.equal(engine.isActive(), false);
     assert.ok(analyzer.calls.buffers[0].handle.stopped);
-    assert.ok(Math.abs(fromAudio.currentTime - (200 + 3 * 1.05)) < 0.02,
+    assert.ok(Math.abs(fromAudio.currentTime - (200 + 3 / 1.05)) < 0.02,
       `expected stretched realign, got ${fromAudio.currentTime}`);
     assert.equal(toAudio.paused, true);
     const restored = analyzer.calls.volumes.filter((entry) => entry.element === fromAudio).pop();
     assert.equal(restored.value, 1);
+    assert.equal(await startPromise, false);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('volume changes update master gains without replacing scheduled handoff fades', async () => {
+  const clock = fakeClock();
+  const originalWindow = globalThis.window;
+  globalThis.window = clock.window;
+  try {
+    const analyzer = fakeAnalyzer();
+    const engine = createWsolaCrossfade({ analyzer, bridge: {} });
+    const plan = readyPlan({ transitionStart: 200, overlapSeconds: 8 });
+    const fromAudio = fakeElement(199.4);
+    const toAudio = fakeElement(0);
+
+    const startPromise = engine.start({
+      fromAudio,
+      toAudio,
+      plan,
+      render: renderFor(plan),
+      volume: 0.8
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const scheduledElementFades = [...analyzer.calls.fades];
+    const scheduledBufferFades = [...analyzer.calls.buffers[0].handle.fades];
+    engine.setTargetVolume(0.35);
+
+    assert.deepEqual(analyzer.calls.fades, scheduledElementFades);
+    assert.deepEqual(analyzer.calls.buffers[0].handle.fades, scheduledBufferFades);
+    assert.deepEqual(analyzer.calls.volumes.slice(-2), [
+      { element: fromAudio, value: 0.35 },
+      { element: toAudio, value: 0.35 }
+    ]);
+    assert.deepEqual(analyzer.calls.buffers[0].handle.volumeCalls, [0.35]);
+
+    engine.cancel();
     assert.equal(await startPromise, false);
   } finally {
     globalThis.window = originalWindow;
@@ -322,6 +369,44 @@ test('start refuses when called too late for a clean downbeat', async () => {
   assert.equal(didStart, false);
   assert.equal(engine.isActive(), false);
   assert.equal(analyzer.calls.buffers.length, 0);
+});
+
+test('rechecks media time after context resume and maps late input time onto stretched output', async () => {
+  const clock = fakeClock();
+  const originalWindow = globalThis.window;
+  globalThis.window = clock.window;
+  try {
+    const analyzer = fakeAnalyzer();
+    const engine = createWsolaCrossfade({ analyzer, bridge: {} });
+    const plan = readyPlan({ transitionStart: 200, overlapSeconds: 8 });
+    const render = renderFor(plan);
+    render.stretchRatio = 0.95;
+    const fromAudio = fakeElement(199.9);
+    const toAudio = fakeElement(0);
+    analyzer.resume = async () => {
+      analyzer.advance(0.15);
+      fromAudio.currentTime += 0.15;
+    };
+
+    const startPromise = engine.start({
+      fromAudio,
+      toAudio,
+      plan,
+      render,
+      volume: 1
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const buffer = analyzer.calls.buffers[0];
+    assert.ok(Math.abs(buffer.offset - 0.05 * 0.95) < 1e-9);
+    assert.ok(Math.abs(toAudio.currentTime - (plan.incomingCueTime + buffer.offset)) < 1e-9);
+
+    engine.cancel();
+    assert.equal(await startPromise, false);
+  } finally {
+    globalThis.window = originalWindow;
+  }
 });
 
 test('start refuses when the elements are outside the audio graph', async () => {

@@ -163,8 +163,10 @@ export function createWsolaCrossfade({
     targetVolume = clamped;
     if (!session) return;
     session.handle?.setVolume(clamped);
-    // Only the audible element follows live volume; muted elements stay muted.
-    if (session.promoted) analyzer.setVolume(session.toAudio, clamped);
+    // Element audibility lives on the normalized mix envelope, so both master
+    // gains can follow the slider without unmuting either shadow deck.
+    analyzer.setVolume(session.fromAudio, clamped);
+    analyzer.setVolume(session.toAudio, clamped);
   }
 
   function clearTimers(state) {
@@ -184,6 +186,8 @@ export function createWsolaCrossfade({
     state.finish?.();
 
     const elapsed = Math.max(0, analyzer.currentTime() - state.overlapStartTime);
+    analyzer.resetMixElement?.(state.fromAudio);
+    analyzer.resetMixElement?.(state.toAudio);
     if (state.promoted) {
       // The incoming element is already the active deck; it has been playing
       // muted in position, so restoring volume is the whole recovery.
@@ -194,7 +198,8 @@ export function createWsolaCrossfade({
       // Pre-promote the outgoing element is still authoritative. The buffer
       // consumed its media at the stretch ratio while the element ran at unit
       // rate, so realign before unmuting.
-      const expected = state.plan.transitionStart + elapsed * state.render.stretchRatio;
+      const ratio = Math.max(0.0001, Number(state.render.stretchRatio) || 1);
+      const expected = state.plan.transitionStart + elapsed / ratio;
       if (Math.abs(state.fromAudio.currentTime - expected) > DRIFT_TOLERANCE_SECONDS) {
         try {
           state.fromAudio.currentTime = expected;
@@ -211,7 +216,7 @@ export function createWsolaCrossfade({
     if (session || !fromAudio || !toAudio || !transitionPlan?.ok || !render?.channels?.length) {
       return false;
     }
-    const untilStart = transitionPlan.transitionStart - fromAudio.currentTime;
+    let untilStart = transitionPlan.transitionStart - fromAudio.currentTime;
     if (untilStart < -MAX_LATE_START_SECONDS) {
       report('wsola-start-too-late', { lateBySeconds: -untilStart });
       return false;
@@ -223,8 +228,20 @@ export function createWsolaCrossfade({
       await analyzer.resume?.();
       if (mySequence !== sequence) return false;
 
+      // `resume()` is asynchronous while the media element keeps advancing.
+      // Re-sample its clock so context startup latency cannot put the buffer
+      // behind the live deck before the first handoff.
+      untilStart = transitionPlan.transitionStart - fromAudio.currentTime;
+      if (untilStart < -MAX_LATE_START_SECONDS) {
+        report('wsola-start-too-late', { lateBySeconds: -untilStart });
+        return false;
+      }
+
       const now = analyzer.currentTime();
-      const offset = Math.max(0, -untilStart);
+      const stretchRatio = Math.max(0.0001, Number(render.stretchRatio) || 1);
+      // `untilStart` is measured on the outgoing media timeline, while the
+      // buffer offset is measured on its stretched output timeline.
+      const offset = Math.max(0, -untilStart) * stretchRatio;
       const when = now + Math.max(0, untilStart);
       const handle = analyzer.playPcmBuffer({
         channels: render.channels,
@@ -254,14 +271,17 @@ export function createWsolaCrossfade({
       // track at full gain. The element keeps playing muted afterwards so a
       // cancel can restore it instantly.
       const connected = analyzer.fadeVolume(
-        fromAudio, targetVolume, 0, when, HANDOFF_FADE_SECONDS
+        fromAudio, 1, 0, when, HANDOFF_FADE_SECONDS
       );
       if (!connected) throw new Error('Transition elements are outside the audio graph');
-      handle.fade(0, targetVolume, when, HANDOFF_FADE_SECONDS);
+      handle.fade(0, 1, when, HANDOFF_FADE_SECONDS);
 
       // The incoming element shadows the buffer's incoming side, muted. It
       // only has to be exactly placed by the time the buffer ends.
-      analyzer.setVolume(toAudio, 0);
+      analyzer.setVolume(toAudio, targetVolume);
+      if (!analyzer.setMixVolume?.(toAudio, 0)) {
+        throw new Error('Transition elements are outside the audio graph');
+      }
       toAudio.currentTime = transitionPlan.incomingCueTime + offset;
       await toAudio.play();
       if (mySequence !== sequence) return false;
@@ -286,11 +306,12 @@ export function createWsolaCrossfade({
       const swapAt = state.overlapStartTime +
         transitionPlan.overlapSeconds * transitionPlan.bassSwapFraction;
       const endAt = handle.endTime;
-      // Both corrections sit in the first two thirds of the overlap: each one
+      // All corrections sit in the first two thirds of the overlap: each one
       // is a seek, and the element needs settled, steady playback well before
       // it becomes audible.
       schedule(state.overlapStartTime + transitionPlan.overlapSeconds * 0.15, correctDrift);
       schedule((state.overlapStartTime + swapAt) / 2, correctDrift);
+      schedule(state.overlapStartTime + transitionPlan.overlapSeconds * 0.6, correctDrift);
       schedule(Math.max(now, swapAt), () => {
         if (state.promoted) return;
         state.promoted = true;
@@ -300,9 +321,9 @@ export function createWsolaCrossfade({
       // Hand back to the element as the buffer's last samples play out, with
       // the same complementary pair of fades used at the start. Both carry the
       // incoming track here, so the exchange is level-preserving.
-      handle.fade(targetVolume, 0, endAt - HANDOFF_FADE_SECONDS, HANDOFF_FADE_SECONDS);
+      handle.fade(1, 0, endAt - HANDOFF_FADE_SECONDS, HANDOFF_FADE_SECONDS);
       analyzer.fadeVolume(
-        toAudio, 0, targetVolume, endAt - HANDOFF_FADE_SECONDS, HANDOFF_FADE_SECONDS
+        toAudio, 0, 1, endAt - HANDOFF_FADE_SECONDS, HANDOFF_FADE_SECONDS
       );
 
       await new Promise((resolve) => {
@@ -313,6 +334,8 @@ export function createWsolaCrossfade({
 
       session = null;
       clearTimers(state);
+      analyzer.resetMixElement?.(toAudio);
+      analyzer.resetMixElement?.(fromAudio);
       analyzer.setVolume(toAudio, targetVolume);
       analyzer.setVolume(fromAudio, 0);
       fromAudio.pause();
@@ -327,6 +350,8 @@ export function createWsolaCrossfade({
         clearTimers(state);
         state.handle?.stop();
       }
+      analyzer.resetMixElement?.(fromAudio);
+      analyzer.resetMixElement?.(toAudio);
       analyzer.setVolume(fromAudio, targetVolume);
       toAudio.pause();
       analyzer.setVolume(toAudio, 0);

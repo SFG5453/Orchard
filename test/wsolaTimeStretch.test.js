@@ -109,6 +109,38 @@ test('time stretch keeps stereo channels aligned', async () => {
   assert.ok(worst < 0.05, `channels drifted apart, residual sum ${worst.toFixed(4)}`);
 });
 
+test('phase-cancelling stereo does not turn correlation noise into pitch flutter', async () => {
+  const left = sine({ duration: 4 });
+  const right = new Float32Array(left.length);
+  let randomState = 123456789;
+  for (let index = 0; index < right.length; index += 1) {
+    randomState = (Math.imul(1664525, randomState) + 1013904223) >>> 0;
+    const noise = (randomState / 0x100000000 * 2 - 1) * 0.00001;
+    right[index] = -left[index] + noise;
+  }
+
+  const [output] = await native.timeStretch([left, right], SAMPLE_RATE, 1.05);
+  const window = Math.floor(SAMPLE_RATE * 0.2);
+  const frequencies = [];
+  for (let start = Math.floor(SAMPLE_RATE * 0.5);
+    start + window < output.length - SAMPLE_RATE * 0.5;
+    start += window) {
+    let positiveCrossings = 0;
+    for (let index = start + 1; index < start + window; index += 1) {
+      if (output[index - 1] <= 0 && output[index] > 0) positiveCrossings += 1;
+    }
+    frequencies.push(positiveCrossings / (window / SAMPLE_RATE));
+  }
+  const lowest = Math.min(...frequencies);
+  const highest = Math.max(...frequencies);
+  const average = frequencies.reduce((total, value) => total + value, 0) / frequencies.length;
+  assert.ok(Math.abs(average - 440) < 6, `phase-cancelled guide drifted to ${average} Hz`);
+  assert.ok(
+    highest - lowest < 2,
+    `phase-cancelled guide fluttered between ${lowest} and ${highest} Hz`
+  );
+});
+
 test('time stretch rejects malformed input', async () => {
   const input = sine({ duration: 0.5 });
   assert.throws(() => native.timeStretch([], SAMPLE_RATE, 1), /valid/);

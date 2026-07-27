@@ -14,6 +14,10 @@ function isUnavailableTrackError(error) {
     .test(String(error?.message || error || ''));
 }
 
+export function queueAfterTransitionPromotion(queue = [], incomingTrackId = '') {
+  return queue.filter((track) => track?.id !== incomingTrackId);
+}
+
 export function playbackNeedsFreshStream(media, playbackError = '') {
   return Boolean(
     playbackError || media?.ended || media?.error || media?.networkState === 3
@@ -366,7 +370,6 @@ export function installPlaybackControls(ctx) {
     if (!prepared) return 'fallback';
     const previousTrack = ctx.activeTrack.value;
     const nextTrack = ctx.activeTrackFromResolved(next, resolved);
-    const nextQueue = ctx.queue.value.slice(1);
     const nextDeck = ctx.activeAudioDeck.value === 'main' ? 'next' : 'main';
     const transition = {
       transitionStart: prepared.plan.transitionStart,
@@ -392,6 +395,7 @@ export function installPlaybackControls(ctx) {
       render: prepared.render,
       volume: ctx.volume.value,
       onPromote: () => {
+        const nextQueue = queueAfterTransitionPromotion(ctx.queue.value, next.id);
         ctx.finishYouTubeHistory?.();
         ctx.markPlaylistTrackPlayed?.(previousTrack);
         if (previousTrack?.id) {
@@ -509,7 +513,6 @@ export function installPlaybackControls(ctx) {
 
     const previousTrack = ctx.activeTrack.value;
     const nextTrack = ctx.activeTrackFromResolved(next, resolved);
-    const nextQueue = ctx.queue.value.slice(1);
     const nextDeck = ctx.activeAudioDeck.value === 'main' ? 'next' : 'main';
     const showSmartMix = ctx.crossfadeMode.value === 'smart' &&
       !options.force &&
@@ -531,6 +534,7 @@ export function installPlaybackControls(ctx) {
       transition,
       volume: ctx.volume.value,
       onPromote: () => {
+        const nextQueue = queueAfterTransitionPromotion(ctx.queue.value, next.id);
         ctx.finishYouTubeHistory?.();
         ctx.markPlaylistTrackPlayed?.(previousTrack);
         if (previousTrack?.id) {

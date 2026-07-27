@@ -2,9 +2,11 @@
 // rendering. `channels` is planar (non-interleaved) Float32 PCM in [-1, 1],
 // every channel the same length, matching the layout AudioBuffer exposes.
 //
-// The similarity search runs once on a mono downmix and the resulting input
-// offsets are applied to every channel, so a stereo image survives the stretch
-// intact; searching per channel would decorrelate them and collapse the image.
+// The similarity search runs once on a shared correlation guide and the
+// resulting input offsets are applied to every channel, so a stereo image
+// survives the stretch intact. The guide normally uses a mono downmix, but
+// falls back to the loudest channel when phase cancellation makes that downmix
+// unreliable; searching independently per channel would decorrelate them.
 //
 // Calls borrow the input only until they return and produce results that own
 // all storage. Stretching is reentrant because every mutable value is

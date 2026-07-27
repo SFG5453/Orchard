@@ -1,6 +1,18 @@
 import { nextTick, onBeforeUnmount, onMounted, watch } from 'vue';
 import { io } from 'socket.io-client';
 
+export function disableCrossfadePlayback(ctx) {
+  ctx.stopCrossfadeClock();
+  if (ctx.cancelActiveCrossfade) {
+    ctx.cancelActiveCrossfade();
+  } else {
+    ctx.autoCrossfade?.cancel?.();
+    ctx.wsolaCrossfade?.cancel?.();
+  }
+  ctx.dismissSmartCrossfadeMix?.();
+  ctx.setCurrentAudioVolume();
+}
+
 export function installLifecycle(ctx) {
   watch(ctx.volume, (value) => {
     ctx.autoCrossfade.setTargetVolume(value);
@@ -237,10 +249,7 @@ export function installLifecycle(ctx) {
       if (ctx.isPlaying.value) ctx.startCrossfadeClock();
       return;
     }
-    ctx.stopCrossfadeClock();
-    ctx.autoCrossfade.cancel();
-    ctx.dismissSmartCrossfadeMix?.();
-    ctx.setCurrentAudioVolume();
+    disableCrossfadePlayback(ctx);
   });
 
   watch(ctx.discordRpcEnabled, (enabled) => {
@@ -420,6 +429,7 @@ export function installLifecycle(ctx) {
     ctx.dismissSmartCrossfadeMix?.();
     ctx.autoplayRequest += 1;
     ctx.autoCrossfade.cancel();
+    ctx.wsolaCrossfade?.cancel?.();
     ctx.finishYouTubeHistory?.();
     ctx.destroySleepTimer();
     ctx.audioAnalyzer.destroy();
