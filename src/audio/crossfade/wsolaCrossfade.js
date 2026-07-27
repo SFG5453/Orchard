@@ -20,7 +20,7 @@ export const WSOLA_PREPARE_LEAD_SECONDS = 30;
 export const WSOLA_START_LEAD_SECONDS = 1.2;
 
 // Starting later than this after the planned downbeat would audibly clip the
-// front of the overlap; past it the caller should use the ordinary crossfade.
+// front of the overlap, so the transition is skipped.
 const MAX_LATE_START_SECONDS = 0.35;
 
 // The incoming element runs muted during the overlap; corrections are

@@ -232,10 +232,8 @@ test('playing from history does not enqueue the rest of listening history', () =
   }]);
 });
 
-// A WSOLA overlap already contains the incoming track, so the legacy engine
-// must never start its own fade on the same standby element underneath it.
-function crossfadeRoutingContext({ wsolaActive, wsolaPlan }) {
-  const legacyStarts = [];
+function crossfadeRoutingContext({ mode = 'smart', wsolaActive, wsolaPlan }) {
+  const fixedDurationStarts = [];
   const fromAudio = { currentTime: 200, duration: 240, pause() {}, play: async () => {} };
   const toAudio = { currentTime: 0, src: 'http://127.0.0.1/next', pause() {}, play: async () => {} };
   const ctx = {
@@ -245,7 +243,7 @@ function crossfadeRoutingContext({ wsolaActive, wsolaPlan }) {
     crossfadeAnalysis: { value: { status: 'ready', bpm: 126 } },
     nextCrossfadeAnalysis: { value: { status: 'ready', bpm: 126 } },
     crossfadeEnabled: { value: true },
-    crossfadeMode: { value: 'smart' },
+    crossfadeMode: { value: mode },
     crossfadeSeconds: { value: 6 },
     currentAudio: () => fromAudio,
     standbyAudio: () => toAudio,
@@ -276,7 +274,7 @@ function crossfadeRoutingContext({ wsolaActive, wsolaPlan }) {
       cancel: () => {},
       transitionPlan: () => ({ shouldStart: true, transitionStart: 190, fadeSeconds: 20 }),
       start: async (options) => {
-        legacyStarts.push(options);
+        fixedDurationStarts.push(options);
         return true;
       }
     },
@@ -291,33 +289,50 @@ function crossfadeRoutingContext({ wsolaActive, wsolaPlan }) {
     }
   };
   installPlaybackControls(ctx);
-  return { ctx, legacyStarts };
+  return { ctx, fixedDurationStarts };
 }
 
-test('an active WSOLA overlap blocks the legacy crossfade instead of doubling it', async () => {
-  const { ctx, legacyStarts } = crossfadeRoutingContext({
+test('an active WSOLA overlap never starts the fixed-duration crossfade underneath it', async () => {
+  const { ctx, fixedDurationStarts } = crossfadeRoutingContext({
     wsolaActive: true,
     wsolaPlan: { ok: true, transitionStart: 200 }
   });
 
   assert.equal(await ctx.maybeStartAutoCrossfade(), false);
   assert.equal(await ctx.maybeStartAutoCrossfade({ force: true, reason: 'ended-handoff' }), false);
-  assert.deepEqual(legacyStarts, [], 'legacy engine started under a live WSOLA overlap');
+  assert.deepEqual(fixedDurationStarts, [], 'fixed-duration engine started under a live WSOLA overlap');
 });
 
-test('a refused WSOLA pairing still falls back to the legacy crossfade', async () => {
-  const originalWindow = globalThis.window;
-  // The mix overlay schedules its own dismissal on the real window timer.
-  globalThis.window = { setTimeout: () => 1, clearTimeout: () => {} };
-  try {
-    const { ctx, legacyStarts } = crossfadeRoutingContext({
-      wsolaActive: false,
-      wsolaPlan: { ok: false, reason: 'tempo-distance' }
-    });
+test('a refused smart pairing does not fall back to the fixed-duration crossfade', async () => {
+  const { ctx, fixedDurationStarts } = crossfadeRoutingContext({
+    wsolaActive: false,
+    wsolaPlan: { ok: false, reason: 'tempo-distance' }
+  });
 
-    assert.equal(await ctx.maybeStartAutoCrossfade(), true);
-    assert.equal(legacyStarts.length, 1);
-  } finally {
-    globalThis.window = originalWindow;
-  }
+  assert.equal(await ctx.maybeStartAutoCrossfade(), false);
+  assert.deepEqual(fixedDurationStarts, []);
+});
+
+test('a forced smart handoff does not use the fixed-duration crossfade', async () => {
+  const { ctx, fixedDurationStarts } = crossfadeRoutingContext({
+    wsolaActive: false,
+    wsolaPlan: { ok: true, transitionStart: 200 }
+  });
+
+  assert.equal(
+    await ctx.maybeStartAutoCrossfade({ force: true, reason: 'ended-handoff' }),
+    false
+  );
+  assert.deepEqual(fixedDurationStarts, []);
+});
+
+test('standard mode still uses the fixed-duration crossfade', async () => {
+  const { ctx, fixedDurationStarts } = crossfadeRoutingContext({
+    mode: 'standard',
+    wsolaActive: false,
+    wsolaPlan: { ok: false, reason: 'tempo-distance' }
+  });
+
+  assert.equal(await ctx.maybeStartAutoCrossfade(), true);
+  assert.equal(fixedDurationStarts.length, 1);
 });
