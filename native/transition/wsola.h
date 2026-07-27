@@ -23,6 +23,13 @@ struct WsolaConfig {
   // (playing it slower); values below 1 compress it. To retune a track of
   // tempo `source_bpm` onto a grid of `target_bpm`, use source_bpm/target_bpm.
   double ratio = 1.0;
+  // Ratio to begin at before gliding to `ratio`, letting a track slide onto a
+  // new tempo the way a DJ rides a pitch fader instead of stepping onto it.
+  // Zero disables the glide and holds `ratio` throughout.
+  double start_ratio = 0;
+  // Fraction of the input over which `start_ratio` reaches `ratio`. Ignored
+  // when there is no glide; clamped to (0, 1].
+  double glide = 0;
   // Analysis/synthesis window in samples. Zero derives ~46 ms from the sample
   // rate, which keeps bass periods intact on four-to-the-floor material.
   int frame_size = 0;

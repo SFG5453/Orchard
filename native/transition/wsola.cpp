@@ -84,18 +84,22 @@ std::vector<std::vector<float>> WsolaStretch(
   const int frame = ResolveFrameSize(config, sample_rate);
   const int synthesis_hop = frame / 2;
   const int overlap = frame - synthesis_hop;
-  // The analysis hop is what actually realizes the ratio: output advances by
-  // synthesis_hop per frame while input advances by analysis_hop.
-  const int analysis_hop =
-    std::max(1, static_cast<int>(std::lround(synthesis_hop / config.ratio)));
   const int radius = config.search_radius > 0 ? config.search_radius : frame / 4;
+
+  const bool gliding =
+    config.start_ratio > 0 && config.glide > 0 && std::isfinite(config.start_ratio);
+  const double glide_span = gliding ? std::min(1.0, config.glide) : 0.0;
+  const double opening_ratio = gliding ? config.start_ratio : config.ratio;
   if (input_length < static_cast<size_t>(frame)) return {};
 
   const auto window = HannWindow(frame);
   const auto mono = Downmix(channels, input_length);
 
+  // Allocated against the slowest ratio in play so a glide cannot overrun the
+  // buffer; the unused tail is trimmed once the window accumulator is known.
   const auto output_length =
-    static_cast<size_t>(std::llround(static_cast<double>(input_length) * config.ratio)) +
+    static_cast<size_t>(std::llround(static_cast<double>(input_length) *
+                                     std::max(config.ratio, opening_ratio))) +
     static_cast<size_t>(frame);
   std::vector<std::vector<float>> output(channels.size(),
                                          std::vector<float>(output_length, 0.0f));
@@ -106,13 +110,26 @@ std::vector<std::vector<float>> WsolaStretch(
 
   std::vector<float> reference(static_cast<size_t>(overlap), 0.0f);
   bool have_reference = false;
+  // Advanced by a per-frame hop rather than derived from the frame index, so a
+  // glide can vary the rate at which input is consumed.
+  double analysis_position = 0;
 
   for (size_t frame_index = 0;; ++frame_index) {
-    const auto nominal =
-      static_cast<int64_t>(frame_index) * static_cast<int64_t>(analysis_hop);
+    const auto nominal = static_cast<int64_t>(std::llround(analysis_position));
     const auto synthesis_start =
       static_cast<int64_t>(frame_index) * static_cast<int64_t>(synthesis_hop);
     if (synthesis_start + frame > static_cast<int64_t>(output_length)) break;
+
+    // The glide is scheduled against input consumed, which is monotonic and
+    // known exactly, unlike the output length under a varying ratio.
+    const double consumed = analysis_position / static_cast<double>(input_length);
+    const double active_ratio =
+      gliding && consumed < glide_span
+        ? opening_ratio + (config.ratio - opening_ratio) * (consumed / glide_span)
+        : config.ratio;
+    // The analysis hop is what actually realizes the ratio: output advances by
+    // synthesis_hop per frame while input advances by analysis_hop.
+    const double analysis_hop = std::max(1.0, synthesis_hop / active_ratio);
 
     int64_t chosen = nominal;
     if (have_reference) {
@@ -158,6 +175,9 @@ std::vector<std::vector<float>> WsolaStretch(
         mono[static_cast<size_t>(continuation) + index];
     }
     have_reference = true;
+    // The chosen offset is a local perturbation only; the nominal grid keeps
+    // advancing on schedule so search jitter cannot accumulate into drift.
+    analysis_position += analysis_hop;
   }
 
   // Trim to the last sample that actually received window energy so callers do

@@ -118,6 +118,27 @@ test('time stretch rejects malformed input', async () => {
   assert.throws(() => native.timeStretch([[1, 2, 3]], SAMPLE_RATE, 1), /Float32Array/);
 });
 
+test('glides onto the target ratio instead of stepping onto it', async () => {
+  const input = sine({ duration: 4 });
+  const [stepped] = await native.timeStretch([input], SAMPLE_RATE, 1.06);
+  const [glided] = await native.timeStretch([input], SAMPLE_RATE, 1.06, {
+    startRatio: 1,
+    glide: 0.5
+  });
+
+  // Half the input is spent easing from 1.0 up to 1.06, so the glided render
+  // is shorter than one that holds 1.06 throughout, but still longer than the
+  // untouched input.
+  assert.ok(
+    glided.length < stepped.length,
+    `glide did not shorten the render: ${glided.length} vs ${stepped.length}`
+  );
+  assert.ok(
+    glided.length > input.length,
+    `glide did not stretch at all: ${glided.length} vs ${input.length}`
+  );
+});
+
 test('binding publishes the transparent ratio limit', () => {
   assert.ok(native.maxTransparentRatioDeviation > 0.01);
   assert.ok(native.maxTransparentRatioDeviation <= 0.2);
