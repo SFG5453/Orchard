@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "../analyzer/audio_analysis.h"
+#include "../transition/wsola.h"
 
 namespace {
 
@@ -185,10 +186,123 @@ Napi::Value Analyze(const Napi::CallbackInfo& info) {
   return promise;
 }
 
-// Exposes only the version marker and Promise-returning analysis entry point.
+// Owns the planar PCM snapshot and stretched result for the worker's lifetime.
+// Mirrors AnalysisWorker: no shared mutable DSP state, no cancellation hook.
+class StretchWorker final : public Napi::AsyncWorker {
+ public:
+  StretchWorker(
+    Napi::Env env,
+    std::vector<std::vector<float>> channels,
+    double sample_rate,
+    orchard::WsolaConfig config
+  ) : Napi::AsyncWorker(env),
+      deferred_(Napi::Promise::Deferred::New(env)),
+      channels_(std::move(channels)),
+      sample_rate_(sample_rate),
+      config_(config) {}
+
+  Napi::Promise Promise() const {
+    return deferred_.Promise();
+  }
+
+  void Execute() override {
+    // libuv worker-pool thread: do not create or retain JavaScript/Napi values.
+    result_ = orchard::WsolaStretch(channels_, sample_rate_, config_);
+  }
+
+  void OnOK() override {
+    // Environment thread: each channel is copied into its own Float32Array.
+    const auto env = Env();
+    auto output = Napi::Array::New(env, result_.size());
+    for (size_t channel = 0; channel < result_.size(); ++channel) {
+      auto typed = Napi::Float32Array::New(env, result_[channel].size());
+      std::copy(result_[channel].begin(), result_[channel].end(), typed.Data());
+      output.Set(channel, typed);
+    }
+    deferred_.Resolve(output);
+  }
+
+  void OnError(const Napi::Error& error) override {
+    deferred_.Reject(error.Value());
+  }
+
+ private:
+  Napi::Promise::Deferred deferred_;
+  std::vector<std::vector<float>> channels_;
+  double sample_rate_;
+  orchard::WsolaConfig config_;
+  std::vector<std::vector<float>> result_;
+};
+
+// Time-scales planar PCM without changing pitch. Accepts an array of
+// Float32Array channels so the caller can hand over AudioBuffer planes
+// directly; the copy is required because that storage stays owned by
+// JavaScript and cannot be read later from the worker-pool thread.
+Napi::Value TimeStretch(const Napi::CallbackInfo& info) {
+  const auto env = info.Env();
+  if (info.Length() < 3 || !info[0].IsArray() || !info[1].IsNumber() || !info[2].IsNumber()) {
+    Napi::TypeError::New(env, "timeStretch expects channel Float32Arrays, sampleRate, and ratio")
+      .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  const auto planes = info[0].As<Napi::Array>();
+  const double sample_rate = info[1].As<Napi::Number>().DoubleValue();
+  const double ratio = info[2].As<Napi::Number>().DoubleValue();
+  if (planes.Length() == 0 || !std::isfinite(sample_rate) || sample_rate < 1000 ||
+      !std::isfinite(ratio) || ratio <= 0) {
+    Napi::RangeError::New(env, "channels, sample rate, and ratio must be valid")
+      .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  std::vector<std::vector<float>> channels(planes.Length());
+  size_t expected = 0;
+  for (uint32_t index = 0; index < planes.Length(); ++index) {
+    const auto plane = planes.Get(index);
+    if (!plane.IsTypedArray() ||
+        plane.As<Napi::TypedArray>().TypedArrayType() != napi_float32_array) {
+      Napi::TypeError::New(env, "every channel must be a Float32Array")
+        .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    const auto typed = plane.As<Napi::Float32Array>();
+    if (index == 0) expected = typed.ElementLength();
+    if (typed.ElementLength() != expected || typed.ElementLength() == 0) {
+      Napi::RangeError::New(env, "channels must be non-empty and the same length")
+        .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    channels[index].assign(typed.Data(), typed.Data() + typed.ElementLength());
+  }
+
+  orchard::WsolaConfig config;
+  config.ratio = ratio;
+  if (info.Length() > 3 && info[3].IsObject()) {
+    const auto options = info[3].As<Napi::Object>();
+    if (options.Has("frameSize")) {
+      config.frame_size = options.Get("frameSize").As<Napi::Number>().Int32Value();
+    }
+    if (options.Has("searchRadius")) {
+      config.search_radius = options.Get("searchRadius").As<Napi::Number>().Int32Value();
+    }
+  }
+
+  auto* worker = new StretchWorker(env, std::move(channels), sample_rate, config);
+  auto promise = worker->Promise();
+  worker->Queue();
+  return promise;
+}
+
+// Exposes the version marker, analysis, and time-stretch entry points.
 Napi::Object Initialize(Napi::Env env, Napi::Object exports) {
   exports.Set("analysisVersion", kAnalysisVersion);
   exports.Set("analyze", Napi::Function::New(env, Analyze));
+  exports.Set("timeStretch", Napi::Function::New(env, TimeStretch));
+  exports.Set(
+    "maxTransparentRatioDeviation",
+    Napi::Number::New(env, orchard::kMaxTransparentRatioDeviation)
+  );
   return exports;
 }
 
