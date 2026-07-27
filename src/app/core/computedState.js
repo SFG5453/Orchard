@@ -228,15 +228,19 @@ export function installComputedState(ctx) {
       };
     }
 
-    // Smart mode has no fixed-duration fallback: when WSOLA cannot plan the
-    // pairing there is no transition to mark.
-    const plan = ctx.crossfadeMode.value === 'smart'
+    // The marker must describe the engine that will actually run. A qualifying
+    // WSOLA pairing overrides the legacy plan, whose Apple-style overlap starts
+    // many seconds earlier and would put the marker in the wrong place.
+    const wsolaPlan = ctx.crossfadeMode.value === 'smart'
       ? ctx.wsolaCrossfade?.plan({
         analysis: ctx.crossfadeAnalysis.value,
         nextAnalysis: ctx.nextCrossfadeAnalysis.value,
         duration: length,
         nextDuration: Number(nextTrack.durationSeconds) || 0
       })
+      : null;
+    const plan = wsolaPlan?.ok
+      ? { transitionStart: wsolaPlan.transitionStart, markerVisible: true }
       : ctx.autoCrossfade.transitionPlan({
         analysis: ctx.crossfadeAnalysis.value,
         currentTime: 0,
@@ -245,19 +249,15 @@ export function installComputedState(ctx) {
         nextAnalysis: ctx.nextCrossfadeAnalysis.value,
         nextTrack
       });
-    const markerVisible = ctx.crossfadeMode.value === 'smart'
-      ? Boolean(plan?.ok)
-      : Boolean(plan?.markerVisible);
-    const transitionStart = Number(plan?.transitionStart);
-    const start = length > 0 && Number.isFinite(transitionStart)
-      ? Math.max(0, Math.min(100, (transitionStart / length) * 100))
+    const start = length > 0
+      ? Math.max(0, Math.min(100, (Number(plan.transitionStart) / length) * 100))
       : 100;
     return {
       '--crossfade-left': `${start}%`,
       '--crossfade-right': '0%',
       '--crossfade-opacity': ctx.crossfadeEnabled.value &&
         ctx.activeTrack.value &&
-        markerVisible ? 1 : 0
+        plan.markerVisible ? 1 : 0
     };
   });
 
