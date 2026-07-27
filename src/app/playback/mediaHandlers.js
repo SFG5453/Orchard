@@ -175,7 +175,7 @@ export function installMediaHandlers(ctx) {
 
   ctx.onAudioPause = function onAudioPause(event) {
     if (!ctx.isCurrentAudioEvent(event)) return;
-    if (ctx.autoCrossfade?.isActive?.()) ctx.cancelActiveCrossfade?.();
+    if (ctx.autoCrossfade?.isActive?.() || ctx.wsolaCrossfade?.isActive?.()) ctx.cancelActiveCrossfade?.();
     ctx.clearPlaybackStallRecovery();
     ctx.reportYouTubeHistoryProgress?.({ force: true });
     ctx.buffering.value = false;
@@ -185,7 +185,7 @@ export function installMediaHandlers(ctx) {
 
   ctx.onAudioEnded = function onAudioEnded(event) {
     if (!ctx.isCurrentAudioEvent(event)) return;
-    if (ctx.autoCrossfade.isActive()) return;
+    if (ctx.autoCrossfade.isActive() || ctx.wsolaCrossfade?.isActive?.()) return;
     if (!ctx.activeTrackIsVideo.value && ctx.recoverPrematureAudioEnd(event.target)) return;
     ctx.clearPlaybackStallRecovery();
     ctx.finishYouTubeHistory?.();

@@ -206,3 +206,65 @@ test('audio analysis service rejects invalid BPM and redacts sensitive diagnosti
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('audio analysis service renders beat-matched transitions over IPC', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'orchard-transition-'));
+  const cachePath = path.join(directory, 'cache.json');
+  const ipc = fakeIpcMain();
+  const service = setupAudioAnalysisService({
+    cachePath,
+    ipcMain: ipc,
+    nativeModulePath: path.resolve('native/build/Release/orchard_audio_analysis.node'),
+    logger: () => {}
+  });
+
+  function stereoTone(seconds, frequency) {
+    const sampleRate = 44100;
+    const data = new Float32Array(Math.floor(seconds * sampleRate));
+    for (let index = 0; index < data.length; index += 1) {
+      data[index] = 0.3 * Math.sin((2 * Math.PI * frequency * index) / sampleRate);
+    }
+    return [data, new Float32Array(data)];
+  }
+
+  try {
+    const result = await ipc.invoke('audio-analysis:render-transition', {
+      outgoing: { channels: stereoTone(12, 220), anchor: 1, bpm: 126 },
+      incoming: { channels: stereoTone(12, 330), anchor: 1, bpm: 126 },
+      options: { sampleRate: 44100, beats: 8, bassSwap: 0.75 }
+    });
+    assert.equal(result.rendered, true, result.rejected);
+    assert.equal(result.channels.length, 2);
+    const expected = 8 * (60 / 126) * 44100;
+    assert.ok(Math.abs(result.channels[0].length - expected) < 4);
+    assert.equal(result.bpm, 126);
+
+    const refused = await ipc.invoke('audio-analysis:render-transition', {
+      outgoing: { channels: stereoTone(12, 220), anchor: 1, bpm: 100 },
+      incoming: { channels: stereoTone(12, 330), anchor: 1, bpm: 126 },
+      options: { sampleRate: 44100, beats: 8 }
+    });
+    assert.equal(refused.rendered, false);
+    assert.match(refused.rejected, /transparent stretch range/);
+
+    await assert.rejects(
+      ipc.invoke('audio-analysis:render-transition', {
+        outgoing: { channels: [], anchor: 0, bpm: 126 },
+        incoming: { channels: stereoTone(2, 330), anchor: 0, bpm: 126 },
+        options: { sampleRate: 44100 }
+      }),
+      /Invalid outgoing PCM/
+    );
+    await assert.rejects(
+      ipc.invoke('audio-analysis:render-transition', {
+        outgoing: { channels: stereoTone(2, 220), anchor: 0, bpm: 126 },
+        incoming: { channels: stereoTone(2, 330), anchor: 0, bpm: 126 },
+        options: {}
+      }),
+      /valid sample rate/
+    );
+  } finally {
+    await service.stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

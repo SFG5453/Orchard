@@ -4,6 +4,7 @@ import { io } from 'socket.io-client';
 export function installLifecycle(ctx) {
   watch(ctx.volume, (value) => {
     ctx.autoCrossfade.setTargetVolume(value);
+    ctx.wsolaCrossfade?.setTargetVolume?.(value);
     ctx.setCurrentAudioVolume(value);
   });
 

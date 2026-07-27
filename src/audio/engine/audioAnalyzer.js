@@ -153,6 +153,16 @@ export function createAudioAnalyzer(options = {}) {
     node.gain.gain.setValueAtTime(clamp01(value), now);
   }
 
+  // Scheduled, click-free counterpart to setVolume, for callers that need an
+  // element muted or restored at an exact context time (transition handoffs).
+  function rampVolume(element, value, at = 0, fadeSeconds = 0.03) {
+    const node = connectElement(element);
+    if (!node) return;
+    const start = Math.max(currentTime(), Number(at) || 0);
+    node.gain.gain.cancelScheduledValues(start);
+    node.gain.gain.setTargetAtTime(clamp01(value), start, Math.max(0.005, fadeSeconds / 3));
+  }
+
   async function decodeAudio(url, signal) {
     const ctx = audioContext();
     if (!ctx) return null;
@@ -473,6 +483,62 @@ export function createAudioAnalyzer(options = {}) {
     return { samples: values, sampleRate: context.sampleRate };
   }
 
+  /**
+   * Plays raw planar PCM as a scheduled one-shot source on the context clock.
+   * Used for pre-rendered transition overlaps, which need sample-accurate
+   * scheduling that media elements cannot provide. The chain is source ->
+   * gain -> destination: per-element processing (EQ, normalization) is
+   * intentionally bypassed because the rendered mix is already final audio.
+   * @returns {object|null} Handle with the resolved start/end context times,
+   * `setVolume`, and a click-free `stop`; null when the context is missing.
+   */
+  function playPcmBuffer({ channels, sampleRate, when = 0, offset = 0, volume = 1 }) {
+    const ctx = audioContext();
+    const frames = channels?.[0]?.length || 0;
+    if (!ctx || !frames) return null;
+
+    const buffer = ctx.createBuffer(channels.length, frames, sampleRate);
+    channels.forEach((data, index) => buffer.copyToChannel(data, index));
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    source.buffer = buffer;
+    gain.gain.value = clamp01(volume);
+    source.connect(gain);
+    gain.connect(ctx.destination);
+
+    // `offset` skips into the buffer for callers that were scheduled late and
+    // need the remainder to stay aligned with the media timeline.
+    const skip = Math.min(Math.max(0, Number(offset) || 0), frames / sampleRate);
+    const startTime = Math.max(ctx.currentTime, Number(when) || 0);
+    const endTime = startTime + frames / sampleRate - skip;
+    source.start(startTime, skip);
+    let stopped = false;
+
+    return {
+      startTime,
+      endTime,
+      setVolume(value) {
+        const now = ctx.currentTime;
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setValueAtTime(clamp01(value), now);
+      },
+      stop(fadeSeconds = 0.03) {
+        if (stopped) return;
+        stopped = true;
+        const now = ctx.currentTime;
+        // A short ramp instead of a hard stop, so cancelling mid-overlap
+        // never leaves a click at whatever sample the source was on.
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setTargetAtTime(0, now, Math.max(0.005, fadeSeconds / 3));
+        try {
+          source.stop(now + Math.max(0.01, fadeSeconds));
+        } catch {
+          // Already ended; the gain ramp is sufficient.
+        }
+      }
+    };
+  }
+
   function destroy() {
     if (!context) return;
     context.close().catch(() => {});
@@ -488,6 +554,8 @@ export function createAudioAnalyzer(options = {}) {
     decodeAudio,
     destroy,
     measure,
+    playPcmBuffer,
+    rampVolume,
     resume,
     samples,
     resetMixElement: mixer.resetElement,

@@ -181,6 +181,72 @@ export function setupAudioAnalysisService({
     return true;
   });
 
+  // Stereo transition rendering shares the addon but not the analysis cache:
+  // a rendered overlap is bound to one exact pairing and playback position, so
+  // the renderer owns any reuse and this handler stays stateless.
+  ipcMain.handle(AUDIO_ANALYSIS.RENDER_TRANSITION, async (_event, payload = {}) => {
+    const native = addon();
+    if (!native || typeof native.renderTransition !== 'function') {
+      log('transition-render-unavailable', { loadAttempts: nativeLoadAttempts });
+      throw new Error('Native transition rendering is unavailable.');
+    }
+
+    function transitionSource(value, label) {
+      const channels = Array.isArray(value?.channels)
+        ? value.channels.map(floatSamples)
+        : [];
+      const anchor = Number(value?.anchor);
+      const bpm = Number(value?.bpm);
+      if (!channels.length || channels.some((channel) => !channel?.length) ||
+          !Number.isFinite(anchor) || anchor < 0 || !Number.isFinite(bpm)) {
+        throw new Error(`Invalid ${label} PCM for transition rendering.`);
+      }
+      // Overlap slices are bounded by design; refuse anything whole-track sized.
+      const maxSamples = 48000 * 90 * channels.length;
+      const total = channels.reduce((sum, channel) => sum + channel.length, 0);
+      if (total > maxSamples) throw new Error(`Oversized ${label} PCM for transition rendering.`);
+      return { channels, anchor, bpm };
+    }
+
+    const outgoing = transitionSource(payload.outgoing, 'outgoing');
+    const incoming = transitionSource(payload.incoming, 'incoming');
+    const options = payload.options && typeof payload.options === 'object' ? payload.options : {};
+    const sampleRate = Number(options.sampleRate);
+    if (!Number.isFinite(sampleRate) || sampleRate < 1000) {
+      throw new Error('A valid sample rate is required for transition rendering.');
+    }
+
+    const startedAt = Date.now();
+    log('transition-render-start', {
+      sampleRate,
+      beats: Number(options.beats) || 0,
+      outgoingBpm: outgoing.bpm,
+      incomingBpm: incoming.bpm
+    });
+    // Only forward keys that are real numbers: the N-API binding treats a
+    // present-but-undefined key as a type error, not an omission.
+    const renderOptions = { sampleRate };
+    ['beats', 'bassSwap', 'bassCrossoverHz', 'bassSwapSeconds', 'tempoGlide'].forEach((key) => {
+      const value = Number(options[key]);
+      if (Number.isFinite(value)) renderOptions[key] = value;
+    });
+    const result = await native.renderTransition(outgoing, incoming, renderOptions);
+    log(result.rendered ? 'transition-render-ready' : 'transition-render-refused', {
+      elapsedMs: Date.now() - startedAt,
+      rejected: String(result.rejected || ''),
+      stretchRatio: Number(result.stretchRatio) || 0,
+      overlapSamples: result.channels?.[0]?.length || 0
+    });
+    return {
+      rendered: Boolean(result.rendered),
+      rejected: String(result.rejected || ''),
+      stretchRatio: Number(result.stretchRatio) || 1,
+      bpm: Number(result.bpm) || 0,
+      sampleRate,
+      channels: result.channels || []
+    };
+  });
+
   ipcMain.handle(AUDIO_ANALYSIS.STORE, async (_event, payload = {}) => {
     await cacheReady;
     const trackId = cleanTrackId(payload.trackId);
@@ -285,6 +351,7 @@ export function setupAudioAnalysisService({
       ipcMain.removeHandler(AUDIO_ANALYSIS.DEBUG);
       ipcMain.removeHandler(AUDIO_ANALYSIS.STORE);
       ipcMain.removeHandler(AUDIO_ANALYSIS.ANALYZE);
+      ipcMain.removeHandler(AUDIO_ANALYSIS.RENDER_TRANSITION);
       if (cache.size) await persist().catch(() => {});
     }
   };

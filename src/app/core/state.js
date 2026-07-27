@@ -6,6 +6,7 @@ import {
   normalizeCrossfadeMode,
   createAutoCrossfade
 } from '../../audio/crossfade/autoCrossfade.js';
+import { createWsolaCrossfade } from '../../audio/crossfade/wsolaCrossfade.js';
 import orchardLogoUrl from '../../assets/orchard-logo.png';
 import {
   ACCENT_COLOR_SOURCE_OPTIONS,
@@ -405,6 +406,12 @@ export function installState(ctx) {
       fadeSeconds: ctx.crossfadeSeconds.value,
       mode: ctx.crossfadeMode.value
     }
+  });
+  ctx.wsolaCrossfade = createWsolaCrossfade({
+    analyzer: ctx.audioAnalyzer,
+    // Lazy lookup: the smart-crossfade analyzer that owns diagnostics is
+    // installed after core state.
+    report: (event, details) => ctx.smartCrossfadeAnalyzer?.report?.(event, details)
   });
   ctx.artworkLookupRequest = 0;
   ctx.detailArtworkLookupRequest = 0;
