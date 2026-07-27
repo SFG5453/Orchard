@@ -99,34 +99,37 @@ export default {
     <main class="fullscreen-player__stage">
       <div class="fullscreen-player__left">
         <div class="fullscreen-player__artwork">
-          <video
-            v-if="nowArtworkVideo"
-            ref="fullscreenArtworkVideoRef"
-            :key="nowArtworkVideo"
-            :src="nowArtworkVideo"
-            :poster="fullscreenArtworkImage || nowArtworkImage || activeTrack?.thumbnail"
-            :autoplay="isPlaying"
-            muted
-            loop
-            playsinline
-            preload="auto"
-            aria-hidden="true"
-            @canplay="playFullscreenArtworkVideo"
-            @pause="keepFullscreenArtworkVideoPlaying"
-            @ended="restartFullscreenArtworkVideo"
-            @stalled="keepFullscreenArtworkVideoPlaying"
-            @waiting="keepFullscreenArtworkVideoPlaying"
-            @error="onNowArtworkVideoError"
-          />
-          <img
-            v-else-if="fullscreenArtworkSrc"
-            :src="fullscreenArtworkSrc"
-            :alt="`${activeTrack?.title || 'Current track'} artwork`"
-            @error="onFullscreenArtworkError"
-          />
-          <div v-else class="fullscreen-player__artwork-empty">
-            <q-icon name="music_note" />
-          </div>
+          <transition name="artwork-fade">
+            <video
+              v-if="nowArtworkVideo"
+              ref="fullscreenArtworkVideoRef"
+              :key="nowArtworkVideo"
+              :src="nowArtworkVideo"
+              :poster="fullscreenArtworkImage || nowArtworkImage || activeTrack?.thumbnail"
+              :autoplay="isPlaying"
+              muted
+              loop
+              playsinline
+              preload="auto"
+              aria-hidden="true"
+              @canplay="playFullscreenArtworkVideo"
+              @pause="keepFullscreenArtworkVideoPlaying"
+              @ended="restartFullscreenArtworkVideo"
+              @stalled="keepFullscreenArtworkVideoPlaying"
+              @waiting="keepFullscreenArtworkVideoPlaying"
+              @error="onNowArtworkVideoError"
+            />
+            <img
+              v-else-if="fullscreenArtworkSrc"
+              :key="fullscreenArtworkSrc"
+              :src="fullscreenArtworkSrc"
+              :alt="`${activeTrack?.title || 'Current track'} artwork`"
+              @error="onFullscreenArtworkError"
+            />
+            <div v-else key="empty" class="fullscreen-player__artwork-empty">
+              <q-icon name="music_note" />
+            </div>
+          </transition>
         </div>
 
         <div class="fullscreen-player__track-copy">

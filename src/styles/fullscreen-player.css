@@ -118,6 +118,7 @@
 }
 
 .fullscreen-player__artwork {
+  position: relative;
   width: min(100%, 570px, calc(100vh - 330px));
   aspect-ratio: 1;
   justify-self: center;
@@ -145,6 +146,28 @@
   place-items: center;
   color: rgba(255, 255, 255, 0.28);
   font-size: 68px;
+}
+
+.artwork-fade-enter-active,
+.artwork-fade-leave-active {
+  transition: opacity 0.6s ease, filter 0.6s ease, transform 0.6s ease;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.artwork-fade-enter-from {
+  opacity: 0;
+  filter: blur(16px);
+  transform: scale(1.02);
+}
+
+.artwork-fade-leave-to {
+  opacity: 0;
+  filter: blur(16px);
+  transform: scale(0.98);
 }
 
 .fullscreen-player__track-copy {
