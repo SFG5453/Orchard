@@ -4,6 +4,16 @@ import test from 'node:test';
 import { mergeBpmMetadata } from '../src/audio/crossfade/bpmMetadata.js';
 import { planTransition } from '../src/audio/crossfade/transitionPlanner.js';
 
+// An interior mix-out is only honoured when what it skips is silence rather
+// than music, so tests that expect one have to supply the silence.
+function silentAfter(duration, cliff) {
+  const curve = [];
+  for (let time = 0; time < duration; time += 1) {
+    curve.push({ time, energy: time >= cliff ? 0 : 0.8 });
+  }
+  return curve;
+}
+
 test('smart transitions honor analyzed content end and structural boundaries', () => {
   const plan = planTransition({
     analysis: {
@@ -134,7 +144,7 @@ test('DJ transitions prefer the analyzed interior mix-in downbeat', () => {
   assert.ok(plan.transitionBeats >= 8);
 });
 
-test('filtered DJ transitions pre-roll an intro into its analyzed handoff', () => {
+test('filtered DJ transitions cap long intro pre-rolls at sixteen seconds', () => {
   const plan = planTransition({
     analysis: {
       bpm: 91.7354,
@@ -164,15 +174,80 @@ test('filtered DJ transitions pre-roll an intro into its analyzed handoff', () =
   });
 
   assert.equal(plan.transitionStyle, 'dj_blend');
-  assert.ok(Math.abs(plan.incomingCueTime - 0.11730915568035627) < 0.000001);
   assert.equal(plan.incomingHandoffTime, 22.9108);
   assert.ok(Math.abs(
     plan.incomingCueTime + plan.handoffStartSeconds * plan.incomingPlaybackRate -
       plan.incomingHandoffTime
   ) < 0.001);
   assert.ok(plan.handoffDuration > 4);
-  assert.ok(plan.fadeSeconds >= 20 && plan.fadeSeconds <= 40);
+  assert.ok(plan.fadeSeconds <= 16);
   assert.equal(plan.transitionEnd, 258.4);
+});
+
+test('phrase alignment cannot stretch a smart transition past sixteen seconds', () => {
+  const plan = planTransition({
+    analysis: {
+      bpm: 120,
+      beatConfidence: 0.9,
+      contentEndTime: 200,
+      downbeats: [176, 178, 180, 182, 184, 186, 188, 190, 192, 194, 196, 198],
+      key: 'C major'
+    },
+    currentTime: 180,
+    currentTrack: { id: 'current', durationSeconds: 200 },
+    duration: 200,
+    mode: 'smart',
+    nextAnalysis: {
+      bpm: 120,
+      beatConfidence: 0.9,
+      mixInTime: 30,
+      key: 'C major'
+    },
+    nextTrack: { id: 'next', durationSeconds: 220 }
+  });
+
+  assert.equal(plan.transitionStyle, 'dj_blend');
+  assert.ok(plan.fadeSeconds <= 16, `fade ${plan.fadeSeconds}`);
+});
+
+test('missing tempo degrades to a plain crossfade at the analyzed mix-out', () => {
+  const plan = planTransition({
+    analysis: {
+      bpm: 0,
+      contentEndTime: 190,
+      mixOutTime: 170,
+      energyCurve: silentAfter(190, 170)
+    },
+    currentTime: 150,
+    currentTrack: { id: 'current', durationSeconds: 200 },
+    duration: 200,
+    fadeSeconds: 6,
+    mode: 'smart',
+    nextAnalysis: { bpm: 120, beatConfidence: 0.9, audibleStartTime: 1.2 },
+    nextTrack: { id: 'next', durationSeconds: 220 }
+  });
+
+  assert.equal(plan.transitionStyle, 'equal_power');
+  assert.equal(plan.transitionEnd, 170);
+  assert.equal(plan.incomingCueTime, 1.2);
+  assert.equal(plan.incomingPlaybackRate, 1);
+  assert.deepEqual(plan.policyReasons, ['outgoing-tempo']);
+  assert.equal(plan.shouldStart, false);
+});
+
+test('two untrusted beat grids degrade to a plain crossfade', () => {
+  const plan = planTransition({
+    analysis: { bpm: 120, beatConfidence: 0.1, contentEndTime: 180, downbeats: [172, 174, 176, 178] },
+    currentTime: 170,
+    currentTrack: { id: 'current', durationSeconds: 200 },
+    duration: 200,
+    mode: 'smart',
+    nextAnalysis: { bpm: 121, beatConfidence: 0.05, mixInTime: 16 },
+    nextTrack: { id: 'next', durationSeconds: 220 }
+  });
+
+  assert.equal(plan.transitionStyle, 'equal_power');
+  assert.deepEqual(plan.policyReasons, ['beat-confidence']);
 });
 
 test('pending next-track analysis keeps the reliable standard fallback', () => {
@@ -279,7 +354,8 @@ test('smart transitions prefer an interior silence-cliff mix-out', () => {
       beatConfidence: 0.2,
       contentEndTime: 198,
       mixOutTime: 170,
-      phraseBoundaries: [150, 162]
+      phraseBoundaries: [150, 162],
+      energyCurve: silentAfter(198, 170)
     },
     currentTime: 165,
     currentTrack: { id: 'current', durationSeconds: 200 },
@@ -293,15 +369,19 @@ test('smart transitions prefer an interior silence-cliff mix-out', () => {
   assert.ok(plan.transitionStart < plan.transitionEnd);
 });
 
-test('DJ transitions finish at an analyzed outro boundary', () => {
+test('DJ transitions mix over the outro instead of stopping where it starts', () => {
   const plan = planTransition({
     analysis: {
       bpm: 100,
       beatConfidence: 0.2,
       contentEndTime: 200,
       mixOutTime: 200,
+      // Twenty seconds of outro, all of it music. The outro is the part of a
+      // track written to have something played over it, so the overlap sits
+      // inside it and the transition still ends where the content does.
       outroStartTime: 180,
-      phraseBoundaries: [168, 180]
+      phraseBoundaries: [168, 180],
+      energyCurve: silentAfter(200, 200)
     },
     currentTime: 170,
     currentTrack: { id: 'current', durationSeconds: 200 },
@@ -311,11 +391,44 @@ test('DJ transitions finish at an analyzed outro boundary', () => {
     nextTrack: { id: 'next', durationSeconds: 220 }
   });
 
-  assert.equal(plan.transitionEnd, 180);
-  assert.equal(plan.incomingCueTime, 0);
+  assert.equal(plan.transitionEnd, 200);
+  assert.ok(plan.transitionStart >= 180,
+    `overlap should sit inside the outro, started at ${plan.transitionStart}`);
   assert.equal(plan.incomingHandoffTime, 19.2);
+  assert.ok(Math.abs(
+    plan.incomingCueTime + plan.handoffStartSeconds * plan.incomingPlaybackRate -
+      plan.incomingHandoffTime
+  ) < 0.001);
   assert.ok(plan.handoffDuration > 4);
-  assert.ok(plan.transitionStart < 180);
+  assert.ok(plan.fadeSeconds <= 16);
+});
+
+test('a long outro of real music is never skipped by the mix-out anchor', () => {
+  // The native analyzer marks an outro up to 48 seconds before content end.
+  // Anchoring there would cut the song short by most of a minute.
+  const plan = planTransition({
+    analysis: {
+      bpm: 120,
+      beatConfidence: 0.9,
+      contentEndTime: 240,
+      outroStartTime: 192,
+      mixOutTime: 240,
+      downbeats: Array.from({ length: 30 }, (_, index) => 180 + index * 2),
+      energyCurve: silentAfter(240, 240),
+      key: 'C major'
+    },
+    currentTime: 200,
+    currentTrack: { id: 'current', durationSeconds: 245 },
+    duration: 245,
+    mode: 'smart',
+    nextAnalysis: { bpm: 120, beatConfidence: 0.9, mixInTime: 16, key: 'C major' },
+    nextTrack: { id: 'next', durationSeconds: 220 }
+  });
+
+  // Ends at content end, give or take the downbeat it snaps to.
+  assert.ok(plan.transitionEnd > 236, `transition ended at ${plan.transitionEnd}`);
+  assert.ok(plan.transitionStart > 192,
+    `expected the overlap inside the outro, started at ${plan.transitionStart}`);
 });
 
 test('interior mix-outs override the same-album gapless shortcut', () => {
@@ -324,7 +437,8 @@ test('interior mix-outs override the same-album gapless shortcut', () => {
       bpm: 138.1833,
       beatConfidence: 0.2,
       contentEndTime: 264.75,
-      mixOutTime: 188.15
+      mixOutTime: 188.15,
+      energyCurve: silentAfter(264.75, 188.15)
     },
     currentTime: 188,
     currentTrack: { id: 'current', albumId: 'same-album', durationSeconds: 268 },

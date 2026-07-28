@@ -1,8 +1,13 @@
+import {
+  assessTransitionTier,
+  rankMixInCandidates,
+  resolveMixOutAnchor
+} from './transitionPolicy.js';
+
 export const CROSSFADE_MODES = ['standard', 'smart'];
 
 const AUTO_MIN_SECONDS = 8;
-const AUTO_MAX_SECONDS = 18;
-const AUTO_PREROLL_MAX_SECONDS = 32;
+const AUTO_TRANSITION_MAX_SECONDS = 16;
 const AUTO_FALLBACK_SECONDS = 12;
 const KEY_INDEX = new Map([
   ['C', 0], ['C♯', 1], ['D♭', 1], ['D', 2], ['D♯', 3], ['E♭', 3],
@@ -113,35 +118,50 @@ function trustedKey(analysis = {}) {
   return key;
 }
 
-function nearestTimedValue(values = [], target = 0, tolerance = Infinity) {
+function nearestTimedValue(values = [], target = 0, tolerance = Infinity, minimum = 0) {
   const candidates = values
     .map(Number)
-    .filter((value) => Number.isFinite(value) && value >= 0 && Math.abs(value - target) <= tolerance);
+    .filter((value) =>
+      Number.isFinite(value) &&
+      value >= minimum &&
+      Math.abs(value - target) <= tolerance
+    );
   if (!candidates.length) return null;
   return candidates.reduce((best, value) =>
     Math.abs(value - target) < Math.abs(best - target) ? value : best
   );
 }
 
-function timedValueNearOrBefore(values = [], target = 0, tolerance = Infinity) {
+function timedValueNearOrBefore(values = [], target = 0, tolerance = Infinity, minimum = 0) {
   const candidates = values
     .map(Number)
-    .filter((value) => Number.isFinite(value) && value >= 0 && value <= target && target - value <= tolerance);
+    .filter((value) =>
+      Number.isFinite(value) &&
+      value >= minimum &&
+      value <= target &&
+      target - value <= tolerance
+    );
   return candidates.length ? Math.max(...candidates) : null;
 }
 
-function alignedTransitionStart(analysis = {}, target = 0, end = Infinity, preferEarlier = false) {
+function alignedTransitionStart(
+  analysis = {},
+  target = 0,
+  end = Infinity,
+  preferEarlier = false,
+  minimum = 0
+) {
   const interval = Number(analysis.beatInterval) || (Number(analysis.bpm) > 0 ? 60 / analysis.bpm : 0);
   const phraseTolerance = Math.max(1, interval * 4);
   const downbeatTolerance = Math.max(0.75, interval * 2);
   const phrase = preferEarlier
-    ? timedValueNearOrBefore(analysis.phraseBoundaries, target, phraseTolerance)
-    : nearestTimedValue(analysis.phraseBoundaries, target, phraseTolerance);
+    ? timedValueNearOrBefore(analysis.phraseBoundaries, target, phraseTolerance, minimum)
+    : nearestTimedValue(analysis.phraseBoundaries, target, phraseTolerance, minimum);
   const downbeat = preferEarlier
-    ? timedValueNearOrBefore(analysis.downbeats, target, downbeatTolerance)
-    : nearestTimedValue(analysis.downbeats, target, downbeatTolerance);
+    ? timedValueNearOrBefore(analysis.downbeats, target, downbeatTolerance, minimum)
+    : nearestTimedValue(analysis.downbeats, target, downbeatTolerance, minimum);
   const aligned = phrase ?? downbeat ?? target;
-  return clamp(aligned, 0, end);
+  return clamp(aligned, minimum, end);
 }
 
 function timedValueAtOrBefore(values = [], target = 0, fallback = target) {
@@ -152,17 +172,10 @@ function timedValueAtOrBefore(values = [], target = 0, fallback = target) {
 }
 
 function incomingCuePoint(analysis = {}) {
-  const candidates = Array.isArray(analysis.mixInCandidates) ? analysis.mixInCandidates : [];
-  if (candidates.length > 0) {
-    const dropCandidate = candidates.find((c) => c.type === 'main_drop' || c.type === 'intro_drop');
-    if (dropCandidate && Number.isFinite(Number(dropCandidate.time)) && Number(dropCandidate.time) >= 0) {
-      return Number(dropCandidate.time);
-    }
-    const best = [...candidates].sort((left, right) => (right.score || 0) - (left.score || 0))[0];
-    if (best && Number.isFinite(Number(best.time)) && Number(best.time) >= 0) {
-      return Number(best.time);
-    }
-  }
+  // Candidate entry points are ranked, not pattern-matched: the analyzer's
+  // score plus type, downbeat, run-up and vocal terms decide which one leads.
+  const ranked = rankMixInCandidates(analysis);
+  if (ranked.length > 0) return ranked[0].time;
   const interval = Number(analysis.beatInterval) || (Number(analysis.bpm) > 0 ? 60 / analysis.bpm : 0);
   const downbeats = Array.isArray(analysis.downbeats) ? analysis.downbeats : [];
   const analyzedMixIn = Number(analysis.mixInTime);
@@ -223,17 +236,23 @@ function phraseSwitch(analysis = {}, nextAnalysis = {}, length = 0) {
   const incomingHandoffTime = incomingCuePoint(nextAnalysis);
   const introDropTime = incomingHandoffTime / Math.max(0.8, incomingPlaybackRate);
   const tailBeats = 16;
-  const tailSeconds = clamp(tailBeats * beatSeconds, 4, 10);
+  const tailSeconds = clamp(tailBeats * beatSeconds, 4, 8);
   const requestedOverlap = introDropTime + tailSeconds;
   if (length <= requestedOverlap * 0.5) return null;
-  const maximumOverlap = length * 0.4;
+  const maximumOverlap = Math.min(AUTO_TRANSITION_MAX_SECONDS, length * 0.4);
   const actualOverlap = Math.min(requestedOverlap, maximumOverlap);
   const alignedEnd = timedValueAtOrBefore(analysis.downbeats, length, length);
   const transitionEnd = length - alignedEnd <= beatSeconds * 4.5 ? alignedEnd : length;
   const rawTransitionStart = transitionEnd - actualOverlap;
+  const earliestTransitionStart = transitionEnd - maximumOverlap;
   const transitionStart = clamp(
-    nearestTimedValue(analysis.downbeats, rawTransitionStart, beatSeconds * 0.75) ?? rawTransitionStart,
-    0,
+    nearestTimedValue(
+      analysis.downbeats,
+      rawTransitionStart,
+      beatSeconds * 0.75,
+      earliestTransitionStart
+    ) ?? rawTransitionStart,
+    earliestTransitionStart,
     transitionEnd - beatSeconds * 4
   );
   const overlap = transitionEnd - transitionStart;
@@ -278,7 +297,11 @@ function adaptiveOverlap(analysis = {}, nextAnalysis = {}) {
   const beatSeconds = 60 / currentBpm;
 
   return {
-    overlap: clamp(transitionBeats * beatSeconds, AUTO_MIN_SECONDS, AUTO_MAX_SECONDS),
+    overlap: clamp(
+      transitionBeats * beatSeconds,
+      AUTO_MIN_SECONDS,
+      AUTO_TRANSITION_MAX_SECONDS
+    ),
     transitionBeats,
     incomingPlaybackRate: ratio >= 0.9 && ratio <= 1.1
       ? Math.round(clamp(1 / ratio, 0.9, 1.1) * 10000) / 10000
@@ -307,12 +330,18 @@ export function planTransition({
   }
 
   if (length < 45) return blocked('short-duration-guard', { transitionStart: length, transitionEnd: length });
-  const analyzedMixOut = Number(analysis.mixOutTime ?? analysis.contentEndTime) || 0;
   const analyzedContentEnd = Number(analysis.contentEndTime) || length;
-  const analyzedOutroStart = Number(analysis.outroStartTime) || 0;
-  const hasInteriorMixOut = analyzedMixOut > 0 &&
-    analyzedMixOut <= length &&
-    analyzedMixOut < Math.min(length, analyzedContentEnd) - 1;
+  const finalMixAnchor = analyzedContentEnd > 0 && analyzedContentEnd <= length
+    ? analyzedContentEnd
+    : length;
+  // Where the transition ends. An interior anchor has to earn its place: it is
+  // only taken when what it skips is silence or a short tail, never when a
+  // minute of music is still to come. See MAX_DISCARDED_MUSIC_SECONDS.
+  const mixOutAnchor = resolveMixOutAnchor(analysis, {
+    contentEnd: finalMixAnchor,
+    duration: length
+  });
+  const hasInteriorMixOut = mixOutAnchor.time < finalMixAnchor - 1;
   if (sameAlbum(currentTrack, nextTrack) && !hasInteriorMixOut) {
     const transitionStart = Math.max(0, length - 0.45);
     return {
@@ -346,18 +375,36 @@ export function planTransition({
     );
   }
 
-  const preferredMixAnchor = hasInteriorMixOut
-    ? analyzedMixOut
-    : (analyzedOutroStart > 0 && analyzedOutroStart < analyzedContentEnd - 4
-        ? analyzedOutroStart
-        : (analyzedContentEnd > 0 && analyzedContentEnd <= length ? analyzedContentEnd : length));
-  const finalMixAnchor = analyzedContentEnd > 0 && analyzedContentEnd <= length
-    ? analyzedContentEnd
-    : length;
+  const preferredMixAnchor = Math.min(length, mixOutAnchor.time);
   const mixAnchor = playbackTime >= preferredMixAnchor - 0.05 &&
     preferredMixAnchor < finalMixAnchor - 1
     ? finalMixAnchor
     : preferredMixAnchor;
+
+  // The degradation ladder's bottom rung: when tempo is missing or neither
+  // beat grid is trusted, no beat-quantized DJ move is allowed. The stored
+  // analysis still decides *where* the transition happens -- a plain
+  // equal-power fade ending at the analyzed mix-out anchor, cued past the
+  // incoming track's lead-in silence -- it just no longer decides *how*.
+  const policy = assessTransitionTier({ analysis, nextAnalysis });
+  if (policy.tier === 'plain_crossfade') {
+    const transitionStart = Math.max(0, mixAnchor - standardFade);
+    return {
+      shouldStart: playbackTime >= transitionStart,
+      markerVisible: true,
+      transitionStart,
+      transitionEnd: mixAnchor,
+      fadeSeconds: mixAnchor - transitionStart,
+      transitionStyle: 'equal_power',
+      incomingCueTime: incomingStartPoint(nextAnalysis),
+      incomingPlaybackRate: 1,
+      policyReasons: policy.reasons,
+      reason: playbackTime >= transitionStart
+        ? 'smart-plain-crossfade'
+        : 'before-plain-crossfade-window'
+    };
+  }
+
   const switchPlan = phraseSwitch(analysis, nextAnalysis, mixAnchor);
   if (switchPlan) {
     return {
@@ -374,9 +421,9 @@ export function planTransition({
   const mixEnd = mixAnchor;
   const nextLength = trackDurationSeconds(nextTrack);
   const maximumOverlap = Math.min(
-    AUTO_PREROLL_MAX_SECONDS,
+    AUTO_TRANSITION_MAX_SECONDS,
     mixEnd * 0.4,
-    nextLength > 0 ? nextLength * 0.4 : AUTO_PREROLL_MAX_SECONDS
+    nextLength > 0 ? nextLength * 0.4 : AUTO_TRANSITION_MAX_SECONDS
   );
   const currentBpm = Number(analysis.bpm) || 0;
   const nextBpm = Number(nextAnalysis.bpm) || 0;
@@ -421,12 +468,12 @@ export function planTransition({
     // The incoming track is cued from its start (incomingCueTime = 0 or pickup)
     // and plays its full intro underneath. The incomingHandoffTime (intro drop,
     // ~16s / 32 beats for dance/pop) determines when the main handoff occurs.
-    // Total overlap ≈ incomingHandoffTime + tail (~7s) ≈ 20-23s for typical
-    // dance tracks at 124 BPM.
+    // The intro and tail are kept inside the global smart-transition ceiling;
+    // a deep analyzed mix-in must not turn one handoff into a 30-second bed.
 
     const introDropTime = incomingHandoffTime / Math.max(0.8, incomingPlaybackRate);
     const tailBeats = 16;
-    const tailSeconds = clamp(tailBeats * beatSeconds, 4, 10);
+    const tailSeconds = clamp(tailBeats * beatSeconds, 4, 8);
     const totalOverlap = clamp(
       introDropTime + tailSeconds,
       Math.min(12, maximumOverlap),
@@ -434,11 +481,13 @@ export function planTransition({
     );
 
     const targetStart = Math.max(0, mixEnd - totalOverlap);
+    const earliestTransitionStart = Math.max(0, mixEnd - maximumOverlap);
     transitionStart = alignedTransitionStart(
       analysis,
       targetStart,
       mixEnd - 0.05,
-      true
+      true,
+      earliestTransitionStart
     );
 
     const alignedOverlap = mixEnd - transitionStart;
@@ -471,11 +520,13 @@ export function planTransition({
       maximumOverlap
     );
     const targetStart = Math.max(0, mixEnd - actualOverlap);
+    const earliestTransitionStart = Math.max(0, mixEnd - maximumOverlap);
     transitionStart = alignedTransitionStart(
       analysis,
       targetStart,
       mixEnd - 0.05,
-      desiredOverlap > overlap + 0.5
+      desiredOverlap > overlap + 0.5,
+      earliestTransitionStart
     );
     const alignedOverlap = mixEnd - transitionStart;
     handoffDuration = Math.min(handoffSeconds, alignedOverlap);

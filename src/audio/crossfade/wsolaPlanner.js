@@ -15,19 +15,24 @@
 // to the session controller, which calls this first to learn whether a pairing
 // is even worth preparing.
 
-// One octave either side of a typical dance tempo; outside this the analysis
-// is treated as noise rather than a tempo.
-const MIN_BPM = 40;
-const MAX_BPM = 220;
+import {
+  alignTempoOctave,
+  assessTransitionTier,
+  isVocalClash,
+  rankMixInCandidates,
+  resolveMixOutAnchor,
+  vocalActivityBetween
+} from './transitionPolicy.js';
 
-// Mirrors kMaxTransparentRatioDeviation in native/transition/wsola.h. The
-// native renderer re-checks this; duplicating the number here avoids shipping
-// PCM across the IPC boundary for a pairing that is certain to be refused.
-const MAX_STRETCH_DEVIATION = 0.08;
+export { alignTempoOctave };
 
 // Beats of overlap after the handoff: the outgoing track's fade once the
-// incoming has arrived. Measured from the Spotify reference capture.
-const TAIL_BEATS = 16;
+// incoming has arrived. Measured from the Spotify reference capture, but
+// capped in seconds (mirrors the legacy planner's tailSeconds clamp) so a
+// slow track doesn't turn "the fade" into a 13-14s wait behind the new vocal.
+const NOMINAL_TAIL_BEATS = 16;
+const TAIL_MIN_SECONDS = 4;
+const TAIL_MAX_SECONDS = 8;
 
 // The incoming track's intro plays underneath the outgoing track before the
 // handoff. Quantized to bars, and bounded: too short and the drop arrives
@@ -39,7 +44,9 @@ const MIN_PREROLL_BEATS = 4;
 const MAX_PREROLL_BEATS = 16;
 
 // A ceiling on the whole overlap regardless of how long the incoming intro is.
-const MAX_OVERLAP_SECONDS = 20;
+// Keep this in step with the live smart-transition planner so enabling audio
+// processing does not unexpectedly change how long the same pairing blends.
+const MAX_OVERLAP_SECONDS = 16;
 
 // How far along the equal-power fade the pre-roll travels; see `bed` in
 // native/transition/transition_render.h. Low, so the pre-roll is the incoming
@@ -61,19 +68,12 @@ function finiteOrZero(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
-function refuse(reason) {
-  return { ok: false, reason };
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
-// Halves or doubles the incoming tempo until it is as close as possible to the
-// outgoing, the way a DJ counts a 63 BPM track against a 126 BPM one. The
-// returned tempo defines the shared grid; "beats" elsewhere are beats of that
-// grid, not of the incoming track's own metadata.
-export function alignTempoOctave(outgoingBpm, incomingBpm) {
-  let aligned = incomingBpm;
-  while (aligned / outgoingBpm > 1.5) aligned /= 2;
-  while (aligned / outgoingBpm < 0.67) aligned *= 2;
-  return aligned;
+function refuse(reason) {
+  return { ok: false, reason };
 }
 
 function nearestAtOrBefore(values, target) {
@@ -93,20 +93,18 @@ function nearest(values, target, tolerance) {
   );
 }
 
-// Where the incoming track takes over: its analyzed drop or best mix-in
-// candidate, snapped to a downbeat so the shared grid starts on a bar. This is
-// the handoff, not the point where the incoming track starts making sound --
-// it begins its intro a pre-roll earlier, underneath the outgoing track.
+// Where the incoming track takes over: the best-ranked mix-in candidate,
+// snapped to a downbeat so the shared grid starts on a bar. Candidate choice
+// is a ranking problem -- analyzer score, candidate type, downbeat alignment,
+// available run-up and how vocal it is -- not a type lookup. This is the
+// handoff, not the point where the incoming track starts making sound; it
+// begins its intro a pre-roll earlier, underneath the outgoing track.
 export function incomingMixInPoint(analysis = {}) {
   const beatSeconds = finiteOrZero(analysis.beatInterval) ||
     (finiteOrZero(analysis.bpm) > 0 ? 60 / analysis.bpm : 0);
   const tolerance = Math.max(0.5, beatSeconds * 2);
-  const candidates = Array.isArray(analysis.mixInCandidates) ? analysis.mixInCandidates : [];
-  const drop = candidates.find((candidate) =>
-    candidate?.type === 'main_drop' || candidate?.type === 'intro_drop');
-  const scored = [...candidates].sort((left, right) =>
-    finiteOrZero(right?.score) - finiteOrZero(left?.score))[0];
-  const target = [drop?.time, scored?.time, analysis.mixInTime]
+  const ranked = rankMixInCandidates(analysis);
+  const target = [ranked[0]?.time, analysis.mixInTime]
     .map(Number)
     .find((value) => Number.isFinite(value) && value > 0);
   if (!Number.isFinite(target)) return null;
@@ -134,14 +132,15 @@ export function planWsolaTransition({
   duration = 0,
   nextDuration = 0
 } = {}) {
-  const outgoingBpm = finiteOrZero(analysis.bpm);
-  const rawIncomingBpm = finiteOrZero(nextAnalysis.bpm);
-  if (outgoingBpm < MIN_BPM || outgoingBpm > MAX_BPM) return refuse('outgoing-tempo');
-  if (rawIncomingBpm < MIN_BPM || rawIncomingBpm > MAX_BPM) return refuse('incoming-tempo');
+  // The confidence gate: beat-matching is the top policy tier, and only a
+  // trusted beat grid on both sides may authorize it. A refusal here routes
+  // the pairing to the legacy planner, which degrades further on its own.
+  const policy = assessTransitionTier({ analysis, nextAnalysis });
+  if (policy.tier !== 'beatmatched') return refuse(policy.reasons[0] || 'policy');
 
-  const incomingBpm = alignTempoOctave(outgoingBpm, rawIncomingBpm);
+  const outgoingBpm = finiteOrZero(analysis.bpm);
+  const incomingBpm = alignTempoOctave(outgoingBpm, finiteOrZero(nextAnalysis.bpm));
   const stretchRatio = outgoingBpm / incomingBpm;
-  if (Math.abs(stretchRatio - 1) > MAX_STRETCH_DEVIATION) return refuse('tempo-distance');
 
   const outgoingLength = Math.max(finiteOrZero(duration), finiteOrZero(analysis.duration));
   const incomingLength = Math.max(finiteOrZero(nextDuration), finiteOrZero(nextAnalysis.duration));
@@ -150,18 +149,55 @@ export function planWsolaTransition({
   const incomingBeatSeconds = 60 / incomingBpm;
   const outgoingBeatSeconds = 60 / outgoingBpm;
 
+  // Quantized to a whole bar so the handoff stays on the grid; floored at one
+  // bar so a very fast tempo doesn't collapse the fade to nothing.
+  let tailBeats = Math.max(
+    4,
+    Math.round(
+      clamp(NOMINAL_TAIL_BEATS * incomingBeatSeconds, TAIL_MIN_SECONDS, TAIL_MAX_SECONDS) /
+        incomingBeatSeconds /
+        4
+    ) * 4
+  );
+
   // The handoff: where the incoming track's arrangement and vocal arrive.
   const incomingDropTime = incomingMixInPoint(nextAnalysis);
   if (!Number.isFinite(incomingDropTime) || incomingDropTime < 0) return refuse('incoming-mix-in');
+
+  // Where the overlap ends: the best-ranked mix-out anchor that does not skip
+  // more of the outgoing track's music than the policy budget allows. Resolved
+  // early so the vocal-activity windows below can be measured against it.
+  const contentEnd = finiteOrZero(analysis.contentEndTime) || outgoingLength;
+  const mixOutAnchor = resolveMixOutAnchor(analysis, { contentEnd, duration: outgoingLength });
+  const overlapEndTarget = Math.min(outgoingLength, mixOutAnchor.time);
+
+  // The tail is the incoming vocal singing over the outgoing fade. When the
+  // masks show both tracks measurably singing through it, one bar of fade is
+  // all the clash that is tolerated.
+  const tailVocalClash = isVocalClash(
+    vocalActivityBetween(
+      analysis,
+      overlapEndTarget - tailBeats * outgoingBeatSeconds,
+      overlapEndTarget
+    ),
+    vocalActivityBetween(
+      nextAnalysis,
+      incomingDropTime,
+      incomingDropTime + tailBeats * incomingBeatSeconds
+    )
+  );
+  if (tailVocalClash) tailBeats = 4;
 
   // The incoming track's intro is what plays underneath the outgoing track, so
   // the pre-roll can be at most as long as that intro. Quantized down to whole
   // bars of the shared grid, so the handoff stays on a downbeat.
   const audibleStart = incomingAudibleStart(nextAnalysis);
   const availablePrerollBeats = Math.max(0, incomingDropTime - audibleStart) / incomingBeatSeconds;
-  const cappedByOverlap = Math.floor(MAX_OVERLAP_SECONDS / incomingBeatSeconds) - TAIL_BEATS;
+  const cappedByOverlap = Math.floor(
+    (Math.floor(MAX_OVERLAP_SECONDS / incomingBeatSeconds) - tailBeats) / 4
+  ) * 4;
   if (cappedByOverlap < MIN_PREROLL_BEATS) return refuse('overlap-too-long');
-  const prerollBeats = Math.max(
+  let prerollBeats = Math.max(
     MIN_PREROLL_BEATS,
     Math.min(
       MAX_PREROLL_BEATS,
@@ -170,7 +206,24 @@ export function planWsolaTransition({
     )
   );
 
-  const overlapBeats = prerollBeats + TAIL_BEATS;
+  // The bed is supposed to be an instrumental intro under a track that is
+  // still at full level. If both sides are singing there instead, keep the
+  // bed to the one-bar minimum rather than running a long double-vocal ride.
+  const bedVocalClash = isVocalClash(
+    vocalActivityBetween(
+      analysis,
+      overlapEndTarget - (prerollBeats + tailBeats) * outgoingBeatSeconds,
+      overlapEndTarget - tailBeats * outgoingBeatSeconds
+    ),
+    vocalActivityBetween(
+      nextAnalysis,
+      Math.max(audibleStart, incomingDropTime - prerollBeats * incomingBeatSeconds),
+      incomingDropTime
+    )
+  );
+  if (bedVocalClash) prerollBeats = MIN_PREROLL_BEATS;
+
+  const overlapBeats = prerollBeats + tailBeats;
   // The same beat count on both grids: the outgoing side is consumed at its
   // own tempo and stretched onto the incoming grid by the renderer.
   const outgoingOverlapSeconds = overlapBeats * outgoingBeatSeconds;
@@ -187,14 +240,6 @@ export function planWsolaTransition({
   const prerollSeconds = incomingDropTime - incomingCueTime;
   if (prerollSeconds <= 0) return refuse('incoming-no-preroll');
 
-  // The outgoing overlap ends where its content does: an interior mix-out if
-  // the analyzer found one, otherwise the end of real content.
-  const contentEnd = finiteOrZero(analysis.contentEndTime) || outgoingLength;
-  const mixOut = finiteOrZero(analysis.mixOutTime);
-  const overlapEndTarget = Math.min(
-    outgoingLength,
-    mixOut > 0 && mixOut < contentEnd - 1 ? mixOut : contentEnd
-  );
   const startTarget = overlapEndTarget - outgoingOverlapSeconds;
   const transitionStart = nearestAtOrBefore(analysis.downbeats, startTarget) ?? startTarget;
   if (transitionStart < MIN_CLEARANCE_SECONDS) return refuse('outgoing-too-short');
@@ -217,12 +262,16 @@ export function planWsolaTransition({
   const incomingSliceStart = Math.max(0, incomingCueTime - SLICE_PADDING_SECONDS);
   return {
     ok: true,
+    tier: policy.tier,
+    beatConfidence: policy.beatConfidence,
+    mixOutType: mixOutAnchor.type,
+    vocalClash: { bed: bedVocalClash, tail: tailVocalClash },
     transitionStart,
     transitionEnd,
     overlapSeconds,
     beats: overlapBeats,
     prerollBeats,
-    tailBeats: TAIL_BEATS,
+    tailBeats,
     handoffFraction,
     bedPosition: BED_POSITION,
     bassSwapFraction,
