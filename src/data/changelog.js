@@ -1,5 +1,18 @@
 export const ORCHARD_RELEASES = [
   {
+    version: '3.2.2',
+    codename: 'Jambs Explosive',
+    date: 'July 27, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'You can now opt into beta updates from Settings. Beta builds are delivered through GitHub Releases, while the stable update channel remains unchanged.'
+        ]
+      }
+    ]
+  },
+  {
     version: '3.2.1',
     codename: 'Hounds Vicar',
     date: 'July 23, 2026',
