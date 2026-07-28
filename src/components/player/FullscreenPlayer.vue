@@ -241,13 +241,56 @@ export default {
         </div>
       </section>
 
-      <aside class="fullscreen-player__queue" aria-label="Up next">
+      <aside class="fullscreen-player__queue" :aria-label="continuousQueueEnabled ? 'Queue' : 'Up next'">
         <header class="fullscreen-player__queue-header">
-          <strong>Up Next</strong>
+          <strong>{{ continuousQueueEnabled ? 'Queue' : 'Up Next' }}</strong>
           <button v-if="queue.length" type="button" @click="clearQueue">Clear</button>
         </header>
 
-        <div class="fullscreen-player__queue-list">
+        <div v-if="continuousQueueEnabled" class="fullscreen-player__queue-list">
+          <div
+            v-for="entry in continuousQueuePreview"
+            :key="`fullscreen-queue-${entry.key}`"
+            class="fullscreen-player__queue-item"
+            :class="`fullscreen-player__queue-item--${entry.section}`"
+            role="button"
+            tabindex="0"
+            :aria-current="entry.section === 'current' ? 'true' : undefined"
+            @click="playContinuousQueueEntry(entry)"
+            @keydown.enter.prevent="playContinuousQueueEntry(entry)"
+            @keydown.space.prevent="playContinuousQueueEntry(entry)"
+          >
+            <img v-if="entry.track.thumbnail" :src="entry.track.thumbnail" alt="" />
+            <span v-else class="fullscreen-player__queue-cover">
+              <q-icon name="music_note" />
+            </span>
+            <span class="fullscreen-player__queue-copy">
+              <strong>{{ entry.track.title }}</strong>
+              <span>{{ entry.track.artist || entry.track.artists?.join(', ') || entry.track.album || 'Orchard' }}</span>
+            </span>
+            <span class="fullscreen-player__queue-time">{{ entry.track.duration || '' }}</span>
+            <button
+              v-if="entry.section !== 'current'"
+              type="button"
+              class="fullscreen-player__queue-remove"
+              :aria-label="`Remove ${entry.track.title} from the queue`"
+              title="Remove from queue"
+              @click.stop="removeContinuousQueueEntry(entry)"
+              @keydown.stop
+            >
+              <q-icon name="close" />
+            </button>
+            <span v-else class="fullscreen-player__queue-remove" aria-hidden="true">
+              <q-icon name="graphic_eq" />
+            </span>
+          </div>
+
+          <div v-if="!continuousQueuePreview.length" class="fullscreen-player__queue-empty">
+            The queue is empty.
+          </div>
+        </div>
+
+        <div v-else class="fullscreen-player__queue-list">
           <div
             v-for="(item, index) in queuePreview"
             :key="`fullscreen-queue-${item.id}-${index}`"

@@ -30,6 +30,7 @@ import {
   writePlaybackState
 } from '../playback/queuePersistence.js';
 import { SONG_CACHE_DEFAULTS, clampSongCacheMaxSizeMb } from '../playback/songCachePreferences.js';
+import { DEFAULT_QUEUE_LAYOUT, QUEUE_LAYOUT_OPTIONS, normalizeQueueLayout } from '../playback/queueLayout.js';
 
 export function installState(ctx) {
   ctx.orchardLogoUrl = orchardLogoUrl;
@@ -44,6 +45,7 @@ export function installState(ctx) {
     crossfadeSeconds: AUTO_CROSSFADE_DEFAULTS.fadeSeconds,
     customArtistPagesEnabled: true,
     playbackStatePersistenceEnabled: true,
+    queueLayout: DEFAULT_QUEUE_LAYOUT,
     youtubeHistoryEnabled: true,
     discordRpcEnabled: true,
     discordRpcActivityName: 'orchard',
@@ -56,6 +58,7 @@ export function installState(ctx) {
     volume: 0.85
   };
   ctx.accentColorSourceOptions = ACCENT_COLOR_SOURCE_OPTIONS;
+  ctx.queueLayoutOptions = QUEUE_LAYOUT_OPTIONS;
   ctx.graphicsModeOptions = GRAPHICS_MODE_OPTIONS;
   ctx.immersiveBackgroundIntensityOptions = IMMERSIVE_BACKGROUND_INTENSITY_OPTIONS;
   ctx.immersiveBackgroundMotionOptions = IMMERSIVE_BACKGROUND_MOTION_OPTIONS;
@@ -85,6 +88,7 @@ export function installState(ctx) {
       playbackStatePersistenceEnabled: typeof preferences.playbackStatePersistenceEnabled === 'boolean'
         ? preferences.playbackStatePersistenceEnabled
         : ctx.DEFAULT_USER_PREFERENCES.playbackStatePersistenceEnabled,
+      queueLayout: normalizeQueueLayout(preferences.queueLayout),
       youtubeHistoryEnabled: typeof preferences.youtubeHistoryEnabled === 'boolean'
         ? preferences.youtubeHistoryEnabled
         : ctx.DEFAULT_USER_PREFERENCES.youtubeHistoryEnabled,
@@ -342,6 +346,7 @@ export function installState(ctx) {
   ctx.crossfadeSeconds = ref(ctx.initialUserPreferences.crossfadeSeconds);
   ctx.customArtistPagesEnabled = ref(ctx.initialUserPreferences.customArtistPagesEnabled);
   ctx.playbackStatePersistenceEnabled = ref(ctx.initialUserPreferences.playbackStatePersistenceEnabled);
+  ctx.queueLayout = ref(ctx.initialUserPreferences.queueLayout);
   ctx.youtubeHistoryEnabled = ref(ctx.initialUserPreferences.youtubeHistoryEnabled);
   ctx.discordRpcEnabled = ref(ctx.initialUserPreferences.discordRpcEnabled);
   ctx.discordRpcActivityName = ref(ctx.initialUserPreferences.discordRpcActivityName);
@@ -382,6 +387,7 @@ export function installState(ctx) {
     ctx.crossfadeSeconds.value = defaults.crossfadeSeconds;
     ctx.customArtistPagesEnabled.value = defaults.customArtistPagesEnabled;
     ctx.playbackStatePersistenceEnabled.value = defaults.playbackStatePersistenceEnabled;
+    ctx.queueLayout.value = defaults.queueLayout;
     ctx.youtubeHistoryEnabled.value = defaults.youtubeHistoryEnabled;
     ctx.customAccentColor.value = defaults.customAccentColor;
     ctx.discordRpcEnabled.value = defaults.discordRpcEnabled;

@@ -357,6 +357,58 @@
   font-size: 15px;
 }
 
+/* Continuous (YouTube Music style) queue */
+.right-queue-group {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 8px 0 2px;
+  padding: 4px 4px 4px 0;
+  background: #0b0f0d;
+  color: #7d8580;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.right-queue-group:first-child {
+  margin-top: 0;
+}
+
+.right-queue .queue-preview__item--previous .queue-preview__copy strong,
+.right-queue .queue-preview__item--previous .queue-preview__copy small {
+  color: #6d756f;
+}
+
+.right-queue .queue-preview__item--previous .queue-preview__cover {
+  opacity: 0.55;
+}
+
+.right-queue .queue-preview__item--current {
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 2px 0 0 rgb(var(--player-accent-rgb));
+}
+
+.right-queue .queue-preview__item--current .queue-preview__copy strong {
+  color: rgb(var(--player-accent-soft-rgb));
+}
+
+.right-queue .queue-preview__item--current .right-queue-index,
+.right-queue .queue-preview__item--current:hover .right-queue-index {
+  background: #111512;
+  color: rgb(var(--player-accent-soft-rgb));
+}
+
+.right-queue-index .q-icon {
+  font-size: 13px;
+}
+
+.right-queue-remove--placeholder {
+  width: 26px;
+  height: 26px;
+}
+
 .right-queue-empty {
   min-height: 140px;
   display: flex;

@@ -133,6 +133,18 @@ export function installSongActions(ctx) {
     ctx.showShareMessage?.(`Removed ${trackLabel(track)} from the queue.`);
   };
 
+  ctx.removeHistoryTrack = function removeHistoryTrack(index) {
+    const track = ctx.history.value[index];
+    if (!track) return;
+    ctx.history.value = ctx.history.value.filter((_, itemIndex) => itemIndex !== index);
+    ctx.showShareMessage?.(`Removed ${trackLabel(track)} from the queue.`);
+  };
+
+  ctx.removeContinuousQueueEntry = function removeContinuousQueueEntry(entry) {
+    if (entry?.section === 'previous') ctx.removeHistoryTrack(entry.historyIndex);
+    if (entry?.section === 'next') ctx.removeQueueTrack(entry.queueIndex);
+  };
+
   ctx.clearQueue = function clearQueue() {
     if (!ctx.queue.value.length) return;
     if (ctx.requestListeningPartyHostControl?.({ action: 'clear-queue' })) return;

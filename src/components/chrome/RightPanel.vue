@@ -48,7 +48,7 @@ export default {
         </div>
 
         <template v-if="rightPanelMode === 'queue'">
-          <div class="right-now-playing">
+          <div v-if="!continuousQueueEnabled" class="right-now-playing">
             <button
               v-if="activeTrack"
               type="button"
@@ -86,10 +86,10 @@ export default {
               </div>
             </button>
           </div>
-          <div class="right-queue">
+          <div class="right-queue" :class="{ 'right-queue--continuous': continuousQueueEnabled }">
             <div class="right-queue-header">
               <div>
-                <strong>Up next</strong>
+                <strong>{{ continuousQueueEnabled ? 'Queue' : 'Up next' }}</strong>
               </div>
               <div class="right-queue-header__actions">
                 <button
@@ -119,7 +119,52 @@ export default {
                 </button>
               </div>
             </div>
-            <div v-if="queue.length" class="queue-preview">
+            <div v-if="continuousQueueEnabled && continuousQueue.length" class="queue-preview queue-preview--continuous">
+              <template v-for="entry in continuousQueue" :key="entry.key">
+                <p v-if="entry.sectionStart" class="right-queue-group">
+                  {{ continuousQueueSectionLabel(entry.section) }}
+                </p>
+                <div
+                  class="queue-preview__item"
+                  :class="`queue-preview__item--${entry.section}`"
+                  role="button"
+                  tabindex="0"
+                  :aria-current="entry.section === 'current' ? 'true' : undefined"
+                  @click="playContinuousQueueEntry(entry)"
+                  @keydown.enter.prevent="playContinuousQueueEntry(entry)"
+                  @keydown.space.prevent="playContinuousQueueEntry(entry)"
+                  @contextmenu="openSongActionMenu(entry.track, $event)"
+                  @keydown="onSongActionKeydown($event, entry.track)"
+                >
+                  <span class="right-queue-index">
+                    <q-icon v-if="entry.section === 'current'" name="graphic_eq" />
+                    <q-icon v-else-if="entry.section === 'previous'" name="history" />
+                    <template v-else>{{ String(entry.queueIndex + 1).padStart(2, '0') }}</template>
+                  </span>
+                  <q-img :src="trackCover(entry.track)" class="queue-preview__cover" />
+                  <div class="queue-preview__copy">
+                    <strong class="explicit-title">
+                      <span class="explicit-title__text">{{ entry.track.title }}</span>
+                      <ExplicitBadge :explicit="entry.track.explicit" />
+                    </strong>
+                    <small>{{ itemMeta(entry.track) }}</small>
+                  </div>
+                  <button
+                    v-if="entry.section !== 'current'"
+                    type="button"
+                    class="right-queue-remove"
+                    :aria-label="`Remove ${entry.track.title} from the queue`"
+                    title="Remove from queue"
+                    @click.stop="removeContinuousQueueEntry(entry)"
+                    @keydown.stop
+                  >
+                    <q-icon name="close" />
+                  </button>
+                  <span v-else class="right-queue-remove right-queue-remove--placeholder" aria-hidden="true" />
+                </div>
+              </template>
+            </div>
+            <div v-else-if="!continuousQueueEnabled && queue.length" class="queue-preview">
               <div
                 v-for="(item, index) in queue"
                 :key="`right-queue-${item.id}-${index}`"

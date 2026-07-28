@@ -124,6 +124,26 @@
   font-size: 17px;
 }
 
+.fullscreen-player__queue-item--previous img,
+.fullscreen-player__queue-item--previous .fullscreen-player__queue-cover {
+  opacity: 0.55;
+}
+
+.fullscreen-player__queue-item--previous .fullscreen-player__queue-copy strong {
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 500;
+}
+
+.fullscreen-player__queue-item--current {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 2px 0 0 rgb(var(--player-accent-rgb));
+}
+
+.fullscreen-player__queue-item--current .fullscreen-player__queue-copy strong,
+.fullscreen-player__queue-item--current .fullscreen-player__queue-remove {
+  color: rgb(var(--player-accent-soft-rgb));
+}
+
 .fullscreen-player__queue-empty {
   display: grid;
   min-height: 180px;
