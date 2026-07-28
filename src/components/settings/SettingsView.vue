@@ -482,6 +482,14 @@ export default {
           </button>
         </div>
 
+        <div class="settings-row">
+          <div class="settings-row__copy">
+            <label for="settings-beta-channel">Beta channel</label>
+            <p>Get beta builds from GitHub releases instead of the regular channel. Beta builds may be less stable.</p>
+          </div>
+          <q-toggle id="settings-beta-channel" v-model="updateChannelBetaToggle" color="primary" aria-label="Beta channel" />
+        </div>
+
         <div class="settings-actions">
           <button type="button" class="settings-link-button" @click="openChangelog">
             <q-icon name="new_releases" />

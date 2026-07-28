@@ -38,6 +38,13 @@ export function installUpdateActions(ctx) {
 
   ctx.updateCanCheck = computed(() => !['checking', 'downloading', 'available'].includes(ctx.updateState.value?.status));
 
+  ctx.updateChannelIsBeta = computed(() => ctx.updateState.value?.channel === 'beta');
+
+  ctx.updateChannelBetaToggle = computed({
+    get: () => ctx.updateChannelIsBeta.value,
+    set: (value) => { void ctx.setUpdateChannel(value ? 'beta' : 'stable'); }
+  });
+
   ctx.contentUpdateStatusLabel = computed(() => {
     const status = ctx.updateState.value?.content?.status || 'idle';
     if (status === 'checking') return 'Checking';
@@ -78,6 +85,16 @@ export function installUpdateActions(ctx) {
 
     try {
       ctx.syncUpdateState(await window.orchardUpdates.check());
+    } catch (error) {
+      ctx.errorMessage.value = error.message;
+    }
+  };
+
+  ctx.setUpdateChannel = async function setUpdateChannel(channel) {
+    if (!window.orchardUpdates?.setChannel) return;
+
+    try {
+      ctx.syncUpdateState(await window.orchardUpdates.setChannel(channel));
     } catch (error) {
       ctx.errorMessage.value = error.message;
     }
