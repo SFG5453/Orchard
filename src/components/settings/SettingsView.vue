@@ -87,6 +87,26 @@ export default {
           <q-toggle id="settings-save-playback-state" v-model="playbackStatePersistenceEnabled" color="primary" aria-label="Save queue and current song" />
         </div>
 
+        <div class="settings-row settings-row--options">
+          <div class="settings-row__copy">
+            <label id="settings-queue-layout-label">Queue style</label>
+            <p>Up next lists only what is still queued. Continuous also shows what already played, with the current song in place.</p>
+          </div>
+          <div class="settings-option-group" role="group" aria-labelledby="settings-queue-layout-label">
+            <button
+              v-for="option in queueLayoutOptions"
+              :key="option.value"
+              type="button"
+              class="settings-option"
+              :class="{ 'settings-option--active': queueLayout === option.value }"
+              :aria-pressed="queueLayout === option.value"
+              @click="queueLayout = option.value"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
+
         <div class="settings-row">
           <div class="settings-row__copy">
             <label for="settings-crossfade">Crossfade</label>

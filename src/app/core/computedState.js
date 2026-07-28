@@ -1,6 +1,7 @@
 import { computed } from 'vue';
 import { playlistArtworkDetection } from '../appearance/playlistArtwork.js';
 import { sortBySearchPopularity, sortByTopMatch } from '../browse/searchRanking.js';
+import { continuousQueueEntries } from '../playback/queueLayout.js';
 
 function sectionTitle(section) {
   return String(section?.title || '').trim().toLowerCase();
@@ -301,6 +302,22 @@ export function installComputedState(ctx) {
   });
 
   ctx.queuePreview = computed(() => ctx.queue.value.slice(0, 6));
+
+  ctx.continuousQueueEnabled = computed(() => ctx.queueLayout.value === 'continuous');
+
+  ctx.continuousQueue = computed(() => continuousQueueEntries({
+    history: ctx.history.value,
+    activeTrack: ctx.activeTrack.value,
+    queue: ctx.queue.value
+  }));
+
+  // Compact surfaces keep the current track in view with a little of what came before it.
+  ctx.continuousQueuePreview = computed(() => {
+    const entries = ctx.continuousQueue.value;
+    const currentIndex = entries.findIndex((entry) => entry.section === 'current');
+    const start = Math.max(0, (currentIndex < 0 ? 0 : currentIndex) - 2);
+    return entries.slice(start, start + 8);
+  });
 
   ctx.activeQueueOriginLabel = computed(() => ctx.trackQueueOriginLabel(ctx.activeTrack.value));
 

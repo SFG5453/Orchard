@@ -11,7 +11,7 @@ export default {
 <template>
               <section class="shelf-section">
                 <div class="section-header">
-                  <h2>Up next</h2>
+                  <h2>{{ continuousQueueEnabled ? 'Queue' : 'Up next' }}</h2>
                   <div class="queue-view__header-actions">
                     <span>{{ queue.length }} items</span>
                     <button v-if="queue.length" type="button" class="queue-view__clear" @click="clearQueue">
@@ -20,7 +20,81 @@ export default {
                   </div>
                 </div>
 
-                <div class="table-card">
+                <div v-if="continuousQueueEnabled" class="table-card">
+                  <template v-for="entry in continuousQueue" :key="entry.key">
+                    <p v-if="entry.sectionStart" class="queue-view__group">
+                      {{ continuousQueueSectionLabel(entry.section) }}
+                    </p>
+                    <div
+                      class="table-row queue-view__row"
+                      :class="{
+                        'table-row--active': entry.section === 'current',
+                        'queue-view__row--previous': entry.section === 'previous',
+                        'queue-view__row--dragging': entry.section === 'next' && queueDragIndex === entry.queueIndex
+                      }"
+                      role="button"
+                      tabindex="0"
+                      :aria-current="entry.section === 'current' ? 'true' : undefined"
+                      :draggable="entry.section === 'next'"
+                      @click="playContinuousQueueEntry(entry)"
+                      @keydown.enter.prevent="playContinuousQueueEntry(entry)"
+                      @keydown.space.prevent="playContinuousQueueEntry(entry)"
+                      @keydown="onSongActionKeydown($event, entry.track)"
+                      @contextmenu="openSongActionMenu(entry.track, $event)"
+                      @dragstart="entry.section === 'next' && onQueueDragStart($event, entry.queueIndex)"
+                      @dragend="queueDragIndex = null"
+                      @dragover.prevent
+                      @drop.prevent="entry.section === 'next' && onQueueDrop($event, entry.queueIndex)"
+                    >
+                      <button
+                        v-if="entry.section === 'next'"
+                        type="button"
+                        class="queue-drag-handle"
+                        :aria-label="`Reorder ${entry.track.title}`"
+                        title="Drag to reorder"
+                        tabindex="-1"
+                        @click.stop
+                        @keydown.stop
+                      >
+                        <q-icon name="drag_indicator" />
+                      </button>
+                      <span v-else class="queue-view__row-marker">
+                        <q-icon :name="entry.section === 'current' ? 'graphic_eq' : 'history'" />
+                      </span>
+                      <span class="table-track">
+                        <q-img v-if="entry.track.thumbnail" :src="entry.track.thumbnail" class="table-cover" />
+                        <span v-else class="table-cover table-cover--empty">
+                          <q-icon name="music_note" />
+                        </span>
+                        <span class="table-copy">
+                          <strong class="explicit-title">
+                            <span class="explicit-title__text">{{ entry.track.title }}</span>
+                            <ExplicitBadge :explicit="entry.track.explicit" />
+                          </strong>
+                          <small>{{ itemMeta(entry.track) }}</small>
+                        </span>
+                      </span>
+                      <span class="table-album">{{ entry.track.album || '—' }}</span>
+                      <span class="table-time">{{ entry.track.duration || '—' }}</span>
+                      <button
+                        v-if="entry.section !== 'current'"
+                        type="button"
+                        class="table-icon-button"
+                        :aria-label="`Remove ${entry.track.title} from the queue`"
+                        title="Remove from queue"
+                        @click.stop="removeContinuousQueueEntry(entry)"
+                        @keydown.stop
+                      >
+                        <q-icon name="close" />
+                      </button>
+                      <span v-else aria-hidden="true" />
+                    </div>
+                  </template>
+
+                  <div v-if="!continuousQueue.length" class="table-empty">The queue is empty.</div>
+                </div>
+
+                <div v-else class="table-card">
                   <div
                     v-for="(item, index) in queue"
                     :key="`queue-page-${item.id}`"
@@ -84,7 +158,7 @@ export default {
                 </div>
               </section>
 
-              <section class="shelf-section">
+              <section v-if="!continuousQueueEnabled" class="shelf-section">
                 <div class="section-header">
                   <h2>Recently played</h2>
                   <span>{{ history.length }} items</span>

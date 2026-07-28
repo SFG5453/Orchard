@@ -1,5 +1,6 @@
 import { nextTick } from 'vue';
 import { playlistPreviousState } from './playbackCollectionQueue.js';
+import { advanceToQueueEntry, rewindToHistoryEntry } from './queueLayout.js';
 import { reliablePlaybackDuration } from './playbackDuration.js';
 import { createSmartCrossfadeMixPresentation } from './smartCrossfadeMixPresentation.js';
 
@@ -202,6 +203,48 @@ export function installPlaybackControls(ctx) {
   ctx.playHistoryTrack = function playHistoryTrack(track) {
     if (!track?.id) return;
     ctx.playTrack(track, { queueSource: [track] });
+  };
+
+  ctx.continuousQueueSectionLabel = function continuousQueueSectionLabel(section) {
+    if (section === 'previous') return 'Previous';
+    if (section === 'current') return 'Now playing';
+    return 'Next up';
+  };
+
+  ctx.playContinuousQueueEntry = function playContinuousQueueEntry(entry) {
+    if (!entry?.track?.id) return;
+    if (entry.section === 'current') {
+      ctx.seek(0);
+      return;
+    }
+    if (ctx.requestListeningPartyHostControl?.({
+      action: 'play-track',
+      track: entry.track,
+      options: {}
+    })) {
+      return;
+    }
+
+    const playbackState = {
+      history: ctx.history.value,
+      activeTrack: ctx.activeTrack.value,
+      queue: ctx.queue.value
+    };
+    const next = entry.section === 'previous'
+      ? rewindToHistoryEntry({ ...playbackState, historyIndex: entry.historyIndex })
+      : advanceToQueueEntry({ ...playbackState, queueIndex: entry.queueIndex });
+    if (!next) return;
+
+    ctx.cancelActiveCrossfade();
+    ctx.history.value = next.history;
+    ctx.queue.value = next.queue;
+    ctx.syncManualQueueOrder();
+    ctx.playTrack(next.track, {
+      listeningPartySync: true,
+      preserveQueue: true,
+      skipHistory: true,
+      sessionAction: entry.section === 'previous' ? 'previous' : 'manual'
+    });
   };
 
   ctx.minimizeVideoPlayer = function minimizeVideoPlayer() {

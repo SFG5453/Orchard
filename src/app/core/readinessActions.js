@@ -393,6 +393,7 @@ export function installReadinessActions(ctx) {
     ctx.crossfadeSeconds.value = preferences.crossfadeSeconds;
     ctx.customArtistPagesEnabled.value = preferences.customArtistPagesEnabled;
     ctx.playbackStatePersistenceEnabled.value = preferences.playbackStatePersistenceEnabled;
+    ctx.queueLayout.value = preferences.queueLayout;
     ctx.youtubeHistoryEnabled.value = preferences.youtubeHistoryEnabled;
     ctx.customAccentColor.value = preferences.customAccentColor;
     ctx.discordRpcEnabled.value = preferences.discordRpcEnabled;
