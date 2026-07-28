@@ -405,6 +405,8 @@ Napi::Value RenderTransition(const Napi::CallbackInfo& info) {
   config.sample_rate = number("sampleRate", config.sample_rate);
   config.beats = number("beats", config.beats);
   config.bass_swap = number("bassSwap", config.bass_swap);
+  config.handoff = number("handoff", config.handoff);
+  config.bed = number("bed", config.bed);
   config.bass_crossover_hz = number("bassCrossoverHz", config.bass_crossover_hz);
   config.bass_swap_seconds = number("bassSwapSeconds", config.bass_swap_seconds);
   config.tempo_glide = number("tempoGlide", config.tempo_glide);

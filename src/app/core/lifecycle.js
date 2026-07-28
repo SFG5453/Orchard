@@ -4,10 +4,10 @@ import { io } from 'socket.io-client';
 export function disableCrossfadePlayback(ctx) {
   ctx.stopCrossfadeClock();
   if (ctx.cancelActiveCrossfade) {
-    ctx.cancelActiveCrossfade();
+    ctx.cancelActiveCrossfade('crossfade-disabled');
   } else {
     ctx.autoCrossfade?.cancel?.();
-    ctx.wsolaCrossfade?.cancel?.();
+    ctx.wsolaCrossfade?.cancel?.('crossfade-disabled');
   }
   ctx.dismissSmartCrossfadeMix?.();
   ctx.setCurrentAudioVolume();
@@ -429,7 +429,7 @@ export function installLifecycle(ctx) {
     ctx.dismissSmartCrossfadeMix?.();
     ctx.autoplayRequest += 1;
     ctx.autoCrossfade.cancel();
-    ctx.wsolaCrossfade?.cancel?.();
+    ctx.wsolaCrossfade?.cancel?.('app-teardown');
     ctx.finishYouTubeHistory?.();
     ctx.destroySleepTimer();
     ctx.audioAnalyzer.destroy();

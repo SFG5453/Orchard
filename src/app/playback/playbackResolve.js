@@ -240,7 +240,7 @@ export function installPlaybackResolve(ctx) {
     const trackItem = options.recoveryAttempt
       ? item
       : { ...item, playbackFallbackTried: false, streamRefreshTried: false };
-    if (ctx.cancelActiveCrossfade) ctx.cancelActiveCrossfade();
+    if (ctx.cancelActiveCrossfade) ctx.cancelActiveCrossfade('play-track');
     else {
       ctx.autoCrossfade.cancel();
       ctx.dismissSmartCrossfadeMix?.();

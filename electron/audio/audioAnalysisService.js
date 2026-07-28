@@ -226,7 +226,7 @@ export function setupAudioAnalysisService({
     // Only forward keys that are real numbers: the N-API binding treats a
     // present-but-undefined key as a type error, not an omission.
     const renderOptions = { sampleRate };
-    ['beats', 'bassSwap', 'bassCrossoverHz', 'bassSwapSeconds', 'tempoGlide'].forEach((key) => {
+    ['beats', 'bassSwap', 'handoff', 'bed', 'bassCrossoverHz', 'bassSwapSeconds', 'tempoGlide'].forEach((key) => {
       const value = Number(options[key]);
       if (Number.isFinite(value)) renderOptions[key] = value;
     });

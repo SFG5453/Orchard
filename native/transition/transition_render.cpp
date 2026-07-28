@@ -82,6 +82,15 @@ float Smooth(double progress) {
   return clamped * clamped * (3.0f - 2.0f * clamped);
 }
 
+// Maps position in the overlap onto position along the equal-power curve. The
+// pre-roll covers the curve up to `bed` and the tail covers the rest, so both
+// the length of the pre-roll and how much of the fade it is allowed to spend
+// are set independently. Linear within each segment.
+double FadePosition(double progress, double handoff, double bed) {
+  if (progress <= handoff) return bed * (progress / handoff);
+  return bed + (1.0 - bed) * ((progress - handoff) / (1.0 - handoff));
+}
+
 }  // namespace
 
 TransitionResult RenderTransition(
@@ -155,6 +164,11 @@ TransitionResult RenderTransition(
     std::clamp(config.bass_crossover_hz, 40.0, 500.0),
     config.sample_rate
   );
+  // Kept clear of both edges: at exactly 0 or 1 the fade would be a step.
+  const auto handoff = std::clamp(config.handoff, 0.05, 0.95);
+  // Above 0.5 the pre-roll would fade the outgoing track further than the
+  // tail does, which is no longer a pre-roll.
+  const auto bed = std::clamp(config.bed, 0.0, 0.5);
   const auto swap_point = std::clamp(config.bass_swap, 0.0, 1.0) * overlap_samples;
   const auto swap_ramp =
     std::max(1.0, config.bass_swap_seconds * config.sample_rate);
@@ -178,8 +192,9 @@ TransitionResult RenderTransition(
     for (size_t index = 0; index < overlap_samples; ++index) {
       const double progress =
         static_cast<double>(index) / static_cast<double>(overlap_samples);
-      const auto fade_out = std::cos(static_cast<float>(progress) * kPi * 0.5f);
-      const auto fade_in = std::sin(static_cast<float>(progress) * kPi * 0.5f);
+      const auto position = static_cast<float>(FadePosition(progress, handoff, bed));
+      const auto fade_out = std::cos(position * kPi * 0.5f);
+      const auto fade_in = std::sin(position * kPi * 0.5f);
 
       // Exactly one track owns the low end at any instant; the handover is a
       // short ramp centred on the swap point. Equal power again, for the same

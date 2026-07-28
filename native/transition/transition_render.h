@@ -43,6 +43,33 @@ struct TransitionConfig {
   // low end on the outgoing track past the crossover was judged better by ear
   // on real material than 0.55.
   double bass_swap = 0.7;
+  // Point in the overlap, as a fraction, where the two tracks cross at equal
+  // power. Everything before it is the incoming track's pre-roll: its intro
+  // playing underneath the outgoing track, rising like a fader ride rather
+  // than a crossfade.
+  //
+  // A DJ does not start a blend at the incoming track's drop, because that is
+  // where its vocal and full arrangement arrive, and the outgoing track is
+  // still singing. They bring the intro in early, underneath, and let the drop
+  // be the moment the mix changes hands. Callers place this at the incoming
+  // drop so the mix changes hands there.
+  //
+  // 0.5 reproduces the plain symmetric equal-power crossfade.
+  double handoff = 0.5;
+  // How far along the equal-power curve the pre-roll travels: the incoming
+  // track's level at the handoff, and the outgoing track's loss up to it.
+  //
+  // The pre-roll is a fader ride under a track that is still playing, not the
+  // first half of a crossfade. At 0.25 the incoming intro reaches -8 dB while
+  // the outgoing has given up 0.7 dB -- a bed -- and the whole audible fade
+  // then happens in the tail. Spending the curve's first half on the pre-roll
+  // instead (bed = 0.5) costs the outgoing track only 3 dB over what may be
+  // fifteen seconds, which reads as no fade at all, and then leaves it fading
+  // for the entire tail on top: slow at both ends.
+  //
+  // 0.5 makes the fade one continuous equal-power curve across the overlap,
+  // which with handoff = 0.5 is the plain symmetric crossfade.
+  double bed = 0.5;
   // Corner frequency of the bass handover. Everything below it belongs to
   // exactly one track at a time, which is what keeps the overlap from turning
   // to mud when two kick drums collide.

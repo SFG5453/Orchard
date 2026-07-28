@@ -52,11 +52,11 @@ export function installPlaybackControls(ctx) {
     );
   };
 
-  ctx.cancelActiveCrossfade = function cancelActiveCrossfade() {
+  ctx.cancelActiveCrossfade = function cancelActiveCrossfade(reason = 'unspecified') {
     const wasActive = Boolean(ctx.autoCrossfade?.isActive?.()) ||
       Boolean(ctx.wsolaCrossfade?.isActive?.());
     ctx.autoCrossfade?.cancel?.();
-    ctx.wsolaCrossfade?.cancel?.();
+    ctx.wsolaCrossfade?.cancel?.(reason);
     if (ctx.smartCrossfadeMix?.value?.visible) ctx.dismissSmartCrossfadeMix();
     return wasActive;
   };
@@ -173,7 +173,7 @@ export function installPlaybackControls(ctx) {
       ctx.sendListeningPartyRequest({ action: ctx.isPlaying.value ? 'pause' : 'play' });
       return;
     }
-    ctx.cancelActiveCrossfade();
+    ctx.cancelActiveCrossfade('toggle-playback');
     const media = ctx.currentPlaybackElement();
     if (ctx.activeTrack.value && (!media?.src || playbackNeedsFreshStream(media, ctx.playbackError.value))) {
       ctx.playTrack(ctx.activeTrack.value, {
@@ -243,7 +243,7 @@ export function installPlaybackControls(ctx) {
 
   ctx.playNext = async function playNext(options = {}) {
     if (!options.fromListeningPartyRequest && !options.fromEnded && ctx.requestListeningPartyHostControl?.({ action: 'next' })) return;
-    ctx.cancelActiveCrossfade();
+    ctx.cancelActiveCrossfade('play-next');
     if (ctx.repeatMode.value === 'one' && ctx.activeTrack.value && !options.skipRepeatOne) {
       await ctx.playTrack(ctx.activeTrack.value, {
         mediaKind: ctx.activeMediaKind.value,
@@ -596,7 +596,7 @@ export function installPlaybackControls(ctx) {
 
   ctx.playPrevious = function playPrevious(options = {}) {
     if (!options.fromListeningPartyRequest && ctx.requestListeningPartyHostControl?.({ action: 'previous' })) return;
-    ctx.cancelActiveCrossfade();
+    ctx.cancelActiveCrossfade('play-previous');
     const playlistContext = ctx.playbackPlaylistContext.value;
     if (playlistContext && !ctx.shuffleEnabled.value && !playlistContext.shuffled) {
       const { activeIndex, previousTrack } = playlistPreviousState(playlistContext.allTracks, ctx.activeTrack.value?.id);
@@ -658,7 +658,7 @@ export function installPlaybackControls(ctx) {
       ctx.sendListeningPartyRequest({ action: 'seek', currentTime: Number(value) || 0 });
       return;
     }
-    ctx.cancelActiveCrossfade();
+    ctx.cancelActiveCrossfade('seek');
     const media = ctx.currentPlaybackElement();
     if (!media || !ctx.duration.value || ctx.activeTrackIsLive.value) return;
     const target = Math.max(0, Math.min(Number(value) || 0, ctx.duration.value));

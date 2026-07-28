@@ -123,7 +123,9 @@ export function createWsolaCrossfade({
       const result = await bridge.renderTransition(outgoing, incoming, {
         sampleRate,
         beats: transitionPlan.beats,
-        bassSwap: transitionPlan.bassSwapFraction
+        bassSwap: transitionPlan.bassSwapFraction,
+        handoff: transitionPlan.handoffFraction,
+        bed: transitionPlan.bedPosition
       });
       if (!result?.rendered) {
         entry.status = 'failed';
@@ -174,7 +176,10 @@ export function createWsolaCrossfade({
     state.timers.length = 0;
   }
 
-  function cancel() {
+  // `reason` names the caller, so a session that ends early can be told apart
+  // from an ordinary teardown without reproducing it under a debugger. A
+  // healthy transition never arrives here at all -- it reports wsola-complete.
+  function cancel(reason = 'unspecified') {
     const state = session;
     if (!state) return;
     session = null;
@@ -209,7 +214,14 @@ export function createWsolaCrossfade({
       state.toAudio.pause();
       analyzer.setVolume(state.toAudio, 0);
     }
-    report('wsola-cancelled', { promoted: state.promoted, elapsedSeconds: elapsed });
+    report('wsola-cancelled', {
+      reason: String(reason),
+      promoted: state.promoted,
+      elapsedSeconds: elapsed,
+      // How much of the rendered overlap was thrown away. Small but non-zero
+      // means the buffer was cut short of its own tail.
+      remainingSeconds: Math.max(0, (Number(state.plan?.overlapSeconds) || 0) - elapsed)
+    });
   }
 
   async function start({ fromAudio, toAudio, plan: transitionPlan, render, volume, onPromote, onComplete, onError }) {

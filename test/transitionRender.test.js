@@ -123,6 +123,98 @@ test('holds a level rather than dipping through the middle', async () => {
   }
 });
 
+test('crosses the two tracks on the handoff, not the middle of the overlap', async () => {
+  const handoff = 0.75;
+  // Tones well clear of the 200 Hz bass crossover, so these readings reflect
+  // the main fade rather than the low-end swap.
+  const outgoingTone = 900;
+  const incomingTone = 1500;
+  const result = await native.renderTransition(
+    source(track({ bass: 55, tone: outgoingTone }), 126),
+    source(track({ bass: 85, tone: incomingTone }), 126),
+    { sampleRate: SAMPLE_RATE, beats: 16, handoff, bassSwap: 0.8 }
+  );
+  assert.equal(result.rendered, true, result.rejected);
+
+  const output = result.channels[0];
+  const window = Math.floor(SAMPLE_RATE * 0.4);
+  const level = (fraction, tone) =>
+    amplitudeAt(output, Math.floor(output.length * fraction - window / 2), window, tone);
+
+  // At the handoff the two sit at equal power; the old symmetric fade would
+  // have crossed at 0.5 and left the incoming track already dominant here.
+  const ratio = level(handoff, outgoingTone) / level(handoff, incomingTone);
+  assert.ok(
+    ratio > 0.8 && ratio < 1.25,
+    `tracks not level at the handoff: ${ratio.toFixed(3)}`
+  );
+
+  // Through the pre-roll the outgoing track still leads.
+  assert.ok(
+    level(0.4, outgoingTone) > level(0.4, incomingTone) * 1.5,
+    'incoming track was not a bed underneath during the pre-roll'
+  );
+  // After the handoff the incoming track takes over.
+  assert.ok(
+    level(0.95, incomingTone) > level(0.95, outgoingTone) * 1.5,
+    'incoming track did not take over after the handoff'
+  );
+});
+
+test('a low bed keeps the outgoing track up until the handoff', async () => {
+  const handoff = 0.5;
+  const outgoingTone = 900;
+  const incomingTone = 1500;
+  const result = await native.renderTransition(
+    source(track({ bass: 55, tone: outgoingTone }), 126),
+    source(track({ bass: 85, tone: incomingTone }), 126),
+    { sampleRate: SAMPLE_RATE, beats: 16, handoff, bed: 0.25, bassSwap: 0.6 }
+  );
+  assert.equal(result.rendered, true, result.rejected);
+
+  const output = result.channels[0];
+  const window = Math.floor(SAMPLE_RATE * 0.4);
+  const level = (fraction, tone) =>
+    amplitudeAt(output, Math.floor(output.length * fraction - window / 2), window, tone);
+
+  // The outgoing track gives up under a dB across the whole pre-roll. Running
+  // the fade's first half over it instead would cost 3 dB, which over a
+  // pre-roll of any length is heard as the fade not having started.
+  const held = level(handoff - 0.02, outgoingTone) / level(0.06, outgoingTone);
+  assert.ok(
+    held > 0.85,
+    `outgoing track dropped ${(-20 * Math.log10(held)).toFixed(2)} dB before the handoff`
+  );
+  // The incoming track is present but well underneath, not level with it.
+  assert.ok(
+    level(handoff - 0.02, outgoingTone) > level(handoff - 0.02, incomingTone) * 1.8,
+    'incoming intro came up level with the outgoing track instead of sitting under it'
+  );
+  // The audible fade is the tail: the outgoing track is gone by the end.
+  assert.ok(
+    level(0.94, outgoingTone) < level(0.06, outgoingTone) * 0.25,
+    'outgoing track had not faded out by the end of the tail'
+  );
+});
+
+test('a handoff at the midpoint reproduces the symmetric crossfade', async () => {
+  const config = { sampleRate: SAMPLE_RATE, beats: 16, bassSwap: 0.6 };
+  const [plain, explicit] = await Promise.all([
+    native.renderTransition(source(track(), 126), source(track({ bass: 85, tone: 330 }), 126), config),
+    native.renderTransition(source(track(), 126), source(track({ bass: 85, tone: 330 }), 126),
+      { ...config, handoff: 0.5 })
+  ]);
+
+  assert.equal(plain.rendered, true, plain.rejected);
+  assert.equal(explicit.rendered, true, explicit.rejected);
+  assert.equal(plain.channels[0].length, explicit.channels[0].length);
+  let worst = 0;
+  for (let index = 0; index < plain.channels[0].length; index += 1) {
+    worst = Math.max(worst, Math.abs(plain.channels[0][index] - explicit.channels[0][index]));
+  }
+  assert.ok(worst < 1e-6, `default handoff drifted from 0.5 by ${worst}`);
+});
+
 test('hands the low end from one track to the other', async () => {
   const result = await native.renderTransition(
     source(track({ bass: 55, tone: 220 }), 126),

@@ -315,6 +315,86 @@ test('cancel before the swap restores the outgoing element at the stretched posi
   }
 });
 
+test('a cancelled transition reports its caller and the tail it discarded', async () => {
+  const clock = fakeClock();
+  const originalWindow = globalThis.window;
+  globalThis.window = clock.window;
+  try {
+    const analyzer = fakeAnalyzer();
+    const reports = [];
+    const engine = createWsolaCrossfade({
+      analyzer,
+      bridge: {},
+      report: (event, detail) => reports.push({ event, detail })
+    });
+    const plan = readyPlan({ transitionStart: 200, overlapSeconds: 8 });
+    const fromAudio = fakeElement(199.9);
+    const toAudio = fakeElement(0);
+    const startPromise = engine.start({
+      fromAudio,
+      toAudio,
+      plan,
+      render: { channels: [new Float32Array(64), new Float32Array(64)], sampleRate: 48000, stretchRatio: 1 },
+      volume: 1,
+      onPromote: () => {},
+      onComplete: () => {},
+      onError: () => {}
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    analyzer.advance(0.1 + 5);
+    engine.cancel('audio-pause-event');
+
+    const cancelled = reports.find((entry) => entry.event === 'wsola-cancelled');
+    assert.ok(cancelled, 'expected a wsola-cancelled report');
+    assert.equal(cancelled.detail.reason, 'audio-pause-event');
+    assert.ok(Math.abs(cancelled.detail.elapsedSeconds - 5) < 0.05);
+    // Three seconds of the rendered overlap never played.
+    assert.ok(Math.abs(cancelled.detail.remainingSeconds - 3) < 0.05,
+      `expected ~3s discarded, got ${cancelled.detail.remainingSeconds}`);
+    assert.equal(await startPromise, false);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('an uninstrumented cancel still names itself', async () => {
+  const clock = fakeClock();
+  const originalWindow = globalThis.window;
+  globalThis.window = clock.window;
+  try {
+    const analyzer = fakeAnalyzer();
+    const reports = [];
+    const engine = createWsolaCrossfade({
+      analyzer,
+      bridge: {},
+      report: (event, detail) => reports.push({ event, detail })
+    });
+    const startPromise = engine.start({
+      fromAudio: fakeElement(199.9),
+      toAudio: fakeElement(0),
+      plan: readyPlan({ transitionStart: 200, overlapSeconds: 8 }),
+      render: { channels: [new Float32Array(64), new Float32Array(64)], sampleRate: 48000, stretchRatio: 1 },
+      volume: 1,
+      onPromote: () => {},
+      onComplete: () => {},
+      onError: () => {}
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    engine.cancel();
+
+    assert.equal(
+      reports.find((entry) => entry.event === 'wsola-cancelled').detail.reason,
+      'unspecified'
+    );
+    assert.equal(await startPromise, false);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
 test('volume changes update master gains without replacing scheduled handoff fades', async () => {
   const clock = fakeClock();
   const originalWindow = globalThis.window;

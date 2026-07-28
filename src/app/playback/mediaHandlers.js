@@ -175,7 +175,12 @@ export function installMediaHandlers(ctx) {
 
   ctx.onAudioPause = function onAudioPause(event) {
     if (!ctx.isCurrentAudioEvent(event)) return;
-    if (ctx.autoCrossfade?.isActive?.() || ctx.wsolaCrossfade?.isActive?.()) ctx.cancelActiveCrossfade?.();
+    if (ctx.autoCrossfade?.isActive?.() || ctx.wsolaCrossfade?.isActive?.()) {
+      // A transition pauses the outgoing element itself at the handoff, so the
+      // reason distinguishes the element running out of media from a genuine
+      // pause arriving mid-overlap.
+      ctx.cancelActiveCrossfade?.(event?.target?.ended ? 'audio-pause-ended' : 'audio-pause-event');
+    }
     ctx.clearPlaybackStallRecovery();
     ctx.reportYouTubeHistoryProgress?.({ force: true });
     ctx.buffering.value = false;
