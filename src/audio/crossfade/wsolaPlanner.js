@@ -1,14 +1,16 @@
 // Plans a beat-matched WSOLA transition in the Spotify AutoMix style measured
 // from reference captures: the outgoing track runs to its mix-out point while
-// the incoming track's intro plays underneath it, and the two cross at equal
-// power on the incoming track's drop.
+// the incoming track's intro plays underneath it, and the outgoing track is
+// gone by the moment the incoming track drops.
 //
-// The pre-roll is the point of the whole shape. Entering at the drop instead
-// puts the incoming vocal on top of an outgoing track that is still singing --
-// on a typical pop pairing that is several seconds of two lead vocals at once,
+// The intro is the point of the whole shape. Entering at the drop instead puts
+// the incoming vocal on top of an outgoing track that is still singing -- on a
+// typical pop pairing that is several seconds of two lead vocals at once,
 // which reads as a mistake however well the grids line up. The intro is the
-// part of a track written to sit under something else, so that is the part
-// that overlaps.
+// part of a track written to sit under something else, so that is the only
+// part that overlaps: the whole overlap lives inside it, and the drop, where
+// the incoming vocal and full arrangement arrive, ends the overlap rather than
+// sitting inside it.
 //
 // Planning is pure and cheap so it can run on every playback tick. The heavy
 // work — decoding PCM and rendering the overlap in the native addon — belongs
@@ -25,26 +27,33 @@ const MAX_BPM = 220;
 // PCM across the IPC boundary for a pairing that is certain to be refused.
 const MAX_STRETCH_DEVIATION = 0.08;
 
-// Beats of overlap after the handoff: the outgoing track's fade once the
-// incoming has arrived. Measured from the Spotify reference capture.
-const TAIL_BEATS = 16;
+// The audible fade, in beats. It sits at the END of the overlap and finishes
+// on the incoming drop, so the outgoing track has already gone silent by the
+// time the incoming vocal arrives. Length measured from the Spotify reference
+// capture, where the same fade ran after the drop instead.
+const FADE_BEATS = 16;
 
-// The incoming track's intro plays underneath the outgoing track before the
-// handoff. Quantized to bars, and bounded: too short and the drop arrives
-// unannounced, too long and the outgoing track is buried under a bed for most
-// of its final phrase. Four bars is the cap because a long intro is not an
-// invitation to play all of it -- at 48 beats a slow track sat under the
-// outgoing one for fifteen seconds before anything started to move.
-const MIN_PREROLL_BEATS = 4;
-const MAX_PREROLL_BEATS = 16;
+// Under this the fade is a cut rather than a mix, and a pairing whose intro
+// cannot cover it belongs to the ordinary crossfade instead.
+const MIN_FADE_BEATS = 8;
+
+// The bed: the part of the incoming intro that plays under a still-full
+// outgoing track before the fade begins. Quantized to bars, and bounded: too
+// short and the incoming track appears from nowhere, too long and the outgoing
+// track is buried under a bed for most of its final phrase. Four bars is the
+// cap because a long intro is not an invitation to play all of it -- at 48
+// beats a slow track sat under the outgoing one for fifteen seconds before
+// anything started to move.
+const MIN_BED_BEATS = 4;
+const MAX_BED_BEATS = 16;
 
 // A ceiling on the whole overlap regardless of how long the incoming intro is.
 const MAX_OVERLAP_SECONDS = 20;
 
-// How far along the equal-power fade the pre-roll travels; see `bed` in
-// native/transition/transition_render.h. Low, so the pre-roll is the incoming
-// intro rising to a bed under a still-full outgoing track, and the outgoing
-// track's audible fade is the tail alone rather than the whole overlap.
+// How far along the equal-power fade the bed travels; see `bed` in
+// native/transition/transition_render.h. Low, so the bed is the incoming intro
+// rising under a still-full outgoing track, and the outgoing track's audible
+// fade is the closing beats alone rather than the whole overlap.
 const BED_POSITION = 0.25;
 
 // Extra PCM around each slice so the WSOLA similarity search and filter
@@ -150,42 +159,48 @@ export function planWsolaTransition({
   const incomingBeatSeconds = 60 / incomingBpm;
   const outgoingBeatSeconds = 60 / outgoingBpm;
 
-  // The handoff: where the incoming track's arrangement and vocal arrive.
+  // The drop: where the incoming track's arrangement and vocal arrive. The
+  // overlap ends here, so nothing of the incoming track's vocal is ever heard
+  // against the outgoing one.
   const incomingDropTime = incomingMixInPoint(nextAnalysis);
   if (!Number.isFinite(incomingDropTime) || incomingDropTime < 0) return refuse('incoming-mix-in');
 
-  // The incoming track's intro is what plays underneath the outgoing track, so
-  // the pre-roll can be at most as long as that intro. Quantized down to whole
-  // bars of the shared grid, so the handoff stays on a downbeat.
+  // The whole overlap lives inside the incoming track's intro, so the intro is
+  // what bounds it. Quantized down to whole bars of the shared grid, so the
+  // drop that ends the overlap stays on a downbeat.
   const audibleStart = incomingAudibleStart(nextAnalysis);
-  const availablePrerollBeats = Math.max(0, incomingDropTime - audibleStart) / incomingBeatSeconds;
-  const cappedByOverlap = Math.floor(MAX_OVERLAP_SECONDS / incomingBeatSeconds) - TAIL_BEATS;
-  if (cappedByOverlap < MIN_PREROLL_BEATS) return refuse('overlap-too-long');
-  const prerollBeats = Math.max(
-    MIN_PREROLL_BEATS,
-    Math.min(
-      MAX_PREROLL_BEATS,
-      cappedByOverlap,
-      Math.floor(availablePrerollBeats / 4) * 4
-    )
+  const introBeats =
+    Math.floor(Math.max(0, incomingDropTime - audibleStart) / incomingBeatSeconds / 4) * 4;
+  // The fade in particular has to run against real audio: fading the outgoing
+  // track out over the incoming track's lead-in silence is a hole in the mix.
+  const fadeBeats = Math.min(FADE_BEATS, introBeats);
+  if (fadeBeats < MIN_FADE_BEATS) return refuse('incoming-intro-too-short');
+
+  // Beats the overlap may run for: the ceiling, and however much of the
+  // incoming track exists before its drop -- the cue can never precede 0:00.
+  const beatCeiling =
+    Math.floor(Math.min(MAX_OVERLAP_SECONDS, incomingDropTime) / incomingBeatSeconds / 4) * 4;
+  if (beatCeiling - fadeBeats < MIN_BED_BEATS) return refuse('overlap-too-long');
+
+  // Whatever intro is left over becomes the bed. The minimum wins even when
+  // the intro cannot cover it, which costs at most one bar of lead-in silence
+  // under a still-full outgoing track -- inaudible, unlike silence under a
+  // fade.
+  const bedBeats = Math.max(
+    MIN_BED_BEATS,
+    Math.min(MAX_BED_BEATS, beatCeiling - fadeBeats, introBeats - fadeBeats)
   );
 
-  const overlapBeats = prerollBeats + TAIL_BEATS;
+  const overlapBeats = bedBeats + fadeBeats;
   // The same beat count on both grids: the outgoing side is consumed at its
   // own tempo and stretched onto the incoming grid by the renderer.
   const outgoingOverlapSeconds = overlapBeats * outgoingBeatSeconds;
   const overlapSeconds = overlapBeats * incomingBeatSeconds;
 
-  // The incoming track enters a pre-roll ahead of its drop. Clamped at its
-  // audible start so the mix never opens on lead-in silence.
-  const incomingCueTime = Math.max(
-    audibleStart,
-    incomingDropTime - prerollBeats * incomingBeatSeconds
-  );
-  // Whatever the clamp took away shortens the pre-roll rather than shifting
-  // the drop, which must stay where the analyzer found it.
-  const prerollSeconds = incomingDropTime - incomingCueTime;
-  if (prerollSeconds <= 0) return refuse('incoming-no-preroll');
+  // The incoming track enters a whole overlap ahead of its drop, so the drop
+  // lands on the last sample of the overlap.
+  const incomingCueTime = incomingDropTime - overlapSeconds;
+  const bedSeconds = bedBeats * incomingBeatSeconds;
 
   // The outgoing overlap ends where its content does: an interior mix-out if
   // the analyzer found one, otherwise the end of real content.
@@ -204,13 +219,13 @@ export function planWsolaTransition({
   const incomingResumeTime = incomingCueTime + overlapSeconds;
   if (incomingResumeTime + MIN_CLEARANCE_SECONDS > incomingLength) return refuse('incoming-too-short');
 
-  // The mix changes hands on the drop: before it the incoming track is a bed
-  // under the outgoing one, after it the outgoing track fades away.
-  const handoffFraction = prerollSeconds / overlapSeconds;
+  // Where the bed ends and the audible fade begins. Everything after it is the
+  // outgoing track leaving, finishing exactly as the incoming track drops.
+  const handoffFraction = bedSeconds / overlapSeconds;
 
-  // The low end changes hands on the drop too -- that is what the drop is --
-  // held a bar past it so the incoming track does not arrive early.
-  const swapBeat = Math.max(4, Math.min(overlapBeats - 4, prerollBeats + 4));
+  // The low end changes hands a bar into the fade, so the incoming track is
+  // carrying the bottom by the time it drops without arriving early.
+  const swapBeat = Math.max(4, Math.min(overlapBeats - 4, bedBeats + 4));
   const bassSwapFraction = swapBeat / overlapBeats;
 
   const outgoingSliceStart = Math.max(0, transitionStart - SLICE_PADDING_SECONDS);
@@ -221,8 +236,8 @@ export function planWsolaTransition({
     transitionEnd,
     overlapSeconds,
     beats: overlapBeats,
-    prerollBeats,
-    tailBeats: TAIL_BEATS,
+    bedBeats,
+    fadeBeats,
     handoffFraction,
     bedPosition: BED_POSITION,
     bassSwapFraction,

@@ -19,6 +19,7 @@ export const ORCHARD_RELEASES = [
           'YouTube Brand Account switching now handles expected Google redirects, detects account and delegated-session changes, refreshes the active profile immediately, and remembers the selected browser identity across restarts.',
           'Search now supplements broad results with dedicated song and artist matches, then ranks exact matches by relevance and catalog popularity.',
           'Smart Crossfade now prevents competing transition engines and queue edits from corrupting an active mix, avoids comb filtering at handoffs, preserves supported audio processing, and bounds long pre-rolls and overlaps.',
+          'Smart Crossfade no longer brings in the next song\'s vocals before a transition has finished. The incoming intro now plays underneath for the whole mix, and the outgoing track has faded out by the moment the new song arrives.',
           'Immersive backgrounds stop unnecessary GPU rendering when animation is disabled, playback is paused, or Orchard is hidden, and Linux restores the original GPU environment when returning to Automatic mode.',
           'Continuous queues keep skipped tracks out of playback history and preserve host-controlled navigation and shared history during listening parties.'
         ]
@@ -27,6 +28,11 @@ export const ORCHARD_RELEASES = [
         title: 'Maintenance',
         items: [
           'Updated Quasar to 2.23.2.'
+        ]
+      }
+    ]
+  },
+  {
     version: '3.2.3',
     codename: 'Diffracted Undoes',
     date: 'July 28, 2026',

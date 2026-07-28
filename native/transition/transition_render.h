@@ -43,16 +43,17 @@ struct TransitionConfig {
   // low end on the outgoing track past the crossover was judged better by ear
   // on real material than 0.55.
   double bass_swap = 0.7;
-  // Point in the overlap, as a fraction, where the two tracks cross at equal
-  // power. Everything before it is the incoming track's pre-roll: its intro
-  // playing underneath the outgoing track, rising like a fader ride rather
-  // than a crossfade.
+  // Point in the overlap, as a fraction, where the bed ends and the audible
+  // fade begins. Everything before it is the incoming track's intro playing
+  // underneath the outgoing track, rising like a fader ride rather than a
+  // crossfade; everything after it is the outgoing track leaving.
   //
   // A DJ does not start a blend at the incoming track's drop, because that is
   // where its vocal and full arrangement arrive, and the outgoing track is
-  // still singing. They bring the intro in early, underneath, and let the drop
-  // be the moment the mix changes hands. Callers place this at the incoming
-  // drop so the mix changes hands there.
+  // still singing. They bring the intro in early, underneath, and are gone by
+  // the drop. Callers size the overlap to end on the incoming drop and place
+  // this a fade before it, so the outgoing track reaches silence exactly as
+  // the incoming one arrives.
   //
   // 0.5 reproduces the plain symmetric equal-power crossfade.
   double handoff = 0.5;
