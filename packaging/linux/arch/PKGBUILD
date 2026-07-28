@@ -1,5 +1,5 @@
 pkgname=orchard
-pkgver=3.2.3
+pkgver=4.0.0_beta.1
 pkgrel=1
 pkgdesc='YouTube Music client backed by InnerTube'
 arch=('x86_64')
