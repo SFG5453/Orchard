@@ -38,7 +38,7 @@ export default {
         <div class="about-dialog__version">Version {{ currentReleaseLabel }}</div>
         <div class="about-dialog__license">
           <span>License</span>
-          <strong>MIT</strong>
+          <strong>AGPL-3.0-or-later</strong>
           <p>Copyright 2025–2026 SFG545.</p>
         </div>
         <div class="about-dialog__contributors-label">Contributors</div>

@@ -39,7 +39,7 @@
     "name": "SFG545",
     "email": "sfg@sfg545.dev"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "dependencies": {
     "@kawarp/core": "^1.2.0",
     "@quasar/extras": "^2.0.2",

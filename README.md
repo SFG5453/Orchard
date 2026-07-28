@@ -208,6 +208,22 @@ The Orchard logo was created with the assistance of ChatGPT image generation.
 
 ## License
 
-Orchard is available under the [MIT License](LICENSE).
+Orchard is available under the [GNU Affero General Public License v3.0 or
+later](LICENSE). Releases up to and including 3.x were published under the MIT
+License; that grant is irrevocable, so those versions remain MIT. Everything
+from 4.0.0 onward is AGPL-3.0-or-later.
 
 Copyright © 2025–2026 SFG545.
+
+Orchard is free software: you can redistribute it and/or modify it under the
+terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+details.
+
+You should have received a copy of the GNU Affero General Public License along
+with Orchard. If not, see <https://www.gnu.org/licenses/>.
