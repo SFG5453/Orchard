@@ -1,5 +1,18 @@
 export const ORCHARD_RELEASES = [
   {
+    version: '3.2.3',
+    codename: 'Diffracted Undoes',
+    date: 'July 28, 2026',
+    sections: [
+      {
+        title: 'Fixed',
+        items: [
+          'Beta channel updates could fail to download on Windows with a "Cannot download" error after opting in from Settings; update packages are now published with consistent, GitHub-safe names so beta releases install correctly.'
+        ]
+      }
+    ]
+  },
+  {
     version: '3.2.2',
     codename: 'Jambs Explosive',
     date: 'July 27, 2026',
