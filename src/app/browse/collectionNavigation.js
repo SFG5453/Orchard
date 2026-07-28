@@ -42,7 +42,8 @@ export async function openCollectionWithLoading(ctx, kind, item) {
       ...data,
       title: data.title || item.title,
       thumbnail: data.thumbnail || item.thumbnail || null,
-      artist: data.artist || item.artist || item.artists?.join(', ') || item.subtitle || '',
+      artist: data.artist || item.artist || item.artists?.join(', ') ||
+        (item.subtitle && !ctx.isYearText(item.subtitle) ? item.subtitle : '') || '',
       itemCount: totalTrackCount ? `${totalTrackCount.toLocaleString('en-US')} tracks` : (item.itemCount || data.itemCount),
       totalTrackCount,
       kind: data.kind || kind

@@ -55,7 +55,7 @@ export function installVisualUtils(ctx) {
     if (item.type === 'album') return ctx.albumTypeLabel(item);
     if (item.artists?.length) return item.artists.join(', ');
     if (item.album) return item.album;
-    if (item.subtitle && !(item.type === 'album' && ctx.isYearText(item.subtitle))) return item.subtitle;
+    if (item.subtitle && !ctx.isYearText(item.subtitle)) return item.subtitle;
     return fallbackArtist || ctx.itemTypeLabel(item);
   };
 

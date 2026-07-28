@@ -23,9 +23,16 @@ export function createBrowseNormalizers({
     textParts
   });
 
+  function artistRunText(runs = []) {
+    return runs.find((run) => {
+      const browseId = run?.navigationEndpoint?.browseEndpoint?.browseId || run?.endpoint?.payload?.browseId || '';
+      return browseId.startsWith('UC');
+    })?.text || '';
+  }
   function browseHeaderArtist(header) {
-    return cleanedText(header?.author?.name || header?.strapline_text_one) ||
-      header?.subtitle?.runs?.find((run) => run?.endpoint?.payload?.browseId?.startsWith?.('UC'))?.text ||
+    return cleanedText(header?.author?.name) ||
+      artistRunText(header?.strapline_text_one?.runs || header?.straplineTextOne?.runs) ||
+      artistRunText(header?.subtitle?.runs) ||
       '';
   }
   function browseHeaderTitle(header) {
@@ -61,7 +68,13 @@ export function createBrowseNormalizers({
   function rawMicroformat(data) {
     return data?.microformat?.microformatDataRenderer || {};
   }
+  function rawHeaderTabContent(data) {
+    return data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0] ||
+      data?.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0] ||
+      {};
+  }
   function rawHeader(data) {
+    const tabContent = rawHeaderTabContent(data);
     return data?.header?.musicEditablePlaylistDetailHeaderRenderer ||
       data?.header?.musicResponsiveHeaderRenderer ||
       data?.header?.musicImmersiveHeaderRenderer ||
@@ -69,6 +82,8 @@ export function createBrowseNormalizers({
       data?.header?.musicVisualHeaderRenderer ||
       data?.header?.musicHeaderRenderer ||
       data?.header ||
+      tabContent?.musicResponsiveHeaderRenderer ||
+      tabContent?.musicDetailHeaderRenderer ||
       {};
   }
   function rawSectionList(data) {
@@ -126,13 +141,24 @@ export function createBrowseNormalizers({
   function rawBrowseArtistName(data) {
     const header = rawHeader(data);
     const mfTitle = asText(rawMicroformat(data).title);
-    const artist = mfTitle.includes(' - Album by ') ? mfTitle.split(' - Album by ').pop() : '';
-    return asText(header.title) || artist || '';
+    const microformatArtist = mfTitle.includes(' - Album by ') ? mfTitle.split(' - Album by ').pop() : '';
+    return browseHeaderArtist(header) || microformatArtist || '';
   }
 
-  function rawBrowseDescription(data) {
+  function musicDescriptionShelfText(value) {
+    const shelf = value?.musicDescriptionShelfRenderer || value;
+    return asText(shelf?.description);
+  }
+
+  function rawBrowseDescription(data, { includeMicroformatDescription = true, includeHeaderSubtitle = true } = {}) {
     const mf = rawMicroformat(data);
-    return cleanedText(mf.description || rawHeader(data).description || rawHeader(data).subtitle) || '';
+    const header = rawHeader(data);
+    const headerDescription = musicDescriptionShelfText(header.description);
+    return cleanedText(
+      headerDescription ||
+      (includeMicroformatDescription ? mf.description : '') ||
+      (includeHeaderSubtitle ? header.subtitle : '')
+    ) || '';
   }
 
   function isYoutubeMusicDescription(description = '', title = '') {
@@ -145,8 +171,8 @@ export function createBrowseNormalizers({
       normalizedDescription.startsWith(`listen to ${normalizedTitle}`);
   }
 
-  function collectionDescription(data, title = '') {
-    const description = rawBrowseDescription(data);
+  function collectionDescription(data, title = '', options) {
+    const description = rawBrowseDescription(data, options);
     return isYoutubeMusicDescription(description, title) ? '' : description;
   }
 
@@ -240,7 +266,7 @@ export function createBrowseNormalizers({
       })
       .find(Boolean) || tracks.find((track) => track.artistBrowseIds?.[0])?.artistBrowseIds?.[0] || '';
     const title = rawBrowseTitle(album, 'album');
-    const description = collectionDescription(album, title);
+    const description = collectionDescription(album, title, { includeMicroformatDescription: false, includeHeaderSubtitle: false });
     const explicit = hasExplicitBadge(rawHeader(album)) || tracks.some((track) => track.explicit);
 
     return {
