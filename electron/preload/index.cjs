@@ -81,6 +81,11 @@ contextBridge.exposeInMainWorld('orchardAudioAnalysis', {
     samples,
     sampleRate,
     duration
+  }),
+  renderTransition: (outgoing, incoming, options) => ipcRenderer.invoke('audio-analysis:render-transition', {
+    outgoing,
+    incoming,
+    options
   })
 });
 

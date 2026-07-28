@@ -1,9 +1,22 @@
 import { nextTick, onBeforeUnmount, onMounted, watch } from 'vue';
 import { io } from 'socket.io-client';
 
+export function disableCrossfadePlayback(ctx) {
+  ctx.stopCrossfadeClock();
+  if (ctx.cancelActiveCrossfade) {
+    ctx.cancelActiveCrossfade('crossfade-disabled');
+  } else {
+    ctx.autoCrossfade?.cancel?.();
+    ctx.wsolaCrossfade?.cancel?.('crossfade-disabled');
+  }
+  ctx.dismissSmartCrossfadeMix?.();
+  ctx.setCurrentAudioVolume();
+}
+
 export function installLifecycle(ctx) {
   watch(ctx.volume, (value) => {
     ctx.autoCrossfade.setTargetVolume(value);
+    ctx.wsolaCrossfade?.setTargetVolume?.(value);
     ctx.setCurrentAudioVolume(value);
   });
 
@@ -238,10 +251,7 @@ export function installLifecycle(ctx) {
       if (ctx.isPlaying.value) ctx.startCrossfadeClock();
       return;
     }
-    ctx.stopCrossfadeClock();
-    ctx.autoCrossfade.cancel();
-    ctx.dismissSmartCrossfadeMix?.();
-    ctx.setCurrentAudioVolume();
+    disableCrossfadePlayback(ctx);
   });
 
   watch(ctx.discordRpcEnabled, (enabled) => {
@@ -421,6 +431,7 @@ export function installLifecycle(ctx) {
     ctx.dismissSmartCrossfadeMix?.();
     ctx.autoplayRequest += 1;
     ctx.autoCrossfade.cancel();
+    ctx.wsolaCrossfade?.cancel?.('app-teardown');
     ctx.finishYouTubeHistory?.();
     ctx.destroySleepTimer();
     ctx.audioAnalyzer.destroy();

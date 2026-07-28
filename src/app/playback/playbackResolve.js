@@ -121,7 +121,10 @@ export function installPlaybackResolve(ctx) {
   };
 
   ctx.clearNextPreload = function clearNextPreload(options = {}) {
-    if (!options.force && ctx.autoCrossfade?.isActive?.()) {
+    // The active transition owns the standby deck until handoff completes.
+    // Queue edits may invalidate metadata for a future preload, but clearing
+    // this element now would erase the already-playing incoming track.
+    if (ctx.autoCrossfade?.isActive?.() || ctx.wsolaCrossfade?.isActive?.()) {
       return false;
     }
 
@@ -158,6 +161,12 @@ export function installPlaybackResolve(ctx) {
   };
 
   ctx.preloadNextTrack = async function preloadNextTrack(options = {}) {
+    // A transition may have promoted queue state logically before its standby
+    // element has finished the audible handoff. Do not let a queue edit load a
+    // different source into that transition-owned deck.
+    if (ctx.autoCrossfade?.isActive?.() || ctx.wsolaCrossfade?.isActive?.()) {
+      return false;
+    }
     const next = ctx.queue.value[0];
     if (!ctx.isPlayableTrack(next) || next.mediaKind === 'video' || !ctx.socket.value?.connected) {
       return false;
@@ -231,7 +240,7 @@ export function installPlaybackResolve(ctx) {
     const trackItem = options.recoveryAttempt
       ? item
       : { ...item, playbackFallbackTried: false, streamRefreshTried: false };
-    if (ctx.cancelActiveCrossfade) ctx.cancelActiveCrossfade();
+    if (ctx.cancelActiveCrossfade) ctx.cancelActiveCrossfade('play-track');
     else {
       ctx.autoCrossfade.cancel();
       ctx.dismissSmartCrossfadeMix?.();

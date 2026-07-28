@@ -11,6 +11,8 @@
 #include <vector>
 
 #include "../analyzer/audio_analysis.h"
+#include "../transition/transition_render.h"
+#include "../transition/wsola.h"
 
 namespace {
 
@@ -185,10 +187,245 @@ Napi::Value Analyze(const Napi::CallbackInfo& info) {
   return promise;
 }
 
-// Exposes only the version marker and Promise-returning analysis entry point.
+class StretchWorker final : public Napi::AsyncWorker {
+ public:
+  StretchWorker(
+    Napi::Env env,
+    std::vector<std::vector<float>> channels,
+    double sample_rate,
+    orchard::WsolaConfig config
+  ) : Napi::AsyncWorker(env),
+      deferred_(Napi::Promise::Deferred::New(env)),
+      channels_(std::move(channels)),
+      sample_rate_(sample_rate),
+      config_(config) {}
+
+  Napi::Promise Promise() const {
+    return deferred_.Promise();
+  }
+
+  void Execute() override {
+    result_ = orchard::WsolaStretch(channels_, sample_rate_, config_);
+  }
+
+  void OnOK() override {
+    const auto env = Env();
+    auto output = Napi::Array::New(env, result_.size());
+    for (size_t channel = 0; channel < result_.size(); ++channel) {
+      auto typed = Napi::Float32Array::New(env, result_[channel].size());
+      std::copy(result_[channel].begin(), result_[channel].end(), typed.Data());
+      output.Set(channel, typed);
+    }
+    deferred_.Resolve(output);
+  }
+
+  void OnError(const Napi::Error& error) override {
+    deferred_.Reject(error.Value());
+  }
+
+ private:
+  Napi::Promise::Deferred deferred_;
+  std::vector<std::vector<float>> channels_;
+  double sample_rate_;
+  orchard::WsolaConfig config_;
+  std::vector<std::vector<float>> result_;
+};
+
+// Time-scales planar PCM without changing pitch. Accepts an array of
+// Float32Array channels so the caller can hand over AudioBuffer planes
+// directly; the copy is required because that storage stays owned by
+// JavaScript and cannot be read later from the worker-pool thread.
+Napi::Value TimeStretch(const Napi::CallbackInfo& info) {
+  const auto env = info.Env();
+  if (info.Length() < 3 || !info[0].IsArray() || !info[1].IsNumber() || !info[2].IsNumber()) {
+    Napi::TypeError::New(env, "timeStretch expects channel Float32Arrays, sampleRate, and ratio")
+      .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  const auto planes = info[0].As<Napi::Array>();
+  const double sample_rate = info[1].As<Napi::Number>().DoubleValue();
+  const double ratio = info[2].As<Napi::Number>().DoubleValue();
+  if (planes.Length() == 0 || !std::isfinite(sample_rate) || sample_rate < 1000 ||
+      !std::isfinite(ratio) || ratio <= 0) {
+    Napi::RangeError::New(env, "channels, sample rate, and ratio must be valid")
+      .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  std::vector<std::vector<float>> channels(planes.Length());
+  size_t expected = 0;
+  for (uint32_t index = 0; index < planes.Length(); ++index) {
+    const auto plane = planes.Get(index);
+    if (!plane.IsTypedArray() ||
+        plane.As<Napi::TypedArray>().TypedArrayType() != napi_float32_array) {
+      Napi::TypeError::New(env, "every channel must be a Float32Array")
+        .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    const auto typed = plane.As<Napi::Float32Array>();
+    if (index == 0) expected = typed.ElementLength();
+    if (typed.ElementLength() != expected || typed.ElementLength() == 0) {
+      Napi::RangeError::New(env, "channels must be non-empty and the same length")
+        .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    channels[index].assign(typed.Data(), typed.Data() + typed.ElementLength());
+  }
+
+  orchard::WsolaConfig config;
+  config.ratio = ratio;
+  if (info.Length() > 3 && info[3].IsObject()) {
+    const auto options = info[3].As<Napi::Object>();
+    if (options.Has("frameSize")) {
+      config.frame_size = options.Get("frameSize").As<Napi::Number>().Int32Value();
+    }
+    if (options.Has("searchRadius")) {
+      config.search_radius = options.Get("searchRadius").As<Napi::Number>().Int32Value();
+    }
+    if (options.Has("startRatio")) {
+      config.start_ratio = options.Get("startRatio").As<Napi::Number>().DoubleValue();
+    }
+    if (options.Has("glide")) {
+      config.glide = options.Get("glide").As<Napi::Number>().DoubleValue();
+    }
+  }
+
+  auto* worker = new StretchWorker(env, std::move(channels), sample_rate, config);
+  auto promise = worker->Promise();
+  worker->Queue();
+  return promise;
+}
+
+// Reads one `{ channels, anchor, bpm }` source. Returns false and leaves the
+// exception pending when the shape is wrong.
+bool ReadSource(Napi::Env env, const Napi::Value& value, orchard::TransitionSource& source) {
+  if (!value.IsObject()) {
+    Napi::TypeError::New(env, "each transition source must be an object")
+      .ThrowAsJavaScriptException();
+    return false;
+  }
+  const auto object = value.As<Napi::Object>();
+  if (!object.Get("channels").IsArray()) {
+    Napi::TypeError::New(env, "each transition source needs a channels array")
+      .ThrowAsJavaScriptException();
+    return false;
+  }
+  const auto planes = object.Get("channels").As<Napi::Array>();
+  source.channels.resize(planes.Length());
+  for (uint32_t index = 0; index < planes.Length(); ++index) {
+    const auto plane = planes.Get(index);
+    if (!plane.IsTypedArray() ||
+        plane.As<Napi::TypedArray>().TypedArrayType() != napi_float32_array) {
+      Napi::TypeError::New(env, "every channel must be a Float32Array")
+        .ThrowAsJavaScriptException();
+      return false;
+    }
+    const auto typed = plane.As<Napi::Float32Array>();
+    source.channels[index].assign(typed.Data(), typed.Data() + typed.ElementLength());
+  }
+  source.anchor = object.Has("anchor") ? object.Get("anchor").As<Napi::Number>().DoubleValue() : 0;
+  source.bpm = object.Has("bpm") ? object.Get("bpm").As<Napi::Number>().DoubleValue() : 0;
+  return true;
+}
+
+class TransitionWorker final : public Napi::AsyncWorker {
+ public:
+  TransitionWorker(
+    Napi::Env env,
+    orchard::TransitionSource outgoing,
+    orchard::TransitionSource incoming,
+    orchard::TransitionConfig config
+  ) : Napi::AsyncWorker(env),
+      deferred_(Napi::Promise::Deferred::New(env)),
+      outgoing_(std::move(outgoing)),
+      incoming_(std::move(incoming)),
+      config_(config) {}
+
+  Napi::Promise Promise() const {
+    return deferred_.Promise();
+  }
+
+  void Execute() override {
+    result_ = orchard::RenderTransition(outgoing_, incoming_, config_);
+  }
+
+  void OnOK() override {
+    // Environment thread: a refusal resolves normally so callers can branch on
+    // `rendered` instead of wrapping every transition in a try/catch.
+    const auto env = Env();
+    auto output = Napi::Object::New(env);
+    output.Set("rendered", result_.rendered);
+    output.Set("rejected", result_.rejected);
+    output.Set("stretchRatio", Compact(result_.stretch_ratio));
+    output.Set("bpm", Compact(result_.bpm));
+    auto planes = Napi::Array::New(env, result_.channels.size());
+    for (size_t channel = 0; channel < result_.channels.size(); ++channel) {
+      auto typed = Napi::Float32Array::New(env, result_.channels[channel].size());
+      std::copy(result_.channels[channel].begin(), result_.channels[channel].end(), typed.Data());
+      planes.Set(channel, typed);
+    }
+    output.Set("channels", planes);
+    deferred_.Resolve(output);
+  }
+
+  void OnError(const Napi::Error& error) override {
+    deferred_.Reject(error.Value());
+  }
+
+ private:
+  Napi::Promise::Deferred deferred_;
+  orchard::TransitionSource outgoing_;
+  orchard::TransitionSource incoming_;
+  orchard::TransitionConfig config_;
+  orchard::TransitionResult result_;
+};
+
+// Renders a beat-matched overlap between two tracks into one buffer. The
+// synchronous copies are required because TypedArray storage stays owned by
+// JavaScript and cannot be read later from the worker-pool thread.
+Napi::Value RenderTransition(const Napi::CallbackInfo& info) {
+  const auto env = info.Env();
+  if (info.Length() < 3 || !info[2].IsObject()) {
+    Napi::TypeError::New(env, "renderTransition expects outgoing, incoming, and options")
+      .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  orchard::TransitionSource outgoing;
+  orchard::TransitionSource incoming;
+  if (!ReadSource(env, info[0], outgoing)) return env.Undefined();
+  if (!ReadSource(env, info[1], incoming)) return env.Undefined();
+
+  const auto options = info[2].As<Napi::Object>();
+  orchard::TransitionConfig config;
+  const auto number = [&options](const char* key, double fallback) {
+    return options.Has(key) ? options.Get(key).As<Napi::Number>().DoubleValue() : fallback;
+  };
+  config.sample_rate = number("sampleRate", config.sample_rate);
+  config.beats = number("beats", config.beats);
+  config.bass_swap = number("bassSwap", config.bass_swap);
+  config.handoff = number("handoff", config.handoff);
+  config.bed = number("bed", config.bed);
+  config.bass_crossover_hz = number("bassCrossoverHz", config.bass_crossover_hz);
+  config.bass_swap_seconds = number("bassSwapSeconds", config.bass_swap_seconds);
+  config.tempo_glide = number("tempoGlide", config.tempo_glide);
+
+  auto* worker = new TransitionWorker(env, std::move(outgoing), std::move(incoming), config);
+  auto promise = worker->Promise();
+  worker->Queue();
+  return promise;
+}
+
 Napi::Object Initialize(Napi::Env env, Napi::Object exports) {
   exports.Set("analysisVersion", kAnalysisVersion);
   exports.Set("analyze", Napi::Function::New(env, Analyze));
+  exports.Set("timeStretch", Napi::Function::New(env, TimeStretch));
+  exports.Set("renderTransition", Napi::Function::New(env, RenderTransition));
+  exports.Set(
+    "maxTransparentRatioDeviation",
+    Napi::Number::New(env, orchard::kMaxTransparentRatioDeviation)
+  );
   return exports;
 }
 

@@ -43,6 +43,18 @@ export function createAudioAnalyzer(options = {}) {
     return context;
   }
 
+  function outputFilters(ctx) {
+    const lowPass = ctx.createBiquadFilter();
+    const highPass = ctx.createBiquadFilter();
+    lowPass.type = 'lowpass';
+    lowPass.frequency.value = Math.min(20000, ctx.sampleRate * 0.45);
+    lowPass.Q.value = 0.707;
+    highPass.type = 'highpass';
+    highPass.frequency.value = 20;
+    highPass.Q.value = 0.707;
+    return { lowPass, highPass };
+  }
+
   function connectElement(element) {
     if (!element) return null;
     const existing = nodes.get(element);
@@ -58,14 +70,7 @@ export function createAudioAnalyzer(options = {}) {
     const normalizedGain = ctx.createGain();
     const gain = ctx.createGain();
     const mixGain = ctx.createGain();
-    const lowPass = ctx.createBiquadFilter();
-    const highPass = ctx.createBiquadFilter();
-    lowPass.type = 'lowpass';
-    lowPass.frequency.value = Math.min(20000, ctx.sampleRate * 0.45);
-    lowPass.Q.value = 0.707;
-    highPass.type = 'highpass';
-    highPass.frequency.value = 20;
-    highPass.Q.value = 0.707;
+    const { lowPass, highPass } = outputFilters(ctx);
     analyser.fftSize = config.fftSize;
     analyser.smoothingTimeConstant = config.smoothingTimeConstant;
     normalizer.threshold.value = -24;
@@ -151,6 +156,41 @@ export function createAudioAnalyzer(options = {}) {
     const now = currentTime();
     node.gain.gain.cancelScheduledValues(now);
     node.gain.gain.setValueAtTime(clamp01(value), now);
+  }
+
+  /**
+   * Scheduled linear fade between two normalized mix-envelope levels, for
+   * handoffs that must land at an exact context time. `from` is explicit
+   * because an AudioParam's value at a future scheduled instant cannot be
+   * read back.
+   *
+   * Linear rather than equal-power on purpose: these fades hand over between
+   * two sources carrying the *same* audio, which sum coherently, so linear
+   * gains hold a constant level where equal-power would bulge in the middle.
+   * @returns {boolean} False when the element is outside the graph, so callers
+   * can refuse rather than schedule a fade that silently never happens.
+   */
+  function fadeVolume(element, from, to, at = 0, fadeSeconds = 0.01) {
+    const node = connectElement(element);
+    if (!node) return false;
+    // Handoff fades are a normalized envelope on top of the element's master
+    // gain. Keeping them separate means a live volume change can update
+    // `node.gain` without cancelling this scheduled automation.
+    const param = node.mixGain.gain;
+    const start = Math.max(currentTime(), Number(at) || 0);
+    param.cancelScheduledValues(start);
+    param.setValueAtTime(clamp01(from), start);
+    param.linearRampToValueAtTime(clamp01(to), start + Math.max(0.001, fadeSeconds));
+    return true;
+  }
+
+  function setMixVolume(element, value) {
+    const node = connectElement(element);
+    if (!node) return false;
+    const now = currentTime();
+    node.mixGain.gain.cancelScheduledValues(now);
+    node.mixGain.gain.setValueAtTime(clamp01(value), now);
+    return true;
   }
 
   async function decodeAudio(url, signal) {
@@ -473,6 +513,76 @@ export function createAudioAnalyzer(options = {}) {
     return { samples: values, sampleRate: context.sampleRate };
   }
 
+  /**
+   * Plays raw planar PCM as a scheduled one-shot source on the context clock.
+   * Used for pre-rendered transition overlaps, which need sample-accurate
+   * scheduling that media elements cannot provide. The chain is source ->
+   * gain -> output filters -> destination. Callers only use this path when
+   * per-source EQ, normalization, balance, preamp, and track gain are flat.
+   * @returns {object|null} Handle with the resolved start/end context times,
+   * `setVolume`, normalized envelope fades, and a click-free `stop`; null
+   * when the context is missing.
+   */
+  function playPcmBuffer({ channels, sampleRate, when = 0, offset = 0, volume = 1 }) {
+    const ctx = audioContext();
+    const frames = channels?.[0]?.length || 0;
+    if (!ctx || !frames) return null;
+
+    const buffer = ctx.createBuffer(channels.length, frames, sampleRate);
+    channels.forEach((data, index) => buffer.copyToChannel(data, index));
+    const source = ctx.createBufferSource();
+    const envelopeGain = ctx.createGain();
+    const volumeGain = ctx.createGain();
+    const { lowPass, highPass } = outputFilters(ctx);
+    source.buffer = buffer;
+    envelopeGain.gain.value = 1;
+    volumeGain.gain.value = clamp01(volume);
+    source.connect(envelopeGain);
+    envelopeGain.connect(volumeGain);
+    volumeGain.connect(lowPass);
+    lowPass.connect(highPass);
+    highPass.connect(ctx.destination);
+
+    // `offset` skips into the buffer for callers that were scheduled late and
+    // need the remainder to stay aligned with the media timeline.
+    const skip = Math.min(Math.max(0, Number(offset) || 0), frames / sampleRate);
+    const startTime = Math.max(ctx.currentTime, Number(when) || 0);
+    const endTime = startTime + frames / sampleRate - skip;
+    source.start(startTime, skip);
+    let stopped = false;
+
+    return {
+      startTime,
+      endTime,
+      setVolume(value) {
+        const now = ctx.currentTime;
+        volumeGain.gain.cancelScheduledValues(now);
+        volumeGain.gain.setValueAtTime(clamp01(value), now);
+      },
+      fade(from, to, at, fadeSeconds = 0.01) {
+        const start = Math.max(ctx.currentTime, Number(at) || 0);
+        envelopeGain.gain.cancelScheduledValues(start);
+        envelopeGain.gain.setValueAtTime(clamp01(from), start);
+        envelopeGain.gain.linearRampToValueAtTime(
+          clamp01(to),
+          start + Math.max(0.001, fadeSeconds)
+        );
+      },
+      stop(fadeSeconds = 0.03) {
+        if (stopped) return;
+        stopped = true;
+        const now = ctx.currentTime;
+        // A short ramp instead of a hard stop, so cancelling mid-overlap
+        // never leaves a click at whatever sample the source was on.
+        envelopeGain.gain.cancelScheduledValues(now);
+        envelopeGain.gain.setTargetAtTime(0, now, Math.max(0.005, fadeSeconds / 3));
+        try {
+          source.stop(now + Math.max(0.01, fadeSeconds));
+        } catch {}
+      }
+    };
+  }
+
   function destroy() {
     if (!context) return;
     context.close().catch(() => {});
@@ -487,11 +597,14 @@ export function createAudioAnalyzer(options = {}) {
     currentTime,
     decodeAudio,
     destroy,
+    fadeVolume,
     measure,
+    playPcmBuffer,
     resume,
     samples,
     resetMixElement: mixer.resetElement,
     scheduleCrossfade: mixer.scheduleCrossfade,
+    setMixVolume,
     setNormalization,
     setVolume,
     spectrum

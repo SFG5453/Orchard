@@ -3,12 +3,21 @@ import { playlistPreviousState } from './playbackCollectionQueue.js';
 import { advanceToQueueEntry, rewindToHistoryEntry } from './queueLayout.js';
 import { reliablePlaybackDuration } from './playbackDuration.js';
 import { createSmartCrossfadeMixPresentation } from './smartCrossfadeMixPresentation.js';
+import {
+  WSOLA_PREPARE_LEAD_SECONDS,
+  WSOLA_START_LEAD_SECONDS,
+  wsolaProcessingCompatible
+} from '../../audio/crossfade/wsolaCrossfade.js';
 
 const LYRIC_AUTO_SCROLL_RESUME_DELAY_MS = 1800;
 
 function isUnavailableTrackError(error) {
   return /\b(?:unavailable|not available|no playable (?:audio |video )?format|video unavailable|private video|removed by uploader)\b/i
     .test(String(error?.message || error || ''));
+}
+
+export function queueAfterTransitionPromotion(queue = [], incomingTrackId = '') {
+  return queue.filter((track) => track?.id !== incomingTrackId);
 }
 
 export function playbackNeedsFreshStream(media, playbackError = '') {
@@ -45,9 +54,11 @@ export function installPlaybackControls(ctx) {
     );
   };
 
-  ctx.cancelActiveCrossfade = function cancelActiveCrossfade() {
-    const wasActive = Boolean(ctx.autoCrossfade?.isActive?.());
+  ctx.cancelActiveCrossfade = function cancelActiveCrossfade(reason = 'unspecified') {
+    const wasActive = Boolean(ctx.autoCrossfade?.isActive?.()) ||
+      Boolean(ctx.wsolaCrossfade?.isActive?.());
     ctx.autoCrossfade?.cancel?.();
+    ctx.wsolaCrossfade?.cancel?.(reason);
     if (ctx.smartCrossfadeMix?.value?.visible) ctx.dismissSmartCrossfadeMix();
     return wasActive;
   };
@@ -164,7 +175,7 @@ export function installPlaybackControls(ctx) {
       ctx.sendListeningPartyRequest({ action: ctx.isPlaying.value ? 'pause' : 'play' });
       return;
     }
-    ctx.cancelActiveCrossfade();
+    ctx.cancelActiveCrossfade('toggle-playback');
     const media = ctx.currentPlaybackElement();
     if (ctx.activeTrack.value && (!media?.src || playbackNeedsFreshStream(media, ctx.playbackError.value))) {
       ctx.playTrack(ctx.activeTrack.value, {
@@ -278,7 +289,7 @@ export function installPlaybackControls(ctx) {
 
   ctx.playNext = async function playNext(options = {}) {
     if (!options.fromListeningPartyRequest && !options.fromEnded && ctx.requestListeningPartyHostControl?.({ action: 'next' })) return;
-    ctx.cancelActiveCrossfade();
+    ctx.cancelActiveCrossfade('play-next');
     if (ctx.repeatMode.value === 'one' && ctx.activeTrack.value && !options.skipRepeatOne) {
       await ctx.playTrack(ctx.activeTrack.value, {
         mediaKind: ctx.activeMediaKind.value,
@@ -344,6 +355,153 @@ export function installPlaybackControls(ctx) {
     ctx.clearNextPreload();
   };
 
+  // Confirms the incoming track is preloaded on the standby element and
+  // returns its resolved stream, forcing the preload when the transition is
+  // imminent. Shared by both transition engines.
+  async function confirmNextPreload(next, toAudio) {
+    if (!ctx.preloadedTrackMatches(next) || !toAudio.src) {
+      const didPreload = await ctx.preloadNextTrack({ force: true });
+      if (!didPreload || !ctx.preloadedTrackMatches(next) || !toAudio.src) {
+        return null;
+      }
+    }
+    return ctx.nextTrackPreload.value?.resolved || null;
+  }
+
+  // Routes a smart-mode transition to the beat-matched WSOLA engine when the
+  // pairing qualifies. Returns 'started' when the engine took over, 'hold'
+  // while a viable plan is waiting on its render (the legacy engine must not
+  // fire its own, earlier overlap in the meantime), and 'fallback' when the
+  // pairing is refused or preparation failed.
+  async function maybeRunWsolaTransition({ next, fromAudio, toAudio, playbackTime, mediaDuration }) {
+    const engine = ctx.wsolaCrossfade;
+    if (!engine) return 'fallback';
+    // An overlap already playing must hold, never fall back: the rendered
+    // buffer already contains the incoming track, so letting the legacy engine
+    // start its own fade on the same standby element plays it a second time.
+    if (engine.isActive()) return 'hold';
+    const fromTrackId = ctx.activeTrack.value?.id;
+    const trackGains = ctx.audioEngineTrackGains?.value || {};
+    if (!wsolaProcessingCompatible({
+      normalizationEnabled: ctx.volumeNormalizationEnabled?.value,
+      audioEngineConfig: ctx.audioEngineConfig?.value,
+      outgoingGainDb: trackGains[fromTrackId],
+      incomingGainDb: trackGains[next.id]
+    })) {
+      return 'fallback';
+    }
+    const plan = engine.plan({
+      analysis: ctx.crossfadeAnalysis.value,
+      nextAnalysis: ctx.nextCrossfadeAnalysis.value,
+      duration: mediaDuration,
+      nextDuration: Number(next.durationSeconds) || 0
+    });
+    if (!plan.ok) return 'fallback';
+    if (engine.preparationStatus(fromTrackId, next.id) === 'failed') return 'fallback';
+
+    const untilStart = plan.transitionStart - playbackTime;
+    if (untilStart > WSOLA_START_LEAD_SECONDS) {
+      if (untilStart <= WSOLA_PREPARE_LEAD_SECONDS &&
+          engine.preparationStatus(fromTrackId, next.id) === 'idle') {
+        const fromUrl = fromAudio.currentSrc || fromAudio.src || '';
+        const toUrl = ctx.nextTrackPreload.value?.resolved?.streamUrl || '';
+        if (fromUrl && toUrl) {
+          void engine.prepare({ fromTrackId, toTrackId: next.id, fromUrl, toUrl, plan });
+        } else if (!toUrl) {
+          void ctx.preloadNextTrack();
+        }
+      }
+      return 'hold';
+    }
+    if (engine.preparationStatus(fromTrackId, next.id) !== 'ready') {
+      return untilStart > -0.2 ? 'hold' : 'fallback';
+    }
+
+    const resolved = await confirmNextPreload(next, toAudio);
+    if (!resolved) return 'fallback';
+    // Start against the plan the buffer was rendered with; a fresher plan may
+    // have shifted after metadata enrichment and would misplace the downbeats.
+    const prepared = engine.preparedTransition(fromTrackId, next.id);
+    if (!prepared) return 'fallback';
+    const previousTrack = ctx.activeTrack.value;
+    const nextTrack = ctx.activeTrackFromResolved(next, resolved);
+    const nextDeck = ctx.activeAudioDeck.value === 'main' ? 'next' : 'main';
+    const transition = {
+      transitionStart: prepared.plan.transitionStart,
+      transitionEnd: prepared.plan.transitionEnd,
+      fadeSeconds: prepared.plan.overlapSeconds,
+      transitionStyle: 'wsola_blend',
+      incomingCueTime: prepared.plan.incomingCueTime,
+      incomingPlaybackRate: 1,
+      reason: 'wsola-beat-match'
+    };
+    ctx.showSmartCrossfadeMix({
+      fromTrack: previousTrack,
+      toTrack: nextTrack,
+      transition,
+      analysis: ctx.crossfadeAnalysis.value,
+      nextAnalysis: ctx.nextCrossfadeAnalysis.value
+    });
+
+    const didStart = await engine.start({
+      fromAudio,
+      toAudio,
+      plan: prepared.plan,
+      render: prepared.render,
+      volume: ctx.volume.value,
+      onPromote: () => {
+        const nextQueue = queueAfterTransitionPromotion(ctx.queue.value, next.id);
+        ctx.finishYouTubeHistory?.();
+        ctx.markPlaylistTrackPlayed?.(previousTrack);
+        if (previousTrack?.id) {
+          ctx.history.value.unshift(previousTrack);
+          ctx.history.value = ctx.history.value.slice(0, 30);
+        }
+        ctx.nextPreloadRequest += 1;
+        ctx.nextTrackPreload.value = null;
+        ctx.activeAudioDeck.value = nextDeck;
+        ctx.activeTrack.value = nextTrack;
+        ctx.startYouTubeHistory?.(nextTrack.youtubeVideoId || nextTrack.id);
+        ctx.promoteCrossfadeAnalysis(nextTrack.id);
+        if (ctx.crossfadeAnalysis.value.status !== 'ready') {
+          void ctx.analyzeCurrentCrossfadeTrack(nextTrack, resolved.streamUrl, nextTrack.durationSeconds || 0);
+        }
+        ctx.queue.value = nextQueue;
+        if (ctx.shuffleEnabled.value && ctx.shuffleSourceQueue.value.length) {
+          ctx.shuffleSourceQueue.value = ctx.shuffleSourceQueue.value.filter((track) => track.id !== nextTrack.id);
+        }
+        void ctx.refillPlaylistQueue?.();
+        ctx.currentTime.value = toAudio.currentTime || 0;
+        ctx.seekPosition.value = ctx.currentTime.value;
+        ctx.duration.value = reliablePlaybackDuration(ctx, toAudio, nextTrack);
+        ctx.buffering.value = false;
+        ctx.isPlaying.value = true;
+        ctx.recordSessionEvent?.('crossfade', nextTrack, {
+          fromTrack: previousTrack,
+          queue: nextQueue,
+          transitionMode: ctx.crossfadeMode.value,
+          transitionReason: transition.reason,
+          transitionStyle: transition.transitionStyle,
+          progressSeconds: ctx.currentTime.value,
+          durationSeconds: ctx.duration.value
+        });
+      },
+      onComplete: () => {
+        ctx.clearAudioElement(fromAudio);
+        void ctx.preloadNextTrack();
+      },
+      onError: (error) => {
+        ctx.dismissSmartCrossfadeMix();
+        ctx.playbackError.value = error.message;
+      }
+    });
+    if (!didStart) {
+      ctx.dismissSmartCrossfadeMix();
+      return 'fallback';
+    }
+    return 'started';
+  }
+
   ctx.maybeStartAutoCrossfade = async function maybeStartAutoCrossfade(options = {}) {
     if (!ctx.crossfadeEnabled.value) return false;
     if (ctx.sleepTimerMode.value === 'end-track' || ctx.sleepTimerVolumeFactor.value < 1) {
@@ -351,6 +509,9 @@ export function installPlaybackControls(ctx) {
     }
     if (ctx.repeatMode.value === 'one') return false;
     if (ctx.activeTrackIsVideo.value) return false;
+    // Covers the forced end-of-track handoff too: only one engine may ever own
+    // the standby element, or the incoming track is heard from both.
+    if (ctx.wsolaCrossfade?.isActive?.()) return false;
 
     const next = ctx.queue.value[0];
     const fromAudio = ctx.currentAudio();
@@ -361,6 +522,20 @@ export function installPlaybackControls(ctx) {
     }
     const mediaCurrentTime = Number(fromAudio.currentTime);
     const mediaDuration = reliablePlaybackDuration(ctx, fromAudio);
+
+    if (!options.force && ctx.crossfadeMode.value === 'smart' &&
+        ctx.isPlaying.value && !ctx.isSeeking.value && !ctx.autoCrossfade.isActive()) {
+      const routed = await maybeRunWsolaTransition({
+        next,
+        fromAudio,
+        toAudio,
+        playbackTime: Number.isFinite(mediaCurrentTime) ? mediaCurrentTime : ctx.currentTime.value,
+        mediaDuration
+      });
+      if (routed === 'started') return true;
+      if (routed === 'hold') return false;
+    }
+
     const forceFadeSeconds = options.reason === 'ended-handoff'
       ? 0.05
       : Math.min(1, ctx.crossfadeSeconds.value || 1);
@@ -393,7 +568,6 @@ export function installPlaybackControls(ctx) {
 
     const previousTrack = ctx.activeTrack.value;
     const nextTrack = ctx.activeTrackFromResolved(next, resolved);
-    const nextQueue = ctx.queue.value.slice(1);
     const nextDeck = ctx.activeAudioDeck.value === 'main' ? 'next' : 'main';
     const showSmartMix = ctx.crossfadeMode.value === 'smart' &&
       !options.force &&
@@ -415,6 +589,7 @@ export function installPlaybackControls(ctx) {
       transition,
       volume: ctx.volume.value,
       onPromote: () => {
+        const nextQueue = queueAfterTransitionPromotion(ctx.queue.value, next.id);
         ctx.finishYouTubeHistory?.();
         ctx.markPlaylistTrackPlayed?.(previousTrack);
         if (previousTrack?.id) {
@@ -476,7 +651,7 @@ export function installPlaybackControls(ctx) {
 
   ctx.playPrevious = function playPrevious(options = {}) {
     if (!options.fromListeningPartyRequest && ctx.requestListeningPartyHostControl?.({ action: 'previous' })) return;
-    ctx.cancelActiveCrossfade();
+    ctx.cancelActiveCrossfade('play-previous');
     const playlistContext = ctx.playbackPlaylistContext.value;
     if (playlistContext && !ctx.shuffleEnabled.value && !playlistContext.shuffled) {
       const { activeIndex, previousTrack } = playlistPreviousState(playlistContext.allTracks, ctx.activeTrack.value?.id);
@@ -538,7 +713,7 @@ export function installPlaybackControls(ctx) {
       ctx.sendListeningPartyRequest({ action: 'seek', currentTime: Number(value) || 0 });
       return;
     }
-    ctx.cancelActiveCrossfade();
+    ctx.cancelActiveCrossfade('seek');
     const media = ctx.currentPlaybackElement();
     if (!media || !ctx.duration.value || ctx.activeTrackIsLive.value) return;
     const target = Math.max(0, Math.min(Number(value) || 0, ctx.duration.value));

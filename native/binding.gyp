@@ -5,7 +5,9 @@
       "sources": [
         "binding/addon.cpp",
         "analyzer/audio_analysis.cpp",
-        "analyzer/tempo_analysis.cpp"
+        "analyzer/tempo_analysis.cpp",
+        "transition/wsola.cpp",
+        "transition/transition_render.cpp"
       ],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")"

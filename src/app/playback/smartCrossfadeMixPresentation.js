@@ -6,7 +6,8 @@ const STYLE_LABELS = {
   dj_filter: 'Filter mix',
   dj_switch: 'Phrase switch',
   equal_power: 'Smart fade',
-  gapless: 'Gapless handoff'
+  gapless: 'Gapless handoff',
+  wsola_blend: 'Beat-matched mix'
 };
 
 function clamp(value, min, max) {

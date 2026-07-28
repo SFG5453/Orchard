@@ -7,9 +7,15 @@ import {
 
 function playbackContext() {
   const ctx = {
+    autoCrossfade: { isActive: () => false },
     isPlayableTrack: (item) => Boolean(item?.id),
+    nextPreloadRequest: 0,
+    nextTrackPreload: { value: null },
+    resetNextCrossfadeAnalysis() {},
+    standbyAudio: () => null,
     supportedAudioMimes: () => [],
-    supportedVideoMimes: () => []
+    supportedVideoMimes: () => [],
+    wsolaCrossfade: { isActive: () => false }
   };
   installPlaybackResolve(ctx);
   return ctx;
@@ -30,6 +36,35 @@ test('resolves an established music-video fallback by its video ID', () => {
   assert.equal(payload.originalVideoId, 'song-id');
   assert.equal(payload.musicVideoAudioFallback, true);
   assert.equal(payload.fallbackTargetDurationSeconds, 180);
+});
+
+test('does not clear the transition-owned standby deck during a WSOLA overlap', () => {
+  const ctx = playbackContext();
+  const preload = {
+    track: { id: 'incoming' },
+    resolved: { streamUrl: 'https://example.test/incoming' }
+  };
+  let cleared = 0;
+  ctx.nextTrackPreload.value = preload;
+  ctx.standbyAudio = () => ({});
+  ctx.clearAudioElement = () => {
+    cleared += 1;
+  };
+  ctx.wsolaCrossfade.isActive = () => true;
+
+  assert.equal(ctx.clearNextPreload({ force: true }), false);
+  assert.equal(ctx.nextTrackPreload.value, preload);
+  assert.equal(ctx.nextPreloadRequest, 0);
+  assert.equal(cleared, 0);
+});
+
+test('does not replace the transition-owned standby source after a queue edit', async () => {
+  const ctx = playbackContext();
+  ctx.queue = { value: [{ id: 'new-queue-head' }] };
+  ctx.wsolaCrossfade.isActive = () => true;
+
+  assert.equal(await ctx.preloadNextTrack({ force: true }), false);
+  assert.equal(ctx.nextPreloadRequest, 0);
 });
 
 test('keeps song identity while preserving resolved fallback stream metadata', () => {
