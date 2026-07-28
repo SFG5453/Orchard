@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const require = createRequire(import.meta.url);
 const native = require('../native/build/Release/orchard_audio_analysis.node');
+const { AUDIO_ANALYSIS_VERSION } = await import('../shared/audioAnalysis.js');
 
 function syntheticTrack({ bpm = 120, duration = 48, sampleRate = 11025 } = {}) {
   const samples = new Float32Array(Math.floor(duration * sampleRate));
@@ -28,7 +29,7 @@ test('native analyzer returns transition-ready musical features', async () => {
   const track = syntheticTrack();
   const result = await native.analyze(track.samples, track.sampleRate, track.duration);
 
-  assert.equal(result.analysisVersion, 7);
+  assert.equal(result.analysisVersion, AUDIO_ANALYSIS_VERSION);
   assert.ok(result.bpm >= 110 && result.bpm <= 130, `unexpected BPM: ${result.bpm}`);
   assert.ok(result.beatConfidence > 0);
   assert.ok(result.beats.length > 60);

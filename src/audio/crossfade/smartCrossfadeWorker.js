@@ -372,7 +372,7 @@ self.onmessage = (event) => {
       vocalActivityMask.push(0.5);
     }
     const result = {
-      analysisVersion: 7,
+      analysisVersion: 8,
       duration,
       ...baseAnalysis,
       energyCurve,

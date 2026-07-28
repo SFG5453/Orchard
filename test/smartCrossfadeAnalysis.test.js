@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createSmartCrossfadeAnalyzer } from '../src/audio/crossfade/smartCrossfadeAnalysis.js';
+import { AUDIO_ANALYSIS_VERSION } from '../shared/audioAnalysis.js';
 
 function validAnalysis(overrides = {}) {
   return {
-    analysisVersion: 7,
+    analysisVersion: AUDIO_ANALYSIS_VERSION,
     duration: 120,
     bpm: 120,
     beatInterval: 0.5,
@@ -69,7 +70,7 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 test('smart crossfade reads persistent cache before checking native availability', async () => {
   const stored = {
-    analysisVersion: 7,
+    analysisVersion: AUDIO_ANALYSIS_VERSION,
     duration: 240,
     bpm: 120,
     beatInterval: 0.5,

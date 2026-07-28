@@ -18,7 +18,7 @@ namespace {
 
 // This is part of the persisted cache/result contract; bump it when numerical
 // semantics or the exported object shape become incompatible.
-constexpr int kAnalysisVersion = 7;
+constexpr int kAnalysisVersion = 8;
 
 // Stable cache output uses four decimal places to keep stored JSON compact.
 double Compact(double value) {

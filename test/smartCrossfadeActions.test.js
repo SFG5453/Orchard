@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { installSmartCrossfadeActions } from '../src/app/playback/smartCrossfadeActions.js';
+import { AUDIO_ANALYSIS_VERSION } from '../shared/audioAnalysis.js';
 
 function localAnalysis() {
   return {
-    analysisVersion: 7,
+    analysisVersion: AUDIO_ANALYSIS_VERSION,
     duration: 180,
     bpm: 123,
     analyzedBpm: 123,

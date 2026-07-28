@@ -276,12 +276,32 @@ double DownbeatAtOrBefore(const std::vector<double>& downbeats, double target, d
 // Sparse 4096-point Hann frames feed chroma templates and broad spectral bands.
 // FFT power is log-compressed before aggregation; chroma is sum-normalized and
 // the vocal value is a bounded spectral heuristic rather than a classifier.
+// Band ratios and flatness to a probability that a voice is present. Shared by
+// the per-frame curve and the track-wide summary so the two cannot drift.
+//
+// Compress spectral power before comparing bands. Raw FFT power lets kick
+// drums and bass overwhelm the much wider voice band, which made vocal-led
+// tracks look instrumental. Flatness adds a small boost for speech-like
+// broadband detail without making it the primary signal.
+double VocalProbabilityFrom(double low, double vocal, double high, double flatness) {
+  const double total = low + vocal + high;
+  const double mid_ratio = vocal / std::max(1e-12, total);
+  const double low_ratio = low / std::max(1e-12, total);
+  const double score = -2.4 + 5.2 * mid_ratio - 0.8 * low_ratio + 0.6 * flatness;
+  return Clamp(1.0 / (1.0 + std::exp(-score)), 0, 1);
+}
+
+// `vocal_frames` receives one probability per accepted frame, which is what
+// makes vocal activity a curve rather than a single number for the whole
+// track. A transition needs to know whether a voice is present *at the
+// overlap*, not whether the track has singing in it somewhere.
 void AnalyzeKeyAndTimbre(
   const std::vector<float>& samples,
   double sample_rate,
   double start_time,
   double end_time,
-  AnalysisResult& result
+  AnalysisResult& result,
+  std::vector<EnergyPoint>& vocal_frames
 ) {
   constexpr size_t frame_size = 4096;
   const size_t hop_size = std::max<size_t>(frame_size, sample_rate * 0.65);
@@ -312,18 +332,21 @@ void AnalyzeKeyAndTimbre(
     double log_sum = 0;
     double arithmetic_sum = 0;
     size_t flatness_bins = 0;
+    double frame_low = 0;
+    double frame_vocal = 0;
+    double frame_high = 0;
     for (size_t bin = 1; bin < frame_size / 2; ++bin) {
       const double frequency = bin * sample_rate / frame_size;
       if (frequency < 45 || frequency > std::min(5000.0, sample_rate * 0.48)) continue;
       const double power = std::norm(spectrum[bin]);
       const double perceptual_power = std::log1p(power);
-      if (frequency < 250) low_energy += perceptual_power;
+      if (frequency < 250) frame_low += perceptual_power;
       else if (frequency <= 4000) {
-        vocal_energy += perceptual_power;
+        frame_vocal += perceptual_power;
         log_sum += std::log(std::max(1e-12, power));
         arithmetic_sum += power;
         ++flatness_bins;
-      } else high_energy += perceptual_power;
+      } else frame_high += perceptual_power;
       if (frequency > 5000) continue;
       const int midi = static_cast<int>(std::round(69.0 + 12.0 * std::log2(frequency / 440.0)));
       const int pitch_class = (midi % 12 + 12) % 12;
@@ -331,9 +354,17 @@ void AnalyzeKeyAndTimbre(
       chroma[pitch_class] += weight * rms;
       frame_chroma += weight;
     }
-    if (flatness_bins && arithmetic_sum > 0) {
-      flatness_total += std::exp(log_sum / flatness_bins) / (arithmetic_sum / flatness_bins);
-    }
+    const double frame_flatness = flatness_bins && arithmetic_sum > 0
+      ? std::exp(log_sum / flatness_bins) / (arithmetic_sum / flatness_bins)
+      : 0.0;
+    flatness_total += frame_flatness;
+    low_energy += frame_low;
+    vocal_energy += frame_vocal;
+    high_energy += frame_high;
+    vocal_frames.push_back({
+      (start + frame_size / 2.0) / sample_rate,
+      VocalProbabilityFrom(frame_low, frame_vocal, frame_high, frame_flatness)
+    });
     chroma_weight += std::max(1e-9, frame_chroma * rms);
     ++accepted_frames;
   }
@@ -370,16 +401,15 @@ void AnalyzeKeyAndTimbre(
     );
   }
 
-  const double total_spectral = low_energy + vocal_energy + high_energy;
-  const double mid_ratio = vocal_energy / std::max(1e-12, total_spectral);
-  const double low_ratio = low_energy / std::max(1e-12, total_spectral);
-  const double flatness = flatness_total / std::max<size_t>(1, accepted_frames);
-  // Compress spectral power before comparing bands. Raw FFT power lets kick
-  // drums and bass overwhelm the much wider voice band, which made vocal-led
-  // tracks look instrumental. Flatness adds a small boost for speech-like
-  // broadband detail without making it the primary signal.
-  const double vocal_score = -2.4 + 5.2 * mid_ratio - 0.8 * low_ratio + 0.6 * flatness;
-  result.vocal_probability = Clamp(1.0 / (1.0 + std::exp(-vocal_score)), 0, 1);
+  // The track-wide summary keeps its existing meaning -- the same logistic over
+  // whole-track band totals -- so callers that only want "is this a vocal
+  // track" are unaffected by the per-frame curve.
+  result.vocal_probability = VocalProbabilityFrom(
+    low_energy,
+    vocal_energy,
+    high_energy,
+    flatness_total / std::max<size_t>(1, accepted_frames)
+  );
 }
 
 // Models 4/4 music in eight-bar (32-beat) phrases and snaps transition cues to
@@ -576,10 +606,33 @@ AnalysisResult AnalyzeAudio(
     result.mid_energy_curve.push_back({time, norm * 1.0});
     result.high_energy_curve.push_back({time, norm * 0.7});
   }
-  AnalyzeKeyAndTimbre(samples, sample_rate, envelope.audible_start, envelope.content_end, result);
-  for (size_t index = 0; index < result.energy_curve.size(); ++index) {
-    const double energy = result.energy_curve[index].energy;
-    result.vocal_activity_mask.push_back(Clamp(result.vocal_probability * (energy > 0.25 ? 1.0 : 0.3), 0, 1));
+  std::vector<EnergyPoint> vocal_frames;
+  AnalyzeKeyAndTimbre(
+    samples,
+    sample_rate,
+    envelope.audible_start,
+    envelope.content_end,
+    result,
+    vocal_frames
+  );
+  // The mask stays parallel to energy_curve -- callers index the two together --
+  // so the analysis frames are resampled onto that grid rather than shipped on
+  // their own. Frames are ~0.65s apart and the curve is ~1s, so nearest-frame
+  // is close enough; silence keeps the loudness gate so a quiet passage cannot
+  // read as singing on spectral shape alone.
+  size_t frame_cursor = 0;
+  for (const EnergyPoint& point : result.energy_curve) {
+    while (frame_cursor + 1 < vocal_frames.size() &&
+           std::abs(vocal_frames[frame_cursor + 1].time - point.time) <
+             std::abs(vocal_frames[frame_cursor].time - point.time)) {
+      ++frame_cursor;
+    }
+    const double probability = vocal_frames.empty()
+      ? result.vocal_probability
+      : vocal_frames[frame_cursor].energy;
+    result.vocal_activity_mask.push_back(
+      Clamp(probability * (point.energy > 0.25 ? 1.0 : 0.3), 0, 1)
+    );
   }
   BuildStructure(envelope, result);
   return result;

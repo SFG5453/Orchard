@@ -1,4 +1,7 @@
-export const AUDIO_ANALYSIS_VERSION = 7;
+// 8: vocalActivityMask became a real per-frame curve. Version 7 entries carry
+// the old track-wide scalar gated by loudness, which reads as plausible data
+// but says nothing about any particular moment, so they must not be reused.
+export const AUDIO_ANALYSIS_VERSION = 8;
 export const MIN_LOCAL_BPM = 40;
 export const MAX_LOCAL_BPM = 240;
 

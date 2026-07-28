@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { setupAudioAnalysisService } from '../electron/audio/audioAnalysisService.js';
+import { AUDIO_ANALYSIS_VERSION } from '../shared/audioAnalysis.js';
 
 function fakeIpcMain() {
   const handlers = new Map();
@@ -50,7 +51,7 @@ test('audio analysis service caches native results across service restarts', asy
       sampleRate: audio.sampleRate,
       samples: audio.samples.buffer
     });
-    assert.equal(analyzed.analysisVersion, 7);
+    assert.equal(analyzed.analysisVersion, AUDIO_ANALYSIS_VERSION);
 
     const memoryHit = await firstIpc.invoke('audio-analysis:analyze', { trackId: 'cached-track' });
     assert.deepEqual(memoryHit, analyzed);
@@ -76,7 +77,7 @@ test('audio analysis service retries a native addon that was unavailable at star
   const cachePath = path.join(directory, 'cache.json');
   const ipc = fakeIpcMain();
   const expected = {
-    analysisVersion: 7,
+    analysisVersion: AUDIO_ANALYSIS_VERSION,
     duration: 8,
     bpm: 120,
     beatInterval: 0.5,
@@ -94,7 +95,7 @@ test('audio analysis service retries a native addon that was unavailable at star
     loadNativeAddon() {
       loadAttempts += 1;
       if (loadAttempts === 1) throw new Error('Native module is not ready yet');
-      return { analysisVersion: 7, analyze: async () => expected };
+      return { analysisVersion: AUDIO_ANALYSIS_VERSION, analyze: async () => expected };
     },
     logger: (event, details) => logs.push({ event, details })
   });
@@ -127,7 +128,7 @@ test('audio analysis service persists worker fallback results across restarts', 
   const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-worker-'));
   const cachePath = path.join(directory, 'cache.json');
   const result = {
-    analysisVersion: 7,
+    analysisVersion: AUDIO_ANALYSIS_VERSION,
     duration: 200,
     bpm: 118,
     beatInterval: 60 / 118,
@@ -182,11 +183,11 @@ test('audio analysis service rejects invalid BPM and redacts sensitive diagnosti
   try {
     await assert.rejects(ipc.invoke('audio-analysis:store', {
       trackId: 'invalid',
-      result: { analysisVersion: 7, duration: 10, bpm: 0, beatInterval: 0 }
+      result: { analysisVersion: AUDIO_ANALYSIS_VERSION, duration: 10, bpm: 0, beatInterval: 0 }
     }), /complete local audio analysis/i);
     await assert.rejects(ipc.invoke('audio-analysis:store', {
       trackId: 'incomplete',
-      result: { analysisVersion: 7, duration: 10, bpm: 120, beatInterval: 0.5 }
+      result: { analysisVersion: AUDIO_ANALYSIS_VERSION, duration: 10, bpm: 120, beatInterval: 0.5 }
     }), /complete local audio analysis/i);
     assert.equal(await ipc.invoke('audio-analysis:get', 'invalid'), null);
 
