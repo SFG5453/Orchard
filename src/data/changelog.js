@@ -27,6 +27,14 @@ export const ORCHARD_RELEASES = [
         title: 'Maintenance',
         items: [
           'Updated Quasar to 2.23.2.'
+    version: '3.2.3',
+    codename: 'Diffracted Undoes',
+    date: 'July 28, 2026',
+    sections: [
+      {
+        title: 'Fixed',
+        items: [
+          'Beta channel updates could fail to download on Windows with a "Cannot download" error after opting in from Settings; update packages are now published with consistent, GitHub-safe names so beta releases install correctly.'
         ]
       }
     ]
