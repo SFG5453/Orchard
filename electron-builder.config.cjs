@@ -8,6 +8,12 @@ module.exports = {
     provider: 'generic',
     url: updateUrl
   },
+  // Beta versions carry a semver prerelease suffix (e.g. 4.0.0-beta.1). electron-builder
+  // otherwise infers an update "channel" from that suffix and names manifests beta.yml /
+  // beta-mac.yml / beta-linux.yml instead of latest*.yml. Beta vs. stable here is decided
+  // by publish destination (GitHub Release vs. R2), not by manifest channel, so keep the
+  // filenames constant across both.
+  detectUpdateChannel: false,
   releaseInfo: {
     releaseNotesFile: 'build/release-notes.md'
   },
@@ -57,6 +63,11 @@ module.exports = {
   },
   win: {
     target: ['nsis'],
-    icon: 'build/icon.ico'
+    icon: 'build/icon.ico',
+    // Default NSIS naming ("Orchard Setup 4.0.0.exe") contains spaces. GitHub Releases
+    // silently rewrites spaces to dots on upload, which desyncs the filename from what's
+    // recorded in latest.yml and breaks electron-updater downloads (404). R2 never
+    // rewrites uploaded filenames, so this only surfaced for GitHub-published beta builds.
+    artifactName: '${productName}-Setup-${version}.${ext}'
   }
 };
