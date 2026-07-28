@@ -15,6 +15,10 @@ const DEFAULT_UPDATE_URL = 'https://downloads.sfg545.dev/orchard/';
 const DEFAULT_ARTIST_PACK_INDEX_URL = 'https://artist-packs.sfg545.dev/v1/index.json';
 const { UPDATES } = IPC_CHANNELS;
 const ARTIST_PACK_MAX_BYTES = 50 * 1024 * 1024;
+const GITHUB_OWNER = 'sfg5453';
+const GITHUB_REPO = 'orchard';
+const UPDATE_CHANNELS = ['stable', 'beta'];
+const DEFAULT_UPDATE_CHANNEL = 'stable';
 
 function normalizeUpdateUrl(value) {
   const fallback = DEFAULT_UPDATE_URL;
@@ -63,6 +67,32 @@ function cleanReleaseNotes(releaseNotes) {
     .flatMap((entry) => typeof entry === 'string' ? entry.split(/\r?\n/) : [entry?.note])
     .map((entry) => String(entry || '').trim())
     .filter(Boolean);
+}
+
+function updatePreferencesPath() {
+  return path.join(app.getPath('userData'), 'update-preferences.json');
+}
+
+async function readUpdateChannel() {
+  try {
+    const parsed = JSON.parse(await readFile(updatePreferencesPath(), 'utf8'));
+    return UPDATE_CHANNELS.includes(parsed?.channel) ? parsed.channel : DEFAULT_UPDATE_CHANNEL;
+  } catch {
+    return DEFAULT_UPDATE_CHANNEL;
+  }
+}
+
+async function writeUpdateChannel(channel) {
+  await writeFile(updatePreferencesPath(), JSON.stringify({ channel }, null, 2));
+}
+
+function applyUpdateChannel(channel, updateUrl) {
+  autoUpdater.allowPrerelease = channel === 'beta';
+  autoUpdater.setFeedURL(
+    channel === 'beta'
+      ? { provider: 'github', owner: GITHUB_OWNER, repo: GITHUB_REPO }
+      : { provider: 'generic', url: updateUrl }
+  );
 }
 
 function contentStorePaths() {
@@ -217,6 +247,7 @@ export function setupOrchardUpdates({ isDev }) {
     message: enabled ? 'Updates are ready.' : disabledMessage,
     version: app.getVersion(),
     updateUrl,
+    channel: DEFAULT_UPDATE_CHANNEL,
     availableVersion: '',
     releaseDate: '',
     releaseNotes: [],
@@ -257,11 +288,20 @@ export function setupOrchardUpdates({ isDev }) {
     });
   }
 
+  let channelReady = enabled
+    ? readUpdateChannel().then((channel) => {
+      state = { ...state, channel };
+      applyUpdateChannel(channel, updateUrl);
+      return channel;
+    })
+    : Promise.resolve(state.channel);
+
   function runCheckForUpdates() {
     if (!enabled) return state;
     if (checkPromise) return checkPromise;
 
-    checkPromise = autoUpdater.checkForUpdates()
+    checkPromise = channelReady
+      .then(() => autoUpdater.checkForUpdates())
       .then(() => state)
       .catch((error) => publish({
         status: 'error',
@@ -274,6 +314,16 @@ export function setupOrchardUpdates({ isDev }) {
       });
 
     return checkPromise;
+  }
+
+  async function setUpdateChannel(channel) {
+    if (!enabled || !UPDATE_CHANNELS.includes(channel)) return state;
+
+    await channelReady;
+    await writeUpdateChannel(channel);
+    applyUpdateChannel(channel, updateUrl);
+    publish({ channel });
+    return runCheckForUpdates();
   }
 
   async function importUserArtistPack() {
@@ -413,6 +463,8 @@ export function setupOrchardUpdates({ isDev }) {
     return state;
   });
 
+  ipcMain.handle(UPDATES.SET_CHANNEL, (_event, channel) => setUpdateChannel(channel));
+
   if (!enabled) {
     return {
       checkForUpdates: () => state,
@@ -424,7 +476,6 @@ export function setupOrchardUpdates({ isDev }) {
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.setFeedURL({ provider: 'generic', url: updateUrl });
 
   autoUpdater.on('checking-for-update', () => {
     publish({

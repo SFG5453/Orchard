@@ -31,7 +31,7 @@ export default {
           </div>
           <div>
             <dt>Source</dt>
-            <dd>{{ updateState.updateUrl ? 'Release channel' : 'Not configured' }}</dd>
+            <dd>{{ updateChannelIsBeta ? 'Beta channel (GitHub)' : (updateState.updateUrl ? 'Release channel' : 'Not configured') }}</dd>
           </div>
         </dl>
 

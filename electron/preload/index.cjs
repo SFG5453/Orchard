@@ -101,6 +101,7 @@ contextBridge.exposeInMainWorld('orchardUpdates', {
   getUserArtistPacks: () => ipcRenderer.invoke('updates:get-user-artist-packs'),
   readArtistPackArchive: (archiveUrl) => ipcRenderer.invoke('updates:read-artist-pack-archive', archiveUrl),
   install: () => ipcRenderer.invoke('updates:install'),
+  setChannel: (channel) => ipcRenderer.invoke('updates:set-channel', channel),
   onState: (callback) => {
     if (typeof callback !== 'function') return () => {};
 

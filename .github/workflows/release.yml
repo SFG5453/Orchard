@@ -1,4 +1,4 @@
-name: R2 Release
+name: Release
 
 on:
   push:
@@ -30,6 +30,7 @@ jobs:
     outputs:
       tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.release.outputs.version }}
+      is_beta: ${{ steps.release.outputs.is_beta }}
     steps:
       - name: Check out release tag
         uses: actions/checkout@v6
@@ -63,6 +64,12 @@ jobs:
           git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}"
           echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          is_beta="false"
+          case "$version" in
+            *-*) is_beta="true" ;;
+          esac
+          echo "is_beta=$is_beta" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: npm ci
@@ -291,6 +298,7 @@ jobs:
       - build-arch
       - build-windows
       - build-macos
+    if: needs.prepare.outputs.is_beta != 'true'
     runs-on: ubuntu-24.04
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -356,3 +364,61 @@ jobs:
               --content-type application/yaml \
               --cache-control no-cache
           done
+
+  publish-github-beta:
+    name: Publish beta to GitHub Releases
+    needs:
+      - prepare
+      - build-linux
+      - build-arch
+      - build-windows
+      - build-macos
+    if: needs.prepare.outputs.is_beta == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Merge macOS update metadata
+        run: |
+          set -euo pipefail
+          node scripts/merge-macos-update-metadata.mjs \
+            release-assets/latest-mac-x64.yml \
+            release-assets/latest-mac-arm64.yml \
+            release-assets/latest-mac.yml
+          rm release-assets/latest-mac-x64.yml release-assets/latest-mac-arm64.yml
+
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          test -n "$(find release-assets -maxdepth 1 -type f -print -quit)"
+          (
+            cd release-assets
+            find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 \
+              | sort -z \
+              | xargs -0 sha256sum > SHA256SUMS.txt
+          )
+          cat release-assets/SHA256SUMS.txt
+
+      - name: Create GitHub prerelease
+        run: |
+          set -euo pipefail
+          test -n "$(find release-assets -maxdepth 1 -type f -print -quit)"
+          gh release create "${{ needs.prepare.outputs.tag }}" release-assets/* \
+            --repo "${{ github.repository }}" \
+            --title "Orchard ${{ needs.prepare.outputs.version }} (beta)" \
+            --notes-file build/release-notes.md \
+            --prerelease

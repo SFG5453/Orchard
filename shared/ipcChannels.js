@@ -65,6 +65,7 @@ export const IPC_CHANNELS = Object.freeze({
     IMPORT_ARTIST_PACK: 'updates:import-artist-pack',
     INSTALL: 'updates:install',
     READ_ARTIST_PACK_ARCHIVE: 'updates:read-artist-pack-archive',
+    SET_CHANNEL: 'updates:set-channel',
     STATE: 'updates:state'
   }),
   WINDOW: Object.freeze({
