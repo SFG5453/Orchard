@@ -102,7 +102,7 @@ test('playing the track just before the current one matches skipping back once',
   assert.equal(rewindToHistoryEntry({ history: [], activeTrack: track('current'), historyIndex: 0 }), null);
 });
 
-test('jumping ahead keeps the skipped tracks as history instead of dropping them', () => {
+test('jumping ahead records only the track that was actually playing', () => {
   const next = advanceToQueueEntry({
     history: [track('played')],
     activeTrack: track('current'),
@@ -112,7 +112,7 @@ test('jumping ahead keeps the skipped tracks as history instead of dropping them
 
   assert.equal(next.track.id, 'next-3');
   assert.deepEqual(ids(next.queue), []);
-  assert.deepEqual(ids(next.history), ['next-2', 'next-1', 'current', 'played']);
+  assert.deepEqual(ids(next.history), ['current', 'played']);
   assert.equal(advanceToQueueEntry({ queue: [], queueIndex: 0 }), null);
 });
 
@@ -125,7 +125,7 @@ test('jumping ahead keeps history within the stored limit', () => {
   });
 
   assert.equal(next.history.length, 30);
-  assert.deepEqual(ids(next.history).slice(0, 5), ['next-3', 'next-2', 'next-1', 'next-0', 'current']);
+  assert.deepEqual(ids(next.history).slice(0, 5), ['current', 'played-0', 'played-1', 'played-2', 'played-3']);
 });
 
 test('the continuous queue plays an earlier track without recording it as history', () => {
@@ -146,7 +146,7 @@ test('the continuous queue plays an earlier track without recording it as histor
   assert.equal(played[0].options.sessionAction, 'previous');
 });
 
-test('the continuous queue plays a queued track and keeps the skipped ones above it', () => {
+test('the continuous queue plays a queued track without adding skipped tracks to history', () => {
   const { ctx, played } = controlsContext({
     history: [],
     activeTrack: track('current'),
@@ -156,7 +156,7 @@ test('the continuous queue plays a queued track and keeps the skipped ones above
   ctx.playContinuousQueueEntry({ section: 'next', queueIndex: 1, track: track('next-2') });
 
   assert.deepEqual(ids(ctx.queue.value), []);
-  assert.deepEqual(ids(ctx.history.value), ['next-1', 'current']);
+  assert.deepEqual(ids(ctx.history.value), ['current']);
   assert.equal(played[0].item.id, 'next-2');
   assert.equal(played[0].options.sessionAction, 'manual');
 });
@@ -179,7 +179,13 @@ test('the continuous queue restarts the current track and defers to a listening 
   ctx.playContinuousQueueEntry({ section: 'next', queueIndex: 0, track: track('queued') });
 
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].track.id, 'queued');
+  assert.deepEqual(requests[0], {
+    action: 'play-continuous-entry',
+    section: 'next',
+    historyIndex: undefined,
+    queueIndex: 0,
+    trackId: 'queued'
+  });
   assert.deepEqual(ids(ctx.queue.value), ['queued']);
   assert.deepEqual(ids(ctx.history.value), ['played']);
   assert.equal(played.length, 1);

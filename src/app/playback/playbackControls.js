@@ -211,16 +211,18 @@ export function installPlaybackControls(ctx) {
     return 'Next up';
   };
 
-  ctx.playContinuousQueueEntry = function playContinuousQueueEntry(entry) {
+  ctx.playContinuousQueueEntry = function playContinuousQueueEntry(entry, options = {}) {
     if (!entry?.track?.id) return;
     if (entry.section === 'current') {
       ctx.seek(0);
       return;
     }
-    if (ctx.requestListeningPartyHostControl?.({
-      action: 'play-track',
-      track: entry.track,
-      options: {}
+    if (!options.fromListeningPartyRequest && ctx.requestListeningPartyHostControl?.({
+      action: 'play-continuous-entry',
+      section: entry.section,
+      historyIndex: entry.historyIndex,
+      queueIndex: entry.queueIndex,
+      trackId: entry.track.id
     })) {
       return;
     }
@@ -239,7 +241,7 @@ export function installPlaybackControls(ctx) {
     ctx.history.value = next.history;
     ctx.queue.value = next.queue;
     ctx.syncManualQueueOrder();
-    ctx.playTrack(next.track, {
+    return ctx.playTrack(next.track, {
       listeningPartySync: true,
       preserveQueue: true,
       skipHistory: true,

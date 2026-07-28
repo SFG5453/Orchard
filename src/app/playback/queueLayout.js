@@ -80,14 +80,14 @@ export function rewindToHistoryEntry({ history = [], activeTrack = null, queue =
 }
 
 /**
- * Jumping ahead moves the skipped tracks into history instead of dropping them.
+ * Jumping ahead records only the track that was actually playing. Tracks skipped over
+ * are removed from the queue, but never masquerade as listening history.
  */
 export function advanceToQueueEntry({ history = [], activeTrack = null, queue = [], queueIndex = 0 } = {}) {
   const track = queue[queueIndex];
   if (!track?.id || queueIndex < 0) return null;
 
-  const played = [...queue.slice(0, queueIndex)].reverse();
-  if (activeTrack?.id) played.push(activeTrack);
+  const played = activeTrack?.id ? [activeTrack] : [];
 
   return {
     track,
