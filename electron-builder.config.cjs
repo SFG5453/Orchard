@@ -8,6 +8,12 @@ module.exports = {
     provider: 'generic',
     url: updateUrl
   },
+  // Beta versions carry a semver prerelease suffix (e.g. 4.0.0-beta.1). electron-builder
+  // otherwise infers an update "channel" from that suffix and names manifests beta.yml /
+  // beta-mac.yml / beta-linux.yml instead of latest*.yml. Beta vs. stable here is decided
+  // by publish destination (GitHub Release vs. R2), not by manifest channel, so keep the
+  // filenames constant across both.
+  detectUpdateChannel: false,
   releaseInfo: {
     releaseNotesFile: 'build/release-notes.md'
   },
