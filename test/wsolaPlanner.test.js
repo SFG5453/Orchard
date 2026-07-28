@@ -93,6 +93,18 @@ test('caps the pre-roll when the incoming intro is very long', () => {
   assert.ok(Math.abs(plan.incomingDropTime - (plan.incomingCueTime + plan.overlapSeconds * plan.handoffFraction)) < 1e-9);
 });
 
+test('refuses slow-tempo plans whose fixed tail cannot fit the overlap ceiling', () => {
+  const plan = planWsolaTransition({
+    analysis: analysisFor({ bpm: 40, duration: 300, mixOutTime: 280 }),
+    nextAnalysis: analysisFor({ bpm: 40, duration: 300, mixInTime: 60 }),
+    duration: 300,
+    nextDuration: 300
+  });
+
+  assert.equal(plan.ok, false);
+  assert.equal(plan.reason, 'overlap-too-long');
+});
+
 test('shortens the pre-roll rather than opening on lead-in silence', () => {
   const nextAnalysis = analysisFor({ bpm: 126, duration: 200, mixInTime: 20 });
   nextAnalysis.audibleStartTime = 14;

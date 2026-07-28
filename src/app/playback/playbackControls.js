@@ -4,7 +4,8 @@ import { reliablePlaybackDuration } from './playbackDuration.js';
 import { createSmartCrossfadeMixPresentation } from './smartCrossfadeMixPresentation.js';
 import {
   WSOLA_PREPARE_LEAD_SECONDS,
-  WSOLA_START_LEAD_SECONDS
+  WSOLA_START_LEAD_SECONDS,
+  wsolaProcessingCompatible
 } from '../../audio/crossfade/wsolaCrossfade.js';
 
 const LYRIC_AUTO_SCROLL_RESUME_DELAY_MS = 1800;
@@ -334,6 +335,16 @@ export function installPlaybackControls(ctx) {
     // buffer already contains the incoming track, so letting the legacy engine
     // start its own fade on the same standby element plays it a second time.
     if (engine.isActive()) return 'hold';
+    const fromTrackId = ctx.activeTrack.value?.id;
+    const trackGains = ctx.audioEngineTrackGains?.value || {};
+    if (!wsolaProcessingCompatible({
+      normalizationEnabled: ctx.volumeNormalizationEnabled?.value,
+      audioEngineConfig: ctx.audioEngineConfig?.value,
+      outgoingGainDb: trackGains[fromTrackId],
+      incomingGainDb: trackGains[next.id]
+    })) {
+      return 'fallback';
+    }
     const plan = engine.plan({
       analysis: ctx.crossfadeAnalysis.value,
       nextAnalysis: ctx.nextCrossfadeAnalysis.value,
@@ -341,7 +352,6 @@ export function installPlaybackControls(ctx) {
       nextDuration: Number(next.durationSeconds) || 0
     });
     if (!plan.ok) return 'fallback';
-    const fromTrackId = ctx.activeTrack.value?.id;
     if (engine.preparationStatus(fromTrackId, next.id) === 'failed') return 'fallback';
 
     const untilStart = plan.transitionStart - playbackTime;

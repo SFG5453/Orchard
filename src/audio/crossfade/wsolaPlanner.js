@@ -160,6 +160,7 @@ export function planWsolaTransition({
   const audibleStart = incomingAudibleStart(nextAnalysis);
   const availablePrerollBeats = Math.max(0, incomingDropTime - audibleStart) / incomingBeatSeconds;
   const cappedByOverlap = Math.floor(MAX_OVERLAP_SECONDS / incomingBeatSeconds) - TAIL_BEATS;
+  if (cappedByOverlap < MIN_PREROLL_BEATS) return refuse('overlap-too-long');
   const prerollBeats = Math.max(
     MIN_PREROLL_BEATS,
     Math.min(

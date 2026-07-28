@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createWsolaCrossfade } from '../src/audio/crossfade/wsolaCrossfade.js';
+import {
+  createWsolaCrossfade,
+  wsolaProcessingCompatible
+} from '../src/audio/crossfade/wsolaCrossfade.js';
 
 function fakeClock() {
   const timers = new Map();
@@ -132,6 +135,28 @@ function renderFor(plan, sampleRate = 44100) {
     stretchRatio: 1.05
   };
 }
+
+test('only uses raw rendered PCM when per-source processing is flat', () => {
+  assert.equal(wsolaProcessingCompatible(), true);
+  assert.equal(wsolaProcessingCompatible({ normalizationEnabled: true }), false);
+  assert.equal(wsolaProcessingCompatible({
+    audioEngineConfig: { enabled: true, eqEnabled: true }
+  }), false);
+  assert.equal(wsolaProcessingCompatible({
+    audioEngineConfig: { enabled: true, preampDb: 2 }
+  }), true);
+  assert.equal(wsolaProcessingCompatible({
+    audioEngineConfig: { enabled: true, balance: -0.2 }
+  }), false);
+  assert.equal(wsolaProcessingCompatible({
+    audioEngineConfig: { enabled: true },
+    outgoingGainDb: -3
+  }), false);
+  assert.equal(wsolaProcessingCompatible({
+    audioEngineConfig: { enabled: false, eqEnabled: true, preampDb: 2 },
+    outgoingGainDb: -3
+  }), true);
+});
 
 test('prepare slices both tracks and forwards the plan to the native bridge', async () => {
   const analyzer = fakeAnalyzer();

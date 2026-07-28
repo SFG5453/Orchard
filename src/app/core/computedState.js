@@ -1,4 +1,5 @@
 import { computed } from 'vue';
+import { wsolaProcessingCompatible } from '../../audio/crossfade/wsolaCrossfade.js';
 import { playlistArtworkDetection } from '../appearance/playlistArtwork.js';
 import { sortBySearchPopularity, sortByTopMatch } from '../browse/searchRanking.js';
 
@@ -231,7 +232,14 @@ export function installComputedState(ctx) {
     // The marker must describe the engine that will actually run. A qualifying
     // WSOLA pairing overrides the legacy plan, whose Apple-style overlap starts
     // many seconds earlier and would put the marker in the wrong place.
-    const wsolaPlan = ctx.crossfadeMode.value === 'smart'
+    const trackGains = ctx.audioEngineTrackGains?.value || {};
+    const wsolaEligible = wsolaProcessingCompatible({
+      normalizationEnabled: ctx.volumeNormalizationEnabled?.value,
+      audioEngineConfig: ctx.audioEngineConfig?.value,
+      outgoingGainDb: trackGains[ctx.activeTrack.value?.id],
+      incomingGainDb: trackGains[nextTrack.id]
+    });
+    const wsolaPlan = ctx.crossfadeMode.value === 'smart' && wsolaEligible
       ? ctx.wsolaCrossfade?.plan({
         analysis: ctx.crossfadeAnalysis.value,
         nextAnalysis: ctx.nextCrossfadeAnalysis.value,

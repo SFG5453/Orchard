@@ -43,6 +43,18 @@ export function createAudioAnalyzer(options = {}) {
     return context;
   }
 
+  function outputFilters(ctx) {
+    const lowPass = ctx.createBiquadFilter();
+    const highPass = ctx.createBiquadFilter();
+    lowPass.type = 'lowpass';
+    lowPass.frequency.value = Math.min(20000, ctx.sampleRate * 0.45);
+    lowPass.Q.value = 0.707;
+    highPass.type = 'highpass';
+    highPass.frequency.value = 20;
+    highPass.Q.value = 0.707;
+    return { lowPass, highPass };
+  }
+
   function connectElement(element) {
     if (!element) return null;
     const existing = nodes.get(element);
@@ -58,14 +70,7 @@ export function createAudioAnalyzer(options = {}) {
     const normalizedGain = ctx.createGain();
     const gain = ctx.createGain();
     const mixGain = ctx.createGain();
-    const lowPass = ctx.createBiquadFilter();
-    const highPass = ctx.createBiquadFilter();
-    lowPass.type = 'lowpass';
-    lowPass.frequency.value = Math.min(20000, ctx.sampleRate * 0.45);
-    lowPass.Q.value = 0.707;
-    highPass.type = 'highpass';
-    highPass.frequency.value = 20;
-    highPass.Q.value = 0.707;
+    const { lowPass, highPass } = outputFilters(ctx);
     analyser.fftSize = config.fftSize;
     analyser.smoothingTimeConstant = config.smoothingTimeConstant;
     normalizer.threshold.value = -24;
@@ -512,8 +517,8 @@ export function createAudioAnalyzer(options = {}) {
    * Plays raw planar PCM as a scheduled one-shot source on the context clock.
    * Used for pre-rendered transition overlaps, which need sample-accurate
    * scheduling that media elements cannot provide. The chain is source ->
-   * gain -> destination: per-element processing (EQ, normalization) is
-   * intentionally bypassed because the rendered mix is already final audio.
+   * gain -> output filters -> destination. Callers only use this path when
+   * per-source EQ, normalization, balance, preamp, and track gain are flat.
    * @returns {object|null} Handle with the resolved start/end context times,
    * `setVolume`, normalized envelope fades, and a click-free `stop`; null
    * when the context is missing.
@@ -528,12 +533,15 @@ export function createAudioAnalyzer(options = {}) {
     const source = ctx.createBufferSource();
     const envelopeGain = ctx.createGain();
     const volumeGain = ctx.createGain();
+    const { lowPass, highPass } = outputFilters(ctx);
     source.buffer = buffer;
     envelopeGain.gain.value = 1;
     volumeGain.gain.value = clamp01(volume);
     source.connect(envelopeGain);
     envelopeGain.connect(volumeGain);
-    volumeGain.connect(ctx.destination);
+    volumeGain.connect(lowPass);
+    lowPass.connect(highPass);
+    highPass.connect(ctx.destination);
 
     // `offset` skips into the buffer for callers that were scheduled late and
     // need the remainder to stay aligned with the media timeline.

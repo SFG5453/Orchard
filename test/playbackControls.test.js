@@ -338,3 +338,20 @@ test('a refused WSOLA pairing still falls back to the legacy crossfade', async (
     globalThis.window = originalWindow;
   }
 });
+
+test('processed audio falls back to the legacy crossfade', async () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { setTimeout: () => 1, clearTimeout: () => {} };
+  try {
+    const { ctx, legacyStarts } = crossfadeRoutingContext({
+      wsolaActive: false,
+      wsolaPlan: { ok: true, transitionStart: 200 }
+    });
+    ctx.volumeNormalizationEnabled = { value: true };
+
+    assert.equal(await ctx.maybeStartAutoCrossfade(), true);
+    assert.equal(legacyStarts.length, 1);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});

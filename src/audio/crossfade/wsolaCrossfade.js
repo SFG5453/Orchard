@@ -39,6 +39,28 @@ const DRIFT_TOLERANCE_SECONDS = 0.04;
 // residual is a single transient rather than an audible effect.
 const HANDOFF_FADE_SECONDS = 0.01;
 
+/**
+ * The rendered overlap contains raw decoded PCM, so it can only replace the
+ * live decks when their per-source processing is effectively flat. The legacy
+ * crossfade keeps both media elements in their normal graphs and is therefore
+ * the safe fallback whenever normalization, EQ, balance, preamp, or track gain
+ * would make the rendered audio sound different.
+ */
+export function wsolaProcessingCompatible({
+  normalizationEnabled = false,
+  audioEngineConfig = {},
+  outgoingGainDb = 0,
+  incomingGainDb = 0
+} = {}) {
+  if (normalizationEnabled) return false;
+  if (!audioEngineConfig?.enabled) return true;
+  // Preamp is only active as part of the manual-EQ branch.
+  if (audioEngineConfig.eqEnabled || audioEngineConfig.autoEqEnabled) return false;
+  if (Math.abs(Number(audioEngineConfig.balance) || 0) > 0.001) return false;
+  return Math.abs(Number(outgoingGainDb) || 0) <= 0.001 &&
+    Math.abs(Number(incomingGainDb) || 0) <= 0.001;
+}
+
 function pairKey(fromTrackId, toTrackId) {
   return `${String(fromTrackId || '')}>${String(toTrackId || '')}`;
 }
