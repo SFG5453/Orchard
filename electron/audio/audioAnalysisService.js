@@ -8,6 +8,7 @@ import {
   localAnalysisWithSource,
   safeAudioAnalysisDiagnostics
 } from '../../shared/audioAnalysis.js';
+import { refineBeatConfidence } from './essentiaBeatConfidence.js';
 
 // Owns native-addon loading, analysis request de-duplication, and the persisted
 // result cache. `stop()` removes every IPC handler and flushes pending cache data.
@@ -16,6 +17,13 @@ const require = createRequire(import.meta.url);
 const { AUDIO_ANALYSIS } = IPC_CHANNELS;
 const CACHE_VERSION = AUDIO_ANALYSIS_VERSION;
 const MAX_CACHE_ITEMS = 600;
+// Mirrors ANALYSIS_PRIORITIES.next in the renderer. Duplicated rather than
+// imported because that module pulls in browser-only globals.
+const ANALYSIS_PRIORITY_NEXT = 1;
+// Generous: the pass runs about a second for a typical track, and the budget
+// exists to stop a pathological input stalling a transition, not to police
+// normal work. A skip is free -- the native confidence is still there.
+const ESSENTIA_TIMEOUT_MS = 10_000;
 
 function errorDetails(error) {
   return {
@@ -65,7 +73,10 @@ export function setupAudioAnalysisService({
   ipcMain,
   nativeModulePath,
   loadNativeAddon = require,
-  logger = stdoutLogger
+  logger = stdoutLogger,
+  // Injectable so tests can exercise the priority gate without loading several
+  // megabytes of WASM and spending a second per track inside the suite.
+  refineConfidence = refineBeatConfidence
 }) {
   const cache = new Map();
   const inFlight = new Map();
@@ -264,6 +275,49 @@ export function setupAudioAnalysisService({
     return true;
   });
 
+  // Only the tracks immediately around a transition earn the Essentia pass.
+  // Its rhythm extractor costs several times the whole native analysis, so
+  // running it at Best Mix scale -- up to fifty tracks -- would turn a job of
+  // roughly half a minute into several. Background analysis keeps the native
+  // confidence, which is what shipped before this existed.
+  async function refineIfWorthIt(rawResult, samples, sampleRate, trackId, priority) {
+    const level = Number(priority);
+    if (!Number.isFinite(level) || level > ANALYSIS_PRIORITY_NEXT) return rawResult;
+    if (!Number.isFinite(Number(rawResult?.bpm)) || Number(rawResult?.bpm) <= 0) return rawResult;
+
+    const refined = await Promise.resolve(
+      refineConfidence(samples, sampleRate, { timeoutMs: ESSENTIA_TIMEOUT_MS })
+    ).catch(() => null);
+    // `essentiaChecked` records that the pass *ran*, which is not the same as
+    // it producing a value -- Essentia declines on material its trackers cannot
+    // read. Without that distinction a declined track looks identical to one
+    // never attempted, and the cache check below would re-analyse it forever.
+    if (!refined) {
+      log('essentia-skipped', { trackId, priority: level });
+      return { ...rawResult, essentiaChecked: true };
+    }
+    log('essentia-refined', {
+      trackId,
+      priority: level,
+      elapsedMs: refined.elapsedMs,
+      nativeConfidence: Number(rawResult.beatConfidence) || 0,
+      essentiaConfidence: refined.essentiaConfidence,
+      beatConfidence: refined.beatConfidence,
+      nativeBpm: Number(rawResult.bpm) || 0,
+      essentiaBpm: refined.essentiaBpm
+    });
+    // Confidence only. The native tempo stays authoritative: on the one file
+    // with known ground truth it was the more accurate of the two.
+    return {
+      ...rawResult,
+      beatConfidence: refined.beatConfidence,
+      nativeBeatConfidence: Number(rawResult.beatConfidence) || 0,
+      essentiaConfidence: refined.essentiaConfidence,
+      essentiaBpm: refined.essentiaBpm,
+      essentiaChecked: true
+    };
+  }
+
   ipcMain.handle(AUDIO_ANALYSIS.ANALYZE, async (_event, payload = {}) => {
     await cacheReady;
     const trackId = cleanTrackId(payload.trackId);
@@ -312,8 +366,9 @@ export function setupAudioAnalysisService({
       throw error;
     }
     const task = nativeTask
-      .then((rawResult) => {
-        const result = localAnalysisWithSource(rawResult, 'local-native');
+      .then(async (rawResult) => {
+        const refined = await refineIfWorthIt(rawResult, samples, sampleRate, trackId, payload.priority);
+        const result = localAnalysisWithSource(refined, 'local-native');
         if (!result) {
           log('native-analysis-invalid', { trackId, bpm: Number(rawResult?.bpm) || 0 });
           throw new Error('Native audio analysis returned an invalid BPM.');

@@ -30,6 +30,86 @@ function tone(duration = 8, sampleRate = 11025) {
   return { duration, sampleRate, samples };
 }
 
+test('only the tracks around a transition pay for the Essentia pass', async () => {
+  // Essentia's rhythm extractor costs several times the whole native analysis,
+  // so Best Mix -- which analyses up to fifty tracks at background priority --
+  // must never trigger it.
+  const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
+  const nativeModulePath = path.resolve('native/build/Release/orchard_audio_analysis.node');
+  const calls = [];
+  const ipc = fakeIpcMain();
+  const service = setupAudioAnalysisService({
+    cachePath: path.join(directory, 'cache.json'),
+    ipcMain: ipc,
+    nativeModulePath,
+    logger: () => {},
+    refineConfidence: (samples, sampleRate) => {
+      calls.push({ sampleCount: samples.length, sampleRate });
+      return { beatConfidence: 0.87, essentiaConfidence: 4.12, essentiaBpm: 126.5, elapsedMs: 5 };
+    }
+  });
+
+  try {
+    const track = tone();
+    const background = await ipc.invoke('audio-analysis:analyze', {
+      trackId: 'background-track',
+      samples: track.samples,
+      sampleRate: track.sampleRate,
+      duration: track.duration,
+      priority: 2
+    });
+    assert.equal(calls.length, 0, 'background analysis must not run Essentia');
+    assert.equal(background.essentiaConfidence, undefined);
+
+    const upcoming = await ipc.invoke('audio-analysis:analyze', {
+      trackId: 'next-track',
+      samples: track.samples,
+      sampleRate: track.sampleRate,
+      duration: track.duration,
+      priority: 1
+    });
+    assert.equal(calls.length, 1, 'the next track must run Essentia exactly once');
+    assert.equal(upcoming.beatConfidence, 0.87);
+    assert.equal(upcoming.essentiaConfidence, 4.12);
+    // The native tempo stays authoritative; only confidence is replaced.
+    assert.ok(Number.isFinite(upcoming.nativeBeatConfidence));
+    assert.notEqual(upcoming.bpm, 126.5);
+  } finally {
+    await service.stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('a refusal from Essentia leaves the native confidence untouched', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
+  const nativeModulePath = path.resolve('native/build/Release/orchard_audio_analysis.node');
+  const ipc = fakeIpcMain();
+  const service = setupAudioAnalysisService({
+    cachePath: path.join(directory, 'cache.json'),
+    ipcMain: ipc,
+    nativeModulePath,
+    logger: () => {},
+    refineConfidence: () => Promise.reject(new Error('wasm unavailable'))
+  });
+
+  try {
+    const track = tone();
+    const result = await ipc.invoke('audio-analysis:analyze', {
+      trackId: 'unrefined',
+      samples: track.samples,
+      sampleRate: track.sampleRate,
+      duration: track.duration,
+      priority: 0
+    });
+    assert.ok(result, 'analysis must still succeed without Essentia');
+    assert.equal(result.essentiaConfidence, undefined);
+    assert.ok(Number.isFinite(result.beatConfidence));
+  } finally {
+    await service.stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('audio analysis service caches native results across service restarts', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
   const cachePath = path.join(directory, 'cache.json');

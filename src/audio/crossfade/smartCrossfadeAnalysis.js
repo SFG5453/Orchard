@@ -271,7 +271,13 @@ export function createSmartCrossfadeAnalyzer({
         sampleRate,
         signal
       });
-      const analysis = localAnalysisWithSource(fallback.result, 'local-worker');
+      // The Essentia pass lives in the main process alongside the native
+      // analyzer, so it can never apply here. Marking the result as checked
+      // stops the priority guard from re-analysing worker results forever.
+      const analysis = localAnalysisWithSource(
+        { ...fallback.result, essentiaChecked: true },
+        'local-worker'
+      );
       if (!analysis) {
         report('fallback-invalid', { trackId: key, bpm: Number(fallback.result?.bpm) || 0 });
         throw new Error('Worker audio analysis returned an invalid BPM');
@@ -292,7 +298,9 @@ export function createSmartCrossfadeAnalyzer({
     }
   }
 
-  async function analyzeBuffer(key, buffer, durationHint, signal) {
+  // `priority` is forwarded to the main process, which spends extra analysis
+  // effort only on the tracks around a transition. See ANALYSIS_PRIORITIES.
+  async function analyzeBuffer(key, buffer, durationHint, signal, priority) {
     if (signal.aborted) throw abortError();
     const channels = Array.from({ length: buffer.numberOfChannels }, (_, index) =>
       new Float32Array(buffer.getChannelData(index)).buffer
@@ -326,7 +334,8 @@ export function createSmartCrossfadeAnalyzer({
         key,
         prepared.samples,
         prepared.sampleRate,
-        prepared.duration
+        prepared.duration,
+        priority
       ), signal);
       const analysis = localAnalysisWithSource(raw, 'local-native');
       if (!analysis) {
@@ -361,7 +370,13 @@ export function createSmartCrossfadeAnalyzer({
       }
       if (!url) throw new Error('No authenticated audio stream was resolved for analysis');
       const buffer = await decodeWithBackoff(job.key, url, controller.signal);
-      const analysis = await analyzeBuffer(job.key, buffer, job.duration, controller.signal);
+      const analysis = await analyzeBuffer(
+        job.key,
+        buffer,
+        job.duration,
+        controller.signal,
+        job.priority
+      );
       remember(job.key, analysis);
       return analysis;
     } finally {
@@ -443,11 +458,31 @@ export function createSmartCrossfadeAnalyzer({
     return promise;
   }
 
+  // A cached analysis is only good enough if it carries the confidence the
+  // request needs. Background analysis skips the expensive Essentia pass, so a
+  // track first seen during a Best Mix run is cached without it -- and without
+  // this check, that entry would be served forever and the track would never
+  // get the confidence a transition decision depends on. Re-analysing costs one
+  // decode, once, for the two tracks around a transition.
+  // `essentiaChecked` marks that the pass ran, not that it produced a value:
+  // Essentia declines on material its beat trackers cannot read, and a declined
+  // track must not be re-analysed on every play.
+  function satisfiesPriority(stored, priority) {
+    const level = Number(priority);
+    if (!Number.isFinite(level) || level > ANALYSIS_PRIORITIES.next) return true;
+    return stored?.essentiaChecked === true;
+  }
+
   async function prepare(trackId, urlSource, options) {
     const key = String(trackId || '').trim();
     if (!key) return null;
     const stored = await readCached(key);
-    if (stored) return stored;
+    if (stored && satisfiesPriority(stored, options?.priority)) return stored;
+    if (stored) {
+      report('cache-below-priority', { trackId: key, priority: Number(options?.priority) || 0 });
+      cache.delete(key);
+      cacheLookups.delete(key);
+    }
     if (destroyed) throw abortError();
     return enqueue(key, urlSource, options);
   }

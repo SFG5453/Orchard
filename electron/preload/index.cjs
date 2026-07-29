@@ -76,11 +76,15 @@ contextBridge.exposeInMainWorld('orchardAudioAnalysis', {
   get: (trackId) => ipcRenderer.invoke('audio-analysis:get', trackId),
   store: (trackId, result) => ipcRenderer.invoke('audio-analysis:store', { trackId, result }),
   debug: (event, details = {}) => ipcRenderer.invoke('audio-analysis:debug', { event, details }),
-  analyze: (trackId, samples, sampleRate, duration) => ipcRenderer.invoke('audio-analysis:analyze', {
+  // `priority` follows ANALYSIS_PRIORITIES. The main process uses it to decide
+  // whether a track is worth the extra Essentia confidence pass, which costs
+  // several times the native analysis and must not run at Best Mix scale.
+  analyze: (trackId, samples, sampleRate, duration, priority) => ipcRenderer.invoke('audio-analysis:analyze', {
     trackId,
     samples,
     sampleRate,
-    duration
+    duration,
+    priority
   }),
   renderTransition: (outgoing, incoming, options) => ipcRenderer.invoke('audio-analysis:render-transition', {
     outgoing,
