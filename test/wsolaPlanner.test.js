@@ -49,8 +49,8 @@ test('plans a pre-roll plus tail overlap ending at the outgoing mix-out', () => 
   // A 20s intro at 126 BPM is 42 bar-aligned beats of available pre-roll, held
   // to the four-bar cap so the outgoing track is not bedded under for a
   // fifteen-second run-up to its own fade.
-  assert.equal(plan.prerollBeats, 16);
-  assert.equal(plan.tailBeats, 16);
+  assert.equal(plan.prerollBeats, 8);
+  assert.equal(plan.tailBeats, 8);
   assert.equal(plan.beats, plan.prerollBeats + plan.tailBeats);
   const outgoingOverlap = plan.beats * (60 / 126);
   assert.ok(plan.transitionStart <= 220 - outgoingOverlap + 0.001);
@@ -269,8 +269,8 @@ test('instrumental pairings keep the full pre-roll and tail', () => {
   });
 
   assert.equal(plan.ok, true, plan.reason);
-  assert.equal(plan.prerollBeats, 16);
-  assert.equal(plan.tailBeats, 16);
+  assert.equal(plan.prerollBeats, 8);
+  assert.equal(plan.tailBeats, 8);
   assert.deepEqual(plan.vocalClash, { bed: false, tail: false });
 });
 
@@ -307,9 +307,9 @@ test('refuses pairings that cannot be rendered transparently', () => {
 
   assert.equal(planWsolaTransition({
     analysis: base,
-    nextAnalysis: analysisFor({ bpm: 126, duration: 30, mixInTime: 20 }),
+    nextAnalysis: analysisFor({ bpm: 126, duration: 24, mixInTime: 20 }),
     duration: 240,
-    nextDuration: 30
+    nextDuration: 24
   }).reason, 'incoming-too-short');
 
   assert.equal(planWsolaTransition({

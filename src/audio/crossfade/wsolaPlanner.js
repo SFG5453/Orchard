@@ -30,9 +30,14 @@ export { alignTempoOctave };
 // incoming has arrived. Measured from the Spotify reference capture, but
 // capped in seconds (mirrors the legacy planner's tailSeconds clamp) so a
 // slow track doesn't turn "the fade" into a 13-14s wait behind the new vocal.
-const NOMINAL_TAIL_BEATS = 16;
-const TAIL_MIN_SECONDS = 4;
-const TAIL_MAX_SECONDS = 8;
+// Two bars. Sixteen beats of fade was long enough that the mix stopped reading
+// as a transition and started reading as two records playing at once -- at
+// 126 BPM that is a 7.6-second fade on top of an equally long bed. The seconds
+// clamp is a safety rail for extreme tempi, not the primary control: overlap
+// length is musical, so it is counted in beats.
+const NOMINAL_TAIL_BEATS = 8;
+const TAIL_MIN_SECONDS = 2;
+const TAIL_MAX_SECONDS = 4;
 
 // The incoming track's intro plays underneath the outgoing track before the
 // handoff. Quantized to bars, and bounded: too short and the drop arrives
@@ -41,7 +46,7 @@ const TAIL_MAX_SECONDS = 8;
 // invitation to play all of it -- at 48 beats a slow track sat under the
 // outgoing one for fifteen seconds before anything started to move.
 const MIN_PREROLL_BEATS = 4;
-const MAX_PREROLL_BEATS = 16;
+const MAX_PREROLL_BEATS = 8;
 
 // A ceiling on the whole overlap regardless of how long the incoming intro is.
 // Keep this in step with the live smart-transition planner so enabling audio

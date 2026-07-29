@@ -6,9 +6,14 @@ import {
 
 export const CROSSFADE_MODES = ['standard', 'smart'];
 
-const AUTO_MIN_SECONDS = 8;
-const AUTO_TRANSITION_MAX_SECONDS = 16;
-const AUTO_FALLBACK_SECONDS = 12;
+// Four bars. Overlaps are counted in beats because that is what the ear hears;
+// the seconds values are rails for tempi where four bars would be absurd, not
+// the primary control. Eight to sixteen beats is the range the automatic-DJ
+// literature reports for stable dance material, and less for dense pop.
+const AUTO_TRANSITION_MAX_BEATS = 16;
+const AUTO_MIN_SECONDS = 4;
+const AUTO_TRANSITION_MAX_SECONDS = 12;
+const AUTO_FALLBACK_SECONDS = 8;
 const KEY_INDEX = new Map([
   ['C', 0], ['C♯', 1], ['D♭', 1], ['D', 2], ['D♯', 3], ['E♭', 3],
   ['E', 4], ['F', 5], ['F♯', 6], ['G♭', 6], ['G', 7], ['G♯', 8],
@@ -235,11 +240,16 @@ function phraseSwitch(analysis = {}, nextAnalysis = {}, length = 0) {
   const incomingPlaybackRate = Math.round(clamp(1 / ratio, 0.9, 1.1) * 10000) / 10000;
   const incomingHandoffTime = incomingCuePoint(nextAnalysis);
   const introDropTime = incomingHandoffTime / Math.max(0.8, incomingPlaybackRate);
-  const tailBeats = 16;
-  const tailSeconds = clamp(tailBeats * beatSeconds, 4, 8);
+  const tailBeats = 8;
+  const tailSeconds = clamp(tailBeats * beatSeconds, 2, 4);
   const requestedOverlap = introDropTime + tailSeconds;
   if (length <= requestedOverlap * 0.5) return null;
-  const maximumOverlap = Math.min(AUTO_TRANSITION_MAX_SECONDS, length * 0.4);
+  // Beat-denominated like the main path; the seconds value is only a rail.
+  const maximumOverlap = Math.min(
+    AUTO_TRANSITION_MAX_BEATS * beatSeconds,
+    AUTO_TRANSITION_MAX_SECONDS,
+    length * 0.4
+  );
   const actualOverlap = Math.min(requestedOverlap, maximumOverlap);
   const alignedEnd = timedValueAtOrBefore(analysis.downbeats, length, length);
   const transitionEnd = length - alignedEnd <= beatSeconds * 4.5 ? alignedEnd : length;
@@ -293,7 +303,7 @@ function adaptiveOverlap(analysis = {}, nextAnalysis = {}) {
   const vocalConflict = Number(analysis.vocalProbability) >= 0.62 &&
     Number(nextAnalysis.vocalProbability) >= 0.62;
   const transitionBeats = !vocalConflict &&
-    (Math.abs(1 - ratio) > 0.07 || (distance !== null && distance > 4)) ? 24 : 16;
+    (Math.abs(1 - ratio) > 0.07 || (distance !== null && distance > 4)) ? 16 : 8;
   const beatSeconds = 60 / currentBpm;
 
   return {
@@ -420,24 +430,31 @@ export function planTransition({
   const { overlap, incomingPlaybackRate, transitionBeats } = adaptiveOverlap(analysis, nextAnalysis);
   const mixEnd = mixAnchor;
   const nextLength = trackDurationSeconds(nextTrack);
+  const currentBpm = Number(analysis.bpm) || 0;
+  const nextBpm = Number(nextAnalysis.bpm) || 0;
+  const handoffBpm = currentBpm || nextBpm;
+  // An overlap is a musical length, so it is bounded in beats first. Bounding
+  // it in seconds meant a faster track got a *longer* mix: at 140 BPM the
+  // sixteen-second cap ran to thirty-seven beats, over nine bars, which stops
+  // sounding like a transition and starts sounding like two records at once.
+  // The seconds cap survives only as a rail for tempi where four bars is
+  // absurdly long.
   const maximumOverlap = Math.min(
+    handoffBpm > 0 ? (AUTO_TRANSITION_MAX_BEATS * 60) / handoffBpm : AUTO_TRANSITION_MAX_SECONDS,
     AUTO_TRANSITION_MAX_SECONDS,
     mixEnd * 0.4,
     nextLength > 0 ? nextLength * 0.4 : AUTO_TRANSITION_MAX_SECONDS
   );
-  const currentBpm = Number(analysis.bpm) || 0;
-  const nextBpm = Number(nextAnalysis.bpm) || 0;
-  const handoffBpm = currentBpm || nextBpm;
   const currentConfidence = Number(analysis.beatConfidence) || 0;
   const nextConfidence = Number(nextAnalysis.beatConfidence) || 0;
   const sameBeatBlend = currentBpm > 0 && nextBpm > 0 &&
     Math.abs(1 - normalizedTempoRatio(currentBpm, nextBpm)) <= 0.05 &&
     (currentConfidence >= 0.2 || nextConfidence >= 0.2);
-  const handoffBeats = sameBeatBlend ? 16 : 8;
+  const handoffBeats = sameBeatBlend ? 8 : 4;
   const beatSeconds = handoffBpm > 0 ? 60 / handoffBpm : 0.5;
   const handoffSeconds = handoffBpm > 0
-    ? clamp((handoffBeats * 60) / handoffBpm, 4, sameBeatBlend ? 12 : 10)
-    : 7;
+    ? clamp((handoffBeats * 60) / handoffBpm, 2, sameBeatBlend ? 6 : 5)
+    : 4;
   const analyzedPickup = Number(nextAnalysis.audibleStartTime ?? nextAnalysis.pickupTime);
   const pickupSeconds = Number.isFinite(analyzedPickup) && analyzedPickup >= 0
     ? analyzedPickup
@@ -472,8 +489,8 @@ export function planTransition({
     // a deep analyzed mix-in must not turn one handoff into a 30-second bed.
 
     const introDropTime = incomingHandoffTime / Math.max(0.8, incomingPlaybackRate);
-    const tailBeats = 16;
-    const tailSeconds = clamp(tailBeats * beatSeconds, 4, 8);
+    const tailBeats = 8;
+    const tailSeconds = clamp(tailBeats * beatSeconds, 2, 4);
     const totalOverlap = clamp(
       introDropTime + tailSeconds,
       Math.min(12, maximumOverlap),

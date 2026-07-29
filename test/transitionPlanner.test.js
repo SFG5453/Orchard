@@ -25,7 +25,7 @@ test('smart transitions honor analyzed content end and structural boundaries', (
       phraseBoundaries: [157, 173],
       vocalProbability: 0.75
     },
-    currentTime: 174,
+    currentTime: 176,
     currentTrack: { id: 'current', durationSeconds: 200 },
     duration: 200,
     mode: 'smart',
@@ -38,9 +38,10 @@ test('smart transitions honor analyzed content end and structural boundaries', (
   });
 
   assert.equal(plan.transitionEnd, 180);
-  assert.equal(plan.transitionStart, 173);
-  assert.equal(plan.fadeSeconds, 7);
-  assert.equal(plan.transitionBeats, 16);
+  // Four bars at 120 BPM, snapped to the downbeat at 175.
+  assert.equal(plan.transitionStart, 175);
+  assert.equal(plan.fadeSeconds, 5);
+  assert.equal(plan.transitionBeats, 8);
   assert.ok(Math.abs(plan.handoffStartSeconds + plan.handoffDuration - plan.fadeSeconds) < 0.001);
   assert.equal(plan.shouldStart, true);
 });
@@ -144,7 +145,7 @@ test('DJ transitions prefer the analyzed interior mix-in downbeat', () => {
   assert.ok(plan.transitionBeats >= 8);
 });
 
-test('filtered DJ transitions cap long intro pre-rolls at sixteen seconds', () => {
+test('filtered DJ transitions cap long intro pre-rolls at four bars', () => {
   const plan = planTransition({
     analysis: {
       bpm: 91.7354,
@@ -179,12 +180,14 @@ test('filtered DJ transitions cap long intro pre-rolls at sixteen seconds', () =
     plan.incomingCueTime + plan.handoffStartSeconds * plan.incomingPlaybackRate -
       plan.incomingHandoffTime
   ) < 0.001);
-  assert.ok(plan.handoffDuration > 4);
-  assert.ok(plan.fadeSeconds <= 16);
+  assert.ok(plan.handoffDuration > 2);
+  // Four bars at ~92 BPM is about 10.4s, well inside the seconds rail.
+  assert.ok(plan.fadeSeconds <= 12, `fade ${plan.fadeSeconds}`);
+  assert.ok(plan.fadeSeconds / (60 / 91.7354) <= 16.5, 'overlap must stay within four bars');
   assert.equal(plan.transitionEnd, 258.4);
 });
 
-test('phrase alignment cannot stretch a smart transition past sixteen seconds', () => {
+test('phrase alignment cannot stretch a smart transition past four bars', () => {
   const plan = planTransition({
     analysis: {
       bpm: 120,
@@ -207,7 +210,7 @@ test('phrase alignment cannot stretch a smart transition past sixteen seconds', 
   });
 
   assert.equal(plan.transitionStyle, 'dj_blend');
-  assert.ok(plan.fadeSeconds <= 16, `fade ${plan.fadeSeconds}`);
+  assert.ok(plan.fadeSeconds <= 8.01, `fade ${plan.fadeSeconds}`);
 });
 
 test('missing tempo degrades to a plain crossfade at the analyzed mix-out', () => {
@@ -399,8 +402,8 @@ test('DJ transitions mix over the outro instead of stopping where it starts', ()
     plan.incomingCueTime + plan.handoffStartSeconds * plan.incomingPlaybackRate -
       plan.incomingHandoffTime
   ) < 0.001);
-  assert.ok(plan.handoffDuration > 4);
-  assert.ok(plan.fadeSeconds <= 16);
+  assert.ok(plan.handoffDuration > 2);
+  assert.ok(plan.fadeSeconds <= 12);
 });
 
 test('a long outro of real music is never skipped by the mix-out anchor', () => {
