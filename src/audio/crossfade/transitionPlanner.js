@@ -266,14 +266,13 @@ function phraseSwitch(analysis = {}, nextAnalysis = {}, length = 0) {
     transitionEnd - beatSeconds * 4
   );
   const overlap = transitionEnd - transitionStart;
-  const rawHandoffStart = Math.max(0, overlap - tailSeconds);
-  const handoffStartSeconds = Math.round(rawHandoffStart / beatSeconds) * beatSeconds;
-  const handoffDuration = clamp(overlap - handoffStartSeconds, tailSeconds * 0.5, overlap);
+  // The fade runs through the incoming intro and closes on its drop, so it
+  // spans the whole overlap rather than starting once the drop has landed.
+  const handoffStartSeconds = 0;
+  const handoffDuration = overlap;
   const transitionBeats = Math.round(overlap / beatSeconds);
-  const incomingCueTime = Math.max(
-    0,
-    incomingHandoffTime - handoffStartSeconds * incomingPlaybackRate
-  );
+  // Clamped at zero, which shortens the run-up rather than moving the drop.
+  const incomingCueTime = Math.max(0, incomingHandoffTime - overlap * incomingPlaybackRate);
 
   return {
     transitionStart,
@@ -509,26 +508,14 @@ export function planTransition({
 
     const alignedOverlap = mixEnd - transitionStart;
 
-    // handoffStartSeconds = time within the overlap when the main volume/filter
-    // swap begins (i.e. when the incoming track reaches its intro drop).
-    // handoffDuration = how long the volume swap takes after that point.
-    const rawHandoffStart = Math.max(0, alignedOverlap - tailSeconds);
-    let handoffStartSecs = Math.round(rawHandoffStart / beatSeconds) * beatSeconds;
-
-    // Ensure we cue the incoming track so its drop exactly aligns with the handoff.
-    // The incoming track will advance by handoffStartSecs * incomingPlaybackRate.
-    let requiredCueTime = incomingHandoffTime - (handoffStartSecs * incomingPlaybackRate);
-
-    if (requiredCueTime < 0) {
-      // Intro is too short. Reduce handoffStartSecs to match available intro beats.
-      const maxHandoffBeats = Math.floor(incomingHandoffTime / (beatSeconds * incomingPlaybackRate));
-      handoffStartSecs = maxHandoffBeats * beatSeconds;
-      requiredCueTime = incomingHandoffTime - (handoffStartSecs * incomingPlaybackRate);
-    }
-
-    handoffStartSeconds = handoffStartSecs;
-    finalIncomingCueTime = Math.max(0, requiredCueTime);
-    handoffDuration = clamp(alignedOverlap - handoffStartSeconds, tailSeconds * 0.5, alignedOverlap);
+    // The outgoing track fades across the whole overlap and reaches silence as
+    // the incoming one drops, so the swap is the overlap rather than a window
+    // opening once the drop has already landed.
+    handoffStartSeconds = 0;
+    // A short intro cannot cover the whole overlap; cueing at zero shortens the
+    // run-up instead of dragging the drop away from where it was analysed.
+    finalIncomingCueTime = Math.max(0, incomingHandoffTime - alignedOverlap * incomingPlaybackRate);
+    handoffDuration = alignedOverlap;
   } else {
     const desiredOverlap = Math.max(overlap, introPreroll + handoffSeconds * 0.42);
     const actualOverlap = clamp(
@@ -546,14 +533,13 @@ export function planTransition({
       earliestTransitionStart
     );
     const alignedOverlap = mixEnd - transitionStart;
-    handoffDuration = Math.min(handoffSeconds, alignedOverlap);
-    handoffStartSeconds = hasIncomingPreroll
-      ? clamp(
-          introPreroll - handoffDuration * 0.58,
-          0,
-          Math.max(0, alignedOverlap - handoffDuration)
-        )
-      : Math.max(0, alignedOverlap - handoffDuration);
+    // Filtered blends fade across the overlap too, so the departing track is
+    // gone by the time the incoming one is running on its own.
+    handoffStartSeconds = 0;
+    handoffDuration = alignedOverlap;
+    finalIncomingCueTime = hasIncomingPreroll
+      ? Math.max(0, incomingHandoffTime - alignedOverlap * incomingPlaybackRate)
+      : finalIncomingCueTime;
   }
 
   const alignedOverlap = mixEnd - transitionStart;

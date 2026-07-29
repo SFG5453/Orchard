@@ -14,6 +14,19 @@ function silentAfter(duration, cliff) {
   return curve;
 }
 
+// The outgoing track fades across the whole overlap and reaches silence as the
+// incoming one drops, so the fade closes on the drop. A track whose intro is
+// shorter than the overlap cues at zero instead, which shortens the run-up
+// rather than moving the drop away from where the analyzer found it.
+function assertFadeClosesOnDrop(plan) {
+  const landing = plan.incomingCueTime + plan.fadeSeconds * plan.incomingPlaybackRate;
+  assert.ok(
+    Math.abs(landing - plan.incomingHandoffTime) < 0.001 || plan.incomingCueTime === 0,
+    `fade should close on the drop: ${landing} vs ${plan.incomingHandoffTime}`
+  );
+  assert.equal(plan.handoffStartSeconds, 0, 'the fade spans the overlap');
+}
+
 test('smart transitions honor analyzed content end and structural boundaries', () => {
   const plan = planTransition({
     analysis: {
@@ -76,11 +89,10 @@ test('same-tempo phrase switches use an AutoMix-style blend', () => {
   assert.ok(plan.transitionBeats >= 8);
   assert.ok(plan.fadeSeconds >= 4);
   assert.equal(plan.bassSwap, true);
-  assert.ok(Math.abs(plan.incomingCueTime - 0.2) < 0.000001);
-  assert.ok(Math.abs(
-    plan.incomingCueTime + plan.handoffStartSeconds * plan.incomingPlaybackRate -
-      plan.incomingHandoffTime
-  ) < 0.001);
+  // The incoming drop is 2.2s in, shorter than the fade, so the cue clamps to
+  // the start of the track rather than dragging the drop later.
+  assert.equal(plan.incomingCueTime, 0);
+  assertFadeClosesOnDrop(plan);
   assert.equal(plan.shouldStart, true);
 });
 
@@ -138,10 +150,7 @@ test('DJ transitions prefer the analyzed interior mix-in downbeat', () => {
     nextTrack: { id: 'next', durationSeconds: 210 }
   });
 
-  assert.ok(Math.abs(
-    plan.incomingCueTime + plan.handoffStartSeconds * plan.incomingPlaybackRate -
-      plan.incomingHandoffTime
-  ) < 0.001);
+  assertFadeClosesOnDrop(plan);
   assert.ok(plan.transitionBeats >= 8);
 });
 
@@ -176,10 +185,7 @@ test('filtered DJ transitions cap long intro pre-rolls at four bars', () => {
 
   assert.equal(plan.transitionStyle, 'dj_blend');
   assert.equal(plan.incomingHandoffTime, 22.9108);
-  assert.ok(Math.abs(
-    plan.incomingCueTime + plan.handoffStartSeconds * plan.incomingPlaybackRate -
-      plan.incomingHandoffTime
-  ) < 0.001);
+  assertFadeClosesOnDrop(plan);
   assert.ok(plan.handoffDuration > 2);
   // Four bars at ~92 BPM is about 10.4s, well inside the seconds rail.
   assert.ok(plan.fadeSeconds <= 12, `fade ${plan.fadeSeconds}`);
@@ -344,9 +350,12 @@ test('vocal-on-vocal phrase switches use extended AutoMix blend', () => {
     nextTrack: { id: 'next', durationSeconds: 200 }
   });
 
-  assert.ok(plan.transitionBeats >= 16);
-  assert.ok(plan.fadeSeconds >= 8);
-  assert.ok(plan.handoffStartSeconds > 0);
+  assert.ok(plan.transitionBeats >= 8);
+  assert.ok(plan.fadeSeconds >= 4);
+  // The run-up is now the distance from the cue to the drop, not a delayed
+  // handoff inside the overlap.
+  assert.ok(plan.incomingHandoffTime > plan.incomingCueTime);
+  assert.equal(plan.handoffStartSeconds, 0);
   assert.equal(plan.transitionStyle, 'dj_blend');
 });
 
@@ -398,10 +407,7 @@ test('DJ transitions mix over the outro instead of stopping where it starts', ()
   assert.ok(plan.transitionStart >= 180,
     `overlap should sit inside the outro, started at ${plan.transitionStart}`);
   assert.equal(plan.incomingHandoffTime, 19.2);
-  assert.ok(Math.abs(
-    plan.incomingCueTime + plan.handoffStartSeconds * plan.incomingPlaybackRate -
-      plan.incomingHandoffTime
-  ) < 0.001);
+  assertFadeClosesOnDrop(plan);
   assert.ok(plan.handoffDuration > 2);
   assert.ok(plan.fadeSeconds <= 12);
 });
