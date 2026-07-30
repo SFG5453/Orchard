@@ -36,26 +36,181 @@ function mixNode() {
   return {
     gain: { gain: audioParam() },
     mixGain: { gain: audioParam() },
+    bassGain: { gain: audioParam() },
+    midDuck: { gain: audioParam() },
     highPass: { context, frequency: audioParam() },
     lowPass: { context, frequency: audioParam() }
   };
 }
 
-test('DJ filters stage an incoming bed before the dominance handoff', () => {
+function mixerFor(nodes, now) {
+  return createCrossfadeMixer({
+    connectElement: (audio) => nodes.get(audio),
+    currentTime: () => now
+  });
+}
+
+function pair(now) {
   const fromAudio = {};
   const toAudio = {};
   const fromNode = mixNode();
   const toNode = mixNode();
   const nodes = new Map([[fromAudio, fromNode], [toAudio, toNode]]);
-  const mixer = createCrossfadeMixer({
-    connectElement: (audio) => nodes.get(audio),
-    currentTime: () => 100
-  });
+  return { fromAudio, toAudio, fromNode, toNode, mixer: mixerFor(nodes, now) };
+}
+
+function lastCurve(param) {
+  return param.events.filter((event) => event.type === 'curve').at(-1);
+}
+
+test('DJ gains stay equal-power complementary across the whole fade', () => {
+  const { fromAudio, toAudio, fromNode, toNode, mixer } = pair(50);
 
   const timing = mixer.scheduleCrossfade({
     fromAudio,
     toAudio,
-    targetVolume: 1,
+    duration: 8,
+    handoffStartSeconds: 0,
+    handoffDuration: 8,
+    transitionStyle: 'dj_blend',
+    bassSwap: true,
+    leadTime: 0
+  });
+
+  assert.equal(timing.startTime, 50);
+  assert.equal(timing.handoffStart, 50);
+
+  const incoming = lastCurve(toNode.mixGain.gain);
+  const outgoing = lastCurve(fromNode.mixGain.gain);
+  assert.ok(Math.abs(incoming.first) < 0.0001);
+  assert.ok(Math.abs(incoming.last - 1) < 0.0001);
+  assert.ok(Math.abs(outgoing.first - 1) < 0.0001);
+  assert.ok(Math.abs(outgoing.last) < 0.0001);
+  // No plateau: the incoming used to reach full gain at 58% and hold there
+  // while the outgoing was still descending, so the tail of every DJ
+  // transition carried two tracks at full level.
+  for (let index = 1; index < incoming.values.length; index += 1) {
+    assert.ok(incoming.values[index] > incoming.values[index - 1]);
+    assert.ok(outgoing.values[index] < outgoing.values[index - 1]);
+  }
+  // Equal power: the two sum to unity in power at every point.
+  incoming.values.forEach((value, index) => {
+    const power = value * value + outgoing.values[index] * outgoing.values[index];
+    assert.ok(Math.abs(power - 1) < 0.0001);
+  });
+});
+
+test('the low end changes hands exclusively rather than overlapping', () => {
+  const { fromAudio, toAudio, fromNode, toNode, mixer } = pair(0);
+
+  mixer.scheduleCrossfade({
+    fromAudio,
+    toAudio,
+    duration: 10,
+    handoffStartSeconds: 0,
+    handoffDuration: 10,
+    transitionStyle: 'dj_blend',
+    bassSwap: true,
+    leadTime: 0
+  });
+
+  const out = lastCurve(fromNode.bassGain.gain);
+  const into = lastCurve(toNode.bassGain.gain);
+  assert.ok(Math.abs(out.first - 1) < 0.0001);
+  assert.ok(Math.abs(out.last) < 0.0001);
+  assert.ok(Math.abs(into.first) < 0.0001);
+  assert.ok(Math.abs(into.last - 1) < 0.0001);
+  // Equal power through the handover, so the bass never dips as it swaps.
+  out.values.forEach((value, index) => {
+    const power = value * value + into.values[index] * into.values[index];
+    assert.ok(Math.abs(power - 1) < 0.0001);
+  });
+  // Centred on 70% of the fade: before it the outgoing still owns the low end.
+  const crossing = into.values.findIndex((value, index) => value >= out.values[index]);
+  assert.ok(Math.abs((crossing / (into.values.length - 1)) * 10 - 7) < 0.1);
+  assert.ok(out.values[Math.round((out.values.length - 1) * 0.4)] > 0.99);
+});
+
+test('bass handover is skipped when the pairing did not ask for one', () => {
+  const { fromAudio, toAudio, fromNode, toNode, mixer } = pair(0);
+
+  mixer.scheduleCrossfade({
+    fromAudio,
+    toAudio,
+    duration: 6,
+    handoffStartSeconds: 0,
+    handoffDuration: 6,
+    transitionStyle: 'dj_filter',
+    leadTime: 0
+  });
+
+  assert.deepEqual(fromNode.bassGain.gain.events, []);
+  assert.deepEqual(toNode.bassGain.gain.events, []);
+});
+
+test('the outgoing mid band ducks at the rate the incoming arrives', () => {
+  const { fromAudio, toAudio, fromNode, mixer } = pair(0);
+
+  mixer.scheduleCrossfade({
+    fromAudio,
+    toAudio,
+    duration: 8,
+    handoffStartSeconds: 0,
+    handoffDuration: 8,
+    transitionStyle: 'dj_blend',
+    bassSwap: true,
+    leadTime: 0
+  });
+
+  const duck = lastCurve(fromNode.midDuck.gain);
+  assert.ok(Math.abs(duck.first) < 0.0001);
+  assert.ok(Math.abs(duck.last + 6) < 0.0001);
+  // Follows the incoming track's power, so it is half spent at the midpoint.
+  const middle = duck.values[Math.round((duck.values.length - 1) * 0.5)];
+  assert.ok(Math.abs(middle + 3) < 0.15);
+});
+
+test('the sweep is colour, not separation, and never doubles the fade', () => {
+  const blend = pair(0);
+  blend.mixer.scheduleCrossfade({
+    fromAudio: blend.fromAudio,
+    toAudio: blend.toAudio,
+    duration: 8,
+    handoffStartSeconds: 0,
+    handoffDuration: 8,
+    transitionStyle: 'dj_blend',
+    bassSwap: true,
+    leadTime: 0
+  });
+  // Well clear of the 200 Hz crossover: sweeping to 200 attenuated the
+  // outgoing track a second time on top of its own fade.
+  assert.equal(lastCurve(blend.fromNode.lowPass.frequency).last, 2200);
+
+  const filtered = pair(0);
+  filtered.mixer.scheduleCrossfade({
+    fromAudio: filtered.fromAudio,
+    toAudio: filtered.toAudio,
+    duration: 8,
+    handoffStartSeconds: 0,
+    handoffDuration: 8,
+    transitionStyle: 'dj_filter',
+    bassSwap: true,
+    leadTime: 0
+  });
+  // A tempo-mismatched blend leans on the sweep harder to disguise the seam.
+  assert.equal(lastCurve(filtered.fromNode.lowPass.frequency).last, 700);
+
+  // Bass isolation is the gain handover's job now, so nothing high-passes the
+  // incoming track.
+  assert.deepEqual(blend.toNode.highPass.frequency.events, []);
+});
+
+test('a planned pre-roll stages the incoming track at bed level', () => {
+  const { fromAudio, toAudio, toNode, mixer } = pair(100);
+
+  const timing = mixer.scheduleCrossfade({
+    fromAudio,
+    toAudio,
     duration: 10,
     handoffStartSeconds: 4,
     handoffDuration: 6,
@@ -72,111 +227,27 @@ test('DJ filters stage an incoming bed before the dominance handoff', () => {
   assert.ok(toNode.mixGain.gain.events.some((event) =>
     event.type === 'ramp' && event.value === 0.28 && event.time === 104
   ));
-  const incomingCurve = toNode.mixGain.gain.events.find((event) => event.type === 'curve');
-  const dominanceIndex = Math.ceil((incomingCurve.values.length - 1) * 0.58);
-  assert.ok(Math.abs(incomingCurve.first - 0.28) < 0.0001);
-  assert.ok(incomingCurve.values[dominanceIndex] > 0.999);
-  assert.ok(incomingCurve.values.slice(dominanceIndex).every((value) => value > 0.999));
-  // 4s preroll is NOT a long preroll (<=6s), so original filter values apply
-  assert.ok(toNode.highPass.frequency.events.some((event) =>
-    event.type === 'set' && event.value === 1600 && event.time === 100
-  ));
-  assert.ok(toNode.highPass.frequency.events.some((event) =>
-    event.type === 'curve' && event.time === 104 && event.last === 20
-  ));
-  assert.ok(fromNode.lowPass.frequency.events.some((event) =>
-    event.type === 'curve' && event.time === 104 && event.last === 200
-  ));
+  const incoming = lastCurve(toNode.mixGain.gain);
+  assert.ok(Math.abs(incoming.first - 0.28) < 0.0001);
+  assert.equal(incoming.time, 104);
+  assert.equal(incoming.duration, 6);
 });
 
-test('same-beat blends use the gentler incoming filter', () => {
-  const fromAudio = {};
-  const toAudio = {};
-  const fromNode = mixNode();
-  const toNode = mixNode();
-  const nodes = new Map([[fromAudio, fromNode], [toAudio, toNode]]);
-  const mixer = createCrossfadeMixer({
-    connectElement: (audio) => nodes.get(audio),
-    currentTime: () => 20
-  });
-
-  const timing = mixer.scheduleCrossfade({
-    fromAudio,
-    toAudio,
-    targetVolume: 1,
-    duration: 28,
-    handoffStartSeconds: 17,
-    handoffDuration: 10,
-    transitionStyle: 'dj_blend',
-    leadTime: 0
-  });
-
-  assert.equal(timing.handoffStart, 37);
-  assert.equal(timing.promotionTime, 42.8);
-  // 17s preroll is a long preroll (>6s), so uses 500Hz HP cutoff
-  assert.ok(toNode.highPass.frequency.events.some((event) =>
-    event.type === 'set' && event.value === 500 && event.time === 20
-  ));
-  // Long preroll uses 0.20 bed gain
-  assert.ok(toNode.mixGain.gain.events.some((event) =>
-    event.type === 'ramp' && Math.abs(event.value - 0.20) < 0.001
-  ));
-});
-
-test('long-preroll filter curves share an exact boundary', () => {
-  const fromAudio = {};
-  const toAudio = {};
-  const fromNode = mixNode();
-  const toNode = mixNode();
-  const nodes = new Map([[fromAudio, fromNode], [toAudio, toNode]]);
-  const mixer = createCrossfadeMixer({
-    connectElement: (audio) => nodes.get(audio),
-    currentTime: () => 0.016000000000000007
-  });
+test('non-DJ styles stay a plain equal-power fade', () => {
+  const { fromAudio, toAudio, fromNode, toNode, mixer } = pair(0);
 
   mixer.scheduleCrossfade({
     fromAudio,
     toAudio,
-    targetVolume: 1,
-    duration: 24,
-    handoffStartSeconds: 17.1234,
-    handoffDuration: 6,
-    transitionStyle: 'dj_blend',
+    duration: 5,
+    transitionStyle: 'equal_power',
     leadTime: 0
   });
 
-  const curves = toNode.highPass.frequency.events.filter((event) => event.type === 'curve');
-  assert.equal(curves.length, 2);
-  assert.equal(curves[0].time + curves[0].duration, curves[1].time);
-});
-
-test('DJ styles schedule DJ gains and filters even when handoffStart equals startTime', () => {
-  const fromAudio = {};
-  const toAudio = {};
-  const fromNode = mixNode();
-  const toNode = mixNode();
-  const nodes = new Map([[fromAudio, fromNode], [toAudio, toNode]]);
-  const mixer = createCrossfadeMixer({
-    connectElement: (audio) => nodes.get(audio),
-    currentTime: () => 50
-  });
-
-  const timing = mixer.scheduleCrossfade({
-    fromAudio,
-    toAudio,
-    targetVolume: 1,
-    duration: 8,
-    handoffStartSeconds: 0,
-    handoffDuration: 8,
-    transitionStyle: 'dj_blend',
-    bassSwap: true,
-    leadTime: 0
-  });
-
-  assert.equal(timing.startTime, 50);
-  assert.equal(timing.handoffStart, 50);
-  assert.ok(toNode.highPass.frequency.events.some((event) => event.type === 'set' && event.value === 350));
-  assert.ok(toNode.mixGain.gain.events.some((event) => event.type === 'curve' && event.time === 50));
+  assert.deepEqual(fromNode.bassGain.gain.events, []);
+  assert.deepEqual(fromNode.midDuck.gain.events, []);
+  assert.deepEqual(fromNode.lowPass.frequency.events, []);
+  assert.ok(lastCurve(toNode.mixGain.gain));
 });
 
 test('resetting a mix cancels its envelope without changing the master volume', () => {
@@ -192,6 +263,14 @@ test('resetting a mix cancels its envelope without changing the master volume', 
   assert.deepEqual(node.mixGain.gain.events.slice(0, 2), [
     { type: 'cancel', time: 42 },
     { type: 'target', value: 1, time: 42, constant: 0.02 }
+  ]);
+  assert.deepEqual(node.bassGain.gain.events, [
+    { type: 'cancel', time: 42 },
+    { type: 'target', value: 1, time: 42, constant: 0.02 }
+  ]);
+  assert.deepEqual(node.midDuck.gain.events, [
+    { type: 'cancel', time: 42 },
+    { type: 'target', value: 0, time: 42, constant: 0.02 }
   ]);
   assert.deepEqual(node.gain.gain.events, []);
 });

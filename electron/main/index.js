@@ -473,7 +473,9 @@ app.whenReady().then(async () => {
   audioAnalysis = setupAudioAnalysisService({
     cachePath: path.join(app.getPath('userData'), 'audio-analysis-cache.json'),
     ipcMain,
-    nativeModulePath: runtimePaths.nativeModulePath
+    nativeModulePath: runtimePaths.nativeModulePath,
+    beatModelPath: runtimePaths.beatModelPath,
+    vocalModelPath: runtimePaths.vocalModelPath
   });
   registerScreenshotCapture({ BrowserWindow, ipcMain });
   systemMedia = setupSystemMediaHandlers({ ipcMain, app, getWindow: () => mainWindow });

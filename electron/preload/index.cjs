@@ -79,17 +79,27 @@ contextBridge.exposeInMainWorld('orchardAudioAnalysis', {
   // `priority` follows ANALYSIS_PRIORITIES. The main process uses it to decide
   // whether a track is worth the extra Essentia confidence pass, which costs
   // several times the native analysis and must not run at Best Mix scale.
-  analyze: (trackId, samples, sampleRate, duration, priority) => ipcRenderer.invoke('audio-analysis:analyze', {
+  // `beatWindows` is optional head/tail PCM at the beat model's sample rate;
+  // it rides along only for transition-priority requests.
+  analyze: (trackId, samples, sampleRate, duration, priority, beatWindows) => ipcRenderer.invoke('audio-analysis:analyze', {
     trackId,
     samples,
     sampleRate,
     duration,
-    priority
+    priority,
+    beatWindows
   }),
   renderTransition: (outgoing, incoming, options) => ipcRenderer.invoke('audio-analysis:render-transition', {
     outgoing,
     incoming,
     options
+  }),
+  // Vocal presence across one overlap slice, used to duck the outgoing track's
+  // mids only where it is actually singing. Resolves null whenever the model
+  // has no opinion; the caller falls back to a flat duck.
+  vocalMask: (channels, sampleRate) => ipcRenderer.invoke('audio-analysis:vocal-mask', {
+    channels,
+    sampleRate
   })
 });
 

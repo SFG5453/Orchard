@@ -12,6 +12,7 @@ export const CROSSFADE_MODES = ['standard', 'smart'];
 // literature reports for stable dance material, and less for dense pop.
 const AUTO_TRANSITION_MAX_BEATS = 16;
 const AUTO_MIN_SECONDS = 4;
+const AUTO_FAST_TRACK_MIN_SECONDS = 6;
 const AUTO_TRANSITION_MAX_SECONDS = 12;
 const AUTO_FALLBACK_SECONDS = 8;
 const KEY_INDEX = new Map([
@@ -240,9 +241,9 @@ function phraseSwitch(analysis = {}, nextAnalysis = {}, length = 0) {
   const incomingPlaybackRate = Math.round(clamp(1 / ratio, 0.9, 1.1) * 10000) / 10000;
   const incomingHandoffTime = incomingCuePoint(nextAnalysis);
   const introDropTime = incomingHandoffTime / Math.max(0.8, incomingPlaybackRate);
-  const tailBeats = 8;
-  const tailSeconds = clamp(tailBeats * beatSeconds, 2, 4);
-  const requestedOverlap = introDropTime + tailSeconds;
+  // The overlap covers only the incoming instrumental intro so the outgoing
+  // track is fully gone by the time the incoming vocals arrive — no tail.
+  const requestedOverlap = introDropTime;
   if (length <= requestedOverlap * 0.5) return null;
   // Beat-denominated like the main path; the seconds value is only a rail.
   const maximumOverlap = Math.min(
@@ -304,11 +305,16 @@ function adaptiveOverlap(analysis = {}, nextAnalysis = {}) {
   const transitionBeats = !vocalConflict &&
     (Math.abs(1 - ratio) > 0.07 || (distance !== null && distance > 4)) ? 16 : 8;
   const beatSeconds = 60 / currentBpm;
+  // Eight beats can be under four seconds on faster material. Keep a little
+  // more real-time overlap there so smart mixes do not turn into abrupt swaps.
+  const minimumOverlap = currentBpm >= 140
+    ? AUTO_FAST_TRACK_MIN_SECONDS
+    : AUTO_MIN_SECONDS;
 
   return {
     overlap: clamp(
       transitionBeats * beatSeconds,
-      AUTO_MIN_SECONDS,
+      minimumOverlap,
       AUTO_TRANSITION_MAX_SECONDS
     ),
     transitionBeats,
@@ -476,22 +482,21 @@ export function planTransition({
   let transitionStart;
 
   if (sameBeatBlend && beatSeconds > 0) {
-    // AutoMix-style 3-phase transition for matching/near-matching BPM:
+    // AutoMix-style transition for matching/near-matching BPM:
     //   Phase 1: Silent preroll — incoming plays from 0:00 at bed gain, HP-filtered
-    //   Phase 2: Crossfade handoff — volume & filter swap around intro drop
-    //   Phase 3: Tail fade — outgoing continues fading after promotion
+    //   Phase 2: Crossfade handoff — outgoing fades to silence at the incoming drop
     //
     // The incoming track is cued from its start (incomingCueTime = 0 or pickup)
     // and plays its full intro underneath. The incomingHandoffTime (intro drop,
     // ~16s / 32 beats for dance/pop) determines when the main handoff occurs.
-    // The intro and tail are kept inside the global smart-transition ceiling;
-    // a deep analyzed mix-in must not turn one handoff into a 30-second bed.
+    // The overlap covers only the instrumental intro so the outgoing track is
+    // fully gone by the time the incoming vocals arrive.
 
     const introDropTime = incomingHandoffTime / Math.max(0.8, incomingPlaybackRate);
-    const tailBeats = 8;
-    const tailSeconds = clamp(tailBeats * beatSeconds, 2, 4);
+    // The overlap covers only the incoming instrumental intro so the outgoing
+    // track reaches silence exactly when the incoming vocals arrive.
     const totalOverlap = clamp(
-      introDropTime + tailSeconds,
+      introDropTime,
       Math.min(12, maximumOverlap),
       maximumOverlap
     );

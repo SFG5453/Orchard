@@ -64,19 +64,26 @@ if [ ! -f "$electron_dir/include/node/node_api.h" ]; then
   mv "$temporary_dir/headers/include" "$electron_dir/include"
 fi
 
+# Read from native/binding.gyp rather than duplicated here, so this build
+# cannot silently miss a translation unit the node-gyp build has.
+sources=$(node "$project_dir/scripts/native-sources.mjs")
+
 mkdir -p "$(dirname -- "$output_path")"
+# -fexceptions because the vendored Rubber Band source throws internally;
+# NAPI_DISABLE_CPP_EXCEPTIONS still keeps our own N-API layer exception-free.
+# shellcheck disable=SC2086 # $sources is a newline-separated path list.
 "$toolchain_dir/bin/x86_64-w64-mingw32-clang++" \
   -std=c++17 \
   -O3 \
+  -fexceptions \
   -shared \
   -static \
   -DNAPI_DISABLE_CPP_EXCEPTIONS \
   -DBUILDING_NODE_EXTENSION \
   -I "$project_dir/node_modules/node-addon-api" \
   -I "$electron_dir/include/node" \
-  "$project_dir/native/binding/addon.cpp" \
-  "$project_dir/native/analyzer/audio_analysis.cpp" \
-  "$project_dir/native/analyzer/tempo_analysis.cpp" \
+  -I "$project_dir/native/vendor/rubberband" \
+  $sources \
   "$node_lib_path" \
   -o "$output_path"
 

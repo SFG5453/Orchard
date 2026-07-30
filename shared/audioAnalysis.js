@@ -1,7 +1,10 @@
 // 8: vocalActivityMask became a real per-frame curve. Version 7 entries carry
 // the old track-wide scalar gated by loudness, which reads as plausible data
 // but says nothing about any particular moment, so they must not be reused.
-export const AUDIO_ANALYSIS_VERSION = 8;
+// 9: the native beat grid became tracked rather than extrapolated (its beats
+// moved by up to 300 ms at the end of long tracks), and downbeats may come
+// from the Beat This model. Cached version-8 grids are stale by construction.
+export const AUDIO_ANALYSIS_VERSION = 9;
 export const MIN_LOCAL_BPM = 40;
 export const MAX_LOCAL_BPM = 240;
 

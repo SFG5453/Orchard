@@ -117,6 +117,10 @@ export function installSmartCrossfadeActions(ctx) {
       const analysis = await ctx.smartCrossfadeAnalyzer.analyze(track.id, streamUrl, {
         duration: fallbackDuration,
         priority: targetName === 'current' ? ANALYSIS_PRIORITIES.current : ANALYSIS_PRIORITIES.next,
+        // These are the live decks: the only requests that carry beat windows
+        // for the model pass. Best Mix analyses the same tracks through
+        // queueTransitionSort without this flag and stays inference-free.
+        forPlayback: true,
         signal: controller.signal
       });
       if (controller.signal.aborted || requestId !== ctx[requestKey]) return;

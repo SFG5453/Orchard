@@ -18,7 +18,7 @@
     "build:native:macos:cross": "sh scripts/build-native-macos-cross.sh",
     "build:native:windows": "sh scripts/build-native-windows.sh",
     "build:frontend": "vite build",
-    "start": "npm run build && node scripts/launch-electron.mjs",
+    "start": "npm run build:frontend && node scripts/launch-electron.mjs",
     "build:artist-pack": "node scripts/build-official-artist-pack.mjs",
     "package": "npm run build && electron-builder --config electron-builder.config.cjs --dir",
     "package:linux-system": "npm run build && node scripts/package-system-electron.mjs",
@@ -26,7 +26,8 @@
     "make:mac": "sh scripts/build-macos-cross.sh",
     "dist": "npm run make",
     "test": "node --test test/*.test.js",
-    "test:native": "node --test test/nativeAudioAnalysis.test.js test/audioAnalysisService.test.js test/smartCrossfadeAnalysis.test.js test/queueTransitionSort.test.js test/transitionPlanner.test.js test/crossfadeMixer.test.js test/autoCrossfade.test.js test/subscribedArtists.test.js test/libraryCategory.test.js"
+    "test:native": "node --test test/nativeAudioAnalysis.test.js test/audioAnalysisService.test.js test/smartCrossfadeAnalysis.test.js test/queueTransitionSort.test.js test/transitionPlanner.test.js test/crossfadeMixer.test.js test/autoCrossfade.test.js test/subscribedArtists.test.js test/libraryCategory.test.js",
+    "fetch:beat-model": "node scripts/fetch-beat-this-model.mjs"
   },
   "keywords": [
     "quasar",
@@ -65,6 +66,7 @@
     "ml-kmeans": "^7.0.1",
     "music-tempo": "^1.0.3",
     "node-addon-api": "^8.9.0",
+    "onnxruntime-node": "^1.27.0",
     "qrcode": "^1.5.4",
     "quasar": "^2.23.2",
     "socket.io": "^4.8.3",

@@ -20,7 +20,8 @@ export const IPC_CHANNELS = Object.freeze({
     DEBUG: 'audio-analysis:debug',
     GET: 'audio-analysis:get',
     RENDER_TRANSITION: 'audio-analysis:render-transition',
-    STORE: 'audio-analysis:store'
+    STORE: 'audio-analysis:store',
+    VOCAL_MASK: 'audio-analysis:vocal-mask'
   }),
   CLIPBOARD: Object.freeze({
     WRITE_TEXT: 'clipboard:write-text'

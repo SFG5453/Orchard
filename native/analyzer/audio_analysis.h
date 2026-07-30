@@ -98,9 +98,15 @@ AnalysisResult AnalyzeAudio(
 );
 
 /**
- * Estimates tempo from at most the first 180 seconds, then extrapolates the
- * selected beat grid through `duration`. `audible_start` is used only to align
- * the first reported beat near meaningful content.
+ * Estimates tempo from at most the first 180 seconds, then *tracks* the beat
+ * grid through `duration` with a phase-locked loop over the onset envelope
+ * rather than extrapolating a fixed interval. `audible_start` is used only to
+ * align the first reported beat near meaningful content.
+ *
+ * `beats` is therefore not uniformly spaced, and `beat_interval` is the median
+ * locked interval rather than a spacing every entry honours. Callers that need
+ * a specific beat's position must read `beats`; callers that need a tempo (a
+ * time-stretch ratio, say) want `bpm`.
  */
 TempoResult AnalyzeTempo(
   const std::vector<float>& samples,

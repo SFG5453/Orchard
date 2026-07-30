@@ -420,3 +420,86 @@ test('analysis diagnostics redact credentials and signed stream queries', async 
     analyzer.destroy();
   }
 });
+
+// Best Mix analyses the active track and the queue head at current/next
+// priority while it sorts, so priority alone cannot decide who pays for the
+// beat model. Only the live decks set `forPlayback`.
+function recordingSetup(cachedResult = null) {
+  const seen = [];
+  const analyzed = [];
+  const analyzer = createSmartCrossfadeAnalyzer({
+    decodeAudio: async () => audioBuffer(),
+    workerFactory: () => ({
+      onmessage: null,
+      onerror: null,
+      postMessage(message) {
+        if (message.prepareOnly) seen.push(Boolean(message.wantBeatWindows));
+        queueMicrotask(() => {
+          this.onmessage?.({ data: {
+            id: message.id,
+            prepared: {
+              samples: new Float32Array([0.1, -0.1]).buffer,
+              sampleRate: 11025,
+              duration: message.duration,
+              beatWindows: message.wantBeatWindows
+                ? [{ samples: new Float32Array([0.1]).buffer, sampleRate: 22050, offsetSeconds: 0 }]
+                : []
+            }
+          } });
+        });
+      },
+      terminate() {}
+    }),
+    nativeBridge: {
+      available: async () => true,
+      debug: async () => true,
+      get: async () => cachedResult,
+      store: async () => true,
+      analyze: async (trackId, samples, sampleRate, duration, priority, beatWindows) => {
+        analyzed.push({ priority, windows: beatWindows?.length || 0 });
+        return validAnalysis({ beatModelChecked: (beatWindows?.length || 0) > 0 });
+      }
+    }
+  });
+  return { analyzer, seen, analyzed };
+}
+
+test('Best Mix never pays for the beat model, even at transition priority', async () => {
+  const { analyzer, seen, analyzed } = recordingSetup();
+  // queueTransitionSort marks the active track "current" while sorting, but it
+  // is not playback and must not carry windows.
+  await analyzer.analyze('sorted-track', 'https://stream', { duration: 120, priority: 0 });
+  assert.deepEqual(seen, [false], 'a Best Mix request must not request beat windows');
+  assert.equal(analyzed[0].windows, 0, 'no windows may reach the main process');
+});
+
+test('the live decks do pay for the beat model', async () => {
+  const { analyzer, seen, analyzed } = recordingSetup();
+  await analyzer.analyze('playing-track', 'https://stream', {
+    duration: 120,
+    priority: 0,
+    forPlayback: true
+  });
+  assert.deepEqual(seen, [true]);
+  assert.equal(analyzed[0].windows, 1);
+});
+
+test('a playback request re-earns a cache entry that Best Mix wrote', async () => {
+  // Cached by Best Mix: Essentia ran, the model never did. Serving this to a
+  // playback request would mean the model never runs for anything Best Mix
+  // touched first.
+  const bestMixEntry = validAnalysis({ essentiaChecked: true });
+  const { analyzer, analyzed } = recordingSetup(bestMixEntry);
+  await analyzer.analyze('shared-track', 'https://stream', {
+    duration: 120,
+    priority: 1,
+    forPlayback: true
+  });
+  assert.equal(analyzed.length, 1, 'the entry must be re-earned, not served');
+  assert.equal(analyzed[0].windows, 1);
+
+  // The same entry is perfectly good for a Best Mix request.
+  const second = recordingSetup(bestMixEntry);
+  await second.analyzer.analyze('shared-track', 'https://stream', { duration: 120, priority: 1 });
+  assert.equal(second.analyzed.length, 0, 'Best Mix must reuse the cached entry');
+});

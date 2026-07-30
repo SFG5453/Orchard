@@ -166,3 +166,89 @@ test('native analyzer retains a useful late gap before resumed audio', async () 
     `unexpected mix-out: ${result.mixOutTime}`
   );
 });
+
+// A percussive track of known tempo and phase, long enough that a grid which is
+// extrapolated rather than tracked will have visibly drifted off it by the end.
+function clickTrack({ bpm, duration, sampleRate = 11025, backbeat = false, firstBeat = 1 }) {
+  const samples = new Float32Array(Math.floor(duration * sampleRate));
+  const beatSeconds = 60 / bpm;
+  const chord = [220, 261.63, 329.63];
+  let noise = 12345;
+  for (let index = 0; index < samples.length; index += 1) {
+    const time = index / sampleRate;
+    if (time < firstBeat) continue;
+    const tone = chord.reduce((sum, freq) => sum + Math.sin(2 * Math.PI * freq * time), 0) / 3;
+    const phase = (time - firstBeat) % beatSeconds;
+    const beatIndex = Math.floor((time - firstBeat) / beatSeconds) % 4;
+    let hit = 0;
+    if (phase < 0.04) {
+      const envelope = 1 - phase / 0.04;
+      // Kick on one and three, snare on two and four. The snare is deliberately
+      // the loudest thing in the bar: picking the loudest onset finds it, and
+      // that is a half-bar error.
+      const kickGain = backbeat ? (beatIndex === 0 ? 1 : beatIndex === 2 ? 0.6 : 0) : 0.9;
+      let snare = 0;
+      if (backbeat && (beatIndex === 1 || beatIndex === 3)) {
+        noise = (noise * 1103515245 + 12345) & 0x7fffffff;
+        snare = ((noise / 0x7fffffff) * 2 - 1) * envelope * 1.1;
+      }
+      hit = Math.sin(2 * Math.PI * 55 * time) * envelope * kickGain + snare;
+    }
+    samples[index] = 0.2 * tone + hit * 0.7;
+  }
+  return samples;
+}
+
+test('the beat grid holds phase to the end of a long track', async () => {
+  const bpm = 128;
+  const duration = 300;
+  const sampleRate = 11025;
+  const firstBeat = 1;
+  const result = await native.analyze(
+    clickTrack({ bpm, duration, sampleRate, firstBeat }),
+    sampleRate,
+    duration
+  );
+
+  // The grid used to be a metronome extrapolated from a tempo estimate that is
+  // quantized to about 0.15%, which is 90-300ms of accumulated phase error by
+  // the time a track reaches the mix-out anchor in its outro -- most of a beat,
+  // and enough on its own to stop two tracks ever lining up.
+  const beatSeconds = 60 / bpm;
+  const errorAt = (target) => {
+    const beat = result.beats.reduce(
+      (best, value) => (Math.abs(value - target) < Math.abs(best - target) ? value : best),
+      result.beats[0]
+    );
+    const index = Math.round((beat - firstBeat) / beatSeconds);
+    return Math.abs(beat - (firstBeat + index * beatSeconds));
+  };
+
+  assert.ok(Math.abs(result.bpm - bpm) < 0.05, `tempo drifted: ${result.bpm}`);
+  for (const target of [30, 120, 250]) {
+    assert.ok(errorAt(target) < 0.02, `grid is ${errorAt(target) * 1000}ms out at ${target}s`);
+  }
+});
+
+test('downbeats land on the kick rather than the backbeat snare', async () => {
+  const bpm = 120;
+  const duration = 180;
+  const sampleRate = 11025;
+  const firstBeat = 1;
+  const result = await native.analyze(
+    clickTrack({ bpm, duration, sampleRate, backbeat: true, firstBeat }),
+    sampleRate,
+    duration
+  );
+
+  const beatSeconds = 60 / bpm;
+  // Every downbeat must sit on beat one of the bar, not on two or four.
+  const offsets = result.downbeats
+    .filter((time) => time > firstBeat && time < duration - 5)
+    .map((time) => ((Math.round((time - firstBeat) / beatSeconds) % 4) + 4) % 4);
+  assert.ok(offsets.length > 10, `too few downbeats to judge: ${offsets.length}`);
+  assert.ok(
+    offsets.every((offset) => offset === 0),
+    `downbeats landed off beat one: ${[...new Set(offsets)].join(',')}`
+  );
+});

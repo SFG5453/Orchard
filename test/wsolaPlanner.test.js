@@ -142,6 +142,29 @@ test('shortens the fade rather than opening on lead-in silence', () => {
   assert.ok(Math.abs(plan.incomingCueTime + plan.overlapSeconds - plan.incomingDropTime) < 1e-9);
 });
 
+test('never overruns the drop when the intro is shorter than the one-bar floor', () => {
+  // A cold open: the track makes sound barely a beat before its drop, so the
+  // MIN_FADE_BEATS floor asks for four beats the intro cannot cover.
+  const nextAnalysis = analysisFor({ bpm: 126, duration: 200, mixInTime: 20 });
+  nextAnalysis.audibleStartTime = 18.4;
+  const plan = planWsolaTransition({
+    analysis: analysisFor({ bpm: 126, duration: 240 }),
+    nextAnalysis,
+    duration: 240,
+    nextDuration: 200
+  });
+
+  assert.equal(plan.ok, true, plan.reason);
+  assert.ok(plan.incomingCueTime >= 18.4 - 1e-9,
+    `cue ${plan.incomingCueTime} must not precede the audible start`);
+  // The invariant the whole shape rests on: the outgoing track reaches silence
+  // exactly as the incoming drops, never a beat after it.
+  assert.ok(Math.abs(plan.incomingCueTime + plan.overlapSeconds - plan.incomingDropTime) < 1e-9,
+    `overlap must end on the drop: ${plan.incomingCueTime} + ${plan.overlapSeconds} != ${plan.incomingDropTime}`);
+  assert.ok(plan.beats < 4, `expected the floor to yield to the intro, got ${plan.beats} beats`);
+  assert.equal(plan.fadeBeats, plan.beats);
+});
+
 test('prefers an analyzed drop over the plain mix-in time', () => {
   const analysis = analysisFor({ bpm: 126, duration: 200, mixInTime: 12 });
   analysis.mixInCandidates = [
@@ -235,6 +258,31 @@ test('both tracks singing through the fade shortens it to one bar', () => {
   assert.equal(plan.ok, true, plan.reason);
   assert.equal(plan.vocalClash, true);
   assert.equal(plan.fadeBeats, 4);
+});
+
+test('a clash confined to part of the window trims back a bar rather than jumping to the floor', () => {
+  // The incoming track sings throughout its intro (always vocal-active), so it
+  // is the outgoing side that decides whether each candidate window clashes.
+  // The outgoing track sings across [204, 215) -- squarely inside the 16-beat
+  // window ending at the mix-out anchor (220s, at 60 BPM 1s/beat) but mostly
+  // outside the tail-anchored 12-beat window, which starts at 208. The 16-beat
+  // check must clash; the 12-beat one must not. The old code checked only the
+  // full candidate and, on any clash at all, fell straight to the one-bar
+  // floor -- discarding three-quarters of a fade that a 12-beat window would
+  // have rendered clash-free. That is what made transitions too short.
+  const plan = planWsolaTransition({
+    analysis: withVocalMask(
+      analysisFor({ bpm: 60, duration: 240, mixOutTime: 220 }),
+      (time) => time >= 204 && time < 215
+    ),
+    nextAnalysis: withVocalMask(analysisFor({ bpm: 60, duration: 200, mixInTime: 20 }), () => true),
+    duration: 240,
+    nextDuration: 200
+  });
+
+  assert.equal(plan.ok, true, plan.reason);
+  assert.equal(plan.fadeBeats, 12, `expected the fade trimmed to 12 beats, got ${plan.fadeBeats}`);
+  assert.equal(plan.vocalClash, false, 'the 12-beat window that was actually used must not itself be a clash');
 });
 
 test('instrumental pairings keep the full fade', () => {

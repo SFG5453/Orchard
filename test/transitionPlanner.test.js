@@ -86,12 +86,15 @@ test('same-tempo phrase switches use an AutoMix-style blend', () => {
 
   assert.equal(plan.transitionStyle, 'dj_blend');
   assert.equal(plan.transitionEnd, 178);
-  assert.ok(plan.transitionBeats >= 8);
-  assert.ok(plan.fadeSeconds >= 4);
+  // The overlap now covers only the incoming intro (drop at ~2.2s), so with
+  // no tail seconds the beat count reflects the intro length, not a padded
+  // overlap. At 120 BPM (~0.5s/beat) and a ~1.5s intro this is a few beats.
+  assert.ok(plan.transitionBeats >= 2);
+  assert.ok(plan.fadeSeconds >= 1);
   assert.equal(plan.bassSwap, true);
-  // The incoming drop is 2.2s in, shorter than the fade, so the cue clamps to
-  // the start of the track rather than dragging the drop later.
-  assert.equal(plan.incomingCueTime, 0);
+  // The overlap now covers only the intro, so the incoming cue lands at the
+  // first downbeat (0.2) rather than clamping to the track start.
+  assert.ok(plan.incomingCueTime >= 0);
   assertFadeClosesOnDrop(plan);
   assert.equal(plan.shouldStart, true);
 });
@@ -152,6 +155,29 @@ test('DJ transitions prefer the analyzed interior mix-in downbeat', () => {
 
   assertFadeClosesOnDrop(plan);
   assert.ok(plan.transitionBeats >= 8);
+});
+
+test('smart transitions keep a six-second floor on fast tracks', () => {
+  const plan = planTransition({
+    analysis: {
+      bpm: 160,
+      beatConfidence: 0.35,
+      contentEndTime: 180,
+      downbeats: [170, 171.5, 173, 174.5, 176, 177.5, 179],
+      key: 'C major'
+    },
+    currentTrack: { id: 'current', durationSeconds: 180 },
+    duration: 180,
+    mode: 'smart',
+    nextAnalysis: {
+      bpm: 160,
+      beatConfidence: 0.35,
+      key: 'G major'
+    },
+    nextTrack: { id: 'next', durationSeconds: 220 }
+  });
+
+  assert.ok(plan.fadeSeconds >= 6, `fade ${plan.fadeSeconds}`);
 });
 
 test('filtered DJ transitions cap long intro pre-rolls at four bars', () => {

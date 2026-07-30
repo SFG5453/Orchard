@@ -60,6 +60,14 @@ const BED_POSITION = 0.5;
 // starts there.
 const BASS_SWAP_FRACTION = 0.7;
 
+// The outgoing track's mid band gives up an extra 6 dB across the fade, at
+// the rate the incoming track rises to replace it -- a DJ's mid EQ kill. The
+// bass swap keeps the low end exclusive, but above it the equal-power fade
+// alone holds both full arrangements at -3 dB each through the middle of the
+// overlap, and two beat-aligned mixes are correlated, so their mids sum hot
+// exactly where they collide. See `mid_duck` in the renderer.
+const MID_DUCK = 0.5;
+
 // Extra PCM around each slice so the WSOLA similarity search and filter
 // warm-up never run against a hard buffer edge.
 const SLICE_PADDING_SECONDS = 1.5;
@@ -184,35 +192,62 @@ export function planWsolaTransition({
   // down to a one-bar floor.
   if (fadeBeats < MIN_FADE_BEATS) fadeBeats = MIN_FADE_BEATS;
 
-  // Both sides singing through the fade is the case this shape exists to avoid,
-  // and when it happens anyway the shortest fade is the least bad one.
-  const fadeVocalClash = isVocalClash(
+  // Both sides singing through the fade is the case this shape exists to
+  // avoid -- but a clash over the *whole* candidate window does not mean the
+  // whole window is the problem. A vocal that only arrives in the outgoing
+  // track's last bar, or is already singing a bar into the incoming drop,
+  // used to collapse a 16-beat fade straight to the one-bar floor, because
+  // the check ran once against the full window and any overlap anywhere in it
+  // failed the whole thing. That is what made transitions too short far more
+  // often than the vocals actually required: back off one bar at a time
+  // instead, and use the longest window that is genuinely clash-free. Only a
+  // clash that survives all the way down to the floor falls back to it, which
+  // remains the least-bad option, same as before.
+  const clashOver = (beats) => isVocalClash(
     vocalActivityBetween(
       analysis,
-      overlapEndTarget - fadeBeats * outgoingBeatSeconds,
+      overlapEndTarget - beats * outgoingBeatSeconds,
       overlapEndTarget
     ),
     vocalActivityBetween(
       nextAnalysis,
-      Math.max(audibleStart, incomingDropTime - fadeBeats * incomingBeatSeconds),
+      Math.max(audibleStart, incomingDropTime - beats * incomingBeatSeconds),
       incomingDropTime
     )
   );
-  if (fadeVocalClash) fadeBeats = MIN_FADE_BEATS;
+  let fadeVocalClash = clashOver(fadeBeats);
+  while (fadeVocalClash && fadeBeats > MIN_FADE_BEATS) {
+    fadeBeats -= 4;
+    fadeVocalClash = clashOver(fadeBeats);
+  }
 
-  const overlapBeats = fadeBeats;
+  // The one-bar floor above can ask for more intro than the track owns: a track
+  // whose first downbeat is a beat and a half after it starts making sound has
+  // no four beats to give. Spending them anyway is what breaks the shape --
+  // `beats` is what the renderer mixes, so an overlap longer than the intro
+  // finishes *after* the drop, fading the outgoing track across the incoming
+  // arrangement, which is precisely what this plan exists to prevent.
+  //
+  // So the floor yields to the intro. Whole beats rather than whole bars here:
+  // this is already the degraded path, and a three-beat fade that lands on the
+  // drop is better than a four-beat one that overruns it.
+  const coverableBeats = Math.floor(
+    Math.max(0, incomingDropTime - audibleStart) / incomingBeatSeconds
+  );
+  const overlapBeats = Math.min(fadeBeats, coverableBeats);
+  if (overlapBeats < 1) return refuse('incoming-no-intro');
+
   // The same beat count on both grids: the outgoing side is consumed at its
   // own tempo and stretched onto the incoming grid by the renderer.
   const outgoingOverlapSeconds = overlapBeats * outgoingBeatSeconds;
   const overlapSeconds = overlapBeats * incomingBeatSeconds;
 
   // The overlap ends on the drop, so the incoming track enters a whole fade
-  // ahead of it. Clamped at its audible start so the mix never opens on
-  // lead-in silence; whatever the clamp takes away shortens the fade rather
-  // than moving the drop, which must stay where the analyzer found it.
-  const incomingCueTime = Math.max(audibleStart, incomingDropTime - overlapSeconds);
-  const fadeSeconds = incomingDropTime - incomingCueTime;
-  if (fadeSeconds <= 0) return refuse('incoming-no-intro');
+  // ahead of it. `coverableBeats` guarantees this clears the audible start, so
+  // the fade is the overlap exactly and the invariant holds by construction
+  // rather than by a clamp that silently moves one end without the other.
+  const incomingCueTime = incomingDropTime - overlapSeconds;
+  const fadeSeconds = overlapSeconds;
 
   const startTarget = overlapEndTarget - outgoingOverlapSeconds;
   const transitionStart = nearestAtOrBefore(analysis.downbeats, startTarget) ?? startTarget;
@@ -235,10 +270,14 @@ export function planWsolaTransition({
     transitionEnd,
     overlapSeconds,
     beats: overlapBeats,
-    fadeBeats,
+    // What the fade actually spends, after the intro has had its say. The
+    // pre-clamp target is not reported: nothing downstream can act on beats
+    // the incoming track had no room for.
+    fadeBeats: overlapBeats,
     handoffFraction: HANDOFF_FRACTION,
     bedPosition: BED_POSITION,
     bassSwapFraction: BASS_SWAP_FRACTION,
+    midDuck: MID_DUCK,
     outgoingBpm,
     incomingBpm,
     stretchRatio,

@@ -142,12 +142,43 @@ export function createWsolaCrossfade({
         anchor: transitionPlan.incomingSlice.anchor,
         bpm: transitionPlan.incomingBpm
       };
+      // The mid duck follows the fade curve, not the music. Asking the vocal
+      // model how much the outgoing track is actually singing across the
+      // overlap lets the renderer spend that duck only where there is a vocal
+      // to get out of the way.
+      //
+      // Sliced to exactly [transitionStart, transitionEnd] -- the overlap on
+      // the outgoing track's own timeline -- so the returned curve spans the
+      // overlap by construction and needs no cropping or offsetting to line
+      // up with the renderer's own 0..1 progress. The stretch between the two
+      // timelines is uniform, so fractional position is preserved through it.
+      let vocalDuckCurve;
+      if (typeof bridge?.vocalMask === 'function') {
+        const overlapChannels = sliceChannels(
+          fromBuffer,
+          transitionPlan.transitionStart,
+          transitionPlan.transitionEnd
+        );
+        const mask = overlapChannels.length
+          ? await bridge.vocalMask(overlapChannels, sampleRate).catch(() => null)
+          : null;
+        if (mask?.curve?.length) vocalDuckCurve = mask.curve;
+        report('wsola-vocal-mask', {
+          trackId: String(toTrackId),
+          points: mask?.curve?.length || 0
+        });
+      }
+
       const result = await bridge.renderTransition(outgoing, incoming, {
         sampleRate,
         beats: transitionPlan.beats,
         bassSwap: transitionPlan.bassSwapFraction,
         handoff: transitionPlan.handoffFraction,
-        bed: transitionPlan.bedPosition
+        bed: transitionPlan.bedPosition,
+        midDuck: transitionPlan.midDuck,
+        // Omitted rather than passed empty when the model had no opinion, so
+        // the renderer's own "no curve means flat duck" default applies.
+        ...(vocalDuckCurve ? { vocalDuckCurve } : {})
       });
       if (!result?.rendered) {
         entry.status = 'failed';

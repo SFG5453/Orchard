@@ -349,3 +349,130 @@ test('audio analysis service renders beat-matched transitions over IPC', async (
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('beat-model windows pre-empt Essentia, and its refusal restores it', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
+  const nativeModulePath = path.resolve('native/build/Release/orchard_audio_analysis.node');
+  const essentiaCalls = [];
+  const modelCalls = [];
+  const ipc = fakeIpcMain();
+  let modelAnswer = {
+    beatConfidence: 0.93,
+    beatModelChecked: true,
+    beatModelBpm: 126,
+    beatModelAgreement: 0.02,
+    downbeats: [1, 2, 3]
+  };
+  const service = setupAudioAnalysisService({
+    cachePath: path.join(directory, 'cache.json'),
+    ipcMain: ipc,
+    nativeModulePath,
+    logger: () => {},
+    refineConfidence: () => {
+      essentiaCalls.push(1);
+      return { beatConfidence: 0.6, essentiaConfidence: 2.0, essentiaBpm: 120, elapsedMs: 1 };
+    },
+    refineBeats: (rawResult, windows, { beatSpectrogram, track }) => {
+      modelCalls.push({
+        windows: windows.length,
+        hasSpectrogram: typeof beatSpectrogram === 'function',
+        // Inference must be routed through the utility process, never run
+        // inline in the main process.
+        hasTrack: typeof track === 'function'
+      });
+      return modelAnswer;
+    },
+    createModelHost: () => ({ track: async () => null, stop: () => {} })
+  });
+
+  try {
+    const track = tone();
+    const windowed = await ipc.invoke('audio-analysis:analyze', {
+      trackId: 'model-track',
+      samples: track.samples,
+      sampleRate: track.sampleRate,
+      duration: track.duration,
+      priority: 1,
+      beatWindows: [
+        { samples: new Float32Array(22050), sampleRate: 22050, offsetSeconds: 0 },
+        { samples: new Float32Array(22050), sampleRate: 22050, offsetSeconds: 100 }
+      ]
+    });
+    assert.deepEqual(modelCalls, [{ windows: 2, hasSpectrogram: true, hasTrack: true }]);
+    assert.equal(essentiaCalls.length, 0, 'a model verdict must skip the Essentia pass');
+    assert.equal(windowed.beatConfidence, 0.93);
+    assert.deepEqual(windowed.downbeats, [1, 2, 3]);
+
+    // No opinion from the model: the Essentia pass is back on duty.
+    modelAnswer = null;
+    const declined = await ipc.invoke('audio-analysis:analyze', {
+      trackId: 'declined-track',
+      samples: track.samples,
+      sampleRate: track.sampleRate,
+      duration: track.duration,
+      priority: 1,
+      beatWindows: [{ samples: new Float32Array(22050), sampleRate: 22050, offsetSeconds: 0 }]
+    });
+    assert.equal(essentiaCalls.length, 1, 'a declined model must fall back to Essentia');
+    assert.equal(declined.beatConfidence, 0.6);
+
+    // No windows at all -- a background-priority analysis -- never touches
+    // the model.
+    const bare = await ipc.invoke('audio-analysis:analyze', {
+      trackId: 'bare-track',
+      samples: track.samples,
+      sampleRate: track.sampleRate,
+      duration: track.duration,
+      priority: 2
+    });
+    assert.equal(modelCalls.length, 2, 'an analysis without windows must not call the model');
+    assert.ok(bare.bpm > 0);
+  } finally {
+    await service.stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('a declined model still stamps beatModelChecked so the track is not re-analysed forever', async () => {
+  // `beatModelChecked` records that the pass ran, not that it produced a
+  // verdict -- exactly like `essentiaChecked`. Without the stamp the renderer's
+  // cache gate would re-decode and re-analyse the track on every play.
+  const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
+  const nativeModulePath = path.resolve('native/build/Release/orchard_audio_analysis.node');
+  const ipc = fakeIpcMain();
+  const service = setupAudioAnalysisService({
+    cachePath: path.join(directory, 'cache.json'),
+    ipcMain: ipc,
+    nativeModulePath,
+    logger: () => {},
+    refineConfidence: () => null,
+    refineBeats: () => null,
+    createModelHost: () => ({ track: async () => null, stop: () => {} })
+  });
+
+  try {
+    const track = tone();
+    const declined = await ipc.invoke('audio-analysis:analyze', {
+      trackId: 'declined-model',
+      samples: track.samples,
+      sampleRate: track.sampleRate,
+      duration: track.duration,
+      priority: 1,
+      beatWindows: [{ samples: new Float32Array(22050), sampleRate: 22050, offsetSeconds: 0 }]
+    });
+    assert.equal(declined.beatModelChecked, true);
+
+    // A background analysis, which never had windows, must not claim the pass ran.
+    const background = await ipc.invoke('audio-analysis:analyze', {
+      trackId: 'no-windows',
+      samples: track.samples,
+      sampleRate: track.sampleRate,
+      duration: track.duration,
+      priority: 2
+    });
+    assert.notEqual(background.beatModelChecked, true);
+  } finally {
+    await service.stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

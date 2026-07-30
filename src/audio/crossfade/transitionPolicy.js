@@ -24,7 +24,7 @@ export const MIN_BPM = 40;
 export const MAX_BPM = 220;
 
 // Mirrors kMaxTransparentRatioDeviation in native/transition/wsola.h.
-export const MAX_STRETCH_DEVIATION = 0.08;
+export const MAX_STRETCH_DEVIATION = 0.04;
 
 // A vocal-activity mask value at or above this counts as singing. The JS
 // fallback analyzer emits a flat 0.5 mask, so unknown material never trips
