@@ -398,30 +398,42 @@ html[data-layout-preset="canopy"] .sidebar .q-drawer__content {
 }
 
 html[data-layout-preset="canopy"] .sidebar-inner {
-  gap: 8px;
-  padding: calc(var(--canopy-bar-height) + 10px) 8px 10px;
+  gap: 16px;
+  padding: calc(var(--canopy-bar-height) + 16px) 12px 16px;
 }
 
 html[data-layout-preset="canopy"] .sidebar-mini {
-  padding-top: calc(var(--canopy-bar-height) + 8px);
+  padding-top: calc(var(--canopy-bar-height) + 16px);
 }
 
 html[data-layout-preset="canopy"] .sidebar-label,
 html[data-layout-preset="canopy"] .sidebar-section-heading {
   color: var(--canopy-eyebrow);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.13em;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
+  padding: 6px 14px;
 }
 
 html[data-layout-preset="canopy"] .nav-link,
 html[data-layout-preset="canopy"] .library-link {
   position: relative;
-  min-height: 34px;
-  padding-left: 14px;
+  min-height: 38px;
+  padding: 0 14px;
+  gap: 12px;
   border-radius: var(--canopy-radius-sm);
-  font-size: 13px;
+  font-size: 13.5px;
+}
+
+html[data-layout-preset="canopy"] .library-link {
+  grid-template-columns: 30px minmax(0, 1fr);
+}
+
+html[data-layout-preset="canopy"] .library-link__cover,
+html[data-layout-preset="canopy"] .library-link__cover--empty {
+  width: 30px;
+  height: 30px;
 }
 
 html[data-layout-preset="canopy"] .nav-link--active,
