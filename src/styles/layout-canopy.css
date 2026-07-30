@@ -1,0 +1,1095 @@
+/*
+ * Canopy - the 4.0.0 interface redesign, selectable in Settings > Appearance.
+ * Ported from the Abandoned Tauri build of Orchard.
+ */
+
+html[data-layout-preset="canopy"] {
+  --canopy-radius: 6px;
+  --canopy-radius-sm: 4px;
+  --canopy-rule: rgba(255, 255, 255, 0.07);
+  --canopy-rule-strong: rgba(255, 255, 255, 0.13);
+  --canopy-surface: rgba(255, 255, 255, 0.022);
+  --canopy-surface-hover: rgba(255, 255, 255, 0.05);
+  --canopy-eyebrow: rgba(255, 255, 255, 0.42);
+  --canopy-accent: var(--primary, #2fdf93);
+  --canopy-bar-height: 64px;
+
+  /* Chrome is the frame the canvas floats on; both carry a slight green cast so
+   * the shell reads as tinted rather than the flat #000 Grove uses. */
+  --canopy-chrome: #0a0d0b;
+  --canopy-canvas: #0f1310;
+  --canopy-readout-bg: rgba(255, 255, 255, 0.035);
+}
+
+/* ------------------------------------------------------------ the bar ---- */
+
+/* Canopy folds the transport into the titlebar and deletes the bottom player
+ * bar outright, which is the structural difference between the two presets.
+ * AppFrame swaps CanopyTitlebar in and drops PlayerBar when this preset is on. */
+html[data-layout-preset="canopy"] .canopy-bar {
+  position: fixed;
+  z-index: 7000;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  height: var(--canopy-bar-height);
+  align-items: center;
+  gap: 10px;
+  padding: 0 0 0 14px;
+  border-bottom: 1px solid var(--canopy-rule);
+  background: var(--canopy-chrome);
+  -webkit-app-region: drag;
+}
+
+/* With the OS drawing its own titlebar there are no window buttons to sit flush
+ * against, so the utility cluster needs its own right gutter. */
+html[data-layout-preset="canopy"] .canopy-bar--native {
+  padding-right: 12px;
+}
+
+html[data-layout-preset="canopy"] .canopy-bar__brand,
+html[data-layout-preset="canopy"] .canopy-bar__transport,
+html[data-layout-preset="canopy"] .canopy-readout,
+html[data-layout-preset="canopy"] .canopy-bar__utility,
+html[data-layout-preset="canopy"] .canopy-bar__controls,
+html[data-layout-preset="canopy"] .canopy-bar .q-btn {
+  -webkit-app-region: no-drag;
+}
+
+html[data-layout-preset="canopy"] .canopy-bar__brand {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+html[data-layout-preset="canopy"] .canopy-bar__mark {
+  width: 22px;
+  height: 22px;
+}
+
+html[data-layout-preset="canopy"] .canopy-bar__name {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+html[data-layout-preset="canopy"] .canopy-bar__transport {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+html[data-layout-preset="canopy"] .canopy-bar__button {
+  color: var(--muted-strong);
+}
+
+html[data-layout-preset="canopy"] .canopy-bar__button--play .q-icon {
+  font-size: 26px;
+}
+
+/* The readout - Cider calls this the LCD. Artwork, then a stacked copy column of
+ * title / artist-album / scrubber, with elapsed and total pinned to the right. */
+html[data-layout-preset="canopy"] .canopy-readout {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  max-width: 660px;
+  height: 52px;
+  flex: 1 1 auto;
+  align-items: center;
+  padding: 0 12px 0 0;
+  border: 1px solid var(--canopy-rule);
+  border-radius: var(--canopy-radius);
+  margin: 0 auto;
+  background: var(--canopy-readout-bg);
+  gap: 10px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout--empty {
+  opacity: 0.75;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__art {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  margin-left: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__image {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--canopy-radius-sm);
+  place-items: center;
+  object-fit: cover;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__image--empty {
+  background: var(--canopy-surface-hover);
+  color: var(--muted);
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+  text-align: center;
+}
+
+/* Title, artist and album are all buttons; they need to look like text until
+ * pointed at, or the readout turns into a row of controls. */
+html[data-layout-preset="canopy"] .canopy-readout__link {
+  overflow: hidden;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__link:hover:not(:disabled) {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__link:disabled {
+  cursor: default;
+  text-decoration: none;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__dash {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__meta {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__times {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The scrubber sits at the bottom of the readout container, spanning its width */
+html[data-layout-preset="canopy"] .canopy-readout__progress {
+  position: absolute;
+  bottom: 0;
+  left: 57px;
+  right: 12px;
+  display: flex;
+  height: 8px;
+  align-items: center;
+  padding: 0;
+}
+
+/* Quasar gives the slider a min-height and track padding sized for a standalone
+ * control; both have to be collapsed or it overruns the readout's bottom edge. */
+html[data-layout-preset="canopy"] .canopy-readout__progress .q-slider {
+  width: 100%;
+  min-height: 0;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__progress .q-slider__track-container {
+  min-height: 0;
+  padding: 0;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__progress .q-slider__track {
+  height: 3px;
+  border-radius: 2px;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__progress .q-slider__track::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: var(--crossfade-left, 100%);
+  right: var(--crossfade-right, 0%);
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(var(--player-accent-rgb, 47, 223, 147), 0.38);
+  box-shadow: inset 2px 0 rgba(var(--player-accent-rgb, 47, 223, 147), 0.95);
+  opacity: var(--crossfade-opacity, 0);
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 160ms ease, left 160ms ease, right 160ms ease;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__progress .q-slider__inner {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* The thumb only shows on hover, so at rest the scrubber reads as a progress
+ * rule rather than a control competing with the copy above it. */
+html[data-layout-preset="canopy"] .canopy-readout__progress .q-slider__thumb {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout:hover .q-slider__thumb {
+  opacity: 1;
+}
+
+html[data-layout-preset="canopy"] .canopy-bar__utility {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+html[data-layout-preset="canopy"] .canopy-bar__volume {
+  display: flex;
+  width: 104px;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-strong);
+}
+
+html[data-layout-preset="canopy"] .canopy-bar__volume-slider {
+  min-width: 0;
+}
+
+html[data-layout-preset="canopy"] .canopy-bar__controls {
+  display: flex;
+  height: 100%;
+  flex: 0 0 auto;
+  margin-left: 4px;
+}
+
+html[data-layout-preset="canopy"] .canopy-bar__controls button {
+  display: grid;
+  width: 44px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--muted-strong);
+  place-items: center;
+}
+
+html[data-layout-preset="canopy"] .canopy-bar__controls button:hover {
+  background: var(--canopy-surface-hover);
+  color: var(--text);
+}
+
+html[data-layout-preset="canopy"] .canopy-bar__controls .canopy-bar__close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+/* ---- shell ---- */
+
+html[data-layout-preset="canopy"] body,
+html[data-layout-preset="canopy"] .app-shell {
+  background: var(--canopy-chrome);
+}
+
+/* Everything below the bar is one inset, rounded canvas floating on the chrome -
+ * the sidebar sits on the chrome, the page sits on the canvas. */
+html[data-layout-preset="canopy"] .q-page-container {
+  padding-top: var(--canopy-bar-height);
+}
+
+html[data-layout-preset="canopy"] .page:has(.detail-page--artist) {
+  background: linear-gradient(to bottom, rgba(var(--player-accent-deep-rgb), 0.5) 0%, var(--canopy-chrome) 60vh);
+  background-attachment: fixed;
+}
+
+html[data-layout-preset="canopy"] .page {
+  min-height: calc(100vh - var(--canopy-bar-height));
+  padding: 0 0 84px;
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  background: var(--canopy-chrome);
+}
+
+html[data-layout-preset="canopy"] .content-shell,
+html[data-layout-preset="canopy"] .settings-view,
+html[data-layout-preset="canopy"] .support-view,
+html[data-layout-preset="canopy"] .detail-page,
+html[data-layout-preset="canopy"] .search-view {
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: 0 26px;
+}
+
+/* The header sticks so the page identity survives a long scroll - Grove scrolls
+ * its 34px title away entirely. */
+html[data-layout-preset="canopy"] .topbar {
+  position: sticky;
+  z-index: 30;
+  top: 0;
+  display: grid;
+  padding: 12px 26px 10px;
+  margin-bottom: 18px;
+  background: linear-gradient(to bottom, var(--canopy-chrome) 68%, transparent);
+  gap: 8px;
+}
+
+html[data-layout-preset="canopy"] .viewport-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+html[data-layout-preset="canopy"] .back-button {
+  border: 1px solid var(--canopy-rule) !important;
+  border-radius: var(--canopy-radius-sm) !important;
+}
+
+html[data-layout-preset="canopy"] .topbar-copy h1 {
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+html[data-layout-preset="canopy"] .topbar-copy p {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+/* ---- sidebar ---- */
+
+html[data-layout-preset="canopy"] .sidebar,
+html[data-layout-preset="canopy"] .sidebar .q-drawer__content {
+  border-right: 0;
+  background: var(--canopy-chrome);
+}
+
+html[data-layout-preset="canopy"] .sidebar-inner {
+  gap: 8px;
+  padding: calc(var(--canopy-bar-height) + 10px) 8px 10px;
+}
+
+html[data-layout-preset="canopy"] .sidebar-mini {
+  padding-top: calc(var(--canopy-bar-height) + 8px);
+}
+
+html[data-layout-preset="canopy"] .sidebar-label,
+html[data-layout-preset="canopy"] .sidebar-section-heading {
+  color: var(--canopy-eyebrow);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+html[data-layout-preset="canopy"] .nav-link,
+html[data-layout-preset="canopy"] .library-link {
+  position: relative;
+  min-height: 34px;
+  padding-left: 14px;
+  border-radius: var(--canopy-radius-sm);
+  font-size: 13px;
+}
+
+html[data-layout-preset="canopy"] .nav-link--active,
+html[data-layout-preset="canopy"] .library-link--active {
+  background: var(--canopy-accent);
+  color: #fff;
+}
+
+/* Accent rail on the active row rather than Grove's filled maroon pill. */
+html[data-layout-preset="canopy"] .nav-link--active::before,
+html[data-layout-preset="canopy"] .library-link--active::before {
+  display: none;
+}
+
+html[data-layout-preset="canopy"] .sidebar-search-input,
+html[data-layout-preset="canopy"] .search-input {
+  border: 1px solid var(--canopy-rule);
+  border-radius: var(--canopy-radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* ---- surfaces ---- */
+
+html[data-layout-preset="canopy"] .table-card,
+html[data-layout-preset="canopy"] .queue-panel,
+html[data-layout-preset="canopy"] .now-panel,
+html[data-layout-preset="canopy"] .device-card,
+html[data-layout-preset="canopy"] .settings-section,
+html[data-layout-preset="canopy"] .search-top-card,
+html[data-layout-preset="canopy"] .playlist-card {
+  border: 1px solid var(--canopy-rule);
+  border-radius: var(--canopy-radius);
+  background: var(--canopy-surface);
+  box-shadow: none;
+}
+
+html[data-layout-preset="canopy"] .action-button,
+html[data-layout-preset="canopy"] .filter-pill,
+html[data-layout-preset="canopy"] .settings-option,
+html[data-layout-preset="canopy"] .device-card__actions button {
+  min-height: 32px;
+  border: 1px solid var(--canopy-rule);
+  border-radius: var(--canopy-radius-sm);
+  background: transparent;
+  font-size: 12px;
+}
+
+html[data-layout-preset="canopy"] .action-button:hover,
+html[data-layout-preset="canopy"] .filter-pill:hover,
+html[data-layout-preset="canopy"] .settings-option:hover {
+  border-color: var(--canopy-rule-strong);
+  background: var(--canopy-surface-hover);
+}
+
+html[data-layout-preset="canopy"] .filter-pill--active,
+html[data-layout-preset="canopy"] .settings-option--active {
+  border-color: var(--canopy-accent);
+  background: rgba(47, 223, 147, 0.1);
+  color: var(--text);
+}
+
+/* ---- home view ---- */
+
+html[data-layout-preset="canopy"] .home-view {
+  display: grid;
+  gap: 34px;
+}
+
+html[data-layout-preset="canopy"] .shelf-section {
+  margin: 0;
+}
+
+/* Shelf titles become a rule-and-eyebrow pair so a long home page reads as a
+ * stack of labelled bands instead of a run of competing 25px headings. */
+html[data-layout-preset="canopy"] .section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--canopy-rule);
+  gap: 14px;
+}
+
+html[data-layout-preset="canopy"] .section-header h2,
+html[data-layout-preset="canopy"] .section-header--compact h2,
+html[data-layout-preset="canopy"] .now-panel__copy h3 {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+html[data-layout-preset="canopy"] .section-header span {
+  font-size: 11px;
+}
+
+html[data-layout-preset="canopy"] .section-more-button {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+html[data-layout-preset="canopy"] .media-rail {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 20px 16px;
+}
+
+html[data-layout-preset="canopy"] .media-card {
+  gap: 7px;
+  transition: transform 160ms ease;
+}
+
+html[data-layout-preset="canopy"] .media-card:hover {
+  background: transparent;
+  transform: translateY(-3px);
+}
+
+html[data-layout-preset="canopy"] .media-card__art,
+html[data-layout-preset="canopy"] .media-card__art--empty,
+html[data-layout-preset="canopy"] .playlist-card__art,
+html[data-layout-preset="canopy"] .search-media-card__art {
+  border: 1px solid var(--canopy-rule);
+  border-radius: var(--canopy-radius-sm);
+  transition: border-color 160ms ease;
+}
+
+html[data-layout-preset="canopy"] .media-card:hover .media-card__art,
+html[data-layout-preset="canopy"] .media-card:hover .media-card__art--empty {
+  border-color: var(--canopy-rule-strong);
+}
+
+html[data-layout-preset="canopy"] .media-card__title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+html[data-layout-preset="canopy"] .media-card__meta,
+html[data-layout-preset="canopy"] .media-card__stat {
+  font-size: 11px;
+}
+
+/* ---- home top picks ---- */
+
+html[data-layout-preset="canopy"] .home-shelf--top-picks .media-rail {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card {
+  position: relative;
+  aspect-ratio: 0.85;
+  /* slightly taller than square */
+  border-radius: var(--canopy-radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 16px;
+  border: none;
+}
+
+html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+}
+
+html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0) 70%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card__title,
+html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card__meta,
+html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card__stat,
+html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card__brand {
+  position: relative;
+  z-index: 2;
+}
+
+html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card__title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 0px;
+  color: #fff;
+}
+
+html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card__meta {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card__stat {
+  order: -1;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 4px;
+}
+
+html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card__brand {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+}
+
+html[data-layout-preset="canopy"] .media-card__brand-icon {
+  width: 12px;
+  height: 12px;
+}
+
+/* ---- album / playlist / artist ---- */
+
+/* Grove's hero is a 300px+ artwork slab. Canopy trades height for a wide banner
+ * so the tracklist is on screen without scrolling. */
+html[data-layout-preset="canopy"] .detail-hero,
+html[data-layout-preset="canopy"] .hero-panel {
+  min-height: 240px;
+  grid-template-columns: 240px minmax(0, 1fr);
+  align-items: end;
+  padding: 32px 36px;
+  border: 1px solid var(--canopy-rule);
+  border-radius: calc(var(--canopy-radius) * 1.5);
+  margin-bottom: 28px;
+  gap: 32px;
+}
+
+html[data-layout-preset="canopy"] .detail-art,
+html[data-layout-preset="canopy"] .detail-art--empty {
+  border: 1px solid var(--canopy-rule-strong);
+  border-radius: var(--canopy-radius);
+  box-shadow: 0 12px 38px rgba(0, 0, 0, 0.55);
+}
+
+html[data-layout-preset="canopy"] .detail-hero h1,
+html[data-layout-preset="canopy"] .detail-hero h2,
+html[data-layout-preset="canopy"] .hero-panel__copy h2 {
+  font-size: clamp(34px, 4.5vw, 48px);
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin-bottom: 6px;
+}
+
+html[data-layout-preset="canopy"] .detail-subtitle,
+html[data-layout-preset="canopy"] .detail-meta {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--collection {
+  align-items: end;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 480px;
+  border: none;
+  border-radius: 0;
+  margin: -22px -26px 34px -26px;
+  /* pull out to edges of content shell */
+  padding: 40px;
+  overflow: hidden;
+  background: transparent !important;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist::before,
+html[data-layout-preset="canopy"] .detail-hero--artist::after {
+  display: none !important;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-hero__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  z-index: 1;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-art,
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-art .q-img__image,
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-art .q-img__container {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  object-fit: cover;
+  object-position: center 25%;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-hero__copy {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  padding: 0;
+  align-self: flex-start;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-title-line {
+  order: 2;
+  margin-bottom: 14px;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-artist-genre {
+  order: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  width: fit-content;
+  margin-bottom: 12px;
+  color: #fff;
+  border: none;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-meta {
+  order: 3;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-description,
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-description-trigger {
+  order: 4;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions {
+  order: 5;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-hero__copy h1,
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-hero__copy h2 {
+  font-size: clamp(48px, 6vw, 72px);
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary {
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary .action-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary .action-button span {
+  display: none;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary .action-button .q-icon {
+  margin: 0;
+  font-size: 20px;
+}
+
+html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary .action-button--primary {
+  width: 56px;
+  height: 56px;
+  background: var(--canopy-accent);
+  color: #000;
+}
+
+html[data-layout-preset="canopy"] .artist-track-heading,
+html[data-layout-preset="canopy"] .album-video-section .section-header h2 {
+  font-size: 12px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+html[data-layout-preset="canopy"] .custom-artist-album-wall__tile,
+html[data-layout-preset="canopy"] .album-video-card__art {
+  border-radius: var(--canopy-radius-sm);
+}
+
+/* ---- tracklists ---- */
+
+html[data-layout-preset="canopy"] .table-head {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--canopy-rule);
+  color: var(--canopy-eyebrow);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+html[data-layout-preset="canopy"] .table-row {
+  position: relative;
+}
+
+html[data-layout-preset="canopy"] .playlist-virtual-row {
+  position: absolute;
+}
+
+/* ---- artist top songs grid ---- */
+html[data-layout-preset="canopy"] .table-card--artist .table-head {
+  display: none;
+}
+
+html[data-layout-preset="canopy"] .table-card--artist .playlist-nonvirtual-tracks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 32px;
+  row-gap: 8px;
+}
+
+html[data-layout-preset="canopy"] .table-card--artist .table-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: var(--canopy-radius);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+}
+
+html[data-layout-preset="canopy"] .table-card--artist .table-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+html[data-layout-preset="canopy"] .table-card--artist .table-index,
+html[data-layout-preset="canopy"] .table-card--artist .table-album,
+html[data-layout-preset="canopy"] .table-card--artist .table-artist {
+  display: none;
+}
+
+html[data-layout-preset="canopy"] .table-card--artist .table-track {
+  flex: 1;
+  min-width: 0;
+}
+
+html[data-layout-preset="canopy"] .table-card--artist .table-time {
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-right: 12px;
+}
+
+html[data-layout-preset="canopy"] .table-row,
+html[data-layout-preset="canopy"] .playlist-virtual-row {
+  padding: 7px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.035);
+}
+
+html[data-layout-preset="canopy"] .table-row:hover {
+  background: var(--canopy-surface-hover);
+}
+
+html[data-layout-preset="canopy"] .table-row--active {
+  background: rgba(47, 223, 147, 0.07);
+}
+
+html[data-layout-preset="canopy"] .table-row--active::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: var(--canopy-accent);
+  content: '';
+}
+
+html[data-layout-preset="canopy"] .table-copy strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+html[data-layout-preset="canopy"] .table-copy small,
+html[data-layout-preset="canopy"] .table-time {
+  font-size: 11px;
+}
+
+html[data-layout-preset="canopy"] .table-cover,
+html[data-layout-preset="canopy"] .table-cover--empty,
+html[data-layout-preset="canopy"] .playlist-track-artwork {
+  border-radius: 3px;
+}
+
+/* ---- search ---- */
+
+/* Filters read as tabs on a rule rather than a row of loose pills. */
+html[data-layout-preset="canopy"] .search-filters {
+  gap: 2px;
+  border-bottom: 1px solid var(--canopy-rule);
+}
+
+html[data-layout-preset="canopy"] .search-filter {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+html[data-layout-preset="canopy"] .search-filter:hover {
+  background: transparent;
+  color: var(--text);
+}
+
+html[data-layout-preset="canopy"] .search-filter--active {
+  border-bottom-color: var(--canopy-accent);
+  background: transparent;
+  color: var(--text);
+}
+
+html[data-layout-preset="canopy"] .search-top-card,
+html[data-layout-preset="canopy"] .search-media-card {
+  border-radius: var(--canopy-radius);
+}
+
+html[data-layout-preset="canopy"] .search-top-card:hover,
+html[data-layout-preset="canopy"] .search-media-card:hover {
+  border-color: var(--canopy-rule-strong);
+  background: var(--canopy-surface-hover);
+}
+
+html[data-layout-preset="canopy"] .search-top-card__type {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ---- right panel / queue ---- */
+
+html[data-layout-preset="canopy"] .right-panel,
+html[data-layout-preset="canopy"] .right-panel .q-drawer__content,
+html[data-layout-preset="canopy"] .side-column,
+html[data-layout-preset="canopy"] .lyrics-sidebar {
+  border-left: 0;
+  background: var(--canopy-chrome);
+}
+
+html[data-layout-preset="canopy"] .right-panel__inner,
+html[data-layout-preset="canopy"] .lyrics-sidebar__inner {
+  padding-top: calc(var(--canopy-bar-height) + 10px);
+}
+
+html[data-layout-preset="canopy"] .right-panel-heading,
+html[data-layout-preset="canopy"] .right-panel-toolbar {
+  border-bottom: 1px solid var(--canopy-rule);
+  color: var(--canopy-eyebrow);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+html[data-layout-preset="canopy"] .queue-preview__item {
+  border-radius: var(--canopy-radius-sm);
+}
+
+html[data-layout-preset="canopy"] .queue-preview__cover,
+html[data-layout-preset="canopy"] .queue-preview__cover--empty,
+html[data-layout-preset="canopy"] .now-panel__cover,
+html[data-layout-preset="canopy"] .now-panel__cover--empty {
+  border-radius: var(--canopy-radius-sm);
+}
+
+/* ---- settings ---- */
+
+html[data-layout-preset="canopy"] .settings-section {
+  padding: 18px 20px;
+}
+
+html[data-layout-preset="canopy"] .settings-section__heading h2 {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+html[data-layout-preset="canopy"] .settings-row {
+  padding: 12px 0;
+  border-top: 1px solid var(--canopy-rule);
+}
+
+html[data-layout-preset="canopy"] .settings-row__copy label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+html[data-layout-preset="canopy"] .settings-row__copy p {
+  font-size: 11px;
+}
+
+html[data-layout-preset="canopy"] .settings-index a {
+  border-radius: var(--canopy-radius-sm);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ---- responsive ---- */
+
+@media (max-width: 1180px) {
+
+  html[data-layout-preset="canopy"] .content-shell,
+  html[data-layout-preset="canopy"] .settings-view,
+  html[data-layout-preset="canopy"] .support-view,
+  html[data-layout-preset="canopy"] .detail-page,
+  html[data-layout-preset="canopy"] .search-view,
+  html[data-layout-preset="canopy"] .topbar {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  html[data-layout-preset="canopy"] .detail-hero,
+  html[data-layout-preset="canopy"] .hero-panel {
+    grid-template-columns: 180px minmax(0, 1fr);
+    padding: 24px;
+    gap: 22px;
+  }
+
+  html[data-layout-preset="canopy"] .detail-hero h1,
+  html[data-layout-preset="canopy"] .detail-hero h2 {
+    font-size: 32px;
+  }
+
+  html[data-layout-preset="canopy"] .media-rail {
+    grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
+    gap: 16px 12px;
+  }
+}
+
+@media (max-width: 820px) {
+
+  html[data-layout-preset="canopy"] .detail-hero,
+  html[data-layout-preset="canopy"] .hero-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html[data-layout-preset="canopy"] .detail-hero__art {
+    max-width: 148px;
+  }
+}

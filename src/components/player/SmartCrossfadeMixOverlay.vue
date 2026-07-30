@@ -7,6 +7,7 @@ export default {
   setup(props) {
     const mix = computed(() => props.app.smartCrossfadeMix.value);
     const isFullscreen = computed(() => props.app.fullscreenPlayerOpen.value);
+    const layoutPreset = computed(() => props.app.layoutPreset.value);
 
     const fullscreenMixStyle = computed(() => ({
       ...props.app.playerBarStyle.value,
@@ -31,7 +32,7 @@ export default {
       props.app.dismissSmartCrossfadeMix?.();
     }
 
-    return { mix, isFullscreen, fullscreenMixStyle, barMixStyle, transitionDetail, dismiss };
+    return { mix, isFullscreen, layoutPreset, fullscreenMixStyle, barMixStyle, transitionDetail, dismiss };
   }
 };
 </script>
@@ -116,8 +117,8 @@ export default {
     </Transition>
   </Teleport>
 
-  <!-- Compact bar: teleported to body, visible when NOT fullscreen -->
-  <Teleport to="body">
+  <!-- Compact bar: teleported to canopy readout if preset is canopy, else body -->
+  <Teleport defer :to="layoutPreset === 'canopy' ? '.canopy-readout' : 'body'">
     <Transition name="smart-crossfade-bar" appear>
       <div
         v-if="mix.visible && !isFullscreen"

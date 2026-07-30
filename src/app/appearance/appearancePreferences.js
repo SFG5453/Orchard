@@ -10,6 +10,7 @@ export const APPEARANCE_DEFAULTS = {
   graphicsMode: GRAPHICS_MODES.AUTOMATIC,
   immersiveBackgroundIntensity: 'balanced',
   immersiveBackgroundMotion: 'animated',
+  layoutPreset: 'grove',
   themePreference: 'dark'
 };
 
@@ -30,6 +31,17 @@ export const IMMERSIVE_BACKGROUND_INTENSITY_OPTIONS = [
 export const IMMERSIVE_BACKGROUND_MOTION_OPTIONS = [
   { label: 'Animated artwork', value: 'animated' },
   { label: 'Artwork warp', value: 'static' }
+];
+
+/*
+ * Layout presets carry codenames so a preset can be talked about (and reported in
+ * bugs) without pinning it to "old" and "new" as more shapes land.
+ *   Grove  - the original sidebar + floating player island shell.
+ *   Canopy - the 4.0.0 redesign: docked player, sticky compact header, centered content.
+ */
+export const LAYOUT_PRESET_OPTIONS = [
+  { label: 'Grove', value: 'grove', description: 'The classic Orchard shell: roomy headers and a floating player island.' },
+  { label: 'Canopy', value: 'canopy', description: 'The 4.0.0 redesign: denser rails, a sticky compact header, and a docked player.' }
 ];
 
 export const THEME_PREFERENCE_OPTIONS = [
@@ -65,6 +77,10 @@ export function normalizeImmersiveBackgroundMotion(value) {
     value,
     APPEARANCE_DEFAULTS.immersiveBackgroundMotion
   );
+}
+
+export function normalizeLayoutPreset(value) {
+  return optionValue(LAYOUT_PRESET_OPTIONS, value, APPEARANCE_DEFAULTS.layoutPreset);
 }
 
 export function normalizeThemePreference(value) {

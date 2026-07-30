@@ -1,4 +1,5 @@
 import { nextTick } from 'vue';
+import { fetchArtistArtFromAudioDB } from './audioDb.js';
 
 function itemCountNumber(value = '') {
   const match = String(value).match(/([\d,]+)\s+(?:songs?|tracks?|videos?)\b/i);
@@ -48,6 +49,11 @@ export async function openCollectionWithLoading(ctx, kind, item) {
       totalTrackCount,
       kind: data.kind || kind
     };
+
+    if (ctx.browseDetail.value.kind === 'artist' && ctx.browseDetail.value.title) {
+      fetchArtistArtFromAudioDB(ctx, ctx.browseDetail.value.title);
+    }
+
     await nextTick();
     void ctx.prefetchBrowseTrackPages();
     ctx.writeLastPageEntry();

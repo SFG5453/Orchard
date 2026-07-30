@@ -110,7 +110,8 @@
   gap: 10px;
 }
 
-.queue-view__clear {
+.queue-view__clear,
+.queue-view__sort {
   padding: 5px 8px;
   border: 0;
   border-radius: 6px;
@@ -119,9 +120,21 @@
   font-size: 12px;
 }
 
-.queue-view__clear:hover {
+.queue-view__clear:hover,
+.queue-view__sort:hover {
   background: rgba(255, 255, 255, 0.05);
   color: var(--text);
+}
+
+.queue-view__sort {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.queue-view__sort--active {
+  color: var(--primary);
 }
 
 .queue-view__row,

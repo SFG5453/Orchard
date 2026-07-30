@@ -1,7 +1,8 @@
 <script>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch, defineAsyncComponent } from 'vue';
 import welcomeMusicUrl from '../../assets/welcome-lofi.mp3';
-import SupportView from '../views/SupportView.vue';
+
+const SupportView = defineAsyncComponent(() => import('../views/SupportView.vue'));
 
 export default {
   name: 'WelcomeWindow',

@@ -104,7 +104,8 @@ export default {
                   @click="toggleTransitionQueueSort"
                 >
                   <q-icon name="route" />
-                  <span>Best mix</span>
+                  <span v-if="transitionQueueSortBusy">{{ transitionQueueSortAnalyzedCount }} / {{ transitionQueueSortTotalCount }}</span>
+                  <span v-else>Best mix</span>
                 </button>
                 <button
                   v-if="queue.length"

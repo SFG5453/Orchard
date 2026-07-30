@@ -40,7 +40,7 @@ export function setupBrowseDetailView(props) {
     return detail.kind === 'artist' ? `About ${detail.title}` : `About ${detail.title}`;
   });
   const descriptionActionLabel = computed(() =>
-    props.app.browseDetail.value?.kind === 'artist' ? 'Read full bio' : 'Read full description'
+    props.app.browseDetail.value?.kind === 'artist' ? 'Read bio' : 'Read full description'
   );
 
   const highlightWords = ref([]);

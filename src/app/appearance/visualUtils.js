@@ -42,8 +42,8 @@ export function installVisualUtils(ctx) {
     const releaseType = releaseTrackCount(releaseText) >= 7
       ? 'Album'
       : /(?:^|[^\w])ep(?:[^\w]|$)/i.test(releaseText)
-      ? 'EP'
-      : /(?:^|[^\w])single(?:[^\w]|$)/i.test(releaseText) ? 'Single' : 'Album';
+        ? 'EP'
+        : /(?:^|[^\w])single(?:[^\w]|$)/i.test(releaseText) ? 'Single' : 'Album';
     const year = [item.year, item.subtitle, item.releaseDate]
       .map((value) => String(value || '').match(/\b[12][0-9]{3}\b/)?.[0] || '')
       .find(Boolean);

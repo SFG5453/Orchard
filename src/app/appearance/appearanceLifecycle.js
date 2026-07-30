@@ -17,6 +17,10 @@ export function installAppearanceLifecycle(ctx) {
     Dark.set(theme !== 'light');
   };
 
+  ctx.applyLayoutPreset = function applyLayoutPreset() {
+    document.documentElement.dataset.layoutPreset = ctx.layoutPreset.value;
+  };
+
   ctx.bindSystemThemePreference = function bindSystemThemePreference() {
     systemThemeMedia = window.matchMedia(SYSTEM_THEME_QUERY);
     systemThemeMedia.addEventListener?.('change', ctx.applyThemePreference);

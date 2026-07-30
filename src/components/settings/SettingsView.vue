@@ -6,13 +6,20 @@ import LastfmSection from './LastfmSection.vue';
 import SongCacheSection from './SongCacheSection.vue';
 import SetupGuideSection from './SetupGuideSection.vue';
 import ArtistPacksSection from './ArtistPacksSection.vue';
+import { computed } from 'vue';
 
 export default {
   name: 'SettingsView',
   components: { AudioEngineSection, BackupRestoreSection, DiagnosticsSection, LastfmSection, SongCacheSection, SetupGuideSection, ArtistPacksSection },
   props: { app: { type: Object, required: true } },
   setup(props) {
-    return { ...props.app, app: props.app };
+    const layoutPresetDescription = computed(() => {
+      const active = props.app.layoutPresetOptions
+        .find((option) => option.value === props.app.layoutPreset.value);
+      return active?.description || '';
+    });
+
+    return { ...props.app, app: props.app, layoutPresetDescription };
   }
 };
 </script>
@@ -204,6 +211,26 @@ export default {
         <div class="settings-section__heading">
           <h2 id="settings-appearance-title">Appearance</h2>
           <p>Choose how artwork shapes the listening view.</p>
+        </div>
+
+        <div class="settings-row settings-row--options">
+          <div class="settings-row__copy">
+            <label id="settings-layout-preset-label">Interface design</label>
+            <p>{{ layoutPresetDescription }}</p>
+          </div>
+          <div class="settings-option-group" role="group" aria-labelledby="settings-layout-preset-label">
+            <button
+              v-for="option in layoutPresetOptions"
+              :key="option.value"
+              type="button"
+              class="settings-option"
+              :class="{ 'settings-option--active': layoutPreset === option.value }"
+              :aria-pressed="layoutPreset === option.value"
+              @click="layoutPreset = option.value"
+            >
+              {{ option.label }}
+            </button>
+          </div>
         </div>
 
         <div class="settings-row settings-row--options">
