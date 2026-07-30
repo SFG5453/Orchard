@@ -1,6 +1,6 @@
 {
   "name": "orchard",
-  "version": "4.0.0-beta.1",
+  "version": "4.0.0-beta.2",
   "description": "A Quasar, Vue, Socket.IO, Electron YouTube Music client backed by InnerTube.",
   "homepage": "https://github.com/sfg5453/orchard",
   "repository": {
@@ -72,7 +72,7 @@
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "standardized-audio-context": "^25.3.77",
-    "vite": "^8.1.5",
+    "vite": "^8.2.0",
     "vue": "^3.5.40",
     "wait-on": "^9.0.10",
     "web-audio-beat-detector": "^8.2.38",
