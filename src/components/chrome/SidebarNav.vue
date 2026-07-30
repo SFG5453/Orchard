@@ -18,11 +18,22 @@ export default {
       return `${thumbnail}${separator}orchard_retry=${accountAvatarRetry.value}`;
     });
     const accountDisplayName = computed(() => {
-      const name = String(props.app.authState.value.user?.name || '').trim();
+      let name = String(props.app.authState.value.user?.name || '').trim();
+      let byline = String(props.app.authState.value.user?.byline || '').trim();
+      if (/subscribers?/i.test(name) && byline && !/subscribers?/i.test(byline)) {
+        name = byline;
+      }
       return name && !isEmailLike(name) && !/^(signed in|youtube music)$/i.test(name) ? name : 'Signed in';
     });
     const accountDisplayByline = computed(() => {
-      const byline = String(props.app.authState.value.user?.byline || '').trim();
+      let name = String(props.app.authState.value.user?.name || '').trim();
+      let byline = String(props.app.authState.value.user?.byline || '').trim();
+      if (/subscribers?/i.test(name) && byline && !/subscribers?/i.test(byline)) {
+        byline = name;
+      }
+      if (/subscribers?/i.test(byline)) {
+        byline = '';
+      }
       return byline && !isEmailLike(byline) && !/^(signed in)$/i.test(byline) ? byline : 'YouTube Music';
     });
     const accountInitial = computed(() => {
@@ -76,10 +87,13 @@ export default {
             <q-icon name="home" />
           </button>
           <button type="button" class="sidebar-mini__button" :class="{ 'sidebar-mini__button--active': activeView === 'releaseRadar' }" title="New" aria-label="New releases" :disabled="!authState.signedIn" @click="showReleaseRadar">
-            <q-icon name="new_releases" />
+            <q-icon name="grid_view" />
           </button>
           <button type="button" class="sidebar-mini__button" :class="{ 'sidebar-mini__button--active': activeView === 'browse' && browseDetail?.title === 'My Supermix' }" title="Radio" aria-label="Radio" :disabled="!authState.signedIn" @click="openPersonalizedRadio">
-            <q-icon name="radio" />
+            <q-icon name="sensors" />
+          </button>
+          <button type="button" class="sidebar-mini__button" :class="{ 'sidebar-mini__button--active': activeView === 'search' && searchResult.source === 'ticketmaster' }" title="Concerts" aria-label="Concerts" :disabled="!authState.signedIn" @click="openLiveShows">
+            <q-icon name="local_activity" />
           </button>
           <button type="button" class="sidebar-mini__button" :class="{ 'sidebar-mini__button--active': activeView === 'pins' }" title="Pins" aria-label="Pins" :disabled="!authState.signedIn" @click="showPins">
             <q-icon name="push_pin" />
@@ -106,7 +120,7 @@ export default {
             clearable
             clear-icon="close"
             :loading="loading"
-            placeholder="Search Orchard"
+            placeholder="Type or press / to Search"
             aria-label="Search Orchard"
             :aria-busy="loading"
             autocomplete="off"
@@ -120,14 +134,14 @@ export default {
           </q-input>
         </q-form>
 
-        <nav class="sidebar-group sidebar-group--nav" aria-label="Browse">
-          <div class="sidebar-label">Browse</div>
+        <nav class="sidebar-group sidebar-group--nav" aria-label="YouTube Music">
+          <div class="sidebar-label">YouTube Music</div>
           <button type="button" class="nav-link" :class="{ 'nav-link--active': activeView === 'home' }" @click="selectView('home')">
             <q-icon name="home" />
             <span>Home</span>
           </button>
           <button type="button" class="nav-link" :class="{ 'nav-link--active': activeView === 'releaseRadar' }" :disabled="!authState.signedIn" @click="showReleaseRadar">
-            <q-icon name="new_releases" />
+            <q-icon name="grid_view" />
             <span>New</span>
           </button>
           <button
@@ -137,7 +151,7 @@ export default {
             :disabled="!authState.signedIn"
             @click="openPersonalizedRadio"
           >
-            <q-icon name="radio" />
+            <q-icon name="sensors" />
             <span>Radio</span>
           </button>
           <button
@@ -147,20 +161,16 @@ export default {
             :disabled="!authState.signedIn"
             @click="openLiveShows"
           >
-            <q-icon name="confirmation_number" />
-            <span>Live Shows</span>
+            <q-icon name="local_activity" />
+            <span>Concerts</span>
           </button>
         </nav>
 
-        <nav class="sidebar-group sidebar-group--nav" aria-label="Your music">
-          <div class="sidebar-label">Your music</div>
-          <button type="button" class="nav-link" :class="{ 'nav-link--active': activeView === 'pins' }" :disabled="!authState.signedIn" @click="showPins">
-            <q-icon name="push_pin" />
-            <span>Pins</span>
-          </button>
+        <nav class="sidebar-group sidebar-group--nav" aria-label="Library">
+          <div class="sidebar-label">Library</div>
           <button type="button" class="nav-link" :class="{ 'nav-link--active': activeView === 'history' }" :disabled="!authState.signedIn" @click="selectView('history')">
-            <q-icon name="history" />
-            <span>Recently Played</span>
+            <q-icon name="schedule" />
+            <span>Recently Added</span>
           </button>
           <button type="button" class="nav-link" :class="{ 'nav-link--active': activeView === 'replay' }" :disabled="!authState.signedIn" @click="selectView('replay')">
             <q-icon name="leaderboard" />
@@ -175,7 +185,7 @@ export default {
             <span>Albums</span>
           </button>
           <button type="button" class="nav-link" :class="{ 'nav-link--active': activeView === 'search' && searchResult.sections?.[0]?.key === 'library-artists' }" :disabled="!authState.signedIn" @click="showSubscribedArtists">
-            <q-icon name="people_outline" />
+            <q-icon name="mic" />
             <span>Artists</span>
           </button>
           <button type="button" class="nav-link" :class="{ 'nav-link--active': activeView === 'podcasts' }" :disabled="!authState.signedIn" @click="loadPodcasts()">
@@ -183,6 +193,15 @@ export default {
             <span>Podcasts</span>
           </button>
         </nav>
+
+        <nav class="sidebar-group sidebar-group--nav" aria-label="Pins">
+          <div class="sidebar-label">Pins</div>
+          <button type="button" class="nav-link" :class="{ 'nav-link--active': activeView === 'pins' }" :disabled="!authState.signedIn" @click="showPins">
+            <q-icon name="push_pin" />
+            <span>Pins</span>
+          </button>
+        </nav>
+
 
         <div v-if="sidebarLibraryItems.length" class="sidebar-group sidebar-group--playlists">
           <div class="sidebar-section-heading">

@@ -161,7 +161,7 @@ export default {
                   </template>
                 </div>
                 <p
-                  v-if="browseDetail.description && (browseDetail.kind !== 'artist' || browseDetail.description !== browseDetail.subtitle)"
+                  v-if="browseDetail.description && browseDetail.kind !== 'artist'"
                   class="detail-description"
                 >
                   <template v-for="(segment, index) in descriptionSegments" :key="index">

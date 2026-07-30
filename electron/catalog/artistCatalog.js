@@ -323,7 +323,7 @@ export function createArtistCatalog({
       kind: 'artist',
       browseId,
       title: artistName || 'Artist',
-      subtitle: rawBrowseDescription(artist),
+      subtitle: asText(header.subtitle),
       artist: artistName,
       year: '',
       itemCount: catalogComplete ? artistCatalogSummary(sections) : '',

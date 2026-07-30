@@ -125,6 +125,7 @@ export function installLifecycle(ctx) {
     ctx.immersiveBackgroundsEnabled,
     ctx.immersiveBackgroundIntensity,
     ctx.immersiveBackgroundMotion,
+    ctx.layoutPreset,
     ctx.playbackStatePersistenceEnabled,
     ctx.queueLayout,
     ctx.songCacheEnabled,
@@ -169,6 +170,7 @@ export function installLifecycle(ctx) {
       immersiveBackgroundsEnabled: ctx.immersiveBackgroundsEnabled.value,
       immersiveBackgroundIntensity: ctx.immersiveBackgroundIntensity.value,
       immersiveBackgroundMotion: ctx.immersiveBackgroundMotion.value,
+      layoutPreset: ctx.layoutPreset.value,
       playbackStatePersistenceEnabled: ctx.playbackStatePersistenceEnabled.value,
       queueLayout: ctx.queueLayout.value,
       songCacheEnabled: ctx.songCacheEnabled.value,
@@ -309,6 +311,10 @@ export function installLifecycle(ctx) {
   watch(ctx.themePreference, () => {
     ctx.applyThemePreference();
   });
+
+  watch(ctx.layoutPreset, () => {
+    ctx.applyLayoutPreset();
+  }, { immediate: true });
 
   watch(ctx.volumeNormalizationEnabled, (enabled) => {
     [ctx.audioRef.value, ctx.nextAudioRef.value, ctx.videoRef.value, ctx.videoAudioRef.value]

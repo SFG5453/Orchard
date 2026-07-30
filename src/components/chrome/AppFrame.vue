@@ -1,27 +1,29 @@
 <script>
 import { defineAsyncComponent } from 'vue';
-import AuthGate from './AuthGate.vue';
-import CollectionActionMenu from '../controls/CollectionActionMenu.vue';
-import CollectionQuickSearch from '../controls/CollectionQuickSearch.vue';
 import FullscreenPlayer from '../player/FullscreenPlayer.vue';
-import HomeView from '../views/HomeView.vue';
 import NowSideColumn from './NowSideColumn.vue';
 import PlayerBar from '../player/PlayerBar.vue';
-import PinsView from '../views/PinsView.vue';
-import QueueView from '../player/QueueView.vue';
-import RecentlyPlayedView from '../views/RecentlyPlayedView.vue';
-import RightPanel from './RightPanel.vue';
-import SearchView from '../views/SearchView.vue';
-import SectionMoreView from '../views/SectionMoreView.vue';
-import SongActionMenu from '../controls/SongActionMenu.vue';
-import SongShareDialog from '../dialogs/SongShareDialog.vue';
 import SidebarNav from './SidebarNav.vue';
-import SpotlightSearch from '../controls/SpotlightSearch.vue';
-import SupportView from '../views/SupportView.vue';
-import VideoPlayer from '../player/VideoPlayer.vue';
 import WindowTitlebar from './WindowTitlebar.vue';
 
+const AuthGate = defineAsyncComponent(() => import('./AuthGate.vue'));
+const CollectionActionMenu = defineAsyncComponent(() => import('../controls/CollectionActionMenu.vue'));
+const CollectionQuickSearch = defineAsyncComponent(() => import('../controls/CollectionQuickSearch.vue'));
+const HomeView = defineAsyncComponent(() => import('../views/HomeView.vue'));
+const PinsView = defineAsyncComponent(() => import('../views/PinsView.vue'));
+const QueueView = defineAsyncComponent(() => import('../player/QueueView.vue'));
+const RecentlyPlayedView = defineAsyncComponent(() => import('../views/RecentlyPlayedView.vue'));
+const RightPanel = defineAsyncComponent(() => import('./RightPanel.vue'));
+const SearchView = defineAsyncComponent(() => import('../views/SearchView.vue'));
+const SectionMoreView = defineAsyncComponent(() => import('../views/SectionMoreView.vue'));
+const SongActionMenu = defineAsyncComponent(() => import('../controls/SongActionMenu.vue'));
+const SongShareDialog = defineAsyncComponent(() => import('../dialogs/SongShareDialog.vue'));
+const SpotlightSearch = defineAsyncComponent(() => import('../controls/SpotlightSearch.vue'));
+const SupportView = defineAsyncComponent(() => import('../views/SupportView.vue'));
+const VideoPlayer = defineAsyncComponent(() => import('../player/VideoPlayer.vue'));
+
 const AnimatedBackground = defineAsyncComponent(() => import('../animated-background/AnimatedBackground.vue'));
+const CanopyTitlebar = defineAsyncComponent(() => import('./CanopyTitlebar.vue'));
 const AboutDialog = defineAsyncComponent(() => import('../dialogs/AboutDialog.vue'));
 const BrowseDetailView = defineAsyncComponent(() => import('../views/BrowseDetailView.vue'));
 const ChangelogDialog = defineAsyncComponent(() => import('../dialogs/ChangelogDialog.vue'));
@@ -42,6 +44,7 @@ export default {
     AnimatedBackground,
     AuthGate,
     BrowseDetailView,
+    CanopyTitlebar,
     ChangelogDialog,
     CollectionActionMenu,
     CollectionQuickSearch,
@@ -90,10 +93,12 @@ export default {
       'app-shell--native-titlebar': nativeTitlebar,
       'app-shell--narrow-window': narrowWindow,
       'app-shell--mini-sidebar': sidebarMini,
+      [`app-shell--layout-${layoutPreset}`]: true,
       'app-shell--right-panel-hidden': !compactWindow && !rightPanelVisible,
       'app-shell--profile-camera': customArtistProfileCameraActive
     }"
     :style="{
+      ...playerBarStyle,
       '--immersive-background-opacity': immersiveBackgroundOpacity(immersiveBackgroundIntensity),
       ...customArtistProfileCameraStyle
     }"
@@ -158,7 +163,8 @@ export default {
       </div>
     </Transition>
 
-    <WindowTitlebar v-if="!nativeTitlebar" :app="app" />
+    <CanopyTitlebar v-if="layoutPreset === 'canopy'" :app="app" />
+    <WindowTitlebar v-else-if="!nativeTitlebar" :app="app" />
     <SidebarNav :app="app" />
     <RightPanel v-if="rightPanelMounted" :app="app" />
 
@@ -233,14 +239,16 @@ export default {
         <BrowseDetailView v-else-if="activeView === 'browse'" :app="app" />
         <main v-else class="content-shell" :class="{ 'content-shell--home': activeView === 'home' }">
           <section class="main-column">
-            <HomeView v-if="activeView === 'home'" :app="app" />
-            <PinsView v-else-if="activeView === 'pins'" :app="app" />
-            <PodcastsView v-else-if="activeView === 'podcasts'" :app="app" />
-            <QueueView v-else-if="activeView === 'queue'" :app="app" />
-            <RecentlyPlayedView v-else-if="activeView === 'history'" :app="app" />
-            <ReplayView v-else-if="activeView === 'replay'" :app="app" />
-            <ReleaseRadarView v-else-if="activeView === 'releaseRadar'" :app="app" />
-            <SearchView v-else :app="app" />
+            <Transition name="view-fade" mode="out-in">
+              <HomeView v-if="activeView === 'home'" :app="app" />
+              <PinsView v-else-if="activeView === 'pins'" :app="app" />
+              <PodcastsView v-else-if="activeView === 'podcasts'" :app="app" />
+              <QueueView v-else-if="activeView === 'queue'" :app="app" />
+              <RecentlyPlayedView v-else-if="activeView === 'history'" :app="app" />
+              <ReplayView v-else-if="activeView === 'replay'" :app="app" />
+              <ReleaseRadarView v-else-if="activeView === 'releaseRadar'" :app="app" />
+              <SearchView v-else :app="app" />
+            </Transition>
           </section>
           <NowSideColumn :app="app" />
         </main>
@@ -275,7 +283,7 @@ export default {
       @error="onAudioError"
       @ended="onAudioEnded"
     />
-    <PlayerBar :app="app" />
+    <PlayerBar v-if="layoutPreset !== 'canopy'" :app="app" />
     <AboutDialog v-if="aboutDialogOpen" :app="app" />
     <ChangelogDialog v-if="changelogDialogOpen" :app="app" />
     <UpdateDialog v-if="updateDialogOpen" :app="app" />

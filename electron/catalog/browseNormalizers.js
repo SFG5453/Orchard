@@ -146,8 +146,9 @@ export function createBrowseNormalizers({
   }
 
   function musicDescriptionShelfText(value) {
-    const shelf = value?.musicDescriptionShelfRenderer || value;
-    return asText(shelf?.description);
+    if (!value) return '';
+    const shelf = value.musicDescriptionShelfRenderer;
+    return asText(shelf ? shelf.description : (value.description || value));
   }
 
   function rawBrowseDescription(data, { includeMicroformatDescription = true, includeHeaderSubtitle = true } = {}) {

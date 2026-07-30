@@ -14,6 +14,21 @@ export default {
                   <h2>{{ continuousQueueEnabled ? 'Queue' : 'Up next' }}</h2>
                   <div class="queue-view__header-actions">
                     <span>{{ queue.length }} items</span>
+                    <button
+                      v-if="queue.length > 1"
+                      type="button"
+                      class="queue-view__sort"
+                      :class="{ 'queue-view__sort--active': transitionQueueSorted }"
+                      :aria-pressed="transitionQueueSorted"
+                      :aria-label="transitionQueueSorted ? 'Restore previous queue order' : 'Sort the queue by musical compatibility'"
+                      :title="transitionQueueSorted ? 'Restore previous queue order' : 'Uses BPM, key, energy, loudness, and vocal density'"
+                      :disabled="transitionQueueSortBusy"
+                      @click="toggleTransitionQueueSort"
+                    >
+                      <q-icon name="route" />
+                      <span v-if="transitionQueueSortBusy">{{ transitionQueueSortAnalyzedCount }} / {{ transitionQueueSortTotalCount }}</span>
+                      <span v-else>Best mix</span>
+                    </button>
                     <button v-if="queue.length" type="button" class="queue-view__clear" @click="clearQueue">
                       Clear
                     </button>
@@ -94,7 +109,7 @@ export default {
                   <div v-if="!continuousQueue.length" class="table-empty">The queue is empty.</div>
                 </div>
 
-                <div v-else class="table-card">
+                <TransitionGroup v-else name="queue-row" tag="div" class="table-card queue-view__list">
                   <div
                     v-for="(item, index) in queue"
                     :key="`queue-page-${item.id}`"
@@ -154,8 +169,8 @@ export default {
                     </button>
                   </div>
 
-                  <div v-if="!queue.length" class="table-empty">The queue is empty.</div>
-                </div>
+                  <div v-if="!queue.length" key="queue-empty" class="table-empty">The queue is empty.</div>
+                </TransitionGroup>
               </section>
 
               <section v-if="!continuousQueueEnabled" class="shelf-section">

@@ -233,6 +233,8 @@ export function installQueueTransitionSort(ctx) {
   ctx.transitionQueueSortBusy = ref(false);
   ctx.transitionQueueSortSnapshot = [];
   ctx.transitionQueueExpectedIds = [];
+  ctx.transitionQueueSortAnalyzedCount = ref(0);
+  ctx.transitionQueueSortTotalCount = ref(0);
   let learnedTempoPromise = null;
   let refreshRequested = false;
 
@@ -273,10 +275,15 @@ export function installQueueTransitionSort(ctx) {
     const getCached = globalThis.orchardAudioAnalysis?.get;
     if (typeof getCached !== 'function') return new Map();
     const unique = Array.from(new Map(tracks.filter((track) => track?.id).map((track) => [track.id, track])).values());
-    const entries = await Promise.all(unique.map(async (track) => [
-      track.id,
-      await getCached(track.id).catch(() => null)
-    ]));
+    
+    ctx.transitionQueueSortTotalCount.value = unique.length;
+    ctx.transitionQueueSortAnalyzedCount.value = 0;
+
+    const entries = await Promise.all(unique.map(async (track) => {
+      const result = await getCached(track.id).catch(() => null);
+      ctx.transitionQueueSortAnalyzedCount.value++;
+      return [track.id, result];
+    }));
     return new Map(entries.filter(([, analysis]) => analysis));
   }
 
@@ -303,6 +310,10 @@ export function installQueueTransitionSort(ctx) {
     const unique = Array.from(new Map(
       tracks.filter((track) => track?.id).map((track) => [track.id, track])
     ).values());
+    
+    ctx.transitionQueueSortTotalCount.value = unique.length;
+    ctx.transitionQueueSortAnalyzedCount.value = 0;
+
     const activeId = ctx.activeTrack.value?.id;
     const nextId = ctx.queue.value[0]?.id;
     const entries = await Promise.all(unique.map(async (track) => {
@@ -316,8 +327,10 @@ export function installQueueTransitionSort(ctx) {
           analysisStream(track),
           { duration: trackDurationSeconds(track), priority }
         );
+        ctx.transitionQueueSortAnalyzedCount.value++;
         return analysis ? [track.id, analysis] : null;
       } catch (error) {
+        ctx.transitionQueueSortAnalyzedCount.value++;
         ctx.smartCrossfadeAnalyzer.report?.('background-track-failed', {
           trackId: track.id,
           errorName: String(error?.name || 'Error'),

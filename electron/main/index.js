@@ -85,7 +85,7 @@ let desktopControls;
 let welcomeCompleted = false;
 
 const { appIconPath } = runtimePaths;
-const useNativeTitlebar = process.platform === 'linux' && (process.env.ORCHARD_NATIVE_TITLEBAR ? !/^(0|false|no)$/i.test(process.env.ORCHARD_NATIVE_TITLEBAR) : /kde|kwin|plasma/i.test([process.env.XDG_CURRENT_DESKTOP, process.env.XDG_SESSION_DESKTOP, process.env.DESKTOP_SESSION, process.env.KDE_FULL_SESSION].filter(Boolean).join(' ')));
+const useNativeTitlebar = false;
 const youtubeMusicOrigin = 'https://music.youtube.com';
 const youtubeWebOrigin = 'https://www.youtube.com';
 const youtubeMusicClientVersion = '1.20260114.01.00';
@@ -450,7 +450,7 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   session.defaultSession.setPermissionCheckHandler((webContents, permission) =>
     webContents === mainWindow?.webContents &&
-      (permission === 'geolocation' || permission === 'speaker-selection')
+    (permission === 'geolocation' || permission === 'speaker-selection')
   );
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     callback(webContents === mainWindow?.webContents &&

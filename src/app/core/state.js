@@ -14,6 +14,7 @@ import {
   GRAPHICS_MODE_OPTIONS,
   IMMERSIVE_BACKGROUND_INTENSITY_OPTIONS,
   IMMERSIVE_BACKGROUND_MOTION_OPTIONS,
+  LAYOUT_PRESET_OPTIONS,
   THEME_PREFERENCE_OPTIONS,
   immersiveBackgroundOpacity,
   normalizeAccentColorSource,
@@ -21,6 +22,7 @@ import {
   normalizeGraphicsMode,
   normalizeImmersiveBackgroundIntensity,
   normalizeImmersiveBackgroundMotion,
+  normalizeLayoutPreset,
   normalizeThemePreference
 } from '../appearance/appearancePreferences.js';
 import {
@@ -63,6 +65,7 @@ export function installState(ctx) {
   ctx.graphicsModeOptions = GRAPHICS_MODE_OPTIONS;
   ctx.immersiveBackgroundIntensityOptions = IMMERSIVE_BACKGROUND_INTENSITY_OPTIONS;
   ctx.immersiveBackgroundMotionOptions = IMMERSIVE_BACKGROUND_MOTION_OPTIONS;
+  ctx.layoutPresetOptions = LAYOUT_PRESET_OPTIONS;
   ctx.themePreferenceOptions = THEME_PREFERENCE_OPTIONS;
   ctx.immersiveBackgroundOpacity = immersiveBackgroundOpacity;
   ctx.discordRpcActivityNameOptions = [
@@ -104,6 +107,7 @@ export function installState(ctx) {
         : ctx.DEFAULT_USER_PREFERENCES.immersiveBackgroundsEnabled,
       immersiveBackgroundIntensity: normalizeImmersiveBackgroundIntensity(preferences.immersiveBackgroundIntensity),
       immersiveBackgroundMotion: normalizeImmersiveBackgroundMotion(preferences.immersiveBackgroundMotion),
+      layoutPreset: normalizeLayoutPreset(preferences.layoutPreset),
       songCacheEnabled: typeof preferences.songCacheEnabled === 'boolean'
         ? preferences.songCacheEnabled
         : ctx.DEFAULT_USER_PREFERENCES.songCacheEnabled,
@@ -364,6 +368,7 @@ export function installState(ctx) {
   ctx.immersiveBackgroundsEnabled = ref(ctx.initialUserPreferences.immersiveBackgroundsEnabled);
   ctx.immersiveBackgroundIntensity = ref(ctx.initialUserPreferences.immersiveBackgroundIntensity);
   ctx.immersiveBackgroundMotion = ref(ctx.initialUserPreferences.immersiveBackgroundMotion);
+  ctx.layoutPreset = ref(ctx.initialUserPreferences.layoutPreset);
   ctx.songCacheEnabled = ref(ctx.initialUserPreferences.songCacheEnabled);
   ctx.songCacheMaxSizeMb = ref(ctx.initialUserPreferences.songCacheMaxSizeMb);
   ctx.songCacheInventory = ref({
@@ -397,6 +402,7 @@ export function installState(ctx) {
     ctx.immersiveBackgroundsEnabled.value = defaults.immersiveBackgroundsEnabled;
     ctx.immersiveBackgroundIntensity.value = defaults.immersiveBackgroundIntensity;
     ctx.immersiveBackgroundMotion.value = defaults.immersiveBackgroundMotion;
+    ctx.layoutPreset.value = defaults.layoutPreset;
     ctx.songCacheEnabled.value = defaults.songCacheEnabled;
     ctx.songCacheMaxSizeMb.value = defaults.songCacheMaxSizeMb;
     ctx.volumeNormalizationEnabled.value = defaults.volumeNormalizationEnabled;
