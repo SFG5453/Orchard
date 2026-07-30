@@ -22,12 +22,15 @@ export default {
     }
 
     try {
-      if (url.pathname === '/auth/token') return await requestToken(env);
+      const ua = request.headers.get('user-agent') || '';
+      const userAgent = ua.includes('OrchardDesktop/3') ? 'OrchardDesktop/3.0' : 'OrchardDesktop/4.0';
+
+      if (url.pathname === '/auth/token') return await requestToken(env, userAgent);
 
       const input = await readJsonBody(request);
-      if (url.pathname === '/auth/session') return await exchangeSession(env, input);
-      if (url.pathname === '/now-playing') return await submitTrack(env, input, false);
-      if (url.pathname === '/scrobble') return await submitTrack(env, input, true);
+      if (url.pathname === '/auth/session') return await exchangeSession(env, input, userAgent);
+      if (url.pathname === '/now-playing') return await submitTrack(env, input, false, userAgent);
+      if (url.pathname === '/scrobble') return await submitTrack(env, input, true, userAgent);
       return jsonResponse({ error: 'Not found.' }, 404);
     } catch (error) {
       const status = Number(error?.status) || 500;
@@ -44,8 +47,8 @@ export default {
   }
 };
 
-async function requestToken(env) {
-  const payload = await callLastfm(env, 'auth.getToken');
+async function requestToken(env, userAgent) {
+  const payload = await callLastfm(env, 'auth.getToken', {}, fetch, userAgent);
   const token = cleanOpaqueToken(payload.token, 'Last.fm returned an invalid authorization token.', 502);
   const authorizationUrl = new URL(LASTFM_AUTH_ENDPOINT);
   authorizationUrl.searchParams.set('api_key', env.LASTFM_API_KEY);
@@ -53,16 +56,16 @@ async function requestToken(env) {
   return jsonResponse({ token, authorizationUrl: authorizationUrl.toString() });
 }
 
-async function exchangeSession(env, input) {
+async function exchangeSession(env, input, userAgent) {
   const token = cleanOpaqueToken(input.token, 'The Last.fm authorization token is invalid.');
-  const payload = await callLastfm(env, 'auth.getSession', { token });
+  const payload = await callLastfm(env, 'auth.getSession', { token }, fetch, userAgent);
   const sessionKey = cleanOpaqueToken(payload.session?.key, 'Last.fm did not return a session key.', 502);
   const user = cleanText(payload.session?.name, 100);
   if (!user) throw requestError('Last.fm did not return an account name.', 502);
   return jsonResponse({ user, sessionKey });
 }
 
-async function submitTrack(env, input, scrobble) {
+async function submitTrack(env, input, scrobble, userAgent) {
   const sessionKey = cleanOpaqueToken(input.sessionKey, 'The Last.fm session is invalid.');
   const track = normalizeTrack(input.track);
   if (!track) throw requestError('Track title and artist are required.', 400);
@@ -81,7 +84,7 @@ async function submitTrack(env, input, scrobble) {
   if (scrobble) params.timestamp = validTimestamp(input.timestamp);
 
   const method = scrobble ? 'track.scrobble' : 'track.updateNowPlaying';
-  const payload = await callLastfm(env, method, params);
+  const payload = await callLastfm(env, method, params, fetch, userAgent);
   const ignored = scrobble
     ? payload.scrobbles?.scrobble?.ignoredMessage
     : payload.nowplaying?.ignoredMessage;
@@ -92,7 +95,7 @@ async function submitTrack(env, input, scrobble) {
   });
 }
 
-export async function callLastfm(env, method, values = {}, fetcher = fetch) {
+export async function callLastfm(env, method, values = {}, fetcher = fetch, userAgent = 'OrchardDesktop/4.0') {
   const params = {
     ...values,
     api_key: env.LASTFM_API_KEY,
@@ -102,14 +105,14 @@ export async function callLastfm(env, method, values = {}, fetcher = fetch) {
   params.format = 'json';
 
   const body = new URLSearchParams(Object.entries(params).map(([key, value]) => [key, String(value)]));
-  const write = method.startsWith('track.');
+  const write = true; // Last.fm recommends POST for all signed requests
   const url = write ? LASTFM_API_ENDPOINT : `${LASTFM_API_ENDPOINT}?${body}`;
   const response = await fetcher(url, {
     method: write ? 'POST' : 'GET',
     headers: {
       accept: 'application/json',
       ...(write ? { 'content-type': 'application/x-www-form-urlencoded; charset=UTF-8' } : {}),
-      'user-agent': 'OrchardDesktop/3.0'
+      'user-agent': userAgent
     },
     ...(write ? { body } : {})
   });
