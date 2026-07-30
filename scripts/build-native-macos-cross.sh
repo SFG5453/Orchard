@@ -87,22 +87,31 @@ if [ ! -f "$electron_dir/include/node/node_api.h" ]; then
   mv "$temporary_dir/headers/include" "$electron_dir/include"
 fi
 
+# Read from native/binding.gyp rather than duplicated here, so this build
+# cannot silently miss a translation unit the node-gyp build has.
+sources=$(node "$project_dir/scripts/native-sources.mjs")
+
 mkdir -p "$native_output"
 for architecture in x86_64 arm64; do
   output_path="$temporary_dir/orchard_audio_analysis-${architecture}.node"
+  # -fexceptions because the vendored Rubber Band source throws internally, and
+  # -framework Accelerate because RubberBandSingle.cpp selects the vDSP FFT on
+  # Apple targets. Both mirror the OS=='mac' conditions in native/binding.gyp.
+  # shellcheck disable=SC2086 # $sources is a newline-separated path list.
   "$toolchain_dir/bin/${architecture}-apple-${OSXCROSS_TARGET}-clang++" \
     -std=c++17 \
     -stdlib=libc++ \
     -O3 \
+    -fexceptions \
     -bundle \
     -undefined dynamic_lookup \
     -DNAPI_DISABLE_CPP_EXCEPTIONS \
     -DBUILDING_NODE_EXTENSION \
     -I "$project_dir/node_modules/node-addon-api" \
     -I "$electron_dir/include/node" \
-    "$project_dir/native/binding/addon.cpp" \
-    "$project_dir/native/analyzer/audio_analysis.cpp" \
-    "$project_dir/native/analyzer/tempo_analysis.cpp" \
+    -I "$project_dir/native/vendor/rubberband" \
+    $sources \
+    -framework Accelerate \
     -o "$output_path"
   file "$output_path" | grep -q "Mach-O 64-bit ${architecture} bundle"
   mv "$output_path" "$native_output/orchard_audio_analysis-${architecture}.node"

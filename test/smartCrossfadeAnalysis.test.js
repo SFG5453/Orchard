@@ -68,6 +68,70 @@ function bridge(overrides = {}) {
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
+test('a background-cached analysis is re-run when a transition needs it', async () => {
+  // Best Mix analyses up to fifty tracks at background priority, which skips
+  // the Essentia pass. Serving those entries to a transition would mean the
+  // confidence upgrade never happened for any track Best Mix touched first.
+  const background = validAnalysis({ beatConfidence: 0.34 });
+  const refined = validAnalysis({ beatConfidence: 0.87, essentiaChecked: true, essentiaConfidence: 4.1 });
+  let analyzeCalls = 0;
+  const analyzer = createSmartCrossfadeAnalyzer({
+    decodeAudio: async () => audioBuffer(),
+    workerFactory: workerFactory(background),
+    nativeBridge: {
+      debug: async () => {},
+      available: async () => true,
+      get: async () => background,
+      store: async () => {},
+      analyze: async () => {
+        analyzeCalls += 1;
+        return refined;
+      }
+    }
+  });
+
+  try {
+    const cached = await analyzer.analyze('t', 'url', { priority: 2 });
+    assert.equal(cached.beatConfidence, 0.34);
+    assert.equal(analyzeCalls, 0, 'background priority accepts the cached entry');
+
+    const upgraded = await analyzer.analyze('t', 'url', { priority: 1 });
+    assert.equal(analyzeCalls, 1, 'a transition re-analyses an unchecked entry');
+    assert.equal(upgraded.beatConfidence, 0.87);
+  } finally {
+    analyzer.destroy();
+  }
+});
+
+test('an Essentia-checked cache entry is not re-analysed', async () => {
+  // Essentia declines on material its trackers cannot read. That must be
+  // remembered, or every play of such a track pays for a full re-analysis.
+  const declined = validAnalysis({ beatConfidence: 0.42, essentiaChecked: true });
+  let analyzeCalls = 0;
+  const analyzer = createSmartCrossfadeAnalyzer({
+    decodeAudio: async () => audioBuffer(),
+    workerFactory: workerFactory(declined),
+    nativeBridge: {
+      debug: async () => {},
+      available: async () => true,
+      get: async () => declined,
+      store: async () => {},
+      analyze: async () => {
+        analyzeCalls += 1;
+        return declined;
+      }
+    }
+  });
+
+  try {
+    const result = await analyzer.analyze('t', 'url', { priority: 0 });
+    assert.equal(analyzeCalls, 0, 'a checked entry is reused even at top priority');
+    assert.equal(result.beatConfidence, 0.42);
+  } finally {
+    analyzer.destroy();
+  }
+});
+
 test('smart crossfade reads persistent cache before checking native availability', async () => {
   const stored = {
     analysisVersion: AUDIO_ANALYSIS_VERSION,
@@ -355,4 +419,87 @@ test('analysis diagnostics redact credentials and signed stream queries', async 
   } finally {
     analyzer.destroy();
   }
+});
+
+// Best Mix analyses the active track and the queue head at current/next
+// priority while it sorts, so priority alone cannot decide who pays for the
+// beat model. Only the live decks set `forPlayback`.
+function recordingSetup(cachedResult = null) {
+  const seen = [];
+  const analyzed = [];
+  const analyzer = createSmartCrossfadeAnalyzer({
+    decodeAudio: async () => audioBuffer(),
+    workerFactory: () => ({
+      onmessage: null,
+      onerror: null,
+      postMessage(message) {
+        if (message.prepareOnly) seen.push(Boolean(message.wantBeatWindows));
+        queueMicrotask(() => {
+          this.onmessage?.({ data: {
+            id: message.id,
+            prepared: {
+              samples: new Float32Array([0.1, -0.1]).buffer,
+              sampleRate: 11025,
+              duration: message.duration,
+              beatWindows: message.wantBeatWindows
+                ? [{ samples: new Float32Array([0.1]).buffer, sampleRate: 22050, offsetSeconds: 0 }]
+                : []
+            }
+          } });
+        });
+      },
+      terminate() {}
+    }),
+    nativeBridge: {
+      available: async () => true,
+      debug: async () => true,
+      get: async () => cachedResult,
+      store: async () => true,
+      analyze: async (trackId, samples, sampleRate, duration, priority, beatWindows) => {
+        analyzed.push({ priority, windows: beatWindows?.length || 0 });
+        return validAnalysis({ beatModelChecked: (beatWindows?.length || 0) > 0 });
+      }
+    }
+  });
+  return { analyzer, seen, analyzed };
+}
+
+test('Best Mix never pays for the beat model, even at transition priority', async () => {
+  const { analyzer, seen, analyzed } = recordingSetup();
+  // queueTransitionSort marks the active track "current" while sorting, but it
+  // is not playback and must not carry windows.
+  await analyzer.analyze('sorted-track', 'https://stream', { duration: 120, priority: 0 });
+  assert.deepEqual(seen, [false], 'a Best Mix request must not request beat windows');
+  assert.equal(analyzed[0].windows, 0, 'no windows may reach the main process');
+});
+
+test('the live decks do pay for the beat model', async () => {
+  const { analyzer, seen, analyzed } = recordingSetup();
+  await analyzer.analyze('playing-track', 'https://stream', {
+    duration: 120,
+    priority: 0,
+    forPlayback: true
+  });
+  assert.deepEqual(seen, [true]);
+  assert.equal(analyzed[0].windows, 1);
+});
+
+test('a playback request re-earns a cache entry that Best Mix wrote', async () => {
+  // Cached by Best Mix: Essentia ran, the model never did. Serving this to a
+  // playback request would mean the model never runs for anything Best Mix
+  // touched first.
+  const bestMixEntry = validAnalysis({ essentiaChecked: true });
+  const { analyzer, analyzed } = recordingSetup(bestMixEntry);
+  await analyzer.analyze('shared-track', 'https://stream', {
+    duration: 120,
+    priority: 1,
+    forPlayback: true
+  });
+  assert.equal(analyzed.length, 1, 'the entry must be re-earned, not served');
+  assert.equal(analyzed[0].windows, 1);
+
+  // The same entry is perfectly good for a Best Mix request.
+  const second = recordingSetup(bestMixEntry);
+  await second.analyzer.analyze('shared-track', 'https://stream', { duration: 120, priority: 1 });
+  assert.equal(second.analyzed.length, 0, 'Best Mix must reuse the cached entry');
 });

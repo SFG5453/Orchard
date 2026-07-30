@@ -150,7 +150,7 @@ export function createSmartCrossfadeAnalyzer({
     return check;
   }
 
-  function workerRequest({ channels, duration, prepareOnly, sampleRate, signal }) {
+  function workerRequest({ channels, duration, prepareOnly, sampleRate, signal, wantBeatWindows }) {
     if (signal?.aborted) return Promise.reject(abortError());
     const id = ++nextRequestId;
     return new Promise((resolve, reject) => {
@@ -167,7 +167,8 @@ export function createSmartCrossfadeAnalyzer({
         sampleRate,
         duration,
         prepareOnly,
-        targetSampleRate: 11025
+        targetSampleRate: 11025,
+        wantBeatWindows: Boolean(wantBeatWindows)
       }, channels);
     });
   }
@@ -271,7 +272,13 @@ export function createSmartCrossfadeAnalyzer({
         sampleRate,
         signal
       });
-      const analysis = localAnalysisWithSource(fallback.result, 'local-worker');
+      // The Essentia pass lives in the main process alongside the native
+      // analyzer, so it can never apply here. Marking the result as checked
+      // stops the priority guard from re-analysing worker results forever.
+      const analysis = localAnalysisWithSource(
+        { ...fallback.result, essentiaChecked: true },
+        'local-worker'
+      );
       if (!analysis) {
         report('fallback-invalid', { trackId: key, bpm: Number(fallback.result?.bpm) || 0 });
         throw new Error('Worker audio analysis returned an invalid BPM');
@@ -292,7 +299,12 @@ export function createSmartCrossfadeAnalyzer({
     }
   }
 
-  async function analyzeBuffer(key, buffer, durationHint, signal) {
+  // `priority` is forwarded to the main process, which spends extra analysis
+  // effort only on the tracks around a transition. See ANALYSIS_PRIORITIES.
+  // `forPlayback` marks requests from the live decks; only those carry beat
+  // windows for the model, so Best Mix -- which analyses the same tracks at
+  // the same priorities while sorting a queue -- never pays for inference.
+  async function analyzeBuffer(key, buffer, durationHint, signal, priority, forPlayback) {
     if (signal.aborted) throw abortError();
     const channels = Array.from({ length: buffer.numberOfChannels }, (_, index) =>
       new Float32Array(buffer.getChannelData(index)).buffer
@@ -310,7 +322,12 @@ export function createSmartCrossfadeAnalyzer({
       duration,
       prepareOnly: true,
       sampleRate: buffer.sampleRate,
-      signal
+      signal,
+      // The beat model earns its inference cost only for the decks around a
+      // live transition. Priority alone cannot make that call: Best Mix marks
+      // the active track and queue head current/next too, and it must never
+      // pay for inference. Only the playback path sets `forPlayback`.
+      wantBeatWindows: forPlayback === true
     });
     report('native-prepare-ready', {
       trackId: key,
@@ -326,7 +343,9 @@ export function createSmartCrossfadeAnalyzer({
         key,
         prepared.samples,
         prepared.sampleRate,
-        prepared.duration
+        prepared.duration,
+        priority,
+        prepared.beatWindows
       ), signal);
       const analysis = localAnalysisWithSource(raw, 'local-native');
       if (!analysis) {
@@ -361,7 +380,14 @@ export function createSmartCrossfadeAnalyzer({
       }
       if (!url) throw new Error('No authenticated audio stream was resolved for analysis');
       const buffer = await decodeWithBackoff(job.key, url, controller.signal);
-      const analysis = await analyzeBuffer(job.key, buffer, job.duration, controller.signal);
+      const analysis = await analyzeBuffer(
+        job.key,
+        buffer,
+        job.duration,
+        controller.signal,
+        job.priority,
+        job.forPlayback
+      );
       remember(job.key, analysis);
       return analysis;
     } finally {
@@ -408,12 +434,20 @@ export function createSmartCrossfadeAnalyzer({
 
   function enqueue(key, urlSource, options) {
     const priority = Math.max(ANALYSIS_PRIORITIES.current, Number(options.priority) || 0);
+    const forPlayback = options.forPlayback === true;
     const existing = jobs.get(key);
     if (existing) {
       if (priority < existing.priority) {
         existing.priority = priority;
         report('queue-promoted', { trackId: key, priority });
         if (existing.state === 'queued') pump();
+      }
+      // A playback request joining a queued Best Mix job upgrades it; once the
+      // job is active its windows decision is already made, and the playback
+      // caller will re-request through the cache gate if the result lacks a
+      // model verdict.
+      if (forPlayback && !existing.forPlayback && existing.state === 'queued') {
+        existing.forPlayback = true;
       }
       report('queue-deduplicated', { trackId: key, state: existing.state });
       return existing.promise;
@@ -430,6 +464,7 @@ export function createSmartCrossfadeAnalyzer({
       urlSource,
       duration: options.duration,
       priority,
+      forPlayback,
       sequence: ++nextSequence,
       state: 'queued',
       promise,
@@ -443,11 +478,38 @@ export function createSmartCrossfadeAnalyzer({
     return promise;
   }
 
+  // A cached analysis is only good enough if it carries the confidence the
+  // request needs. Background analysis skips the expensive Essentia pass, so a
+  // track first seen during a Best Mix run is cached without it -- and without
+  // this check, that entry would be served forever and the track would never
+  // get the confidence a transition decision depends on. Re-analysing costs one
+  // decode, once, for the two tracks around a transition.
+  // `essentiaChecked` marks that the pass ran, not that it produced a value:
+  // Essentia declines on material its beat trackers cannot read, and a declined
+  // track must not be re-analysed on every play.
+  //
+  // Playback requests hold the higher bar: the beat-model pass runs only for
+  // the decks around a live transition, so a track analysed by Best Mix first
+  // is cached without a model verdict and must be re-analysed once it is
+  // actually about to play. `beatModelChecked` follows the same
+  // ran-not-succeeded convention as `essentiaChecked`.
+  function satisfiesPriority(stored, priority, forPlayback) {
+    const level = Number(priority);
+    if (!Number.isFinite(level) || level > ANALYSIS_PRIORITIES.next) return true;
+    if (forPlayback === true && stored?.beatModelChecked !== true) return false;
+    return stored?.essentiaChecked === true;
+  }
+
   async function prepare(trackId, urlSource, options) {
     const key = String(trackId || '').trim();
     if (!key) return null;
     const stored = await readCached(key);
-    if (stored) return stored;
+    if (stored && satisfiesPriority(stored, options?.priority, options?.forPlayback)) return stored;
+    if (stored) {
+      report('cache-below-priority', { trackId: key, priority: Number(options?.priority) || 0 });
+      cache.delete(key);
+      cacheLookups.delete(key);
+    }
     if (destroyed) throw abortError();
     return enqueue(key, urlSource, options);
   }

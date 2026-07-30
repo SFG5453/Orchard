@@ -330,22 +330,59 @@ function buildDjStructure(analysis, duration) {
   };
 }
 
+// The beat/downbeat model reads 22,050 Hz -- twice the analysis rate -- and it
+// only ever needs the head and tail of a track: bar phase is global (beat index
+// mod 4), so a windowed vote near the mix-in and mix-out anchors fixes every
+// downbeat in the grid. Mirrors BEAT_WINDOW_SECONDS in beatThisTracker.js,
+// duplicated because that module imports node built-ins a worker cannot load;
+// the length is chosen so one window costs exactly one model inference.
+const BEAT_WINDOW_SECONDS = 29.76;
+const BEAT_WINDOW_SAMPLE_RATE = 22050;
+
+// Head and tail windows of the source channels, downmixed for the beat model.
+// A track short enough that the windows would overlap gets a single window
+// covering all of it instead of two windows carrying the same audio twice.
+function prepareBeatWindows(channels, sourceRate) {
+  const planes = channels.map((buffer) => new Float32Array(buffer));
+  const inputLength = planes[0]?.length || 0;
+  if (!planes.length || !inputLength) return [];
+  const windowSamples = Math.floor(BEAT_WINDOW_SECONDS * sourceRate);
+  const slice = (start, end) => {
+    const views = planes.map((plane) => plane.subarray(start, end));
+    const prepared = downmixAndResample(views, sourceRate, BEAT_WINDOW_SAMPLE_RATE);
+    return {
+      samples: prepared.pcm.buffer,
+      sampleRate: prepared.sampleRate,
+      offsetSeconds: start / sourceRate
+    };
+  };
+  if (inputLength <= windowSamples * 2) return [slice(0, inputLength)];
+  return [
+    slice(0, windowSamples),
+    slice(inputLength - windowSamples, inputLength)
+  ];
+}
+
 // `prepareOnly` returns native-ready mono PCM. Otherwise the same preparation
 // feeds a numerically distinct JS fallback with the shared result/version shape.
 // Transfer lists detach the posted mono buffer from this worker after delivery.
 self.onmessage = (event) => {
-  const { id, channels, sampleRate, duration, prepareOnly, targetSampleRate } = event.data;
+  const { id, channels, sampleRate, duration, prepareOnly, targetSampleRate, wantBeatWindows } = event.data;
   try {
     if (prepareOnly) {
+      // Windows are cut before the main downmix: both consume the full-rate
+      // planes, and the model wants more bandwidth than the analysis rate keeps.
+      const beatWindows = wantBeatWindows ? prepareBeatWindows(channels, sampleRate) : [];
       const prepared = downmixAndResample(channels, sampleRate, targetSampleRate);
       self.postMessage({
         id,
         prepared: {
           samples: prepared.pcm.buffer,
           sampleRate: prepared.sampleRate,
-          duration
+          duration,
+          beatWindows
         }
-      }, [prepared.pcm.buffer]);
+      }, [prepared.pcm.buffer, ...beatWindows.map((window) => window.samples)]);
       return;
     }
     const prepared = downmixAndResample(channels, sampleRate, targetSampleRate);
@@ -372,7 +409,7 @@ self.onmessage = (event) => {
       vocalActivityMask.push(0.5);
     }
     const result = {
-      analysisVersion: 8,
+      analysisVersion: 9,
       duration,
       ...baseAnalysis,
       energyCurve,

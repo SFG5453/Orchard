@@ -37,7 +37,7 @@ function analysisFor({ bpm = 126, duration = 240, mixOutTime = 0, contentEndTime
   };
 }
 
-test('plans a pre-roll plus tail overlap ending at the outgoing mix-out', () => {
+test('plans a fade that ends on the incoming drop', () => {
   const plan = planWsolaTransition({
     analysis: analysisFor({ bpm: 126, duration: 240, mixOutTime: 220 }),
     nextAnalysis: analysisFor({ bpm: 126, duration: 200, mixInTime: 20 }),
@@ -46,66 +46,58 @@ test('plans a pre-roll plus tail overlap ending at the outgoing mix-out', () => 
   });
 
   assert.equal(plan.ok, true, plan.reason);
-  // A 20s intro at 126 BPM is 42 bar-aligned beats of available pre-roll, held
-  // to the four-bar cap so the outgoing track is not bedded under for a
-  // fifteen-second run-up to its own fade.
-  assert.equal(plan.prerollBeats, 16);
-  assert.equal(plan.tailBeats, 16);
-  assert.equal(plan.beats, plan.prerollBeats + plan.tailBeats);
+  // A 20s intro at 126 BPM covers far more than four bars, so the fade is held
+  // to the cap rather than spending the whole intro.
+  assert.equal(plan.fadeBeats, 16);
+  assert.equal(plan.beats, 16);
   const outgoingOverlap = plan.beats * (60 / 126);
   assert.ok(plan.transitionStart <= 220 - outgoingOverlap + 0.001);
   const bar = (60 / 126) * 4;
   assert.ok(Math.abs(plan.transitionStart % bar) < 0.01 ||
     Math.abs((plan.transitionStart % bar) - bar) < 0.01);
   assert.ok(Math.abs(plan.transitionEnd - plan.transitionStart - outgoingOverlap) < 1e-9);
-  assert.ok(Math.abs(plan.overlapSeconds - outgoingOverlap) < 1e-9);
   assert.equal(plan.stretchRatio, 1);
 });
 
-test('the incoming track pre-rolls its intro and hands over on its drop', () => {
-  const nextAnalysis = analysisFor({ bpm: 126, duration: 200, mixInTime: 20.5 });
+test('the outgoing track fades through the intro and is gone by the drop', () => {
   const plan = planWsolaTransition({
     analysis: analysisFor({ bpm: 126, duration: 240 }),
-    nextAnalysis,
+    nextAnalysis: analysisFor({ bpm: 126, duration: 200, mixInTime: 20.5 }),
     duration: 240,
     nextDuration: 200
   });
 
   assert.equal(plan.ok, true, plan.reason);
   const bar = (60 / 126) * 4;
-  // The drop is what the analyzer found, snapped to a downbeat.
   assert.ok(Math.abs(plan.incomingDropTime - 20.5) <= bar / 2 + 0.01);
-  // The incoming track starts well before it, so its intro plays underneath.
-  assert.ok(plan.incomingCueTime < plan.incomingDropTime - 1,
-    `expected a pre-roll, cue ${plan.incomingCueTime} drop ${plan.incomingDropTime}`);
+  // The whole overlap sits inside the intro and closes on the drop, so the
+  // incoming arrangement never plays over a track that is still fading.
+  assert.ok(Math.abs(plan.incomingCueTime + plan.overlapSeconds - plan.incomingDropTime) < 1e-9,
+    `fade must end on the drop: cue ${plan.incomingCueTime} + ${plan.overlapSeconds} != ${plan.incomingDropTime}`);
   assert.ok(plan.incomingCueTime >= 0);
-  // The handoff lands on the drop rather than the middle of the overlap.
-  const handoffTime = plan.overlapSeconds * plan.handoffFraction;
-  assert.ok(Math.abs(handoffTime - (plan.incomingDropTime - plan.incomingCueTime)) < 1e-9);
-  assert.ok(Math.abs(plan.handoffFraction - plan.prerollBeats / plan.beats) < 1e-9);
-  // The pre-roll spends only a quarter of the fade, so the outgoing track is
-  // still essentially at level when the drop arrives and does its whole
-  // audible fade over the tail.
-  assert.ok(plan.bedPosition <= 0.3, `bed ${plan.bedPosition}`);
-  assert.ok(Math.abs(plan.incomingResumeTime - plan.incomingCueTime - plan.overlapSeconds) < 1e-9);
+  assert.equal(plan.incomingResumeTime, plan.incomingDropTime);
+  // One continuous equal-power fade rather than a bed followed by a tail.
+  assert.equal(plan.handoffFraction, 0.5);
+  assert.equal(plan.bedPosition, 0.5);
 });
 
-test('caps the pre-roll when the incoming intro is very long', () => {
-  const nextAnalysis = analysisFor({ bpm: 126, duration: 200, mixInTime: 90 });
+test('caps the fade when the incoming intro is very long', () => {
   const plan = planWsolaTransition({
     analysis: analysisFor({ bpm: 126, duration: 240 }),
-    nextAnalysis,
+    nextAnalysis: analysisFor({ bpm: 126, duration: 200, mixInTime: 90 }),
     duration: 240,
     nextDuration: 200
   });
 
   assert.equal(plan.ok, true, plan.reason);
   assert.ok(plan.overlapSeconds <= 16.001, `overlap ${plan.overlapSeconds}`);
-  // The drop stays put; the pre-roll shortens to fit the cap.
-  assert.ok(Math.abs(plan.incomingDropTime - (plan.incomingCueTime + plan.overlapSeconds * plan.handoffFraction)) < 1e-9);
+  // A long intro is not an invitation to play all of it; the drop stays put
+  // and the fade starts later.
+  assert.equal(plan.fadeBeats, 16);
+  assert.ok(Math.abs(plan.incomingCueTime + plan.overlapSeconds - plan.incomingDropTime) < 1e-9);
 });
 
-test('slow compatible tempos stay within the sixteen-second overlap ceiling', () => {
+test('slow tempos stay within the overlap ceiling', () => {
   const plan = planWsolaTransition({
     analysis: analysisFor({ bpm: 80, duration: 300, mixOutTime: 280 }),
     nextAnalysis: analysisFor({ bpm: 80, duration: 300, mixInTime: 60 }),
@@ -115,25 +107,26 @@ test('slow compatible tempos stay within the sixteen-second overlap ceiling', ()
 
   assert.equal(plan.ok, true, plan.reason);
   assert.ok(plan.overlapSeconds <= 16.001, `overlap ${plan.overlapSeconds}`);
-  assert.equal(plan.prerollBeats % 4, 0);
+  assert.equal(plan.fadeBeats % 4, 0, 'the fade stays quantized to whole bars');
 });
 
-test('slow tempos shrink the tail in seconds rather than refusing the pairing', () => {
+test('a short intro shortens the fade instead of refusing the pairing', () => {
+  // Refusing here is what made this shape fail the first time it was tried:
+  // a track that starts singing early lost beat-matching altogether.
   const plan = planWsolaTransition({
-    analysis: analysisFor({ bpm: 40, duration: 300, mixOutTime: 280 }),
-    nextAnalysis: analysisFor({ bpm: 40, duration: 300, mixInTime: 60 }),
-    duration: 300,
-    nextDuration: 300
+    analysis: analysisFor({ bpm: 126, duration: 240 }),
+    nextAnalysis: analysisFor({ bpm: 126, duration: 200, mixInTime: 3 }),
+    duration: 240,
+    nextDuration: 200
   });
 
   assert.equal(plan.ok, true, plan.reason);
-  // At 40 BPM sixteen beats would be 24s of tail alone; the seconds cap
-  // quantizes it down to a single bar instead of blowing the overlap ceiling.
-  assert.equal(plan.tailBeats, 4);
-  assert.ok(plan.overlapSeconds <= 16.001, `overlap ${plan.overlapSeconds}`);
+  assert.ok(plan.fadeBeats <= 8, `fade ${plan.fadeBeats} beats should fit a 3s intro`);
+  assert.ok(plan.fadeBeats >= 4, 'the fade bottoms out at one bar rather than vanishing');
+  assert.ok(Math.abs(plan.incomingCueTime + plan.overlapSeconds - plan.incomingDropTime) < 1e-9);
 });
 
-test('shortens the pre-roll rather than opening on lead-in silence', () => {
+test('shortens the fade rather than opening on lead-in silence', () => {
   const nextAnalysis = analysisFor({ bpm: 126, duration: 200, mixInTime: 20 });
   nextAnalysis.audibleStartTime = 14;
   const plan = planWsolaTransition({
@@ -146,7 +139,30 @@ test('shortens the pre-roll rather than opening on lead-in silence', () => {
   assert.equal(plan.ok, true, plan.reason);
   assert.ok(plan.incomingCueTime >= 14 - 1e-9,
     `cue ${plan.incomingCueTime} must not precede the audible start`);
-  assert.ok(Math.abs(plan.incomingDropTime - (plan.incomingCueTime + plan.overlapSeconds * plan.handoffFraction)) < 1e-9);
+  assert.ok(Math.abs(plan.incomingCueTime + plan.overlapSeconds - plan.incomingDropTime) < 1e-9);
+});
+
+test('never overruns the drop when the intro is shorter than the one-bar floor', () => {
+  // A cold open: the track makes sound barely a beat before its drop, so the
+  // MIN_FADE_BEATS floor asks for four beats the intro cannot cover.
+  const nextAnalysis = analysisFor({ bpm: 126, duration: 200, mixInTime: 20 });
+  nextAnalysis.audibleStartTime = 18.4;
+  const plan = planWsolaTransition({
+    analysis: analysisFor({ bpm: 126, duration: 240 }),
+    nextAnalysis,
+    duration: 240,
+    nextDuration: 200
+  });
+
+  assert.equal(plan.ok, true, plan.reason);
+  assert.ok(plan.incomingCueTime >= 18.4 - 1e-9,
+    `cue ${plan.incomingCueTime} must not precede the audible start`);
+  // The invariant the whole shape rests on: the outgoing track reaches silence
+  // exactly as the incoming drops, never a beat after it.
+  assert.ok(Math.abs(plan.incomingCueTime + plan.overlapSeconds - plan.incomingDropTime) < 1e-9,
+    `overlap must end on the drop: ${plan.incomingCueTime} + ${plan.overlapSeconds} != ${plan.incomingDropTime}`);
+  assert.ok(plan.beats < 4, `expected the floor to yield to the intro, got ${plan.beats} beats`);
+  assert.equal(plan.fadeBeats, plan.beats);
 });
 
 test('prefers an analyzed drop over the plain mix-in time', () => {
@@ -175,7 +191,7 @@ test('octave-doubles a half-time incoming tempo onto the shared grid', () => {
   assert.equal(plan.stretchRatio, 1);
 });
 
-test('hands the low end over a bar after the drop', () => {
+test('the low end hands over late in the fade', () => {
   const plan = planWsolaTransition({
     analysis: analysisFor({ bpm: 126, duration: 240 }),
     nextAnalysis: analysisFor({ bpm: 126, duration: 200, mixInTime: 20 }),
@@ -183,10 +199,10 @@ test('hands the low end over a bar after the drop', () => {
     nextDuration: 200
   });
   assert.equal(plan.ok, true, plan.reason);
-  const swapBeat = plan.bassSwapFraction * plan.beats;
-  assert.equal(swapBeat, plan.prerollBeats + 4);
-  assert.equal(swapBeat % 4, 0);
+  // Past the equal-power crossing, so the incoming track does not gain the
+  // bass while it is still fading up and arrive early.
   assert.ok(plan.bassSwapFraction > plan.handoffFraction);
+  assert.ok(plan.bassSwapFraction < 1);
 });
 
 test('slice anchors map media times into the sliced buffers', () => {
@@ -228,39 +244,48 @@ test('an outro of real music is mixed over rather than skipped', () => {
   assert.ok(plan.transitionEnd > 220, `transition ended at ${plan.transitionEnd}`);
 });
 
-test('shrinks the tail to one bar when both tracks sing through it', () => {
-  // The outgoing track sings all the way to its mix-out; the incoming track
-  // sings from its drop but its intro is instrumental.
+test('both tracks singing through the fade shortens it to one bar', () => {
   const plan = planWsolaTransition({
     analysis: withVocalMask(analysisFor({ bpm: 126, duration: 240, mixOutTime: 220 }), () => true),
     nextAnalysis: withVocalMask(
       analysisFor({ bpm: 126, duration: 200, mixInTime: 20 }),
-      (time) => time >= 20
+      () => true
     ),
     duration: 240,
     nextDuration: 200
   });
 
   assert.equal(plan.ok, true, plan.reason);
-  assert.equal(plan.tailBeats, 4);
-  assert.equal(plan.vocalClash.tail, true);
-  assert.equal(plan.vocalClash.bed, false);
+  assert.equal(plan.vocalClash, true);
+  assert.equal(plan.fadeBeats, 4);
 });
 
-test('keeps the bed to one bar when the incoming intro also sings', () => {
+test('a clash confined to part of the window trims back a bar rather than jumping to the floor', () => {
+  // The incoming track sings throughout its intro (always vocal-active), so it
+  // is the outgoing side that decides whether each candidate window clashes.
+  // The outgoing track sings across [204, 215) -- squarely inside the 16-beat
+  // window ending at the mix-out anchor (220s, at 60 BPM 1s/beat) but mostly
+  // outside the tail-anchored 12-beat window, which starts at 208. The 16-beat
+  // check must clash; the 12-beat one must not. The old code checked only the
+  // full candidate and, on any clash at all, fell straight to the one-bar
+  // floor -- discarding three-quarters of a fade that a 12-beat window would
+  // have rendered clash-free. That is what made transitions too short.
   const plan = planWsolaTransition({
-    analysis: withVocalMask(analysisFor({ bpm: 126, duration: 240, mixOutTime: 220 }), () => true),
-    nextAnalysis: withVocalMask(analysisFor({ bpm: 126, duration: 200, mixInTime: 20 }), () => true),
+    analysis: withVocalMask(
+      analysisFor({ bpm: 60, duration: 240, mixOutTime: 220 }),
+      (time) => time >= 204 && time < 215
+    ),
+    nextAnalysis: withVocalMask(analysisFor({ bpm: 60, duration: 200, mixInTime: 20 }), () => true),
     duration: 240,
     nextDuration: 200
   });
 
   assert.equal(plan.ok, true, plan.reason);
-  assert.equal(plan.vocalClash.bed, true);
-  assert.equal(plan.prerollBeats, 4);
+  assert.equal(plan.fadeBeats, 12, `expected the fade trimmed to 12 beats, got ${plan.fadeBeats}`);
+  assert.equal(plan.vocalClash, false, 'the 12-beat window that was actually used must not itself be a clash');
 });
 
-test('instrumental pairings keep the full pre-roll and tail', () => {
+test('instrumental pairings keep the full fade', () => {
   const plan = planWsolaTransition({
     analysis: withVocalMask(analysisFor({ bpm: 126, duration: 240, mixOutTime: 220 }), () => false),
     nextAnalysis: withVocalMask(analysisFor({ bpm: 126, duration: 200, mixInTime: 20 }), () => false),
@@ -269,9 +294,8 @@ test('instrumental pairings keep the full pre-roll and tail', () => {
   });
 
   assert.equal(plan.ok, true, plan.reason);
-  assert.equal(plan.prerollBeats, 16);
-  assert.equal(plan.tailBeats, 16);
-  assert.deepEqual(plan.vocalClash, { bed: false, tail: false });
+  assert.equal(plan.fadeBeats, 16);
+  assert.equal(plan.vocalClash, false);
 });
 
 test('an untrusted beat grid cannot authorize a beat-matched render', () => {
@@ -307,9 +331,9 @@ test('refuses pairings that cannot be rendered transparently', () => {
 
   assert.equal(planWsolaTransition({
     analysis: base,
-    nextAnalysis: analysisFor({ bpm: 126, duration: 30, mixInTime: 20 }),
+    nextAnalysis: analysisFor({ bpm: 126, duration: 24, mixInTime: 20 }),
     duration: 240,
-    nextDuration: 30
+    nextDuration: 24
   }).reason, 'incoming-too-short');
 
   assert.equal(planWsolaTransition({

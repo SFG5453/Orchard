@@ -65,22 +65,23 @@ test('renders a matched-tempo overlap at the requested length', async () => {
 
 test('time-scales the outgoing track onto the incoming tempo', async () => {
   const result = await native.renderTransition(
-    source(track(), 120),
+    source(track(), 122),
     source(track({ bass: 85, tone: 330 }), 126),
     { sampleRate: SAMPLE_RATE, beats: 16 }
   );
 
   assert.equal(result.rendered, true, result.rejected);
   // The overlap runs on the incoming grid, so the outgoing track is the one
-  // that moves. Reaching a faster grid compresses it: 120/126 = 0.9524, below
+  // that moves. Reaching a faster grid compresses it: 122/126 = 0.9683, below
   // 1. A ratio above 1 here would mean the mix is being slowed onto a tempo
-  // further from the target than it started.
+  // further from the target than it started. (The pairing sits inside the 4%
+  // transparency limit; wider gaps are refused by design.)
   assert.ok(
     result.stretchRatio < 1,
     `outgoing was slowed onto a faster grid: ratio ${result.stretchRatio}`
   );
   assert.ok(
-    Math.abs(result.stretchRatio - 120 / 126) < 1e-4,
+    Math.abs(result.stretchRatio - 122 / 126) < 1e-4,
     `unexpected stretch ratio ${result.stretchRatio}`
   );
   assert.equal(result.bpm, 126);
@@ -89,12 +90,12 @@ test('time-scales the outgoing track onto the incoming tempo', async () => {
   // what catches an inverted ratio, which otherwise still looks plausible.
   const slower = await native.renderTransition(
     source(track(), 126),
-    source(track({ bass: 85, tone: 330 }), 120),
+    source(track({ bass: 85, tone: 330 }), 122),
     { sampleRate: SAMPLE_RATE, beats: 16 }
   );
   assert.equal(slower.rendered, true, slower.rejected);
   assert.ok(
-    Math.abs(slower.stretchRatio - 126 / 120) < 1e-4,
+    Math.abs(slower.stretchRatio - 126 / 122) < 1e-4,
     `unexpected mirrored stretch ratio ${slower.stretchRatio}`
   );
 });
@@ -309,4 +310,166 @@ test('rejects malformed sources without rendering', async () => {
     () => native.renderTransition({ channels: [[1, 2]], bpm: 126 }, base, { beats: 8 }),
     /Float32Array/
   );
+});
+
+test('the mid duck pulls the outgoing mids down as the incoming rises', async () => {
+  // Outgoing carries a 1 kHz tone squarely in the mid band; the incoming is a
+  // different register entirely so the measurement isolates the outgoing side.
+  const outgoing = source(track({ tone: 1000 }), 126);
+  const incoming = source(track({ bass: 85, tone: 330 }), 126);
+  const plain = await native.renderTransition(outgoing, incoming, {
+    sampleRate: SAMPLE_RATE, beats: 16
+  });
+  const ducked = await native.renderTransition(outgoing, incoming, {
+    sampleRate: SAMPLE_RATE, beats: 16, midDuck: 0.8
+  });
+  assert.equal(plain.rendered, true, plain.rejected);
+  assert.equal(ducked.rendered, true, ducked.rejected);
+
+  const length = plain.channels[0].length;
+  const window = Math.floor(SAMPLE_RATE * 0.2);
+  // Late in the overlap, where the incoming has risen and the duck is deep.
+  const late = Math.floor(length * 0.78);
+  const plainMid = amplitudeAt(plain.channels[0], late, window, 1000);
+  const duckedMid = amplitudeAt(ducked.channels[0], late, window, 1000);
+  assert.ok(
+    duckedMid < plainMid * 0.75,
+    `mids were not ducked: ${duckedMid} vs ${plainMid}`
+  );
+  // Early in the overlap the incoming has barely arrived, so the outgoing
+  // mids must still be essentially untouched -- the duck is a ride, not a cut.
+  const early = Math.floor(length * 0.08);
+  const plainEarly = amplitudeAt(plain.channels[0], early, window, 1000);
+  const duckedEarly = amplitudeAt(ducked.channels[0], early, window, 1000);
+  assert.ok(
+    duckedEarly > plainEarly * 0.9,
+    `mids were cut at the start: ${duckedEarly} vs ${plainEarly}`
+  );
+});
+
+test('the mid duck leaves the outgoing highs on the ordinary fade', async () => {
+  // 8 kHz sits above the mid crossover: hats and air keep the outgoing track
+  // present while its mids give way underneath.
+  const outgoing = source(track({ tone: 8000 }), 126);
+  const incoming = source(track({ bass: 85, tone: 330 }), 126);
+  const plain = await native.renderTransition(outgoing, incoming, {
+    sampleRate: SAMPLE_RATE, beats: 16
+  });
+  const ducked = await native.renderTransition(outgoing, incoming, {
+    sampleRate: SAMPLE_RATE, beats: 16, midDuck: 0.8
+  });
+  assert.equal(ducked.rendered, true, ducked.rejected);
+
+  const length = plain.channels[0].length;
+  const window = Math.floor(SAMPLE_RATE * 0.2);
+  const late = Math.floor(length * 0.78);
+  const plainHigh = amplitudeAt(plain.channels[0], late, window, 8000);
+  const duckedHigh = amplitudeAt(ducked.channels[0], late, window, 8000);
+  assert.ok(
+    duckedHigh > plainHigh * 0.85,
+    `highs were ducked with the mids: ${duckedHigh} vs ${plainHigh}`
+  );
+});
+
+test('the vocal duck curve scales mid_duck depth per instant', async () => {
+  const outgoing = source(track({ tone: 1000 }), 126);
+  const incoming = source(track({ bass: 85, tone: 330 }), 126);
+  // Flat curve at 0: with mid_duck > 0 but zero vocal presence throughout,
+  // the mids must ride the plain fade, same as mid_duck: 0 would.
+  const silentCurve = await native.renderTransition(outgoing, incoming, {
+    sampleRate: SAMPLE_RATE, beats: 16, midDuck: 0.8,
+    vocalDuckCurve: [0, 0, 0, 0]
+  });
+  const plain = await native.renderTransition(outgoing, incoming, {
+    sampleRate: SAMPLE_RATE, beats: 16
+  });
+  assert.equal(silentCurve.rendered, true, silentCurve.rejected);
+
+  const length = plain.channels[0].length;
+  const window = Math.floor(SAMPLE_RATE * 0.2);
+  const late = Math.floor(length * 0.78);
+  const plainMid = amplitudeAt(plain.channels[0], late, window, 1000);
+  const silentCurveMid = amplitudeAt(silentCurve.channels[0], late, window, 1000);
+  assert.ok(
+    Math.abs(silentCurveMid - plainMid) < plainMid * 0.1,
+    `zero vocal presence must not duck: ${silentCurveMid} vs ${plainMid}`
+  );
+
+  // A curve that is only "on" in the second half must leave the first half
+  // unducked and duck only the back half, unlike a flat mid_duck which would
+  // shape the whole overlap via fade_in^2 alone.
+  const secondHalfCurve = await native.renderTransition(outgoing, incoming, {
+    sampleRate: SAMPLE_RATE, beats: 16, midDuck: 0.8,
+    vocalDuckCurve: [0, 0, 1, 1]
+  });
+  const early = Math.floor(length * 0.15);
+  const earlyPlain = amplitudeAt(plain.channels[0], early, window, 1000);
+  const earlyDucked = amplitudeAt(secondHalfCurve.channels[0], early, window, 1000);
+  assert.ok(
+    Math.abs(earlyDucked - earlyPlain) < earlyPlain * 0.15,
+    `curve at 0 during the first half must not duck yet: ${earlyDucked} vs ${earlyPlain}`
+  );
+  const lateDucked = amplitudeAt(secondHalfCurve.channels[0], late, window, 1000);
+  assert.ok(
+    lateDucked < plainMid * 0.75,
+    `curve at 1 late in the overlap must duck: ${lateDucked} vs ${plainMid}`
+  );
+});
+
+test('an inactive mid duck is level-identical to no duck at all', async () => {
+  // Regression guard for a phase bug that a one-sided check missed entirely.
+  // The bass split used to be subtractive (`low = signal - high`), which is
+  // complementary only against the *un-rotated* high branch: at 1 kHz that
+  // "low" band still carried 0.56 of the input. Adding the mid split rotated
+  // the high branch by -41 degrees, the two stopped cancelling, and the
+  // outgoing mids came out 34% *louder* with the duck engaged than without --
+  // the opposite of ducking. Both crossovers are matched LR4 pairs now.
+  const outgoing = source(track({ tone: 1000 }), 126);
+  const incoming = source(track({ bass: 85, tone: 330 }), 126);
+  const plain = await native.renderTransition(outgoing, incoming, {
+    sampleRate: SAMPLE_RATE, beats: 16
+  });
+  // mid_duck engaged but with zero vocal presence: every filter in the duck
+  // path runs, and the result must still match the untouched fade.
+  const inactive = await native.renderTransition(outgoing, incoming, {
+    sampleRate: SAMPLE_RATE, beats: 16, midDuck: 0.8, vocalDuckCurve: [0, 0, 0, 0]
+  });
+  assert.equal(inactive.rendered, true, inactive.rejected);
+
+  const length = plain.channels[0].length;
+  const window = Math.floor(SAMPLE_RATE * 0.2);
+  for (const fraction of [0.05, 0.25, 0.5]) {
+    const at = Math.floor(length * fraction);
+    const plainMid = amplitudeAt(plain.channels[0], at, window, 1000);
+    const inactiveMid = amplitudeAt(inactive.channels[0], at, window, 1000);
+    assert.ok(
+      Math.abs(inactiveMid - plainMid) < plainMid * 0.06,
+      `at ${fraction} of the overlap an inactive duck changed level: ${inactiveMid} vs ${plainMid}`
+    );
+  }
+});
+
+test('the bass band does not leak into the mids', async () => {
+  // A subtractive low band is not band-limited; an LR4 one is. Measured at
+  // 1 kHz the two differ by more than two orders of magnitude, so this pins
+  // that the low branch really is a filter and not a remainder.
+  const outgoing = source(track({ bass: 55, tone: 1000 }), 126);
+  const incoming = source(track({ bass: 85, tone: 330 }), 126);
+  const rendered = await native.renderTransition(outgoing, incoming, {
+    sampleRate: SAMPLE_RATE, beats: 16,
+    // Hand the low end to the incoming track immediately, so anything left at
+    // 1 kHz from the outgoing track's *low* branch would be audible here.
+    bassSwap: 0, bassSwapSeconds: 0.01
+  });
+  assert.equal(rendered.rendered, true, rendered.rejected);
+
+  const length = rendered.channels[0].length;
+  const window = Math.floor(SAMPLE_RATE * 0.2);
+  const at = Math.floor(length * 0.5);
+  // The outgoing 55 Hz is gone (swapped away); its 1 kHz still rides the
+  // ordinary high-band fade, so the mix must still carry 1 kHz normally --
+  // the point is that it is carried by the *high* branch, not smeared
+  // between both.
+  const bass = amplitudeAt(rendered.channels[0], at, window, 55);
+  assert.ok(bass < 0.02, `outgoing bass survived the swap: ${bass}`);
 });

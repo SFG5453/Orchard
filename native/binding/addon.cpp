@@ -11,14 +11,16 @@
 #include <vector>
 
 #include "../analyzer/audio_analysis.h"
+#include "../analyzer/mel_spectrogram.h"
+#include "../analyzer/vocal_spectrogram.h"
 #include "../transition/transition_render.h"
-#include "../transition/wsola.h"
+#include "../transition/rubberband_stretch.h"
 
 namespace {
 
 // This is part of the persisted cache/result contract; bump it when numerical
 // semantics or the exported object shape become incompatible.
-constexpr int kAnalysisVersion = 8;
+constexpr int kAnalysisVersion = 9;
 
 // Stable cache output uses four decimal places to keep stored JSON compact.
 double Compact(double value) {
@@ -108,6 +110,179 @@ Napi::Object ToObject(Napi::Env env, const orchard::AnalysisResult& result) {
   return output;
 }
 
+// Computes the beat model's log-mel input off the environment thread. Same
+// ownership rules as AnalysisWorker: the PCM snapshot and the result live here
+// until OnOK runs and the worker deletes itself.
+class BeatSpectrogramWorker final : public Napi::AsyncWorker {
+ public:
+  BeatSpectrogramWorker(Napi::Env env, std::vector<float> samples, double sample_rate)
+    : Napi::AsyncWorker(env),
+      deferred_(Napi::Promise::Deferred::New(env)),
+      samples_(std::move(samples)),
+      sample_rate_(sample_rate) {}
+
+  Napi::Promise Promise() const {
+    return deferred_.Promise();
+  }
+
+  void Execute() override {
+    // libuv worker-pool thread: do not create or retain JavaScript/Napi values.
+    result_ = orchard::ComputeBeatSpectrogram(samples_, sample_rate_);
+  }
+
+  void OnOK() override {
+    const auto env = Env();
+    auto object = Napi::Object::New(env);
+    object.Set("frames", Napi::Number::New(env, static_cast<double>(result_.frames)));
+    object.Set("mels", Napi::Number::New(env, static_cast<double>(orchard::kBeatSpectrogramMels)));
+    // Frames per second, so the caller can turn model frame indices into times
+    // without duplicating the hop constant.
+    object.Set("framesPerSecond", Napi::Number::New(
+      env,
+      orchard::kBeatSpectrogramSampleRate / orchard::kBeatSpectrogramHop
+    ));
+    auto typed = Napi::Float32Array::New(env, result_.values.size());
+    if (!result_.values.empty()) {
+      std::copy(result_.values.begin(), result_.values.end(), typed.Data());
+    }
+    object.Set("values", typed);
+    deferred_.Resolve(object);
+  }
+
+  void OnError(const Napi::Error& error) override {
+    deferred_.Reject(error.Value());
+  }
+
+ private:
+  Napi::Promise::Deferred deferred_;
+  std::vector<float> samples_;
+  double sample_rate_;
+  orchard::BeatSpectrogram result_;
+};
+
+// Mono Float32 PCM at exactly 22,050 Hz in, flattened [frames][128] log-mel out.
+// A rate mismatch resolves to zero frames rather than throwing: the caller
+// treats "no spectrogram" as "no model prediction" and keeps the native grid.
+Napi::Value BeatSpectrogram(const Napi::CallbackInfo& info) {
+  const auto env = info.Env();
+  if (info.Length() < 2 || !info[0].IsTypedArray() || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "beatSpectrogram expects Float32Array samples and sampleRate")
+      .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const auto typed = info[0].As<Napi::TypedArray>();
+  if (typed.TypedArrayType() != napi_float32_array) {
+    Napi::TypeError::New(env, "samples must be a Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const auto samples = info[0].As<Napi::Float32Array>();
+  const double sample_rate = info[1].As<Napi::Number>().DoubleValue();
+  if (samples.ElementLength() == 0 || !std::isfinite(sample_rate) || sample_rate < 1000) {
+    Napi::RangeError::New(env, "audio samples and sample rate must be valid")
+      .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  std::vector<float> copied(samples.ElementLength());
+  std::copy(samples.Data(), samples.Data() + samples.ElementLength(), copied.begin());
+  auto* worker = new BeatSpectrogramWorker(env, std::move(copied), sample_rate);
+  auto promise = worker->Promise();
+  worker->Queue();
+  return promise;
+}
+
+// Computes the vocal-separation model's linear-STFT input off the environment
+// thread. Same ownership rules as BeatSpectrogramWorker.
+class VocalSpectrogramWorker final : public Napi::AsyncWorker {
+ public:
+  VocalSpectrogramWorker(
+    Napi::Env env,
+    std::vector<std::vector<float>> channels,
+    double sample_rate
+  ) : Napi::AsyncWorker(env),
+      deferred_(Napi::Promise::Deferred::New(env)),
+      channels_(std::move(channels)),
+      sample_rate_(sample_rate) {}
+
+  Napi::Promise Promise() const {
+    return deferred_.Promise();
+  }
+
+  void Execute() override {
+    result_ = orchard::ComputeVocalSpectrogram(channels_, sample_rate_);
+  }
+
+  void OnOK() override {
+    const auto env = Env();
+    auto object = Napi::Object::New(env);
+    object.Set("frames", Napi::Number::New(env, static_cast<double>(result_.frames)));
+    object.Set("channels", Napi::Number::New(env, static_cast<double>(orchard::kVocalSpectrogramChannels)));
+    object.Set("bins", Napi::Number::New(env, static_cast<double>(orchard::kVocalSpectrogramBins)));
+    object.Set("framesPerSecond", Napi::Number::New(
+      env,
+      orchard::kVocalSpectrogramSampleRate / orchard::kVocalSpectrogramHop
+    ));
+    auto typed = Napi::Float32Array::New(env, result_.values.size());
+    if (!result_.values.empty()) {
+      std::copy(result_.values.begin(), result_.values.end(), typed.Data());
+    }
+    object.Set("values", typed);
+    deferred_.Resolve(object);
+  }
+
+  void OnError(const Napi::Error& error) override {
+    deferred_.Reject(error.Value());
+  }
+
+ private:
+  Napi::Promise::Deferred deferred_;
+  std::vector<std::vector<float>> channels_;
+  double sample_rate_;
+  orchard::VocalSpectrogram result_;
+};
+
+// Stereo Float32 PCM at exactly 44,100 Hz in (planar, two channels required --
+// mono callers must duplicate first, matching the transition renderer's
+// convention), flattened [2][frames][2049] linear-magnitude STFT out. An
+// invalid rate or channel count resolves to zero frames rather than throwing:
+// the caller treats "no spectrogram" as "no vocal mask available".
+Napi::Value VocalSpectrogram(const Napi::CallbackInfo& info) {
+  const auto env = info.Env();
+  if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "vocalSpectrogram expects an array of two Float32Array channels and sampleRate")
+      .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const auto planes = info[0].As<Napi::Array>();
+  const double sample_rate = info[1].As<Napi::Number>().DoubleValue();
+  if (!std::isfinite(sample_rate) || sample_rate < 1000) {
+    Napi::RangeError::New(env, "sample rate must be valid").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  std::vector<std::vector<float>> channels(planes.Length());
+  for (uint32_t index = 0; index < planes.Length(); ++index) {
+    const auto plane = planes.Get(index);
+    if (!plane.IsTypedArray() ||
+        plane.As<Napi::TypedArray>().TypedArrayType() != napi_float32_array) {
+      Napi::TypeError::New(env, "every channel must be a Float32Array")
+        .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    const auto typed = plane.As<Napi::Float32Array>();
+    if (typed.ElementLength() == 0) {
+      Napi::RangeError::New(env, "channels must not be empty").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    channels[index].assign(typed.Data(), typed.Data() + typed.ElementLength());
+  }
+
+  auto* worker = new VocalSpectrogramWorker(env, std::move(channels), sample_rate);
+  auto promise = worker->Promise();
+  worker->Queue();
+  return promise;
+}
+
 // Owns the PCM snapshot and result until AsyncWorker completes its callback and
 // releases the heap-allocated worker. There is no shared mutable DSP state and
 // no cancellation hook; process shutdown is the final fallback cleanup.
@@ -193,19 +368,19 @@ class StretchWorker final : public Napi::AsyncWorker {
     Napi::Env env,
     std::vector<std::vector<float>> channels,
     double sample_rate,
-    orchard::WsolaConfig config
+    double ratio
   ) : Napi::AsyncWorker(env),
       deferred_(Napi::Promise::Deferred::New(env)),
       channels_(std::move(channels)),
       sample_rate_(sample_rate),
-      config_(config) {}
+      ratio_(ratio) {}
 
   Napi::Promise Promise() const {
     return deferred_.Promise();
   }
 
   void Execute() override {
-    result_ = orchard::WsolaStretch(channels_, sample_rate_, config_);
+    result_ = orchard::RubberBandTimeStretch(channels_, sample_rate_, ratio_);
   }
 
   void OnOK() override {
@@ -227,14 +402,15 @@ class StretchWorker final : public Napi::AsyncWorker {
   Napi::Promise::Deferred deferred_;
   std::vector<std::vector<float>> channels_;
   double sample_rate_;
-  orchard::WsolaConfig config_;
+  double ratio_;
   std::vector<std::vector<float>> result_;
 };
 
-// Time-scales planar PCM without changing pitch. Accepts an array of
-// Float32Array channels so the caller can hand over AudioBuffer planes
-// directly; the copy is required because that storage stays owned by
-// JavaScript and cannot be read later from the worker-pool thread.
+// Time-scales planar PCM without changing pitch, via the vendored Rubber Band
+// Library. Accepts an array of Float32Array channels so the caller can hand
+// over AudioBuffer planes directly; the copy is required because that
+// storage stays owned by JavaScript and cannot be read later from the
+// worker-pool thread.
 Napi::Value TimeStretch(const Napi::CallbackInfo& info) {
   const auto env = info.Env();
   if (info.Length() < 3 || !info[0].IsArray() || !info[1].IsNumber() || !info[2].IsNumber()) {
@@ -273,25 +449,7 @@ Napi::Value TimeStretch(const Napi::CallbackInfo& info) {
     channels[index].assign(typed.Data(), typed.Data() + typed.ElementLength());
   }
 
-  orchard::WsolaConfig config;
-  config.ratio = ratio;
-  if (info.Length() > 3 && info[3].IsObject()) {
-    const auto options = info[3].As<Napi::Object>();
-    if (options.Has("frameSize")) {
-      config.frame_size = options.Get("frameSize").As<Napi::Number>().Int32Value();
-    }
-    if (options.Has("searchRadius")) {
-      config.search_radius = options.Get("searchRadius").As<Napi::Number>().Int32Value();
-    }
-    if (options.Has("startRatio")) {
-      config.start_ratio = options.Get("startRatio").As<Napi::Number>().DoubleValue();
-    }
-    if (options.Has("glide")) {
-      config.glide = options.Get("glide").As<Napi::Number>().DoubleValue();
-    }
-  }
-
-  auto* worker = new StretchWorker(env, std::move(channels), sample_rate, config);
+  auto* worker = new StretchWorker(env, std::move(channels), sample_rate, ratio);
   auto promise = worker->Promise();
   worker->Queue();
   return promise;
@@ -409,7 +567,15 @@ Napi::Value RenderTransition(const Napi::CallbackInfo& info) {
   config.bed = number("bed", config.bed);
   config.bass_crossover_hz = number("bassCrossoverHz", config.bass_crossover_hz);
   config.bass_swap_seconds = number("bassSwapSeconds", config.bass_swap_seconds);
-  config.tempo_glide = number("tempoGlide", config.tempo_glide);
+  config.mid_duck = number("midDuck", config.mid_duck);
+  config.mid_crossover_hz = number("midCrossoverHz", config.mid_crossover_hz);
+  if (options.Has("vocalDuckCurve") && options.Get("vocalDuckCurve").IsArray()) {
+    const auto curve = options.Get("vocalDuckCurve").As<Napi::Array>();
+    config.vocal_duck_curve.resize(curve.Length());
+    for (uint32_t index = 0; index < curve.Length(); ++index) {
+      config.vocal_duck_curve[index] = curve.Get(index).As<Napi::Number>().FloatValue();
+    }
+  }
 
   auto* worker = new TransitionWorker(env, std::move(outgoing), std::move(incoming), config);
   auto promise = worker->Promise();
@@ -420,6 +586,8 @@ Napi::Value RenderTransition(const Napi::CallbackInfo& info) {
 Napi::Object Initialize(Napi::Env env, Napi::Object exports) {
   exports.Set("analysisVersion", kAnalysisVersion);
   exports.Set("analyze", Napi::Function::New(env, Analyze));
+  exports.Set("beatSpectrogram", Napi::Function::New(env, BeatSpectrogram));
+  exports.Set("vocalSpectrogram", Napi::Function::New(env, VocalSpectrogram));
   exports.Set("timeStretch", Napi::Function::New(env, TimeStretch));
   exports.Set("renderTransition", Napi::Function::New(env, RenderTransition));
   exports.Set(

@@ -75,17 +75,37 @@ struct TransitionConfig {
   // to mud when two kick drums collide.
   double bass_crossover_hz = 200;
   double bass_swap_seconds = 0.75;
-  // Fraction of the outgoing audio over which it glides onto the incoming
-  // tempo instead of starting there.
+  // How much of the outgoing track's mid band -- the region between the bass
+  // crossover and mid_crossover_hz, where vocals, leads, and most of the
+  // arrangement live -- is given up by the time the overlap ends, on top of
+  // the main fade. 0 leaves the band alone; 0.5 has it 6 dB further down at
+  // the drop.
   //
-  // Defaults to off, and should stay off for an overlap that begins at the
-  // first sample: during the glide the outgoing track is by definition not on
-  // the incoming grid, and it is loudest exactly then, so the listener hears a
-  // beat clash through the opening of the mix. Measured on a 120 -> 126 BPM
-  // pair, a quarter-length glide held the opening at 123 BPM instead of 126.
-  // It is only useful when the caller passes extra outgoing audio ahead of the
-  // overlap, so the tempo move lands while that track is still playing solo.
-  double tempo_glide = 0;
+  // This is what a DJ's mid EQ kill does. Above the bass crossover the plain
+  // equal-power fade keeps both full arrangements audible at -3 dB each for
+  // the middle of the overlap, and two beat-aligned mixes are correlated, so
+  // they sum hot exactly where their spectra collide. The duck follows the
+  // incoming track's fade-in curve: the outgoing's mids give way at the rate
+  // the incoming's arrive to replace them. Highs above mid_crossover_hz are
+  // left on the ordinary fade -- hats and air do not collide the way mids do,
+  // and keeping them is what keeps the outgoing track sounding present while
+  // it leaves.
+  double mid_duck = 0;
+  double mid_crossover_hz = 4000;
+  // Optional per-instant vocal-presence multiplier on `mid_duck`, one value in
+  // [0, 1] per equally-spaced control point spanning the overlap exactly
+  // (first point at the overlap's start, last at its end) -- the caller has
+  // already cropped and aligned it, native code only interpolates.
+  //
+  // `mid_duck` alone follows the fade curve, not the music: it costs the
+  // outgoing track's mids the same amount whether it is singing full-throated
+  // or not singing at all. Where this curve has data, the depth at each
+  // instant is `mid_duck * vocal_duck_curve(t)` instead of a flat `mid_duck`,
+  // so a track only gives up its mids when, and as much as, it is actually
+  // carrying a vocal. Empty (the default) leaves `mid_duck` acting exactly as
+  // it did before this existed -- this is a refinement of that duck, not a
+  // dependency of it.
+  std::vector<float> vocal_duck_curve;
 };
 
 struct TransitionResult {

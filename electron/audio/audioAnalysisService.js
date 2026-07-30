@@ -8,6 +8,11 @@ import {
   localAnalysisWithSource,
   safeAudioAnalysisDiagnostics
 } from '../../shared/audioAnalysis.js';
+import { refineBeatConfidence } from './essentiaBeatConfidence.js';
+import { DEFAULT_MODEL_PATH, refineBeatsWithModel } from './beatThisTracker.js';
+import { createBeatModelHost } from './beatModelHost.js';
+import { DEFAULT_MODEL_PATH as DEFAULT_VOCAL_MODEL_PATH } from './vocalMaskTracker.js';
+import { createVocalMaskHost } from './vocalMaskHost.js';
 
 // Owns native-addon loading, analysis request de-duplication, and the persisted
 // result cache. `stop()` removes every IPC handler and flushes pending cache data.
@@ -16,6 +21,13 @@ const require = createRequire(import.meta.url);
 const { AUDIO_ANALYSIS } = IPC_CHANNELS;
 const CACHE_VERSION = AUDIO_ANALYSIS_VERSION;
 const MAX_CACHE_ITEMS = 600;
+// Mirrors ANALYSIS_PRIORITIES.next in the renderer. Duplicated rather than
+// imported because that module pulls in browser-only globals.
+const ANALYSIS_PRIORITY_NEXT = 1;
+// Generous: the pass runs about a second for a typical track, and the budget
+// exists to stop a pathological input stalling a transition, not to police
+// normal work. A skip is free -- the native confidence is still there.
+const ESSENTIA_TIMEOUT_MS = 10_000;
 
 function errorDetails(error) {
   return {
@@ -64,8 +76,18 @@ export function setupAudioAnalysisService({
   cachePath,
   ipcMain,
   nativeModulePath,
+  beatModelPath = DEFAULT_MODEL_PATH,
+  vocalModelPath = DEFAULT_VOCAL_MODEL_PATH,
   loadNativeAddon = require,
-  logger = stdoutLogger
+  logger = stdoutLogger,
+  // Injectable so tests can exercise the priority gate without loading several
+  // megabytes of WASM and spending a second per track inside the suite.
+  refineConfidence = refineBeatConfidence,
+  // Injectable for the same reason: the real one runs a 23 MB transformer,
+  // in a utility process forked on first use.
+  refineBeats = refineBeatsWithModel,
+  createModelHost = createBeatModelHost,
+  createVocalHost = createVocalMaskHost
 }) {
   const cache = new Map();
   const inFlight = new Map();
@@ -184,6 +206,50 @@ export function setupAudioAnalysisService({
   // Stereo transition rendering shares the addon but not the analysis cache:
   // a rendered overlap is bound to one exact pairing and playback position, so
   // the renderer owns any reuse and this handler stays stateless.
+  // Vocal presence across one overlap slice. Stateless like the transition
+  // renderer beside it: a mask is bound to one exact pairing and playback
+  // position, so nothing here is worth caching.
+  //
+  // Every failure resolves to null rather than throwing, because the caller's
+  // fallback -- the flat mid duck that shipped before this model existed -- is
+  // a perfectly good transition, just a less precise one.
+  ipcMain.handle(AUDIO_ANALYSIS.VOCAL_MASK, async (_event, payload = {}) => {
+    const native = addon();
+    if (typeof native?.vocalSpectrogram !== 'function') return null;
+    const channels = (Array.isArray(payload.channels) ? payload.channels : [])
+      .map(floatSamples)
+      .filter((channel) => channel?.length > 0);
+    const sampleRate = Number(payload.sampleRate);
+    if (channels.length !== 2 || !Number.isFinite(sampleRate) || sampleRate < 1000) return null;
+    // Bounded by the longest overlap the planner will ever ask for; anything
+    // larger is a caller bug rather than something to spend inference on.
+    if (channels.some((channel) => channel.length > sampleRate * 30)) return null;
+
+    const startedAt = Date.now();
+    try {
+      const spectrogram = await native.vocalSpectrogram(channels, sampleRate);
+      if (!spectrogram?.frames) {
+        // Most often a sample-rate mismatch: the model is 44.1 kHz only.
+        log('vocal-mask-unavailable', { sampleRate });
+        return null;
+      }
+      const result = await vocalHost().track(spectrogram);
+      if (!result?.curve?.length) {
+        log('vocal-mask-no-opinion', { elapsedMs: Date.now() - startedAt });
+        return null;
+      }
+      log('vocal-mask-ready', {
+        elapsedMs: Date.now() - startedAt,
+        frames: spectrogram.frames,
+        points: result.curve.length
+      });
+      return result;
+    } catch (error) {
+      log('vocal-mask-failed', { elapsedMs: Date.now() - startedAt, ...errorDetails(error) });
+      return null;
+    }
+  });
+
   ipcMain.handle(AUDIO_ANALYSIS.RENDER_TRANSITION, async (_event, payload = {}) => {
     const native = addon();
     if (!native || typeof native.renderTransition !== 'function') {
@@ -226,7 +292,7 @@ export function setupAudioAnalysisService({
     // Only forward keys that are real numbers: the N-API binding treats a
     // present-but-undefined key as a type error, not an omission.
     const renderOptions = { sampleRate };
-    ['beats', 'bassSwap', 'handoff', 'bed', 'bassCrossoverHz', 'bassSwapSeconds', 'tempoGlide'].forEach((key) => {
+    ['beats', 'bassSwap', 'handoff', 'bed', 'bassCrossoverHz', 'bassSwapSeconds', 'midDuck', 'midCrossoverHz'].forEach((key) => {
       const value = Number(options[key]);
       if (Number.isFinite(value)) renderOptions[key] = value;
     });
@@ -264,6 +330,107 @@ export function setupAudioAnalysisService({
     return true;
   });
 
+  // The beat/downbeat model pass. Ordered ahead of Essentia because it answers
+  // a strictly larger question: Essentia refines how much to *trust* the grid,
+  // while the model can also fix which beat is beat one -- and when it has
+  // done both, Essentia's opinion is redundant and its second of WASM time is
+  // pure cost. Windows only arrive on transition-priority requests, so the
+  // priority gate is enforced by the renderer's decision to send them.
+  // The utility process holding the ONNX session, forked on the first request
+  // that carries windows and re-forked after any exit.
+  let modelHost = null;
+  function host() {
+    if (!modelHost) modelHost = createModelHost({ modelPath: beatModelPath, log });
+    return modelHost;
+  }
+
+  // A second, separate utility process for the vocal model. Separate rather
+  // than shared because the two run at completely different times -- the beat
+  // model during analysis, this one while preparing a transition -- and a
+  // single process would hold both models resident for the lifetime of either.
+  let vocalMaskHost = null;
+  function vocalHost() {
+    if (!vocalMaskHost) vocalMaskHost = createVocalHost({ modelPath: vocalModelPath, log });
+    return vocalMaskHost;
+  }
+
+  async function refineWithModelIfPossible(rawResult, beatWindows, trackId) {
+    if (!beatWindows?.length) return null;
+    const native = addon();
+    if (typeof native?.beatSpectrogram !== 'function') return null;
+    const startedAt = Date.now();
+    try {
+      const merged = await refineBeats(rawResult, beatWindows, {
+        beatSpectrogram: (samples, sampleRate) => native.beatSpectrogram(samples, sampleRate),
+        // Inference happens out of process; the host already knows the model
+        // path, so the per-call one trackBeats would use is ignored.
+        track: (spectrogram) => host().track(spectrogram),
+        modelPath: beatModelPath,
+        log: (event, details) => log(event, { trackId, ...details })
+      });
+      if (!merged) {
+        log('beat-model-no-opinion', { trackId, elapsedMs: Date.now() - startedAt });
+        return null;
+      }
+      log('beat-model-refined', {
+        trackId,
+        elapsedMs: Date.now() - startedAt,
+        beatConfidence: merged.beatConfidence,
+        nativeConfidence: Number(rawResult.beatConfidence) || 0,
+        beatModelBpm: merged.beatModelBpm || 0,
+        agreement: merged.beatModelAgreement,
+        movedDownbeats: Boolean(merged.downbeats)
+      });
+      return { ...rawResult, ...merged };
+    } catch (error) {
+      log('beat-model-failed', { trackId, elapsedMs: Date.now() - startedAt, ...errorDetails(error) });
+      return null;
+    }
+  }
+
+  // Only the tracks immediately around a transition earn the Essentia pass.
+  // Its rhythm extractor costs several times the whole native analysis, so
+  // running it at Best Mix scale -- up to fifty tracks -- would turn a job of
+  // roughly half a minute into several. Background analysis keeps the native
+  // confidence, which is what shipped before this existed.
+  async function refineIfWorthIt(rawResult, samples, sampleRate, trackId, priority) {
+    const level = Number(priority);
+    if (!Number.isFinite(level) || level > ANALYSIS_PRIORITY_NEXT) return rawResult;
+    if (!Number.isFinite(Number(rawResult?.bpm)) || Number(rawResult?.bpm) <= 0) return rawResult;
+
+    const refined = await Promise.resolve(
+      refineConfidence(samples, sampleRate, { timeoutMs: ESSENTIA_TIMEOUT_MS })
+    ).catch(() => null);
+    // `essentiaChecked` records that the pass *ran*, which is not the same as
+    // it producing a value -- Essentia declines on material its trackers cannot
+    // read. Without that distinction a declined track looks identical to one
+    // never attempted, and the cache check below would re-analyse it forever.
+    if (!refined) {
+      log('essentia-skipped', { trackId, priority: level });
+      return { ...rawResult, essentiaChecked: true };
+    }
+    log('essentia-refined', {
+      trackId,
+      priority: level,
+      elapsedMs: refined.elapsedMs,
+      nativeConfidence: Number(rawResult.beatConfidence) || 0,
+      essentiaConfidence: refined.essentiaConfidence,
+      beatConfidence: refined.beatConfidence,
+      nativeBpm: Number(rawResult.bpm) || 0,
+      essentiaBpm: refined.essentiaBpm
+    });
+    // Confidence only. The native tempo stays authoritative: on the one file
+    // with known ground truth it was the more accurate of the two.
+    return {
+      ...rawResult,
+      beatConfidence: refined.beatConfidence,
+      nativeBeatConfidence: Number(rawResult.beatConfidence) || 0,
+      essentiaConfidence: refined.essentiaConfidence,
+      essentiaBpm: refined.essentiaBpm,
+      essentiaChecked: true
+    };
+  }
+
   ipcMain.handle(AUDIO_ANALYSIS.ANALYZE, async (_event, payload = {}) => {
     await cacheReady;
     const trackId = cleanTrackId(payload.trackId);
@@ -271,11 +438,18 @@ export function setupAudioAnalysisService({
       log('native-request-invalid', { reason: 'missing-track-id' });
       throw new Error('A track ID is required for audio analysis.');
     }
+    // A request carrying windows wants a model verdict; a cache entry written
+    // by a Best Mix analysis has none. Serving it anyway would mean the model
+    // never runs for any track Best Mix touched first, so the entry is
+    // re-earned. Mirrors satisfiesPriority in the renderer, which prevents
+    // most of these calls from being made at all.
+    const wantsModel = Array.isArray(payload.beatWindows) && payload.beatWindows.length > 0;
     const existing = cached(trackId);
-    if (existing) {
+    if (existing && !(wantsModel && existing.beatModelChecked !== true)) {
       log('native-cache-hit', { trackId });
       return existing;
     }
+    if (existing) log('native-cache-below-model', { trackId });
     if (inFlight.has(trackId)) {
       log('native-in-flight-reused', { trackId });
       return inFlight.get(trackId);
@@ -311,9 +485,32 @@ export function setupAudioAnalysisService({
       log('native-analysis-failed', { trackId, elapsedMs: Date.now() - startedAt, ...errorDetails(error) });
       throw error;
     }
+    // Optional model windows: head/tail PCM at the beat model's rate. Parsed
+    // leniently -- a malformed window degrades to "no model opinion", never to
+    // a failed analysis.
+    const beatWindows = (Array.isArray(payload.beatWindows) ? payload.beatWindows : [])
+      .map((window) => ({
+        samples: floatSamples(window?.samples),
+        sampleRate: Number(window?.sampleRate) || 0,
+        offsetSeconds: Number(window?.offsetSeconds) || 0
+      }))
+      .filter((window) => window.samples?.length > 0 && window.sampleRate >= 1000 &&
+        window.offsetSeconds >= 0 && window.samples.length <= window.sampleRate * 120);
+
     const task = nativeTask
-      .then((rawResult) => {
-        const result = localAnalysisWithSource(rawResult, 'local-native');
+      .then(async (rawResult) => {
+        const modelRefined = await refineWithModelIfPossible(rawResult, beatWindows, trackId);
+        // `beatModelChecked` is stamped whenever windows arrived, even when the
+        // model declined or broke: it records that the pass ran, exactly like
+        // `essentiaChecked` above. Without it, the renderer's cache gate would
+        // see a playback request, find no model verdict, and re-decode and
+        // re-analyse the same track on every single play.
+        const refined = modelRefined ??
+          {
+            ...await refineIfWorthIt(rawResult, samples, sampleRate, trackId, payload.priority),
+            ...(beatWindows.length ? { beatModelChecked: true } : {})
+          };
+        const result = localAnalysisWithSource(refined, 'local-native');
         if (!result) {
           log('native-analysis-invalid', { trackId, bpm: Number(rawResult?.bpm) || 0 });
           throw new Error('Native audio analysis returned an invalid BPM.');
@@ -352,6 +549,11 @@ export function setupAudioAnalysisService({
       ipcMain.removeHandler(AUDIO_ANALYSIS.STORE);
       ipcMain.removeHandler(AUDIO_ANALYSIS.ANALYZE);
       ipcMain.removeHandler(AUDIO_ANALYSIS.RENDER_TRANSITION);
+      ipcMain.removeHandler(AUDIO_ANALYSIS.VOCAL_MASK);
+      modelHost?.stop();
+      modelHost = null;
+      vocalMaskHost?.stop();
+      vocalMaskHost = null;
       if (cache.size) await persist().catch(() => {});
     }
   };

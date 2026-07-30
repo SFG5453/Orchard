@@ -1,14 +1,16 @@
-// Plans a beat-matched WSOLA transition in the Spotify AutoMix style measured
-// from reference captures: the outgoing track runs to its mix-out point while
-// the incoming track's intro plays underneath it, and the two cross at equal
-// power on the incoming track's drop.
+// Plans a beat-matched WSOLA transition: the outgoing track fades out *through*
+// the incoming track's intro, reaching silence exactly as the incoming drops.
 //
-// The pre-roll is the point of the whole shape. Entering at the drop instead
-// puts the incoming vocal on top of an outgoing track that is still singing --
-// on a typical pop pairing that is several seconds of two lead vocals at once,
-// which reads as a mistake however well the grids line up. The intro is the
-// part of a track written to sit under something else, so that is the part
-// that overlaps.
+// The intro is the runway. It is the part of a track written to have something
+// else over it, so it is the part the outgoing track fades across -- and by the
+// time the incoming arrangement and vocal arrive, the outgoing one is gone.
+//
+// The alternative, which this replaced, held the outgoing at full level under
+// the intro and then faded it *after* the drop. That fails twice over: the
+// outgoing sounds untouched for the whole run-up, so the mix seems to wait for
+// it to end and then rush, and the fade itself lands on top of the incoming
+// track's full arrangement, which is two records at once rather than one
+// becoming the other.
 //
 // Planning is pure and cheap so it can run on every playback tick. The heavy
 // work — decoding PCM and rendering the overlap in the native addon — belongs
@@ -26,33 +28,45 @@ import {
 
 export { alignTempoOctave };
 
-// Beats of overlap after the handoff: the outgoing track's fade once the
-// incoming has arrived. Measured from the Spotify reference capture, but
-// capped in seconds (mirrors the legacy planner's tailSeconds clamp) so a
-// slow track doesn't turn "the fade" into a 13-14s wait behind the new vocal.
-const NOMINAL_TAIL_BEATS = 16;
-const TAIL_MIN_SECONDS = 4;
-const TAIL_MAX_SECONDS = 8;
-
-// The incoming track's intro plays underneath the outgoing track before the
-// handoff. Quantized to bars, and bounded: too short and the drop arrives
-// unannounced, too long and the outgoing track is buried under a bed for most
-// of its final phrase. Four bars is the cap because a long intro is not an
-// invitation to play all of it -- at 48 beats a slow track sat under the
-// outgoing one for fifteen seconds before anything started to move.
-const MIN_PREROLL_BEATS = 4;
-const MAX_PREROLL_BEATS = 16;
+// The fade is bounded in beats because overlap length is musical: bounding it
+// in seconds makes a faster track get a longer mix, which is backwards. Four
+// bars is the ceiling and one bar the floor, the latter for tracks whose intro
+// cannot cover more.
+const MIN_FADE_BEATS = 4;
+const MAX_FADE_BEATS = 16;
 
 // A ceiling on the whole overlap regardless of how long the incoming intro is.
 // Keep this in step with the live smart-transition planner so enabling audio
 // processing does not unexpectedly change how long the same pairing blends.
 const MAX_OVERLAP_SECONDS = 16;
 
-// How far along the equal-power fade the pre-roll travels; see `bed` in
-// native/transition/transition_render.h. Low, so the pre-roll is the incoming
-// intro rising to a bed under a still-full outgoing track, and the outgoing
-// track's audible fade is the tail alone rather than the whole overlap.
-const BED_POSITION = 0.25;
+// One continuous equal-power fade across the whole overlap; see `handoff` and
+// `bed` in native/transition/transition_render.h, where 0.5/0.5 is documented
+// as the plain symmetric crossfade.
+//
+// The overlap used to be a bed plus a tail: the incoming intro rose to -8 dB
+// while the outgoing gave up 0.7 dB, and the outgoing then did its entire
+// audible fade *after* the drop. Two things were wrong with that. For the
+// whole bed the outgoing sounded untouched, so the mix seemed to wait for it
+// to finish and then rush; and the fade landed on top of the incoming track's
+// full arrangement, which is two records at once rather than one becoming the
+// other. Fading continuously through the intro instead means the outgoing is
+// already gone when the drop lands.
+const HANDOFF_FRACTION = 0.5;
+const BED_POSITION = 0.5;
+
+// The low end still hands over late -- see `bass_swap` in the renderer -- but
+// it is now a fraction of a fade that ends at the drop rather than one that
+// starts there.
+const BASS_SWAP_FRACTION = 0.7;
+
+// The outgoing track's mid band gives up an extra 6 dB across the fade, at
+// the rate the incoming track rises to replace it -- a DJ's mid EQ kill. The
+// bass swap keeps the low end exclusive, but above it the equal-power fade
+// alone holds both full arrangements at -3 dB each through the middle of the
+// overlap, and two beat-aligned mixes are correlated, so their mids sum hot
+// exactly where they collide. See `mid_duck` in the renderer.
+const MID_DUCK = 0.5;
 
 // Extra PCM around each slice so the WSOLA similarity search and filter
 // warm-up never run against a hard buffer edge.
@@ -97,8 +111,8 @@ function nearest(values, target, tolerance) {
 // snapped to a downbeat so the shared grid starts on a bar. Candidate choice
 // is a ranking problem -- analyzer score, candidate type, downbeat alignment,
 // available run-up and how vocal it is -- not a type lookup. This is the
-// handoff, not the point where the incoming track starts making sound; it
-// begins its intro a pre-roll earlier, underneath the outgoing track.
+// end of the fade, not the point where the incoming track starts making sound;
+// it begins its intro a whole fade earlier, under the departing track.
 export function incomingMixInPoint(analysis = {}) {
   const beatSeconds = finiteOrZero(analysis.beatInterval) ||
     (finiteOrZero(analysis.bpm) > 0 ? 60 / analysis.bpm : 0);
@@ -111,7 +125,7 @@ export function incomingMixInPoint(analysis = {}) {
   return nearest(analysis.downbeats, target, tolerance) ?? target;
 }
 
-// Where the incoming track first makes sound. The pre-roll starts here at the
+// Where the incoming track first makes sound. The fade starts here at the
 // earliest; anything before it is lead-in silence that would blend as a gap.
 export function incomingAudibleStart(analysis = {}) {
   const candidates = [analysis.audibleStartTime, analysis.pickupTime, analysis.firstBeat]
@@ -149,17 +163,6 @@ export function planWsolaTransition({
   const incomingBeatSeconds = 60 / incomingBpm;
   const outgoingBeatSeconds = 60 / outgoingBpm;
 
-  // Quantized to a whole bar so the handoff stays on the grid; floored at one
-  // bar so a very fast tempo doesn't collapse the fade to nothing.
-  let tailBeats = Math.max(
-    4,
-    Math.round(
-      clamp(NOMINAL_TAIL_BEATS * incomingBeatSeconds, TAIL_MIN_SECONDS, TAIL_MAX_SECONDS) /
-        incomingBeatSeconds /
-        4
-    ) * 4
-  );
-
   // The handoff: where the incoming track's arrangement and vocal arrive.
   const incomingDropTime = incomingMixInPoint(nextAnalysis);
   if (!Number.isFinite(incomingDropTime) || incomingDropTime < 0) return refuse('incoming-mix-in');
@@ -171,74 +174,80 @@ export function planWsolaTransition({
   const mixOutAnchor = resolveMixOutAnchor(analysis, { contentEnd, duration: outgoingLength });
   const overlapEndTarget = Math.min(outgoingLength, mixOutAnchor.time);
 
-  // The tail is the incoming vocal singing over the outgoing fade. When the
-  // masks show both tracks measurably singing through it, one bar of fade is
-  // all the clash that is tolerated.
-  const tailVocalClash = isVocalClash(
+  // The fade runs *through* the incoming track's intro and ends on its drop,
+  // so it can be at most as long as that intro. Quantized down to whole bars
+  // of the shared grid so both ends stay on a downbeat.
+  const audibleStart = incomingAudibleStart(nextAnalysis);
+  const availableFadeBeats = Math.max(0, incomingDropTime - audibleStart) / incomingBeatSeconds;
+  const cappedByOverlap = Math.floor(Math.floor(MAX_OVERLAP_SECONDS / incomingBeatSeconds) / 4) * 4;
+  if (cappedByOverlap < MIN_FADE_BEATS) return refuse('overlap-too-long');
+  let fadeBeats = Math.min(
+    MAX_FADE_BEATS,
+    cappedByOverlap,
+    Math.floor(availableFadeBeats / 4) * 4
+  );
+  // A track that starts singing immediately cannot hide a four-bar fade. Rather
+  // than refuse the pairing outright -- which is what made this shape fail the
+  // first time it was tried -- the fade shortens to whatever the intro covers,
+  // down to a one-bar floor.
+  if (fadeBeats < MIN_FADE_BEATS) fadeBeats = MIN_FADE_BEATS;
+
+  // Both sides singing through the fade is the case this shape exists to
+  // avoid -- but a clash over the *whole* candidate window does not mean the
+  // whole window is the problem. A vocal that only arrives in the outgoing
+  // track's last bar, or is already singing a bar into the incoming drop,
+  // used to collapse a 16-beat fade straight to the one-bar floor, because
+  // the check ran once against the full window and any overlap anywhere in it
+  // failed the whole thing. That is what made transitions too short far more
+  // often than the vocals actually required: back off one bar at a time
+  // instead, and use the longest window that is genuinely clash-free. Only a
+  // clash that survives all the way down to the floor falls back to it, which
+  // remains the least-bad option, same as before.
+  const clashOver = (beats) => isVocalClash(
     vocalActivityBetween(
       analysis,
-      overlapEndTarget - tailBeats * outgoingBeatSeconds,
+      overlapEndTarget - beats * outgoingBeatSeconds,
       overlapEndTarget
     ),
     vocalActivityBetween(
       nextAnalysis,
-      incomingDropTime,
-      incomingDropTime + tailBeats * incomingBeatSeconds
-    )
-  );
-  if (tailVocalClash) tailBeats = 4;
-
-  // The incoming track's intro is what plays underneath the outgoing track, so
-  // the pre-roll can be at most as long as that intro. Quantized down to whole
-  // bars of the shared grid, so the handoff stays on a downbeat.
-  const audibleStart = incomingAudibleStart(nextAnalysis);
-  const availablePrerollBeats = Math.max(0, incomingDropTime - audibleStart) / incomingBeatSeconds;
-  const cappedByOverlap = Math.floor(
-    (Math.floor(MAX_OVERLAP_SECONDS / incomingBeatSeconds) - tailBeats) / 4
-  ) * 4;
-  if (cappedByOverlap < MIN_PREROLL_BEATS) return refuse('overlap-too-long');
-  let prerollBeats = Math.max(
-    MIN_PREROLL_BEATS,
-    Math.min(
-      MAX_PREROLL_BEATS,
-      cappedByOverlap,
-      Math.floor(availablePrerollBeats / 4) * 4
-    )
-  );
-
-  // The bed is supposed to be an instrumental intro under a track that is
-  // still at full level. If both sides are singing there instead, keep the
-  // bed to the one-bar minimum rather than running a long double-vocal ride.
-  const bedVocalClash = isVocalClash(
-    vocalActivityBetween(
-      analysis,
-      overlapEndTarget - (prerollBeats + tailBeats) * outgoingBeatSeconds,
-      overlapEndTarget - tailBeats * outgoingBeatSeconds
-    ),
-    vocalActivityBetween(
-      nextAnalysis,
-      Math.max(audibleStart, incomingDropTime - prerollBeats * incomingBeatSeconds),
+      Math.max(audibleStart, incomingDropTime - beats * incomingBeatSeconds),
       incomingDropTime
     )
   );
-  if (bedVocalClash) prerollBeats = MIN_PREROLL_BEATS;
+  let fadeVocalClash = clashOver(fadeBeats);
+  while (fadeVocalClash && fadeBeats > MIN_FADE_BEATS) {
+    fadeBeats -= 4;
+    fadeVocalClash = clashOver(fadeBeats);
+  }
 
-  const overlapBeats = prerollBeats + tailBeats;
+  // The one-bar floor above can ask for more intro than the track owns: a track
+  // whose first downbeat is a beat and a half after it starts making sound has
+  // no four beats to give. Spending them anyway is what breaks the shape --
+  // `beats` is what the renderer mixes, so an overlap longer than the intro
+  // finishes *after* the drop, fading the outgoing track across the incoming
+  // arrangement, which is precisely what this plan exists to prevent.
+  //
+  // So the floor yields to the intro. Whole beats rather than whole bars here:
+  // this is already the degraded path, and a three-beat fade that lands on the
+  // drop is better than a four-beat one that overruns it.
+  const coverableBeats = Math.floor(
+    Math.max(0, incomingDropTime - audibleStart) / incomingBeatSeconds
+  );
+  const overlapBeats = Math.min(fadeBeats, coverableBeats);
+  if (overlapBeats < 1) return refuse('incoming-no-intro');
+
   // The same beat count on both grids: the outgoing side is consumed at its
   // own tempo and stretched onto the incoming grid by the renderer.
   const outgoingOverlapSeconds = overlapBeats * outgoingBeatSeconds;
   const overlapSeconds = overlapBeats * incomingBeatSeconds;
 
-  // The incoming track enters a pre-roll ahead of its drop. Clamped at its
-  // audible start so the mix never opens on lead-in silence.
-  const incomingCueTime = Math.max(
-    audibleStart,
-    incomingDropTime - prerollBeats * incomingBeatSeconds
-  );
-  // Whatever the clamp took away shortens the pre-roll rather than shifting
-  // the drop, which must stay where the analyzer found it.
-  const prerollSeconds = incomingDropTime - incomingCueTime;
-  if (prerollSeconds <= 0) return refuse('incoming-no-preroll');
+  // The overlap ends on the drop, so the incoming track enters a whole fade
+  // ahead of it. `coverableBeats` guarantees this clears the audible start, so
+  // the fade is the overlap exactly and the invariant holds by construction
+  // rather than by a clamp that silently moves one end without the other.
+  const incomingCueTime = incomingDropTime - overlapSeconds;
+  const fadeSeconds = overlapSeconds;
 
   const startTarget = overlapEndTarget - outgoingOverlapSeconds;
   const transitionStart = nearestAtOrBefore(analysis.downbeats, startTarget) ?? startTarget;
@@ -249,15 +258,6 @@ export function planWsolaTransition({
   const incomingResumeTime = incomingCueTime + overlapSeconds;
   if (incomingResumeTime + MIN_CLEARANCE_SECONDS > incomingLength) return refuse('incoming-too-short');
 
-  // The mix changes hands on the drop: before it the incoming track is a bed
-  // under the outgoing one, after it the outgoing track fades away.
-  const handoffFraction = prerollSeconds / overlapSeconds;
-
-  // The low end changes hands on the drop too -- that is what the drop is --
-  // held a bar past it so the incoming track does not arrive early.
-  const swapBeat = Math.max(4, Math.min(overlapBeats - 4, prerollBeats + 4));
-  const bassSwapFraction = swapBeat / overlapBeats;
-
   const outgoingSliceStart = Math.max(0, transitionStart - SLICE_PADDING_SECONDS);
   const incomingSliceStart = Math.max(0, incomingCueTime - SLICE_PADDING_SECONDS);
   return {
@@ -265,16 +265,19 @@ export function planWsolaTransition({
     tier: policy.tier,
     beatConfidence: policy.beatConfidence,
     mixOutType: mixOutAnchor.type,
-    vocalClash: { bed: bedVocalClash, tail: tailVocalClash },
+    vocalClash: fadeVocalClash,
     transitionStart,
     transitionEnd,
     overlapSeconds,
     beats: overlapBeats,
-    prerollBeats,
-    tailBeats,
-    handoffFraction,
+    // What the fade actually spends, after the intro has had its say. The
+    // pre-clamp target is not reported: nothing downstream can act on beats
+    // the incoming track had no room for.
+    fadeBeats: overlapBeats,
+    handoffFraction: HANDOFF_FRACTION,
     bedPosition: BED_POSITION,
-    bassSwapFraction,
+    bassSwapFraction: BASS_SWAP_FRACTION,
+    midDuck: MID_DUCK,
     outgoingBpm,
     incomingBpm,
     stretchRatio,

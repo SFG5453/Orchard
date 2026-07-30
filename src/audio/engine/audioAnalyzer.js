@@ -55,6 +55,44 @@ export function createAudioAnalyzer(options = {}) {
     return { lowPass, highPass };
   }
 
+  // The mix bands the transition scheduler automates. Two LR4 halves of a
+  // 200 Hz crossover -- a low branch carrying its own gain, and a high branch
+  // -- so the low end can be handed over exclusively rather than fading two
+  // uncorrelated bass lines through each other. This mirrors the native
+  // renderer's split (see native/transition/transition_render.cpp); the live
+  // path had only a full-range low-pass, which meant the outgoing track was
+  // reduced to pure bass exactly as the incoming's bass arrived.
+  //
+  // `midDuck` is one peaking section rather than a second crossover: the
+  // renderer can afford a three-way split offline, but here a single
+  // automatable dip covers the same band without adding two more phase-shifted
+  // branches that would have to sum flat. At 0 dB it is transparent, so a
+  // non-DJ crossfade and ordinary playback run through an unchanged signal.
+  const BASS_CROSSOVER_HZ = 200;
+  const MID_DUCK_HZ = 1200;
+
+  function mixBands(ctx) {
+    const section = (type, frequency) => {
+      const filter = ctx.createBiquadFilter();
+      filter.type = type;
+      filter.frequency.value = frequency;
+      filter.Q.value = 0.70710678;
+      return filter;
+    };
+    const bassLow = [section('lowpass', BASS_CROSSOVER_HZ), section('lowpass', BASS_CROSSOVER_HZ)];
+    const bassHigh = [section('highpass', BASS_CROSSOVER_HZ), section('highpass', BASS_CROSSOVER_HZ)];
+    const bassGain = ctx.createGain();
+    const midDuck = section('peaking', MID_DUCK_HZ);
+    midDuck.Q.value = 0.9;
+    midDuck.gain.value = 0;
+    bassGain.gain.value = 1;
+    bassLow[0].connect(bassLow[1]);
+    bassLow[1].connect(bassGain);
+    bassHigh[0].connect(bassHigh[1]);
+    bassHigh[1].connect(midDuck);
+    return { bassLow, bassHigh, bassGain, midDuck };
+  }
+
   function connectElement(element) {
     if (!element) return null;
     const existing = nodes.get(element);
@@ -71,6 +109,7 @@ export function createAudioAnalyzer(options = {}) {
     const gain = ctx.createGain();
     const mixGain = ctx.createGain();
     const { lowPass, highPass } = outputFilters(ctx);
+    const { bassLow, bassHigh, bassGain, midDuck } = mixBands(ctx);
     analyser.fftSize = config.fftSize;
     analyser.smoothingTimeConstant = config.smoothingTimeConstant;
     normalizer.threshold.value = -24;
@@ -92,17 +131,26 @@ export function createAudioAnalyzer(options = {}) {
     normalizer.connect(normalizedGain);
     normalizedGain.connect(gain);
     gain.connect(mixGain);
-    mixGain.connect(lowPass);
+    // The sweep filters sit on the high branch only. Sweeping a low-pass down
+    // to 200 Hz across a band that starts at 200 Hz is meaningless, and running
+    // it full-range is what made the outgoing track lose its body and its low
+    // end at the same time.
+    mixGain.connect(bassLow[0]);
+    mixGain.connect(bassHigh[0]);
+    bassGain.connect(ctx.destination);
+    midDuck.connect(lowPass);
     lowPass.connect(highPass);
     highPass.connect(ctx.destination);
     element.volume = 1;
 
     const node = {
       analyser,
+      bassGain,
       directGain,
       gain,
       highPass,
       lowPass,
+      midDuck,
       mixGain,
       normalizedGain,
       normalizer,

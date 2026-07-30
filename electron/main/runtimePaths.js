@@ -13,6 +13,14 @@ export function resolveRuntimePaths({ app, isDev, resourcesPath = process.resour
     nativeModulePath: app.isPackaged
       ? path.join(resourcesPath, 'app.asar.unpacked', 'native/build/Release/orchard_audio_analysis.node')
       : path.join(appRoot, 'native/build/Release/orchard_audio_analysis.node'),
+    // Opened by ONNX Runtime's native code, which cannot read inside an asar,
+    // so the packaged copy lives in app.asar.unpacked like the addon above.
+    beatModelPath: app.isPackaged
+      ? path.join(resourcesPath, 'app.asar.unpacked', 'models/beat-this/beat_this_int8.onnx')
+      : path.join(appRoot, 'models/beat-this/beat_this_int8.onnx'),
+    vocalModelPath: app.isPackaged
+      ? path.join(resourcesPath, 'app.asar.unpacked', 'models/vocal-separation/vocals_umxhq_int8.onnx')
+      : path.join(appRoot, 'models/vocal-separation/vocals_umxhq_int8.onnx'),
     preloadPath: path.join(appRoot, 'electron/preload/index.cjs'),
     rendererEntryPath: path.join(appRoot, 'dist/index.html')
   };

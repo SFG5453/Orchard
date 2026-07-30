@@ -26,10 +26,30 @@ module.exports = {
     'electron/**/*',
     'shared/**/*',
     'native/build/Release/*.node',
+    // Only the quantized model ships. The glob is deliberately exact: a dev
+    // machine may also hold the 83 MB fp32 model the int8 was derived from,
+    // and a wildcard would quietly quadruple the installer.
+    'models/beat-this/beat_this_int8.onnx',
+    'models/vocal-separation/vocals_umxhq_int8.onnx',
     'package.json'
   ],
   asarUnpack: [
-    'native/build/Release/*.node'
+    'native/build/Release/*.node',
+    // ONNX Runtime dlopens its own shared libraries next to its binding, and
+    // the model file is opened by native code; neither can read out of an asar.
+    '**/node_modules/onnxruntime-node/**',
+    'models/beat-this/beat_this_int8.onnx',
+    'models/vocal-separation/vocals_umxhq_int8.onnx',
+    // The beat model runs in a utility process, and utilityProcess.fork is
+    // given a real path on disk. These are ES modules, whose loader does not
+    // go through the same asar-aware layer CommonJS require does, so the fork
+    // entry and everything it statically imports are unpacked rather than
+    // relying on that working from inside the archive.
+    'electron/audio/beatModelProcess.js',
+    'electron/audio/beatThisTracker.js',
+    'electron/audio/vocalMaskProcess.js',
+    'electron/audio/vocalMaskTracker.js',
+    'electron/audio/modelProcessHost.js'
   ],
   electronFuses: {
     runAsNode: false,

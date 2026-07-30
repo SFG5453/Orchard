@@ -17,3 +17,6 @@ packaging/linux/arch/*.pkg.tar.*
 
 out/
 .vscode/
+# The fetched fp32 model is a local build input, never committed; the
+# quantized int8 derived from it is what ships.
+models/beat-this/beat_this.onnx

@@ -6,9 +6,15 @@ import {
 
 export const CROSSFADE_MODES = ['standard', 'smart'];
 
-const AUTO_MIN_SECONDS = 8;
-const AUTO_TRANSITION_MAX_SECONDS = 16;
-const AUTO_FALLBACK_SECONDS = 12;
+// Four bars. Overlaps are counted in beats because that is what the ear hears;
+// the seconds values are rails for tempi where four bars would be absurd, not
+// the primary control. Eight to sixteen beats is the range the automatic-DJ
+// literature reports for stable dance material, and less for dense pop.
+const AUTO_TRANSITION_MAX_BEATS = 16;
+const AUTO_MIN_SECONDS = 4;
+const AUTO_FAST_TRACK_MIN_SECONDS = 6;
+const AUTO_TRANSITION_MAX_SECONDS = 12;
+const AUTO_FALLBACK_SECONDS = 8;
 const KEY_INDEX = new Map([
   ['C', 0], ['C♯', 1], ['D♭', 1], ['D', 2], ['D♯', 3], ['E♭', 3],
   ['E', 4], ['F', 5], ['F♯', 6], ['G♭', 6], ['G', 7], ['G♯', 8],
@@ -235,11 +241,16 @@ function phraseSwitch(analysis = {}, nextAnalysis = {}, length = 0) {
   const incomingPlaybackRate = Math.round(clamp(1 / ratio, 0.9, 1.1) * 10000) / 10000;
   const incomingHandoffTime = incomingCuePoint(nextAnalysis);
   const introDropTime = incomingHandoffTime / Math.max(0.8, incomingPlaybackRate);
-  const tailBeats = 16;
-  const tailSeconds = clamp(tailBeats * beatSeconds, 4, 8);
-  const requestedOverlap = introDropTime + tailSeconds;
+  // The overlap covers only the incoming instrumental intro so the outgoing
+  // track is fully gone by the time the incoming vocals arrive — no tail.
+  const requestedOverlap = introDropTime;
   if (length <= requestedOverlap * 0.5) return null;
-  const maximumOverlap = Math.min(AUTO_TRANSITION_MAX_SECONDS, length * 0.4);
+  // Beat-denominated like the main path; the seconds value is only a rail.
+  const maximumOverlap = Math.min(
+    AUTO_TRANSITION_MAX_BEATS * beatSeconds,
+    AUTO_TRANSITION_MAX_SECONDS,
+    length * 0.4
+  );
   const actualOverlap = Math.min(requestedOverlap, maximumOverlap);
   const alignedEnd = timedValueAtOrBefore(analysis.downbeats, length, length);
   const transitionEnd = length - alignedEnd <= beatSeconds * 4.5 ? alignedEnd : length;
@@ -256,14 +267,13 @@ function phraseSwitch(analysis = {}, nextAnalysis = {}, length = 0) {
     transitionEnd - beatSeconds * 4
   );
   const overlap = transitionEnd - transitionStart;
-  const rawHandoffStart = Math.max(0, overlap - tailSeconds);
-  const handoffStartSeconds = Math.round(rawHandoffStart / beatSeconds) * beatSeconds;
-  const handoffDuration = clamp(overlap - handoffStartSeconds, tailSeconds * 0.5, overlap);
+  // The fade runs through the incoming intro and closes on its drop, so it
+  // spans the whole overlap rather than starting once the drop has landed.
+  const handoffStartSeconds = 0;
+  const handoffDuration = overlap;
   const transitionBeats = Math.round(overlap / beatSeconds);
-  const incomingCueTime = Math.max(
-    0,
-    incomingHandoffTime - handoffStartSeconds * incomingPlaybackRate
-  );
+  // Clamped at zero, which shortens the run-up rather than moving the drop.
+  const incomingCueTime = Math.max(0, incomingHandoffTime - overlap * incomingPlaybackRate);
 
   return {
     transitionStart,
@@ -293,13 +303,18 @@ function adaptiveOverlap(analysis = {}, nextAnalysis = {}) {
   const vocalConflict = Number(analysis.vocalProbability) >= 0.62 &&
     Number(nextAnalysis.vocalProbability) >= 0.62;
   const transitionBeats = !vocalConflict &&
-    (Math.abs(1 - ratio) > 0.07 || (distance !== null && distance > 4)) ? 24 : 16;
+    (Math.abs(1 - ratio) > 0.07 || (distance !== null && distance > 4)) ? 16 : 8;
   const beatSeconds = 60 / currentBpm;
+  // Eight beats can be under four seconds on faster material. Keep a little
+  // more real-time overlap there so smart mixes do not turn into abrupt swaps.
+  const minimumOverlap = currentBpm >= 140
+    ? AUTO_FAST_TRACK_MIN_SECONDS
+    : AUTO_MIN_SECONDS;
 
   return {
     overlap: clamp(
       transitionBeats * beatSeconds,
-      AUTO_MIN_SECONDS,
+      minimumOverlap,
       AUTO_TRANSITION_MAX_SECONDS
     ),
     transitionBeats,
@@ -420,24 +435,31 @@ export function planTransition({
   const { overlap, incomingPlaybackRate, transitionBeats } = adaptiveOverlap(analysis, nextAnalysis);
   const mixEnd = mixAnchor;
   const nextLength = trackDurationSeconds(nextTrack);
+  const currentBpm = Number(analysis.bpm) || 0;
+  const nextBpm = Number(nextAnalysis.bpm) || 0;
+  const handoffBpm = currentBpm || nextBpm;
+  // An overlap is a musical length, so it is bounded in beats first. Bounding
+  // it in seconds meant a faster track got a *longer* mix: at 140 BPM the
+  // sixteen-second cap ran to thirty-seven beats, over nine bars, which stops
+  // sounding like a transition and starts sounding like two records at once.
+  // The seconds cap survives only as a rail for tempi where four bars is
+  // absurdly long.
   const maximumOverlap = Math.min(
+    handoffBpm > 0 ? (AUTO_TRANSITION_MAX_BEATS * 60) / handoffBpm : AUTO_TRANSITION_MAX_SECONDS,
     AUTO_TRANSITION_MAX_SECONDS,
     mixEnd * 0.4,
     nextLength > 0 ? nextLength * 0.4 : AUTO_TRANSITION_MAX_SECONDS
   );
-  const currentBpm = Number(analysis.bpm) || 0;
-  const nextBpm = Number(nextAnalysis.bpm) || 0;
-  const handoffBpm = currentBpm || nextBpm;
   const currentConfidence = Number(analysis.beatConfidence) || 0;
   const nextConfidence = Number(nextAnalysis.beatConfidence) || 0;
   const sameBeatBlend = currentBpm > 0 && nextBpm > 0 &&
     Math.abs(1 - normalizedTempoRatio(currentBpm, nextBpm)) <= 0.05 &&
     (currentConfidence >= 0.2 || nextConfidence >= 0.2);
-  const handoffBeats = sameBeatBlend ? 16 : 8;
+  const handoffBeats = sameBeatBlend ? 8 : 4;
   const beatSeconds = handoffBpm > 0 ? 60 / handoffBpm : 0.5;
   const handoffSeconds = handoffBpm > 0
-    ? clamp((handoffBeats * 60) / handoffBpm, 4, sameBeatBlend ? 12 : 10)
-    : 7;
+    ? clamp((handoffBeats * 60) / handoffBpm, 2, sameBeatBlend ? 6 : 5)
+    : 4;
   const analyzedPickup = Number(nextAnalysis.audibleStartTime ?? nextAnalysis.pickupTime);
   const pickupSeconds = Number.isFinite(analyzedPickup) && analyzedPickup >= 0
     ? analyzedPickup
@@ -460,22 +482,21 @@ export function planTransition({
   let transitionStart;
 
   if (sameBeatBlend && beatSeconds > 0) {
-    // AutoMix-style 3-phase transition for matching/near-matching BPM:
+    // AutoMix-style transition for matching/near-matching BPM:
     //   Phase 1: Silent preroll — incoming plays from 0:00 at bed gain, HP-filtered
-    //   Phase 2: Crossfade handoff — volume & filter swap around intro drop
-    //   Phase 3: Tail fade — outgoing continues fading after promotion
+    //   Phase 2: Crossfade handoff — outgoing fades to silence at the incoming drop
     //
     // The incoming track is cued from its start (incomingCueTime = 0 or pickup)
     // and plays its full intro underneath. The incomingHandoffTime (intro drop,
     // ~16s / 32 beats for dance/pop) determines when the main handoff occurs.
-    // The intro and tail are kept inside the global smart-transition ceiling;
-    // a deep analyzed mix-in must not turn one handoff into a 30-second bed.
+    // The overlap covers only the instrumental intro so the outgoing track is
+    // fully gone by the time the incoming vocals arrive.
 
     const introDropTime = incomingHandoffTime / Math.max(0.8, incomingPlaybackRate);
-    const tailBeats = 16;
-    const tailSeconds = clamp(tailBeats * beatSeconds, 4, 8);
+    // The overlap covers only the incoming instrumental intro so the outgoing
+    // track reaches silence exactly when the incoming vocals arrive.
     const totalOverlap = clamp(
-      introDropTime + tailSeconds,
+      introDropTime,
       Math.min(12, maximumOverlap),
       maximumOverlap
     );
@@ -492,26 +513,14 @@ export function planTransition({
 
     const alignedOverlap = mixEnd - transitionStart;
 
-    // handoffStartSeconds = time within the overlap when the main volume/filter
-    // swap begins (i.e. when the incoming track reaches its intro drop).
-    // handoffDuration = how long the volume swap takes after that point.
-    const rawHandoffStart = Math.max(0, alignedOverlap - tailSeconds);
-    let handoffStartSecs = Math.round(rawHandoffStart / beatSeconds) * beatSeconds;
-
-    // Ensure we cue the incoming track so its drop exactly aligns with the handoff.
-    // The incoming track will advance by handoffStartSecs * incomingPlaybackRate.
-    let requiredCueTime = incomingHandoffTime - (handoffStartSecs * incomingPlaybackRate);
-
-    if (requiredCueTime < 0) {
-      // Intro is too short. Reduce handoffStartSecs to match available intro beats.
-      const maxHandoffBeats = Math.floor(incomingHandoffTime / (beatSeconds * incomingPlaybackRate));
-      handoffStartSecs = maxHandoffBeats * beatSeconds;
-      requiredCueTime = incomingHandoffTime - (handoffStartSecs * incomingPlaybackRate);
-    }
-
-    handoffStartSeconds = handoffStartSecs;
-    finalIncomingCueTime = Math.max(0, requiredCueTime);
-    handoffDuration = clamp(alignedOverlap - handoffStartSeconds, tailSeconds * 0.5, alignedOverlap);
+    // The outgoing track fades across the whole overlap and reaches silence as
+    // the incoming one drops, so the swap is the overlap rather than a window
+    // opening once the drop has already landed.
+    handoffStartSeconds = 0;
+    // A short intro cannot cover the whole overlap; cueing at zero shortens the
+    // run-up instead of dragging the drop away from where it was analysed.
+    finalIncomingCueTime = Math.max(0, incomingHandoffTime - alignedOverlap * incomingPlaybackRate);
+    handoffDuration = alignedOverlap;
   } else {
     const desiredOverlap = Math.max(overlap, introPreroll + handoffSeconds * 0.42);
     const actualOverlap = clamp(
@@ -529,14 +538,13 @@ export function planTransition({
       earliestTransitionStart
     );
     const alignedOverlap = mixEnd - transitionStart;
-    handoffDuration = Math.min(handoffSeconds, alignedOverlap);
-    handoffStartSeconds = hasIncomingPreroll
-      ? clamp(
-          introPreroll - handoffDuration * 0.58,
-          0,
-          Math.max(0, alignedOverlap - handoffDuration)
-        )
-      : Math.max(0, alignedOverlap - handoffDuration);
+    // Filtered blends fade across the overlap too, so the departing track is
+    // gone by the time the incoming one is running on its own.
+    handoffStartSeconds = 0;
+    handoffDuration = alignedOverlap;
+    finalIncomingCueTime = hasIncomingPreroll
+      ? Math.max(0, incomingHandoffTime - alignedOverlap * incomingPlaybackRate)
+      : finalIncomingCueTime;
   }
 
   const alignedOverlap = mixEnd - transitionStart;
