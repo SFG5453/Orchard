@@ -109,7 +109,7 @@ export default {
                   <div v-if="!continuousQueue.length" class="table-empty">The queue is empty.</div>
                 </div>
 
-                <div v-else class="table-card">
+                <TransitionGroup v-else name="queue-row" tag="div" class="table-card queue-view__list">
                   <div
                     v-for="(item, index) in queue"
                     :key="`queue-page-${item.id}`"
@@ -169,8 +169,8 @@ export default {
                     </button>
                   </div>
 
-                  <div v-if="!queue.length" class="table-empty">The queue is empty.</div>
-                </div>
+                  <div v-if="!queue.length" key="queue-empty" class="table-empty">The queue is empty.</div>
+                </TransitionGroup>
               </section>
 
               <section v-if="!continuousQueueEnabled" class="shelf-section">

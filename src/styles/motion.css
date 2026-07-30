@@ -1,0 +1,43 @@
+/* Shared, layout-agnostic motion primitives. Scoped to classes only —
+ * no selectors here should ever need to know about a layout preset. */
+
+/* ---- main content view switch (AppFrame) ---- */
+.view-fade-enter-active,
+.view-fade-leave-active {
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.view-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.view-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* ---- queue row add/remove (QueueView) ---- */
+.queue-view__list {
+  position: relative;
+}
+
+.queue-row-enter-active,
+.queue-row-leave-active,
+.queue-row-move {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.queue-row-enter-from {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+
+.queue-row-leave-to {
+  opacity: 0;
+  transform: translateX(8px);
+}
+
+.queue-row-leave-active {
+  position: absolute;
+}

@@ -1,10 +1,33 @@
 <script>
-import { computed } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { gsap } from 'gsap';
 
 export default {
   name: 'HomeView',
   props: { app: { type: Object, required: true } },
   setup(props) {
+    const homeViewRoot = ref(null);
+
+    function animateShelves() {
+      nextTick(() => {
+        const shelves = homeViewRoot.value?.querySelectorAll('.home-shelf');
+        if (!shelves?.length) return;
+        gsap.fromTo(
+          shelves,
+          { opacity: 0, y: 16 },
+          { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out', stagger: 0.06, clearProps: 'opacity,transform' }
+        );
+      });
+    }
+
+    onMounted(animateShelves);
+    watch(
+      () => props.app.homeShelfSections.value.length,
+      (count, previousCount) => {
+        if (count && !previousCount) animateShelves();
+      }
+    );
+
     const homeDisplaySections = computed(() => {
       const sections = [...props.app.homeShelfSections.value];
       const libraryIndex = sections.findIndex((section) =>
@@ -27,13 +50,13 @@ export default {
       return sections;
     });
 
-    return { ...props.app, homeDisplaySections };
+    return { ...props.app, homeDisplaySections, homeViewRoot };
   }
 };
 </script>
 
 <template>
-  <div class="home-view">
+  <div ref="homeViewRoot" class="home-view">
     <div v-if="homeLoading && !hasHomeContent" class="empty-state">Loading your library…</div>
 
     <template v-else-if="hasHomeContent">

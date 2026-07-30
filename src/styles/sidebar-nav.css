@@ -99,6 +99,7 @@
   cursor: pointer;
   text-align: left;
   width: 100%;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .nav-link::before {
@@ -110,6 +111,9 @@
   background: transparent;
   content: '';
   border-radius: 0 1px 1px 0;
+  transform: scaleY(0.4);
+  opacity: 0;
+  transition: background-color 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
 }
 
 .nav-link .q-icon {
@@ -124,6 +128,12 @@
 .nav-link:hover {
   background: rgba(255, 255, 255, 0.03);
   color: #dce5e0;
+}
+
+.nav-link:hover::before {
+  opacity: 1;
+  transform: scaleY(1);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .nav-link:focus-visible,
@@ -141,6 +151,8 @@
 
 .nav-link--active::before {
   background: rgb(var(--player-accent-rgb));
+  opacity: 1;
+  transform: scaleY(1);
 }
 
 .nav-link--active .q-icon {

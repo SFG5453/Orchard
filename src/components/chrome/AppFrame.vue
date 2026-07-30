@@ -238,14 +238,16 @@ export default {
         <BrowseDetailView v-else-if="activeView === 'browse'" :app="app" />
         <main v-else class="content-shell" :class="{ 'content-shell--home': activeView === 'home' }">
           <section class="main-column">
-            <HomeView v-if="activeView === 'home'" :app="app" />
-            <PinsView v-else-if="activeView === 'pins'" :app="app" />
-            <PodcastsView v-else-if="activeView === 'podcasts'" :app="app" />
-            <QueueView v-else-if="activeView === 'queue'" :app="app" />
-            <RecentlyPlayedView v-else-if="activeView === 'history'" :app="app" />
-            <ReplayView v-else-if="activeView === 'replay'" :app="app" />
-            <ReleaseRadarView v-else-if="activeView === 'releaseRadar'" :app="app" />
-            <SearchView v-else :app="app" />
+            <Transition name="view-fade" mode="out-in">
+              <HomeView v-if="activeView === 'home'" :app="app" />
+              <PinsView v-else-if="activeView === 'pins'" :app="app" />
+              <PodcastsView v-else-if="activeView === 'podcasts'" :app="app" />
+              <QueueView v-else-if="activeView === 'queue'" :app="app" />
+              <RecentlyPlayedView v-else-if="activeView === 'history'" :app="app" />
+              <ReplayView v-else-if="activeView === 'replay'" :app="app" />
+              <ReleaseRadarView v-else-if="activeView === 'releaseRadar'" :app="app" />
+              <SearchView v-else :app="app" />
+            </Transition>
           </section>
           <NowSideColumn :app="app" />
         </main>
