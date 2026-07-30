@@ -4,12 +4,13 @@ set -euo pipefail
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 repo_root="$(CDPATH= cd -- "$script_dir/../../.." && pwd)"
 version="$(node -p "require('$repo_root/package.json').version")"
+arch_version="${version//-/_}"
 build_dir="${TMPDIR:-/tmp}/orchard-arch-build-$version-$$"
 src_dir="$build_dir/src/orchard-$version"
 payload_dir="$build_dir/src/system-electron"
 pkgdir="$build_dir/pkg/orchard"
 pkgrel="$(sed -n 's/^pkgrel=//p' "$script_dir/PKGBUILD")"
-pkg_file="$script_dir/orchard-$version-$pkgrel-x86_64.pkg.tar.zst"
+pkg_file="$script_dir/orchard-$arch_version-$pkgrel-x86_64.pkg.tar.zst"
 
 trap 'rm -rf "$build_dir"' EXIT
 rm -rf "$build_dir"
@@ -63,7 +64,7 @@ cat > "$pkgdir/.PKGINFO" <<PKGINFO
 pkgname = orchard
 pkgbase = orchard
 xdata = pkgtype=pkg
-pkgver = $version-$pkgrel
+pkgver = $arch_version-$pkgrel
 pkgdesc = YouTube Music client backed by InnerTube
 url = https://sfg545.dev/orchard
 builddate = $builddate
@@ -89,7 +90,7 @@ else
   zstd_level='-19'
 fi
 
-rm -f "$script_dir"/orchard-"$version"-*.pkg.tar.*
+rm -f "$script_dir"/orchard-"$arch_version"-*.pkg.tar.*
 echo "Compressing the Arch package with zstd $zstd_level."
 (
   cd "$pkgdir"
