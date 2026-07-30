@@ -36,16 +36,12 @@ export default {
       }
     }
 
-    function toggleQueuePanel() {
-      props.app.rightPanelMode.value = props.app.rightPanelMode.value === 'queue' ? 'lyrics' : 'queue';
-    }
 
     return {
       ...props.app,
       app: props.app,
       handleListeningPartyClick,
       outputDeviceLabel,
-      toggleQueuePanel,
       volumeIcon
     };
   }
@@ -235,18 +231,6 @@ export default {
         title="Fullscreen player"
         aria-label="Open fullscreen player"
         @click="openFullscreenPlayer"
-      />
-
-      <q-btn
-        flat
-        round
-        dense
-        icon="queue_music"
-        class="canopy-bar__button"
-        :color="rightPanelMode === 'queue' ? 'primary' : undefined"
-        title="Queue and lyrics"
-        aria-label="Toggle queue and lyrics"
-        @click="toggleQueuePanel"
       />
 
       <!-- Everything the bottom bar used to hold that does not earn a permanent slot. -->

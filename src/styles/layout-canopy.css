@@ -11,7 +11,7 @@ html[data-layout-preset="canopy"] {
   --canopy-surface: rgba(255, 255, 255, 0.022);
   --canopy-surface-hover: rgba(255, 255, 255, 0.05);
   --canopy-eyebrow: rgba(255, 255, 255, 0.42);
-  --canopy-accent: var(--primary, #2fdf93);
+  --canopy-accent: rgb(var(--player-accent-rgb, 47, 223, 147));
   --canopy-bar-height: 64px;
 
   /* Chrome is the frame the canvas floats on; both carry a slight green cast so
@@ -273,7 +273,7 @@ html[data-layout-preset="canopy"] .canopy-bar__utility {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 2px;
+  gap: 12px;
 }
 
 html[data-layout-preset="canopy"] .canopy-bar__volume {
@@ -361,7 +361,7 @@ html[data-layout-preset="canopy"] .topbar {
   display: grid;
   padding: 12px 26px 10px;
   margin-bottom: 18px;
-  background: linear-gradient(to bottom, var(--canopy-chrome) 68%, transparent);
+  background: transparent;
   gap: 8px;
 }
 
