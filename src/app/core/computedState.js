@@ -376,10 +376,30 @@ export function installComputedState(ctx) {
   ctx.lyricPauseWindow = function lyricPauseWindow(line, nextLine) {
     if (typeof line?.startTime !== 'number' || typeof nextLine?.startTime !== 'number') return null;
 
+    let lineEndTime = line.startTime;
+    let hasAccurateEndTime = false;
+
+    const explicitLineEnd = Number(line.endTime);
+    if (Number.isFinite(explicitLineEnd) && explicitLineEnd > line.startTime) {
+      lineEndTime = explicitLineEnd;
+      hasAccurateEndTime = true;
+    } else if (line.words?.length) {
+      const lastWord = line.words[line.words.length - 1];
+      const explicitWordEnd = Number(lastWord.endTime);
+      if (Number.isFinite(explicitWordEnd) && explicitWordEnd > line.startTime) {
+        lineEndTime = explicitWordEnd;
+        hasAccurateEndTime = true;
+      } else if (typeof lastWord.startTime === 'number' && lastWord.startTime > line.startTime) {
+        lineEndTime = lastWord.startTime + 0.4;
+        hasAccurateEndTime = true;
+      }
+    }
+
     const gapLength = nextLine.startTime - line.startTime;
     if (gapLength < ctx.LYRIC_PAUSE_MIN_SECONDS) return null;
 
-    const startTime = line.startTime + ctx.LYRIC_PAUSE_LINE_TAIL_SECONDS;
+    const tail = hasAccurateEndTime ? 0.4 : ctx.LYRIC_PAUSE_LINE_TAIL_SECONDS;
+    const startTime = lineEndTime + tail;
     const endTime = nextLine.startTime - ctx.LYRIC_PAUSE_NEXT_LEAD_SECONDS;
     if (startTime >= endTime) return null;
 
