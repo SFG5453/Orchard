@@ -98,6 +98,7 @@ export default {
       'app-shell--profile-camera': customArtistProfileCameraActive
     }"
     :style="{
+      ...playerBarStyle,
       '--immersive-background-opacity': immersiveBackgroundOpacity(immersiveBackgroundIntensity),
       ...customArtistProfileCameraStyle
     }"
