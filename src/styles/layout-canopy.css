@@ -261,6 +261,22 @@ html[data-layout-preset="canopy"] .canopy-readout__progress .q-slider__inner {
   background: rgba(255, 255, 255, 0.14);
 }
 
+html[data-layout-preset="canopy"] .canopy-readout__progress .q-slider__selection,
+html[data-layout-preset="canopy"] .canopy-bar__volume-slider .q-slider__selection {
+  background: var(--canopy-accent) !important;
+}
+
+html[data-layout-preset="canopy"] .canopy-readout__progress .q-slider__track,
+html[data-layout-preset="canopy"] .canopy-readout__progress .q-slider__inner,
+html[data-layout-preset="canopy"] .canopy-readout__progress .q-slider__selection,
+html[data-layout-preset="canopy"] .canopy-readout__progress .q-slider__thumb,
+html[data-layout-preset="canopy"] .canopy-bar__volume-slider .q-slider__track,
+html[data-layout-preset="canopy"] .canopy-bar__volume-slider .q-slider__inner,
+html[data-layout-preset="canopy"] .canopy-bar__volume-slider .q-slider__selection,
+html[data-layout-preset="canopy"] .canopy-bar__volume-slider .q-slider__thumb {
+  color: var(--canopy-accent) !important;
+}
+
 /* The thumb only shows on hover, so at rest the scrubber reads as a progress
  * rule rather than a control competing with the copy above it. */
 html[data-layout-preset="canopy"] .canopy-readout__progress .q-slider__thumb {
