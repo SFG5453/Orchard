@@ -11,7 +11,7 @@ const { LASTFM } = IPC_CHANNELS;
 
 const defaultWorkerEndpoint = 'https://lastfm.sfg545.dev';
 const sessionFilename = 'lastfm-session.json';
-const lastfmClient = new LastFmNode({ useragent: 'OrchardDesktop/3.0' });
+const lastfmClient = new LastFmNode({ useragent: 'OrchardDesktop/4.0' });
 
 function cleanText(value, maxLength = 500) {
   return String(value || '').trim().replace(/\s+/g, ' ').slice(0, maxLength);
@@ -74,7 +74,7 @@ export function setupLastfm({ app, ipcMain, net, safeStorage, shell }) {
     session = null;
     pending = null;
     if (canPersistSecurely()) {
-      await writeFile(sessionPath, '{}\n', { mode: 0o600 }).catch(() => {});
+      await writeFile(sessionPath, '{}\n', { mode: 0o600 }).catch(() => { });
     }
   };
 
@@ -152,7 +152,7 @@ export function setupLastfm({ app, ipcMain, net, safeStorage, shell }) {
     session = makeSession(record);
     if (!session) throw new Error('Last.fm returned an invalid session.');
     pending = null;
-    await persistRecord().catch(() => {});
+    await persistRecord().catch(() => { });
     return publicState();
   });
 
