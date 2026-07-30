@@ -73,7 +73,7 @@ html[data-layout-preset="canopy"] .canopy-bar__mark {
 }
 
 html[data-layout-preset="canopy"] .canopy-bar__name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -90,7 +90,7 @@ html[data-layout-preset="canopy"] .canopy-bar__button {
 }
 
 html[data-layout-preset="canopy"] .canopy-bar__button--play .q-icon {
-  font-size: 26px;
+  font-size: 24px;
 }
 
 /* The readout - Cider calls this the LCD. Artwork, then a stacked copy column of
@@ -186,7 +186,7 @@ html[data-layout-preset="canopy"] .canopy-readout__title-row {
 
 html[data-layout-preset="canopy"] .canopy-readout__title {
   overflow: hidden;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -199,7 +199,7 @@ html[data-layout-preset="canopy"] .canopy-readout__meta {
   justify-content: center;
   gap: 5px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 html[data-layout-preset="canopy"] .canopy-readout__times {
@@ -397,7 +397,7 @@ html[data-layout-preset="canopy"] .back-button {
 }
 
 html[data-layout-preset="canopy"] .topbar-copy h1 {
-  font-size: 21px;
+  font-size: 19px;
   font-weight: 650;
   letter-spacing: -0.01em;
   line-height: 1.15;
@@ -405,7 +405,7 @@ html[data-layout-preset="canopy"] .topbar-copy h1 {
 
 html[data-layout-preset="canopy"] .topbar-copy p {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 /* ---- sidebar ---- */
@@ -442,7 +442,7 @@ html[data-layout-preset="canopy"] .library-link {
   padding: 0 14px;
   gap: 12px;
   border-radius: var(--canopy-radius-sm);
-  font-size: 13.5px;
+  font-size: 12.5px;
 }
 
 html[data-layout-preset="canopy"] .library-link {
@@ -497,7 +497,7 @@ html[data-layout-preset="canopy"] .device-card__actions button {
   border: 1px solid var(--canopy-rule);
   border-radius: var(--canopy-radius-sm);
   background: transparent;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 html[data-layout-preset="canopy"] .action-button:hover,
@@ -540,18 +540,18 @@ html[data-layout-preset="canopy"] .section-header {
 html[data-layout-preset="canopy"] .section-header h2,
 html[data-layout-preset="canopy"] .section-header--compact h2,
 html[data-layout-preset="canopy"] .now-panel__copy h3 {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
 }
 
 html[data-layout-preset="canopy"] .section-header span {
-  font-size: 11px;
+  font-size: 10px;
 }
 
 html[data-layout-preset="canopy"] .section-more-button {
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -586,13 +586,13 @@ html[data-layout-preset="canopy"] .media-card:hover .media-card__art--empty {
 }
 
 html[data-layout-preset="canopy"] .media-card__title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 html[data-layout-preset="canopy"] .media-card__meta,
 html[data-layout-preset="canopy"] .media-card__stat {
-  font-size: 11px;
+  font-size: 10px;
 }
 
 /* ---- home top picks ---- */
@@ -641,20 +641,20 @@ html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card__brand {
 }
 
 html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card__title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   margin-bottom: 0px;
   color: #fff;
 }
 
 html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card__meta {
-  font-size: 12px;
+  font-size: 11px;
   color: rgba(255, 255, 255, 0.7);
 }
 
 html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card__stat {
   order: -1;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.8);
   margin-bottom: 4px;
@@ -667,7 +667,7 @@ html[data-layout-preset="canopy"] .home-shelf--top-picks .media-card__brand {
   display: flex;
   align-items: center;
   gap: 3px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: #fff;
 }
@@ -703,7 +703,7 @@ html[data-layout-preset="canopy"] .detail-art--empty {
 html[data-layout-preset="canopy"] .detail-hero h1,
 html[data-layout-preset="canopy"] .detail-hero h2,
 html[data-layout-preset="canopy"] .hero-panel__copy h2 {
-  font-size: clamp(34px, 4.5vw, 48px);
+  font-size: clamp(31px, 4.5vw, 44px);
   font-weight: 750;
   letter-spacing: -0.03em;
   line-height: 1.05;
@@ -712,7 +712,7 @@ html[data-layout-preset="canopy"] .hero-panel__copy h2 {
 
 html[data-layout-preset="canopy"] .detail-subtitle,
 html[data-layout-preset="canopy"] .detail-meta {
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -787,7 +787,7 @@ html[data-layout-preset="canopy"] .detail-hero--artist .detail-artist-genre {
   backdrop-filter: blur(8px);
   padding: 6px 14px;
   border-radius: 20px;
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   font-weight: 700;
@@ -812,7 +812,7 @@ html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions {
 
 html[data-layout-preset="canopy"] .detail-hero--artist .detail-hero__copy h1,
 html[data-layout-preset="canopy"] .detail-hero--artist .detail-hero__copy h2 {
-  font-size: clamp(48px, 6vw, 72px);
+  font-size: clamp(44px, 6vw, 66px);
   letter-spacing: -0.04em;
   margin: 0;
 }
@@ -840,7 +840,7 @@ html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary 
 
 html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary .action-button .q-icon {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
 }
 
 html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary .action-button--primary {
@@ -852,7 +852,7 @@ html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary 
 
 html[data-layout-preset="canopy"] .artist-track-heading,
 html[data-layout-preset="canopy"] .album-video-section .section-header h2 {
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.11em;
   text-transform: uppercase;
 }
@@ -950,13 +950,13 @@ html[data-layout-preset="canopy"] .table-row--active::before {
 }
 
 html[data-layout-preset="canopy"] .table-copy strong {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 html[data-layout-preset="canopy"] .table-copy small,
 html[data-layout-preset="canopy"] .table-time {
-  font-size: 11px;
+  font-size: 10px;
 }
 
 html[data-layout-preset="canopy"] .table-cover,
@@ -978,7 +978,7 @@ html[data-layout-preset="canopy"] .search-filter {
   border-bottom: 2px solid transparent;
   border-radius: 0;
   background: transparent;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -1054,7 +1054,7 @@ html[data-layout-preset="canopy"] .settings-section {
 }
 
 html[data-layout-preset="canopy"] .settings-section__heading h2 {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -1066,17 +1066,17 @@ html[data-layout-preset="canopy"] .settings-row {
 }
 
 html[data-layout-preset="canopy"] .settings-row__copy label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 html[data-layout-preset="canopy"] .settings-row__copy p {
-  font-size: 11px;
+  font-size: 10px;
 }
 
 html[data-layout-preset="canopy"] .settings-index a {
   border-radius: var(--canopy-radius-sm);
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -1104,7 +1104,7 @@ html[data-layout-preset="canopy"] .settings-index a {
 
   html[data-layout-preset="canopy"] .detail-hero h1,
   html[data-layout-preset="canopy"] .detail-hero h2 {
-    font-size: 32px;
+    font-size: 29px;
   }
 
   html[data-layout-preset="canopy"] .media-rail {
