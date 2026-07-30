@@ -16,6 +16,7 @@ export default {
     const supportOpen = ref(false);
     const steps = [
       { key: 'account', icon: 'music_note', title: 'Welcome to Orchard' },
+      { key: 'layout', icon: 'view_quilt', title: 'Interface design' },
       { key: 'immersive', icon: 'wallpaper', title: 'Artwork background' },
       { key: 'sound', icon: 'graphic_eq', title: 'Tune playback' },
       { key: 'connected', icon: 'hub', title: 'Stay connected' },
@@ -94,7 +95,6 @@ export default {
     ], finishIfAlreadyReady);
 
     return {
-      ...props.app,
       accountReady,
       app: props.app,
       audioRef,
@@ -130,22 +130,34 @@ export default {
       </button>
     </div>
 
-    <section class="welcome-window__stage" aria-labelledby="welcome-title">
-      <div class="welcome-window__progress" aria-label="Setup progress">
-        <button
-          v-for="(step, index) in steps"
-          :key="step.key"
-          type="button"
-          :aria-label="step.title"
-          :class="{
-            'welcome-window__dot--active': index === stepIndex,
-            'welcome-window__dot--done': index < stepIndex
-          }"
-          class="welcome-window__dot"
-          @click="stepIndex = accountReady || index === 0 ? index : stepIndex"
-        ></button>
+    <section class="welcome-window__hero">
+      <div class="welcome-window__hero-bg"></div>
+      <div class="welcome-window__hero-content">
+        <div class="welcome-window__brand">
+          <q-icon name="album" />
+          <h2>Orchard</h2>
+        </div>
+        
+        <div class="welcome-window__tracker" aria-label="Setup progress">
+          <button
+            v-for="(step, index) in steps"
+            :key="step.key"
+            type="button"
+            class="welcome-window__tracker-step"
+            :class="{
+              'welcome-window__tracker-step--active': index === stepIndex,
+              'welcome-window__tracker-step--done': index < stepIndex
+            }"
+            @click="stepIndex = accountReady || index === 0 ? index : stepIndex"
+          >
+            <q-icon :name="index < stepIndex ? 'check_circle' : step.icon" />
+            <span>{{ step.title }}</span>
+          </button>
+        </div>
       </div>
+    </section>
 
+    <section class="welcome-window__panel" aria-labelledby="welcome-title">
       <button
         type="button"
         class="welcome-window__sound"
@@ -167,21 +179,38 @@ export default {
                 <button
                   type="button"
                   class="welcome-window__primary"
-                  :disabled="socketState !== 'connected' || authState.status === 'starting'"
-                  @click="startLogin"
+                  :disabled="app.authState.status === 'starting'"
+                  @click="app.startLogin"
                 >
                   <q-icon :name="accountReady ? 'check_circle' : 'login'" />
-                  {{ accountReady ? (authState.user?.name || 'Signed in') : authState.status === 'starting' ? 'Opening sign in' : 'Sign in to YouTube Music' }}
+                  {{ accountReady ? (app.authState.user?.name || 'Signed in') : app.authState.status === 'starting' ? 'Opening sign in' : 'Sign in to YouTube Music' }}
                 </button>
-                <span>{{ socketState === 'connected' ? 'Desktop bridge connected' : socketState }}</span>
               </div>
-              <div v-if="authState.pending" class="welcome-window__device">
-                <strong>{{ authState.pending.userCode }}</strong>
-                <span>{{ authState.pending.verificationUrl }}</span>
+              <div v-if="app.authState.pending" class="welcome-window__device">
+                <strong>{{ app.authState.pending.userCode }}</strong>
+                <span>{{ app.authState.pending.verificationUrl }}</span>
                 <div>
-                  <button type="button" @click="openVerification">Open link</button>
-                  <button type="button" @click="copyLoginText(authState.pending.userCode)">Copy code</button>
+                  <button type="button" @click="app.openVerification">Open link</button>
+                  <button type="button" @click="app.copyLoginText(app.authState.pending.userCode)">Copy code</button>
                 </div>
+              </div>
+            </template>
+
+            <template v-else-if="currentStep.key === 'layout'">
+              <p>Choose the interface layout that fits you best.</p>
+              <div class="welcome-window__connect-grid">
+                <button
+                  v-for="option in app.layoutPresetOptions"
+                  :key="option.value"
+                  type="button"
+                  class="welcome-window__sound-card"
+                  :class="{ 'welcome-window__choice--active': app.layoutPreset === option.value }"
+                  @click="app.layoutPreset = option.value"
+                >
+                  <q-icon :name="option.value === 'canopy' ? 'view_compact' : 'view_sidebar'" />
+                  <strong>{{ option.label }}</strong>
+                  <span>{{ option.description }}</span>
+                </button>
               </div>
             </template>
 
@@ -189,17 +218,17 @@ export default {
               <p>Choose whether Orchard should use album artwork behind the player.</p>
               <div class="welcome-window__setting-row">
                 <span>Immersive backgrounds</span>
-                <q-toggle v-model="immersiveBackgroundsEnabled" color="primary" aria-label="Immersive backgrounds" />
+                <q-toggle v-model="app.immersiveBackgroundsEnabled" color="primary" aria-label="Immersive backgrounds" />
               </div>
               <div class="welcome-window__options">
                 <button
-                  v-for="option in immersiveBackgroundMotionOptions"
+                  v-for="option in app.immersiveBackgroundMotionOptions"
                   :key="option.value"
                   type="button"
                   class="welcome-window__option"
-                  :class="{ 'welcome-window__choice--active': immersiveBackgroundMotion === option.value }"
-                  :disabled="!immersiveBackgroundsEnabled"
-                  @click="immersiveBackgroundMotion = option.value"
+                  :class="{ 'welcome-window__choice--active': app.immersiveBackgroundMotion === option.value }"
+                  :disabled="!app.immersiveBackgroundsEnabled"
+                  @click="app.immersiveBackgroundMotion = option.value"
                 >
                   {{ option.label }}
                 </button>
@@ -212,20 +241,20 @@ export default {
                 <button
                   type="button"
                   class="welcome-window__sound-card"
-                  :class="{ 'welcome-window__choice--active': !crossfadeEnabled }"
-                  @click="crossfadeEnabled = false"
+                  :class="{ 'welcome-window__choice--active': !app.crossfadeEnabled }"
+                  @click="app.crossfadeEnabled = false"
                 >
                   <q-icon name="block" />
                   <strong>Off</strong>
                   <span>Keep songs separate with no crossfade.</span>
                 </button>
                 <button
-                  v-for="option in crossfadeModeOptions"
+                  v-for="option in app.crossfadeModeOptions"
                   :key="option.value"
                   type="button"
                   class="welcome-window__sound-card"
-                  :class="{ 'welcome-window__choice--active': crossfadeEnabled && crossfadeMode === option.value }"
-                  @click="crossfadeEnabled = true; crossfadeMode = option.value"
+                  :class="{ 'welcome-window__choice--active': app.crossfadeEnabled && app.crossfadeMode === option.value }"
+                  @click="app.crossfadeEnabled = true; app.crossfadeMode = option.value"
                 >
                   <q-icon :name="option.value === 'smart' ? 'auto_awesome' : 'waves'" />
                   <strong>{{ option.label }}</strong>
@@ -234,21 +263,21 @@ export default {
               </div>
               <div class="welcome-window__setting-row">
                 <span>Autoplay</span>
-                <q-toggle v-model="autoplayEnabled" color="primary" aria-label="Autoplay" />
+                <q-toggle v-model="app.autoplayEnabled" color="primary" aria-label="Autoplay" />
               </div>
               <div class="welcome-window__setting-row">
                 <span>Automatic EQ</span>
                 <q-toggle
-                  :model-value="audioEngineConfig.autoEqEnabled"
+                  :model-value="app.audioEngineConfig.autoEqEnabled"
                   color="primary"
                   aria-label="Automatic EQ"
-                  @update:model-value="setAutoEqEnabled"
+                  @update:model-value="app.setAutoEqEnabled"
                 />
               </div>
               <div class="welcome-window__slider">
                 <span>Duration</span>
-                <q-slider v-model="crossfadeSeconds" :min="1" :max="12" :step="1" :disable="!crossfadeEnabled" color="primary" />
-                <output>{{ crossfadeSeconds }}s</output>
+                <q-slider v-model="app.crossfadeSeconds" :min="1" :max="12" :step="1" :disable="!app.crossfadeEnabled" color="primary" />
+                <output>{{ app.crossfadeSeconds }}s</output>
               </div>
             </template>
 
@@ -257,14 +286,17 @@ export default {
               <div class="welcome-window__connect-grid">
                 <div class="welcome-window__setting-row">
                   <span>Discord Rich Presence</span>
-                  <q-toggle v-model="discordRpcEnabled" color="primary" aria-label="Discord Rich Presence" />
+                  <q-toggle v-model="app.discordRpcEnabled" color="primary" aria-label="Discord Rich Presence" />
                 </div>
                 <div class="welcome-window__connect-panel">
-                  <button type="button" class="welcome-window__secondary" :disabled="!socket?.connected" @click="loadOrchardConnectInfo({ refresh: true })">
+                  <button type="button" class="welcome-window__secondary" :disabled="app.socketState !== 'connected'" @click="app.loadOrchardConnectInfo({ refresh: true })">
                     <q-icon name="qr_code_2" />
                     Pair phone
                   </button>
-                  <div class="welcome-window__qr" v-html="orchardConnect.qrSvg"></div>
+                  <div class="welcome-window__qr" v-html="app.orchardConnect.qrSvg"></div>
+                  <span class="welcome-window__bridge-status">
+                    Bridge: {{ app.socketState === 'connected' ? 'Online' : app.socketState }}
+                  </span>
                 </div>
               </div>
             </template>
@@ -272,10 +304,11 @@ export default {
             <template v-else>
               <p>Setup is saved. Open Orchard and start listening.</p>
               <div class="welcome-window__summary">
-                <span><q-icon name="check_circle" /> {{ authState.user?.name || 'Signed in' }}</span>
-                <span><q-icon name="wallpaper" /> {{ immersiveBackgroundsEnabled ? `${immersiveBackgroundMotion} backgrounds` : 'backgrounds off' }}</span>
-                <span><q-icon name="graphic_eq" /> {{ audioEngineConfig.autoEqEnabled ? 'automatic EQ' : audioEngineConfig.eqEnabled ? 'manual EQ' : 'EQ off' }}</span>
-                <span><q-icon name="phonelink" /> {{ orchardConnect.devices.length }} paired</span>
+                <span><q-icon name="check_circle" /> {{ app.authState.user?.name || 'Signed in' }}</span>
+                <span><q-icon name="view_quilt" /> {{ app.layoutPreset === 'canopy' ? 'Canopy layout' : 'Grove layout' }}</span>
+                <span><q-icon name="wallpaper" /> {{ app.immersiveBackgroundsEnabled ? `${app.immersiveBackgroundMotion} backgrounds` : 'backgrounds off' }}</span>
+                <span><q-icon name="graphic_eq" /> {{ app.audioEngineConfig.autoEqEnabled ? 'automatic EQ' : app.audioEngineConfig.eqEnabled ? 'manual EQ' : 'EQ off' }}</span>
+                <span><q-icon name="phonelink" /> {{ app.orchardConnect.devices.length }} paired</span>
               </div>
               <p v-if="musicBlocked" class="welcome-window__note">Your system blocked automatic welcome music. The top-right audio button will start it.</p>
             </template>
