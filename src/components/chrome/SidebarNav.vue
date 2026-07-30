@@ -18,11 +18,22 @@ export default {
       return `${thumbnail}${separator}orchard_retry=${accountAvatarRetry.value}`;
     });
     const accountDisplayName = computed(() => {
-      const name = String(props.app.authState.value.user?.name || '').trim();
+      let name = String(props.app.authState.value.user?.name || '').trim();
+      let byline = String(props.app.authState.value.user?.byline || '').trim();
+      if (/subscribers?/i.test(name) && byline && !/subscribers?/i.test(byline)) {
+        name = byline;
+      }
       return name && !isEmailLike(name) && !/^(signed in|youtube music)$/i.test(name) ? name : 'Signed in';
     });
     const accountDisplayByline = computed(() => {
-      const byline = String(props.app.authState.value.user?.byline || '').trim();
+      let name = String(props.app.authState.value.user?.name || '').trim();
+      let byline = String(props.app.authState.value.user?.byline || '').trim();
+      if (/subscribers?/i.test(name) && byline && !/subscribers?/i.test(byline)) {
+        byline = name;
+      }
+      if (/subscribers?/i.test(byline)) {
+        byline = '';
+      }
       return byline && !isEmailLike(byline) && !/^(signed in)$/i.test(byline) ? byline : 'YouTube Music';
     });
     const accountInitial = computed(() => {

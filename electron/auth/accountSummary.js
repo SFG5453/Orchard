@@ -25,11 +25,11 @@ function accountSummaryFromItem(account, { asText, bestThumbnail }) {
 
   const name = asText(account.contents?.account_name || account.account_name || account.accountName || account.title);
   const byline = asText(
+    account.channel_handle ||
+    account.channelHandle ||
     account.contents?.account_byline ||
     account.account_byline ||
-    account.accountByline ||
-    account.channel_handle ||
-    account.channelHandle
+    account.accountByline
   );
   const photo = account.contents?.account_photo || account.account_photo || account.accountPhoto || [];
   const channelId =
