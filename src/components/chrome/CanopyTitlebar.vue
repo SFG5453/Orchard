@@ -51,8 +51,7 @@ export default {
 <template>
   <header class="canopy-bar" :class="{ 'canopy-bar--native': nativeTitlebar }">
     <div class="canopy-bar__brand">
-      <img class="canopy-bar__mark" :src="orchardLogoUrl" alt="" />
-      <span class="canopy-bar__name">Orchard</span>
+      <img class="canopy-bar__mark" :src="orchardLogoUrl" alt="Orchard" />
     </div>
 
     <div class="canopy-bar__transport">
@@ -173,10 +172,20 @@ export default {
 
       </div>
 
-      <div class="canopy-readout__times">
-        <span>{{ formatTime(displayedTime) }}</span>
-        <span>{{ durationLabel }}</span>
-      </div>
+      <!-- Song actions live inside the readout: they act on the track it shows,
+           and out in the bar they were an ungrouped button between clusters. -->
+      <q-btn
+        flat
+        round
+        dense
+        size="sm"
+        icon="more_horiz"
+        class="canopy-bar__button canopy-readout__actions"
+        :disable="!activeTrack"
+        title="Song actions"
+        aria-label="Song actions"
+        @click="openSongActionMenu(activeTrack, $event)"
+      />
 
       <!-- Scrubber sits along the bottom of the entire readout -->
       <div class="canopy-readout__progress" :style="crossfadeProgressStyle">
@@ -195,30 +204,30 @@ export default {
       </div>
     </div>
 
-    <q-btn
-      flat
-      round
-      dense
-      icon="more_horiz"
-      class="canopy-bar__button"
-      :disable="!activeTrack"
-      title="Song actions"
-      aria-label="Song actions"
-      @click="openSongActionMenu(activeTrack, $event)"
-    />
-
     <div class="canopy-bar__utility">
+      <!-- The slider is a flyout rather than 104px of permanent bar furniture.
+           It is absolutely positioned so revealing it never reflows the bar. -->
       <div class="canopy-bar__volume">
-        <q-icon :name="volumeIcon" size="18px" />
-        <q-slider
-          v-model="volume"
-          :min="0"
-          :max="1"
-          :step="0.01"
-          color="primary"
-          class="canopy-bar__volume-slider"
-          aria-label="Volume level"
+        <q-btn
+          flat
+          round
+          dense
+          :icon="volumeIcon"
+          class="canopy-bar__button"
+          title="Volume"
+          aria-label="Volume"
         />
+        <div class="canopy-bar__volume-flyout">
+          <q-slider
+            v-model="volume"
+            :min="0"
+            :max="1"
+            :step="0.01"
+            color="primary"
+            class="canopy-bar__volume-slider"
+            aria-label="Volume level"
+          />
+        </div>
       </div>
 
       <q-btn

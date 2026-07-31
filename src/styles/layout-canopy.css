@@ -11,7 +11,7 @@ html[data-layout-preset="canopy"] {
   --canopy-surface: rgba(255, 255, 255, 0.022);
   --canopy-surface-hover: rgba(255, 255, 255, 0.05);
   --canopy-eyebrow: rgba(255, 255, 255, 0.42);
-  --canopy-bar-height: 64px;
+  --canopy-bar-height: 68px;
 
   /* Chrome is the frame the canvas floats on; both carry a slight green cast so
    * the shell reads as tinted rather than the flat #000 Grove uses. */
@@ -38,8 +38,8 @@ html[data-layout-preset="canopy"] .canopy-bar {
   display: flex;
   height: var(--canopy-bar-height);
   align-items: center;
-  gap: 10px;
-  padding: 0 0 0 14px;
+  gap: 18px;
+  padding: 0 0 0 18px;
   border-bottom: 1px solid var(--canopy-rule);
   background: var(--canopy-chrome);
   -webkit-app-region: drag;
@@ -48,13 +48,17 @@ html[data-layout-preset="canopy"] .canopy-bar {
 /* With the OS drawing its own titlebar there are no window buttons to sit flush
  * against, so the utility cluster needs its own right gutter. */
 html[data-layout-preset="canopy"] .canopy-bar--native {
-  padding-right: 12px;
+  padding-right: 16px;
 }
 
 html[data-layout-preset="canopy"] .canopy-bar__brand,
 html[data-layout-preset="canopy"] .canopy-bar__transport,
 html[data-layout-preset="canopy"] .canopy-readout,
 html[data-layout-preset="canopy"] .canopy-bar__utility,
+/* Drag regions come from painted geometry, so an absolutely positioned child
+ * sits outside its cluster's no-drag rect and needs its own, or dragging the
+ * volume slider drags the window instead. */
+html[data-layout-preset="canopy"] .canopy-bar__volume-flyout,
 html[data-layout-preset="canopy"] .canopy-bar__controls,
 html[data-layout-preset="canopy"] .canopy-bar .q-btn {
   -webkit-app-region: no-drag;
@@ -72,17 +76,11 @@ html[data-layout-preset="canopy"] .canopy-bar__mark {
   height: 22px;
 }
 
-html[data-layout-preset="canopy"] .canopy-bar__name {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
 html[data-layout-preset="canopy"] .canopy-bar__transport {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
 html[data-layout-preset="canopy"] .canopy-bar__button {
@@ -93,23 +91,31 @@ html[data-layout-preset="canopy"] .canopy-bar__button--play .q-icon {
   font-size: 24px;
 }
 
-/* The readout - Cider calls this the LCD. Artwork, then a stacked copy column of
- * title / artist-album / scrubber, with elapsed and total pinned to the right. */
+/* The readout - Cider calls this the LCD. Artwork, a stacked copy column of
+ * title / artist-album, and the song-actions button, with the scrubber running
+ * along the bottom edge. Elapsed and total are deliberately absent: the scrubber
+ * carries position, and the width they cost goes to the copy instead. */
 html[data-layout-preset="canopy"] .canopy-readout {
   position: relative;
   display: grid;
   min-width: 0;
-  max-width: 660px;
-  height: 52px;
+  max-width: 780px;
+  height: 54px;
   flex: 1 1 auto;
   align-items: center;
-  padding: 0 12px 0 0;
+  padding: 0 6px 0 0;
   border: 1px solid var(--canopy-rule);
   border-radius: var(--canopy-radius);
   margin: 0 auto;
   background: var(--canopy-readout-bg);
-  gap: 10px;
+  gap: 12px;
   grid-template-columns: 44px minmax(0, 1fr) auto;
+}
+
+/* Centred inside a 54px readout, so it clears the scrubber's 8px bottom band. */
+html[data-layout-preset="canopy"] .canopy-readout__actions {
+  flex: 0 0 auto;
+  color: var(--muted);
 }
 
 html[data-layout-preset="canopy"] .canopy-readout--empty {
@@ -186,7 +192,7 @@ html[data-layout-preset="canopy"] .canopy-readout__title-row {
 
 html[data-layout-preset="canopy"] .canopy-readout__title {
   overflow: hidden;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -199,16 +205,7 @@ html[data-layout-preset="canopy"] .canopy-readout__meta {
   justify-content: center;
   gap: 5px;
   color: var(--muted);
-  font-size: 10px;
-}
-
-html[data-layout-preset="canopy"] .canopy-readout__times {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 10px;
-  color: var(--muted);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
+  font-size: 11px;
 }
 
 /* The scrubber sits at the bottom of the readout container, spanning its width */
@@ -292,18 +289,50 @@ html[data-layout-preset="canopy"] .canopy-bar__utility {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 12px;
+  gap: 4px;
 }
 
 html[data-layout-preset="canopy"] .canopy-bar__volume {
+  position: relative;
   display: flex;
-  width: 104px;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 6px;
   color: var(--muted-strong);
 }
 
+/* Opens leftward over the bar, so the slider costs nothing at rest and the
+ * cluster never shifts when it appears. The button it hangs off is part of the
+ * same hover target, which is what keeps the pointer trip to it unbroken. */
+html[data-layout-preset="canopy"] .canopy-bar__volume-flyout {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 100%;
+  display: flex;
+  width: 132px;
+  align-items: center;
+  padding: 6px 12px;
+  border: 1px solid var(--canopy-rule);
+  border-radius: var(--canopy-radius);
+  background: var(--canopy-chrome);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  /* Hidden with opacity rather than visibility/display on purpose: the slider
+   * has to stay focusable for :focus-within to ever fire, or tabbing to the
+   * volume becomes impossible and the control is keyboard-only-inaccessible. */
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 120ms ease;
+}
+
+html[data-layout-preset="canopy"] .canopy-bar__volume:hover .canopy-bar__volume-flyout,
+html[data-layout-preset="canopy"] .canopy-bar__volume:focus-within .canopy-bar__volume-flyout {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 html[data-layout-preset="canopy"] .canopy-bar__volume-slider {
+  width: 100%;
   min-width: 0;
 }
 
