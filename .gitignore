@@ -4,6 +4,9 @@ build/artist-packs/
 native/build/
 release/
 release-macos/
+release-linux/
+release-windows/
+release-system-electron/
 packaging/linux/arch/*.tar.gz
 packaging/linux/arch/pkg/
 packaging/linux/arch/src/
