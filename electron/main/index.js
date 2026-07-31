@@ -12,6 +12,7 @@ import { startBridgeServer } from '../bridge/bridgeServer.js';
 import { createArtistCatalog } from '../catalog/artistCatalog.js';
 import { createArtistGenreResolver } from '../catalog/artistGenre.js';
 import { createBrowseNormalizers } from '../catalog/browseNormalizers.js';
+import { installInnertubeParserErrorHandler } from '../catalog/innertubeParserErrors.js';
 import { createFutureAlbums } from '../catalog/futureAlbums.js';
 import { createLyricsResolver } from '../catalog/lyricsResolver.js';
 import { createMainFeeds } from '../catalog/mainFeeds.js';
@@ -59,6 +60,10 @@ import { welcomeRequiredAtLaunch } from '../platform/welcomeState.js';
 import { configureWindowOpenHandler, registerDevToolsShortcut, registerWindowControls } from '../platform/windowControls.js';
 import { createGraphicsModeController, GRAPHICS_MODE_FILENAME } from './graphicsMode.js';
 import { resolveRuntimePaths } from './runtimePaths.js';
+
+// Installed before any InnerTube client exists, so no response can reach the
+// stock handler that throws inside an asar.
+installInnertubeParserErrorHandler();
 
 const require = createRequire(import.meta.url);
 const { app, BrowserWindow, Menu, Tray, clipboard, globalShortcut, ipcMain, nativeImage, net, safeStorage, screen, session, shell } = require('electron');
