@@ -3,6 +3,7 @@ import AudioEngineSection from './AudioEngineSection.vue';
 import BackupRestoreSection from './BackupRestoreSection.vue';
 import DiagnosticsSection from './DiagnosticsSection.vue';
 import LastfmSection from './LastfmSection.vue';
+import SpotifySection from './SpotifySection.vue';
 import SongCacheSection from './SongCacheSection.vue';
 import SetupGuideSection from './SetupGuideSection.vue';
 import ArtistPacksSection from './ArtistPacksSection.vue';
@@ -10,7 +11,7 @@ import { computed } from 'vue';
 
 export default {
   name: 'SettingsView',
-  components: { AudioEngineSection, BackupRestoreSection, DiagnosticsSection, LastfmSection, SongCacheSection, SetupGuideSection, ArtistPacksSection },
+  components: { AudioEngineSection, BackupRestoreSection, DiagnosticsSection, LastfmSection, SpotifySection, SongCacheSection, SetupGuideSection, ArtistPacksSection },
   props: { app: { type: Object, required: true } },
   setup(props) {
     const layoutPresetDescription = computed(() => {
@@ -410,6 +411,7 @@ export default {
         </div>
 
         <LastfmSection :app="app" />
+        <SpotifySection :app="app" />
 
         <div class="settings-row">
           <div class="settings-row__copy">

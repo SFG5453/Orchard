@@ -457,6 +457,7 @@ export function installState(ctx) {
   ctx.artworkApiProviders = [
     { id: 'm8tec', baseUrl: 'https://artwork.m8tec.top/' },
     { id: 'boidu', baseUrl: 'https://artwork.boidu.dev/' },
+    { id: 'spotify', baseUrl: 'https://spclient.wg.spotify.com/' },
     { id: 'orchard', baseUrl: 'https://artwork.sfg545.dev/' }
   ];
   ctx.SEARCH_DEBOUNCE_MS = 320;

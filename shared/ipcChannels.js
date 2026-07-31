@@ -57,6 +57,13 @@ export const IPC_CHANNELS = Object.freeze({
   SONG_LINKS: Object.freeze({
     RESOLVE: 'song-links:resolve'
   }),
+  SPOTIFY: Object.freeze({
+    CONNECT: 'spotify:connect',
+    DISCONNECT: 'spotify:disconnect',
+    GET_CANVAS: 'spotify:get-canvas',
+    SAVE_SPDC: 'spotify:save-spdc',
+    STATUS: 'spotify:status'
+  }),
   SYSTEM_MEDIA: Object.freeze({
     COMMAND: 'system-media:command',
     SET_STATE: 'system-media:set-state'
