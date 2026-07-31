@@ -229,6 +229,9 @@ export function installArtworkService(ctx) {
 
   ctx.resolveAnimatedArtworkVideo = async function resolveAnimatedArtworkVideo(data) {
     if (data?.animated) {
+      if (/\.mp4(?:\?|$)/i.test(data.animated)) {
+        return data.animated;
+      }
       try {
         const response = await fetch(data.animated, { cache: 'force-cache' });
         if (response.ok) {
@@ -261,8 +264,29 @@ export function installArtworkService(ctx) {
     return ctx.normalizeEnhancedArtwork(data);
   };
 
-  ctx.fetchArtworkFromProviders = async function fetchArtworkFromProviders(buildUrl, normalize) {
+  ctx.fetchArtworkFromProviders = async function fetchArtworkFromProviders(buildUrl, normalize, target = null) {
     for (const provider of ctx.artworkApiProviders) {
+      if (provider.id === 'spotify') {
+        if (window.orchardSpotify && target) {
+          try {
+            // Targets are reactive objects; IPC can only carry plain values.
+            const canvasResult = await window.orchardSpotify.getCanvas({
+              title: String(target.title || ''),
+              artist: String(target.artist || ''),
+              artists: Array.isArray(target.artists) ? target.artists.map((name) => String(name || '')) : [],
+              album: String(target.album || '')
+            });
+            if (canvasResult?.animated || canvasResult?.videoUrl) {
+              const artwork = await normalize(provider, canvasResult);
+              if (artwork) return artwork;
+            }
+          } catch (error) {
+            console.warn('Spotify canvas provider failed', error);
+          }
+        }
+        continue;
+      }
+
       const url = buildUrl(provider);
       if (!url) continue;
 
@@ -287,7 +311,8 @@ export function installArtworkService(ctx) {
         normalizeArtworkProviderResponse(provider, data, target, artist),
         target,
         fallbackArtist
-      )
+      ),
+      target
     );
   };
 

@@ -56,6 +56,23 @@ contextBridge.exposeInMainWorld('orchardLastfm', {
   scrobble: (track, timestamp) => ipcRenderer.invoke('lastfm:scrobble', { track, timestamp })
 });
 
+contextBridge.exposeInMainWorld('orchardSpotify', {
+  status: () => ipcRenderer.invoke('spotify:status'),
+  connect: () => ipcRenderer.invoke('spotify:connect'),
+  saveSpdc: (spdc) => ipcRenderer.invoke('spotify:save-spdc', { spdc }),
+  disconnect: () => ipcRenderer.invoke('spotify:disconnect'),
+  // Callers pass reactive track objects, which are not structured-cloneable.
+  // Flatten to the plain fields the canvas lookup actually uses.
+  getCanvas: (target) => ipcRenderer.invoke('spotify:get-canvas', {
+    target: {
+      title: String(target?.title || ''),
+      artist: String(target?.artist || ''),
+      artists: Array.isArray(target?.artists) ? target.artists.map((name) => String(name || '')) : [],
+      album: String(target?.album || '')
+    }
+  })
+});
+
 contextBridge.exposeInMainWorld('orchardSongLinks', {
   resolve: (presence) => ipcRenderer.invoke('song-links:resolve', presence),
   resolveDetails: (presence) => ipcRenderer.invoke('song-links:resolve', { ...presence, includeDetails: true })

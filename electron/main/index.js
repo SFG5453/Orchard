@@ -24,6 +24,7 @@ import {
 } from '../integrations/discordRpc.js';
 import { setupGithubAuth } from '../integrations/githubAuth.js';
 import { setupLastfm } from '../integrations/lastfm.js';
+import { setupSpotify } from '../integrations/spotify.js';
 import {
   asText,
   bestThumbnail,
@@ -486,6 +487,7 @@ app.whenReady().then(async () => {
   });
   setupGithubAuth({ app, ipcMain, net, safeStorage, shell });
   setupLastfm({ app, ipcMain, net, safeStorage, shell });
+  setupSpotify({ app, ipcMain, net, safeStorage });
   updates = setupOrchardUpdates({ isDev });
   await startBridge();
   await createMainWindow();
