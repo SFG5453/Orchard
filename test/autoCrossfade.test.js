@@ -78,6 +78,7 @@ test('the active track is promoted at mix dominance instead of mix start', async
     connectElement() {},
     currentTime: () => 10,
     resetMixElement() {},
+    setMixVolume: () => true,
     resume: async () => {},
     scheduleCrossfade: () => ({
       startTime: 10,
@@ -126,6 +127,7 @@ test('volume changes update both master gains while a transition is active', asy
     connectElement() {},
     currentTime: () => 10,
     resetMixElement() {},
+    setMixVolume: () => true,
     resume: async () => {},
     scheduleCrossfade: () => ({
       startTime: 10,
@@ -173,6 +175,7 @@ test('canceling while the incoming play request is pending cannot restart the tr
     connectElement() {},
     currentTime: () => 10,
     resetMixElement() {},
+    setMixVolume: () => true,
     resume: async () => {},
     scheduleCrossfade: () => {
       scheduled += 1;
@@ -207,6 +210,96 @@ test('canceling while the incoming play request is pending cannot restart the tr
     assert.equal(await result, false);
     assert.equal(scheduled, 0);
     assert.equal(incoming.pauseCalls, 1);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+// The incoming deck is connected to the graph at unity gain, and
+// scheduleCrossfade only pins it to zero from its own start time -- one lead
+// time into the future. Anything audible before that point is the burst heard
+// at the top of a transition, so the mute has to land before play() does.
+test('the incoming deck is muted before it is allowed to play', async () => {
+  const originalWindow = globalThis.window;
+  const clock = fakeClock();
+  globalThis.window = clock.window;
+  const order = [];
+  const analyzer = {
+    connectElement() {},
+    currentTime: () => 10,
+    resetMixElement() {},
+    setMixVolume(element, value) {
+      order.push(`mix:${value}`);
+      return true;
+    },
+    resume: async () => {},
+    scheduleCrossfade: () => {
+      order.push('schedule');
+      return { startTime: 10, handoffStart: 10.4, promotionTime: 10.7, endTime: 11 };
+    },
+    setVolume() {}
+  };
+  const crossfade = createAutoCrossfade({ analyzer });
+  const incoming = audio();
+  incoming.play = async () => {
+    order.push('play');
+  };
+
+  try {
+    const result = crossfade.start({
+      fromAudio: audio(110),
+      toAudio: incoming,
+      transition: { fadeSeconds: 1, handoffStartSeconds: 0.4, incomingCueTime: 0 },
+      volume: 1
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(order, ['mix:0', 'play', 'schedule']);
+
+    clock.runNext();
+    clock.runNext();
+    await result;
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+// An analyzer that cannot mute the incoming deck cannot start a transition
+// either: playing it anyway is exactly the burst this guards against.
+test('a deck outside the audio graph refuses the transition instead of bursting', async () => {
+  const originalWindow = globalThis.window;
+  const clock = fakeClock();
+  globalThis.window = clock.window;
+  let played = false;
+  const analyzer = {
+    connectElement() {},
+    currentTime: () => 10,
+    resetMixElement() {},
+    setMixVolume: () => false,
+    resume: async () => {},
+    scheduleCrossfade: () => ({ startTime: 10, handoffStart: 10.4, promotionTime: 10.7, endTime: 11 }),
+    setVolume() {}
+  };
+  const crossfade = createAutoCrossfade({ analyzer });
+  const incoming = audio();
+  incoming.play = async () => {
+    played = true;
+  };
+  const errors = [];
+
+  try {
+    const started = await crossfade.start({
+      fromAudio: audio(110),
+      toAudio: incoming,
+      transition: { fadeSeconds: 1, incomingCueTime: 0 },
+      volume: 1,
+      onError: (error) => errors.push(error.message)
+    });
+
+    assert.equal(started, false);
+    assert.equal(played, false);
+    assert.equal(crossfade.isActive(), false);
+    assert.match(errors[0], /outside the audio graph/);
   } finally {
     globalThis.window = originalWindow;
   }

@@ -181,6 +181,13 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     // separate master gain so slider changes can take effect mid-transition.
     const target = 1;
 
+    // Everything below only pins the incoming gain from startTime onwards, one
+    // lead-time out. Hold it at zero from right now as well, so a deck that is
+    // already rolling at unity cannot be heard through that gap.
+    const toGainParam = mixParam(toNode);
+    toGainParam.cancelScheduledValues(currentTime());
+    toGainParam.setValueAtTime(0, currentTime());
+
     const djStyle = ['dj_switch', 'dj_filter', 'dj_blend'].includes(transitionStyle);
     if (djStyle) {
       scheduleDjGains(

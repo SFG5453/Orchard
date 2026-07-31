@@ -84,21 +84,27 @@ export function installPlaybackControls(ctx) {
 
   ctx.syncAudioPlaybackClock = function syncAudioPlaybackClock() {
     const media = ctx.currentPlaybackElement();
-    if (!media || ctx.isSeeking.value || ctx.activeTrackIsVideo.value) return;
+    if (!media || ctx.isSeeking.value) return;
 
-    const playbackTime = Number(media.currentTime);
-    if (Number.isFinite(playbackTime)) {
-      ctx.currentTime.value = playbackTime;
-      ctx.seekPosition.value = playbackTime;
+    // The video player publishes its own time and duration, so mirroring them
+    // from here would fight it. Polling for a transition is the other half of
+    // this clock's job and applies to a music video just as much.
+    if (!ctx.activeTrackIsVideo.value) {
+      const playbackTime = Number(media.currentTime);
+      if (Number.isFinite(playbackTime)) {
+        ctx.currentTime.value = playbackTime;
+        ctx.seekPosition.value = playbackTime;
+      }
+
+      const mediaDuration = reliablePlaybackDuration(ctx, media);
+      if (mediaDuration) ctx.duration.value = mediaDuration;
     }
 
-    const mediaDuration = reliablePlaybackDuration(ctx, media);
-    if (mediaDuration) ctx.duration.value = mediaDuration;
     if (!media.paused && !media.ended) void ctx.maybeStartAutoCrossfade();
   };
 
   ctx.startCrossfadeClock = function startCrossfadeClock() {
-    if (crossfadeClockTimer || !ctx.crossfadeEnabled.value || ctx.activeTrackIsVideo.value) return;
+    if (crossfadeClockTimer || !ctx.crossfadeEnabled.value) return;
     crossfadeClockTimer = window.setInterval(ctx.syncAudioPlaybackClock, 120);
   };
 
@@ -368,6 +374,16 @@ export function installPlaybackControls(ctx) {
     return ctx.nextTrackPreload.value?.resolved || null;
   }
 
+  // A transition promotes the incoming track without going through
+  // playbackResolve, which is what normally sets the media kind. Left alone
+  // after transitioning out of a music video, activeTrackIsVideo stays true and
+  // currentPlaybackElement keeps pointing at a video that is no longer the
+  // source of anything audible.
+  function retireOutgoingVideo(nextTrack, outgoingVideo) {
+    ctx.activeMediaKind.value = nextTrack?.mediaKind || 'audio';
+    if (outgoingVideo) outgoingVideo.pause();
+  }
+
   // Routes a smart-mode transition to the beat-matched WSOLA engine when the
   // pairing qualifies. Returns 'started' when the engine took over, 'hold'
   // while a viable plan is waiting on its render (the legacy engine must not
@@ -376,6 +392,7 @@ export function installPlaybackControls(ctx) {
   async function maybeRunWsolaTransition({ next, fromAudio, toAudio, playbackTime, mediaDuration }) {
     const engine = ctx.wsolaCrossfade;
     if (!engine) return 'fallback';
+    const fromVideo = ctx.activeTrackIsVideo.value ? ctx.videoRef.value : null;
     // An overlap already playing must hold, never fall back: the rendered
     // buffer already contains the incoming track, so letting the legacy engine
     // start its own fade on the same standby element plays it a second time.
@@ -461,6 +478,7 @@ export function installPlaybackControls(ctx) {
         ctx.nextTrackPreload.value = null;
         ctx.activeAudioDeck.value = nextDeck;
         ctx.activeTrack.value = nextTrack;
+        retireOutgoingVideo(nextTrack, fromVideo);
         ctx.startYouTubeHistory?.(nextTrack.youtubeVideoId || nextTrack.id);
         ctx.promoteCrossfadeAnalysis(nextTrack.id);
         if (ctx.crossfadeAnalysis.value.status !== 'ready') {
@@ -488,6 +506,9 @@ export function installPlaybackControls(ctx) {
       },
       onComplete: () => {
         ctx.clearAudioElement(fromAudio);
+        // The companion audio stream is what fromAudio refers to for a music
+        // video; the picture is a second element and has to be released too.
+        if (fromVideo && fromVideo !== fromAudio) ctx.clearMediaElement(fromVideo);
         void ctx.preloadNextTrack();
       },
       onError: (error) => {
@@ -508,13 +529,16 @@ export function installPlaybackControls(ctx) {
       return false;
     }
     if (ctx.repeatMode.value === 'one') return false;
-    if (ctx.activeTrackIsVideo.value) return false;
     // Covers the forced end-of-track handoff too: only one engine may ever own
     // the standby element, or the incoming track is heard from both.
     if (ctx.wsolaCrossfade?.isActive?.()) return false;
 
     const next = ctx.queue.value[0];
-    const fromAudio = ctx.currentAudio();
+    // For a music video the audible element is the companion audio stream, or
+    // the video itself when it carries its own. Either is in the audio graph;
+    // the video element is only the picture, and gets stopped on promotion.
+    const fromAudio = ctx.currentPlaybackAudioElement();
+    const fromVideo = ctx.activeTrackIsVideo.value ? ctx.videoRef.value : null;
     const toAudio = ctx.standbyAudio();
 
     if (!next?.id || !fromAudio || !toAudio) {
@@ -601,6 +625,7 @@ export function installPlaybackControls(ctx) {
         ctx.nextTrackPreload.value = null;
         ctx.activeAudioDeck.value = nextDeck;
         ctx.activeTrack.value = nextTrack;
+        retireOutgoingVideo(nextTrack, fromVideo);
         ctx.startYouTubeHistory?.(nextTrack.youtubeVideoId || nextTrack.id);
         ctx.promoteCrossfadeAnalysis(nextTrack.id);
         if (ctx.crossfadeAnalysis.value.status !== 'ready') {
@@ -628,6 +653,9 @@ export function installPlaybackControls(ctx) {
       },
       onComplete: () => {
         ctx.clearAudioElement(fromAudio);
+        // The companion audio stream is what fromAudio refers to for a music
+        // video; the picture is a second element and has to be released too.
+        if (fromVideo && fromVideo !== fromAudio) ctx.clearMediaElement(fromVideo);
         void ctx.preloadNextTrack();
       },
       onError: (error) => {
@@ -641,10 +669,8 @@ export function installPlaybackControls(ctx) {
   };
 
   ctx.finishAudioTrack = async function finishAudioTrack() {
-    if (!ctx.activeTrackIsVideo.value) {
-      const didHandoff = await ctx.maybeStartAutoCrossfade({ force: true, reason: 'ended-handoff' });
-      if (didHandoff) return;
-    }
+    const didHandoff = await ctx.maybeStartAutoCrossfade({ force: true, reason: 'ended-handoff' });
+    if (didHandoff) return;
 
     ctx.playNext({ fromEnded: true });
   };

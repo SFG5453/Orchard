@@ -220,6 +220,14 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       const fadeSeconds = Number.isFinite(remainingSeconds) && remainingSeconds > 0
         ? Math.min(requestedFadeSeconds, Math.max(0.05, remainingSeconds))
         : requestedFadeSeconds;
+      // Mute the incoming deck before it makes a sound. scheduleCrossfade only
+      // zeroes this gain at its own start time, one lead-time into the future,
+      // and the element is connected at unity -- so everything between play()
+      // resolving and that point was audible at full level. That is the burst
+      // heard at the top of every transition.
+      if (!analyzer?.setMixVolume?.(toAudio, 0)) {
+        throw new Error('Transition elements are outside the audio graph');
+      }
       await toAudio.play();
       if (!active || sequence !== transitionSequence) return false;
       const timing = analyzer?.scheduleCrossfade?.({

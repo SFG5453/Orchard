@@ -265,7 +265,10 @@ function crossfadeRoutingContext({ wsolaActive, wsolaPlan }) {
     crossfadeMode: { value: 'smart' },
     crossfadeSeconds: { value: 6 },
     currentAudio: () => fromAudio,
+    currentPlaybackAudioElement: () => fromAudio,
     standbyAudio: () => toAudio,
+    videoRef: { value: null },
+    activeMediaKind: { value: 'audio' },
     currentTime: { value: 200 },
     duration: { value: 240 },
     isPlaying: { value: true },
@@ -351,6 +354,74 @@ test('processed audio falls back to the legacy crossfade', async () => {
 
     assert.equal(await ctx.maybeStartAutoCrossfade(), true);
     assert.equal(legacyStarts.length, 1);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+// A music video's audio comes from a companion element, not the audio deck, and
+// the video is only the picture. The transition has to run off the audible
+// element and retire the video, or reaching the end of a music video drops the
+// queue onto a hard cut instead of a crossfade.
+test('a music video transitions out through its companion audio element', async () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { setTimeout: () => 1, clearTimeout: () => {} };
+  try {
+    const { ctx, legacyStarts } = crossfadeRoutingContext({
+      wsolaActive: false,
+      wsolaPlan: { ok: false, reason: 'tempo-distance' }
+    });
+    const companionAudio = { currentTime: 200, duration: 240, pause() {}, play: async () => {} };
+    const videoElement = { pauseCalls: 0, pause() { this.pauseCalls += 1; } };
+    ctx.activeTrackIsVideo = { value: true };
+    ctx.activeMediaKind = { value: 'video' };
+    ctx.videoRef = { value: videoElement };
+    ctx.currentPlaybackAudioElement = () => companionAudio;
+    // Backing state the promotion path writes through on its way to the video.
+    ctx.history = { value: [] };
+    ctx.nextPreloadRequest = 0;
+    ctx.promoteCrossfadeAnalysis = () => {};
+    ctx.shuffleEnabled = { value: false };
+    ctx.shuffleSourceQueue = { value: [] };
+    ctx.buffering = { value: false };
+    ctx.seekPosition = { value: 0 };
+
+    assert.equal(await ctx.maybeStartAutoCrossfade(), true);
+    assert.equal(legacyStarts.length, 1, 'no transition started out of a music video');
+    assert.equal(legacyStarts[0].fromAudio, companionAudio, 'transitioned off the silent video element');
+
+    // Promotion happens without playbackResolve, so it owns resetting the media
+    // kind and stopping the picture.
+    legacyStarts[0].onPromote();
+    assert.equal(ctx.activeMediaKind.value, 'audio');
+    assert.equal(videoElement.pauseCalls, 1);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+// The end-of-track handoff used to bail out for video before it ever reached
+// the crossfade, which is the other half of why music videos hard-cut.
+test('the ended-track handoff is offered to music videos too', async () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { setTimeout: () => 1, clearTimeout: () => {} };
+  try {
+    const { ctx, legacyStarts } = crossfadeRoutingContext({
+      wsolaActive: false,
+      wsolaPlan: { ok: false, reason: 'tempo-distance' }
+    });
+    const companionAudio = { currentTime: 239, duration: 240, pause() {}, play: async () => {} };
+    ctx.activeTrackIsVideo = { value: true };
+    ctx.activeMediaKind = { value: 'video' };
+    ctx.videoRef = { value: { pause() {} } };
+    ctx.currentPlaybackAudioElement = () => companionAudio;
+    let playedNext = false;
+    ctx.playNext = () => { playedNext = true; };
+
+    await ctx.finishAudioTrack();
+
+    assert.equal(legacyStarts.length, 1, 'video fell straight through to a hard cut');
+    assert.equal(playedNext, false);
   } finally {
     globalThis.window = originalWindow;
   }
