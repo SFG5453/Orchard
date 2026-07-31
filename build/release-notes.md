@@ -1,8 +1,9 @@
-## Orchard 4.0.0-beta.3 "Mushroom Novitiates"
+## Orchard 4.0.0-beta.4 "Murmurer Violated"
 
 ### New & improved
-- Orchard can now connect to Spotify and play the animated Canvas loop for a track in place of static album art, falling back to the usual artwork whenever a Canvas is unavailable.
+- The Canopy layout design has been updated to be much more roomier.
 
 ### Fixed
-- Packages built against a system Electron runtime now locate the audio analyzer and both neural models, which had silently fallen back to heuristic analysis and disabled beat-matched transitions.
-- Custom artist sound effects play again after the content security policy was widened to allow their audio data.
+- Fixed an issue causing Orchard to crash on launch on Apple Silicon Macs by enforcing proper ad-hoc code signing.
+- Smart Crossfade now mutes the incoming deck before play and correctly supports handoffs for music videos.
+- Fixed a bug where YouTube searches would occasionally fail with a "Cannot read properties of undefined" error.
