@@ -273,6 +273,7 @@ jobs:
             --${{ matrix.arch }} \
             --config electron-builder.config.cjs \
             -c.directories.output=release-macos \
+            -c.mac.identity=- \
             --publish never
 
           mkdir -p release-assets
