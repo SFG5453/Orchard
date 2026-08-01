@@ -1,9 +1,7 @@
+import { clearSessionValue, readSessionValue, writeSessionValue } from '../core/sessionStore.js';
+
 const PLAYBACK_STATE_STORAGE_KEY = 'orchard:playback-state';
 const MAX_STORED_TRACKS = 80;
-
-function storageAvailable() {
-  return typeof window !== 'undefined' && Boolean(window.localStorage);
-}
 
 export function clampVolume(value) {
   const number = Number(value);
@@ -49,44 +47,28 @@ function sanitizedTrackList(items = []) {
 }
 
 export function readPlaybackState() {
-  if (!storageAvailable()) {
+  const parsed = readSessionValue(PLAYBACK_STATE_STORAGE_KEY);
+  if (!parsed || typeof parsed !== 'object') {
     return { activeTrack: null, queue: [], history: [], shuffleSourceQueue: [] };
   }
 
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(PLAYBACK_STATE_STORAGE_KEY) || '{}');
-    return {
-      activeTrack: sanitizedTrack(parsed.activeTrack),
-      queue: sanitizedTrackList(parsed.queue),
-      history: sanitizedTrackList(parsed.history),
-      shuffleSourceQueue: sanitizedTrackList(parsed.shuffleSourceQueue)
-    };
-  } catch {
-    return { activeTrack: null, queue: [], history: [], shuffleSourceQueue: [] };
-  }
+  return {
+    activeTrack: sanitizedTrack(parsed.activeTrack),
+    queue: sanitizedTrackList(parsed.queue),
+    history: sanitizedTrackList(parsed.history),
+    shuffleSourceQueue: sanitizedTrackList(parsed.shuffleSourceQueue)
+  };
 }
 
 export function clearPlaybackState() {
-  if (!storageAvailable()) return;
-
-  try {
-    window.localStorage.removeItem(PLAYBACK_STATE_STORAGE_KEY);
-  } catch {
-    // Clearing stored playback state is best-effort.
-  }
+  clearSessionValue(PLAYBACK_STATE_STORAGE_KEY);
 }
 
 export function writePlaybackState({ activeTrack, queue, history, shuffleSourceQueue }) {
-  if (!storageAvailable()) return;
-
-  try {
-    window.localStorage.setItem(PLAYBACK_STATE_STORAGE_KEY, JSON.stringify({
-      activeTrack: sanitizedTrack(activeTrack),
-      queue: sanitizedTrackList(queue),
-      history: sanitizedTrackList(history),
-      shuffleSourceQueue: sanitizedTrackList(shuffleSourceQueue)
-    }));
-  } catch {
-    // Restoring the queue is useful, but storage failures should never block playback.
-  }
+  writeSessionValue(PLAYBACK_STATE_STORAGE_KEY, {
+    activeTrack: sanitizedTrack(activeTrack),
+    queue: sanitizedTrackList(queue),
+    history: sanitizedTrackList(history),
+    shuffleSourceQueue: sanitizedTrackList(shuffleSourceQueue)
+  });
 }

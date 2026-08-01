@@ -54,6 +54,10 @@ export const IPC_CHANNELS = Object.freeze({
     GET_STATE: 'migration:get-state',
     REFRESH: 'migration:refresh'
   }),
+  SESSION_STATE: Object.freeze({
+    GET: 'session-state:get',
+    SET: 'session-state:set'
+  }),
   SONG_LINKS: Object.freeze({
     RESOLVE: 'song-links:resolve'
   }),

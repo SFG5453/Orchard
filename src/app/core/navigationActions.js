@@ -1,3 +1,5 @@
+import { readSessionValue, writeSessionValue } from './sessionStore.js';
+
 export function installNavigationActions(ctx) {
   const lastPageStorageKey = 'orchard:last-page';
   const validViews = new Set(['home', 'queue', 'history', 'replay', 'releaseRadar', 'podcasts', 'pins', 'search', 'browse', 'sectionMore', 'settings', 'support']);
@@ -39,22 +41,14 @@ export function installNavigationActions(ctx) {
   ctx.readLastPageEntry = function readLastPageEntry(options = {}) {
     if (typeof window === 'undefined') return null;
 
-    try {
-      const parsed = JSON.parse(window.localStorage.getItem(lastPageStorageKey) || 'null');
-      return parsed ? ctx.safeNavigationEntry(parsed, options) : null;
-    } catch {
-      return null;
-    }
+    const parsed = readSessionValue(lastPageStorageKey);
+    return parsed ? ctx.safeNavigationEntry(parsed, options) : null;
   };
 
   ctx.writeLastPageEntry = function writeLastPageEntry(entry = ctx.createNavigationEntry()) {
     if (typeof window === 'undefined') return;
 
-    try {
-      window.localStorage.setItem(lastPageStorageKey, JSON.stringify(ctx.safeNavigationEntry(entry)));
-    } catch {
-      // Last-page restore is helpful, but storage failures should not affect navigation.
-    }
+    writeSessionValue(lastPageStorageKey, ctx.safeNavigationEntry(entry));
   };
 
   ctx.restoreStartupPage = function restoreStartupPage(authState = ctx.authState.value) {

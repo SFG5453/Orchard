@@ -59,6 +59,8 @@ import { setupSystemMediaHandlers } from '../platform/systemMedia.js';
 import { welcomeRequiredAtLaunch } from '../platform/welcomeState.js';
 import { configureWindowOpenHandler, registerDevToolsShortcut, registerWindowControls } from '../platform/windowControls.js';
 import { createGraphicsModeController, GRAPHICS_MODE_FILENAME } from './graphicsMode.js';
+import { createSessionStateStore, SESSION_STATE_FILENAME } from './sessionState.js';
+import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
 import { resolveRuntimePaths } from './runtimePaths.js';
 
 // Installed before any InnerTube client exists, so no response can reach the
@@ -73,6 +75,9 @@ const runtimePaths = resolveRuntimePaths({ app, isDev });
 const graphicsMode = createGraphicsModeController({
   app,
   filePath: path.join(app.getPath('userData'), GRAPHICS_MODE_FILENAME)
+});
+const sessionState = createSessionStateStore({
+  filePath: path.join(app.getPath('userData'), SESSION_STATE_FILENAME)
 });
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
@@ -464,6 +469,15 @@ app.whenReady().then(async () => {
   });
   registerWindowControls({ BrowserWindow, ipcMain, screen });
   registerClipboardHandlers({ clipboard, ipcMain });
+  // Synchronous on purpose: the renderer seeds the queue and the last page from
+  // this while it builds its initial state, and an async read would mean
+  // starting on an empty queue and rewriting it a tick later.
+  ipcMain.on(IPC_CHANNELS.SESSION_STATE.GET, (event, key) => {
+    event.returnValue = sessionState.get(typeof key === 'string' ? key : '');
+  });
+  ipcMain.on(IPC_CHANNELS.SESSION_STATE.SET, (_event, key, value) => {
+    sessionState.set(key, value);
+  });
   registerAppHandlers({
     app,
     clearDiscordPresence,
@@ -521,10 +535,16 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  // On macOS the app outlives its windows, so this is the moment the renderer
+  // stops being able to tell us anything -- `before-quit` may be hours away.
+  sessionState.flush();
   if (process.platform !== 'darwin') app.quit();
 });
 // Services own native handles/listeners/servers; async cache flushing is best-effort here.
 app.on('before-quit', () => {
+  // First, and synchronously: this is the last chance to get "where was I?" on
+  // disk, and everything below it can afford to lose a few milliseconds.
+  sessionState.flush();
   void audioAnalysis?.stop();
   resetDiscordRpcClient();
   systemMedia?.stop();

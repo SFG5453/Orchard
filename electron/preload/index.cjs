@@ -73,6 +73,14 @@ contextBridge.exposeInMainWorld('orchardSpotify', {
   })
 });
 
+// "Where was I?" state: the playback queue and the last page. Read
+// synchronously because the renderer seeds its initial state from it; written
+// fire-and-forget because the main process owns the flush at quit.
+contextBridge.exposeInMainWorld('orchardSessionState', {
+  get: (key) => ipcRenderer.sendSync('session-state:get', String(key || '')),
+  set: (key, value) => ipcRenderer.send('session-state:set', String(key || ''), value)
+});
+
 contextBridge.exposeInMainWorld('orchardSongLinks', {
   resolve: (presence) => ipcRenderer.invoke('song-links:resolve', presence),
   resolveDetails: (presence) => ipcRenderer.invoke('song-links:resolve', { ...presence, includeDetails: true })
