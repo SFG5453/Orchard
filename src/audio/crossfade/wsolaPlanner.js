@@ -60,6 +60,17 @@ const BED_POSITION = 0.5;
 // starts there.
 const BASS_SWAP_FRACTION = 0.7;
 
+// ...and it is capped in absolute seconds as well, so a long overlap does not
+// scale the hold up with it and leave the outgoing bass sitting under a track
+// that has already taken over. Kept in step with BASS_SWAP_MAX_SECONDS in the
+// mixer so both executors swap at the same instant.
+const BASS_SWAP_MAX_SECONDS = 6;
+
+function bassSwapFractionFor(overlapSeconds) {
+  if (!(overlapSeconds > 0)) return BASS_SWAP_FRACTION;
+  return Math.min(BASS_SWAP_FRACTION, BASS_SWAP_MAX_SECONDS / overlapSeconds);
+}
+
 // The outgoing track's mid band gives up an extra 6 dB across the fade, at
 // the rate the incoming track rises to replace it -- a DJ's mid EQ kill. The
 // bass swap keeps the low end exclusive, but above it the equal-power fade
@@ -276,7 +287,7 @@ export function planWsolaTransition({
     fadeBeats: overlapBeats,
     handoffFraction: HANDOFF_FRACTION,
     bedPosition: BED_POSITION,
-    bassSwapFraction: BASS_SWAP_FRACTION,
+    bassSwapFraction: bassSwapFractionFor(overlapSeconds),
     midDuck: MID_DUCK,
     outgoingBpm,
     incomingBpm,

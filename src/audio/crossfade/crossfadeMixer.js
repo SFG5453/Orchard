@@ -10,6 +10,14 @@ const DJ_DOMINANCE_PROGRESS = 0.58;
 const BASS_SWAP_FRACTION = 0.7;
 const BASS_SWAP_SECONDS = 0.75;
 
+// A ceiling on how long the outgoing track can keep the low end, in seconds
+// from the start of the fade. The fraction alone scales with the overlap, so a
+// twenty-second blend held the outgoing bass for fourteen of them: long past
+// the point the incoming track is the one being listened to, and heard as the
+// mix refusing to let go. Below roughly nine seconds of overlap the fraction is
+// still the smaller of the two and nothing changes.
+const BASS_SWAP_MAX_SECONDS = 6;
+
 // How much the outgoing track's mids give up by the end of the fade, in dB. The
 // bass swap keeps the low end exclusive, but above it two equal-power halves
 // sit at -3 dB each through the middle of the overlap, and beat-aligned mixes
@@ -62,7 +70,7 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
   function bassSwapCurves(duration, size = 256) {
     const out = new Float32Array(size);
     const into = new Float32Array(size);
-    const swapAt = duration * BASS_SWAP_FRACTION;
+    const swapAt = Math.min(duration * BASS_SWAP_FRACTION, BASS_SWAP_MAX_SECONDS);
     const ramp = Math.max(0.05, Math.min(BASS_SWAP_SECONDS, duration * 0.5));
     for (let index = 0; index < size; index += 1) {
       const seconds = (index / (size - 1)) * duration;

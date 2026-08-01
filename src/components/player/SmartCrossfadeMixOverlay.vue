@@ -1,5 +1,5 @@
 <script>
-import { computed } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 export default {
   name: 'SmartCrossfadeMixOverlay',
@@ -28,11 +28,42 @@ export default {
       return 'Phrase aligned';
     });
 
+    // The canopy titlebar is loaded asynchronously, so `.canopy-readout` may not
+    // exist the first time this component renders. A Teleport resolves its
+    // target once, when `to` changes -- a selector that misses stays missed, and
+    // the banner is silently dropped for the rest of the session. So resolve to
+    // the element ourselves and re-resolve whenever a mix starts, which also
+    // catches the case where the titlebar remounted and left us holding a
+    // detached node.
+    const barTarget = ref('body');
+
+    function resolveBarTarget() {
+      if (layoutPreset.value !== 'canopy') {
+        barTarget.value = 'body';
+        return true;
+      }
+      const readout = document.querySelector('.canopy-readout');
+      barTarget.value = readout || 'body';
+      return Boolean(readout);
+    }
+
+    watch(
+      [layoutPreset, () => mix.value.visible],
+      async () => {
+        if (resolveBarTarget()) return;
+        // The titlebar's chunk may still be in flight; body is a usable
+        // fallback in the meantime, and one more pass picks it up when it lands.
+        await nextTick();
+        resolveBarTarget();
+      },
+      { immediate: true }
+    );
+
     function dismiss() {
       props.app.dismissSmartCrossfadeMix?.();
     }
 
-    return { mix, isFullscreen, layoutPreset, fullscreenMixStyle, barMixStyle, transitionDetail, dismiss };
+    return { mix, isFullscreen, layoutPreset, barTarget, fullscreenMixStyle, barMixStyle, transitionDetail, dismiss };
   }
 };
 </script>
@@ -118,7 +149,7 @@ export default {
   </Teleport>
 
   <!-- Compact bar: teleported to canopy readout if preset is canopy, else body -->
-  <Teleport defer :to="layoutPreset === 'canopy' ? '.canopy-readout' : 'body'">
+  <Teleport :to="barTarget">
     <Transition name="smart-crossfade-bar" appear>
       <div
         v-if="mix.visible && !isFullscreen"

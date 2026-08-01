@@ -125,10 +125,54 @@ test('the low end changes hands exclusively rather than overlapping', () => {
     const power = value * value + into.values[index] * into.values[index];
     assert.ok(Math.abs(power - 1) < 0.0001);
   });
-  // Centred on 70% of the fade: before it the outgoing still owns the low end.
+  // Six seconds in -- the absolute cap, which is what binds at this length.
+  // Before it the outgoing still owns the low end.
   const crossing = into.values.findIndex((value, index) => value >= out.values[index]);
-  assert.ok(Math.abs((crossing / (into.values.length - 1)) * 10 - 7) < 0.1);
+  assert.ok(Math.abs((crossing / (into.values.length - 1)) * 10 - 6) < 0.1);
   assert.ok(out.values[Math.round((out.values.length - 1) * 0.4)] > 0.99);
+});
+
+test('a long overlap does not scale the bass hold up with it', () => {
+  const { fromAudio, toAudio, fromNode, toNode, mixer } = pair(0);
+
+  mixer.scheduleCrossfade({
+    fromAudio,
+    toAudio,
+    duration: 20,
+    handoffStartSeconds: 0,
+    handoffDuration: 20,
+    transitionStyle: 'dj_blend',
+    bassSwap: true,
+    leadTime: 0
+  });
+
+  const out = lastCurve(fromNode.bassGain.gain);
+  const into = lastCurve(toNode.bassGain.gain);
+  const crossing = into.values.findIndex((value, index) => value >= out.values[index]);
+  // Capped at six seconds rather than the fourteen 70% of this fade would give.
+  assert.ok(Math.abs((crossing / (into.values.length - 1)) * 20 - 6) < 0.2);
+  assert.ok(Math.abs(out.last) < 0.0001);
+  assert.ok(Math.abs(into.last - 1) < 0.0001);
+});
+
+test('a short overlap still swaps on the fraction, not the cap', () => {
+  const { fromAudio, toAudio, fromNode, toNode, mixer } = pair(0);
+
+  mixer.scheduleCrossfade({
+    fromAudio,
+    toAudio,
+    duration: 6,
+    handoffStartSeconds: 0,
+    handoffDuration: 6,
+    transitionStyle: 'dj_blend',
+    bassSwap: true,
+    leadTime: 0
+  });
+
+  const out = lastCurve(fromNode.bassGain.gain);
+  const into = lastCurve(toNode.bassGain.gain);
+  const crossing = into.values.findIndex((value, index) => value >= out.values[index]);
+  assert.ok(Math.abs((crossing / (into.values.length - 1)) * 6 - 4.2) < 0.1);
 });
 
 test('bass handover is skipped when the pairing did not ask for one', () => {
