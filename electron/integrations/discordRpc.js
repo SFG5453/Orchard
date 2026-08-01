@@ -82,10 +82,6 @@ function numberOrZero(value) {
   return Number.isFinite(number) && number > 0 ? number : 0;
 }
 
-function discordServiceName(value = '') {
-  return String(value || '').trim() === 'youtubeMusic' ? 'YouTube Music' : 'Orchard';
-}
-
 function cacheDiscordArtwork(url, result) {
   discordArtworkWarmCache.set(url, result);
 
@@ -226,10 +222,9 @@ function buildDiscordActivity(presence = {}, options = {}) {
   const currentTime = numberOrZero(presence.currentTime);
   const duration = numberOrZero(presence.duration);
   const isPlaying = Boolean(presence.isPlaying);
-  const service = discordServiceName(presence.activityName);
-  const details = isPlaying ? `${title} on ${service}` : `Paused - ${title} on ${service}`;
+  const details = isPlaying ? title : `Paused - ${title}`;
   const activity = {
-    name: artist || service,
+    name: artist || 'Orchard',
     type: 2,
     details,
     state: artist,

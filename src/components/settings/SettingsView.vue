@@ -389,27 +389,6 @@ export default {
           <q-toggle id="settings-discord" v-model="discordRpcEnabled" color="primary" aria-label="Discord Rich Presence" />
         </div>
 
-        <div class="settings-row settings-row--options" :class="{ 'settings-row--disabled': !discordRpcEnabled }">
-          <div class="settings-row__copy">
-            <label id="settings-discord-name-label">Card name</label>
-            <p>Choose the name shown inside the full Discord activity card.</p>
-          </div>
-          <div class="settings-option-group" role="group" aria-labelledby="settings-discord-name-label">
-            <button
-              v-for="option in discordRpcActivityNameOptions"
-              :key="option.value"
-              type="button"
-              class="settings-option"
-              :class="{ 'settings-option--active': discordRpcActivityName === option.value }"
-              :aria-pressed="discordRpcActivityName === option.value"
-              :disabled="!discordRpcEnabled"
-              @click="discordRpcActivityName = option.value"
-            >
-              {{ option.label }}
-            </button>
-          </div>
-        </div>
-
         <LastfmSection :app="app" />
         <SpotifySection :app="app" />
 

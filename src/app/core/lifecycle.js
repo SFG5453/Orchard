@@ -120,7 +120,6 @@ export function installLifecycle(ctx) {
     ctx.customAccentColor,
     ctx.youtubeHistoryEnabled,
     ctx.discordRpcEnabled,
-    ctx.discordRpcActivityName,
     ctx.graphicsMode,
     ctx.immersiveBackgroundsEnabled,
     ctx.immersiveBackgroundIntensity,
@@ -149,9 +148,6 @@ export function installLifecycle(ctx) {
     ctx.volume.value = ctx.normalizeUserPreferences({
       volume: ctx.volume.value
     }).volume;
-    ctx.discordRpcActivityName.value = ctx.normalizeUserPreferences({
-      discordRpcActivityName: ctx.discordRpcActivityName.value
-    }).discordRpcActivityName;
     ctx.songCacheMaxSizeMb.value = ctx.normalizeUserPreferences({
       songCacheMaxSizeMb: ctx.songCacheMaxSizeMb.value
     }).songCacheMaxSizeMb;
@@ -165,7 +161,6 @@ export function installLifecycle(ctx) {
       customAccentColor: ctx.customAccentColor.value,
       youtubeHistoryEnabled: ctx.youtubeHistoryEnabled.value,
       discordRpcEnabled: ctx.discordRpcEnabled.value,
-      discordRpcActivityName: ctx.discordRpcActivityName.value,
       graphicsMode: ctx.graphicsMode.value,
       immersiveBackgroundsEnabled: ctx.immersiveBackgroundsEnabled.value,
       immersiveBackgroundIntensity: ctx.immersiveBackgroundIntensity.value,
@@ -259,10 +254,6 @@ export function installLifecycle(ctx) {
   watch(ctx.discordRpcEnabled, (enabled) => {
     if (enabled) ctx.queueDiscordPresenceSync();
     else ctx.syncDiscordPresence();
-  });
-
-  watch(ctx.discordRpcActivityName, () => {
-    ctx.queueDiscordPresenceSync();
   });
 
   watch(ctx.graphicsMode, async (value) => {

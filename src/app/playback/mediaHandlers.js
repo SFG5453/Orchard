@@ -274,7 +274,6 @@ export function installMediaHandlers(ctx) {
       title: ctx.activeTrack.value.title || 'Playing music',
       artist,
       album: ctx.activeTrack.value.album || '',
-      activityName: ctx.discordRpcActivityName.value,
       youtubeVideoId: ctx.activeTrack.value.id || '',
       thumbnailUrl: ctx.nowArtworkImage.value || ctx.activeTrack.value.thumbnail || '',
       artworkUrl: ctx.discordArtworkImage.value,
