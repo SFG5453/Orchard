@@ -380,11 +380,8 @@ export function installLifecycle(ctx) {
       ctx.loadOrchardConnectInfo().catch(() => {});
       await ctx.syncSongCacheSettings();
       ctx.queueConnectSync();
-      const didResetWelcome = await ctx.resetWelcomeForCurrentVersion().catch((error) => {
-        ctx.errorMessage.value = error.message;
-        return false;
-      });
-      if (!didResetWelcome) await ctx.fetchAuthStatus();
+      ctx.reviewVersionUpgrade();
+      await ctx.fetchAuthStatus();
       if (ctx.activeView.value === 'search' && ctx.query.value.trim()) ctx.runSearch();
       if (ctx.activeView.value === 'releaseRadar') ctx.loadReleaseRadar({ force: true });
     });

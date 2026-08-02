@@ -3,9 +3,10 @@ import { readPinnedTracks } from '../browse/pinsPersistence.js';
 import { readPlaybackState } from '../playback/queuePersistence.js';
 
 const SETUP_STORAGE_KEY = 'orchard:setup-state';
-const WELCOME_RESET_STORAGE_KEY = 'orchard:welcome-reset-version';
-const WELCOME_RESET_VERSION = '1.0.0';
-const WELCOME_RESET_PENDING_MS = 20_000;
+const LAST_RUN_VERSION_STORAGE_KEY = 'orchard:last-run-version';
+const WELCOME_MODE_STORAGE_KEY = 'orchard:welcome-mode';
+export const WELCOME_MODE_CANOPY = 'canopy-upgrade';
+const CANOPY_MAJOR = 4;
 const BACKUP_SCHEMA_VERSION = 1;
 const STORAGE_KEYS = [
   'orchard:user-preferences',
@@ -31,6 +32,21 @@ function readStoredJson(key, fallback) {
   } catch {
     return fallback;
   }
+}
+
+function majorVersion(version) {
+  const major = Number.parseInt(String(version || '').trim().replace(/^v/, ''), 10);
+  return Number.isFinite(major) && major > 0 ? major : 0;
+}
+
+// Canopy landed in 4.0.0 and is opt-in, so every 3.x listener reaching any 4.x
+// build -- not only 4.0.0 -- deserves one look at the choice. Nothing about the
+// upgrade invalidates their session, so their sign-in is left alone.
+export function canopyUpgradeAvailable(previousVersion, currentVersion) {
+  const previous = majorVersion(previousVersion);
+  const current = majorVersion(currentVersion);
+  if (!previous || !current) return false;
+  return previous < CANOPY_MAJOR && current >= CANOPY_MAJOR;
 }
 
 function readArrayStorage(key) {
@@ -110,6 +126,9 @@ export function installReadinessActions(ctx) {
     ...readStoredJson(SETUP_STORAGE_KEY, {})
   });
   ctx.setupPanelOpen = ref(!ctx.setupState.value.completed);
+  // Set before the welcome window is opened, so the fresh renderer that backs
+  // that window reads it during its own setup.
+  ctx.welcomeMode = ref(canStore() ? window.localStorage.getItem(WELCOME_MODE_STORAGE_KEY) || '' : '');
   ctx.diagnostics = ref({ generatedAt: 0, items: [], report: null });
   ctx.diagnosticsMessage = ref('');
   ctx.backupMessage = ref('');
@@ -123,28 +142,37 @@ export function installReadinessActions(ctx) {
     ctx.persistSetupState();
   };
 
-  ctx.resetWelcomeForCurrentVersion = async function resetWelcomeForCurrentVersion() {
-    if (!canStore() || ctx.appVersion !== WELCOME_RESET_VERSION) return false;
-
-    const stored = window.localStorage.getItem(WELCOME_RESET_STORAGE_KEY) || '';
-    if (stored === WELCOME_RESET_VERSION) return false;
-
-    if (stored.startsWith(`pending:${WELCOME_RESET_VERSION}:`)) {
-      const startedAt = Number(stored.split(':').pop()) || 0;
-      if (Date.now() - startedAt < WELCOME_RESET_PENDING_MS) return true;
-    }
-
-    window.localStorage.setItem(WELCOME_RESET_STORAGE_KEY, `pending:${WELCOME_RESET_VERSION}:${Date.now()}`);
-    ctx.updateSetupState({ completed: false, welcomeCompleted: false });
+  // Runs on every bridge connect. The version is recorded before the offer is
+  // made, so a reconnect -- or a listener who closes the window without
+  // choosing -- never sees it twice.
+  ctx.reviewVersionUpgrade = function reviewVersionUpgrade() {
+    if (!canStore()) return false;
 
     try {
-      await ctx.emitWithReply('auth:logout');
-      window.localStorage.setItem(WELCOME_RESET_STORAGE_KEY, WELCOME_RESET_VERSION);
+      const previous = window.localStorage.getItem(LAST_RUN_VERSION_STORAGE_KEY) || '';
+      window.localStorage.setItem(LAST_RUN_VERSION_STORAGE_KEY, ctx.appVersion);
+      if (!canopyUpgradeAvailable(previous, ctx.appVersion)) return false;
+      // Someone mid-setup gets the full welcome instead; the layout choice is
+      // already one of its steps.
+      if (!ctx.setupState.value.welcomeCompleted) return false;
+
+      window.localStorage.setItem(WELCOME_MODE_STORAGE_KEY, WELCOME_MODE_CANOPY);
+      ctx.welcomeMode.value = WELCOME_MODE_CANOPY;
       window.orchardApp?.showWelcome?.();
       return true;
-    } catch (error) {
-      window.localStorage.removeItem(WELCOME_RESET_STORAGE_KEY);
-      throw error;
+    } catch {
+      return false;
+    }
+  };
+
+  ctx.dismissWelcomeMode = function dismissWelcomeMode() {
+    ctx.welcomeMode.value = '';
+    if (!canStore()) return;
+
+    try {
+      window.localStorage.removeItem(WELCOME_MODE_STORAGE_KEY);
+    } catch {
+      // A stale mode only costs one extra layout prompt.
     }
   };
 
@@ -248,6 +276,7 @@ export function installReadinessActions(ctx) {
 
     ctx.updateSetupState({ completed: true, welcomeCompleted: true });
     ctx.setupPanelOpen.value = false;
+    ctx.dismissWelcomeMode();
     window.orchardApp?.finishWelcome?.();
   };
 

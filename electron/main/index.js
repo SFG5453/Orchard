@@ -100,7 +100,6 @@ const useNativeTitlebar = false;
 const youtubeMusicOrigin = 'https://music.youtube.com';
 const youtubeWebOrigin = 'https://www.youtube.com';
 const youtubeMusicClientVersion = '1.20260114.01.00';
-const welcomeResetVersion = '1.0.0';
 const youtubeMusicClientUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
 const accountSummary = createAccountSummary({ asText, bestThumbnail });
 const authService = createAuthService({
@@ -510,10 +509,7 @@ app.whenReady().then(async () => {
   updates = setupOrchardUpdates({ isDev });
   await startBridge();
   await createMainWindow();
-  const needsWelcome = await welcomeRequiredAtLaunch(mainWindow, {
-    currentVersion: app.getVersion(),
-    resetVersion: welcomeResetVersion
-  });
+  const needsWelcome = await welcomeRequiredAtLaunch(mainWindow);
   if (needsWelcome) await showWelcomeWindow();
   else showMainWindow();
   setTimeout(() => {
@@ -523,10 +519,7 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow().then(async () => {
-        const needsWelcome = await welcomeRequiredAtLaunch(mainWindow, {
-          currentVersion: app.getVersion(),
-          resetVersion: welcomeResetVersion
-        });
+        const needsWelcome = await welcomeRequiredAtLaunch(mainWindow);
         if (needsWelcome) await showWelcomeWindow();
         else showMainWindow();
       });

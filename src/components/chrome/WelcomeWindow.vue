@@ -14,7 +14,7 @@ export default {
     const musicBlocked = ref(false);
     const stepIndex = ref(0);
     const supportOpen = ref(false);
-    const steps = [
+    const FULL_STEPS = [
       { key: 'account', icon: 'music_note', title: 'Welcome to Orchard' },
       { key: 'layout', icon: 'view_quilt', title: 'Interface design' },
       { key: 'immersive', icon: 'wallpaper', title: 'Artwork background' },
@@ -22,12 +22,19 @@ export default {
       { key: 'connected', icon: 'hub', title: 'Stay connected' },
       { key: 'finish', icon: 'check_circle', title: 'Ready to listen' }
     ];
-    const currentStep = computed(() => steps[stepIndex.value] || steps[0]);
+    // Upgrading from 3.x is not a fresh setup: the listener is already signed
+    // in and already configured, so the only thing worth their attention is the
+    // layout that did not exist when they last chose one.
+    const canopyUpgrade = computed(() => props.app.welcomeMode.value === 'canopy-upgrade');
+    const steps = computed(() => (canopyUpgrade.value
+      ? [{ key: 'layout', icon: 'view_quilt', title: 'A new look for Orchard' }]
+      : FULL_STEPS));
+    const currentStep = computed(() => steps.value[stepIndex.value] || steps.value[0]);
     const accountReady = computed(() => props.app.authState.value.signedIn);
-    const canGoNext = computed(() => stepIndex.value > 0 || accountReady.value);
+    const canGoNext = computed(() => canopyUpgrade.value || stepIndex.value > 0 || accountReady.value);
     const primaryLabel = computed(() => {
+      if (stepIndex.value === steps.value.length - 1) return 'Open Orchard';
       if (stepIndex.value === 0) return accountReady.value ? 'Continue' : 'Sign in';
-      if (stepIndex.value === steps.length - 1) return 'Open Orchard';
       return 'Next';
     });
 
@@ -52,17 +59,17 @@ export default {
     }
 
     async function primaryAction() {
+      if (stepIndex.value === steps.value.length - 1) {
+        props.app.completeWelcomeSetup();
+        return;
+      }
+
       if (stepIndex.value === 0 && !accountReady.value) {
         await props.app.startLogin();
         return;
       }
 
-      if (stepIndex.value === steps.length - 1) {
-        props.app.completeWelcomeSetup();
-        return;
-      }
-
-      stepIndex.value = Math.min(stepIndex.value + 1, steps.length - 1);
+      stepIndex.value = Math.min(stepIndex.value + 1, steps.value.length - 1);
     }
 
     function previousStep() {
@@ -75,6 +82,9 @@ export default {
     }
 
     function finishIfAlreadyReady() {
+      // The upgrade prompt is shown to listeners who have already completed
+      // setup, so this shortcut would close the window before they see it.
+      if (canopyUpgrade.value) return;
       if (props.app.authState.value.signedIn && props.app.setupState.value.welcomeCompleted) {
         window.orchardApp?.finishWelcome?.();
       }
@@ -86,7 +96,7 @@ export default {
     });
 
     watch(() => props.app.authState.value.signedIn, (signedIn) => {
-      if (signedIn && stepIndex.value === 0) stepIndex.value = 1;
+      if (signedIn && !canopyUpgrade.value && stepIndex.value === 0) stepIndex.value = 1;
     });
 
     watch(() => [
@@ -99,6 +109,7 @@ export default {
       app: props.app,
       audioRef,
       canGoNext,
+      canopyUpgrade,
       currentStep,
       musicBlocked,
       musicMuted,
@@ -138,7 +149,7 @@ export default {
           <h2>Orchard</h2>
         </div>
         
-        <div class="welcome-window__tracker" aria-label="Setup progress">
+        <div v-if="!canopyUpgrade" class="welcome-window__tracker" aria-label="Setup progress">
           <button
             v-for="(step, index) in steps"
             :key="step.key"
@@ -197,7 +208,11 @@ export default {
             </template>
 
             <template v-else-if="currentStep.key === 'layout'">
-              <p>Choose the interface layout that fits you best.</p>
+              <p v-if="canopyUpgrade">
+                Orchard 4 adds Canopy, a new interface layout. Grove is still here and still your
+                current setting -- nothing else about your setup has changed.
+              </p>
+              <p v-else>Choose the interface layout that fits you best.</p>
               <div class="welcome-window__connect-grid">
                 <button
                   v-for="option in app.layoutPresetOptions"

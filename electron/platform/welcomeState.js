@@ -1,21 +1,15 @@
 // Reads renderer-owned setup state without widening the preload API solely for startup gating.
-export async function welcomeRequiredAtLaunch(window, { currentVersion, resetVersion }) {
+export async function welcomeRequiredAtLaunch(window) {
   if (!window || window.isDestroyed()) return true;
 
   try {
-    const state = await window.webContents.executeJavaScript(`(() => {
+    return !await window.webContents.executeJavaScript(`(() => {
       try {
-        const setup = JSON.parse(localStorage.getItem('orchard:setup-state') || '{}');
-        return {
-          completed: Boolean(setup.welcomeCompleted),
-          resetVersion: localStorage.getItem('orchard:welcome-reset-version') || ''
-        };
+        return Boolean(JSON.parse(localStorage.getItem('orchard:setup-state') || '{}').welcomeCompleted);
       } catch {
-        return { completed: false, resetVersion: '' };
+        return false;
       }
     })()`);
-    const resetPending = currentVersion === resetVersion && state?.resetVersion !== resetVersion;
-    return !state?.completed || resetPending;
   } catch {
     return true;
   }
