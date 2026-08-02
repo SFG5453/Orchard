@@ -325,6 +325,7 @@ function adaptiveOverlap(analysis = {}, nextAnalysis = {}) {
 }
 
 export function planTransition({
+  albumSequential = false,
   analysis = {},
   currentTime = 0,
   currentTrack = null,
@@ -357,7 +358,11 @@ export function planTransition({
     duration: length
   });
   const hasInteriorMixOut = mixOutAnchor.time < finalMixAnchor - 1;
-  if (sameAlbum(currentTrack, nextTrack) && !hasInteriorMixOut) {
+  // Gapless is for an album being played through, not for any two songs that
+  // happen to share an album. A playlist, a manual queue, a shuffle, or a Best
+  // Mix reorder that lands two album siblings back to back is a mix, and gets
+  // mixed: the caller decides which of those it is and says so explicitly.
+  if (albumSequential && sameAlbum(currentTrack, nextTrack) && !hasInteriorMixOut) {
     const transitionStart = Math.max(0, length - 0.45);
     return {
       shouldStart: playbackTime >= transitionStart,

@@ -3,6 +3,7 @@ import { wsolaProcessingCompatible } from '../../audio/crossfade/wsolaCrossfade.
 import { playlistArtworkDetection } from '../appearance/playlistArtwork.js';
 import { sortBySearchPopularity, sortByTopMatch } from '../browse/searchRanking.js';
 import { continuousQueueEntries } from '../playback/queueLayout.js';
+import { isAlbumPlaythrough } from '../playback/playbackControls.js';
 
 function sectionTitle(section) {
   return String(section?.title || '').trim().toLowerCase();
@@ -233,6 +234,12 @@ export function installComputedState(ctx) {
     // The marker must describe the engine that will actually run. A qualifying
     // WSOLA pairing overrides the legacy plan, whose Apple-style overlap starts
     // many seconds earlier and would put the marker in the wrong place.
+    const albumSequential = isAlbumPlaythrough({
+      currentTrack: ctx.activeTrack.value,
+      nextTrack,
+      shuffleEnabled: Boolean(ctx.shuffleEnabled?.value),
+      bestMixSorted: Boolean(ctx.transitionQueueSorted?.value)
+    });
     const trackGains = ctx.audioEngineTrackGains?.value || {};
     const wsolaEligible = wsolaProcessingCompatible({
       normalizationEnabled: ctx.volumeNormalizationEnabled?.value,
@@ -240,7 +247,7 @@ export function installComputedState(ctx) {
       outgoingGainDb: trackGains[ctx.activeTrack.value?.id],
       incomingGainDb: trackGains[nextTrack.id]
     });
-    const wsolaPlan = ctx.crossfadeMode.value === 'smart' && wsolaEligible
+    const wsolaPlan = ctx.crossfadeMode.value === 'smart' && wsolaEligible && !albumSequential
       ? ctx.wsolaCrossfade?.plan({
         analysis: ctx.crossfadeAnalysis.value,
         nextAnalysis: ctx.nextCrossfadeAnalysis.value,
@@ -251,6 +258,7 @@ export function installComputedState(ctx) {
     const plan = wsolaPlan?.ok
       ? { transitionStart: wsolaPlan.transitionStart, markerVisible: true }
       : ctx.autoCrossfade.transitionPlan({
+        albumSequential,
         analysis: ctx.crossfadeAnalysis.value,
         currentTime: 0,
         currentTrack: ctx.activeTrack.value,

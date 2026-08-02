@@ -113,6 +113,7 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
   }
 
   function shouldStart({
+    albumSequential,
     currentAudio,
     currentTime,
     currentTrack,
@@ -126,6 +127,7 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
   }) {
     if (active || !currentAudio || !hasNext || !isPlaying || isSeeking) return false;
     return transitionPlan({
+      albumSequential,
       currentAudio,
       currentTime,
       currentTrack,

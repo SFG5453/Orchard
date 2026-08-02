@@ -466,8 +466,9 @@ test('a long outro of real music is never skipped by the mix-out anchor', () => 
     `expected the overlap inside the outro, started at ${plan.transitionStart}`);
 });
 
-test('interior mix-outs override the same-album gapless shortcut', () => {
+test('interior mix-outs override the album-playthrough gapless shortcut', () => {
   const plan = planTransition({
+    albumSequential: true,
     analysis: {
       bpm: 138.1833,
       beatConfidence: 0.2,
@@ -488,8 +489,9 @@ test('interior mix-outs override the same-album gapless shortcut', () => {
   assert.equal(plan.shouldStart, true);
 });
 
-test('same-album tracks without an interior mix-out remain gapless', () => {
+test('album-playthrough tracks without an interior mix-out remain gapless', () => {
   const plan = planTransition({
+    albumSequential: true,
     analysis: { contentEndTime: 198, mixOutTime: 198 },
     currentTime: 199.6,
     currentTrack: { id: 'current', albumId: 'same-album', durationSeconds: 200 },
@@ -533,4 +535,17 @@ test('matching BPM tracks use quantized beat handoffs and bass swap without requ
   assert.ok(plan.fadeSeconds > 0);
   assert.ok(plan.handoffDuration > 0);
   assert.ok(Math.abs(plan.handoffStartSeconds % (60 / 124)) < 0.001);
+});
+
+test('same-album tracks outside an album playthrough are mixed, not handed off', () => {
+  const plan = planTransition({
+    analysis: { contentEndTime: 198, mixOutTime: 198 },
+    currentTime: 199.6,
+    currentTrack: { id: 'current', albumId: 'same-album', durationSeconds: 200 },
+    duration: 200,
+    mode: 'smart',
+    nextTrack: { id: 'next', albumId: 'same-album', durationSeconds: 180 }
+  });
+
+  assert.notEqual(plan.transitionStyle, 'gapless');
 });

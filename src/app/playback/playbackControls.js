@@ -26,6 +26,37 @@ export function playbackNeedsFreshStream(media, playbackError = '') {
   );
 }
 
+function albumTrackNumber(track) {
+  const number = Number(String(track?.index ?? '').trim());
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+// True only for an album being listened to start to finish in its own order.
+// Anything else -- shuffle, Best Mix, a playlist, a hand-built queue, two album
+// siblings dragged next to each other -- is a mix and should be transitioned.
+export function isAlbumPlaythrough({
+  currentTrack,
+  nextTrack,
+  shuffleEnabled = false,
+  bestMixSorted = false
+} = {}) {
+  if (shuffleEnabled || bestMixSorted) return false;
+
+  const origin = currentTrack?.queueOrigin;
+  const nextOrigin = nextTrack?.queueOrigin;
+  if (origin?.kind !== 'album' || nextOrigin?.kind !== 'album') return false;
+  if (!origin.title || origin.title !== nextOrigin.title) return false;
+  if ((origin.artist || '') !== (nextOrigin.artist || '')) return false;
+
+  // Album rows carry their track number. When both are known the pair has to be
+  // consecutive; when the catalog omitted them, the shared album origin is the
+  // best evidence available and gapless stands.
+  const current = albumTrackNumber(currentTrack);
+  const next = albumTrackNumber(nextTrack);
+  if (!current || !next) return true;
+  return next === current + 1;
+}
+
 export function installPlaybackControls(ctx) {
   let crossfadeClockTimer = 0;
   let fullscreenPlayerDomActive = false;
@@ -546,8 +577,17 @@ export function installPlaybackControls(ctx) {
     }
     const mediaCurrentTime = Number(fromAudio.currentTime);
     const mediaDuration = reliablePlaybackDuration(ctx, fromAudio);
+    const albumSequential = isAlbumPlaythrough({
+      currentTrack: ctx.activeTrack.value,
+      nextTrack: next,
+      shuffleEnabled: Boolean(ctx.shuffleEnabled?.value),
+      bestMixSorted: Boolean(ctx.transitionQueueSorted?.value)
+    });
 
-    if (!options.force && ctx.crossfadeMode.value === 'smart' &&
+    // A beat-matched blend is still a mix. An album playthrough asks for the
+    // record's own spacing, so the WSOLA route is skipped and the planner is
+    // left to hand off gaplessly.
+    if (!albumSequential && !options.force && ctx.crossfadeMode.value === 'smart' &&
         ctx.isPlaying.value && !ctx.isSeeking.value && !ctx.autoCrossfade.isActive()) {
       const routed = await maybeRunWsolaTransition({
         next,
@@ -566,6 +606,7 @@ export function installPlaybackControls(ctx) {
     const transition = options.force
       ? { shouldStart: true, fadeSeconds: forceFadeSeconds, reason: options.reason || 'forced-handoff' }
       : ctx.autoCrossfade.transitionPlan({
+        albumSequential,
         currentAudio: fromAudio,
         currentTime: Number.isFinite(mediaCurrentTime) ? mediaCurrentTime : ctx.currentTime.value,
         currentTrack: ctx.activeTrack.value,
