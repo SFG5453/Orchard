@@ -1,12 +1,12 @@
 // Vocal-presence masking with open-unmix's "vocals" target (Inria/SigSep,
 // umxhq checkpoint).
 //
-// Why a model here at all: the existing mid-band duck (`mid_duck` in
-// transition_render.cpp) kills a flat 200 Hz-4 kHz band by a flat amount that
-// only follows the fade curve, not the music -- it ducks vocals whether or
-// not there are any, and by the same amount for a whispered ad-lib as a
+// Why a model here at all: the outgoing track's filter sweep (`filter_sweep`
+// in transition_render.cpp) follows the fade curve, not the music -- it takes
+// the same spectrum away whether the track is singing or playing an
+// instrumental outro, and to the same depth for a whispered ad-lib as a
 // full-throated hook. A real per-instant vocal-presence signal lets the
-// renderer duck only when, and only as much as, the outgoing track is
+// renderer sweep only when, and only as deep as, the outgoing track is
 // actually singing.
 //
 // open-unmix is the model that can ship: its umxhq weights are MIT (see
@@ -18,8 +18,8 @@
 //
 // Everything here is optional, matching beatThisTracker.js: no model file, no
 // ONNX Runtime, an unreadable graph, a rate mismatch -- all resolve to null,
-// and the caller keeps the flat mid_duck. A missing vocal mask makes the duck
-// less precise; a throwing one would break a transition outright.
+// and the caller keeps the flat sweep depth. A missing vocal mask makes the
+// sweep less precise; a throwing one would break a transition outright.
 
 import path from 'node:path';
 import { stat } from 'node:fs/promises';
@@ -96,10 +96,10 @@ export function padToFixedFrames(values, channels, bins, frames, fixedFrames = F
  * band's bins at each frame, then across channels.
  *
  * Band-averaging is deliberate, not a simplification of convenience: the
- * renderer applies the duck as a gain on a fixed EQ band (mirroring
- * `mid_duck`'s own bandpass), so a curve at that same band's granularity is
- * exactly what it can act on -- shipping a full per-bin mask across IPC and
- * into native code would be work with no consumer for the extra resolution.
+ * renderer spends this curve on a single number per instant -- how far the
+ * sweep has closed -- so a curve at band granularity is already finer than
+ * anything it can act on; shipping a full per-bin mask across IPC and into
+ * native code would be work with no consumer for the extra resolution.
  *
  * `strideFrames` is the frame stride the arrays are actually stored at (the
  * model's fixed input width after padding), which is not the same as
@@ -149,7 +149,7 @@ export function reduceMaskToBandCurve(mix, target, {
  *   framesPerSecond: number}} spectrogram
  * @returns {Promise<null|{curve: number[], framesPerSecond: number}>} null
  *   whenever the model cannot be used, which is a routing decision (fall back
- *   to the flat mid_duck) rather than an error.
+ *   to the flat sweep depth) rather than an error.
  */
 export async function trackVocalMask(spectrogram, {
   modelPath = DEFAULT_MODEL_PATH,

@@ -142,9 +142,9 @@ export function createWsolaCrossfade({
         anchor: transitionPlan.incomingSlice.anchor,
         bpm: transitionPlan.incomingBpm
       };
-      // The mid duck follows the fade curve, not the music. Asking the vocal
-      // model how much the outgoing track is actually singing across the
-      // overlap lets the renderer spend that duck only where there is a vocal
+      // The filter sweep follows the fade curve, not the music. Asking the
+      // vocal model how much the outgoing track is actually singing across the
+      // overlap lets the renderer spend that sweep only where there is a vocal
       // to get out of the way.
       //
       // Sliced to exactly [transitionStart, transitionEnd] -- the overlap on
@@ -175,7 +175,7 @@ export function createWsolaCrossfade({
         bassSwap: transitionPlan.bassSwapFraction,
         handoff: transitionPlan.handoffFraction,
         bed: transitionPlan.bedPosition,
-        midDuck: transitionPlan.midDuck,
+        filterSweep: transitionPlan.filterSweep,
         // Omitted rather than passed empty when the model had no opinion, so
         // the renderer's own "no curve means flat duck" default applies.
         ...(vocalDuckCurve ? { vocalDuckCurve } : {})

@@ -211,8 +211,8 @@ export function setupAudioAnalysisService({
   // position, so nothing here is worth caching.
   //
   // Every failure resolves to null rather than throwing, because the caller's
-  // fallback -- the flat mid duck that shipped before this model existed -- is
-  // a perfectly good transition, just a less precise one.
+  // fallback -- a sweep at its flat depth, which is what shipped before this
+  // model existed -- is a perfectly good transition, just a less precise one.
   ipcMain.handle(AUDIO_ANALYSIS.VOCAL_MASK, async (_event, payload = {}) => {
     const native = addon();
     if (typeof native?.vocalSpectrogram !== 'function') return null;
@@ -292,7 +292,7 @@ export function setupAudioAnalysisService({
     // Only forward keys that are real numbers: the N-API binding treats a
     // present-but-undefined key as a type error, not an omission.
     const renderOptions = { sampleRate };
-    ['beats', 'bassSwap', 'handoff', 'bed', 'bassCrossoverHz', 'bassSwapSeconds', 'midDuck', 'midCrossoverHz'].forEach((key) => {
+    ['beats', 'bassSwap', 'handoff', 'bed', 'bassCrossoverHz', 'bassSwapSeconds', 'filterSweep', 'filterSweepStartHz'].forEach((key) => {
       const value = Number(options[key]);
       if (Number.isFinite(value)) renderOptions[key] = value;
     });

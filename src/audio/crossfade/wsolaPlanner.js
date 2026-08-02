@@ -71,13 +71,17 @@ function bassSwapFractionFor(overlapSeconds) {
   return Math.min(BASS_SWAP_FRACTION, BASS_SWAP_MAX_SECONDS / overlapSeconds);
 }
 
-// The outgoing track's mid band gives up an extra 6 dB across the fade, at
-// the rate the incoming track rises to replace it -- a DJ's mid EQ kill. The
-// bass swap keeps the low end exclusive, but above it the equal-power fade
-// alone holds both full arrangements at -3 dB each through the middle of the
-// overlap, and two beat-aligned mixes are correlated, so their mids sum hot
-// exactly where they collide. See `mid_duck` in the renderer.
-const MID_DUCK = 0.5;
+// The outgoing track rides a low-pass down across the fade -- the filter move
+// a DJ makes on the channel that is leaving. The bass swap keeps the low end
+// exclusive, but above it the equal-power fade alone holds both full
+// arrangements at -3 dB each through the middle of the overlap, and two
+// beat-aligned mixes are correlated, so they sum hot exactly where their
+// spectra collide. Full depth: by the end the outgoing track is down to the
+// bass band it is about to hand over anyway, and the fade has it at silence
+// there regardless, so stopping the sweep short only leaves top end in the
+// mix during the part that actually needs clearing. See `filter_sweep` in the
+// renderer.
+const FILTER_SWEEP = 1;
 
 // Extra PCM around each slice so the WSOLA similarity search and filter
 // warm-up never run against a hard buffer edge.
@@ -288,7 +292,7 @@ export function planWsolaTransition({
     handoffFraction: HANDOFF_FRACTION,
     bedPosition: BED_POSITION,
     bassSwapFraction: bassSwapFractionFor(overlapSeconds),
-    midDuck: MID_DUCK,
+    filterSweep: FILTER_SWEEP,
     outgoingBpm,
     incomingBpm,
     stretchRatio,

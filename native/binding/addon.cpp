@@ -567,8 +567,8 @@ Napi::Value RenderTransition(const Napi::CallbackInfo& info) {
   config.bed = number("bed", config.bed);
   config.bass_crossover_hz = number("bassCrossoverHz", config.bass_crossover_hz);
   config.bass_swap_seconds = number("bassSwapSeconds", config.bass_swap_seconds);
-  config.mid_duck = number("midDuck", config.mid_duck);
-  config.mid_crossover_hz = number("midCrossoverHz", config.mid_crossover_hz);
+  config.filter_sweep = number("filterSweep", config.filter_sweep);
+  config.filter_sweep_start_hz = number("filterSweepStartHz", config.filter_sweep_start_hz);
   if (options.Has("vocalDuckCurve") && options.Get("vocalDuckCurve").IsArray()) {
     const auto curve = options.Get("vocalDuckCurve").As<Napi::Array>();
     config.vocal_duck_curve.resize(curve.Length());

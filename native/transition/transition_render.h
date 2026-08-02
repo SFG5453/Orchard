@@ -75,36 +75,45 @@ struct TransitionConfig {
   // to mud when two kick drums collide.
   double bass_crossover_hz = 200;
   double bass_swap_seconds = 0.75;
-  // How much of the outgoing track's mid band -- the region between the bass
-  // crossover and mid_crossover_hz, where vocals, leads, and most of the
-  // arrangement live -- is given up by the time the overlap ends, on top of
-  // the main fade. 0 leaves the band alone; 0.5 has it 6 dB further down at
-  // the drop.
+  // How far the outgoing track's low-pass sweep travels by the end of the
+  // overlap, as a fraction of the whole distance from filter_sweep_start_hz
+  // down to bass_crossover_hz. 0 leaves the outgoing track on the plain fade;
+  // 1 closes it all the way down onto its own bass band.
   //
-  // This is what a DJ's mid EQ kill does. Above the bass crossover the plain
-  // equal-power fade keeps both full arrangements audible at -3 dB each for
+  // This is the filter ride a DJ does on the outgoing channel, and it is what
+  // makes a blend read as a mix rather than two records playing at once. The
+  // equal-power fade alone holds both full arrangements at -3 dB each through
   // the middle of the overlap, and two beat-aligned mixes are correlated, so
-  // they sum hot exactly where their spectra collide. The duck follows the
-  // incoming track's fade-in curve: the outgoing's mids give way at the rate
-  // the incoming's arrive to replace them. Highs above mid_crossover_hz are
-  // left on the ordinary fade -- hats and air do not collide the way mids do,
-  // and keeping them is what keeps the outgoing track sounding present while
-  // it leaves.
-  double mid_duck = 0;
-  double mid_crossover_hz = 4000;
-  // Optional per-instant vocal-presence multiplier on `mid_duck`, one value in
-  // [0, 1] per equally-spaced control point spanning the overlap exactly
-  // (first point at the overlap's start, last at its end) -- the caller has
-  // already cropped and aligned it, native code only interpolates.
+  // they sum hot exactly where their spectra collide. A moving corner takes
+  // the outgoing track's top away first and its mids last, so it thins out
+  // and recedes instead of merely getting quieter -- and it is a *sweep*, not
+  // a fixed band cut: the ear follows the movement, which is what covers the
+  // seam.
   //
-  // `mid_duck` alone follows the fade curve, not the music: it costs the
-  // outgoing track's mids the same amount whether it is singing full-throated
-  // or not singing at all. Where this curve has data, the depth at each
-  // instant is `mid_duck * vocal_duck_curve(t)` instead of a flat `mid_duck`,
-  // so a track only gives up its mids when, and as much as, it is actually
-  // carrying a vocal. Empty (the default) leaves `mid_duck` acting exactly as
-  // it did before this existed -- this is a refinement of that duck, not a
-  // dependency of it.
+  // The sweep only ever touches the band above bass_crossover_hz. The low end
+  // is already exclusive to one track at a time by way of bass_swap, so the
+  // outgoing kick keeps its weight until it hands over, exactly as before.
+  double filter_sweep = 0;
+  // Where the sweep starts. Above the top of hearing on purpose: the first
+  // part of the ride has to be inaudible, or the transition announces itself.
+  double filter_sweep_start_hz = 18000;
+  // Optional per-instant vocal-presence multiplier on `filter_sweep`, one
+  // value in [0, 1] per equally-spaced control point spanning the overlap
+  // exactly (first point at the overlap's start, last at its end) -- the
+  // caller has already cropped and aligned it, native code only interpolates.
+  //
+  // `filter_sweep` alone follows the fade curve, not the music: it costs the
+  // outgoing track the same spectrum whether it is singing full-throated or
+  // playing an instrumental outro. Where this curve has data, the depth at
+  // each instant is `filter_sweep * vocal_duck_curve(t)`, so a track is only
+  // filtered out of the way when, and as much as, it is actually carrying a
+  // vocal to collide with the incoming one. Empty (the default) reads as a
+  // constant 1 and leaves the sweep at its flat depth -- this is a refinement
+  // of the sweep, not a dependency of it.
+  //
+  // Applied as a running maximum, never the instantaneous value: a filter
+  // that reopens mid-blend is a sound no DJ makes, and the wobble is far more
+  // audible than the extra attenuation it would save.
   std::vector<float> vocal_duck_curve;
 };
 

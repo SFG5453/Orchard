@@ -78,6 +78,60 @@ std::vector<float> ApplyLinkwitzRiley(const std::vector<float>& input, const Biq
   return output;
 }
 
+// A fourth-order Linkwitz-Riley low-pass whose corner may move while it runs.
+//
+// ApplyLinkwitzRiley cannot do this: it runs section one over the whole buffer
+// and section two afterwards, which is only equivalent for a filter whose
+// coefficients never change. A moving corner has to run both sections in
+// lockstep, one sample at a time, so this keeps its own state and takes new
+// coefficients between blocks. The state is deliberately *not* reset when the
+// coefficients change -- that is what makes the corner glide rather than step.
+class SweepingLowPass {
+ public:
+  void SetCutoff(double cutoff, double sample_rate) {
+    filter_ = LowPass(cutoff, sample_rate);
+  }
+
+  float Process(float sample) {
+    for (auto& section : sections_) {
+      const float x0 = sample;
+      const float y0 = filter_.b0 * x0 + filter_.b1 * section.x1 + filter_.b2 * section.x2 -
+                       filter_.a1 * section.y1 - filter_.a2 * section.y2;
+      section.x2 = section.x1;
+      section.x1 = x0;
+      section.y2 = section.y1;
+      section.y1 = y0;
+      sample = y0;
+    }
+    return sample;
+  }
+
+ private:
+  struct State {
+    float x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  };
+  Biquad filter_;
+  State sections_[2];
+};
+
+// Samples between coefficient updates. 64 is 1.5 ms at 44.1 kHz, far shorter
+// than anything the sweep does, so the corner moves by a fraction of a percent
+// per update and the steps are inaudible; recomputing per sample would cost
+// two transcendentals a sample for no audible gain.
+constexpr size_t kSweepBlock = 64;
+
+// Time shape of the sweep: flat at both ends, steep through the middle, so the
+// ride starts and finishes without a lurch. Normalized to hit exactly 0 and 1
+// at the edges -- the raw logistic is 0.047 at t = 0, which would drop the
+// corner to 16 kHz before the transition has begun.
+float SweepShape(double progress) {
+  constexpr double k = 6.0;
+  const auto logistic = [](double x) { return 1.0 / (1.0 + std::exp(-k * (x - 0.5))); };
+  static const double low = logistic(0.0);
+  static const double span = logistic(1.0) - low;
+  return static_cast<float>((logistic(std::clamp(progress, 0.0, 1.0)) - low) / span);
+}
+
 TransitionResult Refuse(const std::string& reason) {
   TransitionResult result;
   result.rendered = false;
@@ -183,8 +237,10 @@ TransitionResult RenderTransition(
   }
 
   const auto channel_count = incoming.channels.size();
-  // Both crossovers are matched LR4 low/high pairs rather than a filter and a
-  // subtracted remainder, and both have to be, for the same reason.
+  // The crossover is a matched LR4 low/high pair rather than a filter and a
+  // subtracted remainder, and it has to be. This matters more, not less, now
+  // that the high branch feeds a sweep: the sweep's phase is *designed* to
+  // move.
   //
   // A subtractive split is only complementary against the *exact* signal it
   // was subtracted from: `low = x - high` reconstructs x, but `low` is not
@@ -192,10 +248,10 @@ TransitionResult RenderTransition(
   // the input, because the LR4 high-pass has rotated 33 degrees there and the
   // difference of two nearly-equal-magnitude vectors 33 degrees apart is not
   // small. That is invisible until something downstream alters the phase of
-  // the high branch, at which point the two stop cancelling: measured, the
-  // mid split's own allpass rotation (-41 degrees at 1 kHz) turned that
-  // residue into a 34% *boost* of the outgoing mids, exactly where the duck
-  // was supposed to be attenuating them.
+  // the high branch, at which point the two stop cancelling: measured, when
+  // the outgoing mids were shaped by a second subtractive split, its allpass
+  // rotation (-41 degrees at 1 kHz) turned that residue into a 34% *boost* of
+  // the mids, exactly the band that was supposed to be getting out of the way.
   //
   // An LR4 pair sums magnitude-flat by construction and each half is genuinely
   // band-limited (the same 200 Hz low-pass is 0.0016 at 1 kHz), so the bands
@@ -203,10 +259,12 @@ TransitionResult RenderTransition(
   const auto bass_hz = std::clamp(config.bass_crossover_hz, 40.0, 500.0);
   const auto crossover = HighPass(bass_hz, config.sample_rate);
   const auto crossover_low = LowPass(bass_hz, config.sample_rate);
-  const auto mid_duck = std::clamp(config.mid_duck, 0.0, 1.0);
-  const auto mid_hz = std::clamp(config.mid_crossover_hz, 1000.0, 12000.0);
-  const auto mid_high = HighPass(mid_hz, config.sample_rate);
-  const auto mid_low = LowPass(mid_hz, config.sample_rate);
+  const auto sweep_depth = std::clamp(config.filter_sweep, 0.0, 1.0);
+  // Kept below Nyquist with room to spare: the bilinear transform warps badly
+  // as the corner approaches it, and an 18 kHz corner at 22.05 kHz Nyquist is
+  // already no longer the response the coefficients claim.
+  const auto sweep_start_hz =
+    std::clamp(config.filter_sweep_start_hz, bass_hz, config.sample_rate * 0.45);
   // Kept clear of both edges: at exactly 0 or 1 the fade would be a step.
   const auto handoff = std::clamp(config.handoff, 0.05, 0.95);
   // Above 0.5 the pre-roll would fade the outgoing track further than the
@@ -215,6 +273,27 @@ TransitionResult RenderTransition(
   const auto swap_point = std::clamp(config.bass_swap, 0.0, 1.0) * overlap_samples;
   const auto swap_ramp =
     std::max(1.0, config.bass_swap_seconds * config.sample_rate);
+
+  // The corner is the same on every channel and its vocal term has to be
+  // accumulated in order, so it is laid out once here rather than recomputed
+  // inside the per-channel loop.
+  std::vector<float> sweep_cutoff;
+  if (sweep_depth > 0) {
+    sweep_cutoff.resize((overlap_samples + kSweepBlock - 1) / kSweepBlock);
+    const auto log_start = std::log(sweep_start_hz);
+    const auto log_end = std::log(bass_hz);
+    float presence = 0;
+    for (size_t block = 0; block < sweep_cutoff.size(); ++block) {
+      const double progress =
+        static_cast<double>(block * kSweepBlock) / static_cast<double>(overlap_samples);
+      presence = std::max(
+        presence, std::clamp(SampleCurve(config.vocal_duck_curve, progress), 0.0f, 1.0f)
+      );
+      const auto amount = SweepShape(progress) * static_cast<float>(sweep_depth) * presence;
+      sweep_cutoff[block] =
+        static_cast<float>(std::exp(log_start + (log_end - log_start) * amount));
+    }
+  }
 
   TransitionResult result;
   result.channels.assign(channel_count, std::vector<float>(overlap_samples, 0.0f));
@@ -230,12 +309,11 @@ TransitionResult RenderTransition(
     const auto to_high = ApplyLinkwitzRiley(to, crossover);
     const auto from_low_band = ApplyLinkwitzRiley(from, crossover_low);
     const auto to_low_band = ApplyLinkwitzRiley(to, crossover_low);
-    // Only the outgoing side is split again: the duck shapes what leaves, not
-    // what arrives.
-    const auto from_top =
-      mid_duck > 0 ? ApplyLinkwitzRiley(from_high, mid_high) : std::vector<float>();
-    const auto from_mid =
-      mid_duck > 0 ? ApplyLinkwitzRiley(from_high, mid_low) : std::vector<float>();
+    // Only the outgoing side is filtered: the sweep shapes what leaves, not
+    // what arrives. It runs on `from_high`, after the bass split, so closing
+    // the corner all the way down can never eat into the low end the swap is
+    // separately handing over.
+    SweepingLowPass sweep;
 
     auto& destination = result.channels[channel];
     for (size_t index = 0; index < overlap_samples; ++index) {
@@ -256,21 +334,17 @@ TransitionResult RenderTransition(
 
       const auto from_low = from_low_band[index];
       const auto to_low = to_low_band[index];
-      // The duck rides the incoming fade curve (fade_in^2 is its power), so
-      // the outgoing mids give way exactly as the incoming's arrive. An LR4
-      // pair's halves sum in phase, so recombining them at different gains
-      // stays magnitude-flat outside the ducked band.
-      auto from_upper = from_high[index] * fade_out;
-      if (mid_duck > 0) {
-        // Where the vocal model has an opinion, it scales the depth directly:
-        // a silent instant multiplies mid_duck by ~0, an unambiguous vocal by
-        // ~1. Without one (curve empty) SampleCurve returns 1 and this is
-        // exactly the flat fade_in^2-only depth this duck always had.
-        const auto vocal_presence = SampleCurve(config.vocal_duck_curve, progress);
-        const auto duck_gain =
-          1.0f - static_cast<float>(mid_duck) * fade_in * fade_in * vocal_presence;
-        from_upper = (from_top[index] + from_mid[index] * duck_gain) * fade_out;
+      // The corner rides down as the fade runs, so the outgoing track loses
+      // its top first and its mids last: it recedes rather than just getting
+      // quieter, and the movement itself is what covers the seam.
+      auto from_upper = from_high[index];
+      if (sweep_depth > 0) {
+        if (index % kSweepBlock == 0) {
+          sweep.SetCutoff(sweep_cutoff[index / kSweepBlock], config.sample_rate);
+        }
+        from_upper = sweep.Process(from_upper);
       }
+      from_upper *= fade_out;
       destination[index] =
         from_upper + to_high[index] * fade_in +
         from_low * from_bass + to_low * to_bass;

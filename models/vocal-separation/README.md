@@ -6,7 +6,7 @@ converted to ONNX at a fixed frame count and dynamically quantized to int8.
 
 Used to duck the *outgoing* track's vocal specifically through a WSOLA
 transition, instead of the flat mid-band EQ kill that shipped before it — see
-`electron/audio/vocalMaskTracker.js` and `mid_duck`/`vocal_duck_curve` in
+`electron/audio/vocalMaskTracker.js` and `filter_sweep`/`vocal_duck_curve` in
 `native/transition/transition_render.cpp`.
 
 ## Licensing
