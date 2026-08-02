@@ -120,16 +120,24 @@ class SweepingLowPass {
 // two transcendentals a sample for no audible gain.
 constexpr size_t kSweepBlock = 64;
 
+// How steep the sweep's logistic is through the middle of the ride. At namespace
+// scope rather than inside SweepShape because a lambda there would have to
+// capture it: MSVC requires an explicit capture for a local constexpr, where GCC
+// and Clang treat the use as a constant expression and let it through.
+constexpr double kSweepSteepness = 6.0;
+
+double SweepLogistic(double x) {
+  return 1.0 / (1.0 + std::exp(-kSweepSteepness * (x - 0.5)));
+}
+
 // Time shape of the sweep: flat at both ends, steep through the middle, so the
 // ride starts and finishes without a lurch. Normalized to hit exactly 0 and 1
 // at the edges -- the raw logistic is 0.047 at t = 0, which would drop the
 // corner to 16 kHz before the transition has begun.
 float SweepShape(double progress) {
-  constexpr double k = 6.0;
-  const auto logistic = [](double x) { return 1.0 / (1.0 + std::exp(-k * (x - 0.5))); };
-  static const double low = logistic(0.0);
-  static const double span = logistic(1.0) - low;
-  return static_cast<float>((logistic(std::clamp(progress, 0.0, 1.0)) - low) / span);
+  static const double low = SweepLogistic(0.0);
+  static const double span = SweepLogistic(1.0) - low;
+  return static_cast<float>((SweepLogistic(std::clamp(progress, 0.0, 1.0)) - low) / span);
 }
 
 TransitionResult Refuse(const std::string& reason) {
