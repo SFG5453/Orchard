@@ -1,9 +1,14 @@
 <script>
+import VirtualQueueList from './VirtualQueueList.vue';
+
 export default {
   name: 'RightPanel',
+  components: { VirtualQueueList },
   props: { app: { type: Object, required: true } },
   setup(props) {
-    return { ...props.app };
+    // The queue list takes the whole app rather than the spread, because it
+    // windows the list itself and needs the live refs, not their snapshots.
+    return { ...props.app, app: props.app };
   }
 };
 </script>
@@ -121,83 +126,10 @@ export default {
               </div>
             </div>
             <div v-if="continuousQueueEnabled && continuousQueue.length" class="queue-preview queue-preview--continuous">
-              <template v-for="entry in continuousQueue" :key="entry.key">
-                <p v-if="entry.sectionStart" class="right-queue-group">
-                  {{ continuousQueueSectionLabel(entry.section) }}
-                </p>
-                <div
-                  class="queue-preview__item"
-                  :class="`queue-preview__item--${entry.section}`"
-                  role="button"
-                  tabindex="0"
-                  :aria-current="entry.section === 'current' ? 'true' : undefined"
-                  @click="playContinuousQueueEntry(entry)"
-                  @keydown.enter.prevent="playContinuousQueueEntry(entry)"
-                  @keydown.space.prevent="playContinuousQueueEntry(entry)"
-                  @contextmenu="openSongActionMenu(entry.track, $event)"
-                  @keydown="onSongActionKeydown($event, entry.track)"
-                >
-                  <span class="right-queue-index">
-                    <q-icon v-if="entry.section === 'current'" name="graphic_eq" />
-                    <q-icon v-else-if="entry.section === 'previous'" name="history" />
-                    <template v-else>{{ String(entry.queueIndex + 1).padStart(2, '0') }}</template>
-                  </span>
-                  <q-img :src="trackCover(entry.track)" class="queue-preview__cover" />
-                  <div class="queue-preview__copy">
-                    <strong class="explicit-title">
-                      <span class="explicit-title__text">{{ entry.track.title }}</span>
-                      <ExplicitBadge :explicit="entry.track.explicit" />
-                    </strong>
-                    <small>{{ itemMeta(entry.track) }}</small>
-                  </div>
-                  <button
-                    v-if="entry.section !== 'current'"
-                    type="button"
-                    class="right-queue-remove"
-                    :aria-label="`Remove ${entry.track.title} from the queue`"
-                    title="Remove from queue"
-                    @click.stop="removeContinuousQueueEntry(entry)"
-                    @keydown.stop
-                  >
-                    <q-icon name="close" />
-                  </button>
-                  <span v-else class="right-queue-remove right-queue-remove--placeholder" aria-hidden="true" />
-                </div>
-              </template>
+              <VirtualQueueList :app="app" :entries="continuousQueue" continuous />
             </div>
             <div v-else-if="!continuousQueueEnabled && queue.length" class="queue-preview">
-              <div
-                v-for="(item, index) in queue"
-                :key="`right-queue-${item.id}-${index}`"
-                class="queue-preview__item"
-                role="button"
-                tabindex="0"
-                @click="playTrack(item, { queueSource: queue })"
-                @keydown.enter.prevent="playTrack(item, { queueSource: queue })"
-                @keydown.space.prevent="playTrack(item, { queueSource: queue })"
-                @contextmenu="openSongActionMenu(item, $event)"
-                @keydown="onSongActionKeydown($event, item)"
-              >
-                <span class="right-queue-index">{{ String(index + 1).padStart(2, '0') }}</span>
-                <q-img :src="trackCover(item)" class="queue-preview__cover" />
-                <div class="queue-preview__copy">
-                  <strong class="explicit-title">
-                    <span class="explicit-title__text">{{ item.title }}</span>
-                    <ExplicitBadge :explicit="item.explicit" />
-                  </strong>
-                  <small>{{ itemMeta(item) }}</small>
-                </div>
-                <button
-                  type="button"
-                  class="right-queue-remove"
-                  :aria-label="`Remove ${item.title} from queue`"
-                  title="Remove from queue"
-                  @click.stop="removeQueueTrack(index)"
-                  @keydown.stop
-                >
-                  <q-icon name="close" />
-                </button>
-              </div>
+              <VirtualQueueList :app="app" :entries="queue" />
             </div>
             <div v-else class="right-queue-empty">
               <q-icon name="music_note" />

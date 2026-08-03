@@ -168,6 +168,29 @@
   margin-top: 0;
 }
 
+/* Windowed queue page. Rows are lifted out of the flow and placed by transform
+   so a five thousand track queue renders a screenful. Their heights stay
+   intrinsic on purpose -- `.table-row` repads at the responsive breakpoints,
+   and useVirtualRows measures a real row rather than assuming one. */
+.queue-view__viewport {
+  position: relative;
+  flex: none;
+}
+
+.queue-view__row--virtual,
+.queue-view__group--virtual {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.queue-view__group--virtual {
+  height: 30px;
+  margin: 0;
+  padding: 12px 4px 4px;
+}
+
 .queue-view__row--previous .table-copy strong,
 .queue-view__row--previous .table-album,
 .queue-view__row--previous .table-time {

@@ -376,6 +376,39 @@
   margin-top: 0;
 }
 
+/* Windowed queue. Rows are lifted out of the flow and placed by transform, so
+   the panel renders a screenful instead of the whole playlist. Their heights
+   have to be exact rather than intrinsic -- VirtualQueueList positions every
+   row from the same two constants. */
+.queue-preview__viewport {
+  position: relative;
+  width: 100%;
+  /* The scroller is a flex column, which would otherwise shrink the spacer to
+     the height of the handful of rows actually rendered and leave nothing to
+     scroll through. */
+  flex: none;
+}
+
+.right-queue .queue-preview__item--virtual {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 54px;
+  min-height: 0;
+}
+
+.right-queue-group--virtual {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 26px;
+  margin: 0;
+  padding: 8px 4px 4px 0;
+  /* A sticky heading cannot stick to a scroller it is positioned out of. */
+  z-index: 1;
+}
+
 .right-queue .queue-preview__item--previous .queue-preview__copy strong,
 .right-queue .queue-preview__item--previous .queue-preview__copy small {
   color: #6d756f;
