@@ -21,7 +21,14 @@ export const SESSION_STATE_FILENAME = 'session-state.json';
 const DEFAULT_WRITE_DELAY_MS = 400;
 
 // A single stored key is a page entry or a playback queue, not a library.
-const MAX_VALUE_BYTES = 512 * 1024;
+//
+// Sized against the largest thing that legitimately lands here: a shuffled
+// playlist queue at MAX_STORED_TRACKS, plus its pre-shuffle source order, plus
+// history -- about 2.7 MB at a realistic 555 bytes per track. The headroom
+// above that is for tracks with unusually long titles or many credited artists.
+// Oversize values are rejected outright rather than trimmed, so a cap set too
+// low does not truncate a session, it silently loses the whole thing.
+const MAX_VALUE_BYTES = 6 * 1024 * 1024;
 
 export function readSessionState(filePath) {
   try {

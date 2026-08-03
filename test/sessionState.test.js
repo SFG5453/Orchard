@@ -122,7 +122,10 @@ test('an oversized or unusable key is refused instead of stored', () => {
 
     assert.equal(store.set('', { view: 'home' }), false);
     assert.equal(store.set(null, { view: 'home' }), false);
-    assert.equal(store.set('orchard:huge', { blob: 'x'.repeat(600 * 1024) }), false);
+    // Past MAX_VALUE_BYTES, which is sized for a full shuffled playlist queue
+    // and its pre-shuffle order -- see queuePersistenceCap.test.js for the
+    // largest payload that has to keep fitting.
+    assert.equal(store.set('orchard:huge', { blob: 'x'.repeat(7 * 1024 * 1024) }), false);
     assert.equal(store.flush(), false);
     assert.equal(store.get('orchard:huge'), null);
   } finally {
