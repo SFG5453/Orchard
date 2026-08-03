@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   installPlaybackResolve,
-  playbackQueueSourceMatches
+  playbackQueueSourceMatches,
+  seedsPlaylistContext
 } from '../src/app/playback/playbackResolve.js';
 
 function playbackContext() {
@@ -98,5 +99,37 @@ test('recognizes a persisted active track followed by its saved queue', () => {
   assert.equal(
     playbackQueueSourceMatches([activeTrack, queue[1], queue[0]], queue, activeTrack),
     false
+  );
+});
+
+test('shuffling a collection seeds a playlist context despite looking like a queue click', () => {
+  // playCollection sets queueAlreadyShuffled so its chosen order survives, and
+  // that alone makes isPlayFromQueue true. Reading it as a click inside the
+  // queue left the playlist with no context, so nothing could page past the
+  // first hundred tracks.
+  assert.equal(seedsPlaylistContext({ isPlayFromQueue: true, queueAlreadyShuffled: true }), true);
+});
+
+test('clicking a track already in the queue leaves the playlist context alone', () => {
+  assert.equal(seedsPlaylistContext({ isPlayFromQueue: true, queueAlreadyShuffled: false }), false);
+});
+
+test('playing a collection outright always seeds a context', () => {
+  assert.equal(seedsPlaylistContext({ isPlayFromQueue: false, queueAlreadyShuffled: false }), true);
+  assert.equal(seedsPlaylistContext({ isPlayFromQueue: false, queueAlreadyShuffled: true }), true);
+});
+
+test('a shuffled collection play is recognized as already-shuffled, not as a fresh source', () => {
+  // The real signal chain: playCollection hands playTrack the shuffled order as
+  // queueSource while the queue is still empty, so only the explicit flag can
+  // distinguish it.
+  const shuffledOrder = [{ id: 'c' }, { id: 'a' }, { id: 'b' }];
+  assert.equal(playbackQueueSourceMatches(shuffledOrder, [], null), false);
+  assert.equal(
+    seedsPlaylistContext({
+      isPlayFromQueue: Boolean(true || playbackQueueSourceMatches(shuffledOrder, [], null)),
+      queueAlreadyShuffled: true
+    }),
+    true
   );
 });

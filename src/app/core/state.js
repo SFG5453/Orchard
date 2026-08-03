@@ -328,6 +328,11 @@ export function installState(ctx) {
   ctx.itunesAlbumLookupCache = new Map();
   ctx.nextTrackPreload = ref(null);
   ctx.playbackPlaylistContext = ref(null);
+  // Progress of the background walk that pulls a shuffled playlist's remaining
+  // continuation pages in behind playback. `total` is the playlist's own count
+  // when it reports one, which is only ever a hint -- unplayable entries are
+  // dropped as pages arrive, so `loaded` can finish below it.
+  ctx.playlistBackfill = ref({ active: false, loaded: 0, total: 0, browseId: '' });
   ctx.autoplayEnabled = ref(ctx.initialUserPreferences.autoplayEnabled);
   ctx.accentColorSource = ref(ctx.initialUserPreferences.accentColorSource);
   ctx.customAccentColor = ref(ctx.initialUserPreferences.customAccentColor);

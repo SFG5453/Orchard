@@ -741,14 +741,20 @@ export function installPlaybackControls(ctx) {
       return;
     }
 
-    if (ctx.activeTrack.value) ctx.queue.value.unshift(ctx.activeTrack.value);
+    // Replaced rather than unshifted: this is the queue's only in-place
+    // mutation, and leaving it here would force the persistence watcher to
+    // deep-watch a list that now runs to thousands of tracks.
+    if (ctx.activeTrack.value) ctx.queue.value = [ctx.activeTrack.value, ...ctx.queue.value];
     ctx.playTrack(previous, { skipHistory: true, preserveQueue: true, sessionAction: 'previous' });
   };
 
   ctx.toggleShuffle = function toggleShuffle(options = {}) {
     if (!options.fromListeningPartyRequest && ctx.requestListeningPartyHostControl?.({ action: 'toggle-shuffle' })) return;
+    const playlistContext = ctx.playbackPlaylistContext.value;
     if (ctx.shuffleEnabled.value) {
       ctx.shuffleEnabled.value = false;
+      ctx.stopPlaylistBackfill?.();
+      if (playlistContext) playlistContext.shuffled = false;
       if (ctx.shuffleSourceQueue.value.length) {
         ctx.queue.value = ctx.shuffleSourceQueue.value.filter(ctx.isPlayableTrack);
       }
@@ -757,6 +763,12 @@ export function installPlaybackControls(ctx) {
       ctx.shuffleSourceQueue.value = ctx.queue.value.filter(ctx.isPlayableTrack);
       ctx.queue.value = ctx.shuffleItems(ctx.shuffleSourceQueue.value);
       ctx.shuffleEnabled.value = true;
+      // Shuffle turned on part way through a playlist should still reach the
+      // whole playlist, not just the pages already pulled in.
+      if (playlistContext) {
+        playlistContext.shuffled = true;
+        void ctx.backfillPlaylistQueue?.();
+      }
     }
 
     ctx.clearNextPreload();

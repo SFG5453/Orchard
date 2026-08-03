@@ -178,12 +178,16 @@ export function installLifecycle(ctx) {
     });
   }, { immediate: true });
 
-  watch([
-    ctx.activeTrack,
-    ctx.queue,
-    ctx.history,
-    ctx.shuffleSourceQueue
-  ], () => {
+  // Split by cost, not by taste. `history` is capped at thirty and is mutated
+  // in place (shift/unshift), so it has to be watched deeply. The queue and its
+  // pre-shuffle source now run to thousands of tracks on a shuffled playlist,
+  // and deep-watching those means re-traversing every track object on every
+  // skip -- they are only ever replaced, so identity is enough.
+  watch([ctx.queue, ctx.shuffleSourceQueue], () => {
+    ctx.writePlaybackState();
+  }, { immediate: true });
+
+  watch([ctx.activeTrack, ctx.history], () => {
     ctx.writePlaybackState();
   }, { deep: true, immediate: true });
 

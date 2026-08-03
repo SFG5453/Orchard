@@ -15,6 +15,22 @@ function isUnavailableTrackError(error) {
     .test(String(error?.message || error || ''));
 }
 
+/**
+ * Whether a play should seed a fresh playlist context, which is what lets the
+ * queue reach past the playlist's first page.
+ *
+ * `isPlayFromQueue` normally means "the listener clicked something already in
+ * the queue", where the existing context must be left alone. But playCollection
+ * marks a shuffled collection `queueAlreadyShuffled` so the order it picked is
+ * not shuffled a second time, and that flag alone makes a brand new playlist
+ * look like a click inside the current queue. It is the one case where both are
+ * true at once, and reading it as the former left shuffled playlists with no
+ * context, hence no way to page in anything past their first hundred tracks.
+ */
+export function seedsPlaylistContext({ isPlayFromQueue = false, queueAlreadyShuffled = false } = {}) {
+  return !isPlayFromQueue || Boolean(queueAlreadyShuffled);
+}
+
 export function playbackQueueSourceMatches(source, queue = [], activeTrack = null) {
   if (!Array.isArray(source)) return false;
   if (source === queue) return true;
@@ -314,34 +330,59 @@ export function installPlaybackResolve(ctx) {
           ? ctx.shuffleItems(seededQueue)
           : seededQueue;
 
+        // Seeds the playlist context a collection play needs to reach past its
+        // first page. Returns whether there is more of the playlist to fetch.
+        const seedPlaylistContext = () => {
+          const detail = ctx.browseDetail.value;
+          if (detail?.kind !== 'playlist' || !detail.browseId || !options.queueSource) {
+            ctx.stopPlaylistBackfill?.();
+            ctx.playbackPlaylistContext.value = null;
+            return false;
+          }
+
+          const allTracks = ctx.tracksWithCollectionContext(detail).filter(ctx.isPlayableTrack);
+          ctx.playbackPlaylistContext.value = {
+            browseId: detail.browseId,
+            continuation: detail.continuation || '',
+            hasMoreTracks: Boolean(detail.hasMoreTracks),
+            shuffled: ctx.shuffleEnabled.value,
+            // Starting part way down a playlist means the tracks above were
+            // skipped past. Under shuffle it means nothing of the sort -- the
+            // starting track is simply the one that came up first, and treating
+            // its predecessors as played would bar them from ever being drawn.
+            playedTrackIds: ctx.shuffleEnabled.value
+              ? [trackItem.id].filter(Boolean)
+              : playlistPlayedTrackIds(allTracks, trackItem.id),
+            allTracks
+          };
+          return true;
+        };
+
+        let startBackfill = false;
         if (options.queueSource || !ctx.queue.value.length || !ctx.queue.value.some((track) => track.id === trackItem.id)) {
           if (isPlayFromQueue) {
             const nextQueueIds = new Set(nextQueue.map((t) => t.id));
             ctx.shuffleSourceQueue.value = ctx.shuffleEnabled.value
               ? ctx.shuffleSourceQueue.value.filter((track) => nextQueueIds.has(track.id))
               : [];
+          } else {
+            ctx.shuffleSourceQueue.value = ctx.shuffleEnabled.value ? seededQueue : [];
+          }
+
+          if (seedsPlaylistContext({ isPlayFromQueue, queueAlreadyShuffled: options.queueAlreadyShuffled })) {
+            startBackfill = seedPlaylistContext();
+          } else {
             const playlistContext = ctx.playbackPlaylistContext.value;
             if (playlistContext && !playlistContext.allTracks.some((track) => track.id === trackItem.id)) {
               ctx.playbackPlaylistContext.value = null;
             }
-          } else {
-            ctx.shuffleSourceQueue.value = ctx.shuffleEnabled.value ? seededQueue : [];
-            const detail = ctx.browseDetail.value;
-            if (detail?.kind === 'playlist' && detail.browseId && options.queueSource) {
-              const allTracks = ctx.tracksWithCollectionContext(detail).filter(ctx.isPlayableTrack);
-              ctx.playbackPlaylistContext.value = {
-                browseId: detail.browseId,
-                continuation: detail.continuation || '',
-                hasMoreTracks: Boolean(detail.hasMoreTracks),
-                shuffled: ctx.shuffleEnabled.value,
-                playedTrackIds: playlistPlayedTrackIds(allTracks, trackItem.id),
-                allTracks
-              };
-            } else {
-              ctx.playbackPlaylistContext.value = null;
-            }
           }
           ctx.queue.value = nextQueue;
+          // Shuffling only what the first page happened to contain would play a
+          // long playlist in near-sequential order; pull the rest in behind
+          // playback so the shuffle widens to the whole thing. Kicked off after
+          // the queue is assigned, since the walk folds arrivals into it.
+          if (startBackfill) void ctx.backfillPlaylistQueue?.();
         }
       }
 

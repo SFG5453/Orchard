@@ -51,7 +51,155 @@ function cryptoRandomInt(maxExclusive) {
   return buffer[0] % maxExclusive;
 }
 
+// How many upcoming tracks the background walk leaves alone when it folds a new
+// page into the queue. Everything past this point is reshuffled with the new
+// arrivals; everything before it is what the listener is already reading as
+// "up next", and having that churn under them every time a page lands is worse
+// than the slight bias it costs -- the pinned few were drawn from a smaller
+// pool than the rest of the playlist.
+const SHUFFLE_PINNED_LOOKAHEAD = 20;
+
+/**
+ * Folds newly loaded tracks into the unplayed tail of an already shuffled queue.
+ * The tail and the arrivals are shuffled together rather than appended, so the
+ * result is a uniform shuffle of everything still to play -- a playlist's last
+ * page is as likely to come up next as its first.
+ */
+export function mergeShuffledTail(queue = [], incoming = [], pinned = SHUFFLE_PINNED_LOOKAHEAD, shuffle = (items) => items) {
+  if (!incoming.length) return queue;
+  const head = queue.slice(0, pinned);
+  const tail = queue.slice(pinned);
+  return [...head, ...shuffle([...tail, ...incoming])];
+}
+
 export function installPlaybackCollectionQueue(ctx) {
+  // Only one walk runs at a time. A new one supersedes whatever is in flight by
+  // bumping the token, which the loop checks after every await.
+  let backfillToken = 0;
+
+  ctx.stopPlaylistBackfill = function stopPlaylistBackfill() {
+    backfillToken += 1;
+    if (ctx.playlistBackfill.value.active) {
+      ctx.playlistBackfill.value = { ...ctx.playlistBackfill.value, active: false };
+    }
+  };
+
+  /**
+   * Walks a shuffled playlist's remaining continuation pages behind playback and
+   * folds each one into the queue as it lands.
+   *
+   * YouTube serves playlists as a chain of opaque continuation tokens with no
+   * random access, so the only way to shuffle across the whole thing is to hold
+   * the whole thing. Doing that before the first note plays would stall startup
+   * by one round trip per hundred tracks, so playback starts on the first page
+   * and the shuffle widens underneath it instead.
+   */
+  ctx.backfillPlaylistQueue = async function backfillPlaylistQueue() {
+    const context = ctx.playbackPlaylistContext.value;
+    if (!context?.browseId || !context.shuffled) return;
+
+    ctx.stopPlaylistBackfill();
+    const token = backfillToken;
+    const browseId = context.browseId;
+    const stale = () => token !== backfillToken || ctx.playbackPlaylistContext.value?.browseId !== browseId;
+
+    // Folds whatever is not in the queue yet into its unplayed tail.
+    const absorb = (incoming) => {
+      if (!incoming.length) return;
+      ctx.queue.value = mergeShuffledTail(ctx.queue.value, incoming, SHUFFLE_PINNED_LOOKAHEAD, ctx.shuffleItems);
+      // Un-shuffle restores playlist order, so the source list grows in the
+      // order the pages arrived rather than the order the queue holds them.
+      if (ctx.shuffleEnabled.value) {
+        ctx.shuffleSourceQueue.value = [...ctx.shuffleSourceQueue.value, ...incoming];
+      }
+    };
+
+    const unqueued = () => unusedPlaylistTracks({
+      allTracks: context.allTracks,
+      queue: ctx.queue.value,
+      activeTrack: ctx.activeTrack.value,
+      history: ctx.history.value,
+      playedTrackIds: context.playedTrackIds
+    });
+
+    // Reaching a hundred playable tracks usually overshoots -- pages arrive a
+    // hundred at a time, so the detail page holds more than the queue was
+    // seeded with. Those are already in hand and would otherwise be skipped
+    // over entirely, since the walk below only ever considers tracks that are
+    // new to `allTracks`.
+    absorb(unqueued());
+
+    if (!context.hasMoreTracks) {
+      ctx.clearNextPreload();
+      void nextTick(() => ctx.preloadNextTrack());
+      return;
+    }
+
+    ctx.playlistBackfill.value = {
+      active: true,
+      loaded: context.allTracks.length,
+      total: Number(ctx.activeTrack.value?.queueOrigin?.totalTrackCount) || 0,
+      browseId
+    };
+
+    try {
+      while (context.hasMoreTracks && context.continuation) {
+        const continuation = context.continuation;
+        const data = await ctx.emitWithReply('music:playlist:more', {
+          browseId,
+          continuation,
+          startIndex: context.allTracks.length
+        });
+
+        if (stale()) return;
+        if (!data) break;
+
+        context.continuation = data.continuation || '';
+        context.hasMoreTracks = Boolean(data.hasMoreTracks && data.continuation && data.continuation !== continuation);
+
+        const seenIds = new Set(context.allTracks.map((track) => track.id).filter(Boolean));
+        const newTracks = (data.tracks || [])
+          .map((track) => ctx.trackWithCollectionContext(track, { browseId, kind: 'playlist' }))
+          .filter((track) => ctx.isPlayableTrack(track) && track.id && !seenIds.has(track.id));
+
+        if (!newTracks.length && !context.hasMoreTracks) break;
+        context.allTracks.push(...newTracks);
+
+        // Anything already played, queued, or playing is not a new arrival --
+        // the first page is in the queue before this walk ever starts.
+        const queuedIds = new Set([
+          ...ctx.queue.value,
+          ctx.activeTrack.value,
+          ...ctx.history.value,
+          ...(context.playedTrackIds || [])
+        ].map((track) => track?.id || track).filter(Boolean));
+        const arrivals = newTracks.filter((track) => !queuedIds.has(track.id));
+
+        if (arrivals.length) {
+          ctx.queue.value = mergeShuffledTail(ctx.queue.value, arrivals, SHUFFLE_PINNED_LOOKAHEAD, ctx.shuffleItems);
+          // Un-shuffle restores playlist order, so the source list grows in the
+          // order the pages arrived rather than the order the queue holds them.
+          if (ctx.shuffleEnabled.value) {
+            ctx.shuffleSourceQueue.value = [...ctx.shuffleSourceQueue.value, ...arrivals];
+          }
+        }
+
+        ctx.playlistBackfill.value = {
+          ...ctx.playlistBackfill.value,
+          loaded: context.allTracks.length
+        };
+      }
+    } catch (error) {
+      console.error('Failed to load the rest of the playlist for shuffle:', error);
+    } finally {
+      if (!stale()) {
+        ctx.playlistBackfill.value = { ...ctx.playlistBackfill.value, active: false };
+        ctx.clearNextPreload();
+        void nextTick(() => ctx.preloadNextTrack());
+      }
+    }
+  };
+
   ctx.markPlaylistTrackPlayed = function markPlaylistTrackPlayed(track) {
     const context = ctx.playbackPlaylistContext.value;
     if (!context?.browseId || !track?.id || !context.allTracks?.some((item) => item.id === track.id)) return;
@@ -199,6 +347,9 @@ export function installPlaybackCollectionQueue(ctx) {
     if (!context || !context.browseId) return;
 
     if (ctx.queue.value.length >= 80) return;
+    // The background shuffle walk owns `context.continuation` while it runs.
+    // Two loops advancing the same chain would skip pages in both.
+    if (ctx.playlistBackfill.value.active) return;
 
     const getUnusedTracks = () => unusedPlaylistTracks({
       allTracks: context.allTracks,
