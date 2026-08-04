@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag to build (for example, v3.0.0)
-        required: true
+        description: Existing version tag or ref to build; optional for build-only runs
+        required: false
         type: string
       build_only:
         description: Build and validate artifacts without publishing them
@@ -54,20 +54,24 @@ jobs:
         id: release
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          BUILD_ONLY: ${{ inputs.build_only || false }}
         run: |
           set -euo pipefail
-          case "$RELEASE_TAG" in
-            v[0-9]*) ;;
-            *) echo "Release tag must start with v followed by a number." >&2; exit 1 ;;
-          esac
-
           version="$(node -p "require('./package.json').version")"
-          if [[ "$RELEASE_TAG" != "v$version" ]]; then
-            echo "Tag $RELEASE_TAG does not match package.json version $version." >&2
-            exit 1
+          if [[ "${BUILD_ONLY:-false}" == "true" ]]; then
+            echo "Build-only run: skipping release tag validation."
+          else
+            case "$RELEASE_TAG" in
+              v[0-9]*) ;;
+              *) echo "Release tag must start with v followed by a number." >&2; exit 1 ;;
+            esac
+            if [[ "$RELEASE_TAG" != "v$version" ]]; then
+              echo "Tag $RELEASE_TAG does not match package.json version $version." >&2
+              exit 1
+            fi
+            git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}"
           fi
 
-          git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}"
           echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
