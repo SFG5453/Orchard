@@ -6,29 +6,33 @@
 # on these exact window, hop, mel and log conventions, so a front end that
 # differs even slightly feeds the network something it has never seen.
 #
-# The sources are dependency-free -- each carries its own radix-2 FFT and
-# includes nothing outside the STL -- so there is no third-party build here and
-# nothing to vendor beyond the two files themselves.
+# The shared DSP sources are compiled directly from Orchard's root native tree.
+# Keep Android-specific JNI and resampling code in this directory, but do not
+# maintain a second copy of the analyzer/transition implementation here.
 
 cmake_minimum_required(VERSION 3.22.1)
 project(orchard_analysis LANGUAGES CXX)
+
+get_filename_component(ORCHARD_NATIVE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../native"
+    ABSOLUTE)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(orchard_analysis SHARED
-    analyzer/mel_spectrogram.cpp
+    ${ORCHARD_NATIVE_DIR}/analyzer/mel_spectrogram.cpp
     analyzer/resampler.cpp
-    analyzer/audio_analysis.cpp
-    analyzer/tempo_analysis.cpp
-    analyzer/vocal_spectrogram.cpp
-    transition/transition_render.cpp
-    transition/rubberband_stretch.cpp
+    ${ORCHARD_NATIVE_DIR}/analyzer/audio_analysis.cpp
+    ${ORCHARD_NATIVE_DIR}/analyzer/tempo_analysis.cpp
+    ${ORCHARD_NATIVE_DIR}/analyzer/vocal_spectrogram.cpp
+    ${ORCHARD_NATIVE_DIR}/transition/transition_render.cpp
+    ${ORCHARD_NATIVE_DIR}/transition/rubberband_stretch.cpp
     # Rubber Band's own single-file build unit (vendored from breakfastquay/rubberband,
     # GPL-2-or-later -- which is why this repository is AGPL). It #includes the rest of the
     # library's sources itself via paths relative to its own directory, so only this one file
     # is listed here.
-    vendor/rubberband/single/RubberBandSingle.cpp
+    ${ORCHARD_NATIVE_DIR}/vendor/rubberband/single/RubberBandSingle.cpp
     jni/transition_jni.cpp
     jni/mel_jni.cpp
     jni/analysis_jni.cpp
@@ -37,7 +41,9 @@ add_library(orchard_analysis SHARED
 
 target_include_directories(orchard_analysis PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/rubberband
+    ${ORCHARD_NATIVE_DIR}
+    ${ORCHARD_NATIVE_DIR}/analyzer
+    ${ORCHARD_NATIVE_DIR}/vendor/rubberband
 )
 
 # Rubber Band selects an FFT and resampler at compile time. Android has neither vDSP nor IPP, so
