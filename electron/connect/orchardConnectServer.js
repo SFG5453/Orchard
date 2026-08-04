@@ -180,7 +180,8 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
         serverUrl: baseUrl(),
         port: httpServer.address().port,
         preferredPort: preferredConnectPort,
-        stable: httpServer.address().port === preferredConnectPort
+        stable: httpServer.address().port === preferredConnectPort,
+        protocolVersion: 2
       }));
     } else if (url.pathname === '/' || url.pathname === '/connect') {
       res.writeHead(200, { ...headers, 'Content-Type': 'text/html; charset=utf-8' });
@@ -272,7 +273,7 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
     devices.set(device.id, device);
     remoteSockets.set(socket.id, device.id);
     socket.join('paired');
-    socket.emit('connect:approved', { deviceToken, state: currentState });
+    socket.emit('connect:approved', { deviceToken, protocolVersion: 2, state: currentState });
     emitPairingState();
     queueDeviceSave();
     return publicDevice(device);
@@ -320,7 +321,7 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
   }
 
   remoteIo.on('connection', (socket) => {
-    socket.on('connect:hello', ({ token = '', deviceToken = '', name = '' } = {}, reply) => {
+    socket.on('connect:hello', ({ token = '', deviceToken = '', name = '', protocolVersion = 1 } = {}, reply) => {
       const existing = deviceToken
         ? [...devices.values()].find((device) => device.tokenHash === deviceTokenHash(deviceToken))
         : null;
@@ -331,13 +332,13 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
         socket.join('paired');
         emitPairingState();
         queueDeviceSave();
-        jsonReply(reply, { status: 'approved', state: currentState });
+        jsonReply(reply, { status: 'approved', protocolVersion: 2, state: currentState });
         return;
       }
 
       const pairing = pairings.get(token);
       if (!pairing || pairing.expiresAt < Date.now()) {
-        jsonReply(reply, { status: 'expired' });
+        jsonReply(reply, { status: 'expired', protocolVersion: 2 });
         return;
       }
 
@@ -346,17 +347,19 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
         const previousSocketId = pendingRequest.socketId;
         pendingRequest.socketId = socket.id;
         pendingRequest.name = String(name || pendingRequest.name || 'Phone').slice(0, 60);
+        pendingRequest.protocolVersion = Number(protocolVersion) || 1;
         pendingRequest.proposedDeviceToken = String(deviceToken || pendingRequest.proposedDeviceToken || '').slice(0, 128);
         if (previousSocketId !== socket.id) remoteIo.sockets.sockets.get(previousSocketId)?.disconnect(true);
         desktopIo.emit('connect:pairing-request', publicPendingRequest(pendingRequest));
         emitPairingState();
-        jsonReply(reply, { status: 'pending' });
+        jsonReply(reply, { status: 'pending', protocolVersion: 2 });
         return;
       }
 
       const request = {
         id: randomUUID(),
         token,
+        protocolVersion: Number(protocolVersion) || 1,
         proposedDeviceToken: String(deviceToken || '').slice(0, 128),
         name: String(name || 'Phone').slice(0, 60),
         createdAt: Date.now(),
@@ -365,7 +368,7 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
       pending.set(request.id, request);
       desktopIo.emit('connect:pairing-request', publicPendingRequest(request));
       emitPairingState();
-      jsonReply(reply, { status: 'pending' });
+      jsonReply(reply, { status: 'pending', protocolVersion: 2 });
     });
 
     socket.on('connect:command', (command = {}) => {

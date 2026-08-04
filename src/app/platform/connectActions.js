@@ -47,11 +47,13 @@ export function installConnectActions(ctx) {
     const track = ctx.activeTrack.value;
     return {
       status: ctx.socketState.value,
+      protocolVersion: 2,
       track: track
         ? {
           ...safeTrack(track),
           artwork: ctx.nowArtworkImage.value || ctx.trackCover(track),
-          animatedArtwork: ctx.nowArtworkVideo.value || ''
+          animatedArtwork: ctx.nowArtworkVideo.value || '',
+          animatedArtworkVertical: ctx.enhancedArtwork?.value?.videoUrlVertical || ctx.nowArtworkVideo.value || ''
         }
         : null,
       playback: {
@@ -59,7 +61,9 @@ export function installConnectActions(ctx) {
         buffering: ctx.buffering.value,
         currentTime: ctx.currentTime.value,
         duration: ctx.duration.value || track?.durationSeconds || 0,
-        volume: ctx.volume.value
+        volume: ctx.volume.value,
+        shuffle: Boolean(ctx.shuffleEnabled?.value),
+        repeatMode: ctx.repeatMode?.value || 'off'
       },
       lyrics: {
         status: ctx.lyricsState.value.status,
@@ -70,7 +74,9 @@ export function installConnectActions(ctx) {
       audioEngine: {
         config: ctx.audioEngineConfig?.value || {},
         activePreset: ctx.audioEngineActivePreset?.value || 'flat',
-        presets: ctx.audioEnginePresets || []
+        presets: ctx.audioEnginePresets || [],
+        manualEqEnabled: Boolean(ctx.audioEngineConfig?.value?.eqEnabled),
+        autoEqEnabled: Boolean(ctx.audioEngineConfig?.value?.autoEqEnabled)
       }
     };
   };
@@ -158,6 +164,21 @@ export function installConnectActions(ctx) {
     } else if (type === 'remove-queue-index') {
       const index = Number(command.value);
       if (Number.isInteger(index)) ctx.removeQueueTrack(index);
+    } else if (type === 'move-queue-index') {
+      const { from, to } = command.value || {};
+      if (Number.isInteger(from) && Number.isInteger(to)) ctx.moveQueueTrack(from, to);
+    } else if (type === 'clear-upcoming') {
+      ctx.clearQueue();
+    } else if (type === 'play-next' && command.value) {
+      const track = command.value.playbackItem || command.value;
+      ctx.playTrackNext(track);
+    } else if (type === 'add-to-queue' && command.value) {
+      const track = command.value.playbackItem || command.value;
+      ctx.addTrackToQueue(track);
+    } else if (type === 'toggle-shuffle') {
+      ctx.toggleShuffle();
+    } else if (type === 'cycle-repeat') {
+      ctx.cycleRepeatMode();
     } else if (type === 'play-track' && command.value?.id) {
       const track = command.value.playbackItem || command.value;
       ctx.playTrack(track, { queueSource: [track, ...ctx.queue.value] });
