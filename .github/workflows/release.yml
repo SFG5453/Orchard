@@ -344,8 +344,8 @@ jobs:
           set -euo pipefail
           
           # Extract version data from build.gradle
-          version="$(grep 'versionName' app/build.gradle | awk '{print $2}' | tr -d \" | tr -d \')"
-          version_code="$(grep 'versionCode' app/build.gradle | awk '{print $2}')"
+          version="$(sed -n "s/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*['\"]\([^'\"]*\)['\"]/\1/p" app/build.gradle)"
+          version_code="$(sed -n "s/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\1/p" app/build.gradle)"
           
           apk_name="Orchard-${version}.apk"
           apk_source="app/build/outputs/apk/release/app-release.apk"
