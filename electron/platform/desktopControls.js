@@ -15,6 +15,9 @@ export function setupDesktopControls({
 }) {
   let tray = null;
   let compact = false;
+  // Mirrors the renderer's stored preference; the main process only learns about
+  // it once the renderer pushes it, so closing stays the default until then.
+  let closeToTray = false;
   let restoreBounds = null;
   let restoreMinimumSize = [760, 620];
   let playbackState = { track: null, isPlaying: false, canGoNext: false, canGoPrevious: false };
@@ -127,7 +130,15 @@ export function setupDesktopControls({
 
   ipcMain.handle(DESKTOP_CONTROLS.COMPACT_STATE, () => compact);
 
+  ipcMain.handle(DESKTOP_CONTROLS.CLOSE_TO_TRAY, (_event, enabled) => {
+    if (enabled !== undefined) closeToTray = Boolean(enabled);
+    return closeToTray;
+  });
+
   return {
+    // Without a tray icon a hidden window has no way back, so the preference is
+    // ignored when the tray failed to construct.
+    closeToTray: () => closeToTray && Boolean(tray),
     setState,
     stop() {
       globalShortcut.unregisterAll();

@@ -179,6 +179,7 @@ contextBridge.exposeInMainWorld('orchardSystemMedia', {
 
 contextBridge.exposeInMainWorld('orchardDesktopControls', {
   getCompactState: () => ipcRenderer.invoke('desktop-controls:compact-state'),
+  setCloseToTray: (enabled) => ipcRenderer.invoke('desktop-controls:close-to-tray', Boolean(enabled)),
   setState: (state) => ipcRenderer.invoke('desktop-controls:set-state', state),
   toggleCompact: () => ipcRenderer.invoke('desktop-controls:toggle-compact'),
   onCompactState: (callback) => {

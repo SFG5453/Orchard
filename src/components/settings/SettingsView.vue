@@ -479,6 +479,14 @@ export default {
           <p>Orchard {{ currentReleaseLabel }}</p>
         </div>
 
+        <div class="settings-row">
+          <div class="settings-row__copy">
+            <label for="settings-close-to-tray">Close to tray</label>
+            <p>Closing the window keeps Orchard playing in the tray instead of quitting. Quit from the tray menu.</p>
+          </div>
+          <q-toggle id="settings-close-to-tray" v-model="closeToTrayEnabled" color="primary" aria-label="Close to tray" />
+        </div>
+
         <div class="settings-action-row">
           <div class="settings-row__copy">
             <span>Updates</span>

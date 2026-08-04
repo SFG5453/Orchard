@@ -113,6 +113,7 @@ export function installLifecycle(ctx) {
   watch([
     ctx.accentColorSource,
     ctx.autoplayEnabled,
+    ctx.closeToTrayEnabled,
     ctx.crossfadeEnabled,
     ctx.crossfadeMode,
     ctx.crossfadeSeconds,
@@ -154,6 +155,7 @@ export function installLifecycle(ctx) {
     ctx.writeUserPreferences({
       accentColorSource: ctx.accentColorSource.value,
       autoplayEnabled: ctx.autoplayEnabled.value,
+      closeToTrayEnabled: ctx.closeToTrayEnabled.value,
       crossfadeEnabled: ctx.crossfadeEnabled.value,
       crossfadeMode: ctx.crossfadeMode.value,
       crossfadeSeconds: ctx.crossfadeSeconds.value,
@@ -254,6 +256,12 @@ export function installLifecycle(ctx) {
     }
     disableCrossfadePlayback(ctx);
   });
+
+  // The main process decides what a window close means, and it only knows the
+  // preference because the renderer hands it over -- so send it on startup too.
+  watch(ctx.closeToTrayEnabled, (enabled) => {
+    void window.orchardDesktopControls?.setCloseToTray?.(enabled);
+  }, { immediate: true });
 
   watch(ctx.discordRpcEnabled, (enabled) => {
     if (enabled) ctx.queueDiscordPresenceSync();

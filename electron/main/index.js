@@ -68,6 +68,7 @@ import { resolveRuntimePaths } from './runtimePaths.js';
 installInnertubeParserErrorHandler();
 
 const require = createRequire(import.meta.url);
+const windowStateKeeper = require('electron-window-state');
 const { app, BrowserWindow, Menu, Tray, clipboard, globalShortcut, ipcMain, nativeImage, net, safeStorage, screen, session, shell } = require('electron');
 const isDev = !app.isPackaged && Boolean(process.env.VITE_DEV_SERVER_URL);
 const allowDevTools = !app.isPackaged;
@@ -94,6 +95,9 @@ let updates;
 let systemMedia;
 let desktopControls;
 let welcomeCompleted = false;
+// Distinguishes "user closed the window" (which may mean hide-to-tray) from a
+// real quit, where the close must be allowed through.
+let quitting = false;
 
 const { appIconPath } = runtimePaths;
 const useNativeTitlebar = false;
@@ -385,9 +389,19 @@ async function showWelcomeWindow() {
 }
 
 async function createMainWindow() {
+  // Restores size/position (and maximized state) across launches; `manage`
+  // below re-attaches the resize/move/close listeners that keep it current.
+  const windowState = windowStateKeeper({
+    defaultWidth: 1220,
+    defaultHeight: 780,
+    file: 'orchard-window-state.json'
+  });
+
   mainWindow = new BrowserWindow({
-    width: 1220,
-    height: 780,
+    x: windowState.x,
+    y: windowState.y,
+    width: windowState.width,
+    height: windowState.height,
     minWidth: 760,
     minHeight: 620,
     autoHideMenuBar: true,
@@ -404,6 +418,7 @@ async function createMainWindow() {
     }
   });
 
+  windowState.manage(mainWindow);
   configureWindowOpenHandler(mainWindow, shell);
   if (allowDevTools) registerDevToolsShortcut(mainWindow);
   desktopControls ||= setupDesktopControls({
@@ -415,6 +430,11 @@ async function createMainWindow() {
     nativeImage,
     getWindow: () => mainWindow,
     appIconPath
+  });
+  mainWindow.on('close', (event) => {
+    if (quitting || !desktopControls?.closeToTray()) return;
+    event.preventDefault();
+    mainWindow.hide();
   });
 
   await mainWindow.loadURL(rendererUrl());
@@ -535,6 +555,7 @@ app.on('window-all-closed', () => {
 });
 // Services own native handles/listeners/servers; async cache flushing is best-effort here.
 app.on('before-quit', () => {
+  quitting = true;
   // First, and synchronously: this is the last chance to get "where was I?" on
   // disk, and everything below it can afford to lose a few milliseconds.
   sessionState.flush();

@@ -27,6 +27,7 @@ export const IPC_CHANNELS = Object.freeze({
     WRITE_TEXT: 'clipboard:write-text'
   }),
   DESKTOP_CONTROLS: Object.freeze({
+    CLOSE_TO_TRAY: 'desktop-controls:close-to-tray',
     COMPACT_STATE: 'desktop-controls:compact-state',
     SET_STATE: 'desktop-controls:set-state',
     TOGGLE_COMPACT: 'desktop-controls:toggle-compact'

@@ -43,6 +43,7 @@ export function installState(ctx) {
   ctx.DEFAULT_USER_PREFERENCES = {
     ...APPEARANCE_DEFAULTS,
     autoplayEnabled: true,
+    closeToTrayEnabled: false,
     crossfadeEnabled: true,
     crossfadeMode: AUTO_CROSSFADE_DEFAULTS.mode,
     crossfadeSeconds: AUTO_CROSSFADE_DEFAULTS.fadeSeconds,
@@ -73,6 +74,9 @@ export function installState(ctx) {
       autoplayEnabled: typeof preferences.autoplayEnabled === 'boolean'
         ? preferences.autoplayEnabled
         : ctx.DEFAULT_USER_PREFERENCES.autoplayEnabled,
+      closeToTrayEnabled: typeof preferences.closeToTrayEnabled === 'boolean'
+        ? preferences.closeToTrayEnabled
+        : ctx.DEFAULT_USER_PREFERENCES.closeToTrayEnabled,
       crossfadeEnabled: typeof preferences.crossfadeEnabled === 'boolean'
         ? preferences.crossfadeEnabled
         : ctx.DEFAULT_USER_PREFERENCES.crossfadeEnabled,
@@ -338,6 +342,7 @@ export function installState(ctx) {
   ctx.customAccentColor = ref(ctx.initialUserPreferences.customAccentColor);
   ctx.autoplayLoading = ref(false);
   ctx.autoplayError = ref('');
+  ctx.closeToTrayEnabled = ref(ctx.initialUserPreferences.closeToTrayEnabled);
   ctx.crossfadeEnabled = ref(ctx.initialUserPreferences.crossfadeEnabled);
   ctx.crossfadeMode = ref(ctx.initialUserPreferences.crossfadeMode);
   ctx.crossfadeModeOptions = [
@@ -383,6 +388,7 @@ export function installState(ctx) {
     const defaults = ctx.normalizeUserPreferences(ctx.DEFAULT_USER_PREFERENCES);
     ctx.accentColorSource.value = defaults.accentColorSource;
     ctx.autoplayEnabled.value = defaults.autoplayEnabled;
+    ctx.closeToTrayEnabled.value = defaults.closeToTrayEnabled;
     ctx.crossfadeEnabled.value = defaults.crossfadeEnabled;
     ctx.crossfadeMode.value = defaults.crossfadeMode;
     ctx.crossfadeSeconds.value = defaults.crossfadeSeconds;
