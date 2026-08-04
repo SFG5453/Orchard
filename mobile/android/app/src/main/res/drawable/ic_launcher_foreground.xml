@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Orchard's mark: an O cut from a single slab, broken once at the upper right.
+
+    Drawn as a stroked arc rather than a filled outline so the ring weight stays exact at every
+    density, and with butt caps so the break reads as a slice rather than a rounded gap. The 25dp
+    radius and 18dp stroke put the mark inside the 66dp adaptive safe zone with room to spare.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-8">
+        <path
+            android:pathData="M77.64,45.86 A25,25 0 1 1 66.12,32.13"
+            android:strokeColor="#E9F5D8"
+            android:strokeWidth="18"
+            android:strokeLineCap="butt" />
+    </group>
+</vector>

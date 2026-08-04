@@ -1,0 +1,18 @@
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.idea/
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# Benchmark model inputs.
+android/app/src/androidTest/assets/*.onnx

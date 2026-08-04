@@ -1,4 +1,8 @@
-## Orchard 4.1.0 "Flirty Gateau"
+## Orchard 4.2.0 "Praise Perceived"
 
-### New & improved
-- Beat-matched transitions now ride a low-pass filter down the outgoing track instead of ducking its mid band. The corner starts above hearing and sweeps toward the bass crossover across the overlap, so the outgoing song thins out and recedes rather than simply getting quieter, and the movement itself is what covers the seam. Vocal activity still steers how far the sweep travels, and the low end is left alone until the existing bass swap hands it over.
+### New And Improved
+- Orchard Mobile 1.0.0 for Android Has been Released! Check it out on the website!
+- Orchard can now remember the window size and close to tray.
+
+### Fixed
+- Shuffling a playlist now shuffles all songs in the playlist instead of the typical 100 songs.

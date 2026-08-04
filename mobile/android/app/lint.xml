@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+  <!-- Media3 intentionally marks integration types unstable between releases.
+       Orchard pins one Media3 version and verifies these boundaries in builds. -->
+  <issue id="UnsafeOptInUsageError">
+    <option name="opt-in" value="androidx.media3.common.util.UnstableApi" />
+  </issue>
+  <!-- Android 8+ uses the adaptive icon; the two legacy API levels retain
+       Orchard's intentionally full-bleed branded tile. -->
+  <issue id="IconLauncherShape" severity="ignore" />
+</lint>

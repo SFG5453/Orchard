@@ -1,3 +1,22 @@
+<!--
+ * Copyright (C) 2026 SFG545
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script>
 import sfg545AvatarUrl from '../../assets/sfg545.gif';
 import reallyUnusualAvatarUrl from '../../assets/ReallyUnusual.png';
@@ -12,6 +31,15 @@ export default {
       reallyUnusualAvatarUrl,
       julianRamierezAvatarUrl
     };
+  },
+  methods: {
+    async viewLicense() {
+      try {
+        await window.orchardApp?.viewLicense?.();
+      } catch (error) {
+        console.warn('Could not open the Orchard license.', error);
+      }
+    }
   },
   setup(props) {
     return props.app;
@@ -75,6 +103,14 @@ export default {
           label="Release notes"
           class="about-dialog__release-notes"
           @click="aboutDialogOpen = false; openChangelog()"
+        />
+        <q-btn
+          flat
+          dense
+          icon="description"
+          label="View license"
+          class="about-dialog__license-button"
+          @click="viewLicense"
         />
         <a
           class="about-dialog__website"

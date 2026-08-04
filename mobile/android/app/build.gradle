@@ -1,0 +1,123 @@
+apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.plugin.compose'
+
+def orchardReleaseKeystore = System.getenv("ANDROID_KEYSTORE_FILE")
+def orchardReleaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+def orchardReleaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+def orchardReleaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+def orchardReleaseSigningReady = [orchardReleaseKeystore, orchardReleaseStorePassword, orchardReleaseKeyAlias, orchardReleaseKeyPassword].every { it }
+
+android {
+    namespace = 'dev.sfg.orchard.connect'
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = 'dev.sfg.orchard.mobile'
+        minSdk = 31
+        targetSdk = 36
+        versionCode = 10000
+        versionName = '1.0.0'
+        testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
+        ndk {
+            // 64-bit only. minSdk 31 predates the 64-bit requirement by years, and a 32-bit
+            // slice would double the native payload for devices that do not exist in the
+            // install base.
+            abiFilters += ['arm64-v8a', 'x86_64']
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file('src/main/cpp/CMakeLists.txt')
+            version = '3.22.1'
+        }
+    }
+
+    signingConfigs {
+        if (orchardReleaseSigningReady) {
+            release {
+                storeFile = file(orchardReleaseKeystore)
+                storePassword = orchardReleaseStorePassword
+                keyAlias = orchardReleaseKeyAlias
+                keyPassword = orchardReleaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        // The Android plugin owns the developer-local debug keystore.
+        debug {}
+        release {
+            if (orchardReleaseSigningReady) signingConfig = signingConfigs.release
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles(getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro')
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
+        resValues = true
+    }
+}
+
+kotlin {
+    jvmToolchain(17)
+}
+
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { it.name.toLowerCase().contains('release') } && !orchardReleaseSigningReady) {
+        throw new GradleException("Release signing environment is required for Orchard Connect production builds.")
+    }
+}
+
+dependencies {
+    def composeBom = platform('androidx.compose:compose-bom:2025.06.01')
+
+    implementation composeBom
+    androidTestImplementation composeBom
+    implementation 'androidx.activity:activity-compose:1.10.1'
+    implementation 'androidx.compose.animation:animation'
+    implementation 'androidx.compose.foundation:foundation'
+    implementation 'androidx.compose.material:material-icons-extended'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.9.1'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1'
+    implementation 'androidx.navigation:navigation-compose:2.9.1'
+    implementation 'androidx.datastore:datastore-preferences:1.2.1'
+    implementation 'androidx.media3:media3-datasource-okhttp:1.9.0'
+    implementation 'androidx.media3:media3-exoplayer:1.9.0'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.9.0'
+    implementation 'androidx.media3:media3-session:1.9.0'
+    implementation 'androidx.media3:media3-ui:1.9.0'
+    implementation 'io.coil-kt.coil3:coil-compose:3.3.0'
+    implementation 'io.coil-kt.coil3:coil-network-okhttp:3.3.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+    implementation 'com.squareup.okhttp3:okhttp:5.4.0'
+    implementation 'androidx.core:core:1.13.1'
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+    implementation 'eu.buney.kopus:kopus:1.6.1.3'
+    implementation 'com.github.TeamNewPipe:NewPipeExtractor:v0.26.4'
+
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+
+    // The full package rather than onnxruntime-mobile: mobile only loads .ort
+    // files, which would put an offline conversion step between every model and
+    // the app for a saving that does not matter in a self-distributed APK.
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.28.0'
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0'
+
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+}

@@ -1,3 +1,22 @@
+/*
+ * Copyright (C) 2026 SFG545
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 // Main-process composition root. It owns Electron lifecycle resources and
 // injects privileged capabilities into isolated services and IPC registrars.
 import { createRequire } from 'node:module';
@@ -502,10 +521,12 @@ app.whenReady().then(async () => {
     clearDiscordPresence,
     ipcMain,
     isDev,
+    licensePath: runtimePaths.licensePath,
     graphicsMode,
     resolveDiscordSongLink,
     resolveDiscordSongLinkDetails,
     setDiscordPresence,
+    shell,
     showMainWindow,
     showWelcomeWindow
   });

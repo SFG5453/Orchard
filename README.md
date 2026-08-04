@@ -147,18 +147,34 @@ npm run start
 | `npm run make`           | Create distributable packages for the current platform |
 | `npm run make:mac`       | Cross-build a universal macOS ZIP from Linux           |
 
-## Orchard Connect for Android
+## Orchard Mobile for Android
 
-The native Kotlin companion is located in [`mobile/orchard-connect`](mobile/orchard-connect). It supports Android 7.0 (API 24) and newer.
+Orchard Mobile is Orchard's standalone native Android client. It plays music independently from the desktop app, signs in to YouTube Music directly, and includes its own library, queue, audio cache, and playback history. It brings Orchard's listening experience to Android with on-device beat and downbeat analysis for Smart Crossfade, synced lyrics, animated artwork, Android Auto, and Orchard Connect.
 
-Build a debug APK with JDK 17 and Android SDK API 36:
+The mobile app lives in [`mobile/`](mobile/) and has its own [README](mobile/README.md), screenshots, build instructions, and development notes.
+
+Build and install a debug APK with JDK 17 and Android SDK 36:
 
 ```bash
-cd mobile/orchard-connect/android
+cd mobile/android
 ./gradlew assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Pair it by opening **Settings → Orchard Connect** in the desktop app, scanning the QR code, and approving the device. Both devices must be reachable on the same local network.
+Run the mobile unit tests and Android lint checks:
+
+```bash
+cd mobile/android
+./gradlew testDebugUnitTest assembleDebug lintDebug
+```
+
+Once Orchard Mobile releases, prebuilt APKs will be available from [sfg545.dev/orchard](https://sfg545.dev/orchard/). Orchard Mobile supports Android 12 (API 31) and newer.
+
+## Orchard Connect for Android
+
+Orchard Connect is built into Orchard Mobile. Pair the phone with the desktop app from the mobile device picker or **Profile → Connected devices**, then approve the request in the desktop Orchard Connect view. Both devices need to be on the same local network.
+
+For the complete pairing flow and security details, see the [mobile documentation](mobile/README.md#pairing-with-orchard-desktop).
 
 ## Project structure
 
@@ -172,7 +188,7 @@ electron/auth/               Browser-backed YouTube authentication
 electron/connect/            Orchard Connect server and pairing UI
 electron/playback/           Stream resolution, proxying, and playback services
 native/                      C++ audio analyzer and N-API bindings
-mobile/orchard-connect/      Native Android/Kotlin companion
+mobile/                      Native Android/Kotlin Orchard Mobile app
 workers/                     Cloudflare Workers and Durable Objects
 services/artwork-converter/  Animated-artwork conversion service
 packaging/                   Linux packaging and runner assets

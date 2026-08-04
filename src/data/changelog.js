@@ -1,4 +1,43 @@
+/*
+ * Copyright (C) 2026 SFG545
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 export const ORCHARD_RELEASES = [
+  {
+    version: '4.2.0',
+    codename: 'Praise Perceived',
+    date: 'August 4, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'Orchard Mobile 1.0.0 is now available on the Orchard Website for Android! Check it out!',
+          'Orchard can now remember the window size and close to tray.',
+        ]
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Shuffling a playlist now shuffles all songs in the playlist instead of the typical 100 songs',
+        ]
+      }
+    ]
+  },
   {
     version: '4.1.0',
     codename: 'Flirty Gateau',

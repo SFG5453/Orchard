@@ -31,7 +31,8 @@ module.exports = {
     // and a wildcard would quietly quadruple the installer.
     'models/beat-this/beat_this_int8.onnx',
     'models/vocal-separation/vocals_umxhq_int8.onnx',
-    'package.json'
+    'package.json',
+    'LICENSE'
   ],
   asarUnpack: [
     'native/build/Release/*.node',
