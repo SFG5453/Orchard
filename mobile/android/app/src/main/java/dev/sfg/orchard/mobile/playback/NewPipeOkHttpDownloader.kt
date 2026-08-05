@@ -1,24 +1,6 @@
-/*
- * Copyright (C) 2026 SFG545
- *
- * This file is part of Orchard.
- *
- * Orchard is free software: you can redistribute it and/or modify it under the
- * terms of the GNU Affero General Public License as published by the Free
- * Software Foundation, either version 3 of the License, or (at your option) any
- * later version.
- *
- * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
- * details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
- */
-
 package dev.sfg.orchard.mobile.playback
 
+import dev.sfg.orchard.mobile.auth.YouTubeSessionAuth
 import dev.sfg.orchard.mobile.auth.YouTubeSessionProvider
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -32,10 +14,8 @@ import org.schabi.newpipe.extractor.downloader.Response
  * This keeps connection pooling, timeouts, and proxy settings consistent with the rest
  * of the app instead of opening a separate socket pool just for NewPipe.
  *
- * When a session is available its cookie rides along, so the extractor is subject
- * to the same bot checks a signed-in browser is rather than an anonymous one.
- * Only requests to YouTube itself carry it; the media CDN neither needs the
- * account nor should be handed it.
+ * When a session is available its cookie and SAPISID auth ride along, so the extractor
+ * is authenticated for age-restricted and explicit content.
  */
 class NewPipeOkHttpDownloader(
     private val client: OkHttpClient,
@@ -47,8 +27,28 @@ class NewPipeOkHttpDownloader(
         request.headers().forEach { (name, values) ->
             values.forEach { builder.addHeader(name, it) }
         }
-        if (request.headers().keys.none { it.equals("Cookie", ignoreCase = true) }) {
-            sessionCookieFor(request.url())?.let { builder.header("Cookie", it) }
+        val session = sessionProvider?.session()
+        val cookie = session?.cookie?.takeIf(String::isNotBlank)
+        val host = runCatching { java.net.URI(request.url()).host }.getOrNull().orEmpty().lowercase()
+        val youtubeHost = host == "youtube.com" || host.endsWith(".youtube.com")
+
+        if (cookie != null && youtubeHost) {
+            if (request.headers().keys.none { it.equals("Cookie", ignoreCase = true) }) {
+                builder.header("Cookie", cookie)
+            }
+            val origin = if (host.contains("music.youtube.com")) "https://music.youtube.com" else "https://www.youtube.com"
+            YouTubeSessionAuth.authorization(cookie, origin = origin)?.let { auth ->
+                if (request.headers().keys.none { it.equals("Authorization", ignoreCase = true) }) {
+                    builder.header("Authorization", auth)
+                }
+            }
+            builder.header("X-Goog-AuthUser", "0")
+            if (request.headers().keys.none { it.equals("Origin", ignoreCase = true) }) {
+                builder.header("Origin", origin)
+            }
+            if (request.headers().keys.none { it.equals("X-Origin", ignoreCase = true) }) {
+                builder.header("X-Origin", origin)
+            }
         }
         val body = request.dataToSend()
         when {
@@ -70,12 +70,5 @@ class NewPipeOkHttpDownloader(
                 response.request.url.toString(),
             )
         }
-    }
-
-    private fun sessionCookieFor(url: String): String? {
-        val cookie = sessionProvider?.session()?.cookie?.takeIf(String::isNotBlank) ?: return null
-        val host = runCatching { java.net.URI(url).host }.getOrNull().orEmpty().lowercase()
-        val youtubeHost = host == "youtube.com" || host.endsWith(".youtube.com")
-        return cookie.takeIf { youtubeHost }
     }
 }
