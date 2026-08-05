@@ -114,6 +114,7 @@ class StreamCache(
         readFactory = CacheDataSource.Factory()
             .setCache(cache)
             .setUpstreamDataSourceFactory(upstream)
+            .setCacheWriteDataSinkFactory(null)
             .setCacheKeyFactory { spec -> cacheKey(spec.uri) }
             // A corrupt or unreadable cache entry should cost a re-download, not playback.
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
@@ -121,7 +122,7 @@ class StreamCache(
             .setCache(cache)
             .setUpstreamDataSourceFactory(upstream)
             .setCacheKeyFactory { spec -> cacheKey(spec.uri) }
-            .setFlags(0)
+            .setFlags(CacheDataSource.FLAG_BLOCK_ON_CACHE)
         return readFactory
     }
 

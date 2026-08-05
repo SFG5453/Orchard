@@ -67,7 +67,8 @@ import okhttp3.OkHttpClient
  */
 @UnstableApi
 class OrchardPlaybackService : MediaLibraryService() {
-    // Crossfade needs two decoders overlapping, so playback always runs on a pair of players and
+    // Crossfade needs two decoders overlapping, so playback always runs on a pair of players
+    // and
     // `player` is whichever one currently owns the session and the queue.
     private lateinit var player: ExoPlayer
     private lateinit var spare: ExoPlayer
@@ -79,26 +80,27 @@ class OrchardPlaybackService : MediaLibraryService() {
     private lateinit var streamCache: StreamCache
     private lateinit var analyzer: dev.sfg.orchard.mobile.playback.smart.TrackAnalyzer
     private lateinit var preparer: dev.sfg.orchard.mobile.playback.smart.TransitionPreparer
-    // One filter per player, inserted in each one's audio pipeline. They follow the players through
+    // One filter per player, inserted in each one's audio pipeline. They follow the players
+    // through
     // a handoff rather than the roles, so a filter never ends up automating the wrong track.
     private lateinit var playerFilter: dev.sfg.orchard.mobile.playback.smart.TransitionFilter
     private lateinit var spareFilter: dev.sfg.orchard.mobile.playback.smart.TransitionFilter
     private val handler = Handler(Looper.getMainLooper())
     // Browse requests hit the network, so they are answered off the session thread.
     private val browseScope =
-            kotlinx.coroutines.CoroutineScope(
-                    kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
-            )
+        kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+        )
     private var retriedMediaId = ""
 
     private val positionSaver =
-            object : Runnable {
-                override fun run() {
-                    persistPlayback()
-                    if (::player.isInitialized && player.isPlaying)
-                            handler.postDelayed(this, POSITION_SAVE_INTERVAL_MS)
-                }
+        object : Runnable {
+            override fun run() {
+                persistPlayback()
+                if (::player.isInitialized && player.isPlaying)
+                    handler.postDelayed(this, POSITION_SAVE_INTERVAL_MS)
             }
+        }
 
     override fun onCreate() {
         super.onCreate()
@@ -106,30 +108,32 @@ class OrchardPlaybackService : MediaLibraryService() {
         val graph = OrchardGraph.from(this)
         browseTree = OrchardMediaLibrary(graph)
         streamResolver =
-                YouTubeStreamResolver(
-                        client = graph.http,
-                        qualityProvider = { graph.settings.settings.value.audioQuality },
-                        visitorStore = PrefsVisitorIdentityStore(this),
-                        onWarning = { message -> graph.postWarning(message) },
-                        sessionProvider = graph.auth,
-                )
+            YouTubeStreamResolver(
+                client = graph.http,
+                qualityProvider = { graph.settings.settings.value.audioQuality },
+                visitorStore = PrefsVisitorIdentityStore(this),
+                onWarning = { message -> graph.postWarning(message) },
+                sessionProvider = graph.auth,
+            )
         streamResolver.warmUp()
         streamCache =
-                StreamCache(
-                        context = this,
-                        maxBytes = graph.settings.settings.value.cacheSizeBytes,
-                ) { graph.settings.settings.value.audioQuality }
+            StreamCache(context = this, maxBytes = graph.settings.settings.value.cacheSizeBytes) {
+                graph.settings.settings.value.audioQuality
+            }
         analyzer = dev.sfg.orchard.mobile.playback.smart.TrackAnalyzer(this, streamCache)
         preparer = dev.sfg.orchard.mobile.playback.smart.TransitionPreparer(this, streamCache)
         graph.analysisLookup = analyzer::analysisFor
-        // Caching finishes seconds after the player events that asked for it, so completion has to
-        // re-drive analysis itself. Hopped onto the main thread because prefetchAround reads player
+        // Caching finishes seconds after the player events that asked for it, so completion
+        // has to
+        // re-drive analysis itself. Hopped onto the main thread because prefetchAround
+        // reads player
         // state, which is not safe to touch from the prefetch pool.
         streamCache.onCached = {
             handler.post {
                 if (::player.isInitialized) {
                     prefetchAround(player)
-                    // The moment the current track finishes caching is the moment its true
+                    // The moment the current track finishes caching is the
+                    // moment its true
                     // bitrate becomes measurable, and no player event marks it.
                     publishBitrate()
                 }
@@ -144,51 +148,47 @@ class OrchardPlaybackService : MediaLibraryService() {
         spare = buildPlayer(graph.http, handlesAudioFocus = false, filter = spareFilter)
         restorePlayback()
         mediaSession =
-                MediaLibrarySession.Builder(this, OrchardSessionPlayer(player), sessionCallback)
-                        .setSessionActivity(mainActivityIntent())
-                        .build()
+            MediaLibrarySession.Builder(this, OrchardSessionPlayer(player), sessionCallback)
+                .setSessionActivity(mainActivityIntent())
+                .build()
         updateCustomLayout()
         // Media3 ships a generic play glyph as the notification's small icon; the media
         // player badges that icon, so without this the tile is stamped with a play symbol
         // instead of the Orchard mark.
         setMediaNotificationProvider(
-                DefaultMediaNotificationProvider.Builder(this).build().apply {
-                    setSmallIcon(R.drawable.ic_notification)
-                },
+            DefaultMediaNotificationProvider.Builder(this).build().apply {
+                setSmallIcon(R.drawable.ic_notification)
+            }
         )
         crossfade =
-                CrossfadeEngine(
-                        handler = handler,
-                        config = {
-                            val settings = graph.settings.settings.value
-                            CrossfadeEngine.Config(
-                                    enabled = settings.crossfadeMs > 0,
-                                    fadeSeconds = settings.crossfadeMs / 1000.0,
-                                    mode =
-                                            if (settings.smartCrossfade) CrossfadeMode.SMART
-                                            else CrossfadeMode.STANDARD,
-                            )
-                        },
-                        analysisFor = analyzer::analysisFor,
-                        preparedFor = { outgoing, incoming ->
-                            preparer.preparedFor(outgoing, incoming)
-                        },
-                        filters = { playerFilter to spareFilter },
-                        onPlan = { plan ->
-                            if (plan != null) prepareTransition(plan)
-                            graph.transitionMarker.value =
-                                    plan?.let {
-                                        dev.sfg.orchard.mobile.model.TransitionMarker(
-                                                trackId =
-                                                        player.currentMediaItem?.mediaId.orEmpty(),
-                                                startMs = (it.transitionStart * 1000).toLong(),
-                                                endMs = (it.transitionEnd * 1000).toLong(),
-                                                style = it.transitionStyle.name.lowercase(),
-                                        )
-                                    }
-                        },
-                        onHandoff = ::adoptPlayer,
-                )
+            CrossfadeEngine(
+                handler = handler,
+                config = {
+                    val settings = graph.settings.settings.value
+                    CrossfadeEngine.Config(
+                        enabled = settings.crossfadeMs > 0,
+                        fadeSeconds = settings.crossfadeMs / 1000.0,
+                        mode =
+                            if (settings.smartCrossfade) CrossfadeMode.SMART
+                            else CrossfadeMode.STANDARD,
+                    )
+                },
+                analysisFor = analyzer::analysisFor,
+                preparedFor = { outgoing, incoming -> preparer.preparedFor(outgoing, incoming) },
+                filters = { playerFilter to spareFilter },
+                onPlan = { plan ->
+                    if (plan != null) prepareTransition(plan)
+                    graph.transitionMarker.value = plan?.let {
+                        dev.sfg.orchard.mobile.model.TransitionMarker(
+                            trackId = player.currentMediaItem?.mediaId.orEmpty(),
+                            startMs = (it.transitionStart * 1000).toLong(),
+                            endMs = (it.transitionEnd * 1000).toLong(),
+                            style = it.transitionStyle.name.lowercase(),
+                        )
+                    }
+                },
+                onHandoff = ::adoptPlayer,
+            )
         crossfade.start(player, spare)
         player.addListener(playbackListener)
     }
@@ -216,7 +216,7 @@ class OrchardPlaybackService : MediaLibraryService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession =
-            mediaSession
+        mediaSession
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
@@ -246,80 +246,80 @@ class OrchardPlaybackService : MediaLibraryService() {
     }
 
     private fun buildPlayer(
-            client: OkHttpClient,
-            handlesAudioFocus: Boolean,
-            filter: dev.sfg.orchard.mobile.playback.smart.TransitionFilter,
+        client: OkHttpClient,
+        handlesAudioFocus: Boolean,
+        filter: dev.sfg.orchard.mobile.playback.smart.TransitionFilter,
     ): ExoPlayer {
         val httpFactory =
-                OkHttpDataSource.Factory(client)
-                        .setUserAgent(YouTubeStreamResolver.CLIENT_USER_AGENT)
+            OkHttpDataSource.Factory(client).setUserAgent(YouTubeStreamResolver.CLIENT_USER_AGENT)
         val resolvingFactory =
-                ResolvingDataSource.Factory(httpFactory) { original ->
-                    Log.d(TAG, "resolvingFactory: request uri=${original.uri}")
-                    if (!MediaItemMapper.isOrchardUri(original.uri)) return@Factory original
-                    val videoId = original.uri.lastPathSegment.orEmpty()
-                    Log.d(TAG, "resolvingFactory: resolving videoId=$videoId")
-                    val stream = streamResolver.resolve(videoId)
-                    if (stream.bitrateKbps > 0) OrchardGraph.from(this@OrchardPlaybackService).activeBitrate.value = stream.bitrateKbps
-                    Log.d(
-                            TAG,
-                            "resolvingFactory: resolved $videoId to url=${stream.url.take(60)}..."
-                    )
-                    original.withUri(stream.url.toUri())
-                }
+            ResolvingDataSource.Factory(httpFactory) { original ->
+                Log.d(TAG, "resolvingFactory: request uri=${original.uri}")
+                if (!MediaItemMapper.isOrchardUri(original.uri)) return@Factory original
+                val videoId = original.uri.lastPathSegment.orEmpty()
+                Log.d(TAG, "resolvingFactory: resolving videoId=$videoId")
+                val stream = streamResolver.resolve(videoId)
+                if (stream.bitrateKbps > 0)
+                    OrchardGraph.from(this@OrchardPlaybackService).activeBitrate.value =
+                        stream.bitrateKbps
+                Log.d(TAG, "resolvingFactory: resolved $videoId to url=${stream.url.take(60)}...")
+                original.withUri(stream.url.toUri())
+            }
         // Cache above resolution: it keys on the stable orchard:// URI, and a hit skips the
         // resolver entirely rather than re-resolving a CDN URL it does not need.
         val cachingFactory = streamCache.dataSourceFactory(resolvingFactory)
         val mediaSourceFactory =
-                DefaultMediaSourceFactory(this).setDataSourceFactory(cachingFactory)
+            DefaultMediaSourceFactory(this).setDataSourceFactory(cachingFactory)
         val loadControl =
-                DefaultLoadControl.Builder()
-                        .setBufferDurationsMs(
-                                DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
-                                WHOLE_TRACK_BUFFER_MS,
-                                BUFFER_FOR_PLAYBACK_MS,
-                                BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
-                        )
-                        .setTargetBufferBytes(TARGET_BUFFER_BYTES)
-                        .setPrioritizeTimeOverSizeThresholds(false)
-                        .build()
-        // A renderers factory rather than the default, so the transition filter sits in the audio
-        // pipeline itself. Automating gain on the player only scales the whole signal; the filter
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
+                    WHOLE_TRACK_BUFFER_MS,
+                    BUFFER_FOR_PLAYBACK_MS,
+                    BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
+                )
+                .setTargetBufferBytes(TARGET_BUFFER_BYTES)
+                .setPrioritizeTimeOverSizeThresholds(false)
+                .build()
+        // A renderers factory rather than the default, so the transition filter sits in the
+        // audio
+        // pipeline itself. Automating gain on the player only scales the whole signal; the
+        // filter
         // ride that makes a blend read as a mix has to happen inside the sink.
         val renderersFactory =
-                object : androidx.media3.exoplayer.DefaultRenderersFactory(this) {
-                    @Suppress("DEPRECATION") // TODO: MIGRATE THIS LATER, don't want to break audio for now
-                    override fun buildAudioSink(
-                            context: android.content.Context,
-                            enableFloatOutput: Boolean,
-                            enableAudioTrackPlaybackParams: Boolean,
-                    ): androidx.media3.exoplayer.audio.AudioSink =
-                            androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
-                                    .setAudioProcessors(arrayOf(filter))
-                                    .setEnableFloatOutput(enableFloatOutput)
-                                    .setEnableAudioTrackPlaybackParams(
-                                            enableAudioTrackPlaybackParams
-                                    )
-                                    .build()
-                }
+            object : androidx.media3.exoplayer.DefaultRenderersFactory(this) {
+                @Suppress(
+                    "DEPRECATION"
+                ) // TODO: MIGRATE THIS LATER, don't want to break audio for now
+                override fun buildAudioSink(
+                    context: android.content.Context,
+                    enableFloatOutput: Boolean,
+                    enableAudioTrackPlaybackParams: Boolean,
+                ): androidx.media3.exoplayer.audio.AudioSink =
+                    androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                        .setAudioProcessors(arrayOf(filter))
+                        .setEnableFloatOutput(enableFloatOutput)
+                        .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                        .build()
+            }
         return ExoPlayer.Builder(this, renderersFactory)
-                .setMediaSourceFactory(mediaSourceFactory)
-                .setLoadControl(loadControl)
-                .build()
-                .apply {
-                    setAudioAttributes(AUDIO_ATTRIBUTES, handlesAudioFocus)
-                    setHandleAudioBecomingNoisy(true)
-                    setWakeMode(C.WAKE_MODE_NETWORK)
-                }
+            .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
+            .build()
+            .apply {
+                setAudioAttributes(AUDIO_ATTRIBUTES, handlesAudioFocus)
+                setHandleAudioBecomingNoisy(true)
+                setWakeMode(C.WAKE_MODE_NETWORK)
+            }
     }
 
     private fun restorePlayback() {
         val restored = stateStore.load()
         if (restored.queue.isEmpty()) return
         player.setMediaItems(
-                restored.queue.map(MediaItemMapper::toMediaItem),
-                restored.currentIndex.coerceIn(0, restored.queue.lastIndex),
-                restored.positionMs,
+            restored.queue.map(MediaItemMapper::toMediaItem),
+            restored.currentIndex.coerceIn(0, restored.queue.lastIndex),
+            restored.positionMs,
         )
         player.setPlaylistMetadata(MediaMetadata.Builder().setTitle(restored.contextTitle).build())
         player.shuffleModeEnabled = restored.shuffle
@@ -331,19 +331,19 @@ class OrchardPlaybackService : MediaLibraryService() {
         if (!::player.isInitialized) return
         val queue = buildList {
             for (index in 0 until player.mediaItemCount) add(
-                    MediaItemMapper.toTrack(player.getMediaItemAt(index))
+                MediaItemMapper.toTrack(player.getMediaItemAt(index))
             )
         }
         stateStore.save(
-                RestoredPlayback(
-                        queue = queue,
-                        currentIndex = player.currentMediaItemIndex,
-                        positionMs = player.currentPosition.coerceAtLeast(0),
-                        shuffle = player.shuffleModeEnabled,
-                        repeatMode = player.repeatMode.toRepeatMode(),
-                        contextTitle = player.playlistMetadata.title?.toString().orEmpty(),
-                        playWhenReady = player.playWhenReady,
-                )
+            RestoredPlayback(
+                queue = queue,
+                currentIndex = player.currentMediaItemIndex,
+                positionMs = player.currentPosition.coerceAtLeast(0),
+                shuffle = player.shuffleModeEnabled,
+                repeatMode = player.repeatMode.toRepeatMode(),
+                contextTitle = player.playlistMetadata.title?.toString().orEmpty(),
+                playWhenReady = player.playWhenReady,
+            )
         )
     }
 
@@ -352,8 +352,8 @@ class OrchardPlaybackService : MediaLibraryService() {
      *
      * Prefers the rate measured from the cached file, which is what the bytes on disk really are,
      * over the rate a resolver declared for the stream it opened, which is the encoder's nominal
-     * target. Falls to 0 when neither is known, and 0 renders as nothing: the readout is allowed
-     * to say what you are hearing or to say nothing, never to guess.
+     * target. Falls to 0 when neither is known, and 0 renders as nothing: the readout is allowed to
+     * say what you are hearing or to say nothing, never to guess.
      *
      * Main thread only, since it reads player state.
      */
@@ -369,97 +369,102 @@ class OrchardPlaybackService : MediaLibraryService() {
         val duration = player.duration.takeIf { it > 0 } ?: 0L
         val measured = uri?.let { streamCache.cachedBitrateKbps(it, duration) } ?: 0
         graph.activeBitrate.value =
-                if (measured > 0) measured else streamResolver.knownBitrateKbps(item.mediaId)
+            if (measured > 0) measured else streamResolver.knownBitrateKbps(item.mediaId)
     }
 
     private val playbackListener =
-            object : Player.Listener {
-                override fun onEvents(player: Player, events: Player.Events) {
-                    Log.d(
-                            TAG,
-                            "playbackListener.onEvents: isPlaying=${player.isPlaying}, state=${player.playbackState}, playWhenReady=${player.playWhenReady}, item=${player.currentMediaItem?.mediaId}, count=${player.mediaItemCount}"
+        object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                Log.d(
+                    TAG,
+                    "playbackListener.onEvents: isPlaying=${player.isPlaying}, state=${player.playbackState}, playWhenReady=${player.playWhenReady}, item=${player.currentMediaItem?.mediaId}, count=${player.mediaItemCount}",
+                )
+                if (
+                    events.containsAny(
+                        Player.EVENT_TIMELINE_CHANGED,
+                        Player.EVENT_MEDIA_ITEM_TRANSITION,
+                        Player.EVENT_PLAY_WHEN_READY_CHANGED,
+                        Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED,
+                        Player.EVENT_REPEAT_MODE_CHANGED,
+                        Player.EVENT_PLAYLIST_METADATA_CHANGED,
                     )
-                    if (events.containsAny(
-                                    Player.EVENT_TIMELINE_CHANGED,
-                                    Player.EVENT_MEDIA_ITEM_TRANSITION,
-                                    Player.EVENT_PLAY_WHEN_READY_CHANGED,
-                                    Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED,
-                                    Player.EVENT_REPEAT_MODE_CHANGED,
-                                    Player.EVENT_PLAYLIST_METADATA_CHANGED,
-                            )
-                    ) {
-                        persistPlayback()
-                        updateCustomLayout()
-                    }
-                    if (events.containsAny(
-                                    Player.EVENT_TIMELINE_CHANGED,
-                                    Player.EVENT_MEDIA_ITEM_TRANSITION
-                            )
-                    ) {
-                        prefetchAround(player)
-                        // A transition alone cannot measure anything: the duration the measurement
-                        // divides by is not known until the timeline lands. This is where it is.
-                        publishBitrate()
-                    }
-                }
-
-                override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
-                    if (shuffleModeEnabled && ::player.isInitialized) shuffleUpcomingItems(player)
-                }
-
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    handler.removeCallbacks(positionSaver)
-                    if (isPlaying) handler.postDelayed(positionSaver, POSITION_SAVE_INTERVAL_MS)
-                    else persistPlayback()
-                }
-
-                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                    Log.d(
-                            TAG,
-                            "playbackListener.onMediaItemTransition: item=${mediaItem?.mediaId}, reason=$reason"
-                    )
-                    retriedMediaId = ""
-                    publishBitrate()
-                    if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) crossfade.abort()
-                }
-
-                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                    Log.d(
-                            TAG,
-                            "playbackListener.onPlayWhenReadyChanged: playWhenReady=$playWhenReady, reason=$reason"
-                    )
-                    if (!playWhenReady &&
-                                    reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS
-                    )
-                            crossfade.abort()
-                }
-
-                override fun onPositionDiscontinuity(
-                        oldPosition: Player.PositionInfo,
-                        newPosition: Player.PositionInfo,
-                        reason: Int,
                 ) {
-                    if (reason == Player.DISCONTINUITY_REASON_SEEK) crossfade.abort()
+                    persistPlayback()
+                    updateCustomLayout()
                 }
-
-                override fun onPlayerError(error: PlaybackException) {
-                    Log.e(
-                            TAG,
-                            "playbackListener.onPlayerError: ${error.errorCodeName} - ${error.message}",
-                            error
+                if (
+                    events.containsAny(
+                        Player.EVENT_TIMELINE_CHANGED,
+                        Player.EVENT_MEDIA_ITEM_TRANSITION,
                     )
-                    val mediaId = player.currentMediaItem?.mediaId.orEmpty()
-                    if (mediaId.isBlank() || retriedMediaId == mediaId) {
-                        Log.e(TAG, "Playback failed after stream refresh", error)
-                        return
-                    }
-                    retriedMediaId = mediaId
-                    streamResolver.invalidate(mediaId)
-                    Log.w(TAG, "Refreshing the failed stream once", error)
-                    player.prepare()
-                    player.play()
+                ) {
+                    prefetchAround(player)
+                    // A transition alone cannot measure anything: the duration
+                    // the measurement
+                    // divides by is not known until the timeline lands. This is
+                    // where it is.
+                    publishBitrate()
                 }
             }
+
+            override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+                if (shuffleModeEnabled && ::player.isInitialized) shuffleUpcomingItems(player)
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                handler.removeCallbacks(positionSaver)
+                if (isPlaying) handler.postDelayed(positionSaver, POSITION_SAVE_INTERVAL_MS)
+                else persistPlayback()
+            }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                Log.d(
+                    TAG,
+                    "playbackListener.onMediaItemTransition: item=${mediaItem?.mediaId}, reason=$reason",
+                )
+                retriedMediaId = ""
+                publishBitrate()
+                if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) crossfade.abort()
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                Log.d(
+                    TAG,
+                    "playbackListener.onPlayWhenReadyChanged: playWhenReady=$playWhenReady, reason=$reason",
+                )
+                if (
+                    !playWhenReady &&
+                        reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS
+                )
+                    crossfade.abort()
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) crossfade.abort()
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                Log.e(
+                    TAG,
+                    "playbackListener.onPlayerError: ${error.errorCodeName} - ${error.message}",
+                    error,
+                )
+                val mediaId = player.currentMediaItem?.mediaId.orEmpty()
+                if (mediaId.isBlank() || retriedMediaId == mediaId) {
+                    Log.e(TAG, "Playback failed after stream refresh", error)
+                    return
+                }
+                retriedMediaId = mediaId
+                streamResolver.invalidate(mediaId)
+                Log.w(TAG, "Refreshing the failed stream once", error)
+                player.prepare()
+                player.play()
+            }
+        }
 
     private fun shuffleUpcomingItems(targetPlayer: Player) {
         val current = targetPlayer.currentMediaItemIndex
@@ -473,260 +478,255 @@ class OrchardPlaybackService : MediaLibraryService() {
     }
 
     private val sessionCallback =
-            object : MediaLibrarySession.Callback {
-                override fun onGetLibraryRoot(
-                        session: MediaLibrarySession,
-                        browser: MediaSession.ControllerInfo,
-                        params: MediaLibraryService.LibraryParams?,
-                ): ListenableFuture<LibraryResult<MediaItem>> {
-                    val rootParams =
-                            MediaLibraryService.LibraryParams.Builder()
-                                    .setExtras(OrchardMediaLibrary.rootExtras())
-                                    .build()
-                    return Futures.immediateFuture(
-                            LibraryResult.ofItem(browseTree.root(), rootParams),
+        object : MediaLibrarySession.Callback {
+            override fun onGetLibraryRoot(
+                session: MediaLibrarySession,
+                browser: MediaSession.ControllerInfo,
+                params: MediaLibraryService.LibraryParams?,
+            ): ListenableFuture<LibraryResult<MediaItem>> {
+                val rootParams =
+                    MediaLibraryService.LibraryParams.Builder()
+                        .setExtras(OrchardMediaLibrary.rootExtras())
+                        .build()
+                return Futures.immediateFuture(LibraryResult.ofItem(browseTree.root(), rootParams))
+            }
+
+            override fun onGetChildren(
+                session: MediaLibrarySession,
+                browser: MediaSession.ControllerInfo,
+                parentId: String,
+                page: Int,
+                pageSize: Int,
+                params: MediaLibraryService.LibraryParams?,
+            ): ListenableFuture<LibraryResult<com.google.common.collect.ImmutableList<MediaItem>>> {
+                val future =
+                    SettableFuture.create<
+                        LibraryResult<com.google.common.collect.ImmutableList<MediaItem>>
+                    >()
+                browseScope.launch {
+                    val result =
+                        runCatching { browseTree.children(parentId) }
+                            .onFailure { Log.w(TAG, "Browse of $parentId failed", it) }
+                            .getOrDefault(emptyList())
+                    // A playlist can run to thousands of rows, so hand back
+                    // only the window
+                    // the browser asked for rather than the whole list every
+                    // time.
+                    val window = result.drop(page * pageSize).take(pageSize)
+                    future.set(
+                        LibraryResult.ofItemList(
+                            com.google.common.collect.ImmutableList.copyOf(window),
+                            params,
+                        )
                     )
                 }
+                return future
+            }
 
-                override fun onGetChildren(
-                        session: MediaLibrarySession,
-                        browser: MediaSession.ControllerInfo,
-                        parentId: String,
-                        page: Int,
-                        pageSize: Int,
-                        params: MediaLibraryService.LibraryParams?,
-                ): ListenableFuture<LibraryResult<com.google.common.collect.ImmutableList<MediaItem>>> {
-                    val future =
-                            SettableFuture
-                                    .create<
-                                            LibraryResult<
-                                                    com.google.common.collect.ImmutableList<
-                                                            MediaItem>>>()
+            override fun onGetItem(
+                session: MediaLibrarySession,
+                browser: MediaSession.ControllerInfo,
+                mediaId: String,
+            ): ListenableFuture<LibraryResult<MediaItem>> {
+                val item = browseTree.item(mediaId)
+                return Futures.immediateFuture(
+                    if (item == null) {
+                        LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                    } else {
+                        LibraryResult.ofItem(item, null)
+                    }
+                )
+            }
+
+            override fun onConnect(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo,
+            ): MediaSession.ConnectionResult {
+                // The library commands are what let a browser ask for the root at
+                // all:
+                // MediaLibraryServiceLegacyStub.onGetRoot hands back null unless
+                // the
+                // controller holds COMMAND_CODE_LIBRARY_GET_LIBRARY_ROOT, and
+                // Android Auto
+                // then sits on a spinner with no error of its own.
+                val sessionCommands =
+                    MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
+                        .add(COMMAND_TOGGLE_SHUFFLE)
+                        .add(COMMAND_TOGGLE_REPEAT)
+                        .build()
+                return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                    .setAvailableSessionCommands(sessionCommands)
+                    .build()
+            }
+
+            override fun onSetMediaItems(
+                mediaSession: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                mediaItems: MutableList<MediaItem>,
+                startIndex: Int,
+                startPositionMs: Long,
+            ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+                Log.d(
+                    TAG,
+                    "sessionCallback.onSetMediaItems: ${mediaItems.size} items, startIndex=$startIndex, pos=$startPositionMs; rawIds=${mediaItems.map { it.mediaId }}",
+                )
+                // Assistant does not know any media ids, so a voice request arrives
+                // as an
+                // item carrying only a search query. Resolving it here is what
+                // makes
+                // "play something on Orchard" play anything at all.
+                val spoken =
+                    mediaItems
+                        .singleOrNull()
+                        ?.takeIf { it.mediaId.isBlank() }
+                        ?.requestMetadata
+                        ?.searchQuery
+                if (spoken != null) {
+                    val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
                     browseScope.launch {
-                        val result =
-                                runCatching { browseTree.children(parentId) }
-                                        .onFailure { Log.w(TAG, "Browse of $parentId failed", it) }
-                                        .getOrDefault(emptyList())
-                        // A playlist can run to thousands of rows, so hand back only the window
-                        // the browser asked for rather than the whole list every time.
-                        val window = result.drop(page * pageSize).take(pageSize)
+                        val found = browseTree.search(spoken)
+                        Log.d(
+                            TAG,
+                            "sessionCallback.onSetMediaItems: search '$spoken' -> ${found.size} tracks",
+                        )
                         future.set(
-                                LibraryResult.ofItemList(
-                                        com.google.common.collect.ImmutableList.copyOf(window),
-                                        params,
-                                ),
+                            MediaSession.MediaItemsWithStartPosition(
+                                found.map { resolveMediaItem(it) },
+                                0,
+                                C.TIME_UNSET,
+                            )
                         )
                     }
                     return future
                 }
 
-                override fun onGetItem(
-                        session: MediaLibrarySession,
-                        browser: MediaSession.ControllerInfo,
-                        mediaId: String,
-                ): ListenableFuture<LibraryResult<MediaItem>> {
-                    val item = browseTree.item(mediaId)
-                    return Futures.immediateFuture(
-                            if (item == null) {
-                                LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
-                            } else {
-                                LibraryResult.ofItem(item, null)
-                            },
-                    )
-                }
-
-                override fun onConnect(
-                        session: MediaSession,
-                        controller: MediaSession.ControllerInfo,
-                ): MediaSession.ConnectionResult {
-                    // The library commands are what let a browser ask for the root at all:
-                    // MediaLibraryServiceLegacyStub.onGetRoot hands back null unless the
-                    // controller holds COMMAND_CODE_LIBRARY_GET_LIBRARY_ROOT, and Android Auto
-                    // then sits on a spinner with no error of its own.
-                    val sessionCommands =
-                            MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
-                                    .buildUpon()
-                                    .add(COMMAND_TOGGLE_SHUFFLE)
-                                    .add(COMMAND_TOGGLE_REPEAT)
-                                    .build()
-                    return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                            .setAvailableSessionCommands(sessionCommands)
-                            .build()
-                }
-
-                override fun onSetMediaItems(
-                        mediaSession: MediaSession,
-                        controller: MediaSession.ControllerInfo,
-                        mediaItems: MutableList<MediaItem>,
-                        startIndex: Int,
-                        startPositionMs: Long,
-                ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
-                    Log.d(
-                            TAG,
-                            "sessionCallback.onSetMediaItems: ${mediaItems.size} items, startIndex=$startIndex, pos=$startPositionMs; rawIds=${mediaItems.map { it.mediaId }}"
-                    )
-                    // Assistant does not know any media ids, so a voice request arrives as an
-                    // item carrying only a search query. Resolving it here is what makes
-                    // "play something on Orchard" play anything at all.
-                    val spoken =
-                            mediaItems.singleOrNull()?.takeIf { it.mediaId.isBlank() }
-                                    ?.requestMetadata
-                                    ?.searchQuery
-                    if (spoken != null) {
-                        val future =
-                                SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
-                        browseScope.launch {
-                            val found = browseTree.search(spoken)
-                            Log.d(TAG, "sessionCallback.onSetMediaItems: search '$spoken' -> ${found.size} tracks")
-                            future.set(
-                                    MediaSession.MediaItemsWithStartPosition(
-                                            found.map { resolveMediaItem(it) },
-                                            0,
-                                            C.TIME_UNSET,
-                                    ),
-                            )
-                        }
-                        return future
-                    }
-
-                    // A car browser sends back the single row that was tapped. Orchard's own UI
-                    // always sends the queue it means to play, so only an outside controller gets
-                    // its selection expanded into the list it was browsing.
-                    val external = controller.packageName != packageName
-                    val expanded =
-                            if (external && mediaItems.size == 1) {
-                                browseTree.queueFor(mediaItems.single().mediaId)
-                            } else {
-                                null
-                            }
-                    if (expanded != null) {
-                        val (queue, index) = expanded
-                        Log.d(TAG, "sessionCallback.onSetMediaItems expanded to ${queue.size} items at $index")
-                        return Futures.immediateFuture(
-                                MediaSession.MediaItemsWithStartPosition(
-                                        queue.map { resolveMediaItem(it) },
-                                        index,
-                                        startPositionMs,
-                                ),
-                        )
-                    }
-                    val updated = mediaItems.map { resolveMediaItem(it) }
-                    Log.d(
-                            TAG,
-                            "sessionCallback.onSetMediaItems resolved: ${updated.map { "${it.mediaId}->${it.localConfiguration?.uri}" }}"
-                    )
-                    return Futures.immediateFuture(
-                            MediaSession.MediaItemsWithStartPosition(
-                                    updated,
-                                    startIndex,
-                                    startPositionMs
-                            ),
-                    )
-                }
-
-                override fun onAddMediaItems(
-                        mediaSession: MediaSession,
-                        controller: MediaSession.ControllerInfo,
-                        mediaItems: MutableList<MediaItem>,
-                ): ListenableFuture<MutableList<MediaItem>> {
-                    Log.d(TAG, "sessionCallback.onAddMediaItems: ${mediaItems.size} items")
-                    val updated = mediaItems.map { resolveMediaItem(it) }.toMutableList()
-                    return Futures.immediateFuture(updated)
-                }
-
-                private fun resolveMediaItem(request: MediaItem): MediaItem {
-                    // Browsers hand back a bare media id with no metadata, which would leave the
-                    // car screen showing an untitled track. Restore the row we served.
-                    val item =
-                            if (request.mediaMetadata.title.isNullOrBlank()) {
-                                browseTree.item(request.mediaId) ?: request
-                            } else {
-                                request
-                            }
-                    val uri =
-                            item.localConfiguration?.uri
-                                    ?: item.requestMetadata.mediaUri
-                                            ?: if (item.mediaId.isNotBlank()) {
-                                        android.net.Uri.Builder()
-                                                .scheme("orchard")
-                                                .authority("stream")
-                                                .appendPath(item.mediaId)
-                                                .build()
-                                    } else null
-                    return if (uri != null && item.localConfiguration?.uri == null) {
-                        item.buildUpon()
-                                .setUri(uri)
-                                .setRequestMetadata(
-                                        item.requestMetadata.buildUpon().setMediaUri(uri).build()
-                                )
-                                .build()
+                // A car browser sends back the single row that was tapped.
+                // Orchard's own UI
+                // always sends the queue it means to play, so only an outside
+                // controller gets
+                // its selection expanded into the list it was browsing.
+                val external = controller.packageName != packageName
+                val expanded =
+                    if (external && mediaItems.size == 1) {
+                        browseTree.queueFor(mediaItems.single().mediaId)
                     } else {
-                        item
+                        null
                     }
+                if (expanded != null) {
+                    val (queue, index) = expanded
+                    Log.d(
+                        TAG,
+                        "sessionCallback.onSetMediaItems expanded to ${queue.size} items at $index",
+                    )
+                    return Futures.immediateFuture(
+                        MediaSession.MediaItemsWithStartPosition(
+                            queue.map { resolveMediaItem(it) },
+                            index,
+                            startPositionMs,
+                        )
+                    )
                 }
+                val updated = mediaItems.map { resolveMediaItem(it) }
+                Log.d(
+                    TAG,
+                    "sessionCallback.onSetMediaItems resolved: ${updated.map { "${it.mediaId}->${it.localConfiguration?.uri}" }}",
+                )
+                return Futures.immediateFuture(
+                    MediaSession.MediaItemsWithStartPosition(updated, startIndex, startPositionMs)
+                )
+            }
 
-                override fun onCustomCommand(
-                        session: MediaSession,
-                        controller: MediaSession.ControllerInfo,
-                        customCommand: SessionCommand,
-                        args: Bundle,
-                ): ListenableFuture<SessionResult> {
-                    when (customCommand.customAction) {
-                        ACTION_TOGGLE_SHUFFLE ->
-                                player.shuffleModeEnabled = !player.shuffleModeEnabled
-                        ACTION_TOGGLE_REPEAT ->
-                                player.repeatMode =
-                                        when (player.repeatMode) {
-                                            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                                            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                                            else -> Player.REPEAT_MODE_OFF
-                                        }
+            override fun onAddMediaItems(
+                mediaSession: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                mediaItems: MutableList<MediaItem>,
+            ): ListenableFuture<MutableList<MediaItem>> {
+                Log.d(TAG, "sessionCallback.onAddMediaItems: ${mediaItems.size} items")
+                val updated = mediaItems.map { resolveMediaItem(it) }.toMutableList()
+                return Futures.immediateFuture(updated)
+            }
+
+            private fun resolveMediaItem(request: MediaItem): MediaItem {
+                // Browsers hand back a bare media id with no metadata, which would
+                // leave the
+                // car screen showing an untitled track. Restore the row we served.
+                val item =
+                    if (request.mediaMetadata.title.isNullOrBlank()) {
+                        browseTree.item(request.mediaId) ?: request
+                    } else {
+                        request
                     }
-                    updateCustomLayout()
-                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                val uri =
+                    item.localConfiguration?.uri
+                        ?: item.requestMetadata.mediaUri
+                        ?: if (item.mediaId.isNotBlank()) {
+                            android.net.Uri.Builder()
+                                .scheme("orchard")
+                                .authority("stream")
+                                .appendPath(item.mediaId)
+                                .build()
+                        } else null
+                return if (uri != null && item.localConfiguration?.uri == null) {
+                    item
+                        .buildUpon()
+                        .setUri(uri)
+                        .setRequestMetadata(
+                            item.requestMetadata.buildUpon().setMediaUri(uri).build()
+                        )
+                        .build()
+                } else {
+                    item
                 }
             }
+
+            override fun onCustomCommand(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                customCommand: SessionCommand,
+                args: Bundle,
+            ): ListenableFuture<SessionResult> {
+                when (customCommand.customAction) {
+                    ACTION_TOGGLE_SHUFFLE -> player.shuffleModeEnabled = !player.shuffleModeEnabled
+                    ACTION_TOGGLE_REPEAT ->
+                        player.repeatMode =
+                            when (player.repeatMode) {
+                                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                else -> Player.REPEAT_MODE_OFF
+                            }
+                }
+                updateCustomLayout()
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+        }
 
     private fun updateCustomLayout() {
         if (!::mediaSession.isInitialized || !::player.isInitialized) return
         val shuffleOn = player.shuffleModeEnabled
         val shuffleIcon =
-                if (shuffleOn) CommandButton.ICON_SHUFFLE_ON else CommandButton.ICON_SHUFFLE_OFF
+            if (shuffleOn) CommandButton.ICON_SHUFFLE_ON else CommandButton.ICON_SHUFFLE_OFF
         val shuffleRes = if (shuffleOn) R.drawable.ic_shuffle_on else R.drawable.ic_shuffle
         val shuffleButton =
-                CommandButton.Builder(shuffleIcon)
-                        .setCustomIconResId(shuffleRes)
-                        .setDisplayName(if (shuffleOn) "Shuffle on" else "Shuffle off")
-                        .setSessionCommand(COMMAND_TOGGLE_SHUFFLE)
-                        .build()
+            CommandButton.Builder(shuffleIcon)
+                .setCustomIconResId(shuffleRes)
+                .setDisplayName(if (shuffleOn) "Shuffle on" else "Shuffle off")
+                .setSessionCommand(COMMAND_TOGGLE_SHUFFLE)
+                .build()
 
         val (repeatIcon, repeatRes, repeatTitle) =
-                when (player.repeatMode) {
-                    Player.REPEAT_MODE_ONE ->
-                            Triple(
-                                    CommandButton.ICON_REPEAT_ONE,
-                                    R.drawable.ic_repeat_one_on,
-                                    "Repeat one"
-                            )
-                    Player.REPEAT_MODE_ALL ->
-                            Triple(
-                                    CommandButton.ICON_REPEAT_ALL,
-                                    R.drawable.ic_repeat_on,
-                                    "Repeat all"
-                            )
-                    else ->
-                            Triple(
-                                    CommandButton.ICON_REPEAT_OFF,
-                                    R.drawable.ic_repeat,
-                                    "Repeat off"
-                            )
-                }
+            when (player.repeatMode) {
+                Player.REPEAT_MODE_ONE ->
+                    Triple(CommandButton.ICON_REPEAT_ONE, R.drawable.ic_repeat_one_on, "Repeat one")
+                Player.REPEAT_MODE_ALL ->
+                    Triple(CommandButton.ICON_REPEAT_ALL, R.drawable.ic_repeat_on, "Repeat all")
+                else -> Triple(CommandButton.ICON_REPEAT_OFF, R.drawable.ic_repeat, "Repeat off")
+            }
         val repeatButton =
-                CommandButton.Builder(repeatIcon)
-                        .setCustomIconResId(repeatRes)
-                        .setDisplayName(repeatTitle)
-                        .setSessionCommand(COMMAND_TOGGLE_REPEAT)
-                        .build()
+            CommandButton.Builder(repeatIcon)
+                .setCustomIconResId(repeatRes)
+                .setDisplayName(repeatTitle)
+                .setSessionCommand(COMMAND_TOGGLE_REPEAT)
+                .build()
 
         mediaSession.setCustomLayout(listOf(shuffleButton, repeatButton))
     }
@@ -739,9 +739,9 @@ class OrchardPlaybackService : MediaLibraryService() {
         }
 
         val wanted =
-                (current..current + 1).filter { it in 0 until player.mediaItemCount }.mapNotNull {
-                    player.getMediaItemAt(it).localConfiguration?.uri
-                }
+            (current..current + 1)
+                .filter { it in 0 until player.mediaItemCount }
+                .mapNotNull { player.getMediaItemAt(it).localConfiguration?.uri }
         streamCache.retainOnly(wanted)
         wanted.forEach(streamCache::prefetch)
 
@@ -750,20 +750,29 @@ class OrchardPlaybackService : MediaLibraryService() {
             return
         }
 
-        // Nothing started this late can finish in time, and a model pass is not free to lose.
+        // Nothing started this late can finish in time, and a model pass is not free to
+        // lose.
         //
-        // Arriving in the last minute of a track means the listener skipped or seeked there:
-        // ordinary playback asks for this analysis when the track begins, minutes ahead. Starting
-        // one now would spend two decodes and two inferences to answer a question the transition
-        // has already passed, while competing for CPU and heap with the playback it is meant to
+        // Arriving in the last minute of a track means the listener skipped or seeked
+        // there:
+        // ordinary playback asks for this analysis when the track begins, minutes ahead.
+        // Starting
+        // one now would spend two decodes and two inferences to answer a question the
+        // transition
+        // has already passed, while competing for CPU and heap with the playback it is
+        // meant to
         // improve. The plain fade is the right answer here, and it costs nothing to reach.
-        val remainingSeconds = if (player.duration != C.TIME_UNSET) {
-            (player.duration - player.currentPosition) / 1000.0
-        } else {
-            Double.MAX_VALUE
-        }
+        val remainingSeconds =
+            if (player.duration != C.TIME_UNSET) {
+                (player.duration - player.currentPosition) / 1000.0
+            } else {
+                Double.MAX_VALUE
+            }
         if (remainingSeconds < MODEL_PASS_MIN_LEAD_SECONDS) {
-            Log.d(TAG, "Only ${remainingSeconds}s left; skipping the model pass for this transition")
+            Log.d(
+                TAG,
+                "Only ${remainingSeconds}s left; skipping the model pass for this transition",
+            )
             return
         }
 
@@ -773,11 +782,11 @@ class OrchardPlaybackService : MediaLibraryService() {
             val uri = item.localConfiguration?.uri ?: continue
             val track = MediaItemMapper.toTrack(item)
             val duration =
-                    if (index == player.currentMediaItemIndex && player.duration != C.TIME_UNSET) {
-                        player.duration / 1000.0
-                    } else {
-                        track.durationMs / 1000.0
-                    }
+                if (index == player.currentMediaItemIndex && player.duration != C.TIME_UNSET) {
+                    player.duration / 1000.0
+                } else {
+                    track.durationMs / 1000.0
+                }
             analyzer.request(track, uri, duration)
         }
     }
@@ -802,13 +811,13 @@ class OrchardPlaybackService : MediaLibraryService() {
 
         preparer.retainOnly(setOf(preparer.key(outgoing, incoming)))
         preparer.prepare(
-                outgoing = outgoing,
-                outgoingUri = currentUri,
-                outgoingAnalysis = analyzer.analysisFor(outgoing),
-                incoming = incoming,
-                incomingUri = nextUri,
-                incomingAnalysis = analyzer.analysisFor(incoming),
-                plan = plan,
+            outgoing = outgoing,
+            outgoingUri = currentUri,
+            outgoingAnalysis = analyzer.analysisFor(outgoing),
+            incoming = incoming,
+            incomingUri = nextUri,
+            incomingAnalysis = analyzer.analysisFor(incoming),
+            plan = plan,
         )
     }
 
@@ -819,27 +828,76 @@ class OrchardPlaybackService : MediaLibraryService() {
     }
 
     private fun mainActivityIntent(): PendingIntent =
-            PendingIntent.getActivity(
-                    this,
-                    0,
-                    Intent(this, MainActivity::class.java)
-                            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
+        PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
 
     private fun Int.toRepeatMode(): RepeatMode =
-            when (this) {
-                Player.REPEAT_MODE_ONE -> RepeatMode.ONE
-                Player.REPEAT_MODE_ALL -> RepeatMode.ALL
-                else -> RepeatMode.OFF
-            }
+        when (this) {
+            Player.REPEAT_MODE_ONE -> RepeatMode.ONE
+            Player.REPEAT_MODE_ALL -> RepeatMode.ALL
+            else -> RepeatMode.OFF
+        }
 
     private fun RepeatMode.toPlayerMode(): Int =
-            when (this) {
-                RepeatMode.ONE -> Player.REPEAT_MODE_ONE
-                RepeatMode.ALL -> Player.REPEAT_MODE_ALL
-                RepeatMode.OFF -> Player.REPEAT_MODE_OFF
+        when (this) {
+            RepeatMode.ONE -> Player.REPEAT_MODE_ONE
+            RepeatMode.ALL -> Player.REPEAT_MODE_ALL
+            RepeatMode.OFF -> Player.REPEAT_MODE_OFF
+        }
+
+    private fun extractPlaybackErrorMessage(error: Throwable): String {
+        var current: Throwable? = error
+        while (current != null) {
+            val msg = current.message.orEmpty()
+            if (msg.startsWith("YouTube could not play this track: ")) {
+                val reason = msg.removePrefix("YouTube could not play this track: ").trim()
+                return if (reason.isNotBlank()) reason else "This track is unavailable."
             }
+            if (msg.contains("inappropriate for some users", ignoreCase = true)) {
+                return "This video may be inappropriate for some users."
+            }
+            if (msg.contains("confirm your age", ignoreCase = true)) {
+                return "This track requires age verification on YouTube."
+            }
+            if (msg.contains("not a bot", ignoreCase = true)) {
+                return "YouTube bot check: sign in to play this track."
+            }
+            if (msg.contains("refused this track", ignoreCase = true)) {
+                return "YouTube refused this track."
+            }
+            if (
+                current is java.net.UnknownHostException ||
+                    current is java.net.SocketTimeoutException
+            ) {
+                return "Network error: check your connection."
+            }
+            current = current.cause
+        }
+        val fallback = error.cause?.message ?: error.message
+        return fallback?.takeIf { it.isNotBlank() } ?: "Playback failed."
+    }
+
+    private fun isUnrecoverablePlaybackError(error: Throwable): Boolean {
+        var current: Throwable? = error
+        while (current != null) {
+            val msg = current.message.orEmpty()
+            if (
+                msg.contains("inappropriate for some users", ignoreCase = true) ||
+                    msg.contains("confirm your age", ignoreCase = true) ||
+                    msg.contains("private", ignoreCase = true) ||
+                    msg.contains("not available in your country", ignoreCase = true) ||
+                    msg.contains("removed", ignoreCase = true)
+            ) {
+                return true
+            }
+            current = current.cause
+        }
+        return false
+    }
 
     companion object {
         private const val TAG = "OrchardPlayback"
@@ -851,8 +909,8 @@ class OrchardPlaybackService : MediaLibraryService() {
         /**
          * How much track has to be left before a model pass is worth starting.
          *
-         * Measured, not guessed: a pass runs 13s to 35s depending on contention, so a minute is
-         * the first round number that clears the slow end with room for the render that follows.
+         * Measured, not guessed: a pass runs 13s to 35s depending on contention, so a minute is the
+         * first round number that clears the slow end with room for the render that follows.
          */
         private const val MODEL_PASS_MIN_LEAD_SECONDS = 60.0
 
@@ -861,9 +919,9 @@ class OrchardPlaybackService : MediaLibraryService() {
         private val COMMAND_TOGGLE_SHUFFLE = SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY)
         private val COMMAND_TOGGLE_REPEAT = SessionCommand(ACTION_TOGGLE_REPEAT, Bundle.EMPTY)
         private val AUDIO_ATTRIBUTES =
-                AudioAttributes.Builder()
-                        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                        .setUsage(C.USAGE_MEDIA)
-                        .build()
+            AudioAttributes.Builder()
+                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                .setUsage(C.USAGE_MEDIA)
+                .build()
     }
 }

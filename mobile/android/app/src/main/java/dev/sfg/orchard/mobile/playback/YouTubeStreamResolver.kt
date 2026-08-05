@@ -103,6 +103,7 @@ class YouTubeStreamResolver(
         val quality = qualityProvider()
         val cacheKey = "$videoId:${quality.name}"
         cached(cacheKey)?.let { return it }
+        var maxQualityFallback = false
         // MAX uses NewPipe for the highest bitrate stream.
         if (quality == AudioQuality.MAX) {
             val newPipeStream = newPipeResolver.resolve(videoId)
@@ -110,11 +111,15 @@ class YouTubeStreamResolver(
                 streams[cacheKey] = newPipeStream
                 return newPipeStream
             }
-            // NewPipe failed; fall back to HIGH and tell the user.
-            Log.w(TAG, "NewPipe extraction failed for $videoId; falling back to HIGH quality")
-            onWarning?.invoke("Max quality unavailable, using High")
+            // NewPipe failed; fall back to HIGH. We only warn the user if HIGH resolution actually succeeds.
+            Log.w(TAG, "NewPipe extraction failed for $videoId; attempting fallback to HIGH quality")
+            maxQualityFallback = true
             val fallbackKey = "$videoId:${AudioQuality.HIGH.name}"
-            cached(fallbackKey)?.let { streams[cacheKey] = it; return it }
+            cached(fallbackKey)?.let {
+                onWarning?.invoke("Max quality unavailable, using High")
+                streams[cacheKey] = it
+                return it
+            }
         }
         // Only one caller resolves a given track; a prefetch already in flight is worth
         // waiting on, since a second player request would cost the same round trip.
@@ -150,6 +155,9 @@ class YouTubeStreamResolver(
                         .getOrThrow()
                 }
             val stream = chooseAudio(response, quality)
+            if (maxQualityFallback) {
+                onWarning?.invoke("Max quality unavailable, using High")
+            }
             streams[cacheKey] = stream
             Log.d(
                 TAG,
