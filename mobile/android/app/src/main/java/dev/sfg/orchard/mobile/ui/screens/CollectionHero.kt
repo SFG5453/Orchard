@@ -32,23 +32,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.IosShare
-import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,15 +58,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.sfg.orchard.mobile.auth.SupabaseSyncService
 import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.playback.smart.BestMixSorter
+import kotlinx.coroutines.launch
 import dev.sfg.orchard.mobile.ui.components.AlbumEditorialReview
 import dev.sfg.orchard.mobile.ui.components.AnimatedArtworkVideo
-import dev.sfg.orchard.mobile.ui.components.CollectionActionRow
 import dev.sfg.orchard.mobile.ui.components.ArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.ArtworkTile
-import dev.sfg.orchard.mobile.ui.theme.CanopyColors
+import dev.sfg.orchard.mobile.ui.components.CollectionActionRow
+import dev.sfg.orchard.mobile.ui.components.CollectionTopBar
 import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import dev.sfg.orchard.mobile.ui.theme.legibleOnDarkChrome
@@ -97,7 +96,8 @@ fun CollectionHero(
     onShare: ((BrowseDetail) -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    var menuOpen by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val syncService = remember { SupabaseSyncService(context) }
 
     val isAlbum = detail.kind == CatalogKind.ALBUM
     val albumAccent = remember(palette.accent) { palette.accent.legibleOnDarkChrome() }
@@ -162,100 +162,24 @@ fun CollectionHero(
         context.startActivity(Intent.createChooser(intent, "Share ${detail.title}"))
     }
 
-    // Shared so albums can float it over the cover while playlists keep it above.
-    val navigationBar: @Composable () -> Unit = {
-            // Top Navigation Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Back button
-                Surface(
-                    onClick = onBack,
-                    shape = CircleShape,
-                    color = Color.White.copy(alpha = 0.16f),
-                    modifier = Modifier.size(38.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
+    fun playBestMix() {
+        scope.launch {
+            val features = syncService.fetchTrackFeatures(detail.tracks.map { it.id })
+            val sorted = BestMixSorter.sort(detail.tracks, features)
+            onPlayAll(sorted, detail.title)
+        }
+    }
 
-                // Top-right action controls: Share & More options
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Surface(
-                        onClick = { shareAlbum() },
-                        shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.16f),
-                        modifier = Modifier.size(38.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Rounded.IosShare,
-                                contentDescription = "Share",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    }
-
-                    Box {
-                        Surface(
-                            onClick = { menuOpen = true },
-                            shape = CircleShape,
-                            color = Color.White.copy(alpha = 0.16f),
-                            modifier = Modifier.size(38.dp),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Rounded.MoreHoriz,
-                                    contentDescription = "More options",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
-                        }
-
-                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                            DropdownMenuItem(
-                                text = { Text(if (isSaved) "Remove from library" else "Add to library") },
-                                onClick = {
-                                    menuOpen = false
-                                    onSave(detail)
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Share") },
-                                onClick = {
-                                    menuOpen = false
-                                    shareAlbum()
-                                },
-                            )
-                            if (detail.description.isNotBlank()) {
-                                DropdownMenuItem(
-                                    text = { Text("About this ${if (detail.kind == CatalogKind.ALBUM) "album" else "playlist"}") },
-                                    onClick = {
-                                        menuOpen = false
-                                        onAbout()
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+    val topBar: @Composable () -> Unit = {
+        CollectionTopBar(
+            onBack = onBack,
+            onShare = { shareAlbum() },
+            onSave = { onSave(detail) },
+            isSaved = isSaved,
+            onAbout = if (detail.description.isNotBlank()) onAbout else null,
+            onBestMix = if (detail.kind == CatalogKind.PLAYLIST && detail.tracks.size > 1) (::playBestMix) else null,
+            aboutLabel = "About this ${if (detail.kind == CatalogKind.ALBUM) "album" else "playlist"}",
+        )
     }
 
     Column(
@@ -295,7 +219,7 @@ fun CollectionHero(
                     ),
                 )
 
-                Box(modifier = Modifier.align(Alignment.TopCenter)) { navigationBar() }
+                Box(modifier = Modifier.align(Alignment.TopCenter)) { topBar() }
 
                 Column(
                     modifier = Modifier
@@ -339,7 +263,7 @@ fun CollectionHero(
             }
             Spacer(Modifier.height(12.dp))
         } else {
-            navigationBar()
+            topBar()
             Spacer(Modifier.height(8.dp))
             // Prominent Centered Artwork Card with motion cover support & soft drop shadow
             Box(
@@ -429,6 +353,56 @@ fun CollectionHero(
             playEnabled = detail.tracks.isNotEmpty(),
             shuffleEnabled = detail.tracks.isNotEmpty() && shuffleAvailable,
         )
+
+        // Best mix button at top of playlists
+        if (detail.kind == CatalogKind.PLAYLIST && detail.tracks.size > 1) {
+            var isSorting by remember { mutableStateOf(false) }
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = {
+                    if (!isSorting) {
+                        isSorting = true
+                        scope.launch {
+                            try {
+                                val features = syncService.fetchTrackFeatures(detail.tracks.map { it.id })
+                                val sorted = BestMixSorter.sort(detail.tracks, features)
+                                onPlayAll(sorted, detail.title)
+                            } finally {
+                                isSorting = false
+                            }
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White.copy(alpha = 0.12f),
+                    contentColor = Color.White,
+                ),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .height(40.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        Icons.Rounded.AutoAwesome,
+                        contentDescription = "Best mix",
+                        tint = LocalAccent.current,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.padding(horizontal = 4.dp))
+                    Text(
+                        text = if (isSorting) "Sorting Best Mix..." else "Best mix",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = Color.White,
+                    )
+                }
+            }
+        }
 
         // Editorial review snippet with expandable "MORE"
         if (detail.description.isNotBlank()) {

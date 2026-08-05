@@ -96,7 +96,7 @@ object TrackFeatures {
         val mixOutCandidates: List<MixCandidate>,
     )
 
-    private fun parse(root: JSONObject) = Features(
+    fun parse(root: JSONObject): Features = Features(
         duration = root.optDouble("duration", 0.0).orZero(),
         bpm = root.optDouble("bpm", 0.0).orZero(),
         beatInterval = root.optDouble("beatInterval", 0.0).orZero(),

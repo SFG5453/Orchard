@@ -29,6 +29,7 @@ import android.os.HandlerThread
 import android.util.Log
 import androidx.media3.common.util.UnstableApi
 import eu.buney.kopus.OpusDecoder
+import eu.buney.kopus.OpusLoader
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
@@ -97,7 +98,10 @@ object AudioDecoder {
 
             if (mime == "audio/opus") {
                 val rate = closestOpusRate(targetRate ?: inputRate.toInt())
-                return decodeOpusMono(extractor, actualStart, endUs, rate, channels)
+                decodeOpusMono(extractor, actualStart, endUs, rate, channels)?.let { return it }
+                // Kopus could not do it. The platform decoder still can, but only from the
+                // top of the region: the extractor may have been advanced already.
+                extractor.seekTo((startSeconds * 1_000_000).toLong(), MediaExtractor.SEEK_TO_CLOSEST_SYNC)
             }
 
             format.setInteger(MediaFormat.KEY_PRIORITY, 0)
@@ -247,7 +251,8 @@ object AudioDecoder {
 
             if (mime == "audio/opus") {
                 val rate = closestOpusRate(targetRate ?: inputRate.toInt())
-                return decodeOpusStereo(extractor, actualStart, endUs, rate, channels)
+                decodeOpusStereo(extractor, actualStart, endUs, rate, channels)?.let { return it }
+                extractor.seekTo((startSeconds * 1_000_000).toLong(), MediaExtractor.SEEK_TO_CLOSEST_SYNC)
             }
 
             format.setInteger(MediaFormat.KEY_PRIORITY, 0)
@@ -353,6 +358,46 @@ object AudioDecoder {
         }
     }
 
+    /** Guards the one-time native load below. */
+    private val opusLoadLock = Any()
+
+    /** Null until the first attempt settles it, so a hopeless load is not retried per track. */
+    @Volatile
+    private var opusNativeUsable: Boolean? = null
+
+    /**
+     * Opens a Kopus decoder, or null when the native library cannot serve one.
+     *
+     * Kopus flips its "already loaded" flag *before* `System.loadLibrary` returns, so a second
+     * thread arriving while the first is still inside `dlopen` is told the library is ready and
+     * calls straight into natives that are not registered yet, which is an `UnsatisfiedLinkError`
+     * rather than an exception and therefore kills the process. Best Mix is what finds it: it
+     * fans a whole playlist across the analysis pool at once, so several threads open their first
+     * decoder in the same instant. Doing the load ourselves under a lock means only the winner is
+     * ever inside it and everyone else waits for a library that is genuinely there.
+     */
+    private fun openOpusDecoder(sampleRate: Int, channels: Int): OpusDecoder? {
+        if (opusNativeUsable == false) return null
+        synchronized(opusLoadLock) {
+            if (opusNativeUsable == false) return null
+            try {
+                OpusLoader.load()
+            } catch (error: Throwable) {
+                Log.w(TAG, "Opus native library unavailable, using the platform decoder", error)
+                opusNativeUsable = false
+                return null
+            }
+        }
+        return try {
+            OpusDecoder(sampleRate, channels).also { opusNativeUsable = true }
+        } catch (error: LinkageError) {
+            // The library loaded but cannot be called: nothing a later track will do better.
+            Log.w(TAG, "Opus native decoder unusable, using the platform decoder", error)
+            opusNativeUsable = false
+            null
+        }
+    }
+
     private fun decodeOpusMono(
         extractor: MediaExtractor,
         actualStart: Double,
@@ -360,7 +405,7 @@ object AudioDecoder {
         sampleRate: Int,
         channels: Int,
     ): Pair<Pcm, Double>? {
-        val decoder = OpusDecoder(sampleRate, channels)
+        val decoder = openOpusDecoder(sampleRate, channels) ?: return null
         val collected = ArrayList<FloatArray>()
         var total = 0
         val inputBuffer = ByteBuffer.allocateDirect(16384)
@@ -430,7 +475,7 @@ object AudioDecoder {
         sampleRate: Int,
         channels: Int,
     ): Pair<StereoPcm, Double>? {
-        val decoder = OpusDecoder(sampleRate, channels)
+        val decoder = openOpusDecoder(sampleRate, channels) ?: return null
         val leftChunks = ArrayList<FloatArray>()
         val rightChunks = ArrayList<FloatArray>()
         var total = 0

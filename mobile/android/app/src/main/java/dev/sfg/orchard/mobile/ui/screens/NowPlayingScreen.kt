@@ -23,75 +23,57 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalConfiguration
-import dev.sfg.orchard.mobile.ui.components.AnimatedArtworkVideo
-import dev.sfg.orchard.mobile.ui.components.RemoteArtwork
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.graphics.toArgb
-import androidx.core.graphics.ColorUtils
-import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.model.LyricLine
-import dev.sfg.orchard.mobile.model.Track
-import dev.sfg.orchard.mobile.ui.components.ArtworkTile
-import dev.sfg.orchard.mobile.ui.components.TrackActionsPopup
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.PlaybackTarget
 import dev.sfg.orchard.mobile.model.PlaybackTargetState
+import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.model.TransitionMarker
 import dev.sfg.orchard.mobile.ui.components.MessagePanel
+import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * State-of-the-art Now Playing experience featuring a full-bleed artwork backdrop, marquee typography, interactive scrubber,
@@ -108,7 +90,6 @@ fun NowPlayingScreen(
     transition: dev.sfg.orchard.mobile.model.TransitionMarker? = null,
     showBitrate: Boolean = false,
     bitrateKbps: Int = 0,
-    audioQuality: dev.sfg.orchard.mobile.model.AudioQuality = dev.sfg.orchard.mobile.model.AudioQuality.HIGH,
     remoteVolume: Float = 1f,
     onRemoteVolumeChange: (Float) -> Unit = {},
     onBack: () -> Unit,
@@ -207,6 +188,7 @@ fun NowPlayingScreen(
             track = track,
             isPlaying = playback.isPlaying,
             animatedArtworkEnabled = animatedArtworkEnabled,
+            transitionProgress = dev.sfg.orchard.mobile.ui.components.transitionProgress(playback, transition),
             modifier = Modifier.blur(backdropBlur),
         )
         // Blur is a no-op below API 31, so darken as well to keep lyrics legible everywhere.
@@ -231,7 +213,6 @@ fun NowPlayingScreen(
                 transition = transition,
                 showBitrate = showBitrate,
                 bitrateKbps = bitrateKbps,
-                audioQuality = audioQuality,
                 remoteVolume = remoteVolume,
                 dragHandle = dragHandle,
                 onRemoteVolumeChange = onRemoteVolumeChange,
@@ -365,7 +346,6 @@ fun NowPlayingScreen(
                     transition = transition,
                     showBitrate = showBitrate,
                     bitrateKbps = bitrateKbps,
-                    audioQuality = audioQuality,
                     remoteVolume = remoteVolume,
                     lyricsActive = lyricsOpen,
                     queueActive = queueOpen,
@@ -383,326 +363,4 @@ fun NowPlayingScreen(
             }
         }
     }
-}
-
-/**
- * The tablet player: cover on the left, everything that reads as text on the right.
- *
- * The phone treats lyrics and the queue as modes that take the screen away from
- * the artwork. Here they are just the right column's content, so a glance still
- * lands on the cover and the transport never moves between modes.
- */
-@Composable
-private fun TabletPlayerBody(
-    track: Track,
-    playback: PlaybackSnapshot,
-    targets: PlaybackTargetState,
-    lyrics: LoadState<List<LyricLine>>,
-    animatedArtworkEnabled: Boolean,
-    liked: Boolean,
-    panel: PlayerPanel,
-    canControl: Boolean,
-    localControls: Boolean,
-    transition: dev.sfg.orchard.mobile.model.TransitionMarker?,
-    showBitrate: Boolean,
-    bitrateKbps: Int,
-    audioQuality: dev.sfg.orchard.mobile.model.AudioQuality,
-    remoteVolume: Float,
-    dragHandle: Modifier,
-    onRemoteVolumeChange: (Float) -> Unit,
-    onBack: () -> Unit,
-    onSeek: (Long) -> Unit,
-    onToggle: () -> Unit,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
-    onShuffle: () -> Unit,
-    onRepeat: () -> Unit,
-    onLiked: () -> Unit,
-    onDevices: () -> Unit,
-    onPlayQueueIndex: (Int) -> Unit,
-    onRemoveQueueIndex: (Int) -> Unit,
-    onMoveQueueItem: (Int, Int) -> Unit,
-    onClearUpcoming: () -> Unit,
-    onShare: (() -> Unit)?,
-    onOpenCollection: ((String) -> Unit)?,
-    onLyricsPanel: () -> Unit,
-    onQueuePanel: () -> Unit,
-) {
-    Column(Modifier.fillMaxSize().systemBarsPadding()) {
-        PlayerTopHandle(onDismiss = onBack, modifier = dragHandle)
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 40.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // The cover is framed rather than full-bleed. At this size the
-            // blurred backdrop behind it reads as the room, and the square reads
-            // as the record.
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(20.dp)),
-            ) {
-                val motion = track.animatedArtworkUrl.ifBlank { track.animatedArtworkVerticalUrl }
-                if (animatedArtworkEnabled && motion.isNotBlank()) {
-                    AnimatedArtworkVideo(motion, playback.isPlaying, Modifier.fillMaxSize())
-                } else {
-                    RemoteArtwork(track.artworkUrl, track.title, Modifier.fillMaxSize())
-                }
-            }
-
-            Spacer(Modifier.width(40.dp))
-
-            Column(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                verticalArrangement = Arrangement.Center,
-            ) {
-                TrackInfoRow(
-                    track = track,
-                    liked = liked,
-                    onLiked = onLiked,
-                    onMore = onQueuePanel,
-                    onShare = onShare,
-                    onOpenAlbum = track.albumId.takeIf { it.isNotBlank() }
-                        ?.let { id -> onOpenCollection?.let { open -> { open(id) } } },
-                    onOpenArtist = track.artistId.takeIf { it.isNotBlank() }
-                        ?.let { id -> onOpenCollection?.let { open -> { open(id) } } },
-                )
-
-                if (panel != PlayerPanel.NONE) {
-                    Spacer(Modifier.height(16.dp))
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            // Same dissolve as the phone panel, so lines fade
-                            // into the column rather than being cut by its edges.
-                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                            .drawWithContent {
-                                drawContent()
-                                drawRect(
-                                    brush = Brush.verticalGradient(
-                                        0f to Color.Transparent,
-                                        0.08f to Color.Black,
-                                        0.9f to Color.Black,
-                                        1f to Color.Transparent,
-                                    ),
-                                    blendMode = BlendMode.DstIn,
-                                )
-                            },
-                    ) {
-                        if (panel == PlayerPanel.QUEUE) {
-                            PlayerQueuePanel(
-                                playback = playback,
-                                editable = canControl,
-                                onPlayIndex = onPlayQueueIndex,
-                                onRemove = onRemoveQueueIndex,
-                                onMove = onMoveQueueItem,
-                                onClearUpcoming = onClearUpcoming,
-                                onShuffleUpcoming = onShuffle,
-                            )
-                        } else {
-                            val palette = rememberArtworkPalette(track.artworkUrl)
-                            val lyricAccent = remember(palette.accent) { palette.accent.readableOnDarkBackdrop() }
-                            when (lyrics) {
-                                is LoadState.Content -> LyricLines(
-                                    lines = lyrics.value,
-                                    positionMs = playback.positionMs,
-                                    playing = playback.isPlaying,
-                                    onSeek = onSeek,
-                                    contentPadding = PaddingValues(vertical = 24.dp),
-                                    accent = lyricAccent,
-                                )
-
-                                LoadState.Loading -> LyricsNotice("Finding lyrics…")
-                                is LoadState.Empty -> LyricsNotice(lyrics.message)
-                                is LoadState.Error -> LyricsNotice(lyrics.message)
-                                LoadState.Idle -> LyricsNotice("Start a song to see its lyrics.")
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(16.dp))
-                } else {
-                    Spacer(Modifier.height(28.dp))
-                }
-
-                PlayerControlStack(
-                    playback = playback,
-                    targets = targets,
-                    canControl = canControl,
-                    localControls = localControls,
-                    transition = transition,
-                    showBitrate = showBitrate,
-                    bitrateKbps = bitrateKbps,
-                    audioQuality = audioQuality,
-                    remoteVolume = remoteVolume,
-                    lyricsActive = panel == PlayerPanel.LYRICS,
-                    queueActive = panel == PlayerPanel.QUEUE,
-                    onRemoteVolumeChange = onRemoteVolumeChange,
-                    onSeek = onSeek,
-                    onToggle = onToggle,
-                    onPrevious = onPrevious,
-                    onNext = onNext,
-                    onShuffle = onShuffle,
-                    onRepeat = onRepeat,
-                    onLyrics = onLyricsPanel,
-                    onDevices = onDevices,
-                    onQueue = onQueuePanel,
-                )
-            }
-        }
-    }
-}
-
-/** Which mode, if any, has taken over the middle of the player. */
-private enum class PlayerPanel { NONE, LYRICS, QUEUE }
-
-/**
- * Everything below the track title: scrubber, transport, volume, destinations.
- *
- * Shared by both layouts. The phone stacks it under the artwork; the tablet puts
- * it in the right column beside the cover, and neither should drift from the
- * other as controls are added.
- */
-@Composable
-private fun PlayerControlStack(
-    playback: PlaybackSnapshot,
-    targets: PlaybackTargetState,
-    canControl: Boolean,
-    localControls: Boolean,
-    transition: dev.sfg.orchard.mobile.model.TransitionMarker?,
-    showBitrate: Boolean,
-    bitrateKbps: Int,
-    audioQuality: dev.sfg.orchard.mobile.model.AudioQuality,
-    remoteVolume: Float,
-    lyricsActive: Boolean,
-    queueActive: Boolean,
-    onRemoteVolumeChange: (Float) -> Unit,
-    onSeek: (Long) -> Unit,
-    onToggle: () -> Unit,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
-    onShuffle: () -> Unit,
-    onRepeat: () -> Unit,
-    onLyrics: () -> Unit,
-    onDevices: () -> Unit,
-    onQueue: () -> Unit,
-) {
-    PlayerScrubber(
-        playback = playback,
-        onSeek = onSeek,
-        transition = transition,
-        showBitrate = showBitrate,
-        bitrateKbps = bitrateKbps,
-        audioQuality = audioQuality,
-    )
-    Spacer(Modifier.height(16.dp))
-    PlayerTransportControls(
-        isPlaying = playback.isPlaying,
-        status = playback.status,
-        shuffle = playback.shuffle,
-        repeatMode = playback.repeatMode,
-        localControls = canControl,
-        onToggle = onToggle,
-        onPrevious = onPrevious,
-        onNext = onNext,
-        onShuffle = onShuffle,
-        onRepeat = onRepeat,
-    )
-    Spacer(Modifier.height(24.dp))
-    DeviceVolumeSlider(
-        enabled = canControl,
-        isRemote = !localControls,
-        remoteVolume = remoteVolume,
-        onRemoteVolumeChange = onRemoteVolumeChange,
-    )
-    Spacer(Modifier.height(20.dp))
-    PlayerBottomDestinations(
-        targets = targets,
-        upcomingCount = playback.upcoming.size,
-        onLyrics = onLyrics,
-        lyricsActive = lyricsActive,
-        onDevices = onDevices,
-        onQueue = onQueue,
-        queueActive = queueActive,
-    )
-}
-
-/** Compact track identity shown above an open panel, replacing the large title row. */
-@Composable
-private fun PanelTrackHeader(
-    track: Track,
-    liked: Boolean,
-    onLiked: () -> Unit,
-    onMore: () -> Unit,
-    onShare: (() -> Unit)?,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ArtworkTile(track.artworkUrl, "Artwork for ${track.title}", Modifier.size(44.dp), 8)
-        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Text(
-                track.title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                track.artist,
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.65f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        var menuOpen by remember { mutableStateOf(false) }
-        if (menuOpen) {
-            TrackActionsPopup(
-                track = track,
-                onDismiss = { menuOpen = false },
-                onViewQueue = onMore,
-                onShare = onShare,
-            )
-        }
-        TrackActionButtons(
-            liked = liked,
-            onLiked = onLiked,
-            onMore = onMore,
-            onShare = onShare,
-            onOpenMenu = { menuOpen = true },
-        )
-    }
-}
-
-/** Centred status text for the states where there is nothing to sing along to. */
-@Composable
-private fun LyricsNotice(message: String) {
-    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(
-            message,
-            style = MaterialTheme.typography.titleMedium,
-            color = Color.White.copy(alpha = 0.70f),
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
-/**
- * Sampled cover accents can be muddy or near-black. Saturate and brighten until the colour reads
- * as a highlight against the dimmed artwork, falling back to white for greys with no hue to keep.
- */
-private fun Color.readableOnDarkBackdrop(): Color {
-    val hsl = FloatArray(3)
-    ColorUtils.colorToHSL(toArgb(), hsl)
-    if (hsl[1] < 0.12f) return Color.White
-    hsl[1] = hsl[1].coerceIn(0.55f, 0.95f)
-    hsl[2] = hsl[2].coerceIn(0.62f, 0.80f)
-    return Color(ColorUtils.HSLToColor(hsl))
 }

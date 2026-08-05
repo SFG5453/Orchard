@@ -61,10 +61,31 @@ class TransitionPreparer(
 
     private val ready = ConcurrentHashMap<String, Prepared>()
     private val running = ConcurrentHashMap.newKeySet<String>()
+
+    /** Pairs whose refusal has already been reported, so a per-tick gate logs once. */
+    private val explained = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * Pairs the renderer itself turned down. Distinct from [explained], which only suppresses
+     * repeated logging of gates that may still come good -- audio finishing its download is the
+     * ordinary case. A refusal from the renderer cannot come good: it is a verdict on the plan and
+     * the audio, neither of which changes between ticks, so re-attempting it only pays for two
+     * decodes again.
+     */
+    private val declined = ConcurrentHashMap.newKeySet<String>()
+
+    private fun explainOnce(key: String, reason: String) {
+        if (explained.add(key)) Log.d(TAG, "No render for $key: $reason")
+    }
     private val executor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "orchard-transition-render").apply {
             isDaemon = true
-            priority = Thread.MIN_PRIORITY
+            // Normal priority, for the reason spelled out on the analysis pool in [TrackAnalyzer]:
+            // Android maps MIN_PRIORITY to nice 19 and the background cgroup, a small share of one
+            // core. This thread runs a phase vocoder over two whole tracks and has a hard deadline,
+            // the transition it is for. Missing it is silent — the engine drops to the plain fade —
+            // so the cost of starving this thread is not a slow mix, it is no mix at all.
+            priority = Thread.NORM_PRIORITY
         }
     }
 
@@ -86,25 +107,48 @@ class TransitionPreparer(
         incomingAnalysis: TrackAnalysis,
         plan: TransitionPlan,
     ) {
+        val key = key(outgoing, incoming)
         // Only the top tier earns a render. Anything less has already been judged not to support
         // beat-matching, and stretching against a grid nobody trusts is exactly what the policy
         // ladder exists to prevent.
-        if (plan.transitionStyle != TransitionStyle.DJ_BLEND) return
-        if (plan.transitionBeats <= 0 || plan.fadeSeconds <= 0) return
+        //
+        // Every gate below reports itself once per pair. This runs on every tick, so logging each
+        // refusal outright would bury the log; but a pair that silently never renders is the whole
+        // reason a mix turns into a fade, and that has to be answerable after the fact.
+        if (plan.transitionStyle != TransitionStyle.DJ_BLEND) {
+            return explainOnce(key, "style is ${plan.transitionStyle}, not DJ_BLEND")
+        }
+        if (plan.transitionBeats <= 0 || plan.fadeSeconds <= 0) {
+            return explainOnce(key, "empty window: beats=${plan.transitionBeats} fade=${plan.fadeSeconds}s")
+        }
         val policy = assessTransitionTier(outgoingAnalysis, incomingAnalysis)
-        if (policy.tier != TransitionTier.BEATMATCHED) return
+        if (policy.tier != TransitionTier.BEATMATCHED) {
+            return explainOnce(key, "tier is ${policy.tier}, not BEATMATCHED")
+        }
 
-        val key = key(outgoing, incoming)
-        if (ready.containsKey(key) || !running.add(key)) return
+        if (ready.containsKey(key) || declined.contains(key) || !running.add(key)) return
         if (!cache.isFullyCached(outgoingUri) || !cache.isFullyCached(incomingUri)) {
             running.remove(key)
-            return
+            return explainOnce(
+                key,
+                "not fully cached: outgoing=${cache.isFullyCached(outgoingUri)} " +
+                    "incoming=${cache.isFullyCached(incomingUri)}",
+            )
         }
 
         executor.execute {
             try {
-                ready[key] = render(key, outgoingUri, outgoingAnalysis, incomingUri, incomingAnalysis, plan)
-                    ?: return@execute
+                val rendered = render(key, outgoingUri, outgoingAnalysis, incomingUri, incomingAnalysis, plan)
+                if (rendered == null) {
+                    // `prepare` is called on every tick for the whole run-up to the transition, and
+                    // a refusal is final, so without this the pair decodes both tracks again every
+                    // few hundred milliseconds for a minute or more and throws all of it away. That
+                    // is how this was found. The engine's volume ramp covers the seam.
+                    declined.add(key)
+                    explainOnce(key, "renderer declined; see the OrchardTransition log for why")
+                    return@execute
+                }
+                ready[key] = rendered
                 Log.d(TAG, "Prepared transition $key")
             } catch (error: Exception) {
                 Log.w(TAG, "Could not prepare $key", error)
@@ -140,21 +184,24 @@ class TransitionPreparer(
                 left = outgoing.first.left,
                 right = outgoing.first.right,
                 anchorSeconds = outAnchor - outgoing.second,
-                bpm = outgoingAnalysis.bpm,
+                bpm = plan.outgoingBpm,
             ),
             incoming = TransitionRenderer.Source(
                 left = incoming.first.left,
                 right = incoming.first.right,
                 anchorSeconds = inAnchor - incoming.second,
-                bpm = incomingAnalysis.bpm,
+                // Octave-aligned by the planner, not the analyzed BPM: see [TransitionPlan].
+                bpm = plan.incomingBpm,
             ),
             beats = plan.transitionBeats.toDouble(),
-            // The mix changes hands where the incoming arrangement lands, which is what the planner
-            // put incomingHandoffTime at; before it the incoming intro is a bed under the outgoing.
-            handoff = 0.5,
-            bassSwap = 0.7,
-            // A sweep is what makes this read as a mix rather than two records at once.
-            filterSweep = FILTER_SWEEP,
+            // One continuous equal-power fade across the whole overlap, the low end handing over
+            // late within it, under a sweep that is what makes this read as a mix rather than two
+            // records at once. All four come from the planner: see the field docs on [TransitionPlan]
+            // for why they are not constants here.
+            handoff = plan.handoffFraction,
+            bed = plan.bedPosition,
+            bassSwap = plan.bassSwapFraction,
+            filterSweep = plan.filterSweep,
             vocalDuck = duckCurve(outgoingAnalysis, plan.transitionStart, plan.transitionEnd),
         ) ?: return null
 
@@ -195,29 +242,50 @@ class TransitionPreparer(
      *
      * The sweep alone follows the fade curve rather than the music: it costs the outgoing track the
      * same spectrum whether it is singing or playing an instrumental outro. This makes the depth
-     * follow what is actually there, so a track is filtered out of the way only when it has a vocal
-     * to collide with.
+     * follow what is actually there, so a track is filtered out of the way smoothly when fading out
+     * during the conclusion of a vocal.
      */
     private fun duckCurve(analysis: TrackAnalysis, start: Double, end: Double): FloatArray? {
         val mask = analysis.vocalActivityMask
         val curve = analysis.energyCurve
         if (mask.isEmpty() || mask.size != curve.size || end <= start) return null
-        return FloatArray(DUCK_POINTS) { index ->
+        val raw = FloatArray(DUCK_POINTS) { index ->
             val time = start + (end - start) * index / (DUCK_POINTS - 1.0)
             val nearest = curve.indices.minByOrNull { abs(curve[it].time - time) } ?: return@FloatArray 1f
-            mask[nearest].toFloat().coerceIn(0f, 1f)
+            val value = mask[nearest].toFloat()
+            if (value.isFinite()) value.coerceIn(0f, 1f) else 1f
         }
+        // If all points are unmeasured/neutral (0.5), leave the sweep at full flat depth.
+        if (raw.all { abs(it - 0.5f) < 0.05f }) return null
+
+        // Apply smooth sustain across the falling edge of vocal presence so fading vocals
+        // are tucked under the incoming track without sudden filter steps.
+        val shaped = FloatArray(DUCK_POINTS)
+        var maxPresence = 0f
+        for (i in 0 until DUCK_POINTS) {
+            maxPresence = maxOf(maxPresence * 0.95f, raw[i])
+            shaped[i] = maxPresence.coerceIn(0f, 1f)
+        }
+        return shaped
     }
 
     private fun nearestDownbeat(analysis: TrackAnalysis, target: Double): Double? =
         analysis.downbeats.minByOrNull { abs(it - target) }?.takeIf { abs(it - target) < 2.0 }
 
-    /** Drops renders for pairs that are no longer next, so the cache directory cannot grow. */
+    /**
+     * Drops renders for pairs that are no longer next, so the cache directory cannot grow.
+     *
+     * The two verdict sets are pruned alongside it. They are much smaller, but they are also the
+     * memory of *why* a pair produced nothing, and a pair that has left the queue and come back is
+     * entitled to be judged again -- its analysis may have finished, or improved, in between.
+     */
     fun retainOnly(keys: Set<String>) {
         for (key in ready.keys.toList()) {
             if (key in keys) continue
             ready.remove(key)?.file?.delete()
         }
+        declined.retainAll(keys)
+        explained.retainAll(keys)
     }
 
     fun key(outgoing: Track, incoming: Track): String = "${outgoing.id}-${incoming.id}"
@@ -236,9 +304,6 @@ class TransitionPreparer(
 
         /** Extra audio either side of the anchor, so the stretcher has room to work into. */
         const val MARGIN_SECONDS = 6.0
-
-        /** How far the outgoing low-pass closes by the end of the overlap. */
-        const val FILTER_SWEEP = 0.85
 
         /** Control points spanning the overlap; the renderer interpolates between them. */
         const val DUCK_POINTS = 64

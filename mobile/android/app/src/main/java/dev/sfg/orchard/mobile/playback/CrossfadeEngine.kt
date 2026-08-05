@@ -21,6 +21,7 @@ package dev.sfg.orchard.mobile.playback
 
 import android.os.Handler
 import android.os.SystemClock
+import android.util.Log
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
@@ -176,8 +177,24 @@ class CrossfadeEngine(
             // already in the buffer, complete with its own fades, so ramping the players on top
             // would fade a finished mix in and out of itself.
             val prepared = currentPair(player)?.let { (out, into) -> preparedFor(out, into) }
-            if (prepared != null && beginRenderedTransition(plan, prepared)) return
+            if (prepared != null && beginRenderedTransition(plan, prepared)) {
+                Log.d(
+                    TAG,
+                    "Transition: rendered overlap, style=${plan.transitionStyle} " +
+                        "beats=${plan.transitionBeats} stretch=${prepared.stretchRatio}",
+                )
+                return
+            }
 
+            // The one line that says whether you heard the mix or the fallback. A render that was
+            // planned but not ready is the interesting case: the plan asked for a beat-matched
+            // blend and the ramp is what actually played.
+            Log.d(
+                TAG,
+                "Transition: volume ramp, style=${plan.transitionStyle} " +
+                    "fadeMs=${plan.fadeMs} rate=${plan.incomingPlaybackRate} " +
+                    "renderReady=${prepared != null}",
+            )
             beginFade(plan, remainingMs = endMs - player.currentPosition)
         }
     }
@@ -328,6 +345,12 @@ class CrossfadeEngine(
                 // Not a blend: the incoming track is already at full volume and the outgoing one
                 // just gets out of the way, so the seam stays as tight as the decoder allows.
                 outgoing.volume = 1f - progress
+            } else if (fadeStyle == TransitionStyle.DJ_BLEND || fadeStyle == TransitionStyle.DJ_FILTER) {
+                // DJ transition: duck outgoing mids as incoming power rises, and use a smooth
+                // bed-to-drop curve so the incoming track doesn't blast at max volume prematurely.
+                val smoothProgress = progress * progress * (3f - 2f * progress)
+                outgoing.volume = cos(progress * PI.toFloat() / 2f)
+                incoming.volume = sin(smoothProgress * PI.toFloat() / 2f)
             } else {
                 // Equal power: ramping both volumes linearly dips the perceived loudness mid-fade.
                 outgoing.volume = cos(progress * PI.toFloat() / 2f)
@@ -350,6 +373,9 @@ class CrossfadeEngine(
      * the transition does not announce itself. It takes the top away first and the mids last, so
      * the outgoing track thins out and recedes instead of merely getting quieter, and because the
      * corner is moving, the ear follows the movement, which is what covers the seam.
+     *
+     * The outgoing channel receives mid-frequency ducking (up to -6 dB) scaled by the incoming track's
+     * power to prevent spectral collision where both tracks are loudest.
      *
      * The low end changes hands once, near the end rather than at the crossover. Handing bass over
      * where the fades cross makes the incoming track arrive early, because it gains weight while
@@ -374,11 +400,18 @@ class CrossfadeEngine(
         outgoingFilter.lowPassHz =
             TransitionFilter.SWEEP_START_HZ / span.pow(depth.toDouble())
 
+        // Mid-ducking on the outgoing channel: duck by up to -6 dB as incoming arrives to prevent
+        // mid-band collision and spectral summing.
+        val fadeIn = sin(progress * (PI.toFloat() / 2f))
+        val midDuckDb = -6.0 * (fadeIn * fadeIn)
+        outgoingFilter.gain = 10.0.pow(midDuckDb / 20.0)
+
         // One crossing, not a fade: below the crossover the band belongs to exactly one track.
         val swapped = progress >= BASS_SWAP_AT
         outgoingFilter.bassGain = if (swapped) BASS_DUCK else 1.0
         incomingFilter.bassGain = if (swapped) 1.0 else BASS_DUCK
         incomingFilter.lowPassHz = TransitionFilter.OPEN
+        incomingFilter.gain = 1.0
     }
 
     private fun finish(outgoing: ExoPlayer, incoming: ExoPlayer) {
@@ -403,6 +436,8 @@ class CrossfadeEngine(
     }
 
     private companion object {
+        const val TAG = "OrchardCrossfade"
+
         const val WATCH_INTERVAL_MS = 200L
         const val RAMP_INTERVAL_MS = 40L
 

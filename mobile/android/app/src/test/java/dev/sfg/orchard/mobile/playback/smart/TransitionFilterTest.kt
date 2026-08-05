@@ -24,6 +24,7 @@ import androidx.media3.common.audio.AudioProcessor
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.PI
+import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 import org.junit.Assert.assertEquals
@@ -126,6 +127,14 @@ class TransitionFilterTest {
     fun gainScalesTheWholeSignal() {
         val level = through(configured().apply { gain = 0.5 }, 1_000.0)
         assertEquals(0.177, level, 0.02)
+    }
+
+    @Test
+    fun midDuckGainAttenuatesByExpectedDb() {
+        // -6 dB is approximately 0.501 linear gain
+        val full = through(configured().apply { gain = 1.0 }, 1_000.0)
+        val ducked = through(configured().apply { gain = 10.0.pow(-6.0 / 20.0) }, 1_000.0)
+        assertEquals(full * 0.501, ducked, 0.02)
     }
 
     @Test

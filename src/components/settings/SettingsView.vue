@@ -26,11 +26,12 @@ import SpotifySection from './SpotifySection.vue';
 import SongCacheSection from './SongCacheSection.vue';
 import SetupGuideSection from './SetupGuideSection.vue';
 import ArtistPacksSection from './ArtistPacksSection.vue';
+import OrchardAccountSection from './OrchardAccountSection.vue';
 import { computed } from 'vue';
 
 export default {
   name: 'SettingsView',
-  components: { AudioEngineSection, BackupRestoreSection, DiagnosticsSection, LastfmSection, SpotifySection, SongCacheSection, SetupGuideSection, ArtistPacksSection },
+  components: { AudioEngineSection, BackupRestoreSection, DiagnosticsSection, LastfmSection, SpotifySection, SongCacheSection, SetupGuideSection, ArtistPacksSection, OrchardAccountSection },
   props: { app: { type: Object, required: true } },
   setup(props) {
     const layoutPresetDescription = computed(() => {
@@ -410,6 +411,7 @@ export default {
 
         <LastfmSection :app="app" />
         <SpotifySection :app="app" />
+        <OrchardAccountSection :app="app" />
 
         <div class="settings-row">
           <div class="settings-row__copy">

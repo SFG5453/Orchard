@@ -208,6 +208,17 @@ export default {
                       <q-icon name="shuffle" />
                       <span>Shuffle</span>
                     </button>
+                    <button
+                      v-if="browseDetail.kind === 'playlist' || browseDetail.kind === 'album'"
+                      type="button"
+                      class="action-button action-button--sync"
+                      :disabled="isAnalyzingPlaylist"
+                      title="Analyze tracks and sync audio features to Cloud for instant mobile Best Mix"
+                      @click="analyzeCurrentCollection(browseDetail)"
+                    >
+                      <q-icon :name="isAnalyzingPlaylist ? 'sync' : 'auto_graph'" :class="{ 'spin-animation': isAnalyzingPlaylist }" />
+                      <span>{{ isAnalyzingPlaylist ? `${Math.round(playlistAnalysisProgress * 100)}%` : 'Analyze for Cloud Sync' }}</span>
+                    </button>
                     <button type="button" class="action-button" @click="shareBrowseDetailLink">
                       <q-icon name="ios_share" />
                       <span>Share</span>
@@ -220,6 +231,12 @@ export default {
                     >
                       <q-icon name="delete_outline" />
                       <span>Delete</span>
+                    </button>
+                  </div>
+                  <div v-if="playlistAnalysisStatus" class="detail-actions__status">
+                    <span class="analysis-status-text">{{ playlistAnalysisStatus }}</span>
+                    <button v-if="isAnalyzingPlaylist" type="button" class="analysis-cancel-button" @click="cancelPlaylistAnalysis">
+                      Cancel
                     </button>
                   </div>
                 </div>

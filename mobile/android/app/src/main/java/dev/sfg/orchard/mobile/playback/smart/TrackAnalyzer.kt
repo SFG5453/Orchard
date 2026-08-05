@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile.playback.smart
 
 import android.content.Context
+import android.media.MediaDataSource
 import android.net.Uri
 import android.util.Log
 import androidx.media3.common.util.UnstableApi
@@ -27,6 +28,7 @@ import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.playback.StreamCache
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.PriorityBlockingQueue
+import java.util.concurrent.Semaphore
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -124,6 +126,21 @@ class TrackAnalyzer(
         }
     }
 
+    /**
+     * Lets the two tracks of one transition through the model-grade passes together, and no more.
+     *
+     * The pool runs three jobs so queue-scope work, which is one cheap mono decode, keeps up with a
+     * whole playlist. The playback-scope pass is a different animal: high-rate stereo audio and two
+     * ONNX models, tens of megabytes live. Three of those at once exhausted a 192MB heap and took
+     * the process down inside MediaCodec's own callback.
+     *
+     * Two, not one, because a transition needs *both* of its tracks analysed before it starts, and
+     * serialising them puts the second one's whole runtime on the critical path — which is how a
+     * pair came to finish eighteen seconds after the transition it was for. Now that each region is
+     * released before the next is decoded, two passes cost about what one used to.
+     */
+    private val modelPass = Semaphore(2)
+
     private class Job(
         val scope: AnalysisScope,
         private val order: Long,
@@ -143,7 +160,7 @@ class TrackAnalyzer(
      * as no evidence rather than as a failure. Model-grade only: see [queueAnalysisFor].
      */
     fun analysisFor(track: Track): TrackAnalysis =
-        results[track.id] ?: TrackAnalysis(trackId = track.id)
+        results[track.id] ?: queueResults[track.id] ?: TrackAnalysis(trackId = track.id)
 
     /**
      * What Best Mix is allowed to order on: a full pass where one exists, the DSP-only pass
@@ -195,7 +212,11 @@ class TrackAnalyzer(
             Job(scope, sequence.incrementAndGet()) {
                 try {
                     store[track.id] = analyze(track, uri, durationSeconds, scope)
-                } catch (error: Exception) {
+                } catch (error: Throwable) {
+                    // Throwable, not Exception: analysis leans on native libraries, and a
+                    // LinkageError or an OOM from one of them is an Error. Uncaught on a pool
+                    // thread that is nobody's parent, it takes the whole app down for work
+                    // whose entire failure mode is meant to be "this track goes unanalysed".
                     Log.w(TAG, "Analysis of ${track.id} failed", error)
                     // Recorded as ready-but-empty so a track that cannot be analysed is not retried
                     // on every tick for the rest of the session.
@@ -231,11 +252,17 @@ class TrackAnalyzer(
         if (scope == AnalysisScope.QUEUE) return analyzeForQueue(track, uri, durationSeconds)
         val started = System.currentTimeMillis()
 
-        val source = cache.mediaDataSource(uri) ?: return empty(track, durationSeconds)
+        // Each pass opens its own handle. `use` closes the source at the end of its block, so the
+        // three passes cannot share one: closing it after pass 1 left passes 2 and 3 decoding a
+        // dead handle, which surfaced as "Failed to instantiate extractor" and cost every track its
+        // beat grid — and with no grid the policy can never reach BEATMATCHED, so every transition
+        // in the app quietly came out as a plain fade.
+        fun openSource() = cache.mediaDataSource(uri)
+        if (openSource() == null) return empty(track, durationSeconds)
 
         // Pass 1: Whole track mono at low rate for structural features (energy, phrases, etc.)
         val structRate = TrackFeatures.sampleRate.toInt()
-        val structDecoded = source.use { AudioDecoder.decodeRegion(it, 0.0, durationSeconds, targetRate = structRate) }
+        val structDecoded = openSource()?.use { AudioDecoder.decodeRegion(it, 0.0, durationSeconds, targetRate = structRate) }
             ?: return empty(track, durationSeconds)
         val (structPcm, _) = structDecoded
         val structSamples = if (abs(structPcm.sampleRate - TrackFeatures.sampleRate) > 1.0) {
@@ -247,17 +274,26 @@ class TrackAnalyzer(
         // Pass 2: High-resolution stereo regions for the models (head and tail only).
         // This avoids decoding minutes of audio at 48kHz that the models never see.
         val window = BeatTracker.WINDOW_SECONDS
-        val headDecoded = source.use { AudioDecoder.decodeRegionStereo(it, 0.0, minOf(window, durationSeconds), targetRate = 48000) }
         val tailStart = max(0.0, durationSeconds - window)
-        val tailDecoded = if (tailStart > window / 2) {
-            source.use { AudioDecoder.decodeRegionStereo(it, tailStart, durationSeconds, targetRate = 48000) }
-        } else null
 
-        val headPcm = headDecoded?.first?.let { AudioDecoder.Pcm(FloatArray(it.left.size) { i -> (it.left[i] + it.right[i]) * 0.5f }, it.sampleRate) }
-        val tailPcm = tailDecoded?.first?.let { AudioDecoder.Pcm(FloatArray(it.left.size) { i -> (it.left[i] + it.right[i]) * 0.5f }, it.sampleRate) }
+        // 30s of 48kHz stereo is ~11MB, and the mono mix, the resampled copy and the mel buffer
+        // are all live at once on top of it. Each region is therefore decoded, reduced to the few
+        // numbers that outlive it, and dropped before the next one is opened, so a track's peak is
+        // one region rather than two. [modelPass] then keeps whole tracks from overlapping.
+        val head: Region?
+        val tail: Region?
+        modelPass.acquire()
+        try {
+            head = region(::openSource, 0.0, minOf(window, durationSeconds), features, durationSeconds)
+            tail = if (tailStart > window / 2) {
+                region(::openSource, tailStart, durationSeconds, features, durationSeconds)
+            } else null
+        } finally {
+            modelPass.release()
+        }
 
-        val headGrid = headPcm?.let { grid(it, 0.0, it.durationSeconds) }
-        val tailGrid = tailPcm?.let { grid(it, tailStart, it.durationSeconds) }
+        val headGrid = head?.grid
+        val tailGrid = tail?.grid
 
         // The tail governs where the outgoing track is mixed out.
         val leading = tailGrid ?: headGrid
@@ -285,7 +321,7 @@ class TrackAnalyzer(
             phraseBoundaries = features?.phraseBoundaries.orEmpty(),
             key = features?.key.orEmpty(),
             keyConfidence = features?.keyConfidence ?: 0.0,
-            audibleStartTime = features?.audibleStartTime ?: headPcm?.let { audibleStart(it.samples, it.sampleRate, 0.0) },
+            audibleStartTime = features?.audibleStartTime ?: head?.audibleStart,
             pickupTime = features?.pickupTime,
             introEndTime = features?.introEndTime ?: 0.0,
             outroStartTime = features?.outroStartTime ?: 0.0,
@@ -295,11 +331,9 @@ class TrackAnalyzer(
             mixOutCandidates = features?.mixOutCandidates.orEmpty(),
             energyCurve = features?.energyCurve.orEmpty(),
             lowEnergyCurve = features?.lowEnergyCurve.orEmpty(),
+            // Vocal mask only where we have stereo model data.
             vocalActivityMask = features?.let {
-                // Vocal mask only where we have stereo model data.
-                val headMask = headDecoded?.let { vocalMask(it.first, features, durationSeconds, 0.0) }
-                val tailMask = tailDecoded?.let { vocalMask(it.first, features, durationSeconds, tailStart) }
-                mergeMasks(features.energyCurve.size, headMask, tailMask)
+                mergeMasks(it.energyCurve.size, head?.vocalMask, tail?.vocalMask)
             } ?: features?.vocalActivityMask.orEmpty(),
             vocalProbability = features?.vocalProbability ?: 0.0,
         )
@@ -348,9 +382,22 @@ class TrackAnalyzer(
             bpm = features.bpm,
             beatInterval = features.beatInterval,
             beatConfidence = features.beatConfidence,
+            downbeats = features.downbeats,
+            firstBeat = features.firstBeat,
+            phraseBoundaries = features.phraseBoundaries,
             key = features.key,
             keyConfidence = features.keyConfidence,
+            audibleStartTime = features.audibleStartTime,
+            pickupTime = features.pickupTime,
+            introEndTime = features.introEndTime,
+            outroStartTime = features.outroStartTime,
+            mixInTime = features.mixInTime,
+            mixOutTime = features.mixOutTime,
+            mixInCandidates = features.mixInCandidates,
+            mixOutCandidates = features.mixOutCandidates,
             energyCurve = features.energyCurve,
+            lowEnergyCurve = features.lowEnergyCurve,
+            vocalActivityMask = features.vocalActivityMask,
             vocalProbability = features.vocalProbability,
         )
     }
@@ -409,13 +456,58 @@ class TrackAnalyzer(
     )
 
     /** Tracks one window of the already-decoded PCM, resampled to the model's rate. */
-    private fun grid(pcm: AudioDecoder.Pcm, startSeconds: Double, endSeconds: Double): BeatTracker.Grid? {
-        val from = (startSeconds * pcm.sampleRate).toInt().coerceIn(0, pcm.samples.size)
-        val to = (endSeconds * pcm.sampleRate).toInt().coerceIn(from, pcm.samples.size)
-        if (to - from < pcm.sampleRate) return null
-        val window = pcm.samples.copyOfRange(from, to)
-        val resampled = MelSpectrogram.resample(window, pcm.sampleRate) ?: return null
-        return tracker.track(resampled, offsetSeconds = startSeconds)
+    /**
+     * The beat grid of one decoded region, with beat times stated against the whole track.
+     *
+     * [offsetSeconds] is where the region begins in the track, and is only ever added to the times
+     * that come back. It used to double as the start of a slice taken from [pcm], which worked for
+     * the head, whose offset is zero, and silently produced nothing for the tail: a region decoded
+     * from 105s onwards holds its own samples from index 0, so slicing it at 105s left an empty
+     * window and no grid at all.
+     */
+    /** Everything a decoded region contributes, once its audio has been let go of. */
+    private class Region(
+        val grid: BeatTracker.Grid?,
+        val vocalMask: DoubleArray?,
+        val audibleStart: Double?,
+    )
+
+    /**
+     * Decodes one high-rate stereo region, runs both models over it, and returns only the results.
+     *
+     * The point of the function boundary is the audio: the stereo buffer, its mono mix and the
+     * resampled copy are all local, so they are collectible the moment this returns instead of
+     * staying live until the whole analysis finishes. Two regions' worth held at once, times three
+     * analysis threads, is what exhausted the heap.
+     */
+    private fun region(
+        openSource: () -> MediaDataSource?,
+        startSeconds: Double,
+        endSeconds: Double,
+        features: TrackFeatures.Features?,
+        durationSeconds: Double,
+    ): Region? {
+        val decoded = openSource()?.use {
+            AudioDecoder.decodeRegionStereo(it, startSeconds, endSeconds, targetRate = 48000)
+        } ?: return null
+        val (stereo, actualStart) = decoded
+        val mono = AudioDecoder.Pcm(
+            FloatArray(stereo.left.size) { i -> (stereo.left[i] + stereo.right[i]) * 0.5f },
+            stereo.sampleRate,
+        )
+        return Region(
+            // The extractor seeks to a sync sample at or before what was asked for, so the region's
+            // real start is what its beat times must be stated against, not the requested one.
+            grid = grid(mono, offsetSeconds = actualStart),
+            vocalMask = features?.let { vocalMask(stereo, it, durationSeconds, actualStart) },
+            audibleStart = audibleStart(mono.samples, mono.sampleRate, actualStart),
+        )
+    }
+
+    private fun grid(pcm: AudioDecoder.Pcm, offsetSeconds: Double): BeatTracker.Grid? {
+        if (pcm.samples.size < pcm.sampleRate) return null
+        val resampled = MelSpectrogram.resample(pcm.samples, pcm.sampleRate) ?: return null
+        return tracker.track(resampled, offsetSeconds = offsetSeconds)
     }
 
     /**

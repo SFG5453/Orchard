@@ -27,6 +27,7 @@ import android.util.Log
 import dev.sfg.orchard.connect.client.OrchardConnectClient
 import dev.sfg.orchard.connect.discovery.ConnectDiscovery
 import dev.sfg.orchard.connect.discovery.LanEndpointDiscovery
+import dev.sfg.orchard.connect.protocol.ConnectAnalysisResults
 import dev.sfg.orchard.connect.protocol.ConnectClientError
 import dev.sfg.orchard.connect.protocol.ConnectClientStatus
 import dev.sfg.orchard.connect.protocol.ConnectCommand
@@ -89,6 +90,8 @@ class ConnectDeviceRepository(
     val snapshot: StateFlow<PlaybackSnapshot> = mutableSnapshot.asStateFlow()
     private val mutableDevice = MutableStateFlow<PlaybackDevice?>(null)
     val device: StateFlow<PlaybackDevice?> = mutableDevice.asStateFlow()
+    private val mutableRemoteAnalysis = MutableStateFlow<Map<String, dev.sfg.orchard.mobile.playback.smart.TrackFeatures.Features>>(emptyMap())
+    val remoteAnalysis: StateFlow<Map<String, dev.sfg.orchard.mobile.playback.smart.TrackFeatures.Features>> = mutableRemoteAnalysis.asStateFlow()
     private val mutableMessage = MutableStateFlow("")
     val message: StateFlow<String> = mutableMessage.asStateFlow()
     @Volatile private var serverUrl = ""
@@ -137,6 +140,7 @@ class ConnectDeviceRepository(
             mutableAudioEngine.value = dev.sfg.orchard.connect.protocol.ConnectAudioEngine()
             mutableRemoteVolume.value = 1.0f
             mutableSnapshot.value = PlaybackSnapshot()
+            mutableRemoteAnalysis.value = emptyMap()
             publishDevice()
         }
     }
@@ -170,6 +174,12 @@ class ConnectDeviceRepository(
     fun toggleAutoEq(enabled: Boolean): Boolean = send(ConnectCommand.AutoEq(enabled))
 
     fun toggleManualEq(enabled: Boolean): Boolean = send(ConnectCommand.ManualEq(enabled))
+
+    fun requestRemoteAnalysis(trackIds: List<String>): Boolean {
+        if (trackIds.isEmpty()) return false
+        val requestId = "analysis-${System.currentTimeMillis()}"
+        return client.requestAnalysis(trackIds, requestId)
+    }
 
     /** Search the desktop for an equivalent playable payload before transfer. */
     fun transfer(track: Track?, positionMs: Long = 0): Boolean {
@@ -228,6 +238,36 @@ class ConnectDeviceRepository(
     }
 
     override fun onLibraryResults(results: ConnectResults) = Unit
+
+    override fun onAnalysisResults(results: ConnectAnalysisResults) {
+        val mapped = results.results.associate { item ->
+            item.id to dev.sfg.orchard.mobile.playback.smart.TrackFeatures.Features(
+                duration = item.duration,
+                bpm = item.bpm,
+                beatInterval = if (item.bpm > 0) 60.0 / item.bpm else 0.0,
+                firstBeat = item.cueIn,
+                beatConfidence = item.beatConfidence,
+                key = item.musicalKey,
+                keyConfidence = item.keyConfidence,
+                audibleStartTime = item.cueIn,
+                pickupTime = 0.0,
+                introEndTime = item.cueIn,
+                outroStartTime = if (item.cueOut > 0) item.cueOut else item.duration,
+                contentEndTime = if (item.cueOut > 0) item.cueOut else item.duration,
+                mixInTime = item.cueIn,
+                mixOutTime = if (item.cueOut > 0) item.cueOut else item.duration,
+                vocalProbability = 0.0,
+                downbeats = emptyList(),
+                phraseBoundaries = emptyList(),
+                vocalActivityMask = emptyList(),
+                energyCurve = emptyList(),
+                lowEnergyCurve = emptyList(),
+                mixInCandidates = emptyList(),
+                mixOutCandidates = emptyList(),
+            )
+        }
+        mutableRemoteAnalysis.value = mutableRemoteAnalysis.value + mapped
+    }
 
     override fun onError(error: ConnectClientError) {
         Log.w(TAG, error.message, error)

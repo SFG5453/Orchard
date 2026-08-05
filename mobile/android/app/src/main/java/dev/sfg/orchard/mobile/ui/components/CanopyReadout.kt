@@ -31,6 +31,7 @@ fun CanopyReadout(
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
     onPrevious: () -> Unit = {},
+    transition: dev.sfg.orchard.mobile.model.TransitionMarker? = null,
 ) {
     MiniPlayer(
         playback = playback,
@@ -38,6 +39,7 @@ fun CanopyReadout(
         onNext = onNext,
         onPrevious = onPrevious,
         onClick = onOpen,
-        modifier = modifier
+        modifier = modifier,
+        transition = transition,
     )
 }

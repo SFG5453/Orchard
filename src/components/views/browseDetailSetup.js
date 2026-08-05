@@ -21,10 +21,17 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { fetchCustomArtistConfig, cachedCustomArtistIndex } from '../../app/appearance/customArtistPacks.js';
 import { albumWallBannerTiles } from '../../custom-artists/shared/albumWallBanner.js';
 import { setupConfiguredArtist } from '../../custom-artists/shared/configuredArtist.js';
+import { createPlaylistAnalysisRunner } from '../../app/playback/playlistAnalysisRunner.js';
 
 export function setupBrowseDetailView(props) {
   const detailPageRef = ref(null);
   const virtualPlaylistRef = ref(null);
+  const analysisRunner = createPlaylistAnalysisRunner(props.app);
+
+  function analyzeCurrentCollection(detail) {
+    const tracks = detail?.tracks || detail?.items || [];
+    return analysisRunner.analyzePlaylist(tracks);
+  }
 
   function scrollToCollectionTrack(index) {
     if (props.app.browseDetail.value?.kind === 'playlist') {
@@ -180,6 +187,11 @@ export function setupBrowseDetailView(props) {
     openDescriptionDialog,
     virtualPlaylistRef,
     isCustomArtistPage,
-    customArtistAlbumWallTiles
+    customArtistAlbumWallTiles,
+    isAnalyzingPlaylist: analysisRunner.isAnalyzing,
+    playlistAnalysisProgress: analysisRunner.progress,
+    playlistAnalysisStatus: analysisRunner.currentStatus,
+    analyzeCurrentCollection,
+    cancelPlaylistAnalysis: analysisRunner.cancel
   };
 }

@@ -57,19 +57,19 @@ class OrchardConnectClientTest {
         val hello = factory.transport.emissions.single()
         assertEquals(ConnectProtocol.Event.HELLO, hello.event)
         assertEquals("pair-token", (hello.payload as JSONObject).getString(ConnectProtocol.Field.TOKEN))
-        assertEquals(2, (hello.payload as JSONObject).getInt(ConnectProtocol.Field.PROTOCOL_VERSION))
+        assertEquals(3, (hello.payload as JSONObject).getInt(ConnectProtocol.Field.PROTOCOL_VERSION))
 
         hello.ack?.invoke(Result.success(JSONObject().put("ok", true).put("data", JSONObject()
             .put("status", "approved")
-            .put("protocolVersion", 2)
-            .put("state", JSONObject().put("status", "connected").put("protocolVersion", 2)))))
+            .put("protocolVersion", 3)
+            .put("state", JSONObject().put("status", "connected").put("protocolVersion", 3)))))
 
         assertEquals(ConnectClientStatus.APPROVED, client.status())
-        assertEquals(2, client.protocolVersion())
+        assertEquals(3, client.protocolVersion())
         assertTrue(client.send(ConnectCommand.Next))
         assertEquals(ConnectProtocol.CommandType.NEXT, (factory.transport.emissions.last().payload as JSONObject).getString("type"))
         assertEquals("connected", events.snapshots.single().status)
-        assertEquals(2, events.snapshots.single().protocolVersion)
+        assertEquals(3, events.snapshots.single().protocolVersion)
     }
 
     @Test
@@ -126,6 +126,49 @@ class OrchardConnectClientTest {
 
         assertTrue(hello.getString(ConnectProtocol.Field.DEVICE_TOKEN).isNotEmpty())
         assertFalse(hello.getString(ConnectProtocol.Field.DEVICE_TOKEN) == "old-host-token")
+    }
+
+    @Test
+    fun higherDesktopProtocolVersionCapsToMaxSupportedClientVersion() {
+        val factory = FakeTransportFactory()
+        val session = FakeSessionStore()
+        val events = RecordingListener()
+        val client = OrchardConnectClient(
+            factory, session, SecureDeviceTokenGenerator(), "Phone", Runnable::run, events
+        )
+        client.connect("http://future-desktop:32145", "pair")
+        factory.transport.listener.onOpened()
+        val hello = factory.transport.emissions.single()
+        hello.ack?.invoke(Result.success(JSONObject().put("ok", true).put("data", JSONObject()
+            .put("status", "approved")
+            .put("protocolVersion", 99)
+            .put("state", JSONObject().put("status", "connected").put("protocolVersion", 99)))))
+
+        assertEquals(ConnectProtocol.PROTOCOL_VERSION, client.protocolVersion())
+        assertEquals(ConnectProtocol.PROTOCOL_VERSION, events.snapshots.single().protocolVersion)
+    }
+
+    @Test
+    fun requestsAnalysisOverConnectWhenApproved() {
+        val factory = FakeTransportFactory()
+        val session = FakeSessionStore()
+        val events = RecordingListener()
+        val client = OrchardConnectClient(
+            factory, session, SecureDeviceTokenGenerator(), "Phone", Runnable::run, events
+        )
+        client.connect("http://desktop:32145", "pair")
+        factory.transport.listener.onOpened()
+        val hello = factory.transport.emissions.single()
+        hello.ack?.invoke(Result.success(JSONObject().put("ok", true).put("data", JSONObject()
+            .put("status", "approved")
+            .put("protocolVersion", 3))))
+
+        assertTrue(client.requestAnalysis(listOf("t1", "t2"), "req-1"))
+        val emitted = factory.transport.emissions.last()
+        assertEquals(ConnectProtocol.Event.ANALYSIS, emitted.event)
+        val payload = emitted.payload as JSONObject
+        assertEquals("req-1", payload.getString(ConnectProtocol.Field.REQUEST_ID))
+        assertEquals(2, payload.getJSONArray(ConnectProtocol.Field.TRACK_IDS).length())
     }
 
     private data class Emission(

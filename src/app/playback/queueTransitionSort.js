@@ -20,6 +20,7 @@
 import { ref, watch } from 'vue';
 import { ANALYSIS_PRIORITIES } from '../../audio/crossfade/smartCrossfadeAnalysis.js';
 import { loadLearnedAudioProfiles } from '../../audio/engine/audioProfileStore.js';
+import { fetchBatchCloudAnalysis } from '../../services/cloudAnalysisSync.js';
 
 const BEST_MIX_TRACK_LIMIT = 50;
 
@@ -56,18 +57,10 @@ function harmonicCost(left = '', right = '') {
       (rightMode === 'major' && leftIndex === (rightIndex + 9) % 12);
     if (relative) return 0.05;
     if (leftIndex === rightIndex) return 0.22;
-    const pitchDistance = Math.min(
-      (leftIndex - rightIndex + 12) % 12,
-      (rightIndex - leftIndex + 12) % 12
-    );
+    const pitchDistance = Math.min((leftIndex - rightIndex + 12) % 12, (rightIndex - leftIndex + 12) % 12);
     return Math.min(1, 0.35 + pitchDistance / 10);
   }
-  const leftCircle = (leftIndex * 7) % 12;
-  const rightCircle = (rightIndex * 7) % 12;
-  const circleDistance = Math.min(
-    (leftCircle - rightCircle + 12) % 12,
-    (rightCircle - leftCircle + 12) % 12
-  );
+  const circleDistance = Math.min(((leftIndex * 7) % 12 - (rightIndex * 7) % 12 + 12) % 12, ((rightIndex * 7) % 12 - (leftIndex * 7) % 12 + 12) % 12);
   if (circleDistance === 0) return 0;
   if (circleDistance === 1) return 0.12;
   if (circleDistance === 2) return 0.38;
@@ -115,20 +108,14 @@ export function transitionCost(left = {}, right = {}) {
   let totalWeight = 0;
   const tempoRatio = normalizedTempoRatio(left.bpm, right.bpm);
   if (tempoRatio) {
-    const weight = 4 * Math.sqrt(
-      confidence(left.tempoConfidence ?? left.beatConfidence, 0.35) *
-      confidence(right.tempoConfidence ?? right.beatConfidence, 0.35)
-    );
-    const cost = Math.min(1.5, Math.abs(Math.log2(tempoRatio)) / Math.log2(1.2));
-    weightedCost += cost * weight;
+    const weight = 4 * Math.sqrt(confidence(left.tempoConfidence ?? left.beatConfidence, 0.35) * confidence(right.tempoConfidence ?? right.beatConfidence, 0.35));
+    weightedCost += Math.min(1.5, Math.abs(Math.log2(tempoRatio)) / Math.log2(1.2)) * weight;
     totalWeight += weight;
   }
 
   const keyCost = harmonicCost(left.key, right.key);
   if (keyCost !== null) {
-    const weight = 2.4 * Math.sqrt(
-      confidence(left.keyConfidence, 0.35) * confidence(right.keyConfidence, 0.35)
-    );
+    const weight = 2.4 * Math.sqrt(confidence(left.keyConfidence, 0.35) * confidence(right.keyConfidence, 0.35));
     weightedCost += keyCost * weight;
     totalWeight += weight;
   }
@@ -153,8 +140,7 @@ export function transitionCost(left = {}, right = {}) {
   const rightVocal = finiteOrNull(right.vocalProbability, -0.001);
   if (leftVocal !== null && rightVocal !== null) {
     const weight = 0.35;
-    const conflict = clamp01((leftVocal - 0.5) * 2) * clamp01((rightVocal - 0.5) * 2);
-    weightedCost += conflict * weight;
+    weightedCost += clamp01((leftVocal - 0.5) * 2) * clamp01((rightVocal - 0.5) * 2) * weight;
     totalWeight += weight;
   }
 
@@ -259,11 +245,8 @@ export function installQueueTransitionSort(ctx) {
 
   function analysisFor(track, learnedTempo, cached = {}, bpmMetadata = {}) {
     const smart = ctx.crossfadeAnalysisByTrack?.get(track?.id) || {};
-    const activeAnalysis = track?.id === ctx.activeTrack.value?.id &&
-      ctx.crossfadeAnalysis.value?.status === 'ready'
-      ? ctx.crossfadeAnalysis.value
-      : {};
-    // Every local source outranks optional catalog enrichment.
+    const activeAnalysis = track?.id === ctx.activeTrack.value?.id && ctx.crossfadeAnalysis.value?.status === 'ready'
+      ? ctx.crossfadeAnalysis.value : {};
     const sources = [smart, activeAnalysis, cached, bpmMetadata, track || {}];
     const tempoSource = sources.find((source) => Number(source?.bpm || source?.tempo) > 0);
     const keySource = sources.find((source) => parsedKey(source?.key));
@@ -272,8 +255,7 @@ export function installQueueTransitionSort(ctx) {
     const vocalSource = sources.find((source) => finiteOrNull(source?.vocalProbability, -0.001) !== null);
     return {
       bpm: Number(tempoSource?.bpm || tempoSource?.tempo || learnedTempo) || 0,
-      tempoConfidence: Number(tempoSource?.tempoConfidence ?? tempoSource?.beatConfidence) ||
-        (tempoSource ? 0.35 : (learnedTempo ? 0.25 : 0)),
+      tempoConfidence: Number(tempoSource?.tempoConfidence ?? tempoSource?.beatConfidence) || (tempoSource ? 0.35 : (learnedTempo ? 0.25 : 0)),
       beatConfidence: Number(tempoSource?.beatConfidence) || 0,
       key: keySource?.key || '',
       keyConfidence: Number(keySource?.keyConfidence) || (keySource ? 0.35 : 0),
@@ -292,31 +274,39 @@ export function installQueueTransitionSort(ctx) {
 
   async function cachedAnalysisMap(tracks) {
     const getCached = globalThis.orchardAudioAnalysis?.get;
-    if (typeof getCached !== 'function') return new Map();
-    const unique = Array.from(new Map(tracks.filter((track) => track?.id).map((track) => [track.id, track])).values());
-    
+    const unique = Array.from(new Map(tracks.filter((t) => t?.id).map((t) => [t.id, t])).values());
     ctx.transitionQueueSortTotalCount.value = unique.length;
     ctx.transitionQueueSortAnalyzedCount.value = 0;
+    const map = new Map();
+    const missing = [];
 
-    const entries = await Promise.all(unique.map(async (track) => {
-      const result = await getCached(track.id).catch(() => null);
-      ctx.transitionQueueSortAnalyzedCount.value++;
-      return [track.id, result];
+    await Promise.all(unique.map(async (track) => {
+      const local = getCached ? await getCached(track.id).catch(() => null) : null;
+      if (local) {
+        map.set(track.id, local);
+        ctx.transitionQueueSortAnalyzedCount.value++;
+      } else {
+        missing.push(track);
+      }
     }));
-    return new Map(entries.filter(([, analysis]) => analysis));
+
+    if (missing.length > 0) {
+      const cloudResults = await fetchBatchCloudAnalysis(missing.map((t) => t.id)).catch(() => new Map());
+      for (const [id, cloudData] of cloudResults.entries()) {
+        map.set(id, cloudData);
+        ctx.transitionQueueSortAnalyzedCount.value++;
+        void globalThis.orchardAudioAnalysis?.store?.(id, cloudData);
+      }
+    }
+    return map;
   }
 
   function analysisStream(track) {
     if (track?.id === ctx.activeTrack.value?.id && track.streamUrl) return track.streamUrl;
     const prepared = ctx.nextTrackPreload?.value;
-    if (prepared?.track?.id === track?.id && prepared.resolved?.streamUrl) {
-      return prepared.resolved.streamUrl;
-    }
+    if (prepared?.track?.id === track?.id && prepared.resolved?.streamUrl) return prepared.resolved.streamUrl;
     return async () => {
-      const resolved = await ctx.resolvePlayableTrack(track, {
-        mediaKind: 'audio',
-        preload: true
-      });
+      const resolved = await ctx.resolvePlayableTrack(track, { mediaKind: 'audio', preload: true });
       return resolved?.streamUrl || '';
     };
   }
@@ -326,39 +316,64 @@ export function installQueueTransitionSort(ctx) {
     if (typeof analyze !== 'function' || typeof ctx.resolvePlayableTrack !== 'function') {
       return cachedAnalysisMap(tracks);
     }
-    const unique = Array.from(new Map(
-      tracks.filter((track) => track?.id).map((track) => [track.id, track])
-    ).values());
-    
+    const unique = Array.from(new Map(tracks.filter((t) => t?.id).map((t) => [t.id, t])).values());
     ctx.transitionQueueSortTotalCount.value = unique.length;
     ctx.transitionQueueSortAnalyzedCount.value = 0;
 
-    const activeId = ctx.activeTrack.value?.id;
-    const nextId = ctx.queue.value[0]?.id;
-    const entries = await Promise.all(unique.map(async (track) => {
-      const priority = track.id === activeId
-        ? ANALYSIS_PRIORITIES.current
-        : track.id === nextId ? ANALYSIS_PRIORITIES.next : ANALYSIS_PRIORITIES.background;
-      try {
-        const analysis = await analyze.call(
-          ctx.smartCrossfadeAnalyzer,
-          track.id,
-          analysisStream(track),
-          { duration: trackDurationSeconds(track), priority }
-        );
+    const resultMap = new Map();
+    const needed = [];
+    const getCached = globalThis.orchardAudioAnalysis?.get;
+
+    await Promise.all(unique.map(async (track) => {
+      const local = getCached ? await getCached(track.id).catch(() => null) : null;
+      if (local) {
+        resultMap.set(track.id, local);
         ctx.transitionQueueSortAnalyzedCount.value++;
-        return analysis ? [track.id, analysis] : null;
-      } catch (error) {
-        ctx.transitionQueueSortAnalyzedCount.value++;
-        ctx.smartCrossfadeAnalyzer.report?.('background-track-failed', {
-          trackId: track.id,
-          errorName: String(error?.name || 'Error'),
-          errorMessage: String(error?.message || error || 'Unknown error')
-        });
-        return null;
+      } else {
+        needed.push(track);
       }
     }));
-    return new Map(entries.filter(Boolean));
+
+    if (needed.length > 0) {
+      const cloudResults = await fetchBatchCloudAnalysis(needed.map((t) => t.id)).catch(() => new Map());
+      const stillNeeded = [];
+      for (const track of needed) {
+        if (cloudResults.has(track.id)) {
+          const cloudData = cloudResults.get(track.id);
+          resultMap.set(track.id, cloudData);
+          ctx.transitionQueueSortAnalyzedCount.value++;
+          void globalThis.orchardAudioAnalysis?.store?.(track.id, cloudData);
+        } else {
+          stillNeeded.push(track);
+        }
+      }
+
+      const activeId = ctx.activeTrack.value?.id;
+      const nextId = ctx.queue.value[0]?.id;
+      await Promise.all(stillNeeded.map(async (track) => {
+        const priority = track.id === activeId
+          ? ANALYSIS_PRIORITIES.current
+          : track.id === nextId ? ANALYSIS_PRIORITIES.next : ANALYSIS_PRIORITIES.background;
+        try {
+          const analysis = await analyze.call(
+            ctx.smartCrossfadeAnalyzer,
+            track.id,
+            analysisStream(track),
+            { duration: trackDurationSeconds(track), priority }
+          );
+          ctx.transitionQueueSortAnalyzedCount.value++;
+          if (analysis) resultMap.set(track.id, analysis);
+        } catch (error) {
+          ctx.transitionQueueSortAnalyzedCount.value++;
+          ctx.smartCrossfadeAnalyzer.report?.('background-track-failed', {
+            trackId: track.id,
+            errorName: String(error?.name || 'Error'),
+            errorMessage: String(error?.message || error || 'Unknown error')
+          });
+        }
+      }));
+    }
+    return resultMap;
   }
 
   function applyQueueOrder(queue) {
@@ -392,52 +407,18 @@ export function installQueueTransitionSort(ctx) {
       const snapshot = [...ctx.queue.value];
       const sortableTracks = snapshot.slice(0, BEST_MIX_TRACK_LIMIT);
       const untouchedTracks = snapshot.slice(BEST_MIX_TRACK_LIMIT);
-      const catalogTracks = [ctx.activeTrack.value, ...sortableTracks]
-        .filter((track) => track?.id);
-      if (!refresh) {
-        ctx.showShareMessage?.(
-          `Preparing local BPM analysis for ${sortableTracks.length} queued songs…`
-        );
-      }
+      const catalogTracks = [ctx.activeTrack.value, ...sortableTracks].filter((t) => t?.id);
+      if (!refresh) ctx.showShareMessage?.(`Preparing local BPM analysis for ${sortableTracks.length} queued songs…`);
       const bpmState = { settled: false, value: new Map() };
-      const bpmPromise = Promise.resolve(
-        ctx.bpmMetadata?.lookupMany?.(catalogTracks) || new Map()
-      ).then((metadata) => {
-        bpmState.settled = true;
-        bpmState.value = metadata;
-        return metadata;
-      }).catch(() => {
-        bpmState.settled = true;
-        return new Map();
-      });
-      const [tempoByTrack, localByTrack] = await Promise.all([
-        learnedTempoMap(),
-        localAnalysisMap(catalogTracks)
-      ]);
-      const localEvidenceCount = sortableTracks.filter((track) => hasMusicalAnalysis(
-        analysisFor(track, tempoByTrack.get(track.id), localByTrack.get(track.id), {})
-      )).length;
-      // Catalog metadata must not delay a queue that has enough local evidence,
-      // but it remains a useful fallback when local analysis could not compare anything.
-      const bpmByTrack = bpmState.settled
-        ? bpmState.value
-        : localEvidenceCount >= 2 ? new Map() : await bpmPromise;
-      if (queueSignature !== ctx.queue.value.map((track) => track.id).join(',')) return;
-      const analysisByTrack = new Map(sortableTracks.map((track) => [
-        track.id,
-        analysisFor(
-          track,
-          tempoByTrack.get(track.id),
-          localByTrack.get(track.id),
-          bpmByTrack.get(track.id)
-        )
-      ]));
-      const currentAnalysis = analysisFor(
-        ctx.activeTrack.value,
-        tempoByTrack.get(ctx.activeTrack.value?.id),
-        localByTrack.get(ctx.activeTrack.value?.id),
-        bpmByTrack.get(ctx.activeTrack.value?.id)
-      );
+      const bpmPromise = Promise.resolve(ctx.bpmMetadata?.lookupMany?.(catalogTracks) || new Map())
+        .then((m) => { bpmState.settled = true; bpmState.value = m; return m; })
+        .catch(() => { bpmState.settled = true; return new Map(); });
+      const [tempoByTrack, localByTrack] = await Promise.all([learnedTempoMap(), localAnalysisMap(catalogTracks)]);
+      const localEvidenceCount = sortableTracks.filter((t) => hasMusicalAnalysis(analysisFor(t, tempoByTrack.get(t.id), localByTrack.get(t.id), {}))).length;
+      const bpmByTrack = bpmState.settled ? bpmState.value : localEvidenceCount >= 2 ? new Map() : await bpmPromise;
+      if (queueSignature !== ctx.queue.value.map((t) => t.id).join(',')) return;
+      const analysisByTrack = new Map(sortableTracks.map((t) => [t.id, analysisFor(t, tempoByTrack.get(t.id), localByTrack.get(t.id), bpmByTrack.get(t.id))]));
+      const currentAnalysis = analysisFor(ctx.activeTrack.value, tempoByTrack.get(ctx.activeTrack.value?.id), localByTrack.get(ctx.activeTrack.value?.id), bpmByTrack.get(ctx.activeTrack.value?.id));
       const result = bestTransitionOrder(sortableTracks, analysisByTrack, currentAnalysis);
       if (!result.comparisons) {
         if (!refresh) {

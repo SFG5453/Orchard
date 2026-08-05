@@ -19,11 +19,16 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
@@ -69,6 +74,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -167,13 +173,19 @@ fun MiniPlayer(
     onPrevious: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    transition: dev.sfg.orchard.mobile.model.TransitionMarker? = null,
 ) {
     val track = playback.currentTrack ?: return
     var offsetX by remember { mutableFloatStateOf(0f) }
     val coroutineScope = rememberCoroutineScope()
 
-    val progress = if (playback.durationMs > 0) {
-        (playback.positionMs.toFloat() / playback.durationMs.toFloat()).coerceIn(0f, 1f)
+    val marker = transition?.takeIf {
+        it.trackId.isNotBlank() && it.trackId == track.id && it.startMs > 0 && it.startMs < playback.durationMs
+    }
+    val effectiveDuration = (marker?.startMs ?: playback.durationMs).coerceAtLeast(1)
+
+    val progress = if (effectiveDuration > 0) {
+        (playback.positionMs.toFloat() / effectiveDuration.toFloat()).coerceIn(0f, 1f)
     } else 0f
 
     val animatedProgress by animateFloatAsState(targetValue = progress, label = "MiniPlayerProgress")
@@ -211,29 +223,45 @@ fun MiniPlayer(
                     .clickable(onClick = onClick),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ArtworkTile(
-                    url = track.artworkUrl,
-                    description = track.title,
-                    modifier = Modifier.size(44.dp),
-                    radius = 10
-                )
+                AnimatedContent(
+                    targetState = track.artworkUrl to track.title,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(350)) togetherWith fadeOut(animationSpec = tween(250))
+                    },
+                    label = "MiniPlayerArtworkCrossfade",
+                ) { (artUrl, artTitle) ->
+                    ArtworkTile(
+                        url = artUrl,
+                        description = artTitle,
+                        modifier = Modifier.size(44.dp),
+                        radius = 10
+                    )
+                }
                 Spacer(Modifier.width(10.dp))
-                Column(
+                AnimatedContent(
+                    targetState = track.title to track.artist,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = tween(350, delayMillis = 40)) + slideInVertically(animationSpec = tween(350, delayMillis = 40)) { it / 3 }) togetherWith
+                            (fadeOut(animationSpec = tween(200)) + slideOutVertically(animationSpec = tween(200)) { -it / 3 })
+                    },
+                    label = "MiniPlayerTrackTransition",
                     modifier = Modifier.weight(1f),
-                ) {
-                    Text(
-                        text = track.title,
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = CanopyColors.Text,
-                        maxLines = 1,
-                        modifier = Modifier.basicMarquee()
-                    )
-                    Text(
-                        text = track.artist,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = CanopyColors.Muted,
-                        maxLines = 1
-                    )
+                ) { (title, artist) ->
+                    Column {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = CanopyColors.Text,
+                            maxLines = 1,
+                            modifier = Modifier.basicMarquee()
+                        )
+                        Text(
+                            text = artist,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = CanopyColors.Muted,
+                            maxLines = 1
+                        )
+                    }
                 }
                 Spacer(Modifier.width(6.dp))
                 val buttonColor = lerp(palette.accent, Color.White, 0.62f)
@@ -253,17 +281,33 @@ fun MiniPlayer(
                 }
             }
 
-            // Bottom progress bar
-            LinearProgressIndicator(
-                progress = { animatedProgress },
+            // Bottom progress bar, which picks up the same rainbow as the full player
+            // while a mix is running so the pill tells the same story in miniature.
+            val glow = rememberTransitionGlow(transitionProgress(playback, marker))
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(3.dp)
                     .align(Alignment.BottomCenter),
-                color = LocalAccent.current,
-                trackColor = Color.Transparent,
-                strokeCap = StrokeCap.Round
-            )
+            ) {
+                LinearProgressIndicator(
+                    progress = { animatedProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp),
+                    color = LocalAccent.current,
+                    trackColor = Color.Transparent,
+                    strokeCap = StrokeCap.Round,
+                )
+                if (glow > 0.01f) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(animatedProgress)
+                            .height(3.dp)
+                            .alpha(glow)
+                            .background(rememberRainbowBrush()),
+                    )
+                }
+            }
         }
     }
 }

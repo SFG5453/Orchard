@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -50,6 +51,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -57,12 +61,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.TransitionMarker
+import dev.sfg.orchard.mobile.ui.components.TRANSITION_LABEL
 import dev.sfg.orchard.mobile.ui.components.durationText
+import dev.sfg.orchard.mobile.ui.components.rememberRainbowBrush
+import dev.sfg.orchard.mobile.ui.components.rememberTransitionGlow
+import dev.sfg.orchard.mobile.ui.components.transitionProgress
 
 /**
  * Expressive scrubber progress bar with active dragging state,
@@ -78,9 +83,15 @@ fun PlayerScrubber(
     transition: TransitionMarker? = null,
     showBitrate: Boolean = false,
     bitrateKbps: Int = 0,
-    audioQuality: dev.sfg.orchard.mobile.model.AudioQuality = dev.sfg.orchard.mobile.model.AudioQuality.HIGH,
 ) {
-    val duration = playback.durationMs.coerceAtLeast(1)
+    val marker = transition?.takeIf {
+        it.trackId.isNotBlank() && it.trackId == playback.currentTrack?.id && it.startMs > 0 && it.startMs < playback.durationMs
+    }
+    // One eased number drives every transition affordance: the glow, the sweep, and the readout.
+    val glow = rememberTransitionGlow(transitionProgress(playback, marker))
+    val rainbow = rememberRainbowBrush()
+    // Effective duration ends where the transition starts, subtracting the transition time & unplayed tail
+    val duration = (marker?.startMs ?: playback.durationMs).coerceAtLeast(1)
     val buffered = playback.bufferedPositionMs.coerceIn(0, duration)
     var dragging by remember(playback.currentTrack?.id) { mutableStateOf(false) }
     var dragPosition by remember(playback.currentTrack?.id) { mutableFloatStateOf(0f) }
@@ -149,50 +160,57 @@ fun PlayerScrubber(
                         (buffered.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
                     } else 0f
 
-                    // Only for this track: a marker left over from the previous one would sit at a
-                    // meaningless position for a second after the handoff.
-                    val marker = transition?.takeIf {
-                        it.trackId.isNotBlank() && it.trackId == playback.currentTrack?.id
-                    }
-                    val markerStart = marker?.let { (it.startMs.toFloat() / duration).coerceIn(0f, 1f) }
-                    val markerEnd = marker?.let { (it.endMs.toFloat() / duration).coerceIn(0f, 1f) }
-
+                    // The glow has to live outside the clipped track, or the rounded clip
+                    // would cut off exactly the bloom that makes it read as a glow.
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(trackHeight)
-                            .clip(RoundedCornerShape(percent = 50))
-                            .background(Color.White.copy(alpha = 0.20f)),
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        if (markerStart != null && markerEnd != null && markerEnd > markerStart) {
-                            // Drawn as a band rather than a line because a transition has a length,
-                            // and its length is the interesting part: a beat-matched blend runs for
-                            // bars where a plain fade is a few seconds.
-                            Row(Modifier.fillMaxSize()) {
-                                if (markerStart > 0f) Spacer(Modifier.weight(markerStart))
-                                Box(
-                                    Modifier
-                                        .weight(markerEnd - markerStart)
-                                        .fillMaxHeight()
-                                        .background(LocalAccent.current.copy(alpha = 0.55f)),
-                                )
-                                if (markerEnd < 1f) Spacer(Modifier.weight(1f - markerEnd))
-                            }
-                        }
-                        if (bufferFraction > 0f) {
+                        if (glow > 0.01f) {
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(bufferFraction)
-                                    .fillMaxHeight()
-                                    .background(Color.White.copy(alpha = 0.18f)),
+                                    .fillMaxWidth(fraction)
+                                    .align(Alignment.CenterStart)
+                                    .height(trackHeight + 6.dp)
+                                    .blur(11.dp, BlurredEdgeTreatment.Unbounded)
+                                    .clip(RoundedCornerShape(percent = 50))
+                                    .alpha(glow * 0.85f)
+                                    .background(rainbow),
                             )
                         }
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth(fraction)
-                                .fillMaxHeight()
-                                .background(Color.White),
-                        )
+                                .fillMaxWidth()
+                                .height(trackHeight)
+                                .clip(RoundedCornerShape(percent = 50))
+                                .background(Color.White.copy(alpha = 0.20f)),
+                        ) {
+                            if (bufferFraction > 0f) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(bufferFraction)
+                                        .fillMaxHeight()
+                                        .background(Color.White.copy(alpha = 0.18f)),
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(fraction)
+                                    .fillMaxHeight()
+                                    .background(Color.White),
+                            ) {
+                                // Rainbow rides over the white fill so the bar keeps its
+                                // normal colour the instant the mix ends.
+                                if (glow > 0.01f) {
+                                    Box(
+                                        Modifier
+                                            .fillMaxSize()
+                                            .alpha(glow)
+                                            .background(rainbow),
+                                    )
+                                }
+                            }
+                        }
                     }
                 },
                 colors = SliderDefaults.colors(
@@ -222,13 +240,25 @@ fun PlayerScrubber(
                     fontWeight = FontWeight.Normal,
                 ),
             )
-            if (showBitrate) {
-                val displayKbps = if (bitrateKbps > 0) bitrateKbps else when (audioQuality) {
-                    dev.sfg.orchard.mobile.model.AudioQuality.DATA_SAVER -> 70
-                    dev.sfg.orchard.mobile.model.AudioQuality.NORMAL -> 128
-                    dev.sfg.orchard.mobile.model.AudioQuality.HIGH -> 160
-                    dev.sfg.orchard.mobile.model.AudioQuality.MAX -> 256
-                }
+            if (glow > 0.01f) {
+                Text(
+                    text = TRANSITION_LABEL,
+                    modifier = Modifier.alpha(glow),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Default,
+                        fontWeight = FontWeight.SemiBold,
+                        brush = rainbow,
+                    ),
+                )
+            } else if (showBitrate && bitrateKbps > 0) {
+                // Only ever the rate of the stream actually open. There used to be a table of
+                // per-quality guesses here for when that was unknown, which is most of the time:
+                // the media cache sits above stream resolution, so a cached track never runs the
+                // resolver that would report one. Max guessed 256, a rate YouTube serves only to
+                // premium clients and Orchard therefore never receives. A readout whose whole job
+                // is to say what you are hearing cannot be allowed to invent it.
+                val displayKbps = bitrateKbps
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))

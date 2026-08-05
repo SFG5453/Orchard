@@ -24,11 +24,18 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import dev.sfg.orchard.mobile.audio.AudioOutputType
 import dev.sfg.orchard.mobile.audio.canReadBluetoothNames
-import dev.sfg.orchard.mobile.ui.components.TrackActionsPopup
 import dev.sfg.orchard.mobile.audio.rememberAudioOutput
+import dev.sfg.orchard.mobile.ui.components.TrackActionsPopup
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -249,57 +256,71 @@ fun TrackInfoRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        // Track Title & Artist
-        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+        // Track Title & Artist with smooth transition animation when song changes
+        androidx.compose.animation.AnimatedContent(
+            targetState = track,
+            transitionSpec = {
+                (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(400, delayMillis = 60)) +
+                    androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(400, delayMillis = 60)) { it / 3 })
+                    .togetherWith(
+                        androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) +
+                            androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(200)) { -it / 3 },
+                    )
+            },
+            label = "TrackInfoTransition",
+            modifier = Modifier.weight(1f).padding(end = 12.dp),
+        ) { currentTrack ->
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = currentTrack.title,
+                        style = MaterialTheme.typography.headlineSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 21.sp,
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = Color.White,
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .then(
+                                if (onOpenAlbum != null) {
+                                    Modifier.clickable(onClick = onOpenAlbum)
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .basicMarquee(initialDelayMillis = 4000, repeatDelayMillis = 3000),
+                    )
+                    if (currentTrack.explicit) {
+                        Spacer(Modifier.width(6.dp))
+                        ExplicitBadge()
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
                 Text(
-                    text = track.title,
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 21.sp,
+                    text = currentTrack.artist,
+                    color = Color.White.copy(alpha = 0.65f),
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Medium,
                     ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = Color.White,
                     modifier = Modifier
-                        .weight(1f, fill = false)
                         .then(
-                            if (onOpenAlbum != null) {
-                                Modifier.clickable(onClick = onOpenAlbum)
+                            if (onOpenArtist != null) {
+                                Modifier.clickable(onClick = onOpenArtist)
                             } else {
                                 Modifier
                             },
                         )
                         .basicMarquee(initialDelayMillis = 4000, repeatDelayMillis = 3000),
                 )
-                if (track.explicit) {
-                    Spacer(Modifier.width(6.dp))
-                    ExplicitBadge()
-                }
             }
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = track.artist,
-                color = Color.White.copy(alpha = 0.65f),
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Medium,
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .then(
-                        if (onOpenArtist != null) {
-                            Modifier.clickable(onClick = onOpenArtist)
-                        } else {
-                            Modifier
-                        },
-                    )
-                    .basicMarquee(initialDelayMillis = 4000, repeatDelayMillis = 3000),
-            )
         }
 
         TrackActionButtons(

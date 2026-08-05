@@ -19,6 +19,7 @@
 
 package dev.sfg.orchard.connect.client
 
+import dev.sfg.orchard.connect.protocol.ConnectAnalysisResults
 import dev.sfg.orchard.connect.protocol.ConnectClientError
 import dev.sfg.orchard.connect.protocol.ConnectClientStatus
 import dev.sfg.orchard.connect.protocol.ConnectCommand
@@ -56,6 +57,7 @@ class OrchardConnectClient(
         fun onSnapshot(snapshot: ConnectSnapshot)
         fun onSearchResults(results: ConnectResults)
         fun onLibraryResults(results: ConnectResults)
+        fun onAnalysisResults(results: ConnectAnalysisResults) {}
         fun onError(error: ConnectClientError)
     }
 
@@ -112,6 +114,12 @@ class OrchardConnectClient(
         return true
     }
 
+    fun requestAnalysis(trackIds: List<String>, requestId: String): Boolean {
+        if (status != ConnectClientStatus.APPROVED || trackIds.isEmpty()) return false
+        currentTransport()?.emit(ConnectProtocol.Event.ANALYSIS, ConnectJsonCodec.analysis(trackIds, requestId))
+        return true
+    }
+
     private fun currentTransport(): ConnectTransport? = synchronized(lock) { transport }
 
     private fun loadOrCreateDeviceToken(serverUrl: String): String {
@@ -139,10 +147,13 @@ class OrchardConnectClient(
         publishStatus(ConnectClientStatus.AWAITING_APPROVAL)
     }
 
+    private fun negotiateProtocolVersion(remoteVersion: Int): Int =
+        if (remoteVersion > ConnectProtocol.PROTOCOL_VERSION) ConnectProtocol.PROTOCOL_VERSION else remoteVersion
+
     private fun handleHelloReply(reply: JSONObject) {
         try {
             val result = ConnectJsonCodec.helloResult(reply)
-            protocolVersion = result.protocolVersion
+            protocolVersion = negotiateProtocolVersion(result.protocolVersion)
             when (result.status) {
                 HelloStatus.APPROVED -> {
                     publishStatus(ConnectClientStatus.APPROVED)
@@ -168,6 +179,7 @@ class OrchardConnectClient(
                 }
                 ConnectProtocol.Event.SEARCH_RESULTS -> publishSearch(ConnectJsonCodec.results(payload as? JSONObject ?: JSONObject()))
                 ConnectProtocol.Event.LIBRARY_RESULTS -> publishLibrary(ConnectJsonCodec.results(payload as? JSONObject ?: JSONObject()))
+                ConnectProtocol.Event.ANALYSIS_RESULTS -> publishAnalysis(ConnectJsonCodec.analysisResults(payload as? JSONObject ?: JSONObject()))
                 ConnectProtocol.Event.REJECTED -> publishStatus(ConnectClientStatus.REJECTED)
                 ConnectProtocol.Event.REVOKED -> {
                     tryStore("clear revoked credential") { sessionStore.clearDeviceToken() }
@@ -185,7 +197,7 @@ class OrchardConnectClient(
             proposedDeviceToken = approvedToken
             tryStore("save approved credential") { sessionStore.saveDeviceToken(approvedToken) }
         }
-        protocolVersion = payload.optInt(ConnectProtocol.Field.PROTOCOL_VERSION, protocolVersion)
+        protocolVersion = negotiateProtocolVersion(payload.optInt(ConnectProtocol.Field.PROTOCOL_VERSION, protocolVersion))
         publishStatus(ConnectClientStatus.APPROVED)
         payload.optJSONObject(ConnectProtocol.Field.STATE)?.let { ConnectJsonCodec.snapshot(it, protocolVersion) }?.let(::publishSnapshot)
     }
@@ -206,6 +218,7 @@ class OrchardConnectClient(
     private fun publishSnapshot(value: ConnectSnapshot) = callbackExecutor.execute { listener.onSnapshot(value) }
     private fun publishSearch(value: ConnectResults) = callbackExecutor.execute { listener.onSearchResults(value) }
     private fun publishLibrary(value: ConnectResults) = callbackExecutor.execute { listener.onLibraryResults(value) }
+    private fun publishAnalysis(value: ConnectAnalysisResults) = callbackExecutor.execute { listener.onAnalysisResults(value) }
 
     private fun publishError(operation: String, error: Throwable) {
         val detail = error.message?.takeIf(String::isNotBlank) ?: error.javaClass.simpleName

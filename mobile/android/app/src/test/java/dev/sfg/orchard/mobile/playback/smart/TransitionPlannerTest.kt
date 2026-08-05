@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile.playback.smart
 
 import dev.sfg.orchard.mobile.model.Track
+import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -202,6 +203,36 @@ class TransitionPlannerTest {
         assertTrue(plan.bassSwap)
         assertTrue(plan.fadeSeconds > 0)
         assertTrue(plan.transitionStart < plan.transitionEnd)
+    }
+
+    @Test
+    fun `a beat-matched plan carries the octave-aligned tempi the renderer needs`() {
+        // The native renderer gates on `outgoing.bpm / incoming.bpm` without aligning octaves, so a
+        // half-time pairing handed the raw analysed tempi is refused outright -- after both tracks
+        // have been decoded for it. The policy aligns octaves before judging, which is why this
+        // reaches the renderer at all; the plan has to carry the same counting the policy did.
+        val outgoing = grid(126.0, 240.0).copy(key = "A minor", keyConfidence = 0.8)
+        val incoming = grid(63.0, 240.0).copy(
+            key = "A minor",
+            keyConfidence = 0.8,
+            mixInCandidates = listOf(MixCandidate(time = 16.0, score = 0.7, type = "main_drop")),
+            audibleStartTime = 0.0,
+        )
+        val plan = planTransition(
+            analysis = outgoing,
+            nextAnalysis = incoming,
+            currentTrack = track(seconds = 240.0),
+            nextTrack = track(id = "b"),
+            currentTime = 200.0,
+            mode = CrossfadeMode.SMART,
+        )
+        assertEquals(TransitionStyle.DJ_BLEND, plan.transitionStyle)
+        assertEquals(126.0, plan.outgoingBpm, 1e-9)
+        assertEquals("the incoming 63 BPM must be counted at 126", 126.0, plan.incomingBpm, 1e-9)
+        assertTrue(
+            "the renderer's own transparency gate must pass on what the plan carries",
+            abs(plan.outgoingBpm / plan.incomingBpm - 1) <= MAX_STRETCH_DEVIATION,
+        )
     }
 
     @Test

@@ -46,7 +46,16 @@ android {
 
     buildTypes {
         // The Android plugin owns the developer-local debug keystore.
-        debug {}
+        debug {
+            // A distinct package so a debug build installs *alongside* a release one rather than
+            // replacing it, and a distinct label so the two are tellable apart in the launcher.
+            // Everything that derives from the application id follows automatically: the
+            // FileProvider authority is declared as `${applicationId}.provider`, and UpdateManager
+            // reads `context.packageName`.
+            applicationIdSuffix = '.debug'
+            versionNameSuffix = '-debug'
+            resValue 'string', 'app_name', 'Orchard Debug'
+        }
         release {
             if (orchardReleaseSigningReady) signingConfig = signingConfigs.release
             minifyEnabled = true

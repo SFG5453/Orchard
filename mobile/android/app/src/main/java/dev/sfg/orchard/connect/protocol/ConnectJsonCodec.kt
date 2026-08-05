@@ -75,6 +75,16 @@ object ConnectJsonCodec {
     fun library(requestId: String): JSONObject = JSONObject()
         .put(ConnectProtocol.Field.REQUEST_ID, requestId)
 
+    fun analysis(trackIds: List<String>, requestId: String): JSONObject {
+        val array = JSONArray()
+        for (id in trackIds) {
+            if (id.isNotBlank()) array.put(id)
+        }
+        return JSONObject()
+            .put(ConnectProtocol.Field.TRACK_IDS, array)
+            .put(ConnectProtocol.Field.REQUEST_ID, requestId)
+    }
+
     fun unwrapReply(reply: JSONObject): JSONObject {
         if (!reply.has(ConnectProtocol.Field.OK)) return reply
         if (!reply.optBoolean(ConnectProtocol.Field.OK)) {
@@ -91,13 +101,15 @@ object ConnectJsonCodec {
             "expired" -> HelloStatus.EXPIRED
             else -> HelloStatus.UNKNOWN
         }
-        val protocolVersion = payload.optInt(ConnectProtocol.Field.PROTOCOL_VERSION, 1)
+        val rawVersion = payload.optInt(ConnectProtocol.Field.PROTOCOL_VERSION, 1)
+        val protocolVersion = if (rawVersion > ConnectProtocol.PROTOCOL_VERSION) ConnectProtocol.PROTOCOL_VERSION else rawVersion
         val state = payload.optJSONObject(ConnectProtocol.Field.STATE)?.let { snapshot(it, protocolVersion) }
         return HelloResult(status, state, protocolVersion)
     }
 
     fun snapshot(payload: JSONObject, defaultProtocolVersion: Int = 1): ConnectSnapshot {
-        val protocolVersion = payload.optInt(ConnectProtocol.Field.PROTOCOL_VERSION, defaultProtocolVersion)
+        val rawVersion = payload.optInt(ConnectProtocol.Field.PROTOCOL_VERSION, defaultProtocolVersion)
+        val protocolVersion = if (rawVersion > ConnectProtocol.PROTOCOL_VERSION) ConnectProtocol.PROTOCOL_VERSION else rawVersion
         val trackJson = payload.optJSONObject("track")
         val playbackJson = payload.optJSONObject("playback") ?: JSONObject()
         val lyricsJson = payload.optJSONObject("lyrics") ?: JSONObject()
@@ -142,6 +154,23 @@ object ConnectJsonCodec {
         items = objects(payload.optJSONArray(ConnectProtocol.Field.RESULTS)).map(::remoteItem)
     )
 
+    fun analysisResults(payload: JSONObject): ConnectAnalysisResults {
+        val requestId = payload.optString(ConnectProtocol.Field.REQUEST_ID)
+        val list = objects(payload.optJSONArray(ConnectProtocol.Field.RESULTS)).map { item ->
+            ConnectAnalysisResult(
+                id = item.optString("id"),
+                bpm = item.optDouble("bpm", 0.0),
+                musicalKey = item.optString("musicalKey", item.optString("key")),
+                keyConfidence = item.optDouble("keyConfidence", 0.0),
+                beatConfidence = item.optDouble("beatConfidence", 0.0),
+                duration = item.optDouble("duration", 0.0),
+                cueIn = item.optDouble("cueIn", 0.0),
+                cueOut = item.optDouble("cueOut", 0.0)
+            )
+        }
+        return ConnectAnalysisResults(requestId = requestId, results = list)
+    }
+
     fun remoteItem(payload: JSONObject): ConnectRemoteItem {
         val playback = payload.optJSONObject("playbackItem") ?: payload
         return ConnectRemoteItem(track(payload), copy(playback), copy(payload))
@@ -155,7 +184,9 @@ object ConnectJsonCodec {
         thumbnail = payload.optString("thumbnail"),
         artwork = payload.optString("artwork"),
         animatedArtwork = payload.optString("animatedArtwork"),
-        animatedArtworkVertical = payload.optString("animatedArtworkVertical")
+        animatedArtworkVertical = payload.optString("animatedArtworkVertical"),
+        bpm = payload.optDouble("bpm", 0.0),
+        musicalKey = payload.optString("musicalKey", payload.optString("key"))
     )
 
     private fun lyricLine(payload: JSONObject): ConnectLyricLine = ConnectLyricLine(

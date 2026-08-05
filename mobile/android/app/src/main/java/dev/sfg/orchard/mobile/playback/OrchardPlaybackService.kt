@@ -126,7 +126,14 @@ class OrchardPlaybackService : MediaLibraryService() {
         // re-drive analysis itself. Hopped onto the main thread because prefetchAround reads player
         // state, which is not safe to touch from the prefetch pool.
         streamCache.onCached = {
-            handler.post { if (::player.isInitialized) prefetchAround(player) }
+            handler.post {
+                if (::player.isInitialized) {
+                    prefetchAround(player)
+                    // The moment the current track finishes caching is the moment its true
+                    // bitrate becomes measurable, and no player event marks it.
+                    publishBitrate()
+                }
+            }
         }
         analyzer.onAnalysed = {
             handler.post { if (::player.isInitialized) prefetchAround(player) }
@@ -340,6 +347,31 @@ class OrchardPlaybackService : MediaLibraryService() {
         )
     }
 
+    /**
+     * Publishes the bitrate of what is actually playing, for the readout under the scrubber.
+     *
+     * Prefers the rate measured from the cached file, which is what the bytes on disk really are,
+     * over the rate a resolver declared for the stream it opened, which is the encoder's nominal
+     * target. Falls to 0 when neither is known, and 0 renders as nothing: the readout is allowed
+     * to say what you are hearing or to say nothing, never to guess.
+     *
+     * Main thread only, since it reads player state.
+     */
+    private fun publishBitrate() {
+        if (!::player.isInitialized || !::streamCache.isInitialized) return
+        val item = player.currentMediaItem
+        val graph = OrchardGraph.from(this)
+        if (item == null) {
+            graph.activeBitrate.value = 0
+            return
+        }
+        val uri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri
+        val duration = player.duration.takeIf { it > 0 } ?: 0L
+        val measured = uri?.let { streamCache.cachedBitrateKbps(it, duration) } ?: 0
+        graph.activeBitrate.value =
+                if (measured > 0) measured else streamResolver.knownBitrateKbps(item.mediaId)
+    }
+
     private val playbackListener =
             object : Player.Listener {
                 override fun onEvents(player: Player, events: Player.Events) {
@@ -365,6 +397,9 @@ class OrchardPlaybackService : MediaLibraryService() {
                             )
                     ) {
                         prefetchAround(player)
+                        // A transition alone cannot measure anything: the duration the measurement
+                        // divides by is not known until the timeline lands. This is where it is.
+                        publishBitrate()
                     }
                 }
 
@@ -384,6 +419,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                             "playbackListener.onMediaItemTransition: item=${mediaItem?.mediaId}, reason=$reason"
                     )
                     retriedMediaId = ""
+                    publishBitrate()
                     if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) crossfade.abort()
                 }
 
@@ -713,6 +749,24 @@ class OrchardPlaybackService : MediaLibraryService() {
             Log.d(TAG, "Smart crossfade is off; not analysing")
             return
         }
+
+        // Nothing started this late can finish in time, and a model pass is not free to lose.
+        //
+        // Arriving in the last minute of a track means the listener skipped or seeked there:
+        // ordinary playback asks for this analysis when the track begins, minutes ahead. Starting
+        // one now would spend two decodes and two inferences to answer a question the transition
+        // has already passed, while competing for CPU and heap with the playback it is meant to
+        // improve. The plain fade is the right answer here, and it costs nothing to reach.
+        val remainingSeconds = if (player.duration != C.TIME_UNSET) {
+            (player.duration - player.currentPosition) / 1000.0
+        } else {
+            Double.MAX_VALUE
+        }
+        if (remainingSeconds < MODEL_PASS_MIN_LEAD_SECONDS) {
+            Log.d(TAG, "Only ${remainingSeconds}s left; skipping the model pass for this transition")
+            return
+        }
+
         for (index in current..current + 1) {
             if (index !in 0 until player.mediaItemCount) continue
             val item = player.getMediaItemAt(index)
@@ -794,6 +848,14 @@ class OrchardPlaybackService : MediaLibraryService() {
         private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 2_000
         private const val WHOLE_TRACK_BUFFER_MS = 20 * 60 * 1_000
         private const val TARGET_BUFFER_BYTES = 32 * 1024 * 1024
+        /**
+         * How much track has to be left before a model pass is worth starting.
+         *
+         * Measured, not guessed: a pass runs 13s to 35s depending on contention, so a minute is
+         * the first round number that clears the slow end with room for the render that follows.
+         */
+        private const val MODEL_PASS_MIN_LEAD_SECONDS = 60.0
+
         private const val ACTION_TOGGLE_SHUFFLE = "dev.sfg.orchard.ACTION_TOGGLE_SHUFFLE"
         private const val ACTION_TOGGLE_REPEAT = "dev.sfg.orchard.ACTION_TOGGLE_REPEAT"
         private val COMMAND_TOGGLE_SHUFFLE = SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY)

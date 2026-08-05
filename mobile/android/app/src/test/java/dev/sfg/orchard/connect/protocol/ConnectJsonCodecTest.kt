@@ -147,4 +147,36 @@ class ConnectJsonCodecTest {
         assertTrue(value.getBoolean("futureField"))
         assertFalse(value.has("playbackItem"))
     }
+
+    @Test
+    fun serializesAndDecodesAnalysisRequestsAndResults() {
+        val request = ConnectJsonCodec.analysis(listOf("track-1", "track-2"), "req-99")
+        assertEquals("req-99", request.getString(ConnectProtocol.Field.REQUEST_ID))
+        val trackIds = request.getJSONArray(ConnectProtocol.Field.TRACK_IDS)
+        assertEquals(2, trackIds.length())
+        assertEquals("track-1", trackIds.getString(0))
+        assertEquals("track-2", trackIds.getString(1))
+
+        val resultsJson = JSONObject()
+            .put(ConnectProtocol.Field.REQUEST_ID, "req-99")
+            .put(
+                ConnectProtocol.Field.RESULTS,
+                JSONArray().put(
+                    JSONObject()
+                        .put("id", "track-1")
+                        .put("bpm", 124.0)
+                        .put("musicalKey", "8B")
+                        .put("cueIn", 1.5)
+                        .put("cueOut", 195.0)
+                        .put("duration", 200.0)
+                )
+            )
+
+        val results = ConnectJsonCodec.analysisResults(resultsJson)
+        assertEquals("req-99", results.requestId)
+        assertEquals(1, results.results.size)
+        assertEquals("track-1", results.results[0].id)
+        assertEquals(124.0, results.results[0].bpm, 0.001)
+        assertEquals("8B", results.results[0].musicalKey)
+    }
 }

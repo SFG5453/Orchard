@@ -247,6 +247,23 @@ class YouTubeStreamResolver(
     private fun cached(cacheKey: String): ResolvedStream? =
         streams[cacheKey]?.takeIf { it.expiresAtMs > System.currentTimeMillis() + 60_000 }
 
+    /**
+     * The bitrate of the stream already resolved for [videoId], or 0 when none is known.
+     *
+     * Never resolves anything: the caller is a UI readout, and a readout must not put a network
+     * round trip behind a track change. Zero is a real answer here and means "not known", which
+     * is the honest state for a track served straight from the media cache, since a cache hit
+     * skips the resolver entirely. Reads the map rather than [cached] because an expired entry
+     * has a dead URL but a bitrate that was still true of the bytes on disk.
+     */
+    fun knownBitrateKbps(videoId: String): Int {
+        if (videoId.isBlank()) return 0
+        val quality = qualityProvider()
+        return streams["$videoId:${quality.name}"]?.bitrateKbps?.takeIf { it > 0 }
+            ?: streams["$videoId:${AudioQuality.HIGH.name}"]?.bitrateKbps?.takeIf { it > 0 }
+            ?: 0
+    }
+
     fun invalidate(videoId: String) {
         streams.keys.removeAll { it.startsWith("$videoId:") }
     }

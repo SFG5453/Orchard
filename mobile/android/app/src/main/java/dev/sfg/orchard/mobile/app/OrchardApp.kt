@@ -70,6 +70,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val shareState by viewModel.shareState.collectAsStateWithLifecycle()
     val warning by viewModel.warning.collectAsStateWithLifecycle()
+    val transitionMarker by viewModel.transitionMarker.collectAsStateWithLifecycle()
     val fullPlayer = route == Routes.NOW_PLAYING
     val chromeHidden = fullPlayer || route == Routes.DEVICES || route == Routes.LOGIN || route == Routes.WELCOME
     // Collection artwork runs under the status bar, so these screens take no top inset and
@@ -102,6 +103,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                     Column(modifier = Modifier.align(Alignment.BottomCenter)) {
                         CanopyReadout(
                             playback = playback,
+                            transition = transitionMarker,
                             onOpen = { navController.navigate(Routes.NOW_PLAYING) },
                             onToggle = viewModel::togglePlayback,
                             onNext = viewModel::next,
@@ -322,7 +324,6 @@ private fun OrchardNavigation(
                 animatedArtworkEnabled = settings.animatedArtwork,
                 showBitrate = settings.showBitrate,
                 bitrateKbps = activeBitrate,
-                audioQuality = settings.audioQuality,
                 liked = liked,
                 protocolVersion = connectProtocolVersion,
                 remoteVolume = connectRemoteVolume,

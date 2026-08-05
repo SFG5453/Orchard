@@ -28,6 +28,14 @@ import QRCode from 'qrcode';
 import { connectClientJs, connectCss, connectHtml } from './orchardConnectPage.js';
 
 const preferredConnectPort = 32145;
+const CONNECT_PROTOCOL_VERSION = 3;
+
+function effectiveProtocolVersion(clientVersion = 1) {
+  const version = Number(clientVersion) || 1;
+  // If version is higher than max supported by desktop, assume it supports all
+  // features of the current version of the desktop protocol.
+  return Math.min(version, CONNECT_PROTOCOL_VERSION);
+}
 
 function localLanAddress() {
   for (const entries of Object.values(networkInterfaces())) {
@@ -200,7 +208,7 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
         port: httpServer.address().port,
         preferredPort: preferredConnectPort,
         stable: httpServer.address().port === preferredConnectPort,
-        protocolVersion: 2
+        protocolVersion: CONNECT_PROTOCOL_VERSION
       }));
     } else if (url.pathname === '/' || url.pathname === '/connect') {
       res.writeHead(200, { ...headers, 'Content-Type': 'text/html; charset=utf-8' });
@@ -292,7 +300,8 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
     devices.set(device.id, device);
     remoteSockets.set(socket.id, device.id);
     socket.join('paired');
-    socket.emit('connect:approved', { deviceToken, protocolVersion: 2, state: currentState });
+    const negotiatedVersion = effectiveProtocolVersion(request.protocolVersion);
+    socket.emit('connect:approved', { deviceToken, protocolVersion: negotiatedVersion, state: currentState });
     emitPairingState();
     queueDeviceSave();
     return publicDevice(device);
@@ -341,6 +350,7 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
 
   remoteIo.on('connection', (socket) => {
     socket.on('connect:hello', ({ token = '', deviceToken = '', name = '', protocolVersion = 1 } = {}, reply) => {
+      const clientVersion = effectiveProtocolVersion(protocolVersion);
       const existing = deviceToken
         ? [...devices.values()].find((device) => device.tokenHash === deviceTokenHash(deviceToken))
         : null;
@@ -351,13 +361,13 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
         socket.join('paired');
         emitPairingState();
         queueDeviceSave();
-        jsonReply(reply, { status: 'approved', protocolVersion: 2, state: currentState });
+        jsonReply(reply, { status: 'approved', protocolVersion: clientVersion, state: currentState });
         return;
       }
 
       const pairing = pairings.get(token);
       if (!pairing || pairing.expiresAt < Date.now()) {
-        jsonReply(reply, { status: 'expired', protocolVersion: 2 });
+        jsonReply(reply, { status: 'expired', protocolVersion: clientVersion });
         return;
       }
 
@@ -366,19 +376,19 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
         const previousSocketId = pendingRequest.socketId;
         pendingRequest.socketId = socket.id;
         pendingRequest.name = String(name || pendingRequest.name || 'Phone').slice(0, 60);
-        pendingRequest.protocolVersion = Number(protocolVersion) || 1;
+        pendingRequest.protocolVersion = clientVersion;
         pendingRequest.proposedDeviceToken = String(deviceToken || pendingRequest.proposedDeviceToken || '').slice(0, 128);
         if (previousSocketId !== socket.id) remoteIo.sockets.sockets.get(previousSocketId)?.disconnect(true);
         desktopIo.emit('connect:pairing-request', publicPendingRequest(pendingRequest));
         emitPairingState();
-        jsonReply(reply, { status: 'pending', protocolVersion: 2 });
+        jsonReply(reply, { status: 'pending', protocolVersion: clientVersion });
         return;
       }
 
       const request = {
         id: randomUUID(),
         token,
-        protocolVersion: Number(protocolVersion) || 1,
+        protocolVersion: clientVersion,
         proposedDeviceToken: String(deviceToken || '').slice(0, 128),
         name: String(name || 'Phone').slice(0, 60),
         createdAt: Date.now(),
@@ -387,7 +397,7 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
       pending.set(request.id, request);
       desktopIo.emit('connect:pairing-request', publicPendingRequest(request));
       emitPairingState();
-      jsonReply(reply, { status: 'pending', protocolVersion: 2 });
+      jsonReply(reply, { status: 'pending', protocolVersion: clientVersion });
     });
 
     socket.on('connect:command', (command = {}) => {
@@ -406,6 +416,12 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
       const deviceId = remoteSockets.get(socket.id);
       if (!deviceId || !devices.has(deviceId)) return;
       desktopIo.emit('connect:remote-library', { deviceId, requestId });
+    });
+
+    socket.on('connect:analysis', ({ trackIds = [], requestId = '' } = {}) => {
+      const deviceId = remoteSockets.get(socket.id);
+      if (!deviceId || !devices.has(deviceId)) return;
+      desktopIo.emit('connect:remote-analysis', { deviceId, trackIds, requestId });
     });
 
     socket.on('disconnect', () => {
@@ -445,6 +461,11 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
       socket.on('connect:remote-library-results', ({ deviceId, ...payload } = {}) => {
         for (const [socketId, pairedDeviceId] of remoteSockets.entries()) {
           if (pairedDeviceId === deviceId) remoteIo.to(socketId).emit('connect:library-results', payload);
+        }
+      });
+      socket.on('connect:remote-analysis-results', ({ deviceId, ...payload } = {}) => {
+        for (const [socketId, pairedDeviceId] of remoteSockets.entries()) {
+          if (pairedDeviceId === deviceId) remoteIo.to(socketId).emit('connect:analysis-results', payload);
         }
       });
     },

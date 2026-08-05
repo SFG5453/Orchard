@@ -33,7 +33,9 @@ data class ConnectTrack(
     val thumbnail: String = "",
     val artwork: String = "",
     val animatedArtwork: String = "",
-    val animatedArtworkVertical: String = ""
+    val animatedArtworkVertical: String = "",
+    val bpm: Double = 0.0,
+    val musicalKey: String = ""
 )
 
 /** Playback values are seconds and a normalized 0..1 volume. */
@@ -115,6 +117,22 @@ data class HelloResult(
 data class ConnectResults(
     val requestId: String,
     val items: List<ConnectRemoteItem>
+)
+
+data class ConnectAnalysisResult(
+    val id: String = "",
+    val bpm: Double = 0.0,
+    val musicalKey: String = "",
+    val keyConfidence: Double = 0.0,
+    val beatConfidence: Double = 0.0,
+    val duration: Double = 0.0,
+    val cueIn: Double = 0.0,
+    val cueOut: Double = 0.0
+)
+
+data class ConnectAnalysisResults(
+    val requestId: String = "",
+    val results: List<ConnectAnalysisResult> = emptyList()
 )
 
 /** Connection states are delivered on the caller-provided callback executor. */

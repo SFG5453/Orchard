@@ -32,6 +32,7 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
+import kotlin.math.roundToInt
 import dev.sfg.orchard.mobile.model.AudioQuality
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -98,7 +99,9 @@ class StreamCache(
         }
     }
 
+    private lateinit var upstreamFactory: DataSource.Factory
     private lateinit var readFactory: CacheDataSource.Factory
+    private lateinit var writeFactory: CacheDataSource.Factory
 
     /**
      * Wraps [upstream] so reads are served from disk when possible and written to it when not.
@@ -107,12 +110,18 @@ class StreamCache(
      * bytes, and keying both as the track alone would serve whichever was fetched first.
      */
     fun dataSourceFactory(upstream: DataSource.Factory): DataSource.Factory {
+        upstreamFactory = upstream
         readFactory = CacheDataSource.Factory()
             .setCache(cache)
             .setUpstreamDataSourceFactory(upstream)
             .setCacheKeyFactory { spec -> cacheKey(spec.uri) }
             // A corrupt or unreadable cache entry should cost a re-download, not playback.
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        writeFactory = CacheDataSource.Factory()
+            .setCache(cache)
+            .setUpstreamDataSourceFactory(upstream)
+            .setCacheKeyFactory { spec -> cacheKey(spec.uri) }
+            .setFlags(0)
         return readFactory
     }
 
@@ -129,6 +138,28 @@ class StreamCache(
     }
 
     /**
+     * The measured bitrate of the cached stream for [uri], in kbps, or 0 when it cannot be
+     * measured yet.
+     *
+     * This is bytes actually on disk over the track's real duration, so unlike the rate a stream
+     * resolver reports it is not a nominal target the encoder was aiming at: it is what the file
+     * turned out to be. Opus is VBR, so the two genuinely differ.
+     *
+     * Requires the whole file, because a partial cache is a count of bytes with no way to say how
+     * many seconds of music they hold. Includes container overhead, which for WebM is well under a
+     * percent at these rates and cannot be separated out without parsing the stream.
+     */
+    fun cachedBitrateKbps(uri: Uri, durationMs: Long): Int {
+        if (durationMs <= 0 || !isFullyCached(uri)) return 0
+        val bytes = cache.getContentMetadata(cacheKey(uri)).get(
+            androidx.media3.datasource.cache.ContentMetadata.KEY_CONTENT_LENGTH,
+            C.LENGTH_UNSET.toLong(),
+        )
+        if (bytes <= 0) return 0
+        return (bytes * 8.0 / durationMs).roundToInt()
+    }
+
+    /**
      * Pulls the whole of [uri] into the cache in the background.
      *
      * Idempotent: a track already being fetched, or already complete, returns immediately. Failures
@@ -136,7 +167,7 @@ class StreamCache(
      * needs on its own if this never finishes.
      */
     fun prefetch(uri: Uri) {
-        if (!::readFactory.isInitialized) return
+        if (!::readFactory.isInitialized || !::upstreamFactory.isInitialized) return
         val key = cacheKey(uri)
         if (inFlight.containsKey(key) || isFullyCached(uri)) return
         val writers = java.util.Collections.synchronizedList(mutableListOf<CacheWriter>())
@@ -158,16 +189,27 @@ class StreamCache(
                     cache.applyContentMetadataMutations(key, mutations)
 
                     fetchByRanges(uri, key, length, writers)
-                    Log.d(
-                        TAG,
-                        "Cached $uri (${length / 1024}KB) in ${System.currentTimeMillis() - started}ms",
-                    )
-                    onCached?.invoke(uri)
+                    if (isFullyCached(uri)) {
+                        Log.d(
+                            TAG,
+                            "Cached $uri (${length / 1024}KB) in ${System.currentTimeMillis() - started}ms",
+                        )
+                        onCached?.invoke(uri)
+                    } else {
+                        Log.w(
+                            TAG,
+                            "Prefetch of $uri finished with missing ranges (${cache.getCachedBytes(key, 0, length)} / $length bytes)",
+                        )
+                    }
                 } else {
                     // No length means no ranges; one sequential pass is all that is available.
                     fetchWhole(uri, key, writers)
-                    Log.d(TAG, "Cached $uri sequentially in ${System.currentTimeMillis() - started}ms")
-                    onCached?.invoke(uri)
+                    if (isFullyCached(uri)) {
+                        Log.d(TAG, "Cached $uri sequentially in ${System.currentTimeMillis() - started}ms")
+                        onCached?.invoke(uri)
+                    } else {
+                        Log.w(TAG, "Prefetch of $uri (sequential) finished incomplete")
+                    }
                 }
             } catch (cancelled: java.io.InterruptedIOException) {
                 // What cancel() raises, and it carries no message. This is the ordinary path when
@@ -189,13 +231,16 @@ class StreamCache(
             C.LENGTH_UNSET.toLong(),
         ).takeIf { it > 0 }?.let { return it }
 
-        val probe = readFactory.createDataSource()
+        // Must probe upstream directly rather than through readFactory (CacheDataSource).
+        // If the cache contains any partial span at position 0 (e.g. from the player buffering),
+        // opening CacheDataSource without a known total content length returns only the size of
+        // that single cached span rather than the full upstream resource length.
+        val probe = upstreamFactory.createDataSource()
         return try {
             // Opened unbounded because that is what makes the source report the whole length, then
             // closed immediately without reading; the point is the header, not the body.
             val spec = DataSpec.Builder()
                 .setUri(uri)
-                .setKey(key)
                 .setPosition(0)
                 .setLength(C.LENGTH_UNSET.toLong())
                 .build()
@@ -222,15 +267,19 @@ class StreamCache(
      */
     private fun fetchByRanges(uri: Uri, key: String, length: Long, writers: MutableList<CacheWriter>) {
         // Several passes, because a range can be read in full and still not be stored. The player
-        // holds a write lock on whatever region it is reading, and CacheDataSource answers a
-        // locked span by reading through *without* caching; CacheWriter then reports success
-        // having cached nothing. That leaves a hole wherever the playhead was, which is precisely
-        // the region the current track needs for analysis. Re-checking what actually landed and
-        // refetching the gaps is cheaper and more robust than trying to dodge the playhead.
+        // holds a write lock on whatever region it is reading, or a worker could hit a transient
+        // network error. Re-checking what actually landed and refetching gaps ensures the entire
+        // track is fully cached on disk.
         repeat(FILL_PASSES) { pass ->
             val missing = missingRanges(key, length)
             if (missing.isEmpty()) return
-            fillRanges(uri, key, missing, writers, probeFirst = pass == 0)
+            try {
+                fillRanges(uri, key, missing, writers, probeFirst = pass == 0)
+            } catch (cancelled: java.io.InterruptedIOException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.w(TAG, "Pass $pass of fillRanges for $uri had errors: ${error.message}")
+            }
         }
     }
 
@@ -303,7 +352,7 @@ class StreamCache(
             .setPosition(range.first)
             .setLength(range.second)
             .build()
-        val writer = CacheWriter(readFactory.createDataSource(), spec, null, null)
+        val writer = CacheWriter(writeFactory.createDataSource(), spec, null, null)
         writers += writer
         writer.cache()
     }
@@ -315,9 +364,22 @@ class StreamCache(
             .setPosition(0)
             .setLength(C.LENGTH_UNSET.toLong())
             .build()
-        val writer = CacheWriter(readFactory.createDataSource(), spec, null, null)
+        val writer = CacheWriter(writeFactory.createDataSource(), spec, null, null)
         writers += writer
         writer.cache()
+        val length = cache.getContentMetadata(key).get(
+            androidx.media3.datasource.cache.ContentMetadata.KEY_CONTENT_LENGTH,
+            C.LENGTH_UNSET.toLong(),
+        )
+        if (length <= 0) {
+            val spans = cache.getCachedSpans(key)
+            val total = spans.sumOf { it.length }
+            if (total > 0) {
+                val mutations = androidx.media3.datasource.cache.ContentMetadataMutations()
+                androidx.media3.datasource.cache.ContentMetadataMutations.setContentLength(mutations, total)
+                cache.applyContentMetadataMutations(key, mutations)
+            }
+        }
     }
 
     /** Stops prefetching anything not in [keep], so a queue edit does not keep downloading. */

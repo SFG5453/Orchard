@@ -195,6 +195,43 @@
   gap: 8px;
 }
 
+.detail-actions__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.analysis-status-text {
+  color: #7b9fe8;
+}
+
+.analysis-cancel-button {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.analysis-cancel-button:hover {
+  color: #ff5252;
+}
+
+.spin-animation {
+  animation: spin 1.2s linear infinite;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 .section-header__actions {
   display: flex;
   align-items: center;

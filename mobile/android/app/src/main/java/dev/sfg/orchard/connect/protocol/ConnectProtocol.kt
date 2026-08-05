@@ -27,7 +27,7 @@ package dev.sfg.orchard.connect.protocol
  * literal event or command names.
  */
 object ConnectProtocol {
-    const val PROTOCOL_VERSION = 2
+    const val PROTOCOL_VERSION = 3
     const val PREFERRED_PORT = 32145
     const val INFO_PATH = "/connect-info"
     const val PAIRING_SCHEME = "orchard-connect"
@@ -39,10 +39,12 @@ object ConnectProtocol {
         const val COMMAND = "connect:command"
         const val SEARCH = "connect:search"
         const val LIBRARY = "connect:library"
+        const val ANALYSIS = "connect:analysis"
         const val APPROVED = "connect:approved"
         const val STATE = "connect:state"
         const val SEARCH_RESULTS = "connect:search-results"
         const val LIBRARY_RESULTS = "connect:library-results"
+        const val ANALYSIS_RESULTS = "connect:analysis-results"
         const val REJECTED = "connect:rejected"
         const val REVOKED = "connect:revoked"
     }
@@ -85,6 +87,7 @@ object ConnectProtocol {
         const val FROM = "from"
         const val TO = "to"
         const val QUERY = "query"
+        const val TRACK_IDS = "trackIds"
         const val REQUEST_ID = "requestId"
         const val RESULTS = "results"
     }

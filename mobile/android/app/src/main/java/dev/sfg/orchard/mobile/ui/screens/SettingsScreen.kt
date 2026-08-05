@@ -138,6 +138,8 @@ fun SettingsScreen(
             onSettings = onSettings,
             onConnectSpotify = onConnectSpotify,
         )
+        Spacer(Modifier.height(12.dp))
+        OrchardAccountSettingsCard()
 
         SectionLabel("Appearance")
         SettingsPanel {
@@ -480,17 +482,7 @@ private fun QualityRow(value: AudioQuality, onChange: (AudioQuality) -> Unit) {
 }
 
 private val AudioQuality.label: String
-    get() = when (this) {
-        AudioQuality.DATA_SAVER -> "Saver"
-        AudioQuality.NORMAL -> "Normal"
-        AudioQuality.HIGH -> "High"
-        AudioQuality.MAX -> "Max"
-    }
+    get() = when (this) { AudioQuality.DATA_SAVER -> "Saver"; AudioQuality.NORMAL -> "Normal"; AudioQuality.HIGH -> "High"; AudioQuality.MAX -> "Max" }
 
 private val AudioQuality.description: String
-    get() = when (this) {
-        AudioQuality.DATA_SAVER -> "Uses the least data"
-        AudioQuality.NORMAL -> "Balanced quality and data"
-        AudioQuality.HIGH -> "Best quality, more data"
-        AudioQuality.MAX -> "Highest bitrate stream via NewPipe"
-    }
+    get() = when (this) { AudioQuality.DATA_SAVER -> "Uses the least data"; AudioQuality.NORMAL -> "Balanced quality and data"; AudioQuality.HIGH -> "Best quality, more data"; AudioQuality.MAX -> "Highest bitrate stream via NewPipe" }

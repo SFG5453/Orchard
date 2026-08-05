@@ -31,18 +31,28 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.IosShare
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -195,5 +205,118 @@ fun AlbumEditorialReview(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+@Composable
+fun CollectionTopBar(
+    onBack: () -> Unit,
+    onShare: () -> Unit,
+    onSave: () -> Unit,
+    isSaved: Boolean,
+    onAbout: (() -> Unit)? = null,
+    onBestMix: (() -> Unit)? = null,
+    aboutLabel: String = "About",
+    modifier: Modifier = Modifier,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            onClick = onBack,
+            shape = CircleShape,
+            color = Color.White.copy(alpha = 0.16f),
+            modifier = Modifier.size(38.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                onClick = onShare,
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.16f),
+                modifier = Modifier.size(38.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Rounded.IosShare,
+                        contentDescription = "Share",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+
+            Box {
+                Surface(
+                    onClick = { menuOpen = true },
+                    shape = CircleShape,
+                    color = Color.White.copy(alpha = 0.16f),
+                    modifier = Modifier.size(38.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Rounded.MoreHoriz,
+                            contentDescription = "More options",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(if (isSaved) "Remove from library" else "Add to library") },
+                        onClick = {
+                            menuOpen = false
+                            onSave()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Share") },
+                        onClick = {
+                            menuOpen = false
+                            onShare()
+                        },
+                    )
+                    if (onAbout != null) {
+                        DropdownMenuItem(
+                            text = { Text(aboutLabel) },
+                            onClick = {
+                                menuOpen = false
+                                onAbout()
+                            },
+                        )
+                    }
+                    if (onBestMix != null) {
+                        DropdownMenuItem(
+                            text = { Text("Play with Best Mix") },
+                            onClick = {
+                                menuOpen = false
+                                onBestMix()
+                            },
+                        )
+                    }
+                }
+            }
+        }
     }
 }

@@ -17,6 +17,8 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { fetchBatchCloudAnalysis } from '../../services/cloudAnalysisSync.js';
+
 const CONNECT_SYNC_INTERVAL_MS = 500;
 
 function safeTrack(track = {}) {
@@ -66,13 +68,15 @@ export function installConnectActions(ctx) {
     const track = ctx.activeTrack.value;
     return {
       status: ctx.socketState.value,
-      protocolVersion: 2,
+      protocolVersion: 3,
       track: track
         ? {
           ...safeTrack(track),
           artwork: ctx.nowArtworkImage.value || ctx.trackCover(track),
           animatedArtwork: ctx.nowArtworkVideo.value || '',
-          animatedArtworkVertical: ctx.enhancedArtwork?.value?.videoUrlVertical || ctx.nowArtworkVideo.value || ''
+          animatedArtworkVertical: ctx.enhancedArtwork?.value?.videoUrlVertical || ctx.nowArtworkVideo.value || '',
+          bpm: track.bpm || track.analysis?.bpm || 0,
+          musicalKey: track.musicalKey || track.key || track.analysis?.key || ''
         }
         : null,
       playback: {
@@ -233,6 +237,62 @@ export function installConnectActions(ctx) {
     });
   };
 
+  ctx.handleConnectAnalysis = async function handleConnectAnalysis({ deviceId, trackIds = [], requestId = '' } = {}) {
+    if (!deviceId || !Array.isArray(trackIds) || trackIds.length === 0) return;
+    const results = [];
+    const missingIds = [];
+    const getCached = globalThis.orchardAudioAnalysis?.get;
+
+    for (const id of trackIds) {
+      if (!id) continue;
+      let cached = null;
+      if (typeof getCached === 'function') {
+        try {
+          cached = await getCached(id);
+        } catch {}
+      }
+      if (cached && (cached.bpm || cached.key)) {
+        results.push({
+          id,
+          bpm: cached.bpm || 0,
+          musicalKey: cached.key || cached.musicalKey || '',
+          keyConfidence: cached.keyConfidence || 0,
+          beatConfidence: cached.beatConfidence || 0,
+          duration: cached.duration || 0,
+          cueIn: cached.cueIn || 0,
+          cueOut: cached.cueOut || 0
+        });
+      } else {
+        missingIds.push(id);
+      }
+    }
+
+    if (missingIds.length > 0) {
+      try {
+        const cloudMap = await fetchBatchCloudAnalysis(missingIds);
+        for (const [id, cloudData] of cloudMap.entries()) {
+          results.push({
+            id,
+            bpm: cloudData.bpm || 0,
+            musicalKey: cloudData.key || cloudData.musicalKey || '',
+            keyConfidence: cloudData.keyConfidence || 0,
+            beatConfidence: cloudData.beatConfidence || 0,
+            duration: cloudData.duration || 0,
+            cueIn: cloudData.cueIn || 0,
+            cueOut: cloudData.cueOut || 0
+          });
+          void globalThis.orchardAudioAnalysis?.store?.(id, cloudData);
+        }
+      } catch {}
+    }
+
+    ctx.socket.value.emit('connect:remote-analysis-results', {
+      deviceId,
+      requestId,
+      results
+    });
+  };
+
   ctx.bindOrchardConnectEvents = function bindOrchardConnectEvents() {
     if (ctx.orchardConnectEventsBound) return;
     ctx.orchardConnectEventsBound = true;
@@ -250,5 +310,6 @@ export function installConnectActions(ctx) {
     ctx.socket.value.on('connect:remote-command', ctx.handleConnectCommand);
     ctx.socket.value.on('connect:remote-search', (payload) => void ctx.handleConnectSearch(payload));
     ctx.socket.value.on('connect:remote-library', (payload) => void ctx.handleConnectLibrary(payload));
+    ctx.socket.value.on('connect:remote-analysis', (payload) => void ctx.handleConnectAnalysis(payload));
   };
 }

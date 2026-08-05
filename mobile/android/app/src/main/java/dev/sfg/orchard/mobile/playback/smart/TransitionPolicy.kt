@@ -101,6 +101,7 @@ private val MIX_IN_TYPE_WEIGHT = mapOf(
 private val MIX_OUT_TYPE_SCORE = mapOf(
     "interior_mix_out" to 0.95,
     "outro_start" to 0.9,
+    "vocal_end" to 0.85,
     "content_end" to 0.75,
 )
 
@@ -181,9 +182,19 @@ fun audibleSecondsBetween(analysis: TrackAnalysis, start: Double, end: Double): 
     return audible
 }
 
-/** The earliest point the analysis claims the track makes sound. */
+/**
+ * The earliest point the analysis claims the track makes sound.
+ *
+ * [TrackAnalysis.firstBeat] is not nullable the way the other two are, and every producer of one
+ * uses 0.0 as its "nothing was measured" fallback -- see `TrackAnalyzer`'s grid/feature chain and
+ * `TrackFeatures`' `optDouble` default. Counting that zero as a real audible start pins this to 0
+ * for any track without a beat grid, which silently overrides a measured `audibleStartTime` and
+ * tells the planner the whole head of the track is intro it can fade across. The desktop analysis
+ * object simply omits the field in that case, so this is what agreeing with it looks like here.
+ */
 internal fun audibleStartOf(analysis: TrackAnalysis): Double {
-    val candidates = listOfNotNull(analysis.audibleStartTime, analysis.pickupTime, analysis.firstBeat)
+    val firstBeat = analysis.firstBeat.takeIf { it.isFinite() && it > 0 }
+    val candidates = listOfNotNull(analysis.audibleStartTime, analysis.pickupTime, firstBeat)
         .filter { it.isFinite() && it >= 0 }
     return candidates.minOrNull() ?: 0.0
 }
@@ -230,6 +241,35 @@ fun rankMixInCandidates(analysis: TrackAnalysis): List<RankedMixCandidate> {
     }.sortedByDescending { it.rankScore }
 }
 
+/**
+ * Finds the conclusion of vocal activity in the tail of the track, snapped to a downbeat when
+ * available. Returns null if vocals continue all the way to the end or no mask is present.
+ */
+fun findVocalEndNearTail(
+    analysis: TrackAnalysis,
+    contentEnd: Double,
+    searchWindowSeconds: Double = 45.0,
+): Double? {
+    val mask = analysis.vocalActivityMask
+    val curve = analysis.energyCurve
+    if (mask.isEmpty() || mask.size != curve.size || contentEnd <= 0) return null
+    val startSearch = max(0.0, contentEnd - searchWindowSeconds)
+    var lastVocalTime: Double? = null
+    for (index in curve.indices) {
+        val t = curve[index].time
+        if (t in startSearch..contentEnd && mask[index] >= VOCAL_ACTIVE_THRESHOLD) {
+            lastVocalTime = t
+        }
+    }
+    val vocalEnd = lastVocalTime ?: return null
+    if (vocalEnd < contentEnd - 1.5) {
+        val beatSeconds = analysis.beatInterval.orZero().takeIf { it > 0 }
+            ?: if (analysis.bpm.orZero() > 0) 60 / analysis.bpm else 0.5
+        return nearestValue(analysis.downbeats, vocalEnd, beatSeconds * 2) ?: vocalEnd
+    }
+    return null
+}
+
 /** Falls back to the scalar mix-out fields when the analysis carries no candidate list. */
 private fun mixOutCandidatesOf(analysis: TrackAnalysis, contentEnd: Double): List<MixCandidate> {
     val supplied = analysis.mixOutCandidates.filter { it.time.isFinite() && it.time > 0 }
@@ -244,6 +284,12 @@ private fun mixOutCandidatesOf(analysis: TrackAnalysis, contentEnd: Double): Lis
         }
         if (outroStart > 0 && outroStart < contentEnd - 1) {
             candidates += MixCandidate(outroStart, 0.9, "outro_start")
+        }
+    }
+    val vocalEnd = findVocalEndNearTail(analysis, contentEnd)
+    if (vocalEnd != null && vocalEnd > 0 && vocalEnd < contentEnd - 1) {
+        if (candidates.none { abs(it.time - vocalEnd) < 1.0 }) {
+            candidates += MixCandidate(vocalEnd, 0.85, "vocal_end")
         }
     }
     // The transition always has somewhere to end: where the content does.
