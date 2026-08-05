@@ -34,6 +34,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.ResolvingDataSource
+import androidx.media3.datasource.DataSourceBitmapLoader
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
@@ -57,6 +58,7 @@ import dev.sfg.orchard.mobile.playback.smart.CrossfadeMode
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
+import okhttp3.Request
 
 /**
  * Process-level owner of local phone playback.
@@ -92,6 +94,7 @@ class OrchardPlaybackService : MediaLibraryService() {
             kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
         )
     private var retriedMediaId = ""
+    private var artworkHydrationId = ""
 
     private val positionSaver =
         object : Runnable {
@@ -150,8 +153,20 @@ class OrchardPlaybackService : MediaLibraryService() {
         mediaSession =
             MediaLibrarySession.Builder(this, OrchardSessionPlayer(player), sessionCallback)
                 .setSessionActivity(mainActivityIntent())
+                // Use the same OkHttp stack as the app's artwork/UI requests. The default
+                // DataSourceBitmapLoader uses URLConnection, which can fail on provider artwork
+                // URLs even though the cover displays correctly in the app; WearOS then falls
+                // back to its gray notification background.
+                .setBitmapLoader(
+                    DataSourceBitmapLoader.Builder(this)
+                        .setDataSourceFactory(OkHttpDataSource.Factory(graph.http))
+                        .setMaximumOutputDimension(512)
+                        .setMakeShared(true)
+                        .build()
+                )
                 .build()
         updateCustomLayout()
+        handler.post { hydrateCurrentArtwork() }
         // Media3 ships a generic play glyph as the notification's small icon; the media
         // player badges that icon, so without this the tile is stamped with a play symbol
         // instead of the Orchard mark.
@@ -372,6 +387,39 @@ class OrchardPlaybackService : MediaLibraryService() {
             if (measured > 0) measured else streamResolver.knownBitrateKbps(item.mediaId)
     }
 
+    /**
+     * WearOS media controls do not reliably dereference remote artworkUri values. Embed the
+     * compressed cover in the session metadata as well, which lets the watch render it directly.
+     */
+    private fun hydrateCurrentArtwork() {
+        if (!::player.isInitialized) return
+        val item = player.currentMediaItem ?: return
+        val artworkUrl = item.mediaMetadata.artworkUri?.toString().orEmpty()
+        if (artworkUrl.isBlank() || item.mediaMetadata.artworkData != null || artworkHydrationId == item.mediaId) return
+        artworkHydrationId = item.mediaId
+        browseScope.launch {
+            val bytes = runCatching {
+                graphHttp().newCall(Request.Builder().url(artworkUrl).build()).execute().use { response ->
+                    if (!response.isSuccessful) return@use null
+                    response.body.bytes().takeIf { it.size <= 2 * 1024 * 1024 }
+                }
+            }.getOrNull() ?: return@launch
+            handler.post {
+                if (!::player.isInitialized) return@post
+                val index = player.currentMediaItemIndex
+                if (index !in 0 until player.mediaItemCount) return@post
+                val current = player.getMediaItemAt(index)
+                if (current.mediaId != item.mediaId) return@post
+                val metadata = current.mediaMetadata.buildUpon()
+                    .setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                    .build()
+                player.replaceMediaItem(index, current.buildUpon().setMediaMetadata(metadata).build())
+            }
+        }
+    }
+
+    private fun graphHttp(): OkHttpClient = OrchardGraph.from(this).http
+
     private val playbackListener =
         object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
@@ -404,6 +452,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                     // divides by is not known until the timeline lands. This is
                     // where it is.
                     publishBitrate()
+                    hydrateCurrentArtwork()
                 }
             }
 
@@ -423,6 +472,8 @@ class OrchardPlaybackService : MediaLibraryService() {
                     "playbackListener.onMediaItemTransition: item=${mediaItem?.mediaId}, reason=$reason",
                 )
                 retriedMediaId = ""
+                artworkHydrationId = ""
+                hydrateCurrentArtwork()
                 publishBitrate()
                 if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) crossfade.abort()
             }
