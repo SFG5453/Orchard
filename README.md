@@ -218,10 +218,6 @@ Some Orchard features depend on external services and may stop working when thos
 
 BPM and musical-key metadata is provided by [GetSongBPM](https://getsongbpm.com).
 
-## Acknowledgements
-
-The Orchard logo was created with the assistance of ChatGPT image generation.
-
 ## License
 
 Orchard is available under the [GNU Affero General Public License v3.0 or
