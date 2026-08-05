@@ -63,7 +63,7 @@ Orchard listens to the audio rather than trusting a catalog. Beat and downbeat t
 
 ## Install
 
-No prebuilt APK yet - build it from source. You'll need **JDK 17** and **Android SDK 36**.
+- Download the latest apk at https://sfg545.dev/orchard
 
 ```bash
 cd android
