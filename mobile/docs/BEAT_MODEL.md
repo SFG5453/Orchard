@@ -2,8 +2,9 @@
 
 `android/app/src/main/assets/beat_this_int8.onnx` is the committed, shipping
 model: the published **Beat This!** weights (Foscarin, Schlüter & Widmer, ISMIR
-2024 — the `final0` checkpoint) converted to ONNX and dynamically quantized to
-int8. 23 MB, against 83 MB for the fp32 original.
+2024 — the `small0` checkpoint) converted to ONNX and dynamically quantized to
+int8. The resulting mobile graph is about 4.4 MB, versus roughly 23 MB for
+the previous quantized `final0` graph.
 
 ## Licensing
 
@@ -84,7 +85,9 @@ synthetic percussion (`BeatTrackerTest`):
 
 ## Regenerating
 
-The fp32 source is a build input and is not committed. Orchard desktop's
+The fp32 source is a build input and is not committed. The mobile asset was
+converted from CPJKU's official `small0.ckpt`; the desktop model remains on its
+separate `final0` build path. Orchard desktop's
 `scripts/fetch-beat-this-model.mjs` downloads it, pinned to commit `07ab790a` of
 `mosynthkey/beat_this_cpp` and verified against sha256
 `c5c1466e08abdb03fdeb50668a06f244b787d564c212490482231a9cfbe9ccbd`. The int8

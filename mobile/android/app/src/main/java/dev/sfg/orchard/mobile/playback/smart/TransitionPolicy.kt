@@ -99,11 +99,16 @@ private val MIX_IN_TYPE_WEIGHT = mapOf(
  * scalar fields but not the candidate list.
  */
 private val MIX_OUT_TYPE_SCORE = mapOf(
+    "energy_cliff" to 0.95,
     "interior_mix_out" to 0.95,
     "outro_start" to 0.9,
     "vocal_end" to 0.85,
+    "yap_start" to 0.9,
     "content_end" to 0.75,
 )
+
+/** A long vocal tail is better exited before it begins than blended into another vocal. */
+private const val YAP_MIN_SECONDS = 6.0
 
 /** Non-finite guards, matching the desktop planner's coercion of `NaN`/`Infinity` to zero. */
 internal fun Double.orZero(): Double = if (isFinite()) this else 0.0
@@ -270,6 +275,41 @@ fun findVocalEndNearTail(
     return null
 }
 
+/**
+ * Finds a sustained, vocal-heavy tail that continues to the end of a track.
+ *
+ * Unlike [findVocalEndNearTail], this deliberately handles the case where the
+ * singer never stops. It returns the start of the final continuous vocal run,
+ * but the normal discarded-music budget still rejects any point that would
+ * cut a meaningful section of the song short.
+ */
+fun findYapStartNearTail(
+    analysis: TrackAnalysis,
+    contentEnd: Double,
+    searchWindowSeconds: Double = 24.0,
+): Double? {
+    val mask = analysis.vocalActivityMask
+    val curve = analysis.energyCurve
+    if (mask.isEmpty() || mask.size != curve.size || contentEnd <= 0) return null
+    val searchStart = max(0.0, contentEnd - searchWindowSeconds)
+    var runStart: Double? = null
+    var lastActive: Double? = null
+    for (index in curve.indices) {
+        val time = curve[index].time
+        if (!time.isFinite() || time < searchStart || time > contentEnd) continue
+        if (mask[index].isFinite() && mask[index] >= VOCAL_ACTIVE_THRESHOLD) {
+            if (runStart == null) runStart = time
+            lastActive = time
+        } else if (runStart != null) {
+            runStart = null
+            lastActive = null
+        }
+    }
+    val start = runStart ?: return null
+    val end = lastActive ?: return null
+    return start.takeIf { end - it >= YAP_MIN_SECONDS && contentEnd - end <= 1.5 }
+}
+
 /** Falls back to the scalar mix-out fields when the analysis carries no candidate list. */
 private fun mixOutCandidatesOf(analysis: TrackAnalysis, contentEnd: Double): List<MixCandidate> {
     val supplied = analysis.mixOutCandidates.filter { it.time.isFinite() && it.time > 0 }
@@ -280,7 +320,7 @@ private fun mixOutCandidatesOf(analysis: TrackAnalysis, contentEnd: Double): Lis
         val mixOut = analysis.mixOutTime.orZero()
         val outroStart = analysis.outroStartTime.orZero()
         if (mixOut > 0 && mixOut < contentEnd - 1) {
-            candidates += MixCandidate(mixOut, 0.95, "interior_mix_out")
+            candidates += MixCandidate(mixOut, 0.95, "energy_cliff")
         }
         if (outroStart > 0 && outroStart < contentEnd - 1) {
             candidates += MixCandidate(outroStart, 0.9, "outro_start")
@@ -290,6 +330,12 @@ private fun mixOutCandidatesOf(analysis: TrackAnalysis, contentEnd: Double): Lis
     if (vocalEnd != null && vocalEnd > 0 && vocalEnd < contentEnd - 1) {
         if (candidates.none { abs(it.time - vocalEnd) < 1.0 }) {
             candidates += MixCandidate(vocalEnd, 0.85, "vocal_end")
+        }
+    }
+    val yapStart = findYapStartNearTail(analysis, contentEnd)
+    if (yapStart != null && yapStart > 0 && yapStart < contentEnd - 1) {
+        if (candidates.none { abs(it.time - yapStart) < 1.0 }) {
+            candidates += MixCandidate(yapStart, 0.9, "yap_start")
         }
     }
     // The transition always has somewhere to end: where the content does.

@@ -560,7 +560,11 @@ void BuildStructure(const EnvelopeResult& envelope, AnalysisResult& result) {
 
   std::vector<MixCuePoint> mix_outs;
   if (result.mix_out_time > 0 && result.mix_out_time < envelope.content_end - 1.0) {
-    mix_outs.push_back({result.mix_out_time, 0.95, "interior_mix_out"});
+    // FindMixOutTime only returns an interior anchor after observing an abrupt
+    // energy collapse into silence. Preserve that meaning for the planner: a
+    // cliff is useful because the remaining tail is silence, not because the
+    // song should be cut short at an arbitrary quiet passage.
+    mix_outs.push_back({result.mix_out_time, 0.95, "energy_cliff"});
   }
   mix_outs.push_back({result.outro_start_time, 0.9, "outro_start"});
   mix_outs.push_back({envelope.content_end, 0.75, "content_end"});

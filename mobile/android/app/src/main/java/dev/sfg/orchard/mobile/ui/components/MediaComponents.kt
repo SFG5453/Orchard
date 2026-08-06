@@ -137,15 +137,24 @@ fun CatalogCard(item: CatalogItem, onClick: () -> Unit, modifier: Modifier = Mod
             ArtworkTile(item.artworkUrl, item.title, Modifier.fillMaxSize(), artworkRadius)
         }
         Spacer(Modifier.height(8.dp))
-        Text(
-            item.title,
-            style = MaterialTheme.typography.titleMedium,
-            color = CanopyColors.Text,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = if (isArtist) TextAlign.Center else TextAlign.Start,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
             modifier = Modifier.fillMaxWidth(),
-        )
+        ) {
+            Text(
+                item.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = CanopyColors.Text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = if (isArtist) TextAlign.Center else TextAlign.Start,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (item is CatalogItem.Song && item.track.explicit) {
+                ExplicitBadge()
+            }
+        }
         Text(
             catalogSubtitle(item),
             style = MaterialTheme.typography.bodyMedium,
@@ -193,6 +202,9 @@ fun TopPickCard(item: CatalogItem, onClick: () -> Unit, modifier: Modifier = Mod
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                 )
+            }
+            if (item is CatalogItem.Song && item.track.explicit) {
+                ExplicitBadge(modifier = Modifier.padding(bottom = 6.dp))
             }
             Text(
                 item.title,
