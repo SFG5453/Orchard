@@ -92,6 +92,7 @@
     }
   },
   "optionalDependencies": {
-    "@particle/dbus-next": "^0.11.4"
+    "@particle/dbus-next": "^0.11.4",
+    "node-smtc": "github:michei69/node-smtc"
   }
 }
