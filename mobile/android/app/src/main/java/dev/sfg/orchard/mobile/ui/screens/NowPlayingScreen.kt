@@ -105,6 +105,9 @@ fun NowPlayingScreen(
     onRemoveQueueIndex: (Int) -> Unit,
     onMoveQueueItem: (Int, Int) -> Unit,
     onClearUpcoming: () -> Unit,
+    downloadedTrackIds: Set<String> = emptySet(),
+    onDownloadTrack: ((Track) -> Unit)? = null,
+    onRemoveDownloadTrack: ((String) -> Unit)? = null,
     onShare: (() -> Unit)? = null,
     onOpenCollection: ((String) -> Unit)? = null,
 ) {
@@ -229,6 +232,9 @@ fun NowPlayingScreen(
                 onRemoveQueueIndex = onRemoveQueueIndex,
                 onMoveQueueItem = onMoveQueueItem,
                 onClearUpcoming = onClearUpcoming,
+                downloadedTrackIds = downloadedTrackIds,
+                onDownloadTrack = onDownloadTrack,
+                onRemoveDownloadTrack = onRemoveDownloadTrack,
                 onShare = onShare,
                 onOpenCollection = onOpenCollection,
                 onLyricsPanel = { panel = if (lyricsOpen) PlayerPanel.NONE else PlayerPanel.LYRICS },
@@ -256,6 +262,9 @@ fun NowPlayingScreen(
                     onLiked = onLiked,
                     onMore = onQueue,
                     onShare = onShare,
+                    isDownloaded = downloadedTrackIds.contains(track.id),
+                    onDownload = onDownloadTrack?.let { action -> { action(track) } },
+                    onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
                 )
                 Box(
                     Modifier
@@ -330,6 +339,9 @@ fun NowPlayingScreen(
                         onLiked = onLiked,
                         onMore = onQueue,
                         onShare = onShare,
+                        isDownloaded = downloadedTrackIds.contains(track.id),
+                        onDownload = onDownloadTrack?.let { action -> { action(track) } },
+                        onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
                         onOpenAlbum = track.albumId.takeIf { it.isNotBlank() }
                             ?.let { id -> onOpenCollection?.let { open -> { open(id) } } },
                         onOpenArtist = track.artistId.takeIf { it.isNotBlank() }

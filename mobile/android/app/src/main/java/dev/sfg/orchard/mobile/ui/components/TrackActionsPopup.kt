@@ -33,6 +33,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
@@ -69,6 +71,8 @@ internal fun TrackActionsPopup(
     onPlayNext: (() -> Unit)? = null,
     onAddToQueue: (() -> Unit)? = null,
     onViewQueue: (() -> Unit)? = null,
+    onDownload: (() -> Unit)? = null,
+    onRemoveDownload: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
     onViewAlbum: (() -> Unit)? = null,
     onViewArtist: (() -> Unit)? = null,
@@ -119,6 +123,12 @@ internal fun TrackActionsPopup(
             }
             onViewQueue?.let { action ->
                 PopupActionRow(Icons.AutoMirrored.Rounded.List, "View Queue") { onDismiss(); action() }
+            }
+            onDownload?.let { action ->
+                PopupActionRow(Icons.Rounded.Download, "Download Offline") { onDismiss(); action() }
+            }
+            onRemoveDownload?.let { action ->
+                PopupActionRow(Icons.Rounded.Delete, "Remove Download") { onDismiss(); action() }
             }
             onViewAlbum?.let { action ->
                 if (track.albumId.isNotBlank()) {

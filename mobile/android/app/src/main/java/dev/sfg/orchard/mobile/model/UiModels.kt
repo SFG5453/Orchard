@@ -28,7 +28,7 @@ sealed interface LoadState<out T> {
     data class Error(val message: String, val cachedValueAvailable: Boolean = false) : LoadState<Nothing>
 }
 
-enum class LibraryFilter { PLAYLISTS, ARTISTS, ALBUMS, SONGS, RECENT }
+enum class LibraryFilter { PLAYLISTS, ARTISTS, ALBUMS, SONGS, RECENT, DOWNLOADS }
 
 data class LibrarySnapshot(
     val likedTracks: List<Track> = emptyList(),
