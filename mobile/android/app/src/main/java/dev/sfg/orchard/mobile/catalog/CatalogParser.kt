@@ -59,6 +59,10 @@ object CatalogParser {
         return if (fallback.isEmpty()) emptyList() else listOf(CatalogSection("listen-now", "Listen now", fallback))
     }
 
+    fun sectionItems(root: JSONObject, defaultArtist: String = ""): List<CatalogItem> {
+        return allItems(root, defaultArtist).distinctBy(CatalogItem::stableId)
+    }
+
     fun detail(id: String, root: JSONObject): BrowseDetail {
         val rawHeader = JsonTraversal.renderers(root, "musicResponsiveHeaderRenderer").firstOrNull()
             ?: JsonTraversal.renderers(root, "musicDetailHeaderRenderer").firstOrNull()
@@ -114,12 +118,29 @@ object CatalogParser {
 
         val carouselShelves = JsonTraversal.renderers(root, "musicCarouselShelfRenderer")
         val sections = carouselShelves.mapIndexedNotNull { index, shelf ->
-            val sectionTitle = JsonTraversal.text(shelf.optJSONObject("header"))
-                .ifBlank { JsonTraversal.renderers(shelf.optJSONObject("header"), "title").firstOrNull()?.let(JsonTraversal::text).orEmpty() }
+            val rawHeader = shelf.optJSONObject("header")
+            val headerNode = rawHeader?.optJSONObject("musicCarouselShelfBasicHeaderRenderer") ?: rawHeader
+            val sectionTitle = JsonTraversal.text(headerNode)
+                .ifBlank { JsonTraversal.renderers(rawHeader, "title").firstOrNull()?.let(JsonTraversal::text).orEmpty() }
                 .ifBlank { "More" }
+
+            val moreButton = headerNode?.optJSONObject("moreContentButton")?.optJSONObject("buttonRenderer")
+                ?: headerNode?.optJSONObject("moreContentButton")?.optJSONObject("button")
+                ?: shelf.optJSONObject("moreContentButton")?.optJSONObject("buttonRenderer")
+            val endpointNode = moreButton?.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")
+                ?: moreButton?.optJSONObject("endpoint")?.optJSONObject("payload")
+            val sectionBrowseId = endpointNode?.optString("browseId").orEmpty()
+            val sectionParams = endpointNode?.optString("params").orEmpty()
+
             val contents = shelf.optJSONArray("contents") ?: JSONArray()
             val items = allItems(contents, albumArtistName).distinctBy(CatalogItem::stableId)
-            if (items.isEmpty()) null else CatalogSection("detail-section-$index-$sectionTitle", sectionTitle, items)
+            if (items.isEmpty()) null else CatalogSection(
+                id = "detail-section-$index-$sectionTitle",
+                title = sectionTitle,
+                items = items,
+                browseId = sectionBrowseId,
+                params = sectionParams,
+            )
         }
 
         val related = (sections.flatMap { it.items } + allItems(root, albumArtistName))

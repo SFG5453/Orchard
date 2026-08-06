@@ -120,6 +120,8 @@ data class CatalogSection(
     val id: String,
     val title: String,
     val items: List<CatalogItem>,
+    val browseId: String = "",
+    val params: String = "",
 )
 
 data class BrowseDetail(

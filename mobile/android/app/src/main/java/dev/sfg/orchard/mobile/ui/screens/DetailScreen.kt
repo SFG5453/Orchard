@@ -71,8 +71,10 @@ import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.ui.components.ArtistBioBottomSheet
 import dev.sfg.orchard.mobile.ui.components.ArtistHero
+import dev.sfg.orchard.mobile.ui.components.ArtistSectionBottomSheet
 import dev.sfg.orchard.mobile.ui.components.CatalogCard
 import dev.sfg.orchard.mobile.ui.components.DetailBackButton
 import dev.sfg.orchard.mobile.ui.components.DetailDescriptionBottomSheet
@@ -107,6 +109,7 @@ fun DetailScreen(
     artistPortraitUrl: String = "",
     onShareTrack: ((Track) -> Unit)? = null,
     onShareCollection: ((BrowseDetail) -> Unit)? = null,
+    onFetchSectionItems: (suspend (String, String) -> List<CatalogItem>)? = null,
 ) {
     when (state) {
         LoadState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -139,6 +142,7 @@ fun DetailScreen(
                     onRemoveDownloadTrack = onRemoveDownloadTrack,
                     onShareTrack = onShareTrack,
                     onShareCollection = onShareCollection,
+                    onFetchSectionItems = onFetchSectionItems,
                 )
             } else {
                 CollectionDetailContent(
@@ -170,6 +174,14 @@ fun DetailScreen(
     }
 }
 
+/** A pending section sheet: title, initial preview items, and (optionally) the API browse key. */
+private data class SectionSheetState(
+    val title: String,
+    val initialItems: List<CatalogItem>,
+    val browseId: String = "",
+    val params: String = "",
+)
+
 /** Canopy mobile layout for artists: edge-to-edge backdrop hero, popular tracks, discography rails. */
 @Composable
 private fun ArtistDetailContent(
@@ -189,11 +201,26 @@ private fun ArtistDetailContent(
     onRemoveDownloadTrack: ((String) -> Unit)? = null,
     onShareTrack: ((Track) -> Unit)? = null,
     onShareCollection: ((BrowseDetail) -> Unit)? = null,
+    onFetchSectionItems: (suspend (String, String) -> List<CatalogItem>)? = null,
 ) {
     var showBioSheet by remember { mutableStateOf(false) }
+    var activeSectionSheet by remember { mutableStateOf<SectionSheetState?>(null) }
+    var showAllPopularTracks by remember { mutableStateOf(false) }
 
     if (showBioSheet && detail.description.isNotBlank()) {
         ArtistBioBottomSheet(detail = detail, onDismiss = { showBioSheet = false })
+    }
+
+    activeSectionSheet?.let { sheet ->
+        ArtistSectionBottomSheet(
+            title = sheet.title,
+            initialItems = sheet.initialItems,
+            browseId = sheet.browseId,
+            params = sheet.params,
+            onFetchFullItems = onFetchSectionItems,
+            onOpen = onOpen,
+            onDismiss = { activeSectionSheet = null },
+        )
     }
 
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 128.dp)) {
@@ -209,13 +236,30 @@ private fun ArtistDetailContent(
             )
         }
         if (detail.tracks.isNotEmpty()) {
-            item { OrchardSectionHeader("Popular") }
-            itemsIndexed(detail.tracks, key = { _, track -> track.id }) { index, track ->
+            val hasMorePopular = detail.tracks.size > 5
+            val displayedTracks = if (showAllPopularTracks || !hasMorePopular) {
+                detail.tracks
+            } else {
+                detail.tracks.take(5)
+            }
+            item {
+                OrchardSectionHeader(
+                    title = "Popular",
+                    action = if (hasMorePopular) {
+                        if (showAllPopularTracks) "Show less" else "View all"
+                    } else null,
+                    onAction = if (hasMorePopular) {
+                        { showAllPopularTracks = !showAllPopularTracks }
+                    } else null,
+                )
+            }
+            itemsIndexed(displayedTracks, key = { _, track -> track.id }) { index, track ->
+                val trackIndex = detail.tracks.indexOf(track).coerceAtLeast(index)
                 val isDownloaded = downloadedTrackIds.contains(track.id)
                 val isDownloading = downloadingTrackIds.contains(track.id)
                 TrackRow(
                     track = track,
-                    onPlay = { onPlayTrack(detail.tracks, index, detail.title) },
+                    onPlay = { onPlayTrack(detail.tracks, trackIndex, detail.title) },
                     modifier = Modifier.padding(horizontal = 8.dp),
                     onPlayNext = onPlayNext?.let { action -> { action(track) } },
                     onAddToQueue = onAdd?.let { action -> { action(track) } },
@@ -231,7 +275,26 @@ private fun ArtistDetailContent(
         }
         if (detail.sections.isNotEmpty()) {
             detail.sections.forEach { section ->
-                item { OrchardSectionHeader(section.title) }
+                // Show "View all" when the section has a browse endpoint (can load more from API)
+                // or when there are enough local items to warrant showing the full grid.
+                val hasMoreViaApi = section.browseId.isNotBlank()
+                val canViewAll = hasMoreViaApi || section.items.size > 3
+                item {
+                    OrchardSectionHeader(
+                        title = section.title,
+                        action = if (canViewAll) "View all" else null,
+                        onAction = if (canViewAll) {
+                            {
+                                activeSectionSheet = SectionSheetState(
+                                    title = section.title,
+                                    initialItems = section.items,
+                                    browseId = section.browseId,
+                                    params = section.params,
+                                )
+                            }
+                        } else null,
+                    )
+                }
                 item {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -244,7 +307,21 @@ private fun ArtistDetailContent(
                 }
             }
         } else if (detail.related.isNotEmpty()) {
-            item { OrchardSectionHeader("Fans also like") }
+            val canViewAll = detail.related.size > 3
+            item {
+                OrchardSectionHeader(
+                    title = "Fans also like",
+                    action = if (canViewAll) "View all" else null,
+                    onAction = if (canViewAll) {
+                        {
+                            activeSectionSheet = SectionSheetState(
+                                title = "Fans also like",
+                                initialItems = detail.related,
+                            )
+                        }
+                    } else null,
+                )
+            }
             item {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),

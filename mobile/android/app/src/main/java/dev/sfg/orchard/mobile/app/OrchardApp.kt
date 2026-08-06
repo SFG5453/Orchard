@@ -343,6 +343,7 @@ private fun OrchardNavigation(
                 artistPortraitUrl = artistImages?.portraitUrl.orEmpty(),
                 onShareTrack = viewModel::shareTrack,
                 onShareCollection = viewModel::shareCollection,
+                onFetchSectionItems = viewModel::fetchSectionItems,
             )
         }
         composable(Routes.NOW_PLAYING) {

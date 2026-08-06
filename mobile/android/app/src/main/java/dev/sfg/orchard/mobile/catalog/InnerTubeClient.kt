@@ -51,6 +51,12 @@ class InnerTubeClient(
 
     fun browse(browseId: String): JSONObject = post("browse", JSONObject().put("browseId", browseId))
 
+    fun browsePayload(browseId: String, params: String = ""): JSONObject {
+        val body = JSONObject().put("browseId", browseId)
+        if (params.isNotBlank()) body.put("params", params)
+        return post("browse", body)
+    }
+
     fun browseContinuation(token: String): JSONObject =
         post("browse", JSONObject().put("continuation", token))
 
