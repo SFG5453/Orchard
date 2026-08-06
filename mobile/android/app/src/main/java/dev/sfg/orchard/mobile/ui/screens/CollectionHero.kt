@@ -91,6 +91,10 @@ fun CollectionHero(
     onSave: (BrowseDetail) -> Unit,
     onAbout: () -> Unit,
     isSaved: Boolean = false,
+    downloadedTrackIds: Set<String> = emptySet(),
+    downloadingTrackIds: Set<String> = emptySet(),
+    onDownloadTracks: ((List<Track>) -> Unit)? = null,
+    onRemoveDownloadTracks: ((List<Track>) -> Unit)? = null,
     animatedArtworkUrl: String = "",
     artistPortraitUrl: String = "",
     onShare: ((BrowseDetail) -> Unit)? = null,
@@ -342,8 +346,20 @@ fun CollectionHero(
 
         }
 
-        // Action buttons row: [ Shuffle ]  [ ▶ Play ]  [ Add / Save ]
+        // Action buttons row: [ Shuffle ]  [ ▶ Play ]  [ Add / Save ]  [ Download ]
         Spacer(Modifier.height(18.dp))
+        val allDownloaded = detail.tracks.isNotEmpty() && detail.tracks.all { downloadedTrackIds.contains(it.id) }
+        val anyDownloading = detail.tracks.isNotEmpty() && detail.tracks.any { downloadingTrackIds.contains(it.id) }
+        val onDownloadAction: (() -> Unit)? = if (onDownloadTracks != null && onRemoveDownloadTracks != null && detail.tracks.isNotEmpty()) {
+            {
+                if (allDownloaded) {
+                    onRemoveDownloadTracks(detail.tracks)
+                } else {
+                    onDownloadTracks(detail.tracks)
+                }
+            }
+        } else null
+
         CollectionActionRow(
             accent = if (isAlbum) albumAccent else Color.White,
             onPlay = { onPlayAll(detail.tracks, detail.title) },
@@ -352,6 +368,10 @@ fun CollectionHero(
             isSaved = isSaved,
             playEnabled = detail.tracks.isNotEmpty(),
             shuffleEnabled = detail.tracks.isNotEmpty() && shuffleAvailable,
+            onDownload = onDownloadAction,
+            isDownloaded = allDownloaded,
+            isDownloading = anyDownloading,
+            downloadEnabled = detail.tracks.isNotEmpty(),
         )
 
         // Best mix button at top of playlists

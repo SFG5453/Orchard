@@ -114,12 +114,27 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val discordConnection: StateFlow<dev.sfg.orchard.mobile.discord.GatewayConnectionState> = graph.discordPresence.connectionState
 
     val activeBitrate: StateFlow<Int> = graph.activeBitrate.asStateFlow()
+    val isOnline: StateFlow<Boolean> = graph.networkMonitor.isOnline
+    val downloads: StateFlow<Map<String, dev.sfg.orchard.mobile.download.DownloadItem>> = graph.downloads.downloads
+    val downloadedTrackIds: StateFlow<Set<String>> = graph.downloads.downloadedTrackIds
+    val downloadingTrackIds: StateFlow<Set<String>> = graph.downloads.downloadingTrackIds
+    val totalBytesUsed: StateFlow<Long> = downloads.map { map ->
+        map.values.filter { it.status == dev.sfg.orchard.mobile.download.DownloadStatus.COMPLETED }
+            .sumOf { it.bytesDownloaded }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), graph.downloads.totalBytesUsed())
+
+    fun downloadTrack(track: Track) = graph.downloads.downloadTrack(track)
+    fun downloadTracks(tracks: List<Track>) = graph.downloads.downloadTracks(tracks)
+    fun removeDownload(videoId: String) = graph.downloads.removeDownload(videoId)
+    fun removeDownloads(tracks: List<Track>) = graph.downloads.removeDownloads(tracks.map { it.id })
+
     private val mutableWarning = MutableStateFlow("")
     val warning: StateFlow<String> = mutableWarning.asStateFlow()
     private var warningDismissJob: Job? = null
 
     init {
         refreshHome()
+        observeNetworkState()
         observeSearch()
         observeRemoteDevice()
         observeArtwork()
@@ -130,6 +145,16 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         observeWarnings()
     }
 
+    private fun observeNetworkState() {
+        viewModelScope.launch {
+            graph.networkMonitor.isOnline.collect { online ->
+                if (online && mutableHome.value is LoadState.Error) {
+                    refreshHome()
+                }
+            }
+        }
+    }
+
     fun refreshHome() {
         viewModelScope.launch {
             mutableHome.value = LoadState.Loading
@@ -137,8 +162,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                 .fold(
                     onSuccess = { if (it.isEmpty()) LoadState.Empty("No recommendations are available yet.") else LoadState.Content(it) },
                     onFailure = {
-                        if (library.value.recentlyPlayed.isNotEmpty()) {
-                            LoadState.Error("Orchard is offline. Your recent music is still available.", true)
+                        if (downloads.value.values.any { d -> d.status == dev.sfg.orchard.mobile.download.DownloadStatus.COMPLETED } || library.value.recentlyPlayed.isNotEmpty()) {
+                            LoadState.Error("Orchard is offline. Your downloaded music is available.", true)
                         } else LoadState.Error(it.message ?: "Home could not be loaded.")
                     },
                 )
@@ -161,11 +186,36 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         val seed = findCatalogItem(id, home.value, search.value, library.value, detail.value)
         viewModelScope.launch {
             mutableDetail.value = LoadState.Loading
-            mutableDetail.value = runCatching { graph.catalog.browse(id) }
-                .fold(
-                    onSuccess = { LoadState.Content(it.withSeed(seed)) },
-                    onFailure = { LoadState.Error(it.message ?: "This collection could not be loaded.") },
+
+            // When offline or if network is down, immediately synthesize from downloaded tracks
+            if (!graph.networkMonitor.checkIsOnline()) {
+                val offlineDetail = dev.sfg.orchard.mobile.download.OfflineDetailSynthesizer.synthesize(
+                    id = id,
+                    seed = seed,
+                    downloadedItems = downloads.value.values.toList(),
+                    library = library.value,
                 )
+                if (offlineDetail != null) {
+                    mutableDetail.value = LoadState.Content(offlineDetail)
+                    return@launch
+                }
+            }
+
+            val result = runCatching { graph.catalog.browse(id) }
+                .map { it.withSeed(seed) }
+                .recoverCatching { error ->
+                    dev.sfg.orchard.mobile.download.OfflineDetailSynthesizer.synthesize(
+                        id = id,
+                        seed = seed,
+                        downloadedItems = downloads.value.values.toList(),
+                        library = library.value,
+                    ) ?: throw error
+                }
+
+            mutableDetail.value = result.fold(
+                onSuccess = { LoadState.Content(it) },
+                onFailure = { LoadState.Error(it.message ?: "This collection could not be loaded.") },
+            )
         }
     }
 

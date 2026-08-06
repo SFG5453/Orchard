@@ -33,6 +33,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.DataSourceBitmapLoader
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -117,6 +118,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                 visitorStore = PrefsVisitorIdentityStore(this),
                 onWarning = { message -> graph.postWarning(message) },
                 sessionProvider = graph.auth,
+                downloadManager = graph.downloads,
             )
         streamResolver.warmUp()
         streamCache =
@@ -267,8 +269,9 @@ class OrchardPlaybackService : MediaLibraryService() {
     ): ExoPlayer {
         val httpFactory =
             OkHttpDataSource.Factory(client).setUserAgent(YouTubeStreamResolver.CLIENT_USER_AGENT)
+        val upstreamFactory = DefaultDataSource.Factory(this, httpFactory)
         val resolvingFactory =
-            ResolvingDataSource.Factory(httpFactory) { original ->
+            ResolvingDataSource.Factory(upstreamFactory) { original ->
                 Log.d(TAG, "resolvingFactory: request uri=${original.uri}")
                 if (!MediaItemMapper.isOrchardUri(original.uri)) return@Factory original
                 val videoId = original.uri.lastPathSegment.orEmpty()

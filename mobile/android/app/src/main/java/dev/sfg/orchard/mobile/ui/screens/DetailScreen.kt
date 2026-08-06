@@ -97,6 +97,12 @@ fun DetailScreen(
     onSave: (BrowseDetail) -> Unit,
     onOpenDetail: (String) -> Unit,
     isSaved: Boolean = false,
+    downloadedTrackIds: Set<String> = emptySet(),
+    downloadingTrackIds: Set<String> = emptySet(),
+    onDownloadTrack: ((Track) -> Unit)? = null,
+    onDownloadTracks: ((List<Track>) -> Unit)? = null,
+    onRemoveDownloadTrack: ((String) -> Unit)? = null,
+    onRemoveDownloadTracks: ((List<Track>) -> Unit)? = null,
     animatedArtworkUrl: String = "",
     artistPortraitUrl: String = "",
     onShareTrack: ((Track) -> Unit)? = null,
@@ -127,6 +133,10 @@ fun DetailScreen(
                     onAdd = onAddToQueue,
                     onSave = onSave,
                     onOpen = onOpenDetail,
+                    downloadedTrackIds = downloadedTrackIds,
+                    downloadingTrackIds = downloadingTrackIds,
+                    onDownloadTrack = onDownloadTrack,
+                    onRemoveDownloadTrack = onRemoveDownloadTrack,
                     onShareTrack = onShareTrack,
                     onShareCollection = onShareCollection,
                 )
@@ -143,6 +153,12 @@ fun DetailScreen(
                     onSave = onSave,
                     onOpen = onOpenDetail,
                     isSaved = isSaved,
+                    downloadedTrackIds = downloadedTrackIds,
+                    downloadingTrackIds = downloadingTrackIds,
+                    onDownloadTrack = onDownloadTrack,
+                    onDownloadTracks = onDownloadTracks,
+                    onRemoveDownloadTrack = onRemoveDownloadTrack,
+                    onRemoveDownloadTracks = onRemoveDownloadTracks,
                     animatedArtworkUrl = animatedArtworkUrl,
                     artistPortraitUrl = artistPortraitUrl,
                     onShareTrack = onShareTrack,
@@ -167,6 +183,10 @@ private fun ArtistDetailContent(
     onAdd: ((Track) -> Unit)?,
     onSave: (BrowseDetail) -> Unit,
     onOpen: (String) -> Unit,
+    downloadedTrackIds: Set<String> = emptySet(),
+    downloadingTrackIds: Set<String> = emptySet(),
+    onDownloadTrack: ((Track) -> Unit)? = null,
+    onRemoveDownloadTrack: ((String) -> Unit)? = null,
     onShareTrack: ((Track) -> Unit)? = null,
     onShareCollection: ((BrowseDetail) -> Unit)? = null,
 ) {
@@ -191,12 +211,18 @@ private fun ArtistDetailContent(
         if (detail.tracks.isNotEmpty()) {
             item { OrchardSectionHeader("Popular") }
             itemsIndexed(detail.tracks, key = { _, track -> track.id }) { index, track ->
+                val isDownloaded = downloadedTrackIds.contains(track.id)
+                val isDownloading = downloadingTrackIds.contains(track.id)
                 TrackRow(
                     track = track,
                     onPlay = { onPlayTrack(detail.tracks, index, detail.title) },
                     modifier = Modifier.padding(horizontal = 8.dp),
                     onPlayNext = onPlayNext?.let { action -> { action(track) } },
                     onAddToQueue = onAdd?.let { action -> { action(track) } },
+                    onDownload = onDownloadTrack?.let { action -> { action(track) } },
+                    onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
+                    isDownloaded = isDownloaded,
+                    isDownloading = isDownloading,
                     onShare = onShareTrack?.let { action -> { action(track) } },
                     onViewAlbum = if (track.albumId.isNotBlank()) {{ onOpen(track.albumId) }} else null,
                     onViewArtist = if (track.artistId.isNotBlank()) {{ onOpen(track.artistId) }} else null,
@@ -247,6 +273,12 @@ private fun CollectionDetailContent(
     onSave: (BrowseDetail) -> Unit,
     onOpen: (String) -> Unit,
     isSaved: Boolean = false,
+    downloadedTrackIds: Set<String> = emptySet(),
+    downloadingTrackIds: Set<String> = emptySet(),
+    onDownloadTrack: ((Track) -> Unit)? = null,
+    onDownloadTracks: ((List<Track>) -> Unit)? = null,
+    onRemoveDownloadTrack: ((String) -> Unit)? = null,
+    onRemoveDownloadTracks: ((List<Track>) -> Unit)? = null,
     animatedArtworkUrl: String = "",
     artistPortraitUrl: String = "",
     onShareTrack: ((Track) -> Unit)? = null,
@@ -281,6 +313,10 @@ private fun CollectionDetailContent(
                     onSave = onSave,
                     onAbout = { showDescriptionSheet = true },
                     isSaved = isSaved,
+                    downloadedTrackIds = downloadedTrackIds,
+                    downloadingTrackIds = downloadingTrackIds,
+                    onDownloadTracks = onDownloadTracks,
+                    onRemoveDownloadTracks = onRemoveDownloadTracks,
                     animatedArtworkUrl = animatedArtworkUrl,
                     artistPortraitUrl = artistPortraitUrl,
                     onShare = onShareCollection,
@@ -289,6 +325,8 @@ private fun CollectionDetailContent(
             if (detail.tracks.isNotEmpty()) {
                 itemsIndexed(detail.tracks, key = { _, track -> track.id }) { index, track ->
                     val isAlbum = detail.kind == CatalogKind.ALBUM
+                    val isDownloaded = downloadedTrackIds.contains(track.id)
+                    val isDownloading = downloadingTrackIds.contains(track.id)
                     TrackRow(
                         track = track,
                         trackNumber = if (isAlbum) index + 1 else null,
@@ -299,6 +337,10 @@ private fun CollectionDetailContent(
                         modifier = Modifier.padding(horizontal = 8.dp),
                         onPlayNext = onPlayNext?.let { action -> { action(track) } },
                         onAddToQueue = onAdd?.let { action -> { action(track) } },
+                        onDownload = onDownloadTrack?.let { action -> { action(track) } },
+                        onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
+                        isDownloaded = isDownloaded,
+                        isDownloading = isDownloading,
                         onShare = onShareTrack?.let { action -> { action(track) } },
                         onViewAlbum = if (track.albumId.isNotBlank()) {{ onOpen(track.albumId) }} else null,
                         onViewArtist = if (track.artistId.isNotBlank()) {{ onOpen(track.artistId) }} else null,
