@@ -19,6 +19,7 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,6 +42,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Person
@@ -51,6 +53,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,11 +63,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.auth.AuthState
+import dev.sfg.orchard.mobile.model.Album
+import dev.sfg.orchard.mobile.model.Artist
 import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.model.CatalogSection
+import dev.sfg.orchard.mobile.download.DownloadItem
+import dev.sfg.orchard.mobile.download.DownloadStatus
 import dev.sfg.orchard.mobile.model.LibraryFilter
 import dev.sfg.orchard.mobile.model.LibrarySnapshot
 import dev.sfg.orchard.mobile.model.LoadState
+import dev.sfg.orchard.mobile.model.Playlist
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.ArtworkTile
 import dev.sfg.orchard.mobile.ui.components.HomeSectionShimmer
@@ -78,6 +86,9 @@ fun HomeScreen(
         state: LoadState<List<CatalogSection>>,
         library: LibrarySnapshot,
         auth: AuthState = AuthState.SignedOut,
+        downloads: List<DownloadItem> = emptyList(),
+        downloadedTrackIds: Set<String> = emptySet(),
+        isOffline: Boolean = false,
         onRefresh: () -> Unit,
         onSearch: () -> Unit,
         onLibrary: (LibraryFilter) -> Unit,
@@ -85,6 +96,89 @@ fun HomeScreen(
         onPlay: (Track) -> Unit,
         onOpenDetail: (String) -> Unit,
 ) {
+        val completedDownloads = remember(downloads) {
+                downloads.filter { it.status == DownloadStatus.COMPLETED && it.filePath.isNotBlank() }
+        }
+        val downloadedTracks: List<Track> = remember(completedDownloads) { completedDownloads.map { it.track } }
+        val effectiveOffline = isOffline || state is LoadState.Error
+
+        val offlinePlaylistItems: List<CatalogItem.Collection> = remember(downloadedTracks, downloadedTrackIds, library.savedPlaylists) {
+                buildList {
+                        if (downloadedTracks.isNotEmpty()) {
+                                add(
+                                        CatalogItem.Collection(
+                                                Playlist(
+                                                        id = "offline_downloads",
+                                                        title = "Downloaded Music",
+                                                        author = "Orchard",
+                                                        artworkUrl = downloadedTracks.firstOrNull { it.artworkUrl.isNotBlank() }?.artworkUrl.orEmpty(),
+                                                        description = "All offline tracks on this device",
+                                                        tracks = downloadedTracks,
+                                                )
+                                        )
+                                )
+                        }
+                        library.savedPlaylists.forEach { playlist ->
+                                val matching = playlist.tracks.filter { it.id in downloadedTrackIds }
+                                if (matching.isNotEmpty()) {
+                                        add(
+                                                CatalogItem.Collection(
+                                                        playlist.copy(
+                                                                tracks = matching,
+                                                        )
+                                                )
+                                        )
+                                }
+                        }
+                }
+        }
+
+        val offlineArtistItems: List<CatalogItem.Performer> = remember(downloadedTracks, library.savedArtists) {
+                val grouped = mutableMapOf<String, MutableList<Track>>()
+                downloadedTracks.forEach { track ->
+                        if (track.artist.isNotBlank()) {
+                                grouped.getOrPut(track.artist) { mutableListOf() }.add(track)
+                        }
+                }
+                grouped.map { (artistName, artistTracks) ->
+                        val artistId = artistTracks.firstOrNull { it.artistId.isNotBlank() }?.artistId ?: artistName
+                        val artworkUrl = library.savedArtists.firstOrNull { it.name.equals(artistName, ignoreCase = true) }?.artworkUrl
+                                ?: artistTracks.firstOrNull { it.artworkUrl.isNotBlank() }?.artworkUrl.orEmpty()
+                        CatalogItem.Performer(
+                                Artist(
+                                        id = artistId,
+                                        name = artistName,
+                                        artworkUrl = artworkUrl,
+                                        subtitle = "${artistTracks.size} downloaded ${if (artistTracks.size == 1) "song" else "songs"}",
+                                )
+                        )
+                }
+        }
+
+        val offlineAlbumItems: List<CatalogItem.Record> = remember(downloadedTracks) {
+                val grouped = mutableMapOf<String, MutableList<Track>>()
+                downloadedTracks.forEach { track ->
+                        if (track.album.isNotBlank()) {
+                                grouped.getOrPut(track.album) { mutableListOf() }.add(track)
+                        }
+                }
+                grouped.map { (albumTitle, albumTracks) ->
+                        val albumId = albumTracks.firstOrNull { it.albumId.isNotBlank() }?.albumId ?: albumTitle
+                        val artist = albumTracks.firstOrNull()?.artist.orEmpty()
+                        val artworkUrl = albumTracks.firstOrNull { it.artworkUrl.isNotBlank() }?.artworkUrl.orEmpty()
+                        CatalogItem.Record(
+                                Album(
+                                        id = albumId,
+                                        title = albumTitle,
+                                        artist = artist,
+                                        artworkUrl = artworkUrl,
+                                        year = "",
+                                        tracks = albumTracks,
+                                )
+                        )
+                }
+        }
+
         LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = OrchardChromeHeight),
@@ -92,159 +186,296 @@ fun HomeScreen(
                 // Masthead with Welcome Back user header & search bar
                 item { HomeHeader(auth = auth, onSearch = onSearch) }
 
-                // Section 1: Your Playlists
-                val playlistItems =
-                        library.savedPlaylists.map { CatalogItem.Collection(it) }.ifEmpty {
-                                extractItemsOfKind<CatalogItem.Collection>(state)
-                        }
-                if (playlistItems.isNotEmpty()) {
+                // Offline Mode Banner
+                if (effectiveOffline) {
                         item {
-                                HomeSectionHeader(
-                                        title = "Your Playlists",
-                                        onSeeAll = { onLibrary(LibraryFilter.PLAYLISTS) },
-                                )
-                        }
-                        item {
-                                LazyRow(
-                                        contentPadding = PaddingValues(horizontal = 16.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                Surface(
+                                        modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = CanopyColors.Surface,
+                                        border = BorderStroke(1.dp, LocalAccent.current.copy(alpha = 0.35f)),
                                 ) {
-                                        items(playlistItems, key = { it.stableId }) { item ->
-                                                PlaylistCard(
-                                                        item = item,
-                                                        onClick = {
-                                                                openItem(item, onPlay, onOpenDetail)
-                                                        }
+                                        Row(
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                                Icon(
+                                                        Icons.Rounded.CloudOff,
+                                                        contentDescription = null,
+                                                        tint = LocalAccent.current,
+                                                        modifier = Modifier.size(22.dp),
                                                 )
-                                        }
-                                }
-                        }
-                        item { Spacer(Modifier.height(20.dp)) }
-                }
-
-                // Section 2: Subscribed Artists
-                val artistItems =
-                        library.savedArtists.map { CatalogItem.Performer(it) }.ifEmpty {
-                                extractItemsOfKind<CatalogItem.Performer>(state)
-                        }
-                if (artistItems.isNotEmpty()) {
-                        item {
-                                HomeSectionHeader(
-                                        title = "Subscribed Artists",
-                                        onSeeAll = { onLibrary(LibraryFilter.ARTISTS) },
-                                )
-                        }
-                        item {
-                                LazyRow(
-                                        contentPadding = PaddingValues(horizontal = 16.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                ) {
-                                        items(artistItems, key = { it.stableId }) { item ->
-                                                CircularArtistCard(
-                                                        item = item,
-                                                        onClick = {
-                                                                openItem(item, onPlay, onOpenDetail)
-                                                        }
-                                                )
-                                        }
-                                }
-                        }
-                        item { Spacer(Modifier.height(20.dp)) }
-                }
-
-                // Section 3: Top Songs (Most Listened To Songs)
-                val songTracks =
-                        library.mostPlayed
-                                .ifEmpty { library.likedTracks }
-                                .ifEmpty { library.recentlyPlayed }
-                                .ifEmpty {
-                                        extractItemsOfKind<CatalogItem.Song>(state).map { it.track }
-                                }
-                if (songTracks.isNotEmpty()) {
-                        item {
-                                HomeSectionHeader(
-                                        title = "Top Songs",
-                                        onSeeAll = { onLibrary(LibraryFilter.SONGS) },
-                                )
-                        }
-                        itemsIndexed(songTracks.take(5), key = { _, track -> track.id }) {
-                                index,
-                                track ->
-                                RankedSongRow(
-                                        rank = index + 1,
-                                        track = track,
-                                        onPlay = { onPlay(track) },
-                                )
-                        }
-                        item { Spacer(Modifier.height(20.dp)) }
-                }
-
-                // Additional catalog sections if available
-                when (state) {
-                        is LoadState.Content ->
-                                state.value.forEach { section ->
-                                        item(key = "head:${section.id}") {
-                                                HomeSectionHeader(
-                                                        title = section.title,
-                                                        onSeeAll = { onSearch() }
-                                                )
-                                        }
-                                        item(key = "rail:${section.id}") {
-                                                LazyRow(
-                                                        contentPadding =
-                                                                PaddingValues(horizontal = 16.dp),
-                                                        horizontalArrangement =
-                                                                Arrangement.spacedBy(14.dp),
-                                                ) {
-                                                        items(
-                                                                section.items,
-                                                                key = { it.stableId }
-                                                        ) { item ->
-                                                                PlaylistCard(
-                                                                        item = item,
-                                                                        onClick = {
-                                                                                openItem(
-                                                                                        item,
-                                                                                        onPlay,
-                                                                                        onOpenDetail
-                                                                                )
-                                                                        }
-                                                                )
-                                                        }
+                                                Spacer(Modifier.width(12.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                                "Offline Mode",
+                                                                style = MaterialTheme.typography.titleSmall,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                color = CanopyColors.Text,
+                                                        )
+                                                        Text(
+                                                                if (downloadedTracks.isNotEmpty())
+                                                                        "Showing downloaded music (${downloadedTracks.size} ${if (downloadedTracks.size == 1) "song" else "songs"})"
+                                                                else "No internet connection detected",
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = CanopyColors.Muted,
+                                                        )
                                                 }
                                         }
-                                        item(key = "gap:${section.id}") {
-                                                Spacer(Modifier.height(20.dp))
+                                }
+                                Spacer(Modifier.height(14.dp))
+                        }
+                }
+
+                if (effectiveOffline) {
+                        // OFFLINE MODE: ONLY show downloaded playlists, downloaded artists (with only downloaded songs), and downloaded songs
+
+                        // 1. Downloaded Playlists
+                        if (offlinePlaylistItems.isNotEmpty()) {
+                                item {
+                                        HomeSectionHeader(
+                                                title = "Downloaded Playlists",
+                                                onSeeAll = { onLibrary(LibraryFilter.PLAYLISTS) },
+                                        )
+                                }
+                                item {
+                                        LazyRow(
+                                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                        ) {
+                                                itemsIndexed(offlinePlaylistItems, key = { index, item -> "off_pl_${item.stableId}_$index" }) { _, item ->
+                                                        PlaylistCard(
+                                                                item = item,
+                                                                onClick = { openItem(item, onPlay, onOpenDetail) }
+                                                        )
+                                                }
                                         }
                                 }
-                        LoadState.Loading ->
-                                if (playlistItems.isEmpty() && songTracks.isEmpty()) {
-                                        item { HomeSectionShimmer("Playlists") }
-                                        item { HomeSectionShimmer("Top Artists") }
+                                item { Spacer(Modifier.height(20.dp)) }
+                        }
+
+                        // 2. Downloaded Artists (ONLY the songs that are downloaded)
+                        if (offlineArtistItems.isNotEmpty()) {
+                                item {
+                                        HomeSectionHeader(
+                                                title = "Downloaded Artists",
+                                                onSeeAll = { onLibrary(LibraryFilter.ARTISTS) },
+                                        )
                                 }
-                        is LoadState.Empty ->
-                                if (playlistItems.isEmpty() && songTracks.isEmpty()) {
-                                        item {
-                                                MessagePanel(
-                                                        "A quiet orchard",
-                                                        state.message,
-                                                        "Refresh",
-                                                        onRefresh
-                                                )
+                                item {
+                                        LazyRow(
+                                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                        ) {
+                                                itemsIndexed(offlineArtistItems, key = { index, item -> "off_art_${item.stableId}_$index" }) { _, item ->
+                                                        CircularArtistCard(
+                                                                item = item,
+                                                                onClick = { openItem(item, onPlay, onOpenDetail) }
+                                                        )
+                                                }
                                         }
                                 }
-                        is LoadState.Error ->
-                                if (playlistItems.isEmpty() && songTracks.isEmpty()) {
-                                        item {
-                                                MessagePanel(
-                                                        "Home is offline",
-                                                        state.message,
-                                                        "Try again",
-                                                        onRefresh
-                                                )
+                                item { Spacer(Modifier.height(20.dp)) }
+                        }
+
+                        // 3. Downloaded Albums (if any)
+                        if (offlineAlbumItems.isNotEmpty()) {
+                                item {
+                                        HomeSectionHeader(
+                                                title = "Downloaded Albums",
+                                                onSeeAll = { onLibrary(LibraryFilter.ALBUMS) },
+                                        )
+                                }
+                                item {
+                                        LazyRow(
+                                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                        ) {
+                                                itemsIndexed(offlineAlbumItems, key = { index, item -> "off_alb_${item.stableId}_$index" }) { _, item ->
+                                                        PlaylistCard(
+                                                                item = item,
+                                                                onClick = { openItem(item, onPlay, onOpenDetail) }
+                                                        )
+                                                }
                                         }
                                 }
-                        LoadState.Idle -> Unit
+                                item { Spacer(Modifier.height(20.dp)) }
+                        }
+
+                        // 4. Downloaded Songs
+                        if (downloadedTracks.isNotEmpty()) {
+                                item {
+                                        HomeSectionHeader(
+                                                title = "Downloaded Songs",
+                                                onSeeAll = { onLibrary(LibraryFilter.DOWNLOADS) },
+                                        )
+                                }
+                                itemsIndexed(downloadedTracks, key = { index, track -> "off_trk_${track.id}_$index" }) { index, track ->
+                                        RankedSongRow(
+                                                rank = index + 1,
+                                                track = track,
+                                                onPlay = { onPlay(track) },
+                                        )
+                                }
+                                item { Spacer(Modifier.height(20.dp)) }
+                        } else {
+                                item {
+                                        MessagePanel(
+                                                title = "No downloaded music",
+                                                message = "You are currently offline. Connect to the internet to stream music, or download tracks to listen offline.",
+                                                actionLabel = "Try reconnecting",
+                                                onAction = onRefresh,
+                                        )
+                                }
+                        }
+                } else {
+                        // ONLINE MODE: Standard recommendations, playlists, subscribed artists, and top songs
+                        // Section 1: Your Playlists
+                        val playlistItems =
+                                library.savedPlaylists.map { CatalogItem.Collection(it) }.ifEmpty {
+                                        extractItemsOfKind<CatalogItem.Collection>(state)
+                                }.distinctBy { it.stableId }
+                        if (playlistItems.isNotEmpty()) {
+                                item {
+                                        HomeSectionHeader(
+                                                title = "Your Playlists",
+                                                onSeeAll = { onLibrary(LibraryFilter.PLAYLISTS) },
+                                        )
+                                }
+                                item {
+                                        LazyRow(
+                                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                        ) {
+                                                itemsIndexed(playlistItems, key = { index, item -> "pl_${item.stableId}_$index" }) { _, item ->
+                                                        PlaylistCard(
+                                                                item = item,
+                                                                onClick = {
+                                                                        openItem(item, onPlay, onOpenDetail)
+                                                                }
+                                                        )
+                                                }
+                                        }
+                                }
+                                item { Spacer(Modifier.height(20.dp)) }
+                        }
+
+                        // Section 2: Subscribed Artists
+                        val artistItems =
+                                library.savedArtists.map { CatalogItem.Performer(it) }.ifEmpty {
+                                        extractItemsOfKind<CatalogItem.Performer>(state)
+                                }.distinctBy { it.stableId }
+                        if (artistItems.isNotEmpty()) {
+                                item {
+                                        HomeSectionHeader(
+                                                title = "Subscribed Artists",
+                                                onSeeAll = { onLibrary(LibraryFilter.ARTISTS) },
+                                        )
+                                }
+                                item {
+                                        LazyRow(
+                                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                        ) {
+                                                itemsIndexed(artistItems, key = { index, item -> "art_${item.stableId}_$index" }) { _, item ->
+                                                        CircularArtistCard(
+                                                                item = item,
+                                                                onClick = {
+                                                                        openItem(item, onPlay, onOpenDetail)
+                                                                }
+                                                        )
+                                                }
+                                        }
+                                }
+                                item { Spacer(Modifier.height(20.dp)) }
+                        }
+
+                        // Section 3: Top Songs (Most Listened To Songs)
+                        val songTracks =
+                                library.mostPlayed
+                                        .ifEmpty { library.likedTracks }
+                                        .ifEmpty { library.recentlyPlayed }
+                                        .ifEmpty {
+                                                extractItemsOfKind<CatalogItem.Song>(state).map { it.track }
+                                        }.distinctBy { it.id }
+                        if (songTracks.isNotEmpty()) {
+                                item {
+                                        HomeSectionHeader(
+                                                title = "Top Songs",
+                                                onSeeAll = { onLibrary(LibraryFilter.SONGS) },
+                                        )
+                                }
+                                itemsIndexed(songTracks.take(5), key = { index, track -> "top_${track.id}_$index" }) {
+                                        index,
+                                        track ->
+                                        RankedSongRow(
+                                                rank = index + 1,
+                                                track = track,
+                                                onPlay = { onPlay(track) },
+                                        )
+                                }
+                                item { Spacer(Modifier.height(20.dp)) }
+                        }
+
+                        // Additional catalog sections if available
+                        when (state) {
+                                is LoadState.Content ->
+                                        state.value.forEach { section ->
+                                                item(key = "head:${section.id}") {
+                                                        HomeSectionHeader(
+                                                                title = section.title,
+                                                                onSeeAll = { onSearch() }
+                                                        )
+                                                }
+                                                item(key = "rail:${section.id}") {
+                                                        LazyRow(
+                                                                contentPadding =
+                                                                        PaddingValues(horizontal = 16.dp),
+                                                                horizontalArrangement =
+                                                                        Arrangement.spacedBy(14.dp),
+                                                        ) {
+                                                                itemsIndexed(
+                                                                        section.items,
+                                                                        key = { index, item -> "${section.id}_${item.stableId}_$index" }
+                                                                ) { _, item ->
+                                                                        PlaylistCard(
+                                                                                item = item,
+                                                                                onClick = {
+                                                                                        openItem(
+                                                                                                item,
+                                                                                                onPlay,
+                                                                                                onOpenDetail
+                                                                                        )
+                                                                                }
+                                                                        )
+                                                                }
+                                                        }
+                                                }
+                                                item(key = "gap:${section.id}") {
+                                                        Spacer(Modifier.height(20.dp))
+                                                }
+                                        }
+                                LoadState.Loading ->
+                                        if (playlistItems.isEmpty() && songTracks.isEmpty()) {
+                                                item { HomeSectionShimmer("Playlists") }
+                                                item { HomeSectionShimmer("Top Artists") }
+                                        }
+                                is LoadState.Empty ->
+                                        if (playlistItems.isEmpty() && songTracks.isEmpty()) {
+                                                item {
+                                                        MessagePanel(
+                                                                "A quiet orchard",
+                                                                state.message,
+                                                                "Refresh",
+                                                                onRefresh
+                                                        )
+                                                }
+                                        }
+                                is LoadState.Error -> Unit
+                                LoadState.Idle -> Unit
+                        }
                 }
         }
 }

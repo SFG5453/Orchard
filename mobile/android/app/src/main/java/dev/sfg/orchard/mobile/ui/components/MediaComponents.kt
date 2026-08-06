@@ -40,8 +40,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -244,6 +246,10 @@ fun TrackRow(
     onPlayNext: (() -> Unit)? = null,
     onAddToQueue: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
+    onDownload: (() -> Unit)? = null,
+    onRemoveDownload: (() -> Unit)? = null,
+    isDownloaded: Boolean = false,
+    isDownloading: Boolean = false,
     onViewAlbum: (() -> Unit)? = null,
     onViewArtist: (() -> Unit)? = null,
     trailingText: String = durationText(track.durationMs),
@@ -262,6 +268,8 @@ fun TrackRow(
             onPlay = onPlay,
             onPlayNext = onPlayNext,
             onAddToQueue = onAddToQueue,
+            onDownload = if (!isDownloaded) onDownload else null,
+            onRemoveDownload = if (isDownloaded) onRemoveDownload else null,
             onShare = onShare,
             onViewAlbum = onViewAlbum,
             onViewArtist = onViewArtist,
@@ -364,6 +372,20 @@ fun TrackRow(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
+                }
+                if (isDownloading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        color = LocalAccent.current,
+                        strokeWidth = 2.dp,
+                    )
+                } else if (isDownloaded) {
+                    Icon(
+                        Icons.Rounded.DownloadDone,
+                        contentDescription = "Downloaded offline",
+                        tint = LocalAccent.current.copy(alpha = 0.85f),
+                        modifier = Modifier.size(16.dp),
+                    )
                 }
                 if (trailingText.isNotBlank()) {
                     Text(

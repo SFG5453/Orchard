@@ -29,6 +29,7 @@ object Routes {
     const val DEVICES = "devices"
     const val LOGIN = "login"
     const val SPOTIFY_LOGIN = "spotify-login"
+    const val DOWNLOADS = "downloads"
     const val DETAIL = "detail/{id}"
 
     fun detail(id: String) = "detail/${android.net.Uri.encode(id)}"

@@ -236,6 +236,9 @@ fun TrackInfoRow(
     // Null when the track carries no album or artist id to open.
     onOpenAlbum: (() -> Unit)? = null,
     onOpenArtist: (() -> Unit)? = null,
+    isDownloaded: Boolean = false,
+    onDownload: (() -> Unit)? = null,
+    onRemoveDownload: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -245,6 +248,8 @@ fun TrackInfoRow(
             track = track,
             onDismiss = { menuOpen = false },
             onViewQueue = onMore,
+            onDownload = if (!isDownloaded) onDownload else null,
+            onRemoveDownload = if (isDownloaded) onRemoveDownload else null,
             onShare = onShare,
         )
     }

@@ -153,6 +153,12 @@ private fun OrchardNavigation(
     val discordAuth by viewModel.discordAuth.collectAsStateWithLifecycle()
     val discordConnection by viewModel.discordConnection.collectAsStateWithLifecycle()
     val libraryFilter by viewModel.libraryFilter.collectAsStateWithLifecycle()
+    val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
+    val downloads by viewModel.downloads.collectAsStateWithLifecycle()
+    val downloadsList = androidx.compose.runtime.remember(downloads) { downloads.values.toList() }
+    val downloadedTrackIds by viewModel.downloadedTrackIds.collectAsStateWithLifecycle()
+    val downloadingTrackIds by viewModel.downloadingTrackIds.collectAsStateWithLifecycle()
+    val totalBytesUsed by viewModel.totalBytesUsed.collectAsStateWithLifecycle()
     val connectMessage by viewModel.connectMessage.collectAsStateWithLifecycle()
     val connectProtocolVersion by viewModel.connectProtocolVersion.collectAsStateWithLifecycle()
     val connectAudioEngine by viewModel.connectAudioEngine.collectAsStateWithLifecycle()
@@ -184,6 +190,9 @@ private fun OrchardNavigation(
                 state = home,
                 library = library,
                 auth = auth,
+                downloads = downloadsList,
+                downloadedTrackIds = downloadedTrackIds,
+                isOffline = !isOnline,
                 onRefresh = viewModel::refreshHome,
                 onSearch = { nav.openTopLevel(Routes.SEARCH) },
                 onLibrary = { filter ->
@@ -203,9 +212,13 @@ private fun OrchardNavigation(
                 onQueryChange = viewModel::updateQuery,
                 onSubmit = viewModel::runSearch,
                 onClearHistory = viewModel::clearSearchHistory,
+                downloadedTrackIds = downloadedTrackIds,
+                downloadingTrackIds = downloadingTrackIds,
                 onPlay = { viewModel.play(it, "Search") },
                 onPlayNext = if (canControlQueue) viewModel::playNext else null,
                 onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
+                onDownloadTrack = viewModel::downloadTrack,
+                onRemoveDownloadTrack = viewModel::removeDownload,
                 onOpenDetail = { id -> viewModel.openDetail(id); nav.navigate(Routes.detail(id)) },
                 onShare = viewModel::shareTrack,
             )
@@ -215,11 +228,25 @@ private fun OrchardNavigation(
                 library = library,
                 filter = libraryFilter,
                 onFilterChange = viewModel::selectLibraryFilter,
+                downloads = downloadsList,
+                downloadedTrackIds = downloadedTrackIds,
+                downloadingTrackIds = downloadingTrackIds,
+                totalBytesUsed = totalBytesUsed,
                 onPlay = { viewModel.play(it, libraryFilter.sourceTitle()) },
                 onPlayNext = if (canControlQueue) viewModel::playNext else null,
                 onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
                 onOpenDetail = { id -> viewModel.openDetail(id); nav.navigate(Routes.detail(id)) },
+                onDownloadTrack = viewModel::downloadTrack,
+                onRemoveDownloadTrack = viewModel::removeDownload,
                 onShare = viewModel::shareTrack,
+            )
+        }
+        composable(Routes.DOWNLOADS) {
+            dev.sfg.orchard.mobile.ui.screens.DownloadsScreen(
+                downloads = downloadsList,
+                totalBytesUsed = totalBytesUsed,
+                onPlay = { viewModel.play(it, "Downloads") },
+                onRemoveDownload = viewModel::removeDownload,
             )
         }
         composable(Routes.SETTINGS) {
@@ -306,6 +333,12 @@ private fun OrchardNavigation(
                 onSave = viewModel::saveDetail,
                 onOpenDetail = { next -> viewModel.openDetail(next); nav.navigate(Routes.detail(next)) },
                 isSaved = isSaved,
+                downloadedTrackIds = downloadedTrackIds,
+                downloadingTrackIds = downloadingTrackIds,
+                onDownloadTrack = viewModel::downloadTrack,
+                onDownloadTracks = viewModel::downloadTracks,
+                onRemoveDownloadTrack = viewModel::removeDownload,
+                onRemoveDownloadTracks = viewModel::removeDownloads,
                 animatedArtworkUrl = animatedArtworkUrl,
                 artistPortraitUrl = artistImages?.portraitUrl.orEmpty(),
                 onShareTrack = viewModel::shareTrack,
@@ -341,6 +374,9 @@ private fun OrchardNavigation(
                 onRemoveQueueIndex = viewModel::removeQueueIndex,
                 onMoveQueueItem = viewModel::moveQueueItem,
                 onClearUpcoming = viewModel::clearUpcoming,
+                downloadedTrackIds = downloadedTrackIds,
+                onDownloadTrack = viewModel::downloadTrack,
+                onRemoveDownloadTrack = viewModel::removeDownload,
                 onShare = { playback.currentTrack?.let(viewModel::shareTrack) },
                 // Leaves the player so the collection is not buried underneath it.
                 onOpenCollection = { id ->
@@ -384,4 +420,5 @@ private fun LibraryFilter.sourceTitle(): String = when (this) {
     LibraryFilter.ALBUMS -> "Your albums"
     LibraryFilter.SONGS -> "Liked songs"
     LibraryFilter.RECENT -> "Recently played"
+    LibraryFilter.DOWNLOADS -> "Downloads"
 }
