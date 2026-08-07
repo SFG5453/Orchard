@@ -15,6 +15,11 @@ on:
         required: false
         default: false
         type: boolean
+      mobile_only:
+        description: Build and publish the Android APK alone, skipping every desktop platform
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: release-${{ inputs.tag || github.ref }}
@@ -37,6 +42,7 @@ jobs:
       tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.release.outputs.version }}
       is_beta: ${{ steps.release.outputs.is_beta }}
+      mobile_only: ${{ steps.release.outputs.mobile_only }}
     steps:
       - name: Check out release tag
         uses: actions/checkout@v6
@@ -55,18 +61,43 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           BUILD_ONLY: ${{ inputs.build_only || false }}
+          MOBILE_ONLY_INPUT: ${{ inputs.mobile_only || false }}
         run: |
           set -euo pipefail
-          version="$(node -p "require('./package.json').version")"
+
+          # A `-mobile` tag suffix ships the Android APK on its own, so a mobile-side fix
+          # does not have to drag a whole desktop release behind it. The suffix is not part
+          # of any version number: it is stripped here, and what is left has to be a valid
+          # release tag on its own terms.
+          mobile_only="$MOBILE_ONLY_INPUT"
+          version_tag="$RELEASE_TAG"
+          case "$RELEASE_TAG" in
+            *-mobile)
+              mobile_only="true"
+              version_tag="${RELEASE_TAG%-mobile}"
+              ;;
+          esac
+
+          # Desktop and mobile version independently -- desktop is on 4.x while mobile is on
+          # 1.x -- so each validates against the file that actually declares its version.
+          if [[ "$mobile_only" == "true" ]]; then
+            version="$(sed -n "s/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*['\"]\([^'\"]*\)['\"].*/\1/p" mobile/android/app/build.gradle)"
+            version_source="mobile/android/app/build.gradle"
+          else
+            version="$(node -p "require('./package.json').version")"
+            version_source="package.json"
+          fi
+          test -n "$version"
+
           if [[ "${BUILD_ONLY:-false}" == "true" ]]; then
             echo "Build-only run: skipping release tag validation."
           else
-            case "$RELEASE_TAG" in
+            case "$version_tag" in
               v[0-9]*) ;;
               *) echo "Release tag must start with v followed by a number." >&2; exit 1 ;;
             esac
-            if [[ "$RELEASE_TAG" != "v$version" ]]; then
-              echo "Tag $RELEASE_TAG does not match package.json version $version." >&2
+            if [[ "$version_tag" != "v$version" ]]; then
+              echo "Tag $RELEASE_TAG does not match $version_source version $version." >&2
               exit 1
             fi
             git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}"
@@ -74,7 +105,10 @@ jobs:
 
           echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "mobile_only=$mobile_only" >> "$GITHUB_OUTPUT"
 
+          # Read off the version rather than the tag, so the `-mobile` marker is never
+          # mistaken for a prerelease qualifier.
           is_beta="false"
           case "$version" in
             *-*) is_beta="true" ;;
@@ -82,17 +116,38 @@ jobs:
           echo "is_beta=$is_beta" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
+        if: steps.release.outputs.mobile_only != 'true'
         run: npm ci
 
       - name: Build native audio analyzer
+        if: steps.release.outputs.mobile_only != 'true'
         run: npm run build:native
 
       - name: Run tests
+        if: steps.release.outputs.mobile_only != 'true'
         run: npm test
+
+      - name: Set up JDK 17
+        if: steps.release.outputs.mobile_only == 'true'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Run mobile tests
+        if: steps.release.outputs.mobile_only == 'true'
+        working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          # The debug variant deliberately: any task with "release" in its name trips the
+          # signing-environment guard in app/build.gradle, and unit tests need no keystore.
+          ./gradlew --no-daemon testDebugUnitTest
 
   build-linux:
     name: Linux packages
     needs: prepare
+    if: needs.prepare.outputs.mobile_only != 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: Check out release tag
@@ -145,6 +200,7 @@ jobs:
   build-arch:
     name: Arch Linux package
     needs: prepare
+    if: needs.prepare.outputs.mobile_only != 'true'
     runs-on: ubuntu-24.04
     container: archlinux:base-devel
     steps:
@@ -189,6 +245,7 @@ jobs:
   build-windows:
     name: Windows installer
     needs: prepare
+    if: needs.prepare.outputs.mobile_only != 'true'
     runs-on: windows-2025
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -239,6 +296,7 @@ jobs:
   build-macos:
     name: macOS ${{ matrix.arch }} ZIP
     needs: prepare
+    if: needs.prepare.outputs.mobile_only != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -388,7 +446,17 @@ jobs:
       - build-windows
       - build-macos
       - build-android
-    if: needs.prepare.outputs.is_beta != 'true' && inputs.build_only != true
+    # A mobile-only run skips every desktop build job, and a skipped dependency would
+    # otherwise skip this one too -- hence always() plus explicit result checks, which
+    # still refuse to publish if anything actually failed or was cancelled.
+    if: >-
+      always()
+      && needs.prepare.result == 'success'
+      && needs.build-android.result == 'success'
+      && !contains(needs.*.result, 'failure')
+      && !contains(needs.*.result, 'cancelled')
+      && needs.prepare.outputs.is_beta != 'true'
+      && inputs.build_only != true
     runs-on: ubuntu-24.04
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -415,6 +483,7 @@ jobs:
           merge-multiple: true
 
       - name: Merge macOS update metadata
+        if: needs.prepare.outputs.mobile_only != 'true'
         run: |
           set -euo pipefail
           node scripts/merge-macos-update-metadata.mjs \
@@ -424,16 +493,26 @@ jobs:
           rm release-assets/latest-mac-x64.yml release-assets/latest-mac-arm64.yml
 
       - name: Generate checksums
+        env:
+          MOBILE_ONLY: ${{ needs.prepare.outputs.mobile_only }}
         run: |
           set -euo pipefail
           test -n "$(find release-assets -maxdepth 1 -type f -print -quit)"
+          # SHA256SUMS.txt has a fixed name in the bucket, so a mobile-only run publishing
+          # under it would replace the desktop checksum list with a single APK line. Mobile
+          # gets its own file instead, leaving the desktop manifest from the last full
+          # release intact.
+          sums="SHA256SUMS.txt"
+          if [[ "$MOBILE_ONLY" == "true" ]]; then
+            sums="SHA256SUMS-mobile.txt"
+          fi
           (
             cd release-assets
-            find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 \
+            find . -maxdepth 1 -type f ! -name 'SHA256SUMS*.txt' -print0 \
               | sort -z \
-              | xargs -0 sha256sum > SHA256SUMS.txt
+              | xargs -0 sha256sum > "$sums"
           )
-          cat release-assets/SHA256SUMS.txt
+          cat "release-assets/$sums"
 
       - name: Upload versioned release artifacts
         run: |
@@ -445,10 +524,11 @@ jobs:
             --exclude 'latest*.json' \
             --recursive
 
-      - name: Publish updater manifests
+      - name: Publish desktop updater manifests
+        if: needs.prepare.outputs.mobile_only != 'true'
         run: |
           set -euo pipefail
-          
+
           # Upload YAML manifests
           for manifest in latest.yml latest-linux.yml latest-mac.yml; do
             test -f "release-assets/$manifest"
@@ -457,8 +537,12 @@ jobs:
               --content-type application/yaml \
               --cache-control no-cache
           done
-          
-          # Upload Android JSON manifest separately for correct content-type
+
+      - name: Publish Android updater manifest
+        run: |
+          set -euo pipefail
+
+          # Uploaded separately from the YAML manifests for the correct content-type
           test -f "release-assets/latest-android.json"
           aws s3 cp "release-assets/latest-android.json" "s3://$R2_BUCKET/orchard/latest-android.json" \
             --endpoint-url "$R2_ENDPOINT" \
@@ -474,7 +558,15 @@ jobs:
       - build-windows
       - build-macos
       - build-android
-    if: needs.prepare.outputs.is_beta == 'true' && inputs.build_only != true
+    # See the publish job: skipped desktop builds must not skip this one.
+    if: >-
+      always()
+      && needs.prepare.result == 'success'
+      && needs.build-android.result == 'success'
+      && !contains(needs.*.result, 'failure')
+      && !contains(needs.*.result, 'cancelled')
+      && needs.prepare.outputs.is_beta == 'true'
+      && inputs.build_only != true
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -494,6 +586,7 @@ jobs:
           merge-multiple: true
 
       - name: Merge macOS update metadata
+        if: needs.prepare.outputs.mobile_only != 'true'
         run: |
           set -euo pipefail
           node scripts/merge-macos-update-metadata.mjs \
@@ -515,11 +608,24 @@ jobs:
           cat release-assets/SHA256SUMS.txt
 
       - name: Create GitHub prerelease
+        env:
+          MOBILE_ONLY: ${{ needs.prepare.outputs.mobile_only }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
           test -n "$(find release-assets -maxdepth 1 -type f -print -quit)"
+
+          # A mobile-only prerelease carries the mobile version and mobile notes; the
+          # desktop ones describe a build this run never produced.
+          notes="build/release-notes.md"
+          title="Orchard $VERSION (beta)"
+          if [[ "$MOBILE_ONLY" == "true" ]]; then
+            notes="mobile/release-notes.md"
+            title="Orchard Mobile $VERSION (beta)"
+          fi
+
           gh release create "${{ needs.prepare.outputs.tag }}" release-assets/* \
             --repo "${{ github.repository }}" \
-            --title "Orchard ${{ needs.prepare.outputs.version }} (beta)" \
-            --notes-file build/release-notes.md \
+            --title "$title" \
+            --notes-file "$notes" \
             --prerelease
