@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -70,6 +71,7 @@ import dev.sfg.orchard.mobile.ui.components.ArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.ArtworkTile
 import dev.sfg.orchard.mobile.ui.components.CollectionActionRow
 import dev.sfg.orchard.mobile.ui.components.CollectionTopBar
+import dev.sfg.orchard.mobile.ui.components.ExplicitBadge
 import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import dev.sfg.orchard.mobile.ui.theme.legibleOnDarkChrome
@@ -233,17 +235,27 @@ fun CollectionHero(
                         .padding(bottom = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text(
-                        text = detail.title,
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.6).sp,
-                        ),
-                        color = albumAccent,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            text = detail.title,
+                            style = MaterialTheme.typography.headlineLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = (-0.6).sp,
+                            ),
+                            color = albumAccent,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (detail.tracks.any { it.explicit }) {
+                            Spacer(Modifier.width(8.dp))
+                            ExplicitBadge()
+                        }
+                    }
                     if (artistName.isNotBlank()) {
                         Text(
                             text = artistName,
@@ -302,18 +314,28 @@ fun CollectionHero(
             Spacer(Modifier.height(20.dp))
 
             // Centered Album Title
-            Text(
-                text = detail.title,
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.4).sp,
-                ),
-                color = Color.White,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
                 modifier = Modifier.padding(horizontal = 24.dp),
-            )
+            ) {
+                Text(
+                    text = detail.title,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.4).sp,
+                    ),
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (detail.tracks.any { it.explicit }) {
+                    Spacer(Modifier.width(8.dp))
+                    ExplicitBadge()
+                }
+            }
 
             // Centered Artist Name
             if (artistName.isNotBlank()) {

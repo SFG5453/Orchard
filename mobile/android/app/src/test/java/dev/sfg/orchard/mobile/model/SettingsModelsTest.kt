@@ -34,6 +34,7 @@ class SettingsModelsTest {
         assertFalse(settings.animatedBackground)
         assertFalse(settings.crossfadeEnabled)
         assertFalse(settings.smartCrossfade)
+        assertFalse(settings.volumeNormalizationEnabled)
         assertEquals(AudioQuality.HIGH, settings.audioQuality)
         assertEquals(OrchardSettings.DEFAULT_CACHE_SIZE_MB, settings.cacheSizeMb)
         assertEquals(0L, settings.crossfadeMs)

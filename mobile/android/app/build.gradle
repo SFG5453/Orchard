@@ -15,8 +15,9 @@ android {
         applicationId = 'dev.sfg.orchard.mobile'
         minSdk = 31
         targetSdk = 36
-        versionCode = 10000
-        versionName = '1.0.0'
+        versionCode = 10100
+        versionName = '1.1.0'
+        buildConfigField 'String', 'CODENAME', '"Fiancee Batches"'
         testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
         ndk {
             // 64-bit only. minSdk 31 predates the 64-bit requirement by years, and a 32-bit

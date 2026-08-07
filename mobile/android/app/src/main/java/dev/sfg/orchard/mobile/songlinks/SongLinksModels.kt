@@ -68,17 +68,20 @@ sealed interface SongShareState {
     val title: String
     val subtitle: String
     val artworkUrl: String
+    val explicit: Boolean
 
     data class Loading(
         override val title: String,
         override val subtitle: String = "",
         override val artworkUrl: String = "",
+        override val explicit: Boolean = false,
     ) : SongShareState
 
     data class Ready(
         override val title: String,
         override val subtitle: String = "",
         override val artworkUrl: String = "",
+        override val explicit: Boolean = false,
         val shareUrl: String,
         val links: List<PlatformLink> = emptyList(),
         val isCollection: Boolean = false,
@@ -88,6 +91,7 @@ sealed interface SongShareState {
         override val title: String,
         override val subtitle: String = "",
         override val artworkUrl: String = "",
+        override val explicit: Boolean = false,
         val message: String,
         val fallbackShareUrl: String? = null,
     ) : SongShareState

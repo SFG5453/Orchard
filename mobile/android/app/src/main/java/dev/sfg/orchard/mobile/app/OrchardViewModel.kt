@@ -42,8 +42,10 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Presentation state holder for the standalone shell and both playback targets. */
 @OptIn(FlowPreview::class)
@@ -127,6 +129,51 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun downloadTracks(tracks: List<Track>) = graph.downloads.downloadTracks(tracks)
     fun removeDownload(videoId: String) = graph.downloads.removeDownload(videoId)
     fun removeDownloads(tracks: List<Track>) = graph.downloads.removeDownloads(tracks.map { it.id })
+
+    fun createPlaylist(title: String, track: Track, onCreated: (String) -> Unit = {}) = viewModelScope.launch {
+        runCatching { withContext(Dispatchers.IO) { graph.playlistActions.create(title, track.id) } }
+            .onSuccess(onCreated)
+            .onFailure { graph.postWarning(it.message ?: "Could not create playlist.") }
+    }
+    fun addTrackToPlaylist(playlistId: String, track: Track) = viewModelScope.launch {
+        runCatching {
+            withContext(Dispatchers.IO) {
+                graph.playlistActions.add(playlistId, track.id)
+                graph.catalog.browse(playlistId)
+            }
+        }.onSuccess(::applyRefreshedPlaylist)
+            .onFailure { graph.postWarning(it.message ?: "Could not add track to playlist.") }
+    }
+    fun removeTrackFromPlaylist(playlistId: String, track: Track) = viewModelScope.launch {
+        runCatching {
+            withContext(Dispatchers.IO) {
+                graph.playlistActions.remove(playlistId, track.id)
+                graph.catalog.browse(playlistId)
+            }
+        }.onSuccess(::applyRefreshedPlaylist)
+            .onFailure { graph.postWarning(it.message ?: "Could not remove track from playlist.") }
+    }
+
+    private fun applyRefreshedPlaylist(refreshed: BrowseDetail) {
+        val activeId = (mutableDetail.value as? LoadState.Content)?.value?.id.orEmpty().removePrefix("VL")
+        if (activeId == refreshed.id.removePrefix("VL")) mutableDetail.value = LoadState.Content(refreshed)
+        graph.library.refreshPlaylist(
+            Playlist(refreshed.id, refreshed.title, refreshed.subtitle, refreshed.artworkUrl, refreshed.description, refreshed.tracks),
+        )
+    }
+    fun deletePlaylist(playlistId: String) = viewModelScope.launch {
+        runCatching {
+            withContext(Dispatchers.IO) { graph.playlistActions.delete(playlistId) }
+            graph.library.removePlaylist(playlistId)
+        }.onFailure { graph.postWarning(it.message ?: "Could not delete playlist.") }
+    }
+
+    // Menu entry points. The picker UI supplies the target playlist through the public methods above.
+    fun addTrackToPlaylistMenu(track: Track) = graph.postWarning("Choose a playlist to add ${track.title} to.")
+    fun removeTrackFromCurrentPlaylist(track: Track) {
+        val id = (detail.value as? LoadState.Content)?.value?.id.orEmpty()
+        if (id.isNotBlank()) removeTrackFromPlaylist(id, track)
+    }
 
     private val mutableWarning = MutableStateFlow("")
     val warning: StateFlow<String> = mutableWarning.asStateFlow()
