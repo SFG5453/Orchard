@@ -18,6 +18,10 @@ sha256sums=('SKIP' 'SKIP' 'SKIP')
 build() {
   cd "${srcdir}/orchard-${pkgver}"
   npm ci --ignore-scripts
+  # node-smtc exposes Windows' System Media Transport Controls and is only an
+  # optional Windows integration. Rebuilding it on Arch fails because its
+  # native loader is not part of the Linux package.
+  rm -rf node_modules/node-smtc
   ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm rebuild
   if [[ -f dist/index.html ]]; then
     node scripts/package-system-electron.mjs \
