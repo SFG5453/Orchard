@@ -1,6 +1,15 @@
 # Keep enough source information for useful release crash reports.
 -keepattributes SourceFile,LineNumberTable
 
+# ONNX Runtime's JNI layer resolves its Java classes, fields and constructors by
+# hardcoded name from native code (FindClass/GetMethodID/GetFieldID). R8 renaming
+# or stripping any of them turns into `java_class == null` and a SIGABRT inside
+# convertToTensorInfo the first time a model runs, so the whole package must
+# survive shrinking untouched.
+-keep class ai.onnxruntime.** { *; }
+-keep class ai.onnxruntime.providers.** { *; }
+-dontwarn ai.onnxruntime.**
+
 # NewPipeExtractor embeds Mozilla Rhino for YouTube cipher evaluation.
 -keep class org.mozilla.javascript.** { *; }
 -keep class org.mozilla.classfile.ClassFileWriter
