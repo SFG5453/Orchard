@@ -17,7 +17,7 @@ android {
         targetSdk = 36
         versionCode = 10101
         versionName = '1.1.1'
-        buildConfigField 'String', 'CODENAME', '"Fiancee Batches"'
+        buildConfigField 'String', 'CODENAME', '"Minuses Entangle"'
         testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
         ndk {
             // 64-bit only. minSdk 31 predates the 64-bit requirement by years, and a 32-bit
