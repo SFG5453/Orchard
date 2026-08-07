@@ -59,6 +59,10 @@ object CatalogParser {
         return if (fallback.isEmpty()) emptyList() else listOf(CatalogSection("listen-now", "Listen now", fallback))
     }
 
+    fun sectionItems(root: JSONObject, defaultArtist: String = ""): List<CatalogItem> {
+        return allItems(root, defaultArtist).distinctBy(CatalogItem::stableId)
+    }
+
     fun detail(id: String, root: JSONObject): BrowseDetail {
         val rawHeader = JsonTraversal.renderers(root, "musicResponsiveHeaderRenderer").firstOrNull()
             ?: JsonTraversal.renderers(root, "musicDetailHeaderRenderer").firstOrNull()
@@ -114,12 +118,29 @@ object CatalogParser {
 
         val carouselShelves = JsonTraversal.renderers(root, "musicCarouselShelfRenderer")
         val sections = carouselShelves.mapIndexedNotNull { index, shelf ->
-            val sectionTitle = JsonTraversal.text(shelf.optJSONObject("header"))
-                .ifBlank { JsonTraversal.renderers(shelf.optJSONObject("header"), "title").firstOrNull()?.let(JsonTraversal::text).orEmpty() }
+            val rawHeader = shelf.optJSONObject("header")
+            val headerNode = rawHeader?.optJSONObject("musicCarouselShelfBasicHeaderRenderer") ?: rawHeader
+            val sectionTitle = JsonTraversal.text(headerNode)
+                .ifBlank { JsonTraversal.renderers(rawHeader, "title").firstOrNull()?.let(JsonTraversal::text).orEmpty() }
                 .ifBlank { "More" }
+
+            val moreButton = headerNode?.optJSONObject("moreContentButton")?.optJSONObject("buttonRenderer")
+                ?: headerNode?.optJSONObject("moreContentButton")?.optJSONObject("button")
+                ?: shelf.optJSONObject("moreContentButton")?.optJSONObject("buttonRenderer")
+            val endpointNode = moreButton?.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")
+                ?: moreButton?.optJSONObject("endpoint")?.optJSONObject("payload")
+            val sectionBrowseId = endpointNode?.optString("browseId").orEmpty()
+            val sectionParams = endpointNode?.optString("params").orEmpty()
+
             val contents = shelf.optJSONArray("contents") ?: JSONArray()
             val items = allItems(contents, albumArtistName).distinctBy(CatalogItem::stableId)
-            if (items.isEmpty()) null else CatalogSection("detail-section-$index-$sectionTitle", sectionTitle, items)
+            if (items.isEmpty()) null else CatalogSection(
+                id = "detail-section-$index-$sectionTitle",
+                title = sectionTitle,
+                items = items,
+                browseId = sectionBrowseId,
+                params = sectionParams,
+            )
         }
 
         val related = (sections.flatMap { it.items } + allItems(root, albumArtistName))
@@ -235,7 +256,7 @@ object CatalogParser {
         if (videoId.isNotBlank()) {
             return CatalogItem.Song(track(videoId, title, listOf(title, subtitle), art, shelf))
         }
-        return browsable(browseId, title, subtitle, art, pageType)
+        return browsable(browseId, title, subtitle, art, pageType, shelf)
     }
 
     private fun responsive(renderer: JSONObject, fallbackArtist: String = ""): CatalogItem? {
@@ -261,7 +282,7 @@ object CatalogParser {
         if (videoId.isNotBlank()) {
             return CatalogItem.Song(track(videoId, title, texts, art, renderer, fallbackArtist, playable.second))
         }
-        return browsable(browseId, title, texts.drop(1).joinToString(" • "), art, JsonTraversal.pageType(endpoint))
+        return browsable(browseId, title, texts.drop(1).joinToString(" • "), art, JsonTraversal.pageType(endpoint), renderer)
     }
 
     private fun twoRow(renderer: JSONObject): CatalogItem? {
@@ -278,7 +299,7 @@ object CatalogParser {
                 track(videoId, title, listOf(title, subtitle), art, renderer, musicVideoType = playable.second),
             )
         }
-        return browsable(JsonTraversal.browseId(endpoint), title, subtitle, art, JsonTraversal.pageType(endpoint))
+        return browsable(JsonTraversal.browseId(endpoint), title, subtitle, art, JsonTraversal.pageType(endpoint), renderer)
     }
 
     /**
@@ -378,8 +399,7 @@ object CatalogParser {
         val album = parts.firstOrNull {
             it != artist && it.isArtistCandidate()
         }.orEmpty()
-        val explicit = JsonTraversal.renderers(renderer, "musicInlineBadgeRenderer")
-            .any { it.optString("iconType").contains("EXPLICIT") }
+        val explicit = isExplicit(renderer)
         val resolvedArt = art.ifBlank {
             if (videoId.isNotBlank()) "https://i.ytimg.com/vi/$videoId/hqdefault.jpg" else ""
         }
@@ -395,6 +415,44 @@ object CatalogParser {
             explicit = explicit,
             musicVideoType = musicVideoType,
         )
+    }
+
+    private fun isExplicit(renderer: JSONObject?): Boolean {
+        if (renderer == null) return false
+
+        val badgeRenderers = JsonTraversal.renderers(renderer, "musicInlineBadgeRenderer") +
+                JsonTraversal.renderers(renderer, "badgeRenderer")
+
+        for (badge in badgeRenderers) {
+            val icon = badge.optJSONObject("icon")
+            val iconType = icon?.optString("iconType").orEmpty().ifBlank { badge.optString("iconType") }
+            if (iconType.contains("EXPLICIT", ignoreCase = true)) return true
+
+            val label = JsonTraversal.text(badge.optJSONObject("accessibilityData"))
+                .ifBlank { JsonTraversal.text(badge.optJSONObject("accessibility")) }
+                .ifBlank { badge.optString("label") }
+                .ifBlank { badge.optString("tooltip") }
+            if (label.contains("explicit", ignoreCase = true)) return true
+        }
+
+        val icons = JsonTraversal.renderers(renderer, "icon")
+        for (icon in icons) {
+            val iconType = icon.optString("iconType")
+            if (iconType.contains("EXPLICIT", ignoreCase = true)) return true
+        }
+
+        val str = renderer.toString()
+        if (str.contains("MUSIC_EXPLICIT_BADGE", ignoreCase = true) ||
+            str.contains("OFFICIAL_EXPLICIT_BADGE", ignoreCase = true) ||
+            str.contains("BADGE_STYLE_TYPE_EXPLICIT", ignoreCase = true) ||
+            str.contains("EXPLICIT_BADGE", ignoreCase = true) ||
+            str.contains("EXPLICIT", ignoreCase = true) ||
+            str.contains("Explicit")
+        ) {
+            return true
+        }
+
+        return false
     }
 
     private fun extractHeaderArtist(header: JSONObject?): String {
@@ -454,8 +512,9 @@ object CatalogParser {
         return "Unknown artist"
     }
 
-    private fun browsable(id: String, title: String, subtitle: String, art: String, pageType: String): CatalogItem? {
+    private fun browsable(id: String, title: String, subtitle: String, art: String, pageType: String, renderer: JSONObject? = null): CatalogItem? {
         if (id.isBlank()) return null
+        val explicit = isExplicit(renderer)
         return when {
             // Ports desktop's isKnownArtistItem: plain user channels ride the same UC ids as
             // official artist channels, so page type is the only thing separating a real artist
@@ -463,8 +522,8 @@ object CatalogParser {
             "USER_CHANNEL" in pageType -> null
             "ARTIST" in pageType || id.startsWith("UC") -> CatalogItem.Performer(Artist(id, title, art, subtitle))
             "ALBUM" in pageType || id.startsWith("MPRE") ->
-                CatalogItem.Record(Album(id, title, albumArtist(subtitle), art, releaseYear(subtitle)))
-            else -> CatalogItem.Collection(Playlist(id, title, playlistAuthor(subtitle).ifBlank { "YouTube Music" }, art))
+                CatalogItem.Record(Album(id, title, albumArtist(subtitle), art, releaseYear(subtitle), explicit = explicit))
+            else -> CatalogItem.Collection(Playlist(id, title, playlistAuthor(subtitle).ifBlank { "YouTube Music" }, art, explicit = explicit))
         }
     }
 

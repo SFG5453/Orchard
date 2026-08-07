@@ -27,11 +27,13 @@ import dev.sfg.orchard.mobile.auth.SecureYouTubeSessionStore
 import dev.sfg.orchard.mobile.catalog.CatalogRepository
 import dev.sfg.orchard.mobile.catalog.AudioVersionResolver
 import dev.sfg.orchard.mobile.catalog.InnerTubeClient
+import dev.sfg.orchard.mobile.catalog.PlaylistActions
 import dev.sfg.orchard.mobile.connect.ConnectDeviceRepository
 import dev.sfg.orchard.mobile.library.LibraryCache
 import dev.sfg.orchard.mobile.library.LibraryRepository
 import dev.sfg.orchard.mobile.lyrics.LyricsRepository
 import dev.sfg.orchard.mobile.settings.SettingsRepository
+import dev.sfg.orchard.mobile.download.DownloadManager
 import dev.sfg.orchard.mobile.songlinks.SongLinksRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -58,10 +60,13 @@ class OrchardGraph(context: Context) {
     )
     private val innerTube: InnerTubeClient = InnerTubeClient(http, auth)
     val settings = SettingsRepository(context, applicationScope)
+    val networkMonitor = dev.sfg.orchard.mobile.network.NetworkMonitor(context)
+    val downloads = DownloadManager(context, http, auth, applicationScope)
     val spotifyCanvas = dev.sfg.orchard.mobile.spotify.SpotifyCanvasRepository(context, http, settings)
     val artwork = ArtworkRepository(http, spotifyCanvas)
     val artistImages = ArtistImageRepository(http)
     val catalog = CatalogRepository(innerTube)
+    val playlistActions = PlaylistActions(innerTube)
     val audioVersions = AudioVersionResolver(innerTube)
     val library = LibraryRepository(LibraryCache(context), catalog, applicationScope)
     val lyrics = LyricsRepository(http, innerTube)

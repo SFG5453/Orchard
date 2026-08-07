@@ -36,12 +36,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -68,7 +71,7 @@ import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
 /**
  * Collection action buttons row:
- * [ Circular Shuffle ]  [ Wide White Play Pill ]  [ Circular Add/Favorite ]
+ * [ Circular Shuffle ]  [ Wide White Play Pill ]  [ Circular Add/Favorite ]  [ Circular Download ]
  */
 @Composable
 fun CollectionActionRow(
@@ -80,13 +83,17 @@ fun CollectionActionRow(
     isSaved: Boolean,
     playEnabled: Boolean = true,
     shuffleEnabled: Boolean = true,
+    onDownload: (() -> Unit)? = null,
+    isDownloaded: Boolean = false,
+    isDownloading: Boolean = false,
+    downloadEnabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Shuffle button (frosted glass circle)
@@ -95,7 +102,7 @@ fun CollectionActionRow(
             enabled = shuffleEnabled,
             shape = CircleShape,
             color = Color.White.copy(alpha = 0.14f),
-            modifier = Modifier.size(46.dp),
+            modifier = Modifier.size(44.dp),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
@@ -120,7 +127,7 @@ fun CollectionActionRow(
             shape = RoundedCornerShape(24.dp),
             modifier = Modifier
                 .weight(1f)
-                .height(46.dp),
+                .height(44.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -147,7 +154,7 @@ fun CollectionActionRow(
             onClick = onSave,
             shape = CircleShape,
             color = Color.White.copy(alpha = 0.14f),
-            modifier = Modifier.size(46.dp),
+            modifier = Modifier.size(44.dp),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
@@ -156,6 +163,34 @@ fun CollectionActionRow(
                     tint = if (isSaved) LocalAccent.current else Color.White,
                     modifier = Modifier.size(22.dp),
                 )
+            }
+        }
+
+        // Download / Offline button (frosted glass circle)
+        if (onDownload != null) {
+            Surface(
+                onClick = onDownload,
+                enabled = downloadEnabled,
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.14f),
+                modifier = Modifier.size(44.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    if (isDownloading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = LocalAccent.current,
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
+                            contentDescription = if (isDownloaded) "Downloaded offline" else "Download collection",
+                            tint = if (isDownloaded) LocalAccent.current else if (downloadEnabled) Color.White else Color.White.copy(alpha = 0.35f),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
             }
         }
     }

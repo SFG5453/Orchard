@@ -28,6 +28,9 @@ import androidx.compose.ui.zIndex
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import dev.sfg.orchard.mobile.ui.components.ArtworkBackdrop
 import dev.sfg.orchard.mobile.ui.components.CanopyReadout
 import dev.sfg.orchard.mobile.ui.components.OrchardBottomBar
+import dev.sfg.orchard.mobile.ui.components.PlaylistPickerSheet
 import dev.sfg.orchard.mobile.ui.components.SongShareBottomSheet
 import dev.sfg.orchard.mobile.ui.navigation.Routes
 import dev.sfg.orchard.mobile.ui.screens.DetailScreen
@@ -72,7 +76,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val warning by viewModel.warning.collectAsStateWithLifecycle()
     val transitionMarker by viewModel.transitionMarker.collectAsStateWithLifecycle()
     val fullPlayer = route == Routes.NOW_PLAYING
-    val chromeHidden = fullPlayer || route == Routes.DEVICES || route == Routes.LOGIN || route == Routes.WELCOME
+    val chromeHidden = fullPlayer || route == Routes.DEVICES || route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME
     // Collection artwork runs under the status bar, so these screens take no top inset and
     // apply it themselves where the content actually needs it.
     val artworkUnderStatusBar = fullPlayer || route == Routes.DETAIL
@@ -97,7 +101,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                     Modifier.padding(padding)
                 },
             ) {
-                OrchardNavigation(navController, viewModel, playback, targets, library, settings)
+    OrchardNavigation(navController, viewModel, playback, targets, library, settings)
 
                 if (!chromeHidden) {
                     Column(modifier = Modifier.align(Alignment.BottomCenter)) {
@@ -153,6 +157,12 @@ private fun OrchardNavigation(
     val discordAuth by viewModel.discordAuth.collectAsStateWithLifecycle()
     val discordConnection by viewModel.discordConnection.collectAsStateWithLifecycle()
     val libraryFilter by viewModel.libraryFilter.collectAsStateWithLifecycle()
+    val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
+    val downloads by viewModel.downloads.collectAsStateWithLifecycle()
+    val downloadsList = androidx.compose.runtime.remember(downloads) { downloads.values.toList() }
+    val downloadedTrackIds by viewModel.downloadedTrackIds.collectAsStateWithLifecycle()
+    val downloadingTrackIds by viewModel.downloadingTrackIds.collectAsStateWithLifecycle()
+    val totalBytesUsed by viewModel.totalBytesUsed.collectAsStateWithLifecycle()
     val connectMessage by viewModel.connectMessage.collectAsStateWithLifecycle()
     val connectProtocolVersion by viewModel.connectProtocolVersion.collectAsStateWithLifecycle()
     val connectAudioEngine by viewModel.connectAudioEngine.collectAsStateWithLifecycle()
@@ -162,6 +172,7 @@ private fun OrchardNavigation(
     val canShuffle = localTargetSelected || connectProtocolVersion >= 2
     val context = androidx.compose.ui.platform.LocalContext.current
     val startDestination = if (settings.onboardingCompleted) Routes.HOME else Routes.WELCOME
+    var playlistPickerTrack by remember { mutableStateOf<dev.sfg.orchard.mobile.model.Track?>(null) }
 
     NavHost(navController = nav, startDestination = startDestination) {
         composable(Routes.WELCOME) {
@@ -184,6 +195,9 @@ private fun OrchardNavigation(
                 state = home,
                 library = library,
                 auth = auth,
+                downloads = downloadsList,
+                downloadedTrackIds = downloadedTrackIds,
+                isOffline = !isOnline,
                 onRefresh = viewModel::refreshHome,
                 onSearch = { nav.openTopLevel(Routes.SEARCH) },
                 onLibrary = { filter ->
@@ -203,9 +217,14 @@ private fun OrchardNavigation(
                 onQueryChange = viewModel::updateQuery,
                 onSubmit = viewModel::runSearch,
                 onClearHistory = viewModel::clearSearchHistory,
+                downloadedTrackIds = downloadedTrackIds,
+                downloadingTrackIds = downloadingTrackIds,
                 onPlay = { viewModel.play(it, "Search") },
                 onPlayNext = if (canControlQueue) viewModel::playNext else null,
                 onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
+                onAddToPlaylist = { playlistPickerTrack = it },
+                onDownloadTrack = viewModel::downloadTrack,
+                onRemoveDownloadTrack = viewModel::removeDownload,
                 onOpenDetail = { id -> viewModel.openDetail(id); nav.navigate(Routes.detail(id)) },
                 onShare = viewModel::shareTrack,
             )
@@ -215,11 +234,25 @@ private fun OrchardNavigation(
                 library = library,
                 filter = libraryFilter,
                 onFilterChange = viewModel::selectLibraryFilter,
+                downloads = downloadsList,
+                downloadedTrackIds = downloadedTrackIds,
+                downloadingTrackIds = downloadingTrackIds,
+                totalBytesUsed = totalBytesUsed,
                 onPlay = { viewModel.play(it, libraryFilter.sourceTitle()) },
                 onPlayNext = if (canControlQueue) viewModel::playNext else null,
                 onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
                 onOpenDetail = { id -> viewModel.openDetail(id); nav.navigate(Routes.detail(id)) },
+                onDownloadTrack = viewModel::downloadTrack,
+                onRemoveDownloadTrack = viewModel::removeDownload,
                 onShare = viewModel::shareTrack,
+            )
+        }
+        composable(Routes.DOWNLOADS) {
+            dev.sfg.orchard.mobile.ui.screens.DownloadsScreen(
+                downloads = downloadsList,
+                totalBytesUsed = totalBytesUsed,
+                onPlay = { viewModel.play(it, "Downloads") },
+                onRemoveDownload = viewModel::removeDownload,
             )
         }
         composable(Routes.SETTINGS) {
@@ -230,6 +263,7 @@ private fun OrchardNavigation(
                 discordConnection = discordConnection,
                 onSettings = viewModel::updateSettings,
                 onSignIn = { nav.navigate(Routes.LOGIN) },
+                onSwitchAccount = { nav.navigate(Routes.ACCOUNT_SWITCH) },
                 onSignOut = viewModel::signOut,
                 onConnectDiscord = { viewModel.connectDiscord(context) },
                 onDisconnectDiscord = viewModel::disconnectDiscord,
@@ -248,6 +282,16 @@ private fun OrchardNavigation(
                 // sent the user here. From Welcome that would be the whole back
                 // stack, leaving an empty NavHost and a black screen.
                 onComplete = { nav.popBackStack(Routes.LOGIN, inclusive = true) },
+            )
+        }
+        composable(Routes.ACCOUNT_SWITCH) {
+            NativeLoginScreen(
+                auth = auth,
+                onBegin = viewModel::beginSignIn,
+                onSession = viewModel::completeSignIn,
+                onCancel = viewModel::cancelSignIn,
+                onComplete = { nav.popBackStack(Routes.ACCOUNT_SWITCH, inclusive = true) },
+                switchingAccount = true,
             )
         }
         composable(Routes.SPOTIFY_LOGIN) {
@@ -303,13 +347,22 @@ private fun OrchardNavigation(
                 onPlayTrack = { tracks, index, source -> viewModel.playAll(tracks, startIndex = index, contextTitle = source) },
                 onPlayNext = if (canControlQueue) viewModel::playNext else null,
                 onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
+                onAddToPlaylist = { playlistPickerTrack = it },
+                onRemoveFromPlaylist = viewModel::removeTrackFromCurrentPlaylist,
                 onSave = viewModel::saveDetail,
                 onOpenDetail = { next -> viewModel.openDetail(next); nav.navigate(Routes.detail(next)) },
                 isSaved = isSaved,
+                downloadedTrackIds = downloadedTrackIds,
+                downloadingTrackIds = downloadingTrackIds,
+                onDownloadTrack = viewModel::downloadTrack,
+                onDownloadTracks = viewModel::downloadTracks,
+                onRemoveDownloadTrack = viewModel::removeDownload,
+                onRemoveDownloadTracks = viewModel::removeDownloads,
                 animatedArtworkUrl = animatedArtworkUrl,
                 artistPortraitUrl = artistImages?.portraitUrl.orEmpty(),
                 onShareTrack = viewModel::shareTrack,
                 onShareCollection = viewModel::shareCollection,
+                onFetchSectionItems = viewModel::fetchSectionItems,
             )
         }
         composable(Routes.NOW_PLAYING) {
@@ -341,6 +394,10 @@ private fun OrchardNavigation(
                 onRemoveQueueIndex = viewModel::removeQueueIndex,
                 onMoveQueueItem = viewModel::moveQueueItem,
                 onClearUpcoming = viewModel::clearUpcoming,
+                downloadedTrackIds = downloadedTrackIds,
+                onDownloadTrack = viewModel::downloadTrack,
+                onRemoveDownloadTrack = viewModel::removeDownload,
+                onAddToPlaylist = { playlistPickerTrack = it },
                 onShare = { playback.currentTrack?.let(viewModel::shareTrack) },
                 // Leaves the player so the collection is not buried underneath it.
                 onOpenCollection = { id ->
@@ -366,6 +423,18 @@ private fun OrchardNavigation(
             )
         }
     }
+
+    playlistPickerTrack?.let { track ->
+        PlaylistPickerSheet(
+            track = track,
+            playlists = library.savedPlaylists,
+            onDismiss = { playlistPickerTrack = null },
+            onSelect = { playlist ->
+                playlistPickerTrack = null
+                viewModel.addTrackToPlaylist(playlist.id, track)
+            },
+        )
+    }
 }
 
 private fun NavHostController.openTopLevel(route: String) {
@@ -384,4 +453,5 @@ private fun LibraryFilter.sourceTitle(): String = when (this) {
     LibraryFilter.ALBUMS -> "Your albums"
     LibraryFilter.SONGS -> "Liked songs"
     LibraryFilter.RECENT -> "Recently played"
+    LibraryFilter.DOWNLOADS -> "Downloads"
 }

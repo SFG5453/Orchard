@@ -93,6 +93,10 @@ fun TabletPlayerBody(
     onRemoveQueueIndex: (Int) -> Unit,
     onMoveQueueItem: (Int, Int) -> Unit,
     onClearUpcoming: () -> Unit,
+    downloadedTrackIds: Set<String> = emptySet(),
+    onDownloadTrack: ((Track) -> Unit)? = null,
+    onRemoveDownloadTrack: ((String) -> Unit)? = null,
+    onAddToPlaylist: ((Track) -> Unit)? = null,
     onShare: (() -> Unit)?,
     onOpenCollection: ((String) -> Unit)?,
     onLyricsPanel: () -> Unit,
@@ -147,6 +151,10 @@ fun TabletPlayerBody(
                     onLiked = onLiked,
                     onMore = onQueuePanel,
                     onShare = onShare,
+                    isDownloaded = downloadedTrackIds.contains(track.id),
+                    onDownload = onDownloadTrack?.let { action -> { action(track) } },
+                    onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
+                    onAddToPlaylist = onAddToPlaylist?.let { action -> { action(track) } },
                     onOpenAlbum = track.albumId.takeIf { it.isNotBlank() }
                         ?.let { id -> onOpenCollection?.let { open -> { open(id) } } },
                     onOpenArtist = track.artistId.takeIf { it.isNotBlank() }

@@ -60,6 +60,25 @@ class CatalogRepository(private val client: InnerTubeClient) {
 
     suspend fun likedSongs(): BrowseDetail = browse("FEmusic_liked_videos")
 
+    suspend fun sectionItems(browseId: String, params: String = ""): List<dev.sfg.orchard.mobile.model.CatalogItem> = withContext(Dispatchers.IO) {
+        if (browseId.isBlank()) return@withContext emptyList()
+        val root = runCatching { client.browsePayload(browseId, params) }.getOrNull() ?: return@withContext emptyList()
+        var items = CatalogParser.sectionItems(root)
+        var token = CatalogParser.continuationToken(root)
+        var pages = 0
+        while (token.isNotBlank() && pages < 10) {
+            val page = runCatching { client.browseContinuation(token) }.getOrNull() ?: break
+            val newItems = CatalogParser.sectionItems(page)
+            if (newItems.isEmpty()) break
+            items = (items + newItems).distinctBy(dev.sfg.orchard.mobile.model.CatalogItem::stableId)
+            val next = CatalogParser.continuationToken(page)
+            if (next == token) break
+            token = next
+            pages++
+        }
+        items
+    }
+
     suspend fun library(): List<CatalogSection> = withContext(Dispatchers.IO) {
         CatalogParser.home(client.browse("FEmusic_library_landing"))
     }

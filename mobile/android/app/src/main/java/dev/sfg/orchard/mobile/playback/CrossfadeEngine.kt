@@ -459,7 +459,10 @@ class CrossfadeEngine(
         const val SWEEP_DEPTH = 0.85f
 
         /** Where the low end changes hands, past the equal-power crossing by design. */
-        const val BASS_SWAP_AT = 0.7f
+        // Let the incoming low end arrive sooner. Keeping this just past the
+        // equal-power midpoint avoids an early kick while preventing the bass
+        // from feeling withheld through most of the blend.
+        const val BASS_SWAP_AT = 0.4f
 
         /** How far the low band is taken down on the track that has given it up. */
         const val BASS_DUCK = 0.12

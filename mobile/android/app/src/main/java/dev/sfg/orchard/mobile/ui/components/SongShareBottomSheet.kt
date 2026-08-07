@@ -143,13 +143,20 @@ fun SongShareBottomSheet(
                     )
                     Spacer(Modifier.width(14.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = state.title.ifBlank { "Orchard Music" },
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = CanopyColors.Text,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = state.title.ifBlank { "Orchard Music" },
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = CanopyColors.Text,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            if (state.explicit) {
+                                Spacer(Modifier.width(6.dp))
+                                ExplicitBadge()
+                            }
+                        }
                         if (state.subtitle.isNotBlank()) {
                             Spacer(Modifier.height(2.dp))
                             Text(

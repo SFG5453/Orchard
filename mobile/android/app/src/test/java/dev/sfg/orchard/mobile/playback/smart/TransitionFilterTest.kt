@@ -151,6 +151,16 @@ class TransitionFilterTest {
     }
 
     @Test
+    fun volumeNormalizationLevelsSignal() {
+        val filter = configured().apply {
+            volumeNormalizationEnabled = true
+        }
+        assertTrue(!filter.transparent)
+        val level = through(filter, 1_000.0)
+        assertTrue("volume normalization processed audio", level > 0.0)
+    }
+
+    @Test
     fun unsupportedEncodingsAreRefusedRatherThanCorrupted() {
         // Float PCM through a 16-bit inner loop would be noise, not a quiet failure worth risking.
         try {

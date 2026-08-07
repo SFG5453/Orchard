@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -37,6 +38,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import dev.sfg.orchard.mobile.download.DownloadItem
+import dev.sfg.orchard.mobile.download.DownloadStatus
 import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.model.LibraryFilter
 import dev.sfg.orchard.mobile.model.LibrarySnapshot
@@ -47,16 +50,24 @@ import dev.sfg.orchard.mobile.ui.components.OrchardFilterChips
 import dev.sfg.orchard.mobile.ui.components.OrchardSectionHeader
 import dev.sfg.orchard.mobile.ui.components.TrackRow
 import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
+import dev.sfg.orchard.mobile.ui.theme.CanopyColors
+import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
 @Composable
 fun LibraryScreen(
     library: LibrarySnapshot,
     filter: LibraryFilter,
     onFilterChange: (LibraryFilter) -> Unit,
+    downloads: List<DownloadItem> = emptyList(),
+    downloadedTrackIds: Set<String> = emptySet(),
+    downloadingTrackIds: Set<String> = emptySet(),
+    totalBytesUsed: Long = 0L,
     onPlay: (Track) -> Unit,
     onPlayNext: ((Track) -> Unit)?,
     onAddToQueue: ((Track) -> Unit)?,
     onOpenDetail: (String) -> Unit,
+    onDownloadTrack: ((Track) -> Unit)? = null,
+    onRemoveDownloadTrack: ((String) -> Unit)? = null,
     onShare: ((Track) -> Unit)? = null,
 ) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = OrchardChromeHeight)) {
@@ -96,33 +107,164 @@ fun LibraryScreen(
                 "Albums you save will be available here.",
                 onOpenDetail,
             )
-            LibraryFilter.SONGS -> tracks(
-                "Liked songs",
-                library.likedTracks,
-                "No liked songs",
-                "Tap the heart in Now Playing to save a track.",
-                onPlay,
-                onPlayNext,
-                onAddToQueue,
-                onShare,
-                onOpenDetail,
+            LibraryFilter.SONGS -> songs(
+                title = "Songs",
+                values = library.likedTracks,
+                emptyTitle = "No songs saved",
+                emptyMessage = "Save songs to your library to see them here",
+                downloadedTrackIds = downloadedTrackIds,
+                downloadingTrackIds = downloadingTrackIds,
+                onPlay = onPlay,
+                onPlayNext = onPlayNext,
+                onAdd = onAddToQueue,
+                onDownloadTrack = onDownloadTrack,
+                onRemoveDownloadTrack = onRemoveDownloadTrack,
+                onOpen = onOpenDetail,
+                onShare = onShare,
             )
             LibraryFilter.RECENT -> tracks(
                 "Recently played",
                 library.recentlyPlayed,
                 "Nothing played yet",
                 "Start a song and Orchard will remember it here.",
+                downloadedTrackIds,
+                downloadingTrackIds,
                 onPlay,
                 onPlayNext,
                 onAddToQueue,
+                onDownloadTrack,
+                onRemoveDownloadTrack,
                 onShare,
                 onOpenDetail,
+            )
+            LibraryFilter.DOWNLOADS -> downloadsList(
+                downloads = downloads,
+                totalBytesUsed = totalBytesUsed,
+                onPlay = onPlay,
+                onRemoveDownload = { id -> onRemoveDownloadTrack?.invoke(id) },
             )
         }
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.collections(
+private fun LazyListScope.downloadsList(
+    downloads: List<DownloadItem>,
+    totalBytesUsed: Long,
+    onPlay: (Track) -> Unit,
+    onRemoveDownload: (String) -> Unit,
+) {
+    val completed = downloads.filter { it.status == DownloadStatus.COMPLETED }
+    val active = downloads.filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.QUEUED }
+    val failed = downloads.filter { it.status == DownloadStatus.FAILED }
+
+    if (active.isEmpty() && completed.isEmpty() && failed.isEmpty()) {
+        item {
+            MessagePanel(
+                title = "No downloaded tracks",
+                message = "Tap the download icon on any track, album, or playlist to listen offline.",
+            )
+        }
+        return
+    }
+
+    if (completed.isNotEmpty()) {
+        item {
+            Text(
+                "Offline tracks • ${formatStorageSize(totalBytesUsed)} used",
+                style = MaterialTheme.typography.bodyMedium,
+                color = CanopyColors.Muted,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
+    }
+
+    if (active.isNotEmpty()) {
+        item {
+            Text(
+                "DOWNLOADING (${active.size})",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = LocalAccent.current,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+        items(active, key = { "active_${it.track.id}" }) { item ->
+            DownloadingRow(item = item, onCancel = { onRemoveDownload(item.track.id) })
+        }
+    }
+
+    if (completed.isNotEmpty()) {
+        item {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "DOWNLOADED (${completed.size})",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = CanopyColors.Muted,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+        items(completed, key = { "completed_${it.track.id}" }) { item ->
+            DownloadedTrackRow(
+                item = item,
+                onPlay = { onPlay(item.track) },
+                onDelete = { onRemoveDownload(item.track.id) },
+            )
+        }
+    }
+
+    if (failed.isNotEmpty()) {
+        item {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "FAILED (${failed.size})",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+        items(failed, key = { "failed_${it.track.id}" }) { item ->
+            DownloadingRow(item = item, onCancel = { onRemoveDownload(item.track.id) })
+        }
+    }
+}
+
+private fun LazyListScope.songs(
+    title: String,
+    values: List<Track>,
+    emptyTitle: String,
+    emptyMessage: String,
+    downloadedTrackIds: Set<String>,
+    downloadingTrackIds: Set<String> = emptySet(),
+    onPlay: (Track) -> Unit,
+    onPlayNext: ((Track) -> Unit)?,
+    onAdd: ((Track) -> Unit)?,
+    onDownloadTrack: ((Track) -> Unit)? = null,
+    onRemoveDownloadTrack: ((String) -> Unit)? = null,
+    onOpen: ((String) -> Unit)? = null,
+    onShare: ((Track) -> Unit)? = null,
+) {
+    if (values.isEmpty()) {
+        item { MessagePanel(emptyTitle, emptyMessage) }
+        return
+    }
+    item { OrchardSectionHeader(title) }
+    items(values, key = Track::id) { track ->
+        TrackRow(
+            track = track,
+            onPlay = { onPlay(track) },
+            onPlayNext = onPlayNext?.let { action -> { action(track) } },
+            onAddToQueue = onAdd?.let { action -> { action(track) } },
+            onDownload = onDownloadTrack?.let { action -> { action(track) } },
+            onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
+            isDownloaded = downloadedTrackIds.contains(track.id),
+            isDownloading = downloadingTrackIds.contains(track.id),
+            onShare = onShare?.let { action -> { action(track) } },
+            onViewAlbum = onOpen?.takeIf { track.albumId.isNotBlank() }?.let { nav -> { nav(track.albumId) } },
+            onViewArtist = onOpen?.takeIf { track.artistId.isNotBlank() }?.let { nav -> { nav(track.artistId) } },
+        )
+    }
+}
+
+private fun LazyListScope.collections(
     title: String,
     values: List<CatalogItem>,
     emptyTitle: String,
@@ -172,14 +314,18 @@ private fun androidx.compose.foundation.lazy.LazyListScope.collections(
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.tracks(
+private fun LazyListScope.tracks(
     title: String,
     values: List<Track>,
     emptyTitle: String,
     emptyMessage: String,
+    downloadedTrackIds: Set<String>,
+    downloadingTrackIds: Set<String>,
     onPlay: (Track) -> Unit,
     onPlayNext: ((Track) -> Unit)?,
     onAdd: ((Track) -> Unit)?,
+    onDownloadTrack: ((Track) -> Unit)? = null,
+    onRemoveDownloadTrack: ((String) -> Unit)? = null,
     onShare: ((Track) -> Unit)? = null,
     onOpen: ((String) -> Unit)? = null,
 ) {
@@ -189,11 +335,17 @@ private fun androidx.compose.foundation.lazy.LazyListScope.tracks(
     }
     item { OrchardSectionHeader(title) }
     items(values, key = Track::id) { track ->
+        val isDownloaded = downloadedTrackIds.contains(track.id)
+        val isDownloading = downloadingTrackIds.contains(track.id)
         TrackRow(
             track = track,
             onPlay = { onPlay(track) },
             onPlayNext = onPlayNext?.let { action -> { action(track) } },
             onAddToQueue = onAdd?.let { action -> { action(track) } },
+            onDownload = onDownloadTrack?.let { action -> { action(track) } },
+            onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
+            isDownloaded = isDownloaded,
+            isDownloading = isDownloading,
             onShare = onShare?.let { action -> { action(track) } },
             onViewAlbum = onOpen?.takeIf { track.albumId.isNotBlank() }?.let { nav -> { nav(track.albumId) } },
             onViewArtist = onOpen?.takeIf { track.artistId.isNotBlank() }?.let { nav -> { nav(track.artistId) } },
@@ -208,4 +360,5 @@ private val LibraryFilter.label: String
         LibraryFilter.ALBUMS -> "Albums"
         LibraryFilter.SONGS -> "Songs"
         LibraryFilter.RECENT -> "Recent"
+        LibraryFilter.DOWNLOADS -> "Downloads"
     }

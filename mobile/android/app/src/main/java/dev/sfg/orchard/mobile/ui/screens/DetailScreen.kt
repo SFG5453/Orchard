@@ -71,8 +71,10 @@ import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.ui.components.ArtistBioBottomSheet
 import dev.sfg.orchard.mobile.ui.components.ArtistHero
+import dev.sfg.orchard.mobile.ui.components.ArtistSectionBottomSheet
 import dev.sfg.orchard.mobile.ui.components.CatalogCard
 import dev.sfg.orchard.mobile.ui.components.DetailBackButton
 import dev.sfg.orchard.mobile.ui.components.DetailDescriptionBottomSheet
@@ -94,13 +96,22 @@ fun DetailScreen(
     onPlayTrack: (List<Track>, Int, String) -> Unit = { list, idx, src -> onPlay(list[idx], src) },
     onPlayNext: ((Track) -> Unit)?,
     onAddToQueue: ((Track) -> Unit)?,
+    onAddToPlaylist: ((Track) -> Unit)? = null,
+    onRemoveFromPlaylist: ((Track) -> Unit)? = null,
     onSave: (BrowseDetail) -> Unit,
     onOpenDetail: (String) -> Unit,
     isSaved: Boolean = false,
+    downloadedTrackIds: Set<String> = emptySet(),
+    downloadingTrackIds: Set<String> = emptySet(),
+    onDownloadTrack: ((Track) -> Unit)? = null,
+    onDownloadTracks: ((List<Track>) -> Unit)? = null,
+    onRemoveDownloadTrack: ((String) -> Unit)? = null,
+    onRemoveDownloadTracks: ((List<Track>) -> Unit)? = null,
     animatedArtworkUrl: String = "",
     artistPortraitUrl: String = "",
     onShareTrack: ((Track) -> Unit)? = null,
     onShareCollection: ((BrowseDetail) -> Unit)? = null,
+    onFetchSectionItems: (suspend (String, String) -> List<CatalogItem>)? = null,
 ) {
     when (state) {
         LoadState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -127,8 +138,13 @@ fun DetailScreen(
                     onAdd = onAddToQueue,
                     onSave = onSave,
                     onOpen = onOpenDetail,
+                    downloadedTrackIds = downloadedTrackIds,
+                    downloadingTrackIds = downloadingTrackIds,
+                    onDownloadTrack = onDownloadTrack,
+                    onRemoveDownloadTrack = onRemoveDownloadTrack,
                     onShareTrack = onShareTrack,
                     onShareCollection = onShareCollection,
+                    onFetchSectionItems = onFetchSectionItems,
                 )
             } else {
                 CollectionDetailContent(
@@ -140,9 +156,17 @@ fun DetailScreen(
                     onPlayNext = onPlayNext,
                     shuffleAvailable = shuffleAvailable,
                     onAdd = onAddToQueue,
+                    onAddToPlaylist = onAddToPlaylist,
+                    onRemoveFromPlaylist = onRemoveFromPlaylist,
                     onSave = onSave,
                     onOpen = onOpenDetail,
                     isSaved = isSaved,
+                    downloadedTrackIds = downloadedTrackIds,
+                    downloadingTrackIds = downloadingTrackIds,
+                    onDownloadTrack = onDownloadTrack,
+                    onDownloadTracks = onDownloadTracks,
+                    onRemoveDownloadTrack = onRemoveDownloadTrack,
+                    onRemoveDownloadTracks = onRemoveDownloadTracks,
                     animatedArtworkUrl = animatedArtworkUrl,
                     artistPortraitUrl = artistPortraitUrl,
                     onShareTrack = onShareTrack,
@@ -153,6 +177,14 @@ fun DetailScreen(
         LoadState.Idle -> Unit
     }
 }
+
+/** A pending section sheet: title, initial preview items, and (optionally) the API browse key. */
+private data class SectionSheetState(
+    val title: String,
+    val initialItems: List<CatalogItem>,
+    val browseId: String = "",
+    val params: String = "",
+)
 
 /** Canopy mobile layout for artists: edge-to-edge backdrop hero, popular tracks, discography rails. */
 @Composable
@@ -167,13 +199,32 @@ private fun ArtistDetailContent(
     onAdd: ((Track) -> Unit)?,
     onSave: (BrowseDetail) -> Unit,
     onOpen: (String) -> Unit,
+    downloadedTrackIds: Set<String> = emptySet(),
+    downloadingTrackIds: Set<String> = emptySet(),
+    onDownloadTrack: ((Track) -> Unit)? = null,
+    onRemoveDownloadTrack: ((String) -> Unit)? = null,
     onShareTrack: ((Track) -> Unit)? = null,
     onShareCollection: ((BrowseDetail) -> Unit)? = null,
+    onFetchSectionItems: (suspend (String, String) -> List<CatalogItem>)? = null,
 ) {
     var showBioSheet by remember { mutableStateOf(false) }
+    var activeSectionSheet by remember { mutableStateOf<SectionSheetState?>(null) }
+    var showAllPopularTracks by remember { mutableStateOf(false) }
 
     if (showBioSheet && detail.description.isNotBlank()) {
         ArtistBioBottomSheet(detail = detail, onDismiss = { showBioSheet = false })
+    }
+
+    activeSectionSheet?.let { sheet ->
+        ArtistSectionBottomSheet(
+            title = sheet.title,
+            initialItems = sheet.initialItems,
+            browseId = sheet.browseId,
+            params = sheet.params,
+            onFetchFullItems = onFetchSectionItems,
+            onOpen = onOpen,
+            onDismiss = { activeSectionSheet = null },
+        )
     }
 
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 128.dp)) {
@@ -189,14 +240,37 @@ private fun ArtistDetailContent(
             )
         }
         if (detail.tracks.isNotEmpty()) {
-            item { OrchardSectionHeader("Popular") }
-            itemsIndexed(detail.tracks, key = { _, track -> track.id }) { index, track ->
+            val hasMorePopular = detail.tracks.size > 5
+            val displayedTracks = if (showAllPopularTracks || !hasMorePopular) {
+                detail.tracks
+            } else {
+                detail.tracks.take(5)
+            }
+            item {
+                OrchardSectionHeader(
+                    title = "Popular",
+                    action = if (hasMorePopular) {
+                        if (showAllPopularTracks) "Show less" else "View all"
+                    } else null,
+                    onAction = if (hasMorePopular) {
+                        { showAllPopularTracks = !showAllPopularTracks }
+                    } else null,
+                )
+            }
+            itemsIndexed(displayedTracks, key = { _, track -> track.id }) { index, track ->
+                val trackIndex = detail.tracks.indexOf(track).coerceAtLeast(index)
+                val isDownloaded = downloadedTrackIds.contains(track.id)
+                val isDownloading = downloadingTrackIds.contains(track.id)
                 TrackRow(
                     track = track,
-                    onPlay = { onPlayTrack(detail.tracks, index, detail.title) },
+                    onPlay = { onPlayTrack(detail.tracks, trackIndex, detail.title) },
                     modifier = Modifier.padding(horizontal = 8.dp),
                     onPlayNext = onPlayNext?.let { action -> { action(track) } },
                     onAddToQueue = onAdd?.let { action -> { action(track) } },
+                    onDownload = onDownloadTrack?.let { action -> { action(track) } },
+                    onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
+                    isDownloaded = isDownloaded,
+                    isDownloading = isDownloading,
                     onShare = onShareTrack?.let { action -> { action(track) } },
                     onViewAlbum = if (track.albumId.isNotBlank()) {{ onOpen(track.albumId) }} else null,
                     onViewArtist = if (track.artistId.isNotBlank()) {{ onOpen(track.artistId) }} else null,
@@ -205,7 +279,26 @@ private fun ArtistDetailContent(
         }
         if (detail.sections.isNotEmpty()) {
             detail.sections.forEach { section ->
-                item { OrchardSectionHeader(section.title) }
+                // Show "View all" when the section has a browse endpoint (can load more from API)
+                // or when there are enough local items to warrant showing the full grid.
+                val hasMoreViaApi = section.browseId.isNotBlank()
+                val canViewAll = hasMoreViaApi || section.items.size > 3
+                item {
+                    OrchardSectionHeader(
+                        title = section.title,
+                        action = if (canViewAll) "View all" else null,
+                        onAction = if (canViewAll) {
+                            {
+                                activeSectionSheet = SectionSheetState(
+                                    title = section.title,
+                                    initialItems = section.items,
+                                    browseId = section.browseId,
+                                    params = section.params,
+                                )
+                            }
+                        } else null,
+                    )
+                }
                 item {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -218,7 +311,21 @@ private fun ArtistDetailContent(
                 }
             }
         } else if (detail.related.isNotEmpty()) {
-            item { OrchardSectionHeader("Fans also like") }
+            val canViewAll = detail.related.size > 3
+            item {
+                OrchardSectionHeader(
+                    title = "Fans also like",
+                    action = if (canViewAll) "View all" else null,
+                    onAction = if (canViewAll) {
+                        {
+                            activeSectionSheet = SectionSheetState(
+                                title = "Fans also like",
+                                initialItems = detail.related,
+                            )
+                        }
+                    } else null,
+                )
+            }
             item {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
@@ -244,9 +351,17 @@ private fun CollectionDetailContent(
     onPlayNext: ((Track) -> Unit)?,
     shuffleAvailable: Boolean,
     onAdd: ((Track) -> Unit)?,
+    onAddToPlaylist: ((Track) -> Unit)? = null,
+    onRemoveFromPlaylist: ((Track) -> Unit)? = null,
     onSave: (BrowseDetail) -> Unit,
     onOpen: (String) -> Unit,
     isSaved: Boolean = false,
+    downloadedTrackIds: Set<String> = emptySet(),
+    downloadingTrackIds: Set<String> = emptySet(),
+    onDownloadTrack: ((Track) -> Unit)? = null,
+    onDownloadTracks: ((List<Track>) -> Unit)? = null,
+    onRemoveDownloadTrack: ((String) -> Unit)? = null,
+    onRemoveDownloadTracks: ((List<Track>) -> Unit)? = null,
     animatedArtworkUrl: String = "",
     artistPortraitUrl: String = "",
     onShareTrack: ((Track) -> Unit)? = null,
@@ -281,6 +396,10 @@ private fun CollectionDetailContent(
                     onSave = onSave,
                     onAbout = { showDescriptionSheet = true },
                     isSaved = isSaved,
+                    downloadedTrackIds = downloadedTrackIds,
+                    downloadingTrackIds = downloadingTrackIds,
+                    onDownloadTracks = onDownloadTracks,
+                    onRemoveDownloadTracks = onRemoveDownloadTracks,
                     animatedArtworkUrl = animatedArtworkUrl,
                     artistPortraitUrl = artistPortraitUrl,
                     onShare = onShareCollection,
@@ -289,6 +408,8 @@ private fun CollectionDetailContent(
             if (detail.tracks.isNotEmpty()) {
                 itemsIndexed(detail.tracks, key = { _, track -> track.id }) { index, track ->
                     val isAlbum = detail.kind == CatalogKind.ALBUM
+                    val isDownloaded = downloadedTrackIds.contains(track.id)
+                    val isDownloading = downloadingTrackIds.contains(track.id)
                     TrackRow(
                         track = track,
                         trackNumber = if (isAlbum) index + 1 else null,
@@ -299,6 +420,14 @@ private fun CollectionDetailContent(
                         modifier = Modifier.padding(horizontal = 8.dp),
                         onPlayNext = onPlayNext?.let { action -> { action(track) } },
                         onAddToQueue = onAdd?.let { action -> { action(track) } },
+                        onAddToPlaylist = if (detail.kind == CatalogKind.ALBUM || detail.kind == CatalogKind.PLAYLIST)
+                            onAddToPlaylist?.let { action -> { action(track) } } else null,
+                        onRemoveFromPlaylist = if (detail.kind == CatalogKind.PLAYLIST)
+                            onRemoveFromPlaylist?.let { action -> { action(track) } } else null,
+                        onDownload = onDownloadTrack?.let { action -> { action(track) } },
+                        onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
+                        isDownloaded = isDownloaded,
+                        isDownloading = isDownloading,
                         onShare = onShareTrack?.let { action -> { action(track) } },
                         onViewAlbum = if (track.albumId.isNotBlank()) {{ onOpen(track.albumId) }} else null,
                         onViewArtist = if (track.artistId.isNotBlank()) {{ onOpen(track.artistId) }} else null,

@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -74,9 +75,14 @@ fun SearchScreen(
     onQueryChange: (String) -> Unit,
     onSubmit: (String) -> Unit,
     onClearHistory: () -> Unit,
+    downloadedTrackIds: Set<String> = emptySet(),
+    downloadingTrackIds: Set<String> = emptySet(),
     onPlay: (Track) -> Unit,
     onPlayNext: ((Track) -> Unit)?,
     onAddToQueue: ((Track) -> Unit)?,
+    onAddToPlaylist: ((Track) -> Unit)? = null,
+    onDownloadTrack: ((Track) -> Unit)? = null,
+    onRemoveDownloadTrack: ((String) -> Unit)? = null,
     onOpenDetail: (String) -> Unit,
     onShare: ((Track) -> Unit)? = null,
 ) {
@@ -96,7 +102,19 @@ fun SearchScreen(
                     repeat(5) { TrackRowShimmer() }
                 }
             }
-            is LoadState.Content -> results(state.value, onPlay, onPlayNext, onAddToQueue, onOpenDetail, onShare)
+            is LoadState.Content -> results(
+                results = state.value,
+                downloadedTrackIds = downloadedTrackIds,
+                downloadingTrackIds = downloadingTrackIds,
+                onPlay = onPlay,
+                onPlayNext = onPlayNext,
+                onAdd = onAddToQueue,
+                onAddToPlaylist = onAddToPlaylist,
+                onDownloadTrack = onDownloadTrack,
+                onRemoveDownloadTrack = onRemoveDownloadTrack,
+                onOpen = onOpenDetail,
+                onShare = onShare,
+            )
             is LoadState.Empty -> item { MessagePanel("No matches", state.message) }
             is LoadState.Error -> item { MessagePanel("Search is unavailable", state.message, "Try again") { onSubmit(query) } }
         }
@@ -156,22 +174,35 @@ private fun androidx.compose.foundation.lazy.LazyListScope.history(
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.results(
+private fun LazyListScope.results(
     results: SearchResults,
+    downloadedTrackIds: Set<String>,
+    downloadingTrackIds: Set<String> = emptySet(),
     onPlay: (Track) -> Unit,
     onPlayNext: ((Track) -> Unit)?,
     onAdd: ((Track) -> Unit)?,
+    onAddToPlaylist: ((Track) -> Unit)? = null,
+    onDownloadTrack: ((Track) -> Unit)? = null,
+    onRemoveDownloadTrack: ((String) -> Unit)? = null,
     onOpen: (String) -> Unit,
     onShare: ((Track) -> Unit)? = null,
 ) {
     if (results.tracks.isNotEmpty()) {
         item { OrchardSectionHeader("Songs") }
         items(results.tracks, key = { "track:${it.id}" }) { track ->
+            val isDownloaded = downloadedTrackIds.contains(track.id)
+            val isDownloading = downloadingTrackIds.contains(track.id)
             TrackRow(
                 track = track,
                 onPlay = { onPlay(track) },
+                modifier = Modifier.padding(horizontal = 8.dp),
                 onPlayNext = onPlayNext?.let { action -> { action(track) } },
                 onAddToQueue = onAdd?.let { action -> { action(track) } },
+                onAddToPlaylist = onAddToPlaylist?.let { action -> { action(track) } },
+                onDownload = onDownloadTrack?.let { action -> { action(track) } },
+                onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
+                isDownloaded = isDownloaded,
+                isDownloading = isDownloading,
                 onShare = onShare?.let { action -> { action(track) } },
                 onViewAlbum = if (track.albumId.isNotBlank()) {{ onOpen(track.albumId) }} else null,
                 onViewArtist = if (track.artistId.isNotBlank()) {{ onOpen(track.artistId) }} else null,

@@ -137,7 +137,11 @@ fun PanelTrackHeader(
     liked: Boolean,
     onLiked: () -> Unit,
     onMore: () -> Unit,
+    onAddToPlaylist: (() -> Unit)? = null,
     onShare: (() -> Unit)?,
+    isDownloaded: Boolean = false,
+    onDownload: (() -> Unit)? = null,
+    onRemoveDownload: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -183,6 +187,9 @@ fun PanelTrackHeader(
                 track = track,
                 onDismiss = { menuOpen = false },
                 onViewQueue = onMore,
+                onAddToPlaylist = onAddToPlaylist,
+                onDownload = if (!isDownloaded) onDownload else null,
+                onRemoveDownload = if (isDownloaded) onRemoveDownload else null,
                 onShare = onShare,
             )
         }

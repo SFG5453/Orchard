@@ -9,8 +9,9 @@ Smart Crossfade with real beat matching, on-device track analysis, synced lyrics
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android%2012%2B-informational)](#install)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Donate-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/sfg545)
 
-[Orchard for desktop](../) · [Report an issue](https://github.com/SFG5453/Orchard/issues)
+[Orchard for desktop](../) · [Report an issue](https://github.com/SFG5453/Orchard/issues) · [Support on Ko-fi](https://ko-fi.com/sfg545)
 
 </div>
 
@@ -119,6 +120,10 @@ android/app/src/main/cpp/
   transition/         Time-stretch and transition rendering
 ```
 
+## Support
+
+If you enjoy using Orchard Mobile and would like to support its development, consider [buying me a coffee on Ko-fi](https://ko-fi.com/sfg545).
+
 ## License
 
 Orchard Mobile is free software under the [GNU Affero General Public License v3.0 or later](LICENSE).
@@ -131,7 +136,7 @@ AGPL rather than GPL so code can move freely between here and Orchard desktop, w
 
 Smart Crossfade ships trained models. Both were chosen because their **weights**, carry a permissive license. Most published music-information-retrieval weights, Essentia's included, are CC BY-NC-SA and cannot be distributed in an application.
 
-* **[Beat This!](https://github.com/CPJKU/beat_this)** (Foscarin, Schlüter & Widmer, ISMIR 2024) — beat and downbeat tracking. Code and weights both MIT. The shipped `beat_this_int8.onnx` is the published `final0` checkpoint converted to ONNX via the MIT-licensed [C++ port](https://github.com/mosynthkey/beat_this_cpp) and quantized to int8. See [docs/BEAT_MODEL.md](docs/BEAT_MODEL.md).
+* **[Beat This!](https://github.com/CPJKU/beat_this)** (Foscarin, Schlüter & Widmer, ISMIR 2024) — beat and downbeat tracking. Code and weights both MIT. Mobile ships the official `small0` checkpoint converted to ONNX and quantized to int8 to reduce model size and inference cost. See [docs/BEAT_MODEL.md](docs/BEAT_MODEL.md).
 * **open-unmix** (Stöter & Liutkus, Inria/SigSep) — used only to measure how much vocal content is present at a given instant. Code and the umxhq weights both MIT, confirmed on the weights' own [Zenodo deposit](https://zenodo.org/record/3370489). Only the `vocals` target ships. Meta's htdemucs separates better but releases its weights under CC-BY-NC-4.0, which a distributed app cannot ship.
 * **ONNX Runtime** (Microsoft) — MIT.
 * **Rubber Band** (Particular Programs Ltd) — time-stretching for beat-matched transitions, vendored at `android/app/src/main/cpp/vendor/rubberband`. **GPL-2-or-later**, and the reason this repository is copyleft rather than MIT.

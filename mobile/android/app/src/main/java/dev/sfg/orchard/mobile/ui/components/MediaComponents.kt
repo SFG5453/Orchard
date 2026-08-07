@@ -40,8 +40,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -135,15 +137,24 @@ fun CatalogCard(item: CatalogItem, onClick: () -> Unit, modifier: Modifier = Mod
             ArtworkTile(item.artworkUrl, item.title, Modifier.fillMaxSize(), artworkRadius)
         }
         Spacer(Modifier.height(8.dp))
-        Text(
-            item.title,
-            style = MaterialTheme.typography.titleMedium,
-            color = CanopyColors.Text,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = if (isArtist) TextAlign.Center else TextAlign.Start,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
             modifier = Modifier.fillMaxWidth(),
-        )
+        ) {
+            Text(
+                item.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = CanopyColors.Text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = if (isArtist) TextAlign.Center else TextAlign.Start,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (item is CatalogItem.Song && item.track.explicit) {
+                ExplicitBadge()
+            }
+        }
         Text(
             catalogSubtitle(item),
             style = MaterialTheme.typography.bodyMedium,
@@ -191,6 +202,9 @@ fun TopPickCard(item: CatalogItem, onClick: () -> Unit, modifier: Modifier = Mod
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                 )
+            }
+            if (item is CatalogItem.Song && item.track.explicit) {
+                ExplicitBadge(modifier = Modifier.padding(bottom = 6.dp))
             }
             Text(
                 item.title,
@@ -243,7 +257,13 @@ fun TrackRow(
     showDivider: Boolean = false,
     onPlayNext: (() -> Unit)? = null,
     onAddToQueue: (() -> Unit)? = null,
+    onAddToPlaylist: (() -> Unit)? = null,
+    onRemoveFromPlaylist: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
+    onDownload: (() -> Unit)? = null,
+    onRemoveDownload: (() -> Unit)? = null,
+    isDownloaded: Boolean = false,
+    isDownloading: Boolean = false,
     onViewAlbum: (() -> Unit)? = null,
     onViewArtist: (() -> Unit)? = null,
     trailingText: String = durationText(track.durationMs),
@@ -262,6 +282,10 @@ fun TrackRow(
             onPlay = onPlay,
             onPlayNext = onPlayNext,
             onAddToQueue = onAddToQueue,
+            onAddToPlaylist = onAddToPlaylist,
+            onRemoveFromPlaylist = onRemoveFromPlaylist,
+            onDownload = if (!isDownloaded) onDownload else null,
+            onRemoveDownload = if (isDownloaded) onRemoveDownload else null,
             onShare = onShare,
             onViewAlbum = onViewAlbum,
             onViewArtist = onViewArtist,
@@ -364,6 +388,20 @@ fun TrackRow(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
+                }
+                if (isDownloading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        color = LocalAccent.current,
+                        strokeWidth = 2.dp,
+                    )
+                } else if (isDownloaded) {
+                    Icon(
+                        Icons.Rounded.DownloadDone,
+                        contentDescription = "Downloaded offline",
+                        tint = LocalAccent.current.copy(alpha = 0.85f),
+                        modifier = Modifier.size(16.dp),
+                    )
                 }
                 if (trailingText.isNotBlank()) {
                     Text(

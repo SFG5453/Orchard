@@ -128,7 +128,7 @@ class TransitionPolicyTest {
                 energyCurve = energyCurve(264, 188),
             ),
         )
-        assertEquals("interior_mix_out", anchor.type)
+        assertEquals("energy_cliff", anchor.type)
         assertEquals(188.0, anchor.time, 1e-9)
         assertEquals(0.0, anchor.discardedMusicSeconds, 1e-9)
     }
@@ -160,6 +160,23 @@ class TransitionPolicyTest {
         assertEquals(0.5, vocalActivityBetween(analysis, 0.0, 3.0)!!, 1e-9)
         assertEquals(1.0, vocalActivityBetween(analysis, 2.0, 3.0)!!, 1e-9)
         assertNull(vocalActivityBetween(TrackAnalysis(), 0.0, 3.0))
+    }
+
+    @Test
+    fun `a sustained vocal tail becomes a yap-start cue when it is safe to leave`() {
+        val analysis = maskedAnalysis(List(60) { second -> if (second >= 52) 0.9 else 0.1 })
+            .copy(contentEndTime = 60.0)
+        assertEquals(52.0, findYapStartNearTail(analysis, 60.0)!!, 1e-9)
+        val anchor = resolveMixOutAnchor(analysis)
+        assertEquals("yap_start", anchor.type)
+        assertEquals(52.0, anchor.time, 1e-9)
+    }
+
+    @Test
+    fun `a vocal tail longer than the skip budget still plays to content end`() {
+        val analysis = maskedAnalysis(List(60) { second -> if (second >= 40) 0.9 else 0.1 })
+            .copy(contentEndTime = 60.0)
+        assertEquals("content_end", resolveMixOutAnchor(analysis).type)
     }
 
     @Test

@@ -72,6 +72,7 @@ class YouTubeStreamResolver(
      */
     private val sessionProvider: YouTubeSessionProvider? = null,
     private val challengeSolver: YouTubeChallengeSolver? = null,
+    private val downloadManager: dev.sfg.orchard.mobile.download.DownloadManager? = null,
 ) {
     private val newPipeResolver: NewPipeStreamResolver by lazy { NewPipeStreamResolver(client, sessionProvider) }
     /**
@@ -109,6 +110,9 @@ class YouTubeStreamResolver(
 
     fun resolve(videoId: String): ResolvedStream {
         require(videoId.isNotBlank()) { "A YouTube video id is required" }
+        downloadManager?.let { mgr ->
+            dev.sfg.orchard.mobile.download.DownloadPlaybackHelper.resolveOfflineStream(videoId, mgr)?.let { return it }
+        }
         val quality = qualityProvider()
         val cacheKey = "$videoId:${quality.name}"
         cached(cacheKey)?.let { return it }
