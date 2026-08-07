@@ -1,8 +1,5 @@
-## Orchard 4.2.0 "Praise Perceived"
+## Orchard 4.3.0 "Persian Inklings"
 
 ### New And Improved
-- Orchard Mobile 1.0.0 for Android Has been Released! Check it out on the website!
-- Orchard can now remember the window size and close to tray.
-
-### Fixed
-- Shuffling a playlist now shuffles all songs in the playlist instead of the typical 100 songs.
+- Orchard Mobile 1.1.0 is now available on the Orchard Website for Android! Includes age-gated stream support, playlist creation, song sharing, and full remote analysis pairing.
+- Added Orchard Connect track analysis protocol (v3) enabling paired mobile devices to request track analysis and receive cloud sync results.

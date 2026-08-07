@@ -108,6 +108,7 @@ fun NowPlayingScreen(
     downloadedTrackIds: Set<String> = emptySet(),
     onDownloadTrack: ((Track) -> Unit)? = null,
     onRemoveDownloadTrack: ((String) -> Unit)? = null,
+    onAddToPlaylist: ((Track) -> Unit)? = null,
     onShare: (() -> Unit)? = null,
     onOpenCollection: ((String) -> Unit)? = null,
 ) {
@@ -235,6 +236,7 @@ fun NowPlayingScreen(
                 downloadedTrackIds = downloadedTrackIds,
                 onDownloadTrack = onDownloadTrack,
                 onRemoveDownloadTrack = onRemoveDownloadTrack,
+                onAddToPlaylist = onAddToPlaylist,
                 onShare = onShare,
                 onOpenCollection = onOpenCollection,
                 onLyricsPanel = { panel = if (lyricsOpen) PlayerPanel.NONE else PlayerPanel.LYRICS },
@@ -265,6 +267,7 @@ fun NowPlayingScreen(
                     isDownloaded = downloadedTrackIds.contains(track.id),
                     onDownload = onDownloadTrack?.let { action -> { action(track) } },
                     onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
+                    onAddToPlaylist = onAddToPlaylist?.let { action -> { action(track) } },
                 )
                 Box(
                     Modifier
@@ -342,6 +345,7 @@ fun NowPlayingScreen(
                         isDownloaded = downloadedTrackIds.contains(track.id),
                         onDownload = onDownloadTrack?.let { action -> { action(track) } },
                         onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
+                        onAddToPlaylist = onAddToPlaylist?.let { action -> { action(track) } },
                         onOpenAlbum = track.albumId.takeIf { it.isNotBlank() }
                             ?.let { id -> onOpenCollection?.let { open -> { open(id) } } },
                         onOpenArtist = track.artistId.takeIf { it.isNotBlank() }

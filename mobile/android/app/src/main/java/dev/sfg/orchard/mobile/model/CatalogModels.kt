@@ -67,6 +67,7 @@ data class Album(
     val artworkUrl: String = "",
     val year: String = "",
     val tracks: List<Track> = emptyList(),
+    val explicit: Boolean = false,
 )
 
 data class Artist(
@@ -83,6 +84,7 @@ data class Playlist(
     val artworkUrl: String = "",
     val description: String = "",
     val tracks: List<Track> = emptyList(),
+    val explicit: Boolean = false,
 )
 
 /** A heterogeneous catalog item used by home, search, and library shelves. */
@@ -90,6 +92,13 @@ sealed interface CatalogItem {
     val stableId: String
     val title: String
     val artworkUrl: String
+    val explicit: Boolean
+        get() = when (this) {
+            is Song -> track.explicit
+            is Record -> album.explicit || album.tracks.any { it.explicit }
+            is Collection -> playlist.explicit || playlist.tracks.any { it.explicit }
+            is Performer -> false
+        }
 
     data class Song(val track: Track) : CatalogItem {
         override val stableId = track.id
@@ -136,6 +145,7 @@ data class BrowseDetail(
     val sections: List<CatalogSection> = emptyList(),
     val artist: String = "",
     val year: String = "",
+    val explicit: Boolean = false,
 )
 
 data class SearchResults(

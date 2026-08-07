@@ -31,7 +31,10 @@ object MediaItemMapper {
     private const val TRACK_JSON = "orchard.track.json"
 
     fun toMediaItem(track: Track): MediaItem {
-        val extras = Bundle().apply { putString(TRACK_JSON, dev.sfg.orchard.mobile.model.CatalogJson.track(track).toString()) }
+        val extras = Bundle().apply {
+            putString(TRACK_JSON, dev.sfg.orchard.mobile.model.CatalogJson.track(track).toString())
+            putBoolean("explicit", track.explicit)
+        }
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
             .setArtist(track.artist)
@@ -58,12 +61,15 @@ object MediaItemMapper {
         if (!json.isNullOrBlank()) {
             runCatching { return dev.sfg.orchard.mobile.model.CatalogJson.track(org.json.JSONObject(json)) }
         }
+        val extras = item.mediaMetadata.extras
+        val explicitFromExtras = extras?.getBoolean("explicit") ?: false
         return Track(
             id = item.mediaId,
             title = item.mediaMetadata.title?.toString().orEmpty(),
             artist = item.mediaMetadata.artist?.toString().orEmpty(),
             album = item.mediaMetadata.albumTitle?.toString().orEmpty(),
             artworkUrl = item.mediaMetadata.artworkUri?.toString().orEmpty(),
+            explicit = explicitFromExtras,
         )
     }
 

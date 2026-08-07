@@ -232,6 +232,7 @@ fun TrackInfoRow(
     liked: Boolean,
     onLiked: () -> Unit,
     onMore: (() -> Unit)? = null,
+    onAddToPlaylist: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
     // Null when the track carries no album or artist id to open.
     onOpenAlbum: (() -> Unit)? = null,
@@ -248,6 +249,7 @@ fun TrackInfoRow(
             track = track,
             onDismiss = { menuOpen = false },
             onViewQueue = onMore,
+            onAddToPlaylist = onAddToPlaylist,
             onDownload = if (!isDownloaded) onDownload else null,
             onRemoveDownload = if (isDownloaded) onRemoveDownload else null,
             onShare = onShare,

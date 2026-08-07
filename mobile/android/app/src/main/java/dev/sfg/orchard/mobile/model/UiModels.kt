@@ -81,6 +81,8 @@ data class OrchardSettings(
     val spotifySpdc: String = "",
     /** Whether to fetch Spotify Canvas animated artwork loops. */
     val spotifyCanvasEnabled: Boolean = true,
+    /** Whether to even out volume levels across played tracks. */
+    val volumeNormalizationEnabled: Boolean = false,
 ) {
     /** Clamped, because a persisted value from an older build must not size the cache absurdly. */
     val cacheSizeBytes: Long

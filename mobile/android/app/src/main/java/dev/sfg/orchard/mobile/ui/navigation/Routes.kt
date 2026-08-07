@@ -28,6 +28,7 @@ object Routes {
     const val NOW_PLAYING = "now-playing"
     const val DEVICES = "devices"
     const val LOGIN = "login"
+    const val ACCOUNT_SWITCH = "account-switch"
     const val SPOTIFY_LOGIN = "spotify-login"
     const val DOWNLOADS = "downloads"
     const val DETAIL = "detail/{id}"

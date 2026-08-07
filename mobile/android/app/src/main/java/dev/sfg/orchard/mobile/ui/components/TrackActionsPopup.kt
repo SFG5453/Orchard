@@ -70,6 +70,8 @@ internal fun TrackActionsPopup(
     onPlay: (() -> Unit)? = null,
     onPlayNext: (() -> Unit)? = null,
     onAddToQueue: (() -> Unit)? = null,
+    onAddToPlaylist: (() -> Unit)? = null,
+    onRemoveFromPlaylist: (() -> Unit)? = null,
     onViewQueue: (() -> Unit)? = null,
     onDownload: (() -> Unit)? = null,
     onRemoveDownload: (() -> Unit)? = null,
@@ -89,13 +91,20 @@ internal fun TrackActionsPopup(
                 ArtworkTile(track.artworkUrl, track.title, Modifier.size(52.dp), 10)
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        track.title,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = CanopyColors.Text,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            track.title,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = CanopyColors.Text,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (track.explicit) {
+                            Spacer(Modifier.width(6.dp))
+                            ExplicitBadge()
+                        }
+                    }
                     if (track.artist.isNotBlank()) {
                         Text(
                             track.artist,
@@ -120,6 +129,12 @@ internal fun TrackActionsPopup(
             }
             onAddToQueue?.let { action ->
                 PopupActionRow(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to Queue") { onDismiss(); action() }
+            }
+            onAddToPlaylist?.let { action ->
+                PopupActionRow(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to Playlist") { onDismiss(); action() }
+            }
+            onRemoveFromPlaylist?.let { action ->
+                PopupActionRow(Icons.Rounded.Delete, "Remove from Playlist") { onDismiss(); action() }
             }
             onViewQueue?.let { action ->
                 PopupActionRow(Icons.AutoMirrored.Rounded.List, "View Queue") { onDismiss(); action() }

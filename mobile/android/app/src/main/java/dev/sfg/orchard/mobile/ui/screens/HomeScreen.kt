@@ -75,6 +75,7 @@ import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.model.Playlist
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.ArtworkTile
+import dev.sfg.orchard.mobile.ui.components.ExplicitBadge
 import dev.sfg.orchard.mobile.ui.components.HomeSectionShimmer
 import dev.sfg.orchard.mobile.ui.components.MessagePanel
 import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
@@ -679,16 +680,23 @@ private fun RankedSongRow(rank: Int, track: Track, onPlay: () -> Unit) {
                 ) { ArtworkTile(track.artworkUrl, track.title, Modifier.fillMaxSize(), 10) }
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                                text = track.title,
-                                style =
-                                        MaterialTheme.typography.titleMedium.copy(
-                                                fontWeight = FontWeight.SemiBold
-                                        ),
-                                color = CanopyColors.Text,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                        text = track.title,
+                                        style =
+                                                MaterialTheme.typography.titleMedium.copy(
+                                                        fontWeight = FontWeight.SemiBold
+                                                ),
+                                        color = CanopyColors.Text,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                )
+                                if (track.explicit) {
+                                        Spacer(Modifier.width(6.dp))
+                                        ExplicitBadge()
+                                }
+                        }
                         Text(
                                 text = track.artist,
                                 style = MaterialTheme.typography.bodySmall,

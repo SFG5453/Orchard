@@ -10,8 +10,9 @@ Real shuffle, Best Mix queue sorting, smart crossfade, advanced audio controls, 
 [![Latest release](https://img.shields.io/github/v/release/SFG5453/Orchard?display_name=tag\&sort=semver)](https://sfg545.dev/orchard)
 [![License](https://img.shields.io/github/license/SFG5453/Orchard)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-informational)](https://sfg545.dev/orchard)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Donate-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/sfg545)
 
-[Download Orchard](https://sfg545.dev/orchard) · [Report an issue](https://github.com/SFG5453/Orchard/issues) · [View the source](https://github.com/SFG5453/Orchard)
+[Download Orchard](https://sfg545.dev/orchard) · [Report an issue](https://github.com/SFG5453/Orchard/issues) · [Support on Ko-fi](https://ko-fi.com/sfg545) · [View the source](https://github.com/SFG5453/Orchard)
 
 </div>
 
@@ -211,6 +212,10 @@ Before submitting a code change:
 5. Explain what changed and how it was tested.
 
 Use the [Issues tab](https://github.com/SFG5453/Orchard/issues) for all public bug reports and feature requests. Private reports with optional diagnostics and screenshots can be submitted through Orchard's in-app Support System.
+
+## Support
+
+If you enjoy using Orchard and would like to support its development, consider [buying me a coffee on Ko-fi](https://ko-fi.com/sfg545).
 
 ## Service dependencies
 

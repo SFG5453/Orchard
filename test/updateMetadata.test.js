@@ -20,6 +20,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mergeMacUpdateMetadata } from '../scripts/merge-macos-update-metadata.mjs';
+import { generateAndroidUpdateMetadata } from '../scripts/generate-android-update-metadata.mjs';
 
 function metadata(version, url, sha512) {
   return `version: ${version}\nfiles:\n  - url: ${url}\n    sha512: ${sha512}\n    size: 123\npath: ${url}\nsha512: ${sha512}\nreleaseNotes: |\n  Notes for ${version}\n`;
@@ -45,4 +46,24 @@ test('rejects mismatched macOS update versions', () => {
     ),
     /versions do not match/
   );
+});
+
+test('generates Android update metadata JSON with release notes and codename', () => {
+  const result = generateAndroidUpdateMetadata({
+    version: '1.0.0',
+    codename: 'Praise Perceived',
+    versionCode: 1,
+    apkUrl: 'https://downloads.sfg545.dev/orchard/Orchard-1.0.0.apk',
+    sha256: 'abc123hash',
+    publishedAt: '2026-08-07T00:00:00Z',
+    releaseNotes: '## Mobile Release Notes\n- Feature A\n- Feature B',
+  });
+
+  const parsed = JSON.parse(result);
+  assert.equal(parsed.version, '1.0.0');
+  assert.equal(parsed.codename, 'Praise Perceived');
+  assert.equal(parsed.versionCode, 1);
+  assert.equal(parsed.apkUrl, 'https://downloads.sfg545.dev/orchard/Orchard-1.0.0.apk');
+  assert.equal(parsed.sha256, 'abc123hash');
+  assert.equal(parsed.releaseNotes, '## Mobile Release Notes\n- Feature A\n- Feature B');
 });
