@@ -111,6 +111,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         stateStore = PlaybackStateStore(this)
         val graph = OrchardGraph.from(this)
         browseTree = OrchardMediaLibrary(graph)
+        val challengeSolver = YouTubeChallengeSolver(this, graph.http)
         streamResolver =
             YouTubeStreamResolver(
                 client = graph.http,
@@ -118,6 +119,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                 visitorStore = PrefsVisitorIdentityStore(this),
                 onWarning = { message -> graph.postWarning(message) },
                 sessionProvider = graph.auth,
+                challengeSolver = challengeSolver,
                 downloadManager = graph.downloads,
             )
         streamResolver.warmUp()

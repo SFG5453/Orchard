@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile.playback
 
 import android.util.Log
+import dev.sfg.orchard.mobile.auth.YouTubeSessionAuth
 import dev.sfg.orchard.mobile.auth.YouTubeSessionProvider
 import dev.sfg.orchard.mobile.model.AudioQuality
 import okhttp3.MediaType.Companion.toMediaType
@@ -38,6 +39,13 @@ data class ResolvedStream(
     val expiresAtMs: Long,
     val bitrateKbps: Int = 0,
 )
+
+/**
+ * Thrown when YouTube refuses playback because the content is age-restricted.
+ * Carrying a dedicated type lets the retry chain distinguish an age gate from
+ * a generic refusal without parsing message strings at every call site.
+ */
+private class AgeGateException(message: String) : RuntimeException(message)
 
 /**
  * Native port of Orchard desktop's direct Android-VR stream fallback.
@@ -63,6 +71,7 @@ class YouTubeStreamResolver(
      * reason to be anonymous for playback.
      */
     private val sessionProvider: YouTubeSessionProvider? = null,
+    private val challengeSolver: YouTubeChallengeSolver? = null,
     private val downloadManager: dev.sfg.orchard.mobile.download.DownloadManager? = null,
 ) {
     private val newPipeResolver: NewPipeStreamResolver by lazy { NewPipeStreamResolver(client, sessionProvider) }
@@ -140,7 +149,7 @@ class YouTubeStreamResolver(
             val account = runCatching { accountIdentity(videoId) }
                 .onFailure { Log.w(TAG, "Could not build an account identity for playback", it) }
                 .getOrNull()
-            Log.d(TAG, "Resolving $videoId as ${if (account != null) "account" else "guest"}")
+            var isAgeGated = false
             val response = runCatching {
                 androidVrPlayer(videoId, account ?: warmVisitor(videoId))
             }
@@ -148,16 +157,33 @@ class YouTubeStreamResolver(
                 // One retry on a fresh identity is cheaper than never trusting the cache.
                 // Signed in, this is also the guest retry: the account may simply
                 // not be entitled to this track.
-                .recoverCatching {
-                    Log.w(TAG, "Retrying with a fresh visitor identity", it)
+                .recoverCatching { firstError ->
+                    if (firstError is AgeGateException) throw firstError
+                    Log.w(TAG, "Retrying with a fresh visitor identity", firstError)
                     androidVrPlayer(videoId, loadVisitor(videoId).also(::rememberVisitor))
                 }
-                .onFailure { Log.w(TAG, "Android VR playback client was unavailable; trying iOS", it) }
-                .getOrElse {
-                    runCatching { iosPlayer(videoId) }
-                        .onFailure { failures[videoId] = System.currentTimeMillis() }
-                        .getOrThrow()
+                .recoverCatching { secondError ->
+                    Log.w(TAG, "ANDROID_VR failed for $videoId; trying ANDROID client", secondError)
+                    val authenticatedVisitor = account ?: warmVisitor(videoId)
+                    androidPlayer(videoId, authenticatedVisitor)
                 }
+                .recoverCatching { thirdError ->
+                    Log.w(TAG, "ANDROID player failed for $videoId; trying IOS client", thirdError)
+                    val authenticatedVisitor = account ?: warmVisitor(videoId)
+                    iosPlayer(videoId, authenticatedVisitor)
+                }
+                .recoverCatching { fourthError ->
+                    Log.w(TAG, "IOS player failed for $videoId; trying WEB_REMIX player", fourthError)
+                    val authenticatedVisitor = account ?: warmVisitor(videoId)
+                    webRemixPlayer(videoId, authenticatedVisitor)
+                }
+                .recoverCatching { fifthError ->
+                    Log.w(TAG, "WEB_REMIX player failed for $videoId; trying TVHTML5 player", fifthError)
+                    val authenticatedVisitor = account ?: warmVisitor(videoId)
+                    tvHtml5Player(videoId, authenticatedVisitor)
+                }
+                .onFailure { failures[videoId] = System.currentTimeMillis() }
+                .getOrThrow()
             val stream = chooseAudio(response, quality)
             if (maxQualityFallback) {
                 onWarning?.invoke("Max quality unavailable, using High")
@@ -229,20 +255,11 @@ class YouTubeStreamResolver(
 
     private fun forgetAccountIdentity() = synchronized(accountLock) { accountVisitor = null }
 
-    /**
-     * Adds the two cookies a browser would always be carrying. Without a consent
-     * record YouTube treats the request as one that has never seen a consent
-     * wall, which reads as automation no matter whose account is attached.
-     */
-    private fun playbackCookie(cookie: String): String {
-        val parts = cookie.split(';').map(String::trim).filter(String::isNotEmpty)
-        val names = parts.map { it.substringBefore('=') }.toSet()
-        return buildList {
-            addAll(parts)
-            if ("SOCS" !in names) add("SOCS=CAI")
-            if ("PREF" !in names) add("PREF=f2=8000000&hl=en")
-        }.joinToString("; ")
-    }
+    private fun playbackCookie(raw: String): String = raw
+        .split(';')
+        .map(String::trim)
+        .filterNot { it.startsWith("__Secure-YEC=") }
+        .joinToString("; ")
 
     private fun rememberVisitor(identity: Visitor) {
         visitor = identity
@@ -280,26 +297,19 @@ class YouTubeStreamResolver(
         streams.keys.removeAll { it.startsWith("$videoId:") }
     }
 
-    /**
-     * Reads a visitor identity from a watch page. [cookie], when given, fetches
-     * the page as the signed-in account so the identity that comes back belongs
-     * to it; the account's own cookie is then kept rather than the page's.
-     */
-    private fun loadVisitor(videoId: String, cookie: String = ""): Visitor {
-        // The warm-up path has no track in hand; the home page carries an identity just as well.
-        val url = if (videoId.isBlank()) "https://www.youtube.com/"
-        else "https://www.youtube.com/watch?v=$videoId&bpctr=9999999999&has_verified=1"
+    private fun loadVisitor(videoId: String, cookie: String? = null): Visitor {
+        val url = if (videoId.isNotBlank()) "https://www.youtube.com/watch?v=$videoId" else "https://www.youtube.com"
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", WEB_USER_AGENT)
-            .apply { if (cookie.isNotBlank()) header("Cookie", cookie) }
+            .header("User-Agent", CLIENT_USER_AGENT)
+            .apply { if (!cookie.isNullOrBlank()) header("Cookie", cookie) }
             .build()
         client.newCall(request).execute().use { response ->
-            val html = response.body.string()
-            if (!response.isSuccessful) error("YouTube visitor setup failed with HTTP ${response.code}")
-            val id = VISITOR_PATTERN.find(html)?.groupValues?.getOrNull(1)
+            check(response.isSuccessful) { "YouTube returned HTTP ${response.code}" }
+            val body = response.body.string()
+            val id = VISITOR_PATTERN.find(body)?.groupValues?.getOrNull(1)
                 ?: error("YouTube did not return a visitor identity")
-            if (cookie.isNotBlank()) return Visitor(id, cookie)
+            if (!cookie.isNullOrBlank()) return Visitor(id, cookie)
             val issued = response.headers.values("Set-Cookie")
                 .map { it.substringBefore(';') }
                 .filterNot { it.startsWith("__Secure-YEC=") }
@@ -336,8 +346,16 @@ class YouTubeStreamResolver(
             .header("Origin", "https://www.youtube.com")
             .apply {
                 visitor?.let {
-                    header("X-Goog-Visitor-Id", it.id)
+                    if (it.id.isNotBlank()) header("X-Goog-Visitor-Id", it.id)
                     if (it.cookie.isNotBlank()) header("Cookie", it.cookie)
+                    // Signed-in requests need the SAPISIDHASH authorization
+                    // matching the Origin header.
+                    if (it.signedIn) {
+                        YouTubeSessionAuth.authorization(it.cookie, origin = "https://www.youtube.com")?.let { auth ->
+                            header("Authorization", auth)
+                        }
+                        header("X-Goog-AuthUser", "0")
+                    }
                 }
             }
             .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
@@ -345,7 +363,46 @@ class YouTubeStreamResolver(
         return executePlayer(request)
     }
 
-    private fun iosPlayer(videoId: String): JSONObject {
+    private fun androidPlayer(videoId: String, visitor: Visitor?): JSONObject {
+        val clientContext = JSONObject()
+            .put("clientName", "ANDROID")
+            .put("clientVersion", ANDROID_CLIENT_VERSION)
+            .put("osName", "Android")
+            .put("osVersion", "14")
+            .put("hl", "en")
+            .put("gl", "US")
+            .apply { visitor?.id?.takeIf(String::isNotBlank)?.let { put("visitorData", it) } }
+        val body = JSONObject()
+            .put("context", JSONObject().put("client", clientContext))
+            .put("videoId", videoId)
+            .put("contentCheckOk", true)
+            .put("racyCheckOk", true)
+        val request = Request.Builder()
+            .url("https://www.youtube.com/youtubei/v1/player?key=$PUBLIC_API_KEY&prettyPrint=false")
+            .header("Content-Type", "application/json")
+            .header("User-Agent", ANDROID_USER_AGENT)
+            .header("X-Youtube-Client-Name", "3")
+            .header("X-Youtube-Client-Version", ANDROID_CLIENT_VERSION)
+            .header("Origin", "https://www.youtube.com")
+            .header("X-Origin", "https://www.youtube.com")
+            .apply {
+                visitor?.let {
+                    if (it.id.isNotBlank()) header("X-Goog-Visitor-Id", it.id)
+                    if (it.cookie.isNotBlank()) header("Cookie", it.cookie)
+                    if (it.signedIn) {
+                        YouTubeSessionAuth.authorization(it.cookie, origin = "https://www.youtube.com")?.let { auth ->
+                            header("Authorization", auth)
+                        }
+                        header("X-Goog-AuthUser", "0")
+                    }
+                }
+            }
+            .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        return executePlayer(request)
+    }
+
+    private fun iosPlayer(videoId: String, visitor: Visitor? = null): JSONObject {
         val body = JSONObject()
             .put(
                 "context",
@@ -358,7 +415,8 @@ class YouTubeStreamResolver(
                         .put("osName", "iOS")
                         .put("osVersion", "16.7.7.20H330")
                         .put("hl", "en")
-                        .put("gl", "US"),
+                        .put("gl", "US")
+                        .apply { visitor?.id?.takeIf(String::isNotBlank)?.let { put("visitorData", it) } },
                 ),
             )
             .put("videoId", videoId)
@@ -370,6 +428,112 @@ class YouTubeStreamResolver(
             .header("User-Agent", IOS_USER_AGENT)
             .header("X-Youtube-Client-Name", "5")
             .header("X-Youtube-Client-Version", IOS_CLIENT_VERSION)
+            .header("Origin", "https://www.youtube.com")
+            .header("X-Origin", "https://www.youtube.com")
+            .apply {
+                visitor?.let {
+                    if (it.id.isNotBlank()) header("X-Goog-Visitor-Id", it.id)
+                    if (it.cookie.isNotBlank()) header("Cookie", it.cookie)
+                    if (it.signedIn) {
+                        YouTubeSessionAuth.authorization(it.cookie, origin = "https://www.youtube.com")?.let { auth ->
+                            header("Authorization", auth)
+                        }
+                        header("X-Goog-AuthUser", "0")
+                    }
+                }
+            }
+            .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        return executePlayer(request)
+    }
+
+    /**
+     * YouTube Music web client (WEB_REMIX). This is the client used by music.youtube.com.
+     * When signed in, carrying the user's cookies and matching SAPISIDHASH authorization,
+     * it satisfies YouTube's server-side age verification for explicit music tracks.
+     */
+    private fun webRemixPlayer(videoId: String, visitor: Visitor?): JSONObject {
+        val clientContext = JSONObject()
+            .put("clientName", "WEB_REMIX")
+            .put("clientVersion", WEB_REMIX_VERSION)
+            .put("hl", "en")
+            .put("gl", "US")
+        val userContext = JSONObject()
+            .put("lockedSafetyMode", false)
+        val playbackContext = JSONObject()
+            .put("contentPlaybackContext", JSONObject().put("signatureTimestamp", 19999))
+        val body = JSONObject()
+            .put("context", JSONObject().put("client", clientContext).put("user", userContext))
+            .put("videoId", videoId)
+            .put("contentCheckOk", true)
+            .put("racyCheckOk", true)
+            .put("playbackContext", playbackContext)
+        val request = Request.Builder()
+            .url("https://music.youtube.com/youtubei/v1/player?key=$PUBLIC_API_KEY&prettyPrint=false")
+            .header("Content-Type", "application/json")
+            .header("User-Agent", WEB_USER_AGENT)
+            .header("X-Youtube-Client-Name", "67")
+            .header("X-Youtube-Client-Version", WEB_REMIX_VERSION)
+            .header("Origin", YouTubeSessionAuth.MUSIC_ORIGIN)
+            .header("Referer", "${YouTubeSessionAuth.MUSIC_ORIGIN}/")
+            .header("X-Origin", YouTubeSessionAuth.MUSIC_ORIGIN)
+            .header("X-Goog-Api-Format-Version", "1")
+            .apply {
+                visitor?.let {
+                    if (it.cookie.isNotBlank()) header("Cookie", it.cookie)
+                    if (it.signedIn) {
+                        YouTubeSessionAuth.authorization(it.cookie, origin = YouTubeSessionAuth.MUSIC_ORIGIN)?.let { auth ->
+                            header("Authorization", auth)
+                        }
+                        header("X-Goog-AuthUser", "0")
+                    } else if (it.id.isNotBlank()) {
+                        header("X-Goog-Visitor-Id", it.id)
+                    }
+                }
+            }
+            .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        return executePlayer(request)
+    }
+
+    private fun tvHtml5Player(videoId: String, visitor: Visitor?): JSONObject {
+        val clientContext = JSONObject()
+            .put("clientName", "TVHTML5")
+            .put("clientVersion", "5.20260114")
+            .put("userAgent", "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version")
+            .put("hl", "en")
+            .put("gl", "US")
+            .apply { visitor?.id?.takeIf(String::isNotBlank)?.let { put("visitorData", it) } }
+        val playbackContext = JSONObject()
+            .put("contentPlaybackContext", JSONObject()
+                .put("html5Preference", "HTML5_PREF_WANTS")
+                .put("signatureTimestamp", 20668))
+        val body = JSONObject()
+            .put("context", JSONObject().put("client", clientContext))
+            .put("videoId", videoId)
+            .put("contentCheckOk", true)
+            .put("racyCheckOk", true)
+            .put("playbackContext", playbackContext)
+        val request = Request.Builder()
+            .url("https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
+            .header("Content-Type", "application/json")
+            .header("User-Agent", "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version")
+            .header("X-Youtube-Client-Name", "7")
+            .header("X-Youtube-Client-Version", "5.20260114")
+            .header("Origin", "https://www.youtube.com")
+            .header("X-Origin", "https://www.youtube.com")
+            .apply {
+                visitor?.let {
+                    if (it.id.isNotBlank()) header("X-Goog-Visitor-Id", it.id)
+                    if (it.cookie.isNotBlank()) header("Cookie", it.cookie)
+                    if (it.signedIn) {
+                        YouTubeSessionAuth.authorization(it.cookie, origin = "https://www.youtube.com")?.let { auth ->
+                            header("Authorization", auth)
+                        }
+                        header("X-Goog-AuthUser", "0")
+                    }
+                }
+            }
             .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
             .build()
         return executePlayer(request)
@@ -378,14 +542,26 @@ class YouTubeStreamResolver(
     private fun executePlayer(request: Request): JSONObject {
         client.newCall(request).execute().use { response ->
             val text = response.body.string()
+            Log.d(TAG, "executePlayer for ${request.url} (code ${response.code}): $text")
             val payload = runCatching { JSONObject(text) }.getOrElse { JSONObject() }
             val status = payload.optJSONObject("playabilityStatus")
             if (!response.isSuccessful || status?.optString("status") != "OK") {
                 val reason = status?.optString("reason").orEmpty().ifBlank { "HTTP ${response.code}" }
+                val statusCode = status?.optString("status").orEmpty()
+                // Distinguish age-gated refusals so the retry chain can
+                // route them to the web/music players instead of a guest retry.
+                if (isAgeGateResponse(statusCode, reason)) {
+                    throw AgeGateException("YouTube could not play this track: $reason")
+                }
                 error("YouTube could not play this track: $reason")
             }
             return payload
         }
+    }
+
+    private fun isAgeGateResponse(status: String, reason: String): Boolean {
+        val text = "$status $reason"
+        return AGE_GATE_PATTERN.containsMatchIn(text)
     }
 
     private fun chooseAudio(payload: JSONObject, quality: AudioQuality): ResolvedStream {
@@ -396,7 +572,10 @@ class YouTubeStreamResolver(
                 val format = formats.optJSONObject(index) ?: continue
                 val mime = format.optString("mimeType")
                 val url = format.optString("url")
-                if (mime.startsWith("audio/") && url.isNotBlank()) add(format)
+                val cipher = format.optString("signatureCipher").ifBlank { format.optString("cipher") }
+                if (mime.startsWith("audio/") && (url.isNotBlank() || cipher.isNotBlank())) {
+                    add(format)
+                }
             }
         }
         val preferred = candidates.sortedWith(
@@ -410,13 +589,37 @@ class YouTubeStreamResolver(
             // MAX falls through to HIGH when NewPipe failed and the innertube path is used.
             AudioQuality.HIGH, AudioQuality.MAX -> preferred.firstOrNull()
         } ?: error("No direct audio format was returned")
-        val url = chosen.getString("url")
+
+        var rawUrl = chosen.optString("url")
+        if (rawUrl.isBlank()) {
+            val cipher = chosen.optString("signatureCipher").ifBlank { chosen.optString("cipher") }
+            if (cipher.isNotBlank()) {
+                val parsed = parseQuery(cipher)
+                val targetUrl = parsed["url"]?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+                    ?: error("No url in signatureCipher")
+                val encSig = parsed["s"]?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+                val sigParam = parsed["sp"]?.let { java.net.URLDecoder.decode(it, "UTF-8") } ?: "sig"
+                val solver = challengeSolver ?: error("Challenge solver required for ciphered streams")
+                rawUrl = solver.decipherUrl(targetUrl, encSig, sigParam)
+            }
+        }
+
+        val url = rawUrl.takeIf(String::isNotBlank) ?: error("Failed to resolve audio stream URL")
         val expirySeconds = EXPIRY_PATTERN.find(url)?.groupValues?.getOrNull(1)?.toLongOrNull()
         val expiry = expirySeconds?.let { TimeUnit.SECONDS.toMillis(it) }
             ?: System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(45)
         val bitrateKbps = (chosen.optInt("bitrate") / 1000).coerceAtLeast(0)
         Log.d(TAG, "Resolved ${chosen.optString("mimeType").substringBefore(';')} audio @ ${bitrateKbps}kbps")
         return ResolvedStream(url, chosen.optString("mimeType"), expiry, bitrateKbps)
+    }
+
+    private fun parseQuery(query: String): Map<String, String> {
+        return query.split('&').mapNotNull { param ->
+            val parts = param.split('=', limit = 2)
+            if (parts.isNotEmpty()) {
+                parts[0] to (if (parts.size > 1) parts[1] else "")
+            } else null
+        }.toMap()
     }
 
     private fun formatPreference(mime: String): Int = when {
@@ -429,16 +632,23 @@ class YouTubeStreamResolver(
         const val CLIENT_USER_AGENT =
             "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip"
         private const val CLIENT_VERSION = "1.65.10"
+        private const val ANDROID_CLIENT_VERSION = "19.29.37"
+        private const val ANDROID_USER_AGENT =
+            "com.google.android.youtube/19.29.37 (Linux; U; Android 14; Pixel 7)"
         private const val IOS_CLIENT_VERSION = "20.11.6"
         private const val IOS_USER_AGENT =
             "com.google.ios.youtube/20.11.6 (iPhone10,4; U; CPU iOS 16_7_7 like Mac OS X)"
+        private const val WEB_REMIX_VERSION = "1.20260213.01.00"
         private const val PUBLIC_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
         private val FAILURE_BACKOFF_MS = TimeUnit.SECONDS.toMillis(20)
         private const val WEB_USER_AGENT =
-            "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 Chrome/125 Mobile Safari/537.36"
+            "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/138 Mobile Safari/537.36"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private val VISITOR_PATTERN = Regex("\\\"visitorData\\\":\\\"([^\\\"]+)")
         private val EXPIRY_PATTERN = Regex("[?&]expire=(\\d+)")
+        private val AGE_GATE_PATTERN = Regex(
+            """(?i)confirm[\s_-]*your[\s_-]*age|age[\s_-]*restrict|inappropriate for some users|LOGIN_REQUIRED""",
+        )
         private const val TAG = "YouTubeStreamResolver"
     }
 }
