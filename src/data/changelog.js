@@ -19,6 +19,20 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '4.3.0',
+    codename: 'Persian Inklings',
+    date: 'August 7, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'Orchard Mobile 1.1.0 is now available on the Orchard Website for Android! Includes age-gated stream support, playlist creation, song sharing, and full remote analysis pairing.',
+          'Added Orchard Connect track analysis protocol (v3) enabling paired mobile devices to request track analysis and receive cloud sync results.',
+        ]
+      }
+    ]
+  },
+  {
     version: '4.2.0',
     codename: 'Praise Perceived',
     date: 'August 4, 2026',

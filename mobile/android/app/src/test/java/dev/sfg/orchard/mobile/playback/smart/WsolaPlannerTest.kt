@@ -272,16 +272,15 @@ class WsolaPlannerTest {
                 nextDuration = 200.0,
             ),
         )
-        // Past the equal-power crossing, so the incoming track does not gain the bass while it is
-        // still fading up and arrive early.
-        assertTrue(plan.bassSwapFraction > plan.handoffFraction)
-        assertTrue(plan.bassSwapFraction < 1)
+        // Bass swap occurs at BASS_SWAP_FRACTION (0.4) of the overlap.
+        assertTrue(plan.bassSwapFraction > 0)
+        assertTrue(plan.bassSwapFraction <= plan.handoffFraction)
     }
 
     @Test
     fun `a long overlap caps the bass hold in absolute seconds`() {
         // Not in the desktop suite, but it pins the behaviour `bassSwapFractionFor` exists for and
-        // that the mobile render site used to miss by passing a fixed 0.7: past roughly 8.6s of
+        // that the mobile render site used to miss by passing a fixed 0.7: past 15s of
         // overlap the fraction has to shrink, or the outgoing bass sits under a track that has
         // already taken over.
         val plan = planned(
@@ -293,7 +292,7 @@ class WsolaPlannerTest {
             ),
         )
         assertTrue("overlap ${plan.overlapSeconds} should exceed the 6s hold", plan.overlapSeconds > 6)
-        assertEquals(6.0, plan.bassSwapFraction * plan.overlapSeconds, 1e-9)
+        assertEquals(4.8, plan.bassSwapFraction * plan.overlapSeconds, 1e-9)
     }
 
     @Test

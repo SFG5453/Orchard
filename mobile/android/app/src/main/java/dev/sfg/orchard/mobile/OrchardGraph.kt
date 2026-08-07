@@ -27,6 +27,7 @@ import dev.sfg.orchard.mobile.auth.SecureYouTubeSessionStore
 import dev.sfg.orchard.mobile.catalog.CatalogRepository
 import dev.sfg.orchard.mobile.catalog.AudioVersionResolver
 import dev.sfg.orchard.mobile.catalog.InnerTubeClient
+import dev.sfg.orchard.mobile.catalog.PlaylistActions
 import dev.sfg.orchard.mobile.connect.ConnectDeviceRepository
 import dev.sfg.orchard.mobile.library.LibraryCache
 import dev.sfg.orchard.mobile.library.LibraryRepository
@@ -65,6 +66,7 @@ class OrchardGraph(context: Context) {
     val artwork = ArtworkRepository(http, spotifyCanvas)
     val artistImages = ArtistImageRepository(http)
     val catalog = CatalogRepository(innerTube)
+    val playlistActions = PlaylistActions(innerTube)
     val audioVersions = AudioVersionResolver(innerTube)
     val library = LibraryRepository(LibraryCache(context), catalog, applicationScope)
     val lyrics = LyricsRepository(http, innerTube)

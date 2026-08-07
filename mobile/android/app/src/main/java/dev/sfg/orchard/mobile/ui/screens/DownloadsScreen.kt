@@ -55,6 +55,7 @@ import dev.sfg.orchard.mobile.download.DownloadItem
 import dev.sfg.orchard.mobile.download.DownloadStatus
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.ArtworkTile
+import dev.sfg.orchard.mobile.ui.components.ExplicitBadge
 import dev.sfg.orchard.mobile.ui.components.MessagePanel
 import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
@@ -166,13 +167,20 @@ internal fun DownloadedTrackRow(
             ArtworkTile(item.track.artworkUrl, item.track.title, Modifier.size(48.dp), 8)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    item.track.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = CanopyColors.Text,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        item.track.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = CanopyColors.Text,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (item.track.explicit) {
+                        Spacer(Modifier.width(6.dp))
+                        ExplicitBadge()
+                    }
+                }
                 Text(
                     "${item.track.artist} • ${formatStorageSize(item.bytesDownloaded)}",
                     style = MaterialTheme.typography.bodySmall,
@@ -205,13 +213,20 @@ internal fun DownloadingRow(
         ArtworkTile(item.track.artworkUrl, item.track.title, Modifier.size(48.dp), 8)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(
-                item.track.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = CanopyColors.Text,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    item.track.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = CanopyColors.Text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (item.track.explicit) {
+                    Spacer(Modifier.width(6.dp))
+                    ExplicitBadge()
+                }
+            }
             Spacer(Modifier.height(4.dp))
             if (item.status == DownloadStatus.DOWNLOADING) {
                 LinearProgressIndicator(

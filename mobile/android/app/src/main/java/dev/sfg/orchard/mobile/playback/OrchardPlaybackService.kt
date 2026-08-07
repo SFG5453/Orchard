@@ -111,6 +111,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         stateStore = PlaybackStateStore(this)
         val graph = OrchardGraph.from(this)
         browseTree = OrchardMediaLibrary(graph)
+        val challengeSolver = YouTubeChallengeSolver(this, graph.http)
         streamResolver =
             YouTubeStreamResolver(
                 client = graph.http,
@@ -118,6 +119,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                 visitorStore = PrefsVisitorIdentityStore(this),
                 onWarning = { message -> graph.postWarning(message) },
                 sessionProvider = graph.auth,
+                challengeSolver = challengeSolver,
                 downloadManager = graph.downloads,
             )
         streamResolver.warmUp()
@@ -149,6 +151,12 @@ class OrchardPlaybackService : MediaLibraryService() {
         }
         playerFilter = dev.sfg.orchard.mobile.playback.smart.TransitionFilter()
         spareFilter = dev.sfg.orchard.mobile.playback.smart.TransitionFilter()
+        browseScope.launch {
+            graph.settings.settings.collect { settings ->
+                playerFilter.volumeNormalizationEnabled = settings.volumeNormalizationEnabled
+                spareFilter.volumeNormalizationEnabled = settings.volumeNormalizationEnabled
+            }
+        }
         player = buildPlayer(graph.http, handlesAudioFocus = true, filter = playerFilter)
         spare = buildPlayer(graph.http, handlesAudioFocus = false, filter = spareFilter)
         restorePlayback()
@@ -413,8 +421,10 @@ class OrchardPlaybackService : MediaLibraryService() {
                 if (index !in 0 until player.mediaItemCount) return@post
                 val current = player.getMediaItemAt(index)
                 if (current.mediaId != item.mediaId) return@post
+                val currentExtras = current.mediaMetadata.extras
                 val metadata = current.mediaMetadata.buildUpon()
                     .setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                    .setExtras(currentExtras)
                     .build()
                 player.replaceMediaItem(index, current.buildUpon().setMediaMetadata(metadata).build())
             }

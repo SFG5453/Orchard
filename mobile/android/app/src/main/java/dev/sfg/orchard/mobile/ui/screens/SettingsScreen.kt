@@ -85,6 +85,7 @@ fun SettingsScreen(
     discordConnection: GatewayConnectionState = GatewayConnectionState.Disconnected,
     onSettings: (OrchardSettings) -> Unit,
     onSignIn: () -> Unit,
+    onSwitchAccount: () -> Unit,
     onSignOut: () -> Unit,
     onConnectDiscord: () -> Unit = {},
     onDisconnectDiscord: () -> Unit = {},
@@ -104,7 +105,7 @@ fun SettingsScreen(
 
         // Account leads: it is the only row whose state the user cannot infer at a glance.
         Spacer(Modifier.height(20.dp))
-        AccountCard(auth, onSignIn, onSignOut)
+        AccountCard(auth, onSignIn, onSwitchAccount, onSignOut)
 
         SectionLabel("Audio")
         SettingsPanel {
@@ -116,6 +117,14 @@ fun SettingsScreen(
                 subtitle = "Display streaming bitrate under player scrubber",
                 checked = settings.showBitrate,
                 onChecked = { onSettings(settings.copy(showBitrate = it)) },
+            )
+            PanelDivider()
+            ToggleRow(
+                icon = Icons.Rounded.GraphicEq,
+                title = "Volume normalization",
+                subtitle = "Even out volume differences between songs",
+                checked = settings.volumeNormalizationEnabled,
+                onChecked = { onSettings(settings.copy(volumeNormalizationEnabled = it)) },
             )
             PanelDivider()
             CrossfadeRow(settings, onSettings)
@@ -189,8 +198,13 @@ fun SettingsScreen(
         }
 
         Spacer(Modifier.height(32.dp))
+        val versionText = if (BuildConfig.CODENAME.isNotBlank()) {
+            "Orchard Mobile ${BuildConfig.VERSION_NAME} \"${BuildConfig.CODENAME}\""
+        } else {
+            "Orchard Mobile ${BuildConfig.VERSION_NAME}"
+        }
         Text(
-            "Orchard Mobile ${BuildConfig.VERSION_NAME}",
+            versionText,
             color = CanopyColors.Eyebrow,
             style = MaterialTheme.typography.labelMedium,
             textAlign = TextAlign.Center,
@@ -202,7 +216,12 @@ fun SettingsScreen(
 
 /** Signed-in identity and the sign in / out affordance, given more weight than a plain row. */
 @Composable
-private fun AccountCard(auth: AuthState, onSignIn: () -> Unit, onSignOut: () -> Unit) {
+private fun AccountCard(
+    auth: AuthState,
+    onSignIn: () -> Unit,
+    onSwitchAccount: () -> Unit,
+    onSignOut: () -> Unit,
+) {
     Surface(
         color = CanopyColors.Surface,
         shape = RoundedCornerShape(20.dp),
@@ -262,7 +281,10 @@ private fun AccountCard(auth: AuthState, onSignIn: () -> Unit, onSignOut: () -> 
     when (auth) {
         AuthState.SignedOut -> AccountButton("Sign in", onSignIn, primary = true)
         is AuthState.Error -> AccountButton("Try again", onSignIn, primary = true)
-        is AuthState.SignedIn -> AccountButton("Sign out", onSignOut, primary = false)
+        is AuthState.SignedIn -> {
+            AccountButton("Switch YouTube account", onSwitchAccount, primary = true)
+            AccountButton("Sign out", onSignOut, primary = false)
+        }
         else -> Unit
     }
 }

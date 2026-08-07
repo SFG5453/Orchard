@@ -71,6 +71,7 @@ object CatalogJson {
         .put("artworkUrl", value.artworkUrl)
         .put("year", value.year)
         .put("tracks", tracks(value.tracks))
+        .put("explicit", value.explicit)
 
     fun album(value: JSONObject): Album = Album(
         id = value.cleanString("id"),
@@ -79,6 +80,7 @@ object CatalogJson {
         artworkUrl = value.cleanString("artworkUrl"),
         year = value.cleanString("year"),
         tracks = tracks(value.optJSONArray("tracks")),
+        explicit = value.optBoolean("explicit"),
     )
 
     fun artist(value: Artist): JSONObject = JSONObject()
@@ -101,6 +103,7 @@ object CatalogJson {
         .put("artworkUrl", value.artworkUrl)
         .put("description", value.description)
         .put("tracks", tracks(value.tracks))
+        .put("explicit", value.explicit)
 
     fun playlist(value: JSONObject): Playlist = Playlist(
         id = value.cleanString("id"),
@@ -109,6 +112,7 @@ object CatalogJson {
         artworkUrl = value.cleanString("artworkUrl"),
         description = value.cleanString("description"),
         tracks = tracks(value.optJSONArray("tracks")),
+        explicit = value.optBoolean("explicit"),
     )
 
     private fun JSONObject.cleanString(key: String, default: String = ""): String {

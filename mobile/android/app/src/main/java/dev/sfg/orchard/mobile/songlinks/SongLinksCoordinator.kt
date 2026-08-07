@@ -39,8 +39,9 @@ class SongLinksCoordinator(
         val title = track.title.ifBlank { "Song" }
         val subtitle = artistContext?.takeIf(String::isNotBlank) ?: track.artist
         val artwork = track.artworkUrl
+        val explicit = track.explicit
 
-        mutableShareState.value = SongShareState.Loading(title = title, subtitle = subtitle, artworkUrl = artwork)
+        mutableShareState.value = SongShareState.Loading(title = title, subtitle = subtitle, artworkUrl = artwork, explicit = explicit)
 
         scope.launch {
             try {
@@ -49,6 +50,7 @@ class SongLinksCoordinator(
                     title = resolved.title.ifBlank { title },
                     subtitle = resolved.artist.ifBlank { subtitle },
                     artworkUrl = resolved.thumbnailUrl.ifBlank { artwork },
+                    explicit = explicit,
                     shareUrl = resolved.shareUrl,
                     links = resolved.links,
                     isCollection = false,
@@ -59,6 +61,7 @@ class SongLinksCoordinator(
                     title = title,
                     subtitle = subtitle,
                     artworkUrl = artwork,
+                    explicit = explicit,
                     message = e.message ?: "Could not resolve cross-platform song link.",
                     fallbackShareUrl = fallbackUrl,
                 )
@@ -70,8 +73,9 @@ class SongLinksCoordinator(
         val title = detail.title.ifBlank { "Collection" }
         val subtitle = detail.subtitle
         val artwork = detail.artworkUrl
+        val explicit = detail.tracks.any { it.explicit }
 
-        mutableShareState.value = SongShareState.Loading(title = title, subtitle = subtitle, artworkUrl = artwork)
+        mutableShareState.value = SongShareState.Loading(title = title, subtitle = subtitle, artworkUrl = artwork, explicit = explicit)
 
         scope.launch {
             try {
@@ -80,6 +84,7 @@ class SongLinksCoordinator(
                     title = resolved.title.ifBlank { title },
                     subtitle = resolved.subtitle.ifBlank { subtitle },
                     artworkUrl = resolved.thumbnailUrl.ifBlank { artwork },
+                    explicit = explicit,
                     shareUrl = resolved.shareUrl,
                     links = resolved.links,
                     isCollection = true,
@@ -90,6 +95,7 @@ class SongLinksCoordinator(
                     title = title,
                     subtitle = subtitle,
                     artworkUrl = artwork,
+                    explicit = explicit,
                     message = e.message ?: "Could not resolve collection share link.",
                     fallbackShareUrl = fallbackUrl,
                 )

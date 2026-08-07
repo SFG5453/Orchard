@@ -15,6 +15,16 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.concurrent.thread
 
+data class MobileUpdateMetadata(
+    val version: String,
+    val codename: String = "",
+    val versionCode: Int = 0,
+    val apkUrl: String = "",
+    val sha256: String = "",
+    val publishedAt: String = "",
+    val releaseNotes: String = "",
+)
+
 class UpdateManager(private val context: Context) {
 
     private val baseUrl = "https://downloads.sfg545.dev/orchard"
@@ -30,14 +40,13 @@ class UpdateManager(private val context: Context) {
 
                 if (connection.responseCode == HttpURLConnection.HTTP_OK) {
                     val response = connection.inputStream.bufferedReader().use { it.readText() }
-                    val json = JSONObject(response)
-                    val latestVersion = json.getString("version")
+                    val metadata = parseUpdateMetadata(response)
 
                     val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
                     val currentVersion = packageInfo.versionName
 
-                    if (compareVersions(latestVersion, currentVersion) > 0) {
-                        downloadAndInstallUpdate(latestVersion)
+                    if (compareVersions(metadata.version, currentVersion) > 0) {
+                        downloadAndInstallUpdate(metadata.version)
                     }
                 }
             } catch (e: Exception) {
@@ -46,19 +55,34 @@ class UpdateManager(private val context: Context) {
         }
     }
 
-    private fun compareVersions(latest: String, current: String?): Int {
-        if (current == null) return 1
-        val lParts = latest.split(".").map { it.toIntOrNull() ?: 0 }
-        val cParts = current.split(".").map { it.toIntOrNull() ?: 0 }
-        
-        val length = maxOf(lParts.size, cParts.size)
-        for (i in 0 until length) {
-            val l = lParts.getOrElse(i) { 0 }
-            val c = cParts.getOrElse(i) { 0 }
-            if (l > c) return 1
-            if (l < c) return -1
+    companion object {
+        fun parseUpdateMetadata(jsonString: String): MobileUpdateMetadata {
+            val json = JSONObject(jsonString)
+            return MobileUpdateMetadata(
+                version = json.getString("version"),
+                codename = json.optString("codename", ""),
+                versionCode = json.optInt("versionCode", 0),
+                apkUrl = json.optString("apkUrl", ""),
+                sha256 = json.optString("sha256", ""),
+                publishedAt = json.optString("publishedAt", ""),
+                releaseNotes = json.optString("releaseNotes", ""),
+            )
         }
-        return 0
+
+        fun compareVersions(latest: String, current: String?): Int {
+            if (current == null) return 1
+            val lParts = latest.split(".").map { it.toIntOrNull() ?: 0 }
+            val cParts = current.split(".").map { it.toIntOrNull() ?: 0 }
+
+            val length = maxOf(lParts.size, cParts.size)
+            for (i in 0 until length) {
+                val l = lParts.getOrElse(i) { 0 }
+                val c = cParts.getOrElse(i) { 0 }
+                if (l > c) return 1
+                if (l < c) return -1
+            }
+            return 0
+        }
     }
 
     private fun downloadAndInstallUpdate(version: String) {

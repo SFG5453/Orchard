@@ -57,6 +57,7 @@ import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.ArtworkTile
+import dev.sfg.orchard.mobile.ui.components.ExplicitBadge
 
 /**
  * The queue as a mode of the player rather than a destination: the transport below stays put and
@@ -221,13 +222,20 @@ private fun QueueTrackRow(
             ArtworkTile(track.artworkUrl, "Artwork for ${track.title}", Modifier.size(44.dp), 8)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    track.title,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = if (isHistory) Color.White.copy(alpha = 0.55f) else Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        track.title,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = if (isHistory) Color.White.copy(alpha = 0.55f) else Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (track.explicit) {
+                        Spacer(Modifier.width(6.dp))
+                        ExplicitBadge()
+                    }
+                }
                 Text(
                     track.artist,
                     style = MaterialTheme.typography.bodyMedium,

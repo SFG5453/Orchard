@@ -66,8 +66,12 @@ class TransitionFilter : BaseAudioProcessor() {
     /** Overall linear gain, so the fade curve and the filter ride are applied in one pass. */
     @Volatile var gain: Double = 1.0
 
+    /** Whether dynamic volume normalization is enabled to level loud/soft tracks. */
+    @Volatile var volumeNormalizationEnabled: Boolean = false
+
     private var channelCount = 0
     private var sampleRate = 0
+    private var normRms = 0.15
 
     // Per-channel biquad state, two samples of history each.
     private var lowPassState = Array(0) { DoubleArray(4) }
@@ -81,13 +85,14 @@ class TransitionFilter : BaseAudioProcessor() {
 
     /** True when nothing is being altered, so the processor can be skipped entirely. */
     val transparent: Boolean
-        get() = lowPassHz >= OPEN && abs(bassGain - 1.0) < 1e-4 && abs(gain - 1.0) < 1e-4
+        get() = !volumeNormalizationEnabled && lowPassHz >= OPEN && abs(bassGain - 1.0) < 1e-4 && abs(gain - 1.0) < 1e-4
 
     /** Returns every parameter to its resting state. Named to avoid colliding with `reset()`. */
     fun clearAutomation() {
         lowPassHz = OPEN
         bassGain = 1.0
         gain = 1.0
+        normRms = 0.15
     }
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
@@ -116,7 +121,27 @@ class TransitionFilter : BaseAudioProcessor() {
         // that changed halfway through a block would put a discontinuity in the middle of it.
         val corner = lowPassHz
         val bass = bassGain
-        val level = gain
+        var level = gain
+
+        if (volumeNormalizationEnabled && channelCount > 0) {
+            val startPos = inputBuffer.position()
+            var sumSq = 0.0
+            val sampleCount = frames * channelCount
+            for (i in 0 until sampleCount) {
+                val sampleVal = inputBuffer.getShort(startPos + i * 2).toDouble() / 32768.0
+                sumSq += sampleVal * sampleVal
+            }
+            val rms = kotlin.math.sqrt(sumSq / sampleCount)
+            if (rms > 1e-4) {
+                val attack = 0.05
+                val release = 0.005
+                val coeff = if (rms > normRms) attack else release
+                normRms += coeff * (rms - normRms)
+            }
+            val targetRms = 0.15
+            val normFactor = if (normRms > 1e-4) (targetRms / normRms).coerceIn(0.3, 2.5) else 1.0
+            level *= normFactor
+        }
 
         if (corner < OPEN) updateLowPass(corner)
         if (abs(bass - 1.0) >= 1e-4) updateLowShelf(bass)

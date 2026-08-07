@@ -379,5 +379,39 @@ class CatalogParserTest {
         assertEquals("Usher", detail.tracks.first().artist)
         assertFalse(detail.tracks.first().artist == "2004")
     }
+
+    @Test
+    fun parsesExplicitTracksWithMusicExplicitBadge() {
+        val root = JSONObject(
+            """{
+              "contents": {
+                "musicShelfRenderer": {
+                  "contents": [
+                    {"musicResponsiveListItemRenderer": {
+                      "flexColumns": [
+                        {"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [
+                          {"text": "Explicit Song", "navigationEndpoint": {"watchEndpoint": {"videoId": "exp-1"}}}
+                        ]}}},
+                        {"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Artist • Album • 3:00"}]}}}
+                      ],
+                      "badges": [
+                        {"musicInlineBadgeRenderer": {
+                          "icon": {"iconType": "MUSIC_EXPLICIT_BADGE"},
+                          "accessibilityData": {"accessibilityData": {"label": "Explicit"}}
+                        }}
+                      ]
+                    }}
+                  ]
+                }
+              }
+            }"""
+        )
+
+        val results = CatalogParser.search(root)
+        assertEquals(1, results.tracks.size)
+        val track = results.tracks.first()
+        assertEquals("exp-1", track.id)
+        assertTrue(track.explicit)
+    }
 }
 

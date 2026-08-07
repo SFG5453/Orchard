@@ -270,13 +270,36 @@ function configureMprisInterfaces(dbus) {
 export function createSystemMediaService({
   emitCommand,
   loadDbus = () => require('@particle/dbus-next'),
+  loadSmtc = async () => (await import('node-smtc')).default,
   platform = process.platform
 }) {
   let bus = null;
   let player = null;
   let startPromise = null;
+  let smtc = null;
 
   async function start(initialState = {}) {
+    if (platform === 'win32') {
+      if (startPromise) return startPromise;
+      startPromise = (async () => {
+        const SMTCPlayer = await loadSmtc();
+        smtc = new SMTCPlayer();
+        smtc.on('play', () => emitCommand({ type: 'play' }));
+        smtc.on('pause', () => emitCommand({ type: 'pause' }));
+        smtc.on('next', () => emitCommand({ type: 'next' }));
+        smtc.on('previous', () => emitCommand({ type: 'previous' }));
+        smtc.on('positionchange', (value) => emitCommand({ type: 'seek', value: Number(value) / 1000 }));
+        smtc.on('shuffle', (value) => emitCommand({ type: 'set-shuffle', value: Boolean(value) }));
+        smtc.on('repeat', (value) => emitCommand({ type: 'set-repeat-mode', value: value === 'track' ? 'one' : value === 'list' ? 'queue' : 'off' }));
+        smtc.start();
+        return true;
+      })().catch((error) => {
+        console.warn(`Windows media integration disabled: ${error.message}`);
+        smtc = null;
+        return false;
+      });
+      return startPromise;
+    }
     if (platform !== 'linux') return false;
     if (startPromise) return startPromise;
 
@@ -307,10 +330,31 @@ export function createSystemMediaService({
   return {
     async publish(state) {
       if (!await start(state)) return false;
+      if (platform === 'win32') {
+        const track = state.track || {};
+        smtc?.setArtist(track.artist || track.artists?.[0] || '');
+        smtc?.setAlbumArtist(track.artist || track.artists?.[0] || '');
+        smtc?.setTitle(track.title || 'Orchard');
+        smtc?.setAlbumTitle(track.album || '');
+        smtc?.setPlaybackStatus(state.isPlaying ? 'playing' : track.id ? 'paused' : 'stopped');
+        smtc?.setShuffle(Boolean(state.shuffleEnabled));
+        smtc?.setAutoRepeat(state.repeatMode === 'one' ? 'track' : state.repeatMode === 'queue' ? 'list' : 'none');
+        const duration = Math.max(0, Number(state.durationSeconds) || 0) * 1000;
+        smtc?.setStartTime(0);
+        smtc?.setMinSeekTime(0);
+        smtc?.setPosition(Math.max(0, Number(state.currentTime) || 0) * 1000);
+        smtc?.setMaxSeekTime(duration);
+        smtc?.setEndTime(duration);
+        return Boolean(smtc);
+      }
       player?.update(state);
       return Boolean(player);
     },
     stop() {
+      if (smtc) {
+        try { smtc.stop(); } catch {}
+      }
+      smtc = null;
       try {
         if (bus) bus.unexport(OBJECT_PATH);
         bus?.disconnect();

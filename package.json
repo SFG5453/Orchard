@@ -1,6 +1,6 @@
 {
   "name": "orchard",
-  "version": "4.2.0",
+  "version": "4.3.0",
   "description": "A Quasar, Vue, Socket.IO, Electron YouTube Music client backed by InnerTube.",
   "homepage": "https://github.com/sfg5453/orchard",
   "repository": {
@@ -92,6 +92,7 @@
     }
   },
   "optionalDependencies": {
-    "@particle/dbus-next": "^0.11.4"
+    "@particle/dbus-next": "^0.11.4",
+    "node-smtc": "git+https://github.com/michei69/node-smtc.git#master"
   }
 }

@@ -71,6 +71,18 @@ class LibraryRepository(
         current.copy(savedPlaylists = toggle(current.savedPlaylists, playlist, Playlist::id))
     }
 
+    fun removePlaylist(playlistId: String) = update { current ->
+        current.copy(savedPlaylists = current.savedPlaylists.filterNot { it.id == playlistId.removePrefix("VL") })
+    }
+
+    /** Keeps a locally saved playlist in sync after an authenticated mutation. */
+    fun refreshPlaylist(playlist: Playlist) = update { current ->
+        val id = playlist.id.removePrefix("VL")
+        current.copy(savedPlaylists = current.savedPlaylists.map { saved ->
+            if (saved.id.removePrefix("VL") == id) playlist else saved
+        })
+    }
+
     fun recordPlayed(track: Track) = update { current ->
         val currentCount = current.playCounts[track.id] ?: 0
         val updatedCounts = current.playCounts + (track.id to currentCount + 1)

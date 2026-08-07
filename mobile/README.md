@@ -9,8 +9,9 @@ Smart Crossfade with real beat matching, on-device track analysis, synced lyrics
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android%2012%2B-informational)](#install)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Donate-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/sfg545)
 
-[Orchard for desktop](../) · [Report an issue](https://github.com/SFG5453/Orchard/issues)
+[Orchard for desktop](../) · [Report an issue](https://github.com/SFG5453/Orchard/issues) · [Support on Ko-fi](https://ko-fi.com/sfg545)
 
 </div>
 
@@ -118,6 +119,10 @@ android/app/src/main/cpp/
   analyzer/           Log-mel front end and tempo analysis
   transition/         Time-stretch and transition rendering
 ```
+
+## Support
+
+If you enjoy using Orchard Mobile and would like to support its development, consider [buying me a coffee on Ko-fi](https://ko-fi.com/sfg545).
 
 ## License
 

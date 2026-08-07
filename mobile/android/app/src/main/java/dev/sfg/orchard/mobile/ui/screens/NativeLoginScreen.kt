@@ -72,11 +72,14 @@ fun NativeLoginScreen(
     onSession: (cookie: String, visitorData: String, dataSyncId: String) -> Unit,
     onCancel: () -> Unit,
     onComplete: () -> Unit,
+    switchingAccount: Boolean = false,
 ) {
     var webView by remember { mutableStateOf<WebView?>(null) }
     var visitorData by remember { mutableStateOf("") }
     var dataSyncId by remember { mutableStateOf("") }
     var captureStarted by remember { mutableStateOf(false) }
+    var channelSwitcherLoaded by remember { mutableStateOf(false) }
+    var authorizationObserved by remember { mutableStateOf(false) }
     var pageError by remember { mutableStateOf("") }
 
     // Sign-in reaches SignedIn twice: once when the cookie is committed, and
@@ -88,7 +91,8 @@ fun NativeLoginScreen(
     LaunchedEffect(Unit) { onBegin() }
     LaunchedEffect(auth) {
         when (auth) {
-            is AuthState.SignedIn -> if (!dismissed) {
+            AuthState.Authorizing -> authorizationObserved = true
+            is AuthState.SignedIn -> if (authorizationObserved && !dismissed) {
                 dismissed = true
                 onComplete()
             }
@@ -108,7 +112,7 @@ fun NativeLoginScreen(
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Sign in to YouTube Music") },
+            title = { Text(if (switchingAccount) "Choose a YouTube account" else "Sign in to YouTube Music") },
             navigationIcon = {
                 IconButton(onClick = ::close) {
                     Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
@@ -141,12 +145,25 @@ fun NativeLoginScreen(
                                 super.onPageFinished(view, url)
                                 pageError = ""
                                 if (!url.isYouTubeUrl()) return
+                                if (switchingAccount && url.isChannelSwitcherUrl()) {
+                                    channelSwitcherLoaded = true
+                                    return
+                                }
+                                // The chooser itself is already authenticated. Wait for its selected
+                                // destination so its account delegation id, rather than the previous
+                                // channel's, is captured.
+                                if (switchingAccount && !channelSwitcherLoaded) return
                                 view.evaluateJavascript(YOUTUBE_CONFIG_SCRIPT) { rawValue ->
                                     decodeYouTubeConfig(rawValue)?.let { config ->
                                         config.optString("visitorData").takeIf(String::isNotBlank)?.let {
                                             visitorData = it
                                         }
-                                        config.optString("dataSyncId").takeIf(String::isNotBlank)?.let {
+                                        // Brand channels retain the same Google cookies as their
+                                        // owner. DELEGATED_SESSION_ID is the distinct channel
+                                        // identity that InnerTube needs for onBehalfOfUser.
+                                        config.optString("delegatedSessionId")
+                                            .ifBlank { config.optString("dataSyncId") }
+                                            .takeIf(String::isNotBlank)?.let {
                                             dataSyncId = it
                                         }
                                     }
@@ -170,21 +187,25 @@ fun NativeLoginScreen(
                                 }
                             }
                         }
-                        stopLoading()
-                        clearHistory()
-                        clearFormData()
-                        clearCache(true)
-                        WebStorage.getInstance().deleteAllData()
-                        WebViewDatabase.getInstance(context.applicationContext).apply {
+                        if (switchingAccount) {
+                            loadUrl(CHANNEL_SWITCHER_URL)
+                        } else {
+                            stopLoading()
+                            clearHistory()
                             clearFormData()
-                            clearHttpAuthUsernamePassword()
-                            clearUsernamePassword()
-                        }
-                        cookieManager.removeAllCookies {
-                            cookieManager.flush()
-                            cookieManager.setAcceptCookie(true)
-                            cookieManager.setAcceptThirdPartyCookies(loginWebView, true)
-                            loadUrl(LOGIN_URL)
+                            clearCache(true)
+                            WebStorage.getInstance().deleteAllData()
+                            WebViewDatabase.getInstance(context.applicationContext).apply {
+                                clearFormData()
+                                clearHttpAuthUsernamePassword()
+                                clearUsernamePassword()
+                            }
+                            cookieManager.removeAllCookies {
+                                cookieManager.flush()
+                                cookieManager.setAcceptCookie(true)
+                                cookieManager.setAcceptThirdPartyCookies(loginWebView, true)
+                                loadUrl(LOGIN_URL)
+                            }
                         }
                     }
                 },
@@ -235,6 +256,9 @@ private fun String?.isYouTubeUrl(): Boolean {
     return host == "youtube.com" || host.endsWith(".youtube.com")
 }
 
+private fun String?.isChannelSwitcherUrl(): Boolean =
+    this?.let(Uri::parse)?.path?.trimEnd('/') == "/channel_switcher"
+
 private fun mergedYouTubeCookie(cookieManager: CookieManager, currentUrl: String?): String {
     val values = linkedMapOf<String, String>()
     val origins = linkedSetOf<String>()
@@ -260,15 +284,30 @@ private fun decodeYouTubeConfig(rawValue: String?): JSONObject? = runCatching {
 
 private const val LOGIN_URL =
     "https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fmusic.youtube.com"
+private const val CHANNEL_SWITCHER_URL = "https://www.youtube.com/channel_switcher"
 
 private const val YOUTUBE_CONFIG_SCRIPT = """
     (function() {
       try {
         var config = window.ytcfg;
         var get = config && typeof config.get === 'function' ? function(key) { return config.get(key); } : function() { return ''; };
-        return JSON.stringify({ visitorData: get('VISITOR_DATA') || '', dataSyncId: get('DATASYNC_ID') || '' });
+        var legacy = window.yt && window.yt.config_ ? window.yt.config_ : {};
+        var findScriptValue = function(key) {
+          for (var i = 0; i < document.scripts.length; i++) {
+            var text = document.scripts[i].textContent || '';
+            var match = text.match(new RegExp('"' + key + '":"([^"]+)"'));
+            if (match) return match[1];
+          }
+          return '';
+        };
+        var delegatedSessionId = get('DELEGATED_SESSION_ID') || legacy.DELEGATED_SESSION_ID || findScriptValue('DELEGATED_SESSION_ID') || '';
+        return JSON.stringify({
+          visitorData: get('VISITOR_DATA') || legacy.VISITOR_DATA || findScriptValue('VISITOR_DATA') || '',
+          delegatedSessionId: delegatedSessionId,
+          dataSyncId: get('DATASYNC_ID') || legacy.DATASYNC_ID || findScriptValue('DATASYNC_ID') || ''
+        });
       } catch (error) {
-        return JSON.stringify({ visitorData: '', dataSyncId: '' });
+        return JSON.stringify({ visitorData: '', delegatedSessionId: '', dataSyncId: '' });
       }
     })();
 """

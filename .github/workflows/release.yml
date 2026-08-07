@@ -360,15 +360,14 @@ jobs:
           sha256="$(sha256sum "../../release-assets/$apk_name" | awk '{print $1}')"
           published_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           
-          cat <<EOF > ../../release-assets/latest-android.json
-          {
-            "version": "$version",
-            "versionCode": $version_code,
-            "apkUrl": "${ORCHARD_UPDATE_URL}${apk_name}",
-            "sha256": "$sha256",
-            "publishedAt": "$published_at"
-          }
-          EOF
+          node "../../scripts/generate-android-update-metadata.mjs" \
+            "$version" \
+            "$version_code" \
+            "${ORCHARD_UPDATE_URL}${apk_name}" \
+            "$sha256" \
+            "$published_at" \
+            "../release-notes.md" \
+            > "../../release-assets/latest-android.json"
           
           cat ../../release-assets/latest-android.json
 
