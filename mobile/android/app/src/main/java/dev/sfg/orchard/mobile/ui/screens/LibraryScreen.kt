@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -247,7 +248,7 @@ private fun LazyListScope.songs(
         return
     }
     item { OrchardSectionHeader(title) }
-    items(values, key = Track::id) { track ->
+    itemsIndexed(values, key = { index, track -> "${track.id}_$index" }) { _, track ->
         TrackRow(
             track = track,
             onPlay = { onPlay(track) },
@@ -334,7 +335,7 @@ private fun LazyListScope.tracks(
         return
     }
     item { OrchardSectionHeader(title) }
-    items(values, key = Track::id) { track ->
+    itemsIndexed(values, key = { index, track -> "${track.id}_$index" }) { _, track ->
         val isDownloaded = downloadedTrackIds.contains(track.id)
         val isDownloading = downloadingTrackIds.contains(track.id)
         TrackRow(

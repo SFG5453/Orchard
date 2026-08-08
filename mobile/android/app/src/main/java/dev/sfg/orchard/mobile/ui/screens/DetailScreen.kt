@@ -257,7 +257,9 @@ private fun ArtistDetailContent(
                     } else null,
                 )
             }
-            itemsIndexed(displayedTracks, key = { _, track -> track.id }) { index, track ->
+            // A collection may legitimately list the same track twice, so the id alone is not
+            // a unique key and LazyColumn throws the moment the duplicate scrolls in.
+            itemsIndexed(displayedTracks, key = { index, track -> "${track.id}_$index" }) { index, track ->
                 val trackIndex = detail.tracks.indexOf(track).coerceAtLeast(index)
                 val isDownloaded = downloadedTrackIds.contains(track.id)
                 val isDownloading = downloadingTrackIds.contains(track.id)
@@ -304,7 +306,7 @@ private fun ArtistDetailContent(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        items(section.items, key = { it.stableId }) { item ->
+                        itemsIndexed(section.items, key = { index, it -> "${it.stableId}_$index" }) { _, item ->
                             CatalogCard(item, onClick = { onOpen(item.stableId) })
                         }
                     }
@@ -331,7 +333,7 @@ private fun ArtistDetailContent(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    items(detail.related, key = { it.stableId }) { item ->
+                    itemsIndexed(detail.related, key = { index, it -> "${it.stableId}_$index" }) { _, item ->
                         CatalogCard(item, onClick = { onOpen(item.stableId) })
                     }
                 }
@@ -406,7 +408,7 @@ private fun CollectionDetailContent(
                 )
             }
             if (detail.tracks.isNotEmpty()) {
-                itemsIndexed(detail.tracks, key = { _, track -> track.id }) { index, track ->
+                itemsIndexed(detail.tracks, key = { index, track -> "${track.id}_$index" }) { index, track ->
                     val isAlbum = detail.kind == CatalogKind.ALBUM
                     val isDownloaded = downloadedTrackIds.contains(track.id)
                     val isDownloading = downloadingTrackIds.contains(track.id)
@@ -485,7 +487,7 @@ private fun CollectionDetailContent(
                         contentPadding = PaddingValues(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        items(detail.related, key = { it.stableId }) { item ->
+                        itemsIndexed(detail.related, key = { index, it -> "${it.stableId}_$index" }) { _, item ->
                             CatalogCard(item, { onOpen(item.stableId) })
                         }
                     }
