@@ -57,6 +57,21 @@ class InnerTubeClient(
         return post("browse", body)
     }
 
+    /**
+     * The radio YouTube Music would roll into after [videoId] finishes.
+     *
+     * `RDAMVM<videoId>` is the mix the web player seeds from a single song, so the result reads as
+     * a continuation of what was just playing rather than a generic recommendation shelf. Audio
+     * only, because Autoplay feeds a music queue and the video cuts run long against the album ones.
+     */
+    fun upNext(videoId: String): JSONObject = post(
+        "next",
+        JSONObject()
+            .put("videoId", videoId)
+            .put("playlistId", "RDAMVM$videoId")
+            .put("isAudioOnly", true),
+    )
+
     fun browseContinuation(token: String): JSONObject =
         post("browse", JSONObject().put("continuation", token))
 

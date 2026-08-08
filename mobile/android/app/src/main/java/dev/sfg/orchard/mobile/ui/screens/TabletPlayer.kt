@@ -101,6 +101,10 @@ fun TabletPlayerBody(
     onOpenCollection: ((String) -> Unit)?,
     onLyricsPanel: () -> Unit,
     onQueuePanel: () -> Unit,
+    autoplayEnabled: Boolean = true,
+    autoplayLoading: Boolean = false,
+    autoplayError: String = "",
+    onAutoplayEnabled: ((Boolean) -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
         PlayerTopHandle(onDismiss = onBack, modifier = dragHandle)
@@ -192,6 +196,10 @@ fun TabletPlayerBody(
                                 onMove = onMoveQueueItem,
                                 onClearUpcoming = onClearUpcoming,
                                 onShuffleUpcoming = onShuffle,
+                                autoplayEnabled = autoplayEnabled,
+                                autoplayLoading = autoplayLoading,
+                                autoplayError = autoplayError,
+                                onAutoplayEnabled = onAutoplayEnabled,
                             )
                         } else {
                             val palette = rememberArtworkPalette(track.artworkUrl)

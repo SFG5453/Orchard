@@ -24,6 +24,8 @@ import android.util.Log
 import dev.sfg.orchard.mobile.artwork.TrackArtwork
 import dev.sfg.orchard.mobile.settings.SettingsRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -45,6 +47,7 @@ class SpotifyCanvasRepository(
     private val harvester = SpotifyTokenHarvester(context)
     private var cachedAccessToken: String? = null
     private var accessTokenExpiresAt: Long = 0L
+    private val harvestMutex = Mutex()
 
     private var cachedClientToken: String? = null
     private var clientTokenExpiresAt: Long = 0L
@@ -95,17 +98,19 @@ class SpotifyCanvasRepository(
         )
     }
 
-    private suspend fun getAccessToken(spdc: String): String? {
-        if (System.currentTimeMillis() < accessTokenExpiresAt && !cachedAccessToken.isNullOrBlank()) {
-            return cachedAccessToken
+    private suspend fun getAccessToken(spdc: String): String? = harvestMutex.withLock {
+        if (System.currentTimeMillis() + TOKEN_REFRESH_MARGIN_MS < accessTokenExpiresAt &&
+            !cachedAccessToken.isNullOrBlank()
+        ) {
+            return@withLock cachedAccessToken
         }
 
-        val token = harvester.harvestAccessToken(spdc)
-        if (!token.isNullOrBlank()) {
-            cachedAccessToken = token
-            accessTokenExpiresAt = System.currentTimeMillis() + 3500_000L
+        val harvested = harvester.harvestAccessToken(spdc)
+        if (harvested != null) {
+            cachedAccessToken = harvested.token
+            accessTokenExpiresAt = harvested.expiresAt
         }
-        return token
+        harvested?.token
     }
 
     private fun getClientToken(): String? {
@@ -132,11 +137,17 @@ class SpotifyCanvasRepository(
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json")
                 .header("User-Agent", SpotifyTokenHarvester.BROWSER_USER_AGENT)
-                .post(jsonBody.toRequestBody("application/json".toMediaType()))
+                // Deliberately the ByteArray overload: the String overload rewrites the
+                // Content-Type to "application/json; charset=utf-8", which clienttoken
+                // rejects with a bare 400.
+                .post(jsonBody.toByteArray(Charsets.UTF_8).toRequestBody("application/json".toMediaType()))
                 .build()
 
             http.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
+                if (!response.isSuccessful) {
+                    Log.w(TAG, "Spotify client token rejected: ${response.code} ${response.body.string().take(300)}")
+                    return null
+                }
                 val data = JSONObject(response.body.string())
                 val token = data.optJSONObject("granted_token")?.optString("token")
                 if (!token.isNullOrBlank()) {
@@ -145,7 +156,7 @@ class SpotifyCanvasRepository(
                     token
                 } else null
             }
-        }.getOrNull()
+        }.onFailure { Log.w(TAG, "Spotify client token failed: ${it.message}") }.getOrNull()
     }
 
     private fun searchSpotifyTrackId(accessToken: String, title: String, artist: String, clientToken: String): String? {
@@ -162,7 +173,10 @@ class SpotifyCanvasRepository(
                 .build()
 
             http.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
+                if (!response.isSuccessful) {
+                    Log.w(TAG, "Spotify search rejected: ${response.code} ${response.body.string().take(200)}")
+                    return null
+                }
                 val data = JSONObject(response.body.string())
                 val items = data.optJSONObject("tracks")?.optJSONArray("items") ?: return null
                 if (items.length() == 0) return null
@@ -177,7 +191,7 @@ class SpotifyCanvasRepository(
                 }
                 items.optJSONObject(0)?.optString("id")
             }
-        }.getOrNull()
+        }.onFailure { Log.w(TAG, "Spotify search failed: ${it.message}") }.getOrNull()
     }
 
     private fun searchViaPathfinder(searchTerm: String, accessToken: String, clientToken: String): String? {
@@ -215,7 +229,10 @@ class SpotifyCanvasRepository(
                 .build()
 
             http.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
+                if (!response.isSuccessful) {
+                    Log.w(TAG, "Spotify pathfinder rejected: ${response.code} ${response.body.string().take(200)}")
+                    return null
+                }
                 val root = JSONObject(response.body.string())
                 val items = root.optJSONObject("data")
                     ?.optJSONObject("searchV2")
@@ -229,7 +246,7 @@ class SpotifyCanvasRepository(
                 val uri = firstItem.optString("uri")
                 if (uri.isNotBlank()) uri.split(":").lastOrNull() else null
             }
-        }.getOrNull()
+        }.onFailure { Log.w(TAG, "Spotify pathfinder failed: ${it.message}") }.getOrNull()
     }
 
     private fun fetchSpotifyCanvasUrl(trackId: String, accessToken: String, clientToken: String): String? {
@@ -250,18 +267,25 @@ class SpotifyCanvasRepository(
                 .build()
 
             http.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
+                if (!response.isSuccessful) {
+                    Log.w(TAG, "Spotify canvaz rejected: ${response.code} ${response.body.string().take(200)}")
+                    return null
+                }
                 val bytes = response.body.bytes()
                 val text = String(bytes, Charsets.ISO_8859_1)
-                CANVAS_URL_REGEX.find(text)?.value
+                CANVAS_URL_REGEX.find(text)?.value.also {
+                    // An empty body is a legitimate answer: most tracks have no canvas.
+                    if (it == null) Log.i(TAG, "Spotify canvas: no video for $trackId (${bytes.size} byte response)")
+                }
             }
-        }.getOrNull()
+        }.onFailure { Log.w(TAG, "Spotify canvas fetch failed: ${it.message}") }.getOrNull()
     }
 
     companion object {
         const val CANVAS_USER_AGENT = "Spotify/9.0.34.593 iOS/18.4 (iPhone15,3)"
         private val CANVAS_URL_REGEX = Regex("https://[^\"'\\s\\x00-\\x1F]+\\.cnvs\\.mp4")
         private const val TAG = "SpotifyCanvasRepository"
+        private const val TOKEN_REFRESH_MARGIN_MS = 60_000L
 
         fun extractSpdc(cookieInput: String): String {
             val str = cookieInput.trim()

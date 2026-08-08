@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -189,7 +190,7 @@ private fun LazyListScope.results(
 ) {
     if (results.tracks.isNotEmpty()) {
         item { OrchardSectionHeader("Songs") }
-        items(results.tracks, key = { "track:${it.id}" }) { track ->
+        itemsIndexed(results.tracks, key = { index, it -> "track:${it.id}_$index" }) { _, track ->
             val isDownloaded = downloadedTrackIds.contains(track.id)
             val isDownloading = downloadingTrackIds.contains(track.id)
             TrackRow(
@@ -218,7 +219,7 @@ private fun LazyListScope.results(
         item { OrchardSectionHeader(title) }
         item {
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                items(values, key = { "$title:${it.stableId}" }) { item ->
+                itemsIndexed(values, key = { index, it -> "$title:${it.stableId}_$index" }) { _, item ->
                     CatalogCard(item, { onOpen(item.stableId) })
                 }
             }

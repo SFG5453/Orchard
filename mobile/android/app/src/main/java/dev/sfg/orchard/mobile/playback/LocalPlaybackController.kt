@@ -139,7 +139,9 @@ class LocalPlaybackController(
         val current = player.currentMediaItemIndex
         val total = player.mediaItemCount
         val from = (current + 1).coerceAtLeast(0)
-        if (from >= total) return@withController
+        // from == total means nothing follows the current track. That is not a no-op case: Autoplay
+        // refills exactly then, and the removal below is empty while the insert still appends.
+        if (from > total) return@withController
         val newMediaItems = tracks.map(MediaItemMapper::toMediaItem)
         player.removeMediaItems(from, total)
         player.addMediaItems(from, newMediaItems)

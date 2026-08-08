@@ -58,6 +58,11 @@ class CatalogRepository(private val client: InnerTubeClient) {
         detail.copy(tracks = tracks)
     }
 
+    /** Radio continuation for a seed track, used to keep the queue from running dry. */
+    suspend fun upNext(videoId: String): List<Track> = withContext(Dispatchers.IO) {
+        if (videoId.isBlank()) emptyList() else CatalogParser.upNext(client.upNext(videoId))
+    }
+
     suspend fun likedSongs(): BrowseDetail = browse("FEmusic_liked_videos")
 
     suspend fun sectionItems(browseId: String, params: String = ""): List<dev.sfg.orchard.mobile.model.CatalogItem> = withContext(Dispatchers.IO) {

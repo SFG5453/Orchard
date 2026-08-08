@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AllInclusive
 import androidx.compose.material.icons.rounded.ClearAll
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -42,6 +43,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -73,6 +76,10 @@ fun PlayerQueuePanel(
     onMove: (Int, Int) -> Unit,
     onClearUpcoming: () -> Unit,
     onShuffleUpcoming: (() -> Unit)? = null,
+    autoplayEnabled: Boolean = true,
+    autoplayLoading: Boolean = false,
+    autoplayError: String = "",
+    onAutoplayEnabled: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val history = playback.history.takeLast(4)
@@ -83,8 +90,17 @@ fun PlayerQueuePanel(
         initialFirstVisibleItemIndex = remember { if (history.isEmpty()) 0 else history.size + 1 },
     )
     if (playback.queue.isEmpty()) {
-        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            QueueNotice("Queue is empty", "Play an album, playlist, or song to get started.")
+        Box(modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                QueueNotice("Queue is empty", "Play an album, playlist, or song to get started.")
+            }
+            AutoplayFooter(
+                enabled = autoplayEnabled,
+                loading = autoplayLoading,
+                error = autoplayError,
+                onEnabled = onAutoplayEnabled,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
         }
         return
     }
@@ -133,6 +149,73 @@ fun PlayerQueuePanel(
                 onPlay = { onPlayIndex(index) }, onRemove = onRemove, onMove = onMove,
             )
         }
+        item {
+            AutoplayFooter(
+                enabled = autoplayEnabled,
+                loading = autoplayLoading,
+                error = autoplayError,
+                onEnabled = onAutoplayEnabled,
+            )
+        }
+    }
+}
+
+/**
+ * Mirrors desktop's queue-panel footer: the same switch as Settings, plus whatever Autoplay is
+ * currently doing. The status line is the only place a listener finds out that recommendations are
+ * loading or that the radio ran out, so it stays visible even when the queue is empty.
+ */
+@Composable
+private fun AutoplayFooter(
+    enabled: Boolean,
+    loading: Boolean,
+    error: String,
+    onEnabled: ((Boolean) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Rounded.AllInclusive,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.7f),
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Autoplay",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = Color.White,
+            )
+            Text(
+                when {
+                    !enabled -> "Off"
+                    loading -> "Finding more music…"
+                    error.isNotBlank() -> error
+                    else -> "Keep the music going"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.6f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Switch(
+            checked = enabled,
+            onCheckedChange = onEnabled,
+            enabled = onEnabled != null,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = LocalAccent.current,
+                uncheckedThumbColor = Color.White.copy(alpha = 0.7f),
+                uncheckedTrackColor = Color.White.copy(alpha = 0.15f),
+            ),
+        )
     }
 }
 

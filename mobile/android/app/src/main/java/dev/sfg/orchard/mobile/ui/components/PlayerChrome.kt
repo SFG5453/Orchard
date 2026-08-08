@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -131,6 +132,10 @@ fun OrchardBottomBar(currentRoute: String?, onSelect: (String) -> Unit) {
         NavigationBar(
             containerColor = Color.Transparent,
             tonalElevation = 0.dp,
+            // The Scaffold already insets the whole chrome column above the system navigation bar.
+            // Letting the bar apply that inset a second time would eat into its fixed 64dp height,
+            // which squashed the icons and labels under 3-button navigation.
+            windowInsets = WindowInsets(0),
             modifier = Modifier.height(64.dp)
         ) {
                 destinations.forEach { destination ->

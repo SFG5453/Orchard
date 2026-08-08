@@ -83,6 +83,8 @@ data class OrchardSettings(
     val spotifyCanvasEnabled: Boolean = true,
     /** Whether to even out volume levels across played tracks. */
     val volumeNormalizationEnabled: Boolean = false,
+    /** Keep playing related music once the queue runs out, matching desktop's default of on. */
+    val autoplayEnabled: Boolean = true,
 ) {
     /** Clamped, because a persisted value from an older build must not size the cache absurdly. */
     val cacheSizeBytes: Long

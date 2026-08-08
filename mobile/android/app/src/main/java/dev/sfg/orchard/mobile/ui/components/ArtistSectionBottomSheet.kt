@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -129,7 +130,7 @@ fun ArtistSectionBottomSheet(
                 contentPadding = PaddingValues(bottom = 32.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                items(displayItems, key = { it.stableId }) { item ->
+                itemsIndexed(displayItems, key = { index, it -> "${it.stableId}_$index" }) { _, item ->
                     CatalogCard(
                         item = item,
                         onClick = {

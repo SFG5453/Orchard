@@ -74,6 +74,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val shareState by viewModel.shareState.collectAsStateWithLifecycle()
     val warning by viewModel.warning.collectAsStateWithLifecycle()
+    val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val transitionMarker by viewModel.transitionMarker.collectAsStateWithLifecycle()
     val fullPlayer = route == Routes.NOW_PLAYING
     val chromeHidden = fullPlayer || route == Routes.DEVICES || route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME
@@ -124,6 +125,12 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .zIndex(100f),
+            )
+
+            dev.sfg.orchard.mobile.ui.components.UpdateDialog(
+                state = updateState,
+                onInstall = viewModel::installUpdate,
+                onDismiss = viewModel::dismissUpdate,
             )
         }
     }
@@ -262,6 +269,7 @@ private fun OrchardNavigation(
                 discordAuth = discordAuth,
                 discordConnection = discordConnection,
                 onSettings = viewModel::updateSettings,
+                onAutoplayEnabled = viewModel::setAutoplayEnabled,
                 onSignIn = { nav.navigate(Routes.LOGIN) },
                 onSwitchAccount = { nav.navigate(Routes.ACCOUNT_SWITCH) },
                 onSignOut = viewModel::signOut,
@@ -369,7 +377,13 @@ private fun OrchardNavigation(
             val liked = playback.currentTrack?.let { track -> library.likedTracks.any { it.id == track.id } } == true
             val transition by viewModel.transitionMarker.collectAsStateWithLifecycle()
             val activeBitrate by viewModel.activeBitrate.collectAsStateWithLifecycle()
+            val autoplayLoading by viewModel.autoplayLoading.collectAsStateWithLifecycle()
+            val autoplayError by viewModel.autoplayError.collectAsStateWithLifecycle()
             NowPlayingScreen(
+                autoplayEnabled = settings.autoplayEnabled,
+                autoplayLoading = autoplayLoading,
+                autoplayError = autoplayError,
+                onAutoplayEnabled = viewModel::setAutoplayEnabled,
                 playback = playback,
                 transition = transition,
                 targets = targets,

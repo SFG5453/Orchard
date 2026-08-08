@@ -46,6 +46,11 @@ data class Track(
      * user upload. Blank when the payload omitted it.
      */
     val musicVideoType: String = "",
+    /**
+     * True for a track Autoplay appended rather than one the listener queued. Turning Autoplay off
+     * strips exactly these, so the queue returns to what was actually chosen.
+     */
+    val autoplayGenerated: Boolean = false,
 ) {
     /** True for album audio, which is the version a listener expects from an album or search. */
     val isAudioOnly: Boolean

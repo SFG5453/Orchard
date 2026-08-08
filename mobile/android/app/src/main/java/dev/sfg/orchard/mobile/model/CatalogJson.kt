@@ -36,6 +36,7 @@ object CatalogJson {
         .put("animatedArtworkVerticalUrl", value.animatedArtworkVerticalUrl)
         .put("durationMs", value.durationMs)
         .put("explicit", value.explicit)
+        .put("autoplayGenerated", value.autoplayGenerated)
 
     fun track(value: JSONObject): Track = Track(
         id = value.cleanString("id"),
@@ -49,6 +50,7 @@ object CatalogJson {
         animatedArtworkVerticalUrl = value.cleanString("animatedArtworkVerticalUrl"),
         durationMs = value.optLong("durationMs"),
         explicit = value.optBoolean("explicit"),
+        autoplayGenerated = value.optBoolean("autoplayGenerated"),
     )
 
     fun tracks(values: List<Track>): JSONArray = JSONArray().also { output ->
