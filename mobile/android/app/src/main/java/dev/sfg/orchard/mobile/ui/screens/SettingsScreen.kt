@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.AllInclusive
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.GraphicEq
@@ -92,6 +93,11 @@ fun SettingsScreen(
     onConnectSpotify: () -> Unit = {},
     onDevices: () -> Unit,
     onWelcome: () -> Unit = {},
+    /**
+     * Separate from [onSettings] because switching Autoplay off also strips the tracks it added,
+     * which only the view model can do.
+     */
+    onAutoplayEnabled: ((Boolean) -> Unit)? = null,
 ) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
@@ -125,6 +131,16 @@ fun SettingsScreen(
                 subtitle = "Even out volume differences between songs",
                 checked = settings.volumeNormalizationEnabled,
                 onChecked = { onSettings(settings.copy(volumeNormalizationEnabled = it)) },
+            )
+            PanelDivider()
+            ToggleRow(
+                icon = Icons.Rounded.AllInclusive,
+                title = "Autoplay",
+                subtitle = "Keep playing related music when the queue runs out",
+                checked = settings.autoplayEnabled,
+                onChecked = { enabled ->
+                    onAutoplayEnabled?.invoke(enabled) ?: onSettings(settings.copy(autoplayEnabled = enabled))
+                },
             )
             PanelDivider()
             CrossfadeRow(settings, onSettings)

@@ -269,6 +269,7 @@ private fun OrchardNavigation(
                 discordAuth = discordAuth,
                 discordConnection = discordConnection,
                 onSettings = viewModel::updateSettings,
+                onAutoplayEnabled = viewModel::setAutoplayEnabled,
                 onSignIn = { nav.navigate(Routes.LOGIN) },
                 onSwitchAccount = { nav.navigate(Routes.ACCOUNT_SWITCH) },
                 onSignOut = viewModel::signOut,
@@ -376,7 +377,13 @@ private fun OrchardNavigation(
             val liked = playback.currentTrack?.let { track -> library.likedTracks.any { it.id == track.id } } == true
             val transition by viewModel.transitionMarker.collectAsStateWithLifecycle()
             val activeBitrate by viewModel.activeBitrate.collectAsStateWithLifecycle()
+            val autoplayLoading by viewModel.autoplayLoading.collectAsStateWithLifecycle()
+            val autoplayError by viewModel.autoplayError.collectAsStateWithLifecycle()
             NowPlayingScreen(
+                autoplayEnabled = settings.autoplayEnabled,
+                autoplayLoading = autoplayLoading,
+                autoplayError = autoplayError,
+                onAutoplayEnabled = viewModel::setAutoplayEnabled,
                 playback = playback,
                 transition = transition,
                 targets = targets,

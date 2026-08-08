@@ -63,6 +63,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 spotifySpdc = values[SPOTIFY_SPDC] ?: "",
                 spotifyCanvasEnabled = values[SPOTIFY_CANVAS_ENABLED] ?: true,
                 volumeNormalizationEnabled = values[VOLUME_NORMALIZATION_ENABLED] ?: false,
+                autoplayEnabled = values[AUTOPLAY_ENABLED] ?: true,
             )
         }
         .stateIn(scope, SharingStarted.Eagerly, OrchardSettings())
@@ -90,6 +91,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[SPOTIFY_SPDC] = value.spotifySpdc
                 it[SPOTIFY_CANVAS_ENABLED] = value.spotifyCanvasEnabled
                 it[VOLUME_NORMALIZATION_ENABLED] = value.volumeNormalizationEnabled
+                it[AUTOPLAY_ENABLED] = value.autoplayEnabled
             }
         }
     }
@@ -134,6 +136,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val SPOTIFY_SPDC = stringPreferencesKey("spotify_spdc")
         val SPOTIFY_CANVAS_ENABLED = booleanPreferencesKey("spotify_canvas_enabled")
         val VOLUME_NORMALIZATION_ENABLED = booleanPreferencesKey("volume_normalization_enabled")
+        val AUTOPLAY_ENABLED = booleanPreferencesKey("autoplay_enabled")
         val SEARCH_HISTORY = stringPreferencesKey("search_history")
     }
 }

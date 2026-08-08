@@ -59,6 +59,35 @@ object CatalogParser {
         return if (fallback.isEmpty()) emptyList() else listOf(CatalogSection("listen-now", "Listen now", fallback))
     }
 
+    /**
+     * Radio rows out of a `next` response. These ride a panel renderer of their own rather than the
+     * shelf renderers everything else uses, and the byline is one string ("SZA • SOS • 3:02")
+     * instead of separate columns, so it is split back apart for [track] to read.
+     */
+    fun upNext(root: JSONObject): List<Track> =
+        JsonTraversal.renderers(root, "playlistPanelVideoRenderer").mapNotNull { renderer ->
+            val endpoint = JsonTraversal.navigation(renderer)
+            val videoId = renderer.optString("videoId").ifBlank { JsonTraversal.videoId(endpoint) }
+            val title = JsonTraversal.text(renderer.optJSONObject("title"))
+            if (videoId.isBlank() || title.isBlank()) return@mapNotNull null
+            val byline = JsonTraversal.text(renderer.optJSONObject("longBylineText"))
+                .ifBlank { JsonTraversal.text(renderer.optJSONObject("shortBylineText")) }
+            val length = JsonTraversal.text(renderer.optJSONObject("lengthText"))
+            val texts = buildList {
+                add(title)
+                byline.split(" • ", "•").map(String::trim).filterTo(this, String::isNotBlank)
+                if (length.isNotBlank()) add(length)
+            }
+            track(
+                videoId = videoId,
+                title = title,
+                texts = texts,
+                art = JsonTraversal.largestThumbnail(renderer),
+                renderer = renderer,
+                musicVideoType = JsonTraversal.musicVideoType(endpoint),
+            )
+        }
+
     fun sectionItems(root: JSONObject, defaultArtist: String = ""): List<CatalogItem> {
         return allItems(root, defaultArtist).distinctBy(CatalogItem::stableId)
     }

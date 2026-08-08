@@ -111,6 +111,10 @@ fun NowPlayingScreen(
     onAddToPlaylist: ((Track) -> Unit)? = null,
     onShare: (() -> Unit)? = null,
     onOpenCollection: ((String) -> Unit)? = null,
+    autoplayEnabled: Boolean = true,
+    autoplayLoading: Boolean = false,
+    autoplayError: String = "",
+    onAutoplayEnabled: ((Boolean) -> Unit)? = null,
 ) {
     // Lyrics and the queue are modes of the player, not destinations, so their state lives here.
     // Only one can hold the panel at a time.
@@ -241,6 +245,10 @@ fun NowPlayingScreen(
                 onOpenCollection = onOpenCollection,
                 onLyricsPanel = { panel = if (lyricsOpen) PlayerPanel.NONE else PlayerPanel.LYRICS },
                 onQueuePanel = onQueue,
+                autoplayEnabled = autoplayEnabled,
+                autoplayLoading = autoplayLoading,
+                autoplayError = autoplayError,
+                onAutoplayEnabled = onAutoplayEnabled,
             )
             return@Box
         }
@@ -298,6 +306,10 @@ fun NowPlayingScreen(
                             onMove = onMoveQueueItem,
                             onClearUpcoming = onClearUpcoming,
                             onShuffleUpcoming = onShuffle,
+                            autoplayEnabled = autoplayEnabled,
+                            autoplayLoading = autoplayLoading,
+                            autoplayError = autoplayError,
+                            onAutoplayEnabled = onAutoplayEnabled,
                         )
                         return@Box
                     }

@@ -175,6 +175,30 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         if (id.isNotBlank()) removeTrackFromPlaylist(id, track)
     }
 
+    /**
+     * Autoplay: once the queue is nearly out, ask YouTube Music what would come next after the last
+     * queued track and append it. Only the local player is refilled, because a Connect device owns
+     * its own queue and would fight us for it.
+     */
+    private val mutableAutoplayLoading = MutableStateFlow(false)
+    val autoplayLoading: StateFlow<Boolean> = mutableAutoplayLoading.asStateFlow()
+    private val mutableAutoplayError = MutableStateFlow("")
+    val autoplayError: StateFlow<String> = mutableAutoplayError.asStateFlow()
+
+    /** Seed of the request in flight, so a burst of queue updates cannot fan out into duplicates. */
+    private var autoplaySeedInFlight = ""
+
+    /** Seed that already came back with nothing usable; retrying it would fail the same way. */
+    private var autoplayExhaustedSeed = ""
+
+    /**
+     * Whether refills are allowed, tracked separately from the persisted setting because DataStore
+     * writes land asynchronously. Reading the setting here would let the refill observer see a
+     * stale `true` in the moment after switching off — emptying the queue and immediately refilling
+     * it from the same radio.
+     */
+    private val autoplayGate = MutableStateFlow(settings.value.autoplayEnabled)
+
     private val mutableWarning = MutableStateFlow("")
     val warning: StateFlow<String> = mutableWarning.asStateFlow()
     private var warningDismissJob: Job? = null
@@ -197,6 +221,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         observeAuthentication()
         observeDiscordPresence()
         observeWarnings()
+        observeAutoplay()
     }
 
     private fun observeNetworkState() {
@@ -410,6 +435,88 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         { if (connectProtocolVersion.value >= 2) graph.connect.clearUpcoming() },
         local::clearUpcoming,
     )
+
+    fun setAutoplayEnabled(enabled: Boolean) {
+        autoplayGate.value = enabled
+        graph.settings.updateSettings(settings.value.copy(autoplayEnabled = enabled))
+        if (enabled) return
+        // Turning it off should undo what it added, not leave the queue full of unasked-for music.
+        mutableAutoplayError.value = ""
+        autoplayExhaustedSeed = ""
+        if (targets.value.selected !is PlaybackTarget.LocalPhone) return
+        val upcoming = playback.value.upcoming
+        val kept = upcoming.filterNot(Track::autoplayGenerated)
+        if (kept.size != upcoming.size) local.replaceUpcoming(kept)
+    }
+
+    private data class AutoplayTrigger(
+        val seedId: String,
+        val remaining: Int,
+        val enabled: Boolean,
+        val isLocal: Boolean,
+    )
+
+    private fun observeAutoplay() {
+        // Persisted changes from anywhere else (the Settings screen, the first DataStore read)
+        // still have to reach the gate.
+        viewModelScope.launch {
+            settings.map { it.autoplayEnabled }
+                .distinctUntilChanged()
+                .collect { autoplayGate.value = it }
+        }
+        viewModelScope.launch {
+            combine(playback, autoplayGate, targets) { snapshot, enabled, target ->
+                val upcoming = snapshot.upcoming
+                AutoplayTrigger(
+                    // The tail of the queue is the seed: recommendations should follow the music the
+                    // listener will actually reach, not the track playing several songs earlier.
+                    seedId = upcoming.lastOrNull()?.id.orEmpty().ifBlank { snapshot.currentTrack?.id.orEmpty() },
+                    remaining = upcoming.size,
+                    enabled = enabled,
+                    isLocal = target.selected is PlaybackTarget.LocalPhone,
+                )
+            }
+                // Playback ticks every second; without this the refill check would run with it.
+                .distinctUntilChanged()
+                .collect(::refillAutoplay)
+        }
+    }
+
+    private fun refillAutoplay(trigger: AutoplayTrigger) {
+        if (!trigger.enabled || !trigger.isLocal) return
+        if (trigger.remaining > AUTOPLAY_REFILL_THRESHOLD) return
+        if (trigger.seedId.isBlank() || !isOnline.value) return
+        if (trigger.seedId == autoplaySeedInFlight || trigger.seedId == autoplayExhaustedSeed) return
+
+        autoplaySeedInFlight = trigger.seedId
+        mutableAutoplayLoading.value = true
+        mutableAutoplayError.value = ""
+        viewModelScope.launch {
+            runCatching { graph.catalog.upNext(trigger.seedId) }
+                .onSuccess { candidates -> appendAutoplayTracks(trigger.seedId, candidates) }
+                .onFailure { mutableAutoplayError.value = it.message ?: "Could not load Autoplay recommendations." }
+            mutableAutoplayLoading.value = false
+            autoplaySeedInFlight = ""
+        }
+    }
+
+    private fun appendAutoplayTracks(seedId: String, candidates: List<Track>) {
+        // Re-read the queue rather than trusting the trigger: the listener may have queued
+        // something, or skipped, while the request was in the air.
+        val snapshot = playback.value
+        val known = snapshot.queue.mapTo(mutableSetOf(), Track::id)
+        snapshot.currentTrack?.id?.let(known::add)
+        val additions = candidates
+            .filter { it.id.isNotBlank() && known.add(it.id) }
+            .take(AUTOPLAY_QUEUE_LIMIT)
+            .map { it.copy(autoplayGenerated = true) }
+        if (additions.isEmpty()) {
+            autoplayExhaustedSeed = seedId
+            mutableAutoplayError.value = "No more recommendations were found."
+            return
+        }
+        local.replaceUpcoming((snapshot.upcoming + additions).take(AUTOPLAY_TOTAL_LIMIT))
+    }
 
     fun setRemoteVolume(volume: Float) = graph.connect.setVolume(volume)
     fun setAudioEnginePreset(preset: String) = graph.connect.setAudioEnginePreset(preset)
@@ -641,5 +748,10 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     private companion object {
         const val TAG = "OrchardViewModel"
+
+        /** Refill once the queue is this short, so the fetch lands well before the music stops. */
+        const val AUTOPLAY_REFILL_THRESHOLD = 3
+        const val AUTOPLAY_QUEUE_LIMIT = 20
+        const val AUTOPLAY_TOTAL_LIMIT = 100
     }
 }
