@@ -68,13 +68,15 @@ fun SpotifyLoginScreen(
 
     fun checkAndCaptureCookie(cookieManager: CookieManager) {
         if (captured) return
-        val cookieHeader = cookieManager.getCookie("https://.spotify.com")
-            ?: cookieManager.getCookie("https://open.spotify.com")
-            ?: cookieManager.getCookie("https://accounts.spotify.com")
-            .orEmpty()
+        // "https://.spotify.com" is not a valid URL for getCookie; ask for the real
+        // hosts and take the first jar that actually carries sp_dc.
+        val spdc = listOf("https://open.spotify.com", "https://accounts.spotify.com")
+            .firstNotNullOfOrNull { host ->
+                SpotifyCanvasRepository.extractSpdc(cookieManager.getCookie(host).orEmpty())
+                    .takeIf { it.isNotBlank() }
+            }
 
-        val spdc = SpotifyCanvasRepository.extractSpdc(cookieHeader)
-        if (spdc.isNotBlank()) {
+        if (spdc != null) {
             captured = true
             onSpdcCaptured(spdc)
         }

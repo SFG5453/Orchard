@@ -88,7 +88,9 @@ class ArtworkRepository(
                 canvas?.cancel()
                 fromProviders
             } else {
-                canvas?.await() ?: fromProviders
+                // The canvas repo stamps Spotify's own track id; consumers match artwork to the
+                // playing track by *our* id, so re-stamp it or the result is silently discarded.
+                canvas?.await()?.copy(trackId = track.id) ?: fromProviders
             }
         }
         synchronized(cache) { cache[key] = resolved }
