@@ -74,6 +74,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val shareState by viewModel.shareState.collectAsStateWithLifecycle()
     val warning by viewModel.warning.collectAsStateWithLifecycle()
+    val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val transitionMarker by viewModel.transitionMarker.collectAsStateWithLifecycle()
     val fullPlayer = route == Routes.NOW_PLAYING
     val chromeHidden = fullPlayer || route == Routes.DEVICES || route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME
@@ -124,6 +125,12 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .zIndex(100f),
+            )
+
+            dev.sfg.orchard.mobile.ui.components.UpdateDialog(
+                state = updateState,
+                onInstall = viewModel::installUpdate,
+                onDismiss = viewModel::dismissUpdate,
             )
         }
     }

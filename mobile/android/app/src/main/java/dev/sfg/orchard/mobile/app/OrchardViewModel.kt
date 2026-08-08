@@ -179,6 +179,13 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val warning: StateFlow<String> = mutableWarning.asStateFlow()
     private var warningDismissJob: Job? = null
 
+    val updateState: StateFlow<dev.sfg.orchard.mobile.UpdateState> = graph.updates.state
+
+    fun installUpdate(metadata: dev.sfg.orchard.mobile.MobileUpdateMetadata) =
+        graph.updates.downloadAndInstallUpdate(metadata)
+
+    fun dismissUpdate() = graph.updates.dismiss()
+
     init {
         refreshHome()
         observeNetworkState()

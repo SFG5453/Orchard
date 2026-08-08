@@ -54,4 +54,16 @@ class UpdateManagerTest {
         assertEquals(0, UpdateManager.compareVersions("1.0.0", "1.0.0"))
         assertEquals(-1, UpdateManager.compareVersions("1.0.0", "1.1.0"))
     }
+
+    /**
+     * Build-type suffixes used to make the trailing segment parse as 0, so "1.1.1-debug" read as
+     * 1.1.0 and every suffixed build believed it was one release behind.
+     */
+    @Test
+    fun ignoresBuildSuffixWhenComparing() {
+        assertEquals(0, UpdateManager.compareVersions("1.1.1", "1.1.1-debug"))
+        assertEquals(0, UpdateManager.compareVersions("1.1.1", "1.1.1-rc1"))
+        assertEquals(1, UpdateManager.compareVersions("1.1.2", "1.1.1-debug"))
+        assertEquals(-1, UpdateManager.compareVersions("1.1.0", "1.1.1-debug"))
+    }
 }

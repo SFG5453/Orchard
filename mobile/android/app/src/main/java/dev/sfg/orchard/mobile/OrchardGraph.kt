@@ -108,9 +108,11 @@ class OrchardGraph(context: Context) {
         warningEvent.tryEmit(message)
     }
 
+    val updates = UpdateManager(context)
+
     init {
         applicationScope.launch { auth.restore() }
-        UpdateManager(context).checkForUpdates()
+        updates.checkForUpdates()
     }
 
     companion object {
