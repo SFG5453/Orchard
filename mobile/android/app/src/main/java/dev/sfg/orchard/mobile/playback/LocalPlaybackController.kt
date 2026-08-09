@@ -55,6 +55,18 @@ class LocalPlaybackController(
     private var progressJob: Job? = null
     private val pendingActions = ArrayDeque<(MediaController) -> Unit>()
 
+    /**
+     * The failure the player last reported, and the item it happened on.
+     *
+     * A failure arrives as an error callback immediately followed by an ordinary event
+     * for the same stoppage. That event carries no error, so a snapshot rebuilt from it
+     * alone erases the message roughly a millisecond after it appears and leaves the UI
+     * looking merely idle. Holding the failure here keeps it on screen until playback is
+     * actually retried or moves to another track.
+     */
+    private var lastError: String = ""
+    private var lastErrorItemId: String? = null
+
     init {
         connect()
     }
@@ -76,6 +88,7 @@ class LocalPlaybackController(
             Log.d(TAG, "replaceQueue: dispatching setMediaItems with ${edited.tracks.size} items to MediaController")
             it.setPlaylistMetadata(MediaMetadata.Builder().setTitle(contextTitle).build())
             it.setMediaItems(edited.tracks.map(MediaItemMapper::toMediaItem), edited.currentIndex, positionMs)
+            clearError()
             it.prepare()
             if (play) it.play()
         }
@@ -110,12 +123,12 @@ class LocalPlaybackController(
     }
     fun toggle() = withController {
         if (it.isPlaying) it.pause() else {
-            if (it.playbackState == Player.STATE_IDLE) it.prepare()
+            if (it.playbackState == Player.STATE_IDLE) { clearError(); it.prepare() }
             it.play()
         }
     }
     fun play() = withController {
-        if (it.playbackState == Player.STATE_IDLE) it.prepare()
+        if (it.playbackState == Player.STATE_IDLE) { clearError(); it.prepare() }
         it.play()
     }
     fun pause() = withController(Player::pause)
@@ -205,8 +218,15 @@ class LocalPlaybackController(
         }
         override fun onPlayerError(error: PlaybackException) {
             Log.e(TAG, "listener.onPlayerError: ${error.errorCodeName} - ${error.message}", error)
-            publish(controller, error.message ?: "Playback failed.")
+            lastError = playbackErrorMessage(error)
+            lastErrorItemId = controller?.currentMediaItem?.mediaId
+            publish(controller, lastError)
         }
+    }
+
+    private fun clearError() {
+        lastError = ""
+        lastErrorItemId = null
     }
 
     private fun publish(player: Player?, explicitError: String = "") {
@@ -215,6 +235,14 @@ class LocalPlaybackController(
             for (index in 0 until player.mediaItemCount) add(MediaItemMapper.toTrack(player.getMediaItemAt(index)))
         }
         val current = player.currentMediaItem?.let(MediaItemMapper::toTrack)
+        // A held failure belongs to the item it happened on. Moving to another track, or
+        // this one becoming playable, means it no longer describes anything.
+        if (lastError.isNotBlank() &&
+            (player.currentMediaItem?.mediaId != lastErrorItemId || player.playbackState == Player.STATE_READY)
+        ) {
+            clearError()
+        }
+        val error = explicitError.ifBlank { lastError }
         // A restored queue is not prepared until playback starts, so the player reports no
         // duration. The catalog already knows it, which keeps the scrubber honest until then.
         val duration = player.duration.takeUnless { it == C.TIME_UNSET }?.coerceAtLeast(0)
@@ -222,7 +250,7 @@ class LocalPlaybackController(
             ?: 0
         mutableSnapshot.value = PlaybackSnapshot(
             status = when {
-                explicitError.isNotBlank() -> PlaybackStatus.ERROR
+                error.isNotBlank() -> PlaybackStatus.ERROR
                 player.playbackState == Player.STATE_BUFFERING -> PlaybackStatus.BUFFERING
                 player.isPlaying -> PlaybackStatus.PLAYING
                 player.playbackState == Player.STATE_READY -> PlaybackStatus.PAUSED
@@ -243,7 +271,7 @@ class LocalPlaybackController(
                 else -> RepeatMode.OFF
             },
             contextTitle = player.playlistMetadata.title?.toString().orEmpty(),
-            errorMessage = explicitError,
+            errorMessage = error,
         )
         syncProgress(player.isPlaying)
     }

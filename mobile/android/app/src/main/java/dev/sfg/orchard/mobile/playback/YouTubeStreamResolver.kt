@@ -38,6 +38,13 @@ data class ResolvedStream(
     val mimeType: String,
     val expiresAtMs: Long,
     val bitrateKbps: Int = 0,
+    /**
+     * The client identity the URL was issued to. A CDN URL is bound to the client that
+     * asked for it, so fetching one minted by a fallback client under the identity of
+     * the first client in the chain is answered with a 403 — resolution appears to work
+     * and only the audio fetch fails.
+     */
+    val userAgent: String = YouTubeStreamResolver.CLIENT_USER_AGENT,
 )
 
 /**
@@ -76,6 +83,8 @@ class YouTubeStreamResolver(
 ) {
     private val newPipeResolver: NewPipeStreamResolver by lazy { NewPipeStreamResolver(client, sessionProvider) }
 
+    private val playerConfig = YouTubePlayerConfig(client)
+
     /**
      * Playback requests get a whole-call deadline the shared client does not set,
      * so a stalled attempt cannot hold up the fallback chain behind it.
@@ -92,13 +101,19 @@ class YouTubeStreamResolver(
     private val streams = ConcurrentHashMap<String, ResolvedStream>()
 
     /**
-     * When every client refused a track, briefly. A failed open makes ExoPlayer
-     * retry immediately, and each retry is another player request: one track
-     * YouTube will not serve turned into dozens of refusals a minute, which is
-     * how an address earns a longer block. Failing fast for a few seconds costs
-     * nothing, since the answer will not have changed.
+     * When every client refused a track, briefly, and why. A failed open makes
+     * ExoPlayer retry immediately, and each retry is another player request: one track
+     * YouTube will not serve turned into dozens of refusals a minute, which is how an
+     * address earns a longer block. Failing fast for a few seconds costs nothing, since
+     * the answer will not have changed.
+     *
+     * The reason is kept because a backed-off attempt has no way to work one out for
+     * itself, and several resolves race for the same track: without it the second
+     * attempt reports the backoff and buries the explanation the first attempt had.
      */
-    private val failures = ConcurrentHashMap<String, Long>()
+    private val failures = ConcurrentHashMap<String, FailedResolve>()
+
+    private data class FailedResolve(val atMs: Long, val cause: Throwable)
     private val locks = ConcurrentHashMap<String, Any>()
     private val prefetchExecutor = Executors.newFixedThreadPool(2) { runnable ->
         Thread(runnable, "orchard-stream-prefetch").apply { isDaemon = true }
@@ -143,9 +158,9 @@ class YouTubeStreamResolver(
         }
         // Only one caller resolves a given track; a prefetch already in flight is worth
         // waiting on, since a second player request would cost the same round trip.
-        failures[videoId]?.let { failedAt ->
-            if (System.currentTimeMillis() - failedAt < FAILURE_BACKOFF_MS) {
-                error("YouTube refused this track moments ago")
+        failures[videoId]?.let { failed ->
+            if (System.currentTimeMillis() - failed.atMs < FAILURE_BACKOFF_MS) {
+                throw failed.cause
             }
             failures.remove(videoId)
         }
@@ -202,7 +217,7 @@ class YouTubeStreamResolver(
                     val authenticatedVisitor = account ?: warmVisitor(videoId)
                     tvHtml5Player(videoId, authenticatedVisitor)
                 }
-                .onFailure { failures[videoId] = System.currentTimeMillis() }
+                .onFailure { failures[videoId] = FailedResolve(System.currentTimeMillis(), it) }
                 .getOrThrow()
             val stream = chooseAudio(response, quality)
             if (maxQualityFallback) {
@@ -481,7 +496,10 @@ class YouTubeStreamResolver(
         val userContext = JSONObject()
             .put("lockedSafetyMode", false)
         val playbackContext = JSONObject()
-            .put("contentPlaybackContext", JSONObject().put("signatureTimestamp", 19999))
+            .put(
+                "contentPlaybackContext",
+                JSONObject().put("signatureTimestamp", playerConfig.signatureTimestamp()),
+            )
         val body = JSONObject()
             .put("context", JSONObject().put("client", clientContext).put("user", userContext))
             .put("videoId", videoId)
@@ -527,7 +545,7 @@ class YouTubeStreamResolver(
         val playbackContext = JSONObject()
             .put("contentPlaybackContext", JSONObject()
                 .put("html5Preference", "HTML5_PREF_WANTS")
-                .put("signatureTimestamp", 20668))
+                .put("signatureTimestamp", playerConfig.signatureTimestamp()))
         val body = JSONObject()
             .put("context", JSONObject().put("client", clientContext))
             .put("videoId", videoId)
@@ -568,6 +586,19 @@ class YouTubeStreamResolver(
             if (!response.isSuccessful || status?.optString("status") != "OK") {
                 val reason = status?.optString("reason").orEmpty().ifBlank { "HTTP ${response.code}" }
                 val statusCode = status?.optString("status").orEmpty()
+                // YouTube says this, and only this, when the quoted signature timestamp
+                // belongs to a player it has since rotated away from. Dropping the cached
+                // value lets the next attempt re-read it rather than repeating a request
+                // already known to be refused.
+                if (reason.contains("needs to be reloaded", ignoreCase = true) ||
+                    status?.optJSONObject("errorScreen")
+                        ?.toString()
+                        .orEmpty()
+                        .contains("needs to be reloaded", ignoreCase = true)
+                ) {
+                    Log.w(TAG, "Player rejected the signature timestamp; refreshing it")
+                    playerConfig.invalidate()
+                }
                 // Distinguish age-gated refusals so the retry chain can
                 // route them to the web/music players instead of a guest retry.
                 if (isAgeGateResponse(statusCode, reason)) {
@@ -575,6 +606,10 @@ class YouTubeStreamResolver(
                 }
                 error("YouTube could not play this track: $reason")
             }
+            // Which client asked is not recoverable from the response, and the CDN URLs
+            // inside it are only valid for that client, so the identity travels with the
+            // payload to whoever picks a format out of it.
+            request.header("User-Agent")?.let { payload.put(REQUEST_USER_AGENT_KEY, it) }
             return payload
         }
     }
@@ -629,8 +664,9 @@ class YouTubeStreamResolver(
         val expiry = expirySeconds?.let { TimeUnit.SECONDS.toMillis(it) }
             ?: System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(45)
         val bitrateKbps = (chosen.optInt("bitrate") / 1000).coerceAtLeast(0)
+        val userAgent = payload.optString(REQUEST_USER_AGENT_KEY).ifBlank { CLIENT_USER_AGENT }
         Log.d(TAG, "Resolved ${chosen.optString("mimeType").substringBefore(';')} audio @ ${bitrateKbps}kbps")
-        return ResolvedStream(url, chosen.optString("mimeType"), expiry, bitrateKbps)
+        return ResolvedStream(url, chosen.optString("mimeType"), expiry, bitrateKbps, userAgent)
     }
 
     private fun parseQuery(query: String): Map<String, String> {
@@ -649,6 +685,13 @@ class YouTubeStreamResolver(
     }
 
     companion object {
+        /**
+         * Where [executePlayer] records the identity a response was fetched under. Not
+         * part of YouTube's schema; it rides along inside the parsed payload because the
+         * format chosen from it is only usable by that same client.
+         */
+        private const val REQUEST_USER_AGENT_KEY = "__orchardRequestUserAgent"
+
         const val CLIENT_USER_AGENT =
             "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip"
         private const val CLIENT_VERSION = "1.65.10"
