@@ -4,7 +4,7 @@
 # an app already in the field.
 #
 # Testers download it without a GitHub account through nightly.link:
-#   https://nightly.link/SFG5453/Orchard/workflows/android-canary-build/<branch>/Orchard-Canary-APK.zip
+#   https://nightly.link/SFG5453/Orchard/workflows/android-canary-build/canary/Orchard-Canary-APK.zip
 #
 # The canary build type installs as its own app beside a tester's real Orchard
 # and has its updater compiled out, so it can never replace or nag the install
@@ -12,6 +12,12 @@
 name: Android Canary Build
 
 on:
+  # nightly.link only indexes push-triggered runs, so a dispatch-only workflow
+  # never produces a downloadable link no matter how many times it succeeds.
+  # Pushing the branch you want tested to `canary` is what publishes the APK.
+  push:
+    branches:
+      - canary
   workflow_dispatch:
 
 jobs:
