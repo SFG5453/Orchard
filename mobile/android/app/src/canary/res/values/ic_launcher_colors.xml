@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Canary wears the mark in yellow so it is obvious at a glance which of the two
+    installed Orchards is the test build.
+
+    The palette is inverted rather than merely recoloured: a yellow bright enough
+    to read as yellow cannot carry the pale foreground, so the mark goes dark on
+    a bright field. That holds 11.3:1, near the 11.0:1 of the release icon, so
+    the shape stays as crisp as it is on the real app.
+-->
+<resources>
+    <color name="ic_launcher_background">#F5C518</color>
+    <color name="ic_launcher_foreground">#1A1300</color>
+</resources>

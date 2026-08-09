@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    The launcher mark's two colours live here rather than inside the vector so a
+    build type can restyle the icon by overriding this file alone, leaving the
+    single copy of the path untouched.
+-->
 <resources>
     <color name="ic_launcher_background">#0D3B33</color>
+    <color name="ic_launcher_foreground">#E9F5D8</color>
 </resources>
