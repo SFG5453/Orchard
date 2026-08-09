@@ -359,7 +359,8 @@ internal object LyricsParser {
             currentEnd = null
         }
         clean.forEach { word ->
-            Regex("\\S+\\s*").findAll(word.text).forEach { match ->
+            Regex("\\s*\\S+\\s*").findAll(word.text).forEach { match ->
+                if (match.value.firstOrNull()?.isWhitespace() == true) finish()
                 if (currentText.isBlank()) currentStart = word.startMs
                 currentText += match.value.trim()
                 if (word.endMs != null && (currentEnd == null || word.endMs > currentEnd!!)) currentEnd = word.endMs
