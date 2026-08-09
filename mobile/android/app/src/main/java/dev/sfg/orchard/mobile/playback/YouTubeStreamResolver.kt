@@ -75,6 +75,13 @@ class YouTubeStreamResolver(
     private val downloadManager: dev.sfg.orchard.mobile.download.DownloadManager? = null,
 ) {
     private val newPipeResolver: NewPipeStreamResolver by lazy { NewPipeStreamResolver(client, sessionProvider) }
+
+    /**
+     * Playback requests get a whole-call deadline the shared client does not set,
+     * so a stalled attempt cannot hold up the fallback chain behind it.
+     */
+    private val playerClient: OkHttpClient =
+        client.newBuilder().callTimeout(PLAYER_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS).build()
     /**
      * [signedIn] distinguishes an account identity from a guest one. A cookie
      * alone leaves the player request anonymous as far as YouTube is concerned;
@@ -146,6 +153,15 @@ class YouTubeStreamResolver(
         synchronized(lock) {
             cached(cacheKey)?.let { return it }
             val started = System.currentTimeMillis()
+            // Each fallback client costs another round trip. Without a shared deadline a
+            // few slow-but-not-failing attempts stack into a minute of silence, which
+            // reads as the app being broken rather than the track being unavailable.
+            fun withinBudget(lastError: Throwable) {
+                if (System.currentTimeMillis() - started >= RESOLVE_BUDGET_MS) {
+                    Log.w(TAG, "Giving up on $videoId after ${System.currentTimeMillis() - started}ms")
+                    throw lastError
+                }
+            }
             val account = runCatching { accountIdentity(videoId) }
                 .onFailure { Log.w(TAG, "Could not build an account identity for playback", it) }
                 .getOrNull()
@@ -163,21 +179,25 @@ class YouTubeStreamResolver(
                     androidVrPlayer(videoId, loadVisitor(videoId).also(::rememberVisitor))
                 }
                 .recoverCatching { secondError ->
+                    withinBudget(secondError)
                     Log.w(TAG, "ANDROID_VR failed for $videoId; trying ANDROID client", secondError)
                     val authenticatedVisitor = account ?: warmVisitor(videoId)
                     androidPlayer(videoId, authenticatedVisitor)
                 }
                 .recoverCatching { thirdError ->
+                    withinBudget(thirdError)
                     Log.w(TAG, "ANDROID player failed for $videoId; trying IOS client", thirdError)
                     val authenticatedVisitor = account ?: warmVisitor(videoId)
                     iosPlayer(videoId, authenticatedVisitor)
                 }
                 .recoverCatching { fourthError ->
+                    withinBudget(fourthError)
                     Log.w(TAG, "IOS player failed for $videoId; trying WEB_REMIX player", fourthError)
                     val authenticatedVisitor = account ?: warmVisitor(videoId)
                     webRemixPlayer(videoId, authenticatedVisitor)
                 }
                 .recoverCatching { fifthError ->
+                    withinBudget(fifthError)
                     Log.w(TAG, "WEB_REMIX player failed for $videoId; trying TVHTML5 player", fifthError)
                     val authenticatedVisitor = account ?: warmVisitor(videoId)
                     tvHtml5Player(videoId, authenticatedVisitor)
@@ -304,7 +324,7 @@ class YouTubeStreamResolver(
             .header("User-Agent", CLIENT_USER_AGENT)
             .apply { if (!cookie.isNullOrBlank()) header("Cookie", cookie) }
             .build()
-        client.newCall(request).execute().use { response ->
+        playerClient.newCall(request).execute().use { response ->
             check(response.isSuccessful) { "YouTube returned HTTP ${response.code}" }
             val body = response.body.string()
             val id = VISITOR_PATTERN.find(body)?.groupValues?.getOrNull(1)
@@ -540,7 +560,7 @@ class YouTubeStreamResolver(
     }
 
     private fun executePlayer(request: Request): JSONObject {
-        client.newCall(request).execute().use { response ->
+        playerClient.newCall(request).execute().use { response ->
             val text = response.body.string()
             Log.d(TAG, "executePlayer for ${request.url} (code ${response.code}): $text")
             val payload = runCatching { JSONObject(text) }.getOrElse { JSONObject() }
@@ -641,6 +661,20 @@ class YouTubeStreamResolver(
         private const val WEB_REMIX_VERSION = "1.20260213.01.00"
         private const val PUBLIC_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
         private val FAILURE_BACKOFF_MS = TimeUnit.SECONDS.toMillis(20)
+
+        /**
+         * Ceiling on a single player or watch-page request. The shared client only
+         * bounds connect and read separately, so one stalled attempt could otherwise
+         * burn 37s on its own and the fallback chain would multiply that.
+         */
+        private const val PLAYER_CALL_TIMEOUT_SECONDS = 10L
+
+        /**
+         * Ceiling on resolving one track across every fallback client. Once it is
+         * spent, the last failure is reported instead of trying the next client:
+         * a caller waiting a minute for audio has already given up.
+         */
+        private val RESOLVE_BUDGET_MS = TimeUnit.SECONDS.toMillis(25)
         private const val WEB_USER_AGENT =
             "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/138 Mobile Safari/537.36"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
