@@ -45,11 +45,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.audio.rememberSystemVolume
 import kotlin.math.roundToInt
+
+/** Thickness of the volume track line. */
+private val TRACK_HEIGHT = 5.dp
 
 /**
  * Interactive device volume slider linked to Android system media volume in real time,
@@ -108,24 +110,17 @@ fun DeviceVolumeSlider(
             },
             valueRange = minVal..maxVal,
             enabled = enabled,
-            thumb = {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .shadow(if (enabled) 3.dp else 0.dp, CircleShape)
-                        .background(
-                            Color.White.copy(alpha = if (enabled) 1f else 0.40f),
-                            CircleShape,
-                        ),
-                )
-            },
+            // The fill edge is the position indicator, so no separate thumb is drawn.
+            // Dragging anywhere along the track still works.
+            thumb = { Box(Modifier.size(0.dp)) },
             track = { sliderState ->
                 val rangeSpan = (sliderState.valueRange.endInclusive - sliderState.valueRange.start).coerceAtLeast(1f)
                 val fraction = ((sliderState.value - sliderState.valueRange.start) / rangeSpan).coerceIn(0f, 1f)
+                // With a zero-width thumb the fill spans the full track, so no inset is needed.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(5.dp)
+                        .height(TRACK_HEIGHT)
                         .clip(RoundedCornerShape(percent = 50))
                         .background(Color.White.copy(alpha = if (enabled) 0.20f else 0.10f)),
                 ) {
