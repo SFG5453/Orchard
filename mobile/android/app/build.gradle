@@ -18,6 +18,10 @@ android {
         versionCode = 10200
         versionName = '1.2.0'
         buildConfigField 'String', 'CODENAME', '"Synopses Brusquely"'
+        // Only the build that is actually published may offer updates. Every other
+        // build has its own applicationId, so the published APK is neither an
+        // upgrade nor installable over it.
+        buildConfigField 'boolean', 'UPDATER_ENABLED', 'true'
         testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
         ndk {
             // 64-bit only. minSdk 31 predates the 64-bit requirement by years, and a 32-bit
@@ -56,12 +60,25 @@ android {
             applicationIdSuffix = '.debug'
             versionNameSuffix = '-debug'
             resValue 'string', 'app_name', 'Orchard Debug'
+            buildConfigField 'boolean', 'UPDATER_ENABLED', 'false'
         }
         release {
             if (orchardReleaseSigningReady) signingConfig = signingConfigs.release
             minifyEnabled = true
             shrinkResources = true
             proguardFiles(getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro')
+        }
+        // Test builds handed out for bug reproduction. Identical to release in
+        // everything that affects behaviour — same signing, same minification, so
+        // it can catch the R8-only faults a debug build cannot — but it installs
+        // as its own app and never offers to update itself, since the published
+        // APK would neither upgrade it nor install over it.
+        canary {
+            initWith release
+            applicationIdSuffix = '.canary'
+            versionNameSuffix = '-canary'
+            resValue 'string', 'app_name', 'Orchard Canary'
+            buildConfigField 'boolean', 'UPDATER_ENABLED', 'false'
         }
     }
 
