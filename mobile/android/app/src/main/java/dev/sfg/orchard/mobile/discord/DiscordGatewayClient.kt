@@ -46,6 +46,11 @@ import java.util.concurrent.atomic.AtomicInteger
 class DiscordGatewayClient(
     private val http: OkHttpClient,
     private val scope: CoroutineScope,
+    /**
+     * Supplies a freshly refreshed access token after the gateway rejects the
+     * current one, or null if the account can no longer be recovered.
+     */
+    private val refreshToken: (suspend () -> String?)? = null,
 ) {
     private val mutableState = MutableStateFlow<GatewayConnectionState>(GatewayConnectionState.Disconnected)
     val connectionState: StateFlow<GatewayConnectionState> = mutableState.asStateFlow()
@@ -57,10 +62,14 @@ class DiscordGatewayClient(
     private var sessionId: String? = null
     private var resumeGatewayUrl: String? = null
     private var activeToken: String? = null
-    private var lastActivityPayload: JSONObject? = null
+    @Volatile private var lastActivityPayload: JSONObject? = null
     private val socketMutex = Mutex()
     private var isExplicitlyClosed = false
     private var reconnectAttempts = 0
+    private var pendingPayload: JSONObject? = null
+    private var lastPresenceSentAtMs = 0L
+    private var flushJob: Job? = null
+    private var tokenRefreshUsed = false
 
     fun connect(token: String) {
         scope.launch {
@@ -68,6 +77,9 @@ class DiscordGatewayClient(
                 isExplicitlyClosed = false
                 activeToken = token
                 if (webSocket != null) return@withLock
+                // A token renewal in flight will reconnect on its own, and it pushes a
+                // new session through the auth state that lands back here mid-recovery.
+                if (mutableState.value is GatewayConnectionState.Connecting) return@withLock
                 startConnection(token)
             }
         }
@@ -82,6 +94,10 @@ class DiscordGatewayClient(
                 resumeGatewayUrl = null
                 sequenceNumber.set(-1)
                 lastActivityPayload = null
+                pendingPayload = null
+                tokenRefreshUsed = false
+                flushJob?.cancel()
+                flushJob = null
                 heartbeatJob?.cancel()
                 heartbeatJob = null
                 reconnectJob?.cancel()
@@ -93,11 +109,35 @@ class DiscordGatewayClient(
         }
     }
 
+    /**
+     * Queues a presence update. Discord drops presence payloads sent faster than a
+     * handful per twenty seconds, and it does so silently, so bursts from rapid
+     * play/pause would otherwise leave the profile stuck on whichever state
+     * happened to be in flight. Updates are coalesced and only the newest one is
+     * sent, on the trailing edge, so the final state always wins.
+     */
     fun updateActivity(activity: DiscordPresenceActivity?) {
         scope.launch {
             socketMutex.withLock {
                 val payload = buildPresenceUpdateJson(activity)
                 lastActivityPayload = payload
+                pendingPayload = payload
+                schedulePresenceFlush()
+            }
+        }
+    }
+
+    /** Must be called while holding [socketMutex]. */
+    private fun schedulePresenceFlush() {
+        if (flushJob?.isActive == true) return
+        val waited = System.currentTimeMillis() - lastPresenceSentAtMs
+        val wait = (PRESENCE_MIN_INTERVAL_MS - waited).coerceIn(0L, PRESENCE_MIN_INTERVAL_MS)
+        flushJob = scope.launch {
+            if (wait > 0) delay(wait)
+            socketMutex.withLock {
+                val payload = pendingPayload ?: return@withLock
+                pendingPayload = null
+                lastPresenceSentAtMs = System.currentTimeMillis()
                 sendPayload(payload)
             }
         }
@@ -163,6 +203,7 @@ class DiscordGatewayClient(
                     sessionId = sId
                     if (resumeUrl != null) resumeGatewayUrl = resumeUrl
                     mutableState.value = GatewayConnectionState.Ready(sId, resumeUrl)
+                    tokenRefreshUsed = false
                     Log.d(TAG, "Gateway READY; session_id=$sId")
 
                     // Resend last activity if pending
@@ -282,12 +323,57 @@ class DiscordGatewayClient(
         mutableState.value = GatewayConnectionState.Disconnected
 
         if (isExplicitlyClosed) return
-        if (code in 4004..4014) {
+        if (code == CLOSE_AUTHENTICATION_FAILED) {
+            // An access token that has aged out looks identical to a bad one here.
+            // Without this the presence silently stops for good after the token's
+            // first expiry and only a reinstall or re-login brings it back.
+            recoverFromRejectedToken()
+            return
+        }
+        if (code in 4005..4014) {
             Log.e(TAG, "Gateway closed with unrecoverable code $code")
             return
         }
 
         scheduleReconnect()
+    }
+
+    /**
+     * Trades the rejected token for a fresh one and identifies again. Only one
+     * attempt is made per session; the flag clears once a connection reaches READY,
+     * so a genuinely dead account cannot spin here.
+     */
+    private fun recoverFromRejectedToken() {
+        val refresh = refreshToken
+        if (refresh == null || tokenRefreshUsed) {
+            Log.e(TAG, "Gateway rejected the access token and it could not be renewed")
+            return
+        }
+        tokenRefreshUsed = true
+        mutableState.value = GatewayConnectionState.Connecting
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch(Dispatchers.IO) {
+            val fresh = runCatching { refresh() }.getOrNull()
+            if (fresh.isNullOrBlank()) {
+                Log.e(TAG, "Could not renew the Discord token after rejection")
+                mutableState.value = GatewayConnectionState.Disconnected
+                return@launch
+            }
+            socketMutex.withLock {
+                if (isExplicitlyClosed) {
+                    mutableState.value = GatewayConnectionState.Disconnected
+                    return@withLock
+                }
+                Log.i(TAG, "Renewed the Discord token; reconnecting")
+                activeToken = fresh
+                // The old session belongs to the rejected token, so resuming it would
+                // just be rejected again. Start clean.
+                sessionId = null
+                resumeGatewayUrl = null
+                sequenceNumber.set(-1)
+                startConnection(fresh)
+            }
+        }
     }
 
     private fun scheduleReconnect(delayMs: Long? = null) {
@@ -307,5 +393,11 @@ class DiscordGatewayClient(
 
     companion object {
         private const val TAG = "DiscordGateway"
+
+        /** Discord close code for a token it will not accept. */
+        private const val CLOSE_AUTHENTICATION_FAILED = 4004
+
+        /** Presence updates are limited to roughly five per twenty seconds. */
+        private const val PRESENCE_MIN_INTERVAL_MS = 4_000L
     }
 }

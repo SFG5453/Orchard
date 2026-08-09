@@ -76,11 +76,9 @@ class DiscordAssetRegistrar(http: OkHttpClient) {
 
         val staticUrl = normalizeDiscordImageUrl(staticArtworkUrl)
         if (staticUrl.isNotBlank()) {
-            val registeredStatic = registerExternalAsset(accessToken, staticUrl)
-            if (!registeredStatic.isNullOrBlank()) {
-                return@withContext registeredStatic
-            }
-            return@withContext staticUrl
+            // A bare https URL is not a valid image key, so returning one here would
+            // render as a broken-image placeholder. No key at all looks better.
+            return@withContext registerExternalAsset(accessToken, staticUrl)
         }
 
         null

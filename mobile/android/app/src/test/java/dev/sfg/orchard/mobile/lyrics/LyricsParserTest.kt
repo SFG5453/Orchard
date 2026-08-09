@@ -63,6 +63,25 @@ class LyricsParserTest {
     }
 
     @Test
+    fun leadingSpaceSyllablesStillSplitIntoWords() {
+        val root = JSONObject(
+            """{"lyrics":[
+              {"time":100,"duration":900,"syllabus":[
+                {"text":"I","time":100,"duration":100},
+                {"text":" walked","time":200,"duration":300},
+                {"text":" alone","time":500,"duration":400}
+              ]}
+            ]}""",
+        )
+
+        val lines = LyricsParser.amPayload(root)
+
+        assertEquals("I walked alone", lines[0].text)
+        assertEquals(listOf("I", "walked", "alone"), lines[0].words.map { it.text })
+        assertEquals(listOf(100L, 200L, 500L), lines[0].words.map { it.startMs })
+    }
+
+    @Test
     fun appleTtmlLineTimingIsNormalized() {
         val lines = LyricsParser.ttml(
             """<tt xmlns="http://www.w3.org/ns/ttml"><body><div>

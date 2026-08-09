@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import java.util.Collections
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -45,7 +46,7 @@ class DiscordPresenceCoordinator(
     private val songLinks: SongLinksRepository,
     private val scope: CoroutineScope,
 ) {
-    private val gateway = DiscordGatewayClient(http, scope)
+    private val gateway = DiscordGatewayClient(http, scope, refreshToken = { auth.forceRefresh() })
     private val assetRegistrar = DiscordAssetRegistrar(http)
     private val currentRequestId = AtomicLong(0)
     private var enhanceJob: Job? = null
@@ -55,6 +56,17 @@ class DiscordPresenceCoordinator(
     private var lastPositionMs: Long = 0L
     private var lastUpdateEpochMs: Long = 0L
     private var lastAnimatedUrl: String? = null
+
+    /**
+     * Image keys already registered with Discord, so a track that has been played
+     * before can carry its artwork on the very first update instead of waiting for
+     * a round trip. Keyed by the artwork the activity was built from.
+     */
+    private val resolvedArtworkKeys: MutableMap<String, String> = Collections.synchronizedMap(
+        object : LinkedHashMap<String, String>(32, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > 100
+        }
+    )
 
     val connectionState: StateFlow<GatewayConnectionState> = gateway.connectionState
     val authState: StateFlow<DiscordAuthState> = auth.authState
@@ -126,13 +138,15 @@ class DiscordPresenceCoordinator(
 
         val requestId = currentRequestId.incrementAndGet()
 
-        // 1. Send immediate base activity
+        // 1. Send immediate base activity. Only a key Discord has already accepted is
+        // usable here; a raw URL would be rejected and blank the artwork that is
+        // currently showing, which is exactly what rapid play/pause used to do.
         val immediateActivity = buildActivity(
             track = track,
             isPlaying = isPlaying,
             positionMs = positionMs,
             durationMs = durationMs,
-            artworkKey = normalizeDiscordImageUrl(track.artworkUrl),
+            artworkKey = resolvedArtworkKeys[artworkCacheKey(track, animatedUrl)],
             songLinkUrl = null,
         )
         gateway.updateActivity(immediateActivity)
@@ -176,8 +190,11 @@ class DiscordPresenceCoordinator(
             }.getOrNull()
         }
 
-        val resolvedArtworkKey = artworkDeferred.await() ?: normalizeDiscordImageUrl(track.artworkUrl)
+        val resolvedArtworkKey = artworkDeferred.await()
         val resolvedSongLinkUrl = songLinkDeferred.await()
+        if (!resolvedArtworkKey.isNullOrBlank()) {
+            resolvedArtworkKeys[artworkCacheKey(track, animatedArtworkUrl)] = resolvedArtworkKey
+        }
 
         if (requestId != currentRequestId.get()) return@withContext
 
@@ -192,6 +209,9 @@ class DiscordPresenceCoordinator(
 
         gateway.updateActivity(enhancedActivity)
     }
+
+    private fun artworkCacheKey(track: Track, animatedArtworkUrl: String?): String =
+        "${animatedArtworkUrl.orEmpty()}|${track.artworkUrl.orEmpty()}"
 
     private fun buildActivity(
         track: Track,

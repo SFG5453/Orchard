@@ -213,6 +213,21 @@ class DiscordOAuthRepository(
         }
     }
 
+    /**
+     * Renews the access token even when it still looks valid by the clock, for the
+     * case where Discord has rejected it outright. Returns the new access token.
+     */
+    suspend fun forceRefresh(): String? = withContext(Dispatchers.IO) {
+        val current = (mutableAuthState.value as? DiscordAuthState.SignedIn)?.session ?: return@withContext null
+        val refreshed = refreshAccessToken(current.refreshToken)
+        if (refreshed == null) {
+            mutableAuthState.value = DiscordAuthState.SignedOut
+            return@withContext null
+        }
+        mutableAuthState.value = DiscordAuthState.SignedIn(refreshed)
+        refreshed.accessToken
+    }
+
     suspend fun refreshAccessToken(refreshToken: String): DiscordAuthSession? = withContext(Dispatchers.IO) {
         val formBody = FormBody.Builder()
             .add("client_id", DISCORD_APPLICATION_ID)

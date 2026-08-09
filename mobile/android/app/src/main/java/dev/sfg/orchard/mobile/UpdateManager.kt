@@ -49,9 +49,9 @@ class UpdateManager(private val context: Context) {
     val state: StateFlow<UpdateState> = mutableState.asStateFlow()
 
     fun checkForUpdates() {
-        // Debug builds carry a "-debug" versionNameSuffix and a different applicationId; the
+        // Debug and canary builds carry their own versionNameSuffix and applicationId; the
         // published release APK is neither an upgrade nor installable over them.
-        if (BuildConfig.DEBUG) return
+        if (!BuildConfig.UPDATER_ENABLED) return
 
         thread {
             try {
