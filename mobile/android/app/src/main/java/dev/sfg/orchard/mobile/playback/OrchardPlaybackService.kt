@@ -275,8 +275,15 @@ class OrchardPlaybackService : MediaLibraryService() {
         handlesAudioFocus: Boolean,
         filter: dev.sfg.orchard.mobile.playback.smart.TransitionFilter,
     ): ExoPlayer {
+        // The identity is a default request property rather than the factory's userAgent
+        // because that one is appended after per-request headers instead of replacing
+        // them, which would send two User-Agent headers on any stream that supplies its
+        // own. As a default property it is simply overridden by the resolved stream's.
         val httpFactory =
-            OkHttpDataSource.Factory(client).setUserAgent(YouTubeStreamResolver.CLIENT_USER_AGENT)
+            OkHttpDataSource.Factory(client)
+                .setDefaultRequestProperties(
+                    mapOf("User-Agent" to YouTubeStreamResolver.CLIENT_USER_AGENT),
+                )
         val upstreamFactory = DefaultDataSource.Factory(this, httpFactory)
         val resolvingFactory =
             ResolvingDataSource.Factory(upstreamFactory) { original ->
@@ -289,7 +296,12 @@ class OrchardPlaybackService : MediaLibraryService() {
                     OrchardGraph.from(this@OrchardPlaybackService).activeBitrate.value =
                         stream.bitrateKbps
                 Log.d(TAG, "resolvingFactory: resolved $videoId to url=${stream.url.take(60)}...")
-                original.withUri(stream.url.toUri())
+                // The CDN checks the URL against the client it was issued to, so the fetch
+                // has to claim the identity that resolved it rather than the factory's
+                // default. Getting this wrong resolves fine and then 403s on the audio.
+                original
+                    .withUri(stream.url.toUri())
+                    .withAdditionalHeaders(mapOf("User-Agent" to stream.userAgent))
             }
         // Cache above resolution: it keys on the stable orchard:// URI, and a hit skips the
         // resolver entirely rather than re-resolving a CDN URL it does not need.
@@ -912,38 +924,6 @@ class OrchardPlaybackService : MediaLibraryService() {
             RepeatMode.ALL -> Player.REPEAT_MODE_ALL
             RepeatMode.OFF -> Player.REPEAT_MODE_OFF
         }
-
-    private fun extractPlaybackErrorMessage(error: Throwable): String {
-        var current: Throwable? = error
-        while (current != null) {
-            val msg = current.message.orEmpty()
-            if (msg.startsWith("YouTube could not play this track: ")) {
-                val reason = msg.removePrefix("YouTube could not play this track: ").trim()
-                return if (reason.isNotBlank()) reason else "This track is unavailable."
-            }
-            if (msg.contains("inappropriate for some users", ignoreCase = true)) {
-                return "This video may be inappropriate for some users."
-            }
-            if (msg.contains("confirm your age", ignoreCase = true)) {
-                return "This track requires age verification on YouTube."
-            }
-            if (msg.contains("not a bot", ignoreCase = true)) {
-                return "YouTube bot check: sign in to play this track."
-            }
-            if (msg.contains("refused this track", ignoreCase = true)) {
-                return "YouTube refused this track."
-            }
-            if (
-                current is java.net.UnknownHostException ||
-                    current is java.net.SocketTimeoutException
-            ) {
-                return "Network error: check your connection."
-            }
-            current = current.cause
-        }
-        val fallback = error.cause?.message ?: error.message
-        return fallback?.takeIf { it.isNotBlank() } ?: "Playback failed."
-    }
 
     private fun isUnrecoverablePlaybackError(error: Throwable): Boolean {
         var current: Throwable? = error

@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.zIndex
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -180,6 +181,17 @@ private fun OrchardNavigation(
     val context = androidx.compose.ui.platform.LocalContext.current
     val startDestination = if (settings.onboardingCompleted) Routes.HOME else Routes.WELCOME
     var playlistPickerTrack by remember { mutableStateOf<dev.sfg.orchard.mobile.model.Track?>(null) }
+
+    // Without this a track the resolver refuses shows up only as the spinner stopping,
+    // which is indistinguishable from the play button having died. Keyed on the message
+    // so a repeated attempt on the same track says so again rather than staying silent.
+    LaunchedEffect(playback.errorMessage) {
+        if (playback.errorMessage.isNotBlank()) {
+            android.widget.Toast
+                .makeText(context, playback.errorMessage, android.widget.Toast.LENGTH_LONG)
+                .show()
+        }
+    }
 
     NavHost(navController = nav, startDestination = startDestination) {
         composable(Routes.WELCOME) {
