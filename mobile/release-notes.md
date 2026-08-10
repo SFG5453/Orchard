@@ -1,11 +1,12 @@
-## Orchard Mobile 1.2.1 "Presume Recumbent"
+## Orchard Mobile 1.3.0 "Dice Soigne"
 
 ### Features
-- **Orchard Canary**: Orchard Canary builds are now available.
+- **Now Playing Transitions**: The player now grows out of the mini player and collapses back into it, with the cover flying between the full-size artwork and the pill's thumbnail as a shared element rather than the two cross-fading.
 
 ### Fixes
-- **Discord Presence**: Presence dropped artwork, went stale, or stopped entirely. Artwork was sent as a raw URL where Discord only accepts an asset key, so every state change replaced good artwork with a broken-image placeholder; asset keys are now cached and reused. Rapid play/pause blew past Discord's rate limit and stranded the profile on a stale state, so updates now coalesce to one every 4 seconds with the newest state winning. And once the access token aged out, presence stopped for good, and that case now refreshes the token and reconnects instead of giving up.
-- **Playback Errors**: When a track failed to play, the app said nothing useful. It now shows the real reason.
-- **Slow Track Loading**: A track that was slow rather than broken could sit in silence for up to a minute while stream resolution worked through its fallbacks. Each attempt is now capped at 10 seconds and the whole chain at 25.
-- **Synced Lyrics Spacing**: Karaoke word timing could run words together, like "Iwalkedalone", for providers that put the separating space at the start of a syllable instead of the end. Full-line lyrics were never affected.
-- **Volume Slider**: The slider thumb never lined up with the edge of the fill, because Material insets thumb travel by half the thumb width while the fill spans the whole track. The thumb is gone and the fill edge is now the position indicator; the full-height touch target and dragging are unchanged.
+- **Lyrics Styling**: Mobile lyrics did not match the desktop player. Sung words took the artwork's accent colour instead of staying white with the accent only tinting the sweep, inactive lines were too bright to let the current line stand out, and the type was several sizes small. The list also had no fade at its edges, so lines were sliced off at the top and bottom.
+- **Lyrics Colour**: The accent behind sung words was sampled separately from the backdrop, using a square crop of the cover where the backdrop uses the tall one, so the two disagreed about the song's colour. Both now read from the same sample.
+- **Pulling The Player Down**: Dragging the player down uncovered black. The player was a navigation destination, which meant the screen behind it had been torn out of the tree and there was nothing left to reveal; it is now presented over the app, so the pull uncovers the real page and the real mini player.
+- **Player Stuck Half Closed**: Releasing the pull-down before it committed could leave the player frozen part-way instead of springing back, because each drag update raced the spring-back animation for the same value. The drag no longer competes with the animation.
+- **Saved Albums**: The albums shelf listed whatever YouTube Music was surfacing on its library landing page rather than the albums actually saved to the account. Albums now come from the account's own albums tab.
+- **Album Subtitles**: Albums saved in Orchard read "Album - 2017 - 2017", because the whole browse line was stored where the artist name belongs and the year was then appended to it again. They now read "Artist - Year", including for albums already saved.
