@@ -132,4 +132,34 @@ class QueueEditorTest {
         assertEquals(1, result.currentIndex)
         assertEquals(listOf(a, b, e, c, d), result.tracks)
     }
+
+    @Test
+    fun restoreOrderPutsShuffledItemsBack() {
+        val restored = QueueEditor.restoreOrder(listOf(d, b, c), listOf("a", "b", "c", "d"), Track::id)
+
+        assertEquals(listOf(b, c, d), restored)
+    }
+
+    @Test
+    fun restoreOrderKeepsItemsAddedWhileShuffledAtTheEnd() {
+        val e = Track("e", "E", "Artist")
+        val f = Track("f", "F", "Artist")
+        val restored = QueueEditor.restoreOrder(listOf(f, c, e, b), listOf("a", "b", "c", "d"), Track::id)
+
+        assertEquals(listOf(b, c, f, e), restored)
+    }
+
+    @Test
+    fun restoreOrderLeavesAWhollyReplacedQueueAlone() {
+        val restored = QueueEditor.restoreOrder(listOf(c, b, d), listOf("x", "y", "z"), Track::id)
+
+        assertEquals(listOf(c, b, d), restored)
+    }
+
+    @Test
+    fun restoreOrderWithoutARememberedOrderIsANoOp() {
+        val restored = QueueEditor.restoreOrder(listOf(c, b, d), emptyList(), Track::id)
+
+        assertEquals(listOf(c, b, d), restored)
+    }
 }

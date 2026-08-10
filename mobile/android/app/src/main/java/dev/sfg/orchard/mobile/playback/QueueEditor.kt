@@ -103,6 +103,18 @@ object QueueEditor {
         return Result(updated, currentIndex)
     }
 
+    /**
+     * Puts [upcoming] back into [order], for turning shuffle off. Ids not in [order] (queued or
+     * autoplayed since) keep their relative order at the end; a queue replaced wholesale shares no
+     * ids and comes back untouched.
+     */
+    fun <T> restoreOrder(upcoming: List<T>, order: List<String>, id: (T) -> String): List<T> {
+        if (order.isEmpty() || upcoming.isEmpty()) return upcoming
+        val rank = order.withIndex().associate { (index, value) -> value to index }
+        // sortedBy is stable, so unranked items hold the relative order they were appended in.
+        return upcoming.sortedBy { rank[id(it)] ?: Int.MAX_VALUE }
+    }
+
     fun shuffleQueue(
         queue: List<Track>,
         currentIndex: Int,

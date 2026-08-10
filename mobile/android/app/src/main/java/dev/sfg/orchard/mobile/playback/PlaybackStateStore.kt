@@ -37,6 +37,8 @@ data class RestoredPlayback(
     val repeatMode: RepeatMode = RepeatMode.OFF,
     val contextTitle: String = "",
     val playWhenReady: Boolean = false,
+    /** Queue order from before shuffle was turned on, so the toggle stays reversible across a restart. */
+    val unshuffledOrder: List<String> = emptyList(),
 )
 
 /** Versioned JSON boundary kept Android-free so restoration rules are unit-testable. */
@@ -51,6 +53,9 @@ internal object PlaybackStateCodec {
             repeatMode = runCatching { RepeatMode.valueOf(root.optString("repeatMode")) }
                 .getOrDefault(RepeatMode.OFF),
             contextTitle = root.optString("contextTitle"),
+            unshuffledOrder = root.optJSONArray("unshuffledOrder")?.let { array ->
+                (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) }
+            }.orEmpty(),
             // Never resume audible playback solely because Android recreated
             // the process; the user or a media controller explicitly resumes.
             playWhenReady = false,
@@ -58,13 +63,14 @@ internal object PlaybackStateCodec {
     }
 
     fun encode(state: RestoredPlayback): JSONObject = JSONObject()
-        .put("version", 2)
+        .put("version", 3)
         .put("queue", CatalogJson.tracks(state.queue))
         .put("currentIndex", state.currentIndex)
         .put("positionMs", state.positionMs.coerceAtLeast(0))
         .put("shuffle", state.shuffle)
         .put("repeatMode", state.repeatMode.name)
         .put("contextTitle", state.contextTitle)
+        .put("unshuffledOrder", org.json.JSONArray(state.unshuffledOrder))
 }
 
 /**

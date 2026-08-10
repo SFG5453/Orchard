@@ -138,16 +138,6 @@ class LocalPlaybackController(
     }
     fun seek(positionMs: Long) = withController { it.seekTo(positionMs.coerceAtLeast(0)) }
     fun setShuffle(enabled: Boolean) = withController { it.shuffleModeEnabled = enabled }
-    fun shuffleUpcoming(random: kotlin.random.Random = kotlin.random.Random.Default) = withController { player ->
-        val current = player.currentMediaItemIndex
-        val total = player.mediaItemCount
-        val from = (current + 1).coerceAtLeast(0)
-        if (from >= total - 1) return@withController
-        val upcoming = (from until total).map { player.getMediaItemAt(it) }
-        val shuffled = FisherYates.shuffle(upcoming, random)
-        player.removeMediaItems(from, total)
-        player.addMediaItems(from, shuffled)
-    }
     fun replaceUpcoming(tracks: List<Track>) = withController { player ->
         val current = player.currentMediaItemIndex
         val total = player.mediaItemCount
@@ -155,9 +145,39 @@ class LocalPlaybackController(
         // from == total means nothing follows the current track. That is not a no-op case: Autoplay
         // refills exactly then, and the removal below is empty while the insert still appends.
         if (from > total) return@withController
-        val newMediaItems = tracks.map(MediaItemMapper::toMediaItem)
+        // Callers compute this tail from a snapshot, and the player may have advanced since: a
+        // track that was upcoming when the list was built can be the current one by the time it
+        // arrives. Writing it back unfiltered queues that track directly behind itself.
+        val played = (0..current.coerceAtMost(total - 1))
+            .mapTo(mutableSetOf()) { player.getMediaItemAt(it).mediaId }
+        val newMediaItems = tracks
+            .filter { it.id.isNotBlank() && it.id !in played }
+            .distinctBy(Track::id)
+            .map(MediaItemMapper::toMediaItem)
         player.removeMediaItems(from, total)
         player.addMediaItems(from, newMediaItems)
+    }
+
+    /**
+     * Appends tracks to the end of the queue, keeping it within [totalLimit] upcoming items.
+     *
+     * Autoplay refills from a request that was in the air while playback carried on, so it must not
+     * rewrite the tail it last saw — by the time the recommendations land, the queue underneath has
+     * moved. Appending against the player's live state instead of a snapshot is what keeps a refill
+     * from reinserting whatever became current while it was waiting.
+     */
+    fun appendUpcoming(tracks: List<Track>, totalLimit: Int) = withController { player ->
+        val known = (0 until player.mediaItemCount)
+            .mapTo(mutableSetOf()) { player.getMediaItemAt(it).mediaId }
+        val upcoming = player.mediaItemCount - player.currentMediaItemIndex - 1
+        val room = (totalLimit - upcoming).coerceAtLeast(0)
+        if (room == 0) return@withController
+        val additions = tracks
+            .filter { it.id.isNotBlank() && known.add(it.id) }
+            .take(room)
+            .map(MediaItemMapper::toMediaItem)
+        if (additions.isEmpty()) return@withController
+        player.addMediaItems(additions)
     }
     fun cycleRepeat() = withController {
         it.repeatMode = when (it.repeatMode) {
