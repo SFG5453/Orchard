@@ -40,6 +40,7 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.LibraryResult
@@ -88,6 +89,8 @@ class OrchardPlaybackService : MediaLibraryService() {
     // a handoff rather than the roles, so a filter never ends up automating the wrong track.
     private lateinit var playerFilter: dev.sfg.orchard.mobile.playback.smart.TransitionFilter
     private lateinit var spareFilter: dev.sfg.orchard.mobile.playback.smart.TransitionFilter
+    /** Queue order as it was when shuffle went on, so turning it off can put the queue back. */
+    private var unshuffledOrder: List<String> = emptyList()
     private val handler = Handler(Looper.getMainLooper())
     // Browse requests hit the network, so they are answered off the session thread.
     private val browseScope =
@@ -348,7 +351,42 @@ class OrchardPlaybackService : MediaLibraryService() {
                 setAudioAttributes(AUDIO_ATTRIBUTES, handlesAudioFocus)
                 setHandleAudioBecomingNoisy(true)
                 setWakeMode(C.WAKE_MODE_NETWORK)
+                keepQueueOrderUnshuffled(this)
             }
+    }
+
+    /**
+     * Makes shuffle mode a flag rather than a second, invisible running order.
+     *
+     * Orchard shuffles by reordering the queue ([shuffleUpcomingItems]), but ExoPlayer's own
+     * shuffle is a separate random permutation driving next/previous while the queue is projected
+     * in timeline order — so with shuffle on, Next played something the list never showed. The
+     * order clones itself across edits, so only a wholesale `setMediaItems` needs a re-assert.
+     */
+    private fun keepQueueOrderUnshuffled(target: ExoPlayer) {
+        if (target.shuffleOrder is ShuffleOrder.UnshuffledShuffleOrder) return
+        target.setShuffleOrder(ShuffleOrder.UnshuffledShuffleOrder(target.mediaItemCount))
+    }
+
+    /**
+     * Rebuilds queue items a rendered transition left pointing at a temp mix file or clipped past
+     * its overlap, restoring the canonical stream URI from the track JSON they still carry.
+     *
+     * Only items behind the playhead: the clip is still owed its effect until it plays, and during
+     * a transition that item sits directly ahead of the mix.
+     */
+    private fun clearSpentClipping(target: Player) {
+        for (index in 0 until target.currentMediaItemIndex) {
+            val item = target.getMediaItemAt(index)
+            val uri = item.localConfiguration?.uri
+            val spent =
+                item.clippingConfiguration != MediaItem.ClippingConfiguration.UNSET ||
+                    (uri != null && !MediaItemMapper.isOrchardUri(uri))
+            if (!spent) continue
+            val restored = MediaItemMapper.toMediaItem(MediaItemMapper.toTrack(item))
+            if (restored.mediaId.isBlank()) continue
+            target.replaceMediaItem(index, restored)
+        }
     }
 
     private fun restorePlayback() {
@@ -360,6 +398,10 @@ class OrchardPlaybackService : MediaLibraryService() {
             restored.positionMs,
         )
         player.setPlaylistMetadata(MediaMetadata.Builder().setTitle(restored.contextTitle).build())
+        // Re-asserted by hand because this runs before the listener that would otherwise catch the
+        // timeline change, and a restored queue with shuffle on is exactly the case that broke.
+        keepQueueOrderUnshuffled(player)
+        unshuffledOrder = restored.unshuffledOrder
         player.shuffleModeEnabled = restored.shuffle
         player.repeatMode = restored.repeatMode.toPlayerMode()
         player.playWhenReady = restored.playWhenReady
@@ -381,6 +423,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                 repeatMode = player.repeatMode.toRepeatMode(),
                 contextTitle = player.playlistMetadata.title?.toString().orEmpty(),
                 playWhenReady = player.playWhenReady,
+                unshuffledOrder = unshuffledOrder,
             )
         )
     }
@@ -462,6 +505,9 @@ class OrchardPlaybackService : MediaLibraryService() {
                         Player.EVENT_PLAYLIST_METADATA_CHANGED,
                     )
                 ) {
+                    if (events.contains(Player.EVENT_TIMELINE_CHANGED) && ::player.isInitialized) {
+                        keepQueueOrderUnshuffled(this@OrchardPlaybackService.player)
+                    }
                     persistPlayback()
                     updateCustomLayout()
                 }
@@ -471,6 +517,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                         Player.EVENT_MEDIA_ITEM_TRANSITION,
                     )
                 ) {
+                    clearSpentClipping(player)
                     prefetchAround(player)
                     // A transition alone cannot measure anything: the duration
                     // the measurement
@@ -482,7 +529,15 @@ class OrchardPlaybackService : MediaLibraryService() {
             }
 
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
-                if (shuffleModeEnabled && ::player.isInitialized) shuffleUpcomingItems(player)
+                if (!::player.isInitialized) return
+                if (shuffleModeEnabled) {
+                    // Taken before the shuffle, because after it there is nothing left to remember.
+                    unshuffledOrder = queueMediaIds(player)
+                    shuffleUpcomingItems(player)
+                } else {
+                    restoreUpcomingOrder(player)
+                    unshuffledOrder = emptyList()
+                }
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -552,6 +607,26 @@ class OrchardPlaybackService : MediaLibraryService() {
         targetPlayer.removeMediaItems(from, total)
         targetPlayer.addMediaItems(from, shuffled)
     }
+
+    /**
+     * Mirror of [shuffleUpcomingItems]. Shuffling rewrites the queue, so without this, switching
+     * shuffle off restores nothing and the toggle looks one-way.
+     */
+    private fun restoreUpcomingOrder(targetPlayer: Player) {
+        if (unshuffledOrder.isEmpty()) return
+        val current = targetPlayer.currentMediaItemIndex
+        val total = targetPlayer.mediaItemCount
+        val from = (current + 1).coerceAtLeast(0)
+        if (from >= total - 1) return
+        val upcoming = (from until total).map { targetPlayer.getMediaItemAt(it) }
+        val restored = QueueEditor.restoreOrder(upcoming, unshuffledOrder, MediaItem::mediaId)
+        if (restored.map(MediaItem::mediaId) == upcoming.map(MediaItem::mediaId)) return
+        targetPlayer.removeMediaItems(from, total)
+        targetPlayer.addMediaItems(from, restored)
+    }
+
+    private fun queueMediaIds(targetPlayer: Player): List<String> =
+        (0 until targetPlayer.mediaItemCount).map { targetPlayer.getMediaItemAt(it).mediaId }
 
     private val sessionCallback =
         object : MediaLibrarySession.Callback {

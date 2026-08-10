@@ -210,9 +210,15 @@ class CrossfadeEngine(
     /**
      * Hands playback to a pre-rendered overlap, then to the incoming track past its far edge.
      *
-     * The standby player is given a two-item playlist (the rendered mix, then the rest of the
-     * incoming track clipped to resume where the mix left it) so ExoPlayer's own item transition
-     * covers the join rather than anything here having to.
+     * The standby player is given the whole queue with two slots rewritten: the outgoing track's
+     * slot becomes the rendered mix, and the incoming track's becomes the rest of itself clipped to
+     * resume where the mix left it. ExoPlayer's own item transition then covers the join rather
+     * than anything here having to.
+     *
+     * Rewriting in place rather than handing over a two-item playlist is what keeps the queue
+     * intact. The standby player becomes authoritative at [finish], and the service persists it
+     * from there, so anything missing from this playlist is not merely hidden for the length of the
+     * transition — it is gone from the queue and from disk.
      *
      * The outgoing player is faded out over a few milliseconds rather than stopped dead. Its audio
      * and the start of the rendered buffer are the same material, but the buffer's copy has been
@@ -225,17 +231,33 @@ class CrossfadeEngine(
     ): Boolean {
         val outgoing = active ?: return false
         val incoming = standby ?: return false
+        val currentIndex = outgoing.currentMediaItemIndex
         val nextIndex = outgoing.nextMediaItemIndex
         if (nextIndex == C.INDEX_UNSET) return false
+        // The rewrite below assumes the two slots are adjacent. A wrap under repeat-all, or any
+        // other non-adjacent next, falls back to the volume ramp, which loads the queue whole.
+        if (nextIndex != currentIndex + 1) return false
         if (!prepared.file.exists()) return false
 
-        val remainder = outgoing.getMediaItemAt(nextIndex).buildUpon()
+        val queue = buildList<MediaItem> {
+            for (index in 0 until outgoing.mediaItemCount) add(outgoing.getMediaItemAt(index))
+        }
+
+        // The mix opens with the outgoing track's own tail, so it keeps that track's identity:
+        // media id, metadata and the track JSON the queue and persistence are rebuilt from. Only
+        // the URI changes, and a file URI passes the stream resolver through untouched.
+        val mix = queue[currentIndex].buildUpon()
+            .setUri(android.net.Uri.fromFile(prepared.file))
+            .setClippingConfiguration(MediaItem.ClippingConfiguration.UNSET)
+            .build()
+        val remainder = queue[nextIndex].buildUpon()
             .setClippingConfiguration(
                 MediaItem.ClippingConfiguration.Builder()
                     .setStartPositionMs((prepared.incomingResumeSeconds * 1000).toLong().coerceAtLeast(0))
                     .build(),
             )
             .build()
+        val playlist = spliceInPlace(queue, currentIndex, mix, remainder)
 
         fading = true
         fadeStartedAt = SystemClock.elapsedRealtime()
@@ -247,11 +269,7 @@ class CrossfadeEngine(
         incoming.repeatMode = outgoing.repeatMode
         incoming.shuffleModeEnabled = outgoing.shuffleModeEnabled
         incoming.setPlaylistMetadata(outgoing.playlistMetadata)
-        incoming.setMediaItems(
-            listOf(MediaItem.fromUri(android.net.Uri.fromFile(prepared.file)), remainder),
-            0,
-            0L,
-        )
+        incoming.setMediaItems(playlist, currentIndex, 0L)
         incoming.setPlaybackParameters(PlaybackParameters.DEFAULT)
         incoming.prepare()
         incoming.play()
@@ -435,36 +453,53 @@ class CrossfadeEngine(
         outgoing.pauseAtEndOfMediaItems = false
     }
 
-    private companion object {
-        const val TAG = "OrchardCrossfade"
+    companion object {
+        /**
+         * The queue a rendered transition plays from: the same queue, with the outgoing and
+         * incoming slots rewritten in place.
+         *
+         * Separated out and kept total because the size and offsets are the whole point. The
+         * standby player becomes authoritative the moment the transition finishes and the service
+         * persists it from there, so a playlist that is short by one is a queue the listener has
+         * permanently lost the tail of — which is what a two-item playlist here used to do.
+         */
+        internal fun <T> spliceInPlace(queue: List<T>, currentIndex: Int, mix: T, remainder: T): List<T> {
+            val nextIndex = currentIndex + 1
+            require(currentIndex >= 0 && nextIndex <= queue.lastIndex) {
+                "splice needs an adjacent pair inside the queue, got $currentIndex of ${queue.size}"
+            }
+            return queue.take(currentIndex) + mix + remainder + queue.drop(nextIndex + 1)
+        }
 
-        const val WATCH_INTERVAL_MS = 200L
-        const val RAMP_INTERVAL_MS = 40L
+        private const val TAG = "OrchardCrossfade"
+
+        private const val WATCH_INTERVAL_MS = 200L
+        private const val RAMP_INTERVAL_MS = 40L
 
         /** One ramp tick. Below this a fade is a cut, not a ramp. */
-        const val MIN_RAMP_MS = 40L
+        private const val MIN_RAMP_MS = 40L
 
         /**
          * How long the live outgoing track takes to give way to the rendered buffer. Short enough
          * that two phase-divergent copies of the same audio never overlap audibly, long enough that
          * the cut is not a click.
          */
-        const val SPLICE_FADE_MS = 60L
+        private const val SPLICE_FADE_MS = 60L
 
         /**
          * How far the low-pass travels toward the bass crossover by the end of the overlap. Short of
          * 1.0 on purpose: closing all the way onto the bass band leaves the outgoing track as a
          * rumble, which reads as a fault rather than as a mix.
          */
-        const val SWEEP_DEPTH = 0.85f
+        private const val SWEEP_DEPTH = 0.85f
 
         /** Where the low end changes hands, past the equal-power crossing by design. */
         // Let the incoming low end arrive sooner. Keeping this just past the
         // equal-power midpoint avoids an early kick while preventing the bass
         // from feeling withheld through most of the blend.
-        const val BASS_SWAP_AT = 0.4f
+        private const val BASS_SWAP_AT = 0.4f
 
         /** How far the low band is taken down on the track that has given it up. */
-        const val BASS_DUCK = 0.12
+        private const val BASS_DUCK = 0.12
     }
 }

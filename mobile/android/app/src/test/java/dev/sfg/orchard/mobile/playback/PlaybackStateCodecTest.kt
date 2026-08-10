@@ -65,4 +65,25 @@ class PlaybackStateCodecTest {
         assertEquals(0, restored.positionMs)
         assertEquals(RepeatMode.OFF, restored.repeatMode)
     }
+
+    @Test
+    fun unshuffledOrderSurvivesRoundTripSoTheToggleStaysReversible() {
+        val restored = PlaybackStateCodec.decode(PlaybackStateCodec.encode(
+            RestoredPlayback(
+                queue = listOf(Track("a", "First", "Artist"), Track("b", "Second", "Artist")),
+                shuffle = true,
+                unshuffledOrder = listOf("a", "b"),
+            ),
+        ))
+
+        assertEquals(listOf("a", "b"), restored.unshuffledOrder)
+    }
+
+    @Test
+    fun stateSavedBeforeUnshuffledOrderExistedRestoresEmpty() {
+        val legacy = PlaybackStateCodec.encode(RestoredPlayback(listOf(Track("a", "Song", "Artist"))))
+        legacy.remove("unshuffledOrder")
+
+        assertEquals(emptyList<String>(), PlaybackStateCodec.decode(legacy).unshuffledOrder)
+    }
 }

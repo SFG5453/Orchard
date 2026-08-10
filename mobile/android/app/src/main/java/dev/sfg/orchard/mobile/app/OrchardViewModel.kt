@@ -311,7 +311,12 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         playAll(listOf(track), contextTitle = contextTitle)
     }
 
-    fun playAll(tracks: List<Track>, startIndex: Int = 0, contextTitle: String = "") {
+    fun playAll(
+        tracks: List<Track>,
+        startIndex: Int = 0,
+        contextTitle: String = "",
+        shuffle: Boolean = false,
+    ) {
         Log.d(TAG, "playAll: ${tracks.size} tracks, startIndex=$startIndex, contextTitle='$contextTitle'")
         if (tracks.isEmpty()) return
         val safeIndex = startIndex.coerceIn(tracks.indices)
@@ -322,16 +327,27 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val start = graph.audioVersions.audioVersion(tracks[safeIndex])
             Log.d(TAG, "playAll: starting playback with track ${start.id} ('${start.title}')")
-            val queue = tracks.toMutableList().apply { this[safeIndex] = start }
+            val requested = tracks.toMutableList().apply { this[safeIndex] = start }
+            // Normalized here rather than only inside replaceQueue, because the audio-version
+            // lookups below address the queue by index. Letting the player dedupe on its own would
+            // shift every index past the first duplicate and aim each swap at the wrong track.
+            val edited = QueueEditor.replaceAndPlay(requested, safeIndex)
+            val queue = edited.tracks
 
             when (targets.value.selected) {
-                PlaybackTarget.LocalPhone -> local.replaceQueue(queue, safeIndex, contextTitle = source)
+                PlaybackTarget.LocalPhone -> {
+                    local.replaceQueue(queue, edited.currentIndex, contextTitle = source)
+                    // After the queue lands, never before: the service remembers the order it
+                    // shuffles over, and enabling shuffle first would have it remember the queue
+                    // this one is replacing — leaving nothing to restore when shuffle goes off.
+                    if (shuffle) local.setShuffle(true)
+                }
                 is PlaybackTarget.Remote -> graph.connect.transfer(start)
             }
             graph.library.recordPlayed(start)
 
             if (targets.value.selected is PlaybackTarget.LocalPhone) {
-                resolveRemainingAudioVersions(queue, safeIndex)
+                resolveRemainingAudioVersions(queue, edited.currentIndex)
             }
         }
     }
@@ -369,10 +385,20 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /**
+     * Plays a collection shuffled. The queue goes in unshuffled and the service shuffles what
+     * follows the randomly chosen opener, so the collection's own order is what shuffle is
+     * remembered as being turned on over and switching it off restores the album or playlist.
+     */
     fun shuffleAll(tracks: List<Track>, contextTitle: String = "") {
-        val shuffled = QueueEditor.shuffle(tracks)
-        playAll(shuffled, contextTitle = contextTitle)
-        if (targets.value.selected is PlaybackTarget.LocalPhone) local.setShuffle(true)
+        val playable = tracks.distinctBy(Track::id).filter { it.id.isNotBlank() }
+        if (playable.isEmpty()) return
+        playAll(
+            playable,
+            startIndex = kotlin.random.Random.Default.nextInt(playable.size),
+            contextTitle = contextTitle,
+            shuffle = true,
+        )
     }
 
     fun saveDetail(detail: BrowseDetail) {
@@ -420,9 +446,9 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun toggleShuffle() = remoteOrLocal(
         { if (connectProtocolVersion.value >= 2) graph.connect.toggleShuffle() },
         {
-            val enable = !playback.value.shuffle
-            if (enable) local.shuffleUpcoming()
-            local.setShuffle(enable)
+            // The service reshuffles the upcoming items itself when the flag turns on, so doing it
+            // here too would rewrite the queue twice for one toggle.
+            local.setShuffle(!playback.value.shuffle)
         },
     )
     fun cycleRepeat() = remoteOrLocal(
@@ -511,8 +537,10 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun appendAutoplayTracks(seedId: String, candidates: List<Track>) {
-        // Re-read the queue rather than trusting the trigger: the listener may have queued
-        // something, or skipped, while the request was in the air.
+        // Filtered against the queue as it stands rather than against the trigger, because the
+        // listener may have queued something, or skipped, while the request was in the air. The
+        // append itself filters again on the player's own state, which is the authoritative one;
+        // this pass only decides whether the seed is worth reporting as exhausted.
         val snapshot = playback.value
         val known = snapshot.queue.mapTo(mutableSetOf(), Track::id)
         snapshot.currentTrack?.id?.let(known::add)
@@ -525,7 +553,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
             mutableAutoplayError.value = "No more recommendations were found."
             return
         }
-        local.replaceUpcoming((snapshot.upcoming + additions).take(AUTOPLAY_TOTAL_LIMIT))
+        // Appended, never written back as a whole tail: the tail in this snapshot is already stale.
+        local.appendUpcoming(additions, AUTOPLAY_TOTAL_LIMIT)
     }
 
     fun setRemoteVolume(volume: Float) = graph.connect.setVolume(volume)
