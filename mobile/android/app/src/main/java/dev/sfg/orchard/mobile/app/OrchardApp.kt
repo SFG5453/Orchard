@@ -31,9 +31,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -58,7 +62,6 @@ import dev.sfg.orchard.mobile.ui.screens.DevicesScreen
 import dev.sfg.orchard.mobile.ui.screens.HomeScreen
 import dev.sfg.orchard.mobile.ui.screens.LibraryScreen
 import dev.sfg.orchard.mobile.ui.screens.NativeLoginScreen
-import dev.sfg.orchard.mobile.ui.screens.NowPlayingScreen
 import dev.sfg.orchard.mobile.ui.screens.SearchScreen
 import dev.sfg.orchard.mobile.ui.screens.SettingsScreen
 import dev.sfg.orchard.mobile.ui.screens.WelcomeScreen
@@ -77,23 +80,31 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val warning by viewModel.warning.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val transitionMarker by viewModel.transitionMarker.collectAsStateWithLifecycle()
-    val fullPlayer = route == Routes.NOW_PLAYING
-    val chromeHidden = fullPlayer || route == Routes.DEVICES || route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME
+
+    // The player is an overlay, not a destination. As a destination the NavHost tore the
+    // screen underneath out of the tree, so dragging the player down uncovered nothing but
+    // black — and the pill it collapses into did not exist to animate towards.
+    var playerOpen by rememberSaveable { mutableStateOf(false) }
+    // Where the pill sits on screen, so the player can shrink into it rather than slide off.
+    var readoutBounds by remember { mutableStateOf<Rect?>(null) }
+    // And its thumbnail specifically, which the player's cover flies into.
+    var readoutArtworkBounds by remember { mutableStateOf<Rect?>(null) }
+    // Outlives the player so the cover can fly on the way in as well as on the way out.
+    var playerCoverBounds by remember { mutableStateOf<Rect?>(null) }
+
+    val chromeHidden = route == Routes.DEVICES || route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME
     // Collection artwork runs under the status bar, so these screens take no top inset and
     // apply it themselves where the content actually needs it.
-    val artworkUnderStatusBar = fullPlayer || route == Routes.DETAIL
+    val artworkUnderStatusBar = route == Routes.DETAIL
 
     Scaffold(
         // Transparent so the artwork wash below shows through every screen.
         containerColor = Color.Transparent,
     ) { padding ->
-        // The full player paints its own artwork edge to edge, so the app wash stays out of its way.
-        if (!fullPlayer) {
-            ArtworkBackdrop(
-                artworkUrl = playback.currentTrack?.artworkUrl.orEmpty(),
-                animated = settings.animatedBackground,
-            )
-        }
+        ArtworkBackdrop(
+            artworkUrl = playback.currentTrack?.artworkUrl.orEmpty(),
+            animated = settings.animatedBackground,
+        )
 
         Box(Modifier.fillMaxSize()) {
             Box(
@@ -110,7 +121,9 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                         CanopyReadout(
                             playback = playback,
                             transition = transitionMarker,
-                            onOpen = { navController.navigate(Routes.NOW_PLAYING) },
+                            modifier = Modifier.onGloballyPositioned { readoutBounds = it.boundsInRoot() },
+                            onArtworkBounds = { readoutArtworkBounds = it },
+                            onOpen = { playerOpen = true },
                             onToggle = viewModel::togglePlayback,
                             onNext = viewModel::next,
                             onPrevious = viewModel::previous,
@@ -119,6 +132,25 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                     }
                 }
             }
+
+            // Sibling of the padded content rather than a child of it: the player is
+            // edge-to-edge and draws its own insets, and it has to paint over the pill
+            // it collapses into.
+            NowPlayingOverlay(
+                open = playerOpen,
+                onOpenChange = { playerOpen = it },
+                collapseBounds = readoutBounds,
+                collapseArtworkBounds = readoutArtworkBounds,
+                restingCoverBounds = playerCoverBounds,
+                onRestingCoverBounds = { playerCoverBounds = it },
+                nav = navController,
+                viewModel = viewModel,
+                playback = playback,
+                targets = targets,
+                library = library,
+                settings = settings,
+                modifier = Modifier.zIndex(50f),
+            )
 
             dev.sfg.orchard.mobile.ui.components.WarningBanner(
                 message = warning,
@@ -383,54 +415,6 @@ private fun OrchardNavigation(
                 onShareTrack = viewModel::shareTrack,
                 onShareCollection = viewModel::shareCollection,
                 onFetchSectionItems = viewModel::fetchSectionItems,
-            )
-        }
-        composable(Routes.NOW_PLAYING) {
-            val liked = playback.currentTrack?.let { track -> library.likedTracks.any { it.id == track.id } } == true
-            val transition by viewModel.transitionMarker.collectAsStateWithLifecycle()
-            val activeBitrate by viewModel.activeBitrate.collectAsStateWithLifecycle()
-            val autoplayLoading by viewModel.autoplayLoading.collectAsStateWithLifecycle()
-            val autoplayError by viewModel.autoplayError.collectAsStateWithLifecycle()
-            NowPlayingScreen(
-                autoplayEnabled = settings.autoplayEnabled,
-                autoplayLoading = autoplayLoading,
-                autoplayError = autoplayError,
-                onAutoplayEnabled = viewModel::setAutoplayEnabled,
-                playback = playback,
-                transition = transition,
-                targets = targets,
-                lyrics = lyrics,
-                animatedArtworkEnabled = settings.animatedArtwork,
-                showBitrate = settings.showBitrate,
-                bitrateKbps = activeBitrate,
-                liked = liked,
-                protocolVersion = connectProtocolVersion,
-                remoteVolume = connectRemoteVolume,
-                onRemoteVolumeChange = viewModel::setRemoteVolume,
-                onBack = nav::popBackStack,
-                onToggle = viewModel::togglePlayback,
-                onPrevious = viewModel::previous,
-                onNext = viewModel::next,
-                onSeek = viewModel::seek,
-                onShuffle = viewModel::toggleShuffle,
-                onRepeat = viewModel::cycleRepeat,
-                onLiked = { playback.currentTrack?.let(viewModel::toggleLiked) },
-                onDevices = { nav.navigate(Routes.DEVICES) },
-                onPlayQueueIndex = viewModel::playQueueIndex,
-                onRemoveQueueIndex = viewModel::removeQueueIndex,
-                onMoveQueueItem = viewModel::moveQueueItem,
-                onClearUpcoming = viewModel::clearUpcoming,
-                downloadedTrackIds = downloadedTrackIds,
-                onDownloadTrack = viewModel::downloadTrack,
-                onRemoveDownloadTrack = viewModel::removeDownload,
-                onAddToPlaylist = { playlistPickerTrack = it },
-                onShare = { playback.currentTrack?.let(viewModel::shareTrack) },
-                // Leaves the player so the collection is not buried underneath it.
-                onOpenCollection = { id ->
-                    viewModel.openDetail(id)
-                    nav.popBackStack()
-                    nav.navigate(Routes.detail(id))
-                },
             )
         }
         composable(Routes.DEVICES) {

@@ -64,6 +64,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.sfg.orchard.mobile.model.Album
 import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
@@ -518,12 +519,29 @@ private fun catalogSubtitle(item: CatalogItem): String = when (item) {
     is CatalogItem.Song -> item.track.artist
     // On an artist page the artist name is dropped upstream, so the year is
     // usually all that is left; elsewhere it reads as "SZA • 2022".
-    is CatalogItem.Record -> listOf(item.album.artist, item.album.year)
-        .filter(String::isNotBlank)
-        .joinToString(" • ")
+    is CatalogItem.Record -> albumSubtitle(item.album)
     is CatalogItem.Performer -> item.artist.subtitle.ifBlank { "Artist" }
     is CatalogItem.Collection -> item.playlist.author
 }
+
+/**
+ * "SZA • 2017".
+ *
+ * Albums saved before the artist field was populated correctly still hold the whole browse
+ * line — "Album • 2017" — in [Album.artist], which used to render as "Album • 2017 • 2017"
+ * once the year was appended. Rather than migrate the cache, the parts that were never an
+ * artist name are dropped on the way out.
+ */
+private fun albumSubtitle(album: Album): String {
+    val parts = album.artist.split("•").map(String::trim).filter(String::isNotBlank)
+    val artist = parts.filterNot { it.lowercase() in ALBUM_KIND_WORDS || YEAR_ONLY.matches(it) }
+    // A year stranded in the artist line is still the album's year if nothing else has it.
+    val year = album.year.ifBlank { parts.lastOrNull(YEAR_ONLY::matches).orEmpty() }
+    return (artist + year).filter(String::isNotBlank).distinct().joinToString(" • ")
+}
+
+private val ALBUM_KIND_WORDS = setOf("album", "single", "ep", "compilation")
+private val YEAR_ONLY = Regex("""\d{4}""")
 
 private fun catalogKind(item: CatalogItem): String = when (item) {
     is CatalogItem.Song -> "Song"

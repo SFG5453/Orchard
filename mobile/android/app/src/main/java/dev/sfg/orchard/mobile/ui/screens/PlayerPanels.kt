@@ -45,12 +45,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.ColorUtils
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.PlaybackTargetState
 import dev.sfg.orchard.mobile.model.Track
@@ -214,17 +212,4 @@ fun LyricsNotice(message: String) {
             textAlign = TextAlign.Center,
         )
     }
-}
-
-/**
- * Sampled cover accents can be muddy or near-black. Saturate and brighten until the colour reads
- * as a highlight against the dimmed artwork, falling back to white for greys with no hue to keep.
- */
-fun Color.readableOnDarkBackdrop(): Color {
-    val hsl = FloatArray(3)
-    ColorUtils.colorToHSL(toArgb(), hsl)
-    if (hsl[1] < 0.12f) return Color.White
-    hsl[1] = hsl[1].coerceIn(0.55f, 0.95f)
-    hsl[2] = hsl[2].coerceIn(0.62f, 0.80f)
-    return Color(ColorUtils.HSLToColor(hsl))
 }

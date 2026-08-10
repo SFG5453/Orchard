@@ -23,23 +23,18 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Icon
@@ -49,11 +44,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -87,48 +85,68 @@ internal fun LyricLines(
     val activeIndex = lines.indexOfLast { line -> line.startMs != null && line.startMs.toFloat() <= smoothPosition }
     val listState = rememberLazyListState()
     LaunchedEffect(activeIndex) {
-        if (activeIndex >= 0) listState.animateScrollToItem(activeIndex, -220)
+        if (activeIndex < 0) return@LaunchedEffect
+        // Desktop parks the active line just above centre via its 38% scroll padding.
+        val viewport = listState.layoutInfo.viewportSize.height
+        listState.animateScrollToItem(activeIndex, if (viewport > 0) -(viewport * 0.34f).toInt() else -220)
     }
     LazyColumn(
         state = listState,
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .verticalEdgeFade(),
         contentPadding = contentPadding,
     ) {
         itemsIndexed(lines) { index, line ->
             val active = index == activeIndex
-            Row(
+            Column(
                 Modifier.fillMaxWidth()
                     .clickable(enabled = line.startMs != null) { line.startMs?.let(onSeek) }
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .padding(vertical = LINE_SPACING),
             ) {
-                if (active) {
-                    Box(
-                        Modifier
-                            .size(width = 5.dp, height = 38.dp)
-                            .background(accent, RoundedCornerShape(3.dp))
+                if (line.words.isNotEmpty()) {
+                    TimedWords(line.words, smoothPosition, active, accent = accent)
+                } else {
+                    Text(
+                        line.text,
+                        color = if (active) Color.White else Color.White.copy(alpha = INACTIVE_ALPHA),
+                        style = lyricTextStyle(),
                     )
-                    Spacer(Modifier.size(12.dp))
                 }
-                Column(Modifier.weight(1f)) {
-                    if (line.words.isNotEmpty()) {
-                        TimedWords(line.words, smoothPosition, active, accent = accent)
-                    } else {
-                        Text(
-                            line.text,
-                            color = if (active) accent else Color.White.copy(alpha = if (activeIndex < 0) 0.85f else 0.35f),
-                            style = MaterialTheme.typography.headlineMedium.copy(fontSize = 22.sp),
-                            fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
-                        )
-                    }
-                    if (line.adlibs.isNotEmpty()) {
-                        TimedWords(line.adlibs, smoothPosition, active, adlib = true, accent = accent)
-                    }
+                if (line.adlibs.isNotEmpty()) {
+                    TimedWords(line.adlibs, smoothPosition, active, adlib = true, accent = accent)
                 }
             }
         }
     }
 }
+
+/** Matches the desktop lyric mask: `linear-gradient(transparent, #000 13%, #000 82%, transparent)`. */
+private fun Modifier.verticalEdgeFade(): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        drawRect(
+            brush = Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0f to Color.Transparent,
+                    0.13f to Color.Black,
+                    0.82f to Color.Black,
+                    1f to Color.Transparent,
+                ),
+            ),
+            blendMode = BlendMode.DstIn,
+        )
+    }
+
+@Composable
+private fun lyricTextStyle(adlib: Boolean = false) =
+    MaterialTheme.typography.headlineMedium.copy(
+        fontSize = if (adlib) 22.sp else 28.sp,
+        lineHeight = if (adlib) 28.sp else 35.sp,
+        fontWeight = FontWeight.Bold,
+        fontStyle = if (adlib) FontStyle.Italic else FontStyle.Normal,
+    )
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -160,18 +178,26 @@ private fun SmoothTimedWord(
         ((positionMs - start) / (end - start)).coerceIn(0f, 1f)
     } else if (lineActive && positionMs >= start) 1f else 0f
     val completed = lineActive && progress >= 1f
-    val style = if (adlib) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium.copy(fontSize = 22.sp)
+    val style = lyricTextStyle(adlib)
     val text = word.text.trim()
-    Box(Modifier.padding(end = 7.dp, bottom = 3.dp)) {
+    // Desktop keeps sung words white and only tints the sweep with the accent, so the
+    // artwork colour reads as a highlight rather than recolouring the whole line.
+    val sung = if (adlib) accent.copy(alpha = 0.76f) else Color.White
+    val unsung = Color.White.copy(
+        alpha = when {
+            !lineActive -> INACTIVE_ALPHA
+            adlib -> 0.48f
+            else -> UNSUNG_ALPHA
+        },
+    )
+    val fill = if (adlib) sung else lerp(Color.White, accent, 0.4f)
+    Box(Modifier.padding(end = 8.dp, bottom = 3.dp)) {
         Text(
             text = text,
-            color = if (completed) accent else Color.White.copy(alpha = if (lineActive) 0.50f else 0.35f),
+            color = if (completed) sung else unsung,
             style = style,
-            fontWeight = FontWeight.SemiBold,
-            fontStyle = if (adlib) FontStyle.Italic else FontStyle.Normal,
         )
         if (progress in 0.0001f..0.9999f) {
-            val fill = accent
             val fadeEnd = (progress + 0.10f).coerceAtMost(1f)
             Text(
                 text = text,
@@ -180,17 +206,20 @@ private fun SmoothTimedWord(
                         colorStops = arrayOf(
                             0f to fill,
                             progress to fill,
-                            fadeEnd to fill.copy(alpha = 0.20f),
-                            1f to Color.Transparent,
+                            fadeEnd to unsung,
+                            1f to unsung,
                         ),
                     ),
-                    shadow = Shadow(fill.copy(alpha = 0.40f), blurRadius = 8f),
+                    shadow = Shadow(fill.copy(alpha = 0.50f), blurRadius = 12f),
                 ),
-                fontWeight = FontWeight.Bold,
-                fontStyle = if (adlib) FontStyle.Italic else FontStyle.Normal,
             )
         }
     }
 }
 
 private const val PLAYER_POSITION_TICK_MS = 500f
+
+/** Colour ramp mirrored from the desktop `.lyrics-line` rules. */
+private const val INACTIVE_ALPHA = 0.18f
+private const val UNSUNG_ALPHA = 0.35f
+private val LINE_SPACING = 10.dp

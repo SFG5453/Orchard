@@ -51,12 +51,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.AnimatedArtworkVideo
 import dev.sfg.orchard.mobile.ui.components.RemoteArtwork
+import dev.sfg.orchard.mobile.ui.components.ArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
 
 /**
@@ -70,18 +74,15 @@ fun FullBleedPlayerBackdrop(
     track: Track,
     isPlaying: Boolean,
     animatedArtworkEnabled: Boolean,
+    /** Hoisted so anything drawn over the backdrop tints from the same sample. */
+    palette: ArtworkPalette,
+    onVideoFrame: (Bitmap?) -> Unit,
+    /** Where the cover actually sits, so a dismissal can fly it into the pill. */
+    onArtworkBounds: ((Rect) -> Unit)? = null,
     modifier: Modifier = Modifier,
     /** 0f outside a transition, rising to 1f at the handoff. Drives the cover handoff. */
     transitionProgress: Float = 0f,
 ) {
-    val verticalVideo = track.animatedArtworkVerticalUrl.ifBlank { track.animatedArtworkUrl }
-    // The cover is cropped into a tall box, so tell the sampler which strip survives.
-    val configuration = LocalConfiguration.current
-    val visibleAspect = configuration.screenWidthDp /
-        (configuration.screenHeightDp * ARTWORK_HEIGHT_FRACTION).coerceAtLeast(1f)
-    var videoFrame by remember(verticalVideo) { mutableStateOf<Bitmap?>(null) }
-    val palette = rememberArtworkPalette(track.artworkUrl, visibleAspect, videoFrame)
-
     val animatedBottom by animateColorAsState(
         targetValue = palette.bottom,
         animationSpec = tween(600),
@@ -139,6 +140,7 @@ fun FullBleedPlayerBackdrop(
                 .fillMaxWidth()
                 .fillMaxHeight(ARTWORK_HEIGHT_FRACTION)
                 .align(Alignment.TopCenter)
+                .onGloballyPositioned { onArtworkBounds?.invoke(it.boundsInRoot()) }
                 .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
                 .drawWithContent {
                     drawContent()
@@ -204,13 +206,27 @@ fun FullBleedPlayerBackdrop(
                             url = currentVideo,
                             active = isPlaying,
                             modifier = Modifier.fillMaxSize(),
-                            onFrame = { videoFrame = it },
+                            onFrame = onVideoFrame,
                         )
                     }
                 }
             }
         }
     }
+}
+
+/**
+ * The full-bleed backdrop's palette. Sampling depends on which strip of the cover the
+ * tall crop actually leaves on screen, so anything that wants to match the backdrop's
+ * colour has to sample through here rather than calling [rememberArtworkPalette] itself
+ * — a square sample of the same cover lands on a different colour.
+ */
+@Composable
+fun rememberFullBleedPalette(track: Track, videoFrame: Bitmap? = null): ArtworkPalette {
+    val configuration = LocalConfiguration.current
+    val visibleAspect = configuration.screenWidthDp /
+        (configuration.screenHeightDp * ARTWORK_HEIGHT_FRACTION).coerceAtLeast(1f)
+    return rememberArtworkPalette(track.artworkUrl, visibleAspect, videoFrame)
 }
 
 private const val ARTWORK_HEIGHT_FRACTION = 0.78f

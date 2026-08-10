@@ -377,8 +377,18 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     fun saveDetail(detail: BrowseDetail) {
         when (detail.kind) {
+            // `subtitle` is the whole browse line — "Album • 2017" — so putting it in the
+            // artist field rendered as "Album • 2017 • 2017" once the year was appended again.
             CatalogKind.ALBUM -> graph.library.saveAlbum(
-                Album(detail.id, detail.title, detail.subtitle, detail.artworkUrl, detail.year, detail.tracks),
+                Album(
+                    id = detail.id,
+                    title = detail.title,
+                    artist = detail.artist.ifBlank { detail.tracks.firstOrNull()?.artist.orEmpty() },
+                    artworkUrl = detail.artworkUrl,
+                    year = detail.year,
+                    tracks = detail.tracks,
+                    explicit = detail.explicit,
+                ),
             )
             CatalogKind.ARTIST -> graph.library.saveArtist(
                 Artist(detail.id, detail.title, detail.artworkUrl, detail.subtitle),

@@ -32,6 +32,7 @@ fun CanopyReadout(
     modifier: Modifier = Modifier,
     onPrevious: () -> Unit = {},
     transition: dev.sfg.orchard.mobile.model.TransitionMarker? = null,
+    onArtworkBounds: ((androidx.compose.ui.geometry.Rect) -> Unit)? = null,
 ) {
     MiniPlayer(
         playback = playback,
@@ -41,5 +42,6 @@ fun CanopyReadout(
         onClick = onOpen,
         modifier = modifier,
         transition = transition,
+        onArtworkBounds = onArtworkBounds,
     )
 }

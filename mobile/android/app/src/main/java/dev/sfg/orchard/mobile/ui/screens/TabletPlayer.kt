@@ -46,6 +46,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -60,7 +62,6 @@ import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.model.TransitionMarker
 import dev.sfg.orchard.mobile.ui.components.AnimatedArtworkVideo
 import dev.sfg.orchard.mobile.ui.components.RemoteArtwork
-import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
 
 /** Two-column layout used when the screen is wider than 600dp (tablets, foldables unfolded, landscape). */
 @Composable
@@ -69,6 +70,10 @@ fun TabletPlayerBody(
     playback: PlaybackSnapshot,
     targets: PlaybackTargetState,
     lyrics: LoadState<List<dev.sfg.orchard.mobile.model.LyricLine>>,
+    /** Sampled by the caller from the full-bleed backdrop so both agree on the colour. */
+    lyricAccent: Color,
+    /** The framed cover's bounds; on a tablet this, not the backdrop, is the cover you see. */
+    onCoverBounds: ((androidx.compose.ui.geometry.Rect) -> Unit)? = null,
     transition: TransitionMarker?,
     canControl: Boolean,
     localControls: Boolean,
@@ -121,6 +126,7 @@ fun TabletPlayerBody(
                 modifier = Modifier
                     .weight(1f)
                     .aspectRatio(1f)
+                    .onGloballyPositioned { onCoverBounds?.invoke(it.boundsInRoot()) }
                     .clip(RoundedCornerShape(20.dp)),
             ) {
                 AnimatedContent(
@@ -202,8 +208,6 @@ fun TabletPlayerBody(
                                 onAutoplayEnabled = onAutoplayEnabled,
                             )
                         } else {
-                            val palette = rememberArtworkPalette(track.artworkUrl)
-                            val lyricAccent = remember(palette.accent) { palette.accent.readableOnDarkBackdrop() }
                             when (lyrics) {
                                 is LoadState.Content -> LyricLines(
                                     lines = lyrics.value,
