@@ -250,6 +250,89 @@ class YouTubeStreamResolver(
         }
     }
 
+    /**
+     * Resolves a progressive stream through the signed-in Music client.
+     *
+     * Current YouTube requires a GVS proof token for most direct WEB formats, but
+     * deliberately exempts itag 18. Unlike Safari's HLS path, this URL is not held
+     * behind the account's pre-roll availability window, so playback can begin as
+     * soon as the player request and signature challenge finish.
+     */
+    fun resolveAuthenticatedDirect(videoId: String): ResolvedStream {
+        require(videoId.isNotBlank()) { "A YouTube video id is required" }
+        val cacheKey = "$videoId:AUTHENTICATED_DIRECT"
+        cached(cacheKey)?.let { return it }
+        val lock = locks.computeIfAbsent(cacheKey) { Any() }
+        synchronized(lock) {
+            cached(cacheKey)?.let { return it }
+            val account =
+                accountIdentity(videoId)
+                    ?: error("Sign in to YouTube to play age-restricted tracks")
+            val stream = chooseAuthenticatedItag18(webRemixPlayer(videoId, account))
+            streams[cacheKey] = stream
+            return stream
+        }
+    }
+
+    /** Slower fallback for sessions where the direct authenticated format is rejected. */
+    fun resolveAuthenticatedHls(videoId: String): ResolvedStream {
+        require(videoId.isNotBlank()) { "A YouTube video id is required" }
+        val cacheKey = "$videoId:AUTHENTICATED_HLS"
+        cached(cacheKey)?.let { return it }
+        val lock = locks.computeIfAbsent(cacheKey) { Any() }
+        synchronized(lock) {
+            cached(cacheKey)?.let { return it }
+            val account = accountIdentity(videoId)
+                ?: error("Sign in to YouTube to play age-restricted tracks")
+            val payload = webSafariPlayer(videoId, account)
+            val stream = chooseAudio(payload, qualityProvider())
+            check(stream.mimeType == HLS_MIME_TYPE) { "Safari did not return an HLS stream" }
+            streams[cacheKey] = stream
+            return stream
+        }
+    }
+
+    private fun chooseAuthenticatedItag18(payload: JSONObject): ResolvedStream {
+        val streaming = payload.optJSONObject("streamingData") ?: error("No streaming data returned")
+        val formats = streaming.optJSONArray("formats") ?: error("No muxed formats returned")
+        val format =
+            (0 until formats.length())
+                .mapNotNull(formats::optJSONObject)
+                .firstOrNull { it.optInt("itag") == AUTHENTICATED_DIRECT_ITAG }
+                ?: error("YouTube did not return authenticated itag $AUTHENTICATED_DIRECT_ITAG")
+        return resolvedFormat(payload, format)
+    }
+
+    private fun resolvedFormat(payload: JSONObject, format: JSONObject): ResolvedStream {
+        var rawUrl = format.optString("url")
+        if (rawUrl.isBlank()) {
+            val cipher = format.optString("signatureCipher").ifBlank { format.optString("cipher") }
+            val parsed = parseQuery(cipher)
+            val target =
+                parsed["url"]?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+                    ?: error("No url in authenticated signatureCipher")
+            val signature = parsed["s"]?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+            val signatureParameter =
+                parsed["sp"]?.let { java.net.URLDecoder.decode(it, "UTF-8") } ?: "sig"
+            rawUrl =
+                challengeSolver?.decipherUrl(target, signature, signatureParameter)
+                    ?: error("Challenge solver required for authenticated playback")
+        }
+        val expirySeconds = EXPIRY_PATTERN.find(rawUrl)?.groupValues?.getOrNull(1)?.toLongOrNull()
+        val expiry =
+            expirySeconds?.let { TimeUnit.SECONDS.toMillis(it) }
+                ?: System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(45)
+        val bitrateKbps = (format.optInt("bitrate") / 1000).coerceAtLeast(0)
+        Log.d(TAG, "Resolved authenticated itag ${format.optInt("itag")} @ ${bitrateKbps}kbps")
+        return ResolvedStream(
+            url = rawUrl,
+            mimeType = format.optString("mimeType"),
+            expiresAtMs = expiry,
+            bitrateKbps = bitrateKbps,
+            userAgent = payload.optString(REQUEST_USER_AGENT_KEY).ifBlank { WEB_USER_AGENT },
+        )
+    }
+
     private fun warmVisitor(videoId: String): Visitor {
         visitor?.let { return it }
         synchronized(visitorLock) {
@@ -323,7 +406,8 @@ class YouTubeStreamResolver(
     fun knownBitrateKbps(videoId: String): Int {
         if (videoId.isBlank()) return 0
         val quality = qualityProvider()
-        return streams["$videoId:${quality.name}"]?.bitrateKbps?.takeIf { it > 0 }
+        return streams["$videoId:AUTHENTICATED_DIRECT"]?.bitrateKbps?.takeIf { it > 0 }
+            ?: streams["$videoId:${quality.name}"]?.bitrateKbps?.takeIf { it > 0 }
             ?: streams["$videoId:${AudioQuality.HIGH.name}"]?.bitrateKbps?.takeIf { it > 0 }
             ?: 0
     }
@@ -498,7 +582,7 @@ class YouTubeStreamResolver(
         val playbackContext = JSONObject()
             .put(
                 "contentPlaybackContext",
-                JSONObject().put("signatureTimestamp", playerConfig.signatureTimestamp()),
+                JSONObject().put("signatureTimestamp", signatureTimestamp()),
             )
         val body = JSONObject()
             .put("context", JSONObject().put("client", clientContext).put("user", userContext))
@@ -524,8 +608,62 @@ class YouTubeStreamResolver(
                             header("Authorization", auth)
                         }
                         header("X-Goog-AuthUser", "0")
+                        header("X-Youtube-Bootstrap-Logged-In", "true")
                     } else if (it.id.isNotBlank()) {
                         header("X-Goog-Visitor-Id", it.id)
+                    }
+                }
+            }
+            .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        return executePlayer(request)
+    }
+
+    /**
+     * Safari's web player exposes HLS for signed-in non-Premium accounts. YouTube's
+     * direct WEB/WEB_REMIX URLs now require a GVS proof-of-origin token, while HLS
+     * remains playable without one.
+     */
+    private fun webSafariPlayer(videoId: String, visitor: Visitor?): JSONObject {
+        val clientContext = JSONObject()
+            .put("clientName", "WEB")
+            .put("clientVersion", WEB_CLIENT_VERSION)
+            .put("userAgent", WEB_SAFARI_USER_AGENT)
+            .put("hl", "en")
+            .put("gl", "US")
+            .apply { visitor?.id?.takeIf(String::isNotBlank)?.let { put("visitorData", it) } }
+        val body = JSONObject()
+            .put("context", JSONObject().put("client", clientContext))
+            .put("videoId", videoId)
+            .put("contentCheckOk", true)
+            .put("racyCheckOk", true)
+            .put(
+                "playbackContext",
+                JSONObject().put(
+                    "contentPlaybackContext",
+                    JSONObject()
+                        .put("html5Preference", "HTML5_PREF_WANTS")
+                        .put("signatureTimestamp", signatureTimestamp()),
+                ),
+            )
+        val request = Request.Builder()
+            .url("https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
+            .header("Content-Type", "application/json")
+            .header("User-Agent", WEB_SAFARI_USER_AGENT)
+            .header("X-Youtube-Client-Name", "1")
+            .header("X-Youtube-Client-Version", WEB_CLIENT_VERSION)
+            .header("Origin", "https://www.youtube.com")
+            .apply {
+                visitor?.let {
+                    if (it.id.isNotBlank()) header("X-Goog-Visitor-Id", it.id)
+                    if (it.cookie.isNotBlank()) header("Cookie", it.cookie)
+                    if (it.signedIn) {
+                        YouTubeSessionAuth.authorization(it.cookie, origin = "https://www.youtube.com")?.let { auth ->
+                            header("Authorization", auth)
+                        }
+                        header("X-Goog-AuthUser", "0")
+                        header("X-Origin", "https://www.youtube.com")
+                        header("X-Youtube-Bootstrap-Logged-In", "true")
                     }
                 }
             }
@@ -545,7 +683,7 @@ class YouTubeStreamResolver(
         val playbackContext = JSONObject()
             .put("contentPlaybackContext", JSONObject()
                 .put("html5Preference", "HTML5_PREF_WANTS")
-                .put("signatureTimestamp", playerConfig.signatureTimestamp()))
+                .put("signatureTimestamp", signatureTimestamp()))
         val body = JSONObject()
             .put("context", JSONObject().put("client", clientContext))
             .put("videoId", videoId)
@@ -598,6 +736,7 @@ class YouTubeStreamResolver(
                 ) {
                     Log.w(TAG, "Player rejected the signature timestamp; refreshing it")
                     playerConfig.invalidate()
+                    challengeSolver?.invalidatePlayer()
                 }
                 // Distinguish age-gated refusals so the retry chain can
                 // route them to the web/music players instead of a guest retry.
@@ -619,8 +758,25 @@ class YouTubeStreamResolver(
         return AGE_GATE_PATTERN.containsMatchIn(text)
     }
 
+    /**
+     * Uses the timestamp from the same player script that will decipher returned
+     * signatures. [playerConfig] remains the fallback for resolver-only tests and
+     * callers that do not install the WebView challenge solver.
+     */
+    private fun signatureTimestamp(): Int =
+        challengeSolver?.signatureTimestamp() ?: playerConfig.signatureTimestamp()
+
     private fun chooseAudio(payload: JSONObject, quality: AudioQuality): ResolvedStream {
         val streaming = payload.optJSONObject("streamingData") ?: error("No streaming data returned")
+        val userAgent = payload.optString(REQUEST_USER_AGENT_KEY).ifBlank { CLIENT_USER_AGENT }
+        streaming.optString("hlsManifestUrl").takeIf(String::isNotBlank)?.let { rawHlsUrl ->
+            val hlsUrl = challengeSolver?.decipherManifestUrl(rawHlsUrl) ?: rawHlsUrl
+            val expirySeconds = EXPIRY_PATTERN.find(hlsUrl)?.groupValues?.getOrNull(1)?.toLongOrNull()
+            val expiry = expirySeconds?.let { TimeUnit.SECONDS.toMillis(it) }
+                ?: System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(45)
+            Log.d(TAG, "Resolved HLS manifest for authenticated web playback")
+            return ResolvedStream(hlsUrl, HLS_MIME_TYPE, expiry, 0, userAgent)
+        }
         val formats = streaming.optJSONArray("adaptiveFormats") ?: JSONArray()
         val candidates = buildList {
             for (index in 0 until formats.length()) {
@@ -664,7 +820,6 @@ class YouTubeStreamResolver(
         val expiry = expirySeconds?.let { TimeUnit.SECONDS.toMillis(it) }
             ?: System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(45)
         val bitrateKbps = (chosen.optInt("bitrate") / 1000).coerceAtLeast(0)
-        val userAgent = payload.optString(REQUEST_USER_AGENT_KEY).ifBlank { CLIENT_USER_AGENT }
         Log.d(TAG, "Resolved ${chosen.optString("mimeType").substringBefore(';')} audio @ ${bitrateKbps}kbps")
         return ResolvedStream(url, chosen.optString("mimeType"), expiry, bitrateKbps, userAgent)
     }
@@ -702,6 +857,10 @@ class YouTubeStreamResolver(
         private const val IOS_USER_AGENT =
             "com.google.ios.youtube/20.11.6 (iPhone10,4; U; CPU iOS 16_7_7 like Mac OS X)"
         private const val WEB_REMIX_VERSION = "1.20260213.01.00"
+        private const val WEB_CLIENT_VERSION = "2.20260708.00.00"
+        const val WEB_SAFARI_USER_AGENT =
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 " +
+                "(KHTML, like Gecko) Version/15.5 Safari/605.1.15,gzip(gfe)"
         private const val PUBLIC_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
         private val FAILURE_BACKOFF_MS = TimeUnit.SECONDS.toMillis(20)
 
@@ -726,6 +885,8 @@ class YouTubeStreamResolver(
         private val AGE_GATE_PATTERN = Regex(
             """(?i)confirm[\s_-]*your[\s_-]*age|age[\s_-]*restrict|inappropriate for some users|LOGIN_REQUIRED""",
         )
+        private const val AUTHENTICATED_DIRECT_ITAG = 18
+        private const val HLS_MIME_TYPE = "application/x-mpegURL"
         private const val TAG = "YouTubeStreamResolver"
     }
 }

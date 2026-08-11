@@ -52,8 +52,21 @@ class YouTubeChallengeSolver(
     }
 
     private val playerCache = ConcurrentHashMap<String, String>()
+    private val nCache = ConcurrentHashMap<String, String>()
     private var webViewRef = AtomicReference<WebView?>()
     private val readyLatch = CountDownLatch(1)
+
+    /**
+     * A player build together with the signature timestamp baked into it.
+     *
+     * The player request and the decipher step must use this same build. Mixing the
+     * current timestamp with a pinned older script produces a plausible googlevideo
+     * URL whose signature the CDN rejects with HTTP 403.
+     */
+    data class PlayerScript(val url: String, val js: String, val signatureTimestamp: Int)
+
+    private val playerLock = Any()
+    @Volatile private var currentPlayer: PlayerScript? = null
 
     init {
         mainHandler.post {
@@ -96,6 +109,44 @@ class YouTubeChallengeSolver(
         }
     }
 
+    /** Returns the player build YouTube is serving now, with its matching timestamp. */
+    fun currentPlayer(): PlayerScript {
+        currentPlayer?.let { return it }
+        synchronized(playerLock) {
+            currentPlayer?.let { return it }
+            val url = runCatching { discoverPlayerUrl() }
+                .onFailure { Log.w(TAG, "Could not discover the live player build; using the pinned fallback", it) }
+                .getOrDefault(DEFAULT_PLAYER_URL)
+            val js = getPlayerJs(url)
+            val timestamp = extractSignatureTimestamp(js)
+                ?: error("Player JS at $url carried no signature timestamp")
+            Log.i(TAG, "Using player $url with signature timestamp $timestamp")
+            return PlayerScript(url, js, timestamp).also { currentPlayer = it }
+        }
+    }
+
+    fun signatureTimestamp(): Int = runCatching { currentPlayer().signatureTimestamp }
+        .onFailure { Log.w(TAG, "Falling back to the pinned signature timestamp", it) }
+        .getOrDefault(DEFAULT_SIGNATURE_TIMESTAMP)
+
+    /** Forces the next request and decipher operation to discover the live build again. */
+    fun invalidatePlayer() = synchronized(playerLock) {
+        currentPlayer?.let { playerCache.remove(it.url) }
+        currentPlayer = null
+    }
+
+    private fun discoverPlayerUrl(): String {
+        val req = Request.Builder()
+            .url("https://www.youtube.com/iframe_api")
+            .header("User-Agent", WEB_USER_AGENT)
+            .build()
+        client.newCall(req).execute().use { resp ->
+            check(resp.isSuccessful) { "iframe_api returned HTTP ${resp.code}" }
+            return extractPlayerUrl(resp.body.string())
+                ?: error("iframe_api carried no player build id")
+        }
+    }
+
     /**
      * Deciphers an encrypted signature and 'n' parameter for a given stream URL.
      */
@@ -103,13 +154,17 @@ class YouTubeChallengeSolver(
         streamUrl: String,
         encryptedSig: String?,
         sigParam: String = "sig",
-        playerUrl: String = DEFAULT_PLAYER_URL,
+        playerUrl: String? = null,
     ): String {
-        val playerJs = getPlayerJs(playerUrl)
+        val playerJs = if (playerUrl != null) getPlayerJs(playerUrl) else currentPlayer().js
         val uri = android.net.Uri.parse(streamUrl)
         val nVal = uri.getQueryParameter("n")
 
-        val (solvedSig, solvedN) = solve(playerJs, encryptedSig, nVal)
+        val cachedN = nVal?.let(nCache::get)
+        val (solvedSig, freshlySolvedN) = solve(playerJs, encryptedSig, nVal?.takeIf { cachedN == null })
+        val solvedN = cachedN ?: freshlySolvedN?.also { solved ->
+            nVal?.let { nCache[it] = solved }
+        }
 
         val uriBuilder = uri.buildUpon()
         if (solvedSig != null) {
@@ -138,6 +193,24 @@ class YouTubeChallengeSolver(
         }
 
         return uriBuilder.build().toString()
+    }
+
+    /**
+     * Solves the path-shaped `n` challenge used by YouTube's HLS manifests.
+     * Direct formats put this value in a query parameter, but manifests encode it
+     * as `/n/<challenge>/`; requesting that path unchanged lets the playlist load
+     * while its media chunks are rejected with HTTP 403.
+     */
+    fun decipherManifestUrl(manifestUrl: String): String {
+        val uri = android.net.Uri.parse(manifestUrl)
+        val path = uri.encodedPath.orEmpty()
+        val match = MANIFEST_N_PATTERN.find(path) ?: return manifestUrl
+        val challenge = match.groupValues[1]
+        val solved = nCache[challenge] ?: solve(currentPlayer().js, null, challenge).second
+            ?.also { nCache[challenge] = it }
+            ?: error("Failed to solve HLS manifest n challenge")
+        val solvedPath = path.replaceRange(match.range, "/n/$solved/")
+        return uri.buildUpon().encodedPath(solvedPath).build().toString()
     }
 
     /**
@@ -204,7 +277,26 @@ class YouTubeChallengeSolver(
     }
 
     companion object {
+        /** Only a network-failure fallback; normal playback discovers the live build. */
         const val DEFAULT_PLAYER_URL = "/s/player/854a788e/player_ias.vflset/en_US/base.js"
+        const val DEFAULT_SIGNATURE_TIMESTAMP = 20668
+        private val MANIFEST_N_PATTERN = Regex("/n/([^/]+)/")
+
+        internal fun extractPlayerUrl(iframeApi: String): String? {
+            val id = PLAYER_ID_PATTERN.find(iframeApi)?.groupValues?.getOrNull(1) ?: return null
+            return "/s/player/$id/player_ias.vflset/en_US/base.js"
+        }
+
+        internal fun extractSignatureTimestamp(playerJs: String): Int? =
+            STS_PATTERN.find(playerJs)?.groupValues?.getOrNull(1)?.toIntOrNull()
+
+        private const val WEB_USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+        // iframe_api escapes slashes in its JavaScript string, while fixtures and
+        // mirrors sometimes do not. The backslashes are therefore optional.
+        private val PLAYER_ID_PATTERN = Regex("""player\\?/([0-9a-zA-Z_-]{4,})\\?/""")
+        private val STS_PATTERN = Regex("""signatureTimestamp\s*[:=]\s*(\d+)""")
         private const val TAG = "YouTubeChallengeSolver"
     }
 }

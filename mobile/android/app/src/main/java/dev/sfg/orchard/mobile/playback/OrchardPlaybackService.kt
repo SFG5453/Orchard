@@ -40,7 +40,11 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ShuffleOrder
+import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.LibraryResult
@@ -327,7 +331,12 @@ class OrchardPlaybackService : MediaLibraryService() {
                 if (!MediaItemMapper.isOrchardUri(original.uri)) return@Factory original
                 val videoId = original.uri.lastPathSegment.orEmpty()
                 Log.d(TAG, "resolvingFactory: resolving videoId=$videoId")
-                val stream = streamResolver.resolve(videoId)
+                val stream =
+                    if (MediaItemMapper.requiresAuthenticatedDirect(original.uri)) {
+                        streamResolver.resolveAuthenticatedDirect(videoId)
+                    } else {
+                        streamResolver.resolve(videoId)
+                    }
                 if (stream.bitrateKbps > 0)
                     OrchardGraph.from(this@OrchardPlaybackService).activeBitrate.value =
                         stream.bitrateKbps
@@ -339,11 +348,63 @@ class OrchardPlaybackService : MediaLibraryService() {
                     .withUri(stream.url.toUri())
                     .withAdditionalHeaders(mapOf("User-Agent" to stream.userAgent))
             }
+        // HLS segment requests are created after the orchard manifest URI has been
+        // resolved, so they do not inherit that DataSpec's headers. Give the entire
+        // HLS data-source family Safari's identity to match the player response.
+        val hlsHttpFactory =
+            OkHttpDataSource.Factory(client)
+                .setDefaultRequestProperties(
+                    mapOf("User-Agent" to YouTubeStreamResolver.WEB_SAFARI_USER_AGENT),
+                )
+        val hlsUpstreamFactory = DefaultDataSource.Factory(this, hlsHttpFactory)
+        val hlsResolvingFactory =
+            ResolvingDataSource.Factory(hlsUpstreamFactory) { original ->
+                if (MediaItemMapper.requiresAuthenticatedHls(original.uri)) {
+                    val videoId = original.uri.lastPathSegment.orEmpty()
+                    val stream = streamResolver.resolveAuthenticatedHls(videoId)
+                    original
+                        .withUri(stream.url.toUri())
+                        .withAdditionalHeaders(mapOf("User-Agent" to stream.userAgent))
+                } else {
+                    original
+                }
+            }
         // Cache above resolution: it keys on the stable orchard:// URI, and a hit skips the
         // resolver entirely rather than re-resolving a CDN URL it does not need.
         val cachingFactory = streamCache.dataSourceFactory(resolvingFactory)
-        val mediaSourceFactory =
+        val progressiveMediaSourceFactory =
             DefaultMediaSourceFactory(this).setDataSourceFactory(cachingFactory)
+        val hlsMediaSourceFactory = HlsMediaSource.Factory(hlsResolvingFactory)
+        val mediaSourceFactory =
+            object : MediaSource.Factory {
+                override fun createMediaSource(mediaItem: MediaItem): MediaSource {
+                    val uri = mediaItem.localConfiguration?.uri
+                    return if (uri != null && MediaItemMapper.requiresAuthenticatedHls(uri)) {
+                        hlsMediaSourceFactory.createMediaSource(mediaItem)
+                    } else {
+                        progressiveMediaSourceFactory.createMediaSource(mediaItem)
+                    }
+                }
+
+                override fun getSupportedTypes(): IntArray =
+                    (progressiveMediaSourceFactory.supportedTypes.asIterable() + C.CONTENT_TYPE_HLS)
+                        .distinct()
+                        .toIntArray()
+
+                override fun setDrmSessionManagerProvider(
+                    drmSessionManagerProvider: DrmSessionManagerProvider,
+                ): MediaSource.Factory = apply {
+                    progressiveMediaSourceFactory.setDrmSessionManagerProvider(drmSessionManagerProvider)
+                    hlsMediaSourceFactory.setDrmSessionManagerProvider(drmSessionManagerProvider)
+                }
+
+                override fun setLoadErrorHandlingPolicy(
+                    loadErrorHandlingPolicy: LoadErrorHandlingPolicy,
+                ): MediaSource.Factory = apply {
+                    progressiveMediaSourceFactory.setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
+                    hlsMediaSourceFactory.setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
+                }
+            }
         val loadControl =
             DefaultLoadControl.Builder()
                 .setBufferDurationsMs(
@@ -624,6 +685,22 @@ class OrchardPlaybackService : MediaLibraryService() {
                 }
                 retriedMediaId = mediaId
                 streamResolver.invalidate(mediaId)
+                val failedItem = player.currentMediaItem
+                val failedUri = failedItem?.localConfiguration?.uri
+                if (
+                    failedItem != null &&
+                        failedUri != null &&
+                        MediaItemMapper.requiresAuthenticatedDirect(failedUri)
+                ) {
+                    val index = player.currentMediaItemIndex
+                    val position = player.currentPosition.coerceAtLeast(0)
+                    Log.w(TAG, "Direct authenticated stream failed; falling back to HLS", error)
+                    player.replaceMediaItem(index, MediaItemMapper.asAuthenticatedHlsFallback(failedItem))
+                    player.seekTo(index, position)
+                    player.prepare()
+                    player.play()
+                    return
+                }
                 Log.w(TAG, "Refreshing the failed stream once", error)
                 player.prepare()
                 player.play()
@@ -919,7 +996,18 @@ class OrchardPlaybackService : MediaLibraryService() {
         val current = player.currentMediaItemIndex
         for (index in current..current + 1) {
             if (index !in 0 until player.mediaItemCount) continue
-            streamResolver.prefetch(player.getMediaItemAt(index).mediaId)
+            val item = player.getMediaItemAt(index)
+            val uri = item.localConfiguration?.uri
+            // Authenticated progressive items are prefetched through StreamCache
+            // below, whose DataSource invokes their signed-in resolver. Running the
+            // ordinary resolver beside that would issue a competing guest fallback chain.
+            if (
+                uri == null ||
+                    (!MediaItemMapper.requiresAuthenticatedHls(uri) &&
+                        !MediaItemMapper.requiresAuthenticatedDirect(uri))
+            ) {
+                streamResolver.prefetch(item.mediaId)
+            }
         }
 
         val wanted =

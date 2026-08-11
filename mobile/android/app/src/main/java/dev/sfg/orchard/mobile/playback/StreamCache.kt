@@ -169,6 +169,10 @@ class StreamCache(
      */
     fun prefetch(uri: Uri) {
         if (!::readFactory.isInitialized || !::upstreamFactory.isInitialized) return
+        // HLS consists of a short-lived manifest and many segments. Treating the
+        // manifest as a progressive track marks a few KB as a fully cached song and
+        // later hands playlist text to the audio analyzer.
+        if (MediaItemMapper.requiresAuthenticatedHls(uri)) return
         val key = cacheKey(uri)
         if (inFlight.containsKey(key) || isFullyCached(uri)) return
         val writers = java.util.Collections.synchronizedList(mutableListOf<CacheWriter>())

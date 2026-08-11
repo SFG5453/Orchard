@@ -46,6 +46,19 @@ class YouTubeSessionAuthTest {
     }
 
     @Test
+    fun authorizationIncludesSecureCookieSchemes() {
+        val authorization = YouTubeSessionAuth.authorization(
+            cookieHeader = "__Secure-1PAPISID=one; __Secure-3PAPISID=three",
+            epochSeconds = 1_700_000_000,
+        ).orEmpty()
+
+        assertEquals(3, authorization.split(' ').count { it.endsWith("HASH") })
+        assert(authorization.startsWith("SAPISIDHASH "))
+        assert(authorization.contains(" SAPISID1PHASH "))
+        assert(authorization.contains(" SAPISID3PHASH "))
+    }
+
+    @Test
     fun dataSyncIdNormalizesDelegationAndPercentEscapes() {
         assertEquals("channel-id", YouTubeSessionAuth.normalizeDataSyncId("account-id%7C%7Cchannel-id"))
         assertEquals("account-id", YouTubeSessionAuth.normalizeDataSyncId("account-id||"))
