@@ -23,6 +23,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import dev.sfg.orchard.mobile.model.Track
 
 /** Converts provider-neutral tracks to Media3 items without persisting stream URLs. */
@@ -44,13 +45,22 @@ object MediaItemMapper {
             .setIsPlayable(true)
             .setExtras(extras)
             .build()
-        val uri = Uri.Builder().scheme(SCHEME).authority("stream").appendPath(track.id).build()
+        val uri = Uri.Builder()
+            .scheme(SCHEME)
+            .authority("stream")
+            .appendPath(track.id)
+            // Explicit tracks need the signed-in WEB_REMIX resolver. Its itag 18 is a
+            // normal progressive MP4, so it starts immediately instead of waiting for
+            // Safari HLS's pre-roll availability window.
+            .apply { if (track.explicit) appendQueryParameter(AUTHENTICATED_DIRECT, "1") }
+            .build()
         val requestMetadata = MediaItem.RequestMetadata.Builder()
             .setMediaUri(uri)
             .build()
         return MediaItem.Builder()
             .setMediaId(track.id)
             .setUri(uri)
+            .apply { if (track.explicit) setMimeType(MimeTypes.VIDEO_MP4) }
             .setRequestMetadata(requestMetadata)
             .setMediaMetadata(metadata)
             .build()
@@ -74,4 +84,28 @@ object MediaItemMapper {
     }
 
     fun isOrchardUri(uri: Uri): Boolean = uri.scheme == SCHEME && uri.host == "stream"
+
+    fun requiresAuthenticatedHls(uri: Uri): Boolean =
+        isOrchardUri(uri) && uri.getQueryParameter(AUTHENTICATED_HLS) == "1"
+
+    fun requiresAuthenticatedDirect(uri: Uri): Boolean =
+        isOrchardUri(uri) && uri.getQueryParameter(AUTHENTICATED_DIRECT) == "1"
+
+    /** Switches a failed direct authenticated stream to the slower, broadly compatible HLS path. */
+    fun asAuthenticatedHlsFallback(item: MediaItem): MediaItem {
+        val original = item.localConfiguration?.uri ?: return item
+        val uri =
+            original.buildUpon()
+                .clearQuery()
+                .appendQueryParameter(AUTHENTICATED_HLS, "1")
+                .build()
+        return item.buildUpon()
+            .setUri(uri)
+            .setMimeType(MimeTypes.APPLICATION_M3U8)
+            .setRequestMetadata(item.requestMetadata.buildUpon().setMediaUri(uri).build())
+            .build()
+    }
+
+    private const val AUTHENTICATED_DIRECT = "authenticated_direct"
+    private const val AUTHENTICATED_HLS = "authenticated_hls"
 }

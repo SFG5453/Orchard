@@ -69,8 +69,13 @@ object QueueEditor {
     }
 
     fun replaceAndPlay(tracks: List<Track>, startIndex: Int = 0): Result {
+        val selectedId = tracks.getOrNull(startIndex)?.id.orEmpty()
         val playable = tracks.distinctBy { it.id }.filter { it.id.isNotBlank() }
-        return Result(playable, normalizedIndex(playable, startIndex))
+        val selectedIndex = playable.indexOfFirst { it.id == selectedId }
+        return Result(
+            playable,
+            if (selectedIndex >= 0) selectedIndex else normalizedIndex(playable, startIndex),
+        )
     }
 
     fun shuffle(tracks: List<Track>, random: kotlin.random.Random = kotlin.random.Random.Default): List<Track> {

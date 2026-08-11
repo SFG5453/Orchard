@@ -40,6 +40,17 @@ class AgeGateTest {
         assertEquals("sig", map["sp"])
         assertEquals("https%3A%2F%2Frr1---sn-oxun-xx.googlevideo.com%2Fvideoplayback%3Fexpire%3D12345", map["url"])
     }
-}
 
+    @Test
+    fun testLivePlayerConfigExtractionKeepsBuildAndTimestampTogether() {
+        val iframeApi = "var scriptUrl = 'https:\\/\\/www.youtube.com\\/s\\/player\\/8d2a370b\\/www-widgetapi.js';"
+        val playerJs = "const config={signatureTimestamp:20672};"
+
+        assertEquals(
+            "/s/player/8d2a370b/player_ias.vflset/en_US/base.js",
+            YouTubeChallengeSolver.extractPlayerUrl(iframeApi),
+        )
+        assertEquals(20672, YouTubeChallengeSolver.extractSignatureTimestamp(playerJs))
+    }
+}
 

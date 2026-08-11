@@ -42,12 +42,28 @@ object YouTubeSessionAuth {
         origin: String = MUSIC_ORIGIN,
         epochSeconds: Long = System.currentTimeMillis() / 1_000,
     ): String? {
-        val loginCookie = loginCookieValue(cookieHeader) ?: return null
-        val source = "$epochSeconds $loginCookie $origin"
-        val digest = MessageDigest.getInstance("SHA-1").digest(source.toByteArray(Charsets.UTF_8))
-        val hash = digest.joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and 0xff) }
-        return "SAPISIDHASH ${epochSeconds}_$hash"
+        val cookies = parseCookies(cookieHeader)
+        val sapisid = cookies["SAPISID"] ?: cookies["__Secure-3PAPISID"] ?: cookies["APISID"]
+        val signedCookies = listOfNotNull(
+            sapisid?.let { "SAPISIDHASH" to it },
+            cookies["__Secure-1PAPISID"]?.let { "SAPISID1PHASH" to it },
+            cookies["__Secure-3PAPISID"]?.let { "SAPISID3PHASH" to it },
+        )
+        if (signedCookies.isEmpty()) return null
+        return signedCookies.joinToString(" ") { (scheme, value) ->
+            val source = "$epochSeconds $value $origin"
+            val digest = MessageDigest.getInstance("SHA-1").digest(source.toByteArray(Charsets.UTF_8))
+            val hash = digest.joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and 0xff) }
+            "$scheme ${epochSeconds}_$hash"
+        }
     }
+
+    private fun parseCookies(cookieHeader: String): Map<String, String> =
+        cookieHeader.split(';').mapNotNull { part ->
+            val separator = part.indexOf('=')
+            if (separator <= 0) return@mapNotNull null
+            part.substring(0, separator).trim() to part.substring(separator + 1).trim()
+        }.toMap()
 
     fun normalizeDataSyncId(value: String?): String {
         val decoded = value.orEmpty().trim().decodePercentEscapes()

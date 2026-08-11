@@ -70,6 +70,39 @@ class CatalogParserTest {
     }
 
     @Test
+    fun artistAlbumCardPrefersItsBrowseActionOverAPlayableTitle() {
+        val root = JSONObject(
+            """{
+              "header": {"musicImmersiveHeaderRenderer": {"title": {"runs": [{"text": "Ky."}]}}},
+              "contents": [{"musicCarouselShelfRenderer": {
+                "header": {"musicCarouselShelfBasicHeaderRenderer": {
+                  "title": {"runs": [{"text": "Albums"}]}
+                }},
+                "contents": [{"musicTwoRowItemRenderer": {
+                  "title": {"runs": [{
+                    "text": "Late Nights",
+                    "navigationEndpoint": {"watchEndpoint": {"videoId": "preview-video"}}
+                  }]},
+                  "subtitle": {"runs": [{"text": "Album • Ky. • 2026"}]},
+                  "navigationEndpoint": {"browseEndpoint": {
+                    "browseId": "MPRElate-nights",
+                    "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {"pageType": "MUSIC_PAGE_TYPE_ALBUM"}
+                    }
+                  }}
+                }}]
+              }}]
+            }""".trimIndent(),
+        )
+
+        val detail = CatalogParser.detail("UCartist", root)
+        val album = detail.sections.single().items.single()
+
+        assertTrue(album is CatalogItem.Record)
+        assertEquals("MPRElate-nights", album.stableId)
+    }
+
+    @Test
     fun searchKeepsOfficialArtistChannelsAndDropsUserChannels() {
         fun channel(name: String, browseId: String, pageType: String) = """
             {"musicTwoRowItemRenderer": {
@@ -414,4 +447,3 @@ class CatalogParserTest {
         assertTrue(track.explicit)
     }
 }
-
