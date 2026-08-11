@@ -19,6 +19,19 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '4.3.1',
+    codename: 'Zane Guessed',
+    date: 'August 11, 2026',
+    sections: [
+      {
+        title: 'Fixed',
+        items: [
+          'Restored playback for age-restricted YouTube tracks using authenticated WEB_REMIX playback, signature deciphering, and Safari HLS fallback.',
+        ]
+      }
+    ]
+  },
+  {
     version: '4.3.0',
     codename: 'Persian Inklings',
     date: 'August 7, 2026',

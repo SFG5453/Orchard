@@ -1,5 +1,5 @@
-## Orchard 4.3.0 "Persian Inklings"
+## Orchard 4.3.1 "Zane Guessed"
 
-### New And Improved
-- Orchard Mobile 1.1.0 is now available on the Orchard Website for Android! Includes age-gated stream support, playlist creation, song sharing, and full remote analysis pairing.
-- Added Orchard Connect track analysis protocol (v3) enabling paired mobile devices to request track analysis and receive cloud sync results.
+### Fixed
+- **Age-Restricted Playback Restored**: Ported authenticated WEB_REMIX playback and Safari HLS fallback to desktop, restoring playback for age-restricted YouTube tracks while maintaining challenge deciphering and player timestamp alignment.
+
