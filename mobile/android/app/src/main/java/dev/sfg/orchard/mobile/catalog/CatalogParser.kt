@@ -267,16 +267,15 @@ object CatalogParser {
         val title = JsonTraversal.text(shelf.optJSONObject("title"))
         if (title.isBlank()) return null
         val subtitle = JsonTraversal.text(shelf.optJSONObject("subtitle"))
-        val endpoint = titleRuns.firstOrNull()?.let(JsonTraversal::navigation)
-            ?: shelf.optJSONObject("onTap")?.let(JsonTraversal::navigation)
-            ?: JsonTraversal.navigation(shelf.optJSONObject("onTap"))
-            ?: JsonTraversal.navigation(shelf)
-        val videoId = JsonTraversal.videoId(endpoint)
-            .ifBlank { JsonTraversal.renderers(shelf.optJSONObject("onTap"), "watchEndpoint").firstOrNull()?.optString("videoId").orEmpty() }
-            .ifBlank { JsonTraversal.renderers(shelf.optJSONObject("title"), "watchEndpoint").firstOrNull()?.optString("videoId").orEmpty() }
+        val endpoint = cardEndpoint(shelf, titleRuns)
         val browseId = JsonTraversal.browseId(endpoint)
             .ifBlank { JsonTraversal.renderers(shelf.optJSONObject("onTap"), "browseEndpoint").firstOrNull()?.optString("browseId").orEmpty() }
             .ifBlank { JsonTraversal.renderers(shelf.optJSONObject("title"), "browseEndpoint").firstOrNull()?.optString("browseId").orEmpty() }
+        val videoId = if (browseId.isBlank()) {
+            JsonTraversal.videoId(endpoint)
+                .ifBlank { JsonTraversal.renderers(shelf.optJSONObject("onTap"), "watchEndpoint").firstOrNull()?.optString("videoId").orEmpty() }
+                .ifBlank { JsonTraversal.renderers(shelf.optJSONObject("title"), "watchEndpoint").firstOrNull()?.optString("videoId").orEmpty() }
+        } else ""
         val pageType = JsonTraversal.pageType(endpoint)
             .ifBlank {
                 JsonTraversal.renderers(shelf, "browseEndpointContextMusicConfig").firstOrNull()?.optString("pageType").orEmpty()
@@ -319,8 +318,9 @@ object CatalogParser {
         val title = JsonTraversal.text(renderer.optJSONObject("title"))
         if (title.isBlank()) return null
         val subtitle = JsonTraversal.text(renderer.optJSONObject("subtitle"))
-        val endpoint = titleRuns.firstOrNull()?.let(JsonTraversal::navigation) ?: JsonTraversal.navigation(renderer)
-        val playable = renderer.preferredPlayable(endpoint)
+        val endpoint = cardEndpoint(renderer, titleRuns)
+        val browseId = JsonTraversal.browseId(endpoint)
+        val playable = if (browseId.isBlank()) renderer.preferredPlayable(endpoint) else "" to ""
         val videoId = playable.first
         val art = JsonTraversal.largestThumbnail(renderer)
         if (videoId.isNotBlank()) {
@@ -328,7 +328,30 @@ object CatalogParser {
                 track(videoId, title, listOf(title, subtitle), art, renderer, musicVideoType = playable.second),
             )
         }
-        return browsable(JsonTraversal.browseId(endpoint), title, subtitle, art, JsonTraversal.pageType(endpoint), renderer)
+        return browsable(browseId, title, subtitle, art, JsonTraversal.pageType(endpoint), renderer)
+    }
+
+    /**
+     * Resolves the destination attached to a media card itself before considering its title.
+     *
+     * Artist album cards can carry a playable title endpoint as well as a direct album browse
+     * endpoint. Treating the title as authoritative turns the album into a song (or sends an
+     * unusable id to browse), even though tapping the card in YouTube Music opens the album. Menu
+     * endpoints are deliberately excluded: only direct card actions participate here.
+     */
+    private fun cardEndpoint(renderer: JSONObject, titleRuns: List<JSONObject>): JSONObject? {
+        val onTap = renderer.optJSONObject("onTap")
+        val candidates = buildList {
+            renderer.optJSONObject("navigationEndpoint")?.let(::add)
+            renderer.optJSONObject("endpoint")?.let(::add)
+            onTap?.takeIf { it.has("browseEndpoint") || it.has("watchEndpoint") }?.let(::add)
+            onTap?.optJSONObject("navigationEndpoint")?.let(::add)
+            onTap?.optJSONObject("endpoint")?.let(::add)
+            titleRuns.mapNotNullTo(this) { run -> run.optJSONObject("navigationEndpoint") }
+        }
+        return candidates.firstOrNull { JsonTraversal.browseId(it).isNotBlank() }
+            ?: candidates.firstOrNull { JsonTraversal.videoId(it).isNotBlank() }
+            ?: JsonTraversal.navigation(renderer)
     }
 
     /**
