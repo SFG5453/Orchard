@@ -33,6 +33,7 @@ import dev.sfg.orchard.mobile.artwork.ArtistImages
 import dev.sfg.orchard.mobile.artwork.TrackArtwork
 import dev.sfg.orchard.mobile.model.*
 import dev.sfg.orchard.mobile.connect.PlaybackTargetCoordinator
+import dev.sfg.orchard.mobile.playback.AutoplayRecommendations
 import dev.sfg.orchard.mobile.playback.LocalPlaybackController
 import dev.sfg.orchard.mobile.playback.QueueEditor
 import dev.sfg.orchard.mobile.songlinks.LinkResolution
@@ -542,11 +543,9 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         // append itself filters again on the player's own state, which is the authoritative one;
         // this pass only decides whether the seed is worth reporting as exhausted.
         val snapshot = playback.value
-        val known = snapshot.queue.mapTo(mutableSetOf(), Track::id)
-        snapshot.currentTrack?.id?.let(known::add)
-        val additions = candidates
-            .filter { it.id.isNotBlank() && known.add(it.id) }
-            .take(AUTOPLAY_QUEUE_LIMIT)
+        val known = snapshot.queue + listOfNotNull(snapshot.currentTrack)
+        val additions = AutoplayRecommendations
+            .select(known, candidates, AUTOPLAY_QUEUE_LIMIT)
             .map { it.copy(autoplayGenerated = true) }
         if (additions.isEmpty()) {
             autoplayExhaustedSeed = seedId

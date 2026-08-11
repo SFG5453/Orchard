@@ -167,14 +167,13 @@ class LocalPlaybackController(
      * from reinserting whatever became current while it was waiting.
      */
     fun appendUpcoming(tracks: List<Track>, totalLimit: Int) = withController { player ->
-        val known = (0 until player.mediaItemCount)
-            .mapTo(mutableSetOf()) { player.getMediaItemAt(it).mediaId }
+        val existing = (0 until player.mediaItemCount)
+            .map { MediaItemMapper.toTrack(player.getMediaItemAt(it)) }
         val upcoming = player.mediaItemCount - player.currentMediaItemIndex - 1
         val room = (totalLimit - upcoming).coerceAtLeast(0)
         if (room == 0) return@withController
-        val additions = tracks
-            .filter { it.id.isNotBlank() && known.add(it.id) }
-            .take(room)
+        val additions = AutoplayRecommendations
+            .select(existing, tracks, room)
             .map(MediaItemMapper::toMediaItem)
         if (additions.isEmpty()) return@withController
         player.addMediaItems(additions)
