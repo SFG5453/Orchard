@@ -80,6 +80,18 @@ class QueueEditorTest {
     }
 
     @Test
+    fun replaceKeepsTheSelectedTrackAfterEarlierRowsAreDropped() {
+        val result = QueueEditor.replaceAndPlay(
+            listOf(a, a.copy(title = "Duplicate"), Track("", "Invalid", ""), b, c),
+            startIndex = 3,
+        )
+
+        assertEquals(listOf(a, b, c), result.tracks)
+        assertEquals(1, result.currentIndex)
+        assertEquals(b, result.tracks[result.currentIndex])
+    }
+
+    @Test
     fun removingOnlyTrackProducesEmptySelection() {
         val result = QueueEditor.remove(listOf(a), 0, 0)
 
