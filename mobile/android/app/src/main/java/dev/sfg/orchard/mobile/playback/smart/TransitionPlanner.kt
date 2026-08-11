@@ -51,6 +51,9 @@ private const val AUTO_FALLBACK_SECONDS = 8.0
 /** Below this a track would spend too much of itself transitioning to be worth planning. */
 private const val MIN_SMART_DURATION_SECONDS = 45.0
 
+/** Leave enough incoming material after a calibrated handoff to avoid landing in its outro. */
+private const val MIN_INCOMING_CLEARANCE_SECONDS = 5.0
+
 private val KEY_INDEX = mapOf(
     "C" to 0, "C♯" to 1, "D♭" to 1, "D" to 2, "D♯" to 3, "E♭" to 3,
     "E" to 4, "F" to 5, "F♯" to 6, "G♭" to 6, "G" to 7, "G♯" to 8,
@@ -324,12 +327,12 @@ private fun phraseSwitch(
         // count of beats measured on the *incoming* grid, which is what the renderer stretches onto;
         // scheduling the ramp from it would run the fade at the wrong tempo's length.
         fadeSeconds = overlap,
-        // The fade runs through the incoming intro and closes on its drop, so it spans the whole
-        // overlap rather than starting once the drop has landed.
+        // The fade spans the whole overlap, including the mobile experiment's two bars of incoming
+        // arrangement, rather than starting once the drop has landed.
         handoffStartSeconds = 0.0,
         handoffDuration = overlap,
         incomingCueTime = planned.incomingCueTime,
-        incomingHandoffTime = planned.incomingDropTime,
+        incomingHandoffTime = planned.incomingHandoffTime,
         // Only the volume-ramp fallback uses this; a rendered overlap is already beat-matched by the
         // native stretcher and plays back at 1.0. Matching the incoming to the outgoing tempo is the
         // same ratio the renderer applies to the outgoing side.
@@ -533,10 +536,22 @@ fun planTransition(
         }
 
     val (overlap, transitionBeats, incomingPlaybackRate) = adaptiveOverlap(analysis, nextAnalysis)
-    val mixEnd = mixAnchor
     val currentBpm = analysis.bpm.orZero()
     val nextBpm = nextAnalysis.bpm.orZero()
     val handoffBpm = if (currentBpm > 0) currentBpm else nextBpm
+    val sameBeatBlend = currentBpm > 0 && nextBpm > 0 &&
+        abs(1 - normalizedTempoRatio(currentBpm, nextBpm)) <= 0.05 &&
+        (analysis.beatConfidence.orZero() >= 0.2 || nextAnalysis.beatConfidence.orZero() >= 0.2)
+    // The fully beat-matched phrase switch is intentionally conservative and can decline a pair
+    // whose key estimate is weak. Its DJ_BLEND fallback must retain the same mobile calibration,
+    // otherwise the exact tracks used to tune it silently take the old drop-to-content-end route.
+    val outgoingArrangementOverlap =
+        if (sameBeatBlend && mixOutAnchor.type == "content_end") {
+            min(ARRANGEMENT_OVERLAP_BEATS * 60 / currentBpm, MAX_DISCARDED_MUSIC_SECONDS)
+        } else {
+            0.0
+        }
+    val mixEnd = max(0.0, mixAnchor - outgoingArrangementOverlap)
     // An overlap is a musical length, so it is bounded in beats first. Bounding it in seconds meant
     // a faster track got a *longer* mix: at 140 BPM the sixteen-second cap ran to thirty-seven
     // beats, over nine bars, which stops sounding like a transition and starts sounding like two
@@ -548,9 +563,6 @@ fun planTransition(
         mixEnd * 0.4,
         if (nextLength > 0) nextLength * 0.4 else AUTO_TRANSITION_MAX_SECONDS,
     )
-    val sameBeatBlend = currentBpm > 0 && nextBpm > 0 &&
-        abs(1 - normalizedTempoRatio(currentBpm, nextBpm)) <= 0.05 &&
-        (analysis.beatConfidence.orZero() >= 0.2 || nextAnalysis.beatConfidence.orZero() >= 0.2)
     val handoffBeats = if (sameBeatBlend) 8 else 4
     val beatSeconds = if (handoffBpm > 0) 60 / handoffBpm else 0.5
     val handoffSeconds = if (handoffBpm > 0) {
@@ -564,7 +576,23 @@ fun planTransition(
     } else {
         0.0
     }
-    val incomingHandoffTime = incomingCuePoint(nextAnalysis)
+    val incomingDropTime = incomingCuePoint(nextAnalysis)
+    val alignedIncomingBpm = alignTempoOctave(currentBpm, nextBpm)
+    val requestedIncomingHandoff =
+        if (sameBeatBlend && alignedIncomingBpm > 0) {
+            incomingDropTime + ARRANGEMENT_OVERLAP_BEATS * 60 / alignedIncomingBpm
+        } else {
+            incomingDropTime
+        }
+    val maxIncomingHandoff = nextLength - MIN_INCOMING_CLEARANCE_SECONDS
+    // Preserve the analyzed drop when a short incoming track cannot afford the experimental tail.
+    // The conservative fallback is the old handoff, never a clamp to a point before the drop.
+    val incomingHandoffTime =
+        if (maxIncomingHandoff >= incomingDropTime) {
+            min(requestedIncomingHandoff, maxIncomingHandoff)
+        } else {
+            incomingDropTime
+        }
     val rawIncomingCueTime = incomingStartPoint(nextAnalysis)
     val analyzedIncomingHandoff = nextAnalysis.mixInTime
     val hasIncomingPreroll = analyzedIncomingHandoff.isFinite() &&
@@ -580,10 +608,9 @@ fun planTransition(
     val transitionStart: Double
 
     if (sameBeatBlend && beatSeconds > 0) {
-        // AutoMix-style transition for matching or near-matching BPM. The incoming track is cued
-        // from its start and plays its full intro underneath; incomingHandoffTime (the intro drop)
-        // decides when the main handoff lands. The overlap covers only the instrumental intro, so
-        // the outgoing track is fully gone by the time the incoming vocals arrive.
+        // AutoMix-style transition for matching or near-matching BPM. The incoming track uses its
+        // instrumental intro as runway, then lets two bars of arrangement live inside the blend.
+        // incomingHandoffTime decides where that calibrated window closes.
         val introDropTime = incomingHandoffTime / max(0.8, incomingPlaybackRate)
         val totalOverlap = clamp(introDropTime, min(12.0, maximumOverlap), maximumOverlap)
         val targetStart = max(0.0, mixEnd - totalOverlap)

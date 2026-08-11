@@ -254,7 +254,7 @@ class TransitionPlannerTest {
     }
 
     @Test
-    fun `an outro marker does not cut the song short`() {
+    fun `an outro marker does not become the exit anchor`() {
         // A 48s outro marker would discard far more than the budget allows, so the transition
         // still ends where the content does.
         val analysis = grid(126.0, 240.0).copy(
@@ -270,7 +270,50 @@ class TransitionPlannerTest {
             currentTime = 200.0,
             mode = CrossfadeMode.SMART,
         )
-        assertEquals(240.0, plan.transitionEnd, 1e-9)
+        assertEquals(240.0 - 8 * 60 / 126.0, plan.transitionEnd, 1e-9)
+    }
+
+    @Test
+    fun `the DJ blend fallback keeps the mobile two-bar calibration`() {
+        // Weak key evidence makes the conservative phrase-switch path decline this otherwise
+        // excellent tempo match. The fallback is still a DJ_BLEND and must not revert to the old
+        // content-end/drop alignment that was late on CN TOWER and early on Whisper My Name.
+        val outgoingBpm = 126.86624778039653
+        val incomingBpm = 125.07983112913352
+        val incomingDrop = 15.4969
+        val outgoing = grid(outgoingBpm, 242.0).copy(
+            contentEndTime = 242.0,
+            key = "B minor",
+            keyConfidence = 0.0,
+        )
+        val incoming = grid(incomingBpm, 222.601).copy(
+            mixInTime = incomingDrop,
+            mixInCandidates = listOf(
+                MixCandidate(time = incomingDrop, score = 0.8, type = "intro_drop"),
+            ),
+            audibleStartTime = 0.0,
+            key = "B minor",
+            keyConfidence = 0.0,
+        )
+
+        val plan = planTransition(
+            analysis = outgoing,
+            nextAnalysis = incoming,
+            currentTrack = track(seconds = 242.0),
+            nextTrack = track(id = "b", seconds = 0.0),
+            currentTime = 200.0,
+            mode = CrossfadeMode.SMART,
+        )
+
+        assertEquals("before-smart-duration", plan.reason)
+        assertEquals(TransitionStyle.DJ_BLEND, plan.transitionStyle)
+        assertEquals(242.0 - 8 * 60 / outgoingBpm, plan.transitionEnd, 1e-9)
+        assertEquals(incomingDrop + 8 * 60 / incomingBpm, plan.incomingHandoffTime, 1e-9)
+        assertEquals(
+            plan.incomingHandoffTime,
+            plan.incomingCueTime + plan.fadeSeconds * plan.incomingPlaybackRate,
+            1e-9,
+        )
     }
 
     @Test

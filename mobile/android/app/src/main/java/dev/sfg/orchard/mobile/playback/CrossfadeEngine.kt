@@ -181,7 +181,10 @@ class CrossfadeEngine(
                 Log.d(
                     TAG,
                     "Transition: rendered overlap, style=${plan.transitionStyle} " +
-                        "beats=${plan.transitionBeats} stretch=${prepared.stretchRatio}",
+                        "beats=${plan.transitionBeats} stretch=${prepared.stretchRatio} " +
+                        "out=${plan.transitionStart}..${plan.transitionEnd} " +
+                        "in=${plan.incomingCueTime}->${plan.incomingHandoffTime} " +
+                        "reason=${plan.reason}",
                 )
                 return
             }
@@ -193,7 +196,10 @@ class CrossfadeEngine(
                 TAG,
                 "Transition: volume ramp, style=${plan.transitionStyle} " +
                     "fadeMs=${plan.fadeMs} rate=${plan.incomingPlaybackRate} " +
-                    "renderReady=${prepared != null}",
+                    "renderReady=${prepared != null} " +
+                    "out=${plan.transitionStart}..${plan.transitionEnd} " +
+                    "in=${plan.incomingCueTime}->${plan.incomingHandoffTime} " +
+                    "reason=${plan.reason}",
             )
             beginFade(plan, remainingMs = endMs - player.currentPosition)
         }

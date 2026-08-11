@@ -24,19 +24,19 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Plans a beat-matched transition: the outgoing track fades out *through* the incoming track's
- * intro, reaching silence exactly as the incoming drops.
+ * Plans a beat-matched transition: the outgoing track fades out through the incoming track's
+ * intro and the first two bars after its analyzed drop.
  *
  * The intro is the runway. It is the part of a track written to have something else over it, so it
- * is the part the outgoing track fades across -- and by the time the incoming arrangement and vocal
- * arrive, the outgoing one is gone.
+ * is the part the outgoing track fades across. The arrangement is then allowed to arrive before
+ * the outgoing track is completely gone: that overlap is where the filter ride and bass handoff do
+ * real mixing rather than merely waiting for a clean boundary.
  *
- * This is a port of the desktop app's `src/audio/crossfade/wsolaPlanner.js`, and the two are meant
- * to stay identical: both feed the same native renderer (`native/transition/transition_render.cpp`,
- * compiled into this app by `cpp/CMakeLists.txt`) from the same analysis fields, so a pairing that
- * blends one way on the desktop should blend the same way here. Changing the shape of a mix belongs
- * in both files or neither. `WsolaPlannerTest` mirrors `test/wsolaPlanner.test.js` case for case to
- * keep that honest.
+ * This began as a port of the desktop app's `src/audio/crossfade/wsolaPlanner.js`. The mobile
+ * experiment deliberately chooses earlier outgoing material and later incoming material while
+ * continuing to feed the same native renderer (`native/transition/transition_render.cpp`, compiled
+ * into this app by `cpp/CMakeLists.txt`). Keep renderer-facing invariants aligned, but do not copy
+ * these anchor offsets to desktop until the experiment has proved itself.
  *
  * Planning is pure and cheap so it can run on every playback tick. The heavy work -- decoding PCM
  * and rendering the overlap natively -- belongs to [TransitionPreparer], which calls this first to
@@ -52,6 +52,14 @@ private const val MAX_FADE_BEATS = 16
 // A ceiling on the whole overlap regardless of how long the incoming intro is.
 private const val MAX_OVERLAP_SECONDS = 16.0
 
+// Apple AutoMix's CN TOWER -> Whisper My Name reference aligns about 3:50 on the outgoing track
+// with 0:12 on the incoming one. The unshifted drop-to-content-end plan aligns roughly 3:54 with
+// 0:08: two bars late on one deck and two bars early on the other. Moving each deck by the same
+// musical amount preserves the beat grid and overlap length while putting the incoming arrangement
+// inside the blend instead of making it the finish line. Applied only to a content-end exit on the
+// outgoing side; a real structural/energy exit has already supplied the earlier anchor.
+internal const val ARRANGEMENT_OVERLAP_BEATS = 8
+
 // One continuous equal-power fade across the whole overlap; see `handoff` and `bed` in
 // native/transition/transition_render.h, where 0.5/0.5 is documented as the plain symmetric
 // crossfade.
@@ -66,7 +74,7 @@ const val HANDOFF_FRACTION = 0.5
 const val BED_POSITION = 0.5
 
 // The low end still hands over late -- see `bass_swap` in the renderer -- but it is now a fraction
-// of a fade that ends at the drop rather than one that starts there.
+// of the continuous fade rather than a separate tail that starts at the drop.
 private const val BASS_SWAP_FRACTION = 0.4
 
 // ...and it is capped in absolute seconds as well, so a long overlap does not scale the hold up
@@ -131,6 +139,8 @@ sealed interface WsolaPlanResult {
         val stretchRatio: Double,
         val incomingCueTime: Double,
         val incomingDropTime: Double,
+        /** Where the blend finishes on the incoming timeline, after the arrangement has arrived. */
+        val incomingHandoffTime: Double,
         val incomingResumeTime: Double,
     ) : WsolaPlanResult
 }
@@ -200,11 +210,18 @@ fun planWsolaTransition(
     // windows below can be measured against it.
     val contentEnd = analysis.contentEndTime.orZero().takeIf { it != 0.0 } ?: outgoingLength
     val mixOutAnchor = resolveMixOutAnchor(analysis, contentEnd = contentEnd, duration = outgoingLength)
-    val overlapEndTarget = min(outgoingLength, mixOutAnchor.time)
+    val unshiftedOverlapEnd = min(outgoingLength, mixOutAnchor.time)
+    val outgoingArrangementOverlap =
+        if (mixOutAnchor.type == "content_end") {
+            min(ARRANGEMENT_OVERLAP_BEATS * outgoingBeatSeconds, MAX_DISCARDED_MUSIC_SECONDS)
+        } else {
+            0.0
+        }
+    val overlapEndTarget = max(MIN_CLEARANCE_SECONDS, unshiftedOverlapEnd - outgoingArrangementOverlap)
 
-    // The fade runs *through* the incoming track's intro and ends on its drop, so it can be at most
-    // as long as that intro. Quantized down to whole bars of the shared grid so both ends stay on a
-    // downbeat.
+    // Size the fade from the incoming intro. The mobile anchor shift below moves the resulting
+    // window as a unit, preserving its length and phase while carrying it two bars past the drop.
+    // Quantize down to whole bars of the shared grid so both ends stay on a downbeat.
     val audibleStart = incomingAudibleStart(nextAnalysis)
     val availableFadeBeats = max(0.0, incomingDropTime - audibleStart) / incomingBeatSeconds
     val cappedByOverlap = floor(floor(MAX_OVERLAP_SECONDS / incomingBeatSeconds) / 4).toInt() * 4
@@ -269,11 +286,19 @@ fun planWsolaTransition(
     val outgoingOverlapSeconds = overlapBeats * outgoingBeatSeconds
     val overlapSeconds = overlapBeats * incomingBeatSeconds
 
-    // The overlap ends on the drop, so the incoming track enters a whole fade ahead of it.
-    // `coverableBeats` guarantees this clears the audible start, so the fade is the overlap exactly
-    // and the invariant holds by construction rather than by a clamp that silently moves one end
-    // without the other.
-    val incomingCueTime = incomingDropTime - overlapSeconds
+    // Let the incoming arrangement live inside the final two bars of the blend. Moving both cue
+    // and handoff preserves the overlap's length and beat phase; only the chosen section of the
+    // incoming track changes. This is the deliberate mobile experiment that replaces the old
+    // "outgoing gone exactly at the drop" safety rail.
+    val requestedIncomingHandoff =
+        incomingDropTime + ARRANGEMENT_OVERLAP_BEATS * incomingBeatSeconds
+    val maxIncomingHandoff = incomingLength - MIN_CLEARANCE_SECONDS
+    // Do not make a short track "fit" by pulling the handoff back before its analyzed drop. That
+    // would silently undo the arrangement overlap and can even resume before the intended mix-in.
+    if (maxIncomingHandoff < incomingDropTime) return WsolaPlanResult.Refused("incoming-too-short")
+    val incomingHandoffTime = min(requestedIncomingHandoff, maxIncomingHandoff)
+    val incomingCueTime = incomingHandoffTime - overlapSeconds
+    if (incomingCueTime < audibleStart - 0.05) return WsolaPlanResult.Refused("incoming-no-runway")
 
     val startTarget = overlapEndTarget - outgoingOverlapSeconds
     val transitionStart = nearestAtOrBefore(analysis.downbeats, startTarget) ?: startTarget
@@ -305,6 +330,7 @@ fun planWsolaTransition(
         stretchRatio = stretchRatio,
         incomingCueTime = incomingCueTime,
         incomingDropTime = incomingDropTime,
+        incomingHandoffTime = incomingHandoffTime,
         incomingResumeTime = incomingResumeTime,
     )
 }

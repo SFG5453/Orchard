@@ -51,6 +51,37 @@ import kotlin.math.abs
 @UnstableApi
 object AudioDecoder {
 
+    /**
+     * Reads the audio duration advertised by a fully available media container.
+     *
+     * Queue metadata is not authoritative: some YouTube Music search rows omit the duration even
+     * though the resolved WebM carries it. Analysis already requires a fully cached file, so the
+     * container is the best fallback and opening only its track formats is much cheaper than a
+     * decode. The caller owns [source]; this function only owns the extractor attached to it.
+     */
+    fun containerDurationSeconds(source: MediaDataSource): Double? {
+        val extractor = MediaExtractor()
+        return try {
+            extractor.setDataSource(source)
+            (0 until extractor.trackCount)
+                .mapNotNull { index ->
+                    val format = extractor.getTrackFormat(index)
+                    val audio = format.getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
+                    if (!audio || !format.containsKey(MediaFormat.KEY_DURATION)) return@mapNotNull null
+                    format.getLong(MediaFormat.KEY_DURATION)
+                        .takeIf { it > 0 }
+                        ?.div(1_000_000.0)
+                }
+                .maxOrNull()
+                ?.takeIf { it.isFinite() && it > 0 }
+        } catch (error: Exception) {
+            Log.w(TAG, "Could not read duration from cached media", error)
+            null
+        } finally {
+            runCatching { extractor.release() }
+        }
+    }
+
     /** Decoded mono PCM at the container's own sample rate; the caller resamples. */
     data class Pcm(val samples: FloatArray, val sampleRate: Double) {
         val durationSeconds: Double get() = samples.size / sampleRate

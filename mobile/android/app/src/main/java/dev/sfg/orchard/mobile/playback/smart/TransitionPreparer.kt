@@ -173,7 +173,10 @@ class TransitionPreparer(
         // renderer needs room to stretch into, and the anchor is not at the edge of the overlap.
         val margin = overlap * 0.5 + MARGIN_SECONDS
         val outAnchor = nearestDownbeat(outgoingAnalysis, plan.transitionStart) ?: return null
-        val inAnchor = nearestDownbeat(incomingAnalysis, plan.incomingHandoffTime)
+        // The rendered buffer must start at the same cue the live two-player fallback uses. Using
+        // the handoff/drop here silently discarded the intro and made rendered and live versions
+        // of the same plan play different sections of the incoming track.
+        val inAnchor = nearestDownbeat(incomingAnalysis, plan.incomingCueTime)
             ?: plan.incomingCueTime
 
         val outgoing = decodeAround(outgoingUri, outAnchor, margin) ?: return null
@@ -218,8 +221,7 @@ class TransitionPreparer(
             endSeconds = plan.transitionStart + rendered.durationSeconds,
             // The overlap already contains the incoming track up to its own anchor plus the tail of
             // the overlap, so playback resumes past all of it.
-            incomingResumeSeconds = inAnchor - incoming.second +
-                (rendered.durationSeconds - (outAnchor - outgoing.second)) + incoming.second,
+            incomingResumeSeconds = inAnchor + rendered.durationSeconds,
             stretchRatio = rendered.stretchRatio,
         )
     }

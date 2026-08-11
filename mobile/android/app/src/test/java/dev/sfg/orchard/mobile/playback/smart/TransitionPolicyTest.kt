@@ -163,20 +163,21 @@ class TransitionPolicyTest {
     }
 
     @Test
-    fun `a sustained vocal tail becomes a yap-start cue when it is safe to leave`() {
+    fun `a sustained vocal tail does not become an exit cue`() {
         val analysis = maskedAnalysis(List(60) { second -> if (second >= 52) 0.9 else 0.1 })
             .copy(contentEndTime = 60.0)
-        assertEquals(52.0, findYapStartNearTail(analysis, 60.0)!!, 1e-9)
         val anchor = resolveMixOutAnchor(analysis)
-        assertEquals("yap_start", anchor.type)
-        assertEquals(52.0, anchor.time, 1e-9)
+        assertEquals("content_end", anchor.type)
+        assertEquals(60.0, anchor.time, 1e-9)
     }
 
     @Test
-    fun `a vocal tail longer than the skip budget still plays to content end`() {
-        val analysis = maskedAnalysis(List(60) { second -> if (second >= 40) 0.9 else 0.1 })
+    fun `a completed tail vocal does not become an exit cue`() {
+        val analysis = maskedAnalysis(List(60) { second -> if (second in 44..52) 0.9 else 0.1 })
             .copy(contentEndTime = 60.0)
-        assertEquals("content_end", resolveMixOutAnchor(analysis).type)
+        val anchor = resolveMixOutAnchor(analysis)
+        assertEquals("content_end", anchor.type)
+        assertEquals(60.0, anchor.time, 1e-9)
     }
 
     @Test

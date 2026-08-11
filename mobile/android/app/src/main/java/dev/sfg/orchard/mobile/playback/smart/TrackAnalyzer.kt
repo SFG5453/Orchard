@@ -51,6 +51,12 @@ enum class AnalysisScope {
     QUEUE,
 }
 
+/** Catalog metadata wins when present; otherwise use the duration measured from cached media. */
+internal fun analysisDuration(catalogSeconds: Double, containerSeconds: Double?): Double =
+    catalogSeconds.takeIf { it.isFinite() && it > 0 }
+        ?: containerSeconds?.takeIf { it.isFinite() && it > 0 }
+        ?: 0.0
+
 /**
  * Produces [TrackAnalysis] for tracks that are about to be mixed, and hands it to the planner.
  *
@@ -191,10 +197,7 @@ class TrackAnalyzer(
         durationSeconds: Double,
         scope: AnalysisScope = AnalysisScope.PLAYBACK,
     ) {
-        if (track.id.isBlank() || durationSeconds <= 0) {
-            Log.d(TAG, "Skipping ${track.id}: no duration yet")
-            return
-        }
+        if (track.id.isBlank()) return
         if (results.containsKey(track.id) || track.id in runningPlayback) return
         val running = if (scope == AnalysisScope.PLAYBACK) runningPlayback else runningQueue
         if (scope == AnalysisScope.QUEUE && queueResults.containsKey(track.id)) return
@@ -205,13 +208,32 @@ class TrackAnalyzer(
             return
         }
         if (!running.add(track.id)) return
-        Log.d(TAG, "Analysing ${track.id} (${track.title}), ${durationSeconds}s, $scope")
 
         val store = if (scope == AnalysisScope.PLAYBACK) results else queueResults
         executor.execute(
             Job(scope, sequence.incrementAndGet()) {
+                var effectiveDuration = durationSeconds
                 try {
-                    store[track.id] = analyze(track, uri, durationSeconds, scope)
+                    if (!effectiveDuration.isFinite() || effectiveDuration <= 0) {
+                        val measured = cache.mediaDataSource(uri)?.use(AudioDecoder::containerDurationSeconds)
+                        effectiveDuration = analysisDuration(effectiveDuration, measured)
+                    }
+                    if (effectiveDuration <= 0) {
+                        Log.d(TAG, "Skipping ${track.id}: cached media has no duration")
+                        store[track.id] = empty(track, 0.0)
+                        return@Job
+                    }
+                    Log.d(TAG, "Analysing ${track.id} (${track.title}), ${effectiveDuration}s, $scope")
+                    val result = analyze(track, uri, effectiveDuration, scope)
+                    store[track.id] = result
+                    Log.d(
+                        TAG,
+                        "Cues ${track.id}: contentEnd=${result.contentEndTime} " +
+                            "mixIn=${result.mixInTime} " +
+                            "mixInCandidates=${result.mixInCandidates.joinToString { "${it.type}@${it.time}" }} " +
+                            "mixOut=${result.mixOutTime} " +
+                            "mixOutCandidates=${result.mixOutCandidates.joinToString { "${it.type}@${it.time}" }}",
+                    )
                 } catch (error: Throwable) {
                     // Throwable, not Exception: analysis leans on native libraries, and a
                     // LinkageError or an OOM from one of them is an Error. Uncaught on a pool
@@ -223,7 +245,7 @@ class TrackAnalyzer(
                     store[track.id] = TrackAnalysis(
                         status = TrackAnalysis.STATUS_READY,
                         trackId = track.id,
-                        duration = durationSeconds,
+                        duration = effectiveDuration,
                     )
                 } finally {
                     running.remove(track.id)
