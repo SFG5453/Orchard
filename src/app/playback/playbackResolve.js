@@ -20,6 +20,7 @@
 import { nextTick } from 'vue';
 import { installPlaybackCollectionQueue, playlistPlayedTrackIds } from './playbackCollectionQueue.js';
 import { resumeMediaAt } from './playbackDuration.js';
+import { isHlsPlaybackMime, loadPlaybackSource } from './hlsPlayback.js';
 
 function trackDurationSeconds(item = {}) {
   const direct = Number(item.durationSeconds || 0);
@@ -231,13 +232,12 @@ export function installPlaybackResolve(ctx) {
         if (!audio) return false;
         audio.pause();
         ctx.prepareCorsMediaElement(audio);
-        audio.src = resolved.streamUrl;
         audio.volume = 1;
         ctx.audioAnalyzer.connectElement(audio);
         ctx.setAudioNormalization(audio);
         ctx.audioAnalyzer.setVolume(audio, 0);
-        audio.load();
-        if (ctx.crossfadeMode.value === 'smart') {
+        await loadPlaybackSource(audio, resolved.streamUrl, resolved.mimeType);
+        if (ctx.crossfadeMode.value === 'smart' && !isHlsPlaybackMime(resolved.mimeType)) {
           void ctx.analyzeNextCrossfadeTrack(next, resolved.streamUrl, trackDurationSeconds(next));
         }
         return true;
@@ -433,8 +433,7 @@ export function installPlaybackResolve(ctx) {
         audio?.pause();
       }
       ctx.prepareCorsMediaElement(media);
-      media.src = resolved.streamUrl;
-      media.load();
+      await loadPlaybackSource(media, resolved.streamUrl, resolved.mimeType);
 
       if (ctx.activeTrackIsVideo.value && resolved.audioStreamUrl && videoAudio) {
         ctx.prepareCorsMediaElement(videoAudio);
@@ -470,7 +469,7 @@ export function installPlaybackResolve(ctx) {
         durationSeconds: ctx.duration.value || ctx.activeTrack.value?.durationSeconds || 0
       });
 
-      if (!ctx.activeTrackIsVideo.value && ctx.crossfadeMode.value === 'smart') {
+      if (!ctx.activeTrackIsVideo.value && ctx.crossfadeMode.value === 'smart' && !isHlsPlaybackMime(resolved.mimeType)) {
         void ctx.analyzeCurrentCrossfadeTrack(
           ctx.activeTrack.value,
           resolved.streamUrl,

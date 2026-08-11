@@ -18,6 +18,7 @@
  */
 
 import { nextTick } from 'vue';
+import { releaseHlsPlayback } from '../playback/hlsPlayback.js';
 import { installLyricsActions } from '../playback/lyricsActions.js';
 
 export function installConnectionActions(ctx) {
@@ -131,6 +132,7 @@ export function installConnectionActions(ctx) {
 
   ctx.clearMediaElement = function clearMediaElement(element) {
     if (!element) return;
+    releaseHlsPlayback(element);
     element.pause();
     ctx.audioAnalyzer.setVolume(element, 0);
     element.removeAttribute('src');

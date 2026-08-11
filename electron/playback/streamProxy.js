@@ -25,6 +25,42 @@ const androidVrUserAgents = new Map([
   ['1.43.32', 'com.google.android.apps.youtube.vr.oculus/1.43.32 (Linux; U; Android 12; en_US; Quest 3; Build/SQ3A.220605.009.A1; Cronet/107.0.5284.2)']
 ]);
 const playbackProbeRanges = ['bytes=0-0'];
+const safariHlsUserAgentPattern = /Version\/15\.5 Safari\/605\.1\.15/i;
+
+export function isYouTubeMediaUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' &&
+      (url.hostname === 'googlevideo.com' || url.hostname.endsWith('.googlevideo.com'));
+  } catch {
+    return false;
+  }
+}
+
+function localHlsUrl(value) {
+  return `/hls?url=${encodeURIComponent(value)}`;
+}
+
+/** Routes every child playlist, key, and media segment back through the main process. */
+export function rewriteHlsManifest(manifest, sourceUrl) {
+  const rewrite = (value) => {
+    if (!value || value.startsWith('data:')) return value;
+    const absolute = new URL(value, sourceUrl).toString();
+    if (!isYouTubeMediaUrl(absolute)) {
+      throw new Error(`Refusing unexpected HLS host ${new URL(absolute).hostname}`);
+    }
+    return localHlsUrl(absolute);
+  };
+
+  return String(manifest)
+    .split(/\r?\n/)
+    .map((line) => {
+      if (!line) return line;
+      if (!line.startsWith('#')) return rewrite(line.trim());
+      return line.replace(/URI="([^"]+)"/g, (_match, value) => `URI="${rewrite(value)}"`);
+    })
+    .join('\n');
+}
 
 export function rangeNotSatisfiable(res, totalLength) {
   res.writeHead(416, {
@@ -190,6 +226,14 @@ function streamRequestProfile(url, fallbackUserAgent) {
   const clientName = (url.searchParams.get('c') || '').toUpperCase();
   const clientVersion = url.searchParams.get('cver') || '';
   const fallbackLooksNative = /^(?:com\.google\.android|com\.google\.ios)/i.test(fallbackUserAgent || '');
+
+  if (safariHlsUserAgentPattern.test(fallbackUserAgent || '')) {
+    return {
+      userAgent: fallbackUserAgent,
+      origin: 'https://www.youtube.com',
+      referer: 'https://www.youtube.com/'
+    };
+  }
 
   if (clientName.startsWith('ANDROID_VR')) {
     return {

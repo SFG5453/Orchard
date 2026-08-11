@@ -37,6 +37,8 @@ import {
   proxyHeadResponseHeaders,
   proxyResponseHeaders,
   rangeNotSatisfiable,
+  isYouTubeMediaUrl,
+  rewriteHlsManifest,
   upstreamRangeHeader,
   upstreamStreamRequest,
   validateUpstreamStreamUrl
@@ -49,6 +51,11 @@ import {
 } from './playbackErrors.js';
 import { createSongCache } from './songCache.js';
 import { createPlaybackStreamCache } from './playbackStreamCache.js';
+import {
+  createAuthenticatedYouTubePlayback,
+  hlsMimeType,
+  youtubeSafariUserAgent
+} from './authenticatedYouTubePlayback.js';
 const youtubeWebUserAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15,gzip(gfe)';
 const androidVrClient = {
   clientName: 'ANDROID_VR',
@@ -103,6 +110,9 @@ export function createPlaybackService({
   getGuestInnertube,
   hasBrowserLoginCookie,
   refreshBrowserAuth,
+  youtubeMusicClientUserAgent = youtubeWebUserAgent,
+  youtubeMusicClientVersion = '1.20260213.01.00',
+  youtubeMusicOrigin = 'https://music.youtube.com',
   youtubeWebOrigin
 }) {
   const streamCache = createPlaybackStreamCache();
@@ -112,6 +122,17 @@ export function createPlaybackService({
   let androidVrIdentityPromise;
   let androidVrCooldownUntil = 0;
   let androidVrCooldownReason = '';
+  const authenticatedPlayback = createAuthenticatedYouTubePlayback({
+    authState,
+    cookieWithPlaybackDefaults,
+    getBrowserInnertube,
+    hasBrowserLoginCookie,
+    refreshBrowserAuth,
+    youtubeMusicClientUserAgent,
+    youtubeMusicClientVersion,
+    youtubeMusicOrigin,
+    youtubeWebOrigin
+  });
 
   function responseCookies(headers) {
     const setCookies = typeof headers.getSetCookie === 'function'
@@ -401,6 +422,9 @@ export function createPlaybackService({
   async function resolveStream(videoId, options = {}) {
     const cacheKey = streamCache.key(videoId, options);
     const cached = streamCache.getStream(cacheKey);
+    const wantsVideo = options.mediaKind === 'video';
+    const requiresAuth = Boolean(options.requiresAuth);
+    const authenticatedAgeGate = Boolean(options.authenticatedAgeGate);
     const explicitItag = options.itag ? String(options.itag) : '';
     const refreshedItag = options.refreshStream ? explicitItag : '';
     const avoidedItags = new Set((options.avoidItags || []).map(String));
@@ -421,12 +445,41 @@ export function createPlaybackService({
       !options.refreshStream &&
       cached &&
       cached.expiresAt > Date.now() + 60_000 &&
+      (!authenticatedAgeGate || cached.authenticated) &&
       !avoidedItags.has(String(cached.format?.itag || ''))
     ) {
       return cached;
     }
-    const wantsVideo = options.mediaKind === 'video';
-    const requiresAuth = Boolean(options.requiresAuth);
+    if (authenticatedAgeGate && !wantsVideo) {
+      let cacheEntry;
+      const wantsHls = explicitItag === 'hls' || avoidedItags.has('18');
+      if (explicitItag && explicitItag !== '18' && explicitItag !== 'hls') {
+        throw new Error(`Requested authenticated stream format ${explicitItag} is unavailable`);
+      }
+      if (wantsHls) {
+        if (avoidedItags.has('hls')) throw new Error('Authenticated HLS playback is temporarily unavailable');
+        cacheEntry = await authenticatedPlayback.resolveHls(videoId, {
+          cacheMetadata: cacheMetadata(options)
+        });
+      } else {
+        try {
+          cacheEntry = await authenticatedPlayback.resolveDirect(videoId, {
+            cacheMetadata: cacheMetadata(options)
+          });
+          if (!await validateUpstreamStreamUrl(cacheEntry.url, { fallbackUserAgent: cacheEntry.userAgent })) {
+            throw new Error('Authenticated direct stream probes failed');
+          }
+        } catch (error) {
+          if (explicitItag === '18') throw error;
+          console.warn(`Authenticated direct playback failed; using Safari HLS: ${error.message}`);
+          cacheEntry = await authenticatedPlayback.resolveHls(videoId, {
+            cacheMetadata: cacheMetadata(options)
+          });
+        }
+      }
+      streamCache.cacheStream(videoId, cacheKey, cacheEntry, options);
+      return cacheEntry;
+    }
     const avoidAndroidVr = requiresAuth || androidVrRapidResolveActive(options);
     const canTryAndroidVr = !requiresAuth && (!wantsVideo || !avoidAndroidVr) && !androidVrCooldownActive();
     if (canTryAndroidVr) {
@@ -518,6 +571,7 @@ export function createPlaybackService({
     const fallbackCacheKey = streamCache.key(videoId, { mediaKind });
     const cachedOptions = retryOptions || streamCache.getOptions(requestedCacheKey) || streamCache.getOptions(fallbackCacheKey) || {};
     const stream = await resolveStream(videoId, { ...cachedOptions, itag: effectiveItag, mediaKind });
+    if (stream.isHls) return proxyHlsResource(stream.url, req, res, { manifest: true });
     const totalLength = Number(stream.format.contentLength || 0);
     const contentType = stream.format.mimeType || 'audio/mp4';
     const rangeHeader = req.headers.range || '';
@@ -565,7 +619,46 @@ export function createPlaybackService({
       if (!res.writableEnded) res.destroy(error);
     }
   }
-  return { androidVrCooldownActive, playbackInfo, proxyStream, resolveStream, songCache, updateSongCacheSettings: songCache.update };
+
+  async function proxyHlsResource(url, req, res, options = {}) {
+    if (!isYouTubeMediaUrl(url)) throw new Error('Refusing an unexpected HLS media host');
+    const rangeHeader = req.headers.range || '';
+    const upstreamRequest = upstreamStreamRequest(url, {
+      fallbackUserAgent: youtubeSafariUserAgent,
+      rangeHeader
+    });
+    const upstream = await fetch(upstreamRequest.url, { headers: upstreamRequest.headers });
+    if (!upstream.ok && upstream.status !== 206) {
+      throw new Error(`Upstream HLS request failed with HTTP ${upstream.status}`);
+    }
+    const upstreamType = upstream.headers.get('content-type') || '';
+    const isManifest = options.manifest || /mpegurl/i.test(upstreamType);
+    if (isManifest) {
+      const manifest = rewriteHlsManifest(await upstream.text(), upstream.url || url);
+      res.writeHead(200, {
+        'Content-Type': hlsMimeType,
+        'Cache-Control': 'no-store',
+        'Access-Control-Allow-Origin': '*'
+      });
+      res.end(req.method === 'HEAD' ? undefined : manifest);
+      return;
+    }
+
+    const headers = proxyResponseHeaders(upstream, upstreamType || 'application/octet-stream', 0, Boolean(rangeHeader));
+    res.writeHead(upstream.status, headers);
+    if (req.method === 'HEAD') {
+      await upstream.body?.cancel().catch(() => {});
+      res.end();
+      return;
+    }
+    try {
+      await pipeWebBody(upstream.body, res);
+    } catch (error) {
+      if (!res.writableEnded) res.destroy(error);
+    }
+  }
+
+  return { androidVrCooldownActive, playbackInfo, proxyHlsResource, proxyStream, resolveStream, songCache, updateSongCacheSettings: songCache.update };
 }
 
 function cacheMetadata(options = {}) {

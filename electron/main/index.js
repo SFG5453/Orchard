@@ -122,7 +122,7 @@ const { appIconPath } = runtimePaths;
 const useNativeTitlebar = false;
 const youtubeMusicOrigin = 'https://music.youtube.com';
 const youtubeWebOrigin = 'https://www.youtube.com';
-const youtubeMusicClientVersion = '1.20260114.01.00';
+const youtubeMusicClientVersion = '1.20260213.01.00';
 const youtubeMusicClientUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
 const accountSummary = createAccountSummary({ asText, bestThumbnail });
 const authService = createAuthService({
@@ -190,10 +190,13 @@ const playbackService = createPlaybackService({
   getGuestInnertube,
   hasBrowserLoginCookie,
   refreshBrowserAuth,
+  youtubeMusicClientUserAgent,
+  youtubeMusicClientVersion,
+  youtubeMusicOrigin,
   youtubeWebOrigin
 });
 const normalizeTrackInfo = createTrackInfoNormalizer({ bestThumbnail });
-const { proxyStream, resolveStream } = playbackService;
+const { proxyHlsResource, proxyStream, resolveStream } = playbackService;
 const subscribedArtists = createSubscribedArtistsService({ authState, cachePath: path.join(app.getPath('userData'), 'youtubei-cache', 'subscriptions') }).subscribedArtists;
 const browseNormalizers = createBrowseNormalizers({
   asText,
@@ -350,6 +353,7 @@ async function startBridge() {
     personalizedRadio,
     playback: playbackService,
     preferredAudioTrack,
+    proxyHlsResource,
     proxyStream,
     publicAuthState,
     releaseAlbumMatches,

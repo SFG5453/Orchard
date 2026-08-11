@@ -56,6 +56,7 @@ export async function startBridgeServer({
   personalizedRadio,
   playback,
   preferredAudioTrack,
+  proxyHlsResource,
   proxyStream,
   publicAuthState,
   releaseAlbumMatches,
@@ -86,6 +87,28 @@ export async function startBridgeServer({
   };
   const httpServer = createServer(async (req, res) => {
     const requestUrl = new URL(req.url, 'http://127.0.0.1');
+    if (requestUrl.pathname === '/hls') {
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, streamCorsHeaders);
+        res.end();
+        return;
+      }
+      try {
+        await proxyHlsResource(requestUrl.searchParams.get('url') || '', req, res);
+      } catch (error) {
+        console.warn(`HLS proxy failed: ${error.message}`);
+        if (res.headersSent) {
+          if (!res.writableEnded) res.destroy(error);
+          return;
+        }
+        res.writeHead(502, {
+          ...streamCorsHeaders,
+          'Content-Type': 'application/json'
+        });
+        res.end(JSON.stringify({ error: error.message }));
+      }
+      return;
+    }
     if (requestUrl.pathname.startsWith('/stream/')) {
       if (req.method === 'OPTIONS') {
         res.writeHead(204, streamCorsHeaders);
@@ -150,7 +173,7 @@ export async function startBridgeServer({
   }
 
   async function resolveTrackRequest({ videoId, supportedMimes = [], supportedVideoMimes = [], mediaKind = 'audio', preload = false, refreshStream = false, avoidItags = [], avoidMimeTypes = [], ...trackHint }) {
-    const preferBrowserPlayback = Boolean(trackHint.isUpload || playback.androidVrCooldownActive());
+    const preferBrowserPlayback = Boolean(trackHint.isUpload || trackHint.explicit || playback.androidVrCooldownActive());
     const [yt, searchYt] = await Promise.all([
       musicClientForPlayback(preferBrowserPlayback),
       getGuestInnertube()
@@ -167,30 +190,43 @@ export async function startBridgeServer({
     }
 
     async function resolveCandidate(candidateId, { playAsVideo = false } = {}) {
-      const resolvedInfo = await playback.playbackInfo(candidateId, {
-        yt,
-        preferBrowserAuth: preferBrowserPlayback
-      });
-      const normalizedInfo = normalizeTrackInfo(candidateId, resolvedInfo.info);
+      const streamAsVideo = wantsVideo || playAsVideo;
+      const authenticatedAgeGate = Boolean(trackHint.explicit && !streamAsVideo);
+      const resolvedInfo = authenticatedAgeGate
+        ? null
+        : await playback.playbackInfo(candidateId, {
+            yt,
+            preferBrowserAuth: preferBrowserPlayback
+          });
+      const normalizedInfo = resolvedInfo
+        ? normalizeTrackInfo(candidateId, resolvedInfo.info)
+        : {
+            id: candidateId,
+            title: trackHint.title || 'Untitled',
+            artist: trackHint.artist || trackHint.artists?.[0] || '',
+            durationSeconds: Number(trackHint.durationSeconds || 0),
+            thumbnail: trackHint.thumbnail || '',
+            isLive: false
+          };
       const fallbackTargetDuration = playAsVideo
         ? Number(trackHint.fallbackTargetDurationSeconds || trackHint.durationSeconds || 0)
         : 0;
       if (fallbackTargetDuration && Math.abs(normalizedInfo.durationSeconds - fallbackTargetDuration) > 5) {
         throw new Error('The matching music video differs from the song by more than five seconds');
       }
-      const streamAsVideo = wantsVideo || playAsVideo;
       const stream = await resolveStream(candidateId, {
         supportedMimes: streamAsVideo ? supportedVideoMimes : supportedMimes,
         supportedAudioMimes: supportedMimes,
         mediaKind: streamAsVideo ? 'video' : 'audio',
         preferInlineVideo: playAsVideo,
         requiresAuth: Boolean(trackHint.isUpload),
+        authenticatedAgeGate,
         lowPriority: Boolean(preload),
         refreshStream: Boolean(refreshStream),
         avoidItags,
         avoidMimeTypes,
-        playbackClient: resolvedInfo.yt,
-        playbackInfo: resolvedInfo.info,
+        playbackClient: resolvedInfo?.yt,
+        playbackInfo: resolvedInfo?.info,
         ...trackHint
       });
       const streamBaseUrl = `http://127.0.0.1:${httpServer.address().port}/stream/${encodeURIComponent(candidateId)}`;
@@ -221,7 +257,7 @@ export async function startBridgeServer({
       };
     }
 
-    if (!wantsVideo && isAgeGateRiskTrack(trackHint)) {
+    if (!wantsVideo && !trackHint.explicit && isAgeGateRiskTrack(trackHint)) {
       const fallback = await findMusicVideoFallbackOnce();
       if (fallback) {
         try {

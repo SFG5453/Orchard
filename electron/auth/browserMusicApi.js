@@ -19,16 +19,23 @@
 
 // Encapsulates authenticated browser-style YouTube Music requests used by main-process services.
 import { createHash } from 'node:crypto';
+import { parseCookieString } from './youtubeAuthCookies.js';
 
-export function browserAuthHeader(cookie = '', origin) {
-  const sapisid = /(?:^|;\s*)(?:SAPISID|__Secure-3PAPISID)=([^;]+)/.exec(cookie)?.[1];
-  if (!sapisid) return '';
+export function browserAuthHeader(cookie = '', origin, epochSeconds = Math.floor(Date.now() / 1000)) {
+  const cookies = parseCookieString(cookie);
+  const sapisid = cookies.SAPISID || cookies['__Secure-3PAPISID'] || cookies.APISID;
+  const signedCookies = [
+    sapisid && ['SAPISIDHASH', sapisid],
+    cookies['__Secure-1PAPISID'] && ['SAPISID1PHASH', cookies['__Secure-1PAPISID']],
+    cookies['__Secure-3PAPISID'] && ['SAPISID3PHASH', cookies['__Secure-3PAPISID']]
+  ].filter(Boolean);
 
-  const timestamp = Math.floor(Date.now() / 1000);
-  const hash = createHash('sha1')
-    .update(`${timestamp} ${sapisid} ${origin}`)
-    .digest('hex');
-  return `SAPISIDHASH ${timestamp}_${hash}`;
+  return signedCookies.map(([scheme, value]) => {
+    const hash = createHash('sha1')
+      .update(`${epochSeconds} ${value} ${origin}`)
+      .digest('hex');
+    return `${scheme} ${epochSeconds}_${hash}`;
+  }).join(' ');
 }
 
 export function cookieWithPlaybackDefaults(cookie = '') {
@@ -69,6 +76,7 @@ export function createBrowserMusicFetch({
     headers.set('X-YouTube-Client-Name', '67');
     headers.set('X-YouTube-Client-Version', youtubeMusicClientVersion);
     headers.set('X-Goog-AuthUser', String(authState.browser.accountIndex || 0));
+    headers.set('X-Youtube-Bootstrap-Logged-In', 'true');
     if (authState.browser.dataSyncId) headers.set('X-Goog-PageId', authState.browser.dataSyncId);
     else headers.delete('X-Goog-PageId');
 

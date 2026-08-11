@@ -36,6 +36,7 @@ export function createPlaybackStreamCache() {
       avoidMimeTypes: opts.avoidMimeTypes || [],
       preferInlineVideo: Boolean(opts.preferInlineVideo),
       requiresAuth: Boolean(opts.requiresAuth),
+      authenticatedAgeGate: Boolean(opts.authenticatedAgeGate),
       lowPriority: Boolean(opts.lowPriority)
     };
   }

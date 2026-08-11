@@ -28,6 +28,7 @@ import {
   parseCookieString,
   youtubeAccountIdentity
 } from '../electron/auth/youtubeAuthCookies.js';
+import { browserAuthHeader } from '../electron/auth/browserMusicApi.js';
 
 test('delegatedSessionIdFromPageAuth selects the channel identity from YouTube page auth', () => {
   assert.equal(
@@ -65,6 +66,19 @@ test('hasYouTubeLoginCookie accepts either supported signing cookie', () => {
   assert.equal(hasYouTubeLoginCookie('__Secure-3PAPISID=fallback'), true);
   assert.equal(hasYouTubeLoginCookie('SID=unrelated'), false);
   assert.equal(hasYouTubeLoginCookie('NOTSAPISID=substring'), false);
+});
+
+test('browserAuthHeader signs every supported secure cookie scheme', () => {
+  const authorization = browserAuthHeader(
+    '__Secure-1PAPISID=one; __Secure-3PAPISID=three',
+    'https://music.youtube.com',
+    1_700_000_000
+  );
+
+  assert.equal(authorization.split(' ').filter((part) => part.endsWith('HASH')).length, 3);
+  assert.match(authorization, /^SAPISIDHASH 1700000000_[a-f0-9]{40}/);
+  assert.match(authorization, / SAPISID1PHASH 1700000000_[a-f0-9]{40}/);
+  assert.match(authorization, / SAPISID3PHASH 1700000000_[a-f0-9]{40}$/);
 });
 
 test('youtubeAccountIdentity ignores unrelated cookie changes', () => {
