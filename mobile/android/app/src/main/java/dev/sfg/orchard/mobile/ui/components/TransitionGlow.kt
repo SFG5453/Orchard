@@ -32,8 +32,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TileMode
-import dev.sfg.orchard.mobile.model.PlaybackSnapshot
-import dev.sfg.orchard.mobile.model.TransitionMarker
 
 /**
  * The word Orchard shows while two tracks are overlapping.
@@ -56,22 +54,6 @@ private val RainbowStops =
                 Color(0xFFB44CFF),
                 Color(0xFFFF3B5C),
         )
-
-/**
- * How far into the planned transition playback currently is, 0f before it starts and 1f at the
- * handoff. Zero whenever the marker does not describe the playing track, so callers can drive every
- * transition affordance off this one number.
- */
-fun transitionProgress(playback: PlaybackSnapshot, marker: TransitionMarker?): Float {
-    val track = playback.currentTrack ?: return 0f
-    if (marker == null || marker.trackId.isBlank() || marker.trackId != track.id) return 0f
-    val start = marker.startMs
-    val end = marker.endMs
-    if (start <= 0 || end <= start) return 0f
-    val position = playback.positionMs
-    if (position < start) return 0f
-    return ((position - start).toFloat() / (end - start).toFloat()).coerceIn(0f, 1f)
-}
 
 /**
  * Eases the raw progress so the glow arrives and leaves smoothly instead of snapping on at the

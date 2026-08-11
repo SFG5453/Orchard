@@ -75,6 +75,7 @@ fun TabletPlayerBody(
     /** The framed cover's bounds; on a tablet this, not the backdrop, is the cover you see. */
     onCoverBounds: ((androidx.compose.ui.geometry.Rect) -> Unit)? = null,
     transition: TransitionMarker?,
+    mixProgress: Float? = null,
     canControl: Boolean,
     localControls: Boolean,
     liked: Boolean,
@@ -236,6 +237,7 @@ fun TabletPlayerBody(
                     canControl = canControl,
                     localControls = localControls,
                     transition = transition,
+                    mixProgress = mixProgress,
                     showBitrate = showBitrate,
                     bitrateKbps = bitrateKbps,
                     remoteVolume = remoteVolume,

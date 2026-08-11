@@ -81,6 +81,8 @@ fun PlayerScrubber(
     modifier: Modifier = Modifier,
     /** The planned transition out of this track, drawn as a band on the track. Null when none. */
     transition: TransitionMarker? = null,
+    /** Raw overlap progress when the visible track has already changed to the incoming song. */
+    mixProgress: Float? = null,
     showBitrate: Boolean = false,
     bitrateKbps: Int = 0,
 ) {
@@ -88,7 +90,7 @@ fun PlayerScrubber(
         it.trackId.isNotBlank() && it.trackId == playback.currentTrack?.id && it.startMs > 0 && it.startMs < playback.durationMs
     }
     // One eased number drives every transition affordance: the glow, the sweep, and the readout.
-    val glow = rememberTransitionGlow(transitionProgress(playback, marker))
+    val glow = rememberTransitionGlow(mixProgress ?: transitionProgress(playback, marker))
     val rainbow = rememberRainbowBrush()
     // Effective duration ends where the transition starts, subtracting the transition time & unplayed tail
     val duration = (marker?.startMs ?: playback.durationMs).coerceAtLeast(1)
@@ -290,4 +292,3 @@ fun PlayerScrubber(
         }
     }
 }
-

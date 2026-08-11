@@ -73,6 +73,7 @@ fun PlayerControlStack(
     canControl: Boolean,
     localControls: Boolean,
     transition: TransitionMarker?,
+    mixProgress: Float? = null,
     showBitrate: Boolean,
     bitrateKbps: Int,
     remoteVolume: Float,
@@ -93,6 +94,7 @@ fun PlayerControlStack(
         playback = playback,
         onSeek = onSeek,
         transition = transition,
+        mixProgress = mixProgress,
         showBitrate = showBitrate,
         bitrateKbps = bitrateKbps,
     )

@@ -75,7 +75,7 @@ const val BED_POSITION = 0.5
 
 // The low end still hands over late -- see `bass_swap` in the renderer -- but it is now a fraction
 // of the continuous fade rather than a separate tail that starts at the drop.
-private const val BASS_SWAP_FRACTION = 0.4
+private const val BASS_SWAP_FRACTION = 0.7
 
 // ...and it is capped in absolute seconds as well, so a long overlap does not scale the hold up
 // with it and leave the outgoing bass sitting under a track that has already taken over.

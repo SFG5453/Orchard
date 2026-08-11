@@ -207,11 +207,44 @@ class OrchardPlaybackService : MediaLibraryService() {
                 onPlan = { plan ->
                     if (plan != null) prepareTransition(plan)
                     graph.transitionMarker.value = plan?.let {
+                        val outgoing = player.currentMediaItem?.let(MediaItemMapper::toTrack)
+                        val nextIndex = player.nextMediaItemIndex
+                        val incoming =
+                            nextIndex
+                                .takeIf { index -> index != C.INDEX_UNSET }
+                                ?.let(player::getMediaItemAt)
+                                ?.let(MediaItemMapper::toTrack)
+                        val prepared =
+                            if (outgoing != null && incoming != null) {
+                                preparer.preparedFor(outgoing, incoming)
+                            } else {
+                                null
+                            }
+                        val renderedDuration =
+                            prepared
+                                ?.let { mix -> (mix.endSeconds - mix.startSeconds).coerceAtLeast(0.0) }
+                                ?: 0.0
+                        // A rendered mix plays the incoming audio at 1x and may snap its cue to the
+                        // nearest downbeat. Deriving the start from its resume point keeps the UI's
+                        // incoming progress on the exact samples being heard.
+                        val incomingCue =
+                            prepared
+                                ?.let { mix -> mix.incomingResumeSeconds - renderedDuration }
+                                ?: it.incomingCueTime
                         dev.sfg.orchard.mobile.model.TransitionMarker(
                             trackId = player.currentMediaItem?.mediaId.orEmpty(),
                             startMs = (it.transitionStart * 1000).toLong(),
                             endMs = (it.transitionEnd * 1000).toLong(),
                             style = it.transitionStyle.name.lowercase(),
+                            incomingTrackId = incoming?.id.orEmpty(),
+                            incomingCueMs = (incomingCue * 1000).toLong().coerceAtLeast(0),
+                            incomingPlaybackRate = if (prepared != null) 1.0 else it.incomingPlaybackRate,
+                            audibleHandoffProgress =
+                                dev.sfg.orchard.mobile.playback.smart.audibleHandoffProgress(
+                                    it,
+                                    rendered = prepared != null,
+                                ),
+                            renderedDurationMs = (renderedDuration * 1000).toLong(),
                         )
                     }
                 },

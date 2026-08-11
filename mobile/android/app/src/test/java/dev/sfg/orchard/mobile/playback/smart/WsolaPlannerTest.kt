@@ -268,9 +268,8 @@ class WsolaPlannerTest {
                 nextDuration = 200.0,
             ),
         )
-        // Bass swap occurs at BASS_SWAP_FRACTION (0.4) of the overlap.
-        assertTrue(plan.bassSwapFraction > 0)
-        assertTrue(plan.bassSwapFraction <= plan.handoffFraction)
+        assertTrue(plan.bassSwapFraction > plan.handoffFraction)
+        assertTrue(plan.bassSwapFraction < 1)
     }
 
     @Test
@@ -288,7 +287,7 @@ class WsolaPlannerTest {
             ),
         )
         assertTrue("overlap ${plan.overlapSeconds} should exceed the 6s hold", plan.overlapSeconds > 6)
-        assertEquals(4.8, plan.bassSwapFraction * plan.overlapSeconds, 1e-9)
+        assertEquals(6.0, plan.bassSwapFraction * plan.overlapSeconds, 1e-9)
     }
 
     @Test

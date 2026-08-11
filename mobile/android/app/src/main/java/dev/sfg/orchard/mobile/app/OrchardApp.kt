@@ -56,6 +56,7 @@ import dev.sfg.orchard.mobile.ui.components.CanopyReadout
 import dev.sfg.orchard.mobile.ui.components.OrchardBottomBar
 import dev.sfg.orchard.mobile.ui.components.PlaylistPickerSheet
 import dev.sfg.orchard.mobile.ui.components.SongShareBottomSheet
+import dev.sfg.orchard.mobile.ui.components.transitionPresentation
 import dev.sfg.orchard.mobile.ui.navigation.Routes
 import dev.sfg.orchard.mobile.ui.screens.DetailScreen
 import dev.sfg.orchard.mobile.ui.screens.DevicesScreen
@@ -80,6 +81,14 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val warning by viewModel.warning.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val transitionMarker by viewModel.transitionMarker.collectAsStateWithLifecycle()
+    // Transition plans belong to the phone's two-player engine, never a selected Connect target.
+    val localTransitionMarker =
+        transitionMarker.takeIf { targets.selected is PlaybackTarget.LocalPhone }
+    val playerPresentation = transitionPresentation(playback, localTransitionMarker)
+    val playerPlayback = playerPresentation.playback
+    // Once the incoming song owns the mix, its scrubber is a normal full-track scrubber. The raw
+    // overlap progress still drives the transition glow and artwork motion separately.
+    val playerMarker = localTransitionMarker.takeUnless { playerPresentation.incomingDominant }
 
     // The player is an overlay, not a destination. As a destination the NavHost tore the
     // screen underneath out of the tree, so dragging the player down uncovered nothing but
@@ -102,7 +111,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
         containerColor = Color.Transparent,
     ) { padding ->
         ArtworkBackdrop(
-            artworkUrl = playback.currentTrack?.artworkUrl.orEmpty(),
+            artworkUrl = playerPlayback.currentTrack?.artworkUrl.orEmpty(),
             animated = settings.animatedBackground,
         )
 
@@ -119,8 +128,9 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                 if (!chromeHidden) {
                     Column(modifier = Modifier.align(Alignment.BottomCenter)) {
                         CanopyReadout(
-                            playback = playback,
-                            transition = transitionMarker,
+                            playback = playerPlayback,
+                            transition = playerMarker,
+                            mixProgress = playerPresentation.progress,
                             modifier = Modifier.onGloballyPositioned { readoutBounds = it.boundsInRoot() },
                             onArtworkBounds = { readoutArtworkBounds = it },
                             onOpen = { playerOpen = true },
@@ -145,7 +155,9 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                 onRestingCoverBounds = { playerCoverBounds = it },
                 nav = navController,
                 viewModel = viewModel,
-                playback = playback,
+                playback = playerPlayback,
+                transition = playerMarker,
+                mixProgress = playerPresentation.progress,
                 targets = targets,
                 library = library,
                 settings = settings,

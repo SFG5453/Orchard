@@ -111,6 +111,8 @@ fun NowPlayingScreen(
     onRestingCoverBounds: (Rect) -> Unit = {},
     protocolVersion: Int = 1,
     transition: dev.sfg.orchard.mobile.model.TransitionMarker? = null,
+    /** Raw overlap progress, including the part after visible identity moves to the incoming song. */
+    mixProgress: Float? = null,
     showBitrate: Boolean = false,
     bitrateKbps: Int = 0,
     remoteVolume: Float = 1f,
@@ -165,6 +167,8 @@ fun NowPlayingScreen(
 
     val localControls = targets.selected is PlaybackTarget.LocalPhone
     val canControl = localControls || protocolVersion >= 2
+    val activeMixProgress =
+        mixProgress ?: dev.sfg.orchard.mobile.ui.components.transitionProgress(playback, transition)
 
     // Two panes need room for a square cover and a readable column beside it.
     // Below this a tablet in portrait, or a large phone in landscape, is better
@@ -294,7 +298,7 @@ fun NowPlayingScreen(
                 palette = palette,
                 onVideoFrame = { videoFrame = it },
                 onArtworkBounds = { if (!wideLayout && progress == 0f) onRestingCoverBounds(it) },
-                transitionProgress = dev.sfg.orchard.mobile.ui.components.transitionProgress(playback, transition),
+                transitionProgress = activeMixProgress,
                 modifier = Modifier.blur(backdropBlur),
             )
             // Blur is a no-op below API 31, so darken as well to keep lyrics legible everywhere.
@@ -319,6 +323,7 @@ fun NowPlayingScreen(
                     canControl = canControl,
                     localControls = localControls,
                     transition = transition,
+                    mixProgress = activeMixProgress,
                     showBitrate = showBitrate,
                     bitrateKbps = bitrateKbps,
                     remoteVolume = remoteVolume,
@@ -468,6 +473,7 @@ fun NowPlayingScreen(
                         canControl = canControl,
                         localControls = localControls,
                         transition = transition,
+                        mixProgress = activeMixProgress,
                         showBitrate = showBitrate,
                         bitrateKbps = bitrateKbps,
                         remoteVolume = remoteVolume,

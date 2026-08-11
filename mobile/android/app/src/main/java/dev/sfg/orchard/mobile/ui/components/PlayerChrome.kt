@@ -182,6 +182,8 @@ fun MiniPlayer(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     transition: dev.sfg.orchard.mobile.model.TransitionMarker? = null,
+    /** Raw overlap progress, retained after visible identity has moved to the incoming track. */
+    mixProgress: Float? = null,
     /** Reports the thumbnail's place on screen so the full player can fly its cover into it. */
     onArtworkBounds: ((Rect) -> Unit)? = null,
 ) {
@@ -295,7 +297,7 @@ fun MiniPlayer(
 
             // Bottom progress bar, which picks up the same rainbow as the full player
             // while a mix is running so the pill tells the same story in miniature.
-            val glow = rememberTransitionGlow(transitionProgress(playback, marker))
+            val glow = rememberTransitionGlow(mixProgress ?: transitionProgress(playback, marker))
             Box(
                 modifier = Modifier
                     .fillMaxWidth()

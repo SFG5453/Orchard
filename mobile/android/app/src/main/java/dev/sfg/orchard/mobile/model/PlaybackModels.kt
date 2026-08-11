@@ -58,6 +58,20 @@ data class TransitionMarker(
     val endMs: Long,
     /** Lowercase style name, so the marker can distinguish a beat-matched blend from a plain fade. */
     val style: String,
+    /** The track being mixed in, so presentation follows the actual next player even after queue edits. */
+    val incomingTrackId: String = "",
+    /** Where the incoming player was cued, on that track's own media timeline. */
+    val incomingCueMs: Long = 0,
+    /** Media-time rate of the incoming player during a live (non-rendered) overlap. */
+    val incomingPlaybackRate: Double = 1.0,
+    /**
+     * First point where the incoming track is louder than the outgoing one across every band the
+     * mixer controls. This can be later than the main fader crossover because DJ mixes retain the
+     * outgoing bass until its separate handoff.
+     */
+    val audibleHandoffProgress: Float = 0.5f,
+    /** Duration of the rendered mix item, or zero when the transition uses the two live players. */
+    val renderedDurationMs: Long = 0,
 )
 
 enum class DeviceAvailability { ONLINE, OFFLINE, UNAVAILABLE }

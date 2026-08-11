@@ -33,6 +33,7 @@ import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.PlaybackTargetState
 import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.model.TransitionMarker
 import dev.sfg.orchard.mobile.ui.components.PlaylistPickerSheet
 import dev.sfg.orchard.mobile.ui.navigation.Routes
 import dev.sfg.orchard.mobile.ui.screens.NowPlayingScreen
@@ -56,6 +57,8 @@ fun NowPlayingOverlay(
     nav: NavHostController,
     viewModel: OrchardViewModel,
     playback: PlaybackSnapshot,
+    transition: TransitionMarker?,
+    mixProgress: Float,
     targets: PlaybackTargetState,
     library: LibrarySnapshot,
     settings: OrchardSettings,
@@ -66,7 +69,6 @@ fun NowPlayingOverlay(
     if (!open || playback.currentTrack == null) return
 
     val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
-    val transition by viewModel.transitionMarker.collectAsStateWithLifecycle()
     val activeBitrate by viewModel.activeBitrate.collectAsStateWithLifecycle()
     val autoplayLoading by viewModel.autoplayLoading.collectAsStateWithLifecycle()
     val autoplayError by viewModel.autoplayError.collectAsStateWithLifecycle()
@@ -89,6 +91,7 @@ fun NowPlayingOverlay(
         onAutoplayEnabled = viewModel::setAutoplayEnabled,
         playback = playback,
         transition = transition,
+        mixProgress = mixProgress,
         targets = targets,
         lyrics = lyrics,
         animatedArtworkEnabled = settings.animatedArtwork,
@@ -102,7 +105,17 @@ fun NowPlayingOverlay(
         onToggle = viewModel::togglePlayback,
         onPrevious = viewModel::previous,
         onNext = viewModel::next,
-        onSeek = viewModel::seek,
+        onSeek = { positionMs ->
+            // At the audible handoff the UI is already on the incoming timeline while the engine
+            // may still own the outgoing deck. A seek commits to the track the user can see.
+            val authoritative = viewModel.playback.value
+            if (authoritative.currentTrack?.id != playback.currentTrack?.id &&
+                playback.currentIndex in playback.queue.indices
+            ) {
+                viewModel.playQueueIndex(playback.currentIndex)
+            }
+            viewModel.seek(positionMs)
+        },
         onShuffle = viewModel::toggleShuffle,
         onRepeat = viewModel::cycleRepeat,
         onLiked = { playback.currentTrack?.let(viewModel::toggleLiked) },
