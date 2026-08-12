@@ -161,10 +161,16 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Install Linux packaging tools
+      - name: Install Linux packaging tools and Flatpak runtimes
         run: |
+          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes rpm
+          sudo apt-get install --yes flatpak flatpak-builder rpm
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive flathub \
+            org.freedesktop.Platform//25.08 \
+            org.freedesktop.Sdk//25.08 \
+            org.electronjs.Electron2.BaseApp//25.08
 
       - name: Install dependencies
         run: npm ci
@@ -172,24 +178,24 @@ jobs:
       - name: Build application
         run: npm run build
 
-      - name: Package AppImage, DEB, and RPM
+      - name: Package AppImage, Flatpak, DEB, and RPM
         run: |
           set -euo pipefail
           ./node_modules/.bin/electron-builder \
-            --linux AppImage deb rpm \
+            --linux AppImage flatpak deb rpm \
             --config electron-builder.config.cjs \
             -c.directories.output=release-linux \
             --publish never
 
           mkdir -p release-assets
           find release-linux -maxdepth 1 -type f \
-            \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.yml' -o -name '*.blockmap' \) \
+            \( -name '*.AppImage' -o -name '*.flatpak' -o -name '*.deb' -o -name '*.rpm' -o -name '*.yml' -o -name '*.blockmap' \) \
             -exec cp {} release-assets/ \;
-          test "$(find release-assets -maxdepth 1 -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \) | wc -l)" -eq 3
+          test "$(find release-assets -maxdepth 1 -type f \( -name '*.AppImage' -o -name '*.flatpak' -o -name '*.deb' -o -name '*.rpm' \) | wc -l)" -eq 4
           test -f release-assets/latest-linux.yml
           find release-assets -maxdepth 1 -type f -print
 
-      - name: Save Linux packages
+      - name: Save Linux packages and Flatpak
         uses: actions/upload-artifact@v7
         with:
           name: release-linux
@@ -198,7 +204,7 @@ jobs:
           retention-days: 1
 
   build-linux-arm64:
-    name: Linux arm64 AppImage
+    name: Linux arm64 bundles
     needs: prepare
     if: needs.prepare.outputs.mobile_only != 'true'
     runs-on: ubuntu-24.04-arm
@@ -214,6 +220,17 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
+      - name: Install Flatpak packaging tools and runtimes
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive flathub \
+            org.freedesktop.Platform//25.08 \
+            org.freedesktop.Sdk//25.08 \
+            org.electronjs.Electron2.BaseApp//25.08
+
       - name: Install dependencies
         run: npm ci
 
@@ -227,11 +244,11 @@ jobs:
           file native/build/Release/orchard_audio_analysis.node
           file native/build/Release/orchard_audio_analysis.node | grep -Eq 'ARM aarch64|ARM64'
 
-      - name: Package arm64 AppImage
+      - name: Package arm64 AppImage and Flatpak
         run: |
           set -euo pipefail
           ./node_modules/.bin/electron-builder \
-            --linux AppImage \
+            --linux AppImage flatpak \
             --arm64 \
             --config electron-builder.config.cjs \
             -c.directories.output=release-linux-arm64 \
@@ -240,11 +257,14 @@ jobs:
           mkdir -p release-assets
           find release-linux-arm64 -maxdepth 1 -type f -name '*-arm64.AppImage' \
             -exec cp {} release-assets/ \;
+          find release-linux-arm64 -maxdepth 1 -type f -name '*-aarch64.flatpak' \
+            -exec cp {} release-assets/ \;
           cp release-linux-arm64/latest-linux-arm64.yml release-assets/
           test "$(find release-assets -maxdepth 1 -type f -name '*-arm64.AppImage' | wc -l)" -eq 1
+          test "$(find release-assets -maxdepth 1 -type f -name '*-aarch64.flatpak' | wc -l)" -eq 1
           find release-assets -maxdepth 1 -type f -print
 
-      - name: Save Linux arm64 AppImage
+      - name: Save Linux arm64 AppImage and Flatpak
         uses: actions/upload-artifact@v7
         with:
           name: release-linux-arm64

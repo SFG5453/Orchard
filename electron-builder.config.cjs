@@ -82,6 +82,30 @@ module.exports = {
     compression: 'xzmt',
     fpm: ['--rpm-compression-level', '6']
   },
+  flatpak: {
+    runtime: 'org.freedesktop.Platform',
+    runtimeVersion: '25.08',
+    sdk: 'org.freedesktop.Sdk',
+    base: 'org.electronjs.Electron2.BaseApp',
+    baseVersion: '25.08',
+    branch: 'stable',
+    useWaylandFlags: true,
+    finishArgs: [
+      '--share=ipc',
+      '--share=network',
+      '--socket=x11',
+      '--socket=wayland',
+      '--socket=pulseaudio',
+      '--device=dri',
+      '--talk-name=org.freedesktop.Notifications',
+      '--talk-name=org.freedesktop.secrets',
+      '--talk-name=org.kde.StatusNotifierWatcher',
+      '--talk-name=com.canonical.AppMenu.Registrar',
+      '--own-name=org.mpris.MediaPlayer2.Orchard',
+      '--filesystem=xdg-run/discord-ipc-0',
+      '--env=ORCHARD_DISTRIBUTION_PACKAGE=Flatpak'
+    ]
+  },
   win: {
     target: ['nsis'],
     icon: 'build/icon.ico',

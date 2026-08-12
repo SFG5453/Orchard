@@ -1,7 +1,7 @@
 ## Orchard 4.3.3 "Rundowns Tonic"
 
 ### New & improved
-- **Windows and Linux on Arm**: Added a native Windows ARM64 installer and Linux ARM64 AppImage, including architecture-aware update metadata.
+- **More Linux Packages**: Added x86_64 and ARM64 Flatpak bundles, plus a native Windows ARM64 installer and Linux ARM64 AppImage with architecture-aware update metadata.
 
 ### Fixed
 - **Full-Quality Explicit Tracks**: Explicit lyrics no longer force songs through the lower-bitrate authenticated stream. Orchard now uses the normal high-quality route unless YouTube returns a real age restriction.

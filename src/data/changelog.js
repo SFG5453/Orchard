@@ -26,7 +26,7 @@ export const ORCHARD_RELEASES = [
       {
         title: 'New & improved',
         items: [
-          'Added a native Windows ARM64 installer and Linux ARM64 AppImage, including architecture-aware update metadata.'
+          'Added x86_64 and ARM64 Flatpak bundles, plus a native Windows ARM64 installer and Linux ARM64 AppImage with architecture-aware update metadata.'
         ]
       },
       {
