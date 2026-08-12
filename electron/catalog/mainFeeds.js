@@ -34,6 +34,8 @@ export function createMainFeeds({
   rawBrowseItemsFromData,
   rawSectionList
 }) {
+  const MAX_HOME_PAGES = 12;
+
   function shelfItems(shelf) {
     const contents = shelf?.contents || shelf?.items || [];
     return contents.map(normalizeTrack).filter((item) => item.id || item.browseId || item.title !== 'Untitled');
@@ -139,8 +141,14 @@ export function createMainFeeds({
   }
 
   async function fetchMusicLibraryCategory(yt, title) {
-    const landing = await fetchRawLibraryPage(yt, { browseId: 'FEmusic_library_landing' });
-    const filterRequest = findLibraryFilterRequest(landing, title);
+    const normalizedTitle = title.trim().toLowerCase();
+    const directBrowseId = normalizedTitle === 'playlists' ? 'FEmusic_liked_playlists' : '';
+    const landing = directBrowseId
+      ? null
+      : await fetchRawLibraryPage(yt, { browseId: 'FEmusic_library_landing' });
+    const filterRequest = directBrowseId
+      ? { browseId: directBrowseId }
+      : findLibraryFilterRequest(landing, title);
     if (!filterRequest) return [];
 
     const items = [];
@@ -155,7 +163,7 @@ export function createMainFeeds({
       request = continuation ? { continuation } : null;
     }
 
-    const categoryItems = title.trim().toLowerCase() === 'songs'
+    const categoryItems = normalizedTitle === 'songs'
       ? items.filter((item) => item.id)
       : items;
     const seen = new Set();
@@ -167,14 +175,58 @@ export function createMainFeeds({
     });
   }
 
-  function normalizeRawMusicFeed(data) {
+  function continuationSectionItems(data) {
+    const actions = [
+      ...(data?.onResponseReceivedActions || []),
+      ...(data?.on_response_received_actions || []),
+      ...(data?.onResponseReceivedEndpoints || []),
+      ...(data?.on_response_received_endpoints || [])
+    ];
+
+    return actions.flatMap((action) => [
+      ...(action?.appendContinuationItemsAction?.continuationItems || []),
+      ...(action?.append_continuation_items_action?.continuation_items || []),
+      ...(action?.reloadContinuationItemsCommand?.continuationItems || []),
+      ...(action?.reload_continuation_items_command?.continuation_items || []),
+      ...(action?.contents || [])
+    ]);
+  }
+
+  function rawMusicHomeSections(data) {
+    return [
+      ...rawSectionList(data),
+      ...(data?.continuationContents?.sectionListContinuation?.contents || []),
+      ...(data?.continuation_contents?.section_list_continuation?.contents || []),
+      ...continuationSectionItems(data)
+    ];
+  }
+
+  function normalizeRawMusicFeed(data, page = 0) {
     return {
       filters: [],
-      sections: rawSectionList(data)
+      sections: rawMusicHomeSections(data)
         .map(normalizeBrowseSection)
+        .map((section, index) => ({ ...section, key: `home-${page}-${section.key || index}` }))
         .map((section) => ({ ...section, items: section.items.filter(shouldShowMusicItem) }))
         .filter((section) => section.items.length > 0)
     };
+  }
+
+  async function fetchMusicHomeFeed(yt) {
+    let page = await yt.music.getHomeFeed();
+    const sections = [...(page.sections || [])];
+    const filters = page.filters || [];
+    let pageCount = 1;
+
+    while (page.has_continuation && pageCount < MAX_HOME_PAGES) {
+      const nextPage = await page.getContinuation().catch(() => null);
+      if (!nextPage) break;
+      sections.push(...(nextPage.sections || []));
+      page = nextPage;
+      pageCount += 1;
+    }
+
+    return { filters, sections };
   }
 
   async function fetchFeed(label, primary, fallback) {
@@ -210,9 +262,23 @@ export function createMainFeeds({
   }
 
   async function fetchBrowserMusicHome() {
-    return normalizeRawMusicFeed(await fetchRawBrowserMusicBrowse({
-      browseId: 'FEmusic_home'
-    }));
+    let data = await fetchRawBrowserMusicBrowse({ browseId: 'FEmusic_home' });
+    const feed = normalizeRawMusicFeed(data);
+    let continuation = browseContinuationTokenFromData(data);
+    let page = 1;
+
+    while (continuation && page < MAX_HOME_PAGES) {
+      const nextData = await fetchRawBrowserMusicBrowse({ continuation }).catch(() => null);
+      if (!nextData) break;
+      const nextFeed = normalizeRawMusicFeed(nextData, page);
+      feed.sections.push(...nextFeed.sections);
+      const nextContinuation = browseContinuationTokenFromData(nextData);
+      if (nextContinuation === continuation) break;
+      continuation = nextContinuation;
+      page += 1;
+    }
+
+    return feed;
   }
 
   async function fetchBrowserMusicLibrary() {
@@ -251,6 +317,7 @@ export function createMainFeeds({
     catalogAudioItems,
     fetchBrowserMusicHome,
     fetchFeed,
+    fetchMusicHomeFeed,
     fetchMusicLibraryCategory,
     fetchMusicLibraryFeed,
     normalizeFeedResult,

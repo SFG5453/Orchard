@@ -30,7 +30,24 @@ import kotlinx.coroutines.withContext
 /** Coroutine-friendly data boundary used by screen state holders. */
 class CatalogRepository(private val client: InnerTubeClient) {
     suspend fun home(): List<CatalogSection> = withContext(Dispatchers.IO) {
-        CatalogParser.home(client.browse("FEmusic_home"))
+        val root = client.browse("FEmusic_home")
+        val sections = CatalogParser.home(root).toMutableList()
+        var token = CatalogParser.homeContinuationToken(root)
+        var pages = 1
+
+        while (token.isNotBlank() && pages < MAX_HOME_PAGES) {
+            // Home is useful even if a later recommendation page expires or fails.
+            val page = runCatching { client.browseContinuation(token) }.getOrNull() ?: break
+            sections += CatalogParser.home(page)
+            val next = CatalogParser.homeContinuationToken(page)
+            if (next == token) break
+            token = next
+            pages++
+        }
+
+        sections.mapIndexed { index, section ->
+            section.copy(id = "home-$index-${section.title}")
+        }
     }
 
     suspend fun search(query: String): SearchResults = withContext(Dispatchers.IO) {
@@ -71,7 +88,7 @@ class CatalogRepository(private val client: InnerTubeClient) {
         var items = CatalogParser.sectionItems(root)
         var token = CatalogParser.continuationToken(root)
         var pages = 0
-        while (token.isNotBlank() && pages < 10) {
+        while (token.isNotBlank() && pages < MAX_SECTION_PAGES) {
             val page = runCatching { client.browseContinuation(token) }.getOrNull() ?: break
             val newItems = CatalogParser.sectionItems(page)
             if (newItems.isEmpty()) break
@@ -89,6 +106,10 @@ class CatalogRepository(private val client: InnerTubeClient) {
     }
 
     private companion object {
+        /** Enough pages to match the long, personalized Music home without making it unbounded. */
+        const val MAX_HOME_PAGES = 12
+        /** Library grids are 25 items per page; this covers unusually large saved collections. */
+        const val MAX_SECTION_PAGES = 40
         /** 100 rows per page, so this covers playlists up to 5000 tracks. */
         const val MAX_TRACK_PAGES = 50
     }

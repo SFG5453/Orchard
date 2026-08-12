@@ -195,6 +195,10 @@ export default {
             <q-icon name="leaderboard" />
             <span>Replay</span>
           </button>
+          <button type="button" class="nav-link" :class="{ 'nav-link--active': activeView === 'search' && searchResult.sections?.[0]?.key === 'library-playlists' }" :disabled="!authState.signedIn" @click="showLibraryPlaylists">
+            <q-icon name="queue_music" />
+            <span>Playlists</span>
+          </button>
           <button type="button" class="nav-link" :class="{ 'nav-link--active': activeView === 'search' && searchResult.sections?.[0]?.key === 'library-songs' }" :disabled="!authState.signedIn" @click="showLibrarySongs">
             <q-icon name="music_note" />
             <span>Songs</span>

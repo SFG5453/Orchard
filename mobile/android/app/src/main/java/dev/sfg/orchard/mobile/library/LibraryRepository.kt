@@ -96,24 +96,30 @@ class LibraryRepository(
         val sections = catalog.library()
         val items = sections.flatMap { it.items }
         val liked = runCatching { catalog.likedSongs().tracks }.getOrDefault(emptyList())
-        // The library landing page is a set of recent-activity shelves, not the saved albums:
-        // whatever YouTube feels like surfacing there is not what the user pressed save on.
-        // The albums tab is its own browse id, so ask for that instead and keep the landing
+        // The landing page contains recent-activity shelves, not the complete saved collections.
+        // Albums and playlists each have their own browse id, so use those and retain the landing
         // page only as a fallback.
         val savedAlbums = runCatching { catalog.sectionItems(LIKED_ALBUMS) }
             .getOrDefault(emptyList())
             .filterIsInstance<CatalogItem.Record>()
             .map { it.album }
             .distinctBy(Album::id)
+        val savedPlaylists = runCatching { catalog.sectionItems(LIKED_PLAYLISTS) }
+            .getOrDefault(emptyList())
+            .filterIsInstance<CatalogItem.Collection>()
+            .map { it.playlist }
+            .distinctBy(Playlist::id)
         val current = mutableLibrary.value
         val refreshed = current.copy(
             likedTracks = liked.ifEmpty { current.likedTracks },
-            // Never let a failed or empty fetch wipe albums the user saved in Orchard.
+            // Never let a failed or empty remote fetch wipe a collection already cached by Orchard.
             savedAlbums = savedAlbums
                 .ifEmpty { items.filterIsInstance<CatalogItem.Record>().map { it.album }.distinctBy(Album::id) }
                 .ifEmpty { current.savedAlbums },
             savedArtists = items.filterIsInstance<CatalogItem.Performer>().map { it.artist }.distinctBy(Artist::id),
-            savedPlaylists = items.filterIsInstance<CatalogItem.Collection>().map { it.playlist }.distinctBy(Playlist::id),
+            savedPlaylists = savedPlaylists
+                .ifEmpty { items.filterIsInstance<CatalogItem.Collection>().map { it.playlist }.distinctBy(Playlist::id) }
+                .ifEmpty { current.savedPlaylists },
         )
         mutableLibrary.value = refreshed
         cacheUpdates.trySend(refreshed).getOrThrow()
@@ -133,5 +139,7 @@ class LibraryRepository(
     private companion object {
         /** YouTube Music's own Albums tab — the albums the user actually saved. */
         const val LIKED_ALBUMS = "FEmusic_liked_albums"
+        /** The complete saved-playlist grid; the library landing page contains only recent items. */
+        const val LIKED_PLAYLISTS = "FEmusic_liked_playlists"
     }
 }

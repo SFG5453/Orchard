@@ -144,6 +144,78 @@ class CatalogParserTest {
     }
 
     @Test
+    fun homeKeepsCarouselSongShelfAndGridSectionsInOrder() {
+        fun song(id: String, title: String) = """
+            {"musicResponsiveListItemRenderer": {
+              "flexColumns": [{"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{
+                "text": "$title", "navigationEndpoint": {"watchEndpoint": {"videoId": "$id"}}
+              }]}}}]
+            }}
+        """.trimIndent()
+        fun album(id: String, title: String) = """
+            {"musicTwoRowItemRenderer": {
+              "title": {"runs": [{"text": "$title"}]},
+              "navigationEndpoint": {"browseEndpoint": {
+                "browseId": "$id", "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {"pageType": "MUSIC_PAGE_TYPE_ALBUM"}
+                }
+              }}
+            }}
+        """.trimIndent()
+        val root = JSONObject(
+            """{
+              "contents": {"singleColumnBrowseResultsRenderer": {"tabs": [{"tabRenderer": {
+                "content": {"sectionListRenderer": {"contents": [
+                  {"musicCarouselShelfRenderer": {
+                    "header": {"musicCarouselShelfBasicHeaderRenderer": {"title": {"runs": [{"text": "Listen again"}]}}},
+                    "contents": [${album("MPREagain", "Again")}]
+                  }},
+                  {"musicShelfRenderer": {
+                    "title": {"runs": [{"text": "Quick picks"}]},
+                    "contents": [${song("quick-song", "Quick song")}]
+                  }},
+                  {"gridRenderer": {
+                    "header": {"gridHeaderRenderer": {"title": {"runs": [{"text": "Albums for you"}]}}},
+                    "items": [${album("MPREalbum", "An album")}]
+                  }}
+                ], "continuations": [{"nextContinuationData": {"continuation": "home-page-2"}}]}}
+              }}]}}
+            }""".trimIndent(),
+        )
+
+        val sections = CatalogParser.home(root)
+
+        assertEquals(listOf("Listen again", "Quick picks", "Albums for you"), sections.map { it.title })
+        assertTrue(sections[1].items.single() is CatalogItem.Song)
+        assertEquals("home-page-2", CatalogParser.homeContinuationToken(root))
+    }
+
+    @Test
+    fun savedPlaylistGridExposesItemsAndContinuation() {
+        val root = JSONObject(
+            """{
+              "gridRenderer": {
+                "items": [{"musicTwoRowItemRenderer": {
+                  "title": {"runs": [{"text": "Road trip"}]},
+                  "navigationEndpoint": {"browseEndpoint": {
+                    "browseId": "VLroad-trip", "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {"pageType": "MUSIC_PAGE_TYPE_PLAYLIST"}
+                    }
+                  }}
+                }}],
+                "continuations": [{"nextContinuationData": {"continuation": "playlist-page-2"}}]
+              }
+            }""".trimIndent(),
+        )
+
+        val items = CatalogParser.sectionItems(root)
+
+        assertEquals(listOf("Road trip"), items.map { it.title })
+        assertTrue(items.single() is CatalogItem.Collection)
+        assertEquals("playlist-page-2", CatalogParser.continuationToken(root))
+    }
+
+    @Test
     fun playlistDetailUsesResponsiveHeaderAndDoesNotTreatPlayCountAsAlbum() {
         val root = JSONObject(
             """{

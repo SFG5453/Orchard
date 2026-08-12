@@ -34,6 +34,8 @@ import org.json.JSONObject
 
 /** Tolerant normalizer for the renderer variants returned by YouTube Music. */
 object CatalogParser {
+    private val homeShelfKeys = setOf("musicCarouselShelfRenderer", "musicShelfRenderer", "gridRenderer")
+
     fun search(root: JSONObject): SearchResults {
         val items = allItems(root).distinctBy { "${it::class.simpleName}:${it.stableId}" }
         return SearchResults(
@@ -45,18 +47,46 @@ object CatalogParser {
     }
 
     fun home(root: JSONObject): List<CatalogSection> {
-        val shelves = JsonTraversal.renderers(root, "musicCarouselShelfRenderer")
+        val shelves = homeShelves(root)
         val sections = shelves.mapIndexedNotNull { index, shelf ->
-            val title = JsonTraversal.text(shelf.optJSONObject("header"))
+            val title = JsonTraversal.text(shelf.optJSONObject("title"))
+                .ifBlank { JsonTraversal.text(shelf.optJSONObject("header")) }
                 .ifBlank { JsonTraversal.renderers(shelf.optJSONObject("header"), "title").firstOrNull()?.let(JsonTraversal::text).orEmpty() }
                 .ifBlank { "For you" }
-            val contents = shelf.optJSONArray("contents") ?: JSONArray()
+            val contents = shelf.optJSONArray("contents") ?: shelf.optJSONArray("items") ?: JSONArray()
             val items = allItems(contents).distinctBy(CatalogItem::stableId)
             if (items.isEmpty()) null else CatalogSection("shelf-$index-$title", title, items)
         }
         if (sections.isNotEmpty()) return sections
         val fallback = allItems(root).distinctBy(CatalogItem::stableId)
         return if (fallback.isEmpty()) emptyList() else listOf(CatalogSection("listen-now", "Listen now", fallback))
+    }
+
+    /** Home mixes carousels, song shelves, and grids, including inside continuation actions. */
+    private fun homeShelves(root: Any?): List<JSONObject> = buildList { collectHomeShelves(root, this) }
+
+    private fun collectHomeShelves(value: Any?, output: MutableList<JSONObject>) {
+        when (value) {
+            is JSONObject -> {
+                value.keys().forEach { key ->
+                    val child = value.opt(key)
+                    if (key in homeShelfKeys && child is JSONObject) output.add(child)
+                    else collectHomeShelves(child, output)
+                }
+            }
+            is JSONArray -> for (index in 0 until value.length()) collectHomeShelves(value.opt(index), output)
+        }
+    }
+
+    /** Continuation belonging to the home section list, not a nested album or playlist shelf. */
+    fun homeContinuationToken(root: JSONObject): String {
+        val sectionLists = JsonTraversal.renderers(root, "sectionListRenderer") +
+            JsonTraversal.renderers(root, "sectionListContinuation")
+        sectionLists.firstNotNullOfOrNull { section ->
+            continuationIn(section.opt("continuations")).takeIf(String::isNotBlank)
+                ?: section.optString("continuation").takeIf(String::isNotBlank)
+        }?.let { return it }
+        return continuationIn(root)
     }
 
     /**

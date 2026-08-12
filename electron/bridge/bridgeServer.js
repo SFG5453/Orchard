@@ -37,6 +37,7 @@ export async function startBridgeServer({
   ensureSignedIn,
   fetchBrowserMusicHome,
   fetchFeed,
+  fetchMusicHomeFeed,
   fetchMusicLibraryCategory,
   fetchMusicLibraryFeed,
   findMusicVideoFallback,
@@ -464,7 +465,7 @@ export async function startBridgeServer({
         if (!hasBrowserLoginCookie()) await refreshBrowserAuth();
         const yt = await ensureSignedIn();
         const [home, library] = await Promise.all([
-          fetchFeed('Music home', () => yt.music.getHomeFeed(), hasBrowserLoginCookie() ? fetchBrowserMusicHome : null),
+          fetchFeed('Music home', () => fetchMusicHomeFeed(yt), hasBrowserLoginCookie() ? fetchBrowserMusicHome : null),
           fetchMusicLibraryFeed(yt)
         ]);
         const errors = [home.error, library.error].filter(Boolean);

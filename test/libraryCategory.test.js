@@ -22,7 +22,7 @@ import test from 'node:test';
 import { createBrowseNormalizers } from '../electron/catalog/browseNormalizers.js';
 import { createMainFeeds } from '../electron/catalog/mainFeeds.js';
 
-function mainFeeds() {
+function mainFeeds(overrides = {}) {
   return createMainFeeds({
     asText: (value) => typeof value === 'string'
       ? value
@@ -36,9 +36,67 @@ function mainFeeds() {
     normalizeTrack: (item) => item,
     normalizeTvLibrary: () => ({ sections: [] }),
     rawBrowseItemsFromData: (data) => data.items || [],
-    rawSectionList: () => []
+    rawSectionList: () => [],
+    ...overrides
   });
 }
+
+test('loads every parsed YouTube Music home continuation', async () => {
+  const third = { sections: [{ title: 'New releases' }], filters: [], has_continuation: false };
+  const second = {
+    sections: [{ title: 'Albums for you' }],
+    filters: [],
+    has_continuation: true,
+    getContinuation: async () => third
+  };
+  const first = {
+    sections: [{ title: 'Quick picks' }],
+    filters: ['Energize'],
+    has_continuation: true,
+    getContinuation: async () => second
+  };
+
+  const feed = await mainFeeds().fetchMusicHomeFeed({
+    music: { getHomeFeed: async () => first }
+  });
+
+  assert.deepEqual(feed.sections.map((section) => section.title), [
+    'Quick picks',
+    'Albums for you',
+    'New releases'
+  ]);
+  assert.deepEqual(feed.filters, ['Energize']);
+});
+
+test('loads raw browser home continuation sections', async () => {
+  const pages = {
+    FEmusic_home: {
+      sections: [{ key: 'quick', title: 'Quick picks', items: [{ id: 'one', type: 'track' }] }],
+      continuation: 'home-next'
+    },
+    'home-next': {
+      continuationContents: {
+        sectionListContinuation: {
+          contents: [{ key: 'albums', title: 'Albums for you', items: [{ id: 'two', type: 'album' }] }]
+        }
+      }
+    }
+  };
+  const requests = [];
+  const feed = await mainFeeds({
+    fetchRawBrowserMusicBrowse: async (request) => {
+      const key = request.continuation || request.browseId;
+      requests.push(key);
+      return pages[key];
+    },
+    rawSectionList: (data) => data.sections || [],
+    normalizeBrowseSection: (section) => section,
+    browseContinuationTokenFromData: (data) => data.continuation || null
+  }).fetchBrowserMusicHome();
+
+  assert.deepEqual(feed.sections.map((section) => section.title), ['Quick picks', 'Albums for you']);
+  assert.deepEqual(requests, ['FEmusic_home', 'home-next']);
+});
 
 test('unwraps item sections in the newer music library layout', () => {
   const album = { musicTwoRowItemRenderer: { title: { runs: [{ text: 'Album' }] } } };
@@ -113,6 +171,31 @@ test('loads, paginates, and deduplicates a raw music library category', async ()
     requests.map((request) => request.continuation || request.browseId),
     ['FEmusic_library_landing', 'library-albums', 'next-page']
   );
+});
+
+test('loads every saved playlist from the dedicated playlist grid', async () => {
+  const first = { browseId: 'VL-first', title: 'First', type: 'playlist' };
+  const second = { browseId: 'VL-second', title: 'Second', type: 'playlist' };
+  const pages = {
+    FEmusic_liked_playlists: { items: [first], continuation: 'playlist-page-2' },
+    'playlist-page-2': { items: [first, second] }
+  };
+  const requests = [];
+  const yt = {
+    actions: {
+      execute: async (_path, request) => {
+        const key = request.continuation || request.browseId;
+        requests.push(key);
+        return { data: pages[key] };
+      }
+    }
+  };
+
+  assert.deepEqual(
+    await mainFeeds().fetchMusicLibraryCategory(yt, 'Playlists'),
+    [first, second]
+  );
+  assert.deepEqual(requests, ['FEmusic_liked_playlists', 'playlist-page-2']);
 });
 
 test('omits the YouTube Music shuffle action from library song data', async () => {

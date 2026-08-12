@@ -226,7 +226,7 @@ const {
 const {
   catalogAudioItems,
   fetchBrowserMusicHome,
-  fetchFeed, fetchMusicLibraryCategory,
+  fetchFeed, fetchMusicHomeFeed, fetchMusicLibraryCategory,
   fetchMusicLibraryFeed,
   shelfItems
 } = createMainFeeds({
@@ -333,7 +333,7 @@ async function startBridge() {
     continueMusicPlaylistWithFallback,
     ensureSignedIn,
     fetchBrowserMusicHome,
-    fetchFeed, fetchMusicLibraryCategory,
+    fetchFeed, fetchMusicHomeFeed, fetchMusicLibraryCategory,
     fetchMusicLibraryFeed,
     findMusicVideoFallback,
     getBrowserInnertube,

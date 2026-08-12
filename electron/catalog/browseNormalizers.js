@@ -248,6 +248,8 @@ export function createBrowseNormalizers({
       continuationTokenFromContinuations(data?.continuationContents?.gridContinuation?.continuations) ||
       data?.continuationContents?.sectionListContinuation?.continuation ||
       continuationTokenFromContinuations(data?.continuationContents?.sectionListContinuation?.continuations) ||
+      continuationTokenFromContinuations(data?.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer?.continuations) ||
+      continuationTokenFromContinuations(data?.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.continuations) ||
       data?.continuation_contents?.continuation ||
       rawSectionList(data)
         .map(rawSectionNode)

@@ -248,6 +248,10 @@ export function installConnectionActions(ctx) {
     return showRemoteLibraryCategory('Albums', 'music:library-category', 'Could not load library albums.');
   };
 
+  ctx.showLibraryPlaylists = function showLibraryPlaylists() {
+    return showRemoteLibraryCategory('Playlists', 'music:library-category', 'Could not load library playlists.');
+  };
+
   ctx.showLibrarySongs = function showLibrarySongs() {
     return showRemoteLibraryCategory('Songs', 'music:library-category', 'Could not load library songs.');
   };
