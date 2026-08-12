@@ -113,6 +113,12 @@ class YouTubeStreamResolver(
      */
     private val failures = ConcurrentHashMap<String, FailedResolve>()
 
+    /**
+     * Tracks videos for which a player client returned an actual age gate. Catalog metadata's
+     * "explicit" flag is only a lyrics advisory and must never select a lower-quality stream.
+     */
+    private val ageGatedVideos = ConcurrentHashMap.newKeySet<String>()
+
     private data class FailedResolve(val atMs: Long, val cause: Throwable)
     private val locks = ConcurrentHashMap<String, Any>()
     private val prefetchExecutor = Executors.newFixedThreadPool(2) { runnable ->
@@ -180,7 +186,9 @@ class YouTubeStreamResolver(
             val account = runCatching { accountIdentity(videoId) }
                 .onFailure { Log.w(TAG, "Could not build an account identity for playback", it) }
                 .getOrNull()
-            var isAgeGated = false
+            fun rememberAgeGate(error: Throwable) {
+                if (error is AgeGateException) ageGatedVideos += videoId
+            }
             val response = runCatching {
                 androidVrPlayer(videoId, account ?: warmVisitor(videoId))
             }
@@ -189,35 +197,43 @@ class YouTubeStreamResolver(
                 // Signed in, this is also the guest retry: the account may simply
                 // not be entitled to this track.
                 .recoverCatching { firstError ->
+                    rememberAgeGate(firstError)
                     if (firstError is AgeGateException) throw firstError
                     Log.w(TAG, "Retrying with a fresh visitor identity", firstError)
                     androidVrPlayer(videoId, loadVisitor(videoId).also(::rememberVisitor))
                 }
                 .recoverCatching { secondError ->
+                    rememberAgeGate(secondError)
                     withinBudget(secondError)
                     Log.w(TAG, "ANDROID_VR failed for $videoId; trying ANDROID client", secondError)
                     val authenticatedVisitor = account ?: warmVisitor(videoId)
                     androidPlayer(videoId, authenticatedVisitor)
                 }
                 .recoverCatching { thirdError ->
+                    rememberAgeGate(thirdError)
                     withinBudget(thirdError)
                     Log.w(TAG, "ANDROID player failed for $videoId; trying IOS client", thirdError)
                     val authenticatedVisitor = account ?: warmVisitor(videoId)
                     iosPlayer(videoId, authenticatedVisitor)
                 }
                 .recoverCatching { fourthError ->
+                    rememberAgeGate(fourthError)
                     withinBudget(fourthError)
                     Log.w(TAG, "IOS player failed for $videoId; trying WEB_REMIX player", fourthError)
                     val authenticatedVisitor = account ?: warmVisitor(videoId)
                     webRemixPlayer(videoId, authenticatedVisitor)
                 }
                 .recoverCatching { fifthError ->
+                    rememberAgeGate(fifthError)
                     withinBudget(fifthError)
                     Log.w(TAG, "WEB_REMIX player failed for $videoId; trying TVHTML5 player", fifthError)
                     val authenticatedVisitor = account ?: warmVisitor(videoId)
                     tvHtml5Player(videoId, authenticatedVisitor)
                 }
-                .onFailure { failures[videoId] = FailedResolve(System.currentTimeMillis(), it) }
+                .onFailure {
+                    rememberAgeGate(it)
+                    failures[videoId] = FailedResolve(System.currentTimeMillis(), it)
+                }
                 .getOrThrow()
             val stream = chooseAudio(response, quality)
             if (maxQualityFallback) {
@@ -415,6 +431,12 @@ class YouTubeStreamResolver(
     fun invalidate(videoId: String) {
         streams.keys.removeAll { it.startsWith("$videoId:") }
     }
+
+    /**
+     * Consumes evidence that normal resolution encountered an age gate. The playback service uses
+     * this only after the normal stream fails, keeping authenticated itag 18 a real fallback.
+     */
+    fun consumeAgeGate(videoId: String): Boolean = ageGatedVideos.remove(videoId)
 
     private fun loadVisitor(videoId: String, cookie: String? = null): Visitor {
         val url = if (videoId.isNotBlank()) "https://www.youtube.com/watch?v=$videoId" else "https://www.youtube.com"

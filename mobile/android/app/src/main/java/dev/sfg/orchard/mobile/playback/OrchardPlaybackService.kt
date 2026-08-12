@@ -678,19 +678,16 @@ class OrchardPlaybackService : MediaLibraryService() {
                     "playbackListener.onPlayerError: ${error.errorCodeName} - ${error.message}",
                     error,
                 )
-                val mediaId = player.currentMediaItem?.mediaId.orEmpty()
-                if (mediaId.isBlank() || retriedMediaId == mediaId) {
-                    Log.e(TAG, "Playback failed after stream refresh", error)
+                val failedItem = player.currentMediaItem
+                val mediaId = failedItem?.mediaId.orEmpty()
+                val failedUri = failedItem?.localConfiguration?.uri
+                if (mediaId.isBlank() || failedItem == null || failedUri == null) {
+                    Log.e(TAG, "Playback failed without a recoverable media item", error)
                     return
                 }
-                retriedMediaId = mediaId
                 streamResolver.invalidate(mediaId)
-                val failedItem = player.currentMediaItem
-                val failedUri = failedItem?.localConfiguration?.uri
                 if (
-                    failedItem != null &&
-                        failedUri != null &&
-                        MediaItemMapper.requiresAuthenticatedDirect(failedUri)
+                    MediaItemMapper.requiresAuthenticatedDirect(failedUri)
                 ) {
                     val index = player.currentMediaItemIndex
                     val position = player.currentPosition.coerceAtLeast(0)
@@ -701,6 +698,28 @@ class OrchardPlaybackService : MediaLibraryService() {
                     player.play()
                     return
                 }
+                if (MediaItemMapper.requiresAuthenticatedHls(failedUri)) {
+                    Log.e(TAG, "Playback failed after authenticated HLS fallback", error)
+                    return
+                }
+                if (streamResolver.consumeAgeGate(mediaId)) {
+                    val index = player.currentMediaItemIndex
+                    val position = player.currentPosition.coerceAtLeast(0)
+                    Log.w(TAG, "Normal stream was age-gated; retrying authenticated direct", error)
+                    player.replaceMediaItem(
+                        index,
+                        MediaItemMapper.asAuthenticatedDirectFallback(failedItem),
+                    )
+                    player.seekTo(index, position)
+                    player.prepare()
+                    player.play()
+                    return
+                }
+                if (retriedMediaId == mediaId) {
+                    Log.e(TAG, "Playback failed after stream refresh", error)
+                    return
+                }
+                retriedMediaId = mediaId
                 Log.w(TAG, "Refreshing the failed stream once", error)
                 player.prepare()
                 player.play()

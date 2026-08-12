@@ -49,10 +49,6 @@ object MediaItemMapper {
             .scheme(SCHEME)
             .authority("stream")
             .appendPath(track.id)
-            // Explicit tracks need the signed-in WEB_REMIX resolver. Its itag 18 is a
-            // normal progressive MP4, so it starts immediately instead of waiting for
-            // Safari HLS's pre-roll availability window.
-            .apply { if (track.explicit) appendQueryParameter(AUTHENTICATED_DIRECT, "1") }
             .build()
         val requestMetadata = MediaItem.RequestMetadata.Builder()
             .setMediaUri(uri)
@@ -60,7 +56,6 @@ object MediaItemMapper {
         return MediaItem.Builder()
             .setMediaId(track.id)
             .setUri(uri)
-            .apply { if (track.explicit) setMimeType(MimeTypes.VIDEO_MP4) }
             .setRequestMetadata(requestMetadata)
             .setMediaMetadata(metadata)
             .build()
@@ -90,6 +85,21 @@ object MediaItemMapper {
 
     fun requiresAuthenticatedDirect(uri: Uri): Boolean =
         isOrchardUri(uri) && uri.getQueryParameter(AUTHENTICATED_DIRECT) == "1"
+
+    /** Retries a stream that was actually age-gated through the signed-in direct path. */
+    fun asAuthenticatedDirectFallback(item: MediaItem): MediaItem {
+        val original = item.localConfiguration?.uri ?: return item
+        val uri =
+            original.buildUpon()
+                .clearQuery()
+                .appendQueryParameter(AUTHENTICATED_DIRECT, "1")
+                .build()
+        return item.buildUpon()
+            .setUri(uri)
+            .setMimeType(MimeTypes.VIDEO_MP4)
+            .setRequestMetadata(item.requestMetadata.buildUpon().setMediaUri(uri).build())
+            .build()
+    }
 
     /** Switches a failed direct authenticated stream to the slower, broadly compatible HLS path. */
     fun asAuthenticatedHlsFallback(item: MediaItem): MediaItem {
