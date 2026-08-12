@@ -197,6 +197,61 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  build-linux-arm64:
+    name: Linux arm64 AppImage
+    needs: prepare
+    if: needs.prepare.outputs.mobile_only != 'true'
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Verify native architecture
+        run: |
+          set -euo pipefail
+          test "$(node -p process.arch)" = arm64
+          file native/build/Release/orchard_audio_analysis.node
+          file native/build/Release/orchard_audio_analysis.node | grep -Eq 'ARM aarch64|ARM64'
+
+      - name: Package arm64 AppImage
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/electron-builder \
+            --linux AppImage \
+            --arm64 \
+            --config electron-builder.config.cjs \
+            -c.directories.output=release-linux-arm64 \
+            --publish never
+
+          mkdir -p release-assets
+          find release-linux-arm64 -maxdepth 1 -type f -name '*-arm64.AppImage' \
+            -exec cp {} release-assets/ \;
+          cp release-linux-arm64/latest-linux-arm64.yml release-assets/
+          test "$(find release-assets -maxdepth 1 -type f -name '*-arm64.AppImage' | wc -l)" -eq 1
+          find release-assets -maxdepth 1 -type f -print
+
+      - name: Save Linux arm64 AppImage
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-linux-arm64
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 1
+
   build-arch:
     name: Arch Linux package
     needs: prepare
@@ -293,6 +348,69 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  build-windows-arm64:
+    name: Windows arm64 installer
+    needs: prepare
+    if: needs.prepare.outputs.mobile_only != 'true'
+    runs-on: windows-11-arm
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Verify native architecture
+        shell: pwsh
+        run: |
+          if ((node -p process.arch) -ne 'arm64') { throw 'Node.js is not running as arm64.' }
+          $addon = [IO.File]::ReadAllBytes('native/build/Release/orchard_audio_analysis.node')
+          $peOffset = [BitConverter]::ToInt32($addon, 0x3c)
+          $machine = [BitConverter]::ToUInt16($addon, $peOffset + 4)
+          if ($machine -ne 0xaa64) { throw "Native analyzer has PE machine type 0x$($machine.ToString('x4')), expected arm64 (0xaa64)." }
+
+      - name: Package arm64 NSIS installer
+        shell: pwsh
+        run: |
+          & ./node_modules/.bin/electron-builder.cmd `
+            --win nsis `
+            --arm64 `
+            --config electron-builder.config.cjs `
+            --config.directories.output=release-windows-arm64 `
+            --config.win.artifactName='${productName}-Setup-${version}-arm64.${ext}' `
+            --publish never
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          $installers = @(Get-ChildItem release-windows-arm64 -File -Filter '*-arm64.exe')
+          if ($installers.Count -ne 1) { throw "Expected one Windows arm64 installer, found $($installers.Count)." }
+          $installers | Copy-Item -Destination release-assets
+          Get-ChildItem release-windows-arm64 -File -Filter '*-arm64.exe.blockmap' | Copy-Item -Destination release-assets
+          if (-not (Test-Path release-windows-arm64/latest.yml)) { throw 'Windows arm64 update metadata was not created.' }
+          Copy-Item release-windows-arm64/latest.yml release-assets/latest-windows-arm64.yml
+          Get-ChildItem release-assets -File
+
+      - name: Save Windows arm64 installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-windows-arm64
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 1
+
   build-macos:
     name: macOS ${{ matrix.arch }} ZIP
     needs: prepare
@@ -370,7 +488,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.tag }}
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -442,8 +560,10 @@ jobs:
     needs:
       - prepare
       - build-linux
+      - build-linux-arm64
       - build-arch
       - build-windows
+      - build-windows-arm64
       - build-macos
       - build-android
     # A mobile-only run skips every desktop build job, and a skipped dependency would
@@ -492,6 +612,16 @@ jobs:
             release-assets/latest-mac.yml
           rm release-assets/latest-mac-x64.yml release-assets/latest-mac-arm64.yml
 
+      - name: Merge Windows update metadata
+        if: needs.prepare.outputs.mobile_only != 'true'
+        run: |
+          set -euo pipefail
+          node scripts/merge-windows-update-metadata.mjs \
+            release-assets/latest.yml \
+            release-assets/latest-windows-arm64.yml \
+            release-assets/latest.yml
+          rm release-assets/latest-windows-arm64.yml
+
       - name: Generate checksums
         env:
           MOBILE_ONLY: ${{ needs.prepare.outputs.mobile_only }}
@@ -530,7 +660,7 @@ jobs:
           set -euo pipefail
 
           # Upload YAML manifests
-          for manifest in latest.yml latest-linux.yml latest-mac.yml; do
+          for manifest in latest.yml latest-linux.yml latest-linux-arm64.yml latest-mac.yml; do
             test -f "release-assets/$manifest"
             aws s3 cp "release-assets/$manifest" "s3://$R2_BUCKET/orchard/$manifest" \
               --endpoint-url "$R2_ENDPOINT" \
@@ -554,8 +684,10 @@ jobs:
     needs:
       - prepare
       - build-linux
+      - build-linux-arm64
       - build-arch
       - build-windows
+      - build-windows-arm64
       - build-macos
       - build-android
     # See the publish job: skipped desktop builds must not skip this one.
@@ -594,6 +726,16 @@ jobs:
             release-assets/latest-mac-arm64.yml \
             release-assets/latest-mac.yml
           rm release-assets/latest-mac-x64.yml release-assets/latest-mac-arm64.yml
+
+      - name: Merge Windows update metadata
+        if: needs.prepare.outputs.mobile_only != 'true'
+        run: |
+          set -euo pipefail
+          node scripts/merge-windows-update-metadata.mjs \
+            release-assets/latest.yml \
+            release-assets/latest-windows-arm64.yml \
+            release-assets/latest.yml
+          rm release-assets/latest-windows-arm64.yml
 
       - name: Generate checksums
         run: |
