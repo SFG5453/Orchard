@@ -146,13 +146,24 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
             .onFailure { graph.postWarning(it.message ?: "Could not add track to playlist.") }
     }
     fun removeTrackFromPlaylist(playlistId: String, track: Track) = viewModelScope.launch {
-        runCatching {
-            withContext(Dispatchers.IO) {
-                graph.playlistActions.remove(playlistId, track.id)
-                graph.catalog.browse(playlistId)
-            }
-        }.onSuccess(::applyRefreshedPlaylist)
+        runCatching { withContext(Dispatchers.IO) { graph.playlistActions.remove(playlistId, track.id) } }
+            .onSuccess { applyRemovedPlaylistTrack(playlistId, track.id) }
             .onFailure { graph.postWarning(it.message ?: "Could not remove track from playlist.") }
+    }
+
+    /**
+     * Reflect a confirmed removal without immediately re-reading YouTube's eventually consistent
+     * playlist page. Removing by index matters because playlists may contain the same song twice.
+     */
+    private fun applyRemovedPlaylistTrack(playlistId: String, videoId: String) {
+        val active = (mutableDetail.value as? LoadState.Content)?.value ?: return
+        if (active.id.removePrefix("VL") != playlistId.removePrefix("VL")) return
+        val updated = active.withPlaylistTrackRemoved(videoId)
+        if (updated === active) return
+        mutableDetail.value = LoadState.Content(updated)
+        graph.library.refreshPlaylist(
+            Playlist(updated.id, updated.title, updated.subtitle, updated.artworkUrl, updated.description, updated.tracks),
+        )
     }
 
     private fun applyRefreshedPlaylist(refreshed: BrowseDetail) {
@@ -792,4 +803,11 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         const val AUTOPLAY_QUEUE_LIMIT = 20
         const val AUTOPLAY_TOTAL_LIMIT = 100
     }
+}
+
+/** Returns the same instance when [videoId] is absent; otherwise removes one playlist row. */
+internal fun BrowseDetail.withPlaylistTrackRemoved(videoId: String): BrowseDetail {
+    val index = tracks.indexOfFirst { it.id == videoId }
+    if (index < 0) return this
+    return copy(tracks = tracks.toMutableList().apply { removeAt(index) })
 }

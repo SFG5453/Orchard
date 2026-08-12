@@ -46,8 +46,18 @@ class PlaylistActions(private val client: InnerTubeClient) {
     fun remove(playlistId: String, videoId: String) {
         val id = playlistId.removePrefix("VL").trim()
         require(id.isNotEmpty() && videoId.isNotBlank()) { "Playlist or track information is missing." }
-        val page = client.post("browse", JSONObject().put("browseId", "VL$id"))
-        val setVideoId = findSetVideoId(page, videoId)
+        var page = client.post("browse", JSONObject().put("browseId", "VL$id"))
+        var setVideoId = findSetVideoId(page, videoId)
+        var continuation = CatalogParser.continuationToken(page)
+        var pages = 0
+        while (setVideoId.isBlank() && continuation.isNotBlank() && pages < MAX_PLAYLIST_PAGES) {
+            page = client.browseContinuation(continuation)
+            setVideoId = findSetVideoId(page, videoId)
+            val next = CatalogParser.continuationToken(page)
+            if (next == continuation) break
+            continuation = next
+            pages++
+        }
         check(setVideoId.isNotBlank()) { "This track is not in the playlist." }
         client.post("browse/edit_playlist", JSONObject()
             .put("playlistId", id)
@@ -110,5 +120,10 @@ class PlaylistActions(private val client: InnerTubeClient) {
                 .any { key -> containsVideoId(value.opt(key), videoId, depth + 1) }
         }
         else -> false
+    }
+
+    private companion object {
+        /** YouTube Music returns roughly 100 playlist rows per browse page. */
+        const val MAX_PLAYLIST_PAGES = 50
     }
 }
