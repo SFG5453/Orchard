@@ -19,6 +19,27 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '4.3.2',
+    codename: 'Exerted Minimizes',
+    date: 'August 11, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'Home and library feeds now load additional continuation pages, making more recommendations, albums, songs, and saved playlists available without manual pagination.',
+          'Added a dedicated Playlists entry to the library navigation.'
+        ]
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Improved handling of newer YouTube Music home, library, and playlist response layouts, including the added pagination paths.',
+          'Fixed removing mobile playlist tracks that appear on later playlist pages, and updated the visible playlist immediately after a successful removal.'
+        ]
+      }
+    ]
+  },
+  {
     version: '4.3.1',
     codename: 'Zane Guessed',
     date: 'August 11, 2026',

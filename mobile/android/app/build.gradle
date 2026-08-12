@@ -15,8 +15,8 @@ android {
         applicationId = 'dev.sfg.orchard.mobile'
         minSdk = 31
         targetSdk = 36
-        versionCode = 10401
-        versionName = '1.4.1'
+        versionCode = 10402
+        versionName = '1.4.2'
         buildConfigField 'String', 'CODENAME', '"Nonlinear Reddish"'
         // Only the build that is actually published may offer updates. Every other
         // build has its own applicationId, so the published APK is neither an

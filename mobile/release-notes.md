@@ -1,7 +1,5 @@
-## Orchard Mobile 1.4.1 "Nonlinear Reddish"
+## Orchard Mobile 1.4.2 "Fitchburg Coagulant"
 
 ### Fixes
-- **Age-Restricted Playback Restored**: Restored playback for age-restricted YouTube tracks using session authentication, deciphering signature and n challenges, WEB_REMIX playback, and Safari HLS fallback. Credits to Julian-FF2000.
-- **Playlist Selection**: Fixed track selection when tapping tracks within playlists.
-- **Album Navigation**: Preserved album browse targets during navigation.
-
+- **Home and Library Pagination**: Home and library screens now load additional continuation pages, including more recommendations, albums, songs, and saved playlists.
+- **Playlist Track Removal**: Fixed removing tracks that appear on later playlist pages, and updated the visible playlist immediately after a successful removal.
