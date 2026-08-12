@@ -167,6 +167,7 @@ test('playback fallback recognizes direct auth status and YouTube challenges', (
   assert.equal(isAgeGatePlaybackError(new Error('Sign in to confirm your age')), true);
   assert.equal(isBotCheckPlaybackError(new Error("Sign in to confirm you're not a bot")), true);
   assert.equal(isPrivatePlaybackError(new Error('This video is private')), true);
+  assert.equal(isAgeGatePlaybackError({ ageGateBlocked: true, message: 'Authenticated fallback failed' }), true);
 });
 
 test('unrelated request failures do not silently switch playback identity', () => {

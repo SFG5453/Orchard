@@ -29,6 +29,10 @@ import { registerArtistGenreBridge } from './artistGenreBridge.js';
 import { playbackAudioBitrate } from '../playback/playbackFormats.js';
 import { isAgeGatePlaybackError } from '../playback/playbackErrors.js';
 import { isAgeGateRiskTrack } from '../playback/musicVideoFallback.js';
+import {
+  shouldPreferBrowserPlayback,
+  shouldTryAuthenticatedAgeGate
+} from '../playback/playbackRouting.js';
 /** Starts the renderer-only loopback transport and returns its owned close handle. */
 export async function startBridgeServer({
   bridgeError,
@@ -174,7 +178,10 @@ export async function startBridgeServer({
   }
 
   async function resolveTrackRequest({ videoId, supportedMimes = [], supportedVideoMimes = [], mediaKind = 'audio', preload = false, refreshStream = false, avoidItags = [], avoidMimeTypes = [], ...trackHint }) {
-    const preferBrowserPlayback = Boolean(trackHint.isUpload || trackHint.explicit || playback.androidVrCooldownActive());
+    const preferBrowserPlayback = shouldPreferBrowserPlayback(
+      trackHint,
+      playback.androidVrCooldownActive()
+    );
     const [yt, searchYt] = await Promise.all([
       musicClientForPlayback(preferBrowserPlayback),
       getGuestInnertube()
@@ -190,9 +197,8 @@ export async function startBridgeServer({
       return musicVideoFallbackPromise;
     }
 
-    async function resolveCandidate(candidateId, { playAsVideo = false } = {}) {
+    async function resolveCandidate(candidateId, { playAsVideo = false, authenticatedAgeGate = false } = {}) {
       const streamAsVideo = wantsVideo || playAsVideo;
-      const authenticatedAgeGate = Boolean(trackHint.explicit && !streamAsVideo);
       const resolvedInfo = authenticatedAgeGate
         ? null
         : await playback.playbackInfo(candidateId, {
@@ -243,6 +249,7 @@ export async function startBridgeServer({
           ? `${streamBaseUrl}?itag=${stream.audioFormat.itag}&media=audio`
           : '',
         playbackSource: stream.playbackSource || 'youtube',
+        authenticatedPlayback: Boolean(stream.authenticated),
         externalSource: stream.externalSource || '',
         streamUrl: `${streamBaseUrl}?itag=${stream.format.itag}&media=${streamAsVideo ? 'video' : 'audio'}`, streamExpiresAt: stream.expiresAt || 0
       };
@@ -283,6 +290,18 @@ export async function startBridgeServer({
       };
     } catch (error) {
       if (wantsVideo || !isAgeGatePlaybackError(error)) throw error;
+      if (shouldTryAuthenticatedAgeGate(error, {
+        wantsVideo,
+        signedIn: hasBrowserLoginCookie()
+      })) {
+        try {
+          return await resolveCandidate(resolvedVideoId, { authenticatedAgeGate: true });
+        } catch (authenticatedError) {
+          authenticatedError.ageGateBlocked = true;
+          console.warn(`Authenticated age-gate playback failed: ${authenticatedError.message}`);
+          error = authenticatedError;
+        }
+      }
       const fallback = await findMusicVideoFallbackOnce();
       if (fallback) {
         try {

@@ -52,6 +52,7 @@ export function sanitizedTrack(track) {
     failedAudioItags,
     failedAudioMimeTypes,
     failedVideoItags,
+    authenticatedPlayback,
     itag,
     audioItag,
     mimeType,

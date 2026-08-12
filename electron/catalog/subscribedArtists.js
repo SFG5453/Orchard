@@ -19,6 +19,7 @@
 
 // Reads authenticated channel subscriptions and retains only official artist identities.
 import { Innertube, UniversalCache } from 'youtubei.js';
+import { withFreshYouTubeSession } from '../auth/youtubeClientSession.js';
 
 const MAX_SUBSCRIPTION_PAGES = 20;
 
@@ -87,7 +88,7 @@ export function createSubscribedArtistsService({ authState, cachePath }) {
     const identity = browserIdentity();
     if (!clientPromise || clientIdentity !== identity) {
       clientIdentity = identity;
-      clientPromise = Innertube.create({
+      clientPromise = Innertube.create(withFreshYouTubeSession({
         cache: new UniversalCache(true, cachePath),
         client_type: 'WEB',
         retrieve_player: false,
@@ -97,7 +98,7 @@ export function createSubscribedArtistsService({ authState, cachePath }) {
         account_index: browser.accountIndex || 0,
         on_behalf_of_user: browser.dataSyncId || undefined,
         po_token: browser.poToken || undefined
-      });
+      }));
     }
 
     try {

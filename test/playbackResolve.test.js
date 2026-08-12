@@ -107,6 +107,21 @@ test('keeps song identity while preserving resolved fallback stream metadata', (
   assert.equal(active.musicVideoFallbackId, 'video-id');
 });
 
+test('authenticated playback state comes from the resolved stream, not catalog metadata', () => {
+  const ctx = playbackContext();
+  const explicitTrack = ctx.activeTrackFromResolved(
+    { id: 'explicit-song', explicit: true },
+    { id: 'explicit-song', authenticatedPlayback: false }
+  );
+  const ageGated = ctx.activeTrackFromResolved(
+    { id: 'age-gated-song', explicit: false },
+    { id: 'age-gated-song', authenticatedPlayback: true }
+  );
+
+  assert.equal(explicitTrack.authenticatedPlayback, false);
+  assert.equal(ageGated.authenticatedPlayback, true);
+});
+
 test('recognizes a persisted active track followed by its saved queue', () => {
   const activeTrack = { id: 'active' };
   const queue = [{ id: 'second' }, { id: 'third' }];

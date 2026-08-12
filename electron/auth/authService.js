@@ -24,6 +24,7 @@ import { Innertube, UniversalCache } from 'youtubei.js';
 import { createAccountProfileProbe } from './accountProfileProbe.js';
 import { createBrowserAccountSelectionStore } from './browserAccountSelection.js';
 import { createBrowserMusicFetch } from './browserMusicApi.js';
+import { withFreshYouTubeSession } from './youtubeClientSession.js';
 import {
   isAuthSwitchDestinationUrl,
   loadAuthWindowUrl,
@@ -105,12 +106,12 @@ export function createAuthService({
 
   function getInnertube() {
     if (!innertubePromise) {
-      innertubePromise = Innertube.create({
+      innertubePromise = Innertube.create(withFreshYouTubeSession({
         cache: createYoutubeCache('oauth'),
         client_type: 'WEB_REMIX',
         retrieve_player: true,
         generate_session_locally: true
-      }).then((yt) => {
+      })).then((yt) => {
         innertubeInstance = yt;
         bindAuthEvents(yt);
         return yt;
@@ -122,12 +123,12 @@ export function createAuthService({
 
   function getGuestInnertube() {
     if (!guestInnertubePromise) {
-      guestInnertubePromise = Innertube.create({
+      guestInnertubePromise = Innertube.create(withFreshYouTubeSession({
         cache: createYoutubeCache('guest'),
         client_type: 'WEB_REMIX',
         retrieve_player: true,
         generate_session_locally: true
-      });
+      }));
     }
 
     return guestInnertubePromise;
@@ -139,7 +140,7 @@ export function createAuthService({
     const identity = browserIdentity();
     if (!browserInnertubePromise || browserInnertubeIdentity !== identity) {
       browserInnertubeIdentity = identity;
-      browserInnertubePromise = Innertube.create({
+      browserInnertubePromise = Innertube.create(withFreshYouTubeSession({
         cache: createYoutubeCache('browser'),
         client_type: 'WEB_REMIX',
         retrieve_player: true,
@@ -150,7 +151,7 @@ export function createAuthService({
         on_behalf_of_user: authState.browser.dataSyncId || undefined,
         po_token: authState.browser.poToken || undefined,
         fetch: browserMusicFetch
-      });
+      }));
     }
 
     return browserInnertubePromise;

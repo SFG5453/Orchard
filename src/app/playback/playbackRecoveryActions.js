@@ -121,7 +121,7 @@ export function installPlaybackRecoveryActions(ctx) {
       if (!track.streamRefreshTried && ctx.retryVideoStream(track, { refreshStream: true, resumeAt: stalledAt })) return;
       if (ctx.retryVideoStream(track, { avoidCurrentFormat: true, resumeAt: stalledAt })) return;
     } else {
-      if (track.explicit && String(track.itag) === '18' && ctx.retryAudioWithAlternateFormat(track, { resumeAt: stalledAt })) return;
+      if (track.authenticatedPlayback && String(track.itag) === '18' && ctx.retryAudioWithAlternateFormat(track, { resumeAt: stalledAt })) return;
       if (!track.streamRefreshTried && ctx.retryAudioStream(track, { refreshStream: true, resumeAt: stalledAt })) return;
       if (ctx.retryAudioWithAlternateFormat(track, { resumeAt: stalledAt })) return;
     }
@@ -147,7 +147,7 @@ export function installPlaybackRecoveryActions(ctx) {
       if (!track?.streamRefreshTried && ctx.retryVideoStream(track, { refreshStream: true, resumeAt })) return;
       if (ctx.retryVideoStream(track, { avoidCurrentFormat: true, resumeAt })) return;
     } else {
-      if (track?.explicit && String(track.itag) === '18' && ctx.retryAudioWithAlternateFormat(track, { resumeAt })) return;
+      if (track?.authenticatedPlayback && String(track.itag) === '18' && ctx.retryAudioWithAlternateFormat(track, { resumeAt })) return;
       if (shouldTryAlternateFirst && ctx.retryAudioWithAlternateFormat(track, { avoidCurrentMimeType: true, resumeAt })) return;
       if (!track?.streamRefreshTried && ctx.retryAudioStream(track, { refreshStream: true, resumeAt })) return;
       if (ctx.retryAudioWithAlternateFormat(track, { resumeAt })) return;

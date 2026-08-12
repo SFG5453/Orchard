@@ -37,7 +37,8 @@ function responseStatus(error) {
 }
 
 export function isAgeGatePlaybackError(error) {
-  return /sign in to confirm your age|confirm your age|age[- ]restricted/i.test(errorText(error));
+  return Boolean(error?.ageGateBlocked) ||
+    /sign in to confirm your age|confirm your age|age[- ]restricted/i.test(errorText(error));
 }
 
 export function isBotCheckPlaybackError(error) {

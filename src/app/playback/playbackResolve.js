@@ -142,6 +142,7 @@ export function installPlaybackResolve(ctx) {
       audioItag: resolved.audioItag || null,
       streamExpiresAt: resolved.streamExpiresAt || 0,
       playbackSource: resolved.playbackSource || 'youtube',
+      authenticatedPlayback: Boolean(resolved.authenticatedPlayback),
       externalSource: resolved.externalSource || '',
       musicVideoAudioFallback: Boolean(resolved.musicVideoAudioFallback),
       musicVideoFallbackId: resolved.musicVideoFallbackId || '',
