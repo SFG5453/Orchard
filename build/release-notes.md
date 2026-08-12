@@ -1,6 +1,9 @@
-## Orchard 4.3.2 "Exerted Minimizes"
+## Orchard 4.3.3 "Rundowns Tonic"
+
+### New & improved
+- **Windows and Linux on Arm**: Added a native Windows ARM64 installer and Linux ARM64 AppImage, including architecture-aware update metadata.
 
 ### Fixed
-- **Playlist and Home Feed Compatibility**: Improved handling of newer YouTube Music home, library, and playlist response layouts, with coverage for the added pagination paths.
-- **Mobile Playlist Track Removal**: Fixed removing tracks found on later playlist pages and updated the visible playlist immediately after a successful removal.
-- **Expanded Home and Library**: Home and library feeds now load additional continuation pages, so more recommendations, albums, songs, and saved playlists are available without manual pagination.
+- **Full-Quality Explicit Tracks**: Explicit lyrics no longer force songs through the lower-bitrate authenticated stream. Orchard now uses the normal high-quality route unless YouTube returns a real age restriction.
+- **Playback Survives Stale Local Configuration**: YouTube session identities are refreshed on launch while player and sign-in caches are preserved, fixing "no playable audio format" failures that previously required deleting Orchard's local configuration directory.
+- **Age-Restricted Playback Recovery**: Authenticated direct and HLS playback are now reserved for confirmed age gates, with recovery state kept out of the persisted queue.

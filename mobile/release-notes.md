@@ -1,5 +1,5 @@
-## Orchard Mobile 1.4.2 "Fitchburg Coagulant"
+## Orchard Mobile 1.4.3 "Sheep Hydrants"
 
 ### Fixes
-- **Home and Library Pagination**: Home and library screens now load additional continuation pages, including more recommendations, albums, songs, and saved playlists.
-- **Playlist Track Removal**: Fixed removing tracks that appear on later playlist pages, and updated the visible playlist immediately after a successful removal.
+- **Full-Quality Explicit Tracks**: Explicit lyrics no longer force songs onto the roughly 69 kbps authenticated stream. Songs now use the normal high-quality route unless YouTube returns a real age restriction.
+- **Age-Restricted Playback Recovery**: When a genuine age gate is detected, Orchard Mobile retries through authenticated direct playback and falls back to HLS only if needed.

@@ -19,6 +19,27 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '4.3.3',
+    codename: 'Rundowns Tonic',
+    date: 'August 12, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'Added a native Windows ARM64 installer and Linux ARM64 AppImage, including architecture-aware update metadata.'
+        ]
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Explicit lyrics no longer force songs through the lower-bitrate authenticated stream. Orchard now uses the normal high-quality route unless YouTube returns a real age restriction.',
+          'YouTube session identities are refreshed on launch while player and sign-in caches are preserved, fixing "no playable audio format" failures that previously required deleting Orchard\'s local configuration directory.',
+          'Authenticated direct and HLS playback are now reserved for confirmed age gates, with recovery state kept out of the persisted queue.'
+        ]
+      }
+    ]
+  },
+  {
     version: '4.3.2',
     codename: 'Exerted Minimizes',
     date: 'August 11, 2026',
