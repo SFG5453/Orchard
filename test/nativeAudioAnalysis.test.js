@@ -108,6 +108,39 @@ test('native analyzer recognizes a voice-like harmonic signal as vocal', async (
   );
 });
 
+test('low-energy curve measures bass rather than copying broadband loudness', async () => {
+  const duration = 12;
+  const sampleRate = 11025;
+  const samples = new Float32Array(duration * sampleRate);
+  for (let index = 0; index < samples.length; index += 1) {
+    const time = index / sampleRate;
+    if (time < 1 || time >= duration - 1) continue;
+    // Keep amplitude steady while replacing a treble tone with a bass tone halfway through.
+    // Broadband RMS should remain flat; only the real sub-250 Hz curve should move.
+    const frequency = time < 6 ? 1000 : 80;
+    samples[index] = Math.sin(2 * Math.PI * frequency * time) * 0.2;
+  }
+
+  const result = await native.analyze(samples, sampleRate, duration);
+  const averageBetween = (curve, from, to) => {
+    const points = curve.filter((point) => point.time >= from && point.time < to);
+    return points.reduce((sum, point) => sum + point.energy, 0) / points.length;
+  };
+  const broadbandBefore = averageBetween(result.energyCurve, 2, 5);
+  const broadbandAfter = averageBetween(result.energyCurve, 7, 10);
+  const bassBefore = averageBetween(result.lowEnergyCurve, 2, 5);
+  const bassAfter = averageBetween(result.lowEnergyCurve, 7, 10);
+
+  assert.ok(
+    Math.abs(broadbandAfter - broadbandBefore) < 0.15,
+    `broadband envelope moved unexpectedly: ${broadbandBefore} -> ${broadbandAfter}`
+  );
+  assert.ok(
+    bassAfter > bassBefore + 0.7,
+    `bass curve did not detect the spectral handoff: ${bassBefore} -> ${bassAfter}`
+  );
+});
+
 test('native analyzer detects short trailing silence', async () => {
   const duration = 8;
   const sampleRate = 11025;

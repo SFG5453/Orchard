@@ -22,6 +22,7 @@
 // PCM. Heap allocation is expected here because this is not a real-time thread.
 import Meyda from 'meyda';
 import MusicTempo from 'music-tempo';
+import { AUDIO_ANALYSIS_VERSION } from '../../../shared/audioAnalysis.js';
 
 // Krumhansl-Schmuckler pitch-class profiles; confidence is the top-two score gap.
 const KEY_NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
@@ -422,16 +423,17 @@ self.onmessage = (event) => {
     for (let index = 0; index < pcm.length; index += stride) {
       const time = index / analysisSampleRate;
       energyCurve.push({ time, energy: 0.8 });
-      lowEnergyCurve.push({ time, energy: 0.68 });
       midEnergyCurve.push({ time, energy: 0.8 });
       highEnergyCurve.push({ time, energy: 0.56 });
       vocalActivityMask.push(0.5);
     }
     const result = {
-      analysisVersion: 9,
+      analysisVersion: AUDIO_ANALYSIS_VERSION,
       duration,
       ...baseAnalysis,
       energyCurve,
+      // This DSP-only fallback does not run the native spectral band split. Empty means "no
+      // evidence" and lets the transition planner retain its calibrated bass-swap prior.
       lowEnergyCurve,
       midEnergyCurve,
       highEnergyCurve,

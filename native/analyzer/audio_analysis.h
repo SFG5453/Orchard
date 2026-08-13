@@ -40,7 +40,8 @@ namespace orchard {
 // ordered event vectors use playback order unless stated otherwise.
 struct EnergyPoint {
   double time = 0;
-  // RMS relative to the track reference level, capped at 1.5.
+  // Energy relative to the corresponding whole-track reference, capped at 1.5.
+  // `energy_curve` uses RMS; spectral band curves use FFT-band energy.
   double energy = 0;
 };
 

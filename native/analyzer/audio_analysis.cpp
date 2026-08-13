@@ -320,6 +320,7 @@ void AnalyzeKeyAndTimbre(
   double start_time,
   double end_time,
   AnalysisResult& result,
+  std::vector<EnergyPoint>& low_frames,
   std::vector<EnergyPoint>& vocal_frames
 ) {
   constexpr size_t frame_size = 4096;
@@ -380,6 +381,10 @@ void AnalyzeKeyAndTimbre(
     low_energy += frame_low;
     vocal_energy += frame_vocal;
     high_energy += frame_high;
+    low_frames.push_back({
+      (start + frame_size / 2.0) / sample_rate,
+      frame_low
+    });
     vocal_frames.push_back({
       (start + frame_size / 2.0) / sample_rate,
       VocalProbabilityFrom(frame_low, frame_vocal, frame_high, frame_flatness)
@@ -625,10 +630,10 @@ AnalysisResult AnalyzeAudio(
     const double time = index * envelope.window_seconds;
     const double norm = Clamp(envelope.levels[index] / std::max(1e-6, envelope.reference), 0, 1.5);
     result.energy_curve.push_back({time, norm});
-    result.low_energy_curve.push_back({time, norm * 0.85});
     result.mid_energy_curve.push_back({time, norm * 1.0});
     result.high_energy_curve.push_back({time, norm * 0.7});
   }
+  std::vector<EnergyPoint> low_frames;
   std::vector<EnergyPoint> vocal_frames;
   AnalyzeKeyAndTimbre(
     samples,
@@ -636,8 +641,29 @@ AnalysisResult AnalyzeAudio(
     envelope.audible_start,
     envelope.content_end,
     result,
+    low_frames,
     vocal_frames
   );
+  // Low-band frames come from actual FFT energy below 250 Hz. Resample them onto the compact
+  // envelope grid so the mobile planner can compare the same track-relative timestamps without
+  // storing another high-resolution curve. Silence remains zero rather than borrowing the nearest
+  // active spectral frame.
+  std::vector<double> low_values;
+  low_values.reserve(low_frames.size());
+  for (const EnergyPoint& frame : low_frames) low_values.push_back(frame.energy);
+  const double low_reference = Percentile(std::move(low_values), 0.85);
+  size_t low_cursor = 0;
+  for (const EnergyPoint& point : result.energy_curve) {
+    while (low_cursor + 1 < low_frames.size() &&
+           std::abs(low_frames[low_cursor + 1].time - point.time) <
+             std::abs(low_frames[low_cursor].time - point.time)) {
+      ++low_cursor;
+    }
+    const double energy = low_frames.empty() || point.energy <= 0.1 || low_reference <= 1e-9
+      ? 0.0
+      : Clamp(low_frames[low_cursor].energy / low_reference, 0, 1.5);
+    result.low_energy_curve.push_back({point.time, energy});
+  }
   // The mask stays parallel to energy_curve -- callers index the two together --
   // so the analysis frames are resampled onto that grid rather than shipped on
   // their own. Frames are ~0.65s apart and the curve is ~1s, so nearest-frame

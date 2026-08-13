@@ -23,7 +23,10 @@
 // 9: the native beat grid became tracked rather than extrapolated (its beats
 // moved by up to 300 ms at the end of long tracks), and downbeats may come
 // from the Beat This model. Cached version-8 grids are stale by construction.
-export const AUDIO_ANALYSIS_VERSION = 9;
+// 10: lowEnergyCurve became measured sub-250 Hz spectral energy rather than a
+// scaled copy of the broadband envelope. Cached version-9 curves cannot safely
+// choose a content-aware bass handoff.
+export const AUDIO_ANALYSIS_VERSION = 10;
 export const MIN_LOCAL_BPM = 40;
 export const MAX_LOCAL_BPM = 240;
 

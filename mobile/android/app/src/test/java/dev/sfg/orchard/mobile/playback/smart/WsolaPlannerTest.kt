@@ -51,6 +51,20 @@ class WsolaPlannerTest {
         return curve
     }
 
+    private fun lowEnergyCurveFor(
+        duration: Double,
+        stepSeconds: Double = 0.25,
+        energyAt: (Double) -> Double,
+    ): List<EnergySample> {
+        val curve = mutableListOf<EnergySample>()
+        var time = 0.0
+        while (time < duration) {
+            curve += EnergySample(time, energyAt(time))
+            time += stepSeconds
+        }
+        return curve
+    }
+
     private fun analysisFor(
         bpm: Double = 126.0,
         duration: Double = 240.0,
@@ -270,6 +284,72 @@ class WsolaPlannerTest {
         )
         assertTrue(plan.bassSwapFraction > plan.handoffFraction)
         assertTrue(plan.bassSwapFraction < 1)
+        assertEquals(
+            "the fallback is snapped to a beat",
+            0.0,
+            (plan.bassSwapFraction * plan.beats) % 1.0,
+            1e-9,
+        )
+    }
+
+    @Test
+    fun `incoming bass entrance moves the swap to its beat`() {
+        // At 120 BPM the 16-beat incoming window is [16, 24]. Its bass arrives at 22s, beat 12
+        // of the overlap, later than the 0.7 prior but still inside the six-second ceiling.
+        val plan = planned(
+            planWsolaTransition(
+                analysis = analysisFor(bpm = 120.0, duration = 240.0),
+                nextAnalysis = analysisFor(bpm = 120.0, duration = 200.0, mixInTime = 20.0)
+                    .copy(
+                        // A long real track is downsampled to roughly one point per second.
+                        lowEnergyCurve = lowEnergyCurveFor(200.0, stepSeconds = 1.0) {
+                            if (it >= 22.0) 1.0 else 0.05
+                        },
+                    ),
+                duration = 240.0,
+                nextDuration = 200.0,
+            ),
+        )
+
+        assertEquals(12.0 / 16.0, plan.bassSwapFraction, 1e-9)
+    }
+
+    @Test
+    fun `outgoing bass exit moves the swap to its beat`() {
+        // The content-end plan uses outgoing [228, 236] at 120 BPM. Its bass leaves at 232s,
+        // exactly halfway through the overlap, so the low end can change hands at the crossover.
+        val plan = planned(
+            planWsolaTransition(
+                analysis = analysisFor(bpm = 120.0, duration = 240.0).copy(
+                    lowEnergyCurve = lowEnergyCurveFor(240.0, stepSeconds = 1.0) {
+                        if (it < 232.0) 1.0 else 0.05
+                    },
+                ),
+                nextAnalysis = analysisFor(bpm = 120.0, duration = 200.0, mixInTime = 20.0),
+                duration = 240.0,
+                nextDuration = 200.0,
+            ),
+        )
+
+        assertEquals(8.0 / 16.0, plan.bassSwapFraction, 1e-9)
+    }
+
+    @Test
+    fun `flat low-band analysis keeps the beat-snapped prior`() {
+        val flatOutgoing = lowEnergyCurveFor(240.0) { 0.8 }
+        val flatIncoming = lowEnergyCurveFor(200.0) { 0.6 }
+        val plan = planned(
+            planWsolaTransition(
+                analysis = analysisFor(bpm = 120.0, duration = 240.0)
+                    .copy(lowEnergyCurve = flatOutgoing),
+                nextAnalysis = analysisFor(bpm = 120.0, duration = 200.0, mixInTime = 20.0)
+                    .copy(lowEnergyCurve = flatIncoming),
+                duration = 240.0,
+                nextDuration = 200.0,
+            ),
+        )
+
+        assertEquals(11.0 / 16.0, plan.bassSwapFraction, 1e-9)
     }
 
     @Test

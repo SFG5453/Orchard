@@ -15,12 +15,15 @@ CREATE TABLE IF NOT EXISTS public.track_analysis (
     musical_key TEXT DEFAULT '',
     key_confidence DOUBLE PRECISION DEFAULT 0.0,
     beat_confidence DOUBLE PRECISION DEFAULT 0.0,
-    analysis_version INTEGER NOT NULL DEFAULT 9,
+    analysis_version INTEGER NOT NULL DEFAULT 10,
     analysis_data JSONB NOT NULL DEFAULT '{}'::jsonb,
     analyzed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT TIMEZONE('utc'::text, NOW()),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT TIMEZONE('utc'::text, NOW())
 );
+
+-- CREATE TABLE IF NOT EXISTS does not update an existing deployment's default.
+ALTER TABLE public.track_analysis ALTER COLUMN analysis_version SET DEFAULT 10;
 
 -- 2. Indexes for fast lookup
 CREATE INDEX IF NOT EXISTS idx_track_analysis_bpm ON public.track_analysis(bpm);

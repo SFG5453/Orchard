@@ -17,6 +17,8 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { AUDIO_ANALYSIS_VERSION } from '../../shared/audioAnalysis.js';
+
 const STORAGE_KEYS = {
   SUPABASE_URL: 'orchard_supabase_url',
   SUPABASE_ANON_KEY: 'orchard_supabase_anon_key',
@@ -203,7 +205,7 @@ class SupabaseClient {
       musical_key: String(r.musical_key || r.key || ''),
       key_confidence: Number(r.key_confidence || r.keyConfidence) || 0.0,
       beat_confidence: Number(r.beat_confidence || r.beatConfidence) || 0.0,
-      analysis_version: Number(r.analysis_version || r.analysisVersion) || 9,
+      analysis_version: Number(r.analysis_version || r.analysisVersion) || AUDIO_ANALYSIS_VERSION,
       analysis_data: r.analysis_data || r.features || r,
       analyzed_by: this.getUser()?.id || null
     })).filter(p => p.video_id && p.bpm > 0);

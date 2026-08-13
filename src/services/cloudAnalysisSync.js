@@ -18,7 +18,7 @@
  */
 
 import { supabaseClient } from './supabaseClient.js';
-import { isValidLocalAnalysis } from '../../shared/audioAnalysis.js';
+import { AUDIO_ANALYSIS_VERSION, isValidLocalAnalysis } from '../../shared/audioAnalysis.js';
 
 export const CLOUD_SYNC_DISCLAIMER =
   'Audio analysis metadata (BPM, musical key, downbeats, cue points) is shared publicly with the Orchard Cloud cache by Track Video ID. No personal listening history, user playlists, or identifying info is included.';
@@ -39,7 +39,7 @@ export async function syncTrackAnalysisToCloud(videoId, analysis) {
     musical_key: analysis.key || analysis.musicalKey || '',
     key_confidence: analysis.keyConfidence || 0.0,
     beat_confidence: analysis.beatConfidence || analysis.tempoConfidence || 0.0,
-    analysis_version: analysis.analysisVersion || 9,
+    analysis_version: analysis.analysisVersion || AUDIO_ANALYSIS_VERSION,
     analysis_data: analysis
   };
 
