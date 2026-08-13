@@ -98,7 +98,7 @@ class TrackDownloader(
             // 2. Probe content length with a small initial range request (0..1023)
             val probeRequest = Request.Builder()
                 .url(resolved.url)
-                .header("User-Agent", USER_AGENT)
+                .header("User-Agent", resolved.userAgent)
                 .header("Range", "bytes=0-1023")
                 .build()
 
@@ -125,6 +125,7 @@ class TrackDownloader(
                 // High-speed concurrent ranged download
                 downloadByRanges(
                     url = resolved.url,
+                    userAgent = resolved.userAgent,
                     totalLength = totalContentLength,
                     initialChunk = chunk0,
                     tempFile = tempFile,
@@ -134,6 +135,7 @@ class TrackDownloader(
                 // Fallback to sequential stream
                 downloadSequential(
                     url = resolved.url,
+                    userAgent = resolved.userAgent,
                     tempFile = tempFile,
                     progressListener = progressListener,
                 )
@@ -182,6 +184,7 @@ class TrackDownloader(
 
     private suspend fun downloadByRanges(
         url: String,
+        userAgent: String,
         totalLength: Long,
         initialChunk: ByteArray,
         tempFile: File,
@@ -224,12 +227,12 @@ class TrackDownloader(
 
                         val request = Request.Builder()
                             .url(url)
-                            .header("User-Agent", USER_AGENT)
+                            .header("User-Agent", userAgent)
                             .header("Range", rangeHeader)
                             .build()
 
                         http.newCall(request).execute().use { response ->
-                            if (!response.isSuccessful && response.code != 206) {
+                            if (response.code != 206) {
                                 throw java.io.IOException("HTTP ${response.code} on range $rangeHeader")
                             }
                             val body = response.body
@@ -244,6 +247,10 @@ class TrackDownloader(
                                 val p = (totalNow.toFloat() / totalLength.toFloat()).coerceIn(0f, 1f)
                                 progressListener?.onProgress(totalNow, totalLength, p)
                             }
+                            val expectedBytes = chunkEnd - chunkStart + 1
+                            if (currentPos - chunkStart != expectedBytes) {
+                                throw java.io.EOFException("Connection closed while downloading range $rangeHeader")
+                            }
                         }
                     }
                 }
@@ -256,12 +263,13 @@ class TrackDownloader(
 
     private suspend fun downloadSequential(
         url: String,
+        userAgent: String,
         tempFile: File,
         progressListener: ProgressListener?,
     ) = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", USER_AGENT)
+            .header("User-Agent", userAgent)
             .build()
 
         http.newCall(request).execute().use { response ->
@@ -295,9 +303,8 @@ class TrackDownloader(
 
     companion object {
         private const val TAG = "TrackDownloader"
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 16)"
         private const val BUFFER_SIZE = 32 * 1024
-        private const val CHUNK_SIZE = 512 * 1024L // 512 KB chunks for high parallelism
-        private const val CONCURRENCY = 6
+        private const val CHUNK_SIZE = 1024 * 1024L
+        private const val CONCURRENCY = 3
     }
 }

@@ -75,6 +75,8 @@ fun NowPlayingOverlay(
     val connectProtocolVersion by viewModel.connectProtocolVersion.collectAsStateWithLifecycle()
     val connectRemoteVolume by viewModel.connectRemoteVolume.collectAsStateWithLifecycle()
     val downloadedTrackIds by viewModel.downloadedTrackIds.collectAsStateWithLifecycle()
+    val sleepTimerRemainingSeconds by viewModel.sleepTimerRemainingSeconds.collectAsStateWithLifecycle()
+    val sleepTimerEndOfTrack by viewModel.sleepTimerEndOfTrack.collectAsStateWithLifecycle()
     var playlistPickerTrack by remember { mutableStateOf<Track?>(null) }
 
     val liked = playback.currentTrack?.let { track -> library.likedTracks.any { it.id == track.id } } == true
@@ -89,6 +91,11 @@ fun NowPlayingOverlay(
         autoplayLoading = autoplayLoading,
         autoplayError = autoplayError,
         onAutoplayEnabled = viewModel::setAutoplayEnabled,
+        sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
+        sleepTimerEndOfTrack = sleepTimerEndOfTrack,
+        onStartSleepTimer = viewModel::startSleepTimer,
+        onStartSleepTimerAtEndOfTrack = viewModel::startSleepTimerAtEndOfTrack,
+        onCancelSleepTimer = viewModel::cancelSleepTimer,
         playback = playback,
         transition = transition,
         mixProgress = mixProgress,

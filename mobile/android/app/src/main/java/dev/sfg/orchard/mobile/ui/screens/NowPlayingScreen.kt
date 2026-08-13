@@ -45,8 +45,12 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -140,10 +144,16 @@ fun NowPlayingScreen(
     autoplayLoading: Boolean = false,
     autoplayError: String = "",
     onAutoplayEnabled: ((Boolean) -> Unit)? = null,
+    sleepTimerRemainingSeconds: Long = 0L,
+    sleepTimerEndOfTrack: Boolean = false,
+    onStartSleepTimer: (Int) -> Unit = {},
+    onStartSleepTimerAtEndOfTrack: () -> Unit = {},
+    onCancelSleepTimer: () -> Unit = {},
 ) {
     // Lyrics and the queue are modes of the player, not destinations, so their state lives here.
     // Only one can hold the panel at a time.
     var panel by remember { mutableStateOf(PlayerPanel.NONE) }
+    var sleepTimerDialogOpen by remember { mutableStateOf(false) }
     val lyricsOpen = panel == PlayerPanel.LYRICS
     val queueOpen = panel == PlayerPanel.QUEUE
     val onQueue = { panel = if (queueOpen) PlayerPanel.NONE else PlayerPanel.QUEUE }
@@ -304,6 +314,20 @@ fun NowPlayingScreen(
             // Blur is a no-op below API 31, so darken as well to keep lyrics legible everywhere.
             if (wideLayout || panel != PlayerPanel.NONE) {
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (wideLayout) 0.42f else 0.28f)))
+            }
+
+            IconButton(
+                onClick = { sleepTimerDialogOpen = true },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .systemBarsPadding()
+                    .padding(top = 4.dp, end = 12.dp),
+            ) {
+                Icon(
+                    Icons.Rounded.Bedtime,
+                    contentDescription = if (sleepTimerRemainingSeconds > 0 || sleepTimerEndOfTrack) "Sleep timer active" else "Sleep timer",
+                    tint = if (sleepTimerRemainingSeconds > 0 || sleepTimerEndOfTrack) lyricAccent else Color.White,
+                )
             }
 
             // A tablet has room to stop trading one thing for another: the cover
@@ -500,6 +524,38 @@ fun NowPlayingScreen(
             progress = progress,
             source = restingCoverBounds,
             destination = collapseArtworkBounds,
+        )
+    }
+
+    if (sleepTimerDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { sleepTimerDialogOpen = false },
+            title = { Text("Sleep timer") },
+            text = {
+                Column {
+                    val status = when {
+                        sleepTimerEndOfTrack -> "Playback will pause at the end of this track."
+                        sleepTimerRemainingSeconds > 0 -> "Playback will pause in ${sleepTimerRemainingSeconds / 60}:${(sleepTimerRemainingSeconds % 60).toString().padStart(2, '0')}."
+                        else -> "Choose when playback should pause."
+                    }
+                    Text(status)
+                    listOf(15, 30, 45, 60, 90).forEach { minutes ->
+                        TextButton(onClick = { onStartSleepTimer(minutes); sleepTimerDialogOpen = false }) {
+                            Text("$minutes minutes")
+                        }
+                    }
+                    TextButton(onClick = { onStartSleepTimerAtEndOfTrack(); sleepTimerDialogOpen = false }) {
+                        Text("End of current track")
+                    }
+                }
+            },
+            confirmButton = {
+                if (sleepTimerRemainingSeconds > 0 || sleepTimerEndOfTrack) {
+                    TextButton(onClick = { onCancelSleepTimer(); sleepTimerDialogOpen = false }) { Text("Cancel timer") }
+                } else {
+                    TextButton(onClick = { sleepTimerDialogOpen = false }) { Text("Close") }
+                }
+            },
         )
     }
 }

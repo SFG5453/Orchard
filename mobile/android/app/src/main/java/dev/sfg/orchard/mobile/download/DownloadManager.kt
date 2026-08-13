@@ -26,6 +26,8 @@ import dev.sfg.orchard.mobile.model.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -69,7 +71,16 @@ class DownloadManager(
         repeat(MAX_CONCURRENT_DOWNLOADS) {
             scope.launch {
                 for (item in downloadQueue) {
-                    processDownload(item)
+                    coroutineScope {
+                        val videoId = item.track.id
+                        val job = launch { processDownload(item) }
+                        activeJobs[videoId] = job
+                        try {
+                            job.join()
+                        } finally {
+                            activeJobs.remove(videoId, job)
+                        }
+                    }
                 }
             }
         }
@@ -79,8 +90,8 @@ class DownloadManager(
     fun downloadTrack(track: Track) {
         if (track.id.isBlank()) return
         val current = mutableDownloads.value[track.id]
-        if (current?.status == DownloadStatus.COMPLETED) {
-            Log.d(TAG, "Track ${track.id} already downloaded")
+        if (current?.status == DownloadStatus.COMPLETED || current?.isDownloading == true) {
+            Log.d(TAG, "Track ${track.id} already downloaded or queued")
             return
         }
 
@@ -167,13 +178,9 @@ class DownloadManager(
         val downloadingItem = queuedItem.copy(status = DownloadStatus.DOWNLOADING)
         updateItemState(downloadingItem)
 
-        val job = scope.coroutineContext[Job]
-        if (job != null) {
-            activeJobs[videoId] = job
-        }
-
-        try {
-            val result = downloader.download(downloadingItem) { bytesDownloaded, totalBytes, progress ->
+        var result = downloadingItem
+        for (attempt in 0 until MAX_DOWNLOAD_ATTEMPTS) {
+            result = downloader.download(result.copy(status = DownloadStatus.DOWNLOADING)) { bytesDownloaded, totalBytes, progress ->
                 val progressItem = downloadingItem.copy(
                     bytesDownloaded = bytesDownloaded,
                     totalBytes = totalBytes,
@@ -181,13 +188,16 @@ class DownloadManager(
                 )
                 updateItemState(progressItem)
             }
-
-            updateItemState(result)
-            if (result.status == DownloadStatus.COMPLETED) {
-                store.save(result)
+            if (result.status == DownloadStatus.COMPLETED) break
+            if (attempt < MAX_DOWNLOAD_ATTEMPTS - 1) {
+                Log.w(TAG, "Retrying download $videoId after attempt ${attempt + 1}: ${result.errorMessage}")
+                delay(RETRY_BASE_DELAY_MS * (attempt + 1))
             }
-        } finally {
-            activeJobs.remove(videoId)
+        }
+
+        updateItemState(result)
+        if (result.status == DownloadStatus.COMPLETED) {
+            store.save(result)
         }
     }
 
@@ -211,6 +221,8 @@ class DownloadManager(
 
     companion object {
         private const val TAG = "DownloadManager"
-        private const val MAX_CONCURRENT_DOWNLOADS = 3
+        private const val MAX_CONCURRENT_DOWNLOADS = 2
+        private const val MAX_DOWNLOAD_ATTEMPTS = 3
+        private const val RETRY_BASE_DELAY_MS = 750L
     }
 }

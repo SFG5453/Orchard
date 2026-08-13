@@ -215,6 +215,12 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val warning: StateFlow<String> = mutableWarning.asStateFlow()
     private var warningDismissJob: Job? = null
 
+    private val mutableSleepTimerRemainingSeconds = MutableStateFlow(0L)
+    val sleepTimerRemainingSeconds: StateFlow<Long> = mutableSleepTimerRemainingSeconds.asStateFlow()
+    private val mutableSleepTimerEndOfTrack = MutableStateFlow(false)
+    val sleepTimerEndOfTrack: StateFlow<Boolean> = mutableSleepTimerEndOfTrack.asStateFlow()
+    private var sleepTimerJob: Job? = null
+
     val updateState: StateFlow<dev.sfg.orchard.mobile.UpdateState> = graph.updates.state
 
     fun installUpdate(metadata: dev.sfg.orchard.mobile.MobileUpdateMetadata) =
@@ -449,6 +455,52 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     )
 
     fun togglePlayback() = remoteOrLocal({ graph.connect.send(ConnectCommand.TogglePlayback) }, local::toggle)
+    fun startSleepTimer(minutes: Int) {
+        if (minutes <= 0) return
+        cancelSleepTimer()
+        val deadline = System.currentTimeMillis() + minutes * 60_000L
+        mutableSleepTimerRemainingSeconds.value = minutes * 60L
+        sleepTimerJob = viewModelScope.launch {
+            while (true) {
+                val remaining = ((deadline - System.currentTimeMillis() + 999L) / 1_000L).coerceAtLeast(0L)
+                mutableSleepTimerRemainingSeconds.value = remaining
+                if (remaining == 0L) break
+                delay(1_000L)
+            }
+            pauseForSleepTimer()
+            clearSleepTimerState()
+        }
+    }
+
+    fun startSleepTimerAtEndOfTrack() {
+        val trackId = playback.value.currentTrack?.id ?: return
+        cancelSleepTimer()
+        mutableSleepTimerEndOfTrack.value = true
+        sleepTimerJob = viewModelScope.launch {
+            playback.map { it.currentTrack?.id }
+                .dropWhile { it == trackId }
+                .first()
+            pauseForSleepTimer()
+            clearSleepTimerState()
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        clearSleepTimerState()
+    }
+
+    private fun clearSleepTimerState() {
+        mutableSleepTimerRemainingSeconds.value = 0L
+        mutableSleepTimerEndOfTrack.value = false
+    }
+
+    private fun pauseForSleepTimer() {
+        if (!playback.value.isPlaying) return
+        remoteOrLocal({ graph.connect.send(ConnectCommand.TogglePlayback) }, local::pause)
+    }
+
     fun next() = remoteOrLocal({ graph.connect.send(ConnectCommand.Next) }, local::next)
     fun previous() = remoteOrLocal({ graph.connect.send(ConnectCommand.Previous) }, local::previous)
     fun seek(positionMs: Long) = remoteOrLocal(

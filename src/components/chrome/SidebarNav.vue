@@ -187,6 +187,10 @@ export default {
 
         <nav class="sidebar-group sidebar-group--nav" aria-label="Library">
           <div class="sidebar-label">Library</div>
+          <button type="button" class="nav-link" :class="{ 'nav-link--active': activeView === 'queue' }" @click="selectView('queue')">
+            <q-icon name="playlist_play" />
+            <span>Queue</span>
+          </button>
           <button type="button" class="nav-link" :class="{ 'nav-link--active': activeView === 'history' }" :disabled="!authState.signedIn" @click="selectView('history')">
             <q-icon name="schedule" />
             <span>Recently Added</span>
