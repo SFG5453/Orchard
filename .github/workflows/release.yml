@@ -43,6 +43,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       is_beta: ${{ steps.release.outputs.is_beta }}
       mobile_only: ${{ steps.release.outputs.mobile_only }}
+      build_android: ${{ steps.release.outputs.build_android }}
     steps:
       - name: Check out release tag
         uses: actions/checkout@v6
@@ -106,6 +107,46 @@ jobs:
           echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "mobile_only=$mobile_only" >> "$GITHUB_OUTPUT"
+
+          android_version="$(sed -n "s/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*['\"]\([^'\"]*\)['\"].*/\1/p" mobile/android/app/build.gradle)"
+          android_version_code="$(sed -n "s/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\1/p" mobile/android/app/build.gradle)"
+          test -n "$android_version"
+          test -n "$android_version_code"
+
+          # Compare against the updater manifest because Android can be released
+          # independently of desktop tags. If the manifest is unavailable or invalid,
+          # build the APK rather than risk omitting a new Android release.
+          build_android="true"
+          if published_android="$(
+            curl --fail --silent --show-error --max-time 15 \
+              "${ORCHARD_UPDATE_URL}latest-android.json" |
+              node -e '
+                let input = "";
+                process.stdin.setEncoding("utf8");
+                process.stdin.on("data", (chunk) => { input += chunk; });
+                process.stdin.on("end", () => {
+                  try {
+                    const metadata = JSON.parse(input);
+                    const versionCode = Number(metadata.versionCode);
+                    if (!metadata.version || !Number.isInteger(versionCode) || versionCode <= 0) process.exit(1);
+                    process.stdout.write(`${metadata.version}\t${versionCode}`);
+                  } catch {
+                    process.exit(1);
+                  }
+                });
+              '
+          )"; then
+            IFS=$'\t' read -r published_android_version published_android_version_code <<< "$published_android"
+            if [[ "$android_version" == "$published_android_version" && "$android_version_code" == "$published_android_version_code" ]]; then
+              build_android="false"
+              echo "Android $android_version ($android_version_code) is already published; skipping the APK build."
+            else
+              echo "Android changed from $published_android_version ($published_android_version_code) to $android_version ($android_version_code); building the APK."
+            fi
+          else
+            echo "Could not read published Android metadata; building the APK."
+          fi
+          echo "build_android=$build_android" >> "$GITHUB_OUTPUT"
 
           # Read off the version rather than the tag, so the `-mobile` marker is never
           # mistaken for a prerelease qualifier.
@@ -500,6 +541,7 @@ jobs:
   build-android:
     name: Android APK
     needs: prepare
+    if: needs.prepare.outputs.build_android == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: Check out release tag
@@ -586,13 +628,13 @@ jobs:
       - build-windows-arm64
       - build-macos
       - build-android
-    # A mobile-only run skips every desktop build job, and a skipped dependency would
-    # otherwise skip this one too -- hence always() plus explicit result checks, which
-    # still refuse to publish if anything actually failed or was cancelled.
+    # A mobile-only run skips every desktop build, while an unchanged Android version
+    # skips the APK build. Accept those intentional skips without accepting failures.
     if: >-
       always()
       && needs.prepare.result == 'success'
-      && needs.build-android.result == 'success'
+      && (needs.prepare.outputs.build_android != 'true' || needs.build-android.result == 'success')
+      && (needs.prepare.outputs.mobile_only != 'true' || needs.prepare.outputs.build_android == 'true')
       && !contains(needs.*.result, 'failure')
       && !contains(needs.*.result, 'cancelled')
       && needs.prepare.outputs.is_beta != 'true'
@@ -689,6 +731,7 @@ jobs:
           done
 
       - name: Publish Android updater manifest
+        if: needs.prepare.outputs.build_android == 'true'
         run: |
           set -euo pipefail
 
@@ -710,11 +753,12 @@ jobs:
       - build-windows-arm64
       - build-macos
       - build-android
-    # See the publish job: skipped desktop builds must not skip this one.
+    # See the publish job: intentional desktop or Android skips must not skip this one.
     if: >-
       always()
       && needs.prepare.result == 'success'
-      && needs.build-android.result == 'success'
+      && (needs.prepare.outputs.build_android != 'true' || needs.build-android.result == 'success')
+      && (needs.prepare.outputs.mobile_only != 'true' || needs.prepare.outputs.build_android == 'true')
       && !contains(needs.*.result, 'failure')
       && !contains(needs.*.result, 'cancelled')
       && needs.prepare.outputs.is_beta == 'true'
