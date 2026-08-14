@@ -1,16 +1,6 @@
-## Orchard 4.4.0 "Jocosity Jordanians"
-
-### New & improved
-- **Analysis-Aware Bass Handoffs**: Smart Crossfade now measures each track's low-frequency structure and moves the bass handoff to a suitable beat when it detects an incoming bass entrance or outgoing bass exit.
-- **Interface Scaling**: Adjust text and interface size from 85% to 150%; Orchard remembers the setting between launches.
-- **Artist Subscriptions**: Subscribe to or unsubscribe from artists directly on their artist pages.
-- **Queue on Narrow Layouts**: Open the Queue from the sidebar even when Orchard is using a narrow desktop layout.
+## Orchard 4.4.1 "Hole Riddance"
 
 ### Fixed
-- **Niri and Wayland Stability**: Orchard now respects Niri-managed window geometry, supports narrower tiled windows, and avoids fighting the compositor over restored bounds.
-- **Immersive Background Resizing**: Artwork backgrounds recover correctly after compositor and viewport resizes.
-- **Smoother Interface Scaling**: Scaling is applied after the slider is released, avoiding unnecessary resizing while it is being dragged.
-- **Reliable Welcome Flow**: Completed setup is remembered across packaged launches, and the Open Orchard, minimize, and close buttons now work reliably.
-
-### Changed
-- **Simpler Settings**: Removed the redundant setup guide now that onboarding handles initial configuration.
+- **Reliable Desktop Playback**: Restored direct YouTube Music playback after upstream protection changes caused tracks to fail with “no supported source” errors, including on macOS.
+- **Full-Quality Direct Streams**: Direct audio now uses video-bound proof-of-origin tokens and concrete byte ranges, while HLS remains a fallback for authenticated age-gated playback.
+- **Playlist Additions**: Songs can be added to existing YouTube Music playlists again.

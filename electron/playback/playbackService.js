@@ -32,12 +32,12 @@ import {
   rawPlayableVideoOnlyFormats
 } from './playbackFormats.js';
 import {
+  isYouTubeMediaUrl,
   parseRangeHeader,
   pipeWebBody,
   proxyHeadResponseHeaders,
   proxyResponseHeaders,
   rangeNotSatisfiable,
-  isYouTubeMediaUrl,
   rewriteHlsManifest,
   upstreamRangeHeader,
   upstreamStreamRequest,
@@ -56,6 +56,7 @@ import {
   hlsMimeType,
   youtubeSafariUserAgent
 } from './authenticatedYouTubePlayback.js';
+import { addPoToken, createYouTubePoTokenService } from './youtubePoToken.js';
 const youtubeWebUserAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15,gzip(gfe)';
 const androidVrClient = {
   clientName: 'ANDROID_VR',
@@ -113,7 +114,8 @@ export function createPlaybackService({
   youtubeMusicClientUserAgent = youtubeWebUserAgent,
   youtubeMusicClientVersion = '1.20260213.01.00',
   youtubeMusicOrigin = 'https://music.youtube.com',
-  youtubeWebOrigin
+  youtubeWebOrigin,
+  youtubePoTokenService = createYouTubePoTokenService()
 }) {
   const streamCache = createPlaybackStreamCache();
   const upstreamFailures = new Map();
@@ -249,15 +251,22 @@ export function createPlaybackService({
     const browserYtPromise = getBrowserInnertube();
     const browserYt = preferBrowserAuth && browserYtPromise ? await browserYtPromise : null;
     const primaryYt = options.yt || browserYt || await getGuestInnertube();
-    const browserPlaybackOptions = () => hasBrowserLoginCookie()
-      ? { poToken: authState.browser.poToken }
-      : {};
+    const playerOptions = ({ browserAuthenticated = false } = {}) => {
+      const poToken = options.poToken || (
+        browserAuthenticated && hasBrowserLoginCookie()
+          ? authState.browser.poToken
+          : ''
+      );
+      return poToken ? { poToken } : {};
+    };
 
     try {
       return {
         yt: primaryYt,
         info: requireDirectStreamingFormats(
-          options.info || await basicPlaybackInfo(primaryYt, videoId, browserYt === primaryYt ? browserPlaybackOptions() : {})
+          options.info || await basicPlaybackInfo(primaryYt, videoId, playerOptions({
+            browserAuthenticated: browserYt === primaryYt
+          }))
         )
       };
     } catch (error) {
@@ -286,7 +295,7 @@ export function createPlaybackService({
           return {
             yt: fallbackBrowserYt,
             info: requireDirectStreamingFormats(
-              await basicPlaybackInfo(fallbackBrowserYt, videoId, browserPlaybackOptions())
+              await basicPlaybackInfo(fallbackBrowserYt, videoId, playerOptions({ browserAuthenticated: true }))
             )
           };
         } catch (browserError) {
@@ -298,7 +307,7 @@ export function createPlaybackService({
       if (primaryYt !== guestYt && canFallbackToGuest(error)) {
         return {
           yt: guestYt,
-          info: requireDirectStreamingFormats(await basicPlaybackInfo(guestYt, videoId))
+          info: requireDirectStreamingFormats(await basicPlaybackInfo(guestYt, videoId, playerOptions()))
         };
       }
 
@@ -480,8 +489,16 @@ export function createPlaybackService({
       streamCache.cacheStream(videoId, cacheKey, cacheEntry, options);
       return cacheEntry;
     }
-    const avoidAndroidVr = requiresAuth || androidVrRapidResolveActive(options);
-    const canTryAndroidVr = !requiresAuth && (!wantsVideo || !avoidAndroidVr) && !androidVrCooldownActive();
+    let contentPoToken = '';
+    try {
+      contentPoToken = await youtubePoTokenService.get(videoId, {
+        rejectedToken: options.rejectedPoToken || ''
+      });
+    } catch (error) {
+      console.warn(`YouTube PO token generation failed; trying legacy direct playback: ${error.message}`);
+    }
+    const avoidAndroidVr = requiresAuth || (!contentPoToken && androidVrRapidResolveActive(options));
+    const canTryAndroidVr = !contentPoToken && !requiresAuth && (!wantsVideo || !avoidAndroidVr) && !androidVrCooldownActive();
     if (canTryAndroidVr) {
       try {
         const cacheEntry = await resolveAndroidVrStream(videoId, {
@@ -508,7 +525,8 @@ export function createPlaybackService({
     const { yt, info } = await playbackInfo(videoId, {
       yt: preferBrowserPlayback ? null : options.playbackClient,
       info: preferBrowserPlayback ? null : options.playbackInfo,
-      preferBrowserAuth: preferBrowserPlayback
+      preferBrowserAuth: preferBrowserPlayback,
+      poToken: contentPoToken
     });
     const audioFormats = playableAudioFormats(info);
     const supportedAudioMimes = options.supportedMimes;
@@ -539,10 +557,12 @@ export function createPlaybackService({
       if (wantsVideo && !formatHasInlineAudio(format) && !audioFormat) {
         throw new Error('No playable audio companion format was returned by InnerTube');
       }
-      const candidateUrl = await format.decipher(yt.session.player);
+      const candidateUrl = addPoToken(await format.decipher(yt.session.player), contentPoToken);
       const candidateEntry = {
         url: candidateUrl,
-        audioUrl: audioFormat ? await audioFormat.decipher(yt.session.player) : '',
+        audioUrl: audioFormat
+          ? addPoToken(await audioFormat.decipher(yt.session.player), contentPoToken)
+          : '',
         format: formatMetadata(format),
         audioFormat: audioFormat ? formatMetadata(audioFormat) : null,
         mediaKind: wantsVideo ? 'video' : 'audio',
@@ -584,25 +604,36 @@ export function createPlaybackService({
       return;
     }
     const fallbackUserAgent = stream.userAgent || youtubeWebUserAgent;
+    const requiresBoundedRange = totalLength > 0;
+    const upstreamRange = upstreamRangeHeader(range, totalLength, {
+      requireBounded: requiresBoundedRange
+    });
     const upstreamRequest = upstreamStreamRequest(stream.url, {
       fallbackUserAgent,
-      rangeHeader: upstreamRangeHeader(range, totalLength)
+      // Current googlevideo URLs reject requests without a concrete end offset,
+      // including URLs that omit rqh=1. Chromium can omit it initially.
+      rangeHeader: upstreamRange
     });
     const upstream = await fetch(upstreamRequest.url, { headers: upstreamRequest.headers });
     const failureKey = `${videoId}:${mediaKind}:${stream.format.itag}`;
     if ([403, 410, 429, 500, 502, 503, 504].includes(upstream.status) && allowRetry) {
       await upstream.body?.cancel().catch(() => {});
-      upstreamFailures.set(failureKey, Date.now() + upstreamFailureCooldownMs);
       streamCache.deleteKey(streamCache.key(videoId, { mediaKind }));
       streamCache.deleteKey(streamCache.key(videoId, { mediaKind, itag: stream.format.itag }));
+      const rejectedPoToken = new URL(stream.url).searchParams.get('pot') || '';
+      if (!rejectedPoToken) {
+        upstreamFailures.set(failureKey, Date.now() + upstreamFailureCooldownMs);
+      }
       return proxyStream(videoId, req, res, false, {
         ...cachedOptions,
         itag: String(stream.format.itag),
         mediaKind,
-        refreshStream: true
+        refreshStream: true,
+        rejectedPoToken
       });
     }
     if (!upstream.ok && upstream.status !== 206) {
+      await upstream.body?.cancel().catch(() => {});
       throw new Error(`Upstream stream failed with HTTP ${upstream.status}`);
     }
     upstreamFailures.delete(failureKey);
@@ -629,6 +660,7 @@ export function createPlaybackService({
     });
     const upstream = await fetch(upstreamRequest.url, { headers: upstreamRequest.headers });
     if (!upstream.ok && upstream.status !== 206) {
+      await upstream.body?.cancel().catch(() => {});
       throw new Error(`Upstream HLS request failed with HTTP ${upstream.status}`);
     }
     const upstreamType = upstream.headers.get('content-type') || '';

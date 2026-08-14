@@ -19,6 +19,21 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '4.4.1',
+    codename: 'Hole Riddance',
+    date: 'August 14, 2026',
+    sections: [
+      {
+        title: 'Fixed',
+        items: [
+          'Restored direct YouTube Music playback after upstream protection changes caused tracks to fail with “no supported source” errors, including on macOS.',
+          'Direct audio now uses video-bound proof-of-origin tokens and concrete byte ranges, while HLS remains a fallback for authenticated age-gated playback.',
+          'Songs can be added to existing YouTube Music playlists again.'
+        ]
+      }
+    ]
+  },
+  {
     version: '4.4.0',
     codename: 'Jocosity Jordanians',
     date: 'August 13, 2026',

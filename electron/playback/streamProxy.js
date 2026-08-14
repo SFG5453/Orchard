@@ -95,12 +95,21 @@ export function parseRangeHeader(rangeHeader, totalLength = 0) {
   return { ok: true, wantsRange: true, start, requestedEnd };
 }
 
-export function upstreamRangeHeader(range, totalLength = 0) {
+export function upstreamRangeHeader(range, totalLength = 0, { requireBounded = false } = {}) {
   if (!range) return '';
-  if (!range.wantsRange) return '';
+  if (!range.wantsRange) {
+    return requireBounded && totalLength ? `bytes=0-${totalLength - 1}` : '';
+  }
 
-  if (range.suffixLength) return `bytes=-${range.suffixLength}`;
-  return `bytes=${range.start}-${range.requestedEnd ?? ''}`;
+  if (range.suffixLength) {
+    return requireBounded && totalLength
+      ? `bytes=${range.start}-${totalLength - 1}`
+      : `bytes=-${range.suffixLength}`;
+  }
+  const end = range.requestedEnd === null
+    ? (requireBounded && totalLength ? totalLength - 1 : '')
+    : (requireBounded && totalLength ? Math.min(range.requestedEnd, totalLength - 1) : range.requestedEnd);
+  return `bytes=${range.start}-${end}`;
 }
 
 function cleanContentType(contentType, upstreamContentType = '') {
@@ -182,12 +191,15 @@ export function upstreamStreamRequest(url, { fallbackUserAgent, rangeHeader } = 
   return { headers, url: upstreamUrl };
 }
 
-export async function validateUpstreamStreamUrl(url, { fallbackUserAgent } = {}) {
+export async function validateUpstreamStreamUrl(url, {
+  fallbackUserAgent,
+  fetchImpl = fetch
+} = {}) {
   let sawReadableProbe = false;
 
   for (const rangeHeader of playbackProbeRanges) {
     const request = upstreamStreamRequest(url, { fallbackUserAgent, rangeHeader });
-    const response = await fetch(request.url, { headers: request.headers });
+    const response = await fetchImpl(request.url, { headers: request.headers });
 
     if (response.status === 416) return sawReadableProbe;
     if (!response.ok && response.status !== 206) return false;
@@ -204,6 +216,17 @@ export async function validateUpstreamStreamUrl(url, { fallbackUserAgent } = {})
     if (!response.body) {
       sawReadableProbe = true;
       continue;
+    }
+
+    // The probe asks for one byte. Drain a correctly bounded response instead
+    // of cancelling it after the first read, which poisons the pooled request.
+    const contentLength = Number(response.headers.get('content-length') || 0);
+    if (response.status === 206 && contentLength > 0 && contentLength <= 1024) {
+      if ((await response.arrayBuffer()).byteLength) {
+        sawReadableProbe = true;
+        continue;
+      }
+      return false;
     }
 
     const reader = response.body.getReader();

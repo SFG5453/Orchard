@@ -19,7 +19,54 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { proxyHeadResponseHeaders, proxyResponseHeaders } from '../electron/playback/streamProxy.js';
+import {
+  parseRangeHeader,
+  proxyHeadResponseHeaders,
+  proxyResponseHeaders,
+  upstreamRangeHeader,
+  validateUpstreamStreamUrl
+} from '../electron/playback/streamProxy.js';
+
+test('googlevideo ranges can be bounded when Chromium omits the end', () => {
+  const noRange = parseRangeHeader('', 1024);
+  const openRange = parseRangeHeader('bytes=512-', 1024);
+  const suffixRange = parseRangeHeader('bytes=-256', 1024);
+  const oversizedRange = parseRangeHeader('bytes=512-2047', 1024);
+
+  assert.equal(upstreamRangeHeader(noRange, 1024), '');
+  assert.equal(upstreamRangeHeader(noRange, 1024, { requireBounded: true }), 'bytes=0-1023');
+  assert.equal(upstreamRangeHeader(openRange, 1024), 'bytes=512-');
+  assert.equal(upstreamRangeHeader(openRange, 1024, { requireBounded: true }), 'bytes=512-1023');
+  assert.equal(upstreamRangeHeader(suffixRange, 1024, { requireBounded: true }), 'bytes=768-1023');
+  assert.equal(upstreamRangeHeader(oversizedRange, 1024, { requireBounded: true }), 'bytes=512-1023');
+});
+
+test('stream validation drains its bounded probe instead of cancelling the connection', async () => {
+  let cancelled = false;
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(Uint8Array.of(0));
+      controller.close();
+    },
+    cancel() {
+      cancelled = true;
+    }
+  });
+  const fetchImpl = async () => new Response(body, {
+    status: 206,
+    headers: {
+      'Content-Length': '1',
+      'Content-Range': 'bytes 0-0/1024',
+      'Content-Type': 'audio/mp4'
+    }
+  });
+
+  assert.equal(await validateUpstreamStreamUrl(
+    'https://rr1.googlevideo.com/videoplayback',
+    { fetchImpl }
+  ), true);
+  assert.equal(cancelled, false);
+});
 
 test('proxyHeadResponseHeaders exposes range metadata without an upstream body', () => {
   assert.deepEqual(proxyHeadResponseHeaders('audio/webm; codecs="opus"', 3145728), {

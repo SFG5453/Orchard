@@ -62,6 +62,33 @@ test('playback info retries the guest client after an authenticated 401', async 
   assert.equal(result.info, guestInfo);
 });
 
+test('playback info sends a video-bound PO token to the player request', async () => {
+  let request;
+  const info = {
+    streaming_data: { adaptive_formats: [{ mime_type: 'audio/mp4; codecs="mp4a.40.2"' }] }
+  };
+  const guest = {
+    getBasicInfo: async (_videoId, options) => {
+      request = options;
+      return info;
+    }
+  };
+  const playback = createPlaybackService({
+    authState: { browser: {} },
+    cookieWithPlaybackDefaults: () => '',
+    getBrowserInnertube: () => null,
+    getGuestInnertube: async () => guest,
+    hasBrowserLoginCookie: () => false,
+    refreshBrowserAuth: async () => {},
+    youtubeWebOrigin: 'https://www.youtube.com'
+  });
+
+  const result = await playback.playbackInfo('track-id', { poToken: 'video-bound-token' });
+
+  assert.equal(result.info, info);
+  assert.deepEqual(request, { client: 'YTMUSIC', po_token: 'video-bound-token' });
+});
+
 test('playback info retries the browser account when premium formats are absent', async () => {
   const primary = {
     getBasicInfo: async () => ({
