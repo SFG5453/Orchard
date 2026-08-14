@@ -145,6 +145,7 @@ export function installLifecycle(ctx) {
     ctx.immersiveBackgroundIntensity,
     ctx.immersiveBackgroundMotion,
     ctx.layoutPreset,
+    ctx.uiScale,
     ctx.playbackStatePersistenceEnabled,
     ctx.queueLayout,
     ctx.songCacheEnabled,
@@ -187,6 +188,7 @@ export function installLifecycle(ctx) {
       immersiveBackgroundIntensity: ctx.immersiveBackgroundIntensity.value,
       immersiveBackgroundMotion: ctx.immersiveBackgroundMotion.value,
       layoutPreset: ctx.layoutPreset.value,
+      uiScale: ctx.uiScale.value,
       playbackStatePersistenceEnabled: ctx.playbackStatePersistenceEnabled.value,
       queueLayout: ctx.queueLayout.value,
       songCacheEnabled: ctx.songCacheEnabled.value,
@@ -336,6 +338,11 @@ export function installLifecycle(ctx) {
 
   watch(ctx.layoutPreset, () => {
     ctx.applyLayoutPreset();
+  }, { immediate: true });
+
+  watch(ctx.uiScale, (scale) => {
+    if (window.orchardWindow?.setZoomFactor) window.orchardWindow.setZoomFactor(scale);
+    else document.documentElement.style.zoom = String(scale);
   }, { immediate: true });
 
   watch(ctx.volumeNormalizationEnabled, (enabled) => {

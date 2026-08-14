@@ -224,6 +224,17 @@ export default {
                       <span>Share</span>
                     </button>
                     <button
+                      v-if="browseDetail.kind === 'artist'"
+                      type="button"
+                      class="action-button"
+                      :disabled="artistSubscription.status === 'loading' || artistSubscription.status === 'saving'"
+                      :aria-pressed="artistSubscription.subscribed"
+                      @click="toggleArtistSubscription(browseDetail)"
+                    >
+                      <q-icon :name="artistSubscription.subscribed ? 'notifications_off' : 'person_add'" />
+                      <span>{{ artistSubscription.status === 'saving' ? 'Saving…' : artistSubscription.subscribed ? 'Unsubscribe' : 'Subscribe' }}</span>
+                    </button>
+                    <button
                       v-if="browseDetail.kind === 'playlist' && browseDetail.editable"
                       type="button"
                       class="action-button action-button--danger"

@@ -26,6 +26,7 @@ export function registerAppHandlers({
   app,
   clearDiscordPresence,
   graphicsMode,
+  getMainWindow = () => null,
   ipcMain,
   isDev,
   resolveDiscordSongLink,
@@ -60,7 +61,16 @@ export function registerAppHandlers({
   ipcMain.handle(APP.RESTART, () => {
     graphicsMode.restart();
   });
-  ipcMain.handle(APP.FINISH_WELCOME, () => {
+  ipcMain.handle(APP.FINISH_WELCOME, async () => {
+    const target = getMainWindow();
+    if (target && !target.isDestroyed()) {
+      await target.webContents.executeJavaScript(`(() => {
+        const key = 'orchard:setup-state';
+        let state = {};
+        try { state = JSON.parse(localStorage.getItem(key) || '{}'); } catch {}
+        localStorage.setItem(key, JSON.stringify({ ...state, completed: true, welcomeCompleted: true }));
+      })()`).catch(() => {});
+    }
     showMainWindow();
   });
   ipcMain.handle(APP.SHOW_WELCOME, () => {

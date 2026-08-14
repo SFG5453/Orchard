@@ -42,7 +42,8 @@ import {
   normalizeImmersiveBackgroundIntensity,
   normalizeImmersiveBackgroundMotion,
   normalizeLayoutPreset,
-  normalizeThemePreference
+  normalizeThemePreference,
+  normalizeUiScale
 } from '../appearance/appearancePreferences.js';
 import {
   clampVolume,
@@ -122,6 +123,7 @@ export function installState(ctx) {
       immersiveBackgroundIntensity: normalizeImmersiveBackgroundIntensity(preferences.immersiveBackgroundIntensity),
       immersiveBackgroundMotion: normalizeImmersiveBackgroundMotion(preferences.immersiveBackgroundMotion),
       layoutPreset: normalizeLayoutPreset(preferences.layoutPreset),
+      uiScale: normalizeUiScale(preferences.uiScale),
       songCacheEnabled: typeof preferences.songCacheEnabled === 'boolean'
         ? preferences.songCacheEnabled
         : ctx.DEFAULT_USER_PREFERENCES.songCacheEnabled,
@@ -254,6 +256,7 @@ export function installState(ctx) {
   ctx.browseTrackPageError = ref('');
   ctx.socketState = ref('connecting');
   ctx.errorMessage = ref('');
+  ctx.artistSubscription = ref({ browseId: '', subscribed: false, status: 'idle', error: '' });
   ctx.warningMessage = ref('');
   ctx.migrationState = ref({
     status: 'loading',
@@ -388,6 +391,7 @@ export function installState(ctx) {
   ctx.immersiveBackgroundIntensity = ref(ctx.initialUserPreferences.immersiveBackgroundIntensity);
   ctx.immersiveBackgroundMotion = ref(ctx.initialUserPreferences.immersiveBackgroundMotion);
   ctx.layoutPreset = ref(ctx.initialUserPreferences.layoutPreset);
+  ctx.uiScale = ref(ctx.initialUserPreferences.uiScale);
   ctx.songCacheEnabled = ref(ctx.initialUserPreferences.songCacheEnabled);
   ctx.songCacheMaxSizeMb = ref(ctx.initialUserPreferences.songCacheMaxSizeMb);
   ctx.songCacheInventory = ref({
@@ -422,6 +426,7 @@ export function installState(ctx) {
     ctx.immersiveBackgroundIntensity.value = defaults.immersiveBackgroundIntensity;
     ctx.immersiveBackgroundMotion.value = defaults.immersiveBackgroundMotion;
     ctx.layoutPreset.value = defaults.layoutPreset;
+    ctx.uiScale.value = defaults.uiScale;
     ctx.songCacheEnabled.value = defaults.songCacheEnabled;
     ctx.songCacheMaxSizeMb.value = defaults.songCacheMaxSizeMb;
     ctx.volumeNormalizationEnabled.value = defaults.volumeNormalizationEnabled;

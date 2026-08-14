@@ -30,7 +30,8 @@ export const APPEARANCE_DEFAULTS = {
   immersiveBackgroundIntensity: 'balanced',
   immersiveBackgroundMotion: 'animated',
   layoutPreset: 'grove',
-  themePreference: 'dark'
+  themePreference: 'dark',
+  uiScale: 1
 };
 
 export { GRAPHICS_MODE_OPTIONS, normalizeGraphicsMode };
@@ -104,6 +105,12 @@ export function normalizeLayoutPreset(value) {
 
 export function normalizeThemePreference(value) {
   return optionValue(THEME_PREFERENCE_OPTIONS, value, APPEARANCE_DEFAULTS.themePreference);
+}
+
+export function normalizeUiScale(value) {
+  const scale = Number(value);
+  if (!Number.isFinite(scale)) return APPEARANCE_DEFAULTS.uiScale;
+  return Math.round(Math.max(0.85, Math.min(1.5, scale)) * 20) / 20;
 }
 
 export function immersiveBackgroundOpacity(value) {

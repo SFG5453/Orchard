@@ -451,6 +451,7 @@ export function installReadinessActions(ctx) {
     ctx.immersiveBackgroundIntensity.value = preferences.immersiveBackgroundIntensity;
     ctx.immersiveBackgroundMotion.value = preferences.immersiveBackgroundMotion;
     ctx.layoutPreset.value = preferences.layoutPreset;
+    ctx.uiScale.value = preferences.uiScale;
     ctx.volumeNormalizationEnabled.value = preferences.volumeNormalizationEnabled;
     ctx.repeatMode.value = preferences.repeatMode;
     ctx.shuffleEnabled.value = preferences.shuffleEnabled;

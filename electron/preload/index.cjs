@@ -21,7 +21,7 @@
 // Keep this file dependency-free and expose only narrow, structured operations.
 // Channel literals mirror shared/ipcChannels.js because a sandboxed preload
 // cannot load arbitrary local modules; test/ipcChannels.test.js prevents drift.
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
 function randomInt(maxExclusive) {
   const max = Number(maxExclusive);
@@ -47,7 +47,8 @@ contextBridge.exposeInMainWorld('orchardWindow', {
   minimize: () => ipcRenderer.invoke('window:minimize'),
   toggleMaximize: () => ipcRenderer.invoke('window:toggle-maximize'),
   setFullscreen: (fullscreen) => ipcRenderer.invoke('window:set-fullscreen', fullscreen),
-  close: () => ipcRenderer.invoke('window:close')
+  close: () => ipcRenderer.invoke('window:close'),
+  setZoomFactor: (factor) => webFrame.setZoomFactor(Math.max(0.85, Math.min(1.5, Number(factor) || 1)))
 });
 
 contextBridge.exposeInMainWorld('orchardApp', {

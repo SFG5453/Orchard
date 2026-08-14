@@ -41,6 +41,8 @@ let visibility = null;
 let windowVisible = true;
 let reducedMotion = false;
 let mounted = false;
+let resizeObserver = null;
+let resizeFrame = 0;
 
 function playbackAllowed() {
   return props.enabled && props.playing && props.motionEnabled && windowVisible && !reducedMotion;
@@ -77,8 +79,12 @@ function syncSources() {
 }
 
 function resizeBackground() {
-  kawarpBackground?.resize();
-  syncPlayback();
+  window.cancelAnimationFrame(resizeFrame);
+  resizeFrame = window.requestAnimationFrame(() => {
+    resizeFrame = 0;
+    kawarpBackground?.resize();
+    syncPlayback();
+  });
 }
 
 watch(
@@ -114,11 +120,18 @@ onMounted(() => {
   syncSources();
   syncPlayback();
   window.addEventListener('resize', resizeBackground);
+  window.visualViewport?.addEventListener('resize', resizeBackground);
+  resizeObserver = new ResizeObserver(resizeBackground);
+  if (rootRef.value) resizeObserver.observe(rootRef.value);
 });
 
 onBeforeUnmount(() => {
   mounted = false;
   window.removeEventListener('resize', resizeBackground);
+  window.visualViewport?.removeEventListener('resize', resizeBackground);
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+  window.cancelAnimationFrame(resizeFrame);
   visibility?.destroy();
   videoBackground?.destroy();
   kawarpBackground?.destroy();

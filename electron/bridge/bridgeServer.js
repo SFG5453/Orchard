@@ -80,6 +80,7 @@ export async function startBridgeServer({
   startAccountSwitch,
   startBrowserSignIn,
   subscribedArtists,
+  setArtistSubscription,
   youtubeHistory,
   youtubeLikes,
   connectDevicesPath
@@ -439,6 +440,16 @@ export async function startBridgeServer({
       try {
         await refreshBrowserAuth();
         reply({ ok: true, data: await subscribedArtists() });
+      } catch (error) {
+        reply({ ok: false, error: bridgeError(error) });
+      }
+    });
+
+    socket.on('music:set-artist-subscription', async ({ browseId, subscribed }, reply) => {
+      try {
+        await refreshBrowserAuth();
+        const result = await setArtistSubscription(browseId, Boolean(subscribed));
+        reply({ ok: true, data: { ...result, artists: await subscribedArtists() } });
       } catch (error) {
         reply({ ok: false, error: bridgeError(error) });
       }

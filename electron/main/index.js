@@ -90,6 +90,9 @@ const require = createRequire(import.meta.url);
 const windowStateKeeper = require('electron-window-state');
 const { app, BrowserWindow, Menu, Tray, clipboard, globalShortcut, ipcMain, nativeImage, net, safeStorage, screen, session, shell } = require('electron');
 const isDev = !app.isPackaged && Boolean(process.env.VITE_DEV_SERVER_URL);
+const isNiriSession = process.platform === 'linux' && (
+  Boolean(process.env.NIRI_SOCKET) || /(?:^|:)niri(?:$|:)/i.test(process.env.XDG_CURRENT_DESKTOP || '')
+);
 const allowDevTools = !app.isPackaged;
 const runtimePaths = resolveRuntimePaths({ app, isDev });
 const graphicsMode = createGraphicsModeController({
@@ -197,7 +200,8 @@ const playbackService = createPlaybackService({
 });
 const normalizeTrackInfo = createTrackInfoNormalizer({ bestThumbnail });
 const { proxyHlsResource, proxyStream, resolveStream } = playbackService;
-const subscribedArtists = createSubscribedArtistsService({ authState, cachePath: path.join(app.getPath('userData'), 'youtubei-cache', 'subscriptions') }).subscribedArtists;
+const subscribedArtistService = createSubscribedArtistsService({ authState, cachePath: path.join(app.getPath('userData'), 'youtubei-cache', 'subscriptions') });
+const { setArtistSubscription, subscribedArtists } = subscribedArtistService;
 const browseNormalizers = createBrowseNormalizers({
   asText,
   bestThumbnail,
@@ -372,6 +376,7 @@ async function startBridge() {
     startAccountSwitch,
     startBrowserSignIn,
     subscribedArtists,
+    setArtistSubscription,
     youtubeHistory,
     youtubeLikes,
     connectDevicesPath: path.join(app.getPath('userData'), 'orchard-connect-devices.json')
@@ -421,11 +426,10 @@ async function createMainWindow() {
   });
 
   mainWindow = new BrowserWindow({
-    x: windowState.x,
-    y: windowState.y,
-    width: windowState.width,
-    height: windowState.height,
-    minWidth: 760,
+    ...(isNiriSession ? {} : { x: windowState.x, y: windowState.y }),
+    width: isNiriSession ? 1100 : windowState.width,
+    height: isNiriSession ? 760 : windowState.height,
+    minWidth: isNiriSession ? 480 : 760,
     minHeight: 620,
     autoHideMenuBar: true,
     frame: useNativeTitlebar,
@@ -441,7 +445,9 @@ async function createMainWindow() {
     }
   });
 
-  windowState.manage(mainWindow);
+  // Niri is authoritative for tiled geometry. electron-window-state restoring or
+  // recording bounds fights the compositor and produces visible edge oscillation.
+  if (!isNiriSession) windowState.manage(mainWindow);
   configureWindowOpenHandler(mainWindow, shell);
   if (allowDevTools) registerDevToolsShortcut(mainWindow);
   desktopControls ||= setupDesktopControls({
@@ -527,6 +533,7 @@ app.whenReady().then(async () => {
     isDev,
     licensePath: runtimePaths.licensePath,
     graphicsMode,
+    getMainWindow: () => mainWindow,
     resolveDiscordSongLink,
     resolveDiscordSongLinkDetails,
     setDiscordPresence,

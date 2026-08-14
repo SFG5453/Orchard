@@ -120,7 +120,10 @@ export function setupBrowseDetailView(props) {
 
   watch(
     () => props.app.browseDetail.value,
-    (detail) => props.app.loadArtistGenre?.(detail),
+    (detail) => {
+      props.app.loadArtistGenre?.(detail);
+      if (detail?.kind === 'artist') props.app.loadArtistSubscription?.(detail.browseId);
+    },
     { immediate: true }
   );
 
@@ -182,6 +185,7 @@ export function setupBrowseDetailView(props) {
     descriptionSegments,
     detailPageRef,
     artistGenreLabel,
+    artistSubscription: props.app.artistSubscription,
     descriptionDialogSegments,
     subtitleSegments,
     openDescriptionDialog,

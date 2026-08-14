@@ -125,5 +125,14 @@ export function createSubscribedArtistsService({ authState, cachePath }) {
     return subscribedArtistsFromChannels(channels);
   }
 
-  return { subscribedArtists };
+  async function setArtistSubscription(channelId, subscribed) {
+    const id = cleanText(channelId);
+    if (!id) throw new Error('Artist channel ID is required.');
+    const yt = await subscriptionClient();
+    if (subscribed) await yt.interact.subscribe(id);
+    else await yt.interact.unsubscribe(id);
+    return { browseId: id, subscribed: Boolean(subscribed) };
+  }
+
+  return { setArtistSubscription, subscribedArtists };
 }

@@ -260,6 +260,42 @@ export function installConnectionActions(ctx) {
     return showRemoteLibraryCategory('Artists', 'music:subscribed-artists', 'Could not load subscribed artists.');
   };
 
+  ctx.loadArtistSubscription = async function loadArtistSubscription(browseId) {
+    const id = String(browseId || '').trim();
+    if (!id || !ctx.authState.value.signedIn) return;
+    ctx.artistSubscription.value = { browseId: id, subscribed: false, status: 'loading', error: '' };
+    try {
+      const artists = await ctx.emitWithReply('music:subscribed-artists');
+      if (ctx.artistSubscription.value.browseId !== id) return;
+      ctx.artistSubscription.value = {
+        browseId: id,
+        subscribed: (artists || []).some((artist) => artist.browseId === id),
+        status: 'ready',
+        error: ''
+      };
+    } catch (error) {
+      if (ctx.artistSubscription.value.browseId === id) {
+        ctx.artistSubscription.value = { browseId: id, subscribed: false, status: 'error', error: error.message || 'Could not load subscription.' };
+      }
+    }
+  };
+
+  ctx.toggleArtistSubscription = async function toggleArtistSubscription(detail) {
+    const browseId = String(detail?.browseId || '').trim();
+    if (!browseId || ctx.artistSubscription.value.status === 'saving') return;
+    const subscribed = !ctx.artistSubscription.value.subscribed;
+    ctx.artistSubscription.value = { browseId, subscribed: !subscribed, status: 'saving', error: '' };
+    try {
+      const result = await ctx.emitWithReply('music:set-artist-subscription', { browseId, subscribed });
+      ctx.artistSubscription.value = { browseId, subscribed: result.subscribed, status: 'ready', error: '' };
+      const section = ctx.searchResult.value?.sections?.find((item) => item.key === 'library-artists');
+      if (section) section.items = result.artists || [];
+    } catch (error) {
+      ctx.artistSubscription.value = { browseId, subscribed: !subscribed, status: 'error', error: error.message || 'Could not update subscription.' };
+      ctx.errorMessage.value = ctx.artistSubscription.value.error;
+    }
+  };
+
   ctx.runPresetSearch = async function runPresetSearch(searchQuery, filter = 'all') {
     if (!ctx.authState.value.signedIn) {
       ctx.selectView('home');

@@ -88,8 +88,9 @@ export class KawarpArtworkBackground {
   resize() {
     if (!this.renderer || this.destroyed) return;
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.25);
-    const width = Math.max(2, Math.round(window.innerWidth * pixelRatio));
-    const height = Math.max(2, Math.round(window.innerHeight * pixelRatio));
+    const bounds = this.canvas.getBoundingClientRect();
+    const width = Math.max(2, Math.round((bounds.width || window.innerWidth) * pixelRatio));
+    const height = Math.max(2, Math.round((bounds.height || window.innerHeight) * pixelRatio));
     if (this.canvas.width !== width || this.canvas.height !== height) {
       this.canvas.width = width;
       this.canvas.height = height;

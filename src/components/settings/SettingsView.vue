@@ -24,14 +24,13 @@ import DiagnosticsSection from './DiagnosticsSection.vue';
 import LastfmSection from './LastfmSection.vue';
 import SpotifySection from './SpotifySection.vue';
 import SongCacheSection from './SongCacheSection.vue';
-import SetupGuideSection from './SetupGuideSection.vue';
 import ArtistPacksSection from './ArtistPacksSection.vue';
 import OrchardAccountSection from './OrchardAccountSection.vue';
 import { computed } from 'vue';
 
 export default {
   name: 'SettingsView',
-  components: { AudioEngineSection, BackupRestoreSection, DiagnosticsSection, LastfmSection, SpotifySection, SongCacheSection, SetupGuideSection, ArtistPacksSection, OrchardAccountSection },
+  components: { AudioEngineSection, BackupRestoreSection, DiagnosticsSection, LastfmSection, SpotifySection, SongCacheSection, ArtistPacksSection, OrchardAccountSection },
   props: { app: { type: Object, required: true } },
   setup(props) {
     const layoutPresetDescription = computed(() => {
@@ -48,10 +47,6 @@ export default {
 <template>
   <main class="settings-view">
     <nav class="settings-index" aria-label="Settings sections">
-      <a href="#settings-setup">
-        <q-icon name="checklist" />
-        <span>Setup</span>
-      </a>
       <a href="#settings-playback">
         <q-icon name="play_circle_outline" />
         <span>Playback</span>
@@ -91,8 +86,6 @@ export default {
     </nav>
 
     <div class="settings-content">
-      <SetupGuideSection :app="app" />
-
       <section id="settings-playback" class="settings-section" aria-labelledby="settings-playback-title">
         <div class="settings-section__heading">
           <h2 id="settings-playback-title">Playback</h2>
@@ -232,6 +225,17 @@ export default {
         <div class="settings-section__heading">
           <h2 id="settings-appearance-title">Appearance</h2>
           <p>Choose how artwork shapes the listening view.</p>
+        </div>
+
+        <div class="settings-row settings-row--slider">
+          <div class="settings-row__copy">
+            <label for="settings-ui-scale">Text and interface size</label>
+            <p>Scale Orchard for readability without changing your display settings.</p>
+          </div>
+          <div class="settings-slider">
+            <q-slider id="settings-ui-scale" v-model="uiScale" :min="0.85" :max="1.5" :step="0.05" color="primary" aria-label="Text and interface size" />
+            <output for="settings-ui-scale">{{ Math.round(uiScale * 100) }}%</output>
+          </div>
         </div>
 
         <div class="settings-row settings-row--options">
