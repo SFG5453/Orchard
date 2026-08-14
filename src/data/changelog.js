@@ -19,6 +19,36 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '4.4.0',
+    codename: 'Jocosity Jordanians',
+    date: 'August 13, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'Smart Crossfade now measures each track\'s low-frequency structure and moves the bass handoff to a suitable beat when it detects an incoming bass entrance or outgoing bass exit.',
+          'Added a persistent text and interface size control with scaling from 85% to 150%.',
+          'Artists can now be subscribed to or unsubscribed from directly on their artist pages.',
+          'The Queue is now available from the sidebar on narrow desktop layouts.'
+        ]
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Improved Wayland stability by respecting Niri-managed window geometry and allowing narrower tiled windows.',
+          'Immersive artwork backgrounds now recover correctly after compositor and viewport resizes.',
+          'Interface scaling is applied after the slider is released, avoiding unnecessary resizing while the control is being dragged.'
+        ]
+      },
+      {
+        title: 'Changed',
+        items: [
+          'Removed the redundant setup guide from Settings now that onboarding handles initial configuration.'
+        ]
+      }
+    ]
+  },
+  {
     version: '4.3.3',
     codename: 'Rundowns Tonic',
     date: 'August 12, 2026',

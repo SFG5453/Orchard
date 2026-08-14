@@ -59,6 +59,7 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarOutline
 import androidx.compose.material.icons.rounded.Cast
+import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material.icons.rounded.Earbuds
 import androidx.compose.material.icons.rounded.Headphones
@@ -341,7 +342,7 @@ fun TrackInfoRow(
 }
 
 
-/** Bottom quick destinations bar with active device route, lyrics, and queue with badge count. */
+/** Bottom quick destinations bar with player tools, active output route, and queue badge count. */
 @Composable
 fun PlayerBottomDestinations(
     targets: PlaybackTargetState,
@@ -351,6 +352,8 @@ fun PlayerBottomDestinations(
     onDevices: () -> Unit,
     onQueue: () -> Unit,
     queueActive: Boolean = false,
+    sleepTimerActive: Boolean = false,
+    onSleepTimer: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -369,6 +372,18 @@ fun PlayerBottomDestinations(
                 imageVector = Icons.Rounded.Subtitles,
                 contentDescription = if (lyricsActive) "Hide lyrics" else "Lyrics",
                 tint = if (lyricsActive) Color.White else Color.White.copy(alpha = 0.75f),
+                modifier = Modifier.size(24.dp),
+            )
+        }
+
+        IconButton(
+            onClick = onSleepTimer,
+            modifier = Modifier.size(44.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Bedtime,
+                contentDescription = if (sleepTimerActive) "Sleep timer active" else "Sleep timer",
+                tint = if (sleepTimerActive) Color.White else Color.White.copy(alpha = 0.75f),
                 modifier = Modifier.size(24.dp),
             )
         }

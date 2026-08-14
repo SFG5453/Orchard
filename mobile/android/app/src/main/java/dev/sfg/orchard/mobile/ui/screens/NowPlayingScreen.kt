@@ -45,7 +45,6 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -316,20 +315,6 @@ fun NowPlayingScreen(
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (wideLayout) 0.42f else 0.28f)))
             }
 
-            IconButton(
-                onClick = { sleepTimerDialogOpen = true },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .systemBarsPadding()
-                    .padding(top = 4.dp, end = 12.dp),
-            ) {
-                Icon(
-                    Icons.Rounded.Bedtime,
-                    contentDescription = if (sleepTimerRemainingSeconds > 0 || sleepTimerEndOfTrack) "Sleep timer active" else "Sleep timer",
-                    tint = if (sleepTimerRemainingSeconds > 0 || sleepTimerEndOfTrack) lyricAccent else Color.White,
-                )
-            }
-
             // A tablet has room to stop trading one thing for another: the cover
             // keeps its own frame on the left while lyrics or the queue occupy the
             // right, instead of displacing the artwork the way the phone must.
@@ -374,6 +359,8 @@ fun NowPlayingScreen(
                     onOpenCollection = onOpenCollection,
                     onLyricsPanel = { panel = if (lyricsOpen) PlayerPanel.NONE else PlayerPanel.LYRICS },
                     onQueuePanel = onQueue,
+                    sleepTimerActive = sleepTimerRemainingSeconds > 0 || sleepTimerEndOfTrack,
+                    onSleepTimer = { sleepTimerDialogOpen = true },
                     autoplayEnabled = autoplayEnabled,
                     autoplayLoading = autoplayLoading,
                     autoplayError = autoplayError,
@@ -513,6 +500,8 @@ fun NowPlayingScreen(
                         onLyrics = { panel = if (lyricsOpen) PlayerPanel.NONE else PlayerPanel.LYRICS },
                         onDevices = onDevices,
                         onQueue = onQueue,
+                        sleepTimerActive = sleepTimerRemainingSeconds > 0 || sleepTimerEndOfTrack,
+                        onSleepTimer = { sleepTimerDialogOpen = true },
                     )
                 }
             }

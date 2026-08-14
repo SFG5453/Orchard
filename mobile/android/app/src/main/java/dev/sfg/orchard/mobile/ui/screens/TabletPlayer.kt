@@ -107,6 +107,8 @@ fun TabletPlayerBody(
     onOpenCollection: ((String) -> Unit)?,
     onLyricsPanel: () -> Unit,
     onQueuePanel: () -> Unit,
+    sleepTimerActive: Boolean = false,
+    onSleepTimer: () -> Unit = {},
     autoplayEnabled: Boolean = true,
     autoplayLoading: Boolean = false,
     autoplayError: String = "",
@@ -253,6 +255,8 @@ fun TabletPlayerBody(
                     onLyrics = onLyricsPanel,
                     onDevices = onDevices,
                     onQueue = onQueuePanel,
+                    sleepTimerActive = sleepTimerActive,
+                    onSleepTimer = onSleepTimer,
                 )
             }
         }

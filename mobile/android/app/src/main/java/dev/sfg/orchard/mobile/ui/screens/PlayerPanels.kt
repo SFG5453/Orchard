@@ -89,6 +89,8 @@ fun PlayerControlStack(
     onLyrics: () -> Unit,
     onDevices: () -> Unit,
     onQueue: () -> Unit,
+    sleepTimerActive: Boolean = false,
+    onSleepTimer: () -> Unit = {},
 ) {
     PlayerScrubber(
         playback = playback,
@@ -127,6 +129,8 @@ fun PlayerControlStack(
         onDevices = onDevices,
         onQueue = onQueue,
         queueActive = queueActive,
+        sleepTimerActive = sleepTimerActive,
+        onSleepTimer = onSleepTimer,
     )
 }
 

@@ -1,9 +1,15 @@
-## Orchard 4.3.3 "Rundowns Tonic"
+## Orchard 4.4.0 "Jocosity Jordanians"
 
 ### New & improved
-- **More Linux Packages**: Added x86_64 and ARM64 Flatpak bundles, plus a native Windows ARM64 installer and Linux ARM64 AppImage with architecture-aware update metadata.
+- **Analysis-Aware Bass Handoffs**: Smart Crossfade now measures each track's low-frequency structure and moves the bass handoff to a suitable beat when it detects an incoming bass entrance or outgoing bass exit.
+- **Interface Scaling**: Adjust text and interface size from 85% to 150%; Orchard remembers the setting between launches.
+- **Artist Subscriptions**: Subscribe to or unsubscribe from artists directly on their artist pages.
+- **Queue on Narrow Layouts**: Open the Queue from the sidebar even when Orchard is using a narrow desktop layout.
 
 ### Fixed
-- **Full-Quality Explicit Tracks**: Explicit lyrics no longer force songs through the lower-bitrate authenticated stream. Orchard now uses the normal high-quality route unless YouTube returns a real age restriction.
-- **Playback Survives Stale Local Configuration**: YouTube session identities are refreshed on launch while player and sign-in caches are preserved, fixing "no playable audio format" failures that previously required deleting Orchard's local configuration directory.
-- **Age-Restricted Playback Recovery**: Authenticated direct and HLS playback are now reserved for confirmed age gates, with recovery state kept out of the persisted queue.
+- **Niri and Wayland Stability**: Orchard now respects Niri-managed window geometry, supports narrower tiled windows, and avoids fighting the compositor over restored bounds.
+- **Immersive Background Resizing**: Artwork backgrounds recover correctly after compositor and viewport resizes.
+- **Smoother Interface Scaling**: Scaling is applied after the slider is released, avoiding unnecessary resizing while it is being dragged.
+
+### Changed
+- **Simpler Settings**: Removed the redundant setup guide now that onboarding handles initial configuration.
