@@ -33,6 +33,8 @@ export default {
     const musicBlocked = ref(false);
     const stepIndex = ref(0);
     const supportOpen = ref(false);
+    const completionError = ref('');
+    const completionPending = ref(false);
     const FULL_STEPS = [
       { key: 'account', icon: 'music_note', title: 'Welcome to Orchard' },
       { key: 'layout', icon: 'view_quilt', title: 'Interface design' },
@@ -79,7 +81,11 @@ export default {
 
     async function primaryAction() {
       if (stepIndex.value === steps.value.length - 1) {
-        props.app.completeWelcomeSetup();
+        completionError.value = '';
+        completionPending.value = true;
+        const completed = await props.app.completeWelcomeSetup();
+        completionPending.value = false;
+        if (!completed) completionError.value = props.app.errorMessage.value || 'Could not open Orchard.';
         return;
       }
 
@@ -129,6 +135,8 @@ export default {
       audioRef,
       canGoNext,
       canopyUpgrade,
+      completionError,
+      completionPending,
       currentStep,
       musicBlocked,
       musicMuted,
@@ -152,10 +160,10 @@ export default {
     <audio ref="audioRef" :src="welcomeMusicUrl" loop autoplay preload="auto"></audio>
 
     <div class="welcome-window__chrome">
-      <button type="button" title="Minimize" @click="minimizeWindow">
+      <button type="button" title="Minimize" @click="app.minimizeWindow">
         <q-icon name="remove" />
       </button>
-      <button type="button" title="Close" @click="closeWindow">
+      <button type="button" title="Close" @click="app.closeWindow">
         <q-icon name="close" />
       </button>
     </div>
@@ -354,9 +362,12 @@ export default {
         <button type="button" class="welcome-window__secondary" @click="openSupport">Support</button>
         <div>
           <button type="button" class="welcome-window__secondary" :disabled="stepIndex === 0" @click="previousStep">Previous</button>
-          <button type="button" class="welcome-window__primary" :disabled="!canGoNext" @click="primaryAction">{{ primaryLabel }}</button>
+          <button type="button" class="welcome-window__primary" :disabled="!canGoNext || completionPending" @click="primaryAction">
+            {{ completionPending ? 'Opening Orchard…' : primaryLabel }}
+          </button>
         </div>
       </footer>
+      <p v-if="completionError" class="welcome-window__completion-error" role="alert">{{ completionError }}</p>
     </section>
   </main>
 

@@ -59,7 +59,9 @@ contextBridge.exposeInMainWorld('orchardApp', {
     ? ipcRenderer.invoke('app:graphics-mode')
     : ipcRenderer.invoke('app:graphics-mode', value),
   restart: () => ipcRenderer.invoke('app:restart'),
-  showWelcome: () => ipcRenderer.invoke('app:show-welcome'),
+  showWelcome: (options = {}) => ipcRenderer.invoke('app:show-welcome', {
+    resetCompletion: options?.resetCompletion === true
+  }),
   viewLicense: () => ipcRenderer.invoke('app:view-license')
 });
 

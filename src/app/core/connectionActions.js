@@ -174,7 +174,7 @@ export function installConnectionActions(ctx) {
     if (wasSignedIn && nextState?.signedIn === false) {
       ctx.resetNavigation('home');
       ctx.updateSetupState?.({ welcomeCompleted: false });
-      window.orchardApp?.showWelcome?.();
+      window.orchardApp?.showWelcome?.({ resetCompletion: true });
     }
 
     if (ctx.authState.value.error) ctx.errorMessage.value = ctx.authState.value.error;

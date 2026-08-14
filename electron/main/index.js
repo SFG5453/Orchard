@@ -75,7 +75,7 @@ import { registerClipboardHandlers } from '../platform/clipboard.js';
 import { setupDesktopControls } from '../platform/desktopControls.js';
 import { registerScreenshotCapture } from '../platform/screenshotCapture.js';
 import { setupSystemMediaHandlers } from '../platform/systemMedia.js';
-import { welcomeRequiredAtLaunch } from '../platform/welcomeState.js';
+import { setWelcomeCompleted, welcomeRequiredAtLaunch } from '../platform/welcomeState.js';
 import { configureWindowOpenHandler, registerDevToolsShortcut, registerWindowControls } from '../platform/windowControls.js';
 import { createGraphicsModeController, GRAPHICS_MODE_FILENAME } from './graphicsMode.js';
 import { createSessionStateStore, SESSION_STATE_FILENAME } from './sessionState.js';
@@ -529,6 +529,7 @@ app.whenReady().then(async () => {
   registerAppHandlers({
     app,
     clearDiscordPresence,
+    completeWelcome: () => setWelcomeCompleted(sessionState, true),
     ipcMain,
     isDev,
     licensePath: runtimePaths.licensePath,
@@ -539,7 +540,8 @@ app.whenReady().then(async () => {
     setDiscordPresence,
     shell,
     showMainWindow,
-    showWelcomeWindow
+    showWelcomeWindow,
+    resetWelcome: () => setWelcomeCompleted(sessionState, false)
   });
   audioAnalysis = setupAudioAnalysisService({
     cachePath: path.join(app.getPath('userData'), 'audio-analysis-cache.json'),
@@ -561,7 +563,7 @@ app.whenReady().then(async () => {
   updates = setupOrchardUpdates({ isDev });
   await startBridge();
   await createMainWindow();
-  const needsWelcome = await welcomeRequiredAtLaunch(mainWindow);
+  const needsWelcome = await welcomeRequiredAtLaunch(mainWindow, sessionState);
   if (needsWelcome) await showWelcomeWindow();
   else showMainWindow();
   setTimeout(() => {
@@ -571,7 +573,7 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow().then(async () => {
-        const needsWelcome = await welcomeRequiredAtLaunch(mainWindow);
+        const needsWelcome = await welcomeRequiredAtLaunch(mainWindow, sessionState);
         if (needsWelcome) await showWelcomeWindow();
         else showMainWindow();
       });

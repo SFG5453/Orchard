@@ -25,6 +25,7 @@ const { APP, DISCORD, SONG_LINKS } = IPC_CHANNELS;
 export function registerAppHandlers({
   app,
   clearDiscordPresence,
+  completeWelcome = () => {},
   graphicsMode,
   getMainWindow = () => null,
   ipcMain,
@@ -35,7 +36,8 @@ export function registerAppHandlers({
   shell,
   setDiscordPresence,
   showMainWindow,
-  showWelcomeWindow
+  showWelcomeWindow,
+  resetWelcome = () => {}
 }) {
   ipcMain.handle(DISCORD.SET_PRESENCE, async (_event, presence) => {
     await setDiscordPresence(presence);
@@ -62,6 +64,7 @@ export function registerAppHandlers({
     graphicsMode.restart();
   });
   ipcMain.handle(APP.FINISH_WELCOME, async () => {
+    completeWelcome();
     const target = getMainWindow();
     if (target && !target.isDestroyed()) {
       await target.webContents.executeJavaScript(`(() => {
@@ -73,7 +76,8 @@ export function registerAppHandlers({
     }
     showMainWindow();
   });
-  ipcMain.handle(APP.SHOW_WELCOME, () => {
+  ipcMain.handle(APP.SHOW_WELCOME, (_event, options = {}) => {
+    if (options?.resetCompletion === true) resetWelcome();
     void showWelcomeWindow();
   });
   ipcMain.handle(APP.VIEW_LICENSE, async () => {

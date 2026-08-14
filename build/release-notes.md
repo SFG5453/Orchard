@@ -10,6 +10,7 @@
 - **Niri and Wayland Stability**: Orchard now respects Niri-managed window geometry, supports narrower tiled windows, and avoids fighting the compositor over restored bounds.
 - **Immersive Background Resizing**: Artwork backgrounds recover correctly after compositor and viewport resizes.
 - **Smoother Interface Scaling**: Scaling is applied after the slider is released, avoiding unnecessary resizing while it is being dragged.
+- **Reliable Welcome Flow**: Completed setup is remembered across packaged launches, and the Open Orchard, minimize, and close buttons now work reliably.
 
 ### Changed
 - **Simpler Settings**: Removed the redundant setup guide now that onboarding handles initial configuration.

@@ -37,7 +37,8 @@ export const ORCHARD_RELEASES = [
         items: [
           'Improved Wayland stability by respecting Niri-managed window geometry and allowing narrower tiled windows.',
           'Immersive artwork backgrounds now recover correctly after compositor and viewport resizes.',
-          'Interface scaling is applied after the slider is released, avoiding unnecessary resizing while the control is being dragged.'
+          'Interface scaling is applied after the slider is released, avoiding unnecessary resizing while the control is being dragged.',
+          'The welcome flow now remembers completed setup across packaged launches, and its Open Orchard, minimize, and close buttons work reliably.'
         ]
       },
       {

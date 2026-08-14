@@ -287,16 +287,25 @@ export function installReadinessActions(ctx) {
     ctx.setupPanelOpen.value = false;
   };
 
-  ctx.completeWelcomeSetup = function completeWelcomeSetup() {
+  ctx.completeWelcomeSetup = async function completeWelcomeSetup() {
     if (!ctx.authState.value.signedIn) {
       ctx.errorMessage.value = 'Sign in before opening Orchard.';
-      return;
+      return false;
     }
 
     ctx.updateSetupState({ completed: true, welcomeCompleted: true });
     ctx.setupPanelOpen.value = false;
     ctx.dismissWelcomeMode();
-    window.orchardApp?.finishWelcome?.();
+    try {
+      if (typeof window.orchardApp?.finishWelcome !== 'function') {
+        throw new Error('The desktop bridge is unavailable.');
+      }
+      await window.orchardApp.finishWelcome();
+      return true;
+    } catch (error) {
+      ctx.errorMessage.value = error?.message || 'Could not open Orchard.';
+      return false;
+    }
   };
 
   ctx.reopenSetup = function reopenSetup() {

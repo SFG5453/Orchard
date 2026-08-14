@@ -572,3 +572,11 @@
   display: flex;
   gap: 12px;
 }
+
+.welcome-window__completion-error {
+  max-width: none !important;
+  margin-top: 12px !important;
+  color: #ffb4ab !important;
+  font-size: 14px !important;
+  text-align: right;
+}
