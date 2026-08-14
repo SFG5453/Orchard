@@ -883,7 +883,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                         .add(COMMAND_TOGGLE_SHUFFLE)
                         .add(COMMAND_TOGGLE_REPEAT)
                         .build()
-                return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
                     .setAvailableSessionCommands(sessionCommands)
                     .build()
             }

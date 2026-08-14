@@ -55,9 +55,10 @@ class OrchardConnectClientTest {
         assertFalse(client.send(ConnectCommand.Next))
         factory.transport.listener.onOpened()
         val hello = factory.transport.emissions.single()
+        val helloPayload = hello.payload as JSONObject
         assertEquals(ConnectProtocol.Event.HELLO, hello.event)
-        assertEquals("pair-token", (hello.payload as JSONObject).getString(ConnectProtocol.Field.TOKEN))
-        assertEquals(3, (hello.payload as JSONObject).getInt(ConnectProtocol.Field.PROTOCOL_VERSION))
+        assertEquals("pair-token", helloPayload.getString(ConnectProtocol.Field.TOKEN))
+        assertEquals(3, helloPayload.getInt(ConnectProtocol.Field.PROTOCOL_VERSION))
 
         hello.ack?.invoke(Result.success(JSONObject().put("ok", true).put("data", JSONObject()
             .put("status", "approved")

@@ -46,7 +46,7 @@ class TransitionFilterTest {
 
     private fun configured(): TransitionFilter = TransitionFilter().apply {
         configure(AudioProcessor.AudioFormat(rate, channels, C.ENCODING_PCM_16BIT))
-        flush()
+        flush(AudioProcessor.StreamMetadata.DEFAULT)
     }
 
     /** Runs a sine through the processor and returns the output RMS. */

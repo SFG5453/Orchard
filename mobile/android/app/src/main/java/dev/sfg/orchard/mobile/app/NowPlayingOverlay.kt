@@ -66,7 +66,8 @@ fun NowPlayingOverlay(
 ) {
     // Nothing to show once playback is cleared, and no reason to hold the player's
     // state machine alive while it is closed.
-    if (!open || playback.currentTrack == null) return
+    if (!open) return
+    val currentTrack = playback.currentTrack ?: return
 
     val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
     val activeBitrate by viewModel.activeBitrate.collectAsStateWithLifecycle()
@@ -79,7 +80,7 @@ fun NowPlayingOverlay(
     val sleepTimerEndOfTrack by viewModel.sleepTimerEndOfTrack.collectAsStateWithLifecycle()
     var playlistPickerTrack by remember { mutableStateOf<Track?>(null) }
 
-    val liked = playback.currentTrack?.let { track -> library.likedTracks.any { it.id == track.id } } == true
+    val liked = library.likedTracks.any { it.id == currentTrack.id }
 
     NowPlayingScreen(
         modifier = modifier,
@@ -116,7 +117,7 @@ fun NowPlayingOverlay(
             // At the audible handoff the UI is already on the incoming timeline while the engine
             // may still own the outgoing deck. A seek commits to the track the user can see.
             val authoritative = viewModel.playback.value
-            if (authoritative.currentTrack?.id != playback.currentTrack?.id &&
+            if (authoritative.currentTrack?.id != currentTrack.id &&
                 playback.currentIndex in playback.queue.indices
             ) {
                 viewModel.playQueueIndex(playback.currentIndex)
@@ -125,7 +126,7 @@ fun NowPlayingOverlay(
         },
         onShuffle = viewModel::toggleShuffle,
         onRepeat = viewModel::cycleRepeat,
-        onLiked = { playback.currentTrack?.let(viewModel::toggleLiked) },
+        onLiked = { viewModel.toggleLiked(currentTrack) },
         onDevices = {
             onOpenChange(false)
             nav.navigate(Routes.DEVICES)
@@ -138,7 +139,7 @@ fun NowPlayingOverlay(
         onDownloadTrack = viewModel::downloadTrack,
         onRemoveDownloadTrack = viewModel::removeDownload,
         onAddToPlaylist = { playlistPickerTrack = it },
-        onShare = { playback.currentTrack?.let(viewModel::shareTrack) },
+        onShare = { viewModel.shareTrack(currentTrack) },
         // Closes the player so the collection is not buried underneath it.
         onOpenCollection = { id ->
             onOpenChange(false)

@@ -213,7 +213,6 @@ fun NowPlayingScreen(
             settle.animateTo(1f, tween(280))
             onBack()
         }
-        Unit
     }
     // Back mirrors the drag rather than cutting straight to the previous screen.
     BackHandler(enabled = panel == PlayerPanel.NONE) { dismiss() }
