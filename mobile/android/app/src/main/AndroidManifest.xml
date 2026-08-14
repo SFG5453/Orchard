@@ -105,6 +105,28 @@
       </intent-filter>
     </service>
 
+    <receiver
+      android:name="dev.sfg.orchard.mobile.widget.OrchardPlayerWidgetProvider"
+      android:exported="false">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/orchard_player_widget_info" />
+    </receiver>
+
+    <receiver
+      android:name="dev.sfg.orchard.mobile.widget.OrchardRecentWidgetProvider"
+      android:exported="false">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/orchard_recent_widget_info" />
+    </receiver>
+
     <provider
         android:name="androidx.core.content.FileProvider"
         android:authorities="${applicationId}.provider"

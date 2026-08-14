@@ -42,6 +42,7 @@ Orchard Mobile is the phone half of [Orchard](../) — a standalone native Andro
 * Gapless playback for albums played in order
 * Queue with reordering, removal, history, and restore after the app is killed
 * Media notification, lock-screen controls, headset and Bluetooth buttons, audio focus
+* Artwork-tinted home-screen widgets for playback controls and recent tracks
 * Android Auto browsing and voice search
 * Playback history
 

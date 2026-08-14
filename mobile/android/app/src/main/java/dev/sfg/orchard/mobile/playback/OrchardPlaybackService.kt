@@ -61,6 +61,9 @@ import dev.sfg.orchard.connect.app.MainActivity
 import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.model.RepeatMode
 import dev.sfg.orchard.mobile.playback.smart.CrossfadeMode
+import dev.sfg.orchard.mobile.widget.OrchardWidgetUpdater
+import dev.sfg.orchard.mobile.widget.OrchardPlayerWidgetProvider
+import org.json.JSONObject
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
@@ -108,6 +111,9 @@ class OrchardPlaybackService : MediaLibraryService() {
         object : Runnable {
             override fun run() {
                 persistPlayback()
+                if (::player.isInitialized) {
+                    OrchardWidgetUpdater.onPlayerChanged(this@OrchardPlaybackService, player)
+                }
                 if (::player.isInitialized && player.isPlaying)
                     handler.postDelayed(this, POSITION_SAVE_INTERVAL_MS)
             }
@@ -256,6 +262,7 @@ class OrchardPlaybackService : MediaLibraryService() {
             )
         crossfade.start(player, spare)
         player.addListener(playbackListener)
+        OrchardWidgetUpdater.onPlayerChanged(this, player)
     }
 
     /**
@@ -276,6 +283,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         spareFilter = heldFilter
         mediaSession.player = OrchardSessionPlayer(incoming)
         persistPlayback()
+        OrchardWidgetUpdater.onPlayerChanged(this, incoming)
         updateCustomLayout()
         prefetchAround(incoming)
     }
@@ -283,12 +291,47 @@ class OrchardPlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession =
         mediaSession
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val result = super.onStartCommand(intent, flags, startId)
+        when (intent?.action) {
+            OrchardPlayerWidgetProvider.ACTION_TOGGLE -> {
+                if (player.isPlaying) player.pause()
+                else {
+                    if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                    player.play()
+                }
+            }
+            OrchardPlayerWidgetProvider.ACTION_PREVIOUS -> {
+                if (player.currentPosition > 5_000) player.seekTo(0)
+                else if (player.hasPreviousMediaItem()) player.seekToPreviousMediaItem()
+                if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                player.play()
+            }
+            OrchardPlayerWidgetProvider.ACTION_NEXT -> {
+                if (player.hasNextMediaItem()) player.seekToNextMediaItem()
+                if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                player.play()
+            }
+            OrchardPlayerWidgetProvider.ACTION_PLAY_RECENT -> {
+                intent.getStringExtra(OrchardPlayerWidgetProvider.EXTRA_TRACK_JSON)
+                    ?.let { json -> runCatching { dev.sfg.orchard.mobile.model.CatalogJson.track(JSONObject(json)) }.getOrNull() }
+                    ?.let { track ->
+                        player.setMediaItem(MediaItemMapper.toMediaItem(track))
+                        player.prepare()
+                        player.play()
+                    }
+            }
+        }
+        return result
+    }
+
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         browseScope.cancel()
         if (::crossfade.isInitialized) crossfade.release()
         if (::player.isInitialized) {
             persistPlayback()
+            OrchardWidgetUpdater.onPlayerChanged(this, player, forcePaused = true)
             player.release()
         }
         if (::spare.isInitialized) spare.release()
@@ -619,6 +662,12 @@ class OrchardPlaybackService : MediaLibraryService() {
                     // where it is.
                     publishBitrate()
                     hydrateCurrentArtwork()
+                }
+                if (::player.isInitialized) {
+                    OrchardWidgetUpdater.onPlayerChanged(
+                        this@OrchardPlaybackService,
+                        this@OrchardPlaybackService.player,
+                    )
                 }
             }
 

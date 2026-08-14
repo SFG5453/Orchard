@@ -1,3 +1,18 @@
 <resources>
   <string name="app_name">Orchard</string>
+  <string name="play">Play</string>
+  <string name="pause">Pause</string>
+  <string name="previous">Previous</string>
+  <string name="next">Next</string>
+  <string name="recent">Recent</string>
+  <string name="widget_now_playing">ORCHARD  ·  NOW PLAYING</string>
+  <string name="widget_ready">ORCHARD  ·  READY</string>
+  <string name="widget_nothing_playing">Nothing playing</string>
+  <string name="widget_open_orchard">Tap to open Orchard</string>
+  <string name="widget_jump_back_in">Jump back in</string>
+  <string name="widget_latest_rotation">Your latest rotation</string>
+  <string name="widget_recent_empty">Play something in Orchard and it’ll appear here.</string>
+  <string name="widget_play_track">Play %1$s by %2$s</string>
+  <string name="widget_player_description">Artwork-tinted playback controls that resize from compact to expanded.</string>
+  <string name="widget_recent_description">Quickly play your four most recent tracks.</string>
 </resources>
