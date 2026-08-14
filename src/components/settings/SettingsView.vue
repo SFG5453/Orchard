@@ -26,7 +26,7 @@ import SpotifySection from './SpotifySection.vue';
 import SongCacheSection from './SongCacheSection.vue';
 import ArtistPacksSection from './ArtistPacksSection.vue';
 import OrchardAccountSection from './OrchardAccountSection.vue';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 export default {
   name: 'SettingsView',
@@ -38,8 +38,15 @@ export default {
         .find((option) => option.value === props.app.layoutPreset.value);
       return active?.description || '';
     });
+    const uiScaleDraft = ref(props.app.uiScale.value);
+    watch(props.app.uiScale, (scale) => {
+      uiScaleDraft.value = scale;
+    });
+    const applyUiScale = (scale) => {
+      props.app.uiScale.value = scale;
+    };
 
-    return { ...props.app, app: props.app, layoutPresetDescription };
+    return { ...props.app, app: props.app, layoutPresetDescription, uiScaleDraft, applyUiScale };
   }
 };
 </script>
@@ -233,8 +240,8 @@ export default {
             <p>Scale Orchard for readability without changing your display settings.</p>
           </div>
           <div class="settings-slider">
-            <q-slider id="settings-ui-scale" v-model="uiScale" :min="0.85" :max="1.5" :step="0.05" color="primary" aria-label="Text and interface size" />
-            <output for="settings-ui-scale">{{ Math.round(uiScale * 100) }}%</output>
+            <q-slider id="settings-ui-scale" v-model="uiScaleDraft" :min="0.85" :max="1.5" :step="0.05" color="primary" aria-label="Text and interface size" @change="applyUiScale" />
+            <output for="settings-ui-scale">{{ Math.round(uiScaleDraft * 100) }}%</output>
           </div>
         </div>
 
