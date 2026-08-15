@@ -223,6 +223,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     val updateState: StateFlow<dev.sfg.orchard.mobile.UpdateState> = graph.updates.state
 
+    fun checkForUpdates() = graph.updates.checkForUpdates()
+
     fun installUpdate(metadata: dev.sfg.orchard.mobile.MobileUpdateMetadata) =
         graph.updates.downloadAndInstallUpdate(metadata)
 

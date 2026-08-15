@@ -47,6 +47,9 @@ import androidx.compose.material.icons.rounded.Gradient
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -57,6 +60,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,12 +76,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import dev.sfg.orchard.connect.BuildConfig
+import dev.sfg.orchard.mobile.MobileChangelog
+import dev.sfg.orchard.mobile.MobileUpdateMetadata
+import dev.sfg.orchard.mobile.UpdateState
 import dev.sfg.orchard.mobile.auth.AuthState
 import dev.sfg.orchard.mobile.discord.DiscordAuthState
 import dev.sfg.orchard.mobile.discord.GatewayConnectionState
 import dev.sfg.orchard.mobile.model.AudioQuality
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
+import dev.sfg.orchard.mobile.ui.components.ReleaseNotesDialog
+import dev.sfg.orchard.mobile.ui.components.UpdateDialog
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -84,6 +96,7 @@ fun SettingsScreen(
     auth: AuthState,
     discordAuth: DiscordAuthState = DiscordAuthState.SignedOut,
     discordConnection: GatewayConnectionState = GatewayConnectionState.Disconnected,
+    updateState: UpdateState = UpdateState.Idle,
     onSettings: (OrchardSettings) -> Unit,
     onSignIn: () -> Unit,
     onSwitchAccount: () -> Unit,
@@ -93,12 +106,16 @@ fun SettingsScreen(
     onConnectSpotify: () -> Unit = {},
     onDevices: () -> Unit,
     onWelcome: () -> Unit = {},
+    onCheckForUpdates: () -> Unit = {},
+    onInstallUpdate: (MobileUpdateMetadata) -> Unit = {},
     /**
      * Separate from [onSettings] because switching Autoplay off also strips the tracks it added,
      * which only the view model can do.
      */
     onAutoplayEnabled: ((Boolean) -> Unit)? = null,
 ) {
+    var showNotesDialog by remember { mutableStateOf(false) }
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
     ) {
@@ -203,6 +220,50 @@ fun SettingsScreen(
             )
         }
 
+        SectionLabel("Updates")
+        SettingsPanel {
+            val availableUpdate = (updateState as? UpdateState.Available)?.metadata
+            if (availableUpdate != null) {
+                ActionRow(
+                    icon = Icons.Rounded.SystemUpdate,
+                    title = "Update available (${availableUpdate.version})",
+                    subtitle = if (availableUpdate.codename.isNotBlank()) {
+                        "\"${availableUpdate.codename}\" • Tap to install"
+                    } else {
+                        "Tap to install"
+                    },
+                    onClick = { onInstallUpdate(availableUpdate) },
+                )
+                PanelDivider()
+                ActionRow(
+                    icon = Icons.Rounded.History,
+                    title = "Release notes",
+                    subtitle = "View changes in Orchard ${availableUpdate.version}",
+                    onClick = { showNotesDialog = true },
+                )
+            } else {
+                ActionRow(
+                    icon = Icons.Rounded.History,
+                    title = "Release notes",
+                    subtitle = if (!BuildConfig.UPDATER_ENABLED) {
+                        "Orchard ${BuildConfig.VERSION_NAME} • Updates disabled"
+                    } else {
+                        "Orchard ${BuildConfig.VERSION_NAME} • Up to date"
+                    },
+                    onClick = { showNotesDialog = true },
+                )
+                if (BuildConfig.UPDATER_ENABLED) {
+                    PanelDivider()
+                    ActionRow(
+                        icon = Icons.Rounded.Refresh,
+                        title = "Check for updates",
+                        subtitle = "Check for newer Orchard releases",
+                        onClick = onCheckForUpdates,
+                    )
+                }
+            }
+        }
+
         SectionLabel("Guide")
         SettingsPanel {
             ActionRow(
@@ -227,6 +288,27 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(OrchardChromeHeight))
+    }
+
+    if (showNotesDialog) {
+        val available = (updateState as? UpdateState.Available)?.metadata
+        if (available != null) {
+            UpdateDialog(
+                state = updateState,
+                onInstall = {
+                    showNotesDialog = false
+                    onInstallUpdate(it)
+                },
+                onDismiss = { showNotesDialog = false },
+            )
+        } else {
+            ReleaseNotesDialog(
+                version = BuildConfig.VERSION_NAME,
+                codename = BuildConfig.CODENAME,
+                releaseNotes = MobileChangelog.CURRENT_RELEASE_NOTES,
+                onDismiss = { showNotesDialog = false },
+            )
+        }
     }
 }
 

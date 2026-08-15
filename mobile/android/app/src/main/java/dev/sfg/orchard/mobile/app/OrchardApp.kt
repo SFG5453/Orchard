@@ -215,6 +215,7 @@ private fun OrchardNavigation(
     val downloadedTrackIds by viewModel.downloadedTrackIds.collectAsStateWithLifecycle()
     val downloadingTrackIds by viewModel.downloadingTrackIds.collectAsStateWithLifecycle()
     val totalBytesUsed by viewModel.totalBytesUsed.collectAsStateWithLifecycle()
+    val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val connectMessage by viewModel.connectMessage.collectAsStateWithLifecycle()
     val connectProtocolVersion by viewModel.connectProtocolVersion.collectAsStateWithLifecycle()
     val connectAudioEngine by viewModel.connectAudioEngine.collectAsStateWithLifecycle()
@@ -324,6 +325,7 @@ private fun OrchardNavigation(
                 auth = auth,
                 discordAuth = discordAuth,
                 discordConnection = discordConnection,
+                updateState = updateState,
                 onSettings = viewModel::updateSettings,
                 onAutoplayEnabled = viewModel::setAutoplayEnabled,
                 onSignIn = { nav.navigate(Routes.LOGIN) },
@@ -334,6 +336,8 @@ private fun OrchardNavigation(
                 onConnectSpotify = { nav.navigate(Routes.SPOTIFY_LOGIN) },
                 onDevices = { nav.navigate(Routes.DEVICES) },
                 onWelcome = { nav.navigate(Routes.WELCOME) },
+                onCheckForUpdates = viewModel::checkForUpdates,
+                onInstallUpdate = viewModel::installUpdate,
             )
         }
         composable(Routes.LOGIN) {
