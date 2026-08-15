@@ -120,13 +120,13 @@ class UpdateDialogParserTest {
         val sections = parseReleaseNoteSections(notes)
 
         assertEquals(2, sections.size)
-        assertEquals("Features", sections[0].title)
+        assertEquals("New & improved", sections[0].title)
         assertEquals(ReleaseNoteCategory.NEW, sections[0].category)
-        assertEquals(3, sections[0].items.size)
+        assertEquals(2, sections[0].items.size)
 
-        assertEquals("Fixes", sections[1].title)
+        assertEquals("Fixed", sections[1].title)
         assertEquals(ReleaseNoteCategory.FIXED, sections[1].category)
-        assertEquals(1, sections[1].items.size)
+        assertEquals(3, sections[1].items.size)
     }
 
     @Test

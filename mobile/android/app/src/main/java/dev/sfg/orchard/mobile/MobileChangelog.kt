@@ -29,12 +29,13 @@ object MobileChangelog {
     const val CURRENT_CODENAME = BuildConfig.CODENAME
 
     val CURRENT_RELEASE_NOTES = """
-        ### Features
-        - **Home-Screen Widgets**: Add a responsive Now Playing controller or a four-track “Jump back in” widget. Both use album-derived colors and keep working when the app is closed.
-        - **Sleep Timer**: Pause playback after 15, 30, 45, 60, or 90 minutes, or at the end of the current track.
-        - **Analysis-Aware Bass Handoffs**: Smart Crossfade now uses measured low-frequency changes to place the bass swap on a better beat for each pair of songs.
+        ### New & improved
+        - **Faster, Resumable Downloads**: Orchard can download more tracks at once, resume interrupted transfers, and use bounded parallel ranges for Max-quality audio when the source supports them.
+        - **Release Notes and Update Controls**: A redesigned update experience shows structured release notes, exposes the installed version, and adds manual update checks and install actions to Settings.
 
-        ### Fixes
-        - **More Reliable Batch Downloads**: Downloads now avoid duplicate queue entries, retry transient failures, use the stream's expected user agent, and reject incomplete ranged responses.
+        ### Fixed
+        - **More Reliable Playback and Downloads**: Orchard now rotates through coordinated YouTube client profiles and carries each profile's required request identity into media fetches when a stream is rejected.
+        - **Safer Download Recovery**: Downloads validate byte ranges and content lengths, preserve compatible partial files after interruptions, and fall back safely when a server rejects parallel transfers.
+        - **Screen Timeout with Animated Artwork**: Animated artwork no longer keeps the display awake when the normal Android screen timeout should turn it off.
     """.trimIndent()
 }

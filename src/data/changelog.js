@@ -19,6 +19,19 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '4.5.0',
+    codename: 'Funds Lecterns',
+    date: 'August 15, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'Added a persistent Global gain control that adjusts every track and playback path from -24 dB to +6 dB, even while the rest of the Audio Engine is bypassed.'
+        ]
+      }
+    ]
+  },
+  {
     version: '4.4.1',
     codename: 'Hole Riddance',
     date: 'August 14, 2026',
