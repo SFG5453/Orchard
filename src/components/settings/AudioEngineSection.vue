@@ -160,8 +160,8 @@ export default {
 
     <div class="audio-engine__control-grid">
       <label class="audio-engine__control">
-        <span>Preamp</span>
-        <input v-model.number="audioEngineConfig.preampDb" type="range" min="-12" max="6" step="0.5" :disabled="!audioEngineConfig.enabled" />
+        <span>EQ preamp</span>
+        <input v-model.number="audioEngineConfig.preampDb" type="range" min="-12" max="6" step="0.5" :disabled="!audioEngineConfig.enabled || !audioEngineConfig.eqEnabled" />
         <output>{{ Number(audioEngineConfig.preampDb).toFixed(1) }} dB</output>
       </label>
       <label class="audio-engine__control">
@@ -182,6 +182,24 @@ export default {
         <p>Reduce sudden volume jumps and control loud peaks.</p>
       </div>
       <q-toggle id="settings-engine-leveling" v-model="volumeNormalizationEnabled" color="primary" />
+    </div>
+
+    <div class="settings-row settings-row--slider">
+      <div class="settings-row__copy">
+        <label for="settings-output-gain">Global gain</label>
+        <p>Trim every track and playback path when Orchard's output is too loud or distorts.</p>
+      </div>
+      <div class="settings-slider">
+        <q-slider
+          id="settings-output-gain"
+          v-model="audioEngineConfig.outputGainDb"
+          :min="-24"
+          :max="6"
+          :step="0.5"
+          color="primary"
+        />
+        <output>{{ Number(audioEngineConfig.outputGainDb).toFixed(1) }} dB</output>
+      </div>
     </div>
 
     <div class="settings-row settings-row--slider" :class="{ 'settings-row--disabled': !activeTrack || !audioEngineConfig.enabled }">

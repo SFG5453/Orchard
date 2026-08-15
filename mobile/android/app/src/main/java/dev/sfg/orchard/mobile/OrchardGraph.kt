@@ -61,7 +61,9 @@ class OrchardGraph(context: Context) {
     private val innerTube: InnerTubeClient = InnerTubeClient(http, auth)
     val settings = SettingsRepository(context, applicationScope)
     val networkMonitor = dev.sfg.orchard.mobile.network.NetworkMonitor(context)
-    val downloads = DownloadManager(context, http, auth, applicationScope)
+    val downloads = DownloadManager(context, http, auth, applicationScope) {
+        settings.settings.value.audioQuality
+    }
     val spotifyCanvas = dev.sfg.orchard.mobile.spotify.SpotifyCanvasRepository(context, http, settings)
     val artwork = ArtworkRepository(http, spotifyCanvas)
     val artistImages = ArtistImageRepository(http)

@@ -72,6 +72,9 @@ export function wsolaProcessingCompatible({
   incomingGainDb = 0
 } = {}) {
   if (normalizationEnabled) return false;
+  // The rendered overlap bypasses the live Audio Engine graph, including its
+  // global output trim, so it cannot hand off transparently while that trim is active.
+  if (Math.abs(Number(audioEngineConfig?.outputGainDb) || 0) > 0.001) return false;
   if (!audioEngineConfig?.enabled) return true;
   // Preamp is only active as part of the manual-EQ branch.
   if (audioEngineConfig.eqEnabled || audioEngineConfig.autoEqEnabled) return false;

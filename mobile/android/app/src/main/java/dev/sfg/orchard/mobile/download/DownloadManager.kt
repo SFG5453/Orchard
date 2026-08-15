@@ -22,6 +22,7 @@ package dev.sfg.orchard.mobile.download
 import android.content.Context
 import android.util.Log
 import dev.sfg.orchard.mobile.auth.YouTubeSessionProvider
+import dev.sfg.orchard.mobile.model.AudioQuality
 import dev.sfg.orchard.mobile.model.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -45,9 +46,11 @@ class DownloadManager(
     http: OkHttpClient,
     sessionProvider: YouTubeSessionProvider? = null,
     private val scope: CoroutineScope,
+    qualityProvider: () -> AudioQuality = { AudioQuality.HIGH },
 ) {
     val store: DownloadStore = DownloadStore(context)
-    private val downloader: TrackDownloader = TrackDownloader(http, sessionProvider, store)
+    private val downloader: TrackDownloader =
+        TrackDownloader(http, sessionProvider, store, qualityProvider)
 
     private val mutableDownloads = MutableStateFlow<Map<String, DownloadItem>>(emptyMap())
     val downloads: StateFlow<Map<String, DownloadItem>> = mutableDownloads.asStateFlow()
@@ -60,6 +63,7 @@ class DownloadManager(
 
     private val downloadQueue = Channel<DownloadItem>(Channel.UNLIMITED)
     private val activeJobs = ConcurrentHashMap<String, Job>()
+    private val stateLock = Any()
 
     init {
         // Load initial state from disk
@@ -202,10 +206,12 @@ class DownloadManager(
     }
 
     private fun updateItemState(item: DownloadItem) {
-        val map = mutableDownloads.value.toMutableMap()
-        map[item.track.id] = item
-        mutableDownloads.value = map
-        updateDerivedStates(map)
+        synchronized(stateLock) {
+            val map = mutableDownloads.value.toMutableMap()
+            map[item.track.id] = item
+            mutableDownloads.value = map
+            updateDerivedStates(map)
+        }
     }
 
     private fun updateDerivedStates(map: Map<String, DownloadItem>) {
@@ -221,8 +227,10 @@ class DownloadManager(
 
     companion object {
         private const val TAG = "DownloadManager"
-        private const val MAX_CONCURRENT_DOWNLOADS = 2
-        private const val MAX_DOWNLOAD_ATTEMPTS = 3
+        // MAX-quality tracks may use four bounded range requests each. Three tracks keeps enough
+        // parallelism to beat per-connection throttling without creating a request storm.
+        private const val MAX_CONCURRENT_DOWNLOADS = 3
+        private const val MAX_DOWNLOAD_ATTEMPTS = 6
         private const val RETRY_BASE_DELAY_MS = 750L
     }
 }

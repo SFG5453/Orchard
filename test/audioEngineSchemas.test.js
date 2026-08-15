@@ -31,10 +31,12 @@ test('audio engine schemas keep Zod in strict-CSP jitless mode', () => {
   const config = audioEngineConfigSchema.parse({
     enabled: true,
     gains: Array.from({ length: 10 }, () => 0),
+    outputGainDb: -6,
     outputDeviceId: 'default'
   });
   assert.equal(config.enabled, true);
   assert.equal(config.gains.length, 10);
+  assert.equal(config.outputGainDb, -6);
 });
 
 test('jitless audio profile validation preserves the public profile contract', () => {

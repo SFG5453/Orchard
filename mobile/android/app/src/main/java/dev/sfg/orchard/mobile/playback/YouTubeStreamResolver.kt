@@ -45,7 +45,22 @@ data class ResolvedStream(
      * and only the audio fetch fails.
      */
     val userAgent: String = YouTubeStreamResolver.CLIENT_USER_AGENT,
-)
+    /** Exact progressive-stream size, used for progress and completeness validation. */
+    val contentLength: Long = 0,
+    val origin: String? = null,
+    val referer: String? = null,
+    /** Stable key used to avoid immediately retrying a CDN-rejected client profile. */
+    val clientKey: String = "",
+    /** NewPipe/MAX URLs can safely be fetched as independent bounded ranges. */
+    val supportsParallelRanges: Boolean = false,
+) {
+    val requestHeaders: Map<String, String>
+        get() = buildMap {
+            put("User-Agent", userAgent)
+            origin?.let { put("Origin", it) }
+            referer?.let { put("Referer", it) }
+        }
+}
 
 /**
  * Thrown when YouTube refuses playback because the content is age-restricted.
@@ -53,6 +68,22 @@ data class ResolvedStream(
  * a generic refusal without parsing message strings at every call site.
  */
 private class AgeGateException(message: String) : RuntimeException(message)
+
+/** A player/fetch identity kept together, following ArchiveTune's client catalog model. */
+private data class PlayerClientProfile(
+    val key: String,
+    val name: String,
+    val version: String,
+    val id: String,
+    val userAgent: String,
+    val osName: String? = null,
+    val osVersion: String? = null,
+    val deviceMake: String? = null,
+    val deviceModel: String? = null,
+    val androidSdkVersion: Int? = null,
+    val useSignatureTimestamp: Boolean = false,
+    val youtubeOrigin: Boolean = false,
+)
 
 /**
  * Native port of Orchard desktop's direct Android-VR stream fallback.
@@ -113,6 +144,10 @@ class YouTubeStreamResolver(
      */
     private val failures = ConcurrentHashMap<String, FailedResolve>()
 
+    /** CDN-rejected profiles are skipped per track for a short period, not globally. */
+    private val rejectedClientsUntil = ConcurrentHashMap<String, Long>()
+    @Volatile private var lastSuccessfulClientKey: String? = null
+
     /**
      * Tracks videos for which a player client returned an actual age gate. Catalog metadata's
      * "explicit" flag is only a lyrics advisory and must never select a lower-quality stream.
@@ -126,6 +161,7 @@ class YouTubeStreamResolver(
     }
     private val visitorLock = Any()
     @Volatile private var visitor: Visitor? = null
+    @Volatile private var lastVisitorRefreshAtMs: Long = 0L
 
     /**
      * The account identity, held separately from the guest one and keyed by the
@@ -186,66 +222,65 @@ class YouTubeStreamResolver(
             val account = runCatching { accountIdentity(videoId) }
                 .onFailure { Log.w(TAG, "Could not build an account identity for playback", it) }
                 .getOrNull()
-            fun rememberAgeGate(error: Throwable) {
-                if (error is AgeGateException) ageGatedVideos += videoId
+            var visitorIdentity = warmVisitor(videoId)
+            var refreshedVisitor = false
+            var lastError: Throwable = IllegalStateException("No YouTube player client was available")
+            var stream: ResolvedStream? = null
+
+            // ArchiveTune's important reliability property is the profile catalog: native
+            // clients are anonymous/visitor requests, use the Music Innertube host, and carry
+            // their exact identity into the subsequent googlevideo request. Account cookies are
+            // deliberately reserved for web clients that actually support cookie authentication.
+            for (profile in orderedClientProfiles(videoId)) {
+                withinBudget(lastError)
+                val attempt = runCatching {
+                    chooseAudio(player(videoId, visitorIdentity, profile), quality)
+                }
+                if (attempt.isSuccess) {
+                    stream = attempt.getOrThrow()
+                    lastSuccessfulClientKey = profile.key
+                    break
+                }
+                lastError = attempt.exceptionOrNull() ?: lastError
+                if (lastError is AgeGateException) ageGatedVideos += videoId
+                Log.w(TAG, "${profile.key} failed for $videoId", lastError)
+
+                // Refresh a persisted guest identity once. Repeating this for every profile
+                // creates exactly the burst of watch-page traffic that causes larger batches to
+                // fail after their first few tracks.
+                if (!refreshedVisitor) {
+                    refreshedVisitor = true
+                    runCatching { refreshVisitor(videoId) }
+                        .onSuccess { visitorIdentity = it }
+                        .onFailure { Log.w(TAG, "Could not refresh visitor identity", it) }
+                }
             }
-            val response = runCatching {
-                androidVrPlayer(videoId, account ?: warmVisitor(videoId))
+
+            // Signed web playback remains the last normal fallback for account-only or
+            // age-gated music. It is never replaced with NewPipe; NewPipe belongs to MAX only.
+            if (stream == null && account != null) {
+                withinBudget(lastError)
+                runCatching { chooseAudio(webRemixPlayer(videoId, account), quality) }
+                    .onSuccess { stream = it }
+                    .onFailure {
+                        lastError = it
+                        if (it is AgeGateException) ageGatedVideos += videoId
+                    }
             }
-                // A stored identity can go stale, and YouTube then answers with a bot check.
-                // One retry on a fresh identity is cheaper than never trusting the cache.
-                // Signed in, this is also the guest retry: the account may simply
-                // not be entitled to this track.
-                .recoverCatching { firstError ->
-                    rememberAgeGate(firstError)
-                    if (firstError is AgeGateException) throw firstError
-                    Log.w(TAG, "Retrying with a fresh visitor identity", firstError)
-                    androidVrPlayer(videoId, loadVisitor(videoId).also(::rememberVisitor))
-                }
-                .recoverCatching { secondError ->
-                    rememberAgeGate(secondError)
-                    withinBudget(secondError)
-                    Log.w(TAG, "ANDROID_VR failed for $videoId; trying ANDROID client", secondError)
-                    val authenticatedVisitor = account ?: warmVisitor(videoId)
-                    androidPlayer(videoId, authenticatedVisitor)
-                }
-                .recoverCatching { thirdError ->
-                    rememberAgeGate(thirdError)
-                    withinBudget(thirdError)
-                    Log.w(TAG, "ANDROID player failed for $videoId; trying IOS client", thirdError)
-                    val authenticatedVisitor = account ?: warmVisitor(videoId)
-                    iosPlayer(videoId, authenticatedVisitor)
-                }
-                .recoverCatching { fourthError ->
-                    rememberAgeGate(fourthError)
-                    withinBudget(fourthError)
-                    Log.w(TAG, "IOS player failed for $videoId; trying WEB_REMIX player", fourthError)
-                    val authenticatedVisitor = account ?: warmVisitor(videoId)
-                    webRemixPlayer(videoId, authenticatedVisitor)
-                }
-                .recoverCatching { fifthError ->
-                    rememberAgeGate(fifthError)
-                    withinBudget(fifthError)
-                    Log.w(TAG, "WEB_REMIX player failed for $videoId; trying TVHTML5 player", fifthError)
-                    val authenticatedVisitor = account ?: warmVisitor(videoId)
-                    tvHtml5Player(videoId, authenticatedVisitor)
-                }
-                .onFailure {
-                    rememberAgeGate(it)
-                    failures[videoId] = FailedResolve(System.currentTimeMillis(), it)
-                }
-                .getOrThrow()
-            val stream = chooseAudio(response, quality)
+            val resolved = stream ?: run {
+                failures[videoId] = FailedResolve(System.currentTimeMillis(), lastError)
+                throw lastError
+            }
             if (maxQualityFallback) {
                 onWarning?.invoke("Max quality unavailable, using High")
             }
-            streams[cacheKey] = stream
+            streams[cacheKey] = resolved
             Log.d(
                 TAG,
                 "Resolved $videoId as ${if (account != null) "account" else "guest"} " +
                     "in ${System.currentTimeMillis() - started}ms",
             )
-            return stream
+            return resolved
         }
     }
 
@@ -301,7 +336,7 @@ class YouTubeStreamResolver(
             val account = accountIdentity(videoId)
                 ?: error("Sign in to YouTube to play age-restricted tracks")
             val payload = webSafariPlayer(videoId, account)
-            val stream = chooseAudio(payload, qualityProvider())
+            val stream = chooseAudio(payload, qualityProvider(), allowHls = true)
             check(stream.mimeType == HLS_MIME_TYPE) { "Safari did not return an HLS stream" }
             streams[cacheKey] = stream
             return stream
@@ -339,13 +374,19 @@ class YouTubeStreamResolver(
             expirySeconds?.let { TimeUnit.SECONDS.toMillis(it) }
                 ?: System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(45)
         val bitrateKbps = (format.optInt("bitrate") / 1000).coerceAtLeast(0)
+        val fallbackUserAgent = payload.optString(REQUEST_USER_AGENT_KEY).ifBlank { WEB_USER_AGENT }
+        val identity = YouTubeStreamRequestIdentity.fromUrl(rawUrl, fallbackUserAgent)
         Log.d(TAG, "Resolved authenticated itag ${format.optInt("itag")} @ ${bitrateKbps}kbps")
         return ResolvedStream(
             url = rawUrl,
             mimeType = format.optString("mimeType"),
             expiresAtMs = expiry,
             bitrateKbps = bitrateKbps,
-            userAgent = payload.optString(REQUEST_USER_AGENT_KEY).ifBlank { WEB_USER_AGENT },
+            userAgent = identity.userAgent,
+            contentLength = resolvedContentLength(format, rawUrl),
+            origin = identity.origin,
+            referer = identity.referer,
+            clientKey = identity.clientKey,
         )
     }
 
@@ -433,10 +474,86 @@ class YouTubeStreamResolver(
     }
 
     /**
+     * Records a failed media fetch so the next resolve changes client instead of minting the same
+     * rejected URL. Only response codes that indicate an expired/rejected CDN URL trigger this.
+     */
+    fun reject(videoId: String, stream: ResolvedStream, responseCode: Int) {
+        if (responseCode !in RETRYABLE_STREAM_RESPONSE_CODES || stream.clientKey.isBlank()) return
+        rejectedClientsUntil["$videoId:${stream.clientKey}"] =
+            System.currentTimeMillis() + REJECTED_CLIENT_BACKOFF_MS
+        invalidate(videoId)
+        failures.remove(videoId)
+    }
+
+    /**
      * Consumes evidence that normal resolution encountered an age gate. The playback service uses
      * this only after the normal stream fails, keeping authenticated itag 18 a real fallback.
      */
     fun consumeAgeGate(videoId: String): Boolean = ageGatedVideos.remove(videoId)
+
+    private fun orderedClientProfiles(videoId: String): List<PlayerClientProfile> {
+        val now = System.currentTimeMillis()
+        rejectedClientsUntil.entries.removeIf { it.value <= now }
+        val preferred = lastSuccessfulClientKey?.let { key -> STREAM_CLIENT_PROFILES.find { it.key == key } }
+        return buildList {
+            preferred?.let(::add)
+            addAll(STREAM_CLIENT_PROFILES)
+        }.distinctBy { it.key }.filterNot { profile ->
+            rejectedClientsUntil["$videoId:${profile.key}"]?.let { it > now } == true
+        }
+    }
+
+    /** Builds the same client-shaped player request used by ArchiveTune's Innertube core. */
+    private fun player(videoId: String, visitor: Visitor, profile: PlayerClientProfile): JSONObject {
+        val origin = if (profile.youtubeOrigin) YOUTUBE_ORIGIN else YouTubeSessionAuth.MUSIC_ORIGIN
+        val referer = if (profile.youtubeOrigin) "$YOUTUBE_ORIGIN/tv" else "$origin/"
+        val clientContext = JSONObject()
+            .put("clientName", profile.name)
+            .put("clientVersion", profile.version)
+            .put("hl", "en")
+            .put("gl", "US")
+            .put("visitorData", visitor.id)
+            .apply {
+                profile.osName?.let { put("osName", it) }
+                profile.osVersion?.let { put("osVersion", it) }
+                profile.deviceMake?.let { put("deviceMake", it) }
+                profile.deviceModel?.let { put("deviceModel", it) }
+                profile.androidSdkVersion?.let { put("androidSdkVersion", it) }
+            }
+        val body = JSONObject()
+            .put("context", JSONObject().put("client", clientContext))
+            .put("videoId", videoId)
+            .put("contentCheckOk", true)
+            .put("racyCheckOk", true)
+            .apply {
+                if (profile.useSignatureTimestamp) {
+                    put(
+                        "playbackContext",
+                        JSONObject().put(
+                            "contentPlaybackContext",
+                            JSONObject()
+                                .put("signatureTimestamp", signatureTimestamp())
+                                .put("vis", 0)
+                                .put("splay", false)
+                                .put("lactMilliseconds", "-1"),
+                        ),
+                    )
+                }
+            }
+        val request = Request.Builder()
+            .url("$origin/youtubei/v1/player?prettyPrint=false")
+            .header("Content-Type", "application/json")
+            .header("User-Agent", profile.userAgent)
+            .header("X-YouTube-Client-Name", profile.id)
+            .header("X-YouTube-Client-Version", profile.version)
+            .header("X-Goog-Api-Format-Version", "1")
+            .header("X-Goog-Visitor-Id", visitor.id)
+            .header("X-Origin", origin)
+            .header("Referer", referer)
+            .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        return executePlayer(request)
+    }
 
     private fun loadVisitor(videoId: String, cookie: String? = null): Visitor {
         val url = if (videoId.isNotBlank()) "https://www.youtube.com/watch?v=$videoId" else "https://www.youtube.com"
@@ -456,6 +573,18 @@ class YouTubeStreamResolver(
                 .filterNot { it.startsWith("__Secure-YEC=") }
                 .joinToString("; ")
             return Visitor(id, issued)
+        }
+    }
+
+    /** Coalesces refreshes from a multi-track download batch into one watch-page request. */
+    private fun refreshVisitor(videoId: String): Visitor = synchronized(visitorLock) {
+        val now = System.currentTimeMillis()
+        if (now - lastVisitorRefreshAtMs < VISITOR_REFRESH_COALESCE_MS) {
+            visitor?.let { return it }
+        }
+        return loadVisitor(videoId).also {
+            rememberVisitor(it)
+            lastVisitorRefreshAtMs = now
         }
     }
 
@@ -788,16 +917,30 @@ class YouTubeStreamResolver(
     private fun signatureTimestamp(): Int =
         challengeSolver?.signatureTimestamp() ?: playerConfig.signatureTimestamp()
 
-    private fun chooseAudio(payload: JSONObject, quality: AudioQuality): ResolvedStream {
+    private fun chooseAudio(
+        payload: JSONObject,
+        quality: AudioQuality,
+        allowHls: Boolean = false,
+    ): ResolvedStream {
         val streaming = payload.optJSONObject("streamingData") ?: error("No streaming data returned")
         val userAgent = payload.optString(REQUEST_USER_AGENT_KEY).ifBlank { CLIENT_USER_AGENT }
-        streaming.optString("hlsManifestUrl").takeIf(String::isNotBlank)?.let { rawHlsUrl ->
+        streaming.optString("hlsManifestUrl").takeIf { allowHls && it.isNotBlank() }?.let { rawHlsUrl ->
             val hlsUrl = challengeSolver?.decipherManifestUrl(rawHlsUrl) ?: rawHlsUrl
             val expirySeconds = EXPIRY_PATTERN.find(hlsUrl)?.groupValues?.getOrNull(1)?.toLongOrNull()
             val expiry = expirySeconds?.let { TimeUnit.SECONDS.toMillis(it) }
                 ?: System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(45)
             Log.d(TAG, "Resolved HLS manifest for authenticated web playback")
-            return ResolvedStream(hlsUrl, HLS_MIME_TYPE, expiry, 0, userAgent)
+            val identity = YouTubeStreamRequestIdentity.fromUrl(hlsUrl, userAgent)
+            return ResolvedStream(
+                hlsUrl,
+                HLS_MIME_TYPE,
+                expiry,
+                0,
+                identity.userAgent,
+                origin = identity.origin,
+                referer = identity.referer,
+                clientKey = identity.clientKey,
+            )
         }
         val formats = streaming.optJSONArray("adaptiveFormats") ?: JSONArray()
         val candidates = buildList {
@@ -842,9 +985,25 @@ class YouTubeStreamResolver(
         val expiry = expirySeconds?.let { TimeUnit.SECONDS.toMillis(it) }
             ?: System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(45)
         val bitrateKbps = (chosen.optInt("bitrate") / 1000).coerceAtLeast(0)
+        val identity = YouTubeStreamRequestIdentity.fromUrl(url, userAgent)
         Log.d(TAG, "Resolved ${chosen.optString("mimeType").substringBefore(';')} audio @ ${bitrateKbps}kbps")
-        return ResolvedStream(url, chosen.optString("mimeType"), expiry, bitrateKbps, userAgent)
+        return ResolvedStream(
+            url = url,
+            mimeType = chosen.optString("mimeType"),
+            expiresAtMs = expiry,
+            bitrateKbps = bitrateKbps,
+            userAgent = identity.userAgent,
+            contentLength = resolvedContentLength(chosen, url),
+            origin = identity.origin,
+            referer = identity.referer,
+            clientKey = identity.clientKey,
+        )
     }
+
+    private fun resolvedContentLength(format: JSONObject, url: String): Long =
+        format.optString("contentLength").toLongOrNull()
+            ?: CONTENT_LENGTH_PATTERN.find(url)?.groupValues?.getOrNull(1)?.toLongOrNull()
+            ?: 0L
 
     private fun parseQuery(query: String): Map<String, String> {
         return query.split('&').mapNotNull { param ->
@@ -862,6 +1021,136 @@ class YouTubeStreamResolver(
     }
 
     companion object {
+        // Profile values are adapted from ArchiveTune's GPL-3.0 Innertube client catalog:
+        // https://github.com/rukamori/ArchiveTune (inspected 2026-08-15).
+        private val STREAM_CLIENT_PROFILES = listOf(
+            PlayerClientProfile(
+                key = "ANDROID_VR@1.65.10",
+                name = "ANDROID_VR",
+                version = "1.65.10",
+                id = "28",
+                userAgent = CLIENT_USER_AGENT,
+                osName = "Android",
+                osVersion = "12L",
+                deviceMake = "Oculus",
+                deviceModel = "Quest 3",
+                androidSdkVersion = 32,
+            ),
+            PlayerClientProfile(
+                key = "ANDROID_VR@1.61.48",
+                name = "ANDROID_VR",
+                version = "1.61.48",
+                id = "28",
+                userAgent = YouTubeStreamRequestIdentity.ANDROID_VR_1_61_USER_AGENT,
+                osName = "Android",
+                osVersion = "12",
+                deviceMake = "Oculus",
+                deviceModel = "Quest 3",
+                androidSdkVersion = 32,
+            ),
+            PlayerClientProfile(
+                key = "IOS@21.26.4",
+                name = "IOS",
+                version = "21.26.4",
+                id = "5",
+                userAgent = YouTubeStreamRequestIdentity.IOS_USER_AGENT,
+                osName = "iPhone",
+                osVersion = "18.3.2.22D82",
+                deviceMake = "Apple",
+                deviceModel = "iPhone16,2",
+            ),
+            PlayerClientProfile(
+                key = "ANDROID@21.26.364",
+                name = "ANDROID",
+                version = "21.26.364",
+                id = "3",
+                userAgent = YouTubeStreamRequestIdentity.ANDROID_USER_AGENT,
+                osName = "Android",
+                osVersion = "11",
+                useSignatureTimestamp = true,
+            ),
+            PlayerClientProfile(
+                key = "ANDROID_MUSIC@7.27.52",
+                name = "ANDROID_MUSIC",
+                version = "7.27.52",
+                id = "21",
+                userAgent = YouTubeStreamRequestIdentity.ANDROID_MUSIC_USER_AGENT,
+                osName = "Android",
+                osVersion = "15",
+                deviceMake = "Google",
+                deviceModel = "Pixel 9 Pro",
+                androidSdkVersion = 35,
+                useSignatureTimestamp = true,
+            ),
+            PlayerClientProfile(
+                key = "IOS_MUSIC@7.27.0",
+                name = "IOS_MUSIC",
+                version = "7.27.0",
+                id = "26",
+                userAgent = YouTubeStreamRequestIdentity.IOS_MUSIC_USER_AGENT,
+                osName = "iOS",
+                osVersion = "17.5.1.21F90",
+                deviceMake = "Apple",
+                deviceModel = "iPhone16,2",
+            ),
+            PlayerClientProfile(
+                key = "ANDROID_TESTSUITE@1.9",
+                name = "ANDROID_TESTSUITE",
+                version = "1.9",
+                id = "30",
+                userAgent = YouTubeStreamRequestIdentity.ANDROID_TESTSUITE_USER_AGENT,
+                osName = "Android",
+                osVersion = "15",
+                deviceMake = "Google",
+                deviceModel = "Pixel 9 Pro",
+                androidSdkVersion = 35,
+            ),
+            PlayerClientProfile(
+                key = "ANDROID_UNPLUGGED@8.49.0",
+                name = "ANDROID_UNPLUGGED",
+                version = "8.49.0",
+                id = "29",
+                userAgent = YouTubeStreamRequestIdentity.ANDROID_UNPLUGGED_USER_AGENT,
+                osName = "Android",
+                osVersion = "15",
+                deviceMake = "Google",
+                deviceModel = "Pixel 9 Pro",
+                androidSdkVersion = 35,
+                useSignatureTimestamp = true,
+            ),
+            PlayerClientProfile(
+                key = "IOS@19.22.3",
+                name = "IOS",
+                version = "19.22.3",
+                id = "5",
+                userAgent = YouTubeStreamRequestIdentity.IPAD_USER_AGENT,
+                osName = "iPadOS",
+                osVersion = "17.7.10.21H450",
+                deviceMake = "Apple",
+                deviceModel = "iPad7,6",
+            ),
+            PlayerClientProfile(
+                key = "VISIONOS@0.1",
+                name = "VISIONOS",
+                version = "0.1",
+                id = "101",
+                userAgent = YouTubeStreamRequestIdentity.VISION_OS_USER_AGENT,
+                osName = "visionOS",
+                osVersion = "1.3.21O771",
+                deviceMake = "Apple",
+                deviceModel = "RealityDevice14,1",
+            ),
+            PlayerClientProfile(
+                key = "TVHTML5@7.20260707.07.00",
+                name = "TVHTML5",
+                version = "7.20260707.07.00",
+                id = "7",
+                userAgent = YouTubeStreamRequestIdentity.TV_USER_AGENT,
+                useSignatureTimestamp = true,
+                youtubeOrigin = true,
+            ),
+        )
+
         /**
          * Where [executePlayer] records the identity a response was fetched under. Not
          * part of YouTube's schema; it rides along inside the parsed payload because the
@@ -872,19 +1161,21 @@ class YouTubeStreamResolver(
         const val CLIENT_USER_AGENT =
             "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip"
         private const val CLIENT_VERSION = "1.65.10"
-        private const val ANDROID_CLIENT_VERSION = "19.29.37"
-        private const val ANDROID_USER_AGENT =
-            "com.google.android.youtube/19.29.37 (Linux; U; Android 14; Pixel 7)"
-        private const val IOS_CLIENT_VERSION = "20.11.6"
-        private const val IOS_USER_AGENT =
-            "com.google.ios.youtube/20.11.6 (iPhone10,4; U; CPU iOS 16_7_7 like Mac OS X)"
-        private const val WEB_REMIX_VERSION = "1.20260213.01.00"
+        private const val ANDROID_CLIENT_VERSION = "21.26.364"
+        private const val ANDROID_USER_AGENT = YouTubeStreamRequestIdentity.ANDROID_USER_AGENT
+        private const val IOS_CLIENT_VERSION = "21.26.4"
+        private const val IOS_USER_AGENT = YouTubeStreamRequestIdentity.IOS_USER_AGENT
+        private const val WEB_REMIX_VERSION = "1.20260707.12.00"
         private const val WEB_CLIENT_VERSION = "2.20260708.00.00"
         const val WEB_SAFARI_USER_AGENT =
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 " +
-                "(KHTML, like Gecko) Version/15.5 Safari/605.1.15,gzip(gfe)"
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_4) AppleWebKit/605.1.15 " +
+                "(KHTML, like Gecko) Version/18.3 Safari/605.1.15"
         private const val PUBLIC_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
         private val FAILURE_BACKOFF_MS = TimeUnit.SECONDS.toMillis(20)
+        private val REJECTED_CLIENT_BACKOFF_MS = TimeUnit.MINUTES.toMillis(10)
+        private val RETRYABLE_STREAM_RESPONSE_CODES = setOf(403, 404, 410, 416)
+        private const val YOUTUBE_ORIGIN = "https://www.youtube.com"
+        private val VISITOR_REFRESH_COALESCE_MS = TimeUnit.SECONDS.toMillis(30)
 
         /**
          * Ceiling on a single player or watch-page request. The shared client only
@@ -899,11 +1190,11 @@ class YouTubeStreamResolver(
          * a caller waiting a minute for audio has already given up.
          */
         private val RESOLVE_BUDGET_MS = TimeUnit.SECONDS.toMillis(25)
-        private const val WEB_USER_AGENT =
-            "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/138 Mobile Safari/537.36"
+        private const val WEB_USER_AGENT = YouTubeStreamRequestIdentity.WEB_USER_AGENT
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private val VISITOR_PATTERN = Regex("\\\"visitorData\\\":\\\"([^\\\"]+)")
         private val EXPIRY_PATTERN = Regex("[?&]expire=(\\d+)")
+        private val CONTENT_LENGTH_PATTERN = Regex("[?&]clen=(\\d+)")
         private val AGE_GATE_PATTERN = Regex(
             """(?i)confirm[\s_-]*your[\s_-]*age|age[\s_-]*restrict|inappropriate for some users|LOGIN_REQUIRED""",
         )

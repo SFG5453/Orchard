@@ -259,11 +259,19 @@ fun AnimatedArtworkVideo(
             (LayoutInflater.from(targetContext).inflate(R.layout.animated_artwork_player, null) as PlayerView).apply {
                 this.player = player
                 setShutterBackgroundColor(AndroidColor.TRANSPARENT)
+                // PlayerView/video surfaces may request that the display stay awake while
+                // video is rendering. Canvas is decorative artwork, not foreground video,
+                // so it must always respect the user's normal Android screen timeout.
+                keepScreenOn = false
+                videoSurfaceView?.keepScreenOn = false
                 playerView = this
             }
         },
         update = { view ->
             view.alpha = animatedAlpha
+            // Reassert after player state changes in case Media3 refreshed the surface flags.
+            view.keepScreenOn = false
+            view.videoSurfaceView?.keepScreenOn = false
         },
         modifier = modifier.graphicsLayer { alpha = animatedAlpha },
     )

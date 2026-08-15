@@ -168,6 +168,9 @@ test('only uses raw rendered PCM when per-source processing is flat', () => {
     audioEngineConfig: { enabled: true, balance: -0.2 }
   }), false);
   assert.equal(wsolaProcessingCompatible({
+    audioEngineConfig: { enabled: false, outputGainDb: -6 }
+  }), false);
+  assert.equal(wsolaProcessingCompatible({
     audioEngineConfig: { enabled: true },
     outgoingGainDb: -3
   }), false);

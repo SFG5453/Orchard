@@ -31,6 +31,7 @@ export const audioEngineConfigSchema = z.object({
   eqEnabled: z.boolean().optional(),
   gains: z.array(finiteNumber).length(10).optional(),
   preampDb: finiteNumber.optional(),
+  outputGainDb: finiteNumber.optional(),
   q: finiteNumber.optional(),
   balance: finiteNumber.optional(),
   outputDeviceId: z.string().optional()

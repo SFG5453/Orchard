@@ -24,6 +24,7 @@ import okhttp3.OkHttpClient
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.stream.AudioStream
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.util.concurrent.TimeUnit
 
 /**
@@ -63,9 +64,16 @@ class NewPipeStreamResolver(
             .maxByOrNull { it.averageBitrate }
             ?: return null
         val format = runCatching { best.format }.getOrNull()
+        val identity = YouTubeStreamRequestIdentity.fromUrl(
+            best.content,
+            YouTubeStreamRequestIdentity.WEB_USER_AGENT,
+        )
         Log.d(TAG, "NewPipe resolved ${format?.name ?: "?"} " +
             "@${best.averageBitrate}kbps for $videoId")
         val bitrateKbps = if (best.averageBitrate > 1000) best.averageBitrate / 1000 else best.averageBitrate
+        val contentLength = best.itagItem?.contentLength?.takeIf { it > 0L }
+            ?: best.content.toHttpUrlOrNull()?.queryParameter("clen")?.toLongOrNull()
+            ?: 0L
         ResolvedStream(
             url = best.content,
             mimeType = format?.mimeType ?: "audio/webm",
@@ -73,6 +81,12 @@ class NewPipeStreamResolver(
             // Use a conservative 45-minute window consistent with the innertube path.
             expiresAtMs = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(45),
             bitrateKbps = bitrateKbps.coerceAtLeast(0),
+            userAgent = identity.userAgent,
+            contentLength = contentLength,
+            origin = identity.origin,
+            referer = identity.referer,
+            clientKey = identity.clientKey,
+            supportsParallelRanges = true,
         )
     }.onFailure {
         Log.w(TAG, "NewPipe stream extraction failed for $videoId", it)

@@ -21,7 +21,7 @@ package dev.sfg.orchard.mobile.download
 
 import android.util.Log
 import dev.sfg.orchard.mobile.auth.YouTubeSessionProvider
-import dev.sfg.orchard.mobile.playback.NewPipeStreamResolver
+import dev.sfg.orchard.mobile.model.AudioQuality
 import dev.sfg.orchard.mobile.playback.ResolvedStream
 import dev.sfg.orchard.mobile.playback.YouTubeStreamResolver
 import kotlinx.coroutines.Dispatchers
@@ -36,22 +36,39 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
-import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.coroutineContext
 
 /**
- * Downloads audio tracks with maximum speed by resolving streams via [YouTubeStreamResolver]
- * (with [NewPipeStreamResolver] fallback) and fetching multiple concurrent byte-ranges to bypass
- * YouTube's progressive per-stream rate limiting.
+ * Downloads audio tracks through the same client-profile resolver used for playback.
+ *
+ * NewPipe is intentionally absent from the retry path. [YouTubeStreamResolver] invokes it only
+ * when the user explicitly selects [AudioQuality.MAX]; every other quality remains Innertube-only.
  */
 class TrackDownloader(
     private val http: OkHttpClient,
     sessionProvider: YouTubeSessionProvider? = null,
     private val store: DownloadStore,
+    qualityProvider: () -> AudioQuality = { AudioQuality.HIGH },
 ) {
-    private val streamResolver by lazy { YouTubeStreamResolver(client = http, sessionProvider = sessionProvider) }
-    private val newPipeResolver by lazy { NewPipeStreamResolver(http, sessionProvider) }
+    private val streamResolver by lazy {
+        YouTubeStreamResolver(
+            client = http,
+            sessionProvider = sessionProvider,
+            qualityProvider = qualityProvider,
+        )
+    }
+    private data class ResumeIdentity(
+        val mimeType: String,
+        val contentLength: Long,
+        val bitrateKbps: Int,
+        val supportsParallelRanges: Boolean,
+    )
+
+    private val resumeIdentities = ConcurrentHashMap<String, ResumeIdentity>()
+    private val knownContentLengths = ConcurrentHashMap<String, Long>()
+    private val parallelRangeRejected = ConcurrentHashMap.newKeySet<String>()
 
     fun interface ProgressListener {
         fun onProgress(bytesDownloaded: Long, totalBytes: Long, progress: Float)
@@ -71,13 +88,10 @@ class TrackDownloader(
 
         Log.d(TAG, "Resolving stream for track: ${item.track.title} ($videoId)")
 
-        // 1. Fast resolution: YouTubeStreamResolver first (sub-250ms), fallback to NewPipe
-        val resolved: ResolvedStream = try {
-            streamResolver.resolve(videoId)
-        } catch (e: Exception) {
-            Log.w(TAG, "Primary stream resolution failed, attempting fallback for $videoId", e)
-            newPipeResolver.resolve(videoId)
-        } ?: newPipeResolver.resolve(videoId) ?: run {
+        val resolved: ResolvedStream = runCatching { streamResolver.resolve(videoId) }
+            .onFailure { Log.w(TAG, "Stream resolution failed for $videoId", it) }
+            .getOrNull()
+            ?: run {
             return@withContext item.copy(
                 status = DownloadStatus.FAILED,
                 errorMessage = "Could not resolve audio stream URL",
@@ -93,49 +107,43 @@ class TrackDownloader(
 
         val tempFile = store.getTempFile(videoId)
         val targetFile = store.getTargetFile(videoId, ext)
+        val resumeIdentity = ResumeIdentity(
+            mimeType = resolved.mimeType,
+            contentLength = resolved.contentLength,
+            bitrateKbps = resolved.bitrateKbps,
+            supportsParallelRanges = resolved.supportsParallelRanges,
+        )
+        val previousIdentity = resumeIdentities.put(videoId, resumeIdentity)
+        if (previousIdentity != null && previousIdentity != resumeIdentity && tempFile.exists()) {
+            Log.i(TAG, "Discarding incompatible partial download for $videoId")
+            tempFile.delete()
+            knownContentLengths.remove(videoId)
+        }
+
+        val expectedLength = resolved.contentLength.takeIf { it > 0L }
+            ?: knownContentLengths[videoId]
+            ?: 0L
+        val useParallelRanges = resolved.supportsParallelRanges &&
+            expectedLength >= PARALLEL_RANGE_THRESHOLD &&
+            videoId !in parallelRangeRejected
 
         try {
-            // 2. Probe content length with a small initial range request (0..1023)
-            val probeRequest = Request.Builder()
-                .url(resolved.url)
-                .header("User-Agent", resolved.userAgent)
-                .header("Range", "bytes=0-1023")
-                .build()
-
-            var totalContentLength = 0L
-            var initialBytes: ByteArray? = null
-
-            http.newCall(probeRequest).execute().use { probeResponse ->
-                if (probeResponse.isSuccessful || probeResponse.code == 206) {
-                    val contentRange = probeResponse.header("Content-Range").orEmpty()
-                    val slashIdx = contentRange.lastIndexOf('/')
-                    if (slashIdx != -1) {
-                        totalContentLength = contentRange.substring(slashIdx + 1).trim().toLongOrNull() ?: 0L
-                    }
-                    val body = probeResponse.body
-                    if (totalContentLength <= 0L) {
-                        totalContentLength = body.contentLength()
-                    }
-                    initialBytes = body.bytes()
-                }
-            }
-
-            val chunk0 = initialBytes
-            if (totalContentLength > 0L && chunk0 != null) {
-                // High-speed concurrent ranged download
+            if (useParallelRanges) {
+                // A range download writes chunks out of order, so an old sequential partial cannot
+                // be reused safely. This mode is restricted to NewPipe URLs with an exact length.
+                tempFile.delete()
                 downloadByRanges(
-                    url = resolved.url,
-                    userAgent = resolved.userAgent,
-                    totalLength = totalContentLength,
-                    initialChunk = chunk0,
+                    stream = resolved,
                     tempFile = tempFile,
+                    expectedLength = expectedLength,
                     progressListener = progressListener,
                 )
             } else {
-                // Fallback to sequential stream
+                // ArchiveTune lets Media3 begin with an ordinary unbounded open. Do the equivalent
+                // here: a forced full-span Range header is rejected by some otherwise valid GVS URLs.
                 downloadSequential(
-                    url = resolved.url,
-                    userAgent = resolved.userAgent,
+                    videoId = videoId,
+                    stream = resolved,
                     tempFile = tempFile,
                     progressListener = progressListener,
                 )
@@ -159,6 +167,9 @@ class TrackDownloader(
             }
 
             Log.i(TAG, "Download completed for ${item.track.title}: ${targetFile.absolutePath} (${targetFile.length()} bytes)")
+            resumeIdentities.remove(videoId)
+            knownContentLengths.remove(videoId)
+            parallelRangeRejected.remove(videoId)
 
             item.copy(
                 status = DownloadStatus.COMPLETED,
@@ -172,118 +183,182 @@ class TrackDownloader(
             )
         } catch (e: Exception) {
             Log.e(TAG, "Download failed for $videoId", e)
-            if (tempFile.exists()) {
+            if (useParallelRanges) {
+                // A sparse file cannot be resumed by the sequential path. Drop it and make the
+                // next manager attempt use the conservative resumable downloader.
+                parallelRangeRejected.add(videoId)
                 tempFile.delete()
+                streamResolver.invalidate(videoId)
+            } else if (e is StreamHttpException) {
+                streamResolver.reject(videoId, resolved, e.responseCode)
+            } else {
+                // A reset or early EOF is a transport interruption, not evidence that the client
+                // profile is invalid. Keep the bytes and mint a fresh URL for the next range.
+                streamResolver.invalidate(videoId)
             }
             item.copy(
                 status = DownloadStatus.FAILED,
-                errorMessage = e.localizedMessage ?: "Download failed",
+                bytesDownloaded = tempFile.length(),
+                totalBytes = resolved.contentLength.takeIf { it > 0L }
+                    ?: knownContentLengths[videoId]
+                    ?: 0L,
+                progress = progress(tempFile.length(), resolved.contentLength.takeIf { it > 0L }
+                    ?: knownContentLengths[videoId]
+                    ?: 0L),
+                errorMessage = e.localizedMessage ?: "Download interrupted",
             )
         }
     }
 
     private suspend fun downloadByRanges(
-        url: String,
-        userAgent: String,
-        totalLength: Long,
-        initialChunk: ByteArray,
+        stream: ResolvedStream,
         tempFile: File,
+        expectedLength: Long,
         progressListener: ProgressListener?,
-    ) = coroutineScope {
-        RandomAccessFile(tempFile, "rw").use { raf ->
-            raf.setLength(totalLength)
-            val channel = raf.channel
-
-            // Write the first probed chunk
-            val initialWritten = initialChunk.size.toLong()
-            channel.write(ByteBuffer.wrap(initialChunk), 0L)
-
-            val bytesReadAccumulator = AtomicLong(initialWritten)
-            progressListener?.onProgress(initialWritten, totalLength, (initialWritten.toFloat() / totalLength.toFloat()).coerceIn(0f, 1f))
-
-            if (initialWritten >= totalLength) {
-                raf.fd.sync()
-                return@coroutineScope
+    ) = withContext(Dispatchers.IO) {
+        val ranges = buildList {
+            var start = 0L
+            while (start < expectedLength) {
+                val end = minOf(start + RANGE_CHUNK_SIZE - 1L, expectedLength - 1L)
+                add(start..end)
+                start = end + 1L
             }
+        }
+        val downloaded = AtomicLong(0L)
 
-            // Partition remaining bytes into chunks of CHUNK_SIZE
-            val chunks = mutableListOf<Pair<Long, Long>>()
-            var start = initialWritten
-            while (start < totalLength) {
-                val end = minOf(start + CHUNK_SIZE - 1, totalLength - 1)
-                chunks.add(start to end)
-                start = end + 1
-            }
+        RandomAccessFile(tempFile, "rw").use { output ->
+            output.setLength(expectedLength)
+            progressListener?.onProgress(0L, expectedLength, 0f)
 
-            // Distribute across concurrent coroutine workers
-            val chunkQueue = ConcurrentLinkedQueue(chunks)
-            val workers = (0 until CONCURRENCY).map {
-                async(Dispatchers.IO) {
-                    val buffer = ByteArray(BUFFER_SIZE)
-                    while (isActive) {
-                        val chunk = chunkQueue.poll() ?: break
-                        val (chunkStart, chunkEnd) = chunk
-                        val rangeHeader = "bytes=$chunkStart-$chunkEnd"
+            // Process fixed-size batches so one track never opens more than four GVS requests.
+            for (batch in ranges.chunked(RANGE_CONCURRENCY)) {
+                coroutineScope {
+                    batch.map { range ->
+                        async(Dispatchers.IO) {
+                            val request = Request.Builder()
+                                .url(stream.url)
+                                .header("Accept", "*/*")
+                                .header("Accept-Encoding", "identity")
+                                .apply {
+                                    stream.requestHeaders.forEach { (name, value) -> header(name, value) }
+                                }
+                                .header("Range", "bytes=${range.first}-${range.last}")
+                                .build()
 
-                        val request = Request.Builder()
-                            .url(url)
-                            .header("User-Agent", userAgent)
-                            .header("Range", rangeHeader)
-                            .build()
+                            http.newCall(request).execute().use { response ->
+                                if (response.code != 206) {
+                                    throw StreamHttpException(response.code)
+                                }
+                                val returnedRange = response.header("Content-Range")
+                                    ?.substringBefore('/')
+                                    ?.removePrefix("bytes ")
+                                if (returnedRange != "${range.first}-${range.last}") {
+                                    throw java.io.IOException(
+                                        "Server returned unexpected range ${response.header("Content-Range")}",
+                                    )
+                                }
 
-                        http.newCall(request).execute().use { response ->
-                            if (response.code != 206) {
-                                throw java.io.IOException("HTTP ${response.code} on range $rangeHeader")
-                            }
-                            val body = response.body
-                            val stream = body.byteStream()
-                            var currentPos = chunkStart
-                            var n: Int
-                            while (stream.read(buffer).also { n = it } != -1) {
-                                if (!isActive) throw java.io.InterruptedIOException("Download cancelled")
-                                channel.write(ByteBuffer.wrap(buffer, 0, n), currentPos)
-                                currentPos += n
-                                val totalNow = bytesReadAccumulator.addAndGet(n.toLong())
-                                val p = (totalNow.toFloat() / totalLength.toFloat()).coerceIn(0f, 1f)
-                                progressListener?.onProgress(totalNow, totalLength, p)
-                            }
-                            val expectedBytes = chunkEnd - chunkStart + 1
-                            if (currentPos - chunkStart != expectedBytes) {
-                                throw java.io.EOFException("Connection closed while downloading range $rangeHeader")
+                                val expectedRangeBytes = range.last - range.first + 1L
+                                val input = response.body.byteStream()
+                                val buffer = ByteArray(BUFFER_SIZE)
+                                var rangeBytes = 0L
+
+                                while (rangeBytes < expectedRangeBytes) {
+                                    if (!coroutineContext.isActive) {
+                                        throw java.io.InterruptedIOException("Download cancelled")
+                                    }
+                                    val remaining = expectedRangeBytes - rangeBytes
+                                    val bytesRead = input.read(
+                                        buffer,
+                                        0,
+                                        minOf(buffer.size.toLong(), remaining).toInt(),
+                                    )
+                                    if (bytesRead == -1) break
+
+                                    val position = range.first + rangeBytes
+                                    val bytes = ByteBuffer.wrap(buffer, 0, bytesRead)
+                                    while (bytes.hasRemaining()) {
+                                        output.channel.write(bytes, position + bytes.position())
+                                    }
+                                    rangeBytes += bytesRead
+                                    val totalDownloaded = downloaded.addAndGet(bytesRead.toLong())
+                                    progressListener?.onProgress(
+                                        totalDownloaded,
+                                        expectedLength,
+                                        progress(totalDownloaded, expectedLength),
+                                    )
+                                }
+
+                                if (rangeBytes != expectedRangeBytes) {
+                                    throw java.io.EOFException(
+                                        "Range ${range.first}-${range.last} closed after " +
+                                            "$rangeBytes of $expectedRangeBytes bytes",
+                                    )
+                                }
                             }
                         }
-                    }
+                    }.awaitAll()
                 }
             }
+            output.channel.force(false)
+        }
 
-            workers.awaitAll()
-            raf.fd.sync()
+        if (downloaded.get() != expectedLength || tempFile.length() != expectedLength) {
+            throw java.io.EOFException(
+                "Parallel download wrote ${downloaded.get()} of $expectedLength bytes",
+            )
         }
     }
 
     private suspend fun downloadSequential(
-        url: String,
-        userAgent: String,
+        videoId: String,
+        stream: ResolvedStream,
         tempFile: File,
         progressListener: ProgressListener?,
     ) = withContext(Dispatchers.IO) {
+        var expectedLength = stream.contentLength.takeIf { it > 0L }
+            ?: knownContentLengths[videoId]
+            ?: 0L
+        if (expectedLength > 0L && tempFile.length() > expectedLength) {
+            tempFile.delete()
+        }
+        val requestedOffset = tempFile.length()
+        if (expectedLength > 0L && requestedOffset == expectedLength) {
+            progressListener?.onProgress(expectedLength, expectedLength, 1f)
+            return@withContext
+        }
         val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", userAgent)
+            .url(stream.url)
+            .header("Accept", "*/*")
+            .header("Accept-Encoding", "identity")
+            .apply { stream.requestHeaders.forEach { (name, value) -> header(name, value) } }
+            .apply {
+                if (requestedOffset > 0L) header("Range", "bytes=$requestedOffset-")
+            }
             .build()
 
         http.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                throw java.io.IOException("HTTP ${response.code} downloading stream")
+                throw StreamHttpException(response.code)
             }
             val body = response.body
-            val contentLength = body.contentLength()
+            val append = requestedOffset > 0L && response.code == 206
+            val writeOffset = if (append) requestedOffset else 0L
+            expectedLength = expectedLength.takeIf { it > 0L }
+                ?: response.header("Content-Range")
+                    ?.substringAfterLast('/', "")
+                    ?.toLongOrNull()
+                ?: body.contentLength().takeIf { it > 0L }?.let { it + writeOffset }
+                ?: 0L
+            if (expectedLength > 0L) knownContentLengths[videoId] = expectedLength
             val inputStream = body.byteStream()
 
-            FileOutputStream(tempFile).use { outputStream ->
+            FileOutputStream(tempFile, append).use { outputStream ->
                 val buffer = ByteArray(BUFFER_SIZE)
                 var bytesRead: Int
-                var totalRead = 0L
+                var totalRead = writeOffset
+
+                progressListener?.onProgress(totalRead, expectedLength, progress(totalRead, expectedLength))
 
                 while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                     if (!coroutineContext.isActive) {
@@ -291,20 +366,30 @@ class TrackDownloader(
                     }
                     outputStream.write(buffer, 0, bytesRead)
                     totalRead += bytesRead
-                    val progress = if (contentLength > 0) {
-                        (totalRead.toFloat() / contentLength.toFloat()).coerceIn(0f, 1f)
-                    } else 0f
-                    progressListener?.onProgress(totalRead, contentLength, progress)
+                    progressListener?.onProgress(totalRead, expectedLength, progress(totalRead, expectedLength))
                 }
                 outputStream.flush()
+            }
+
+            if (expectedLength > 0L && tempFile.length() != expectedLength) {
+                throw java.io.EOFException(
+                    "Connection closed after ${tempFile.length()} of $expectedLength bytes",
+                )
             }
         }
     }
 
+    private fun progress(downloaded: Long, total: Long): Float =
+        if (total > 0L) (downloaded.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f
+
+    private class StreamHttpException(val responseCode: Int) :
+        java.io.IOException("HTTP $responseCode downloading stream")
+
     companion object {
         private const val TAG = "TrackDownloader"
         private const val BUFFER_SIZE = 32 * 1024
-        private const val CHUNK_SIZE = 1024 * 1024L
-        private const val CONCURRENCY = 3
+        private const val RANGE_CHUNK_SIZE = 1024 * 1024L
+        private const val RANGE_CONCURRENCY = 4
+        private const val PARALLEL_RANGE_THRESHOLD = 2 * RANGE_CHUNK_SIZE
     }
 }

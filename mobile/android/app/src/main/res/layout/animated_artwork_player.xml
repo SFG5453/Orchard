@@ -4,6 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@android:color/transparent"
+    android:keepScreenOn="false"
     app:keep_content_on_player_reset="true"
     app:resize_mode="zoom"
     app:shutter_background_color="@android:color/transparent"

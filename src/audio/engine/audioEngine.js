@@ -48,6 +48,7 @@ export const DEFAULT_AUDIO_ENGINE_CONFIG = {
   eqEnabled: false,
   gains: [...EQ_PRESETS.flat.gains],
   preampDb: 0,
+  outputGainDb: 0,
   q: 1.1,
   balance: 0,
   outputDeviceId: 'default'
@@ -74,6 +75,7 @@ export function normalizeAudioEngineConfig(value = {}) {
       : (typeof value.eqEnabled === 'boolean' ? value.eqEnabled : DEFAULT_AUDIO_ENGINE_CONFIG.eqEnabled),
     gains: EQ_BANDS.map((_, index) => clamp(value.gains?.[index], -12, 12)),
     preampDb: clamp(value.preampDb, -12, 6),
+    outputGainDb: clamp(value.outputGainDb, -24, 6),
     q: clamp(value.q, 0.4, 2.4, DEFAULT_AUDIO_ENGINE_CONFIG.q),
     balance: clamp(value.balance, -1, 1),
     outputDeviceId: String(value.outputDeviceId || 'default')
@@ -116,6 +118,10 @@ export function createAudioEngine(initialConfig = {}) {
     });
     const trackDb = config.enabled ? processor.trackGainDb : 0;
     processor.trackGain.gain.setTargetAtTime(dbToGain(trackDb), now, 0.012);
+    // Output gain is deliberately independent of the engine bypass. It is the
+    // global safety trim, so users can tame an overly hot system output without
+    // enabling EQ or maintaining a separate adjustment for every track.
+    processor.output.gain.setTargetAtTime(dbToGain(config.outputGainDb), now, 0.012);
   }
 
   function createProcessor({ context: audioContext, source, element }) {

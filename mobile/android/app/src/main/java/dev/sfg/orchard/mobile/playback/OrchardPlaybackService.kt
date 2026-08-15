@@ -389,7 +389,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                 // default. Getting this wrong resolves fine and then 403s on the audio.
                 original
                     .withUri(stream.url.toUri())
-                    .withAdditionalHeaders(mapOf("User-Agent" to stream.userAgent))
+                    .withAdditionalHeaders(stream.requestHeaders)
             }
         // HLS segment requests are created after the orchard manifest URI has been
         // resolved, so they do not inherit that DataSpec's headers. Give the entire
@@ -407,7 +407,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                     val stream = streamResolver.resolveAuthenticatedHls(videoId)
                     original
                         .withUri(stream.url.toUri())
-                        .withAdditionalHeaders(mapOf("User-Agent" to stream.userAgent))
+                        .withAdditionalHeaders(stream.requestHeaders)
                 } else {
                     original
                 }
