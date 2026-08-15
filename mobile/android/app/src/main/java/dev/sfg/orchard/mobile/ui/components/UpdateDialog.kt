@@ -97,6 +97,7 @@ import org.intellij.markdown.ast.ASTNode
 import org.intellij.markdown.ast.findChildOfType
 import org.intellij.markdown.ast.getTextInNode
 import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
+import org.intellij.markdown.parser.CancellationToken
 import org.intellij.markdown.parser.MarkdownParser
 
 /** Category classifications for release note sections matching desktop changelogs. */
@@ -141,7 +142,10 @@ fun parseReleaseNoteSections(markdown: String): List<ReleaseNoteSection> {
     if (markdown.isBlank()) return emptyList()
 
     val flavour = GFMFlavourDescriptor()
-    val parsedTree = MarkdownParser(flavour).buildMarkdownTreeFromString(markdown)
+    val parsedTree = MarkdownParser(
+        flavour = flavour,
+        cancellationToken = CancellationToken.NonCancellable,
+    ).buildMarkdownTreeFromString(markdown as CharSequence)
 
     val sections = mutableListOf<ReleaseNoteSection>()
     var currentTitle: String? = null
@@ -267,7 +271,10 @@ fun formatMarkdownInline(
     if (text.isBlank()) return AnnotatedString("")
 
     val flavour = GFMFlavourDescriptor()
-    val tree = MarkdownParser(flavour).buildMarkdownTreeFromString(text)
+    val tree = MarkdownParser(
+        flavour = flavour,
+        cancellationToken = CancellationToken.NonCancellable,
+    ).buildMarkdownTreeFromString(text as CharSequence)
     val builder = AnnotatedString.Builder()
 
     fun appendNode(node: ASTNode) {
