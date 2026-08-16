@@ -69,6 +69,15 @@ data class ResolvedStream(
  */
 private class AgeGateException(message: String) : RuntimeException(message)
 
+/**
+ * Thrown when YouTube refuses playback because the content belongs to an account rather than to
+ * the public catalog: a YouTube Music upload, or a video the owner set to private.
+ *
+ * No guest client can ever play these, so the retry chain treats one refusal as the answer for
+ * every anonymous profile and moves straight to the signed-in player.
+ */
+private class AccountOnlyException(message: String) : RuntimeException(message)
+
 /** A player/fetch identity kept together, following ArchiveTune's client catalog model. */
 private data class PlayerClientProfile(
     val key: String,
@@ -245,6 +254,13 @@ class YouTubeStreamResolver(
                 if (lastError is AgeGateException) ageGatedVideos += videoId
                 Log.w(TAG, "${profile.key} failed for $videoId", lastError)
 
+                // An upload or private video is refused identically by every anonymous client, so
+                // walking the rest of the catalog only burns the budget the signed-in player needs.
+                if (lastError is AccountOnlyException && account != null) {
+                    Log.d(TAG, "$videoId is account-only; skipping the remaining guest clients")
+                    break
+                }
+
                 // Refresh a persisted guest identity once. Repeating this for every profile
                 // creates exactly the burst of watch-page traffic that causes larger batches to
                 // fail after their first few tracks.
@@ -258,8 +274,10 @@ class YouTubeStreamResolver(
 
             // Signed web playback remains the last normal fallback for account-only or
             // age-gated music. It is never replaced with NewPipe; NewPipe belongs to MAX only.
+            // Deliberately outside the budget check: this is the only client that can play
+            // account-only music, and dropping it because the guest attempts ran long turns a
+            // playable upload into "Video unavailable".
             if (stream == null && account != null) {
-                withinBudget(lastError)
                 runCatching { chooseAudio(webRemixPlayer(videoId, account), quality) }
                     .onSuccess { stream = it }
                     .onFailure {
@@ -728,8 +746,20 @@ class YouTubeStreamResolver(
             .put("clientVersion", WEB_REMIX_VERSION)
             .put("hl", "en")
             .put("gl", "US")
+            // A signed-in player request without the account's own visitorData resolves against a
+            // different identity than the library page did, which reads as "video unavailable" for
+            // anything only that account can see, such as a YouTube Music upload.
+            .apply { visitor?.id?.takeIf(String::isNotBlank)?.let { put("visitorData", it) } }
         val userContext = JSONObject()
             .put("lockedSafetyMode", false)
+            // Uploads belong to a channel, not to the Google account, so the delegation id is what
+            // ties the request to the channel that owns them.
+            .apply {
+                if (visitor?.signedIn == true) {
+                    sessionProvider?.session()?.dataSyncId?.takeIf(String::isNotBlank)
+                        ?.let { put("onBehalfOfUser", it) }
+                }
+            }
         val playbackContext = JSONObject()
             .put(
                 "contentPlaybackContext",
@@ -889,6 +919,11 @@ class YouTubeStreamResolver(
                     playerConfig.invalidate()
                     challengeSolver?.invalidatePlayer()
                 }
+                // Checked before the age gate: an upload refusal also arrives as LOGIN_REQUIRED,
+                // and only the private/upload wording tells the two apart.
+                if (isAccountOnlyResponse(reason)) {
+                    throw AccountOnlyException("YouTube could not play this track: $reason")
+                }
                 // Distinguish age-gated refusals so the retry chain can
                 // route them to the web/music players instead of a guest retry.
                 if (isAgeGateResponse(statusCode, reason)) {
@@ -908,6 +943,8 @@ class YouTubeStreamResolver(
         val text = "$status $reason"
         return AGE_GATE_PATTERN.containsMatchIn(text)
     }
+
+    private fun isAccountOnlyResponse(reason: String): Boolean = ACCOUNT_ONLY_PATTERN.containsMatchIn(reason)
 
     /**
      * Uses the timestamp from the same player script that will decipher returned
@@ -1197,6 +1234,14 @@ class YouTubeStreamResolver(
         private val CONTENT_LENGTH_PATTERN = Regex("[?&]clen=(\\d+)")
         private val AGE_GATE_PATTERN = Regex(
             """(?i)confirm[\s_-]*your[\s_-]*age|age[\s_-]*restrict|inappropriate for some users|LOGIN_REQUIRED""",
+        )
+
+        /**
+         * Mirrors the desktop's private-playback detection so both clients route uploads the same
+         * way. YouTube Music uploads refuse guest players with the private-video wording.
+         */
+        internal val ACCOUNT_ONLY_PATTERN = Regex(
+            """(?i)(?:this )?video (?:is|has been set to) private|private video|only available to (?:the )?owner""",
         )
         private const val AUTHENTICATED_DIRECT_ITAG = 18
         private const val HLS_MIME_TYPE = "application/x-mpegURL"
