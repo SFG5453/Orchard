@@ -187,6 +187,7 @@ export function installState(ctx) {
     pairUrl: '',
     appPairUrl: '',
     webPairUrl: '',
+    altWebPairUrls: [],
     qrSvg: '',
     expiresAt: 0,
     pending: [],

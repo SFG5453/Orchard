@@ -465,6 +465,23 @@ export default {
               </button>
             </div>
             <p v-if="orchardConnectPairingMessage" class="settings-connect__message">{{ orchardConnectPairingMessage }}</p>
+            <details v-if="orchardConnect.altWebPairUrls?.length" class="settings-connect__alternates">
+              <summary>Phone can't reach this address?</summary>
+              <p>
+                This machine has more than one network address. If the QR code does not connect, open one
+                of these on the phone instead.
+              </p>
+              <button
+                v-for="url in orchardConnect.altWebPairUrls"
+                :key="url"
+                type="button"
+                class="settings-button settings-connect__alternate"
+                @click="copyOrchardConnectAltLink(url)"
+              >
+                <q-icon name="content_copy" />
+                {{ url }}
+              </button>
+            </details>
           </div>
         </div>
 

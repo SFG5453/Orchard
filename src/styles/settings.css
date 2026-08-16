@@ -348,6 +348,24 @@
   color: #b7c2bb;
 }
 
+.settings-connect__alternates {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.settings-connect__alternates summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.settings-connect__alternate {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
 .settings-connect-list {
   display: grid;
 }
