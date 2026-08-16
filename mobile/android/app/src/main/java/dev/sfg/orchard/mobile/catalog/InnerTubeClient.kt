@@ -45,9 +45,15 @@ class InnerTubeClient(
 
     fun search(query: String): JSONObject = post("search", JSONObject().put("query", query))
 
-    /** Search restricted to songs, so music videos never come back as candidates. */
+    /**
+     * Search restricted to songs, so music videos never come back as candidates.
+     *
+     * Sent anonymously: this runs on the app's behalf while resolving a track the listener already
+     * picked, and an authenticated search writes the query into the account's YouTube search
+     * history. Only searches the listener actually typed belong there.
+     */
     fun searchSongs(query: String): JSONObject =
-        post("search", JSONObject().put("query", query).put("params", SONGS_FILTER))
+        post("search", JSONObject().put("query", query).put("params", SONGS_FILTER), anonymous = true)
 
     fun browse(browseId: String): JSONObject = post("browse", JSONObject().put("browseId", browseId))
 
@@ -122,9 +128,10 @@ class InnerTubeClient(
         return best?.optString("url").orEmpty()
     }
 
-    fun post(endpoint: String, payload: JSONObject): JSONObject {
+    /** [anonymous] drops the account session, keeping the call out of the listener's YouTube activity. */
+    fun post(endpoint: String, payload: JSONObject, anonymous: Boolean = false): JSONObject {
         val activeIdentity = identity ?: loadIdentity().also { identity = it }
-        val activeSession = sessionProvider.session()
+        val activeSession = if (anonymous) null else sessionProvider.session()
         val first = execute(endpoint, payload, activeIdentity, activeSession, includeDataSyncId = true)
         val firstMessage = errorMessage(first.body)
         val result = if (
