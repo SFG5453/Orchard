@@ -18,6 +18,7 @@
  */
 
 import { openCollectionWithLoading } from './collectionNavigation.js';
+import { copyTextToClipboard } from '../platform/clipboardText.js';
 
 export function installBrowseActions(ctx) {
   ctx.cancelBrowseTrackPrefetch = function cancelBrowseTrackPrefetch() {
@@ -252,7 +253,7 @@ export function installBrowseActions(ctx) {
     if (!value) return;
 
     try {
-      await navigator.clipboard.writeText(value);
+      await copyTextToClipboard(value);
     } catch {
       ctx.errorMessage.value = `Copy failed. Use ${value}`;
     }
