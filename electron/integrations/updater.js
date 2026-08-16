@@ -25,6 +25,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
 import { createArtistPackService, readOfficialPackArchive } from './artistPackService.js';
+import { updateErrorMessage } from './updateErrors.js';
 
 const require = createRequire(import.meta.url);
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
@@ -62,11 +63,6 @@ function normalizeContentIndexUrl(value) {
   }
 }
 
-function updateErrorMessage(error) {
-  if (!error) return 'Update check failed.';
-  if (typeof error === 'string') return error;
-  return error.message || String(error);
-}
 
 function cleanProgress(progress) {
   if (!progress) return null;

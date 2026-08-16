@@ -75,6 +75,10 @@ export const IPC_CHANNELS = Object.freeze({
     GET_STATE: 'migration:get-state',
     REFRESH: 'migration:refresh'
   }),
+  NETWORK: Object.freeze({
+    GET_PROXY_MODE: 'network:get-proxy-mode',
+    SET_PROXY_MODE: 'network:set-proxy-mode'
+  }),
   SESSION_STATE: Object.freeze({
     GET: 'session-state:get',
     SET: 'session-state:set'

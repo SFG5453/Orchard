@@ -394,6 +394,7 @@ export function installLifecycle(ctx) {
     ctx.updateMediaSessionPlaybackState();
     ctx.updateMediaSessionPositionState();
     void ctx.loadMigrationNotice();
+    void ctx.loadProxyMode();
     void ctx.bindUpdateEvents().then((bound) => {
       if (bound && new URLSearchParams(window.location.search).get('welcome') !== '1') {
         void ctx.ensureOfficialArtistPages();
