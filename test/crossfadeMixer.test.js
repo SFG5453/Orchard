@@ -55,6 +55,8 @@ function mixNode() {
   return {
     gain: { gain: audioParam() },
     mixGain: { gain: audioParam() },
+    directBand: { gain: audioParam() },
+    splitInput: { gain: audioParam() },
     bassGain: { gain: audioParam() },
     midDuck: { gain: audioParam() },
     highPass: { context, frequency: audioParam() },
@@ -311,6 +313,68 @@ test('non-DJ styles stay a plain equal-power fade', () => {
   assert.deepEqual(fromNode.midDuck.gain.events, []);
   assert.deepEqual(fromNode.lowPass.frequency.events, []);
   assert.ok(lastCurve(toNode.mixGain.gain));
+});
+
+function splitTarget(node) {
+  return {
+    direct: node.directBand.gain.events.filter((event) => event.type === 'target').at(-1)?.value,
+    split: node.splitInput.gain.events.filter((event) => event.type === 'target').at(-1)?.value
+  };
+}
+
+// The crossover sums to an allpass, so leaving it in circuit costs transient
+// headroom without changing the response. A fade that never automates the
+// bands must not pay for it.
+test('a plain crossfade leaves both decks off the band split', () => {
+  const { fromAudio, toAudio, fromNode, toNode, mixer } = pair(0);
+
+  mixer.scheduleCrossfade({
+    fromAudio,
+    toAudio,
+    duration: 5,
+    transitionStyle: 'equal_power',
+    leadTime: 0
+  });
+
+  assert.deepEqual(splitTarget(fromNode), { direct: 1, split: 0 });
+  assert.deepEqual(splitTarget(toNode), { direct: 1, split: 0 });
+});
+
+test('a DJ transition engages the band split on both decks before its curves run', () => {
+  const now = 50;
+  const leadTime = 0.05;
+  const { fromAudio, toAudio, fromNode, toNode, mixer } = pair(now);
+
+  const timing = mixer.scheduleCrossfade({
+    fromAudio,
+    toAudio,
+    duration: 8,
+    transitionStyle: 'dj_blend',
+    bassSwap: true,
+    leadTime
+  });
+
+  assert.deepEqual(splitTarget(fromNode), { direct: 0, split: 1 });
+  assert.deepEqual(splitTarget(toNode), { direct: 0, split: 1 });
+
+  // Armed from now, and settled well inside the lead time -- five time
+  // constants is over 99% of the way across -- so neither deck is still
+  // straddling the two paths when the first scheduled value lands.
+  const arming = fromNode.splitInput.gain.events.at(-1);
+  assert.equal(arming.time, now);
+  assert.ok(arming.constant * 5 < timing.startTime - now);
+});
+
+test('resetting a mix returns the deck to the unsplit path', () => {
+  const element = {};
+  const node = mixNode();
+  const mixer = createCrossfadeMixer({ connectElement: () => node, currentTime: () => 7 });
+
+  node.directBand.gain.setTargetAtTime(0, 1, 0.006);
+  node.splitInput.gain.setTargetAtTime(1, 1, 0.006);
+  mixer.resetElement(element);
+
+  assert.deepEqual(splitTarget(node), { direct: 1, split: 0 });
 });
 
 test('resetting a mix cancels its envelope without changing the master volume', () => {
