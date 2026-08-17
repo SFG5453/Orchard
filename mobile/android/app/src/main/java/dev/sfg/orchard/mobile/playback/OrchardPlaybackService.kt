@@ -97,6 +97,8 @@ class OrchardPlaybackService : MediaLibraryService() {
     // a handoff rather than the roles, so a filter never ends up automating the wrong track.
     private lateinit var playerFilter: dev.sfg.orchard.mobile.playback.smart.TransitionFilter
     private lateinit var spareFilter: dev.sfg.orchard.mobile.playback.smart.TransitionFilter
+    private lateinit var playerEq: dev.sfg.orchard.mobile.playback.EqualizerAudioProcessor
+    private lateinit var spareEq: dev.sfg.orchard.mobile.playback.EqualizerAudioProcessor
     /** Queue order as it was when shuffle went on, so turning it off can put the queue back. */
     private var unshuffledOrder: List<String> = emptyList()
     private val handler = Handler(Looper.getMainLooper())
@@ -168,14 +170,18 @@ class OrchardPlaybackService : MediaLibraryService() {
         }
         playerFilter = dev.sfg.orchard.mobile.playback.smart.TransitionFilter()
         spareFilter = dev.sfg.orchard.mobile.playback.smart.TransitionFilter()
+        playerEq = dev.sfg.orchard.mobile.playback.EqualizerAudioProcessor()
+        spareEq = dev.sfg.orchard.mobile.playback.EqualizerAudioProcessor()
         browseScope.launch {
             graph.settings.settings.collect { settings ->
                 playerFilter.volumeNormalizationEnabled = settings.volumeNormalizationEnabled
                 spareFilter.volumeNormalizationEnabled = settings.volumeNormalizationEnabled
+                playerEq.config = settings.equalizerConfig
+                spareEq.config = settings.equalizerConfig
             }
         }
-        player = buildPlayer(graph.http, handlesAudioFocus = true, filter = playerFilter)
-        spare = buildPlayer(graph.http, handlesAudioFocus = false, filter = spareFilter)
+        player = buildPlayer(graph.http, handlesAudioFocus = true, filter = playerFilter, eqProcessor = playerEq)
+        spare = buildPlayer(graph.http, handlesAudioFocus = false, filter = spareFilter, eqProcessor = spareEq)
         restorePlayback()
         mediaSession =
             MediaLibrarySession.Builder(this, OrchardSessionPlayer(player), sessionCallback)
@@ -361,6 +367,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         client: OkHttpClient,
         handlesAudioFocus: Boolean,
         filter: dev.sfg.orchard.mobile.playback.smart.TransitionFilter,
+        eqProcessor: dev.sfg.orchard.mobile.playback.EqualizerAudioProcessor,
     ): ExoPlayer {
         // The identity is a default request property rather than the factory's userAgent
         // because that one is appended after per-request headers instead of replacing
@@ -481,7 +488,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                     enableAudioTrackPlaybackParams: Boolean,
                 ): androidx.media3.exoplayer.audio.AudioSink =
                     androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
-                        .setAudioProcessors(arrayOf(filter))
+                        .setAudioProcessors(arrayOf(filter, eqProcessor))
                         .setEnableFloatOutput(enableFloatOutput)
                         .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                         .build()

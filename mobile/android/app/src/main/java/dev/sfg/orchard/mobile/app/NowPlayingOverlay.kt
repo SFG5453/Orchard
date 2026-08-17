@@ -103,6 +103,7 @@ fun NowPlayingOverlay(
         targets = targets,
         lyrics = lyrics,
         animatedArtworkEnabled = settings.animatedArtwork,
+        gesturesEnabled = settings.playerGesturesEnabled,
         showBitrate = settings.showBitrate,
         bitrateKbps = activeBitrate,
         liked = liked,

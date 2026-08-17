@@ -33,6 +33,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -55,6 +57,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import dev.sfg.orchard.mobile.model.Track
@@ -82,6 +85,10 @@ fun FullBleedPlayerBackdrop(
     modifier: Modifier = Modifier,
     /** 0f outside a transition, rising to 1f at the handoff. Drives the cover handoff. */
     transitionProgress: Float = 0f,
+    gesturesEnabled: Boolean = false,
+    onNext: () -> Unit = {},
+    onPrevious: () -> Unit = {},
+    onLiked: () -> Unit = {},
 ) {
     val animatedBottom by animateColorAsState(
         targetValue = palette.bottom,
@@ -110,6 +117,27 @@ fun FullBleedPlayerBackdrop(
     Box(
         modifier
             .fillMaxSize()
+            .then(
+                if (gesturesEnabled) {
+                    Modifier
+                        .pointerInput(Unit) {
+                            detectTapGestures(onDoubleTap = { onLiked() })
+                        }
+                        .pointerInput(Unit) {
+                            var dragDistance = 0f
+                            detectHorizontalDragGestures(
+                                onDragStart = { dragDistance = 0f },
+                                onDragEnd = {
+                                    if (dragDistance > 150f) onPrevious()
+                                    else if (dragDistance < -150f) onNext()
+                                },
+                                onHorizontalDrag = { change, dragAmount ->
+                                    dragDistance += dragAmount
+                                }
+                            )
+                        }
+                } else Modifier
+            )
             .background(
                 Brush.verticalGradient(
                     0.0f to animatedBottom,

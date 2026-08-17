@@ -24,10 +24,12 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.sfg.orchard.mobile.model.AudioQuality
+import dev.sfg.orchard.mobile.model.EqualizerConfig
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -64,6 +66,14 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 spotifyCanvasEnabled = values[SPOTIFY_CANVAS_ENABLED] ?: true,
                 volumeNormalizationEnabled = values[VOLUME_NORMALIZATION_ENABLED] ?: false,
                 autoplayEnabled = values[AUTOPLAY_ENABLED] ?: true,
+                equalizerConfig = EqualizerConfig(
+                    enabled = values[EQUALIZER_ENABLED] ?: false,
+                    presetId = values[EQUALIZER_PRESET] ?: "flat",
+                    gains = decodeFloatList(values[EQUALIZER_GAINS].orEmpty(), 10),
+                    preampDb = values[EQUALIZER_PREAMP] ?: 0f,
+                    bassBoost = values[EQUALIZER_BASS_BOOST] ?: 0f,
+                ),
+                playerGesturesEnabled = values[PLAYER_GESTURES_ENABLED] ?: true,
             )
         }
         .stateIn(scope, SharingStarted.Eagerly, OrchardSettings())
@@ -92,6 +102,12 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[SPOTIFY_CANVAS_ENABLED] = value.spotifyCanvasEnabled
                 it[VOLUME_NORMALIZATION_ENABLED] = value.volumeNormalizationEnabled
                 it[AUTOPLAY_ENABLED] = value.autoplayEnabled
+                it[EQUALIZER_ENABLED] = value.equalizerConfig.enabled
+                it[EQUALIZER_PRESET] = value.equalizerConfig.presetId
+                it[EQUALIZER_GAINS] = value.equalizerConfig.gains.joinToString(",")
+                it[EQUALIZER_PREAMP] = value.equalizerConfig.preampDb
+                it[EQUALIZER_BASS_BOOST] = value.equalizerConfig.bassBoost
+                it[PLAYER_GESTURES_ENABLED] = value.playerGesturesEnabled
             }
         }
     }
@@ -120,6 +136,12 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         }
     }.getOrDefault(emptyList())
 
+    private fun decodeFloatList(value: String, expectedSize: Int): List<Float> {
+        if (value.isBlank()) return List(expectedSize) { 0f }
+        val parts = value.split(",")
+        return List(expectedSize) { i -> parts.getOrNull(i)?.toFloatOrNull() ?: 0f }
+    }
+
     private companion object {
         val ANIMATED_ARTWORK = booleanPreferencesKey("animated_artwork")
         val AUDIO_QUALITY = stringPreferencesKey("audio_quality")
@@ -138,5 +160,11 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val VOLUME_NORMALIZATION_ENABLED = booleanPreferencesKey("volume_normalization_enabled")
         val AUTOPLAY_ENABLED = booleanPreferencesKey("autoplay_enabled")
         val SEARCH_HISTORY = stringPreferencesKey("search_history")
+        val EQUALIZER_ENABLED = booleanPreferencesKey("equalizer_enabled")
+        val EQUALIZER_PRESET = stringPreferencesKey("equalizer_preset")
+        val EQUALIZER_GAINS = stringPreferencesKey("equalizer_gains")
+        val EQUALIZER_PREAMP = floatPreferencesKey("equalizer_preamp")
+        val EQUALIZER_BASS_BOOST = floatPreferencesKey("equalizer_bass_boost")
+        val PLAYER_GESTURES_ENABLED = booleanPreferencesKey("player_gestures_enabled")
     }
 }

@@ -85,6 +85,10 @@ data class OrchardSettings(
     val volumeNormalizationEnabled: Boolean = false,
     /** Keep playing related music once the queue runs out, matching desktop's default of on. */
     val autoplayEnabled: Boolean = true,
+    /** Configuration for the 10-band audio equalizer and audio effects. */
+    val equalizerConfig: EqualizerConfig = EqualizerConfig(),
+    /** Enable swipe and tap gestures on the player artwork. */
+    val playerGesturesEnabled: Boolean = true,
 ) {
     /** Clamped, because a persisted value from an older build must not size the cache absurdly. */
     val cacheSizeBytes: Long

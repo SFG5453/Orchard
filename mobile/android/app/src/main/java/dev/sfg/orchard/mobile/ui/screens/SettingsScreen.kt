@@ -134,6 +134,8 @@ fun SettingsScreen(
         SettingsPanel {
             QualityRow(settings.audioQuality) { onSettings(settings.copy(audioQuality = it)) }
             PanelDivider()
+            EqualizerRow(settings, onSettings)
+            PanelDivider()
             ToggleRow(
                 icon = Icons.Rounded.GraphicEq,
                 title = "Show audio bitrate",
@@ -185,6 +187,14 @@ fun SettingsScreen(
 
         SectionLabel("Appearance")
         SettingsPanel {
+            ToggleRow(
+                icon = Icons.Rounded.Person,
+                title = "Player gestures",
+                subtitle = "Swipe to skip and tap to like on artwork",
+                checked = settings.playerGesturesEnabled,
+                onChecked = { onSettings(settings.copy(playerGesturesEnabled = it)) },
+            )
+            PanelDivider()
             ToggleRow(
                 icon = Icons.Rounded.Palette,
                 title = "Use system colours",

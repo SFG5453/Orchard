@@ -99,6 +99,7 @@ fun NowPlayingScreen(
     targets: PlaybackTargetState,
     lyrics: LoadState<List<LyricLine>>,
     animatedArtworkEnabled: Boolean,
+    gesturesEnabled: Boolean = false,
     liked: Boolean,
     modifier: Modifier = Modifier,
     /** The pill's bounds in root coordinates; the player collapses into it. */
@@ -303,6 +304,10 @@ fun NowPlayingScreen(
                 track = track,
                 isPlaying = playback.isPlaying,
                 animatedArtworkEnabled = animatedArtworkEnabled,
+                gesturesEnabled = gesturesEnabled,
+                onNext = onNext,
+                onPrevious = onPrevious,
+                onLiked = onLiked,
                 palette = palette,
                 onVideoFrame = { videoFrame = it },
                 onArtworkBounds = { if (!wideLayout && progress == 0f) onRestingCoverBounds(it) },
