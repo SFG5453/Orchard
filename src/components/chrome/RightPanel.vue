@@ -116,6 +116,21 @@ export default {
                 <strong>{{ continuousQueueEnabled ? 'Queue' : 'Up next' }}</strong>
               </div>
               <div class="right-queue-header__actions">
+                <!-- The full queue has always had a page of its own, but the
+                     only route to it was a sidebar entry filed under Library,
+                     which reads as saved content rather than what is playing.
+                     Anyone wanting more room for the queue is looking at the
+                     queue, so the way through is offered here. -->
+                <button
+                  type="button"
+                  class="right-queue-expand"
+                  title="Open the full queue"
+                  aria-label="Open the full queue"
+                  @click="selectView('queue')"
+                >
+                  <q-icon name="open_in_full" />
+                  <span>Open</span>
+                </button>
                 <button
                   v-if="queue.length > 1"
                   type="button"

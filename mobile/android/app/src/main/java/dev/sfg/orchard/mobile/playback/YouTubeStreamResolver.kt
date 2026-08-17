@@ -492,15 +492,29 @@ class YouTubeStreamResolver(
     }
 
     /**
+     * Drops both resolved URLs and the short failure backoff before a deliberate retry.
+     *
+     * A resolver failure is cached briefly to coalesce Media3 and prefetch requests. Once the
+     * player has surfaced that failure to the user, however, retaining it makes the next Play tap
+     * fail immediately without making a network request — the player appears to stop itself.
+     */
+    fun resetForRetry(videoId: String) {
+        invalidate(videoId)
+        failures.remove(videoId)
+    }
+
+    /**
      * Records a failed media fetch so the next resolve changes client instead of minting the same
      * rejected URL. Only response codes that indicate an expired/rejected CDN URL trigger this.
      */
-    fun reject(videoId: String, stream: ResolvedStream, responseCode: Int) {
-        if (responseCode !in RETRYABLE_STREAM_RESPONSE_CODES || stream.clientKey.isBlank()) return
+    fun reject(videoId: String, stream: ResolvedStream, responseCode: Int): Boolean {
+        if (responseCode !in RETRYABLE_STREAM_RESPONSE_CODES || stream.clientKey.isBlank()) {
+            return false
+        }
         rejectedClientsUntil["$videoId:${stream.clientKey}"] =
             System.currentTimeMillis() + REJECTED_CLIENT_BACKOFF_MS
-        invalidate(videoId)
-        failures.remove(videoId)
+        resetForRetry(videoId)
+        return true
     }
 
     /**

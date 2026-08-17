@@ -75,11 +75,25 @@ export function hasExplicitBadge(value = {}) {
   return list.some((badge) => /explicit|music_explicit_badge/.test(explicitBadgeText(badge)));
 }
 
+// Loose comparison text for titles and artist names. Keeps letters and digits
+// in every script, because the class this used to reduce to, [a-z0-9], emptied
+// any title written without Latin characters. An empty key is not a harmless
+// near-miss here: callers treat it as "no identity" and drop the item, so a
+// Chinese or Japanese artist's releases disappeared from their own page while
+// the ones that happened to carry a Latin word survived.
+//
+// Latin combining marks are folded so an accented name still matches its plain
+// spelling. The fold is deliberately narrow: decomposing and recomposing around
+// U+0300-U+036F leaves Japanese voiced kana intact, where stripping every
+// combining mark would turn da into ta and match two different words.
 export function normalizedLooseText(value = '') {
   return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .normalize('NFC')
     .toLowerCase()
     .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
 }
 

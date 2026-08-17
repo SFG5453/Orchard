@@ -22,7 +22,7 @@
 .immersive-background::after {
   position: absolute;
   inset: 0;
-  background: rgba(3, 7, 4, 0.34);
+  background: rgba(3, 7, 4, var(--immersive-veil-alpha, 0.34));
   content: '';
 }
 
@@ -43,5 +43,5 @@
 }
 
 html[data-theme-resolved='light'] .immersive-background::after {
-  background: rgba(248, 250, 248, 0.7);
+  background: rgba(248, 250, 248, var(--immersive-veil-alpha, 0.7));
 }

@@ -68,6 +68,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Process-level owner of local phone playback.
@@ -106,6 +107,9 @@ class OrchardPlaybackService : MediaLibraryService() {
         )
     private var retriedMediaId = ""
     private var artworkHydrationId = ""
+
+    /** The exact client identity behind each stable Orchard URI's most recent media fetch. */
+    private val resolvedStreams = ConcurrentHashMap<String, ResolvedStream>()
 
     private val positionSaver =
         object : Runnable {
@@ -383,6 +387,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                 if (stream.bitrateKbps > 0)
                     OrchardGraph.from(this@OrchardPlaybackService).activeBitrate.value =
                         stream.bitrateKbps
+                resolvedStreams[original.uri.toString()] = stream
                 Log.d(TAG, "resolvingFactory: resolved $videoId to url=${stream.url.take(60)}...")
                 // The CDN checks the URL against the client it was issued to, so the fetch
                 // has to claim the identity that resolved it rather than the factory's
@@ -405,6 +410,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                 if (MediaItemMapper.requiresAuthenticatedHls(original.uri)) {
                     val videoId = original.uri.lastPathSegment.orEmpty()
                     val stream = streamResolver.resolveAuthenticatedHls(videoId)
+                    resolvedStreams[original.uri.toString()] = stream
                     original
                         .withUri(stream.url.toUri())
                         .withAdditionalHeaders(stream.requestHeaders)
@@ -734,7 +740,15 @@ class OrchardPlaybackService : MediaLibraryService() {
                     Log.e(TAG, "Playback failed without a recoverable media item", error)
                     return
                 }
-                streamResolver.invalidate(mediaId)
+                val resolvedStream = resolvedStreams.remove(failedUri.toString())
+                val responseCode = playbackHttpResponseCode(error)
+                val rejectedClient =
+                    if (resolvedStream != null && responseCode != null) {
+                        streamResolver.reject(mediaId, resolvedStream, responseCode)
+                    } else {
+                        false
+                    }
+                if (!rejectedClient) streamResolver.resetForRetry(mediaId)
                 if (
                     MediaItemMapper.requiresAuthenticatedDirect(failedUri)
                 ) {
@@ -762,6 +776,18 @@ class OrchardPlaybackService : MediaLibraryService() {
                     player.seekTo(index, position)
                     player.prepare()
                     player.play()
+                    return
+                }
+                // Resolution itself already walked the complete client catalog. Repeating that
+                // 25-second chain automatically only extends the spinner. Its failure backoff was
+                // cleared above, so an explicit Play tap makes one fresh attempt instead of
+                // reproducing the old exception instantly.
+                if (resolvedStream == null) {
+                    Log.e(TAG, "Playback stopped after stream resolution exhausted its fallbacks", error)
+                    return
+                }
+                if (isUnrecoverablePlaybackError(error)) {
+                    Log.e(TAG, "Playback error is not recoverable by refreshing the stream", error)
                     return
                 }
                 if (retriedMediaId == mediaId) {
