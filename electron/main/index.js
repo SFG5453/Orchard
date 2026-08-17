@@ -430,8 +430,11 @@ async function createMainWindow() {
     ...(isNiriSession ? {} : { x: windowState.x, y: windowState.y }),
     width: isNiriSession ? 1100 : windowState.width,
     height: isNiriSession ? 760 : windowState.height,
-    minWidth: isNiriSession ? 480 : 760,
-    minHeight: 620,
+    // The renderer has a mini-sidebar and compact settings breakpoints for
+    // narrow windows. Keep the native constraint aligned with those layouts;
+    // otherwise the responsive path can never be used on regular desktops.
+    minWidth: 480,
+    minHeight: 520,
     autoHideMenuBar: true,
     frame: useNativeTitlebar,
     show: false,

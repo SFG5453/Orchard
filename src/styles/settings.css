@@ -410,10 +410,29 @@
 
 @media (max-width: 520px) {
   .settings-row,
-  .settings-action-row,
   .settings-row--slider {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 12px;
+  }
+
+  .settings-row--options {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 10px 0;
+  }
+
+  .settings-option-group {
+    justify-content: flex-start;
+  }
+
+  .settings-action-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 10px 0;
+  }
+
+  .settings-connect__actions {
+    justify-content: flex-start;
   }
 
   .settings-row--slider {
@@ -422,5 +441,26 @@
 
   .settings-link-button--danger {
     margin-left: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .settings-view {
+    gap: 18px;
+  }
+
+  .settings-index {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-index a {
+    min-height: 34px;
+    gap: 7px;
+    padding: 0 7px;
+    font-size: 11px;
+  }
+
+  .settings-connect__qr {
+    width: min(188px, 100%);
   }
 }
