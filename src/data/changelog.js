@@ -19,6 +19,31 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '4.5.1',
+    codename: 'Hellishly Code',
+    date: 'August 16, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'Added a Network setting that lets album art and update checks ignore an unreachable system proxy while preserving system proxy behavior by default.',
+          'Orchard Connect now prefers a reachable LAN address and offers alternate network links when the computer has multiple adapters.',
+          'The full queue can now be opened directly from the compact queue panel.',
+          'Immersive artwork veils adapt to cover colors so light covers remain readable without unnecessarily obscuring darker artwork.'
+        ]
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Normal playback no longer passes through the DJ crossover filters, preventing phase-related transient clipping while preserving crossover automation for DJ transition styles.',
+          'The fullscreen transport and lyrics now fit on short displays instead of being clipped below the viewport.',
+          'Copy actions now use the main-process clipboard bridge and browser fallbacks, fixing silent failures inside the desktop app.',
+          'Catalog matching now preserves titles and artist names written in non-Latin scripts.'
+        ]
+      }
+    ]
+  },
+  {
     version: '4.5.0',
     codename: 'Funds Lecterns',
     date: 'August 15, 2026',

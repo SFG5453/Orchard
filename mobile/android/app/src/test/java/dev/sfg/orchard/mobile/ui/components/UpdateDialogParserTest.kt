@@ -119,14 +119,10 @@ class UpdateDialogParserTest {
         val notes = dev.sfg.orchard.mobile.MobileChangelog.CURRENT_RELEASE_NOTES
         val sections = parseReleaseNoteSections(notes)
 
-        assertEquals(2, sections.size)
-        assertEquals("New & improved", sections[0].title)
-        assertEquals(ReleaseNoteCategory.NEW, sections[0].category)
-        assertEquals(2, sections[0].items.size)
-
-        assertEquals("Fixed", sections[1].title)
-        assertEquals(ReleaseNoteCategory.FIXED, sections[1].category)
-        assertEquals(3, sections[1].items.size)
+        assertEquals(1, sections.size)
+        assertEquals("Fixed", sections[0].title)
+        assertEquals(ReleaseNoteCategory.FIXED, sections[0].category)
+        assertEquals(3, sections[0].items.size)
     }
 
     @Test

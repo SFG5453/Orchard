@@ -1,10 +1,6 @@
-## Orchard Mobile 1.6.0 "Pewee Lemonades"
-
-### New & improved
-- **Faster, Resumable Downloads**: Orchard can download more tracks at once, resume interrupted transfers, and use bounded parallel ranges for Max-quality audio when the source supports them.
-- **Release Notes and Update Controls**: A redesigned update experience shows structured release notes, exposes the installed version, and adds manual update checks and install actions to Settings.
+## Orchard Mobile 1.6.1 "Palmiest Addressees"
 
 ### Fixed
-- **More Reliable Playback and Downloads**: Orchard now rotates through coordinated YouTube client profiles and carries each profile's required request identity into media fetches when a stream is rejected.
-- **Safer Download Recovery**: Downloads validate byte ranges and content lengths, preserve compatible partial files after interruptions, and fall back safely when a server rejects parallel transfers.
-- **Screen Timeout with Animated Artwork**: Animated artwork no longer keeps the display awake when the normal Android screen timeout should turn it off.
+- **Uploaded Library Playback**: Uploaded and private library tracks now skip guest clients that cannot access them and reach signed-in playback with the account's visitor and channel delegation identity. The same path now retries only when refreshing the stream can help.
+- **Progressive Collection Loading**: Collections show their first page immediately and fill in as more pages arrive. Endless mixes use a bounded paging budget, and opening another collection cancels the previous load.
+- **Private Search History**: Internal song lookups used to resolve playback are now anonymous, so they no longer add searches to the listener's YouTube history.
