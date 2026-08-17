@@ -112,7 +112,7 @@ export function installLifecycle(ctx) {
 
   watch(ctx.backdropArtworkImage, (imageUrl) => {
     if (imageUrl) ctx.lastImmersiveArtworkImage.value = imageUrl;
-    ctx.loadPlayerBarAccent(imageUrl);
+    ctx.loadArtworkColors(imageUrl);
   }, { immediate: true });
 
   watch(ctx.discordArtworkImage, () => {
@@ -328,8 +328,15 @@ export function installLifecycle(ctx) {
     ctx.syncSongCacheSettings();
   });
 
-  watch([ctx.accentColorSource, ctx.customAccentColor], () => {
-    ctx.loadPlayerBarAccent(ctx.backdropArtworkImage.value);
+  // The veil is solved against the theme's text colours and scaled by the
+  // background intensity, so both have to re-solve it, not just the accent.
+  watch([
+    ctx.accentColorSource,
+    ctx.customAccentColor,
+    ctx.themePreference,
+    ctx.immersiveBackgroundIntensity
+  ], () => {
+    ctx.loadArtworkColors(ctx.backdropArtworkImage.value);
   });
 
   watch(ctx.themePreference, () => {
@@ -394,6 +401,7 @@ export function installLifecycle(ctx) {
     ctx.updateMediaSessionPlaybackState();
     ctx.updateMediaSessionPositionState();
     void ctx.loadMigrationNotice();
+    void ctx.loadProxyMode();
     void ctx.bindUpdateEvents().then((bound) => {
       if (bound && new URLSearchParams(window.location.search).get('welcome') !== '1') {
         void ctx.ensureOfficialArtistPages();

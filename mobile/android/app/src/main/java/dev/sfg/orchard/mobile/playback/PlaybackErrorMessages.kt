@@ -19,6 +19,9 @@
 
 package dev.sfg.orchard.mobile.playback
 
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.HttpDataSource
+
 /**
  * Turns a playback failure into something worth showing someone.
  *
@@ -60,6 +63,21 @@ internal fun playbackErrorMessage(error: Throwable): String {
     }
     val fallback = error.cause?.message ?: error.message
     return fallback?.takeIf { it.isNotBlank() } ?: "Playback failed."
+}
+
+/** Finds the CDN response code Media3 nests below its top-level playback exception. */
+@UnstableApi
+internal fun playbackHttpResponseCode(error: Throwable): Int? =
+    findCause(error, HttpDataSource.InvalidResponseCodeException::class.java)?.responseCode
+
+/** Cause chains are routinely two or three wrappers deep in Media3 source failures. */
+internal fun <T : Throwable> findCause(error: Throwable, type: Class<T>): T? {
+    var current: Throwable? = error
+    while (current != null) {
+        if (type.isInstance(current)) return type.cast(current)
+        current = current.cause
+    }
+    return null
 }
 
 private const val UNPLAYABLE_PREFIX = "YouTube could not play this track: "

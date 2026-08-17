@@ -40,6 +40,7 @@ import dev.sfg.orchard.mobile.songlinks.LinkResolution
 import dev.sfg.orchard.mobile.songlinks.SongLinksCoordinator
 import dev.sfg.orchard.mobile.songlinks.SongShareState
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -220,6 +221,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     private val mutableSleepTimerEndOfTrack = MutableStateFlow(false)
     val sleepTimerEndOfTrack: StateFlow<Boolean> = mutableSleepTimerEndOfTrack.asStateFlow()
     private var sleepTimerJob: Job? = null
+    private var detailJob: Job? = null
 
     val updateState: StateFlow<dev.sfg.orchard.mobile.UpdateState> = graph.updates.state
 
@@ -283,7 +285,10 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     fun openDetail(id: String) {
         val seed = findCatalogItem(id, home.value, search.value, library.value, detail.value)
-        viewModelScope.launch {
+        // A collection now publishes several times as its pages land, so a load left running after
+        // the listener moved on would keep writing its pages over the collection they opened next.
+        detailJob?.cancel()
+        detailJob = viewModelScope.launch {
             mutableDetail.value = LoadState.Loading
 
             // When offline or if network is down, immediately synthesize from downloaded tracks
@@ -300,21 +305,27 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
 
-            val result = runCatching { graph.catalog.browse(id) }
-                .map { it.withSeed(seed) }
-                .recoverCatching { error ->
-                    dev.sfg.orchard.mobile.download.OfflineDetailSynthesizer.synthesize(
-                        id = id,
-                        seed = seed,
-                        downloadedItems = downloads.value.values.toList(),
-                        library = library.value,
-                    ) ?: throw error
+            // Each page replaces the last, so the collection appears as soon as its first page
+            // lands and grows underneath the listener instead of holding a spinner until an
+            // endless mix exhausts its continuation budget.
+            try {
+                graph.catalog.browsePages(id).collect { page ->
+                    mutableDetail.value = LoadState.Content(page.withSeed(seed))
                 }
-
-            mutableDetail.value = result.fold(
-                onSuccess = { LoadState.Content(it) },
-                onFailure = { LoadState.Error(it.message ?: "This collection could not be loaded.") },
-            )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                // Continuation failures are already absorbed by the repository, so reaching here
+                // means the first page never arrived and there is nothing on screen to keep.
+                val offline = dev.sfg.orchard.mobile.download.OfflineDetailSynthesizer.synthesize(
+                    id = id,
+                    seed = seed,
+                    downloadedItems = downloads.value.values.toList(),
+                    library = library.value,
+                )
+                mutableDetail.value = offline?.let { LoadState.Content(it) }
+                    ?: LoadState.Error(error.message ?: "This collection could not be loaded.")
+            }
         }
     }
 

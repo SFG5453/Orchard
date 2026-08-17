@@ -18,6 +18,7 @@
  */
 
 import { fetchBatchCloudAnalysis } from '../../services/cloudAnalysisSync.js';
+import { copyTextToClipboard } from './clipboardText.js';
 
 const CONNECT_SYNC_INTERVAL_MS = 500;
 
@@ -130,6 +131,7 @@ export function installConnectActions(ctx) {
         pairUrl: data.appUrl || data.url,
         appPairUrl: data.appUrl || data.url,
         webPairUrl: data.webUrl || '',
+        altWebPairUrls: data.altWebUrls || [],
         qrSvg: data.qrSvg,
         expiresAt: data.expiresAt
       }
@@ -156,16 +158,34 @@ export function installConnectActions(ctx) {
 
   ctx.copyOrchardConnectLink = async function copyOrchardConnectLink() {
     const url = ctx.orchardConnect.value.pairUrl;
-    if (!url || !navigator.clipboard) return;
-    await navigator.clipboard.writeText(url);
-    ctx.orchardConnectPairingMessage.value = 'App link copied.';
+    if (!url) return;
+    try {
+      await copyTextToClipboard(url);
+      ctx.orchardConnectPairingMessage.value = 'App link copied.';
+    } catch {
+      ctx.orchardConnectPairingMessage.value = `Copy failed. Use ${url}`;
+    }
   };
 
   ctx.copyOrchardConnectWebLink = async function copyOrchardConnectWebLink() {
     const url = ctx.orchardConnect.value.webPairUrl;
-    if (!url || !navigator.clipboard) return;
-    await navigator.clipboard.writeText(url);
-    ctx.orchardConnectPairingMessage.value = 'Camera link copied.';
+    if (!url) return;
+    try {
+      await copyTextToClipboard(url);
+      ctx.orchardConnectPairingMessage.value = 'Camera link copied.';
+    } catch {
+      ctx.orchardConnectPairingMessage.value = `Copy failed. Use ${url}`;
+    }
+  };
+
+  ctx.copyOrchardConnectAltLink = async function copyOrchardConnectAltLink(url) {
+    if (!url) return;
+    try {
+      await copyTextToClipboard(url);
+      ctx.orchardConnectPairingMessage.value = 'Alternate link copied.';
+    } catch {
+      ctx.orchardConnectPairingMessage.value = `Copy failed. Use ${url}`;
+    }
   };
 
   ctx.handleConnectCommand = function handleConnectCommand({ command = {} } = {}) {

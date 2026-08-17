@@ -19,6 +19,7 @@
 
 import { computed, ref, watch } from 'vue';
 import { ListeningPartyClient } from './listeningPartyClient.js';
+import { copyTextToClipboard } from '../platform/clipboardText.js';
 
 const PARTY_SYNC_INTERVAL_MS = 2500;
 
@@ -26,29 +27,6 @@ function sameTrackOrder(left = [], right = []) {
   return left.length === right.length && left.every((track, index) => track?.id === right[index]?.id);
 }
 
-async function copyText(value) {
-  const text = String(value || '').trim();
-  if (!text) return false;
-  if (window.orchardClipboard?.writeText) {
-    await window.orchardClipboard.writeText(text);
-    return true;
-  }
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return true;
-  }
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.setAttribute('readonly', '');
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  const copied = document.execCommand('copy');
-  textarea.remove();
-  if (!copied) throw new Error('Clipboard access is unavailable.');
-  return true;
-}
 
 export function installListeningPartyActions(ctx) {
   ctx.listeningParty = ref({
@@ -153,7 +131,7 @@ export function installListeningPartyActions(ctx) {
 
   ctx.copyListeningPartyInviteUrl = async function copyListeningPartyInviteUrl() {
     if (!ctx.listeningPartyInviteUrl.value) return;
-    await copyText(ctx.listeningPartyInviteUrl.value);
+    await copyTextToClipboard(ctx.listeningPartyInviteUrl.value);
     ctx.listeningPartyInviteCopied.value = true;
     ctx.showShareMessage?.('Copied listening party invite link.');
     window.setTimeout(() => {

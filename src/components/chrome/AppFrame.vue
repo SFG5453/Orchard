@@ -119,6 +119,7 @@ export default {
     :style="{
       ...playerBarStyle,
       '--immersive-background-opacity': immersiveBackgroundOpacity(immersiveBackgroundIntensity),
+      '--immersive-veil-alpha': immersiveVeilAlpha,
       ...customArtistProfileCameraStyle
     }"
   >

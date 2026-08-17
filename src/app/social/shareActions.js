@@ -18,6 +18,7 @@
  */
 
 import { ref } from 'vue';
+import { copyTextToClipboard } from '../platform/clipboardText.js';
 
 const songLinksOrigin = 'https://songlinks.sfg545.dev';
 
@@ -83,17 +84,7 @@ async function fetchSongLinksJson(path, payload) {
 }
 
 async function copyShareText(value) {
-  const text = cleanShareText(value);
-  if (!text) return false;
-  if (window.orchardClipboard?.writeText) {
-    await window.orchardClipboard.writeText(text);
-    return true;
-  }
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return true;
-  }
-  throw new Error('Clipboard access is unavailable.');
+  return copyTextToClipboard(cleanShareText(value));
 }
 
 export function installShareActions(ctx) {

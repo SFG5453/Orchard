@@ -37,13 +37,49 @@ function effectiveProtocolVersion(clientVersion = 1) {
   return Math.min(version, CONNECT_PROTOCOL_VERSION);
 }
 
-function localLanAddress() {
-  for (const entries of Object.values(networkInterfaces())) {
+// Windows boxes routinely enumerate Hyper-V, WSL, VPN and hypervisor adapters
+// ahead of the real NIC, so taking the first non-internal IPv4 hands the phone
+// an address nothing on the LAN can route to. Rank the candidates instead.
+const virtualAdapterPattern = /(vethernet|hyper-?v|vmware|vmnet|virtualbox|vboxnet|wsl|docker|tailscale|zerotier|npcap|loopback|bluetooth|tap-|tun\d|utun|ppp|radmin|hamachi|nordlynx|wireguard|proton)/i;
+
+// 192.168/16 and 10/8 are what home routers hand out. 172.16/12 is valid but is
+// also where Docker and WSL live, so it only wins when nothing better exists.
+function addressRangeScore(address = '') {
+  const [first, second] = address.split('.').map(Number);
+  if (first === 192 && second === 168) return 3;
+  if (first === 10) return 2;
+  if (first === 172 && second >= 16 && second <= 31) return 1;
+  return 0;
+}
+
+export function lanAddressCandidates(interfaces = {}) {
+  const candidates = [];
+  for (const [name, entries] of Object.entries(interfaces)) {
     for (const entry of entries || []) {
-      if (entry.family === 'IPv4' && !entry.internal) return entry.address;
+      const family = entry?.family;
+      if (family !== 'IPv4' && family !== 4) continue;
+      if (entry.internal) continue;
+      // Self-assigned APIPA addresses mean the interface never got a lease.
+      if (entry.address.startsWith('169.254.')) continue;
+      candidates.push({
+        address: entry.address,
+        name,
+        virtual: virtualAdapterPattern.test(name),
+        rangeScore: addressRangeScore(entry.address)
+      });
     }
   }
-  return '127.0.0.1';
+
+  return candidates
+    .sort((left, right) =>
+      Number(left.virtual) - Number(right.virtual) ||
+      right.rangeScore - left.rangeScore ||
+      left.address.localeCompare(right.address))
+    .map((candidate) => candidate.address);
+}
+
+function localLanAddress() {
+  return lanAddressCandidates(networkInterfaces())[0] || '127.0.0.1';
 }
 
 function jsonReply(reply, data) {
@@ -231,6 +267,16 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
     return `http://${localLanAddress()}:${httpServer.address().port}`;
   }
 
+  // Ranking picks the address that works on most machines, but a host with two
+  // real NICs (wired plus wireless) can still be reachable only on the other
+  // one, so every candidate is offered as a fallback link.
+  function alternateWebUrls(token) {
+    const port = httpServer.address().port;
+    return lanAddressCandidates(networkInterfaces())
+      .slice(1)
+      .map((address) => `http://${address}:${port}/connect?token=${encodeURIComponent(token)}`);
+  }
+
   async function newPairing() {
     const token = randomBytes(18).toString('base64url');
     const serverUrl = baseUrl();
@@ -241,6 +287,7 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
       url: appUrl,
       appUrl,
       webUrl,
+      altWebUrls: alternateWebUrls(token),
       qrSvg: await QRCode.toString(appUrl, { type: 'svg', margin: 1, width: 168 }),
       expiresAt: Date.now() + 10 * 60 * 1000
     };
@@ -255,6 +302,7 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
       pairUrl: active.appUrl,
       appPairUrl: active.appUrl,
       webPairUrl: active.webUrl,
+      altWebPairUrls: active.altWebUrls || [],
       qrSvg: active.qrSvg,
       expiresAt: active.expiresAt,
       pending: publicPendingRequests(pending),

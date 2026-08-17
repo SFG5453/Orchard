@@ -85,8 +85,17 @@ export function createAudioAnalyzer(options = {}) {
   // `midDuck` is one peaking section rather than a second crossover: the
   // renderer can afford a three-way split offline, but here a single
   // automatable dip covers the same band without adding two more phase-shifted
-  // branches that would have to sum flat. At 0 dB it is transparent, so a
-  // non-DJ crossfade and ordinary playback run through an unchanged signal.
+  // branches that would have to sum flat. At 0 dB it is transparent.
+  //
+  // This network is switched *out* of circuit for ordinary playback, because
+  // "transparent" is only true of its magnitude response. An LR4 low/high pair
+  // sums to an allpass: dead flat within 0.03 dB, which is why it never showed
+  // up as a tone-balance problem, but it redistributes phase across the low
+  // mids and that grows transient peaks. Measured against real masters it adds
+  // 0.7-3.4 dB of peak with no change in level, so a track mastered near full
+  // scale -- which is most of them -- was driven past the destination's ceiling
+  // and hard-clipped on every transient, with EQ and every gain at unity. That
+  // was the "distorted even with the audio engine off" report.
   const BASS_CROSSOVER_HZ = 200;
   const MID_DUCK_HZ = 1200;
 
@@ -127,6 +136,9 @@ export function createAudioAnalyzer(options = {}) {
     const normalizedGain = ctx.createGain();
     const gain = ctx.createGain();
     const mixGain = ctx.createGain();
+    const directBand = ctx.createGain();
+    const splitInput = ctx.createGain();
+    const bandSum = ctx.createGain();
     const { lowPass, highPass } = outputFilters(ctx);
     const { bassLow, bassHigh, bassGain, midDuck } = mixBands(ctx);
     analyser.fftSize = config.fftSize;
@@ -140,6 +152,11 @@ export function createAudioAnalyzer(options = {}) {
     normalizedGain.gain.value = 0;
     gain.gain.value = clamp01(element.volume);
     mixGain.gain.value = 1;
+    // Playback starts on the unsplit path and stays there unless a transition
+    // that automates the bands asks for the split.
+    directBand.gain.value = 1;
+    splitInput.gain.value = 0;
+    bandSum.gain.value = 1;
 
     const processor = options.createProcessor?.({ context: ctx, source, element });
     if (processor?.output) processor.output.connect(analyser);
@@ -150,23 +167,34 @@ export function createAudioAnalyzer(options = {}) {
     normalizer.connect(normalizedGain);
     normalizedGain.connect(gain);
     gain.connect(mixGain);
-    // The sweep filters sit on the high branch only. Sweeping a low-pass down
+    // Ordinary playback: mix envelope straight to the output, no filters in
+    // the path at all. `splitInput` sits at zero, so the crossover branches
+    // below are silent and their filter state decays away until armed.
+    mixGain.connect(directBand);
+    directBand.connect(ctx.destination);
+    // The sweep filter sits on the high branch only. Sweeping a low-pass down
     // to 200 Hz across a band that starts at 200 Hz is meaningless, and running
     // it full-range is what made the outgoing track lose its body and its low
-    // end at the same time.
-    mixGain.connect(bassLow[0]);
-    mixGain.connect(bassHigh[0]);
-    bassGain.connect(ctx.destination);
+    // end at the same time. The static output pair is common to both branches
+    // and lives after the sum, so the crossover halves stay phase-matched.
+    mixGain.connect(splitInput);
+    splitInput.connect(bassLow[0]);
+    splitInput.connect(bassHigh[0]);
+    bassGain.connect(bandSum);
     midDuck.connect(lowPass);
-    lowPass.connect(highPass);
+    lowPass.connect(bandSum);
+    bandSum.connect(highPass);
     highPass.connect(ctx.destination);
     element.volume = 1;
 
     const node = {
       analyser,
+      bandSum,
       bassGain,
+      directBand,
       directGain,
       gain,
+      splitInput,
       highPass,
       lowPass,
       midDuck,

@@ -72,6 +72,7 @@ import { createMusicVideoFallback } from '../playback/musicVideoFallback.js';
 import { createPlaybackService } from '../playback/playbackService.js';
 import { registerAppHandlers } from '../platform/appHandlers.js';
 import { registerClipboardHandlers } from '../platform/clipboard.js';
+import { registerNetworkPreferences } from '../platform/networkPreferences.js';
 import { setupDesktopControls } from '../platform/desktopControls.js';
 import { registerScreenshotCapture } from '../platform/screenshotCapture.js';
 import { setupSystemMediaHandlers } from '../platform/systemMedia.js';
@@ -517,6 +518,10 @@ app.whenReady().then(async () => {
   });
   registerWindowControls({ BrowserWindow, ipcMain, screen });
   registerClipboardHandlers({ clipboard, ipcMain });
+  // Awaited here so the stored proxy mode is in force before any window requests
+  // its first image; applying it later would leave the opening screen's artwork
+  // going out through the proxy the listener asked Orchard to ignore.
+  await registerNetworkPreferences({ app, ipcMain, session }).restore();
   // Synchronous on purpose: the renderer seeds the queue and the last page from
   // this while it builds its initial state, and an async read would mean
   // starting on an empty queue and rewriting it a tick later.

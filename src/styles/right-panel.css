@@ -81,6 +81,7 @@
 .right-queue .queue-preview__item:focus-visible,
 .right-queue-remove:focus-visible,
 .right-queue-clear:focus-visible,
+.right-queue-expand:focus-visible,
 .right-queue-sort:focus-visible {
   outline: 1px solid rgba(47, 223, 147, 0.4);
   outline-offset: -1px;
@@ -219,7 +220,8 @@
   gap: 7px;
 }
 
-.right-queue-clear {
+.right-queue-clear,
+.right-queue-expand {
   justify-content: center;
 }
 
@@ -228,6 +230,7 @@
 }
 
 .right-queue-clear,
+.right-queue-expand,
 .right-queue-sort {
   display: inline-flex;
   min-height: 28px;
@@ -244,6 +247,7 @@
 }
 
 .right-queue-clear:hover,
+.right-queue-expand:hover,
 .right-queue-sort:hover {
   border-color: rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.045);
@@ -251,6 +255,7 @@
 }
 
 .right-queue-clear .q-icon,
+.right-queue-expand .q-icon,
 .right-queue-sort .q-icon {
   font-size: 12px;
 }

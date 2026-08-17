@@ -456,19 +456,25 @@ function readReply(response = {}) {
 }
 
 function requestPairing() {
+  const deviceToken = localStorage.getItem('orchard-connect-token') || '';
+  // Reaching this page without a token means the address was typed or copied
+  // without the ?token= part, which is not the same thing as an expired link.
+  if (!token && !deviceToken) {
+    els.status.textContent = 'This device is not paired. Scan the QR code in Orchard, or copy the camera link from Settings - it must include the token.';
+    return;
+  }
+
   els.status.textContent = 'Waiting for desktop approval';
-  socket.emit('connect:hello', {
-    token,
-    deviceToken: localStorage.getItem('orchard-connect-token') || '',
-    name: deviceName()
-  }, (response = {}) => {
+  socket.emit('connect:hello', { token, deviceToken, name: deviceName() }, (response = {}) => {
     const payload = readReply(response);
     if (payload.status === 'approved') {
       state.approved = true;
       els.status.textContent = 'Connected';
       renderState(payload.state || {});
     } else if (payload.status === 'expired') {
-      els.status.textContent = 'Pairing link expired. Refresh the QR code in Orchard.';
+      els.status.textContent = token
+        ? 'Pairing link expired. Refresh the QR code in Orchard.'
+        : 'This device is no longer paired. Scan a new QR code in Orchard.';
     } else if (payload.status === 'pending') {
       els.status.textContent = 'Approve this device in Orchard.';
     }

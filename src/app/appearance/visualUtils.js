@@ -17,7 +17,37 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { hexColorToRgb } from './appearancePreferences.js';
+import { hexColorToRgb, immersiveBackgroundOpacity } from './appearancePreferences.js';
+import { VEIL_MIN_ALPHA, solveVeilAlpha } from './immersiveVeil.js';
+
+// What the veil composites against. The page colour and the two text colours
+// come from the theme tokens in base-shell.css and appearance-theme.css, and the
+// veil colours from immersive-background.css.
+// Each theme keeps the opacity it already shipped as its floor, so a cover that
+// never needed help looks exactly as it did.
+const VEIL_THEMES = {
+  dark: {
+    veilRgb: [3, 7, 4],
+    pageRgb: [0, 0, 0],
+    textRgb: [246, 246, 246],
+    mutedRgb: [141, 141, 141],
+    minAlpha: VEIL_MIN_ALPHA
+  },
+  light: {
+    veilRgb: [248, 250, 248],
+    pageRgb: [244, 246, 244],
+    textRgb: [20, 23, 20],
+    mutedRgb: [104, 112, 105],
+    minAlpha: 0.7
+  }
+};
+
+function veilTheme() {
+  const resolved = typeof document === 'undefined'
+    ? 'dark'
+    : document.documentElement?.dataset?.themeResolved;
+  return VEIL_THEMES[resolved === 'light' ? 'light' : 'dark'];
+}
 
 export function installVisualUtils(ctx) {
   function releaseTrackCount(value = '') {
@@ -35,11 +65,18 @@ export function installVisualUtils(ctx) {
     return /^[12][0-9]{3}$/.test(String(value || '').trim());
   };
 
+  // Mirrors normalizedLooseText in electron/catalog/musicText.js, and carries
+  // the same reason for keeping every script's letters: callers use the result
+  // as a dedupe key, and reducing a title to [a-z0-9] emptied anything written
+  // without Latin characters, so unrelated tracks collided on one blank key.
   ctx.normalizedLookupText = function normalizedLookupText(value = '') {
     return String(value)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .normalize('NFC')
       .toLowerCase()
       .replace(/&/g, ' and ')
-      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
       .trim();
   };
 
@@ -267,8 +304,63 @@ export function installVisualUtils(ctx) {
     ];
   };
 
-  ctx.loadPlayerBarAccent = async function loadPlayerBarAccent(imageUrl) {
+  // Average colour of the whole cover, opaque pixels only. The backdrop is a
+  // heavy blur of the artwork, so its mean is what the veil actually has to
+  // cover. Unlike the accent sampler this keeps greys, since a grey cover is
+  // exactly the case that needs a heavier veil.
+  ctx.meanArtworkColor = function meanArtworkColor(imageData) {
+    const data = imageData.data;
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    let count = 0;
+
+    for (let index = 0; index < data.length; index += 16) {
+      if (data[index + 3] < 200) continue;
+      r += data[index];
+      g += data[index + 1];
+      b += data[index + 2];
+      count += 1;
+    }
+
+    return count ? [r / count, g / count, b / count] : null;
+  };
+
+  async function sampleArtworkImageData(imageUrl) {
+    if (!imageUrl || typeof Image === 'undefined' || typeof document === 'undefined') return null;
+
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.decoding = 'async';
+    image.referrerPolicy = 'no-referrer';
+
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = reject;
+      image.src = imageUrl;
+    });
+
+    const canvas = document.createElement('canvas');
+    const sampleWidth = 64;
+    const sampleHeight = Math.max(1, Math.round((image.naturalHeight / image.naturalWidth) * sampleWidth));
+    canvas.width = sampleWidth;
+    canvas.height = sampleHeight;
+
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) throw new Error('Canvas is unavailable');
+
+    context.drawImage(image, 0, 0, sampleWidth, sampleHeight);
+    return context.getImageData(0, 0, sampleWidth, sampleHeight);
+  }
+
+  /**
+   * Reads the backdrop artwork once and derives both colours that depend on it:
+   * the accent, when the listener has asked for an artwork accent, and the veil
+   * opacity that keeps text legible over it. One decode serves both.
+   */
+  ctx.loadArtworkColors = async function loadArtworkColors(imageUrl) {
     const requestId = ++ctx.playerColorRequest;
+    const wantsArtworkAccent = ctx.accentColorSource?.value === 'artwork';
     const fallbackAccent = ctx.accentColorSource?.value === 'custom'
       ? hexColorToRgb(ctx.customAccentColor.value)
       : [47, 223, 147];
@@ -280,44 +372,44 @@ export function installVisualUtils(ctx) {
       document.documentElement.style.setProperty('--q-primary', `rgb(${ctx.rgbToken(accent.rgb)})`);
     }
 
-    if (ctx.accentColorSource?.value !== 'artwork') {
-      applyAccent(fallbackAccent);
-      return;
+    // No artwork to measure means nothing is covering the page, so the veil
+    // goes back to the shipped default rather than holding a previous cover's.
+    function applyVeil(artworkRgb) {
+      if (requestId !== ctx.playerColorRequest || !ctx.immersiveVeilAlpha) return;
+
+      const theme = veilTheme();
+      ctx.immersiveVeilAlpha.value = artworkRgb
+        ? solveVeilAlpha({
+          ...theme,
+          artworkRgb,
+          backgroundOpacity: immersiveBackgroundOpacity(ctx.immersiveBackgroundIntensity?.value)
+        })
+        : theme.minAlpha;
     }
 
-    if (!imageUrl || typeof Image === 'undefined' || typeof document === 'undefined') {
-      applyAccent(fallbackAccent);
-      return;
-    }
+    // A fixed accent does not depend on the artwork, so it lands immediately
+    // rather than waiting on a decode that only the veil needs.
+    if (!wantsArtworkAccent) applyAccent(fallbackAccent);
 
+    let imageData = null;
     try {
-      const image = new Image();
-      image.crossOrigin = 'anonymous';
-      image.decoding = 'async';
-      image.referrerPolicy = 'no-referrer';
-
-      await new Promise((resolve, reject) => {
-        image.onload = resolve;
-        image.onerror = reject;
-        image.src = imageUrl;
-      });
-
-      const canvas = document.createElement('canvas');
-      const sampleWidth = 64;
-      const sampleHeight = Math.max(1, Math.round((image.naturalHeight / image.naturalWidth) * sampleWidth));
-      canvas.width = sampleWidth;
-      canvas.height = sampleHeight;
-
-      const context = canvas.getContext('2d', { willReadFrequently: true });
-      if (!context) throw new Error('Canvas is unavailable');
-
-      context.drawImage(image, 0, 0, sampleWidth, sampleHeight);
-      const accent = ctx.pickArtworkAccent(context.getImageData(0, 0, sampleWidth, sampleHeight));
-
-      if (accent) applyAccent(accent);
+      imageData = await sampleArtworkImageData(imageUrl);
     } catch {
-      applyAccent(fallbackAccent);
+      imageData = null;
     }
+
+    if (requestId !== ctx.playerColorRequest) return;
+
+    applyVeil(imageData ? ctx.meanArtworkColor(imageData) : null);
+    if (!wantsArtworkAccent) return;
+
+    if (!imageData) {
+      applyAccent(fallbackAccent);
+      return;
+    }
+
+    const accent = ctx.pickArtworkAccent(imageData);
+    if (accent) applyAccent(accent);
   };
 
   ctx.playlistCardStyle = function playlistCardStyle(index) {

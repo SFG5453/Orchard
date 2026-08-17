@@ -22,8 +22,12 @@
   z-index: 11000;
   inset: 0;
   display: grid;
-  min-width: 720px;
-  min-height: 520px;
+  /* The minimums keep the three-column stage honest on a small window, but the
+     panel is `overflow: hidden`, so anything past the viewport is clipped
+     outright rather than scrolled. Capping them at the viewport keeps the
+     transport row on screen on short displays such as 1920x480 bar monitors. */
+  min-width: min(720px, 100vw);
+  min-height: min(520px, 100vh);
   grid-template-rows: 76px minmax(0, 1fr) 150px;
   overflow: hidden;
   background: #070908;
@@ -229,7 +233,7 @@
 .fullscreen-player__lyrics {
   position: relative;
   height: min(58vh, 600px);
-  min-height: 300px;
+  min-height: min(300px, 58vh);
   overflow: hidden;
   -webkit-mask-image: linear-gradient(transparent, #000 13%, #000 82%, transparent);
   mask-image: linear-gradient(transparent, #000 13%, #000 82%, transparent);
@@ -484,6 +488,57 @@
 
   .fullscreen-player__transport {
     padding-bottom: 8px;
+  }
+}
+
+/* Ultra-short displays (bar monitors, half-height windows) cannot afford the
+   compact tier's 184px of chrome, so the rows tighten again and the artwork is
+   sized off what is left rather than off a fixed ceiling. */
+@media (max-height: 560px) {
+  .fullscreen-player {
+    grid-template-rows: 46px minmax(0, 1fr) 104px;
+  }
+
+  .fullscreen-player__header {
+    padding-block: 4px;
+  }
+
+  .fullscreen-player__left {
+    gap: 12px;
+  }
+
+  .fullscreen-player__artwork {
+    width: min(100%, 360px, calc(100vh - 236px));
+  }
+
+  .fullscreen-player__track-copy strong {
+    font-size: clamp(19px, 2vw, 26px);
+  }
+
+  .fullscreen-player__lyrics {
+    height: calc(100vh - 176px);
+  }
+
+  .fullscreen-player__lyrics .lyrics-line {
+    padding: 5px 0;
+    font-size: clamp(17px, 1.6vw, 26px);
+  }
+
+  .fullscreen-player__transport {
+    padding: 2px 44px 8px;
+  }
+
+  .fullscreen-player__buttons {
+    gap: 12px;
+  }
+
+  .fullscreen-player__buttons .q-btn:nth-child(3) {
+    width: 48px;
+    height: 48px;
+  }
+
+  .fullscreen-player__lyrics-label {
+    display: none;
   }
 }
 

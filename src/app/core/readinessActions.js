@@ -19,6 +19,7 @@
 
 import { computed, ref } from 'vue';
 import { readPinnedTracks } from '../browse/pinsPersistence.js';
+import { copyTextToClipboard } from '../platform/clipboardText.js';
 import { readPlaybackState } from '../playback/queuePersistence.js';
 
 const SETUP_STORAGE_KEY = 'orchard:setup-state';
@@ -412,8 +413,12 @@ export function installReadinessActions(ctx) {
   ctx.copyDiagnostics = async function copyDiagnostics() {
     if (!ctx.diagnostics.value.report) await ctx.collectDiagnostics();
     const text = JSON.stringify(ctx.diagnostics.value.report, null, 2);
-    await navigator.clipboard?.writeText(text);
-    ctx.diagnosticsMessage.value = 'Diagnostic report copied.';
+    try {
+      await copyTextToClipboard(text);
+      ctx.diagnosticsMessage.value = 'Diagnostic report copied.';
+    } catch {
+      ctx.diagnosticsMessage.value = 'Copy failed. Export the report instead.';
+    }
   };
 
   ctx.exportOrchardBackup = async function exportOrchardBackup() {

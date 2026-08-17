@@ -113,6 +113,14 @@ contextBridge.exposeInMainWorld('orchardClipboard', {
   writeText: (value) => ipcRenderer.invoke('clipboard:write-text', value)
 });
 
+// Album art and update checks resolve the system proxy; playback does not. This
+// lets the listener put the rest of the app on the same footing as playback when
+// the machine's proxy is unreachable.
+contextBridge.exposeInMainWorld('orchardNetwork', {
+  getProxyMode: () => ipcRenderer.invoke('network:get-proxy-mode'),
+  setProxyMode: (mode) => ipcRenderer.invoke('network:set-proxy-mode', mode)
+});
+
 contextBridge.exposeInMainWorld('orchardCrypto', {
   randomInt: (maxExclusive) => randomInt(Number(maxExclusive))
 });

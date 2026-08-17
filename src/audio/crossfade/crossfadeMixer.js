@@ -56,9 +56,28 @@ function equalPowerCurves(size = 64) {
 
 const CURVES = equalPowerCurves();
 
+// How fast a deck moves on or off the band-split network. The two paths are
+// magnitude-identical, so this swap has no level to fade -- it is only there to
+// keep the phase change from arriving as a step. Short enough to finish inside
+// the scheduler's lead time, so a deck is always fully on the intended path
+// before its curves start.
+const BAND_SPLIT_TIME_CONSTANT = 0.006;
+
 export function createCrossfadeMixer({ connectElement, currentTime }) {
   function mixParam(node) {
     return node.mixGain.gain;
+  }
+
+  // Only the DJ styles automate the crossover, and only they pay for it. See
+  // the allpass note in audioAnalyzer.js: leaving the split in circuit costs
+  // several dB of transient headroom for a response that is otherwise flat.
+  function setBandSplit(node, enabled) {
+    if (!node?.directBand || !node?.splitInput) return;
+    const now = currentTime();
+    node.directBand.gain.cancelScheduledValues(now);
+    node.splitInput.gain.cancelScheduledValues(now);
+    node.directBand.gain.setTargetAtTime(enabled ? 0 : 1, now, BAND_SPLIT_TIME_CONSTANT);
+    node.splitInput.gain.setTargetAtTime(enabled ? 1 : 0, now, BAND_SPLIT_TIME_CONSTANT);
   }
 
   function scheduleGain(node, curve, scale, startTime, duration, floor = 0) {
@@ -216,6 +235,10 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     toGainParam.setValueAtTime(0, currentTime());
 
     const djStyle = ['dj_switch', 'dj_filter', 'dj_blend'].includes(transitionStyle);
+    // Arm both decks before anything is scheduled, so the crossover is settled
+    // and carrying signal by the time the first curve runs at `startTime`.
+    setBandSplit(fromNode, djStyle);
+    setBandSplit(toNode, djStyle);
     if (djStyle) {
       scheduleDjGains(
         fromNode,
@@ -257,6 +280,7 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     const gain = mixParam(node);
     gain.cancelScheduledValues(now);
     gain.setTargetAtTime(1, now, 0.02);
+    setBandSplit(node, false);
     node.bassGain?.gain.cancelScheduledValues(now);
     node.bassGain?.gain.setTargetAtTime(1, now, 0.02);
     node.midDuck?.gain.cancelScheduledValues(now);

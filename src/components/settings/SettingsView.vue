@@ -82,6 +82,10 @@ export default {
         <q-icon name="info_outline" />
         <span>Application</span>
       </a>
+      <a v-if="proxyModeAvailable" href="#settings-network">
+        <q-icon name="lan" />
+        <span>Network</span>
+      </a>
       <a href="#settings-diagnostics">
         <q-icon name="fact_check" />
         <span>Diagnostics</span>
@@ -465,6 +469,23 @@ export default {
               </button>
             </div>
             <p v-if="orchardConnectPairingMessage" class="settings-connect__message">{{ orchardConnectPairingMessage }}</p>
+            <details v-if="orchardConnect.altWebPairUrls?.length" class="settings-connect__alternates">
+              <summary>Phone can't reach this address?</summary>
+              <p>
+                This machine has more than one network address. If the QR code does not connect, open one
+                of these on the phone instead.
+              </p>
+              <button
+                v-for="url in orchardConnect.altWebPairUrls"
+                :key="url"
+                type="button"
+                class="settings-button settings-connect__alternate"
+                @click="copyOrchardConnectAltLink(url)"
+              >
+                <q-icon name="content_copy" />
+                {{ url }}
+              </button>
+            </details>
           </div>
         </div>
 
@@ -552,6 +573,32 @@ export default {
             Restore defaults
           </button>
         </div>
+      </section>
+
+      <section
+        v-if="proxyModeAvailable"
+        id="settings-network"
+        class="settings-section"
+        aria-labelledby="settings-network-title"
+      >
+        <div class="settings-section__heading">
+          <h2 id="settings-network-title">Network</h2>
+          <p>How Orchard reaches the internet.</p>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-row__copy">
+            <label for="settings-proxy-bypass">Ignore system proxy</label>
+            <p>
+              Album art and update checks go through your computer's proxy settings; playback never
+              does. Turn this on if artwork is missing or updates fail with a tunnel or proxy error
+              while music still plays.
+            </p>
+          </div>
+          <q-toggle id="settings-proxy-bypass" v-model="proxyBypassToggle" color="primary" aria-label="Ignore system proxy" />
+        </div>
+
+        <p v-if="proxyModeMessage" class="settings-connect__message">{{ proxyModeMessage }}</p>
       </section>
 
       <DiagnosticsSection :app="app" />

@@ -52,6 +52,7 @@ import {
   readPlaybackState,
   writePlaybackState
 } from '../playback/queuePersistence.js';
+import { VEIL_MIN_ALPHA } from '../appearance/immersiveVeil.js';
 import { SONG_CACHE_DEFAULTS, clampSongCacheMaxSizeMb } from '../playback/songCachePreferences.js';
 import { DEFAULT_QUEUE_LAYOUT, QUEUE_LAYOUT_OPTIONS, normalizeQueueLayout } from '../playback/queueLayout.js';
 
@@ -187,6 +188,7 @@ export function installState(ctx) {
     pairUrl: '',
     appPairUrl: '',
     webPairUrl: '',
+    altWebPairUrls: [],
     qrSvg: '',
     expiresAt: 0,
     pending: [],
@@ -347,6 +349,7 @@ export function installState(ctx) {
   ctx.detailEnhancedArtwork = ref(null);
   ctx.playlistArtworkCollage = ref([]);
   ctx.playerBarAccent = ref(ctx.createPlayerBarAccent([47, 223, 147]));
+  ctx.immersiveVeilAlpha = ref(VEIL_MIN_ALPHA);
   ctx.lastImmersiveArtworkImage = ref('');
   ctx.nowArtworkVideoFailed = ref(false);
   ctx.detailArtworkVideoFailed = ref(false);
