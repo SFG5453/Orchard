@@ -19,6 +19,19 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '4.5.2',
+    codename: 'Obscurity Defroster',
+    date: 'August 16, 2026',
+    sections: [
+      {
+        title: 'Fixed',
+        items: [
+          'Orchard can now use smaller desktop windows, and Settings adapts its rows, options, actions, navigation, and Connect layout for narrow widths.'
+        ]
+      }
+    ]
+  },
+  {
     version: '4.5.1',
     codename: 'Hellishly Code',
     date: 'August 16, 2026',
