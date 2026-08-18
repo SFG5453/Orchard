@@ -827,7 +827,7 @@ export function installPlaybackControls(ctx) {
 
   ctx.seekToLyric = function seekToLyric(item) {
     if (!item?.canSeek) return;
-    ctx.seek(item.seekTime);
+    ctx.seek(ctx.playbackTimeForLyricTime(item.seekTime));
   };
 
   ctx.lyricAutoScrollPaused = function lyricAutoScrollPaused() {

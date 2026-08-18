@@ -121,6 +121,26 @@ export default {
 
         <div class="settings-row settings-row--options">
           <div class="settings-row__copy">
+            <label id="settings-sponsorblock-label">Skip non-music sections</label>
+            <p>Handle talking, intros, and outros using community markers from SponsorBlock. Sends the video ID of the playing track to sponsor.ajay.app.</p>
+          </div>
+          <div class="settings-option-group" role="group" aria-labelledby="settings-sponsorblock-label">
+            <button
+              v-for="option in sponsorBlockModeOptions"
+              :key="option.value"
+              type="button"
+              class="settings-option"
+              :class="{ 'settings-option--active': sponsorBlockMode === option.value }"
+              :aria-pressed="sponsorBlockMode === option.value"
+              @click="sponsorBlockMode = option.value"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
+
+        <div class="settings-row settings-row--options">
+          <div class="settings-row__copy">
             <label id="settings-queue-layout-label">Queue style</label>
             <p>Up next lists only what is still queued. Continuous also shows what already played, with the current song in place.</p>
           </div>

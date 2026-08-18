@@ -55,6 +55,11 @@ import {
 import { VEIL_MIN_ALPHA } from '../appearance/immersiveVeil.js';
 import { SONG_CACHE_DEFAULTS, clampSongCacheMaxSizeMb } from '../playback/songCachePreferences.js';
 import { DEFAULT_QUEUE_LAYOUT, QUEUE_LAYOUT_OPTIONS, normalizeQueueLayout } from '../playback/queueLayout.js';
+import {
+  DEFAULT_SPONSOR_BLOCK_MODE,
+  SPONSOR_BLOCK_MODE_OPTIONS,
+  normalizeSponsorBlockMode
+} from '../playback/sponsorBlockActions.js';
 
 export function installState(ctx) {
   ctx.orchardLogoUrl = orchardLogoUrl;
@@ -76,6 +81,7 @@ export function installState(ctx) {
     immersiveBackgroundsEnabled: true,
     songCacheEnabled: SONG_CACHE_DEFAULTS.enabled,
     songCacheMaxSizeMb: SONG_CACHE_DEFAULTS.maxSizeMb,
+    sponsorBlockMode: DEFAULT_SPONSOR_BLOCK_MODE,
     volumeNormalizationEnabled: false,
     repeatMode: 'off',
     shuffleEnabled: false,
@@ -83,6 +89,7 @@ export function installState(ctx) {
   };
   ctx.accentColorSourceOptions = ACCENT_COLOR_SOURCE_OPTIONS;
   ctx.queueLayoutOptions = QUEUE_LAYOUT_OPTIONS;
+  ctx.sponsorBlockModeOptions = SPONSOR_BLOCK_MODE_OPTIONS;
   ctx.graphicsModeOptions = GRAPHICS_MODE_OPTIONS;
   ctx.immersiveBackgroundIntensityOptions = IMMERSIVE_BACKGROUND_INTENSITY_OPTIONS;
   ctx.immersiveBackgroundMotionOptions = IMMERSIVE_BACKGROUND_MOTION_OPTIONS;
@@ -129,6 +136,7 @@ export function installState(ctx) {
         ? preferences.songCacheEnabled
         : ctx.DEFAULT_USER_PREFERENCES.songCacheEnabled,
       songCacheMaxSizeMb: clampSongCacheMaxSizeMb(preferences.songCacheMaxSizeMb),
+      sponsorBlockMode: normalizeSponsorBlockMode(preferences.sponsorBlockMode ?? preferences.sponsorBlockEnabled),
       volumeNormalizationEnabled: typeof preferences.volumeNormalizationEnabled === 'boolean'
         ? preferences.volumeNormalizationEnabled
         : ctx.DEFAULT_USER_PREFERENCES.volumeNormalizationEnabled,
@@ -330,6 +338,11 @@ export function installState(ctx) {
     source: '',
     providers: []
   });
+  ctx.sponsorBlockState = ref({
+    trackId: '',
+    status: 'idle',
+    segments: []
+  });
   ctx.queue = ref(ctx.initialPlaybackState.queue);
   ctx.history = ref(ctx.initialPlaybackState.history);
   ctx.shuffleSourceQueue = ref(ctx.initialPlaybackState.shuffleSourceQueue);
@@ -407,6 +420,7 @@ export function installState(ctx) {
   ctx.songCachePrefetching = ref(false);
   ctx.songCacheMessage = ref('');
   ctx.themePreference = ref(ctx.initialUserPreferences.themePreference);
+  ctx.sponsorBlockMode = ref(ctx.initialUserPreferences.sponsorBlockMode);
   ctx.volumeNormalizationEnabled = ref(ctx.initialUserPreferences.volumeNormalizationEnabled);
   ctx.repeatMode = ref(ctx.initialUserPreferences.repeatMode);
   ctx.shuffleEnabled = ref(ctx.initialUserPreferences.shuffleEnabled);
@@ -432,6 +446,7 @@ export function installState(ctx) {
     ctx.uiScale.value = defaults.uiScale;
     ctx.songCacheEnabled.value = defaults.songCacheEnabled;
     ctx.songCacheMaxSizeMb.value = defaults.songCacheMaxSizeMb;
+    ctx.sponsorBlockMode.value = defaults.sponsorBlockMode;
     ctx.volumeNormalizationEnabled.value = defaults.volumeNormalizationEnabled;
     ctx.repeatMode.value = defaults.repeatMode;
     ctx.shuffleEnabled.value = defaults.shuffleEnabled;
@@ -462,6 +477,7 @@ export function installState(ctx) {
   ctx.autoplaySuppressedTrackId = '';
   ctx.playerColorRequest = 0;
   ctx.lyricsRequest = 0;
+  ctx.sponsorBlockRequest = 0;
   ctx.lyricAutoScrollPauseTimer = 0;
   ctx.lyricAutoScrollPausedUntil = 0;
   ctx.searchRequest = 0;

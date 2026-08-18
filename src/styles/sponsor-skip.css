@@ -1,0 +1,71 @@
+/*
+ * Copyright (C) 2026 SFG545
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Floating "Skip intro" affordance for SponsorBlock intro segments. It sits
+ * just above the player bar, so its offset tracks the bar's responsive height. */
+
+.sponsor-skip-button {
+  position: fixed;
+  z-index: 6400;
+  left: 50%;
+  bottom: 96px;
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: #151111;
+  color: var(--text);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+  cursor: pointer;
+  transform: translate3d(-50%, 0, 0);
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.sponsor-skip-button:hover {
+  border-color: rgba(var(--player-accent-rgb), 0.58);
+  background: #1d1718;
+  color: var(--primary-strong);
+}
+
+.sponsor-skip-button .q-icon {
+  font-size: 20px;
+}
+
+.sponsor-skip-enter-active,
+.sponsor-skip-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.sponsor-skip-enter-from,
+.sponsor-skip-leave-to {
+  opacity: 0;
+  transform: translate3d(-50%, 24px, 0);
+}
+
+@media (max-width: 900px) {
+  .sponsor-skip-button {
+    bottom: 188px;
+  }
+}

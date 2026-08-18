@@ -37,6 +37,7 @@ const SearchView = defineAsyncComponent(() => import('../views/SearchView.vue'))
 const SectionMoreView = defineAsyncComponent(() => import('../views/SectionMoreView.vue'));
 const SongActionMenu = defineAsyncComponent(() => import('../controls/SongActionMenu.vue'));
 const SongShareDialog = defineAsyncComponent(() => import('../dialogs/SongShareDialog.vue'));
+const SponsorSkipButton = defineAsyncComponent(() => import('../player/SponsorSkipButton.vue'));
 const SpotlightSearch = defineAsyncComponent(() => import('../controls/SpotlightSearch.vue'));
 const SupportView = defineAsyncComponent(() => import('../views/SupportView.vue'));
 const VideoPlayer = defineAsyncComponent(() => import('../player/VideoPlayer.vue'));
@@ -90,6 +91,7 @@ export default {
     SongActionMenu,
     SongShareDialog,
     SidebarNav,
+    SponsorSkipButton,
     SpotlightSearch,
     VideoPlayer,
     WindowTitlebar
@@ -276,6 +278,7 @@ export default {
     </q-page-container>
 
     <VideoPlayer :app="app" />
+    <SponsorSkipButton :app="app" />
     <audio
       ref="audioRef"
       crossorigin="anonymous"

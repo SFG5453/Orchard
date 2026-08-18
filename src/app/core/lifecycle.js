@@ -78,6 +78,7 @@ export function installLifecycle(ctx) {
     ctx.handleSleepTimerTrackChange(track);
     ctx.loadEnhancedArtwork(track);
     ctx.loadLyrics(track);
+    ctx.loadSponsorBlockSegments(track);
     ctx.applyMediaSessionMetadata();
     ctx.queueSystemMediaSync();
     ctx.queueDiscordPresenceSync();
@@ -150,6 +151,7 @@ export function installLifecycle(ctx) {
     ctx.queueLayout,
     ctx.songCacheEnabled,
     ctx.songCacheMaxSizeMb,
+    ctx.sponsorBlockMode,
     ctx.volumeNormalizationEnabled,
     ctx.repeatMode,
     ctx.shuffleEnabled,
@@ -193,6 +195,7 @@ export function installLifecycle(ctx) {
       queueLayout: ctx.queueLayout.value,
       songCacheEnabled: ctx.songCacheEnabled.value,
       songCacheMaxSizeMb: ctx.songCacheMaxSizeMb.value,
+      sponsorBlockMode: ctx.sponsorBlockMode.value,
       volumeNormalizationEnabled: ctx.volumeNormalizationEnabled.value,
       repeatMode: ctx.repeatMode.value,
       shuffleEnabled: ctx.shuffleEnabled.value,
@@ -352,12 +355,24 @@ export function installLifecycle(ctx) {
     else document.documentElement.style.zoom = String(scale);
   }, { immediate: true });
 
+  watch(ctx.sponsorBlockMode, (mode, previousMode) => {
+    if (mode === 'off') {
+      ctx.clearSponsorBlockSegments();
+      return;
+    }
+
+    // Switching between the two on states keeps the segments already fetched.
+    if (previousMode === 'off') ctx.loadSponsorBlockSegments(ctx.activeTrack.value);
+    else ctx.maybeAutoSkipSponsorSegment();
+  });
+
   watch(ctx.volumeNormalizationEnabled, (enabled) => {
     [ctx.audioRef.value, ctx.nextAudioRef.value, ctx.videoRef.value, ctx.videoAudioRef.value]
       .forEach((element) => ctx.setAudioNormalization(element, enabled));
   });
 
   watch([ctx.currentTime, ctx.duration], () => {
+    ctx.maybeAutoSkipSponsorSegment();
     ctx.updateMediaSessionPositionState();
     ctx.queueSystemMediaSync();
     ctx.queueConnectSync();
@@ -429,6 +444,7 @@ export function installLifecycle(ctx) {
       ctx.reviewVersionUpgrade();
       await ctx.fetchAuthStatus();
       if (ctx.activeView.value === 'search' && ctx.query.value.trim()) ctx.runSearch();
+      if (ctx.activeTrack.value) ctx.loadSponsorBlockSegments(ctx.activeTrack.value);
       if (ctx.activeView.value === 'releaseRadar') ctx.loadReleaseRadar({ force: true });
     });
 

@@ -57,6 +57,7 @@ import { installSmartQueueActions } from '../playback/smartQueueActions.js';
 import { installSmartCrossfadeActions } from '../playback/smartCrossfadeActions.js';
 import { installSongActions } from '../browse/songActions.js';
 import { installSongCacheActions } from '../playback/songCacheActions.js';
+import { installSponsorBlockActions } from '../playback/sponsorBlockActions.js';
 import { installSpotlightActions } from '../browse/spotlightActions.js';
 import { installState } from './state.js';
 import { installSystemMediaActions } from '../platform/systemMediaActions.js';
@@ -105,6 +106,7 @@ export function createOrchardApp() {
   installPlaylistActions(ctx);
   installShareActions(ctx);
   installPlaybackControls(ctx);
+  installSponsorBlockActions(ctx);
   installSongActions(ctx);
   installSongCacheActions(ctx);
   installReplayStats(ctx);

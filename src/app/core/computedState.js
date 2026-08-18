@@ -382,7 +382,16 @@ export function installComputedState(ctx) {
 
   ctx.displayedTime = computed(() => (ctx.isSeeking.value ? ctx.seekPosition.value : ctx.currentTime.value));
 
-  ctx.displayedLyricTime = computed(() => ctx.displayedTime.value);
+  ctx.displayedLyricTime = computed(() => ctx.lyricTimeForPlaybackTime(ctx.displayedTime.value));
+
+  ctx.activeSponsorSegment = computed(() => ctx.currentSponsorBlockSegment(ctx.displayedTime.value, 0.2));
+
+  ctx.sponsorSkipLabelText = computed(() => ctx.sponsorSkipLabel(ctx.activeSponsorSegment.value));
+
+  // Auto mode has nothing to click: the segment is gone before you could.
+  ctx.sponsorSkipButtonVisible = computed(() => (
+    ctx.sponsorBlockMode.value === 'button' && Boolean(ctx.activeSponsorSegment.value)
+  ));
 
   ctx.lyricsStatusText = computed(() => {
     if (!ctx.activeTrack.value) return 'Pick a track to load lyrics';

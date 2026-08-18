@@ -26,6 +26,7 @@ import { registerCacheBridge } from './cacheBridge.js';
 import { registerYouTubeHistoryBridge } from './youtubeHistoryBridge.js';
 import { registerYouTubeLikesBridge } from './youtubeLikesBridge.js';
 import { registerArtistGenreBridge } from './artistGenreBridge.js';
+import { registerSponsorBlockBridge } from './sponsorBlockBridge.js';
 import { playbackAudioBitrate } from '../playback/playbackFormats.js';
 import { isAgeGatePlaybackError } from '../playback/playbackErrors.js';
 import { isAgeGateRiskTrack } from '../playback/musicVideoFallback.js';
@@ -366,6 +367,7 @@ export async function startBridgeServer({
     connectServer.registerDesktop(socket);
     registerCacheBridge({ socket, bridgeError, playback, resolveTrackRequest, normalizeTrackInfo });
     registerArtistGenreBridge({ socket, bridgeError, resolveArtistGenre });
+    registerSponsorBlockBridge({ socket });
     playlistMutations.register(socket, bridgeError);
 
     socket.on('music:search', async ({ query, filter = 'songs' }, reply) => {
