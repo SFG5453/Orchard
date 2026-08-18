@@ -1,6 +1,6 @@
-## Orchard Mobile 1.6.1 "Palmiest Addressees"
+## Orchard Mobile 1.7.0 "Galvanic Traci"
 
-### Fixed
-- **Uploaded Library Playback**: Uploaded and private library tracks now skip guest clients that cannot access them and reach signed-in playback with the account's visitor and channel delegation identity. The same path now retries only when refreshing the stream can help.
-- **Progressive Collection Loading**: Collections show their first page immediately and fill in as more pages arrive. Endless mixes use a bounded paging budget, and opening another collection cancels the previous load.
-- **Private Search History**: Internal song lookups used to resolve playback are now anonymous, so they no longer add searches to the listener's YouTube history.
+### Added
+- **Audio Equalizer**: A persisted 10-band equalizer with presets, per-band gain, preamp, and bass boost is now available in Settings and applied directly to playback.
+- **Player Artwork Gestures**: Horizontal swipes skip to the previous or next track, and a double-tap likes the current track. Gestures can be disabled in Settings.
+- **Home Screen Layout**: Online and offline Home sections can now be reordered and shown or hidden independently from the new Home Screen Layout settings page.
