@@ -504,6 +504,11 @@ jobs:
     runs-on: ${{ matrix.runner }}
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # electron-builder's --${{ matrix.arch }} target can differ from the Node
+      # process architecture used while loading electron-builder.config.cjs.
+      # Keep ONNX inclusion/pruning aligned with the artifact being built.
+      ORCHARD_ELECTRON_PLATFORM: darwin
+      ORCHARD_ELECTRON_ARCH: ${{ matrix.arch }}
     steps:
       - name: Check out release tag
         uses: actions/checkout@v6
