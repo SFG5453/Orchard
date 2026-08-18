@@ -57,6 +57,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Validate tag and package version
         id: release
         env:
@@ -202,6 +205,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install Linux packaging tools and Flatpak runtimes
         run: |
           set -euo pipefail
@@ -260,6 +266,9 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install Flatpak packaging tools and runtimes
         run: |
@@ -321,7 +330,7 @@ jobs:
     container: archlinux:base-devel
     steps:
       - name: Install Arch build tools
-        run: pacman -Syu --noconfirm git electron43 libarchive nodejs npm python zstd
+        run: pacman -Syu --noconfirm git electron43 libarchive nodejs npm python rust zstd
 
       - name: Check out release tag
         uses: actions/checkout@v6
@@ -377,6 +386,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install dependencies
         run: npm ci
 
@@ -427,6 +439,9 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install dependencies
         run: npm ci
@@ -500,6 +515,9 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install dependencies
         run: npm ci

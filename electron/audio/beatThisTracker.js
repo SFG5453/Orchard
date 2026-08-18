@@ -42,6 +42,7 @@
 import path from 'node:path';
 import { stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { loadOnnxModel, loadOnnxRuntime, onnxExecutionProviders } from './onnxRuntime.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -97,11 +98,12 @@ async function session(modelPath, load) {
       const info = await stat(modelPath).catch(() => null);
       if (!info?.isFile()) throw new Error(`Beat This model is not installed at ${modelPath}`);
       const runtime = await load();
+      const model = await loadOnnxModel(modelPath);
       const InferenceSession = runtime?.InferenceSession || runtime?.default?.InferenceSession;
       const Tensor = runtime?.Tensor || runtime?.default?.Tensor;
-      if (!InferenceSession || !Tensor) throw new Error('onnxruntime-node exports were unusable');
-      const created = await InferenceSession.create(modelPath, {
-        executionProviders: ['cpu'],
+      if (!InferenceSession || !Tensor) throw new Error('ONNX Runtime exports were unusable');
+      const created = await InferenceSession.create(model, {
+        executionProviders: onnxExecutionProviders(),
         graphOptimizationLevel: 'all',
         // Analysis runs while audio is playing. Leaving this at the default
         // takes every core and has been the cause of glitching in other
@@ -438,7 +440,7 @@ export async function refineBeatsWithModel(rawResult, windows, {
 
 export async function trackBeats(spectrogram, {
   modelPath = DEFAULT_MODEL_PATH,
-  load = () => import('onnxruntime-node'),
+  load = loadOnnxRuntime,
   now = () => Date.now()
 } = {}) {
   const frames = Number(spectrogram?.frames) || 0;

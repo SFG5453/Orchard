@@ -43,6 +43,7 @@
 import path from 'node:path';
 import { stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { loadOnnxModel, loadOnnxRuntime, onnxExecutionProviders } from './onnxRuntime.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -72,11 +73,12 @@ async function session(modelPath, load) {
       const info = await stat(modelPath).catch(() => null);
       if (!info?.isFile()) throw new Error(`Vocal separation model is not installed at ${modelPath}`);
       const runtime = await load();
+      const model = await loadOnnxModel(modelPath);
       const InferenceSession = runtime?.InferenceSession || runtime?.default?.InferenceSession;
       const Tensor = runtime?.Tensor || runtime?.default?.Tensor;
-      if (!InferenceSession || !Tensor) throw new Error('onnxruntime-node exports were unusable');
-      const created = await InferenceSession.create(modelPath, {
-        executionProviders: ['cpu'],
+      if (!InferenceSession || !Tensor) throw new Error('ONNX Runtime exports were unusable');
+      const created = await InferenceSession.create(model, {
+        executionProviders: onnxExecutionProviders(),
         graphOptimizationLevel: 'all',
         intraOpNumThreads: 2
       });
@@ -172,7 +174,7 @@ export function reduceMaskToBandCurve(mix, target, {
  */
 export async function trackVocalMask(spectrogram, {
   modelPath = DEFAULT_MODEL_PATH,
-  load = () => import('onnxruntime-node'),
+  load = loadOnnxRuntime,
   sampleRate = 44100,
   fftSize = 4096,
   lowHz = 200,

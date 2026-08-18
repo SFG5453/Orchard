@@ -14,7 +14,7 @@
   "scripts": {
     "dev": "npm run build:native && concurrently -k \"vite --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && node scripts/launch-electron.mjs --dev-server=http://127.0.0.1:5173\"",
     "build": "npm run build:native && npm run build:frontend",
-    "build:native": "node-gyp rebuild --directory native",
+    "build:native": "node-gyp rebuild --directory native && npm run build:native:media",
     "build:native:macos:cross": "sh scripts/build-native-macos-cross.sh",
     "build:native:windows": "sh scripts/build-native-windows.sh",
     "build:frontend": "vite build",
@@ -27,7 +27,10 @@
     "dist": "npm run make",
     "test": "node --test test/*.test.js",
     "test:native": "node --test test/nativeAudioAnalysis.test.js test/audioAnalysisService.test.js test/smartCrossfadeAnalysis.test.js test/queueTransitionSort.test.js test/transitionPlanner.test.js test/crossfadeMixer.test.js test/autoCrossfade.test.js test/subscribedArtists.test.js test/libraryCategory.test.js",
-    "fetch:beat-model": "node scripts/fetch-beat-this-model.mjs"
+    "fetch:beat-model": "node scripts/fetch-beat-this-model.mjs",
+    "build:native:media": "sh scripts/build-native-media.sh",
+    "build:native:media:windows": "sh scripts/build-native-media-windows.sh",
+    "build:native:media:macos:cross": "sh scripts/build-native-media-macos-cross.sh"
   },
   "keywords": [
     "quasar",
@@ -70,8 +73,9 @@
     "music-tempo": "^1.0.3",
     "node-addon-api": "^8.9.2",
     "onnxruntime-node": "^1.27.0",
+    "onnxruntime-web": "^1.27.0",
     "qrcode": "^1.5.4",
-    "quasar": "^2.24.0",
+    "quasar": "^2.25.0",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "standardized-audio-context": "^25.3.77",
@@ -92,9 +96,5 @@
     "@discordjs/rest": {
       "undici": "6.27.0"
     }
-  },
-  "optionalDependencies": {
-    "@particle/dbus-next": "^0.11.4",
-    "node-smtc": "git+https://github.com/michei69/node-smtc.git#master"
   }
 }

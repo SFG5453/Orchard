@@ -48,6 +48,8 @@ ORCHARD_MACOS_NATIVE_OUTPUT="$native_output" npm run build:native:macos:cross
 
 mkdir -p "$(dirname -- "$addon_path")"
 cp "$native_output/orchard_audio_analysis-x86_64.node" "$addon_path"
+ORCHARD_ELECTRON_PLATFORM=darwin \
+ORCHARD_ELECTRON_ARCH=x64 \
 CSC_IDENTITY_AUTO_DISCOVERY=false ./node_modules/.bin/electron-builder \
   --mac dir \
   --x64 \
@@ -56,6 +58,8 @@ CSC_IDENTITY_AUTO_DISCOVERY=false ./node_modules/.bin/electron-builder \
   --publish never
 
 cp "$native_output/orchard_audio_analysis-arm64.node" "$addon_path"
+ORCHARD_ELECTRON_PLATFORM=darwin \
+ORCHARD_ELECTRON_ARCH=arm64 \
 CSC_IDENTITY_AUTO_DISCOVERY=false ./node_modules/.bin/electron-builder \
   --mac dir \
   --arm64 \

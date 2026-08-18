@@ -194,7 +194,10 @@ contextBridge.exposeInMainWorld('orchardUpdates', {
 });
 
 contextBridge.exposeInMainWorld('orchardSystemMedia', {
-  nativeSystemMedia: process.platform === 'linux',
+  // Every desktop platform now goes through the native-media addon, so the
+  // renderer must not also drive Chromium's mediaSession. Leaving both live on
+  // Windows is what produced two competing entries in the OS media flyout.
+  nativeSystemMedia: true,
   setState: (state) => ipcRenderer.invoke('system-media:set-state', state),
   onCommand: (callback) => {
     if (typeof callback !== 'function') return () => {};

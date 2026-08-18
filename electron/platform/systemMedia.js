@@ -17,359 +17,122 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Owns platform media-session integration and releases D-Bus/listener resources from `stop()`.
+// Owns platform media-session integration and releases the native controls from
+// `stop()`. MPRIS, SMTC and Now Playing all live in the native-media addon; this
+// module only marshals state to it and commands back out.
 import { createRequire } from 'node:module';
 import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
 
 const require = createRequire(import.meta.url);
 const { SYSTEM_MEDIA } = IPC_CHANNELS;
 
-const OBJECT_PATH = '/org/mpris/MediaPlayer2';
-const SERVICE_NAME = 'org.mpris.MediaPlayer2.Orchard';
-const NO_TRACK_PATH = '/org/mpris/MediaPlayer2/TrackList/NoTrack';
+const DBUS_NAME = 'Orchard';
+const DISPLAY_NAME = 'Orchard';
+const DESKTOP_ENTRY = 'dev.sfg.orchard';
 
-const LOOP_TO_REPEAT = {
-  None: 'off',
-  Track: 'one',
-  Playlist: 'queue'
-};
-
-const REPEAT_TO_LOOP = {
-  off: 'None',
-  one: 'Track',
-  queue: 'Playlist'
-};
-
-function toMicroseconds(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0) return 0n;
-  return BigInt(Math.round(number * 1_000_000));
+function loadAddon() {
+  return require('../../native-media/index.cjs');
 }
 
-function trackObjectPath(track = {}) {
-  if (!track.id) return NO_TRACK_PATH;
-  const safeId = String(track.id).replace(/[^A-Za-z0-9_]/g, '_') || 'unknown';
-  return `/dev/sfg/orchard/track/${safeId}`;
+/**
+ * The addon reports a command as `{ type, numberValue, boolValue, stringValue }`
+ * because N-API has no untyped union. `handleSystemMediaCommand()` in the
+ * renderer switches on `type` and reads a single `value`, so collapse it here
+ * rather than teaching the renderer about the wire shape.
+ */
+function toRendererCommand(command) {
+  const value = command.numberValue ?? command.boolValue ?? command.stringValue;
+  return value === undefined || value === null
+    ? { type: command.type }
+    : { type: command.type, value };
 }
 
-function metadataFromState(state, Variant) {
-  const track = state.track || {};
-  const metadata = {
-    'mpris:trackid': new Variant('o', trackObjectPath(track)),
-    'xesam:title': new Variant('s', track.title || 'Orchard'),
-    'xesam:album': new Variant('s', track.album || ''),
-    'xesam:artist': new Variant('as', (track.artists?.length ? track.artists : [track.artist]).filter(Boolean))
-  };
+/**
+ * Windows needs the HWND to attach SMTC to. Electron hands it over as a raw
+ * buffer whose width follows the platform pointer size.
+ */
+function windowHandle(window) {
+  if (process.platform !== 'win32' || !window) return undefined;
 
-  if (track.thumbnail) metadata['mpris:artUrl'] = new Variant('s', track.thumbnail);
-  if (state.durationSeconds > 0) metadata['mpris:length'] = new Variant('x', toMicroseconds(state.durationSeconds));
-  if (track.id) metadata['xesam:url'] = new Variant('s', `https://music.youtube.com/watch?v=${track.id}`);
-
-  return metadata;
-}
-
-function configureMprisInterfaces(dbus) {
-  const {
-    Interface,
-    ACCESS_READ,
-    ACCESS_READWRITE
-  } = dbus.interface;
-
-  class MediaPlayerInterface extends Interface {
-    constructor(emitCommand) {
-      super('org.mpris.MediaPlayer2');
-      this.emitCommand = emitCommand;
-    }
-
-    Raise() {
-      this.emitCommand({ type: 'raise' });
-    }
-
-    Quit() {
-      this.emitCommand({ type: 'quit' });
-    }
-
-    get CanQuit() { return true; }
-    get Fullscreen() { return false; }
-    set Fullscreen(_value) {}
-    get CanSetFullscreen() { return false; }
-    get CanRaise() { return true; }
-    get HasTrackList() { return false; }
-    get Identity() { return 'Orchard'; }
-    get DesktopEntry() { return 'dev.sfg.orchard'; }
-    get SupportedUriSchemes() { return ['http', 'https']; }
-    get SupportedMimeTypes() { return ['audio/mpeg', 'audio/mp4', 'audio/webm', 'video/mp4', 'video/webm']; }
+  try {
+    const handle = window.getNativeWindowHandle();
+    if (!handle || handle.length === 0) return undefined;
+    return handle.length === 8
+      ? Number(handle.readBigUInt64LE(0))
+      : handle.readUInt32LE(0);
+  } catch {
+    // A destroyed window has no handle; the caller retries on the next publish.
+    return undefined;
   }
-
-  MediaPlayerInterface.configureMembers({
-    methods: {
-      Raise: {},
-      Quit: {}
-    },
-    properties: {
-      CanQuit: { signature: 'b', access: ACCESS_READ },
-      Fullscreen: { signature: 'b', access: ACCESS_READWRITE },
-      CanSetFullscreen: { signature: 'b', access: ACCESS_READ },
-      CanRaise: { signature: 'b', access: ACCESS_READ },
-      HasTrackList: { signature: 'b', access: ACCESS_READ },
-      Identity: { signature: 's', access: ACCESS_READ },
-      DesktopEntry: { signature: 's', access: ACCESS_READ },
-      SupportedUriSchemes: { signature: 'as', access: ACCESS_READ },
-      SupportedMimeTypes: { signature: 'as', access: ACCESS_READ }
-    }
-  });
-
-  class PlayerInterface extends Interface {
-    constructor(emitCommand, initialState = {}) {
-      super('org.mpris.MediaPlayer2.Player');
-      this.emitCommand = emitCommand;
-      this.state = { ...initialState };
-      this.Variant = dbus.Variant;
-    }
-
-    update(nextState = {}) {
-      const properties = [
-        'PlaybackStatus',
-        'LoopStatus',
-        'Shuffle',
-        'Volume',
-        'CanGoNext',
-        'CanGoPrevious',
-        'CanPlay',
-        'CanPause',
-        'CanSeek'
-      ];
-
-      const oldValues = {};
-      for (const property of properties) {
-        oldValues[property] = this[property];
-      }
-
-      const prevTrack = this.state.track || {};
-      const prevDuration = this.state.durationSeconds;
-
-      this.state = { ...this.state, ...nextState };
-
-      const changed = {};
-      for (const property of properties) {
-        if (this[property] !== undefined && this[property] !== oldValues[property]) {
-          changed[property] = this[property];
-        }
-      }
-
-      const newTrack = this.state.track || {};
-      const newDuration = this.state.durationSeconds;
-
-      const metadataChanged =
-        prevTrack.id !== newTrack.id ||
-        prevTrack.title !== newTrack.title ||
-        prevTrack.album !== newTrack.album ||
-        prevTrack.thumbnail !== newTrack.thumbnail ||
-        String(prevTrack.artist) !== String(newTrack.artist) ||
-        String(prevTrack.artists) !== String(newTrack.artists) ||
-        prevDuration !== newDuration;
-
-      if (metadataChanged) {
-        changed.Metadata = this.Metadata;
-      }
-
-      if (Object.keys(changed).length > 0) {
-        Interface.emitPropertiesChanged(this, changed);
-      }
-    }
-
-    Next() { this.emitCommand({ type: 'next' }); }
-    Previous() { this.emitCommand({ type: 'previous' }); }
-    Pause() { this.emitCommand({ type: 'pause' }); }
-    PlayPause() { this.emitCommand({ type: 'play-pause' }); }
-    Stop() { this.emitCommand({ type: 'stop' }); }
-    Play() { this.emitCommand({ type: 'play' }); }
-    Seek(offset) { this.emitCommand({ type: 'seek-relative', value: Number(offset) / 1_000_000 }); }
-    SetPosition(_trackId, position) { this.emitCommand({ type: 'seek', value: Number(position) / 1_000_000 }); }
-    OpenUri(_uri) {}
-    Seeked(position) { return position; }
-
-    get PlaybackStatus() {
-      if (!this.state.track) return 'Stopped';
-      return this.state.isPlaying ? 'Playing' : 'Paused';
-    }
-
-    get LoopStatus() { return REPEAT_TO_LOOP[this.state.repeatMode] || 'None'; }
-    set LoopStatus(value) {
-      const repeatMode = LOOP_TO_REPEAT[value] || 'off';
-      this.state.repeatMode = repeatMode;
-      this.emitCommand({ type: 'set-repeat-mode', value: repeatMode });
-      Interface.emitPropertiesChanged(this, { LoopStatus: this.LoopStatus });
-    }
-
-    get Rate() { return 1; }
-    set Rate(_value) {}
-    get Shuffle() { return Boolean(this.state.shuffleEnabled); }
-    set Shuffle(value) {
-      this.state.shuffleEnabled = Boolean(value);
-      this.emitCommand({ type: 'set-shuffle', value: this.state.shuffleEnabled });
-      Interface.emitPropertiesChanged(this, { Shuffle: this.Shuffle });
-    }
-
-    get Metadata() { return metadataFromState(this.state, this.Variant); }
-    get Volume() { return Number.isFinite(this.state.volume) ? this.state.volume : 1; }
-    set Volume(value) {
-      this.state.volume = Math.max(0, Math.min(1, Number(value) || 0));
-      this.emitCommand({ type: 'set-volume', value: this.state.volume });
-      Interface.emitPropertiesChanged(this, { Volume: this.Volume });
-    }
-
-    get Position() { return toMicroseconds(this.state.currentTime); }
-    get MinimumRate() { return 1; }
-    get MaximumRate() { return 1; }
-    get CanGoNext() { return Boolean(this.state.canGoNext); }
-    get CanGoPrevious() { return Boolean(this.state.canGoPrevious); }
-    get CanPlay() { return Boolean(this.state.track); }
-    get CanPause() { return Boolean(this.state.track); }
-    get CanSeek() { return Boolean(this.state.canSeek); }
-    get CanControl() { return true; }
-  }
-
-  PlayerInterface.configureMembers({
-    methods: {
-      Next: {},
-      Previous: {},
-      Pause: {},
-      PlayPause: {},
-      Stop: {},
-      Play: {},
-      Seek: { inSignature: 'x' },
-      SetPosition: { inSignature: 'ox' },
-      OpenUri: { inSignature: 's' }
-    },
-    signals: {
-      Seeked: { signature: 'x' }
-    },
-    properties: {
-      PlaybackStatus: { signature: 's', access: ACCESS_READ },
-      LoopStatus: { signature: 's', access: ACCESS_READWRITE },
-      Rate: { signature: 'd', access: ACCESS_READWRITE },
-      Shuffle: { signature: 'b', access: ACCESS_READWRITE },
-      Metadata: { signature: 'a{sv}', access: ACCESS_READ },
-      Volume: { signature: 'd', access: ACCESS_READWRITE },
-      Position: { signature: 'x', access: ACCESS_READ },
-      MinimumRate: { signature: 'd', access: ACCESS_READ },
-      MaximumRate: { signature: 'd', access: ACCESS_READ },
-      CanGoNext: { signature: 'b', access: ACCESS_READ },
-      CanGoPrevious: { signature: 'b', access: ACCESS_READ },
-      CanPlay: { signature: 'b', access: ACCESS_READ },
-      CanPause: { signature: 'b', access: ACCESS_READ },
-      CanSeek: { signature: 'b', access: ACCESS_READ },
-      CanControl: { signature: 'b', access: ACCESS_READ }
-    }
-  });
-
-  return { MediaPlayerInterface, PlayerInterface };
 }
 
 export function createSystemMediaService({
   emitCommand,
-  loadDbus = () => require('@particle/dbus-next'),
-  loadSmtc = async () => (await import('node-smtc')).default,
-  platform = process.platform
+  getWindow = () => null,
+  loadNativeMedia = loadAddon
 }) {
-  let bus = null;
-  let player = null;
-  let startPromise = null;
-  let smtc = null;
+  let controls = null;
+  let unavailable = false;
 
-  async function start(initialState = {}) {
-    if (platform === 'win32') {
-      if (startPromise) return startPromise;
-      startPromise = (async () => {
-        const SMTCPlayer = await loadSmtc();
-        smtc = new SMTCPlayer();
-        smtc.on('play', () => emitCommand({ type: 'play' }));
-        smtc.on('pause', () => emitCommand({ type: 'pause' }));
-        smtc.on('next', () => emitCommand({ type: 'next' }));
-        smtc.on('previous', () => emitCommand({ type: 'previous' }));
-        smtc.on('positionchange', (value) => emitCommand({ type: 'seek', value: Number(value) / 1000 }));
-        smtc.on('shuffle', (value) => emitCommand({ type: 'set-shuffle', value: Boolean(value) }));
-        smtc.on('repeat', (value) => emitCommand({ type: 'set-repeat-mode', value: value === 'track' ? 'one' : value === 'list' ? 'queue' : 'off' }));
-        smtc.start();
-        return true;
-      })().catch((error) => {
-        console.warn(`Windows media integration disabled: ${error.message}`);
-        smtc = null;
-        return false;
-      });
-      return startPromise;
-    }
-    if (platform !== 'linux') return false;
-    if (startPromise) return startPromise;
+  function start() {
+    if (controls || unavailable) return controls;
 
-    startPromise = (async () => {
-      const dbus = loadDbus();
-      const { MediaPlayerInterface, PlayerInterface } = configureMprisInterfaces(dbus);
-      bus = dbus.sessionBus();
-      player = new PlayerInterface(emitCommand, initialState);
-      bus.export(OBJECT_PATH, new MediaPlayerInterface(emitCommand));
-      bus.export(OBJECT_PATH, player);
-      // Export the complete MPRIS object with its initial playback state before
-      // announcing the well-known name. Consumers such as Plasma can read the
-      // player immediately when NameOwnerChanged fires; publishing the initial
-      // state afterward creates a window where they can cache an empty player
-      // and miss the first PropertiesChanged signal.
-      await bus.requestName(SERVICE_NAME);
-      return true;
-    })().catch((error) => {
+    try {
+      const { SystemMediaControls } = loadNativeMedia();
+      const hwnd = windowHandle(getWindow());
+
+      // Without an HWND there is nothing for SMTC to attach to, so defer rather
+      // than burning the one-shot `unavailable` flag on a window that simply is
+      // not open yet.
+      if (process.platform === 'win32' && hwnd === undefined) return null;
+
+      controls = new SystemMediaControls(
+        {
+          displayName: DISPLAY_NAME,
+          dbusName: DBUS_NAME,
+          desktopEntry: DESKTOP_ENTRY,
+          hwnd
+        },
+        (command) => emitCommand(toRendererCommand(command))
+      );
+    } catch (error) {
       console.warn(`System media integration disabled: ${error.message}`);
-      bus = null;
-      player = null;
-      return false;
-    });
+      unavailable = true;
+      controls = null;
+    }
 
-    return startPromise;
+    return controls;
   }
 
   return {
     async publish(state) {
-      if (!await start(state)) return false;
-      if (platform === 'win32') {
-        const track = state.track || {};
-        smtc?.setArtist(track.artist || track.artists?.[0] || '');
-        smtc?.setAlbumArtist(track.artist || track.artists?.[0] || '');
-        smtc?.setTitle(track.title || 'Orchard');
-        smtc?.setAlbumTitle(track.album || '');
-        smtc?.setPlaybackStatus(state.isPlaying ? 'playing' : track.id ? 'paused' : 'stopped');
-        smtc?.setShuffle(Boolean(state.shuffleEnabled));
-        smtc?.setAutoRepeat(state.repeatMode === 'one' ? 'track' : state.repeatMode === 'queue' ? 'list' : 'none');
-        const duration = Math.max(0, Number(state.durationSeconds) || 0) * 1000;
-        smtc?.setStartTime(0);
-        smtc?.setMinSeekTime(0);
-        smtc?.setPosition(Math.max(0, Number(state.currentTime) || 0) * 1000);
-        smtc?.setMaxSeekTime(duration);
-        smtc?.setEndTime(duration);
-        return Boolean(smtc);
+      if (!start()) return false;
+
+      try {
+        controls.setState(state);
+        return true;
+      } catch (error) {
+        console.warn(`System media update failed: ${error.message}`);
+        return false;
       }
-      player?.update(state);
-      return Boolean(player);
     },
     stop() {
-      if (smtc) {
-        try { smtc.stop(); } catch {}
-      }
-      smtc = null;
+      if (!controls) return;
+
       try {
-        if (bus) bus.unexport(OBJECT_PATH);
-        bus?.disconnect();
+        controls.stop();
       } catch {
-        // D-Bus teardown can race with session shutdown.
+        // Teardown races with window destruction during quit.
       }
-      bus = null;
-      player = null;
-      startPromise = null;
+
+      controls = null;
     }
   };
 }
 
 export function setupSystemMediaHandlers({ ipcMain, app, getWindow }) {
   const systemMedia = createSystemMediaService({
+    getWindow,
     emitCommand: (command) => {
       const window = getWindow();
 
