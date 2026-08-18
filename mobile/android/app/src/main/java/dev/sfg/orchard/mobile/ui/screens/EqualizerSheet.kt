@@ -115,7 +115,7 @@ private fun EqualizerContent(config: EqualizerConfig, onConfigChange: (Equalizer
                     focusedTextColor = CanopyColors.Text,
                     unfocusedTextColor = CanopyColors.Text,
                 ),
-                modifier = Modifier.menuAnchor().fillMaxWidth()
+                modifier = Modifier.menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
             )
             ExposedDropdownMenu(
                 expanded = expanded,

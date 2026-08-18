@@ -108,6 +108,7 @@ fun SettingsScreen(
     onWelcome: () -> Unit = {},
     onCheckForUpdates: () -> Unit = {},
     onInstallUpdate: (MobileUpdateMetadata) -> Unit = {},
+    onHomeLayout: () -> Unit = {},
     /**
      * Separate from [onSettings] because switching Autoplay off also strips the tracks it added,
      * which only the view model can do.
@@ -187,6 +188,13 @@ fun SettingsScreen(
 
         SectionLabel("Appearance")
         SettingsPanel {
+            ActionRow(
+                icon = Icons.Rounded.Palette,
+                title = "Home screen layout",
+                subtitle = "Reorder and hide sections on Home",
+                onClick = onHomeLayout,
+            )
+            PanelDivider()
             ToggleRow(
                 icon = Icons.Rounded.Person,
                 title = "Player gestures",

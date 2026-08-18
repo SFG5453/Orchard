@@ -30,6 +30,18 @@ sealed interface LoadState<out T> {
 
 enum class LibraryFilter { PLAYLISTS, ARTISTS, ALBUMS, SONGS, RECENT, DOWNLOADS }
 
+enum class BuiltInHomeSection {
+    YOUR_PLAYLISTS, SUBSCRIBED_ARTISTS, TOP_SONGS, RECOMMENDATIONS,
+    DOWNLOADED_PLAYLISTS, DOWNLOADED_ARTISTS, DOWNLOADED_ALBUMS, DOWNLOADED_SONGS
+}
+
+data class HomeSectionConfig(
+    val section: BuiltInHomeSection,
+    val enabled: Boolean
+)
+
+enum class NowPlayingWidget { ARTWORK, TRACK_INFO, CONTROLS }
+
 data class LibrarySnapshot(
     val likedTracks: List<Track> = emptyList(),
     val savedAlbums: List<Album> = emptyList(),
@@ -89,6 +101,28 @@ data class OrchardSettings(
     val equalizerConfig: EqualizerConfig = EqualizerConfig(),
     /** Enable swipe and tap gestures on the player artwork. */
     val playerGesturesEnabled: Boolean = true,
+    /** Online layout configuration. */
+    val homeLayoutOnline: List<HomeSectionConfig> = listOf(
+        HomeSectionConfig(BuiltInHomeSection.YOUR_PLAYLISTS, true),
+        HomeSectionConfig(BuiltInHomeSection.SUBSCRIBED_ARTISTS, true),
+        HomeSectionConfig(BuiltInHomeSection.TOP_SONGS, true),
+        HomeSectionConfig(BuiltInHomeSection.RECOMMENDATIONS, true)
+    ),
+    /** Offline layout configuration. */
+    val homeLayoutOffline: List<HomeSectionConfig> = listOf(
+        HomeSectionConfig(BuiltInHomeSection.DOWNLOADED_PLAYLISTS, true),
+        HomeSectionConfig(BuiltInHomeSection.DOWNLOADED_ARTISTS, true),
+        HomeSectionConfig(BuiltInHomeSection.DOWNLOADED_ALBUMS, true),
+        HomeSectionConfig(BuiltInHomeSection.DOWNLOADED_SONGS, true)
+    ),
+    /** Layout for the Now Playing screen widgets. */
+    val nowPlayingLayout: List<NowPlayingWidget> = listOf(
+        NowPlayingWidget.ARTWORK,
+        NowPlayingWidget.TRACK_INFO,
+        NowPlayingWidget.CONTROLS
+    ),
+    /** Whether to show full-bleed artwork on the Now Playing screen. */
+    val fullBleedArtworkEnabled: Boolean = true,
 ) {
     /** Clamped, because a persisted value from an older build must not size the cache absurdly. */
     val cacheSizeBytes: Long

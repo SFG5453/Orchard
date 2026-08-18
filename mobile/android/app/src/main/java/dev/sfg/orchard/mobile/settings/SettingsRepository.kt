@@ -31,6 +31,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import dev.sfg.orchard.mobile.model.AudioQuality
 import dev.sfg.orchard.mobile.model.EqualizerConfig
 import dev.sfg.orchard.mobile.model.OrchardSettings
+import dev.sfg.orchard.mobile.model.BuiltInHomeSection
+import dev.sfg.orchard.mobile.model.HomeSectionConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -74,6 +76,8 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                     bassBoost = values[EQUALIZER_BASS_BOOST] ?: 0f,
                 ),
                 playerGesturesEnabled = values[PLAYER_GESTURES_ENABLED] ?: true,
+                homeLayoutOnline = decodeHomeLayout(values[HOME_LAYOUT_ONLINE], true),
+                homeLayoutOffline = decodeHomeLayout(values[HOME_LAYOUT_OFFLINE], false),
             )
         }
         .stateIn(scope, SharingStarted.Eagerly, OrchardSettings())
@@ -108,6 +112,8 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[EQUALIZER_PREAMP] = value.equalizerConfig.preampDb
                 it[EQUALIZER_BASS_BOOST] = value.equalizerConfig.bassBoost
                 it[PLAYER_GESTURES_ENABLED] = value.playerGesturesEnabled
+                it[HOME_LAYOUT_ONLINE] = encodeHomeLayout(value.homeLayoutOnline)
+                it[HOME_LAYOUT_OFFLINE] = encodeHomeLayout(value.homeLayoutOffline)
             }
         }
     }
@@ -142,6 +148,37 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         return List(expectedSize) { i -> parts.getOrNull(i)?.toFloatOrNull() ?: 0f }
     }
 
+    private fun decodeHomeLayout(value: String?, online: Boolean): List<HomeSectionConfig> {
+        if (value.isNullOrBlank()) {
+            return if (online) OrchardSettings().homeLayoutOnline else OrchardSettings().homeLayoutOffline
+        }
+        return runCatching {
+            val arr = JSONArray(value)
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val sectionStr = obj.optString("section")
+                    val enabled = obj.optBoolean("enabled", true)
+                    runCatching { BuiltInHomeSection.valueOf(sectionStr) }.getOrNull()?.let { section ->
+                        add(HomeSectionConfig(section, enabled))
+                    }
+                }
+            }
+        }.getOrDefault(if (online) OrchardSettings().homeLayoutOnline else OrchardSettings().homeLayoutOffline)
+    }
+
+    private fun encodeHomeLayout(layout: List<HomeSectionConfig>): String {
+        val arr = JSONArray()
+        layout.forEach { config ->
+            val obj = org.json.JSONObject()
+            obj.put("section", config.section.name)
+            obj.put("enabled", config.enabled)
+            arr.put(obj)
+        }
+        return arr.toString()
+    }
+
+
     private companion object {
         val ANIMATED_ARTWORK = booleanPreferencesKey("animated_artwork")
         val AUDIO_QUALITY = stringPreferencesKey("audio_quality")
@@ -166,5 +203,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val EQUALIZER_PREAMP = floatPreferencesKey("equalizer_preamp")
         val EQUALIZER_BASS_BOOST = floatPreferencesKey("equalizer_bass_boost")
         val PLAYER_GESTURES_ENABLED = booleanPreferencesKey("player_gestures_enabled")
+        val HOME_LAYOUT_ONLINE = stringPreferencesKey("home_layout_online")
+        val HOME_LAYOUT_OFFLINE = stringPreferencesKey("home_layout_offline")
     }
 }

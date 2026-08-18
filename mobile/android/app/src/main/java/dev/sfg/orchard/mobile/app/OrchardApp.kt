@@ -65,6 +65,7 @@ import dev.sfg.orchard.mobile.ui.screens.LibraryScreen
 import dev.sfg.orchard.mobile.ui.screens.NativeLoginScreen
 import dev.sfg.orchard.mobile.ui.screens.SearchScreen
 import dev.sfg.orchard.mobile.ui.screens.SettingsScreen
+import dev.sfg.orchard.mobile.ui.screens.SettingsHomeLayout
 import dev.sfg.orchard.mobile.ui.screens.WelcomeScreen
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
@@ -256,6 +257,7 @@ private fun OrchardNavigation(
         }
         composable(Routes.HOME) {
             HomeScreen(
+                settings = settings,
                 state = home,
                 library = library,
                 auth = auth,
@@ -271,6 +273,12 @@ private fun OrchardNavigation(
                 onDevices = { nav.navigate(Routes.DEVICES) },
                 onPlay = { viewModel.play(it, "Home") },
                 onOpenDetail = { id -> viewModel.openDetail(id); nav.navigate(Routes.detail(id)) },
+                onEditLayout = { nav.navigate(Routes.SETTINGS_HOME_LAYOUT) },
+                onToggleLike = viewModel::toggleLiked,
+                onPlayNext = if (canControlQueue) viewModel::playNext else null,
+                onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
+                onAddToPlaylist = { playlistPickerTrack = it },
+                onShare = viewModel::shareTrack,
             )
         }
         composable(Routes.SEARCH) {
@@ -338,6 +346,15 @@ private fun OrchardNavigation(
                 onWelcome = { nav.navigate(Routes.WELCOME) },
                 onCheckForUpdates = viewModel::checkForUpdates,
                 onInstallUpdate = viewModel::installUpdate,
+                onHomeLayout = { nav.navigate(Routes.SETTINGS_HOME_LAYOUT) },
+            )
+        }
+        composable(Routes.SETTINGS_HOME_LAYOUT) {
+            SettingsHomeLayout(
+                settings = settings,
+                auth = auth,
+                onSettings = viewModel::updateSettings,
+                onBack = { nav.popBackStack() },
             )
         }
         composable(Routes.LOGIN) {

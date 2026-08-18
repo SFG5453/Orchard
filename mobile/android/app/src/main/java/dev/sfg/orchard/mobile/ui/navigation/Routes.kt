@@ -25,6 +25,7 @@ object Routes {
     const val SEARCH = "search"
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
+    const val SETTINGS_HOME_LAYOUT = "settings-home-layout"
     const val NOW_PLAYING = "now-playing"
     const val DEVICES = "devices"
     const val LOGIN = "login"
