@@ -182,8 +182,8 @@ module.exports = {
     fpm: ['--deb-compression-level', '7']
   },
   rpm: {
-  compression: 'zstd',
-  fpm: ['--rpm-compression-level', '19']
+  compression: 'xzmt',
+  fpm: ['--rpm-compression-level', '6']
   },
   flatpak: {
     runtime: 'org.freedesktop.Platform',
