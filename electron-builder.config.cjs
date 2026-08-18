@@ -41,16 +41,41 @@ const onnxWebFiles = useOnnxWebFallback
     ]
   : [`!${ONNX_WEB_ROOT}/**`];
 
-async function pruneOnnxRuntime({ appOutDir, electronPlatformName, arch }) {
+async function pruneOnnxRuntime(context) {
+  const {
+    appOutDir,
+    electronPlatformName,
+    arch,
+    packager
+  } = context;
+
   const targetArchitecture = ONNX_ARCH_NAMES.get(arch);
-  if (!ONNX_PLATFORMS.has(electronPlatformName) || !ONNX_ARCHITECTURES.has(targetArchitecture)) {
-    throw new Error(`Unsupported ONNX Runtime target: ${electronPlatformName}/${arch}`);
+
+  if (
+    !ONNX_PLATFORMS.has(electronPlatformName) ||
+    !ONNX_ARCHITECTURES.has(targetArchitecture)
+  ) {
+    throw new Error(
+      `Unsupported ONNX Runtime target: ${electronPlatformName}/${arch}`
+    );
   }
-  if (electronPlatformName === 'darwin' && targetArchitecture === 'x64') return;
+
+  if (electronPlatformName === 'darwin' && targetArchitecture === 'x64') {
+    return;
+  }
+
+  const resourcesDir =
+    electronPlatformName === 'darwin'
+      ? path.join(
+          appOutDir,
+          `${packager.appInfo.productFilename}.app`,
+          'Contents',
+          'Resources'
+        )
+      : path.join(appOutDir, 'resources');
 
   const runtimeRoot = path.join(
-    appOutDir,
-    'resources',
+    resourcesDir,
     'app.asar.unpacked',
     'node_modules',
     'onnxruntime-node',
@@ -58,31 +83,42 @@ async function pruneOnnxRuntime({ appOutDir, electronPlatformName, arch }) {
     'napi-v6'
   );
 
-  // onnxruntime-node resolves exactly one platform/architecture directory at
-  // runtime. Remove every other prebuilt payload from the final application.
   for (const platform of ONNX_PLATFORMS) {
     if (platform !== electronPlatformName) {
-      await fs.rm(path.join(runtimeRoot, platform), { recursive: true, force: true });
-      continue;
-    }
-    for (const candidateArchitecture of ONNX_ARCHITECTURES) {
-      if (candidateArchitecture === targetArchitecture) continue;
-      await fs.rm(path.join(runtimeRoot, platform, candidateArchitecture), {
+      await fs.rm(path.join(runtimeRoot, platform), {
         recursive: true,
         force: true
       });
+      continue;
+    }
+
+    for (const candidateArchitecture of ONNX_ARCHITECTURES) {
+      if (candidateArchitecture === targetArchitecture) continue;
+
+      await fs.rm(
+        path.join(runtimeRoot, platform, candidateArchitecture),
+        {
+          recursive: true,
+          force: true
+        }
+      );
     }
   }
 
-  const targetRoot = path.join(runtimeRoot, electronPlatformName, targetArchitecture);
-  const targetFiles = await fs.readdir(targetRoot).catch(() => []);
-  const binding = targetFiles.find((file) => file === 'onnxruntime_binding.node');
-  if (!binding) {
-    throw new Error(`ONNX Runtime has no binding for ${electronPlatformName}/${targetArchitecture}`);
+  const targetRoot = path.join(
+    runtimeRoot,
+    electronPlatformName,
+    targetArchitecture
+  );
+
+  const targetFiles = await fs.readdir(targetRoot);
+
+  if (!targetFiles.includes('onnxruntime_binding.node')) {
+    throw new Error(
+      `ONNX Runtime has no binding for ${electronPlatformName}/${targetArchitecture}`
+    );
   }
 
-  // Orchard explicitly selects the CPU execution provider. CUDA, TensorRT,
-  // and the provider dispatcher are therefore unnecessary in every release.
   await Promise.all(
     targetFiles
       .filter((file) => file.startsWith('libonnxruntime_providers_'))
