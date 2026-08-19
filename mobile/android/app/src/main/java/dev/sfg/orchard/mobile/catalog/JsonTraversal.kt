@@ -36,6 +36,50 @@ internal object JsonTraversal {
         }
     }
 
+    /**
+     * True when a renderer describes something the listener uploaded themselves rather than
+     * something from YouTube's catalog.
+     *
+     * Ported from the desktop's `isUploadedMusicItem` so both clients decide this the same way.
+     * YouTube never states it outright; it is inferred from three markers that only ever appear
+     * on privately owned entities: an entity id in the `<kind>_po_<id>` shape, the delete command
+     * offered in the item's own menu, and the library browse ids uploads are filed under.
+     */
+    fun isPrivatelyOwned(root: Any?): Boolean =
+        // Identity, not equality: org.json does not define structural equality, and the guard
+        // only needs to stop a renderer that points back at itself.
+        scanPrivatelyOwned(root, java.util.Collections.newSetFromMap(java.util.IdentityHashMap()))
+
+    private fun scanPrivatelyOwned(value: Any?, seen: MutableSet<JSONObject>): Boolean {
+        when (value) {
+            is JSONObject -> {
+                if (!seen.add(value)) return false
+                for (key in value.keys()) {
+                    val normalized = key.replace("_", "").lowercase()
+                    val nested = value.opt(key)
+                    when {
+                        normalized == "musicdeleteprivatelyownedentitycommand" -> return true
+                        normalized == "entityid" &&
+                            PRIVATELY_OWNED_ENTITY_ID.containsMatchIn(nested?.toString().orEmpty()) -> return true
+                        normalized == "type" &&
+                            nested?.toString().orEmpty()
+                                .contains("deleteprivatelyownedentity", ignoreCase = true) -> return true
+                        normalized == "browseid" &&
+                            nested?.toString().orEmpty().startsWith(PRIVATELY_OWNED_BROWSE_PREFIX) -> return true
+                    }
+                    if (scanPrivatelyOwned(nested, seen)) return true
+                }
+            }
+            is JSONArray -> for (index in 0 until value.length()) {
+                if (scanPrivatelyOwned(value.opt(index), seen)) return true
+            }
+        }
+        return false
+    }
+
+    private val PRIVATELY_OWNED_ENTITY_ID = Regex("""^[a-z]+_po_""", RegexOption.IGNORE_CASE)
+    private const val PRIVATELY_OWNED_BROWSE_PREFIX = "FEmusic_library_privately_owned"
+
     fun text(value: JSONObject?): String {
         if (value == null) return ""
         value.optString("simpleText").takeIf(String::isNotBlank)?.let { return it }

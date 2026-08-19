@@ -51,6 +51,12 @@ data class Track(
      * strips exactly these, so the queue returns to what was actually chosen.
      */
     val autoplayGenerated: Boolean = false,
+    /**
+     * True for a track the listener uploaded to YouTube Music themselves. It exists only inside
+     * their own library, so no guest player client can see it and playback has to go straight to
+     * the signed-in web player.
+     */
+    val isUpload: Boolean = false,
 ) {
     /** True for album audio, which is the version a listener expects from an album or search. */
     val isAudioOnly: Boolean

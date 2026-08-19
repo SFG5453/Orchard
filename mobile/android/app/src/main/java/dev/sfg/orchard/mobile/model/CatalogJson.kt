@@ -37,6 +37,7 @@ object CatalogJson {
         .put("durationMs", value.durationMs)
         .put("explicit", value.explicit)
         .put("autoplayGenerated", value.autoplayGenerated)
+        .put("isUpload", value.isUpload)
 
     fun track(value: JSONObject): Track = Track(
         id = value.cleanString("id"),
@@ -51,6 +52,7 @@ object CatalogJson {
         durationMs = value.optLong("durationMs"),
         explicit = value.optBoolean("explicit"),
         autoplayGenerated = value.optBoolean("autoplayGenerated"),
+        isUpload = value.optBoolean("isUpload"),
     )
 
     fun tracks(values: List<Track>): JSONArray = JSONArray().also { output ->

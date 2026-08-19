@@ -496,6 +496,7 @@ object CatalogParser {
             durationMs = duration,
             explicit = explicit,
             musicVideoType = musicVideoType,
+            isUpload = JsonTraversal.isPrivatelyOwned(renderer),
         )
     }
 
