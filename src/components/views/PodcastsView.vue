@@ -32,7 +32,10 @@ export default {
     Loading podcasts…
   </div>
 
-  <template v-else-if="podcastFeed.sections.length">
+  <!-- A real element, not a <template>: the v-for below would otherwise make
+       this branch a multi-root fragment, which cannot run the view-fade leave
+       transition in AppFrame and wedges it for every other view. -->
+  <div v-else-if="podcastFeed.sections.length" class="podcasts-view">
     <section v-for="section in podcastFeed.sections" :key="section.key" class="shelf-section">
       <div class="section-header">
         <h2>{{ section.title }}</h2>
@@ -64,7 +67,7 @@ export default {
         </article>
       </div>
     </section>
-  </template>
+  </div>
 
   <div v-else class="empty-state">No podcasts were returned.</div>
 </template>
