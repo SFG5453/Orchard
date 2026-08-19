@@ -23,6 +23,7 @@ import android.util.Log
 import dev.sfg.orchard.mobile.auth.YouTubeSessionAuth
 import dev.sfg.orchard.mobile.auth.YouTubeSessionProvider
 import dev.sfg.orchard.mobile.model.AudioQuality
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -92,6 +93,13 @@ private data class PlayerClientProfile(
     val androidSdkVersion: Int? = null,
     val useSignatureTimestamp: Boolean = false,
     val youtubeOrigin: Boolean = false,
+    /**
+     * Whether this client participates in the WebPO scheme. Only the web family does: a proof has
+     * to be declared in the player request for the URL it returns to be bound to it, and the
+     * native clients have no field for that. Bolting `pot` onto an ANDROID_VR URL proves nothing
+     * to the CDN, which is why doing so did not rescue a single refused stream on device.
+     */
+    val supportsPoToken: Boolean = false,
 )
 
 /**
@@ -120,6 +128,12 @@ class YouTubeStreamResolver(
     private val sessionProvider: YouTubeSessionProvider? = null,
     private val challengeSolver: YouTubeChallengeSolver? = null,
     private val downloadManager: dev.sfg.orchard.mobile.download.DownloadManager? = null,
+    /**
+     * Mints the proof-of-origin token googlevideo increasingly demands. Optional: when absent, or
+     * when a mint fails, URLs go out unprotected exactly as before — which still works for many
+     * sessions, and is a better outcome than refusing to play at all.
+     */
+    private val poTokenMinter: YouTubePoTokenMinter? = null,
 ) {
     private val newPipeResolver: NewPipeStreamResolver by lazy { NewPipeStreamResolver(client, sessionProvider) }
 
@@ -163,6 +177,12 @@ class YouTubeStreamResolver(
      */
     private val ageGatedVideos = ConcurrentHashMap.newKeySet<String>()
 
+    /**
+     * Videos no guest client can see, either because the catalog said so up front or because one
+     * refused with the private-video wording.
+     */
+    private val accountOnlyVideos = ConcurrentHashMap.newKeySet<String>()
+
     private data class FailedResolve(val atMs: Long, val cause: Throwable)
     private val locks = ConcurrentHashMap<String, Any>()
     private val prefetchExecutor = Executors.newFixedThreadPool(2) { runnable ->
@@ -171,6 +191,8 @@ class YouTubeStreamResolver(
     private val visitorLock = Any()
     @Volatile private var visitor: Visitor? = null
     @Volatile private var lastVisitorRefreshAtMs: Long = 0L
+    private val playerRefreshLock = Any()
+    @Volatile private var lastPlayerRefreshAtMs: Long = 0L
 
     /**
      * The account identity, held separately from the guest one and keyed by the
@@ -190,8 +212,9 @@ class YouTubeStreamResolver(
         val cacheKey = "$videoId:${quality.name}"
         cached(cacheKey)?.let { return it }
         var maxQualityFallback = false
-        // MAX uses NewPipe for the highest bitrate stream.
-        if (quality == AudioQuality.MAX) {
+        // MAX uses NewPipe for the highest bitrate stream. NewPipe reads the public watch page,
+        // which does not exist for an upload, so that path is skipped rather than paid for.
+        if (quality == AudioQuality.MAX && videoId !in accountOnlyVideos) {
             val newPipeStream = newPipeResolver.resolve(videoId)
             if (newPipeStream != null) {
                 streams[cacheKey] = newPipeStream
@@ -236,14 +259,31 @@ class YouTubeStreamResolver(
             var lastError: Throwable = IllegalStateException("No YouTube player client was available")
             var stream: ResolvedStream? = null
 
+            // A track the catalog already identified as an upload exists only inside the
+            // listener's own library. Walking the guest catalog for it spends the whole resolve
+            // budget collecting refusals before reaching the one client that can see it, and the
+            // refusals are indistinguishable from a track that is genuinely gone.
+            val knownAccountOnly = videoId in accountOnlyVideos
+            if (knownAccountOnly && account == null) {
+                // Nothing further to try: no guest client can see this, and there is no account
+                // to ask. Say why, rather than letting the guest chain produce "Video unavailable".
+                error("Sign in to YouTube to play music you uploaded")
+            }
+            val guestProfiles = if (knownAccountOnly) {
+                Log.d(TAG, "$videoId is account-only; resolving through the signed-in player")
+                emptyList()
+            } else {
+                orderedClientProfiles(videoId)
+            }
+
             // ArchiveTune's important reliability property is the profile catalog: native
             // clients are anonymous/visitor requests, use the Music Innertube host, and carry
             // their exact identity into the subsequent googlevideo request. Account cookies are
             // deliberately reserved for web clients that actually support cookie authentication.
-            for (profile in orderedClientProfiles(videoId)) {
+            for (profile in guestProfiles) {
                 withinBudget(lastError)
                 val attempt = runCatching {
-                    chooseAudio(player(videoId, visitorIdentity, profile), quality)
+                    chooseAudio(videoId, player(videoId, visitorIdentity, profile), quality)
                 }
                 if (attempt.isSuccess) {
                     stream = attempt.getOrThrow()
@@ -256,9 +296,12 @@ class YouTubeStreamResolver(
 
                 // An upload or private video is refused identically by every anonymous client, so
                 // walking the rest of the catalog only burns the budget the signed-in player needs.
-                if (lastError is AccountOnlyException && account != null) {
-                    Log.d(TAG, "$videoId is account-only; skipping the remaining guest clients")
-                    break
+                if (lastError is AccountOnlyException) {
+                    accountOnlyVideos += videoId
+                    if (account != null) {
+                        Log.d(TAG, "$videoId is account-only; skipping the remaining guest clients")
+                        break
+                    }
                 }
 
                 // Refresh a persisted guest identity once. Repeating this for every profile
@@ -278,7 +321,7 @@ class YouTubeStreamResolver(
             // account-only music, and dropping it because the guest attempts ran long turns a
             // playable upload into "Video unavailable".
             if (stream == null && account != null) {
-                runCatching { chooseAudio(webRemixPlayer(videoId, account), quality) }
+                runCatching { chooseAudio(videoId, webRemixPlayer(videoId, account), quality) }
                     .onSuccess { stream = it }
                     .onFailure {
                         lastError = it
@@ -337,7 +380,7 @@ class YouTubeStreamResolver(
             val account =
                 accountIdentity(videoId)
                     ?: error("Sign in to YouTube to play age-restricted tracks")
-            val stream = chooseAuthenticatedItag18(webRemixPlayer(videoId, account))
+            val stream = chooseAuthenticatedItag18(videoId, webRemixPlayer(videoId, account))
             streams[cacheKey] = stream
             return stream
         }
@@ -354,14 +397,14 @@ class YouTubeStreamResolver(
             val account = accountIdentity(videoId)
                 ?: error("Sign in to YouTube to play age-restricted tracks")
             val payload = webSafariPlayer(videoId, account)
-            val stream = chooseAudio(payload, qualityProvider(), allowHls = true)
+            val stream = chooseAudio(videoId, payload, qualityProvider(), allowHls = true)
             check(stream.mimeType == HLS_MIME_TYPE) { "Safari did not return an HLS stream" }
             streams[cacheKey] = stream
             return stream
         }
     }
 
-    private fun chooseAuthenticatedItag18(payload: JSONObject): ResolvedStream {
+    private fun chooseAuthenticatedItag18(videoId: String, payload: JSONObject): ResolvedStream {
         val streaming = payload.optJSONObject("streamingData") ?: error("No streaming data returned")
         val formats = streaming.optJSONArray("formats") ?: error("No muxed formats returned")
         val format =
@@ -369,10 +412,10 @@ class YouTubeStreamResolver(
                 .mapNotNull(formats::optJSONObject)
                 .firstOrNull { it.optInt("itag") == AUTHENTICATED_DIRECT_ITAG }
                 ?: error("YouTube did not return authenticated itag $AUTHENTICATED_DIRECT_ITAG")
-        return resolvedFormat(payload, format)
+        return resolvedFormat(videoId, payload, format)
     }
 
-    private fun resolvedFormat(payload: JSONObject, format: JSONObject): ResolvedStream {
+    private fun resolvedFormat(videoId: String, payload: JSONObject, format: JSONObject): ResolvedStream {
         var rawUrl = format.optString("url")
         if (rawUrl.isBlank()) {
             val cipher = format.optString("signatureCipher").ifBlank { format.optString("cipher") }
@@ -386,7 +429,10 @@ class YouTubeStreamResolver(
             rawUrl =
                 challengeSolver?.decipherUrl(target, signature, signatureParameter)
                     ?: error("Challenge solver required for authenticated playback")
+        } else {
+            rawUrl = prepareDirectStreamUrl(rawUrl)
         }
+        rawUrl = normalizeClientVersion(rawUrl)
         val expirySeconds = EXPIRY_PATTERN.find(rawUrl)?.groupValues?.getOrNull(1)?.toLongOrNull()
         val expiry =
             expirySeconds?.let { TimeUnit.SECONDS.toMillis(it) }
@@ -394,9 +440,10 @@ class YouTubeStreamResolver(
         val bitrateKbps = (format.optInt("bitrate") / 1000).coerceAtLeast(0)
         val fallbackUserAgent = payload.optString(REQUEST_USER_AGENT_KEY).ifBlank { WEB_USER_AGENT }
         val identity = YouTubeStreamRequestIdentity.fromUrl(rawUrl, fallbackUserAgent)
+        val protectedUrl = withPoToken(videoId, rawUrl)
         Log.d(TAG, "Resolved authenticated itag ${format.optInt("itag")} @ ${bitrateKbps}kbps")
         return ResolvedStream(
-            url = rawUrl,
+            url = protectedUrl,
             mimeType = format.optString("mimeType"),
             expiresAtMs = expiry,
             bitrateKbps = bitrateKbps,
@@ -466,6 +513,19 @@ class YouTubeStreamResolver(
         prefetchExecutor.execute { runCatching { resolve(videoId) } }
     }
 
+    /**
+     * Builds the attestation machinery before a track needs it.
+     *
+     * Only the first mint is expensive — it downloads and runs BotGuard's interpreter — and every
+     * later one reuses that. Paying for it during the warm-up keeps it off the first play, where
+     * it would read as the app being slow to start.
+     */
+    fun warmUpPoToken(videoId: String) {
+        val minter = poTokenMinter ?: return
+        if (videoId.isBlank()) return
+        prefetchExecutor.execute { minter.warmUp(videoId) }
+    }
+
     private fun cached(cacheKey: String): ResolvedStream? =
         streams[cacheKey]?.takeIf { it.expiresAtMs > System.currentTimeMillis() + 60_000 }
 
@@ -511,8 +571,19 @@ class YouTubeStreamResolver(
         if (responseCode !in RETRYABLE_STREAM_RESPONSE_CODES || stream.clientKey.isBlank()) {
             return false
         }
+        // A refused proof is worth re-minting once, but it is not a reason to keep asking the same
+        // client. Sparing the client here meant every retry resolved through the profile that had
+        // just been refused, so a track failed three times against one client and never reached
+        // the others — observed on device, all four attempts landing on the same CDN host.
+        YouTubePoTokenMinter.poTokenOf(stream.url).takeIf(String::isNotBlank)?.let { rejected ->
+            poTokenMinter?.invalidate(videoId, rejected)
+        }
         rejectedClientsUntil["$videoId:${stream.clientKey}"] =
             System.currentTimeMillis() + REJECTED_CLIENT_BACKOFF_MS
+        // Resolution counts as successful the moment a URL is minted, which happens well before
+        // the CDN judges it. Leaving a refused client pinned as "last successful" would send the
+        // next track straight back to it.
+        if (lastSuccessfulClientKey == stream.clientKey) lastSuccessfulClientKey = null
         resetForRetry(videoId)
         return true
     }
@@ -523,11 +594,44 @@ class YouTubeStreamResolver(
      */
     fun consumeAgeGate(videoId: String): Boolean = ageGatedVideos.remove(videoId)
 
+    /**
+     * Records, before any request is made, that a track is one of the listener's own uploads.
+     *
+     * The resolver can work this out from a refusal, but only when a guest client says
+     * "private video" — and the clients that still answer guests say "Please sign in" or "This
+     * video is not available" instead, which are the same words a deleted track gets. Knowing up
+     * front is what keeps an upload from being reported as unavailable.
+     */
+    fun markAccountOnly(videoId: String) {
+        if (videoId.isNotBlank()) accountOnlyVideos += videoId
+    }
+
+    /**
+     * Puts the client that can present a proof of origin first whenever there is a proof to
+     * present.
+     *
+     * The native clients are not refused — they are *rationed*. A URL from ANDROID_VR serves an
+     * opening prefix and then answers 403 for everything past it, so resolution succeeds, the
+     * first minute plays, and the track dies mid-song. Measured on 2026-08-18 against a fresh
+     * ANDROID_VR URL, asking for a kilobyte at a time to isolate the boundary from the request
+     * size: the highest byte offset it would serve was 1129590 of 3497127, unchanged over ninety
+     * seconds, and a `pot` on that URL does not move it because ANDROID_VR never declared one.
+     * The same video through WEB_REMIX carrying a video-id-bound token served every byte,
+     * including `bytes=0-` in one response.
+     *
+     * So a merely remembered client does not outrank an attested one: [lastSuccessfulClientKey]
+     * records which client *resolved*, and ANDROID_VR resolves perfectly every time.
+     *
+     * Asking the minter here costs nothing extra — it caches per video id, so this is the same
+     * mint the player request is about to make in [declarePoToken].
+     */
     private fun orderedClientProfiles(videoId: String): List<PlayerClientProfile> {
         val now = System.currentTimeMillis()
         rejectedClientsUntil.entries.removeIf { it.value <= now }
         val preferred = lastSuccessfulClientKey?.let { key -> STREAM_CLIENT_PROFILES.find { it.key == key } }
+        val attested = poTokenMinter?.token(videoId) != null
         return buildList {
+            if (attested) addAll(STREAM_CLIENT_PROFILES.filter { it.supportsPoToken })
             preferred?.let(::add)
             addAll(STREAM_CLIENT_PROFILES)
         }.distinctBy { it.key }.filterNot { profile ->
@@ -571,6 +675,7 @@ class YouTubeStreamResolver(
                         ),
                     )
                 }
+                declarePoToken(this, videoId, profile.supportsPoToken)
             }
         val request = Request.Builder()
             .url("$origin/youtubei/v1/player?prettyPrint=false")
@@ -665,90 +770,6 @@ class YouTubeStreamResolver(
         return executePlayer(request)
     }
 
-    private fun androidPlayer(videoId: String, visitor: Visitor?): JSONObject {
-        val clientContext = JSONObject()
-            .put("clientName", "ANDROID")
-            .put("clientVersion", ANDROID_CLIENT_VERSION)
-            .put("osName", "Android")
-            .put("osVersion", "14")
-            .put("hl", "en")
-            .put("gl", "US")
-            .apply { visitor?.id?.takeIf(String::isNotBlank)?.let { put("visitorData", it) } }
-        val body = JSONObject()
-            .put("context", JSONObject().put("client", clientContext))
-            .put("videoId", videoId)
-            .put("contentCheckOk", true)
-            .put("racyCheckOk", true)
-        val request = Request.Builder()
-            .url("https://www.youtube.com/youtubei/v1/player?key=$PUBLIC_API_KEY&prettyPrint=false")
-            .header("Content-Type", "application/json")
-            .header("User-Agent", ANDROID_USER_AGENT)
-            .header("X-Youtube-Client-Name", "3")
-            .header("X-Youtube-Client-Version", ANDROID_CLIENT_VERSION)
-            .header("Origin", "https://www.youtube.com")
-            .header("X-Origin", "https://www.youtube.com")
-            .apply {
-                visitor?.let {
-                    if (it.id.isNotBlank()) header("X-Goog-Visitor-Id", it.id)
-                    if (it.cookie.isNotBlank()) header("Cookie", it.cookie)
-                    if (it.signedIn) {
-                        YouTubeSessionAuth.authorization(it.cookie, origin = "https://www.youtube.com")?.let { auth ->
-                            header("Authorization", auth)
-                        }
-                        header("X-Goog-AuthUser", "0")
-                    }
-                }
-            }
-            .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
-            .build()
-        return executePlayer(request)
-    }
-
-    private fun iosPlayer(videoId: String, visitor: Visitor? = null): JSONObject {
-        val body = JSONObject()
-            .put(
-                "context",
-                JSONObject().put(
-                    "client",
-                    JSONObject()
-                        .put("clientName", "IOS")
-                        .put("clientVersion", IOS_CLIENT_VERSION)
-                        .put("deviceModel", "iPhone10,4")
-                        .put("osName", "iOS")
-                        .put("osVersion", "16.7.7.20H330")
-                        .put("hl", "en")
-                        .put("gl", "US")
-                        .apply { visitor?.id?.takeIf(String::isNotBlank)?.let { put("visitorData", it) } },
-                ),
-            )
-            .put("videoId", videoId)
-            .put("contentCheckOk", true)
-            .put("racyCheckOk", true)
-        val request = Request.Builder()
-            .url("https://www.youtube.com/youtubei/v1/player?key=$PUBLIC_API_KEY&prettyPrint=false")
-            .header("Content-Type", "application/json")
-            .header("User-Agent", IOS_USER_AGENT)
-            .header("X-Youtube-Client-Name", "5")
-            .header("X-Youtube-Client-Version", IOS_CLIENT_VERSION)
-            .header("Origin", "https://www.youtube.com")
-            .header("X-Origin", "https://www.youtube.com")
-            .apply {
-                visitor?.let {
-                    if (it.id.isNotBlank()) header("X-Goog-Visitor-Id", it.id)
-                    if (it.cookie.isNotBlank()) header("Cookie", it.cookie)
-                    if (it.signedIn) {
-                        YouTubeSessionAuth.authorization(it.cookie, origin = "https://www.youtube.com")?.let { auth ->
-                            header("Authorization", auth)
-                        }
-                        header("X-Goog-AuthUser", "0")
-                    }
-                }
-            }
-            .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
-            .build()
-        return executePlayer(request)
-    }
-
     /**
      * YouTube Music web client (WEB_REMIX). This is the client used by music.youtube.com.
      * When signed in, carrying the user's cookies and matching SAPISIDHASH authorization,
@@ -785,10 +806,11 @@ class YouTubeStreamResolver(
             .put("contentCheckOk", true)
             .put("racyCheckOk", true)
             .put("playbackContext", playbackContext)
+            .apply { declarePoToken(this, videoId, supported = true) }
         val request = Request.Builder()
             .url("https://music.youtube.com/youtubei/v1/player?key=$PUBLIC_API_KEY&prettyPrint=false")
             .header("Content-Type", "application/json")
-            .header("User-Agent", WEB_USER_AGENT)
+            .header("User-Agent", YouTubeStreamRequestIdentity.WEB_REMIX_USER_AGENT)
             .header("X-Youtube-Client-Name", "67")
             .header("X-Youtube-Client-Version", WEB_REMIX_VERSION)
             .header("Origin", YouTubeSessionAuth.MUSIC_ORIGIN)
@@ -929,9 +951,7 @@ class YouTubeStreamResolver(
                         .orEmpty()
                         .contains("needs to be reloaded", ignoreCase = true)
                 ) {
-                    Log.w(TAG, "Player rejected the signature timestamp; refreshing it")
-                    playerConfig.invalidate()
-                    challengeSolver?.invalidatePlayer()
+                    refreshSignatureTimestamp()
                 }
                 // Checked before the age gate: an upload refusal also arrives as LOGIN_REQUIRED,
                 // and only the private/upload wording tells the two apart.
@@ -953,6 +973,29 @@ class YouTubeStreamResolver(
         }
     }
 
+    /**
+     * Re-reads the live player build after YouTube complained about the signature timestamp.
+     *
+     * Rate limited because the complaint is not always about us: TVHTML5 answers
+     * "The page needs to be reloaded." to every guest request, correct timestamp or not, and it
+     * sits at the end of the client chain. Invalidating on each one made every exhausted resolve
+     * throw away the cached player script and re-download it, so the tracks least likely to play
+     * were also the slowest to fail.
+     */
+    private fun refreshSignatureTimestamp() {
+        val now = System.currentTimeMillis()
+        synchronized(playerRefreshLock) {
+            if (now - lastPlayerRefreshAtMs < PLAYER_REFRESH_COALESCE_MS) {
+                Log.d(TAG, "Signature timestamp was refreshed recently; keeping the current player")
+                return
+            }
+            lastPlayerRefreshAtMs = now
+        }
+        Log.w(TAG, "Player rejected the signature timestamp; refreshing it")
+        playerConfig.invalidate()
+        challengeSolver?.invalidatePlayer()
+    }
+
     private fun isAgeGateResponse(status: String, reason: String): Boolean {
         val text = "$status $reason"
         return AGE_GATE_PATTERN.containsMatchIn(text)
@@ -968,7 +1011,36 @@ class YouTubeStreamResolver(
     private fun signatureTimestamp(): Int =
         challengeSolver?.signatureTimestamp() ?: playerConfig.signatureTimestamp()
 
+    /**
+     * Declares the proof in the player request, which is the half that makes it count.
+     *
+     * A `pot` on the URL is only honoured when the player request that minted the URL announced
+     * the same proof, exactly as youtubei.js does for desktop. Attaching one without declaring it
+     * changes nothing, which is what the first Android build did — tokens minted, attached, and
+     * every stream still refused.
+     */
+    private fun declarePoToken(body: JSONObject, videoId: String, supported: Boolean) {
+        if (!supported) return
+        val token = poTokenMinter?.token(videoId) ?: return
+        body.put("serviceIntegrityDimensions", JSONObject().put("poToken", token))
+    }
+
+    /**
+     * Attaches the token to a URL from a client that declared it. HLS is deliberately left alone —
+     * manifests still play without one, and their segment URLs are not ours to rewrite.
+     */
+    private fun withPoToken(videoId: String, url: String): String {
+        val minter = poTokenMinter ?: return url
+        // Only meaningful for URLs whose player request carried the same proof. The client that
+        // issued this URL is recoverable from the URL itself, which is how the fetch identity is
+        // already decided.
+        if (!YouTubeStreamRequestIdentity.usesPoToken(url)) return url
+        val token = minter.token(videoId) ?: return url
+        return YouTubePoTokenMinter.withPoToken(url, token)
+    }
+
     private fun chooseAudio(
+        videoId: String,
         payload: JSONObject,
         quality: AudioQuality,
         allowHls: Boolean = false,
@@ -1029,17 +1101,22 @@ class YouTubeStreamResolver(
                 val solver = challengeSolver ?: error("Challenge solver required for ciphered streams")
                 rawUrl = solver.decipherUrl(targetUrl, encSig, sigParam)
             }
+        } else {
+            rawUrl = prepareDirectStreamUrl(rawUrl)
         }
 
-        val url = rawUrl.takeIf(String::isNotBlank) ?: error("Failed to resolve audio stream URL")
+        val url = rawUrl.takeIf(String::isNotBlank)
+            ?.let(::normalizeClientVersion)
+            ?: error("Failed to resolve audio stream URL")
         val expirySeconds = EXPIRY_PATTERN.find(url)?.groupValues?.getOrNull(1)?.toLongOrNull()
         val expiry = expirySeconds?.let { TimeUnit.SECONDS.toMillis(it) }
             ?: System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(45)
         val bitrateKbps = (chosen.optInt("bitrate") / 1000).coerceAtLeast(0)
         val identity = YouTubeStreamRequestIdentity.fromUrl(url, userAgent)
+        val protectedUrl = withPoToken(videoId, url)
         Log.d(TAG, "Resolved ${chosen.optString("mimeType").substringBefore(';')} audio @ ${bitrateKbps}kbps")
         return ResolvedStream(
-            url = url,
+            url = protectedUrl,
             mimeType = chosen.optString("mimeType"),
             expiresAtMs = expiry,
             bitrateKbps = bitrateKbps,
@@ -1055,6 +1132,17 @@ class YouTubeStreamResolver(
         format.optString("contentLength").toLongOrNull()
             ?: CONTENT_LENGTH_PATTERN.find(url)?.groupValues?.getOrNull(1)?.toLongOrNull()
             ?: 0L
+
+    /**
+     * Mirrors youtubei.js' handling of direct formats. `format.url` is not necessarily ready to
+     * fetch: WEB clients commonly return it with an `n` throttling challenge even when there is no
+     * signatureCipher. Forwarding that value unchanged is accepted by the player endpoint but the
+     * media CDN answers 403, which is what made account uploads look unavailable on Android.
+     */
+    private fun prepareDirectStreamUrl(url: String): String =
+        prepareDirectStreamUrlForFetch(url) { challengedUrl ->
+            challengeSolver?.decipherUrl(challengedUrl, encryptedSig = null) ?: challengedUrl
+        }
 
     private fun parseQuery(query: String): Map<String, String> {
         return query.split('&').mapNotNull { param ->
@@ -1074,6 +1162,23 @@ class YouTubeStreamResolver(
     companion object {
         // Profile values are adapted from ArchiveTune's GPL-3.0 Innertube client catalog:
         // https://github.com/rukamori/ArchiveTune (inspected 2026-08-15).
+        //
+        // Ordered by client *family*, not by preference within a family. Probed against live
+        // YouTube on 2026-08-18 with a fresh guest visitorData: of the profiles that used to be
+        // here, only ANDROID_VR and VISIONOS still hand back audio formats carrying a URL. The
+        // IOS and ANDROID clients now answer with SABR only — their adaptiveFormats have neither
+        // `url` nor `signatureCipher`, so [chooseAudio] can never pick one and they were three
+        // guaranteed round trips in the middle of the chain. They are gone rather than demoted.
+        //
+        // What is left after ANDROID_VR is what matters: a googlevideo URL is refused by the CDN
+        // per client family, so following a rejected ANDROID_VR with a second ANDROID_VR build
+        // asks the same question twice. VISIONOS is the only surviving independent family, so it
+        // goes second and the older VR build after it.
+        //
+        // This order is the *unattested* one. None of the native clients can present a proof of
+        // origin, and a URL without one is rationed to an opening prefix, so whenever a token can
+        // be minted [orderedClientProfiles] promotes WEB_REMIX ahead of all of them and this list
+        // becomes the fallback for sessions that cannot attest.
         private val STREAM_CLIENT_PROFILES = listOf(
             PlayerClientProfile(
                 key = "ANDROID_VR@1.65.10",
@@ -1088,6 +1193,17 @@ class YouTubeStreamResolver(
                 androidSdkVersion = 32,
             ),
             PlayerClientProfile(
+                key = "VISIONOS@0.1",
+                name = "VISIONOS",
+                version = "0.1",
+                id = "101",
+                userAgent = YouTubeStreamRequestIdentity.VISION_OS_USER_AGENT,
+                osName = "visionOS",
+                osVersion = "1.3.21O771",
+                deviceMake = "Apple",
+                deviceModel = "RealityDevice14,1",
+            ),
+            PlayerClientProfile(
                 key = "ANDROID_VR@1.61.48",
                 name = "ANDROID_VR",
                 version = "1.61.48",
@@ -1099,27 +1215,22 @@ class YouTubeStreamResolver(
                 deviceModel = "Quest 3",
                 androidSdkVersion = 32,
             ),
+            // The only guest client that can present a proof of origin, and so the only one whose
+            // URLs serve a whole track rather than an opening prefix. It costs a signature
+            // decipher the native clients do not, which is why it is listed here rather than at
+            // the top; [orderedClientProfiles] moves it to the front whenever a token exists.
             PlayerClientProfile(
-                key = "IOS@21.26.4",
-                name = "IOS",
-                version = "21.26.4",
-                id = "5",
-                userAgent = YouTubeStreamRequestIdentity.IOS_USER_AGENT,
-                osName = "iPhone",
-                osVersion = "18.3.2.22D82",
-                deviceMake = "Apple",
-                deviceModel = "iPhone16,2",
-            ),
-            PlayerClientProfile(
-                key = "ANDROID@21.26.364",
-                name = "ANDROID",
-                version = "21.26.364",
-                id = "3",
-                userAgent = YouTubeStreamRequestIdentity.ANDROID_USER_AGENT,
-                osName = "Android",
-                osVersion = "11",
+                key = "WEB_REMIX@$WEB_REMIX_VERSION",
+                name = "WEB_REMIX",
+                version = WEB_REMIX_VERSION,
+                id = "67",
+                userAgent = YouTubeStreamRequestIdentity.WEB_REMIX_USER_AGENT,
                 useSignatureTimestamp = true,
+                supportsPoToken = true,
             ),
+            // The remainder answer a guest with LOGIN_REQUIRED or UNPLAYABLE today, but that
+            // refusal tracks the account and region rather than the build, so they stay as a
+            // trailing last resort behind the profiles known to work.
             PlayerClientProfile(
                 key = "ANDROID_MUSIC@7.27.52",
                 name = "ANDROID_MUSIC",
@@ -1145,18 +1256,6 @@ class YouTubeStreamResolver(
                 deviceModel = "iPhone16,2",
             ),
             PlayerClientProfile(
-                key = "ANDROID_TESTSUITE@1.9",
-                name = "ANDROID_TESTSUITE",
-                version = "1.9",
-                id = "30",
-                userAgent = YouTubeStreamRequestIdentity.ANDROID_TESTSUITE_USER_AGENT,
-                osName = "Android",
-                osVersion = "15",
-                deviceMake = "Google",
-                deviceModel = "Pixel 9 Pro",
-                androidSdkVersion = 35,
-            ),
-            PlayerClientProfile(
                 key = "ANDROID_UNPLUGGED@8.49.0",
                 name = "ANDROID_UNPLUGGED",
                 version = "8.49.0",
@@ -1170,26 +1269,16 @@ class YouTubeStreamResolver(
                 useSignatureTimestamp = true,
             ),
             PlayerClientProfile(
-                key = "IOS@19.22.3",
-                name = "IOS",
-                version = "19.22.3",
-                id = "5",
-                userAgent = YouTubeStreamRequestIdentity.IPAD_USER_AGENT,
-                osName = "iPadOS",
-                osVersion = "17.7.10.21H450",
-                deviceMake = "Apple",
-                deviceModel = "iPad7,6",
-            ),
-            PlayerClientProfile(
-                key = "VISIONOS@0.1",
-                name = "VISIONOS",
-                version = "0.1",
-                id = "101",
-                userAgent = YouTubeStreamRequestIdentity.VISION_OS_USER_AGENT,
-                osName = "visionOS",
-                osVersion = "1.3.21O771",
-                deviceMake = "Apple",
-                deviceModel = "RealityDevice14,1",
+                key = "ANDROID_TESTSUITE@1.9",
+                name = "ANDROID_TESTSUITE",
+                version = "1.9",
+                id = "30",
+                userAgent = YouTubeStreamRequestIdentity.ANDROID_TESTSUITE_USER_AGENT,
+                osName = "Android",
+                osVersion = "15",
+                deviceMake = "Google",
+                deviceModel = "Pixel 9 Pro",
+                androidSdkVersion = 35,
             ),
             PlayerClientProfile(
                 key = "TVHTML5@7.20260707.07.00",
@@ -1209,13 +1298,37 @@ class YouTubeStreamResolver(
          */
         private const val REQUEST_USER_AGENT_KEY = "__orchardRequestUserAgent"
 
+        /**
+         * Applies the two URL mutations YouTube's desktop player performs for direct formats.
+         * Kept as a pure helper so the direct-URL case remains covered without a WebView in unit
+         * tests; [decipherN] is the production challenge solver there.
+         */
+        internal fun prepareDirectStreamUrlForFetch(
+            url: String,
+            decipherN: (String) -> String,
+        ): String {
+            val parsed = url.toHttpUrlOrNull() ?: return url
+            val deciphered = if (parsed.queryParameter("n") != null) decipherN(url) else url
+            return normalizeClientVersion(deciphered)
+        }
+
+        /** Keep the URL's web-client version in sync with the player request that minted it. */
+        internal fun normalizeClientVersion(url: String): String {
+            val parsed = url.toHttpUrlOrNull() ?: return url
+            val currentVersion = when (parsed.queryParameter("c")) {
+                "WEB_REMIX" -> WEB_REMIX_VERSION
+                "WEB", "WEB_CREATOR" -> WEB_CLIENT_VERSION
+                else -> return url
+            }
+            return parsed.newBuilder()
+                .setQueryParameter("cver", currentVersion)
+                .build()
+                .toString()
+        }
+
         const val CLIENT_USER_AGENT =
             "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip"
         private const val CLIENT_VERSION = "1.65.10"
-        private const val ANDROID_CLIENT_VERSION = "21.26.364"
-        private const val ANDROID_USER_AGENT = YouTubeStreamRequestIdentity.ANDROID_USER_AGENT
-        private const val IOS_CLIENT_VERSION = "21.26.4"
-        private const val IOS_USER_AGENT = YouTubeStreamRequestIdentity.IOS_USER_AGENT
         private const val WEB_REMIX_VERSION = "1.20260707.12.00"
         private const val WEB_CLIENT_VERSION = "2.20260708.00.00"
         const val WEB_SAFARI_USER_AGENT =
@@ -1227,6 +1340,7 @@ class YouTubeStreamResolver(
         private val RETRYABLE_STREAM_RESPONSE_CODES = setOf(403, 404, 410, 416)
         private const val YOUTUBE_ORIGIN = "https://www.youtube.com"
         private val VISITOR_REFRESH_COALESCE_MS = TimeUnit.SECONDS.toMillis(30)
+        private val PLAYER_REFRESH_COALESCE_MS = TimeUnit.MINUTES.toMillis(5)
 
         /**
          * Ceiling on a single player or watch-page request. The shared client only
@@ -1246,8 +1360,18 @@ class YouTubeStreamResolver(
         private val VISITOR_PATTERN = Regex("\\\"visitorData\\\":\\\"([^\\\"]+)")
         private val EXPIRY_PATTERN = Regex("[?&]expire=(\\d+)")
         private val CONTENT_LENGTH_PATTERN = Regex("[?&]clen=(\\d+)")
-        private val AGE_GATE_PATTERN = Regex(
-            """(?i)confirm[\s_-]*your[\s_-]*age|age[\s_-]*restrict|inappropriate for some users|LOGIN_REQUIRED""",
+        /**
+         * Deliberately keyed on age wording alone. `LOGIN_REQUIRED` used to be an alternative
+         * here, but probing live YouTube on 2026-08-18 with an unrestricted public video showed
+         * ANDROID_MUSIC, IOS_MUSIC and ANDROID_UNPLUGGED all answering
+         * `LOGIN_REQUIRED / "Please sign in"` simply because the request was a guest one. That
+         * flagged ordinary tracks as age-gated, and the flag then diverted the playback retry
+         * into the signed-in itag 18 path, which is a 360p muxed video stream and the wrong
+         * answer for a track whose only problem was a rejected CDN URL.
+         */
+        internal val AGE_GATE_PATTERN = Regex(
+            """(?i)confirm[\s_-]*your[\s_-]*age|age[\s_-]*restrict|""" +
+                """(?:potentially )?inappropriate for some users|potentially inappropriate""",
         )
 
         /**

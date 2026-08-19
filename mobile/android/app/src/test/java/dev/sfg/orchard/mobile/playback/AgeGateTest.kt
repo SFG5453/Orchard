@@ -1,6 +1,7 @@
 package dev.sfg.orchard.mobile.playback
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -16,14 +17,28 @@ class AgeGateTest {
 
     @Test
     fun testAgeGatePatternMatching() {
-        val ageGatePattern = Regex(
-            """(?i)confirm[\s_-]*your[\s_-]*age|age[\s_-]*restrict|inappropriate for some users|LOGIN_REQUIRED""",
-        )
+        val ageGatePattern = YouTubeStreamResolver.AGE_GATE_PATTERN
 
         assertTrue(ageGatePattern.containsMatchIn("LOGIN_REQUIRED The following content has been identified by the YouTube community as potentially inappropriate"))
         assertTrue(ageGatePattern.containsMatchIn("This video is age-restricted and only available on YouTube."))
         assertTrue(ageGatePattern.containsMatchIn("Please confirm your age to view this video"))
         assertTrue(ageGatePattern.containsMatchIn("Sign in to confirm your age"))
+    }
+
+    /**
+     * Probed against live YouTube on 2026-08-18: ANDROID_MUSIC, IOS_MUSIC and ANDROID_UNPLUGGED
+     * all answer `LOGIN_REQUIRED / "Please sign in"` for an unrestricted public video, purely
+     * because the request carries a guest identity. Matching the status alone marked ordinary
+     * tracks as age-gated, which sent the playback retry down the signed-in itag 18 path instead
+     * of rotating to the next client.
+     */
+    @Test
+    fun testGuestSignInRefusalIsNotAnAgeGate() {
+        val ageGatePattern = YouTubeStreamResolver.AGE_GATE_PATTERN
+
+        assertFalse(ageGatePattern.containsMatchIn("LOGIN_REQUIRED Please sign in"))
+        assertFalse(ageGatePattern.containsMatchIn("UNPLAYABLE This video is not available"))
+        assertFalse(ageGatePattern.containsMatchIn("UNPLAYABLE The page needs to be reloaded."))
     }
 
     @Test

@@ -50,6 +50,8 @@ class TrackDownloader(
     private val http: OkHttpClient,
     sessionProvider: YouTubeSessionProvider? = null,
     private val store: DownloadStore,
+    poTokenMinter: () -> dev.sfg.orchard.mobile.playback.YouTubePoTokenMinter? = { null },
+    challengeSolver: () -> dev.sfg.orchard.mobile.playback.YouTubeChallengeSolver? = { null },
     qualityProvider: () -> AudioQuality = { AudioQuality.HIGH },
 ) {
     private val streamResolver by lazy {
@@ -57,6 +59,8 @@ class TrackDownloader(
             client = http,
             sessionProvider = sessionProvider,
             qualityProvider = qualityProvider,
+            poTokenMinter = poTokenMinter(),
+            challengeSolver = challengeSolver(),
         )
     }
     private data class ResumeIdentity(
@@ -87,6 +91,11 @@ class TrackDownloader(
         }
 
         Log.d(TAG, "Resolving stream for track: ${item.track.title} ($videoId)")
+
+        // Uploads live only in the listener's own library, so the guest client catalog cannot see
+        // them. Saying so before resolving is what separates "sign in to reach this" from the
+        // "video unavailable" a deleted track earns.
+        if (item.track.isUpload) streamResolver.markAccountOnly(videoId)
 
         val resolved: ResolvedStream = runCatching { streamResolver.resolve(videoId) }
             .onFailure { Log.w(TAG, "Stream resolution failed for $videoId", it) }
@@ -139,8 +148,6 @@ class TrackDownloader(
                     progressListener = progressListener,
                 )
             } else {
-                // ArchiveTune lets Media3 begin with an ordinary unbounded open. Do the equivalent
-                // here: a forced full-span Range header is rejected by some otherwise valid GVS URLs.
                 downloadSequential(
                     videoId = videoId,
                     stream = resolved,
@@ -327,55 +334,70 @@ class TrackDownloader(
             progressListener?.onProgress(expectedLength, expectedLength, 1f)
             return@withContext
         }
-        val request = Request.Builder()
-            .url(stream.url)
-            .header("Accept", "*/*")
-            .header("Accept-Encoding", "identity")
-            .apply { stream.requestHeaders.forEach { (name, value) -> header(name, value) } }
-            .apply {
-                if (requestedOffset > 0L) header("Range", "bytes=$requestedOffset-")
+        // Every request carries an explicit bounded range, walking the file in [RANGE_CHUNK_SIZE]
+        // pieces the way the parallel path above already does. A request with no Range header is
+        // answered too, but throttled to a trickle and then cut off short of the end — measured
+        // at 3145712 of 3497127 bytes over 98 seconds — so "just read the body" is not an option
+        // even when the URL is perfectly good.
+        var totalRead = requestedOffset
+        progressListener?.onProgress(totalRead, expectedLength, progress(totalRead, expectedLength))
+
+        do {
+            val chunkStart = totalRead
+            val chunkEnd = if (expectedLength > 0L) {
+                minOf(chunkStart + RANGE_CHUNK_SIZE, expectedLength) - 1L
+            } else {
+                chunkStart + RANGE_CHUNK_SIZE - 1L
             }
-            .build()
+            val request = Request.Builder()
+                .url(stream.url)
+                .header("Accept", "*/*")
+                .header("Accept-Encoding", "identity")
+                .apply { stream.requestHeaders.forEach { (name, value) -> header(name, value) } }
+                .header("Range", "bytes=$chunkStart-$chunkEnd")
+                .build()
 
-        http.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw StreamHttpException(response.code)
-            }
-            val body = response.body
-            val append = requestedOffset > 0L && response.code == 206
-            val writeOffset = if (append) requestedOffset else 0L
-            expectedLength = expectedLength.takeIf { it > 0L }
-                ?: response.header("Content-Range")
-                    ?.substringAfterLast('/', "")
-                    ?.toLongOrNull()
-                ?: body.contentLength().takeIf { it > 0L }?.let { it + writeOffset }
-                ?: 0L
-            if (expectedLength > 0L) knownContentLengths[videoId] = expectedLength
-            val inputStream = body.byteStream()
-
-            FileOutputStream(tempFile, append).use { outputStream ->
-                val buffer = ByteArray(BUFFER_SIZE)
-                var bytesRead: Int
-                var totalRead = writeOffset
-
-                progressListener?.onProgress(totalRead, expectedLength, progress(totalRead, expectedLength))
-
-                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                    if (!coroutineContext.isActive) {
-                        throw java.io.InterruptedIOException("Download cancelled")
-                    }
-                    outputStream.write(buffer, 0, bytesRead)
-                    totalRead += bytesRead
-                    progressListener?.onProgress(totalRead, expectedLength, progress(totalRead, expectedLength))
+            http.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw StreamHttpException(response.code)
                 }
-                outputStream.flush()
-            }
+                val body = response.body
+                // The total only has to be discovered once, from the first response that states it.
+                expectedLength = expectedLength.takeIf { it > 0L }
+                    ?: response.header("Content-Range")
+                        ?.substringAfterLast('/', "")
+                        ?.toLongOrNull()
+                    ?: 0L
+                if (expectedLength > 0L) knownContentLengths[videoId] = expectedLength
 
-            if (expectedLength > 0L && tempFile.length() != expectedLength) {
-                throw java.io.EOFException(
-                    "Connection closed after ${tempFile.length()} of $expectedLength bytes",
-                )
+                FileOutputStream(tempFile, chunkStart > 0L).use { outputStream ->
+                    val buffer = ByteArray(BUFFER_SIZE)
+                    var bytesRead: Int
+                    while (body.byteStream().read(buffer).also { bytesRead = it } != -1) {
+                        if (!coroutineContext.isActive) {
+                            throw java.io.InterruptedIOException("Download cancelled")
+                        }
+                        outputStream.write(buffer, 0, bytesRead)
+                        totalRead += bytesRead
+                        progressListener?.onProgress(
+                            totalRead,
+                            expectedLength,
+                            progress(totalRead, expectedLength),
+                        )
+                    }
+                    outputStream.flush()
+                }
+                // A piece that returned nothing would otherwise spin this loop forever.
+                if (totalRead <= chunkStart) {
+                    throw java.io.EOFException("Stream ended at $totalRead of $expectedLength bytes")
+                }
             }
+        } while (expectedLength > 0L && totalRead < expectedLength)
+
+        if (expectedLength > 0L && tempFile.length() != expectedLength) {
+            throw java.io.EOFException(
+                "Connection closed after ${tempFile.length()} of $expectedLength bytes",
+            )
         }
     }
 

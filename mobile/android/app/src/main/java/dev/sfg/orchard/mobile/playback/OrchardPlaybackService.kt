@@ -107,7 +107,8 @@ class OrchardPlaybackService : MediaLibraryService() {
         kotlinx.coroutines.CoroutineScope(
             kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
         )
-    private var retriedMediaId = ""
+    /** Stream refreshes already spent per media id, cleared when the queue moves on. */
+    private val retriedMediaIds = mutableMapOf<String, Int>()
     private var artworkHydrationId = ""
 
     /** The exact client identity behind each stable Orchard URI's most recent media fetch. */
@@ -130,7 +131,9 @@ class OrchardPlaybackService : MediaLibraryService() {
         stateStore = PlaybackStateStore(this)
         val graph = OrchardGraph.from(this)
         browseTree = OrchardMediaLibrary(graph)
-        val challengeSolver = YouTubeChallengeSolver(this, graph.http)
+        // The graph's, not a fresh one: downloads solve the same challenges, and the solver's
+        // player cache is only worth having if both paths read from it.
+        val challengeSolver = graph.challengeSolver
         streamResolver =
             YouTubeStreamResolver(
                 client = graph.http,
@@ -140,6 +143,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                 sessionProvider = graph.auth,
                 challengeSolver = challengeSolver,
                 downloadManager = graph.downloads,
+                poTokenMinter = graph.poTokenMinter,
             )
         streamResolver.warmUp()
         streamCache =
@@ -399,9 +403,12 @@ class OrchardPlaybackService : MediaLibraryService() {
                 // The CDN checks the URL against the client it was issued to, so the fetch
                 // has to claim the identity that resolved it rather than the factory's
                 // default. Getting this wrong resolves fine and then 403s on the audio.
-                original
-                    .withUri(stream.url.toUri())
-                    .withAdditionalHeaders(stream.requestHeaders)
+                bounded(
+                    original
+                        .withUri(stream.url.toUri())
+                        .withAdditionalHeaders(stream.requestHeaders),
+                    stream,
+                )
             }
         // HLS segment requests are created after the orchard manifest URI has been
         // resolved, so they do not inherit that DataSpec's headers. Give the entire
@@ -707,7 +714,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                     TAG,
                     "playbackListener.onMediaItemTransition: item=${mediaItem?.mediaId}, reason=$reason",
                 )
-                retriedMediaId = ""
+                retriedMediaIds.clear()
                 artworkHydrationId = ""
                 hydrateCurrentArtwork()
                 publishBitrate()
@@ -772,7 +779,12 @@ class OrchardPlaybackService : MediaLibraryService() {
                     Log.e(TAG, "Playback failed after authenticated HLS fallback", error)
                     return
                 }
-                if (streamResolver.consumeAgeGate(mediaId)) {
+                // Only consulted when the CDN did not answer at all, or answered with something
+                // other than a rejected URL. A 403 on the media fetch says the URL was refused,
+                // not that the track is age-gated: the age gate is decided at the player step and
+                // this branch swaps in a 360p muxed video stream, which throws away the client
+                // rotation [reject] just set up and needs a signed-in account to boot.
+                if (!rejectedClient && streamResolver.consumeAgeGate(mediaId)) {
                     val index = player.currentMediaItemIndex
                     val position = player.currentPosition.coerceAtLeast(0)
                     Log.w(TAG, "Normal stream was age-gated; retrying authenticated direct", error)
@@ -797,16 +809,48 @@ class OrchardPlaybackService : MediaLibraryService() {
                     Log.e(TAG, "Playback error is not recoverable by refreshing the stream", error)
                     return
                 }
-                if (retriedMediaId == mediaId) {
-                    Log.e(TAG, "Playback failed after stream refresh", error)
+                // A rejected client earns its own attempt, because the next resolve is a
+                // genuinely different question: [reject] blacklists the profile that minted the
+                // refused URL, so the retry asks a client from another family. A single shared
+                // retry slot meant one 403 spent the budget and the second 403 gave up, which
+                // never got past the two ANDROID_VR builds at the head of the catalog.
+                val attempts = retriedMediaIds.getOrDefault(mediaId, 0)
+                val limit = if (rejectedClient) MAX_CLIENT_ROTATION_RETRIES else 1
+                if (attempts >= limit) {
+                    Log.e(TAG, "Playback failed after $attempts stream refreshes", error)
                     return
                 }
-                retriedMediaId = mediaId
-                Log.w(TAG, "Refreshing the failed stream once", error)
+                retriedMediaIds[mediaId] = attempts + 1
+                Log.w(TAG, "Refreshing the failed stream (attempt ${attempts + 1} of $limit)", error)
                 player.prepare()
                 player.play()
             }
         }
+
+    /**
+     * Gives a googlevideo request a concrete end offset, because a request with no Range header
+     * is answered at dial-up speed and then cut off.
+     *
+     * Media3 opens a progressive stream at position 0 with no known length, and
+     * `HttpUtil.buildRangeRequestHeader` answers that exact pair with null — so the request goes
+     * out carrying no Range header at all. Measured against a resolved URL: no Range header
+     * returned 200 and then dribbled 3145712 of 3497127 bytes over 98 seconds before the
+     * connection died, while `bytes=0-3497126` returned 206 with the whole file in under a
+     * second. Desktop reached the same conclusion in 716f5f0, which sends bounded ranges too.
+     *
+     * Only fills in a length that is genuinely unknown; a range Media3 asked for is already
+     * bounded and is its own business. Without a content length there is nothing honest to put
+     * here, so the spec is passed through unchanged rather than guessing an end that could be
+     * answered with 416.
+     */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun bounded(spec: androidx.media3.datasource.DataSpec, stream: ResolvedStream):
+        androidx.media3.datasource.DataSpec {
+        if (spec.length != androidx.media3.common.C.LENGTH_UNSET.toLong()) return spec
+        val remaining = stream.contentLength - spec.position
+        if (stream.contentLength <= 0 || remaining <= 0) return spec
+        return spec.subrange(0, remaining)
+    }
 
     private fun shuffleUpcomingItems(targetPlayer: Player) {
         val current = targetPlayer.currentMediaItemIndex
@@ -1005,6 +1049,10 @@ class OrchardPlaybackService : MediaLibraryService() {
             ): ListenableFuture<MutableList<MediaItem>> {
                 Log.d(TAG, "sessionCallback.onAddMediaItems: ${mediaItems.size} items")
                 val updated = mediaItems.map { resolveMediaItem(it) }.toMutableList()
+                // Attesting takes about a third of a second the first time and nothing after, so
+                // it is worth starting now rather than inside the load that opens the first
+                // track. Only the head of the queue: the rest ride on the same attestation.
+                updated.firstOrNull()?.mediaId?.let(streamResolver::warmUpPoToken)
                 return Futures.immediateFuture(updated)
             }
 
@@ -1018,6 +1066,12 @@ class OrchardPlaybackService : MediaLibraryService() {
                     } else {
                         request
                     }
+                // The data source that resolves this later sees only a video id, so what the
+                // catalog knew about the track has to be handed over while the item is still
+                // whole. An upload cannot be recognised from the refusal it earns.
+                if (MediaItemMapper.toTrack(item).isUpload) {
+                    streamResolver.markAccountOnly(item.mediaId)
+                }
                 val uri =
                     item.localConfiguration?.uri
                         ?: item.requestMetadata.mediaUri
@@ -1242,6 +1296,12 @@ class OrchardPlaybackService : MediaLibraryService() {
 
     companion object {
         private const val TAG = "OrchardPlayback"
+        /**
+         * How many times a refused CDN URL may be answered by resolving again. Each attempt is
+         * spent on a client the resolver has not tried for this track, so the ceiling is really
+         * "how many client families are worth walking while the listener waits".
+         */
+        private const val MAX_CLIENT_ROTATION_RETRIES = 3
         private const val POSITION_SAVE_INTERVAL_MS = 5_000L
         private const val BUFFER_FOR_PLAYBACK_MS = 500
         private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 2_000

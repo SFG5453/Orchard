@@ -46,11 +46,21 @@ class DownloadManager(
     http: OkHttpClient,
     sessionProvider: YouTubeSessionProvider? = null,
     private val scope: CoroutineScope,
+    /**
+     * Supplied lazily so constructing the graph does not build a WebView. Downloads share the
+     * minter with playback; attesting twice would cost twice and prove the same thing.
+     */
+    poTokenMinter: () -> dev.sfg.orchard.mobile.playback.YouTubePoTokenMinter? = { null },
+    /**
+     * Also lazy, and for the same reason. The attesting client returns ciphered formats, so a
+     * downloader without a solver would resolve through it and then be unable to read the URL.
+     */
+    challengeSolver: () -> dev.sfg.orchard.mobile.playback.YouTubeChallengeSolver? = { null },
     qualityProvider: () -> AudioQuality = { AudioQuality.HIGH },
 ) {
     val store: DownloadStore = DownloadStore(context)
     private val downloader: TrackDownloader =
-        TrackDownloader(http, sessionProvider, store, qualityProvider)
+        TrackDownloader(http, sessionProvider, store, poTokenMinter, challengeSolver, qualityProvider)
 
     private val mutableDownloads = MutableStateFlow<Map<String, DownloadItem>>(emptyMap())
     val downloads: StateFlow<Map<String, DownloadItem>> = mutableDownloads.asStateFlow()

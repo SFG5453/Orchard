@@ -11,6 +11,7 @@
 
 package dev.sfg.orchard.mobile.playback
 
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -52,5 +53,39 @@ class YouTubeStreamRequestIdentityTest {
         assertEquals("resolver-agent", identity.userAgent)
         assertNull(identity.origin)
         assertNull(identity.referer)
+    }
+
+    @Test
+    fun `direct web remix URL is deciphered and receives the current client version`() {
+        val rawUrl =
+            "https://rr.googlevideo.com/videoplayback?c=WEB_REMIX&cver=stale&n=challenge&itag=140"
+        var decipherInput = ""
+
+        val prepared = YouTubeStreamResolver.prepareDirectStreamUrlForFetch(rawUrl) { challengedUrl ->
+            decipherInput = challengedUrl
+            challengedUrl.toHttpUrlOrNull()!!.newBuilder()
+                .setQueryParameter("n", "solved")
+                .build()
+                .toString()
+        }
+
+        assertEquals(rawUrl, decipherInput)
+        val parsed = prepared.toHttpUrlOrNull()!!
+        assertEquals("solved", parsed.queryParameter("n"))
+        assertEquals("1.20260707.12.00", parsed.queryParameter("cver"))
+    }
+
+    @Test
+    fun `direct URL without n skips deciphering`() {
+        var decipherCalls = 0
+        val prepared = YouTubeStreamResolver.prepareDirectStreamUrlForFetch(
+            "https://rr.googlevideo.com/videoplayback?c=WEB_REMIX&itag=140",
+        ) {
+            decipherCalls += 1
+            it
+        }
+
+        assertEquals(0, decipherCalls)
+        assertEquals("1.20260707.12.00", prepared.toHttpUrlOrNull()!!.queryParameter("cver"))
     }
 }

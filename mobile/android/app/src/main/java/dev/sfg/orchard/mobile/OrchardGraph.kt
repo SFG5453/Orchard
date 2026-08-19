@@ -34,6 +34,7 @@ import dev.sfg.orchard.mobile.library.LibraryRepository
 import dev.sfg.orchard.mobile.lyrics.LyricsRepository
 import dev.sfg.orchard.mobile.settings.SettingsRepository
 import dev.sfg.orchard.mobile.download.DownloadManager
+import dev.sfg.orchard.mobile.playback.YouTubePoTokenMinter
 import dev.sfg.orchard.mobile.songlinks.SongLinksRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -61,7 +62,28 @@ class OrchardGraph(context: Context) {
     private val innerTube: InnerTubeClient = InnerTubeClient(http, auth)
     val settings = SettingsRepository(context, applicationScope)
     val networkMonitor = dev.sfg.orchard.mobile.network.NetworkMonitor(context)
-    val downloads = DownloadManager(context, http, auth, applicationScope) {
+    /**
+     * Shared by playback and downloads: attesting is expensive once and free afterwards, so the
+     * two paths must not each stand up their own BotGuard WebView. Created lazily because a
+     * WebView is not free and a session that only browses never needs one.
+     */
+    val poTokenMinter: YouTubePoTokenMinter by lazy { YouTubePoTokenMinter(context) }
+
+    /**
+     * Also shared, and also deferred: the attesting client hands back ciphered URLs, so downloads
+     * need the same solver playback uses rather than a second WebView fetching the same player.
+     */
+    val challengeSolver: dev.sfg.orchard.mobile.playback.YouTubeChallengeSolver by lazy {
+        dev.sfg.orchard.mobile.playback.YouTubeChallengeSolver(context, http)
+    }
+    val downloads = DownloadManager(
+        context,
+        http,
+        auth,
+        applicationScope,
+        { poTokenMinter },
+        { challengeSolver },
+    ) {
         settings.settings.value.audioQuality
     }
     val spotifyCanvas = dev.sfg.orchard.mobile.spotify.SpotifyCanvasRepository(context, http, settings)

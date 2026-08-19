@@ -78,11 +78,26 @@ data class YouTubeStreamRequestIdentity(
             return YouTubeStreamRequestIdentity(userAgent, origin, referer, key)
         }
 
+        /**
+         * Whether the client that minted [url] takes part in the WebPO scheme.
+         *
+         * Only the web family does. A `pot` is validated against the proof the player request
+         * declared, and the native clients have nowhere to declare one, so attaching a token to
+         * their URLs is inert — measured on device, where refused ANDROID_VR streams stayed
+         * refused with a freshly minted token on every retry.
+         */
+        fun usesPoToken(url: String): Boolean {
+            val client = url.toHttpUrlOrNull()?.queryParameter("c").orEmpty().uppercase(Locale.US)
+            return client.startsWith("WEB") || client == "MWEB" || client.startsWith("TVHTML5")
+        }
+
         const val WEB_USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                 "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
-        const val WEB_REMIX_USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0"
+        // WEB_REMIX player requests, WebPO attestation, and the subsequent media fetch must all
+        // present the same browser identity. A different fetch identity is rejected by the CDN
+        // even though the signed-in player request itself succeeded.
+        const val WEB_REMIX_USER_AGENT = WEB_USER_AGENT
         const val MWEB_USER_AGENT =
             "Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36 " +
                 "(KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36"
