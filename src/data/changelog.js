@@ -19,6 +19,33 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '4.7.0',
+    codename: 'Epiphanies Hesitated',
+    date: 'August 18, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'The mouse wheel now adjusts volume while the pointer is over the volume controls.',
+          "Canopy's titlebar readout shows the playing track's bitrate and carries its own Liked Songs toggle beside the song actions button."
+        ]
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Visiting the queue or a podcast no longer wedges the view transition and leaves Home blank until another view forces it through.',
+          "Canopy's windowed queue rows are no longer spaced a row height apart."
+        ]
+      },
+      {
+        title: 'Changed',
+        items: [
+          'The release pipeline now verifies the architecture of the native media addon alongside the audio analyzer on arm64 and macOS, so a mismatched system-media binary fails the build instead of shipping. Electron is updated to 43.4.1.'
+        ]
+      }
+    ]
+  },
+  {
     version: '4.6.0',
     codename: 'Suicide Mutilators',
     date: 'August 17, 2026',

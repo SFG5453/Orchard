@@ -1,8 +1,13 @@
-## Orchard 4.6.0 "Suicide Mutilators"
+## Orchard 4.7.0 "Epiphanies Hesitated"
 
 ### Added
-- **SponsorBlock**: SponsorBlock skipping is back with off, show-button, and automatic modes. Intro, outro, and music-offtopic segments are supported, with lyric timing adjusted when a skipped segment displaces the song.
-- **Unified System Media Controls**: Linux MPRIS, Windows SMTC, and macOS Now Playing controls now share one native media service, including playback commands, metadata, seeking, repeat, shuffle, and clean shutdown behavior.
+- **Volume Wheel**: The mouse wheel now adjusts volume while the pointer is over the volume controls.
+- **Canopy Readout**: The Canopy titlebar readout shows the playing track's bitrate and carries its own Liked Songs toggle beside the song actions button.
+
+### Fixed
+- **Blank Home After The Queue**: The queue and podcast views render from a single root again, so AppFrame's view transition can run its leave hook instead of wedging and leaving Home blank until another view forced it through.
+- **Canopy Queue Spacing**: Windowed queue rows are positioned absolutely again rather than being pushed a row height apart by the layout's `position: relative` rule.
 
 ### Changed
-- **Smaller Release Packages**: Desktop releases now ship only the target platform and architecture's ONNX Runtime CPU payload, omit unused execution-provider libraries, use the Intel macOS WebAssembly fallback, and use stronger RPM compression. Native media binaries are built and packaged for Linux, Windows, and macOS through the release pipeline.
+- **Release Pipeline**: The arm64 and macOS jobs now verify the architecture of the native media addon alongside the audio analyzer, so a mismatched system-media binary fails the build instead of shipping.
+- Electron is updated to 43.4.1.

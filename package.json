@@ -1,6 +1,6 @@
 {
   "name": "orchard",
-  "version": "4.6.0",
+  "version": "4.7.0",
   "description": "A Quasar, Vue, Socket.IO, Electron YouTube Music client backed by InnerTube.",
   "homepage": "https://github.com/sfg5453/orchard",
   "repository": {
@@ -89,7 +89,7 @@
   },
   "devDependencies": {
     "@electron/fuses": "^2.1.3",
-    "electron": "^43.4.0",
+    "electron": "^43.4.1",
     "electron-builder": "^26.15.7",
     "sass-embedded": "^1.102.0"
   },

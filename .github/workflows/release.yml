@@ -163,7 +163,7 @@ jobs:
         if: steps.release.outputs.mobile_only != 'true'
         run: npm ci
 
-      - name: Build native audio analyzer
+      - name: Build native Addons
         if: steps.release.outputs.mobile_only != 'true'
         run: npm run build:native
 
@@ -291,8 +291,12 @@ jobs:
         run: |
           set -euo pipefail
           test "$(node -p process.arch)" = arm64
-          file native/build/Release/orchard_audio_analysis.node
-          file native/build/Release/orchard_audio_analysis.node | grep -Eq 'ARM aarch64|ARM64'
+          for addon in \
+            native/build/Release/orchard_audio_analysis.node \
+            native-media/build/orchard-system-media-linux-arm64.node; do
+            file "$addon"
+            file "$addon" | grep -Eq 'ARM aarch64|ARM64'
+          done
 
       - name: Package arm64 AppImage and Flatpak
         run: |
@@ -453,10 +457,15 @@ jobs:
         shell: pwsh
         run: |
           if ((node -p process.arch) -ne 'arm64') { throw 'Node.js is not running as arm64.' }
-          $addon = [IO.File]::ReadAllBytes('native/build/Release/orchard_audio_analysis.node')
-          $peOffset = [BitConverter]::ToInt32($addon, 0x3c)
-          $machine = [BitConverter]::ToUInt16($addon, $peOffset + 4)
-          if ($machine -ne 0xaa64) { throw "Native analyzer has PE machine type 0x$($machine.ToString('x4')), expected arm64 (0xaa64)." }
+          foreach ($path in @(
+            'native/build/Release/orchard_audio_analysis.node',
+            'native-media/build/orchard-system-media-win32-arm64.node'
+          )) {
+            $addon = [IO.File]::ReadAllBytes($path)
+            $peOffset = [BitConverter]::ToInt32($addon, 0x3c)
+            $machine = [BitConverter]::ToUInt16($addon, $peOffset + 4)
+            if ($machine -ne 0xaa64) { throw "$path has PE machine type 0x$($machine.ToString('x4')), expected arm64 (0xaa64)." }
+          }
 
       - name: Package arm64 NSIS installer
         shell: pwsh
@@ -532,8 +541,12 @@ jobs:
 
       - name: Verify native architecture
         run: |
-          file native/build/Release/orchard_audio_analysis.node
-          file native/build/Release/orchard_audio_analysis.node | grep -q '${{ matrix.file_arch }}'
+          for addon in \
+            native/build/Release/orchard_audio_analysis.node \
+            native-media/build/orchard-system-media-darwin-${{ matrix.arch }}.node; do
+            file "$addon"
+            file "$addon" | grep -q '${{ matrix.file_arch }}'
+          done
 
       - name: Package unsigned macOS ZIP
         run: |

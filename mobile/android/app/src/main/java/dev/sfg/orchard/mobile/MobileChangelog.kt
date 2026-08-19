@@ -29,9 +29,8 @@ object MobileChangelog {
     const val CURRENT_CODENAME = BuildConfig.CODENAME
 
     val CURRENT_RELEASE_NOTES = """
-        ### Added
-        - **Audio Equalizer**: A persisted 10-band equalizer with presets, per-band gain, preamp, and bass boost is now available in Settings and applied directly to playback.
-        - **Player Artwork Gestures**: Horizontal swipes skip to the previous or next track, and a double-tap likes the current track. Gestures can be disabled in Settings.
-        - **Home Screen Layout**: Online and offline Home sections can now be reordered and shown or hidden independently from the new Home Screen Layout settings page.
+        ### Fixed
+        - **Playback Against Rationed Guest Clients**: Orchard now mints a WebPO proof of origin in a WebView and declares it in the web-family player request, ordering attested clients first; a refused proof is invalidated and its client blacklisted so retries rotate families. Playback and downloads also send explicit bounded ranges, instead of relying on unbounded requests that were answered at a trickle and cut short.
+        - **Uploads**: Tracks the catalog flags as privately owned uploads skip the guest client chain and resolve through the signed-in web player, so they report "sign in" rather than "Video unavailable" (basically, they play).
     """.trimIndent()
 }
