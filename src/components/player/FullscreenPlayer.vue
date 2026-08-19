@@ -19,6 +19,7 @@
 
 <script>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { createVolumeWheelHandler } from '../../app/playback/volumeWheel.js';
 
 export default {
   name: 'FullscreenPlayer',
@@ -27,6 +28,7 @@ export default {
     const app = props.app;
     const closeButtonRef = ref(null);
     const fullscreenArtworkSrc = ref(app.fullscreenArtworkImage.value || app.nowArtworkImage.value);
+    const onVolumeWheel = createVolumeWheelHandler(app.volume);
 
     function onFullscreenKeydown(event) {
       if (event.key === 'Escape') void app.closeFullscreenPlayer();
@@ -77,6 +79,7 @@ export default {
       fullscreenArtworkSrc,
       keepFullscreenArtworkVideoPlaying,
       onFullscreenArtworkError,
+      onVolumeWheel,
       playFullscreenArtworkVideo,
       restartFullscreenArtworkVideo
     };
@@ -418,7 +421,7 @@ export default {
           />
         </div>
 
-        <div class="fullscreen-player__volume">
+        <div class="fullscreen-player__volume" title="Scroll to change volume" @wheel.prevent="onVolumeWheel">
           <q-icon :name="volume === 0 ? 'volume_off' : 'volume_up'" />
           <q-slider v-model="volume" :min="0" :max="1" :step="0.01" color="primary" aria-label="Volume" />
         </div>

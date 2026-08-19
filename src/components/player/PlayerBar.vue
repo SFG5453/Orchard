@@ -20,6 +20,7 @@
 <script>
 import { computed, onMounted } from 'vue';
 import CompactSettingsMenu from '../controls/CompactSettingsMenu.vue';
+import { createVolumeWheelHandler } from '../../app/playback/volumeWheel.js';
 
 export default {
   name: 'PlayerBar',
@@ -49,6 +50,8 @@ export default {
       return 'volume_up';
     });
 
+    const onVolumeWheel = createVolumeWheelHandler(props.app.volume);
+
     let savedVolume = 0.85;
     const toggleMute = () => {
       if (props.app.volume.value > 0) {
@@ -77,6 +80,7 @@ export default {
       bitrateLabel,
       currentOutputDeviceLabel,
       volumeIcon,
+      onVolumeWheel,
       toggleMute,
       handleListeningPartyClick,
       sleepTimerActive: props.app.sleepTimerActive,
@@ -337,7 +341,11 @@ export default {
 
       <div class="right-bottom-row">
         <!-- Volume controls -->
-        <div class="volume-wrap">
+        <div
+          class="volume-wrap"
+          title="Scroll to change volume"
+          @wheel.prevent="onVolumeWheel"
+        >
           <q-btn
             flat
             round

@@ -20,6 +20,7 @@
 <script>
 import { computed } from 'vue';
 import CompactSettingsMenu from '../controls/CompactSettingsMenu.vue';
+import { createVolumeWheelHandler } from '../../app/playback/volumeWheel.js';
 
 /*
  * Canopy's titlebar. Unlike Grove, this bar owns the transport and the
@@ -39,6 +40,8 @@ export default {
       if (value < 0.7) return 'volume_down';
       return 'volume_up';
     });
+
+    const onVolumeWheel = createVolumeWheelHandler(props.app.volume);
 
     const outputDeviceLabel = computed(() => {
       if (props.app.audioOutputLoading?.value) return 'Loading...';
@@ -60,6 +63,7 @@ export default {
       ...props.app,
       app: props.app,
       handleListeningPartyClick,
+      onVolumeWheel,
       outputDeviceLabel,
       volumeIcon
     };
@@ -226,14 +230,14 @@ export default {
     <div class="canopy-bar__utility">
       <!-- The slider is a flyout rather than 104px of permanent bar furniture.
            It is absolutely positioned so revealing it never reflows the bar. -->
-      <div class="canopy-bar__volume">
+      <div class="canopy-bar__volume" @wheel.prevent="onVolumeWheel">
         <q-btn
           flat
           round
           dense
           :icon="volumeIcon"
           class="canopy-bar__button"
-          title="Volume"
+          title="Volume (scroll to change)"
           aria-label="Volume"
         />
         <div class="canopy-bar__volume-flyout">
