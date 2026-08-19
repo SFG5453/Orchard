@@ -21,6 +21,7 @@
 import { computed, onMounted } from 'vue';
 import CompactSettingsMenu from '../controls/CompactSettingsMenu.vue';
 import { createVolumeWheelHandler } from '../../app/playback/volumeWheel.js';
+import { bitrateLabel } from '../../app/playback/trackQuality.js';
 
 export default {
   name: 'PlayerBar',
@@ -29,12 +30,6 @@ export default {
   },
   props: { app: { type: Object, required: true } },
   setup(props) {
-    const bitrateLabel = (track) => {
-      const value = Number(track?.bitrate || 0);
-      if (!Number.isFinite(value) || value <= 0) return '';
-      return String(Math.round(value >= 1000 ? value / 1000 : value));
-    };
-
     const currentOutputDeviceLabel = computed(() => {
       if (props.app.audioOutputLoading?.value) return 'Loading...';
       const activeId = props.app.audioEngineConfig.value?.outputDeviceId || 'default';

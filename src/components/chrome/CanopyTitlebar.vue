@@ -21,6 +21,7 @@
 import { computed } from 'vue';
 import CompactSettingsMenu from '../controls/CompactSettingsMenu.vue';
 import { createVolumeWheelHandler } from '../../app/playback/volumeWheel.js';
+import { bitrateLabel } from '../../app/playback/trackQuality.js';
 
 /*
  * Canopy's titlebar. Unlike Grove, this bar owns the transport and the
@@ -62,6 +63,7 @@ export default {
     return {
       ...props.app,
       app: props.app,
+      bitrateLabel,
       handleListeningPartyClick,
       onVolumeWheel,
       outputDeviceLabel,
@@ -189,6 +191,9 @@ export default {
             >
               {{ activeTrack.album || 'Unknown Album' }}
             </button>
+            <span v-if="bitrateLabel(activeTrack)" class="canopy-readout__bitrate">
+              {{ bitrateLabel(activeTrack) }} kbps
+            </span>
           </template>
           <span v-else>Choose a song to begin</span>
         </div>
@@ -197,18 +202,33 @@ export default {
 
       <!-- Song actions live inside the readout: they act on the track it shows,
            and out in the bar they were an ungrouped button between clusters. -->
-      <q-btn
-        flat
-        round
-        dense
-        size="sm"
-        icon="more_horiz"
-        class="canopy-bar__button canopy-readout__actions"
-        :disable="!activeTrack"
-        title="Song actions"
-        aria-label="Song actions"
-        @click="openSongActionMenu(activeTrack, $event)"
-      />
+      <div class="canopy-readout__actions">
+        <q-btn
+          flat
+          round
+          dense
+          size="sm"
+          class="canopy-bar__button"
+          :icon="isActiveTrackLiked ? 'star' : 'star_border'"
+          :loading="activeTrackLikePending"
+          :disable="!canToggleActiveTrackLike"
+          :title="isActiveTrackLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs'"
+          :aria-label="isActiveTrackLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs'"
+          @click="toggleActiveTrackLike"
+        />
+        <q-btn
+          flat
+          round
+          dense
+          size="sm"
+          icon="more_horiz"
+          class="canopy-bar__button"
+          :disable="!activeTrack"
+          title="Song actions"
+          aria-label="Song actions"
+          @click="openSongActionMenu(activeTrack, $event)"
+        />
+      </div>
 
       <!-- Scrubber sits along the bottom of the entire readout -->
       <div class="canopy-readout__progress" :style="crossfadeProgressStyle">

@@ -133,7 +133,10 @@ html[data-layout-preset="canopy"] .canopy-readout {
 
 /* Centred inside a 54px readout, so it clears the scrubber's 8px bottom band. */
 html[data-layout-preset="canopy"] .canopy-readout__actions {
+  display: flex;
   flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
   color: var(--muted);
 }
 
@@ -225,6 +228,18 @@ html[data-layout-preset="canopy"] .canopy-readout__meta {
   gap: 5px;
   color: var(--muted);
   font-size: 11px;
+}
+
+/* Bitrate marker */
+html[data-layout-preset="canopy"] .canopy-readout__bitrate {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border: 1px solid var(--canopy-rule);
+  border-radius: 999px;
+  background: var(--canopy-surface-hover);
+  font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
 }
 
 /* The scrubber sits at the bottom of the readout container, spanning its width */
@@ -926,7 +941,11 @@ html[data-layout-preset="canopy"] .table-row {
   position: relative;
 }
 
-html[data-layout-preset="canopy"] .playlist-virtual-row {
+/* Windowed rows are `.table-row`s too, so the `position: relative` above wins on
+ * specificity and drops them back into normal flow -- on top of the transform
+ * that already placed them, which spaces the queue out by a row height each. */
+html[data-layout-preset="canopy"] .playlist-virtual-row,
+html[data-layout-preset="canopy"] .queue-view__row--virtual {
   position: absolute;
 }
 
