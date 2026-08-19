@@ -221,6 +221,7 @@ private fun OrchardNavigation(
     val connectProtocolVersion by viewModel.connectProtocolVersion.collectAsStateWithLifecycle()
     val connectAudioEngine by viewModel.connectAudioEngine.collectAsStateWithLifecycle()
     val connectRemoteVolume by viewModel.connectRemoteVolume.collectAsStateWithLifecycle()
+    val listeningParty by viewModel.listeningParty.collectAsStateWithLifecycle()
     val localTargetSelected = targets.selected is PlaybackTarget.LocalPhone
     val canControlQueue = localTargetSelected || connectProtocolVersion >= 2
     val canShuffle = localTargetSelected || connectProtocolVersion >= 2
@@ -456,6 +457,7 @@ private fun OrchardNavigation(
                 connectMessage = connectMessage,
                 protocolVersion = connectProtocolVersion,
                 audioEngine = connectAudioEngine,
+                party = listeningParty,
                 onBack = nav::popBackStack,
                 onSelect = viewModel::selectTarget,
                 onPair = viewModel::pairDevice,
@@ -463,6 +465,9 @@ private fun OrchardNavigation(
                 onPresetSelect = viewModel::setAudioEnginePreset,
                 onToggleAutoEq = viewModel::toggleAutoEq,
                 onToggleManualEq = viewModel::toggleManualEq,
+                onCreateParty = { viewModel.createListeningParty() },
+                onJoinParty = { viewModel.joinListeningParty(it) },
+                onLeaveParty = viewModel::leaveListeningParty,
             )
         }
     }

@@ -10,6 +10,13 @@
 -keep class ai.onnxruntime.providers.** { *; }
 -dontwarn ai.onnxruntime.**
 
+# WebRTC's native layer calls back into Java by hardcoded name, the same way ONNX
+# Runtime's does: observers, the enums it reads signalling state from, and the
+# constructors JNI instantiates are all resolved reflectively. Renaming any of them
+# fails at the first setRemoteDescription rather than at build time.
+-keep class org.webrtc.** { *; }
+-dontwarn org.webrtc.**
+
 # NewPipeExtractor embeds Mozilla Rhino for YouTube cipher evaluation.
 -keep class org.mozilla.javascript.** { *; }
 -keep class org.mozilla.classfile.ClassFileWriter

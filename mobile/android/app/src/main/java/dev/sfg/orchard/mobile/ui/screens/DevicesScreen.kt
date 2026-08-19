@@ -43,6 +43,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.Devices
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material3.Button
@@ -74,6 +75,10 @@ import dev.sfg.orchard.mobile.model.DeviceType
 import dev.sfg.orchard.mobile.model.PlaybackDevice
 import dev.sfg.orchard.mobile.model.PlaybackTarget
 import dev.sfg.orchard.mobile.model.PlaybackTargetState
+import dev.sfg.orchard.mobile.social.PartyRole
+import dev.sfg.orchard.mobile.social.PartyState
+import dev.sfg.orchard.mobile.social.PartyStatus
+import dev.sfg.orchard.mobile.social.cleanRoomCode
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -83,6 +88,7 @@ fun DevicesScreen(
     connectMessage: String,
     protocolVersion: Int = 1,
     audioEngine: dev.sfg.orchard.connect.protocol.ConnectAudioEngine = dev.sfg.orchard.connect.protocol.ConnectAudioEngine(),
+    party: PartyState = PartyState(),
     onBack: () -> Unit,
     onSelect: (PlaybackTarget) -> Unit,
     onPair: (String) -> Unit,
@@ -90,6 +96,9 @@ fun DevicesScreen(
     onPresetSelect: (String) -> Unit = {},
     onToggleAutoEq: (Boolean) -> Unit = {},
     onToggleManualEq: (Boolean) -> Unit = {},
+    onCreateParty: () -> Unit = {},
+    onJoinParty: (String) -> Unit = {},
+    onLeaveParty: () -> Unit = {},
 ) {
     var pairingInput by remember { mutableStateOf("") }
     val context = LocalContext.current
@@ -168,8 +177,194 @@ fun DevicesScreen(
             onDisconnect = onDisconnect,
             hasRemote = targets.devices.any { !it.isLocal },
         )
+
+        ListeningPartyPanel(
+            party = party,
+            onCreate = onCreateParty,
+            onJoin = onJoinParty,
+            onLeave = onLeaveParty,
+        )
     }
 }
+
+/**
+ * Create/join controls for a listening party.
+ *
+ * It sits with the device pickers rather than in the player because it answers the same question
+ * they do — where, and with whom, this music is playing — and a listener who wants to move audio
+ * somewhere else looks here first.
+ */
+@Composable
+private fun ListeningPartyPanel(
+    party: PartyState,
+    onCreate: () -> Unit,
+    onJoin: (String) -> Unit,
+    onLeave: () -> Unit,
+) {
+    var codeInput by remember { mutableStateOf("") }
+    Surface(
+        color = CanopyColors.Surface,
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp),
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Rounded.Groups,
+                    contentDescription = null,
+                    tint = if (party.isActive) LocalAccent.current else CanopyColors.Muted,
+                    modifier = Modifier.size(24.dp),
+                )
+                Text(
+                    "Listening party",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = CanopyColors.Text,
+                    modifier = Modifier.padding(start = 10.dp),
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+
+            if (party.isActive) {
+                ActiveParty(party = party, onLeave = onLeave)
+            } else {
+                Text(
+                    "Play the same music, in time, with anyone on Orchard.",
+                    color = CanopyColors.Muted,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(14.dp))
+                TextField(
+                    value = codeInput,
+                    onValueChange = { codeInput = cleanRoomCode(it).take(ROOM_CODE_LENGTH) },
+                    placeholder = { Text("Room code") },
+                    singleLine = true,
+                    shape = CircleShape,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = CanopyColors.Canvas,
+                        unfocusedContainerColor = CanopyColors.Canvas,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        focusedTextColor = CanopyColors.Text,
+                        unfocusedTextColor = CanopyColors.Text,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Button(
+                        onClick = { onJoin(codeInput) },
+                        enabled = codeInput.isNotBlank() && party.status != PartyStatus.CONNECTING,
+                        shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = LocalAccent.current,
+                            contentColor = Color.Black,
+                        ),
+                        modifier = Modifier.weight(1f).height(44.dp),
+                    ) {
+                        Text("Join", fontWeight = FontWeight.Bold)
+                    }
+                    OutlinedButton(
+                        onClick = onCreate,
+                        enabled = party.status != PartyStatus.CONNECTING,
+                        shape = CircleShape,
+                        modifier = Modifier.weight(1f).height(44.dp),
+                    ) {
+                        Text("Start a party", fontWeight = FontWeight.Bold, color = CanopyColors.Text)
+                    }
+                }
+            }
+
+            if (party.error.isNotBlank()) {
+                Text(
+                    party.error,
+                    color = CanopyColors.Danger,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActiveParty(party: PartyState, onLeave: () -> Unit) {
+    Text(
+        when (party.status) {
+            PartyStatus.CONNECTING -> "Connecting…"
+            PartyStatus.OFFLINE -> "Reconnecting to the party…"
+            // The host is the device the rest of the room follows, which is worth stating plainly:
+            // it is the difference between a control moving everyone and only asking.
+            else -> if (party.isHost) "You are hosting" else "Following the host"
+        },
+        color = if (party.status == PartyStatus.CONNECTED) LocalAccent.current else CanopyColors.Muted,
+        style = MaterialTheme.typography.bodyMedium,
+    )
+
+    if (party.code.isNotBlank()) {
+        Spacer(Modifier.height(14.dp))
+        Text("Room code", color = CanopyColors.Muted, style = MaterialTheme.typography.labelLarge)
+        Text(
+            // Spaced out because this code gets read aloud and typed on another device.
+            party.code.toCharArray().joinToString(" "),
+            style = MaterialTheme.typography.displayLarge.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 28.sp,
+                letterSpacing = 2.sp,
+            ),
+            color = CanopyColors.Text,
+        )
+    }
+
+    Spacer(Modifier.height(12.dp))
+    Text(
+        when (party.peers.size) {
+            0 -> "No one else has joined yet."
+            1 -> "1 other listener"
+            else -> "${party.peers.size} other listeners"
+        },
+        color = CanopyColors.Muted,
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    party.peers.forEach { peer ->
+        Row(
+            Modifier.fillMaxWidth().padding(top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Rounded.PhoneAndroid,
+                contentDescription = null,
+                tint = if (peer.open) LocalAccent.current else CanopyColors.Muted,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                peer.name.ifBlank { "Listener" },
+                color = CanopyColors.Text,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f).padding(start = 10.dp),
+            )
+            if (peer.role == PartyRole.HOST) {
+                Text("Host", color = LocalAccent.current, style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+
+    OutlinedButton(
+        onClick = onLeave,
+        shape = CircleShape,
+        modifier = Modifier.fillMaxWidth().padding(top = 14.dp).height(44.dp),
+    ) {
+        Text(
+            if (party.isHost) "End the party" else "Leave the party",
+            color = CanopyColors.Danger,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+/** Room codes the worker generates are always this long. */
+private const val ROOM_CODE_LENGTH = 6
 
 @Composable
 private fun RemoteAudioEngineCard(

@@ -34,8 +34,10 @@ import dev.sfg.orchard.mobile.artwork.TrackArtwork
 import dev.sfg.orchard.mobile.model.*
 import dev.sfg.orchard.mobile.connect.PlaybackTargetCoordinator
 import dev.sfg.orchard.mobile.playback.AutoplayRecommendations
+import dev.sfg.orchard.mobile.playback.ListeningPartyManager
 import dev.sfg.orchard.mobile.playback.LocalPlaybackController
 import dev.sfg.orchard.mobile.playback.QueueEditor
+import dev.sfg.orchard.mobile.social.PartyState
 import dev.sfg.orchard.mobile.songlinks.LinkResolution
 import dev.sfg.orchard.mobile.songlinks.SongLinksCoordinator
 import dev.sfg.orchard.mobile.songlinks.SongShareState
@@ -56,6 +58,20 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     private val songLinksCoordinator = SongLinksCoordinator(graph.songLinks, viewModelScope)
     val shareState: StateFlow<SongShareState?> = songLinksCoordinator.shareState
     private val local = LocalPlaybackController(application, viewModelScope)
+
+    /**
+     * Scoped here rather than on the graph, unlike most repositories: it drives
+     * [LocalPlaybackController], which is itself created and closed with this view model, so a
+     * longer-lived party would outlive the player it commands.
+     */
+    private val party = ListeningPartyManager(
+        context = application,
+        http = graph.http,
+        scope = viewModelScope,
+        player = local,
+        displayName = Build.MODEL.takeIf(String::isNotBlank) ?: application.selfDeviceLabel(),
+    )
+    val listeningParty: StateFlow<PartyState> = party.state
     private val targetCoordinator = PlaybackTargetCoordinator(
         PlaybackDevice(
             id = "local-phone",
@@ -467,7 +483,11 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         { local.addToQueue(track) },
     )
 
-    fun togglePlayback() = remoteOrLocal({ graph.connect.send(ConnectCommand.TogglePlayback) }, local::toggle)
+    fun togglePlayback() = partyOrLocal(
+        if (playback.value.isPlaying) "pause" else "play",
+        { graph.connect.send(ConnectCommand.TogglePlayback) },
+        local::toggle,
+    )
     fun startSleepTimer(minutes: Int) {
         if (minutes <= 0) return
         cancelSleepTimer()
@@ -514,13 +534,17 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         remoteOrLocal({ graph.connect.send(ConnectCommand.TogglePlayback) }, local::pause)
     }
 
-    fun next() = remoteOrLocal({ graph.connect.send(ConnectCommand.Next) }, local::next)
-    fun previous() = remoteOrLocal({ graph.connect.send(ConnectCommand.Previous) }, local::previous)
-    fun seek(positionMs: Long) = remoteOrLocal(
-        { graph.connect.send(ConnectCommand.Seek(positionMs / 1_000.0)) },
-        { local.seek(positionMs) },
-    )
-    fun toggleShuffle() = remoteOrLocal(
+    fun next() = partyOrLocal("next", { graph.connect.send(ConnectCommand.Next) }, local::next)
+    fun previous() = partyOrLocal("previous", { graph.connect.send(ConnectCommand.Previous) }, local::previous)
+    fun seek(positionMs: Long) {
+        if (party.requestSeek(positionMs)) return
+        remoteOrLocal(
+            { graph.connect.send(ConnectCommand.Seek(positionMs / 1_000.0)) },
+            { local.seek(positionMs) },
+        )
+    }
+    fun toggleShuffle() = partyOrLocal(
+        "toggle-shuffle",
         { if (connectProtocolVersion.value >= 2) graph.connect.toggleShuffle() },
         {
             // The service reshuffles the upcoming items itself when the flag turns on, so doing it
@@ -695,6 +719,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     }
 
     override fun onCleared() {
+        party.leaveParty(closeRoom = false)
         local.close()
         super.onCleared()
     }
@@ -834,6 +859,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     private fun observeWarnings() {
         viewModelScope.launch { graph.warningEvent.collect { showWarning(it) } }
+        viewModelScope.launch { party.messages.collect { showWarning(it) } }
     }
 
     fun connectDiscord(context: android.content.Context) {
@@ -859,6 +885,34 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     private fun remoteOrLocal(remote: () -> Unit, localAction: () -> Unit) {
         if (targets.value.selected is PlaybackTarget.Remote) remote() else localAction()
     }
+
+    /**
+     * Transport dispatch for a device that may be a listening-party guest.
+     *
+     * A guest sends the intent to the host and changes nothing locally; the host's answering
+     * snapshot is what actually moves this player, so every device in the room turns over
+     * together instead of one running ahead.
+     */
+    private fun partyOrLocal(action: String, remote: () -> Unit, localAction: () -> Unit) {
+        if (party.interceptTransport(action)) return
+        remoteOrLocal(remote, localAction)
+    }
+
+    // ---------------------------------------------------------------- listening party
+
+    fun createListeningParty() = viewModelScope.launch {
+        runCatching { party.createParty() }
+            .onFailure { showWarning(it.message ?: "Could not start the listening party.") }
+    }
+
+    fun joinListeningParty(code: String) = viewModelScope.launch {
+        runCatching { party.joinParty(code) }
+            .onFailure { showWarning(it.message ?: "Could not join that listening party.") }
+    }
+
+    fun leaveListeningParty() = party.leaveParty()
+
+    fun transferListeningPartyHost(participantId: String) = party.transferHost(participantId)
 
     private companion object {
         const val TAG = "OrchardViewModel"
