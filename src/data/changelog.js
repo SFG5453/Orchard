@@ -19,6 +19,25 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '4.7.1',
+    codename: 'Distension Conceal',
+    date: 'August 19, 2026',
+    sections: [
+      {
+        title: 'Fixed',
+        items: [
+          'Prevented party guests connected to an Android host from entering an endless song restart loop caused by differences in track payload properties.'
+        ]
+      },
+      {
+        title: 'Maintenence',
+        items: [
+          'Updated hls.js to 1.7.1.'
+        ]
+      }
+    ]
+  },
+  {
     version: '4.7.0',
     codename: 'Epiphanies Hesitated',
     date: 'August 18, 2026',
