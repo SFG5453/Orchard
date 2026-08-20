@@ -344,6 +344,10 @@ export function installPlaybackControls(ctx) {
   };
 
   ctx.playNext = async function playNext(options = {}) {
+    if (!options.fromListeningPartyRequest && ctx.listeningParty?.value?.status === 'connected' && !ctx.listeningPartyIsHost?.value) {
+      ctx.requestListeningPartyHostControl?.({ action: 'next' });
+      return;
+    }
     if (!options.fromListeningPartyRequest && !options.fromEnded && ctx.requestListeningPartyHostControl?.({ action: 'next' })) return;
     ctx.cancelActiveCrossfade('play-next');
     if (ctx.repeatMode.value === 'one' && ctx.activeTrack.value && !options.skipRepeatOne) {
@@ -574,6 +578,9 @@ export function installPlaybackControls(ctx) {
   }
 
   ctx.maybeStartAutoCrossfade = async function maybeStartAutoCrossfade(options = {}) {
+    if (ctx.listeningParty?.value?.status === 'connected' && !ctx.listeningPartyIsHost?.value) {
+      return false;
+    }
     if (!ctx.crossfadeEnabled.value) return false;
     if (ctx.sleepTimerMode.value === 'end-track' || ctx.sleepTimerVolumeFactor.value < 1) {
       return false;
@@ -729,6 +736,9 @@ export function installPlaybackControls(ctx) {
   };
 
   ctx.finishAudioTrack = async function finishAudioTrack() {
+    if (ctx.listeningParty?.value?.status === 'connected' && !ctx.listeningPartyIsHost?.value) {
+      return;
+    }
     const didHandoff = await ctx.maybeStartAutoCrossfade({ force: true, reason: 'ended-handoff' });
     if (didHandoff) return;
 

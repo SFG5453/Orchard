@@ -189,3 +189,67 @@ test('the host applies a requested continuous queue transition by entry', async 
   assert.equal(ctx.playedTracks[0].options.preserveQueue, true);
   assert.equal(ctx.playedTracks[0].options.listeningPartySync, true);
 });
+
+test('party guests do not restart playTrack when receiving periodic updates for a pending track', async (t) => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { setTimeout: (callback) => { callback(); return 0; } };
+  t.after(() => { globalThis.window = originalWindow; });
+
+  const ctx = listeningPartyContext({ activeTrack: null });
+  let resolvePlay;
+  ctx.playTrack = (item, options) => {
+    ctx.playedTracks.push({ item, options });
+    return new Promise((resolve) => {
+      resolvePlay = () => {
+        ctx.activeTrack.value = item;
+        resolve();
+      };
+    });
+  };
+
+  const payload = {
+    track: track('MtUefXEQRAY'),
+    queue: [],
+    history: [],
+    currentTime: 10,
+    isPlaying: true,
+    sentAt: Date.now()
+  };
+
+  // First state update triggers playTrack (pending resolution)
+  const firstPromise = ctx.applyListeningPartyState(payload);
+  assert.equal(ctx.playedTracks.length, 1);
+  assert.equal(ctx.pendingListeningPartyTrackId, 'MtUefXEQRAY');
+
+  // Second state update arrives while first playTrack is still pending resolution
+  await ctx.applyListeningPartyState(payload);
+  // Must NOT trigger a second playTrack call
+  assert.equal(ctx.playedTracks.length, 1);
+
+  // Complete first playTrack
+  resolvePlay();
+  await firstPromise;
+  assert.equal(ctx.pendingListeningPartyTrackId, null);
+
+  // Subsequent state update for already active track does not call playTrack
+  await ctx.applyListeningPartyState(payload);
+  assert.equal(ctx.playedTracks.length, 1);
+});
+
+test('party guests suppress local auto-crossfade and track-ended handoffs', async () => {
+  const ctx = listeningPartyContext({
+    activeTrack: track('track-1'),
+    queue: [track('track-2')]
+  });
+  ctx.listeningParty.value = { status: 'connected', participant: { role: 'guest' } };
+  ctx.crossfadeEnabled = { value: true };
+
+  assert.equal(await ctx.maybeStartAutoCrossfade({ force: true, reason: 'ended-handoff' }), false);
+
+  let playNextCalled = false;
+  ctx.playNext = () => { playNextCalled = true; };
+  await ctx.finishAudioTrack();
+  assert.equal(playNextCalled, false);
+});
+
+

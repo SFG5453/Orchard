@@ -54,6 +54,7 @@ export function installListeningPartyActions(ctx) {
   ctx.listeningPartyClient = null;
   ctx.listeningPartySyncTimer = 0;
   ctx.applyingListeningPartyState = false;
+  ctx.pendingListeningPartyTrackId = null;
 
   ctx.createListeningParty = async function createListeningParty(options = {}) {
     return ctx.startListeningPartyClient((client) => client.createRoom(options));
@@ -69,6 +70,7 @@ export function installListeningPartyActions(ctx) {
     if (ctx.listeningPartyIsHost.value && options.closeRoom !== false) ctx.listeningPartyClient?.closeRoom();
     ctx.listeningPartyClient?.disconnect();
     ctx.listeningPartyClient = null;
+    ctx.pendingListeningPartyTrackId = null;
     ctx.listeningParty.value = { status: 'idle', room: null, participant: null, peers: [], error: '', lastState: null };
   };
 
@@ -236,17 +238,34 @@ export function installListeningPartyActions(ctx) {
 
   ctx.applyListeningPartyState = async function applyListeningPartyState(state = {}) {
     if (!state.track?.id) return;
+
+    const isSameTrack =
+      ctx.activeTrack.value?.id === state.track.id ||
+      ctx.pendingListeningPartyTrackId === state.track.id;
+
+    if (ctx.applyingListeningPartyState && isSameTrack) {
+      return;
+    }
+
     ctx.applyingListeningPartyState = true;
     try {
       const drift = (Date.now() - Number(state.sentAt || Date.now())) / 1000;
       const targetTime = Math.max(0, Number(state.currentTime || 0) + (state.isPlaying ? drift : 0));
-      if (ctx.activeTrack.value?.id !== state.track.id) {
-        await ctx.playTrack(state.track, {
-          mediaKind: state.mediaKind || 'audio',
-          queueSource: [state.track, ...(state.queue || [])],
-          listeningPartySync: true,
-          skipHistory: true
-        });
+      if (!isSameTrack) {
+        ctx.pendingListeningPartyTrackId = state.track.id;
+        try {
+          await ctx.playTrack(state.track, {
+            mediaKind: state.mediaKind || 'audio',
+            queueSource: [state.track, ...(state.queue || [])],
+            listeningPartySync: true,
+            skipHistory: true,
+            resumeAt: targetTime
+          });
+        } finally {
+          if (ctx.pendingListeningPartyTrackId === state.track.id) {
+            ctx.pendingListeningPartyTrackId = null;
+          }
+        }
       }
       const nextQueue = Array.isArray(state.queue) ? state.queue.filter(ctx.isPlayableTrack).slice(0, 100) : [];
       if (!sameTrackOrder(ctx.queue.value, nextQueue)) {
@@ -259,7 +278,10 @@ export function installListeningPartyActions(ctx) {
       if (!sameTrackOrder(ctx.history.value, nextHistory)) {
         ctx.history.value = nextHistory;
       }
-      if (Math.abs((ctx.currentPlaybackElement?.()?.currentTime || 0) - targetTime) > 1.25) ctx.seek(targetTime);
+      const media = ctx.currentPlaybackElement?.();
+      if (media && !ctx.loading.value && (media.readyState ?? 4) >= 2 && Math.abs((media.currentTime || 0) - targetTime) > 1.25) {
+        ctx.seek(targetTime);
+      }
       await ctx.ensureListeningPartyPlaying(Boolean(state.isPlaying));
     } finally {
       window.setTimeout(() => {
