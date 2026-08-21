@@ -66,4 +66,132 @@ class UpdateManagerTest {
         assertEquals(1, UpdateManager.compareVersions("1.1.2", "1.1.1-debug"))
         assertEquals(-1, UpdateManager.compareVersions("1.1.0", "1.1.1-debug"))
     }
+
+    @Test
+    fun comparesBetaVersionsCorrectly() {
+        // Newer beta vs older beta
+        assertEquals(1, UpdateManager.compareVersions("1.8.0-beta.2", "1.8.0-beta.1"))
+        // Same beta
+        assertEquals(0, UpdateManager.compareVersions("1.8.0-beta.1", "1.8.0-beta.1"))
+        // Older beta vs newer beta
+        assertEquals(-1, UpdateManager.compareVersions("1.8.0-beta.1", "1.8.0-beta.2"))
+        // Stable release is newer than its beta
+        assertEquals(1, UpdateManager.compareVersions("1.8.0", "1.8.0-beta.1"))
+        // Beta is older than its stable release
+        assertEquals(-1, UpdateManager.compareVersions("1.8.0-beta.1", "1.8.0"))
+        // Older major/minor vs beta
+        assertEquals(-1, UpdateManager.compareVersions("1.7.0", "1.8.0-beta.1"))
+        // Newer major/minor vs beta
+        assertEquals(1, UpdateManager.compareVersions("1.9.0", "1.8.0-beta.1"))
+    }
+
+    @Test
+    fun parsesGitHubReleasesWithManifestAsset() {
+        val releasesJson = """
+            [
+              {
+                "tag_name": "v1.8.0-beta.1",
+                "name": "Orchard Mobile 1.8.0 (beta)",
+                "prerelease": true,
+                "body": "Beta notes",
+                "published_at": "2026-08-20T00:00:00Z",
+                "assets": [
+                  {
+                    "name": "latest-android.json",
+                    "browser_download_url": "https://github.com/downloads/latest-android.json"
+                  },
+                  {
+                    "name": "Orchard-1.8.0-beta.1.apk",
+                    "browser_download_url": "https://github.com/downloads/Orchard-1.8.0-beta.1.apk"
+                  }
+                ]
+              }
+            ]
+        """.trimIndent()
+
+        val manifestJson = """
+            {
+              "version": "1.8.0-beta.1",
+              "codename": "Beta Codename",
+              "versionCode": 10801,
+              "apkUrl": "https://github.com/downloads/Orchard-1.8.0-beta.1.apk",
+              "sha256": "abc123hash",
+              "publishedAt": "2026-08-20T00:00:00Z",
+              "releaseNotes": "## Orchard Mobile 1.8.0-beta.1\n- Bug fixes"
+            }
+        """.trimIndent()
+
+        val metadata = UpdateManager.parseGitHubReleasesMetadata(
+            releasesJson = releasesJson,
+            fetchManifest = { manifestJson },
+        )
+
+        org.junit.Assert.assertNotNull(metadata)
+        assertEquals("1.8.0-beta.1", metadata?.version)
+        assertEquals("Beta Codename", metadata?.codename)
+        assertEquals(10801, metadata?.versionCode)
+        assertEquals("https://github.com/downloads/Orchard-1.8.0-beta.1.apk", metadata?.apkUrl)
+        assertEquals("abc123hash", metadata?.sha256)
+        assertEquals("## Orchard Mobile 1.8.0-beta.1\n- Bug fixes", metadata?.releaseNotes)
+    }
+
+    @Test
+    fun parsesGitHubReleasesWithApkFallback() {
+        val releasesJson = """
+            [
+              {
+                "tag_name": "v1.8.0-beta.2",
+                "name": "Orchard Mobile 1.8.0 (beta)",
+                "prerelease": true,
+                "body": "Fallback beta notes",
+                "published_at": "2026-08-21T00:00:00Z",
+                "assets": [
+                  {
+                    "name": "Orchard-1.8.0-beta.2.apk",
+                    "browser_download_url": "https://github.com/downloads/Orchard-1.8.0-beta.2.apk"
+                  }
+                ]
+              }
+            ]
+        """.trimIndent()
+
+        val metadata = UpdateManager.parseGitHubReleasesMetadata(
+            releasesJson = releasesJson,
+            fetchManifest = { null },
+        )
+
+        org.junit.Assert.assertNotNull(metadata)
+        assertEquals("1.8.0-beta.2", metadata?.version)
+        assertEquals("https://github.com/downloads/Orchard-1.8.0-beta.2.apk", metadata?.apkUrl)
+        assertEquals("Fallback beta notes", metadata?.releaseNotes)
+        assertEquals("2026-08-21T00:00:00Z", metadata?.publishedAt)
+    }
+
+    @Test
+    fun parsesGitHubReleasesReturnsNullWhenNoAndroidAssets() {
+        val releasesJson = """
+            [
+              {
+                "tag_name": "v1.8.0-beta.1",
+                "name": "Orchard Desktop Only (beta)",
+                "prerelease": true,
+                "body": "Desktop only release",
+                "published_at": "2026-08-20T00:00:00Z",
+                "assets": [
+                  {
+                    "name": "Orchard-Setup-1.8.0-beta.1.exe",
+                    "browser_download_url": "https://github.com/downloads/Orchard-Setup-1.8.0-beta.1.exe"
+                  }
+                ]
+              }
+            ]
+        """.trimIndent()
+
+        val metadata = UpdateManager.parseGitHubReleasesMetadata(
+            releasesJson = releasesJson,
+            fetchManifest = { null },
+        )
+
+        org.junit.Assert.assertNull(metadata)
+    }
 }

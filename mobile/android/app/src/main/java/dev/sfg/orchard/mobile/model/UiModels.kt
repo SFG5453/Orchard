@@ -131,6 +131,8 @@ data class OrchardSettings(
     val fullBleedArtworkEnabled: Boolean = true,
     /** Custom user-defined name for this local device in Connect and Listening Party. */
     val customDeviceName: String = "",
+    /** Whether to receive beta builds from GitHub releases. */
+    val betaChannelEnabled: Boolean = false,
 ) {
     /** Clamped, because a persisted value from an older build must not size the cache absurdly. */
     val cacheSizeBytes: Long

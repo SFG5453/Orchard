@@ -14,6 +14,7 @@ import dev.sfg.orchard.connect.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
@@ -40,10 +41,14 @@ sealed interface UpdateState {
     data class ReadyToInstall(val version: String) : UpdateState
 }
 
-class UpdateManager(private val context: Context) {
+class UpdateManager(
+    private val context: Context,
+    private val isBetaEnabled: () -> Boolean = { false },
+) {
 
     private val baseUrl = "https://downloads.sfg545.dev/orchard"
     private val jsonUrl = "$baseUrl/latest-android.json"
+    private val githubReleasesUrl = "https://api.github.com/repos/sfg5453/orchard/releases"
 
     private val mutableState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = mutableState.asStateFlow()
@@ -55,29 +60,57 @@ class UpdateManager(private val context: Context) {
 
         thread {
             try {
-                val connection = URL(jsonUrl).openConnection() as HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.connectTimeout = 5000
-                connection.readTimeout = 5000
+                val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                val currentVersion = packageInfo.versionName
 
-                if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                    val response = connection.inputStream.bufferedReader().use { it.readText() }
-                    val metadata = parseUpdateMetadata(response)
+                val metadata: MobileUpdateMetadata? = if (isBetaEnabled()) {
+                    fetchBetaUpdateMetadata()
+                } else {
+                    fetchStableUpdateMetadata()
+                }
 
-                    val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                    val currentVersion = packageInfo.versionName
-
-                    if (compareVersions(metadata.version, currentVersion) > 0) {
-                        // Surface it and let the user decide; downloading and firing the system
-                        // installer unprompted is what made this feel like a random intrusion.
-                        mutableState.value = UpdateState.Available(metadata)
-                    }
+                if (metadata != null && compareVersions(metadata.version, currentVersion) > 0) {
+                    // Surface it and let the user decide; downloading and firing the system
+                    // installer unprompted is what made this feel like a random intrusion.
+                    mutableState.value = UpdateState.Available(metadata)
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Update check failed: ${e.message}")
             }
         }
     }
+
+    private fun fetchStableUpdateMetadata(): MobileUpdateMetadata? = runCatching {
+        val connection = URL(jsonUrl).openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.connectTimeout = 5000
+        connection.readTimeout = 5000
+
+        if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+            val response = connection.inputStream.bufferedReader().use { it.readText() }
+            parseUpdateMetadata(response)
+        } else {
+            null
+        }
+    }.getOrNull()
+
+    private fun fetchBetaUpdateMetadata(): MobileUpdateMetadata? = runCatching {
+        val connection = URL(githubReleasesUrl).openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.setRequestProperty("Accept", "application/vnd.github+json")
+        connection.setRequestProperty("User-Agent", "Orchard-Android")
+        connection.connectTimeout = 5000
+        connection.readTimeout = 5000
+
+        if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+            val response = connection.inputStream.bufferedReader().use { it.readText() }
+            val meta = parseGitHubReleasesMetadata(response)
+            if (meta != null) return@runCatching meta
+        }
+
+        // If GitHub releases did not return beta metadata, check if there's a newer stable release.
+        fetchStableUpdateMetadata()
+    }.getOrNull()
 
     fun dismiss() {
         mutableState.value = UpdateState.Idle
@@ -99,15 +132,81 @@ class UpdateManager(private val context: Context) {
             )
         }
 
+        fun parseGitHubReleasesMetadata(
+            releasesJson: String,
+            fetchManifest: (String) -> String? = { url ->
+                runCatching {
+                    val conn = URL(url).openConnection() as HttpURLConnection
+                    conn.requestMethod = "GET"
+                    conn.connectTimeout = 5000
+                    conn.readTimeout = 5000
+                    if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                        conn.inputStream.bufferedReader().use { it.readText() }
+                    } else null
+                }.getOrNull()
+            },
+        ): MobileUpdateMetadata? {
+            val array = JSONArray(releasesJson)
+            for (i in 0 until array.length()) {
+                val releaseObj = array.getJSONObject(i)
+                val tagName = releaseObj.optString("tag_name", "").removePrefix("v").removePrefix("V").trim()
+                if (tagName.isEmpty()) continue
+
+                val assets = releaseObj.optJSONArray("assets") ?: JSONArray()
+                var manifestUrl: String? = null
+                var apkUrl: String? = null
+
+                for (j in 0 until assets.length()) {
+                    val asset = assets.getJSONObject(j)
+                    val name = asset.optString("name", "")
+                    val downloadUrl = asset.optString("browser_download_url", "")
+                    if (name.equals("latest-android.json", ignoreCase = true)) {
+                        manifestUrl = downloadUrl
+                    } else if (name.endsWith(".apk", ignoreCase = true) && apkUrl == null) {
+                        apkUrl = downloadUrl
+                    }
+                }
+
+                if (manifestUrl != null) {
+                    val manifestContent = fetchManifest(manifestUrl)
+                    if (manifestContent != null) {
+                        return parseUpdateMetadata(manifestContent)
+                    }
+                }
+
+                if (apkUrl != null) {
+                    val body = releaseObj.optString("body", "")
+                    val publishedAt = releaseObj.optString("published_at", "")
+                    return MobileUpdateMetadata(
+                        version = tagName,
+                        apkUrl = apkUrl,
+                        releaseNotes = body,
+                        publishedAt = publishedAt,
+                    )
+                }
+            }
+            return null
+        }
+
         fun compareVersions(latest: String, current: String?): Int {
             if (current == null) return 1
-            // Version names carry build suffixes ("1.1.1-debug", "1.2.0-rc1"). Comparing the raw
-            // segment made "1-debug" parse as 0, so every suffixed build looked out of date.
-            fun parts(value: String) = value.trim().split(".")
-                .map { segment -> segment.takeWhile(Char::isDigit).toIntOrNull() ?: 0 }
 
-            val lParts = parts(latest)
-            val cParts = parts(current)
+            fun parseSemver(value: String): Pair<List<Int>, String?> {
+                val clean = value.trim().removePrefix("v").removePrefix("V")
+                val dashIndex = clean.indexOf('-')
+                val (base, pre) = if (dashIndex >= 0) {
+                    clean.substring(0, dashIndex) to clean.substring(dashIndex + 1)
+                } else {
+                    clean to null
+                }
+                val numbers = base.split(".").map { segment ->
+                    segment.takeWhile(Char::isDigit).toIntOrNull() ?: 0
+                }
+                return numbers to pre
+            }
+
+            val (lParts, lPre) = parseSemver(latest)
+            val (cParts, cPre) = parseSemver(current)
 
             val length = maxOf(lParts.size, cParts.size)
             for (i in 0 until length) {
@@ -116,6 +215,39 @@ class UpdateManager(private val context: Context) {
                 if (l > c) return 1
                 if (l < c) return -1
             }
+
+            if (lPre == null && cPre == null) return 0
+            if (lPre == null && cPre in listOf("debug", "canary", "rc1")) return 0
+            if (cPre == null && lPre in listOf("debug", "canary", "rc1")) return 0
+
+            if (lPre == null && cPre != null) return 1
+            if (lPre != null && cPre == null) return -1
+
+            if (lPre != null && cPre != null) {
+                if (lPre == cPre) return 0
+                fun preParts(s: String) = s.split(".").map { seg ->
+                    seg.toIntOrNull()?.let { Pair(true, it) } ?: Pair(false, seg)
+                }
+                val lp = preParts(lPre)
+                val cp = preParts(cPre)
+                val pLen = maxOf(lp.size, cp.size)
+                for (i in 0 until pLen) {
+                    val lSeg = lp.getOrNull(i)
+                    val cSeg = cp.getOrNull(i)
+                    if (lSeg == null) return -1
+                    if (cSeg == null) return 1
+                    if (lSeg.first && cSeg.first) {
+                        val lNum = lSeg.second as Int
+                        val cNum = cSeg.second as Int
+                        if (lNum != cNum) return lNum.compareTo(cNum)
+                    } else {
+                        val lStr = lSeg.second.toString()
+                        val cStr = cSeg.second.toString()
+                        if (lStr != cStr) return lStr.compareTo(cStr)
+                    }
+                }
+            }
+
             return 0
         }
     }

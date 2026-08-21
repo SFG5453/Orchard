@@ -284,6 +284,8 @@ fun SettingsScreen(
                     title = "Release notes",
                     subtitle = if (!BuildConfig.UPDATER_ENABLED) {
                         "Orchard ${BuildConfig.VERSION_NAME} • Updates disabled"
+                    } else if (settings.betaChannelEnabled) {
+                        "Orchard ${BuildConfig.VERSION_NAME} • Beta channel • Up to date"
                     } else {
                         "Orchard ${BuildConfig.VERSION_NAME} • Up to date"
                     },
@@ -298,6 +300,19 @@ fun SettingsScreen(
                         onClick = onCheckForUpdates,
                     )
                 }
+            }
+            if (BuildConfig.UPDATER_ENABLED) {
+                PanelDivider()
+                ToggleRow(
+                    icon = Icons.Rounded.AutoAwesome,
+                    title = "Beta channel",
+                    subtitle = "Get beta builds from GitHub releases instead of the regular channel. Beta builds may be less stable.",
+                    checked = settings.betaChannelEnabled,
+                    onChecked = {
+                        val updated = settings.copy(betaChannelEnabled = it)
+                        onSettings(updated)
+                    },
+                )
             }
         }
 

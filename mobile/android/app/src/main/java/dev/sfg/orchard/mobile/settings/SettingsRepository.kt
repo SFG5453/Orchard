@@ -80,6 +80,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 homeLayoutOnline = decodeHomeLayout(values[HOME_LAYOUT_ONLINE], true),
                 homeLayoutOffline = decodeHomeLayout(values[HOME_LAYOUT_OFFLINE], false),
                 customDeviceName = values[CUSTOM_DEVICE_NAME] ?: "",
+                betaChannelEnabled = values[BETA_CHANNEL_ENABLED] ?: false,
             )
         }
         .stateIn(scope, SharingStarted.Eagerly, OrchardSettings())
@@ -118,6 +119,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[HOME_LAYOUT_ONLINE] = encodeHomeLayout(value.homeLayoutOnline)
                 it[HOME_LAYOUT_OFFLINE] = encodeHomeLayout(value.homeLayoutOffline)
                 it[CUSTOM_DEVICE_NAME] = value.customDeviceName
+                it[BETA_CHANNEL_ENABLED] = value.betaChannelEnabled
             }
         }
     }
@@ -211,5 +213,6 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val HOME_LAYOUT_ONLINE = stringPreferencesKey("home_layout_online")
         val HOME_LAYOUT_OFFLINE = stringPreferencesKey("home_layout_offline")
         val CUSTOM_DEVICE_NAME = stringPreferencesKey("custom_device_name")
+        val BETA_CHANNEL_ENABLED = booleanPreferencesKey("beta_channel_enabled")
     }
 }
