@@ -614,6 +614,10 @@ jobs:
 
       - name: Package Android artifact and generate metadata
         working-directory: mobile/android
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          IS_BETA: ${{ needs.prepare.outputs.is_beta }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           
@@ -630,6 +634,14 @@ jobs:
           
           mkdir -p ../../release-assets
           cp "$apk_source" "../../release-assets/$apk_name"
+
+          # Stable APKs are served from R2, but beta releases are intentionally not
+          # published there. Point beta metadata at the GitHub release asset that is
+          # created later in this workflow, so the in-app beta updater can download it.
+          apk_url="${ORCHARD_UPDATE_URL}${apk_name}"
+          if [[ "$IS_BETA" == "true" ]]; then
+            apk_url="https://github.com/${RELEASE_REPOSITORY}/releases/download/${RELEASE_TAG}/${apk_name}"
+          fi
           
           sha256="$(sha256sum "../../release-assets/$apk_name" | awk '{print $1}')"
           published_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -637,7 +649,7 @@ jobs:
           node "../../scripts/generate-android-update-metadata.mjs" \
             "$version" \
             "$version_code" \
-            "${ORCHARD_UPDATE_URL}${apk_name}" \
+            "$apk_url" \
             "$sha256" \
             "$published_at" \
             "../release-notes.md" \
