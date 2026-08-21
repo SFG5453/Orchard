@@ -173,6 +173,13 @@ fun HomeScreen(
         }
     }
 
+    val openCatalogItem: (CatalogItem) -> Unit = { item ->
+        when (item) {
+            is CatalogItem.Song -> onPlay(item.track)
+            else -> onOpenDetail(item.stableId)
+        }
+    }
+
     activeSectionSheet?.let { sheet ->
         CatalogSectionBottomSheet(
             title = sheet.title,
@@ -363,7 +370,7 @@ fun HomeScreen(
                             id = "st_${item.stableId}",
                             title = item.title,
                             artworkUrl = item.artworkUrl,
-                            onClick = { onOpenDetail(item.stableId) },
+                            onClick = { openCatalogItem(item) },
                             onPlay = { playCatalogItem(item) },
                         )
                     )
@@ -412,7 +419,7 @@ fun HomeScreen(
                 FeaturedHeroCarousel(
                     items = featuredHeroItems,
                     onPlay = { item -> playCatalogItem(item) },
-                    onClick = { item -> onOpenDetail(item.stableId) },
+                    onClick = { item -> openCatalogItem(item) },
                 )
                 Spacer(Modifier.height(18.dp))
             }
@@ -498,13 +505,13 @@ fun HomeScreen(
                                     if (glass) {
                                         GlassJumpBackInCard(
                                             item = item,
-                                            onClick = { onOpenDetail(item.stableId) },
+                                            onClick = { openCatalogItem(item) },
                                             onPlay = { playCatalogItem(item) },
                                         )
                                     } else {
                                         PlaylistCard(
                                             item = item,
-                                            onClick = { onOpenDetail(item.stableId) },
+                                            onClick = { openCatalogItem(item) },
                                         )
                                     }
                                 }
@@ -544,7 +551,7 @@ fun HomeScreen(
                                 ) { _, item ->
                                     CircularArtistCard(
                                         item = item,
-                                        onClick = { onOpenDetail(item.stableId) },
+                                        onClick = { openCatalogItem(item) },
                                     )
                                 }
                             }
@@ -628,24 +635,24 @@ fun HomeScreen(
                                                 when (sectionIndex % 3) {
                                                     0 -> GlassSquircleCard(
                                                         item = item,
-                                                        onClick = { onOpenDetail(item.stableId) },
+                                                        onClick = { openCatalogItem(item) },
                                                         onPlay = { playCatalogItem(item) },
                                                     )
                                                     1 -> GlassJumpBackInCard(
                                                         item = item,
-                                                        onClick = { onOpenDetail(item.stableId) },
+                                                        onClick = { openCatalogItem(item) },
                                                         onPlay = { playCatalogItem(item) },
                                                     )
                                                     else -> GlassRecentlyPlayedCard(
                                                         item = item,
-                                                        onClick = { onOpenDetail(item.stableId) },
+                                                        onClick = { openCatalogItem(item) },
                                                     )
                                                 }
                                             } else {
                                                 PlaylistCard(
                                                     item = item,
                                                     onClick = {
-                                                        onOpenDetail(item.stableId)
+                                                        openCatalogItem(item)
                                                     },
                                                 )
                                             }
@@ -694,13 +701,13 @@ fun HomeScreen(
                                     if (glass) {
                                         GlassJumpBackInCard(
                                             item = item,
-                                            onClick = { onOpenDetail(item.stableId) },
+                                            onClick = { openCatalogItem(item) },
                                             onPlay = { playCatalogItem(item) },
                                         )
                                     } else {
                                         PlaylistCard(
                                             item = item,
-                                            onClick = { onOpenDetail(item.stableId) },
+                                            onClick = { openCatalogItem(item) },
                                         )
                                     }
                                 }
@@ -734,7 +741,7 @@ fun HomeScreen(
                                 ) { _, item ->
                                     CircularArtistCard(
                                         item = item,
-                                        onClick = { onOpenDetail(item.stableId) },
+                                        onClick = { openCatalogItem(item) },
                                     )
                                 }
                             }
@@ -768,12 +775,12 @@ fun HomeScreen(
                                     if (glass) {
                                         GlassRecentlyPlayedCard(
                                             item = item,
-                                            onClick = { onOpenDetail(item.stableId) },
+                                            onClick = { openCatalogItem(item) },
                                         )
                                     } else {
                                         PlaylistCard(
                                             item = item,
-                                            onClick = { onOpenDetail(item.stableId) },
+                                            onClick = { openCatalogItem(item) },
                                         )
                                     }
                                 }

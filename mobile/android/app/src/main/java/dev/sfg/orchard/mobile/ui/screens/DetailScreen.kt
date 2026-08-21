@@ -222,6 +222,7 @@ private fun ArtistDetailContent(
             browseId = sheet.browseId,
             params = sheet.params,
             onFetchFullItems = onFetchSectionItems,
+            onPlay = { track -> onPlayTrack(listOf(track), 0, sheet.title) },
             onOpen = onOpen,
             onDismiss = { activeSectionSheet = null },
         )
@@ -307,7 +308,13 @@ private fun ArtistDetailContent(
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
                         itemsIndexed(section.items, key = { index, it -> "${it.stableId}_$index" }) { _, item ->
-                            CatalogCard(item, onClick = { onOpen(item.stableId) })
+                            CatalogCard(item, onClick = {
+                                if (item is CatalogItem.Song) {
+                                    onPlayTrack(listOf(item.track), 0, section.title)
+                                } else {
+                                    onOpen(item.stableId)
+                                }
+                            })
                         }
                     }
                 }
@@ -334,7 +341,13 @@ private fun ArtistDetailContent(
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     itemsIndexed(detail.related, key = { index, it -> "${it.stableId}_$index" }) { _, item ->
-                        CatalogCard(item, onClick = { onOpen(item.stableId) })
+                        CatalogCard(item, onClick = {
+                            if (item is CatalogItem.Song) {
+                                onPlayTrack(listOf(item.track), 0, detail.title)
+                            } else {
+                                onOpen(item.stableId)
+                            }
+                        })
                     }
                 }
             }
@@ -488,7 +501,13 @@ private fun CollectionDetailContent(
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
                         itemsIndexed(detail.related, key = { index, it -> "${it.stableId}_$index" }) { _, item ->
-                            CatalogCard(item, { onOpen(item.stableId) })
+                            CatalogCard(item, {
+                                if (item is CatalogItem.Song) {
+                                    onPlayAll(listOf(item.track), detail.title)
+                                } else {
+                                    onOpen(item.stableId)
+                                }
+                            })
                         }
                     }
                 }
