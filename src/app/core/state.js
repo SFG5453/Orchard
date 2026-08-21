@@ -308,6 +308,11 @@ export function installState(ctx) {
     progress: null,
     error: '',
     dev: false,
+    external: false,
+    packageType: '',
+    packageLabel: '',
+    downloadedFile: '',
+    downloadAvailable: false,
     content: {
       status: 'idle',
       message: '',

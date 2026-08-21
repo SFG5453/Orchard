@@ -229,7 +229,7 @@ export default {
           <q-icon :name="updateBannerIcon" />
           <span>{{ updateBannerMessage }}</span>
           <q-btn
-            v-if="['available', 'downloading', 'downloaded', 'error'].includes(updateState.status)"
+            v-if="['available', 'downloading', 'downloaded', 'external-available', 'external-downloading', 'external-downloaded', 'error'].includes(updateState.status)"
             flat
             dense
             icon="info_outline"
@@ -243,6 +243,22 @@ export default {
             icon="restart_alt"
             label="Install"
             @click="installUpdate"
+          />
+          <q-btn
+            v-else-if="externalUpdateCanDownload"
+            flat
+            dense
+            icon="download"
+            label="Download"
+            @click="downloadExternalUpdate"
+          />
+          <q-btn
+            v-else-if="externalUpdateCanReveal"
+            flat
+            dense
+            icon="folder_open"
+            label="Show file"
+            @click="revealExternalUpdate"
           />
           <q-btn
             v-else-if="updateState.status === 'error'"

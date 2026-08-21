@@ -100,7 +100,7 @@ export function installChangelogActions(ctx) {
   });
 
   ctx.hasAvailableUpdate = computed(() => (
-    ['available', 'downloading', 'downloaded'].includes(ctx.updateState.value?.status) &&
+    ['available', 'downloading', 'downloaded', 'external-available', 'external-downloading', 'external-downloaded'].includes(ctx.updateState.value?.status) &&
     Boolean(normalizedVersion(ctx.updateState.value?.availableVersion))
   ));
 

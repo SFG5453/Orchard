@@ -30,7 +30,7 @@ export function installUpdateActions(ctx) {
 
   ctx.updateBannerIcon = computed(() => {
     const status = ctx.updateState.value?.status;
-    if (status === 'downloaded') return 'system_update_alt';
+    if (status === 'downloaded' || status === 'external-downloaded') return 'system_update_alt';
     if (status === 'error') return 'warning';
     return 'sync';
   });
@@ -48,6 +48,9 @@ export function installUpdateActions(ctx) {
     if (status === 'available') return 'Downloading';
     if (status === 'downloading') return 'Downloading';
     if (status === 'downloaded') return 'Ready to install';
+    if (status === 'external-available') return 'Package available';
+    if (status === 'external-downloading') return 'Downloading package';
+    if (status === 'external-downloaded') return 'Saved to Downloads';
     if (status === 'current') return 'Up to date';
     if (status === 'error') return 'Update failed';
     return 'Ready';
@@ -55,9 +58,20 @@ export function installUpdateActions(ctx) {
 
   ctx.updateCanInstall = computed(() => ctx.updateState.value?.status === 'downloaded');
 
-  ctx.updateCanCheck = computed(() => !['checking', 'downloading', 'available'].includes(ctx.updateState.value?.status));
+  ctx.updateCanCheck = computed(() => !['checking', 'downloading', 'available', 'external-downloading'].includes(ctx.updateState.value?.status));
 
   ctx.updateChannelIsBeta = computed(() => ctx.updateState.value?.channel === 'beta');
+
+  ctx.externalUpdateCanDownload = computed(() => (
+    Boolean(ctx.updateState.value?.external) &&
+    Boolean(ctx.updateState.value?.downloadAvailable) &&
+    !['checking', 'external-downloading'].includes(ctx.updateState.value?.status)
+  ));
+
+  ctx.externalUpdateCanReveal = computed(() => (
+    ctx.updateState.value?.status === 'external-downloaded' &&
+    Boolean(ctx.updateState.value?.downloadedFile)
+  ));
 
   ctx.updateChannelBetaToggle = computed({
     get: () => ctx.updateChannelIsBeta.value,
@@ -124,6 +138,26 @@ export function installUpdateActions(ctx) {
 
     try {
       ctx.syncUpdateState(await window.orchardUpdates.install());
+    } catch (error) {
+      ctx.errorMessage.value = error.message;
+    }
+  };
+
+  ctx.downloadExternalUpdate = async function downloadExternalUpdate() {
+    if (!window.orchardUpdates?.downloadExternal) return;
+
+    try {
+      ctx.syncUpdateState(await window.orchardUpdates.downloadExternal());
+    } catch (error) {
+      ctx.errorMessage.value = error.message;
+    }
+  };
+
+  ctx.revealExternalUpdate = async function revealExternalUpdate() {
+    if (!window.orchardUpdates?.revealExternal) return;
+
+    try {
+      ctx.syncUpdateState(await window.orchardUpdates.revealExternal());
     } catch (error) {
       ctx.errorMessage.value = error.message;
     }
