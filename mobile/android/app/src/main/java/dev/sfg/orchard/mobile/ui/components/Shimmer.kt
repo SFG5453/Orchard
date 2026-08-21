@@ -19,10 +19,6 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,48 +32,92 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.invalidateDraw
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /**
  * Animated shimmer modifier matching SimpMusic shimmer effect.
+ *
+ * A loading screen puts one of these on every placeholder at once. Running it as a node rather
+ * than a `composed` modifier keeps the whole animation in the draw phase: the sweep advances on
+ * frame callbacks and invalidates only its own draw, where the previous version recomposed every
+ * placeholder in the list on every frame and rebuilt its gradient and background modifier as it
+ * went. It also means each call site shares one modifier instance instead of allocating its own.
  */
-fun Modifier.shimmer(): Modifier = composed {
-    var size by remember { mutableStateOf(IntSize.Zero) }
-    val transition = rememberInfiniteTransition(label = "OrchardShimmer")
-    val startOffsetX by transition.animateFloat(
-        initialValue = -2 * size.width.toFloat(),
-        targetValue = 2 * size.width.toFloat(),
-        animationSpec = infiniteRepeatable(animation = tween(1000)),
-        label = "ShimmerOffset",
-    )
+fun Modifier.shimmer(): Modifier = this then ShimmerElement
 
-    background(
-        brush = Brush.linearGradient(
-            colors = listOf(
-                CanopyColors.ShimmerBackground,
-                CanopyColors.ShimmerLine,
-                CanopyColors.ShimmerBackground,
-            ),
-            start = Offset(startOffsetX, 0f),
-            end = Offset(startOffsetX + size.width.toFloat(), size.height.toFloat()),
-        ),
-    ).onGloballyPositioned {
-        size = it.size
+private object ShimmerElement : ModifierNodeElement<ShimmerNode>() {
+    override fun create() = ShimmerNode()
+
+    override fun update(node: ShimmerNode) = Unit
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "shimmer"
+    }
+
+    override fun hashCode() = "shimmer".hashCode()
+
+    override fun equals(other: Any?) = other === this
+}
+
+private class ShimmerNode : Modifier.Node(), DrawModifierNode {
+    private var startNanos = 0L
+    private var offsetX = 0f
+
+    private var brush: Brush? = null
+    private var brushSize = Size.Unspecified
+    private var brushOffset = Float.NaN
+
+    override fun onAttach() {
+        coroutineScope.launch {
+            while (isActive) {
+                withFrameNanos { frame ->
+                    if (startNanos == 0L) startNanos = frame
+                    val phase = ((frame - startNanos) % SWEEP_NANOS).toFloat() / SWEEP_NANOS
+                    offsetX = phase
+                }
+                invalidateDraw()
+            }
+        }
+    }
+
+    override fun ContentDrawScope.draw() {
+        val start = -2f * size.width + 4f * size.width * offsetX
+        if (size != brushSize || start != brushOffset) {
+            brush = Brush.linearGradient(
+                colors = ShimmerColors,
+                start = Offset(start, 0f),
+                end = Offset(start + size.width, size.height),
+            )
+            brushSize = size
+            brushOffset = start
+        }
+        brush?.let { drawRect(it) }
+        drawContent()
     }
 }
+
+private val ShimmerColors = listOf(
+    CanopyColors.ShimmerBackground,
+    CanopyColors.ShimmerLine,
+    CanopyColors.ShimmerBackground,
+)
+
+private const val SWEEP_NANOS = 1_000_000_000L
 
 @Composable
 fun CatalogCardShimmer(modifier: Modifier = Modifier) {

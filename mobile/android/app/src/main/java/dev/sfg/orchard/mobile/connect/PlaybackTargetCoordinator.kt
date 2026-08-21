@@ -31,9 +31,18 @@ import dev.sfg.orchard.mobile.model.PlaybackTargetState
  * what prevents local and remote sessions from being marked active together.
  */
 class PlaybackTargetCoordinator(localDevice: PlaybackDevice, private val selfWord: String = "phone") {
-    private val phone = localDevice.copy(isLocal = true, isActive = true)
+    private var phone = localDevice.copy(isLocal = true, isActive = true)
     var state: PlaybackTargetState = PlaybackTargetState(devices = listOf(phone))
         private set
+
+    fun updateLocalDeviceName(name: String, customName: String = "") {
+        phone = phone.copy(name = name, customName = customName)
+        val selected = state.selected
+        val remotes = state.devices.filterNot { it.isLocal }
+        state = state.copy(
+            devices = listOf(phone.copy(isActive = selected is PlaybackTarget.LocalPhone)) + remotes
+        )
+    }
 
     fun updateRemoteDevices(remotes: List<PlaybackDevice>) {
         val selectedId = (state.selected as? PlaybackTarget.Remote)?.deviceId
@@ -81,7 +90,7 @@ class PlaybackTargetCoordinator(localDevice: PlaybackDevice, private val selfWor
             },
             message = when (target) {
                 PlaybackTarget.LocalPhone -> "Playing on this $selfWord."
-                is PlaybackTarget.Remote -> "Playing on ${state.devices.firstOrNull { it.id == target.deviceId }?.name ?: "Orchard device"}."
+                is PlaybackTarget.Remote -> "Playing on ${state.devices.firstOrNull { it.id == target.deviceId }?.displayName ?: "Orchard device"}."
             },
         )
     }

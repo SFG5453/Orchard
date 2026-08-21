@@ -65,6 +65,9 @@ import dev.sfg.orchard.mobile.ui.components.OrchardSectionHeader
 import dev.sfg.orchard.mobile.ui.components.TrackRow
 import dev.sfg.orchard.mobile.ui.components.TrackRowShimmer
 import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
+import dev.sfg.orchard.mobile.ui.glass.GlassTone
+import dev.sfg.orchard.mobile.ui.glass.glassFill
+import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -127,7 +130,7 @@ private fun SearchField(query: String, onChange: (String) -> Unit, onSubmit: (St
     TextField(
         value = query,
         onValueChange = onChange,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().glassPane(CircleShape, GlassTone.CONTROL),
         placeholder = { Text("Search songs, artists, albums, playlists…") },
         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = LocalAccent.current) },
         trailingIcon = {
@@ -141,8 +144,8 @@ private fun SearchField(query: String, onChange: (String) -> Unit, onSubmit: (St
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { onSubmit(query) }),
         colors = TextFieldDefaults.colors(
-            focusedContainerColor = CanopyColors.Surface,
-            unfocusedContainerColor = CanopyColors.Surface,
+            focusedContainerColor = glassFill(CanopyColors.Surface),
+            unfocusedContainerColor = glassFill(CanopyColors.Surface),
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
             focusedTextColor = CanopyColors.Text,

@@ -68,6 +68,12 @@ data class OrchardSettings(
     val useSystemColors: Boolean = false,
     /** Let the artwork-tinted background drift instead of holding still between tracks. */
     val animatedBackground: Boolean = false,
+    /**
+     * Experimental: render panels, bars and chips as translucent frosted panes tinted by the
+     * playing cover, instead of flat opaque surfaces. Off by default — it is a large change to
+     * every screen's contrast, and Android 12 only gets an approximation of it.
+     */
+    val frostedGlass: Boolean = false,
     /** Overlap the end of a track with the start of the next one. */
     val crossfadeEnabled: Boolean = false,
     val crossfadeSeconds: Int = DEFAULT_CROSSFADE_SECONDS,
@@ -123,6 +129,8 @@ data class OrchardSettings(
     ),
     /** Whether to show full-bleed artwork on the Now Playing screen. */
     val fullBleedArtworkEnabled: Boolean = true,
+    /** Custom user-defined name for this local device in Connect and Listening Party. */
+    val customDeviceName: String = "",
 ) {
     /** Clamped, because a persisted value from an older build must not size the cache absurdly. */
     val cacheSizeBytes: Long

@@ -19,6 +19,7 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AllInclusive
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Deblur
 import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Gradient
@@ -87,6 +89,8 @@ import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
 import dev.sfg.orchard.mobile.ui.components.ReleaseNotesDialog
 import dev.sfg.orchard.mobile.ui.components.UpdateDialog
+import dev.sfg.orchard.mobile.ui.glass.glassFill
+import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -228,6 +232,21 @@ fun SettingsScreen(
             )
         }
 
+        SectionLabel("Experimental")
+        SettingsPanel {
+            ToggleRow(
+                icon = Icons.Rounded.Deblur,
+                title = "Frosted glass",
+                subtitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    "Blur the artwork behind panels and bars"
+                } else {
+                    "Blur the artwork behind panels and bars • No frost texture on Android 12"
+                },
+                checked = settings.frostedGlass,
+                onChecked = { onSettings(settings.copy(frostedGlass = it)) },
+            )
+        }
+
         SectionLabel("Devices")
         SettingsPanel {
             ActionRow(
@@ -339,9 +358,9 @@ private fun AccountCard(
     onSignOut: () -> Unit,
 ) {
     Surface(
-        color = CanopyColors.Surface,
-        shape = RoundedCornerShape(20.dp),
-        modifier = Modifier.fillMaxWidth(),
+        color = glassFill(CanopyColors.Surface),
+        shape = SettingsPanelShape,
+        modifier = Modifier.fillMaxWidth().glassPane(SettingsPanelShape),
     ) {
         Row(
             Modifier.fillMaxWidth().padding(18.dp),
@@ -462,13 +481,15 @@ private fun SectionLabel(value: String) {
 @Composable
 private fun SettingsPanel(content: @Composable ColumnScope.() -> Unit) {
     Surface(
-        color = CanopyColors.Surface,
-        shape = RoundedCornerShape(20.dp),
-        modifier = Modifier.fillMaxWidth(),
+        color = glassFill(CanopyColors.Surface),
+        shape = SettingsPanelShape,
+        modifier = Modifier.fillMaxWidth().glassPane(SettingsPanelShape),
     ) {
         Column(content = content)
     }
 }
+
+private val SettingsPanelShape = RoundedCornerShape(20.dp)
 
 /** Hairline between rows in the same panel. */
 @Composable

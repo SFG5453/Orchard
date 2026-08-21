@@ -85,7 +85,13 @@ data class PlaybackDevice(
     val availability: DeviceAvailability,
     val isLocal: Boolean = false,
     val isActive: Boolean = false,
-)
+    val customName: String = "",
+    val serverUrl: String = "",
+    val lastSeenAt: Long = 0L,
+) {
+    val displayName: String
+        get() = customName.ifBlank { name }
+}
 
 sealed interface PlaybackTarget {
     data object LocalPhone : PlaybackTarget

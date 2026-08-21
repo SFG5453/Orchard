@@ -49,13 +49,33 @@ object CatalogParser {
     fun home(root: JSONObject): List<CatalogSection> {
         val shelves = homeShelves(root)
         val sections = shelves.mapIndexedNotNull { index, shelf ->
+            val rawHeader = shelf.optJSONObject("header")
+            val headerNode = rawHeader?.optJSONObject("musicCarouselShelfBasicHeaderRenderer") ?: rawHeader
             val title = JsonTraversal.text(shelf.optJSONObject("title"))
-                .ifBlank { JsonTraversal.text(shelf.optJSONObject("header")) }
-                .ifBlank { JsonTraversal.renderers(shelf.optJSONObject("header"), "title").firstOrNull()?.let(JsonTraversal::text).orEmpty() }
+                .ifBlank { JsonTraversal.text(headerNode) }
+                .ifBlank { JsonTraversal.renderers(rawHeader, "title").firstOrNull()?.let(JsonTraversal::text).orEmpty() }
                 .ifBlank { "For you" }
+            val moreButton = headerNode?.optJSONObject("moreContentButton")?.optJSONObject("buttonRenderer")
+                ?: headerNode?.optJSONObject("moreContentButton")?.optJSONObject("button")
+                ?: shelf.optJSONObject("moreContentButton")?.optJSONObject("buttonRenderer")
+                ?: shelf.optJSONObject("bottomEndpoint")
+            val endpointNode = moreButton?.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")
+                ?: moreButton?.optJSONObject("endpoint")?.optJSONObject("payload")
+                ?: moreButton?.optJSONObject("browseEndpoint")
+            val titleEndpoint = headerNode?.optJSONObject("title")?.optJSONArray("runs")?.optJSONObject(0)?.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")
+                ?: shelf.optJSONObject("title")?.optJSONArray("runs")?.optJSONObject(0)?.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")
+            val sectionBrowseId = endpointNode?.optString("browseId").orEmpty().ifBlank { titleEndpoint?.optString("browseId").orEmpty() }
+            val sectionParams = endpointNode?.optString("params").orEmpty().ifBlank { titleEndpoint?.optString("params").orEmpty() }
+
             val contents = shelf.optJSONArray("contents") ?: shelf.optJSONArray("items") ?: JSONArray()
             val items = allItems(contents).distinctBy(CatalogItem::stableId)
-            if (items.isEmpty()) null else CatalogSection("shelf-$index-$title", title, items)
+            if (items.isEmpty()) null else CatalogSection(
+                id = "shelf-$index-$title",
+                title = title,
+                items = items,
+                browseId = sectionBrowseId,
+                params = sectionParams,
+            )
         }
         if (sections.isNotEmpty()) return sections
         val fallback = allItems(root).distinctBy(CatalogItem::stableId)

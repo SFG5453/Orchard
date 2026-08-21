@@ -253,6 +253,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         observeNetworkState()
         observeSearch()
         observeRemoteDevice()
+        observeLocalDeviceName()
         observeArtwork()
         observeDetailArtwork()
         observeLyrics()
@@ -446,6 +447,36 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
             contextTitle = contextTitle,
             shuffle = true,
         )
+    }
+
+    /**
+     * Plays all tracks from a collection (playlist, album, artist, or mix) given its id.
+     */
+    fun playCollection(id: String, contextTitle: String = "", shuffle: Boolean = false) {
+        Log.d(TAG, "playCollection: id='$id', contextTitle='$contextTitle', shuffle=$shuffle")
+        viewModelScope.launch {
+            val detail = runCatching { graph.catalog.browse(id) }.getOrNull()
+            val tracks = detail?.tracks.orEmpty().filter { it.id.isNotBlank() }
+            if (tracks.isNotEmpty()) {
+                playAll(
+                    tracks = tracks,
+                    startIndex = if (shuffle) kotlin.random.Random.Default.nextInt(tracks.size) else 0,
+                    contextTitle = contextTitle.ifBlank { detail?.title.orEmpty() },
+                    shuffle = shuffle,
+                )
+            } else {
+                showWarning("No playable tracks found")
+            }
+        }
+    }
+
+    fun playItem(item: CatalogItem, shuffle: Boolean = false) {
+        when (item) {
+            is CatalogItem.Song -> play(item.track, contextTitle = item.track.title)
+            is CatalogItem.Collection -> playCollection(item.playlist.id, contextTitle = item.title, shuffle = shuffle)
+            is CatalogItem.Record -> playCollection(item.album.id, contextTitle = item.title, shuffle = shuffle)
+            is CatalogItem.Performer -> playCollection(item.artist.id, contextTitle = item.title, shuffle = shuffle)
+        }
     }
 
     fun saveDetail(detail: BrowseDetail) {
@@ -662,6 +693,9 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun toggleManualEq(enabled: Boolean) = graph.connect.toggleManualEq(enabled)
 
     fun selectTarget(target: PlaybackTarget) {
+        if (target is PlaybackTarget.Remote) {
+            graph.connect.connectTo(target.deviceId)
+        }
         if (target == targets.value.selected || !targetCoordinator.beginTransfer(target)) {
             mutableTargets.value = targetCoordinator.state
             return
@@ -676,7 +710,30 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun pairDevice(input: String) = graph.connect.pair(input)
-    fun disconnectDevice() = graph.connect.disconnect()
+    fun disconnectDevice(deviceId: String? = null) {
+        if (deviceId != null) {
+            graph.connect.removeDevice(deviceId)
+        } else {
+            graph.connect.disconnect()
+        }
+    }
+
+    fun renameDevice(device: PlaybackDevice, newName: String) {
+        if (device.isLocal) {
+            val trimmed = newName.trim()
+            val updated = settings.value.copy(customDeviceName = trimmed)
+            graph.settings.updateSettings(updated)
+            val base = Build.MODEL.takeIf(String::isNotBlank) ?: getApplication<Application>().selfDeviceLabel()
+            val effective = trimmed.ifBlank { base }
+            targetCoordinator.updateLocalDeviceName(name = effective, customName = trimmed)
+            mutableTargets.value = targetCoordinator.state
+            party.updateDisplayName(effective)
+        } else {
+            graph.connect.renameDevice(device.id, newName.trim())
+        }
+    }
+
+    fun removeDevice(deviceId: String) = graph.connect.removeDevice(deviceId)
     fun toggleLiked(track: Track) = graph.library.toggleLiked(track)
     fun updateSettings(value: OrchardSettings) = graph.settings.updateSettings(value)
     fun beginSignIn() = graph.auth.beginSignIn()
@@ -766,9 +823,21 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     private fun observeRemoteDevice() {
         viewModelScope.launch {
-            graph.connect.device.collect { remote ->
-                targetCoordinator.updateRemoteDevices(listOfNotNull(remote))
+            graph.connect.devices.collect { remotes ->
+                targetCoordinator.updateRemoteDevices(remotes)
                 mutableTargets.value = targetCoordinator.state
+            }
+        }
+    }
+
+    private fun observeLocalDeviceName() {
+        viewModelScope.launch {
+            settings.map { it.customDeviceName }.distinctUntilChanged().collect { custom ->
+                val base = Build.MODEL.takeIf(String::isNotBlank) ?: getApplication<Application>().selfDeviceLabel()
+                val effective = custom.ifBlank { base }
+                targetCoordinator.updateLocalDeviceName(name = effective, customName = custom)
+                mutableTargets.value = targetCoordinator.state
+                party.updateDisplayName(effective)
             }
         }
     }

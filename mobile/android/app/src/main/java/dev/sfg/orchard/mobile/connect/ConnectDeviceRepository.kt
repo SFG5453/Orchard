@@ -88,6 +88,8 @@ class ConnectDeviceRepository(
     val remoteVolume: StateFlow<Float> = mutableRemoteVolume.asStateFlow()
     private val mutableSnapshot = MutableStateFlow(PlaybackSnapshot())
     val snapshot: StateFlow<PlaybackSnapshot> = mutableSnapshot.asStateFlow()
+    private val mutableDevices = MutableStateFlow<List<PlaybackDevice>>(emptyList())
+    val devices: StateFlow<List<PlaybackDevice>> = mutableDevices.asStateFlow()
     private val mutableDevice = MutableStateFlow<PlaybackDevice?>(null)
     val device: StateFlow<PlaybackDevice?> = mutableDevice.asStateFlow()
     private val mutableRemoteAnalysis = MutableStateFlow<Map<String, dev.sfg.orchard.mobile.playback.smart.TrackFeatures.Features>>(emptyMap())
@@ -98,11 +100,14 @@ class ConnectDeviceRepository(
     @Volatile private var manualDisconnect = false
     private var reconnectJob: Job? = null
     private var reconnectAttempt = 0
+    private var discoveryJob: Job? = null
+    private val discoveredUrls = mutableMapOf<String, String>()
+    private val onlineStatusCache = mutableMapOf<String, Boolean>()
     private data class PendingTransfer(val track: Track, val positionMs: Long)
     private var pendingTransfer: PendingTransfer? = null
 
     init {
-        restoreKnownDevice()
+        restoreKnownDevices()
     }
 
     fun pair(input: String) {
@@ -114,8 +119,19 @@ class ConnectDeviceRepository(
         }
         scope.launch(Dispatchers.IO) {
             runCatching {
-                val target = discovery.discover(rawServer, ConnectDiscovery.serverHost(rawServer)).ifBlank { rawServer }
-                sessionStore.saveLocation(target, ConnectDiscovery.serverHost(target))
+                val host = ConnectDiscovery.serverHost(rawServer)
+                val target = discovery.discover(rawServer, host).ifBlank { rawServer }
+                val defaultName = runCatching { URI(target).host }.getOrNull().orEmpty().ifBlank { "Orchard desktop" }
+                val pairedDevice = dev.sfg.orchard.connect.session.StoredPairedDevice(
+                    id = target,
+                    serverUrl = target,
+                    serverHost = host,
+                    deviceToken = parsed.token,
+                    defaultName = defaultName,
+                    pairedAt = System.currentTimeMillis(),
+                    lastSeenAt = System.currentTimeMillis()
+                )
+                sessionStore.saveDevice(pairedDevice)
                 target
             }.onSuccess { target ->
                 serverUrl = target
@@ -123,8 +139,51 @@ class ConnectDeviceRepository(
                 reconnectAttempt = 0
                 reconnectJob?.cancel()
                 client.connect(target, parsed.token)
-                publishDevice()
+                publishDevices()
+                refreshDiscovery()
             }.onFailure { mutableMessage.value = it.message ?: "The device could not be reached." }
+        }
+    }
+
+    fun connectTo(deviceId: String) {
+        scope.launch(Dispatchers.IO) {
+            val stored = sessionStore.loadDevices()
+            val match = stored.firstOrNull { it.id == deviceId || it.serverUrl == deviceId } ?: return@launch
+            val target = discoveredUrls[match.id]?.ifBlank { match.serverUrl } ?: match.serverUrl
+            serverUrl = target
+            manualDisconnect = false
+            reconnectAttempt = 0
+            reconnectJob?.cancel()
+            client.connect(target, match.deviceToken)
+            publishDevices()
+        }
+    }
+
+    fun renameDevice(deviceId: String, newName: String) {
+        scope.launch(Dispatchers.IO) {
+            sessionStore.updateDeviceName(deviceId, newName.trim())
+            publishDevices()
+        }
+    }
+
+    fun removeDevice(deviceId: String) {
+        scope.launch(Dispatchers.IO) {
+            val isActive = serverUrl == deviceId || mutableDevices.value.any { it.id == deviceId && it.isActive }
+            if (isActive) {
+                manualDisconnect = true
+                reconnectJob?.cancel()
+                client.disconnect()
+                serverUrl = ""
+                mutableProtocolVersion.value = 1
+                mutableAudioEngine.value = dev.sfg.orchard.connect.protocol.ConnectAudioEngine()
+                mutableRemoteVolume.value = 1.0f
+                mutableSnapshot.value = PlaybackSnapshot()
+                mutableRemoteAnalysis.value = emptyMap()
+            }
+            sessionStore.removeDevice(deviceId)
+            discoveredUrls.remove(deviceId)
+            onlineStatusCache.remove(deviceId)
+            publishDevices()
         }
     }
 
@@ -141,7 +200,9 @@ class ConnectDeviceRepository(
             mutableRemoteVolume.value = 1.0f
             mutableSnapshot.value = PlaybackSnapshot()
             mutableRemoteAnalysis.value = emptyMap()
-            publishDevice()
+            discoveredUrls.clear()
+            onlineStatusCache.clear()
+            publishDevices()
         }
     }
 
@@ -199,7 +260,7 @@ class ConnectDeviceRepository(
     override fun onStatusChanged(status: ConnectClientStatus) {
         mutableStatus.value = status
         mutableProtocolVersion.value = client.protocolVersion()
-        publishDevice()
+        publishDevices()
         when (status) {
             ConnectClientStatus.APPROVED -> {
                 reconnectAttempt = 0
@@ -274,13 +335,36 @@ class ConnectDeviceRepository(
         mutableMessage.value = error.message
     }
 
-    private fun restoreKnownDevice() {
+    private fun restoreKnownDevices() {
         scope.launch(Dispatchers.IO) {
-            runCatching { sessionStore.load() }.onSuccess { stored ->
-                serverUrl = stored.serverUrl
-                publishDevice()
-                if (serverUrl.isNotBlank()) pair(serverUrl)
-            }.onFailure { Log.w(TAG, "Known Connect device could not be restored", it) }
+            runCatching { sessionStore.loadDevices() }.onSuccess { storedList ->
+                if (storedList.isNotEmpty()) {
+                    val primary = storedList.first()
+                    serverUrl = primary.serverUrl
+                    publishDevices()
+                    if (serverUrl.isNotBlank()) {
+                        client.connect(serverUrl, primary.deviceToken)
+                    }
+                    refreshDiscovery()
+                }
+            }.onFailure { Log.w(TAG, "Known Connect devices could not be restored", it) }
+        }
+    }
+
+    private fun refreshDiscovery() {
+        discoveryJob?.cancel()
+        discoveryJob = scope.launch(Dispatchers.IO) {
+            val devices = sessionStore.loadDevices()
+            devices.forEach { dev ->
+                val resolved = runCatching { discovery.discover(dev.serverUrl, dev.serverHost) }.getOrNull().orEmpty()
+                if (resolved.isNotBlank()) {
+                    discoveredUrls[dev.id] = resolved
+                    onlineStatusCache[dev.id] = true
+                } else {
+                    onlineStatusCache[dev.id] = false
+                }
+            }
+            publishDevices()
         }
     }
 
@@ -305,23 +389,39 @@ class ConnectDeviceRepository(
         }
     }
 
-    private fun publishDevice() {
-        mutableDevice.value = serverUrl.takeIf(String::isNotBlank)?.let {
+    private fun publishDevices() {
+        val stored = sessionStore.loadDevices()
+        val mapped = stored.map { dev ->
+            val isCurrent = (dev.id == serverUrl || dev.serverUrl == serverUrl)
+            val isOnline = when {
+                isCurrent -> client.status() == ConnectClientStatus.APPROVED
+                onlineStatusCache[dev.id] == true -> true
+                else -> false
+            }
+            val devName = dev.defaultName.ifBlank {
+                runCatching { URI(dev.serverUrl).host }.getOrNull().orEmpty().ifBlank { "Orchard desktop" }
+            }
             PlaybackDevice(
-                id = it,
-                name = deviceName(),
+                id = dev.id,
+                name = devName,
+                customName = dev.customName,
                 type = DeviceType.COMPUTER,
-                availability = if (client.status() == ConnectClientStatus.APPROVED) {
-                    DeviceAvailability.ONLINE
-                } else {
-                    DeviceAvailability.OFFLINE
-                },
+                availability = if (isOnline) DeviceAvailability.ONLINE else DeviceAvailability.OFFLINE,
+                serverUrl = dev.serverUrl,
+                lastSeenAt = dev.lastSeenAt,
             )
         }
+        mutableDevices.value = mapped
+        mutableDevice.value = mapped.firstOrNull { it.id == serverUrl || it.serverUrl == serverUrl } ?: mapped.firstOrNull()
     }
 
-    private fun deviceName(): String = runCatching { URI(serverUrl).host }
-        .getOrNull().orEmpty().ifBlank { "Orchard desktop" }
+    private fun deviceName(): String {
+        val activeDev = mutableDevices.value.firstOrNull { it.id == serverUrl || it.serverUrl == serverUrl }
+        if (activeDev != null && activeDev.displayName.isNotBlank()) {
+            return activeDev.displayName
+        }
+        return runCatching { URI(serverUrl).host }.getOrNull().orEmpty().ifBlank { "Orchard desktop" }
+    }
 
     private fun ConnectSnapshot.toPlaybackSnapshot(): PlaybackSnapshot {
         val tracks = queue.map { it.toTrack() }

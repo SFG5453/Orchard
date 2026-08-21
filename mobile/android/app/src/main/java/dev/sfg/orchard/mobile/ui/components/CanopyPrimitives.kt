@@ -45,6 +45,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import dev.sfg.orchard.mobile.ui.glass.GlassTone
+import dev.sfg.orchard.mobile.ui.glass.glassFill
+import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -93,8 +96,8 @@ fun CanopyPanel(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(
-        modifier = modifier,
-        color = CanopyColors.Surface,
+        modifier = modifier.glassPane(CanopyRadius),
+        color = glassFill(CanopyColors.Surface),
         shape = CanopyRadius,
     ) {
         Column(modifier = Modifier.padding(contentPadding), content = content)
@@ -126,7 +129,7 @@ fun CanopyButton(
     primary: Boolean = false,
 ) {
     val containerColor by animateColorAsState(
-        if (primary) LocalAccent.current else CanopyColors.Surface,
+        if (primary) LocalAccent.current else glassFill(CanopyColors.Surface),
         label = "BtnBg"
     )
     val contentColor by animateColorAsState(
@@ -138,7 +141,10 @@ fun CanopyButton(
         onClick = onClick,
         color = containerColor,
         shape = CircleShape,
-        modifier = modifier.heightIn(min = 36.dp)
+        // The accent fill is the affordance on a primary button; only the quiet one is glass.
+        modifier = modifier
+            .heightIn(min = 36.dp)
+            .then(if (primary) Modifier else Modifier.glassPane(CircleShape, GlassTone.CONTROL)),
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Text(

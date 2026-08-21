@@ -61,6 +61,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.ui.glass.GlassTone
+import dev.sfg.orchard.mobile.ui.glass.glassFill
+import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -168,9 +171,9 @@ fun ArtistHero(
                 Surface(
                     onClick = { onShuffle(detail.tracks, detail.title) },
                     enabled = detail.tracks.isNotEmpty() && shuffleAvailable,
-                    color = CanopyColors.Surface,
+                    color = glassFill(CanopyColors.Surface),
                     shape = CircleShape,
-                    modifier = Modifier.size(44.dp),
+                    modifier = Modifier.size(44.dp).glassPane(CircleShape, GlassTone.CONTROL),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(Icons.Rounded.Shuffle, contentDescription = "Shuffle", tint = LocalAccent.current, modifier = Modifier.size(20.dp))
@@ -178,9 +181,9 @@ fun ArtistHero(
                 }
                 Surface(
                     onClick = { onSave(detail) },
-                    color = CanopyColors.Surface,
+                    color = glassFill(CanopyColors.Surface),
                     shape = CircleShape,
-                    modifier = Modifier.size(44.dp),
+                    modifier = Modifier.size(44.dp).glassPane(CircleShape, GlassTone.CONTROL),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(Icons.Rounded.FavoriteBorder, contentDescription = "Favorite", tint = CanopyColors.Favorite, modifier = Modifier.size(20.dp))

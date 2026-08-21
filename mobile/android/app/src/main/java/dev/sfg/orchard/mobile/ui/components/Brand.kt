@@ -35,10 +35,13 @@ import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.connect.R
 
 @Composable
-fun OrchardMark(modifier: Modifier = Modifier) {
+fun OrchardMark(
+    modifier: Modifier = Modifier,
+    contentDescription: String? = "Orchard",
+) {
     Image(
         painter = painterResource(R.drawable.ic_launcher_foreground),
-        contentDescription = null,
+        contentDescription = contentDescription,
         // The launcher layer keeps the mark inside the adaptive safe zone; in app there is no
         // mask to clear, so it is scaled back up to fill its slot.
         modifier = modifier.graphicsLayer(scaleX = 1.55f, scaleY = 1.55f),

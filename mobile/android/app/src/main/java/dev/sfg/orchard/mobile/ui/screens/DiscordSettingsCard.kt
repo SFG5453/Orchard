@@ -59,6 +59,8 @@ import coil3.compose.AsyncImage
 import dev.sfg.orchard.mobile.discord.DiscordAuthState
 import dev.sfg.orchard.mobile.discord.GatewayConnectionState
 import dev.sfg.orchard.mobile.model.OrchardSettings
+import dev.sfg.orchard.mobile.ui.glass.glassFill
+import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -74,10 +76,11 @@ fun DiscordSettingsCard(
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(20.dp)
     Surface(
-        color = CanopyColors.Surface,
-        shape = RoundedCornerShape(20.dp),
-        modifier = Modifier.fillMaxWidth(),
+        color = glassFill(CanopyColors.Surface),
+        shape = shape,
+        modifier = Modifier.fillMaxWidth().glassPane(shape),
     ) {
         Column(Modifier.padding(16.dp)) {
             when (discordAuth) {

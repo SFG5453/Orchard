@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.auth.SUPABASE_SYNC_DISCLAIMER
 import dev.sfg.orchard.mobile.auth.SupabaseSyncService
+import dev.sfg.orchard.mobile.ui.glass.glassFill
+import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import kotlinx.coroutines.launch
@@ -80,10 +82,11 @@ fun OrchardAccountSettingsCard() {
     var userEmail by remember { mutableStateOf(syncService.userEmail) }
     val isAuthenticated = userEmail.isNotBlank()
 
+    val shape = RoundedCornerShape(20.dp)
     Surface(
-        color = CanopyColors.Surface,
-        shape = RoundedCornerShape(20.dp),
-        modifier = Modifier.fillMaxWidth(),
+        color = glassFill(CanopyColors.Surface),
+        shape = shape,
+        modifier = Modifier.fillMaxWidth().glassPane(shape),
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(

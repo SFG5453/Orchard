@@ -56,6 +56,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                     .getOrDefault(AudioQuality.HIGH),
                 useSystemColors = values[SYSTEM_COLORS] ?: false,
                 animatedBackground = values[ANIMATED_BACKGROUND] ?: false,
+                frostedGlass = values[FROSTED_GLASS] ?: false,
                 crossfadeEnabled = values[CROSSFADE_ENABLED] ?: false,
                 crossfadeSeconds = values[CROSSFADE_SECONDS] ?: OrchardSettings.DEFAULT_CROSSFADE_SECONDS,
                 smartCrossfade = values[SMART_CROSSFADE] ?: false,
@@ -78,6 +79,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 playerGesturesEnabled = values[PLAYER_GESTURES_ENABLED] ?: true,
                 homeLayoutOnline = decodeHomeLayout(values[HOME_LAYOUT_ONLINE], true),
                 homeLayoutOffline = decodeHomeLayout(values[HOME_LAYOUT_OFFLINE], false),
+                customDeviceName = values[CUSTOM_DEVICE_NAME] ?: "",
             )
         }
         .stateIn(scope, SharingStarted.Eagerly, OrchardSettings())
@@ -94,6 +96,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[AUDIO_QUALITY] = value.audioQuality.name
                 it[SYSTEM_COLORS] = value.useSystemColors
                 it[ANIMATED_BACKGROUND] = value.animatedBackground
+                it[FROSTED_GLASS] = value.frostedGlass
                 it[CROSSFADE_ENABLED] = value.crossfadeEnabled
                 it[CROSSFADE_SECONDS] = value.crossfadeSeconds
                 it[SMART_CROSSFADE] = value.smartCrossfade
@@ -114,6 +117,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[PLAYER_GESTURES_ENABLED] = value.playerGesturesEnabled
                 it[HOME_LAYOUT_ONLINE] = encodeHomeLayout(value.homeLayoutOnline)
                 it[HOME_LAYOUT_OFFLINE] = encodeHomeLayout(value.homeLayoutOffline)
+                it[CUSTOM_DEVICE_NAME] = value.customDeviceName
             }
         }
     }
@@ -184,6 +188,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val AUDIO_QUALITY = stringPreferencesKey("audio_quality")
         val SYSTEM_COLORS = booleanPreferencesKey("system_colors")
         val ANIMATED_BACKGROUND = booleanPreferencesKey("animated_background")
+        val FROSTED_GLASS = booleanPreferencesKey("frosted_glass")
         val CROSSFADE_ENABLED = booleanPreferencesKey("crossfade_enabled")
         val CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
         val SMART_CROSSFADE = booleanPreferencesKey("smart_crossfade")
@@ -205,5 +210,6 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val PLAYER_GESTURES_ENABLED = booleanPreferencesKey("player_gestures_enabled")
         val HOME_LAYOUT_ONLINE = stringPreferencesKey("home_layout_online")
         val HOME_LAYOUT_OFFLINE = stringPreferencesKey("home_layout_offline")
+        val CUSTOM_DEVICE_NAME = stringPreferencesKey("custom_device_name")
     }
 }

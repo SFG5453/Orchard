@@ -59,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.spotify.SpotifyCanvasRepository
+import dev.sfg.orchard.mobile.ui.glass.glassFill
+import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -73,10 +75,11 @@ fun SpotifySettingsCard(
     var showSpdcDialog by remember { mutableStateOf(false) }
     val isConnected = settings.spotifySpdc.isNotBlank()
 
+    val shape = RoundedCornerShape(20.dp)
     Surface(
-        color = CanopyColors.Surface,
-        shape = RoundedCornerShape(20.dp),
-        modifier = Modifier.fillMaxWidth(),
+        color = glassFill(CanopyColors.Surface),
+        shape = shape,
+        modifier = Modifier.fillMaxWidth().glassPane(shape),
     ) {
         Column(Modifier.padding(16.dp)) {
             if (isConnected) {

@@ -67,6 +67,9 @@ import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.model.Album
 import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.ui.glass.GlassTone
+import dev.sfg.orchard.mobile.ui.glass.glassFill
+import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -100,9 +103,9 @@ fun OrchardSectionHeader(
         if (action != null && onAction != null) {
             Surface(
                 onClick = onAction,
-                color = CanopyColors.Surface,
+                color = glassFill(CanopyColors.Surface),
                 shape = CircleShape,
-                modifier = Modifier.height(32.dp),
+                modifier = Modifier.height(32.dp).glassPane(CircleShape, GlassTone.CONTROL),
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
                     Text(
@@ -453,7 +456,7 @@ fun <T> OrchardFilterChips(
             val option = options[index]
             val isSelected = option == selected
             val containerColor by animateColorAsState(
-                if (isSelected) LocalAccent.current else CanopyColors.Surface,
+                if (isSelected) LocalAccent.current else glassFill(CanopyColors.Surface),
                 label = "ChipBg"
             )
             val textColor by animateColorAsState(
@@ -465,7 +468,13 @@ fun <T> OrchardFilterChips(
                 onClick = { onSelect(option) },
                 shape = CircleShape,
                 color = containerColor,
-                modifier = Modifier.height(34.dp)
+                // The selected chip is a solid accent fill, which is what makes it selected.
+                modifier = Modifier
+                    .height(34.dp)
+                    .then(
+                        if (isSelected) Modifier
+                        else Modifier.glassPane(CircleShape, GlassTone.CONTROL),
+                    ),
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 16.dp)) {
                     Text(
@@ -481,12 +490,14 @@ fun <T> OrchardFilterChips(
 
 @Composable
 fun MessagePanel(title: String, message: String, actionLabel: String? = null, onAction: (() -> Unit)? = null) {
+    val shape = RoundedCornerShape(16.dp)
     Surface(
-        color = CanopyColors.Surface,
-        shape = RoundedCornerShape(16.dp),
+        color = glassFill(CanopyColors.Surface),
+        shape = shape,
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp)
+            .glassPane(shape)
     ) {
         Column(Modifier.padding(20.dp)) {
             Text(title, style = MaterialTheme.typography.titleLarge, color = CanopyColors.Text)

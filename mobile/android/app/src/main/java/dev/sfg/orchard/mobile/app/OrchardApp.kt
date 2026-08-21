@@ -25,8 +25,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.zIndex
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,7 +59,14 @@ import dev.sfg.orchard.mobile.ui.components.CanopyReadout
 import dev.sfg.orchard.mobile.ui.components.OrchardBottomBar
 import dev.sfg.orchard.mobile.ui.components.PlaylistPickerSheet
 import dev.sfg.orchard.mobile.ui.components.SongShareBottomSheet
+import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.transitionPresentation
+import dev.sfg.orchard.mobile.ui.glass.LocalGlass
+import dev.sfg.orchard.mobile.ui.glass.LocalGlassScene
+import dev.sfg.orchard.mobile.ui.glass.glassSceneSource
+import dev.sfg.orchard.mobile.ui.glass.glassWashSource
+import dev.sfg.orchard.mobile.ui.glass.rememberGlassScene
+import dev.sfg.orchard.mobile.ui.glass.rememberGlassStyle
 import dev.sfg.orchard.mobile.ui.navigation.Routes
 import dev.sfg.orchard.mobile.ui.screens.DetailScreen
 import dev.sfg.orchard.mobile.ui.screens.DevicesScreen
@@ -102,90 +112,115 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     // Outlives the player so the cover can fly on the way in as well as on the way out.
     var playerCoverBounds by remember { mutableStateOf<Rect?>(null) }
 
-    val chromeHidden = route == Routes.DEVICES || route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME
+    val chromeHidden = (route == Routes.DEVICES && !settings.frostedGlass) || route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME
     // Collection artwork runs under the status bar, so these screens take no top inset and
     // apply it themselves where the content actually needs it.
     val artworkUnderStatusBar = route == Routes.DETAIL
 
-    Scaffold(
-        // Transparent so the artwork wash below shows through every screen.
-        containerColor = Color.Transparent,
-    ) { padding ->
-        ArtworkBackdrop(
-            artworkUrl = playerPlayback.currentTrack?.artworkUrl.orEmpty(),
-            animated = settings.animatedBackground,
-        )
+    // Sampled once here and handed to both the wash and the glass panes, so the cover the app is
+    // tinted by and the cover its panes are tinted by can never disagree.
+    val backdropPalette = rememberArtworkPalette(playerPlayback.currentTrack?.artworkUrl.orEmpty())
+    val glassTint = animateColorAsState(
+        targetValue = backdropPalette.accent,
+        animationSpec = tween(900),
+        label = "GlassTint",
+    )
+    val glass = rememberGlassStyle(settings.frostedGlass, glassTint)
+    // Only exists while the treatment is on: with it off there is nothing to record, and the two
+    // layers should not be allocated at all.
+    val glassScene = if (settings.frostedGlass) rememberGlassScene() else null
 
-        Box(Modifier.fillMaxSize()) {
-            Box(
-                if (artworkUnderStatusBar) {
-                    Modifier.padding(bottom = padding.calculateBottomPadding())
-                } else {
-                    Modifier.padding(padding)
-                },
-            ) {
-    OrchardNavigation(navController, viewModel, playback, targets, library, settings)
+    CompositionLocalProvider(LocalGlass provides glass, LocalGlassScene provides glassScene) {
+        Scaffold(
+            // Transparent so the artwork wash below shows through every screen.
+            containerColor = Color.Transparent,
+        ) { padding ->
+            // Collection artwork runs under the status bar, so those screens take no top inset.
+            val contentInset = if (artworkUnderStatusBar) {
+                Modifier.padding(bottom = padding.calculateBottomPadding())
+            } else {
+                Modifier.padding(padding)
+            }
 
-                if (!chromeHidden) {
-                    Column(modifier = Modifier.align(Alignment.BottomCenter)) {
-                        CanopyReadout(
-                            playback = playerPlayback,
-                            transition = playerMarker,
-                            mixProgress = playerPresentation.progress,
-                            modifier = Modifier.onGloballyPositioned { readoutBounds = it.boundsInRoot() },
-                            onArtworkBounds = { readoutArtworkBounds = it },
-                            onOpen = { playerOpen = true },
-                            onToggle = viewModel::togglePlayback,
-                            onNext = viewModel::next,
-                            onPrevious = viewModel::previous,
-                        )
-                        OrchardBottomBar(route) { navController.openTopLevel(it) }
-                    }
+            // Everything the chrome floats over is recorded here, and only here. A pane cannot
+            // blur a recording it is itself part of, which is why the pill and the bar were
+            // lifted out of this box and into the overlay below.
+            Box(Modifier.fillMaxSize().glassSceneSource(glassScene)) {
+                ArtworkBackdrop(
+                    palette = backdropPalette,
+                    animated = settings.animatedBackground,
+                    rich = settings.frostedGlass,
+                    modifier = Modifier.glassWashSource(glassScene),
+                )
+
+                Box(Modifier.fillMaxSize().then(contentInset)) {
+                    OrchardNavigation(navController, viewModel, playback, targets, library, settings)
                 }
             }
 
-            // Sibling of the padded content rather than a child of it: the player is
-            // edge-to-edge and draws its own insets, and it has to paint over the pill
-            // it collapses into.
-            NowPlayingOverlay(
-                open = playerOpen,
-                onOpenChange = { playerOpen = it },
-                collapseBounds = readoutBounds,
-                collapseArtworkBounds = readoutArtworkBounds,
-                restingCoverBounds = playerCoverBounds,
-                onRestingCoverBounds = { playerCoverBounds = it },
-                nav = navController,
-                viewModel = viewModel,
-                playback = playerPlayback,
-                transition = playerMarker,
-                mixProgress = playerPresentation.progress,
-                targets = targets,
-                library = library,
-                settings = settings,
-                modifier = Modifier.zIndex(50f),
-            )
+            Box(Modifier.fillMaxSize()) {
+                if (!chromeHidden) {
+                    Box(Modifier.fillMaxSize().then(contentInset)) {
+                        Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+                            CanopyReadout(
+                                playback = playerPlayback,
+                                transition = playerMarker,
+                                mixProgress = playerPresentation.progress,
+                                modifier = Modifier.onGloballyPositioned { readoutBounds = it.boundsInRoot() },
+                                onArtworkBounds = { readoutArtworkBounds = it },
+                                onOpen = { playerOpen = true },
+                                onToggle = viewModel::togglePlayback,
+                                onNext = viewModel::next,
+                                onPrevious = viewModel::previous,
+                            )
+                            OrchardBottomBar(route) { navController.openTopLevel(it) }
+                        }
+                    }
+                }
 
-            dev.sfg.orchard.mobile.ui.components.WarningBanner(
-                message = warning,
-                onDismiss = viewModel::dismissWarning,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .zIndex(100f),
-            )
+                // Sibling of the padded content rather than a child of it: the player is
+                // edge-to-edge and draws its own insets, and it has to paint over the pill
+                // it collapses into.
+                NowPlayingOverlay(
+                    open = playerOpen,
+                    onOpenChange = { playerOpen = it },
+                    collapseBounds = readoutBounds,
+                    collapseArtworkBounds = readoutArtworkBounds,
+                    restingCoverBounds = playerCoverBounds,
+                    onRestingCoverBounds = { playerCoverBounds = it },
+                    nav = navController,
+                    viewModel = viewModel,
+                    playback = playerPlayback,
+                    transition = playerMarker,
+                    mixProgress = playerPresentation.progress,
+                    targets = targets,
+                    library = library,
+                    settings = settings,
+                    modifier = Modifier.zIndex(50f),
+                )
 
-            dev.sfg.orchard.mobile.ui.components.UpdateDialog(
-                state = updateState,
-                onInstall = viewModel::installUpdate,
-                onDismiss = viewModel::dismissUpdate,
+                dev.sfg.orchard.mobile.ui.components.WarningBanner(
+                    message = warning,
+                    onDismiss = viewModel::dismissWarning,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .zIndex(100f),
+                )
+
+                dev.sfg.orchard.mobile.ui.components.UpdateDialog(
+                    state = updateState,
+                    onInstall = viewModel::installUpdate,
+                    onDismiss = viewModel::dismissUpdate,
+                )
+            }
+        }
+
+        shareState?.let { state ->
+            SongShareBottomSheet(
+                state = state,
+                onDismiss = viewModel::dismissShare,
             )
         }
-    }
-
-    shareState?.let { state ->
-        SongShareBottomSheet(
-            state = state,
-            onDismiss = viewModel::dismissShare,
-        )
     }
 }
 
@@ -280,6 +315,10 @@ private fun OrchardNavigation(
                 onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
                 onAddToPlaylist = { playlistPickerTrack = it },
                 onShare = viewModel::shareTrack,
+                onOpenProfile = { nav.openTopLevel(Routes.SETTINGS) },
+                onFetchSectionItems = viewModel::fetchSectionItems,
+                onPlayItem = viewModel::playItem,
+                onPlayCollection = { id, title -> viewModel.playCollection(id, title) },
             )
         }
         composable(Routes.SEARCH) {
@@ -468,6 +507,8 @@ private fun OrchardNavigation(
                 onCreateParty = { viewModel.createListeningParty() },
                 onJoinParty = { viewModel.joinListeningParty(it) },
                 onLeaveParty = viewModel::leaveListeningParty,
+                onRenameDevice = viewModel::renameDevice,
+                onRemoveDevice = viewModel::removeDevice,
             )
         }
     }
