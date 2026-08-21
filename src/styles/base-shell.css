@@ -57,7 +57,7 @@ input {
 }
 
 .app-shell {
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg);
 }
 
@@ -441,7 +441,7 @@ input {
 }
 
 .page {
-  min-height: calc(100vh - 94px);
+  min-height: calc(100dvh - 94px);
   padding: 22px 24px 116px;
 }
 

@@ -188,7 +188,16 @@ export function installState(ctx) {
   ctx.socket = ref(null);
   ctx.viewportWidth = ref(typeof window === 'undefined' ? 1220 : window.innerWidth);
   ctx.syncViewportSize = function syncViewportSize() {
-    ctx.viewportWidth.value = typeof window === 'undefined' ? 1220 : window.innerWidth;
+    const wasDesktopPanel = ctx.viewportWidth.value >= 1281;
+    const nextWidth = typeof window === 'undefined' ? 1220 : window.innerWidth;
+    ctx.viewportWidth.value = nextWidth;
+
+    // `rightPanelOpen` tracks only the dismissible narrow-screen overlay. The
+    // desktop drawer is derived from viewport width, so Quasar cannot race the
+    // resize handler and leave it permanently closed after a breakpoint jump.
+    if (wasDesktopPanel && nextWidth < 1281 && ctx.rightPanelOpen?.value) {
+      ctx.rightPanelOpen.value = false;
+    }
   };
   ctx.orchardConnect = ref({
     status: 'idle',
@@ -242,16 +251,27 @@ export function installState(ctx) {
   ctx.smartCrossfadeMixSequence = 0;
   ctx.compactWindow = ref(false);
   ctx.rightPanelMode = ref('queue');
+  ctx.rightPanelOpen = ref(false);
+  ctx.openRightPanel = function openRightPanel(mode = 'queue') {
+    ctx.rightPanelMode.value = mode;
+    ctx.rightPanelOpen.value = true;
+  };
+  ctx.closeRightPanel = function closeRightPanel() {
+    ctx.rightPanelOpen.value = false;
+  };
   ctx.narrowWindow = computed(() => ctx.viewportWidth.value < 1180 && !ctx.compactWindow.value);
   ctx.sidebarMini = computed(() => ctx.viewportWidth.value < 900 && !ctx.compactWindow.value);
   ctx.sidebarWidth = computed(() => {
     if (ctx.sidebarMini.value) return 68;
     return ctx.viewportWidth.value < 1180 ? 216 : 232;
   });
-  ctx.rightPanelWidth = computed(() => 288);
+  ctx.rightPanelWidth = computed(() => Math.min(288, Math.max(240, ctx.viewportWidth.value - 24)));
   ctx.rightPanelMounted = computed(() => (
     !ctx.compactWindow.value &&
-    !['settings', 'support'].includes(ctx.activeView.value)
+    (
+      !['settings', 'support'].includes(ctx.activeView.value) ||
+      (ctx.viewportWidth.value < 1281 && ctx.rightPanelOpen.value)
+    )
   ));
   ctx.rightPanelVisible = computed(() => (
     ctx.viewportWidth.value >= 1281 &&

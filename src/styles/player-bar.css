@@ -428,3 +428,142 @@
 .app-shell--compact-window .player-fullscreen-button {
   display: none;
 }
+
+/* The desktop drawer is permanently visible at this size, so duplicate entry
+   points in the transport only add noise. They become the way back into queue
+   and lyrics as soon as the drawer changes into a responsive overlay. */
+.player-right-panel-button {
+  display: none;
+}
+
+.app-shell--right-panel-hidden .player-right-panel-button {
+  display: inline-flex;
+}
+
+/* A narrow player should remain a transport, not turn into a three-storey card.
+   Track and utility controls share the first row and the transport gets the
+   second. This keeps the page usable at the 760x620 case reported in #85. */
+@media (max-width: 900px) {
+  .player-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+  }
+
+  .player-section--left {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .player-section--center {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .player-section--right {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .right-top-row {
+    display: none;
+  }
+
+  .right-bottom-row {
+    flex: 0 0 auto;
+  }
+
+  .player-section--right .volume-wrap,
+  .player-sleep-timer-button {
+    display: none;
+  }
+
+  .mini-album-row,
+  .quality-pills-row {
+    display: none;
+  }
+}
+
+/* Short, narrow windows need one compact control row plus the seek bar. UI
+   zoom changes the CSS viewport too, so this also covers high display scaling. */
+@media (max-width: 900px) and (max-height: 700px) {
+  .player-bar {
+    grid-template-columns: minmax(96px, 1fr) auto auto;
+    grid-template-rows: 48px 28px;
+    gap: 2px 8px;
+    padding: 6px 10px;
+    border-radius: 12px;
+  }
+
+  .player-section--left {
+    min-width: 0;
+  }
+
+  .player-section--center {
+    display: contents;
+  }
+
+  .transport-buttons {
+    width: auto;
+    grid-column: 2;
+    grid-row: 1;
+    gap: 3px;
+  }
+
+  .progress-wrap {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    gap: 6px;
+  }
+
+  .player-section--right {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .player-section--right .player-fullscreen-button,
+  .player-section--right .settings-menu-btn {
+    display: none;
+  }
+
+  .player-control--play {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .mini-cover-button,
+  .mini-cover {
+    width: 38px;
+    height: 38px;
+  }
+
+  .track-action-btn,
+  .player-track__title-row .explicit-badge {
+    display: none;
+  }
+
+  .progress-time {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 560px) {
+  .player-bar {
+    left: 6px !important;
+    right: 6px !important;
+    bottom: 6px;
+  }
+
+  .player-control--secondary:not(.player-right-panel-button),
+  .settings-menu-btn {
+    display: none;
+  }
+
+  .mini-title {
+    max-width: 100%;
+  }
+}

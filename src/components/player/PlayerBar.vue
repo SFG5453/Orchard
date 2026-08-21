@@ -389,6 +389,29 @@ export default {
           @click="openSleepTimerSettings"
         />
 
+        <q-btn
+          flat
+          round
+          dense
+          class="player-control player-control--secondary player-right-panel-button"
+          icon="queue_music"
+          title="Queue"
+          aria-label="Open queue panel"
+          @click="openRightPanel('queue')"
+        />
+
+        <q-btn
+          flat
+          round
+          dense
+          class="player-control player-control--secondary player-right-panel-button"
+          icon="lyrics"
+          title="Lyrics"
+          aria-label="Open lyrics panel"
+          :disable="!activeTrack"
+          @click="openRightPanel('lyrics')"
+        />
+
         <!-- Settings Button (opens the NEW compact settings menu) -->
         <q-btn
           flat

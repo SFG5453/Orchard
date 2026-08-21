@@ -27,13 +27,33 @@ export default {
   setup(props) {
     // The queue list takes the whole app rather than the spread, because it
     // windows the list itself and needs the live refs, not their snapshots.
-    return { ...props.app, app: props.app };
+    function onDrawerVisibilityChange(open) {
+      // Above the breakpoint the drawer is part of the layout and must remain
+      // visible. Only persist dismissals while it is acting as an overlay.
+      if (props.app.viewportWidth.value < 1281) {
+        props.app.rightPanelOpen.value = open;
+      }
+    }
+
+    return { ...props.app, app: props.app, onDrawerVisibilityChange };
   }
 };
 </script>
 
 <template>
-    <q-drawer side="right" show-if-above :width="rightPanelWidth" :breakpoint="1280" class="lyrics-sidebar" :style="playerBarStyle">
+    <q-drawer
+      :key="viewportWidth >= 1281 ? 'right-panel-desktop' : 'right-panel-overlay'"
+      :model-value="viewportWidth >= 1281 ? true : rightPanelOpen"
+      side="right"
+      :behavior="viewportWidth >= 1281 ? 'desktop' : 'mobile'"
+      :show-if-above="viewportWidth >= 1281"
+      :overlay="viewportWidth < 1281"
+      :width="rightPanelWidth"
+      :breakpoint="1280"
+      class="lyrics-sidebar"
+      :style="playerBarStyle"
+      @update:model-value="onDrawerVisibilityChange"
+    >
       <div class="lyrics-sidebar__inner">
         <div class="right-panel-toolbar" aria-label="Right panel controls">
           <strong class="right-panel-toolbar__title">
@@ -64,9 +84,18 @@ export default {
               type="button"
               aria-label="Open settings"
               title="Settings"
-              @click="selectView('settings')"
+              @click="closeRightPanel(); selectView('settings')"
             >
               <q-icon name="more_horiz" />
+            </button>
+            <button
+              v-if="viewportWidth < 1281"
+              type="button"
+              aria-label="Close now playing panel"
+              title="Close"
+              @click="closeRightPanel"
+            >
+              <q-icon name="close" />
             </button>
           </div>
         </div>

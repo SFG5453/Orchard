@@ -19,7 +19,7 @@
 
 .fullscreen-player__queue {
   display: grid;
-  max-height: min(62vh, 600px);
+  max-height: min(62dvh, 600px);
   grid-template-rows: auto minmax(0, 1fr) auto;
   align-self: center;
   overflow: hidden;

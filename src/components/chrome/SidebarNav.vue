@@ -120,6 +120,27 @@ export default {
           <button type="button" class="sidebar-mini__button" :class="{ 'sidebar-mini__button--active': activeView === 'podcasts' }" title="Podcasts" aria-label="Podcasts" :disabled="!authState.signedIn" @click="loadPodcasts()">
             <q-icon name="podcasts" />
           </button>
+          <button
+            type="button"
+            class="sidebar-mini__button"
+            :class="{ 'sidebar-mini__button--active': rightPanelOpen && rightPanelMode === 'queue' }"
+            title="Queue"
+            aria-label="Open queue panel"
+            @click="openRightPanel('queue')"
+          >
+            <q-icon name="queue_music" />
+          </button>
+          <button
+            type="button"
+            class="sidebar-mini__button"
+            :class="{ 'sidebar-mini__button--active': rightPanelOpen && rightPanelMode === 'lyrics' }"
+            title="Lyrics"
+            aria-label="Open lyrics panel"
+            :disabled="!activeTrack"
+            @click="openRightPanel('lyrics')"
+          >
+            <q-icon name="lyrics" />
+          </button>
           <span class="sidebar-mini__spacer" />
           <button type="button" class="sidebar-mini__button" :class="{ 'sidebar-mini__button--active': activeView === 'support' }" title="Support" aria-label="Support" @click="selectView('support')">
             <q-icon name="support_agent" />

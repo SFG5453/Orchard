@@ -285,6 +285,29 @@ export default {
         @click="openFullscreenPlayer"
       />
 
+      <q-btn
+        flat
+        round
+        dense
+        icon="queue_music"
+        class="canopy-bar__button player-right-panel-button"
+        title="Queue"
+        aria-label="Open queue panel"
+        @click="openRightPanel('queue')"
+      />
+
+      <q-btn
+        flat
+        round
+        dense
+        icon="lyrics"
+        class="canopy-bar__button player-right-panel-button"
+        :disable="!activeTrack"
+        title="Lyrics"
+        aria-label="Open lyrics panel"
+        @click="openRightPanel('lyrics')"
+      />
+
       <!-- Everything the bottom bar used to hold that does not earn a permanent slot. -->
       <q-btn flat round dense icon="tune" class="canopy-bar__button" title="Playback options" aria-label="Playback options">
         <q-menu dark anchor="bottom right" self="top right" class="player-popup-menu canopy-overflow-menu">
