@@ -1,7 +1,12 @@
-## Orchard Mobile 1.8.0 "Distension Conceal"
+## Orchard Mobile 2.0.0-beta.1 "Aerie Hymned"
 
 ### Added
-- **Listening Parties**: Join and host real-time listening parties directly from your Android device. Includes room creation, join codes, participant roster in Devices, WebRTC/WebSocket sync with automatic drift correction, and remote playback control.
+- **Frosted Glass UI**: Redesigned modern frosted glass theme with immersive background blurs, animated artwork backdrops, enhanced player chrome, and updated screens across Home, Devices, and Settings. Design enhancements contributed by Julian-FF2000.
+- **Beta Channel**: Opt in to receive beta builds directly from GitHub releases with prerelease semver update checks and release notes.
+
+### Changed
+- Unified upper and bass frequency bands into a single constant-power crossfade curve in the DJ mixing engine.
 
 ### Maintenance
-- Updated OkHttp to 5.5.0 and added WebRTC SDK with version 144.7559.12 with release ProGuard rules for WebSocket and JNI reflection.
+- Updated ONNX Runtime to 1.29.0 and markdown library to 0.7.9.
+

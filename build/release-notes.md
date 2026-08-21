@@ -1,7 +1,11 @@
-## Orchard 4.7.1 "Distension Conceal"
+## Orchard 5.0.0-beta.1 "Aerie Hymned"
+
+### New & improved
+- **Native Transition Engine**: Integrated the `earmark` transition engine via a native N-API Rust module (`native-audio-rust`), bringing high-performance beat grid alignment, energy and loudness analysis, and constraint-based DJ transition planning to desktop crossfades.
 
 ### Fixed
-- **Listening Party Song Restart Loop**: Prevented party guests connected to an Android host from entering an endless song restart loop caused by differences in track payload properties.
+- **Beta Channel Updates**: Update checks on the beta channel now gracefully handle missing release manifests, reporting when Orchard is up to date or reminding you when the corresponding stable version has released so you can switch to the release channel.
 
 ### Maintenance
-- `hls.js` is updated to 1.7.1.
+- Updated Vite to 8.2.2 and `sass-embedded` to 1.103.1.
+

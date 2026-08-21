@@ -15,9 +15,9 @@ android {
         applicationId = 'dev.sfg.orchard.mobile'
         minSdk = 31
         targetSdk = 36
-        versionCode = 10800
-        versionName = '1.8.0'
-        buildConfigField 'String', 'CODENAME', '"Distension Conceal"'
+        versionCode = 20000
+        versionName = '2.0.0-beta.1'
+        buildConfigField 'String', 'CODENAME', '"Aerie Hymned"'
         // Only the build that is actually published may offer updates. Every other
         // build has its own applicationId, so the published APK is neither an
         // upgrade nor installable over it.
@@ -157,7 +157,7 @@ dependencies {
     // The full package rather than onnxruntime-mobile: mobile only loads .ort
     // files, which would put an offline conversion step between every model and
     // the app for a saving that does not matter in a self-distributed APK.
-    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.28.0'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.29.0'
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20260719'
