@@ -25,7 +25,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
 import { createArtistPackService, readOfficialPackArchive } from './artistPackService.js';
-import { updateErrorMessage } from './updateErrors.js';
+import { resolveBetaUpdateCheckFallback, updateErrorMessage } from './updateErrors.js';
 
 const require = createRequire(import.meta.url);
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
@@ -303,6 +303,28 @@ export function setupOrchardUpdates({ isDev }) {
     });
   }
 
+  function handleUpdateError(error) {
+    if (state.channel === 'beta') {
+      const fallback = resolveBetaUpdateCheckFallback(error, state.version);
+      if (fallback) {
+        return publish({
+          status: 'current',
+          message: fallback.message,
+          availableVersion: fallback.availableVersion,
+          error: '',
+          progress: null
+        });
+      }
+    }
+
+    return publish({
+      status: 'error',
+      message: 'Update check failed.',
+      error: updateErrorMessage(error),
+      progress: null
+    });
+  }
+
   let channelReady = enabled
     ? readUpdateChannel().then((channel) => {
       state = { ...state, channel };
@@ -318,12 +340,7 @@ export function setupOrchardUpdates({ isDev }) {
     checkPromise = channelReady
       .then(() => autoUpdater.checkForUpdates())
       .then(() => state)
-      .catch((error) => publish({
-        status: 'error',
-        message: 'Update check failed.',
-        error: updateErrorMessage(error),
-        progress: null
-      }))
+      .catch((error) => handleUpdateError(error))
       .finally(() => {
         checkPromise = null;
       });
@@ -524,12 +541,7 @@ export function setupOrchardUpdates({ isDev }) {
   });
 
   autoUpdater.on('error', (error) => {
-    publish({
-      status: 'error',
-      message: 'Update check failed.',
-      error: updateErrorMessage(error),
-      progress: null
-    });
+    handleUpdateError(error);
   });
 
   return {

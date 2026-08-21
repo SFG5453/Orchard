@@ -132,7 +132,7 @@ class OrchardGraph(context: Context) {
         warningEvent.tryEmit(message)
     }
 
-    val updates = UpdateManager(context)
+    val updates = UpdateManager(context) { settings.settings.value.betaChannelEnabled }
 
     init {
         applicationScope.launch { auth.restore() }

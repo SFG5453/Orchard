@@ -123,6 +123,8 @@ data class OrchardSettings(
     ),
     /** Whether to show full-bleed artwork on the Now Playing screen. */
     val fullBleedArtworkEnabled: Boolean = true,
+    /** Whether to receive beta builds from GitHub releases. */
+    val betaChannelEnabled: Boolean = false,
 ) {
     /** Clamped, because a persisted value from an older build must not size the cache absurdly. */
     val cacheSizeBytes: Long
