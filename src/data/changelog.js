@@ -19,6 +19,19 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '4.7.2',
+    codename: 'Clause Zamenhof',
+    date: 'August 20, 2026',
+    sections: [
+      {
+        title: 'Fixed',
+        items: [
+          'Beta channel update checks now gracefully handle missing release manifests, reporting when Orchard is up to date or reminding you when the corresponding stable version has released so you can switch to the release channel.'
+        ]
+      }
+    ]
+  },
+  {
     version: '4.7.1',
     codename: 'Distension Conceal',
     date: 'August 19, 2026',

@@ -1,7 +1,9 @@
-## Orchard Mobile 1.8.0 "Distension Conceal"
+## Orchard Mobile 1.9.0 "Rustic Bipedal"
 
 ### Added
-- **Listening Parties**: Join and host real-time listening parties directly from your Android device. Includes room creation, join codes, participant roster in Devices, WebRTC/WebSocket sync with automatic drift correction, and remote playback control.
+- **Beta Channel**: Opt in to receive beta builds directly from GitHub releases with prerelease semver update checks and release notes.
 
 ### Maintenance
-- Updated OkHttp to 5.5.0 and added WebRTC SDK with version 144.7559.12 with release ProGuard rules for WebSocket and JNI reflection.
+- Updated markdown library to 0.7.9.
+
+
