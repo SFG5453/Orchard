@@ -1,0 +1,25 @@
+[package]
+name = "orchard-audio-transition"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# dyn-symbols resolves every napi_* symbol at runtime via the host executable
+# rather than linking an import library. It is on by default, but we turn the
+# defaults off, so it has to be named explicitly -- without it the Windows link
+# fails on undefined napi symbols, since Electron ships no import lib to link.
+napi = { version = "3.12.1", default-features = false, features = ["napi4", "dyn-symbols"] }
+napi-derive = "3.6.3"
+earmark = { path = "vendor/earmark" }
+
+[build-dependencies]
+napi-build = "2.4.1"
+
+[profile.release]
+lto = true
+strip = true

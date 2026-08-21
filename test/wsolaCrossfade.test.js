@@ -180,7 +180,7 @@ test('only uses raw rendered PCM when per-source processing is flat', () => {
   }), true);
 });
 
-test('prepare slices both tracks and forwards the plan to the native bridge', async () => {
+test('prepare slices around the anchors and constrains the engine to them', async () => {
   const analyzer = fakeAnalyzer();
   const rendered = [];
   const engine = createWsolaCrossfade({
@@ -188,12 +188,22 @@ test('prepare slices both tracks and forwards the plan to the native bridge', as
     bridge: {
       renderTransition: async (outgoing, incoming, options) => {
         rendered.push({ outgoing, incoming, options });
+        // Answer with a transition the constraints would admit: ending exactly
+        // on each anchor, expressed on the slice timeline the engine was given.
         return {
           rendered: true,
           rejected: '',
+          strategy: 'bass swap',
+          summary: '',
+          beats: 16,
+          duration: 7.6,
           stretchRatio: 1,
           bpm: 126,
-          sampleRate: options.sampleRate,
+          sampleRate: outgoing.sampleRate,
+          outgoingStart: options.outgoing.endEarliest + 1 - 7.6,
+          incomingStart: options.incoming.endEarliest + 1 - 7.6,
+          outgoingResume: options.outgoing.endEarliest + 1,
+          incomingResume: options.incoming.endEarliest + 1,
           channels: [new Float32Array(1000), new Float32Array(1000)]
         };
       }
@@ -202,8 +212,9 @@ test('prepare slices both tracks and forwards the plan to the native bridge', as
 
   const plan = {
     ...readyPlan({ transitionStart: 40 }),
-    outgoingSlice: { start: 38.5, end: 49.1, anchor: 1.5 },
-    incomingSlice: { start: 18.5, end: 29.1, anchor: 1.5 }
+    incomingDropTime: 27.6,
+    outgoingGrid: { bpm: 126, beats: [46, 47.6, 49], downbeats: [46, 47.6] },
+    incomingGrid: { bpm: 126, beats: [26, 27.6, 29], downbeats: [26, 27.6] }
   };
   await engine.prepare({ fromTrackId: 'a', toTrackId: 'b', fromUrl: 'u1', toUrl: 'u2', plan });
 
@@ -211,15 +222,33 @@ test('prepare slices both tracks and forwards the plan to the native bridge', as
   assert.equal(engine.preparationStatus('a', 'other'), 'idle');
   assert.ok(engine.preparedTransition('a', 'b')?.render);
   assert.equal(rendered.length, 1);
+
   const call = rendered[0];
   assert.equal(call.outgoing.channels.length, 2);
-  assert.equal(call.outgoing.anchor, plan.outgoingSlice.anchor);
+  assert.equal(call.outgoing.sampleRate, 44100);
   assert.equal(call.outgoing.bpm, 126);
-  assert.equal(call.incoming.anchor, plan.incomingSlice.anchor);
-  assert.equal(call.options.beats, 16);
-  assert.equal(call.options.bassSwap, 0.75);
-  const expectedFrames = Math.round((plan.outgoingSlice.end - plan.outgoingSlice.start) * 44100);
+
+  // The slice starts far enough before the anchor for the longest overlap the
+  // engine may pick, and the anchor sits one tolerance inside the end window.
+  const outgoingSliceStart = plan.transitionEnd - 20 - 1.5;
+  const expectedFrames = Math.round((plan.transitionEnd + 1.5 - outgoingSliceStart) * 44100);
   assert.ok(Math.abs(call.outgoing.channels[0].length - expectedFrames) <= 1);
+  assert.ok(Math.abs(call.options.outgoing.endLatest - call.options.outgoing.endEarliest - 2) < 1e-9);
+  const anchorLocal = plan.transitionEnd - outgoingSliceStart;
+  assert.ok(Math.abs(call.options.outgoing.endEarliest - (anchorLocal - 1)) < 1e-9);
+
+  // Grids arrive rebased onto the slice, so nothing outside it survives.
+  assert.ok(call.outgoing.downbeats.every((time) => time >= 0 && time <= 21.5));
+  assert.deepEqual(call.options.beatLengths, [4, 8, 16]);
+
+  // The plan start() runs against is the transition the engine chose, back on
+  // the media timeline.
+  const effective = engine.preparedTransition('a', 'b').plan;
+  assert.ok(Math.abs(effective.transitionEnd - plan.transitionEnd) < 1e-6);
+  assert.ok(Math.abs(effective.incomingResumeTime - plan.incomingDropTime) < 1e-6);
+  assert.ok(Math.abs(effective.transitionStart - (plan.transitionEnd - 7.6)) < 1e-6);
+  assert.equal(effective.overlapSeconds, 7.6);
+  assert.equal(effective.strategy, 'bass swap');
 });
 
 test('a refused render marks the pairing failed instead of throwing', async () => {

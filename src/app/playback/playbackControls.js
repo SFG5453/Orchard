@@ -470,7 +470,13 @@ export function installPlaybackControls(ctx) {
     if (!plan.ok) return 'fallback';
     if (engine.preparationStatus(fromTrackId, next.id) === 'failed') return 'fallback';
 
-    const untilStart = plan.transitionStart - playbackTime;
+    // Once the engine has planned, its choice supersedes the estimate above:
+    // it may have picked a longer overlap, which starts earlier, and gating on
+    // the estimate would then call start() after the buffer was already due.
+    const prepared = engine.preparationStatus(fromTrackId, next.id) === 'ready'
+      ? engine.preparedTransition(fromTrackId, next.id)
+      : null;
+    const untilStart = (prepared?.plan?.transitionStart ?? plan.transitionStart) - playbackTime;
     if (untilStart > WSOLA_START_LEAD_SECONDS) {
       if (untilStart <= WSOLA_PREPARE_LEAD_SECONDS &&
           engine.preparationStatus(fromTrackId, next.id) === 'idle') {
@@ -492,7 +498,6 @@ export function installPlaybackControls(ctx) {
     if (!resolved) return 'fallback';
     // Start against the plan the buffer was rendered with; a fresher plan may
     // have shifted after metadata enrichment and would misplace the downbeats.
-    const prepared = engine.preparedTransition(fromTrackId, next.id);
     if (!prepared) return 'fallback';
     const previousTrack = ctx.activeTrack.value;
     const nextTrack = ctx.activeTrackFromResolved(next, resolved);

@@ -154,6 +154,8 @@ module.exports = {
     'shared/**/*',
     'native-media/index.cjs',
     'native-media/build/*.node',
+    'native-audio-rust/index.cjs',
+    'native-audio-rust/build/*.node',
     'native/build/Release/*.node',
     ...onnxRuntimeExclusions,
     ...onnxWebFiles,
@@ -167,6 +169,7 @@ module.exports = {
   ],
   asarUnpack: [
     'native-media/build/*.node',
+    'native-audio-rust/build/*.node',
     'native/build/Release/*.node',
     // ONNX Runtime dlopens its own shared libraries next to its binding, and
     // the model file is opened by native code; neither can read out of an asar.

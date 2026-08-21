@@ -14,7 +14,7 @@
   "scripts": {
     "dev": "npm run build:native && concurrently -k \"vite --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && node scripts/launch-electron.mjs --dev-server=http://127.0.0.1:5173\"",
     "build": "npm run build:native && npm run build:frontend",
-    "build:native": "node-gyp rebuild --directory native && npm run build:native:media",
+    "build:native": "node-gyp rebuild --directory native && npm run build:native:media && sh scripts/build-native-audio.sh",
     "build:native:macos:cross": "sh scripts/build-native-macos-cross.sh",
     "build:native:windows": "sh scripts/build-native-windows.sh",
     "build:frontend": "vite build",
@@ -80,7 +80,7 @@
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "standardized-audio-context": "^25.3.77",
-    "vite": "^8.2.1",
+    "vite": "^8.2.2",
     "vue": "^3.5.41",
     "wait-on": "^9.1.0",
     "web-audio-beat-detector": "^8.2.38",
@@ -91,7 +91,7 @@
     "@electron/fuses": "^2.1.3",
     "electron": "^43.4.1",
     "electron-builder": "^26.15.7",
-    "sass-embedded": "^1.102.0"
+    "sass-embedded": "^1.103.1"
   },
   "overrides": {
     "@discordjs/rest": {

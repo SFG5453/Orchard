@@ -315,53 +315,89 @@ test('audio analysis service renders beat-matched transitions over IPC', async (
     cachePath,
     ipcMain: ipc,
     nativeModulePath: path.resolve('native/build/Release/orchard_audio_analysis.node'),
+    transitionModulePath: path.resolve('native-audio-rust/index.cjs'),
     logger: () => {}
   });
 
-  function stereoTone(seconds, frequency) {
-    const sampleRate = 44100;
-    const data = new Float32Array(Math.floor(seconds * sampleRate));
+  const SAMPLE_RATE = 44100;
+  const BPM = 126;
+
+  // A kick-like pulse train: the engine measures bands and transients, so a bare
+  // sine gives it nothing to tell one candidate from another.
+  function source(seconds, frequency) {
+    const beatFrames = Math.floor((60 / BPM) * SAMPLE_RATE);
+    const data = new Float32Array(Math.floor(seconds * SAMPLE_RATE));
     for (let index = 0; index < data.length; index += 1) {
-      data[index] = 0.3 * Math.sin((2 * Math.PI * frequency * index) / sampleRate);
+      const time = index / SAMPLE_RATE;
+      const beatPhase = (index % beatFrames) / SAMPLE_RATE;
+      data[index] = 0.6 * Math.exp(-beatPhase * 14) * Math.sin(2 * Math.PI * 55 * time)
+        + 0.2 * Math.sin(2 * Math.PI * frequency * time);
     }
-    return [data, new Float32Array(data)];
+    const interval = 60 / BPM;
+    const beats = [];
+    for (let index = 0; index * interval < seconds; index += 1) beats.push(index * interval);
+    return {
+      channels: [data, new Float32Array(data)],
+      sampleRate: SAMPLE_RATE,
+      bpm: BPM,
+      beats,
+      downbeats: beats.filter((_, index) => index % 4 === 0)
+    };
   }
+
+  // Both anchors sit on a downbeat, because every reachable end does.
+  const bar = 4 * (60 / BPM);
+  const mixOut = Math.round(24 / bar) * bar;
+  const drop = Math.round(12 / bar) * bar;
 
   try {
     const result = await ipc.invoke('audio-analysis:render-transition', {
-      outgoing: { channels: stereoTone(12, 220), anchor: 1, bpm: 126 },
-      incoming: { channels: stereoTone(12, 330), anchor: 1, bpm: 126 },
-      options: { sampleRate: 44100, beats: 8, bassSwap: 0.75 }
+      outgoing: source(30, 220),
+      incoming: source(30, 330),
+      options: {
+        outgoing: { endEarliest: mixOut - 0.05, endLatest: mixOut + 0.05 },
+        incoming: { endEarliest: drop - 0.05, endLatest: drop + 0.05 },
+        beatLengths: [8]
+      }
     });
     assert.equal(result.rendered, true, result.rejected);
     assert.equal(result.channels.length, 2);
-    const expected = 8 * (60 / 126) * 44100;
+    assert.equal(result.beats, 8);
+    const expected = 8 * (60 / BPM) * SAMPLE_RATE;
     assert.ok(Math.abs(result.channels[0].length - expected) < 4);
-    assert.equal(result.bpm, 126);
+    assert.equal(result.bpm, BPM);
+    // Both anchors are honoured, which is the whole point of constraining.
+    assert.ok(Math.abs(result.outgoingResume - mixOut) <= 0.05);
+    assert.ok(Math.abs(result.incomingResume - drop) <= 0.05);
+    assert.ok(result.strategy.length > 0);
 
+    // A window between downbeats is refused rather than approximated, and a
+    // refusal is reported for the caller to fall back on, never thrown.
     const refused = await ipc.invoke('audio-analysis:render-transition', {
-      outgoing: { channels: stereoTone(12, 220), anchor: 1, bpm: 100 },
-      incoming: { channels: stereoTone(12, 330), anchor: 1, bpm: 126 },
-      options: { sampleRate: 44100, beats: 8 }
+      outgoing: source(30, 220),
+      incoming: source(30, 330),
+      options: {
+        incoming: { endEarliest: drop + 0.9, endLatest: drop + 1.0 }
+      }
     });
     assert.equal(refused.rendered, false);
-    assert.match(refused.rejected, /transparent stretch range/);
+    assert.match(refused.rejected, /no viable transition/i);
 
     await assert.rejects(
       ipc.invoke('audio-analysis:render-transition', {
-        outgoing: { channels: [], anchor: 0, bpm: 126 },
-        incoming: { channels: stereoTone(2, 330), anchor: 0, bpm: 126 },
-        options: { sampleRate: 44100 }
+        outgoing: { ...source(4, 220), channels: [] },
+        incoming: source(4, 330),
+        options: {}
       }),
       /Invalid outgoing PCM/
     );
     await assert.rejects(
       ipc.invoke('audio-analysis:render-transition', {
-        outgoing: { channels: stereoTone(2, 220), anchor: 0, bpm: 126 },
-        incoming: { channels: stereoTone(2, 330), anchor: 0, bpm: 126 },
+        outgoing: { ...source(4, 220), sampleRate: 0 },
+        incoming: source(4, 330),
         options: {}
       }),
-      /valid sample rate/
+      /Invalid outgoing PCM/
     );
   } finally {
     await service.stop();

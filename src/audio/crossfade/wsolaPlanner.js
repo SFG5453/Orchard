@@ -296,6 +296,15 @@ export function planWsolaTransition({
   const incomingSliceStart = Math.max(0, incomingCueTime - SLICE_PADDING_SECONDS);
   return {
     ok: true,
+    // The grids travel with the plan because the engine plans against them, not
+    // just renders: it picks the beat-aligned candidate inside the anchors
+    // below, so it needs the same beats this plan was derived from.
+    outgoingGrid: { bpm: outgoingBpm, beats: analysis.beats || [], downbeats: analysis.downbeats || [] },
+    incomingGrid: {
+      bpm: incomingBpm,
+      beats: nextAnalysis.beats || [],
+      downbeats: nextAnalysis.downbeats || []
+    },
     tier: policy.tier,
     beatConfidence: policy.beatConfidence,
     mixOutType: mixOutAnchor.type,

@@ -555,6 +555,7 @@ app.whenReady().then(async () => {
     cachePath: path.join(app.getPath('userData'), 'audio-analysis-cache.json'),
     ipcMain,
     nativeModulePath: runtimePaths.nativeModulePath,
+    transitionModulePath: runtimePaths.transitionModulePath,
     beatModelPath: runtimePaths.beatModelPath,
     vocalModelPath: runtimePaths.vocalModelPath
   });

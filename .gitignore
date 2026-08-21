@@ -27,3 +27,8 @@ models/beat-this/beat_this.onnx
 # Rust build artifacts for the native media addon
 native-media/target/
 native-media/build/
+
+# Rust build artifacts for the native audio addon
+native-audio-rust/target/
+native-audio-rust/build/
+native-audio-rust/vendor/earmark/target/

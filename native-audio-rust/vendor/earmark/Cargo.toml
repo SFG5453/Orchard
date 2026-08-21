@@ -1,0 +1,30 @@
+[package]
+name = "earmark"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Beat-aware smart crossfade engine: analyses, plans, and renders DJ-style transitions from decoded PCM and precomputed beat metadata."
+repository = "https://github.com/SFG5453/earmark"
+keywords = ["audio", "crossfade", "dsp", "beatmatching", "dj"]
+categories = ["multimedia::audio"]
+
+[dependencies]
+biquad = "0.6.0"
+ebur128 = "0.1.10"
+num-complex = "0.4.6"
+realfft = "3.5.0"
+rubato = "5.0.0"
+signalsmith-stretch = "0.1.3"
+thiserror = "2.0.20"
+
+[lib]
+# Benchmarks live in benches/; without this `cargo bench` also runs the unit-test harness,
+# which does not understand Criterion's flags.
+bench = false
+
+[dev-dependencies]
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "engine"
+harness = false

@@ -83,6 +83,30 @@ function floatSamples(value) {
   return null;
 }
 
+function finiteSeconds(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map(Number).filter((time) => Number.isFinite(time) && time >= 0);
+}
+
+/**
+ * Translates a renderer-side window into the addon's flat shape. Both bounds of
+ * a window must be real numbers or the window is dropped: a half-specified
+ * window would silently constrain one end only.
+ */
+function regionConstraint(value) {
+  if (!value || typeof value !== 'object') return undefined;
+  const bounds = {};
+  [['startEarliest', 'startLatest'], ['endEarliest', 'endLatest']].forEach(([from, to]) => {
+    const earliest = Number(value[from]);
+    const latest = Number(value[to]);
+    if (Number.isFinite(earliest) && Number.isFinite(latest) && latest >= earliest) {
+      bounds[from] = earliest;
+      bounds[to] = latest;
+    }
+  });
+  return Object.keys(bounds).length ? bounds : undefined;
+}
+
 /**
  * Registers the privileged native-analysis IPC service and persistent LRU cache.
  * @param {object} options
@@ -95,6 +119,7 @@ export function setupAudioAnalysisService({
   cachePath,
   ipcMain,
   nativeModulePath,
+  transitionModulePath,
   beatModelPath = DEFAULT_MODEL_PATH,
   vocalModelPath = DEFAULT_VOCAL_MODEL_PATH,
   loadNativeAddon = require,
@@ -112,6 +137,8 @@ export function setupAudioAnalysisService({
   const inFlight = new Map();
   let nativeAddon = null;
   let nativeLoadAttempts = 0;
+  let transitionAddon = null;
+  let transitionLoadAttempts = 0;
   let saveTimer = null;
   let savePromise = Promise.resolve();
 
@@ -146,9 +173,36 @@ export function setupAudioAnalysisService({
     return nativeAddon;
   }
 
+  // The transition engine lives in its own napi-rs addon (native-audio-rust),
+  // separate from the analysis addon above: it carries no analysis version
+  // because it caches nothing, and unlike the node-gyp addon the same binary
+  // loads under any Electron version.
+  function transition() {
+    if (transitionAddon) return transitionAddon;
+    if (!transitionModulePath) return null;
+    transitionLoadAttempts += 1;
+    try {
+      const loaded = loadNativeAddon(transitionModulePath);
+      if (typeof loaded?.renderTransition === 'function') {
+        transitionAddon = loaded;
+        log('transition-load-ready', { attempt: transitionLoadAttempts });
+      } else {
+        log('transition-load-invalid', {
+          attempt: transitionLoadAttempts,
+          hasRenderTransition: typeof loaded?.renderTransition === 'function'
+        });
+      }
+    } catch (error) {
+      transitionAddon = null;
+      log('transition-load-failed', { attempt: transitionLoadAttempts, ...errorDetails(error) });
+    }
+    return transitionAddon;
+  }
+
   // Load before the renderer asks for analysis, while still allowing a later
   // request to recover if startup briefly raced the unpacked native module.
   addon();
+  transition();
 
   const cacheReady = readFile(cachePath, 'utf8')
     .then((contents) => JSON.parse(contents))
@@ -270,9 +324,9 @@ export function setupAudioAnalysisService({
   });
 
   ipcMain.handle(AUDIO_ANALYSIS.RENDER_TRANSITION, async (_event, payload = {}) => {
-    const native = addon();
-    if (!native || typeof native.renderTransition !== 'function') {
-      log('transition-render-unavailable', { loadAttempts: nativeLoadAttempts });
+    const engine = transition();
+    if (!engine) {
+      log('transition-render-unavailable', { loadAttempts: transitionLoadAttempts });
       throw new Error('Native transition rendering is unavailable.');
     }
 
@@ -280,54 +334,73 @@ export function setupAudioAnalysisService({
       const channels = Array.isArray(value?.channels)
         ? value.channels.map(floatSamples)
         : [];
-      const anchor = Number(value?.anchor);
+      const sampleRate = Number(value?.sampleRate);
       const bpm = Number(value?.bpm);
       if (!channels.length || channels.some((channel) => !channel?.length) ||
-          !Number.isFinite(anchor) || anchor < 0 || !Number.isFinite(bpm)) {
+          !Number.isFinite(sampleRate) || sampleRate < 1000 || !Number.isFinite(bpm)) {
         throw new Error(`Invalid ${label} PCM for transition rendering.`);
       }
       // Overlap slices are bounded by design; refuse anything whole-track sized.
       const maxSamples = 48000 * 90 * channels.length;
       const total = channels.reduce((sum, channel) => sum + channel.length, 0);
       if (total > maxSamples) throw new Error(`Oversized ${label} PCM for transition rendering.`);
-      return { channels, anchor, bpm };
+      return {
+        channels,
+        sampleRate,
+        bpm,
+        beats: finiteSeconds(value?.beats),
+        downbeats: finiteSeconds(value?.downbeats)
+      };
     }
 
     const outgoing = transitionSource(payload.outgoing, 'outgoing');
     const incoming = transitionSource(payload.incoming, 'incoming');
     const options = payload.options && typeof payload.options === 'object' ? payload.options : {};
-    const sampleRate = Number(options.sampleRate);
-    if (!Number.isFinite(sampleRate) || sampleRate < 1000) {
-      throw new Error('A valid sample rate is required for transition rendering.');
-    }
 
     const startedAt = Date.now();
     log('transition-render-start', {
-      sampleRate,
-      beats: Number(options.beats) || 0,
+      sampleRate: outgoing.sampleRate,
       outgoingBpm: outgoing.bpm,
-      incomingBpm: incoming.bpm
+      incomingBpm: incoming.bpm,
+      outgoingDownbeats: outgoing.downbeats.length,
+      incomingDownbeats: incoming.downbeats.length
     });
-    // Only forward keys that are real numbers: the N-API binding treats a
-    // present-but-undefined key as a type error, not an omission.
-    const renderOptions = { sampleRate };
-    ['beats', 'bassSwap', 'handoff', 'bed', 'bassCrossoverHz', 'bassSwapSeconds', 'filterSweep', 'filterSweepStartHz'].forEach((key) => {
-      const value = Number(options[key]);
-      if (Number.isFinite(value)) renderOptions[key] = value;
+
+    const result = await engine.renderTransition(outgoing, incoming, {
+      outgoing: regionConstraint(options.outgoing),
+      incoming: regionConstraint(options.incoming),
+      ...(Array.isArray(options.beatLengths) ? { beatLengths: options.beatLengths.map(Number) } : {}),
+      // Omitted rather than passed empty when the model had no opinion, so the
+      // engine's own "no curve means full depth" default applies.
+      ...(Array.isArray(options.duckCurve) && options.duckCurve.length
+        ? { duckCurve: options.duckCurve.map(Number) }
+        : {}),
+      diagnostics: Boolean(options.diagnostics)
     });
-    const result = await native.renderTransition(outgoing, incoming, renderOptions);
+
     log(result.rendered ? 'transition-render-ready' : 'transition-render-refused', {
       elapsedMs: Date.now() - startedAt,
       rejected: String(result.rejected || ''),
-      stretchRatio: Number(result.stretchRatio) || 0,
+      strategy: String(result.strategy || ''),
+      beats: Number(result.beats) || 0,
+      stretchRatio: Number(result.outgoingTempoRatio) || 0,
       overlapSamples: result.channels?.[0]?.length || 0
     });
     return {
       rendered: Boolean(result.rendered),
       rejected: String(result.rejected || ''),
-      stretchRatio: Number(result.stretchRatio) || 1,
-      bpm: Number(result.bpm) || 0,
-      sampleRate,
+      strategy: String(result.strategy || ''),
+      summary: String(result.summary || ''),
+      beats: Number(result.beats) || 0,
+      duration: Number(result.duration) || 0,
+      stretchRatio: Number(result.outgoingTempoRatio) || 1,
+      incomingStretchRatio: Number(result.incomingTempoRatio) || 1,
+      bpm: Number(result.targetBpm) || 0,
+      outgoingStart: Number(result.outgoingStart) || 0,
+      incomingStart: Number(result.incomingStart) || 0,
+      outgoingResume: Number(result.outgoingResume) || 0,
+      incomingResume: Number(result.incomingResume) || 0,
+      sampleRate: Number(result.sampleRate) || outgoing.sampleRate,
       channels: result.channels || []
     };
   });
