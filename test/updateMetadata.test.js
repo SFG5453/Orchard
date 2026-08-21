@@ -18,7 +18,11 @@
  */
 
 import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
+import { generateDesktopUpdateMetadata } from '../scripts/generate-desktop-update-metadata.mjs';
 import { mergeMacUpdateMetadata } from '../scripts/merge-macos-update-metadata.mjs';
 import { mergeWindowsUpdateMetadata } from '../scripts/merge-windows-update-metadata.mjs';
 import { generateAndroidUpdateMetadata } from '../scripts/generate-android-update-metadata.mjs';
@@ -88,4 +92,34 @@ test('generates Android update metadata JSON with release notes and codename', (
   assert.equal(parsed.apkUrl, 'https://downloads.sfg545.dev/orchard/Orchard-1.0.0.apk');
   assert.equal(parsed.sha256, 'abc123hash');
   assert.equal(parsed.releaseNotes, '## Mobile Release Notes\n- Feature A\n- Feature B');
+});
+
+test('generates checksummed desktop package metadata for every Linux package type', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'orchard-update-metadata-'));
+  try {
+    await Promise.all([
+      writeFile(path.join(directory, 'Orchard-4.7.3-x86_64.AppImage'), 'appimage'),
+      writeFile(path.join(directory, 'Orchard-4.7.3-amd64.deb'), 'deb'),
+      writeFile(path.join(directory, 'Orchard-4.7.3-x86_64.rpm'), 'rpm'),
+      writeFile(path.join(directory, 'Orchard-4.7.3-x86_64.flatpak'), 'flatpak'),
+      writeFile(path.join(directory, 'orchard-4.7.3-1-x86_64.pkg.tar.zst'), 'arch'),
+      writeFile(path.join(directory, 'latest-linux.yml'), 'ignored')
+    ]);
+
+    const metadata = JSON.parse(await generateDesktopUpdateMetadata({
+      artifactsDirectory: directory,
+      baseUrl: 'https://downloads.sfg545.dev/orchard/',
+      channel: 'stable',
+      releaseDate: '2026-08-21T00:00:00.000Z',
+      releaseNotes: 'Managed package updates',
+      version: '4.7.3'
+    }));
+
+    assert.equal(metadata.version, '4.7.3');
+    assert.deepEqual(metadata.assets.map((asset) => asset.type).sort(), ['appimage', 'arch', 'deb', 'flatpak', 'rpm']);
+    assert.equal(metadata.assets.every((asset) => /^[a-f0-9]{64}$/.test(asset.sha256)), true);
+    assert.equal(metadata.assets.find((asset) => asset.type === 'deb')?.url, 'https://downloads.sfg545.dev/orchard/Orchard-4.7.3-amd64.deb');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
