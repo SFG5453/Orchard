@@ -35,10 +35,7 @@ internal fun audibleHandoffProgress(plan: TransitionPlan, rendered: Boolean): Fl
         TransitionStyle.DJ_FILTER ->
             max(
                 plan.handoffFraction,
-                if (rendered) plan.bassSwapFraction else LIVE_DJ_BASS_HANDOFF,
+                if (rendered) plan.bassSwapFraction else plan.handoffFraction,
             ).toFloat()
         TransitionStyle.EQUAL_POWER -> plan.handoffFraction.toFloat()
     }.coerceIn(0f, 1f)
-
-/** Centre of the live mixer's independent 750 ms bass handoff. */
-private const val LIVE_DJ_BASS_HANDOFF = 0.7

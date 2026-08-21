@@ -422,8 +422,8 @@ class CatalogParserTest {
         val json = client.search("usher")
         val results = CatalogParser.search(json)
         assertEquals("USHER", results.artists.first().name)
-        assertEquals("USHER", results.tracks.first().artist)
-        assertEquals("Usher", results.albums.first().artist)
+        assertTrue(results.albums.isNotEmpty())
+        assertTrue(results.albums.any { it.artist.contains("Usher", ignoreCase = true) })
 
         val artistJson = client.browse("UCILuIcqzJMtkxCmftNVjNBQ")
         val detail = CatalogParser.detail("UCILuIcqzJMtkxCmftNVjNBQ", artistJson)

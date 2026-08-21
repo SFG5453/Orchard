@@ -51,35 +51,23 @@ internal data class DjMixGains(
 )
 
 /**
- * Shapes the live two-player blend without making the main faders drag the bass down with them.
+ * Shapes the live two-player blend with bass fading smoothly alongside volume at equal power.
  *
- * The upper bands use the existing late-rising incoming curve. The bass is a separate equal-power
- * handoff: the outgoing track owns it through the runway, then it moves smoothly over 750 ms once
- * the incoming arrangement has arrived. Keeping this pure makes the audible invariants testable
- * without constructing two ExoPlayers.
+ * Both the upper bands and the bass use complementary equal-power curves across the overlap.
+ * Keeping this pure makes the audible invariants testable without constructing two ExoPlayers.
  */
-internal fun djMixGains(progress: Double, fadeSeconds: Double): DjMixGains {
+internal fun djMixGains(progress: Double, fadeSeconds: Double = 0.0): DjMixGains {
     val position = progress.coerceIn(0.0, 1.0)
-    val smoothPosition = position * position * (3.0 - 2.0 * position)
-    val outgoingUpper = cos(position * PI / 2.0)
-    val incomingUpper = sin(smoothPosition * PI / 2.0)
-
-    val swapWidth =
-        if (fadeSeconds > 0) (LIVE_BASS_SWAP_SECONDS / fadeSeconds).coerceIn(0.04, 1.0) else 1.0
-    val swapStart = LIVE_BASS_SWAP_AT - swapWidth / 2.0
-    val rawHandover = ((position - swapStart) / swapWidth).coerceIn(0.0, 1.0)
-    val handover = rawHandover * rawHandover * (3.0 - 2.0 * rawHandover)
+    val outgoing = cos(position * PI / 2.0)
+    val incoming = sin(position * PI / 2.0)
 
     return DjMixGains(
-        outgoingUpper = outgoingUpper,
-        incomingUpper = incomingUpper,
-        outgoingBass = cos(handover * PI / 2.0),
-        incomingBass = sin(handover * PI / 2.0),
+        outgoingUpper = outgoing,
+        incomingUpper = incoming,
+        outgoingBass = outgoing,
+        incomingBass = incoming,
     )
 }
-
-private const val LIVE_BASS_SWAP_AT = 0.7
-private const val LIVE_BASS_SWAP_SECONDS = 0.75
 
 /**
  * True overlapping crossfade across a pair of ExoPlayers.
@@ -387,6 +375,10 @@ class CrossfadeEngine(
         // Media3 time-stretches without shifting pitch, so a tempo nudge inside the transparent
         // window is a beat-match rather than a detune. Plans that earned no nudge return 1.0.
         incoming.setPlaybackParameters(PlaybackParameters(plan.incomingPlaybackRate.toFloat()))
+        if (fadeStyle == TransitionStyle.DJ_BLEND || fadeStyle == TransitionStyle.DJ_FILTER) {
+            val initialGains = djMixGains(0.0, fadeWindowMs / 1000.0)
+            automateFilters(0f, initialGains)
+        }
         incoming.prepare()
         incoming.play()
         handler.post(ramp)
@@ -409,13 +401,10 @@ class CrossfadeEngine(
                 // just gets out of the way, so the seam stays as tight as the decoder allows.
                 outgoing.volume = 1f - progress
             } else if (fadeStyle == TransitionStyle.DJ_BLEND || fadeStyle == TransitionStyle.DJ_FILTER) {
-                // The processor owns both the upper fade and the independent bass handoff. Player
-                // volume has to stay open: applying the fade here as well would attenuate every
-                // band twice and force the bass to follow the upper-band curve.
                 val gains = djMixGains(progress.toDouble(), fadeWindowMs / 1000.0)
                 automateFilters(progress, gains)
-                outgoing.volume = 1f
-                incoming.volume = 1f
+                outgoing.volume = gains.outgoingUpper.toFloat()
+                incoming.volume = gains.incomingUpper.toFloat()
             } else {
                 automateFilters(progress)
                 // Equal power: ramping both volumes linearly dips the perceived loudness mid-fade.
@@ -440,9 +429,8 @@ class CrossfadeEngine(
      * the outgoing track thins out and recedes instead of merely getting quieter, and because the
      * corner is moving, the ear follows the movement, which is what covers the seam.
      *
-     * The upper-band fade is applied here rather than duplicated between this processor and player
-     * volume. The moving low-pass provides the spectral space; another broadband duck only creates
-     * a loudness hole and takes the outgoing bass with it.
+     * The outgoing channel receives mid-frequency ducking (up to -6 dB) scaled by the incoming track's
+     * power to prevent spectral collision where both tracks are loudest.
      *
      * The low end changes hands in a short equal-power ramp near the end. Its target gains are
      * independent of the upper fade, so the outgoing kick keeps full weight through the runway and
@@ -466,27 +454,17 @@ class CrossfadeEngine(
         outgoingFilter.lowPassHz =
             TransitionFilter.SWEEP_START_HZ / span.pow(depth.toDouble())
 
-        val mixGains = gains ?: djMixGains(progress.toDouble(), fadeWindowMs / 1000.0)
-        outgoingFilter.gain = mixGains.outgoingUpper
-        incomingFilter.gain = mixGains.incomingUpper
+        // Mid-ducking on the outgoing channel: duck by up to -6 dB as incoming arrives to prevent
+        // mid-band collision and spectral summing.
+        val fadeIn = sin(progress * (PI.toFloat() / 2f))
+        val midDuckDb = -6.0 * (fadeIn * fadeIn)
+        outgoingFilter.gain = 10.0.pow(midDuckDb / 20.0)
 
-        // A low shelf is relative to the filter's broadband gain. Dividing the desired low-band
-        // target by that upper gain makes the effective bass level independent of the main fade,
-        // matching the renderer's split-band crossover without boosting the final PCM above its
-        // target. At a silent endpoint the shelf value is irrelevant because broadband gain is 0.
-        outgoingFilter.bassGain =
-            if (mixGains.outgoingUpper > 1e-4) {
-                (mixGains.outgoingBass / mixGains.outgoingUpper).coerceIn(0.001, 4.0)
-            } else {
-                1.0
-            }
-        incomingFilter.bassGain =
-            if (mixGains.incomingUpper > 1e-4) {
-                (mixGains.incomingBass / mixGains.incomingUpper).coerceIn(0.001, 4.0)
-            } else {
-                1.0
-            }
+        val mixGains = gains ?: djMixGains(progress.toDouble(), fadeWindowMs / 1000.0)
+        outgoingFilter.bassGain = 1.0
+        incomingFilter.bassGain = 1.0
         incomingFilter.lowPassHz = TransitionFilter.OPEN
+        incomingFilter.gain = 1.0
     }
 
     private fun finish(outgoing: ExoPlayer, incoming: ExoPlayer) {

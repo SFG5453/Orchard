@@ -27,31 +27,23 @@ import org.junit.Test
 class CrossfadeMixCurveTest {
 
     @Test
-    fun `the runway keeps its bass on the outgoing track`() {
-        val start = djMixGains(progress = 0.0, fadeSeconds = 7.5)
-        val runway = djMixGains(progress = 0.5, fadeSeconds = 7.5)
-
-        assertEquals(1.0, start.outgoingBass, 1e-9)
-        assertEquals(0.0, start.incomingBass, 1e-9)
-        assertEquals(1.0, runway.outgoingBass, 1e-9)
-        assertEquals(0.0, runway.incomingBass, 1e-9)
-        assertTrue("the upper fade should still be moving", runway.outgoingUpper < 1.0)
-        assertTrue("the incoming upper band should still rise", runway.incomingUpper > 0.0)
-    }
-
-    @Test
-    fun `the bass changes hands smoothly at constant power`() {
-        val middle = djMixGains(progress = 0.7, fadeSeconds = 7.5)
-        val expected = 1.0 / sqrt(2.0)
-
-        assertEquals(expected, middle.outgoingBass, 1e-9)
-        assertEquals(expected, middle.incomingBass, 1e-9)
-        assertEquals(
-            1.0,
-            middle.outgoingBass * middle.outgoingBass +
-                middle.incomingBass * middle.incomingBass,
-            1e-9,
-        )
+    fun `both upper and bass bands crossfade smoothly at constant power`() {
+        for (step in 0..10) {
+            val progress = step / 10.0
+            val gains = djMixGains(progress = progress, fadeSeconds = 7.5)
+            assertEquals(
+                1.0,
+                gains.outgoingUpper * gains.outgoingUpper +
+                    gains.incomingUpper * gains.incomingUpper,
+                1e-9,
+            )
+            assertEquals(
+                1.0,
+                gains.outgoingBass * gains.outgoingBass +
+                    gains.incomingBass * gains.incomingBass,
+                1e-9,
+            )
+        }
     }
 
     @Test

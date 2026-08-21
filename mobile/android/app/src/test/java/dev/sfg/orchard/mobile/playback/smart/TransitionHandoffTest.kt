@@ -26,7 +26,7 @@ import org.junit.Test
 
 class TransitionHandoffTest {
     @Test
-    fun `live DJ blend waits for its later bass crossover`() {
+    fun `live DJ blend hands over at the handoff fraction`() {
         val plan =
             TransitionPlan(
                 transitionStyle = TransitionStyle.DJ_BLEND,
@@ -34,11 +34,11 @@ class TransitionHandoffTest {
                 bassSwapFraction = 0.6,
             )
 
-        assertEquals(0.7f, audibleHandoffProgress(plan, rendered = false), 0f)
+        assertEquals(0.5f, audibleHandoffProgress(plan, rendered = false), 0f)
 
-        val firstVisibleFrame = djMixGains(progress = 0.701, fadeSeconds = 7.5)
-        assertTrue(firstVisibleFrame.incomingUpper > firstVisibleFrame.outgoingUpper)
-        assertTrue(firstVisibleFrame.incomingBass > firstVisibleFrame.outgoingBass)
+        val pastMidpoint = djMixGains(progress = 0.51, fadeSeconds = 7.5)
+        assertTrue(pastMidpoint.incomingUpper > pastMidpoint.outgoingUpper)
+        assertTrue(pastMidpoint.incomingBass > pastMidpoint.outgoingBass)
     }
 
     @Test
