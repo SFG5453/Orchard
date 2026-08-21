@@ -48,7 +48,7 @@
   "dependencies": {
     "@kawarp/core": "^1.2.0",
     "@quasar/extras": "^2.0.4",
-    "@quasar/vite-plugin": "^2.0.0",
+    "@quasar/vite-plugin": "^2.0.1",
     "@tonaljs/note": "^4.12.1",
     "@vibrant/core": "^4.0.4",
     "@vibrant/generator-default": "^4.0.4",
@@ -76,7 +76,7 @@
     "onnxruntime-node": "^1.27.0",
     "onnxruntime-web": "^1.27.0",
     "qrcode": "^1.5.4",
-    "quasar": "^2.25.1",
+    "quasar": "^2.26.0",
     "semver": "^7.8.5",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
