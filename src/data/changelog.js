@@ -19,6 +19,20 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '4.7.3',
+    codename: 'Liminal Refrain',
+    date: 'August 21, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'Arch Linux, Debian, RPM, and Flatpak installations now receive stable and beta release notifications even when Orchard cannot install the update itself.',
+          'Package-managed Linux listeners can ask Orchard to download the exact release package to Downloads. Orchard confirms first, verifies the package checksum, and can reveal the saved file when it is ready.'
+        ]
+      }
+    ]
+  },
+  {
     version: '4.7.2',
     codename: 'Clause Zamenhof',
     date: 'August 20, 2026',
