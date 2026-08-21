@@ -100,11 +100,13 @@ export const IPC_CHANNELS = Object.freeze({
   UPDATES: Object.freeze({
     CHECK: 'updates:check',
     CHECK_CONTENT: 'updates:check-content',
+    DOWNLOAD_EXTERNAL: 'updates:download-external',
     GET_STATE: 'updates:get-state',
     GET_USER_ARTIST_PACKS: 'updates:get-user-artist-packs',
     IMPORT_ARTIST_PACK: 'updates:import-artist-pack',
     INSTALL: 'updates:install',
     READ_ARTIST_PACK_ARCHIVE: 'updates:read-artist-pack-archive',
+    REVEAL_EXTERNAL: 'updates:reveal-external',
     SET_CHANNEL: 'updates:set-channel',
     STATE: 'updates:state'
   }),

@@ -50,7 +50,7 @@ export default {
           </div>
           <div>
             <dt>Source</dt>
-            <dd>{{ updateChannelIsBeta ? 'Beta channel (GitHub)' : (updateState.updateUrl ? 'Release channel' : 'Not configured') }}</dd>
+            <dd>{{ updateState.packageLabel ? `${updateState.packageLabel} · ${updateChannelIsBeta ? 'Beta channel' : 'Release channel'}` : (updateChannelIsBeta ? 'Beta channel (GitHub)' : (updateState.updateUrl ? 'Release channel' : 'Not configured')) }}</dd>
           </div>
         </dl>
 
@@ -89,7 +89,7 @@ export default {
         </section>
 
         <q-linear-progress
-          v-if="updateState.status === 'downloading' || updateState.status === 'available'"
+          v-if="['downloading', 'available', 'external-downloading'].includes(updateState.status)"
           :value="updateProgressPercent / 100"
           color="primary"
           track-color="grey-10"
@@ -126,6 +126,27 @@ export default {
           <span>{{ updateState.status === 'error' ? 'Retry' : 'Check' }}</span>
         </button>
         <button
+          v-if="updateState.external && !externalUpdateCanReveal"
+          type="button"
+          class="update-dialog__button update-dialog__button--primary"
+          :disabled="!externalUpdateCanDownload"
+          @click="downloadExternalUpdate"
+        >
+          <q-icon name="download" />
+          <span>{{ updateState.status === 'external-downloading' ? 'Downloading…' : 'Download package' }}</span>
+        </button>
+        <button
+          v-else-if="updateState.external"
+          type="button"
+          class="update-dialog__button update-dialog__button--primary"
+          :disabled="!externalUpdateCanReveal"
+          @click="revealExternalUpdate"
+        >
+          <q-icon name="folder_open" />
+          <span>Show in Downloads</span>
+        </button>
+        <button
+          v-else
           type="button"
           class="update-dialog__button update-dialog__button--primary"
           :disabled="!updateCanInstall"

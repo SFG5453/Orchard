@@ -720,6 +720,19 @@ jobs:
             release-assets/latest.yml
           rm release-assets/latest-windows-arm64.yml
 
+      - name: Generate desktop package manifest
+        if: needs.prepare.outputs.mobile_only != 'true'
+        run: |
+          set -euo pipefail
+          node scripts/generate-desktop-update-metadata.mjs \
+            "${{ needs.prepare.outputs.version }}" \
+            stable \
+            "${ORCHARD_UPDATE_URL}" \
+            release-assets \
+            build/release-notes.md \
+            release-assets/latest-desktop.json
+          cat release-assets/latest-desktop.json
+
       - name: Generate checksums
         env:
           MOBILE_ONLY: ${{ needs.prepare.outputs.mobile_only }}
@@ -765,6 +778,12 @@ jobs:
               --content-type application/yaml \
               --cache-control no-cache
           done
+
+          test -f release-assets/latest-desktop.json
+          aws s3 cp release-assets/latest-desktop.json "s3://$R2_BUCKET/orchard/latest-desktop.json" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type application/json \
+            --cache-control no-cache
 
       - name: Publish Android updater manifest
         if: needs.prepare.outputs.build_android == 'true'
@@ -836,6 +855,19 @@ jobs:
             release-assets/latest-windows-arm64.yml \
             release-assets/latest.yml
           rm release-assets/latest-windows-arm64.yml
+
+      - name: Generate desktop package manifest
+        if: needs.prepare.outputs.mobile_only != 'true'
+        run: |
+          set -euo pipefail
+          node scripts/generate-desktop-update-metadata.mjs \
+            "${{ needs.prepare.outputs.version }}" \
+            beta \
+            "https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.tag }}/" \
+            release-assets \
+            build/release-notes.md \
+            release-assets/latest-desktop.json
+          cat release-assets/latest-desktop.json
 
       - name: Generate checksums
         run: |

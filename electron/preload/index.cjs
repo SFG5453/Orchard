@@ -176,9 +176,11 @@ contextBridge.exposeInMainWorld('orchardUpdates', {
   getState: () => ipcRenderer.invoke('updates:get-state'),
   check: () => ipcRenderer.invoke('updates:check'),
   checkContent: (options) => ipcRenderer.invoke('updates:check-content', options),
+  downloadExternal: () => ipcRenderer.invoke('updates:download-external'),
   importArtistPack: () => ipcRenderer.invoke('updates:import-artist-pack'),
   getUserArtistPacks: () => ipcRenderer.invoke('updates:get-user-artist-packs'),
   readArtistPackArchive: (archiveUrl) => ipcRenderer.invoke('updates:read-artist-pack-archive', archiveUrl),
+  revealExternal: () => ipcRenderer.invoke('updates:reveal-external'),
   install: () => ipcRenderer.invoke('updates:install'),
   setChannel: (channel) => ipcRenderer.invoke('updates:set-channel', channel),
   onState: (callback) => {
