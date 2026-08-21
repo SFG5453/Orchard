@@ -334,7 +334,7 @@ jobs:
     container: archlinux:base-devel
     steps:
       - name: Install Arch build tools
-        run: pacman -Syu --noconfirm git electron43 libarchive nodejs npm python rust zstd
+        run: pacman -Syu --noconfirm clang electron43 git libarchive llvm nodejs npm python rust zstd
 
       - name: Check out release tag
         uses: actions/checkout@v6
