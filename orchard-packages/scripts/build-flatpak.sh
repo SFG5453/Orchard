@@ -29,7 +29,7 @@ cp "$release_dir/extensions/orchard-packages-backend" "$flatpak_dir/bundle/exten
 cp "$flatpak_dir/orchard" "$flatpak_dir/bundle/orchard"
 cp "$flatpak_dir/orchard-packages-launcher" "$flatpak_dir/bundle/orchard-packages-launcher"
 cp "$repository_dir/packaging/arch/orchard-packages.desktop" "$flatpak_dir/bundle/dev.sfg.orchard.desktop"
-cp "$repository_dir/build/icon.png" "$flatpak_dir/bundle/dev.sfg.orchard.png"
+cp "$flatpak_dir/dev.sfg.orchard.png" "$flatpak_dir/bundle/dev.sfg.orchard.png"
 cp "$flatpak_dir/dev.sfg.orchard.metainfo.xml" "$flatpak_dir/bundle/dev.sfg.orchard.metainfo.xml"
 
 flatpak-builder --arch="$flatpak_arch" --force-clean --repo="$flatpak_dir/repo" \

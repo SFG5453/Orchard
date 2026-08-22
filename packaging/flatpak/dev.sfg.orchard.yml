@@ -21,7 +21,7 @@ modules:
       - install -Dm755 orchard /app/bin/orchard
       - install -Dm755 orchard-packages-launcher /app/bin/orchard-packages
       - install -Dm644 dev.sfg.orchard.desktop /app/share/applications/dev.sfg.orchard.desktop
-      - install -Dm644 dev.sfg.orchard.png /app/share/icons/hicolor/1024x1024/apps/dev.sfg.orchard.png
+      - install -Dm644 dev.sfg.orchard.png /app/share/icons/hicolor/512x512/apps/dev.sfg.orchard.png
       - install -Dm644 dev.sfg.orchard.metainfo.xml /app/share/metainfo/dev.sfg.orchard.metainfo.xml
     sources:
       - type: dir
