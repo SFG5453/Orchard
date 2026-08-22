@@ -70,11 +70,6 @@ export const IPC_CHANNELS = Object.freeze({
     SCROBBLE: 'lastfm:scrobble',
     STATUS: 'lastfm:status'
   }),
-  MIGRATION: Object.freeze({
-    DOWNLOAD: 'migration:download',
-    GET_STATE: 'migration:get-state',
-    REFRESH: 'migration:refresh'
-  }),
   NETWORK: Object.freeze({
     GET_PROXY_MODE: 'network:get-proxy-mode',
     SET_PROXY_MODE: 'network:set-proxy-mode'

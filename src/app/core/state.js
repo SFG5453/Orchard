@@ -79,6 +79,7 @@ export function installState(ctx) {
     youtubeHistoryEnabled: true,
     discordRpcEnabled: true,
     immersiveBackgroundsEnabled: true,
+    keepOldVersions: false,
     songCacheEnabled: SONG_CACHE_DEFAULTS.enabled,
     songCacheMaxSizeMb: SONG_CACHE_DEFAULTS.maxSizeMb,
     sponsorBlockMode: DEFAULT_SPONSOR_BLOCK_MODE,
@@ -128,6 +129,9 @@ export function installState(ctx) {
       immersiveBackgroundsEnabled: typeof preferences.immersiveBackgroundsEnabled === 'boolean'
         ? preferences.immersiveBackgroundsEnabled
         : ctx.DEFAULT_USER_PREFERENCES.immersiveBackgroundsEnabled,
+      keepOldVersions: typeof preferences.keepOldVersions === 'boolean'
+        ? preferences.keepOldVersions
+        : ctx.DEFAULT_USER_PREFERENCES.keepOldVersions,
       immersiveBackgroundIntensity: normalizeImmersiveBackgroundIntensity(preferences.immersiveBackgroundIntensity),
       immersiveBackgroundMotion: normalizeImmersiveBackgroundMotion(preferences.immersiveBackgroundMotion),
       layoutPreset: normalizeLayoutPreset(preferences.layoutPreset),
@@ -288,15 +292,6 @@ export function installState(ctx) {
   ctx.errorMessage = ref('');
   ctx.artistSubscription = ref({ browseId: '', subscribed: false, status: 'idle', error: '' });
   ctx.warningMessage = ref('');
-  ctx.migrationState = ref({
-    status: 'loading',
-    version: '',
-    notes: '',
-    pubDate: '',
-    platformKey: '',
-    downloadUrl: '',
-    error: ''
-  });
   ctx.updateState = ref({
     status: 'idle',
     message: '',
@@ -432,6 +427,7 @@ export function installState(ctx) {
   ctx.immersiveBackgroundIntensity = ref(ctx.initialUserPreferences.immersiveBackgroundIntensity);
   ctx.immersiveBackgroundMotion = ref(ctx.initialUserPreferences.immersiveBackgroundMotion);
   ctx.layoutPreset = ref(ctx.initialUserPreferences.layoutPreset);
+  ctx.keepOldVersions = ref(ctx.initialUserPreferences.keepOldVersions);
   ctx.uiScale = ref(ctx.initialUserPreferences.uiScale);
   ctx.songCacheEnabled = ref(ctx.initialUserPreferences.songCacheEnabled);
   ctx.songCacheMaxSizeMb = ref(ctx.initialUserPreferences.songCacheMaxSizeMb);
@@ -468,6 +464,7 @@ export function installState(ctx) {
     ctx.immersiveBackgroundIntensity.value = defaults.immersiveBackgroundIntensity;
     ctx.immersiveBackgroundMotion.value = defaults.immersiveBackgroundMotion;
     ctx.layoutPreset.value = defaults.layoutPreset;
+    ctx.keepOldVersions.value = defaults.keepOldVersions;
     ctx.uiScale.value = defaults.uiScale;
     ctx.songCacheEnabled.value = defaults.songCacheEnabled;
     ctx.songCacheMaxSizeMb.value = defaults.songCacheMaxSizeMb;

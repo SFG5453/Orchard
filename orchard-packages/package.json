@@ -1,0 +1,27 @@
+{
+  "name": "orchard-packages",
+  "version": "5.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run build:frontend && bunx neu build",
+    "build:frontend": "bun run scripts/build-frontend.ts",
+    "build:backend": "bun run scripts/build-backend.ts",
+    "build:release": "bun run scripts/build-release.ts",
+    "dev": "bun run scripts/dev.ts",
+    "package:orchard": "bun run scripts/package-orchard.ts",
+    "package:arch": "sh scripts/build-arch-package.sh",
+    "package:flatpak": "sh scripts/build-flatpak.sh",
+    "test": "bun test && go test ./backend",
+    "typecheck": "tsc --noEmit",
+    "verify:r2": "bun run scripts/verify-r2.ts"
+  },
+  "dependencies": {
+    "@neutralinojs/lib": "6.9.0"
+  },
+  "devDependencies": {
+    "@neutralinojs/neu": "11.7.2",
+    "@types/bun": "1.4.0",
+    "typescript": "7.0.2"
+  }
+}
