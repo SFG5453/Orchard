@@ -32,7 +32,7 @@ cp "$repository_dir/packaging/arch/orchard-packages.desktop" "$flatpak_dir/bundl
 cp "$flatpak_dir/dev.sfg.orchard.png" "$flatpak_dir/bundle/dev.sfg.orchard.png"
 cp "$flatpak_dir/dev.sfg.orchard.metainfo.xml" "$flatpak_dir/bundle/dev.sfg.orchard.metainfo.xml"
 
-flatpak-builder --arch="$flatpak_arch" --force-clean --repo="$flatpak_dir/repo" \
+flatpak-builder --disable-rofiles-fuse --arch="$flatpak_arch" --force-clean --repo="$flatpak_dir/repo" \
   "$flatpak_dir/build" "$flatpak_dir/dev.sfg.orchard.yml"
 flatpak build-bundle --arch="$flatpak_arch" \
   "$flatpak_dir/repo" "$output" dev.sfg.orchard
