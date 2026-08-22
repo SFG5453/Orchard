@@ -1,0 +1,56 @@
+# Maintainer: SFG545 <sfg@sfg545.dev>
+
+pkgname=orchard-packages
+pkgver=5.0.0
+pkgrel=3
+pkgdesc='Small desktop installer and version manager for Orchard'
+arch=('x86_64')
+url='https://github.com/sfg5453/orchard'
+license=('AGPL-3.0-or-later')
+depends=('gtk3' 'webkit2gtk-4.1')
+makedepends=('bun' 'go')
+provides=('orchard')
+conflicts=('orchard')
+replaces=('orchard')
+options=('!strip')
+source=(
+  "$pkgname-$pkgver.tar.zst"
+  'orchard-packages.desktop'
+  'orchard-packages.sh'
+)
+sha256sums=('f0ea10ab0df53dccb6b1bb2aa5accb340ad93f7cfe97dc0237f6cfa61ed28409' 'c94216cfcbdc8bde050e4a8c5dfde7751802aff8b1c3ecb2f2d0bdd65285b23a' 'b8f0612493b5acf2c823b41894b4e21ffaf39d61139c9071992593284ebb5743')
+
+build() {
+  cd "$srcdir/$pkgname-$pkgver"
+  bun run build:frontend
+  bun run scripts/build-backend.ts linux-x64 --extension
+  bunx neu build
+}
+
+package() {
+  cd "$srcdir/$pkgname-$pkgver"
+
+  install -Dm755 \
+    'dist/neutralino/orchard-packages/orchard-packages-linux_x64' \
+    "$pkgdir/usr/lib/orchard-packages/orchard-packages"
+  install -Dm644 \
+    'dist/neutralino/orchard-packages/resources.neu' \
+    "$pkgdir/usr/lib/orchard-packages/resources.neu"
+  install -Dm755 \
+    'extensions/orchard-packages-backend' \
+    "$pkgdir/usr/lib/orchard-packages/extensions/orchard-packages-backend"
+  install -Dm755 \
+    "$srcdir/orchard-packages.sh" \
+    "$pkgdir/usr/bin/orchard"
+  ln -s '../lib/orchard-packages/orchard-packages' \
+    "$pkgdir/usr/bin/orchard-packages"
+  install -Dm644 \
+    "$srcdir/orchard-packages.desktop" \
+    "$pkgdir/usr/share/applications/dev.sfg.orchard.desktop"
+  install -Dm644 \
+    'resources/icons/orchard-packages.png' \
+    "$pkgdir/usr/share/icons/hicolor/1024x1024/apps/dev.sfg.orchard.png"
+  install -Dm644 \
+    'LICENSE' \
+    "$pkgdir/usr/share/licenses/orchard-packages/LICENSE"
+}

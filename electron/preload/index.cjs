@@ -159,12 +159,6 @@ contextBridge.exposeInMainWorld('orchardAudioAnalysis', {
   })
 });
 
-contextBridge.exposeInMainWorld('orchardMigration', {
-  getState: () => ipcRenderer.invoke('migration:get-state'),
-  refresh: () => ipcRenderer.invoke('migration:refresh'),
-  download: () => ipcRenderer.invoke('migration:download')
-});
-
 contextBridge.exposeInMainWorld('orchardGithub', {
   status: () => ipcRenderer.invoke('github-auth:status'),
   connect: () => ipcRenderer.invoke('github-auth:connect'),
@@ -181,7 +175,9 @@ contextBridge.exposeInMainWorld('orchardUpdates', {
   getUserArtistPacks: () => ipcRenderer.invoke('updates:get-user-artist-packs'),
   readArtistPackArchive: (archiveUrl) => ipcRenderer.invoke('updates:read-artist-pack-archive', archiveUrl),
   revealExternal: () => ipcRenderer.invoke('updates:reveal-external'),
-  install: () => ipcRenderer.invoke('updates:install'),
+  install: (options = {}) => ipcRenderer.invoke('updates:install', {
+    keepOldVersions: options?.keepOldVersions === true
+  }),
   setChannel: (channel) => ipcRenderer.invoke('updates:set-channel', channel),
   onState: (callback) => {
     if (typeof callback !== 'function') return () => {};

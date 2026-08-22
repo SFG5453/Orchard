@@ -146,6 +146,7 @@ export function installLifecycle(ctx) {
     ctx.immersiveBackgroundIntensity,
     ctx.immersiveBackgroundMotion,
     ctx.layoutPreset,
+    ctx.keepOldVersions,
     ctx.uiScale,
     ctx.playbackStatePersistenceEnabled,
     ctx.queueLayout,
@@ -190,6 +191,7 @@ export function installLifecycle(ctx) {
       immersiveBackgroundIntensity: ctx.immersiveBackgroundIntensity.value,
       immersiveBackgroundMotion: ctx.immersiveBackgroundMotion.value,
       layoutPreset: ctx.layoutPreset.value,
+      keepOldVersions: ctx.keepOldVersions.value,
       uiScale: ctx.uiScale.value,
       playbackStatePersistenceEnabled: ctx.playbackStatePersistenceEnabled.value,
       queueLayout: ctx.queueLayout.value,
@@ -415,7 +417,6 @@ export function installLifecycle(ctx) {
     ctx.applyMediaSessionMetadata();
     ctx.updateMediaSessionPlaybackState();
     ctx.updateMediaSessionPositionState();
-    void ctx.loadMigrationNotice();
     void ctx.loadProxyMode();
     void ctx.bindUpdateEvents().then((bound) => {
       if (bound && new URLSearchParams(window.location.search).get('welcome') !== '1') {

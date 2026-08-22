@@ -45,9 +45,10 @@ export function installUpdateActions(ctx) {
     const status = ctx.updateState.value?.status || 'idle';
     if (status === 'disabled') return 'Updates unavailable';
     if (status === 'checking') return 'Checking';
-    if (status === 'available') return 'Downloading';
+    if (status === 'available') return 'Update available';
     if (status === 'downloading') return 'Downloading';
     if (status === 'downloaded') return 'Ready to install';
+    if (status === 'installing') return 'Installing';
     if (status === 'external-available') return 'Package available';
     if (status === 'external-downloading') return 'Downloading package';
     if (status === 'external-downloaded') return 'Saved to Downloads';
@@ -56,9 +57,9 @@ export function installUpdateActions(ctx) {
     return 'Ready';
   });
 
-  ctx.updateCanInstall = computed(() => ctx.updateState.value?.status === 'downloaded');
+  ctx.updateCanInstall = computed(() => ['available', 'downloaded'].includes(ctx.updateState.value?.status));
 
-  ctx.updateCanCheck = computed(() => !['checking', 'downloading', 'available', 'external-downloading'].includes(ctx.updateState.value?.status));
+  ctx.updateCanCheck = computed(() => !['checking', 'downloading', 'available', 'downloaded', 'installing', 'external-downloading'].includes(ctx.updateState.value?.status));
 
   ctx.updateChannelIsBeta = computed(() => ctx.updateState.value?.channel === 'beta');
 
@@ -137,7 +138,9 @@ export function installUpdateActions(ctx) {
     if (!window.orchardUpdates?.install) return;
 
     try {
-      ctx.syncUpdateState(await window.orchardUpdates.install());
+      ctx.syncUpdateState(await window.orchardUpdates.install({
+        keepOldVersions: ctx.keepOldVersions.value
+      }));
     } catch (error) {
       ctx.errorMessage.value = error.message;
     }
