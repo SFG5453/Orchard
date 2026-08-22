@@ -435,7 +435,7 @@ jobs:
       - name: Install Arch build tools
         run: |
           pacman -Syu --noconfirm \
-            bun clang curl flatpak flatpak-builder git go libarchive llvm nodejs npm python rust webkit2gtk-4.1 zstd
+            bun clang curl flatpak flatpak-builder git go libarchive llvm nodejs npm python rust unzip webkit2gtk-4.1 zstd
           useradd --create-home builder
 
       - name: Check out release tag
