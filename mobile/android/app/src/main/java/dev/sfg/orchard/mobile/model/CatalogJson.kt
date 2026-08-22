@@ -36,6 +36,7 @@ object CatalogJson {
         .put("animatedArtworkVerticalUrl", value.animatedArtworkVerticalUrl)
         .put("durationMs", value.durationMs)
         .put("explicit", value.explicit)
+        .put("musicVideoType", value.musicVideoType)
         .put("autoplayGenerated", value.autoplayGenerated)
         .put("isUpload", value.isUpload)
 
@@ -51,6 +52,7 @@ object CatalogJson {
         animatedArtworkVerticalUrl = value.cleanString("animatedArtworkVerticalUrl"),
         durationMs = value.optLong("durationMs"),
         explicit = value.optBoolean("explicit"),
+        musicVideoType = value.cleanString("musicVideoType"),
         autoplayGenerated = value.optBoolean("autoplayGenerated"),
         isUpload = value.optBoolean("isUpload"),
     )
@@ -125,4 +127,3 @@ object CatalogJson {
         return if (v.equals("null", ignoreCase = true)) default else v
     }
 }
-

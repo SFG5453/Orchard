@@ -104,6 +104,16 @@ class LocalPlaybackController(
         player.replaceMediaItem(index, MediaItemMapper.toMediaItem(track))
     }
 
+    /** Repairs a restored/current version in place without sending the listener back to zero. */
+    fun replaceCurrent(expectedId: String, track: Track) = withController { player ->
+        val index = player.currentMediaItemIndex
+        if (index !in 0 until player.mediaItemCount) return@withController
+        if (player.getMediaItemAt(index).mediaId != expectedId) return@withController
+        val position = player.currentPosition.coerceAtLeast(0)
+        player.replaceMediaItem(index, MediaItemMapper.toMediaItem(track))
+        player.seekTo(index, position)
+    }
+
     fun playNext(track: Track) = withController { player ->
         val index = (player.currentMediaItemIndex + 1).coerceIn(0, player.mediaItemCount)
         player.addMediaItem(index, MediaItemMapper.toMediaItem(track))

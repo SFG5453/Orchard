@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile.playback
 
 import dev.sfg.orchard.mobile.model.RepeatMode
+import dev.sfg.orchard.mobile.model.MUSIC_VIDEO_TYPE_ATV
 import dev.sfg.orchard.mobile.model.Track
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -29,7 +30,10 @@ import org.junit.Test
 class PlaybackStateCodecTest {
     @Test
     fun queuePositionShuffleAndRepeatSurviveRoundTrip() {
-        val queue = listOf(Track("a", "First", "Artist"), Track("b", "Second", "Artist"))
+        val queue = listOf(
+            Track("a", "First", "Artist"),
+            Track("b", "Second", "Artist", explicit = true, musicVideoType = MUSIC_VIDEO_TYPE_ATV),
+        )
         val restored = PlaybackStateCodec.decode(PlaybackStateCodec.encode(
             RestoredPlayback(
                 queue,

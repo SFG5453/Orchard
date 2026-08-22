@@ -31,6 +31,7 @@ import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.auth.AuthState
 import dev.sfg.orchard.mobile.artwork.ArtistImages
 import dev.sfg.orchard.mobile.artwork.TrackArtwork
+import dev.sfg.orchard.mobile.catalog.needsAudioVersionLookup
 import dev.sfg.orchard.mobile.model.*
 import dev.sfg.orchard.mobile.connect.PlaybackTargetCoordinator
 import dev.sfg.orchard.mobile.playback.AutoplayRecommendations
@@ -260,6 +261,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         observeAuthentication()
         observeDiscordPresence()
         observeWarnings()
+        observeLocalAudioVersion()
         observeAutoplay()
     }
 
@@ -400,11 +402,13 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** Replaces queued music videos with their album audio as each lookup completes. */
+    /** Verifies queued versions in playback order without bursting one search per explicit row. */
     private fun CoroutineScope.resolveRemainingAudioVersions(queue: List<Track>, startIndex: Int) {
-        queue.forEachIndexed { index, track ->
-            if (index == startIndex || !track.isVideoUpload) return@forEachIndexed
-            launch {
+        val lookupOrder = (startIndex + 1 until queue.size) + (0 until startIndex)
+        launch {
+            lookupOrder.forEach { index ->
+                val track = queue[index]
+                if (!track.needsAudioVersionLookup()) return@forEach
                 val audio = graph.audioVersions.audioVersion(track)
                 if (audio.id != track.id) local.replaceQueued(index, track.id, audio)
             }
@@ -504,15 +508,19 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun playNext(track: Track) = remoteOrLocal(
-        { if (connectProtocolVersion.value >= 2) graph.connect.playNext(track) },
-        { local.playNext(track) },
-    )
+    fun playNext(track: Track) {
+        remoteOrLocal(
+            { if (connectProtocolVersion.value >= 2) graph.connect.playNext(track) },
+            { viewModelScope.launch { local.playNext(graph.audioVersions.audioVersion(track)) } },
+        )
+    }
 
-    fun addToQueue(track: Track) = remoteOrLocal(
-        { if (connectProtocolVersion.value >= 2) graph.connect.addToQueue(track) },
-        { local.addToQueue(track) },
-    )
+    fun addToQueue(track: Track) {
+        remoteOrLocal(
+            { if (connectProtocolVersion.value >= 2) graph.connect.addToQueue(track) },
+            { viewModelScope.launch { local.addToQueue(graph.audioVersions.audioVersion(track)) } },
+        )
+    }
 
     fun togglePlayback() = partyOrLocal(
         if (playback.value.isPlaying) "pause" else "play",
@@ -929,6 +937,21 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     private fun observeWarnings() {
         viewModelScope.launch { graph.warningEvent.collect { showWarning(it) } }
         viewModelScope.launch { party.messages.collect { showWarning(it) } }
+    }
+
+    /** Repairs an explicit id restored from an older queue before it can keep playing clean audio. */
+    private fun observeLocalAudioVersion() {
+        viewModelScope.launch {
+            local.snapshot
+                .map { it.currentTrack }
+                .filterNotNull()
+                .distinctUntilChangedBy { Triple(it.id, it.explicit, it.musicVideoType) }
+                .collectLatest { track ->
+                    if (!track.needsAudioVersionLookup()) return@collectLatest
+                    val audio = graph.audioVersions.audioVersion(track)
+                    if (audio.id != track.id) local.replaceCurrent(track.id, audio)
+                }
+        }
     }
 
     fun connectDiscord(context: android.content.Context) {
