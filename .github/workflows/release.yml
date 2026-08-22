@@ -426,18 +426,11 @@ jobs:
           retention-days: 1
 
   build-linux-x64:
-    name: Linux x64 packages (Arch)
+    name: Linux x64 packages
     needs: prepare
     if: needs.prepare.outputs.mobile_only != 'true'
     runs-on: ubuntu-24.04
-    container: archlinux:base-devel
     steps:
-      - name: Install Arch build tools
-        run: |
-          pacman -Syu --noconfirm \
-            bun clang curl flatpak flatpak-builder git go libarchive llvm nodejs npm python rust unzip webkit2gtk-4.1 zstd
-          useradd --create-home builder
-
       - name: Check out release tag
         uses: actions/checkout@v6
         with:
@@ -449,31 +442,40 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Install dependencies and stage Linux x64 native inputs
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: orchard-packages/go.sum
+
+      - name: Install build tools and Flatpak runtime
         run: |
           set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes flatpak flatpak-builder zstd
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive flathub \
+            org.gnome.Platform//${FLATPAK_RUNTIME} \
+            org.gnome.Sdk//${FLATPAK_RUNTIME}
+
+      - name: Build x64 native packages and manager
+        run: |
+          set -euo pipefail
+          test "$(node -p process.arch)" = x64
           npm ci
           npm run build:native
           node scripts/stage-package-native.mjs linux-x64 native-inputs
           bun install --cwd orchard-packages --frozen-lockfile
-
-      - name: Build x64 manager, Flatpak, and Arch package
-        run: |
-          set -euo pipefail
           bun run --cwd orchard-packages build:release linux-x64
-          flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          flatpak install --noninteractive flathub \
-            org.gnome.Platform//${FLATPAK_RUNTIME} \
-            org.gnome.Sdk//${FLATPAK_RUNTIME}
           bun run --cwd orchard-packages package:flatpak linux-x64
-          chown -R builder:builder "$GITHUB_WORKSPACE"
-          runuser -u builder -- env HOME=/home/builder PATH="$PATH" \
-            sh -c 'cd "$1" && bun run package:orchard-packages:arch' _ "$GITHUB_WORKSPACE"
 
       - name: Stage Linux x64 artifacts
         run: |
@@ -484,7 +486,6 @@ jobs:
           ZSTD_CLEVEL=6 tar --zstd -cf \
             "release-assets/orchard-packages-$manager_version-linux-x64.tar.zst" \
             -C "$bundle" .
-          cp artifacts/arch/*.pkg.tar.zst release-assets/
           cp artifacts/flatpak/*.flatpak release-assets/
           find release-assets -maxdepth 1 -type f -print
 
@@ -501,6 +502,44 @@ jobs:
         with:
           name: release-manager-linux-x64
           path: release-assets/
+          if-no-files-found: error
+          retention-days: 1
+
+  build-arch-x64:
+    name: Arch Linux x64 package
+    needs: prepare
+    if: needs.prepare.outputs.mobile_only != 'true'
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    steps:
+      - name: Install Arch build tools
+        run: |
+          pacman -Syu --noconfirm \
+            bun git go libarchive nodejs npm python unzip webkit2gtk-4.1 zstd
+          useradd --create-home builder
+
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Build Arch package
+        run: |
+          set -euo pipefail
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          runuser -u builder -- env HOME=/home/builder PATH="$PATH" \
+            sh -c 'cd "$1" && bun run package:orchard-packages:arch' _ "$GITHUB_WORKSPACE"
+
+      - name: Save Arch Linux package
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-manager-arch-x64
+          path: artifacts/arch/*.pkg.tar.zst
           if-no-files-found: error
           retention-days: 1
 
@@ -640,7 +679,7 @@ jobs:
 
   publish-r2:
     name: Publish package service to R2
-    needs: [prepare, build-linux-arm64, build-linux-x64, build-windows, build-macos, build-r2, build-android]
+    needs: [prepare, build-linux-arm64, build-linux-x64, build-arch-x64, build-windows, build-macos, build-r2, build-android]
     if: >-
       always()
       && needs.prepare.result == 'success'
@@ -732,7 +771,7 @@ jobs:
 
   publish-github-beta:
     name: Publish beta to GitHub Releases
-    needs: [prepare, build-linux-arm64, build-linux-x64, build-windows, build-macos, build-r2, build-android]
+    needs: [prepare, build-linux-arm64, build-linux-x64, build-arch-x64, build-windows, build-macos, build-r2, build-android]
     if: >-
       always()
       && needs.prepare.result == 'success'
