@@ -360,6 +360,22 @@ export async function refineBeatsWithModel(rawResult, windows, {
     return Math.min(Math.abs(grid[low] - time), Math.abs(grid[high] - time));
   };
 
+  const metricalPhases = (grid, expectedInterval, count) => {
+    const phases = Array.from({ length: count }, () => []);
+    let position = 0;
+    for (let index = 0; index < grid.length; index += 1) {
+      if (index > 0) {
+        const elapsedBeats = Math.max(
+          1,
+          Math.round((grid[index] - grid[index - 1]) / expectedInterval)
+        );
+        position += elapsedBeats;
+      }
+      phases[position % count].push(grid[index]);
+    }
+    return phases;
+  };
+
   const offsetVotes = [0, 0, 0, 0];
   const agreements = [];
   let modelConfidence = 0;
@@ -403,14 +419,13 @@ export async function refineBeatsWithModel(rawResult, windows, {
     const fold = 2 ** Math.abs(octaves);
     let phaseDistances;
     if (octaves > 0 && fold > 1) {
-      phaseDistances = Array.from({ length: fold }, (_, phase) => shiftedModelBeats
-        .filter((_, index) => index % fold === phase)
-        .map((time) => Math.abs(nativeBeats[nearestIndex(time)] - time)));
+      phaseDistances = metricalPhases(shiftedModelBeats, 60 / found.bpm, fold)
+        .map((phase) => phase
+          .map((time) => Math.abs(nativeBeats[nearestIndex(time)] - time)));
     } else if (octaves < 0 && fold > 1) {
-      phaseDistances = Array.from({ length: fold }, (_, phase) => {
-        const foldedNativeBeats = nativeBeats.filter((_, index) => index % fold === phase);
-        return shiftedModelBeats.map((time) => nearestDistance(foldedNativeBeats, time));
-      });
+      phaseDistances = metricalPhases(nativeBeats, interval, fold)
+        .map((foldedNativeBeats) => shiftedModelBeats
+          .map((time) => nearestDistance(foldedNativeBeats, time)));
     } else {
       phaseDistances = [shiftedModelBeats.map(
         (time) => Math.abs(nativeBeats[nearestIndex(time)] - time)
