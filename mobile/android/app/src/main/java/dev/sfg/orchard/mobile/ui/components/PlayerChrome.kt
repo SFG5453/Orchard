@@ -149,6 +149,7 @@ private val MiniPlayerShape = RoundedCornerShape(16.dp)
 @Composable
 fun OrchardBottomBar(currentRoute: String?, onSelect: (String) -> Unit) {
     val glass = LocalGlass.current.enabled
+    val glassTint = LocalGlass.current.tint
     val destinations = if (glass) glassDestinations else standardDestinations
     val scrim = remember {
         Brush.verticalGradient(
@@ -175,6 +176,8 @@ fun OrchardBottomBar(currentRoute: String?, onSelect: (String) -> Unit) {
     }
     val activeIndex = selectedIndex ?: lastKnownIndex
 
+    val tintColor = if (glassTint != Color.Unspecified && glassTint.alpha > 0f) glassTint else LocalAccent.current
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -183,6 +186,25 @@ fun OrchardBottomBar(currentRoute: String?, onSelect: (String) -> Unit) {
                     Modifier
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                         .glassPane(BottomBarShape, GlassTone.CHROME)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                listOf(
+                                    tintColor.copy(alpha = 0.38f),
+                                    tintColor.copy(alpha = 0.24f),
+                                ),
+                            ),
+                            shape = BottomBarShape,
+                        )
+                        .border(
+                            width = 1.dp,
+                            brush = Brush.verticalGradient(
+                                listOf(
+                                    tintColor.copy(alpha = 0.55f),
+                                    tintColor.copy(alpha = 0.25f),
+                                ),
+                            ),
+                            shape = BottomBarShape,
+                        )
                 } else {
                     Modifier.background(scrim)
                 },
@@ -214,13 +236,24 @@ fun OrchardBottomBar(currentRoute: String?, onSelect: (String) -> Unit) {
             )
 
             if (indicatorAlpha > 0.001f) {
+                val indicatorColor = if (glass) {
+                    tintColor.copy(alpha = 0.45f)
+                } else {
+                    LocalAccent.current.copy(alpha = 0.15f)
+                }
+
                 Box(
                     modifier = Modifier
                         .offset(x = animatedOffset, y = 6.dp)
                         .size(width = indicatorWidth, height = indicatorHeight)
                         .alpha(indicatorAlpha)
                         .background(
-                            color = if (glass) Color.White.copy(alpha = 0.18f) else LocalAccent.current.copy(alpha = 0.15f),
+                            color = indicatorColor,
+                            shape = RoundedCornerShape(16.dp),
+                        )
+                        .border(
+                            width = 0.5.dp,
+                            color = if (glass) Color.White.copy(alpha = 0.35f) else Color.Transparent,
                             shape = RoundedCornerShape(16.dp),
                         ),
                 )
@@ -261,11 +294,11 @@ fun OrchardBottomBar(currentRoute: String?, onSelect: (String) -> Unit) {
                             )
                         },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = if (glass) Color.White else LocalAccent.current,
-                            selectedTextColor = if (glass) Color.White else LocalAccent.current,
+                            selectedIconColor = Color.White,
+                            selectedTextColor = Color.White,
                             indicatorColor = Color.Transparent,
-                            unselectedIconColor = CanopyColors.Muted,
-                            unselectedTextColor = CanopyColors.Muted,
+                            unselectedIconColor = if (glass) Color.White.copy(alpha = 0.72f) else CanopyColors.Muted,
+                            unselectedTextColor = if (glass) Color.White.copy(alpha = 0.72f) else CanopyColors.Muted,
                         ),
                     )
                 }

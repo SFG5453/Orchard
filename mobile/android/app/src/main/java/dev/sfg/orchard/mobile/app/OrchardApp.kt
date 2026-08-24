@@ -68,6 +68,7 @@ import dev.sfg.orchard.mobile.ui.glass.glassWashSource
 import dev.sfg.orchard.mobile.ui.glass.rememberGlassScene
 import dev.sfg.orchard.mobile.ui.glass.rememberGlassStyle
 import dev.sfg.orchard.mobile.ui.navigation.Routes
+import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import dev.sfg.orchard.mobile.ui.screens.DetailScreen
 import dev.sfg.orchard.mobile.ui.screens.DevicesScreen
 import dev.sfg.orchard.mobile.ui.screens.HomeScreen
@@ -115,11 +116,25 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val chromeHidden = (route == Routes.DEVICES && !settings.frostedGlass) || route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME
     // Collection artwork runs under the status bar, so these screens take no top inset and
     // apply it themselves where the content actually needs it.
-    val artworkUnderStatusBar = route == Routes.DETAIL
+    val isDetail = route == Routes.DETAIL || route?.startsWith("detail") == true
+    val artworkUnderStatusBar = isDetail
+
+    // When in an album / collection, sample the album cover's palette so the frosted glass
+    // and bottom navigation dynamically reflect the album being viewed.
+    val detailState by viewModel.detail.collectAsStateWithLifecycle()
+    val detailArtwork by viewModel.detailArtwork.collectAsStateWithLifecycle()
+    val detailArtworkUrl = detailArtwork?.staticUrl?.takeIf { it.isNotBlank() }
+        ?: (detailState as? LoadState.Content)?.value?.artworkUrl.orEmpty()
+
+    val activeCoverUrl = if (isDetail && detailArtworkUrl.isNotBlank()) {
+        detailArtworkUrl
+    } else {
+        playerPlayback.currentTrack?.artworkUrl.orEmpty()
+    }
 
     // Sampled once here and handed to both the wash and the glass panes, so the cover the app is
     // tinted by and the cover its panes are tinted by can never disagree.
-    val backdropPalette = rememberArtworkPalette(playerPlayback.currentTrack?.artworkUrl.orEmpty())
+    val backdropPalette = rememberArtworkPalette(activeCoverUrl)
     val glassTint = animateColorAsState(
         targetValue = backdropPalette.accent,
         animationSpec = tween(900),
@@ -129,8 +144,14 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     // Only exists while the treatment is on: with it off there is nothing to record, and the two
     // layers should not be allocated at all.
     val glassScene = if (settings.frostedGlass) rememberGlassScene() else null
+    val currentAccent = LocalAccent.current
+    val effectiveAccent = if (settings.frostedGlass) glassTint.value else currentAccent
 
-    CompositionLocalProvider(LocalGlass provides glass, LocalGlassScene provides glassScene) {
+    CompositionLocalProvider(
+        LocalGlass provides glass,
+        LocalGlassScene provides glassScene,
+        LocalAccent provides effectiveAccent,
+    ) {
         Scaffold(
             // Transparent so the artwork wash below shows through every screen.
             containerColor = Color.Transparent,
