@@ -19,6 +19,34 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '5.0.0-beta.3',
+    codename: 'Curates Admixture',
+    date: 'August 24, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'Best Mix now ranks tracks by executable DJ choreography, with exact staged transition automation shared across the desktop and mobile playback engines.',
+          'Introduced the new Orchard package manager and a GitHub-backed updater with managed Linux package downloads and automatic beta-channel selection.',
+          'Improved responsive player, title bar, sidebar, fullscreen, and windowed layouts.'
+        ]
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Strengthened transition timing, beat-grid alignment, vocal-collision handling, cue boundaries, audible track-tail protection, and WSOLA source timeline mapping.',
+          'Reduced repeated transition planning and audio-analysis overhead while rejecting stale cloud analysis results.'
+        ]
+      },
+      {
+        title: 'Maintenance',
+        items: [
+          'Added Arch Linux packaging, repaired Flatpak and Linux x64 builds, bundled the required C++ runtime, and updated Quasar and @xmldom/xmldom dependencies.'
+        ]
+      }
+    ]
+  },
+  {
     version: '5.0.0-beta.1',
     codename: 'Aerie Hymned',
     date: 'August 20, 2026',

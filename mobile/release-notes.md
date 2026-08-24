@@ -1,12 +1,20 @@
-## Orchard Mobile 2.0.0-beta.1 "Aerie Hymned"
+## Orchard Mobile 2.0.0-beta.2 "Disallow Thermoses"
 
 ### Added
-- **Frosted Glass UI**: Redesigned modern frosted glass theme with immersive background blurs, animated artwork backdrops, enhanced player chrome, and updated screens across Home, Devices, and Settings. Design enhancements contributed by Julian-FF2000.
-- **Beta Channel**: Opt in to receive beta builds directly from GitHub releases with prerelease semver update checks and release notes.
+- **Best Mix**: Added mobile Best Mix with offline audio analysis, cloud synchronization, and transition-aware queue sorting.
+- **Queue Controls**: Added Best Mix, Autoplay, and Sleep Timer controls to the redesigned queue header.
+- **Catalog Browsing**: Expanded search and added multi-section catalog browse pages.
+- **Adaptive Navigation**: The frosted bottom navigation bar now samples colors from the current album artwork.
 
 ### Changed
-- Unified upper and bass frequency bands into a single constant-power crossfade curve in the DJ mixing engine.
+- Mobile now executes the same exact staged transition choreography as desktop.
+- Home prioritizes saved playlists and albums while catalog songs and related shelves play directly.
+- Audio decoding now resamples during decode and reuses vocal-model inference buffers for better performance.
+
+### Fixed
+- Improved transition timing, beat-grid agreement, cue boundaries, vocal-collision handling, and audible track-tail protection.
+- Fixed explicit-safe audio version resolution and clipped animated artwork to its container.
+- Removed the duplicate cloud audio-analysis setting.
 
 ### Maintenance
-- Updated ONNX Runtime to 1.29.0 and markdown library to 0.7.9.
-
+- Updated cloud analysis to schema version 12 and bumped `@xmldom/xmldom` to 0.9.12.
