@@ -26,6 +26,7 @@
 
 #include <jni.h>
 
+#include <algorithm>
 #include <vector>
 
 #include "analyzer/vocal_spectrogram.h"
@@ -74,6 +75,66 @@ Java_dev_sfg_orchard_mobile_playback_smart_VocalSpectrogram_nativeCompute(
     env->SetFloatArrayRegion(result, 0, produced, spectrogram.values.data());
   }
   return result;
+}
+
+// Writes the spectrogram straight into a direct buffer the caller owns and
+// returns the frames written.
+//
+// That buffer is the one the model reads, so the window never exists as a Java
+// array: a [1, 2, bins, 960] tensor is 15 MB, and going through a float[] meant
+// it existed twice over, because the runtime copies a non-direct input buffer
+// into a direct one of its own before inference. Two analyses run at once by
+// design, and that arithmetic is what took the process down.
+//
+// `frame_stride` is the model's fixed width. Writing each bin's frames that far
+// apart into a cleared buffer is also what zero-pads a short window, so no
+// separate padding pass is needed.
+JNIEXPORT jint JNICALL
+Java_dev_sfg_orchard_mobile_playback_smart_VocalSpectrogram_nativeComputeInto(
+    JNIEnv* env,
+    jclass /* clazz */,
+    jfloatArray left,
+    jfloatArray right,
+    jint offset,
+    jint length,
+    jdouble sample_rate,
+    jobject destination,
+    jint frame_stride) {
+  if (offset < 0 || length <= 0 || frame_stride <= 0) return 0;
+  if (offset + length > env->GetArrayLength(left) ||
+      offset + length > env->GetArrayLength(right)) {
+    return 0;
+  }
+
+  auto* out = static_cast<float*>(env->GetDirectBufferAddress(destination));
+  const jlong capacity = env->GetDirectBufferCapacity(destination);
+  if (out == nullptr || capacity < 0) return 0;
+
+  const size_t stride = static_cast<size_t>(frame_stride);
+  const size_t required =
+      orchard::kVocalSpectrogramChannels * orchard::kVocalSpectrogramBins * stride;
+  if (static_cast<size_t>(capacity) / sizeof(float) < required) return 0;
+
+  std::vector<std::vector<float>> channels(orchard::kVocalSpectrogramChannels);
+  channels[0].resize(static_cast<size_t>(length));
+  channels[1].resize(static_cast<size_t>(length));
+  env->GetFloatArrayRegion(left, offset, length, channels[0].data());
+  env->GetFloatArrayRegion(right, offset, length, channels[1].data());
+
+  const orchard::VocalSpectrogram spectrogram =
+      orchard::ComputeVocalSpectrogram(channels, sample_rate);
+  if (spectrogram.frames == 0 || spectrogram.frames > stride) return 0;
+
+  std::fill_n(out, required, 0.0f);
+  for (size_t channel = 0; channel < orchard::kVocalSpectrogramChannels; ++channel) {
+    for (size_t bin = 0; bin < orchard::kVocalSpectrogramBins; ++bin) {
+      const size_t row = channel * orchard::kVocalSpectrogramBins + bin;
+      std::copy_n(spectrogram.values.data() + row * spectrogram.frames,
+                  spectrogram.frames,
+                  out + row * stride);
+    }
+  }
+  return static_cast<jint>(spectrogram.frames);
 }
 
 JNIEXPORT jint JNICALL
