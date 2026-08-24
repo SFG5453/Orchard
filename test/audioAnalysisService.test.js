@@ -295,12 +295,21 @@ test('audio analysis service rejects invalid BPM and redacts sensitive diagnosti
       details: {
         cookie: 'SID=private',
         authorization: 'Bearer private',
-        message: 'https://stream.example/audio?signature=secret&token=private'
+        message: 'https://stream.example/audio?signature=secret&token=private',
+        candidates: Array.from({ length: 25 }, (_, index) => ({
+          index,
+          accessToken: `secret-${index}`,
+          nested: { more: { privateUrl: `https://stream.example/${index}?token=private` } }
+        }))
       }
     });
     const serialized = JSON.stringify(logs);
     assert.doesNotMatch(serialized, /SID=private|Bearer private|signature=secret|token=private/);
     assert.match(serialized, /redacted/);
+    const debug = logs.find((entry) => entry.event === 'renderer:decode-failed');
+    assert.equal(debug.details.candidates.length, 20);
+    assert.equal(debug.details.candidates[0].accessToken, '[redacted]');
+    assert.equal(debug.details.candidates[0].nested.more, '[truncated]');
   } finally {
     await service.stop();
     await rm(directory, { recursive: true, force: true });

@@ -148,6 +148,26 @@ test('chooses a full beatmatched transition for a clean compatible pair', () => 
   assert.equal(plan.incoming.resume, plan.incoming.handoff);
   assert.ok(['beatmatched_crossfade', 'bass_swap'].includes(plan.strategy));
   assert.equal(plan.fallback.transitionClass, 'simple_crossfade');
+
+  const selected = plan.diagnostics.selected;
+  assert.equal(selected.outgoingEnd, plan.outgoing.end);
+  assert.equal(selected.incomingHandoff, plan.incoming.handoff);
+  assert.equal(selected.transitionClass, plan.transitionClass);
+  assert.equal(selected.strategy, plan.strategy);
+  assert.equal(selected.confidence, plan.confidence);
+  assert.deepEqual(Object.keys(selected.components).sort(), [
+    'beat',
+    'dspRisk',
+    'duration',
+    'energy',
+    'harmonic',
+    'spectral',
+    'stability',
+    'structure',
+    'tempo',
+    'vocal'
+  ]);
+  assert.equal(plan.fallbackReason, '');
 });
 
 test('demotes close-tempo candidates with sustained lead-vocal collision', () => {

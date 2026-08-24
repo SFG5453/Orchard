@@ -482,6 +482,7 @@ function diagnosticCandidate(evaluation) {
     beats: evaluation.pair.beats,
     sources: evaluation.sources,
     transitionClass: evaluation.transitionClass,
+    strategy: strategyFor(evaluation),
     confidence: evaluation.confidence,
     quality: evaluation.quality,
     evidenceCoverage: evaluation.evidenceCoverage,
