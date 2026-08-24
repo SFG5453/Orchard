@@ -142,37 +142,6 @@ internal fun CrossfadeRow(settings: OrchardSettings, onSettings: (OrchardSetting
                         ),
                     )
                 }
-                AnimatedVisibility(visible = settings.smartCrossfade) {
-                    Column {
-                        Spacer(Modifier.height(10.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f).padding(end = 14.dp)) {
-                                Text(
-                                    "Cloud audio analysis",
-                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontWeight = FontWeight.Medium,
-                                    ),
-                                    color = CanopyColors.Text,
-                                )
-                                Text(
-                                    "Download pre-computed analysis from Supabase for Best Mix instead of analyzing local files",
-                                    color = CanopyColors.Muted,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                            Switch(
-                                checked = settings.bestMixSupabaseSync,
-                                onCheckedChange = { onSettings(settings.copy(bestMixSupabaseSync = it)) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.Black,
-                                    checkedTrackColor = LocalAccent.current,
-                                    uncheckedThumbColor = CanopyColors.Muted,
-                                    uncheckedTrackColor = CanopyColors.Canvas,
-                                ),
-                            )
-                        }
-                    }
-                }
             }
         }
     }
