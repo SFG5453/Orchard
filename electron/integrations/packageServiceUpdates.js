@@ -19,8 +19,6 @@
 
 import semver from 'semver';
 
-export const DEFAULT_PACKAGE_SERVICE_URL = 'https://packages.sfg545.dev/';
-
 export function packageServiceTarget(platform = process.platform, architecture = process.arch) {
   const normalizedPlatform = platform === 'win32' ? 'win32' : platform;
   const normalizedArchitecture = architecture === 'x64' || architecture === 'amd64'
@@ -48,10 +46,17 @@ export function selectPackageServiceRelease(manifest, { channel, currentVersion,
   };
 }
 
-export function latestBetaPackageManifest(releases) {
+/**
+ * Locates the manifest for a channel among GitHub releases, which are the only
+ * place Orchard packages are published. Assets sit beside the manifest in the
+ * same release, so the manifest's own URL is the base for everything it lists.
+ */
+export function latestPackageManifest(releases, channel = 'stable') {
   if (!Array.isArray(releases)) return null;
+  const wantsPrerelease = channel === 'beta';
   for (const release of releases) {
-    if (!release?.prerelease || release?.draft) continue;
+    if (release?.draft) continue;
+    if (Boolean(release?.prerelease) !== wantsPrerelease) continue;
     const asset = Array.isArray(release.assets)
       ? release.assets.find((candidate) => candidate?.name === 'manifest.json')
       : null;
@@ -63,7 +68,7 @@ export function latestBetaPackageManifest(releases) {
         baseURL: new URL('.', manifestUrl).toString()
       };
     } catch {
-      // Continue to an older beta with a complete package manifest.
+      // Continue to an older release with a complete package manifest.
     }
   }
   return null;

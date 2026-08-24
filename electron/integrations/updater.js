@@ -31,8 +31,7 @@ import {
   preparePackageServiceUpdate
 } from './packageServiceInstaller.js';
 import {
-  DEFAULT_PACKAGE_SERVICE_URL,
-  latestBetaPackageManifest,
+  latestPackageManifest,
   packageServiceTarget,
   selectPackageServiceRelease
 } from './packageServiceUpdates.js';
@@ -40,25 +39,29 @@ import { updateErrorMessage } from './updateErrors.js';
 
 const require = createRequire(import.meta.url);
 const { app, BrowserWindow, dialog, ipcMain, net } = require('electron');
-const DEFAULT_UPDATE_URL = DEFAULT_PACKAGE_SERVICE_URL;
 const DEFAULT_ARTIST_PACK_INDEX_URL = 'https://artist-packs.sfg545.dev/v1/index.json';
 const { UPDATES } = IPC_CHANNELS;
 const ARTIST_PACK_MAX_BYTES = 50 * 1024 * 1024;
 const GITHUB_OWNER = 'sfg5453';
 const GITHUB_REPO = 'orchard';
+const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
+const GITHUB_RELEASES_API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=20`;
 const UPDATE_CHANNELS = ['stable', 'beta'];
 const DEFAULT_UPDATE_CHANNEL = 'stable';
 
+// Packages are published to GitHub releases and nowhere else. This override
+// exists so a developer can point a build at a locally served manifest; there
+// is no hosted fallback behind it.
 function normalizeUpdateUrl(value) {
-  const fallback = DEFAULT_UPDATE_URL;
+  if (!value) return '';
 
   try {
-    const url = new URL(value || fallback);
-    if (!['http:', 'https:'].includes(url.protocol)) return fallback;
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol)) return '';
     if (!url.pathname.endsWith('/')) url.pathname = `${url.pathname}/`;
     return url.toString();
   } catch {
-    return fallback;
+    return '';
   }
 }
 
@@ -234,7 +237,8 @@ async function fetchOfficialPackEntries(archiveUrl) {
 }
 
 export function setupOrchardUpdates({ isDev }) {
-  const updateUrl = normalizeUpdateUrl(process.env.ORCHARD_PACKAGE_URL);
+  const packageUrlOverride = normalizeUpdateUrl(process.env.ORCHARD_PACKAGE_URL);
+  const updateUrl = packageUrlOverride || GITHUB_RELEASES_URL;
   const artistPackIndexUrl = normalizeContentIndexUrl(process.env.ORCHARD_ARTIST_PACK_INDEX_URL);
   const sourceBuild = Boolean(isDev) || !app.isPackaged;
   const updateChecksEnabled = !sourceBuild;
@@ -247,7 +251,7 @@ export function setupOrchardUpdates({ isDev }) {
   const disabledMessage = 'Updates are disabled for development builds.';
   let checkPromise = null;
   let availablePackageRelease = null;
-  let availablePackageBaseURL = updateUrl;
+  let availablePackageBaseURL = packageUrlOverride;
   let preparedPackageUpdate = null;
   let packageUpdatePromise = null;
   const fetchWithNet = (url, options) => net.fetch(url, options);
@@ -301,19 +305,21 @@ export function setupOrchardUpdates({ isDev }) {
 
   async function checkPackageServiceUpdate() {
     publish({ status: 'checking', message: 'Checking for updates...', progress: null, error: '' });
-    let manifestUrl = new URL('manifest.json', updateUrl).toString();
-    availablePackageBaseURL = updateUrl;
-    if (state.channel === 'beta') {
-      const releases = await fetchJson(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=20`, {
+    let manifestUrl;
+    if (packageUrlOverride) {
+      manifestUrl = new URL('manifest.json', packageUrlOverride).toString();
+      availablePackageBaseURL = packageUrlOverride;
+    } else {
+      const releases = await fetchJson(GITHUB_RELEASES_API_URL, {
         headers: {
           accept: 'application/vnd.github+json',
           'user-agent': `OrchardDesktop/${state.version}`
         }
       }, fetchWithNet);
-      const beta = latestBetaPackageManifest(releases);
-      if (!beta) throw new Error('No Orchard package beta is currently available.');
-      manifestUrl = beta.manifestUrl;
-      availablePackageBaseURL = beta.baseURL;
+      const source = latestPackageManifest(releases, state.channel);
+      if (!source) throw new Error(`No ${state.channel} Orchard package release is currently available.`);
+      manifestUrl = source.manifestUrl;
+      availablePackageBaseURL = source.baseURL;
     }
     const manifest = await fetchJson(manifestUrl, {}, fetchWithNet);
     const { latest, updateAvailable } = selectPackageServiceRelease(manifest, {
