@@ -37,6 +37,7 @@
 @import './styles/library-category.css';
 @import './styles/about-dialog.css';
 @import './styles/changelog-dialog.css';
+@import './styles/legacy-install-dialog.css';
 @import './styles/update-dialog.css';
 @import './styles/description-dialog.css';
 @import './styles/song-actions.css';

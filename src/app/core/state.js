@@ -225,6 +225,7 @@ export function installState(ctx) {
   ctx.listeningPartyDialogOpen = ref(Boolean(partyRoomId));
   ctx.changelogDialogOpen = ref(false);
   ctx.updateDialogOpen = ref(false);
+  ctx.legacyInstallDialogOpen = ref(false);
   ctx.fullscreenPlayerOpen = ref(false);
   ctx.smartCrossfadeMix = ref({
     id: 0,
@@ -272,6 +273,14 @@ export function installState(ctx) {
   ctx.errorMessage = ref('');
   ctx.artistSubscription = ref({ browseId: '', subscribed: false, status: 'idle', error: '' });
   ctx.warningMessage = ref('');
+  ctx.legacyInstallState = ref({
+    status: 'idle',
+    kind: '',
+    label: '',
+    location: '',
+    removal: null,
+    error: ''
+  });
   ctx.updateState = ref({
     status: 'idle',
     message: '',

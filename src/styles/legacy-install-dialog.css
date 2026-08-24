@@ -1,0 +1,43 @@
+/*
+ * Copyright (C) 2026 SFG545
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.legacy-install-dialog__command {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0d110e;
+}
+
+.legacy-install-dialog__command code {
+  overflow-x: auto;
+  flex: 1;
+  min-width: 0;
+  color: #d9ddda;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.legacy-install-dialog__location {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+}

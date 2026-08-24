@@ -26,7 +26,8 @@ export const ORCHARD_RELEASES = [
       {
         title: 'New & improved',
         items: [
-          'Replaced the desktop updater with the new Orchard package service, which downloads, verifies, and installs updates directly instead of handing you off to an external installer.'
+          'Replaced the desktop updater with the new Orchard package service, which downloads, verifies, and installs updates directly instead of handing you off to an external installer.',
+          'Once Orchard is running from the package service, it offers a one-time prompt to retire the older install it replaced, using your platform\u2019s own uninstaller.'
         ]
       },
       {

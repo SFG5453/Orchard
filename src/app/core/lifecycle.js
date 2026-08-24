@@ -427,6 +427,7 @@ export function installLifecycle(ctx) {
     ctx.bindDesktopControls();
     ctx.showChangelogAfterUpgrade();
     if (new URLSearchParams(window.location.search).get('welcome') !== '1') {
+      void ctx.loadLegacyInstallNotice();
       ctx.loadSupportReports({ quiet: true });
       ctx.scheduleSupportPolling();
       window.addEventListener('focus', ctx.refreshSupportOnFocus);

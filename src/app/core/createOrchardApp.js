@@ -34,6 +34,7 @@ import { installCustomArtistIdlePreviewActions } from '../appearance/customArtis
 import { installCustomArtistProfileArtwork } from '../appearance/customArtistProfileArtwork.js';
 import { installCustomArtistProfileTransition } from '../appearance/customArtistProfileTransition.js';
 import { installDesktopActions } from '../platform/desktopActions.js';
+import { installLegacyInstallActions } from '../platform/legacyInstallActions.js';
 import { installLifecycle } from './lifecycle.js';
 import { installListeningPartyActions } from '../social/listeningPartyActions.js';
 import { installLastfmScrobbling } from '../social/lastfmScrobbling.js';
@@ -117,6 +118,7 @@ export function createOrchardApp() {
   installCollectionActions(ctx);
   installAutoplayActions(ctx);
   installUpdateActions(ctx);
+  installLegacyInstallActions(ctx);
   installNetworkActions(ctx);
   installChangelogActions(ctx);
   installArtworkService(ctx);

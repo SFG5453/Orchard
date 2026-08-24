@@ -62,6 +62,12 @@ export const IPC_CHANNELS = Object.freeze({
     DISCONNECT: 'github-auth:disconnect',
     STATUS: 'github-auth:status'
   }),
+  LEGACY_INSTALL: Object.freeze({
+    DISMISS: 'legacy-install:dismiss',
+    GET_STATE: 'legacy-install:get-state',
+    REFRESH: 'legacy-install:refresh',
+    REMOVE: 'legacy-install:remove'
+  }),
   LASTFM: Object.freeze({
     COMPLETE: 'lastfm:complete',
     CONNECT: 'lastfm:connect',

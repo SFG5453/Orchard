@@ -159,6 +159,13 @@ contextBridge.exposeInMainWorld('orchardAudioAnalysis', {
   })
 });
 
+contextBridge.exposeInMainWorld('orchardLegacyInstall', {
+  getState: () => ipcRenderer.invoke('legacy-install:get-state'),
+  refresh: () => ipcRenderer.invoke('legacy-install:refresh'),
+  remove: () => ipcRenderer.invoke('legacy-install:remove'),
+  dismiss: () => ipcRenderer.invoke('legacy-install:dismiss')
+});
+
 contextBridge.exposeInMainWorld('orchardGithub', {
   status: () => ipcRenderer.invoke('github-auth:status'),
   connect: () => ipcRenderer.invoke('github-auth:connect'),

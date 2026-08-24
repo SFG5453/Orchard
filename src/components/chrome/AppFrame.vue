@@ -55,6 +55,7 @@ const ReleaseRadarView = defineAsyncComponent(() => import('../views/ReleaseRada
 const SettingsView = defineAsyncComponent(() => import('../settings/SettingsView.vue'));
 const SmartCrossfadeMixOverlay = defineAsyncComponent(() => import('../player/SmartCrossfadeMixOverlay.vue'));
 const UpdateDialog = defineAsyncComponent(() => import('../dialogs/UpdateDialog.vue'));
+const LegacyInstallDialog = defineAsyncComponent(() => import('../dialogs/LegacyInstallDialog.vue'));
 const ListeningPartyDialog = defineAsyncComponent(() => import('../dialogs/ListeningPartyDialog.vue'));
 
 export default {
@@ -69,6 +70,7 @@ export default {
     CollectionActionMenu,
     CollectionQuickSearch,
     HomeView,
+    LegacyInstallDialog,
     LiveShowsDialog,
     ListeningPartyDialog,
     FullscreenPlayer,
@@ -326,6 +328,7 @@ export default {
     <AboutDialog v-if="aboutDialogOpen" :app="app" />
     <ChangelogDialog v-if="changelogDialogOpen" :app="app" />
     <UpdateDialog v-if="updateDialogOpen" :app="app" />
+    <LegacyInstallDialog v-if="legacyInstallDialogOpen" :app="app" />
     <LiveShowsDialog v-if="liveShowsDialogOpen" :app="app" />
     <ListeningPartyDialog v-if="listeningPartyDialogOpen" :app="app" />
     <CollectionActionMenu :app="app" />

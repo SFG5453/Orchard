@@ -44,6 +44,7 @@ import {
 } from '../integrations/discordRpc.js';
 import { setupGithubAuth } from '../integrations/githubAuth.js';
 import { setupLastfm } from '../integrations/lastfm.js';
+import { setupLegacyInstallNotice } from '../integrations/legacyInstall.js';
 import { setupSpotify } from '../integrations/spotify.js';
 import {
   asText,
@@ -563,6 +564,7 @@ app.whenReady().then(async () => {
   setupGithubAuth({ app, ipcMain, net, safeStorage, shell });
   setupLastfm({ app, ipcMain, net, safeStorage, shell });
   setupSpotify({ app, ipcMain, net, safeStorage });
+  setupLegacyInstallNotice({ app, ipcMain, shell, channels: IPC_CHANNELS.LEGACY_INSTALL });
   updates = setupOrchardUpdates({ isDev });
   await startBridge();
   await createMainWindow();
