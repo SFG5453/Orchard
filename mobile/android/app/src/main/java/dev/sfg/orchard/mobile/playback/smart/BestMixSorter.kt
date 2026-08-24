@@ -198,4 +198,38 @@ object BestMixSorter {
         flush()
         return output
     }
+
+    private val localFeaturesCache = java.util.concurrent.ConcurrentHashMap<String, TrackFeatures.Features>()
+
+    fun getCachedFeatures(trackId: String): TrackFeatures.Features? = localFeaturesCache[trackId]
+
+    fun cacheFeatures(trackId: String, features: TrackFeatures.Features) {
+        localFeaturesCache[trackId] = features
+    }
+
+    /**
+     * Analyzes an on-disk audio file (e.g. a downloaded Opus/WebM track) for Best Mix.
+     * Decodes the track to mono PCM at the native feature analyzer sample rate and computes
+     * tempo, harmonic key, energy curve, and downbeats.
+     * Results are cached in-memory for instant subsequent sorts.
+     */
+    fun analyzeLocalTrack(track: Track, file: java.io.File): TrackFeatures.Features? {
+        localFeaturesCache[track.id]?.let { return it }
+        if (!file.exists() || file.length() == 0L) return null
+        val durationSeconds = (track.durationMs / 1000.0).takeIf { it > 0 } ?: (file.length() / 20_000.0)
+        val decodeDuration = minOf(durationSeconds, 180.0)
+        val source = FileMediaDataSource(file)
+        val targetRate = TrackFeatures.sampleRate.toInt()
+        val decoded = source.use { AudioDecoder.decodeRegion(it, 0.0, decodeDuration, targetRate = targetRate) }
+            ?: return null
+        val (pcm, _) = decoded
+        val samples = if (abs(pcm.sampleRate - TrackFeatures.sampleRate) > 1.0) {
+            MelSpectrogram.resample(pcm.samples, pcm.sampleRate, TrackFeatures.sampleRate) ?: pcm.samples
+        } else pcm.samples
+        val features = TrackFeatures.analyze(samples, durationSeconds)
+        if (features != null) {
+            localFeaturesCache[track.id] = features
+        }
+        return features
+    }
 }

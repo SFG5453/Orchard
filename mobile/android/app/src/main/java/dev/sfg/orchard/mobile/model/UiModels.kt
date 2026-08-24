@@ -83,6 +83,8 @@ data class OrchardSettings(
      * back to the plain fade for any track it has no evidence about, so it is never worse.
      */
     val smartCrossfade: Boolean = false,
+    /** Whether Best Mix downloads pre-computed analysis from Supabase instead of analyzing local files. Off by default. */
+    val bestMixSupabaseSync: Boolean = false,
     /** Ceiling on the on-disk stream cache, in megabytes. Whole tracks are kept, so this is the
      * difference between a few albums and a library, and between instant re-listens and refetching.
      */

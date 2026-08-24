@@ -488,6 +488,9 @@ private fun OrchardNavigation(
                 onShareTrack = viewModel::shareTrack,
                 onShareCollection = viewModel::shareCollection,
                 onFetchSectionItems = viewModel::fetchSectionItems,
+                smartCrossfadeEnabled = settings.smartCrossfade,
+                bestMixSupabaseSync = settings.bestMixSupabaseSync,
+                onPlayBestMix = viewModel::playBestMix,
             )
         }
         composable(Routes.DEVICES) {

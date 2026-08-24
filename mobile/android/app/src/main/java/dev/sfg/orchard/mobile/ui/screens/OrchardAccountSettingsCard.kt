@@ -44,6 +44,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -62,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.auth.SUPABASE_SYNC_DISCLAIMER
 import dev.sfg.orchard.mobile.auth.SupabaseSyncService
+import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.ui.glass.glassFill
 import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
@@ -71,7 +74,10 @@ import kotlinx.coroutines.launch
 private val CloudAccent = Color(0xFF7B9FE8)
 
 @Composable
-fun OrchardAccountSettingsCard() {
+fun OrchardAccountSettingsCard(
+    settings: OrchardSettings? = null,
+    onSettings: ((OrchardSettings) -> Unit)? = null,
+) {
     val context = LocalContext.current
     val syncService = remember { SupabaseSyncService(context) }
     val scope = rememberCoroutineScope()
@@ -146,6 +152,37 @@ fun OrchardAccountSettingsCard() {
                         SUPABASE_SYNC_DISCLAIMER,
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            if (settings != null && onSettings != null) {
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            "Cloud audio analysis",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                            color = CanopyColors.Text,
+                        )
+                        Text(
+                            "Download pre-computed analysis for Best Mix from Supabase",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = settings.bestMixSupabaseSync,
+                        onCheckedChange = { onSettings(settings.copy(bestMixSupabaseSync = it)) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.Black,
+                            checkedTrackColor = CloudAccent,
+                            uncheckedThumbColor = CanopyColors.Muted,
+                            uncheckedTrackColor = CanopyColors.Canvas,
+                        ),
                     )
                 }
             }

@@ -38,7 +38,12 @@ import dev.sfg.orchard.mobile.playback.AutoplayRecommendations
 import dev.sfg.orchard.mobile.playback.ListeningPartyManager
 import dev.sfg.orchard.mobile.playback.LocalPlaybackController
 import dev.sfg.orchard.mobile.playback.QueueEditor
+import dev.sfg.orchard.mobile.auth.SupabaseSyncService
+import dev.sfg.orchard.mobile.playback.smart.BestMixSorter
+import dev.sfg.orchard.mobile.playback.smart.TrackFeatures
 import dev.sfg.orchard.mobile.social.PartyState
+import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 import dev.sfg.orchard.mobile.songlinks.LinkResolution
 import dev.sfg.orchard.mobile.songlinks.SongLinksCoordinator
 import dev.sfg.orchard.mobile.songlinks.SongShareState
@@ -46,10 +51,15 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 /** Presentation state holder for the standalone shell and both playback targets. */
@@ -451,6 +461,111 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
             contextTitle = contextTitle,
             shuffle = true,
         )
+    }
+
+    /**
+     * Orders [tracks] via Best Mix algorithm and starts playback.
+     * If cloud sync is enabled, attempts to fetch features from Supabase first.
+     * Otherwise, ensures undownloaded tracks are downloaded, then extracts audio features
+     * locally via native AudioDecoder & TrackFeatures before sorting.
+     */
+    fun playBestMix(
+        tracks: List<Track>,
+        title: String,
+        onProgress: (String) -> Unit = {},
+        onComplete: () -> Unit = {},
+    ) = viewModelScope.launch {
+        if (tracks.isEmpty()) {
+            onComplete()
+            return@launch
+        }
+        val currentSettings = settings.value
+        val syncService = SupabaseSyncService(getApplication())
+        val featuresMap = mutableMapOf<String, TrackFeatures.Features>()
+
+        // 1. Check in-memory cached features first
+        for (track in tracks) {
+            BestMixSorter.getCachedFeatures(track.id)?.let { featuresMap[track.id] = it }
+        }
+
+        // 2. Fetch from Supabase if enabled and tracks are missing
+        if (currentSettings.bestMixSupabaseSync && featuresMap.size < tracks.size) {
+            val neededIds = tracks.map { it.id }.filter { it !in featuresMap }
+            onProgress("Checking cloud analysis...")
+            val cloudFeatures = withContext(Dispatchers.IO) {
+                syncService.fetchTrackFeatures(neededIds)
+            }
+            cloudFeatures.forEach { (id, features) ->
+                featuresMap[id] = features
+                BestMixSorter.cacheFeatures(id, features)
+            }
+        }
+
+        // 3. For remaining tracks missing features, analyze downloaded files in parallel
+        val missingTracks = tracks.filter { it.id !in featuresMap }
+        if (missingTracks.isNotEmpty()) {
+            // Check if any tracks need downloading
+            val currentDownloads = graph.downloads.downloads.value
+            val undownloaded = missingTracks.filter { track ->
+                val item = currentDownloads[track.id]
+                item == null || item.status != dev.sfg.orchard.mobile.download.DownloadStatus.COMPLETED ||
+                    item.filePath.isBlank() || !File(item.filePath).exists()
+            }
+
+            if (undownloaded.isNotEmpty()) {
+                onProgress("Downloading tracks (0/${undownloaded.size})...")
+                graph.downloads.downloadTracks(undownloaded)
+                val targetIds = undownloaded.map { it.id }.toSet()
+                // Wait for downloads to complete or timeout (up to 90s)
+                val startTime = System.currentTimeMillis()
+                while (System.currentTimeMillis() - startTime < 90_000L) {
+                    val completed = graph.downloads.downloads.value
+                    val finishedCount = targetIds.count { id ->
+                        val item = completed[id]
+                        item?.status == dev.sfg.orchard.mobile.download.DownloadStatus.COMPLETED ||
+                            item?.status == dev.sfg.orchard.mobile.download.DownloadStatus.FAILED
+                    }
+                    onProgress("Downloading tracks ($finishedCount/${undownloaded.size})...")
+                    if (finishedCount >= targetIds.size) break
+                    delay(500)
+                }
+            }
+
+            // High-speed multi-core parallel local audio analysis
+            val allDownloads = graph.downloads.store.loadAll()
+            val totalToAnalyze = missingTracks.size
+            val completedCount = AtomicInteger(0)
+            val parallelism = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
+            val semaphore = Semaphore(parallelism)
+
+            onProgress("Analyzing audio (0/$totalToAnalyze)...")
+            coroutineScope {
+                missingTracks.map { track ->
+                    async(Dispatchers.Default) {
+                        semaphore.withPermit {
+                            val file = allDownloads[track.id]?.filePath?.let { File(it) }
+                            if (file != null && file.exists()) {
+                                val localFeatures = BestMixSorter.analyzeLocalTrack(track, file)
+                                if (localFeatures != null) {
+                                    synchronized(featuresMap) {
+                                        featuresMap[track.id] = localFeatures
+                                    }
+                                }
+                            }
+                            val done = completedCount.incrementAndGet()
+                            onProgress("Analyzing audio ($done/$totalToAnalyze)...")
+                        }
+                    }
+                }.awaitAll()
+            }
+        }
+
+        onProgress("Sorting Best Mix...")
+        val sorted = withContext(Dispatchers.Default) {
+            BestMixSorter.sort(tracks, featuresMap)
+        }
+        playAll(sorted, contextTitle = "$title • Best Mix")
+        onComplete()
     }
 
     /**

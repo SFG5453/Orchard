@@ -20,7 +20,13 @@
 package dev.sfg.orchard.mobile.ui.screens
 
 import android.content.Intent
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
@@ -36,11 +42,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,12 +63,15 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.sfg.orchard.mobile.ui.theme.CanopyColors
+import kotlin.math.roundToInt
 import dev.sfg.orchard.mobile.auth.SupabaseSyncService
 import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.CatalogKind
@@ -101,10 +113,65 @@ fun CollectionHero(
     animatedArtworkUrl: String = "",
     artistPortraitUrl: String = "",
     onShare: ((BrowseDetail) -> Unit)? = null,
+    smartCrossfadeEnabled: Boolean = false,
+    bestMixSupabaseSync: Boolean = false,
+    onPlayBestMix: ((List<Track>, String, (String) -> Unit, () -> Unit) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val syncService = remember { SupabaseSyncService(context) }
+
+    var isSorting by remember { mutableStateOf(false) }
+    var sortStatusText by remember { mutableStateOf("") }
+    var showDownloadPrompt by remember { mutableStateOf(false) }
+
+    val undownloadedTracks = remember(detail.tracks, downloadedTrackIds) {
+        detail.tracks.filter { it.id !in downloadedTrackIds }
+    }
+    val undownloadedDurationMs = remember(undownloadedTracks) {
+        undownloadedTracks.sumOf { if (it.durationMs > 0) it.durationMs else 210_000L }
+    }
+    val estimatedMb = remember(undownloadedDurationMs) {
+        (undownloadedDurationMs / 1000.0 * 20.0 / 1024.0).roundToInt().coerceAtLeast(1)
+    }
+
+    fun startBestMixExecution() {
+        if (isSorting) return
+        isSorting = true
+        sortStatusText = "Preparing Best Mix..."
+        if (onPlayBestMix != null) {
+            onPlayBestMix(
+                detail.tracks,
+                detail.title,
+                { status -> sortStatusText = status },
+                {
+                    isSorting = false
+                    sortStatusText = ""
+                },
+            )
+        } else {
+            scope.launch {
+                try {
+                    sortStatusText = "Sorting Best Mix..."
+                    val features = syncService.fetchTrackFeatures(detail.tracks.map { it.id })
+                    val sorted = BestMixSorter.sort(detail.tracks, features)
+                    onPlayAll(sorted, detail.title)
+                } finally {
+                    isSorting = false
+                    sortStatusText = ""
+                }
+            }
+        }
+    }
+
+    fun triggerBestMix() {
+        if (isSorting) return
+        if (!bestMixSupabaseSync && undownloadedTracks.isNotEmpty()) {
+            showDownloadPrompt = true
+        } else {
+            startBestMixExecution()
+        }
+    }
 
     val isAlbum = detail.kind == CatalogKind.ALBUM
     val albumAccent = remember(palette.accent) { palette.accent.legibleOnDarkChrome() }
@@ -169,14 +236,6 @@ fun CollectionHero(
         context.startActivity(Intent.createChooser(intent, "Share ${detail.title}"))
     }
 
-    fun playBestMix() {
-        scope.launch {
-            val features = syncService.fetchTrackFeatures(detail.tracks.map { it.id })
-            val sorted = BestMixSorter.sort(detail.tracks, features)
-            onPlayAll(sorted, detail.title)
-        }
-    }
-
     val topBar: @Composable () -> Unit = {
         CollectionTopBar(
             onBack = onBack,
@@ -184,7 +243,7 @@ fun CollectionHero(
             onSave = { onSave(detail) },
             isSaved = isSaved,
             onAbout = if (detail.description.isNotBlank()) onAbout else null,
-            onBestMix = if (detail.kind == CatalogKind.PLAYLIST && detail.tracks.size > 1) (::playBestMix) else null,
+            onBestMix = if (smartCrossfadeEnabled && detail.kind == CatalogKind.PLAYLIST && detail.tracks.size > 1) (::triggerBestMix) else null,
             aboutLabel = "About this ${if (detail.kind == CatalogKind.ALBUM) "album" else "playlist"}",
         )
     }
@@ -402,54 +461,132 @@ fun CollectionHero(
             downloadEnabled = detail.tracks.isNotEmpty(),
         )
 
-        // Best mix button at top of playlists
-        if (detail.kind == CatalogKind.PLAYLIST && detail.tracks.size > 1) {
-            var isSorting by remember { mutableStateOf(false) }
+        // Best mix button at top of playlists (gated by smart crossfade)
+        if (smartCrossfadeEnabled && detail.kind == CatalogKind.PLAYLIST && detail.tracks.size > 1) {
+            val transition = rememberInfiniteTransition(label = "BestMixGlow")
+            val borderGlow by transition.animateFloat(
+                initialValue = 0.25f,
+                targetValue = 0.85f,
+                animationSpec = infiniteRepeatable(tween(2200), RepeatMode.Reverse),
+                label = "BestMixBorderGlow",
+            )
+            val sparkleScale by transition.animateFloat(
+                initialValue = 0.88f,
+                targetValue = 1.18f,
+                animationSpec = infiniteRepeatable(tween(1600), RepeatMode.Reverse),
+                label = "BestMixSparkleScale",
+            )
+
             Spacer(Modifier.height(10.dp))
             Button(
-                onClick = {
-                    if (!isSorting) {
-                        isSorting = true
-                        scope.launch {
-                            try {
-                                val features = syncService.fetchTrackFeatures(detail.tracks.map { it.id })
-                                val sorted = BestMixSorter.sort(detail.tracks, features)
-                                onPlayAll(sorted, detail.title)
-                            } finally {
-                                isSorting = false
-                            }
-                        }
-                    }
-                },
+                onClick = ::triggerBestMix,
+                enabled = !isSorting,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White.copy(alpha = 0.12f),
+                    containerColor = Color.White.copy(alpha = 0.10f),
                     contentColor = Color.White,
+                    disabledContainerColor = Color.White.copy(alpha = 0.16f),
+                    disabledContentColor = Color.White,
                 ),
                 shape = RoundedCornerShape(20.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
-                    .height(40.dp),
+                    .height(42.dp)
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.horizontalGradient(
+                            listOf(
+                                LocalAccent.current.copy(alpha = borderGlow * 0.8f),
+                                Color.White.copy(alpha = 0.40f),
+                                LocalAccent.current.copy(alpha = borderGlow),
+                            ),
+                        ),
+                        shape = RoundedCornerShape(20.dp),
+                    ),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                 ) {
-                    Icon(
-                        Icons.Rounded.AutoAwesome,
-                        contentDescription = "Best mix",
-                        tint = LocalAccent.current,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.padding(horizontal = 4.dp))
+                    if (isSorting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = LocalAccent.current,
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            Icons.Rounded.AutoAwesome,
+                            contentDescription = "Best mix",
+                            tint = LocalAccent.current,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .graphicsLayer {
+                                    scaleX = sparkleScale
+                                    scaleY = sparkleScale
+                                },
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
                     Text(
-                        text = if (isSorting) "Sorting Best Mix..." else "Best mix",
+                        text = if (isSorting) sortStatusText.ifBlank { "Sorting Best Mix..." } else "Best mix",
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 14.sp,
                         color = Color.White,
                     )
                 }
             }
+        }
+
+        if (showDownloadPrompt) {
+            AlertDialog(
+                onDismissRequest = { showDownloadPrompt = false },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Rounded.AutoAwesome,
+                            contentDescription = null,
+                            tint = LocalAccent.current,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Best Mix Offline Analysis", fontWeight = FontWeight.Bold)
+                    }
+                },
+                text = {
+                    Column {
+                        Text(
+                            "Best Mix analyzes harmonic keys, tempo, and cue points locally to arrange your playlist seamlessly.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.85f),
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "Downloading ${undownloadedTracks.size} song${if (undownloadedTracks.size == 1) "" else "s"} could take up to ~$estimatedMb MB of storage.",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = LocalAccent.current,
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showDownloadPrompt = false
+                            startBestMixExecution()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = LocalAccent.current),
+                    ) {
+                        Text("Download & Sort", color = Color.Black, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDownloadPrompt = false }) {
+                        Text("Cancel", color = Color.White.copy(alpha = 0.7f))
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = CanopyColors.Surface,
+            )
         }
 
         // Editorial review snippet with expandable "MORE"

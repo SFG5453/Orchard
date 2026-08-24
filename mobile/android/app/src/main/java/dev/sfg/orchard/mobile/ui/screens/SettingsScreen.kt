@@ -188,7 +188,10 @@ fun SettingsScreen(
             onConnectSpotify = onConnectSpotify,
         )
         Spacer(Modifier.height(12.dp))
-        OrchardAccountSettingsCard()
+        OrchardAccountSettingsCard(
+            settings = settings,
+            onSettings = onSettings,
+        )
 
         SectionLabel("Appearance")
         SettingsPanel {

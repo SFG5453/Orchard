@@ -60,6 +60,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 crossfadeEnabled = values[CROSSFADE_ENABLED] ?: false,
                 crossfadeSeconds = values[CROSSFADE_SECONDS] ?: OrchardSettings.DEFAULT_CROSSFADE_SECONDS,
                 smartCrossfade = values[SMART_CROSSFADE] ?: false,
+                bestMixSupabaseSync = values[BEST_MIX_SUPABASE_SYNC] ?: false,
                 cacheSizeMb = values[CACHE_SIZE_MB] ?: OrchardSettings.DEFAULT_CACHE_SIZE_MB,
                 onboardingCompleted = values[ONBOARDING_COMPLETED] ?: false,
                 discordPresenceEnabled = values[DISCORD_PRESENCE_ENABLED] ?: true,
@@ -101,6 +102,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[CROSSFADE_ENABLED] = value.crossfadeEnabled
                 it[CROSSFADE_SECONDS] = value.crossfadeSeconds
                 it[SMART_CROSSFADE] = value.smartCrossfade
+                it[BEST_MIX_SUPABASE_SYNC] = value.bestMixSupabaseSync
                 it[CACHE_SIZE_MB] = value.cacheSizeMb
                 it[ONBOARDING_COMPLETED] = value.onboardingCompleted
                 it[DISCORD_PRESENCE_ENABLED] = value.discordPresenceEnabled
@@ -194,6 +196,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val CROSSFADE_ENABLED = booleanPreferencesKey("crossfade_enabled")
         val CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
         val SMART_CROSSFADE = booleanPreferencesKey("smart_crossfade")
+        val BEST_MIX_SUPABASE_SYNC = booleanPreferencesKey("best_mix_supabase_sync")
         val CACHE_SIZE_MB = intPreferencesKey("cache_size_mb")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")

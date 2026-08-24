@@ -112,6 +112,9 @@ fun DetailScreen(
     onShareTrack: ((Track) -> Unit)? = null,
     onShareCollection: ((BrowseDetail) -> Unit)? = null,
     onFetchSectionItems: (suspend (String, String) -> List<CatalogItem>)? = null,
+    smartCrossfadeEnabled: Boolean = false,
+    bestMixSupabaseSync: Boolean = false,
+    onPlayBestMix: ((List<Track>, String, (String) -> Unit, () -> Unit) -> Unit)? = null,
 ) {
     when (state) {
         LoadState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -171,6 +174,9 @@ fun DetailScreen(
                     artistPortraitUrl = artistPortraitUrl,
                     onShareTrack = onShareTrack,
                     onShareCollection = onShareCollection,
+                    smartCrossfadeEnabled = smartCrossfadeEnabled,
+                    bestMixSupabaseSync = bestMixSupabaseSync,
+                    onPlayBestMix = onPlayBestMix,
                 )
             }
         }
@@ -381,6 +387,9 @@ private fun CollectionDetailContent(
     artistPortraitUrl: String = "",
     onShareTrack: ((Track) -> Unit)? = null,
     onShareCollection: ((BrowseDetail) -> Unit)? = null,
+    smartCrossfadeEnabled: Boolean = false,
+    bestMixSupabaseSync: Boolean = false,
+    onPlayBestMix: ((List<Track>, String, (String) -> Unit, () -> Unit) -> Unit)? = null,
 ) {
     var showDescriptionSheet by remember { mutableStateOf(false) }
 
@@ -418,6 +427,9 @@ private fun CollectionDetailContent(
                     animatedArtworkUrl = animatedArtworkUrl,
                     artistPortraitUrl = artistPortraitUrl,
                     onShare = onShareCollection,
+                    smartCrossfadeEnabled = smartCrossfadeEnabled,
+                    bestMixSupabaseSync = bestMixSupabaseSync,
+                    onPlayBestMix = onPlayBestMix,
                 )
             }
             if (detail.tracks.isNotEmpty()) {
