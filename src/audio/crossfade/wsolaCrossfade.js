@@ -87,6 +87,37 @@ function pairKey(fromTrackId, toTrackId) {
   return `${String(fromTrackId || '')}>${String(toTrackId || '')}`;
 }
 
+function planningFingerprint(value) {
+  try {
+    return JSON.stringify(value, (_key, item) => {
+      if (typeof item === 'number' && !Number.isFinite(item)) return null;
+      if (ArrayBuffer.isView(item)) return Array.from(item);
+      return item;
+    });
+  } catch {
+    // Analysis objects are expected to be plain serializable evidence. An
+    // invalid/cyclic object must never alias a previous cache entry.
+    return null;
+  }
+}
+
+function pairPlanningCacheKey(options = {}) {
+  const outgoing = planningFingerprint(options.analysis);
+  const incoming = planningFingerprint(options.nextAnalysis);
+  const settings = planningFingerprint(options.settings || {});
+  if (outgoing === null || incoming === null || settings === null) return null;
+  return JSON.stringify([
+    String(options.fromTrackId || options.analysis?.trackId || ''),
+    String(options.toTrackId || options.nextAnalysis?.trackId || ''),
+    Number(options.duration) || 0,
+    Number(options.nextDuration) || 0,
+    String(options.mode || 'smart'),
+    settings,
+    outgoing,
+    incoming
+  ]);
+}
+
 // Decoder and filter safety on either side of the exact selected source
 // windows. The renderer is still given one fixed plan inside these slices; the
 // padding is not a search region and cannot change any cue.
@@ -196,6 +227,7 @@ function sliceChannels(buffer, startSeconds, endSeconds) {
 export function createWsolaCrossfade({
   analyzer,
   bridge = globalThis.orchardAudioAnalysis,
+  planner = planWsolaTransition,
   report = () => {}
 } = {}) {
   // One preparation at a time: transitions are strictly sequential, so a new
@@ -204,9 +236,14 @@ export function createWsolaCrossfade({
   let session = null;
   let sequence = 0;
   let targetVolume = 1;
+  let planningCache = null;
 
-  function plan(options) {
-    return planWsolaTransition(options);
+  function plan(options = {}) {
+    const key = pairPlanningCacheKey(options);
+    if (key !== null && planningCache?.key === key) return planningCache.result;
+    const result = planner(options);
+    planningCache = key === null ? null : { key, result };
+    return result;
   }
 
   function preparationStatus(fromTrackId, toTrackId) {

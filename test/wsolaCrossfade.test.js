@@ -224,6 +224,45 @@ test('only uses raw rendered PCM when per-source processing is flat', () => {
   }), true);
 });
 
+test('pair planning caches refusals until an authoritative input changes', () => {
+  let calls = 0;
+  const planner = (options) => {
+    calls += 1;
+    return { ok: false, reason: 'confidence-boundary', options };
+  };
+  const engine = createWsolaCrossfade({
+    analyzer: fakeAnalyzer(),
+    bridge: {},
+    planner
+  });
+  const analysis = { analysisVersion: 11, status: 'ready', bpm: 120, frames: [{ time: 0, energy: 0.5 }] };
+  const nextAnalysis = { analysisVersion: 11, status: 'ready', bpm: 122, frames: [{ time: 0, energy: 0.4 }] };
+  const options = {
+    fromTrackId: 'from',
+    toTrackId: 'to',
+    analysis,
+    nextAnalysis,
+    duration: 240,
+    nextDuration: 200,
+    mode: 'smart',
+    settings: { maxStretchDeviation: 0.04 }
+  };
+
+  const first = engine.plan(options);
+  const second = engine.plan(options);
+  assert.strictEqual(second, first);
+  assert.equal(calls, 1, 'a refusal was recomputed during the playback poll');
+
+  analysis.bpm = 121;
+  const enriched = engine.plan(options);
+  assert.notStrictEqual(enriched, first);
+  assert.equal(calls, 2, 'an analysis fingerprint change did not invalidate the plan');
+
+  engine.plan({ ...options, settings: { maxStretchDeviation: 0.03 } });
+  engine.plan({ ...options, toTrackId: 'another-track' });
+  assert.equal(calls, 4, 'settings and pair identity must participate in the cache key');
+});
+
 test('prepare sends the authoritative plan rebased into exact padded slices', async () => {
   const analyzer = fakeAnalyzer();
   const rendered = [];

@@ -457,10 +457,13 @@ export function installPlaybackControls(ctx) {
     const preparationStatus = engine.preparationStatus(fromTrackId, next.id);
     const capturedPlan = engine.preparationPlan?.(fromTrackId, next.id) || null;
     const plan = capturedPlan || engine.plan({
+      fromTrackId,
+      toTrackId: next.id,
       analysis: ctx.crossfadeAnalysis.value,
       nextAnalysis: ctx.nextCrossfadeAnalysis.value,
       duration: mediaDuration,
-      nextDuration: Number(next.durationSeconds) || 0
+      nextDuration: Number(next.durationSeconds) || 0,
+      mode: ctx.crossfadeMode.value
     });
     const attachedFallback = (sourcePlan = plan) => {
       if (!sourcePlan?.pairPlan?.fallback) return null;

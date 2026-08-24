@@ -268,10 +268,13 @@ export function installComputedState(ctx) {
     });
     const wsolaPlan = ctx.crossfadeMode.value === 'smart' && wsolaEligible && !albumSequential
       ? ctx.wsolaCrossfade?.plan({
+        fromTrackId: ctx.activeTrack.value?.id,
+        toTrackId: nextTrack.id,
         analysis: ctx.crossfadeAnalysis.value,
         nextAnalysis: ctx.nextCrossfadeAnalysis.value,
         duration: length,
-        nextDuration: Number(nextTrack.durationSeconds) || 0
+        nextDuration: Number(nextTrack.durationSeconds) || 0,
+        mode: ctx.crossfadeMode.value
       })
       : null;
     const plan = wsolaPlan?.ok
