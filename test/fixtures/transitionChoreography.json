@@ -1,0 +1,321 @@
+{
+  "blinding_lights_to_dont_start_now": {
+    "outgoing": {
+      "trackId": "blinding_lights",
+      "duration": 200.0,
+      "bpm": 85.492,
+      "beatInterval": 0.70182,
+      "beatConfidence": 0.947,
+      "key": "F minor",
+      "keyConfidence": 0.9,
+      "audibleStartTime": 0.0,
+      "contentEndTime": 198.0,
+      "phraseBoundaries": [168.4368, 179.6659, 190.895],
+      "downbeats": [168.4368, 171.2441, 174.0514, 176.8586, 179.6659, 182.4732, 185.2805, 188.0877, 190.895],
+      "structuralBoundaryCandidates": [
+        { "time": 179.6659, "confidence": 0.92, "source": "detected-change" },
+        { "time": 190.895, "confidence": 0.88, "source": "detected-change" }
+      ],
+      "mixOutCandidates": [
+        { "time": 179.6659, "score": 0.92, "type": "phrase" },
+        { "time": 190.895, "score": 0.88, "type": "outro" }
+      ],
+      "transitionFeatureFrames": [
+        { "time": 165.0, "energy": 0.78, "low": 0.68, "mid": 0.60, "high": 0.50, "vocal": 0.75, "novelty": 0.6, "transientDensity": 0.2, "stability": 0.85 },
+        { "time": 170.0, "energy": 0.75, "low": 0.65, "mid": 0.58, "high": 0.48, "vocal": 0.70, "novelty": 0.5, "transientDensity": 0.2, "stability": 0.85 },
+        { "time": 175.0, "energy": 0.70, "low": 0.60, "mid": 0.55, "high": 0.45, "vocal": 0.65, "novelty": 0.5, "transientDensity": 0.18, "stability": 0.86 },
+        { "time": 180.0, "energy": 0.60, "low": 0.50, "mid": 0.50, "high": 0.40, "vocal": 0.50, "novelty": 0.7, "transientDensity": 0.18, "stability": 0.88 },
+        { "time": 185.0, "energy": 0.50, "low": 0.35, "mid": 0.45, "high": 0.35, "vocal": 0.30, "novelty": 0.5, "transientDensity": 0.15, "stability": 0.88 },
+        { "time": 190.0, "energy": 0.35, "low": 0.20, "mid": 0.35, "high": 0.25, "vocal": 0.10, "novelty": 0.8, "transientDensity": 0.12, "stability": 0.90 },
+        { "time": 195.0, "energy": 0.15, "low": 0.10, "mid": 0.20, "high": 0.10, "vocal": 0.05, "novelty": 0.4, "transientDensity": 0.08, "stability": 0.92 }
+      ],
+      "energyCurve": [
+        { "time": 170.0, "energy": 0.75 },
+        { "time": 175.0, "energy": 0.7 },
+        { "time": 180.0, "energy": 0.6 },
+        { "time": 185.0, "energy": 0.5 },
+        { "time": 190.0, "energy": 0.35 },
+        { "time": 195.0, "energy": 0.15 }
+      ],
+      "lowEnergyCurve": [
+        { "time": 170.0, "energy": 0.65 },
+        { "time": 175.0, "energy": 0.6 },
+        { "time": 180.0, "energy": 0.5 },
+        { "time": 185.0, "energy": 0.35 },
+        { "time": 190.0, "energy": 0.2 },
+        { "time": 195.0, "energy": 0.1 }
+      ],
+      "vocalActivityMask": [0.7, 0.65, 0.5, 0.3, 0.1, 0.05],
+      "vocalProbability": 0.78
+    },
+    "incoming": {
+      "trackId": "dont_start_now",
+      "duration": 183.0,
+      "bpm": 123.97,
+      "beatInterval": 0.483988,
+      "beatConfidence": 0.95,
+      "key": "B minor",
+      "keyConfidence": 0.92,
+      "audibleStartTime": 0.05,
+      "pickupTime": 0.1,
+      "contentEndTime": 181.0,
+      "phraseBoundaries": [0.1, 7.8438, 15.5876, 23.3314],
+      "downbeats": [0.1, 2.0359, 3.9719, 5.9078, 7.8438, 9.7797, 11.7157, 13.6516, 15.5876],
+      "structuralBoundaryCandidates": [
+        { "time": 0.1, "confidence": 0.95, "source": "detected-change" },
+        { "time": 7.8438, "confidence": 0.88, "source": "detected-change" }
+      ],
+      "mixInCandidates": [
+        { "time": 0.1, "score": 0.95, "type": "intro" },
+        { "time": 7.8438, "score": 0.88, "type": "verse" }
+      ],
+      "transitionFeatureFrames": [
+        { "time": 0.0, "energy": 0.65, "low": 0.50, "mid": 0.60, "high": 0.50, "vocal": 0.95, "novelty": 0.7, "transientDensity": 0.22, "stability": 0.85 },
+        { "time": 2.0, "energy": 0.66, "low": 0.52, "mid": 0.61, "high": 0.52, "vocal": 0.94, "novelty": 0.4, "transientDensity": 0.22, "stability": 0.86 },
+        { "time": 4.0, "energy": 0.68, "low": 0.55, "mid": 0.62, "high": 0.55, "vocal": 0.92, "novelty": 0.4, "transientDensity": 0.22, "stability": 0.86 },
+        { "time": 6.0, "energy": 0.70, "low": 0.62, "mid": 0.64, "high": 0.58, "vocal": 0.91, "novelty": 0.5, "transientDensity": 0.24, "stability": 0.87 },
+        { "time": 8.0, "energy": 0.72, "low": 0.68, "mid": 0.65, "high": 0.60, "vocal": 0.90, "novelty": 0.8, "transientDensity": 0.25, "stability": 0.88 },
+        { "time": 12.0, "energy": 0.75, "low": 0.70, "mid": 0.68, "high": 0.62, "vocal": 0.88, "novelty": 0.4, "transientDensity": 0.25, "stability": 0.88 },
+        { "time": 16.0, "energy": 0.82, "low": 0.80, "mid": 0.72, "high": 0.68, "vocal": 0.85, "novelty": 0.6, "transientDensity": 0.28, "stability": 0.90 }
+      ],
+      "energyCurve": [
+        { "time": 0.0, "energy": 0.65 },
+        { "time": 4.0, "energy": 0.68 },
+        { "time": 8.0, "energy": 0.72 },
+        { "time": 12.0, "energy": 0.75 },
+        { "time": 16.0, "energy": 0.82 }
+      ],
+      "lowEnergyCurve": [
+        { "time": 0.0, "energy": 0.5 },
+        { "time": 4.0, "energy": 0.55 },
+        { "time": 8.0, "energy": 0.68 },
+        { "time": 12.0, "energy": 0.7 },
+        { "time": 16.0, "energy": 0.8 }
+      ],
+      "vocalActivityMask": [0.95, 0.92, 0.9, 0.88, 0.85],
+      "vocalProbability": 0.92
+    }
+  },
+  "safe_instrumental_blend": {
+    "outgoing": {
+      "trackId": "instrumental_a",
+      "duration": 210.0,
+      "bpm": 124.0,
+      "beatInterval": 0.483871,
+      "beatConfidence": 0.96,
+      "key": "C major",
+      "keyConfidence": 0.95,
+      "audibleStartTime": 0.0,
+      "contentEndTime": 208.0,
+      "phraseBoundaries": [178.0645, 193.5484, 201.2903],
+      "downbeats": [178.0645, 180.0, 181.9355, 183.871, 185.8065, 187.7419, 189.6774, 191.6129, 193.5484, 195.4839, 197.4194, 199.3548, 201.2903],
+      "structuralBoundaryCandidates": [
+        { "time": 193.5484, "confidence": 0.95, "source": "detected-change" },
+        { "time": 201.2903, "confidence": 0.90, "source": "detected-change" }
+      ],
+      "mixOutCandidates": [
+        { "time": 193.5484, "score": 0.95, "type": "break" },
+        { "time": 201.2903, "score": 0.9, "type": "outro" }
+      ],
+      "transitionFeatureFrames": [
+        { "time": 175.0, "energy": 0.82, "low": 0.78, "mid": 0.65, "high": 0.55, "vocal": 0.02, "novelty": 0.5, "transientDensity": 0.25, "stability": 0.90 },
+        { "time": 180.0, "energy": 0.78, "low": 0.75, "mid": 0.62, "high": 0.52, "vocal": 0.02, "novelty": 0.5, "transientDensity": 0.25, "stability": 0.90 },
+        { "time": 185.0, "energy": 0.72, "low": 0.70, "mid": 0.58, "high": 0.48, "vocal": 0.02, "novelty": 0.4, "transientDensity": 0.22, "stability": 0.90 },
+        { "time": 190.0, "energy": 0.65, "low": 0.62, "mid": 0.52, "high": 0.42, "vocal": 0.01, "novelty": 0.5, "transientDensity": 0.20, "stability": 0.91 },
+        { "time": 193.5, "energy": 0.58, "low": 0.54, "mid": 0.48, "high": 0.38, "vocal": 0.01, "novelty": 0.8, "transientDensity": 0.18, "stability": 0.92 },
+        { "time": 195.0, "energy": 0.52, "low": 0.48, "mid": 0.45, "high": 0.35, "vocal": 0.01, "novelty": 0.5, "transientDensity": 0.18, "stability": 0.92 },
+        { "time": 200.0, "energy": 0.38, "low": 0.30, "mid": 0.35, "high": 0.25, "vocal": 0.00, "novelty": 0.7, "transientDensity": 0.12, "stability": 0.93 }
+      ],
+      "energyCurve": [
+        { "time": 180.0, "energy": 0.78 },
+        { "time": 185.0, "energy": 0.72 },
+        { "time": 190.0, "energy": 0.65 },
+        { "time": 195.0, "energy": 0.52 },
+        { "time": 200.0, "energy": 0.38 }
+      ],
+      "lowEnergyCurve": [
+        { "time": 180.0, "energy": 0.75 },
+        { "time": 185.0, "energy": 0.7 },
+        { "time": 190.0, "energy": 0.62 },
+        { "time": 195.0, "energy": 0.48 },
+        { "time": 200.0, "energy": 0.3 }
+      ],
+      "vocalActivityMask": [0.02, 0.02, 0.01, 0.01, 0.0],
+      "vocalProbability": 0.04
+    },
+    "incoming": {
+      "trackId": "instrumental_b",
+      "duration": 210.0,
+      "bpm": 125.0,
+      "beatInterval": 0.48,
+      "beatConfidence": 0.96,
+      "key": "C major",
+      "keyConfidence": 0.95,
+      "audibleStartTime": 0.0,
+      "pickupTime": 0.0,
+      "contentEndTime": 208.0,
+      "phraseBoundaries": [0.0, 7.68, 15.36, 23.04],
+      "downbeats": [0.0, 1.92, 3.84, 5.76, 7.68, 9.6, 11.52, 13.44, 15.36, 17.28, 19.2, 21.12, 23.04],
+      "structuralBoundaryCandidates": [
+        { "time": 0.0, "confidence": 0.88, "source": "detected-change" },
+        { "time": 7.68, "confidence": 0.96, "source": "detected-change" }
+      ],
+      "mixInCandidates": [
+        { "time": 0.0, "score": 0.88, "type": "intro" },
+        { "time": 7.68, "score": 0.96, "type": "drop" }
+      ],
+      "transitionFeatureFrames": [
+        { "time": 0.0, "energy": 0.35, "low": 0.20, "mid": 0.35, "high": 0.30, "vocal": 0.01, "novelty": 0.6, "transientDensity": 0.15, "stability": 0.88 },
+        { "time": 2.0, "energy": 0.40, "low": 0.25, "mid": 0.40, "high": 0.35, "vocal": 0.01, "novelty": 0.4, "transientDensity": 0.16, "stability": 0.89 },
+        { "time": 4.0, "energy": 0.45, "low": 0.30, "mid": 0.45, "high": 0.40, "vocal": 0.02, "novelty": 0.5, "transientDensity": 0.18, "stability": 0.90 },
+        { "time": 6.0, "energy": 0.60, "low": 0.50, "mid": 0.55, "high": 0.50, "vocal": 0.02, "novelty": 0.7, "transientDensity": 0.22, "stability": 0.91 },
+        { "time": 7.68, "energy": 0.80, "low": 0.78, "mid": 0.68, "high": 0.60, "vocal": 0.02, "novelty": 0.9, "transientDensity": 0.28, "stability": 0.92 },
+        { "time": 8.0, "energy": 0.80, "low": 0.78, "mid": 0.68, "high": 0.60, "vocal": 0.02, "novelty": 0.8, "transientDensity": 0.28, "stability": 0.92 },
+        { "time": 12.0, "energy": 0.82, "low": 0.80, "mid": 0.70, "high": 0.62, "vocal": 0.01, "novelty": 0.5, "transientDensity": 0.28, "stability": 0.92 },
+        { "time": 16.0, "energy": 0.85, "low": 0.82, "mid": 0.72, "high": 0.65, "vocal": 0.01, "novelty": 0.6, "transientDensity": 0.30, "stability": 0.93 }
+      ],
+      "energyCurve": [
+        { "time": 0.0, "energy": 0.35 },
+        { "time": 4.0, "energy": 0.45 },
+        { "time": 8.0, "energy": 0.8 },
+        { "time": 12.0, "energy": 0.82 },
+        { "time": 16.0, "energy": 0.85 }
+      ],
+      "lowEnergyCurve": [
+        { "time": 0.0, "energy": 0.2 },
+        { "time": 4.0, "energy": 0.3 },
+        { "time": 8.0, "energy": 0.78 },
+        { "time": 12.0, "energy": 0.8 },
+        { "time": 16.0, "energy": 0.82 }
+      ],
+      "vocalActivityMask": [0.01, 0.02, 0.02, 0.01, 0.01],
+      "vocalProbability": 0.03
+    }
+  },
+  "sustained_vocal_collision": {
+    "outgoing": {
+      "trackId": "vocal_a",
+      "duration": 180.0,
+      "bpm": 124.0,
+      "beatInterval": 0.483871,
+      "beatConfidence": 0.92,
+      "key": "A minor",
+      "keyConfidence": 0.9,
+      "audibleStartTime": 0.0,
+      "contentEndTime": 178.0,
+      "phraseBoundaries": [150.0, 160.0, 170.0],
+      "downbeats": [150.0, 151.935, 153.87, 155.806, 157.742, 159.677, 161.613, 163.548, 165.484, 167.419, 169.355],
+      "structuralBoundaryCandidates": [
+        { "time": 160.0, "confidence": 0.85, "source": "detected-change" },
+        { "time": 170.0, "confidence": 0.82, "source": "detected-change" }
+      ],
+      "mixOutCandidates": [
+        { "time": 160.0, "score": 0.85, "type": "chorus" },
+        { "time": 170.0, "score": 0.82, "type": "outro" }
+      ],
+      "transitionFeatureFrames": [
+        { "time": 150.0, "energy": 0.80, "low": 0.60, "mid": 0.65, "high": 0.55, "vocal": 0.88, "novelty": 0.6, "transientDensity": 0.22, "stability": 0.88 },
+        { "time": 160.0, "energy": 0.82, "low": 0.62, "mid": 0.68, "high": 0.58, "vocal": 0.92, "novelty": 0.7, "transientDensity": 0.24, "stability": 0.88 },
+        { "time": 170.0, "energy": 0.75, "low": 0.55, "mid": 0.60, "high": 0.50, "vocal": 0.85, "novelty": 0.6, "transientDensity": 0.20, "stability": 0.89 }
+      ],
+      "energyCurve": [
+        { "time": 150.0, "energy": 0.8 },
+        { "time": 160.0, "energy": 0.82 },
+        { "time": 170.0, "energy": 0.75 }
+      ],
+      "lowEnergyCurve": [
+        { "time": 150.0, "energy": 0.6 },
+        { "time": 160.0, "energy": 0.62 },
+        { "time": 170.0, "energy": 0.55 }
+      ],
+      "vocalActivityMask": [0.88, 0.92, 0.85],
+      "vocalProbability": 0.95
+    },
+    "incoming": {
+      "trackId": "vocal_b",
+      "duration": 180.0,
+      "bpm": 124.0,
+      "beatInterval": 0.483871,
+      "beatConfidence": 0.92,
+      "key": "A minor",
+      "keyConfidence": 0.9,
+      "audibleStartTime": 0.0,
+      "contentEndTime": 178.0,
+      "phraseBoundaries": [0.0, 7.742, 15.484],
+      "downbeats": [0.0, 1.935, 3.87, 5.806, 7.742, 9.677, 11.613, 13.548, 15.484],
+      "structuralBoundaryCandidates": [
+        { "time": 0.0, "confidence": 0.90, "source": "detected-change" },
+        { "time": 7.742, "confidence": 0.85, "source": "detected-change" }
+      ],
+      "mixInCandidates": [
+        { "time": 0.0, "score": 0.9, "type": "verse" },
+        { "time": 7.742, "score": 0.85, "type": "chorus" }
+      ],
+      "transitionFeatureFrames": [
+        { "time": 0.0, "energy": 0.78, "low": 0.55, "mid": 0.65, "high": 0.55, "vocal": 0.92, "novelty": 0.7, "transientDensity": 0.22, "stability": 0.88 },
+        { "time": 8.0, "energy": 0.82, "low": 0.60, "mid": 0.68, "high": 0.58, "vocal": 0.90, "novelty": 0.6, "transientDensity": 0.24, "stability": 0.88 },
+        { "time": 16.0, "energy": 0.85, "low": 0.65, "mid": 0.70, "high": 0.60, "vocal": 0.88, "novelty": 0.6, "transientDensity": 0.25, "stability": 0.89 }
+      ],
+      "energyCurve": [
+        { "time": 0.0, "energy": 0.78 },
+        { "time": 8.0, "energy": 0.82 },
+        { "time": 16.0, "energy": 0.85 }
+      ],
+      "lowEnergyCurve": [
+        { "time": 0.0, "energy": 0.55 },
+        { "time": 8.0, "energy": 0.6 },
+        { "time": 16.0, "energy": 0.65 }
+      ],
+      "vocalActivityMask": [0.92, 0.9, 0.88],
+      "vocalProbability": 0.94
+    }
+  },
+  "weak_evidence_pair": {
+    "outgoing": {
+      "trackId": "weak_a",
+      "duration": 180.0,
+      "bpm": 110.0,
+      "beatInterval": 0.5454,
+      "beatConfidence": 0.35,
+      "key": "Unknown",
+      "keyConfidence": 0.2,
+      "audibleStartTime": 0.0,
+      "contentEndTime": 178.0,
+      "phraseBoundaries": [],
+      "downbeats": [],
+      "structuralBoundaryCandidates": [],
+      "mixOutCandidates": [],
+      "transitionFeatureFrames": [
+        { "time": 160.0, "energy": 0.4, "low": 0.3, "mid": 0.4, "high": 0.3, "vocal": 0.1, "novelty": 0.3, "transientDensity": 0.1, "stability": 0.5 },
+        { "time": 170.0, "energy": 0.2, "low": 0.1, "mid": 0.2, "high": 0.1, "vocal": 0.05, "novelty": 0.3, "transientDensity": 0.1, "stability": 0.5 }
+      ],
+      "energyCurve": [{ "time": 160.0, "energy": 0.4 }, { "time": 170.0, "energy": 0.2 }],
+      "lowEnergyCurve": [{ "time": 160.0, "energy": 0.3 }, { "time": 170.0, "energy": 0.1 }],
+      "vocalActivityMask": [0.1, 0.05],
+      "vocalProbability": 0.1
+    },
+    "incoming": {
+      "trackId": "weak_b",
+      "duration": 180.0,
+      "bpm": 130.0,
+      "beatInterval": 0.4615,
+      "beatConfidence": 0.3,
+      "key": "Unknown",
+      "keyConfidence": 0.15,
+      "audibleStartTime": 0.0,
+      "contentEndTime": 178.0,
+      "phraseBoundaries": [],
+      "downbeats": [],
+      "structuralBoundaryCandidates": [],
+      "mixInCandidates": [],
+      "transitionFeatureFrames": [
+        { "time": 0.0, "energy": 0.3, "low": 0.2, "mid": 0.3, "high": 0.2, "vocal": 0.1, "novelty": 0.3, "transientDensity": 0.1, "stability": 0.5 },
+        { "time": 10.0, "energy": 0.5, "low": 0.4, "mid": 0.5, "high": 0.4, "vocal": 0.1, "novelty": 0.4, "transientDensity": 0.15, "stability": 0.5 }
+      ],
+      "energyCurve": [{ "time": 0.0, "energy": 0.3 }, { "time": 10.0, "energy": 0.5 }],
+      "lowEnergyCurve": [{ "time": 0.0, "energy": 0.2 }, { "time": 10.0, "energy": 0.4 }],
+      "vocalActivityMask": [0.1, 0.1],
+      "vocalProbability": 0.1
+    }
+  }
+}

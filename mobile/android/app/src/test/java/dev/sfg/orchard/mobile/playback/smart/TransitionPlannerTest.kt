@@ -391,4 +391,105 @@ class TransitionPlannerTest {
             assertTrue("cue negative at $time", plan.incomingCueTime >= 0)
         }
     }
+
+    @Test
+    fun `regression blinding lights to dont start now is never beatmatched and duration is 0 to 4s`() {
+        val outgoing = TrackAnalysis(
+            trackId = "blinding_lights",
+            duration = 200.0,
+            bpm = 85.492,
+            beatInterval = 0.70182,
+            beatConfidence = 0.947,
+            key = "F minor",
+            keyConfidence = 0.9,
+            contentEndTime = 198.0,
+            phraseBoundaries = listOf(168.4368, 179.6659, 190.895),
+            downbeats = listOf(168.4368, 171.2441, 174.0514, 176.8586, 179.6659, 182.4732, 185.2805, 188.0877, 190.895),
+            mixOutCandidates = listOf(
+                MixCandidate(179.6659, 0.92, "phrase"),
+                MixCandidate(190.895, 0.88, "outro"),
+            ),
+            vocalProbability = 0.78,
+        )
+        val incoming = TrackAnalysis(
+            trackId = "dont_start_now",
+            duration = 183.0,
+            bpm = 123.97,
+            beatInterval = 0.483988,
+            beatConfidence = 0.95,
+            key = "B minor",
+            keyConfidence = 0.92,
+            audibleStartTime = 0.05,
+            pickupTime = 0.1,
+            contentEndTime = 181.0,
+            phraseBoundaries = listOf(0.1, 7.8438, 15.5876, 23.3314),
+            downbeats = listOf(0.1, 2.0359, 3.9719, 5.9078, 7.8438, 9.7797, 11.7157, 13.6516, 15.5876),
+            mixInCandidates = listOf(
+                MixCandidate(0.1, 0.95, "intro"),
+                MixCandidate(7.8438, 0.88, "verse"),
+            ),
+            vocalProbability = 0.92,
+        )
+        val plan = planTransition(
+            analysis = outgoing,
+            nextAnalysis = incoming,
+            currentTrack = track(id = "blinding_lights", seconds = 200.0),
+            nextTrack = track(id = "dont_start_now", seconds = 183.0),
+            currentTime = 170.0,
+            mode = CrossfadeMode.SMART,
+        )
+        assertFalse(plan.blocked)
+        assertTrue(plan.transitionStyle != TransitionStyle.DJ_BLEND)
+        assertTrue("fade seconds must be <= 4.0s but got ${plan.fadeSeconds}", plan.fadeSeconds <= 4.0)
+    }
+
+    @Test
+    fun `fixture safe instrumental blend receives 8 to 16 beat staged blend`() {
+        val outgoing = TrackAnalysis(
+            trackId = "inst_a",
+            duration = 210.0,
+            bpm = 124.0,
+            beatInterval = 0.483871,
+            beatConfidence = 0.96,
+            key = "C major",
+            keyConfidence = 0.95,
+            contentEndTime = 208.0,
+            phraseBoundaries = listOf(178.0645, 193.5484, 201.2903),
+            downbeats = listOf(178.0645, 180.0, 181.9355, 183.871, 185.8065, 187.7419, 189.6774, 191.6129, 193.5484, 195.4839, 197.4194, 199.3548, 201.2903),
+            mixOutCandidates = listOf(
+                MixCandidate(193.5484, 0.95, "break"),
+                MixCandidate(201.2903, 0.90, "outro"),
+            ),
+            vocalProbability = 0.04,
+        )
+        val incoming = TrackAnalysis(
+            trackId = "inst_b",
+            duration = 210.0,
+            bpm = 125.0,
+            beatInterval = 0.48,
+            beatConfidence = 0.96,
+            key = "C major",
+            keyConfidence = 0.95,
+            contentEndTime = 208.0,
+            phraseBoundaries = listOf(0.0, 7.68, 15.36, 23.04),
+            downbeats = listOf(0.0, 1.92, 3.84, 5.76, 7.68, 9.6, 11.52, 13.44, 15.36, 17.28, 19.2, 21.12, 23.04),
+            mixInCandidates = listOf(
+                MixCandidate(0.0, 0.88, "intro"),
+                MixCandidate(7.68, 0.96, "drop"),
+            ),
+            vocalProbability = 0.03,
+        )
+        val plan = planTransition(
+            analysis = outgoing,
+            nextAnalysis = incoming,
+            currentTrack = track(id = "inst_a", seconds = 210.0),
+            nextTrack = track(id = "inst_b", seconds = 210.0),
+            currentTime = 180.0,
+            mode = CrossfadeMode.SMART,
+        )
+        assertFalse(plan.blocked)
+        assertTrue("expected 8..16 beats, got ${plan.transitionBeats}", plan.transitionBeats in 8..16)
+        assertTrue(plan.incomingCueTime <= plan.incomingHandoffTime)
+    }
 }
+

@@ -19,6 +19,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import fs from 'node:fs';
 
 import { normalizeTrackAnalysis } from '../shared/trackAnalysis.js';
 import {
@@ -260,3 +261,22 @@ test('speech/live guards and short-track guards precede pair search', () => {
   assert.equal('pairPlan' in speech, false);
   assert.equal('pairPlan' in short, false);
 });
+
+const fixtureData = JSON.parse(
+  fs.readFileSync(new URL('./fixtures/transitionChoreography.json', import.meta.url), 'utf8')
+);
+
+test('regression: planTransition on Blinding Lights -> Dont Start Now never plans long equal-power fade', () => {
+  const fixture = fixtureData.blinding_lights_to_dont_start_now;
+  const plan = planTransition(smartOptions({
+    analysis: normalizeTrackAnalysis(fixture.outgoing),
+    nextAnalysis: normalizeTrackAnalysis(fixture.incoming),
+    duration: fixture.outgoing.duration,
+    currentTrack: { id: fixture.outgoing.trackId, durationSeconds: fixture.outgoing.duration },
+    nextTrack: { id: fixture.incoming.trackId, durationSeconds: fixture.incoming.duration }
+  }));
+
+  assert.ok(plan.fadeSeconds <= 4.0, `fadeSeconds should be <= 4.0s, got ${plan.fadeSeconds}`);
+  assert.notEqual(plan.transitionStyle, 'equal_power');
+});
+

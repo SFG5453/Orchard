@@ -19,6 +19,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import fs from 'node:fs';
 import { normalizeTrackAnalysis } from '../shared/trackAnalysis.js';
 import {
   PAIR_TRANSITION_POLICY,
@@ -456,3 +457,81 @@ test('keeps selection deterministic and diagnostics bounded', () => {
   assert.ok(first.diagnostics.generated.detailed <= 64);
   assert.ok(first.diagnostics.topCandidates.length <= 5);
 });
+
+
+const choreographyFixtures = JSON.parse(
+  fs.readFileSync(new URL('./fixtures/transitionChoreography.json', import.meta.url), 'utf8')
+);
+
+function fixturePair(name) {
+  const data = choreographyFixtures[name];
+  return {
+    analysis: normalizeTrackAnalysis(data.outgoing),
+    nextAnalysis: normalizeTrackAnalysis(data.incoming),
+    duration: data.outgoing.duration,
+    nextDuration: data.incoming.duration
+  };
+}
+
+test('regression: Blinding Lights -> Dont Start Now is never beatmatched and has 0-4s overlap', () => {
+  const plan = planPairTransition(fixturePair('blinding_lights_to_dont_start_now'));
+  assert.notEqual(plan.transitionClass, 'full_beatmatched');
+  assert.notEqual(plan.transitionClass, 'conservative_beatmatched');
+  assert.notEqual(plan.strategy, 'beatmatched_crossfade');
+  assert.ok(
+    plan.durationSeconds >= 0 && plan.durationSeconds <= 4.0,
+    `expected 0-4s overlap, got ${plan.durationSeconds}`
+  );
+  assert.ok(
+    ['filtered_handoff', 'clean_cut', 'filtered_blend', 'boundary_handoff', 'short_fade'].includes(plan.strategy) ||
+    plan.renderMode === 'boundary' ||
+    plan.renderMode === 'live',
+    `expected filtered handoff or cut, got ${plan.strategy}`
+  );
+  assert.ok(
+    plan.fallback.durationSeconds <= 4.0,
+    `fallback duration should be capped at 4s, got ${plan.fallback.durationSeconds}`
+  );
+});
+
+test('fixture: safe instrumental blend receives 8-16 beat staged blend with incoming audibly present before arrival', () => {
+  const plan = planPairTransition(fixturePair('safe_instrumental_blend'));
+  assert.ok(['full_beatmatched', 'conservative_beatmatched'].includes(plan.transitionClass));
+  assert.ok(plan.beats >= 8 && plan.beats <= 16, `expected 8-16 beats, got ${plan.beats}`);
+  assert.ok(
+    plan.incoming.start <= plan.incoming.handoff,
+    `incoming cue (${plan.incoming.start}) should be <= arrival (${plan.incoming.handoff})`
+  );
+});
+
+test('fixture: sustained vocal collision receives short filtered handoff or clean cut', () => {
+  const plan = planPairTransition(fixturePair('sustained_vocal_collision'));
+  assert.notEqual(plan.transitionClass, 'full_beatmatched');
+  assert.ok(
+    plan.durationSeconds <= 4.0 ||
+    ['filtered_handoff', 'clean_cut', 'filtered_blend', 'boundary_handoff'].includes(plan.strategy),
+    `expected short handoff or clean cut, got duration ${plan.durationSeconds} strategy ${plan.strategy}`
+  );
+});
+
+test('fixture: weak evidence pair falls back cleanly', () => {
+  const plan = planPairTransition(fixturePair('weak_evidence_pair'));
+  assert.notEqual(plan.transitionClass, 'full_beatmatched');
+  assert.notEqual(plan.transitionClass, 'conservative_beatmatched');
+  assert.ok(['silence_trim', 'normal_boundary', 'simple_crossfade'].includes(plan.transitionClass));
+});
+
+test('every fallback has internally consistent cue, duration, and arrival geometry', () => {
+  const cases = ['blinding_lights_to_dont_start_now', 'safe_instrumental_blend', 'sustained_vocal_collision', 'weak_evidence_pair'];
+  for (const name of cases) {
+    const plan = planPairTransition(fixturePair(name));
+    const fallback = plan.fallback;
+    assert.ok(fallback, `missing fallback for ${name}`);
+    const expectedOutDuration = Math.round((fallback.outgoingEnd - fallback.outgoingStart) * 1e6) / 1e6;
+    assert.ok(
+      Math.abs(expectedOutDuration - fallback.durationSeconds) < 1e-4,
+      `fallback geometry inconsistent for ${name}: outEnd - outStart = ${expectedOutDuration}, durationSeconds = ${fallback.durationSeconds}`
+    );
+  }
+});
+
