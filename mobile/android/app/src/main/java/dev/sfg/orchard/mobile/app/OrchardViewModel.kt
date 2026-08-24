@@ -569,6 +569,77 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
+     * Orders only the upcoming tracks in the active queue with Best Mix harmonic & tempo transitions
+     * without interrupting current playback.
+     */
+    fun bestMixUpcoming(
+        onProgress: (String) -> Unit = {},
+        onComplete: () -> Unit = {},
+    ) = viewModelScope.launch {
+        val currentSnapshot = playback.value
+        val upcoming = currentSnapshot.upcoming
+        if (upcoming.size <= 1) {
+            onComplete()
+            return@launch
+        }
+        val currentSettings = settings.value
+        val syncService = SupabaseSyncService(getApplication())
+        val featuresMap = mutableMapOf<String, TrackFeatures.Features>()
+
+        // 1. Check in-memory cache
+        for (track in upcoming) {
+            BestMixSorter.getCachedFeatures(track.id)?.let { featuresMap[track.id] = it }
+        }
+
+        // 2. Fetch from Supabase if enabled
+        if (currentSettings.bestMixSupabaseSync && featuresMap.size < upcoming.size) {
+            val neededIds = upcoming.map { it.id }.filter { it !in featuresMap }
+            onProgress("Checking cloud analysis...")
+            val cloudFeatures = withContext(Dispatchers.IO) { syncService.fetchTrackFeatures(neededIds) }
+            cloudFeatures.forEach { (id, features) ->
+                featuresMap[id] = features
+                BestMixSorter.cacheFeatures(id, features)
+            }
+        }
+
+        // 3. Analyze local files in parallel for remaining
+        val missing = upcoming.filter { it.id !in featuresMap }
+        if (missing.isNotEmpty()) {
+            val allDownloads = graph.downloads.store.loadAll()
+            val totalToAnalyze = missing.size
+            val completedCount = AtomicInteger(0)
+            val parallelism = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
+            val semaphore = Semaphore(parallelism)
+
+            onProgress("Analyzing audio (0/$totalToAnalyze)...")
+            coroutineScope {
+                missing.map { track ->
+                    async(Dispatchers.Default) {
+                        semaphore.withPermit {
+                            val file = allDownloads[track.id]?.filePath?.let { File(it) }
+                            if (file != null && file.exists()) {
+                                val localFeatures = BestMixSorter.analyzeLocalTrack(track, file)
+                                if (localFeatures != null) {
+                                    synchronized(featuresMap) { featuresMap[track.id] = localFeatures }
+                                }
+                            }
+                            val done = completedCount.incrementAndGet()
+                            onProgress("Analyzing audio ($done/$totalToAnalyze)...")
+                        }
+                    }
+                }.awaitAll()
+            }
+        }
+
+        onProgress("Sorting queue...")
+        val sortedUpcoming = withContext(Dispatchers.Default) {
+            BestMixSorter.sort(upcoming, featuresMap)
+        }
+        local.replaceUpcoming(sortedUpcoming)
+        onComplete()
+    }
+
+    /**
      * Plays all tracks from a collection (playlist, album, artist, or mix) given its id.
      */
     fun playCollection(id: String, contextTitle: String = "", shuffle: Boolean = false) {

@@ -107,12 +107,15 @@ fun TabletPlayerBody(
     onOpenCollection: ((String) -> Unit)?,
     onLyricsPanel: () -> Unit,
     onQueuePanel: () -> Unit,
-    sleepTimerActive: Boolean = false,
+    sleepTimerRemainingSeconds: Long = 0L,
+    sleepTimerEndOfTrack: Boolean = false,
     onSleepTimer: () -> Unit = {},
     autoplayEnabled: Boolean = true,
     autoplayLoading: Boolean = false,
     autoplayError: String = "",
     onAutoplayEnabled: ((Boolean) -> Unit)? = null,
+    smartCrossfade: Boolean = false,
+    onBestMixUpcoming: ((onProgress: (String) -> Unit, onComplete: () -> Unit) -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
         PlayerTopHandle(onDismiss = onBack, modifier = dragHandle)
@@ -209,6 +212,11 @@ fun TabletPlayerBody(
                                 autoplayLoading = autoplayLoading,
                                 autoplayError = autoplayError,
                                 onAutoplayEnabled = onAutoplayEnabled,
+                                smartCrossfade = smartCrossfade,
+                                onBestMixUpcoming = onBestMixUpcoming,
+                                sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
+                                sleepTimerEndOfTrack = sleepTimerEndOfTrack,
+                                onSleepTimer = onSleepTimer,
                             )
                         } else {
                             when (lyrics) {
@@ -255,7 +263,7 @@ fun TabletPlayerBody(
                     onLyrics = onLyricsPanel,
                     onDevices = onDevices,
                     onQueue = onQueuePanel,
-                    sleepTimerActive = sleepTimerActive,
+                    sleepTimerActive = sleepTimerRemainingSeconds > 0 || sleepTimerEndOfTrack,
                     onSleepTimer = onSleepTimer,
                 )
             }

@@ -149,6 +149,8 @@ fun NowPlayingScreen(
     onStartSleepTimer: (Int) -> Unit = {},
     onStartSleepTimerAtEndOfTrack: () -> Unit = {},
     onCancelSleepTimer: () -> Unit = {},
+    smartCrossfade: Boolean = false,
+    onBestMixUpcoming: ((onProgress: (String) -> Unit, onComplete: () -> Unit) -> Unit)? = null,
 ) {
     // Lyrics and the queue are modes of the player, not destinations, so their state lives here.
     // Only one can hold the panel at a time.
@@ -363,12 +365,15 @@ fun NowPlayingScreen(
                     onOpenCollection = onOpenCollection,
                     onLyricsPanel = { panel = if (lyricsOpen) PlayerPanel.NONE else PlayerPanel.LYRICS },
                     onQueuePanel = onQueue,
-                    sleepTimerActive = sleepTimerRemainingSeconds > 0 || sleepTimerEndOfTrack,
+                    sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
+                    sleepTimerEndOfTrack = sleepTimerEndOfTrack,
                     onSleepTimer = { sleepTimerDialogOpen = true },
                     autoplayEnabled = autoplayEnabled,
                     autoplayLoading = autoplayLoading,
                     autoplayError = autoplayError,
                     onAutoplayEnabled = onAutoplayEnabled,
+                    smartCrossfade = smartCrossfade,
+                    onBestMixUpcoming = onBestMixUpcoming,
                 )
                 return@Box
             }
@@ -430,6 +435,11 @@ fun NowPlayingScreen(
                                 autoplayLoading = autoplayLoading,
                                 autoplayError = autoplayError,
                                 onAutoplayEnabled = onAutoplayEnabled,
+                                smartCrossfade = smartCrossfade,
+                                onBestMixUpcoming = onBestMixUpcoming,
+                                sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
+                                sleepTimerEndOfTrack = sleepTimerEndOfTrack,
+                                onSleepTimer = { sleepTimerDialogOpen = true },
                             )
                             return@Box
                         }

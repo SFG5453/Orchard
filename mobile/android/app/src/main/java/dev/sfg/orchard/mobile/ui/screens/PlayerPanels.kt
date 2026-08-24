@@ -129,8 +129,6 @@ fun PlayerControlStack(
         onDevices = onDevices,
         onQueue = onQueue,
         queueActive = queueActive,
-        sleepTimerActive = sleepTimerActive,
-        onSleepTimer = onSleepTimer,
     )
 }
 

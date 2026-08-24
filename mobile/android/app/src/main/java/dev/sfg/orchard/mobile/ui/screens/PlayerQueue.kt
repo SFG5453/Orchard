@@ -19,6 +19,15 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -26,19 +35,27 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AllInclusive
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.ClearAll
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,21 +63,29 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
-import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.ArtworkTile
 import dev.sfg.orchard.mobile.ui.components.ExplicitBadge
+import dev.sfg.orchard.mobile.ui.theme.CanopyColors
+import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
 /**
  * The queue as a mode of the player rather than a destination: the transport below stays put and
@@ -80,35 +105,59 @@ fun PlayerQueuePanel(
     autoplayLoading: Boolean = false,
     autoplayError: String = "",
     onAutoplayEnabled: ((Boolean) -> Unit)? = null,
+    smartCrossfade: Boolean = false,
+    onBestMixUpcoming: ((onProgress: (String) -> Unit, onComplete: () -> Unit) -> Unit)? = null,
+    sleepTimerRemainingSeconds: Long = 0L,
+    sleepTimerEndOfTrack: Boolean = false,
+    onSleepTimer: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val history = playback.history.takeLast(4)
     val historyStart = playback.currentIndex - history.size
-    // The played tracks sit above the fold rather than at the top: opening the queue should land
-    // on what plays next, with history there for anyone who scrolls back for it.
     val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = remember { if (history.isEmpty()) 0 else history.size + 1 },
+        initialFirstVisibleItemIndex = remember { 0 },
     )
     if (playback.queue.isEmpty()) {
         Box(modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                QueueNotice("Queue is empty", "Play an album, playlist, or song to get started.")
+            Column(Modifier.fillMaxSize()) {
+                QueueTopControls(
+                    smartCrossfade = smartCrossfade,
+                    onBestMixUpcoming = onBestMixUpcoming,
+                    upcomingCount = 0,
+                    autoplayEnabled = autoplayEnabled,
+                    autoplayLoading = autoplayLoading,
+                    autoplayError = autoplayError,
+                    onAutoplayEnabled = onAutoplayEnabled,
+                    sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
+                    sleepTimerEndOfTrack = sleepTimerEndOfTrack,
+                    onSleepTimer = onSleepTimer,
+                )
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    QueueNotice("Queue is empty", "Play an album, playlist, or song to get started.")
+                }
             }
-            AutoplayFooter(
-                enabled = autoplayEnabled,
-                loading = autoplayLoading,
-                error = autoplayError,
-                onEnabled = onAutoplayEnabled,
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
         }
         return
     }
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
     ) {
+        item {
+            QueueTopControls(
+                smartCrossfade = smartCrossfade,
+                onBestMixUpcoming = onBestMixUpcoming,
+                upcomingCount = playback.upcoming.size,
+                autoplayEnabled = autoplayEnabled,
+                autoplayLoading = autoplayLoading,
+                autoplayError = autoplayError,
+                onAutoplayEnabled = onAutoplayEnabled,
+                sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
+                sleepTimerEndOfTrack = sleepTimerEndOfTrack,
+                onSleepTimer = onSleepTimer,
+            )
+        }
         if (history.isNotEmpty()) {
             item { QueueSectionHeader("Played") }
             itemsIndexed(history, key = { index, track -> "history:$index:${track.id}" }) { offset, track ->
@@ -149,73 +198,284 @@ fun PlayerQueuePanel(
                 onPlay = { onPlayIndex(index) }, onRemove = onRemove, onMove = onMove,
             )
         }
-        item {
-            AutoplayFooter(
-                enabled = autoplayEnabled,
-                loading = autoplayLoading,
-                error = autoplayError,
-                onEnabled = onAutoplayEnabled,
-            )
-        }
     }
 }
 
 /**
- * Mirrors desktop's queue-panel footer: the same switch as Settings, plus whatever Autoplay is
- * currently doing. The status line is the only place a listener finds out that recommendations are
- * loading or that the radio ran out, so it stays visible even when the queue is empty.
+ * Top control card and quick pill row for the queue screen.
+ * Displays Best Mix in the center when smart crossfade is active, alongside Autoplay and Sleep Timer pills.
  */
 @Composable
-private fun AutoplayFooter(
-    enabled: Boolean,
-    loading: Boolean,
-    error: String,
-    onEnabled: ((Boolean) -> Unit)?,
+fun QueueTopControls(
+    smartCrossfade: Boolean,
+    onBestMixUpcoming: ((onProgress: (String) -> Unit, onComplete: () -> Unit) -> Unit)?,
+    upcomingCount: Int,
+    autoplayEnabled: Boolean,
+    autoplayLoading: Boolean,
+    autoplayError: String,
+    onAutoplayEnabled: ((Boolean) -> Unit)?,
+    sleepTimerRemainingSeconds: Long,
+    sleepTimerEndOfTrack: Boolean,
+    onSleepTimer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier
+    var isSorting by remember { mutableStateOf(false) }
+    var sortStatusText by remember { mutableStateOf("") }
+
+    val transition = rememberInfiniteTransition(label = "QueueTopGlow")
+    val borderGlow by transition.animateFloat(
+        initialValue = 0.30f,
+        targetValue = 0.85f,
+        animationSpec = infiniteRepeatable(tween(2000), RepeatMode.Reverse),
+        label = "QueueTopBorderGlow",
+    )
+    val sparkleScale by transition.animateFloat(
+        initialValue = 0.90f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(tween(1600), RepeatMode.Reverse),
+        label = "QueueTopSparkleScale",
+    )
+
+    Column(
+        modifier = modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Icon(
-            Icons.Rounded.AllInclusive,
-            contentDescription = null,
-            tint = Color.White.copy(alpha = 0.7f),
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                "Autoplay",
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = Color.White,
-            )
-            Text(
-                when {
-                    !enabled -> "Off"
-                    loading -> "Finding more music…"
-                    error.isNotBlank() -> error
-                    else -> "Keep the music going"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+        if (smartCrossfade) {
+            // Featured Best Mix Card
+            Surface(
+                color = Color.White.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.horizontalGradient(
+                            listOf(
+                                LocalAccent.current.copy(alpha = borderGlow * 0.7f),
+                                Color.White.copy(alpha = 0.35f),
+                                LocalAccent.current.copy(alpha = borderGlow),
+                            ),
+                        ),
+                        shape = RoundedCornerShape(20.dp),
+                    ),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .background(LocalAccent.current.copy(alpha = 0.18f), CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Rounded.AutoAwesome,
+                                contentDescription = "Best Mix",
+                                tint = LocalAccent.current,
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .graphicsLayer {
+                                        scaleX = sparkleScale
+                                        scaleY = sparkleScale
+                                    },
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Best Mix",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White,
+                            )
+                            Text(
+                                "Harmonic & tempo transition ordering",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.65f),
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            if (!isSorting && upcomingCount > 1 && onBestMixUpcoming != null) {
+                                isSorting = true
+                                sortStatusText = "Analyzing queue..."
+                                onBestMixUpcoming(
+                                    { status -> sortStatusText = status },
+                                    {
+                                        isSorting = false
+                                        sortStatusText = ""
+                                    },
+                                )
+                            }
+                        },
+                        enabled = !isSorting && upcomingCount > 1 && onBestMixUpcoming != null,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = LocalAccent.current,
+                            contentColor = Color.Black,
+                            disabledContainerColor = Color.White.copy(alpha = 0.12f),
+                            disabledContentColor = Color.White.copy(alpha = 0.45f),
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(38.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            if (isSorting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = Color.Black,
+                                    strokeWidth = 2.dp,
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    sortStatusText.ifBlank { "Sorting queue..." },
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Rounded.AutoAwesome,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    if (upcomingCount <= 1) "Need 2+ upcoming tracks" else "Mix Upcoming Queue",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
-        Switch(
-            checked = enabled,
-            onCheckedChange = onEnabled,
-            enabled = onEnabled != null,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = LocalAccent.current,
-                uncheckedThumbColor = Color.White.copy(alpha = 0.7f),
-                uncheckedTrackColor = Color.White.copy(alpha = 0.15f),
-            ),
-        )
+
+        // Quick Controls Row: Autoplay & Sleep Timer Pills
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            // Autoplay Pill
+            Surface(
+                color = Color.White.copy(alpha = if (autoplayEnabled) 0.14f else 0.07f),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable(enabled = onAutoplayEnabled != null) {
+                        onAutoplayEnabled?.invoke(!autoplayEnabled)
+                    },
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(
+                                if (autoplayEnabled) LocalAccent.current.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.10f),
+                                CircleShape,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Rounded.AllInclusive,
+                            contentDescription = "Autoplay",
+                            tint = if (autoplayEnabled) LocalAccent.current else Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Autoplay",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                            color = Color.White,
+                        )
+                        Text(
+                            when {
+                                !autoplayEnabled -> "Off"
+                                autoplayLoading -> "Loading…"
+                                autoplayError.isNotBlank() -> "Error"
+                                else -> "On"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (autoplayEnabled) LocalAccent.current else Color.White.copy(alpha = 0.55f),
+                        )
+                    }
+                }
+            }
+
+            // Sleep Timer Pill
+            val isSleepActive = sleepTimerRemainingSeconds > 0 || sleepTimerEndOfTrack
+            val sleepTimerText = when {
+                sleepTimerEndOfTrack -> "End of track"
+                sleepTimerRemainingSeconds > 0 -> "${(sleepTimerRemainingSeconds + 59) / 60}m remaining"
+                else -> "Off"
+            }
+
+            Surface(
+                color = Color.White.copy(alpha = if (isSleepActive) 0.14f else 0.07f),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable(onClick = onSleepTimer),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(
+                                if (isSleepActive) Color(0xFFB39DDB).copy(alpha = 0.25f) else Color.White.copy(alpha = 0.10f),
+                                CircleShape,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Rounded.Bedtime,
+                            contentDescription = "Sleep Timer",
+                            tint = if (isSleepActive) Color(0xFFCE93D8) else Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Sleep Timer",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                            color = Color.White,
+                        )
+                        Text(
+                            sleepTimerText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isSleepActive) Color(0xFFCE93D8) else Color.White.copy(alpha = 0.55f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -352,14 +352,12 @@ fun PlayerBottomDestinations(
     onDevices: () -> Unit,
     onQueue: () -> Unit,
     queueActive: Boolean = false,
-    sleepTimerActive: Boolean = false,
-    onSleepTimer: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -372,18 +370,6 @@ fun PlayerBottomDestinations(
                 imageVector = Icons.Rounded.Subtitles,
                 contentDescription = if (lyricsActive) "Hide lyrics" else "Lyrics",
                 tint = if (lyricsActive) Color.White else Color.White.copy(alpha = 0.75f),
-                modifier = Modifier.size(24.dp),
-            )
-        }
-
-        IconButton(
-            onClick = onSleepTimer,
-            modifier = Modifier.size(44.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Bedtime,
-                contentDescription = if (sleepTimerActive) "Sleep timer active" else "Sleep timer",
-                tint = if (sleepTimerActive) Color.White else Color.White.copy(alpha = 0.75f),
                 modifier = Modifier.size(24.dp),
             )
         }
