@@ -108,6 +108,7 @@ Napi::Array StructuralBoundaryArray(
     const auto& boundary = boundaries[index];
     auto value = Napi::Object::New(env);
     value.Set("time", Compact(boundary.time));
+    value.Set("observedTime", Compact(boundary.observed_time));
     value.Set("confidence", Compact(boundary.confidence));
     value.Set("source", boundary.source);
     value.Set("noveltyPeak", Compact(boundary.novelty_peak));

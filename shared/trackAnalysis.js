@@ -162,33 +162,59 @@ function normalizeHarmonic(raw) {
   });
 }
 
-function boundaryEvidence(candidate = {}) {
+function boundaryEvidence(candidate = {}, overrides = {}) {
   const nested = candidate.evidence && typeof candidate.evidence === 'object'
     ? candidate.evidence
     : candidate;
   return Object.freeze({
+    observedTime: finite(overrides.observedTime ?? nested.observedTime),
     noveltyPeak: finite(nested.noveltyPeak),
     energyDelta: finite(nested.energyDelta),
     lowDelta: finite(nested.lowDelta),
     vocalDelta: finite(nested.vocalDelta),
     stabilityBefore: finite(nested.stabilityBefore),
     stabilityAfter: finite(nested.stabilityAfter),
-    downbeatDistance: finite(nested.downbeatDistance)
+    downbeatDistance: finite(overrides.downbeatDistance ?? nested.downbeatDistance)
   });
 }
 
-function detectedBoundaries(raw, range) {
+function snapObservedBoundary(observedTime, timing, range) {
+  let nearest = null;
+  let distance = Infinity;
+  for (const downbeat of timing.downbeats) {
+    if (downbeat < range.start || downbeat > range.end) continue;
+    const candidateDistance = Math.abs(downbeat - observedTime);
+    if (candidateDistance < distance) {
+      nearest = downbeat;
+      distance = candidateDistance;
+    }
+  }
+  const tolerance = Math.max(0.25, positive(timing.beatInterval));
+  return {
+    time: nearest !== null && distance <= tolerance ? nearest : observedTime,
+    distance: Number.isFinite(distance) ? distance : null
+  };
+}
+
+function detectedBoundaries(raw, range, timing) {
   return (Array.isArray(raw.structuralBoundaryCandidates)
     ? raw.structuralBoundaryCandidates
     : [])
     .map((candidate) => {
-      const time = finite(candidate?.time);
-      if (time === null || time < range.start || time > range.end) return null;
+      // `time` may have been snapped against the native grid. The observation
+      // survives separately so a later Beat This refinement can perform the
+      // only authoritative snap against the final downbeats.
+      const observedTime = finite(candidate?.observedTime ?? candidate?.time);
+      if (observedTime === null || observedTime < range.start || observedTime > range.end) return null;
+      const snapped = snapObservedBoundary(observedTime, timing, range);
       return Object.freeze({
-        time: rounded(time),
+        time: rounded(snapped.time),
         confidence: clamp(candidate.confidence, 0, 1),
         source: 'detected-change',
-        evidence: boundaryEvidence(candidate)
+        evidence: boundaryEvidence(candidate, {
+          observedTime: rounded(observedTime),
+          downbeatDistance: snapped.distance === null ? null : rounded(snapped.distance)
+        })
       });
     })
     .filter(Boolean);
@@ -253,7 +279,7 @@ export function normalizeTrackAnalysis(raw = {}) {
     harmonic: normalizeHarmonic(raw),
     frames: normalizeFrames(raw, duration),
     boundaries: dedupeBoundaries([
-      ...detectedBoundaries(raw, range),
+      ...detectedBoundaries(raw, range, timing),
       ...endpointBoundaries(range),
       ...rhythmicFallbacks(timing, range)
     ])

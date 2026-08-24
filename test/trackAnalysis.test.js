@@ -87,7 +87,8 @@ test('rebuilds rhythmic fallbacks from the final downbeat grid', () => {
 test('retains measured boundary evidence without promoting a semantic label', () => {
   const analysis = normalizeTrackAnalysis(rawAnalysis({
     structuralBoundaryCandidates: [{
-      time: 10.1,
+      time: 10,
+      observedTime: 10.1,
       confidence: 0.82,
       source: 'detected-change',
       noveltyPeak: 0.9,
@@ -102,11 +103,42 @@ test('retains measured boundary evidence without promoting a semantic label', ()
   }));
 
   const boundary = analysis.boundaries.find((item) => item.source === 'detected-change');
-  assert.equal(boundary.time, 10.1);
+  assert.equal(boundary.time, 10);
   assert.equal(boundary.confidence, 0.82);
   assert.equal(boundary.evidence.noveltyPeak, 0.9);
   assert.equal(boundary.evidence.energyDelta, 0.7);
+  assert.equal(boundary.evidence.observedTime, 10.1);
+  assert.equal(boundary.evidence.downbeatDistance, 0.1);
   assert.equal('type' in boundary, false);
+});
+
+test('re-snaps detected changes against the final refined downbeat grid', () => {
+  const candidate = {
+    // Native first snapped this observation to the old 10-second downbeat.
+    time: 10,
+    observedTime: 10.4,
+    confidence: 0.82,
+    noveltyPeak: 0.9,
+    downbeatDistance: 0.4
+  };
+  const before = normalizeTrackAnalysis(rawAnalysis({
+    downbeats: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20],
+    structuralBoundaryCandidates: [candidate]
+  }));
+  const refined = normalizeTrackAnalysis(rawAnalysis({
+    downbeats: [0.5, 2.5, 4.5, 6.5, 8.5, 10.5, 12.5, 14.5, 16.5, 18.5],
+    beatModelChecked: true,
+    structuralBoundaryCandidates: [candidate]
+  }));
+
+  const detected = (analysis) => analysis.boundaries.find(
+    (boundary) => boundary.source === 'detected-change'
+  );
+  assert.equal(detected(before).time, 10);
+  assert.equal(detected(before).evidence.downbeatDistance, 0.4);
+  assert.equal(detected(refined).time, 10.5);
+  assert.equal(detected(refined).evidence.downbeatDistance, 0.1);
+  assert.equal(detected(refined).evidence.observedTime, 10.4);
 });
 
 test('keeps unavailable vocal evidence unknown during interpolation', () => {

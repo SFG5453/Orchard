@@ -91,7 +91,11 @@ struct TransitionFeatureFrame {
 };
 
 struct StructuralBoundaryCandidate {
+  // `time` is the native-grid snap retained for compatibility. `observed_time`
+  // is the unsnapped signal-change timestamp used by desktop finalization
+  // after an optional beat-model refinement replaces that grid.
   double time = 0;
+  double observed_time = 0;
   double confidence = 0;
   std::string source = "detected-change";
   double novelty_peak = 0;

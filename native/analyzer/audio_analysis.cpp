@@ -678,6 +678,7 @@ void BuildTransitionEvidence(AnalysisResult& result) {
     const size_t context = 4;
     StructuralBoundaryCandidate candidate{
       time,
+      frame.time,
       Clamp(
         frame.novelty * 0.65 +
           result.beat_confidence * 0.20 +

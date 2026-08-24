@@ -100,6 +100,7 @@ test('native analyzer returns transition-ready musical features', async () => {
   assert.ok(result.structuralBoundaryCandidates.every((boundary) =>
     boundary.source === 'detected-change' &&
     !('type' in boundary) &&
+    Number.isFinite(boundary.observedTime) &&
     Number.isFinite(boundary.noveltyPeak) &&
     Number.isFinite(boundary.energyDelta)
   ));
