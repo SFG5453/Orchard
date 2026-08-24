@@ -21,6 +21,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createCrossfadeMixer } from '../src/audio/crossfade/crossfadeMixer.js';
+import {
+  CHOREOGRAPHY_SCHEMA_VERSION,
+  CHOREOGRAPHY_STRATEGY,
+  CURVE_INTERPOLATION,
+  createAutomationPoint,
+  createTransitionChoreography
+} from '../src/audio/crossfade/transitionChoreography.js';
+
 
 function audioParam() {
   return {
@@ -402,13 +410,6 @@ test('resetting a mix cancels its envelope without changing the master volume', 
   assert.deepEqual(node.gain.gain.events, []);
 });
 
-import {
-  CHOREOGRAPHY_SCHEMA_VERSION,
-  CHOREOGRAPHY_STRATEGY,
-  CURVE_INTERPOLATION,
-  createAutomationPoint,
-  createTransitionChoreography
-} from '../src/audio/crossfade/transitionChoreography.js';
 
 test('scheduleCrossfade executes exact choreography curves for gains, low-pass, and bass', () => {
   const { fromAudio, toAudio, fromNode, toNode, mixer } = pair(100);

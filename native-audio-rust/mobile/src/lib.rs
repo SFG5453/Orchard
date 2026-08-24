@@ -188,6 +188,10 @@ pub struct SelectedTransition {
     /// One of `equal_power_crossfade`, `beatmatched_crossfade`, `bass_swap`, `filtered_blend`,
     /// `short_fade`. Anything else is an error rather than a refusal.
     pub strategy: String,
+    pub handoff_fraction: Option<f64>,
+    pub bed_position: Option<f64>,
+    pub bass_swap_fraction: Option<f64>,
+    pub filter_sweep: Option<f64>,
 }
 
 impl SelectedTransition {
@@ -205,6 +209,10 @@ impl SelectedTransition {
             outgoing_pitch_semitones: self.outgoing_pitch_semitones,
             incoming_pitch_semitones: self.incoming_pitch_semitones,
             strategy: self.strategy,
+            handoff_fraction: self.handoff_fraction,
+            bed_position: self.bed_position,
+            bass_swap_fraction: self.bass_swap_fraction,
+            filter_sweep: self.filter_sweep,
         };
         plan.validate().map_err(TransitionError::invalid)?;
         Ok(plan)

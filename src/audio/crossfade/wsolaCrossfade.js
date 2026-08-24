@@ -155,7 +155,7 @@ function localGrid(grid, slice) {
 }
 
 function selectedLocalPlan(transitionPlan, outgoingSlice, incomingSlice) {
-  return {
+  const plan = {
     outgoingStart: Number(transitionPlan.transitionStart) - outgoingSlice.start,
     incomingStart: Number(transitionPlan.incomingCueTime) - incomingSlice.start,
     duration: Number(transitionPlan.overlapSeconds),
@@ -167,6 +167,22 @@ function selectedLocalPlan(transitionPlan, outgoingSlice, incomingSlice) {
     incomingTempoRatio: Number(transitionPlan.incomingTempoRatio),
     strategy: String(transitionPlan.strategy || '')
   };
+  if (Number.isFinite(Number(transitionPlan.handoffFraction))) {
+    plan.handoffFraction = Number(transitionPlan.handoffFraction);
+  }
+  if (Number.isFinite(Number(transitionPlan.bedPosition))) {
+    plan.bedPosition = Number(transitionPlan.bedPosition);
+  }
+  if (Number.isFinite(Number(transitionPlan.bassSwapFraction))) {
+    plan.bassSwapFraction = Number(transitionPlan.bassSwapFraction);
+  }
+  if (Number.isFinite(Number(transitionPlan.filterSweep))) {
+    plan.filterSweep = Number(transitionPlan.filterSweep);
+  }
+  if (transitionPlan.choreography) {
+    plan.choreography = transitionPlan.choreography;
+  }
+  return plan;
 }
 
 function strategyIdentity(value) {

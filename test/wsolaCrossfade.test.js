@@ -313,7 +313,8 @@ test('prepare sends the authoritative plan rebased into exact padded slices', as
     targetBpm: plan.targetBpm,
     outgoingTempoRatio: plan.outgoingTempoRatio,
     incomingTempoRatio: plan.incomingTempoRatio,
-    strategy: plan.strategy
+    strategy: plan.strategy,
+    bassSwapFraction: plan.bassSwapFraction
   });
   assert.equal('outgoing' in call.options, false);
   assert.equal('incoming' in call.options, false);

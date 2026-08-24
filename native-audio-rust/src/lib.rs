@@ -126,6 +126,10 @@ pub struct JsSelectedTransition {
     pub outgoing_pitch_semitones: Option<f64>,
     pub incoming_pitch_semitones: Option<f64>,
     pub strategy: String,
+    pub handoff_fraction: Option<f64>,
+    pub bed_position: Option<f64>,
+    pub bass_swap_fraction: Option<f64>,
+    pub filter_sweep: Option<f64>,
 }
 
 #[napi(object)]
@@ -296,6 +300,10 @@ pub fn render_planned_transition(
         outgoing_pitch_semitones: plan.outgoing_pitch_semitones,
         incoming_pitch_semitones: plan.incoming_pitch_semitones,
         strategy: plan.strategy,
+        handoff_fraction: plan.handoff_fraction,
+        bed_position: plan.bed_position,
+        bass_swap_fraction: plan.bass_swap_fraction,
+        filter_sweep: plan.filter_sweep,
     };
     // A strategy name the engine does not know is a caller mistake, not a pairing that cannot be
     // made, so it throws here rather than resolving to a refusal the caller would act on by

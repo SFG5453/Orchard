@@ -96,6 +96,10 @@ pub struct SelectedPlan {
     pub outgoing_pitch_semitones: Option<f64>,
     pub incoming_pitch_semitones: Option<f64>,
     pub strategy: String,
+    pub handoff_fraction: Option<f64>,
+    pub bed_position: Option<f64>,
+    pub bass_swap_fraction: Option<f64>,
+    pub filter_sweep: Option<f64>,
 }
 
 impl SelectedPlan {
@@ -156,6 +160,10 @@ mod tests {
             outgoing_pitch_semitones: Some(0.25),
             incoming_pitch_semitones: Some(-0.25),
             strategy: strategy.to_string(),
+            handoff_fraction: None,
+            bed_position: None,
+            bass_swap_fraction: None,
+            filter_sweep: None,
         }
     }
 

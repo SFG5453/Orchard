@@ -43,6 +43,8 @@ pub use curve::depth_curve;
 pub use plan::{RegionWindow, SelectedPlan, TransitionRequest};
 pub use source::{MAX_SECONDS, Source, validate_pcm};
 
+use earmark::dsp::automation::{AutomationCurve, AutomationPoint, CurveShape};
+use earmark::dsp::filters::FilterKind;
 use earmark::{
     CrossfadeError, EngineConfig, SmartCrossfadeEngine, TransitionOutput, TransitionPlan,
 };
@@ -135,6 +137,38 @@ pub fn render_constrained(
     Ok(Rendered::new(&plan, &output))
 }
 
+fn apply_selected_shape(plan: &mut TransitionPlan, selected: &SelectedPlan) {
+    if let Some(swap_fraction) = selected.bass_swap_fraction {
+        let swap_at = (swap_fraction as f32).clamp(0.05, 0.95);
+        let swap_start = (swap_at - 0.05).max(0.0);
+        let swap_end = (swap_at + 0.05).min(1.0);
+        for filter in &mut plan.filters.outgoing {
+            if filter.kind == FilterKind::HighPass {
+                filter.cutoff = AutomationCurve::from_points(vec![
+                    AutomationPoint::new(0.0, 20.0, CurveShape::Linear),
+                    AutomationPoint::new(swap_start, 20.0, CurveShape::EqualPowerIn),
+                    AutomationPoint::new(swap_end, 200.0, CurveShape::Linear),
+                    AutomationPoint::new(1.0, 200.0, CurveShape::Linear),
+                ]);
+            }
+        }
+        for filter in &mut plan.filters.incoming {
+            if filter.kind == FilterKind::HighPass {
+                filter.cutoff = AutomationCurve::from_points(vec![
+                    AutomationPoint::new(0.0, 200.0, CurveShape::Linear),
+                    AutomationPoint::new(swap_start, 200.0, CurveShape::EqualPowerOut),
+                    AutomationPoint::new(swap_end, 20.0, CurveShape::Linear),
+                    AutomationPoint::new(1.0, 20.0, CurveShape::Linear),
+                ]);
+            }
+        }
+    }
+
+    if selected.filter_sweep == Some(0.0) {
+        plan.filters.outgoing.retain(|f| f.kind != FilterKind::LowPass);
+    }
+}
+
 /// Renders the caller's exact transition without invoking earmark analysis,
 /// candidate generation, scoring, or strategy selection.
 pub fn render_selected(
@@ -143,14 +177,15 @@ pub fn render_selected(
     selected: &SelectedPlan,
     duck_curve: Option<&[f64]>,
 ) -> Result<Rendered, Refusal> {
-    let selected = selected.to_earmark()?;
+    let selected_earmark = selected.to_earmark()?;
     let outgoing_audio = outgoing.audio().map_err(describe)?;
     let incoming_audio = incoming.audio().map_err(describe)?;
 
     let mut engine = SmartCrossfadeEngine::new(EngineConfig::default()).map_err(describe)?;
     let mut plan = engine
-        .plan_selected(&outgoing_audio, &incoming_audio, &selected)
+        .plan_selected(&outgoing_audio, &incoming_audio, &selected_earmark)
         .map_err(describe)?;
+    apply_selected_shape(&mut plan, selected);
     duck::apply_across_overlap(&mut plan, duck_curve);
 
     let output = engine
@@ -187,6 +222,10 @@ mod tests {
             outgoing_pitch_semitones: None,
             incoming_pitch_semitones: None,
             strategy: strategy.to_string(),
+            handoff_fraction: None,
+            bed_position: None,
+            bass_swap_fraction: None,
+            filter_sweep: None,
         }
     }
 
