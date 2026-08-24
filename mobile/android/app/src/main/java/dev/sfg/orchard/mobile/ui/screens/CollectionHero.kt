@@ -50,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -197,7 +198,12 @@ fun CollectionHero(
         // Albums get a full-bleed cover with the titles laid over it; playlists keep the
         // centred card, which suits their mixed artwork better.
         if (detail.kind == CatalogKind.ALBUM) {
-            Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clipToBounds(),
+            ) {
                 ArtworkTile(
                     url = detail.artworkUrl,
                     description = "Artwork for ${detail.title}",

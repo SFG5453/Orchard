@@ -45,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -273,7 +274,12 @@ fun AnimatedArtworkVideo(
             view.keepScreenOn = false
             view.videoSurfaceView?.keepScreenOn = false
         },
-        modifier = modifier.graphicsLayer { alpha = animatedAlpha },
+        modifier = modifier
+            .clipToBounds()
+            .graphicsLayer {
+                alpha = animatedAlpha
+                clip = true
+            },
     )
 }
 
