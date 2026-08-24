@@ -22,6 +22,7 @@ import assert from 'node:assert/strict';
 import {
   latestBetaPackageManifest,
   packageServiceTarget,
+  resolveUpdateChannel,
   selectPackageServiceRelease
 } from '../electron/integrations/packageServiceUpdates.js';
 
@@ -65,4 +66,16 @@ test('selects a complete package manifest from the latest GitHub beta', () => {
     manifestUrl: 'https://github.com/sfg5453/orchard/releases/download/v5.2.0-beta.1/manifest.json',
     baseURL: 'https://github.com/sfg5453/orchard/releases/download/v5.2.0-beta.1/'
   });
+});
+
+test('a prerelease build resolves to the GitHub beta endpoint whatever is stored', () => {
+  assert.equal(resolveUpdateChannel('stable', '5.0.0-beta.2'), 'beta');
+  assert.equal(resolveUpdateChannel('beta', '5.0.0-beta.2'), 'beta');
+  assert.equal(resolveUpdateChannel('', '5.0.0-beta.2'), 'beta');
+});
+
+test('a stable build keeps the stored channel', () => {
+  assert.equal(resolveUpdateChannel('stable', '5.0.0'), 'stable');
+  assert.equal(resolveUpdateChannel('beta', '5.0.0'), 'beta');
+  assert.equal(resolveUpdateChannel('nonsense', '5.0.0'), 'stable');
 });

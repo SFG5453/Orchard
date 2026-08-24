@@ -21,6 +21,16 @@ import semver from 'semver';
 
 export const DEFAULT_PACKAGE_SERVICE_URL = 'https://packages.sfg545.dev/';
 
+/**
+ * Prerelease builds are only ever published to the GitHub beta endpoint, so a
+ * stored 'stable' preference cannot serve them -- it would point the package
+ * service at a manifest that will never list this build's successor.
+ */
+export function resolveUpdateChannel(storedChannel, version) {
+  if (semver.prerelease(semver.valid(version) || semver.coerce(version)?.version || '')) return 'beta';
+  return storedChannel === 'beta' ? 'beta' : 'stable';
+}
+
 export function packageServiceTarget(platform = process.platform, architecture = process.arch) {
   const normalizedPlatform = platform === 'win32' ? 'win32' : platform;
   const normalizedArchitecture = architecture === 'x64' || architecture === 'amd64'

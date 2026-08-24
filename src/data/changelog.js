@@ -33,7 +33,7 @@ export const ORCHARD_RELEASES = [
       {
         title: 'Maintenance',
         items: [
-          'This build is a transition release: installing it lets Orchard update itself to 5.0.0-beta.3 and beyond.'
+          'This build is a transition release: installing it lets Orchard update itself to 5.0.0-beta.3 and beyond, which it fetches from the GitHub beta releases.'
         ]
       }
     ]

@@ -34,6 +34,7 @@ import {
   DEFAULT_PACKAGE_SERVICE_URL,
   latestBetaPackageManifest,
   packageServiceTarget,
+  resolveUpdateChannel,
   selectPackageServiceRelease
 } from './packageServiceUpdates.js';
 import { updateErrorMessage } from './updateErrors.js';
@@ -416,7 +417,8 @@ export function setupOrchardUpdates({ isDev }) {
   }
 
   let channelReady = updateChecksEnabled
-    ? readUpdateChannel().then((channel) => {
+    ? readUpdateChannel().then((stored) => {
+      const channel = resolveUpdateChannel(stored, state.version);
       state = { ...state, channel };
       return channel;
     })
@@ -442,6 +444,7 @@ export function setupOrchardUpdates({ isDev }) {
 
     await channelReady;
     await writeUpdateChannel(channel);
+    channel = resolveUpdateChannel(channel, state.version);
     availablePackageRelease = null;
     preparedPackageUpdate = null;
     publish({ channel, downloadAvailable: false, downloadedFile: '' });
