@@ -203,6 +203,45 @@ private fun harmonicallyCompatible(left: String, right: String): Boolean {
 private fun trustedKey(analysis: TrackAnalysis): String =
     if (analysis.key.isBlank() || analysis.keyConfidence < 0.25) "" else analysis.key
 
+internal fun supportsHarmonicPhraseSwitch(
+    analysis: TrackAnalysis,
+    nextAnalysis: TrackAnalysis,
+): Boolean = harmonicallyCompatible(trustedKey(analysis), trustedKey(nextAnalysis))
+
+internal data class SmartPairPreview(
+    val tier: TransitionTier,
+    val wsolaPlan: WsolaPlanResult.Planned? = null,
+)
+
+/**
+ * Classifies a stored-analysis pair through the same degradation ladder playback will use.
+ * Keeping the harmonic gate and operational WSOLA refusal here prevents queue ordering from
+ * advertising a phrase switch that [planTransition] would replace with an adaptive overlap.
+ */
+internal fun previewSmartTransitionPair(
+    analysis: TrackAnalysis,
+    nextAnalysis: TrackAnalysis,
+    duration: Double = 0.0,
+    nextDuration: Double = 0.0,
+): SmartPairPreview {
+    val policy = assessTransitionTier(analysis, nextAnalysis)
+    if (policy.tier != TransitionTier.BEATMATCHED) return SmartPairPreview(policy.tier)
+    if (!supportsHarmonicPhraseSwitch(analysis, nextAnalysis)) {
+        return SmartPairPreview(TransitionTier.DJ_ASSISTED)
+    }
+    val plan = planWsolaTransition(
+        analysis = analysis,
+        nextAnalysis = nextAnalysis,
+        duration = duration,
+        nextDuration = nextDuration,
+    ) as? WsolaPlanResult.Planned
+    return if (plan != null) {
+        SmartPairPreview(TransitionTier.BEATMATCHED, plan)
+    } else {
+        SmartPairPreview(TransitionTier.DJ_ASSISTED)
+    }
+}
+
 private fun nearestTimedValue(
     values: List<Double>,
     target: Double,
@@ -306,17 +345,12 @@ private fun phraseSwitch(
     length: Double,
     nextLength: Double,
 ): TransitionPlan? {
-    // A key clash is the one gate the shared planner does not apply: the desktop engine reaches it
-    // only for pairings its own queue sort has already made harmonic sense of, whereas here any two
-    // tracks can land next to each other.
-    if (!harmonicallyCompatible(trustedKey(analysis), trustedKey(nextAnalysis))) return null
-
-    val planned = planWsolaTransition(
+    val planned = previewSmartTransitionPair(
         analysis = analysis,
         nextAnalysis = nextAnalysis,
         duration = length,
         nextDuration = nextLength,
-    ) as? WsolaPlanResult.Planned ?: return null
+    ).wsolaPlan ?: return null
 
     val overlap = planned.transitionEnd - planned.transitionStart
     return TransitionPlan(

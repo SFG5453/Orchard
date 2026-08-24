@@ -87,7 +87,13 @@ object BestMixSorter {
     private fun confidence(value: Double, fallback: Double): Double =
         if (value.isFinite() && value > 0) max(0.15, min(1.0, value)) else fallback
 
-    fun transitionCost(left: TrackFeatures.Features, right: TrackFeatures.Features): Double? {
+    private fun hasMusicalEvidence(features: TrackFeatures.Features): Boolean =
+        features.bpm > 0 || harmonicCost(features.key, features.key) != null
+
+    private fun legacyTransitionCost(
+        left: TrackFeatures.Features,
+        right: TrackFeatures.Features,
+    ): Double? {
         var weightedCost = 0.0
         var totalWeight = 0.0
 
@@ -123,6 +129,56 @@ object BestMixSorter {
         return if (totalWeight > 0) weightedCost / totalWeight else null
     }
 
+    private fun TrackFeatures.Features.asTrackAnalysis(): TrackAnalysis = TrackAnalysis(
+        duration = duration,
+        bpm = bpm,
+        beatInterval = beatInterval,
+        firstBeat = firstBeat,
+        beatConfidence = beatConfidence,
+        key = key,
+        keyConfidence = keyConfidence,
+        audibleStartTime = audibleStartTime,
+        pickupTime = pickupTime,
+        introEndTime = introEndTime,
+        outroStartTime = outroStartTime,
+        contentEndTime = contentEndTime,
+        mixInTime = mixInTime,
+        mixOutTime = mixOutTime,
+        vocalProbability = vocalProbability,
+        downbeats = downbeats,
+        phraseBoundaries = phraseBoundaries,
+        vocalActivityMask = vocalActivityMask,
+        energyCurve = energyCurve,
+        lowEnergyCurve = lowEnergyCurve,
+        mixInCandidates = mixInCandidates,
+        mixOutCandidates = mixOutCandidates,
+    )
+
+    fun transitionCost(left: TrackFeatures.Features, right: TrackFeatures.Features): Double? {
+        val legacyCost = legacyTransitionCost(left, right) ?: return null
+        val analysis = left.asTrackAnalysis()
+        val nextAnalysis = right.asTrackAnalysis()
+        val preview = previewSmartTransitionPair(
+            analysis = analysis,
+            nextAnalysis = nextAnalysis,
+            duration = left.duration,
+            nextDuration = right.duration,
+        )
+        val planCost = when (preview.tier) {
+            TransitionTier.BEATMATCHED -> {
+                val plan = checkNotNull(preview.wsolaPlan)
+                val vocalPenalty = if (plan.vocalClash) 10.0 else 0.0
+                val confidencePenalty = (1.0 - plan.beatConfidence.coerceIn(0.0, 1.0)) * 2.0
+                val shortenedFadePenalty =
+                    ((16 - plan.fadeBeats).coerceAtLeast(0) / 16.0)
+                vocalPenalty + confidencePenalty + shortenedFadePenalty
+            }
+            TransitionTier.DJ_ASSISTED -> 10.0
+            TransitionTier.PLAIN_CROSSFADE -> 20.0
+        }
+        return planCost + legacyCost * 0.01
+    }
+
     private data class AnalyzedTrack(
         val track: Track,
         val features: TrackFeatures.Features,
@@ -137,7 +193,7 @@ object BestMixSorter {
         val ordered = mutableListOf<Track>()
         var previous = initialFeatures
 
-        if ((previous == null || previous.bpm <= 0) && remaining.isNotEmpty()) {
+        if ((previous == null || !hasMusicalEvidence(previous)) && remaining.isNotEmpty()) {
             val first = remaining.removeAt(0)
             ordered.add(first.track)
             previous = first.features
@@ -168,12 +224,16 @@ object BestMixSorter {
      * Sorts a list of tracks for Best Mix using available audio features.
      * Tracks without analysis are kept in place without halting the process.
      */
-    fun sort(tracks: List<Track>, featuresMap: Map<String, TrackFeatures.Features>): List<Track> {
+    fun sort(
+        tracks: List<Track>,
+        featuresMap: Map<String, TrackFeatures.Features>,
+        initialFeatures: TrackFeatures.Features? = null,
+    ): List<Track> {
         if (tracks.size <= 1) return tracks
 
         val output = mutableListOf<Track>()
         val segment = mutableListOf<AnalyzedTrack>()
-        var previousFeatures: TrackFeatures.Features? = null
+        var previousFeatures = initialFeatures
 
         fun flush() {
             if (segment.isNotEmpty()) {
@@ -186,7 +246,7 @@ object BestMixSorter {
 
         tracks.forEachIndexed { index, track ->
             val features = featuresMap[track.id]
-            if (features != null && (features.bpm > 0 || features.key.isNotBlank())) {
+            if (features != null && hasMusicalEvidence(features)) {
                 segment.add(AnalyzedTrack(track, features, index))
             } else {
                 flush()

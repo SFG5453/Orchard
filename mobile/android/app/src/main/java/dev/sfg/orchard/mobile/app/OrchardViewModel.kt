@@ -570,8 +570,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
-     * Orders only the upcoming tracks in the active queue with Best Mix harmonic & tempo transitions
-     * without interrupting current playback.
+     * Orders only the upcoming tracks by their Smart Crossfade transition quality without
+     * interrupting current playback.
      */
     fun bestMixUpcoming(
         onProgress: (String) -> Unit = {},
@@ -583,18 +583,21 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
             onComplete()
             return@launch
         }
+        val queueRequest = BestMixQueueRequest.capture(currentSnapshot)
         val currentSettings = settings.value
         val syncService = SupabaseSyncService(getApplication())
         val featuresMap = mutableMapOf<String, TrackFeatures.Features>()
+        val currentTrack = currentSnapshot.currentTrack
+        val analysisTracks = (listOfNotNull(currentTrack) + upcoming).distinctBy(Track::id)
 
         // 1. Check in-memory cache
-        for (track in upcoming) {
+        for (track in analysisTracks) {
             BestMixSorter.getCachedFeatures(track.id)?.let { featuresMap[track.id] = it }
         }
 
         // 2. Fetch from Supabase if enabled
-        if (currentSettings.bestMixSupabaseSync && featuresMap.size < upcoming.size) {
-            val neededIds = upcoming.map { it.id }.filter { it !in featuresMap }
+        if (currentSettings.bestMixSupabaseSync && featuresMap.size < analysisTracks.size) {
+            val neededIds = analysisTracks.map { it.id }.filter { it !in featuresMap }
             onProgress("Checking cloud analysis...")
             val cloudFeatures = withContext(Dispatchers.IO) { syncService.fetchTrackFeatures(neededIds) }
             cloudFeatures.forEach { (id, features) ->
@@ -604,7 +607,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         }
 
         // 3. Analyze local files in parallel for remaining
-        val missing = upcoming.filter { it.id !in featuresMap }
+        val missing = analysisTracks.filter { it.id !in featuresMap }
         if (missing.isNotEmpty()) {
             val allDownloads = graph.downloads.store.loadAll()
             val totalToAnalyze = missing.size
@@ -634,7 +637,15 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
         onProgress("Sorting queue...")
         val sortedUpcoming = withContext(Dispatchers.Default) {
-            BestMixSorter.sort(upcoming, featuresMap)
+            BestMixSorter.sort(
+                tracks = upcoming,
+                featuresMap = featuresMap,
+                initialFeatures = currentTrack?.id?.let(featuresMap::get),
+            )
+        }
+        if (!queueRequest.matches(playback.value)) {
+            onComplete()
+            return@launch
         }
         local.replaceUpcoming(sortedUpcoming)
         onComplete()

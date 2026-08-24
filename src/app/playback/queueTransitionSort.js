@@ -18,11 +18,14 @@
  */
 
 import { ref, watch } from 'vue';
+import { finalizeTrackAnalysis } from '../../../shared/trackAnalysis.js';
+import { planPairTransition } from '../../audio/crossfade/pairTransitionPlanner.js';
 import { ANALYSIS_PRIORITIES } from '../../audio/crossfade/smartCrossfadeAnalysis.js';
 import { loadLearnedAudioProfiles } from '../../audio/engine/audioProfileStore.js';
 import { fetchBatchCloudAnalysis } from '../../services/cloudAnalysisSync.js';
 
 const BEST_MIX_TRACK_LIMIT = 50;
+const BEST_MIX_PLANNER_SHORTLIST = 3;
 
 function persistCloudAnalysis(trackId, analysis) {
   try {
@@ -113,7 +116,7 @@ export function hasMusicalAnalysis(analysis = {}) {
   return Number(analysis.bpm) > 0 || Boolean(parsedKey(analysis.key));
 }
 
-export function transitionCost(left = {}, right = {}) {
+function legacyTransitionCost(left = {}, right = {}) {
   let weightedCost = 0;
   let totalWeight = 0;
   const tempoRatio = normalizedTempoRatio(left.bpm, right.bpm);
@@ -157,10 +160,34 @@ export function transitionCost(left = {}, right = {}) {
   return totalWeight > 0 ? weightedCost / totalWeight : null;
 }
 
+const TRANSITION_CLASS_COST = Object.freeze({
+  full_beatmatched: 0,
+  conservative_beatmatched: 1,
+  simple_crossfade: 2,
+  silence_trim: 3,
+  normal_boundary: 4
+});
+
+export function transitionCost(left = {}, right = {}) {
+  const legacyCost = legacyTransitionCost(left, right);
+  if (legacyCost === null) return null;
+  const plan = planPairTransition({
+    analysis: left,
+    nextAnalysis: right,
+    duration: Number(left.duration) || 0,
+    nextDuration: Number(right.duration) || 0
+  });
+  const classCost = TRANSITION_CLASS_COST[plan.transitionClass] ?? TRANSITION_CLASS_COST.normal_boundary;
+  const confidenceCost = 1 - clamp01(plan.confidence);
+  const qualityCost = 1 - clamp01(plan.diagnostics?.selected?.quality ?? plan.confidence);
+  return classCost * 10 + confidenceCost * 2 + qualityCost + legacyCost * 0.01;
+}
+
 function orderAnalyzedSegment(segment, initialAnalysis) {
   const remaining = [...segment];
   const ordered = [];
   let comparisons = 0;
+  let plannerEvaluations = 0;
   let previous = initialAnalysis;
   if (!hasMusicalAnalysis(previous) && remaining.length) {
     const [first] = remaining.splice(0, 1);
@@ -170,26 +197,43 @@ function orderAnalyzedSegment(segment, initialAnalysis) {
 
   while (remaining.length) {
     const comparable = remaining
-      .map((candidate, index) => ({ candidate, cost: transitionCost(previous, candidate.analysis), index }))
-      .filter((entry) => entry.cost !== null);
+      .map((candidate, index) => ({
+        candidate,
+        index,
+        prefilterCost: legacyTransitionCost(previous, candidate.analysis)
+      }))
+      .filter((entry) => entry.prefilterCost !== null);
     let bestIndex = 0;
     if (comparable.length) {
       comparisons += 1;
       comparable.sort((left, right) =>
-        left.cost - right.cost || left.candidate.originalIndex - right.candidate.originalIndex
+        left.prefilterCost - right.prefilterCost ||
+        left.candidate.originalIndex - right.candidate.originalIndex
       );
-      bestIndex = comparable[0].index;
+      const finalists = comparable.slice(0, BEST_MIX_PLANNER_SHORTLIST)
+        .map((entry) => ({
+          ...entry,
+          cost: transitionCost(previous, entry.candidate.analysis)
+        }));
+      plannerEvaluations += finalists.length;
+      finalists.sort((left, right) =>
+        left.cost - right.cost ||
+        left.prefilterCost - right.prefilterCost ||
+        left.candidate.originalIndex - right.candidate.originalIndex
+      );
+      bestIndex = finalists[0].index;
     }
     const [selected] = remaining.splice(bestIndex, 1);
     ordered.push(selected);
     previous = selected.analysis;
   }
-  return { comparisons, ordered };
+  return { comparisons, ordered, plannerEvaluations };
 }
 
 export function bestTransitionOrder(queue, analysisByTrack, initialAnalysis = {}) {
   const output = [];
   let comparisons = 0;
+  let plannerEvaluations = 0;
   let segment = [];
   let previous = initialAnalysis;
 
@@ -198,6 +242,7 @@ export function bestTransitionOrder(queue, analysisByTrack, initialAnalysis = {}
     const result = orderAnalyzedSegment(segment, previous);
     output.push(...result.ordered.map((entry) => entry.track));
     comparisons += result.comparisons;
+    plannerEvaluations += result.plannerEvaluations;
     previous = result.ordered.at(-1)?.analysis || previous;
     segment = [];
   }
@@ -213,7 +258,7 @@ export function bestTransitionOrder(queue, analysisByTrack, initialAnalysis = {}
     previous = {};
   });
   flushSegment();
-  return { comparisons, ordered: output };
+  return { comparisons, ordered: output, plannerEvaluations };
 }
 
 function isOrderedSubset(currentIds, expectedIds) {
@@ -263,7 +308,10 @@ export function installQueueTransitionSort(ctx) {
     const loudnessSource = sources.find((source) => finiteOrNull(source?.loudnessLufs, -69) !== null);
     const energySource = sources.find((source) => Array.isArray(source?.energyCurve) && source.energyCurve.length);
     const vocalSource = sources.find((source) => finiteOrNull(source?.vocalProbability, -0.001) !== null);
-    return {
+    const merged = Object.assign({}, ...[...sources].reverse());
+    return finalizeTrackAnalysis({
+      ...merged,
+      duration: Number(merged.duration) || trackDurationSeconds(track),
       bpm: Number(tempoSource?.bpm || tempoSource?.tempo || learnedTempo) || 0,
       tempoConfidence: Number(tempoSource?.tempoConfidence ?? tempoSource?.beatConfidence) || (tempoSource ? 0.35 : (learnedTempo ? 0.25 : 0)),
       beatConfidence: Number(tempoSource?.beatConfidence) || 0,
@@ -272,7 +320,7 @@ export function installQueueTransitionSort(ctx) {
       loudnessLufs: loudnessSource?.loudnessLufs ?? null,
       energyCurve: energySource?.energyCurve || [],
       vocalProbability: vocalSource?.vocalProbability ?? null
-    };
+    });
   }
 
   async function learnedTempoMap() {
