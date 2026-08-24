@@ -320,24 +320,8 @@ fun HomeScreen(
     // Spotify-style 6-grid quick access items
     val quickGridItems = remember(library, state) {
         buildList {
-            // 1. Liked Music
-            if (library.likedTracks.isNotEmpty()) {
-                add(
-                    QuickGridItem(
-                        id = "liked_music",
-                        title = "Liked Music",
-                        artworkUrl = library.likedTracks.firstOrNull { it.artworkUrl.isNotBlank() }?.artworkUrl.orEmpty(),
-                        icon = Icons.Filled.Favorite,
-                        gradient = Brush.linearGradient(
-                            listOf(Color(0xFF8E2DE2), Color(0xFF4A00E0)),
-                        ),
-                        onClick = { onLibrary(LibraryFilter.SONGS) },
-                        onPlay = { library.likedTracks.firstOrNull()?.let(onPlay) },
-                    )
-                )
-            }
-            // 2. Playlists
-            library.savedPlaylists.take(4).forEach { playlist ->
+            // 1. Playlists
+            library.savedPlaylists.take(6).forEach { playlist ->
                 add(
                     QuickGridItem(
                         id = "pl_${playlist.id}",
@@ -348,7 +332,7 @@ fun HomeScreen(
                     )
                 )
             }
-            // 3. Saved Albums
+            // 2. Saved Albums
             if (size < 6) {
                 library.savedAlbums.take(6 - size).forEach { album ->
                     add(
@@ -362,7 +346,7 @@ fun HomeScreen(
                     )
                 }
             }
-            // 4. Catalog items fallback
+            // 3. Catalog items fallback
             if (size < 6 && state is LoadState.Content) {
                 val stateItems = state.value.flatMap { it.items }.filter { it.artworkUrl.isNotBlank() }
                 stateItems.distinctBy { it.stableId }.take(6 - size).forEach { item ->
@@ -404,7 +388,7 @@ fun HomeScreen(
             }
         }
 
-        // Spotify 2x3 Quick-Access Grid (Liked Music & Top Playlists)
+        // Spotify 2x3 Quick-Access Grid (Top Playlists & Saved Items)
         if (selectedMood == "All" && quickGridItems.isNotEmpty() && !effectiveOffline) {
             item {
                 SpotifyQuickGrid(
