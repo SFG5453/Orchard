@@ -19,6 +19,25 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '5.0.0-beta.2',
+    codename: 'Aerie Hymned',
+    date: 'August 24, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'Replaced the desktop updater with the new Orchard package service, which downloads, verifies, and installs updates directly instead of handing you off to an external installer.'
+        ]
+      },
+      {
+        title: 'Maintenance',
+        items: [
+          'This build is a transition release: installing it lets Orchard update itself to 5.0.0-beta.3 and beyond.'
+        ]
+      }
+    ]
+  },
+  {
     version: '5.0.0-beta.1',
     codename: 'Aerie Hymned',
     date: 'August 20, 2026',
