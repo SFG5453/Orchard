@@ -104,11 +104,14 @@ class VocalTrackerTest {
         try {
             val seconds = 10.0
             val (left, right) = material(seconds, withMidBand = true)
-            val curve = tracker.track(left, right, rate)
-            assertNotNull("no vocal curve produced", curve)
+            val presence = tracker.track(left, right, rate)
+            assertNotNull("no vocal curve produced", presence)
+            // Well inside the model's width, so nothing is cropped and frame zero is input zero.
+            assertEquals(0.0, presence!!.startSeconds, 0.0)
+            val curve = presence.values
 
             val expected = (seconds * VocalSpectrogram.frameRate).toInt()
-            Log.i(TAG, "curve ${curve!!.size} frames, expected ~$expected")
+            Log.i(TAG, "curve ${curve.size} frames, expected ~$expected")
             // Within a couple of frames of the STFT's own framing.
             assertTrue("got ${curve.size} frames for $expected", kotlin.math.abs(curve.size - expected) < 5)
             assertTrue("values outside [0,1]", curve.all { it in 0f..1f })
@@ -123,13 +126,33 @@ class VocalTrackerTest {
     }
 
     @Test
-    fun aWindowLongerThanTheModelIsRefusedRatherThanTruncated() {
+    fun aWindowLongerThanTheModelIsCroppedToTheEndAskedFor() {
         val tracker = VocalTracker(context)
         try {
-            // The model's width is fixed at 960 frames (~22.3 s). Silently truncating would give a
-            // curve that stops early while claiming to describe the whole window.
-            val (left, right) = material(30.0, withMidBand = true)
-            assertNull(tracker.track(left, right, rate))
+            // The model's width is fixed at 960 frames (~22.3 s) and the analyzer's region is
+            // 29.76 s, so cropping is the ordinary case, not an exception. Refusing instead is what
+            // left every real track with no mask at all. What must not happen is cropping
+            // *silently*: the window that was measured has to come back with the curve, or the
+            // caller maps it onto the wrong seconds.
+            val seconds = 30.0
+            val (left, right) = material(seconds, withMidBand = true)
+            val width = (VocalTracker.FIXED_FRAMES - 1) * VocalSpectrogram.hop / VocalSpectrogram.sampleRate
+
+            val leading = tracker.track(left, right, rate, VocalTracker.Keep.LEADING)
+            assertNotNull("leading window produced nothing", leading)
+            assertEquals(0.0, leading!!.startSeconds, 0.0)
+            assertEquals(VocalTracker.FIXED_FRAMES, leading.values.size)
+
+            val trailing = tracker.track(left, right, rate, VocalTracker.Keep.TRAILING)
+            assertNotNull("trailing window produced nothing", trailing)
+            assertEquals(seconds - width, trailing!!.startSeconds, 0.05)
+            assertEquals(VocalTracker.FIXED_FRAMES, trailing.values.size)
+
+            // Different stretches of the same material, so a `keep` that is ignored is visible.
+            assertTrue(
+                "both ends returned the same window",
+                trailing.startSeconds > leading.startSeconds,
+            )
         } finally {
             tracker.release()
         }
@@ -144,7 +167,7 @@ class VocalTrackerTest {
             // toward silence.
             val seconds = 3.0
             val (left, right) = material(seconds, withMidBand = true)
-            val curve = tracker.track(left, right, rate)!!
+            val curve = tracker.track(left, right, rate)!!.values
             val expected = (seconds * VocalSpectrogram.frameRate).toInt()
             Log.i(TAG, "short window ${curve.size} frames, expected ~$expected")
             assertTrue(kotlin.math.abs(curve.size - expected) < 5)

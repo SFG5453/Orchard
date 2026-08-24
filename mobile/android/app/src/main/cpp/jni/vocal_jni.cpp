@@ -35,21 +35,34 @@ extern "C" {
 // Takes the two channels as separate arrays rather than one interleaved one,
 // mirroring the planar layout the front end wants and avoiding a deinterleave
 // on either side of the boundary.
+//
+// The offset and length exist because the model's input width is fixed and
+// shorter than the region the caller decodes, so it hands over a window of what
+// it already has. Copying that window out on the Java side first would cost
+// megabytes of heap for data that is about to be copied into these vectors
+// anyway.
 JNIEXPORT jfloatArray JNICALL
 Java_dev_sfg_orchard_mobile_playback_smart_VocalSpectrogram_nativeCompute(
     JNIEnv* env,
     jclass /* clazz */,
     jfloatArray left,
     jfloatArray right,
+    jint offset,
+    jint length,
     jdouble sample_rate) {
-  const jsize left_count = env->GetArrayLength(left);
-  const jsize right_count = env->GetArrayLength(right);
+  if (offset < 0 || length < 0) return env->NewFloatArray(0);
+  if (offset + length > env->GetArrayLength(left) ||
+      offset + length > env->GetArrayLength(right)) {
+    return env->NewFloatArray(0);
+  }
 
   std::vector<std::vector<float>> channels(2);
-  channels[0].resize(static_cast<size_t>(left_count));
-  channels[1].resize(static_cast<size_t>(right_count));
-  if (left_count > 0) env->GetFloatArrayRegion(left, 0, left_count, channels[0].data());
-  if (right_count > 0) env->GetFloatArrayRegion(right, 0, right_count, channels[1].data());
+  channels[0].resize(static_cast<size_t>(length));
+  channels[1].resize(static_cast<size_t>(length));
+  if (length > 0) {
+    env->GetFloatArrayRegion(left, offset, length, channels[0].data());
+    env->GetFloatArrayRegion(right, offset, length, channels[1].data());
+  }
 
   const orchard::VocalSpectrogram spectrogram =
       orchard::ComputeVocalSpectrogram(channels, sample_rate);

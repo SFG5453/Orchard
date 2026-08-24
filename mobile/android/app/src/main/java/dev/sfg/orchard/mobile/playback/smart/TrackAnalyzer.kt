@@ -299,9 +299,12 @@ class TrackAnalyzer(
         val tail: Region?
         modelPass.acquire()
         try {
-            head = region(::openSource, 0.0, minOf(window, durationSeconds), features, durationSeconds)
+            // The vocal model's window is shorter than the region, so each region keeps the end a
+            // transition actually reads: the head is entered near its start, the tail is left from
+            // its end.
+            head = region(::openSource, 0.0, minOf(window, durationSeconds), features, VocalTracker.Keep.LEADING)
             tail = if (tailStart > window / 2) {
-                region(::openSource, tailStart, durationSeconds, features, durationSeconds)
+                region(::openSource, tailStart, durationSeconds, features, VocalTracker.Keep.TRAILING)
             } else null
         } finally {
             modelPass.release()
@@ -432,21 +435,22 @@ class TrackAnalyzer(
     private fun vocalMask(
         stereo: AudioDecoder.StereoPcm,
         features: TrackFeatures.Features,
-        duration: Double,
         actualStart: Double,
+        keep: VocalTracker.Keep,
     ): DoubleArray? {
         val curve = features.energyCurve
         if (curve.isEmpty() || !VocalSpectrogram.available) return null
 
-        val window = (VocalTracker.FIXED_FRAMES - 1) * VocalSpectrogram.hop / VocalSpectrogram.sampleRate
         val mask = DoubleArray(curve.size) { NEUTRAL_VOCAL }
+        val presence = vocals.track(stereo.left, stereo.right, stereo.sampleRate, keep) ?: return null
 
-        val values = vocals.track(stereo.left, stereo.right, stereo.sampleRate) ?: return null
-
+        // The model measures one window of the region rather than all of it, so its frame zero sits
+        // `startSeconds` into the region, not at the region's own start.
+        val from = actualStart + presence.startSeconds
         for (index in curve.indices) {
-            val frame = ((curve[index].time - actualStart) * VocalSpectrogram.frameRate).toInt()
-            if (frame in values.indices) {
-                mask[index] = values[frame].toDouble()
+            val frame = ((curve[index].time - from) * VocalSpectrogram.frameRate).toInt()
+            if (frame in presence.values.indices) {
+                mask[index] = presence.values[frame].toDouble()
             }
         }
         return mask
@@ -533,7 +537,7 @@ class TrackAnalyzer(
         startSeconds: Double,
         endSeconds: Double,
         features: TrackFeatures.Features?,
-        durationSeconds: Double,
+        keep: VocalTracker.Keep,
     ): Region? {
         // Decoded at the vocal model's rate rather than the container's. It is the higher of the
         // two rates this region feeds, so nothing is lost, and it saves resampling a stereo region
@@ -552,7 +556,7 @@ class TrackAnalyzer(
             // The extractor seeks to a sync sample at or before what was asked for, so the region's
             // real start is what its beat times must be stated against, not the requested one.
             grid = grid(mono, offsetSeconds = actualStart),
-            vocalMask = features?.let { vocalMask(stereo, it, durationSeconds, actualStart) },
+            vocalMask = features?.let { vocalMask(stereo, it, actualStart, keep) },
             audibleStart = audibleStart(mono.samples, mono.sampleRate, actualStart),
         )
     }
