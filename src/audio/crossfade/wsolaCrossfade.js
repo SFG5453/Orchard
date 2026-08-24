@@ -326,7 +326,8 @@ export function createWsolaCrossfade({
       entry.render = {
         channels: result.channels,
         sampleRate: result.sampleRate,
-        stretchRatio: result.stretchRatio
+        stretchRatio: result.stretchRatio,
+        incomingStretchRatio: result.incomingStretchRatio
       };
       entry.status = 'ready';
       report('wsola-prepare-ready', {
@@ -389,6 +390,17 @@ export function createWsolaCrossfade({
     if (state.promoted) {
       // The incoming element is already the active deck; it has been playing
       // muted in position, so restoring volume is the whole recovery.
+      const incomingRatio = Math.max(
+        0.0001,
+        Number(state.plan.incomingTempoRatio) || Number(state.render.incomingStretchRatio) || 1
+      );
+      const expected = state.plan.incomingCueTime + elapsed * incomingRatio;
+      if (Math.abs(state.toAudio.currentTime - expected) > DRIFT_TOLERANCE_SECONDS) {
+        try {
+          state.toAudio.currentTime = expected;
+        } catch {}
+      }
+      state.toAudio.playbackRate = 1;
       analyzer.setVolume(state.toAudio, targetVolume);
       state.fromAudio.pause();
       analyzer.setVolume(state.fromAudio, 0);
@@ -396,8 +408,11 @@ export function createWsolaCrossfade({
       // Pre-promote the outgoing element is still authoritative. The buffer
       // consumed its media at the stretch ratio while the element ran at unit
       // rate, so realign before unmuting.
-      const ratio = Math.max(0.0001, Number(state.render.stretchRatio) || 1);
-      const expected = state.plan.transitionStart + elapsed / ratio;
+      const ratio = Math.max(
+        0.0001,
+        Number(state.plan.outgoingTempoRatio) || Number(state.render.stretchRatio) || 1
+      );
+      const expected = state.plan.transitionStart + elapsed * ratio;
       if (Math.abs(state.fromAudio.currentTime - expected) > DRIFT_TOLERANCE_SECONDS) {
         try {
           state.fromAudio.currentTime = expected;
@@ -405,6 +420,7 @@ export function createWsolaCrossfade({
       }
       analyzer.setVolume(state.fromAudio, targetVolume);
       state.toAudio.pause();
+      state.toAudio.playbackRate = 1;
       analyzer.setVolume(state.toAudio, 0);
     }
     report('wsola-cancelled', {
@@ -443,10 +459,17 @@ export function createWsolaCrossfade({
       }
 
       const now = analyzer.currentTime();
-      const stretchRatio = Math.max(0.0001, Number(render.stretchRatio) || 1);
+      const stretchRatio = Math.max(
+        0.0001,
+        Number(transitionPlan.outgoingTempoRatio) || Number(render.stretchRatio) || 1
+      );
+      const incomingStretchRatio = Math.max(
+        0.0001,
+        Number(transitionPlan.incomingTempoRatio) || Number(render.incomingStretchRatio) || 1
+      );
       // `untilStart` is measured on the outgoing media timeline, while the
       // buffer offset is measured on its stretched output timeline.
-      const offset = Math.max(0, -untilStart) * stretchRatio;
+      const offset = Math.max(0, -untilStart) / stretchRatio;
       const when = now + Math.max(0, untilStart);
       const handle = analyzer.playPcmBuffer({
         channels: render.channels,
@@ -487,7 +510,8 @@ export function createWsolaCrossfade({
       if (!analyzer.setMixVolume?.(toAudio, 0)) {
         throw new Error('Transition elements are outside the audio graph');
       }
-      toAudio.currentTime = transitionPlan.incomingCueTime + offset;
+      toAudio.currentTime = transitionPlan.incomingCueTime + offset * incomingStretchRatio;
+      toAudio.playbackRate = incomingStretchRatio;
       await toAudio.play();
       if (mySequence !== sequence) return false;
 
@@ -500,7 +524,7 @@ export function createWsolaCrossfade({
       };
       const correctDrift = () => {
         const expected = transitionPlan.incomingCueTime +
-          (analyzer.currentTime() - state.overlapStartTime);
+          (analyzer.currentTime() - state.overlapStartTime) * incomingStretchRatio;
         if (Math.abs(toAudio.currentTime - expected) > DRIFT_TOLERANCE_SECONDS) {
           try {
             toAudio.currentTime = expected;
@@ -543,6 +567,7 @@ export function createWsolaCrossfade({
       analyzer.resetMixElement?.(fromAudio);
       analyzer.setVolume(toAudio, targetVolume);
       analyzer.setVolume(fromAudio, 0);
+      toAudio.playbackRate = 1;
       fromAudio.pause();
       report('wsola-complete', { stretchRatio: render.stretchRatio });
       onComplete?.();
@@ -559,6 +584,7 @@ export function createWsolaCrossfade({
       analyzer.resetMixElement?.(toAudio);
       analyzer.setVolume(fromAudio, targetVolume);
       toAudio.pause();
+      toAudio.playbackRate = 1;
       analyzer.setVolume(toAudio, 0);
       report('wsola-start-failed', { errorMessage: String(error?.message || error) });
       onError?.(error);

@@ -126,23 +126,29 @@ function fakeElement(currentTime = 0) {
   };
 }
 
-function readyPlan({ transitionStart = 200, overlapSeconds = 16 * 60 / 126 } = {}) {
+function readyPlan({
+  transitionStart = 200,
+  overlapSeconds = 16 * 60 / 126,
+  outgoingTempoRatio = 1,
+  incomingTempoRatio = 1
+} = {}) {
   const targetBpm = 16 * 60 / overlapSeconds;
+  const incomingCueTime = 20;
   return {
     ok: true,
     transitionStart,
-    transitionEnd: transitionStart + overlapSeconds,
+    transitionEnd: transitionStart + overlapSeconds * outgoingTempoRatio,
     overlapSeconds,
     beats: 16,
     bassSwapFraction: 0.75,
     outgoingBpm: targetBpm,
     incomingBpm: targetBpm,
     targetBpm,
-    outgoingTempoRatio: 1,
-    incomingTempoRatio: 1,
-    stretchRatio: 1,
-    incomingCueTime: 20,
-    incomingResumeTime: 20 + overlapSeconds,
+    outgoingTempoRatio,
+    incomingTempoRatio,
+    stretchRatio: outgoingTempoRatio,
+    incomingCueTime,
+    incomingResumeTime: incomingCueTime + overlapSeconds * incomingTempoRatio,
     strategy: 'beatmatched_crossfade',
     outgoingSlice: {
       start: Math.max(0, transitionStart - 1.5),
@@ -188,7 +194,8 @@ function renderFor(plan, sampleRate = 44100) {
       new Float32Array(Math.round(plan.overlapSeconds * sampleRate))
     ],
     sampleRate,
-    stretchRatio: 1.05
+    stretchRatio: plan.outgoingTempoRatio,
+    incomingStretchRatio: plan.incomingTempoRatio
   };
 }
 
@@ -409,9 +416,12 @@ test('cancel before the swap restores the outgoing element at the stretched posi
   try {
     const analyzer = fakeAnalyzer();
     const engine = createWsolaCrossfade({ analyzer, bridge: {} });
-    const plan = readyPlan({ transitionStart: 200, overlapSeconds: 8 });
+    const plan = readyPlan({
+      transitionStart: 200,
+      overlapSeconds: 8,
+      outgoingTempoRatio: 1.05
+    });
     const render = renderFor(plan);
-    render.stretchRatio = 1.05;
     const fromAudio = fakeElement(199.9);
     const toAudio = fakeElement(0);
 
@@ -437,7 +447,7 @@ test('cancel before the swap restores the outgoing element at the stretched posi
 
     assert.equal(engine.isActive(), false);
     assert.ok(analyzer.calls.buffers[0].handle.stopped);
-    assert.ok(Math.abs(fromAudio.currentTime - (200 + 3 / 1.05)) < 0.02,
+    assert.ok(Math.abs(fromAudio.currentTime - (200 + 3 * 1.05)) < 0.02,
       `expected stretched realign, got ${fromAudio.currentTime}`);
     assert.equal(toAudio.paused, true);
     const restored = analyzer.calls.volumes.filter((entry) => entry.element === fromAudio).pop();
@@ -591,9 +601,13 @@ test('rechecks media time after context resume and maps late input time onto str
   try {
     const analyzer = fakeAnalyzer();
     const engine = createWsolaCrossfade({ analyzer, bridge: {} });
-    const plan = readyPlan({ transitionStart: 200, overlapSeconds: 8 });
+    const plan = readyPlan({
+      transitionStart: 200,
+      overlapSeconds: 8,
+      outgoingTempoRatio: 0.95,
+      incomingTempoRatio: 1.02
+    });
     const render = renderFor(plan);
-    render.stretchRatio = 0.95;
     const fromAudio = fakeElement(199.9);
     const toAudio = fakeElement(0);
     analyzer.resume = async () => {
@@ -612,8 +626,21 @@ test('rechecks media time after context resume and maps late input time onto str
     await Promise.resolve();
 
     const buffer = analyzer.calls.buffers[0];
-    assert.ok(Math.abs(buffer.offset - 0.05 * 0.95) < 1e-9);
-    assert.ok(Math.abs(toAudio.currentTime - (plan.incomingCueTime + buffer.offset)) < 1e-9);
+    const expectedOffset = 0.05 / 0.95;
+    assert.ok(Math.abs(buffer.offset - expectedOffset) < 1e-9);
+    assert.ok(Math.abs(
+      toAudio.currentTime - (plan.incomingCueTime + expectedOffset * 1.02)
+    ) < 1e-9);
+
+    // The first drift correction is 15% into the output interval. Its media
+    // target must advance on the incoming source timeline, not one-for-one
+    // with output time.
+    toAudio.currentTime = 0;
+    analyzer.advance(plan.overlapSeconds * 0.15 - expectedOffset);
+    assert.equal(await clock.runNext(), true);
+    assert.ok(Math.abs(
+      toAudio.currentTime - (plan.incomingCueTime + plan.overlapSeconds * 0.15 * 1.02)
+    ) < 1e-9);
 
     engine.cancel();
     assert.equal(await startPromise, false);
