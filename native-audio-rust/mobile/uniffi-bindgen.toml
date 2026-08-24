@@ -1,0 +1,5 @@
+# Generator configuration, not crate configuration. UniFFI 0.32 reads per-crate `uniffi.toml`
+# files only when it knows where the crate root is, which in `--library` mode it does not: the
+# input is a built .so. `[defaults]` applies to every crate in the run, and there is exactly one.
+[defaults.bindings.kotlin]
+package_name = "dev.sfg.orchard.earmark"

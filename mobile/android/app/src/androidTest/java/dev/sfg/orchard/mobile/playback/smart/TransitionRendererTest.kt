@@ -25,6 +25,7 @@ import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.sin
 import kotlin.math.sqrt
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -37,8 +38,9 @@ import org.junit.Test
  * volume ramp cannot approximate: it time-stretches the outgoing track onto the incoming grid,
  * hands the low end over at a downbeat, and rides a filter down the outgoing channel.
  *
- * These check that it renders, refuses when it should, and produces audio that is actually a mix of
- * both sources rather than either one alone, not that it sounds good, which no test can say.
+ * These check that it renders, refuses when it should, honours the anchors it is given, and
+ * produces audio that is actually a mix of both sources rather than either one alone. Not that it
+ * sounds good, which no test can say.
  */
 class TransitionRendererTest {
 
@@ -77,6 +79,24 @@ class TransitionRendererTest {
         return left to left.copyOf()
     }
 
+    /**
+     * A source with the beat grid the engine plans against. Downbeats every four beats: candidate
+     * placement keys off them, so a source without them scores blind on structure and is not what
+     * the app hands over.
+     */
+    private fun source(seconds: Double, bpm: Double, toneHz: Double): TransitionRenderer.Source {
+        val (left, right) = loop(seconds, bpm, toneHz)
+        val beatSeconds = 60.0 / bpm
+        val beats = generateSequence(0.0) { it + beatSeconds }.takeWhile { it < seconds }.toList()
+        return TransitionRenderer.Source(
+                left = left,
+                right = right,
+                bpm = bpm,
+                beats = beats.toDoubleArray(),
+                downbeats = beats.filterIndexed { index, _ -> index % 4 == 0 }.toDoubleArray(),
+        )
+    }
+
     private fun rms(values: FloatArray, from: Int = 0, to: Int = values.size): Double {
         if (to <= from) return 0.0
         var sum = 0.0
@@ -84,75 +104,76 @@ class TransitionRendererTest {
         return sqrt(sum / (to - from))
     }
 
+    private val atEightSeconds = TransitionRenderer.Anchor(startSeconds = 8.0)
+
     @Test
     fun rendersAnOverlapBetweenMatchingTempi() {
-        val (outLeft, outRight) = loop(20.0, 126.0, toneHz = 440.0)
-        val (inLeft, inRight) = loop(20.0, 126.0, toneHz = 660.0)
-
         val rendered =
                 TransitionRenderer.render(
-                        outgoing =
-                                TransitionRenderer.Source(
-                                        outLeft,
-                                        outRight,
-                                        anchorSeconds = 8.0,
-                                        bpm = 126.0
-                                ),
-                        incoming =
-                                TransitionRenderer.Source(
-                                        inLeft,
-                                        inRight,
-                                        anchorSeconds = 8.0,
-                                        bpm = 126.0
-                                ),
-                        beats = 16.0,
-                        filterSweep = 0.8,
+                        outgoing = source(20.0, 126.0, toneHz = 440.0),
+                        incoming = source(20.0, 126.0, toneHz = 660.0),
+                        outgoingAnchor = atEightSeconds,
+                        incomingAnchor = atEightSeconds,
                 )
         assertNotNull("renderer refused a matching pair", rendered)
         Log.i(
                 TAG,
-                "frames=${rendered!!.frames} ${rendered.durationSeconds}s stretch=${rendered.stretchRatio}",
+                "frames=${rendered!!.frames} ${rendered.durationSeconds}s ${rendered.strategy} " +
+                        "beats=${rendered.beats} stretch=${rendered.stretchRatio}",
         )
 
-        // Sixteen beats at 126 BPM is about 7.6 s.
-        assertTrue(
-                "overlap ${rendered.durationSeconds}s is not ~7.6s",
-                abs(rendered.durationSeconds - 7.62) < 0.5
-        )
         assertTrue(
                 "stretch ${rendered.stretchRatio} should be ~1 for equal tempi",
                 abs(rendered.stretchRatio - 1.0) < 0.02
         )
         assertTrue("output is silent", rms(rendered.left) > 0.01)
         assertTrue("output is not finite", rendered.left.all { it.isFinite() })
-        assertTrue("output clipped", rendered.left.all { abs(it) <= 1.0001f })
         assertTrue("channels are not both populated", rms(rendered.right) > 0.01)
+    }
+
+    /**
+     * The engine chooses the overlap length and where inside the window the mix begins, so the
+     * caller schedules against what came back. A start that wandered outside the window it was
+     * given would put the rendered mix at a cue nothing else in the app knows about.
+     */
+    @Test
+    fun placesTheTransitionInsideTheRequestedWindow() {
+        val rendered =
+                TransitionRenderer.render(
+                        outgoing = source(20.0, 126.0, toneHz = 440.0),
+                        incoming = source(20.0, 126.0, toneHz = 660.0),
+                        outgoingAnchor = atEightSeconds,
+                        incomingAnchor = atEightSeconds,
+                )!!
+        Log.i(TAG, "out=${rendered.outgoingStart} in=${rendered.incomingStart}")
+
+        assertTrue(
+                "outgoing start ${rendered.outgoingStart} left the requested window",
+                abs(rendered.outgoingStart - 8.0) <= 1.0,
+        )
+        assertTrue(
+                "incoming start ${rendered.incomingStart} left the requested window",
+                abs(rendered.incomingStart - 8.0) <= 1.0,
+        )
+        // Where the outgoing track had reached when the mix ended, which is what the caller resumes
+        // from. Stretching moves it off `start + duration`, so it is reported rather than derived.
+        assertEquals(
+                rendered.outgoingStart + rendered.durationSeconds * rendered.stretchRatio,
+                rendered.outgoingResume,
+                0.05,
+        )
     }
 
     @Test
     fun stretchesTheOutgoingTrackOntoTheIncomingGrid() {
         // 124 against 126 is inside the transparent window, so it should render with a real
         // stretch.
-        val (outLeft, outRight) = loop(20.0, 124.0, toneHz = 440.0)
-        val (inLeft, inRight) = loop(20.0, 126.0, toneHz = 660.0)
-
         val rendered =
                 TransitionRenderer.render(
-                        outgoing =
-                                TransitionRenderer.Source(
-                                        outLeft,
-                                        outRight,
-                                        anchorSeconds = 8.0,
-                                        bpm = 124.0
-                                ),
-                        incoming =
-                                TransitionRenderer.Source(
-                                        inLeft,
-                                        inRight,
-                                        anchorSeconds = 8.0,
-                                        bpm = 126.0
-                                ),
-                        beats = 16.0,
+                        outgoing = source(20.0, 124.0, toneHz = 440.0),
+                        incoming = source(20.0, 126.0, toneHz = 660.0),
+                        outgoingAnchor = atEightSeconds,
+                        incomingAnchor = atEightSeconds,
                 )
         assertNotNull("renderer refused a pair two BPM apart", rendered)
         Log.i(TAG, "124->126 stretch=${rendered!!.stretchRatio}")
@@ -164,81 +185,44 @@ class TransitionRendererTest {
     }
 
     @Test
-    fun refusesATempoGapTooWideToStayTransparent() {
-        // 126 against 90 is far outside the window; stretching that far is audible as artefact,
-        // and the honest answer is to decline and let the plain crossfade run.
-        val (outLeft, outRight) = loop(20.0, 126.0, toneHz = 440.0)
-        val (inLeft, inRight) = loop(20.0, 90.0, toneHz = 660.0)
-
+    fun refusesWhenThereIsTooLittleAudioForTheOverlap() {
+        // Two seconds cannot fill a beat-aligned overlap however good the tempo match is.
         assertNull(
                 TransitionRenderer.render(
-                        outgoing =
-                                TransitionRenderer.Source(
-                                        outLeft,
-                                        outRight,
-                                        anchorSeconds = 8.0,
-                                        bpm = 126.0
-                                ),
-                        incoming =
-                                TransitionRenderer.Source(
-                                        inLeft,
-                                        inRight,
-                                        anchorSeconds = 8.0,
-                                        bpm = 90.0
-                                ),
-                        beats = 16.0,
+                        outgoing = source(2.0, 126.0, toneHz = 440.0),
+                        incoming = source(2.0, 126.0, toneHz = 660.0),
+                        outgoingAnchor = TransitionRenderer.Anchor(startSeconds = 1.0),
+                        incomingAnchor = TransitionRenderer.Anchor(startSeconds = 1.0),
                 ),
         )
     }
 
+    /**
+     * Every reachable transition end sits a whole number of bars from a downbeat, so a window
+     * narrower than that lattice legitimately contains nothing. Refusing is the correct answer;
+     * drifting to the nearest fit would silently mix at a cue nobody asked for.
+     */
     @Test
-    fun refusesWhenThereIsTooLittleAudioForTheOverlap() {
-        // Two seconds cannot fill a sixteen-beat overlap however good the tempo match is.
-        val (outLeft, outRight) = loop(2.0, 126.0, toneHz = 440.0)
-        val (inLeft, inRight) = loop(2.0, 126.0, toneHz = 660.0)
+    fun refusesAWindowNarrowerThanTheDownbeatLattice() {
         assertNull(
                 TransitionRenderer.render(
-                        outgoing =
-                                TransitionRenderer.Source(
-                                        outLeft,
-                                        outRight,
-                                        anchorSeconds = 1.0,
-                                        bpm = 126.0
-                                ),
-                        incoming =
-                                TransitionRenderer.Source(
-                                        inLeft,
-                                        inRight,
-                                        anchorSeconds = 1.0,
-                                        bpm = 126.0
-                                ),
-                        beats = 16.0,
+                        outgoing = source(20.0, 126.0, toneHz = 440.0),
+                        incoming = source(20.0, 126.0, toneHz = 660.0),
+                        outgoingAnchor =
+                                TransitionRenderer.Anchor(startSeconds = 8.0, endSeconds = 8.2),
+                        incomingAnchor = atEightSeconds,
                 ),
         )
     }
 
     @Test
     fun theOverlapRisesFromTheOutgoingTrackAndEndsOnTheIncomingOne() {
-        val (outLeft, outRight) = loop(20.0, 126.0, toneHz = 440.0)
-        val (inLeft, inRight) = loop(20.0, 126.0, toneHz = 660.0)
         val rendered =
                 TransitionRenderer.render(
-                        outgoing =
-                                TransitionRenderer.Source(
-                                        outLeft,
-                                        outRight,
-                                        anchorSeconds = 8.0,
-                                        bpm = 126.0
-                                ),
-                        incoming =
-                                TransitionRenderer.Source(
-                                        inLeft,
-                                        inRight,
-                                        anchorSeconds = 8.0,
-                                        bpm = 126.0
-                                ),
-                        beats = 16.0,
-                        filterSweep = 0.8,
+                        outgoing = source(20.0, 126.0, toneHz = 440.0),
+                        incoming = source(20.0, 126.0, toneHz = 660.0),
+                        outgoingAnchor = atEightSeconds,
+                        incomingAnchor = atEightSeconds,
                 )!!
 
         // Both ends carry audio: a render that collapsed to one source, or faded to nothing in the

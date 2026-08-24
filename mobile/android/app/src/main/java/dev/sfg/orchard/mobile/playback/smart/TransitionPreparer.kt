@@ -29,6 +29,7 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 
@@ -179,51 +180,88 @@ class TransitionPreparer(
         val inAnchor = nearestDownbeat(incomingAnalysis, plan.incomingCueTime)
             ?: plan.incomingCueTime
 
-        val outgoing = decodeAround(outgoingUri, outAnchor, margin) ?: return null
-        val incoming = decodeAround(incomingUri, inAnchor, margin) ?: return null
+        val (outgoingPcm, outgoingSliceStart) = decodeAround(outgoingUri, outAnchor, margin) ?: return null
+        val (incomingPcm, incomingSliceStart) = decodeAround(incomingUri, inAnchor, margin) ?: return null
+        val outgoingSliceEnd = outgoingSliceStart + outgoingPcm.left.size / TransitionRenderer.SAMPLE_RATE
 
         val rendered = TransitionRenderer.render(
             outgoing = TransitionRenderer.Source(
-                left = outgoing.first.left,
-                right = outgoing.first.right,
-                anchorSeconds = outAnchor - outgoing.second,
+                left = outgoingPcm.left,
+                right = outgoingPcm.right,
                 bpm = plan.outgoingBpm,
+                beats = beatGrid(outgoingAnalysis, outgoingSliceStart, outgoingPcm.left.size),
+                downbeats = rebased(outgoingAnalysis.downbeats, outgoingSliceStart, outgoingPcm.left.size),
             ),
             incoming = TransitionRenderer.Source(
-                left = incoming.first.left,
-                right = incoming.first.right,
-                anchorSeconds = inAnchor - incoming.second,
+                left = incomingPcm.left,
+                right = incomingPcm.right,
                 // Octave-aligned by the planner, not the analyzed BPM: see [TransitionPlan].
                 bpm = plan.incomingBpm,
+                beats = beatGrid(incomingAnalysis, incomingSliceStart, incomingPcm.left.size),
+                downbeats = rebased(incomingAnalysis.downbeats, incomingSliceStart, incomingPcm.left.size),
             ),
-            beats = plan.transitionBeats.toDouble(),
-            // One continuous equal-power fade across the whole overlap, the low end handing over
-            // late within it, under a sweep that is what makes this read as a mix rather than two
-            // records at once. All four come from the planner: see the field docs on [TransitionPlan]
-            // for why they are not constants here.
-            handoff = plan.handoffFraction,
-            bed = plan.bedPosition,
-            bassSwap = plan.bassSwapFraction,
-            filterSweep = plan.filterSweep,
-            vocalDuck = duckCurve(outgoingAnalysis, plan.transitionStart, plan.transitionEnd),
+            // The planner owns *where*; the engine owns how long the overlap is, what shape it
+            // takes, and which strategy suits the two spectra. That division is why none of
+            // [TransitionPlan]'s handoff, bed, bassSwap or filterSweep are passed any more: they
+            // described a renderer that decided nothing.
+            outgoingAnchor = TransitionRenderer.Anchor(
+                startSeconds = outAnchor - outgoingSliceStart,
+                endSeconds = plan.transitionEnd - outgoingSliceStart,
+            ),
+            incomingAnchor = TransitionRenderer.Anchor(
+                startSeconds = inAnchor - incomingSliceStart,
+            ),
+            vocalDuck = duckCurve(outgoingAnalysis, outgoingSliceStart, outgoingSliceEnd),
         ) ?: return null
 
         val file = TransitionAudio.writeWav(rendered, File(directory(), "$key.wav")) ?: return null
         Log.d(
             TAG,
-            "Rendered ${rendered.durationSeconds}s stretch=${rendered.stretchRatio} " +
-                "in ${System.currentTimeMillis() - started}ms",
+            "Rendered ${rendered.durationSeconds}s ${rendered.strategy} beats=${rendered.beats} " +
+                "stretch=${rendered.stretchRatio} in ${System.currentTimeMillis() - started}ms",
         )
 
+        // Every timing below is the engine's own, not the anchor it was asked for. It picks a
+        // beat-aligned start inside the requested window and the overlap length from the phrase
+        // structure, so re-deriving these from the plan would place the mix at a cue that was
+        // never rendered.
+        val startSeconds = outgoingSliceStart + rendered.outgoingStart
         return Prepared(
             file = file,
-            startSeconds = plan.transitionStart,
-            endSeconds = plan.transitionStart + rendered.durationSeconds,
-            // The overlap already contains the incoming track up to its own anchor plus the tail of
-            // the overlap, so playback resumes past all of it.
-            incomingResumeSeconds = inAnchor + rendered.durationSeconds,
+            startSeconds = startSeconds,
+            endSeconds = startSeconds + rendered.durationSeconds,
+            // The overlap already contains the incoming track from its entry point through to the
+            // end of the mix, so playback resumes past all of it.
+            incomingResumeSeconds = incomingSliceStart + rendered.incomingResume,
             stretchRatio = rendered.stretchRatio,
         )
+    }
+
+    /**
+     * The beat grid across the decoded region, in seconds from the start of that region.
+     *
+     * The analyzer stores downbeats but not every beat, so the beats are laid down from the first
+     * beat at the analyzed interval. The engine places candidates on downbeats and only measures
+     * against the beats, so a synthesized grid that drifts slightly is a scoring nuance; a missing
+     * one makes it score blind.
+     */
+    private fun beatGrid(analysis: TrackAnalysis, from: Double, frames: Int): DoubleArray {
+        val interval = analysis.beatInterval.takeIf { it > 0.0 }
+            ?: analysis.bpm.takeIf { it > 0.0 }?.let { 60.0 / it }
+            ?: return DoubleArray(0)
+        val until = from + frames / TransitionRenderer.SAMPLE_RATE
+        val first = analysis.firstBeat + interval * ceil((from - analysis.firstBeat) / interval)
+        return generateSequence(first) { it + interval }
+            .takeWhile { it <= until }
+            .map { it - from }
+            .toList()
+            .toDoubleArray()
+    }
+
+    /** The subset of [times] inside the decoded region, rebased onto it. */
+    private fun rebased(times: List<Double>, from: Double, frames: Int): DoubleArray {
+        val until = from + frames / TransitionRenderer.SAMPLE_RATE
+        return times.filter { it in from..until }.map { it - from }.toDoubleArray()
     }
 
     /** Decodes stereo either side of [anchor], returning the audio and where it starts. */
@@ -240,12 +278,15 @@ class TransitionPreparer(
     }
 
     /**
-     * Vocal presence across the overlap, as one value per control point.
+     * Vocal presence across the decoded slice, as one value per control point.
      *
      * The sweep alone follows the fade curve rather than the music: it costs the outgoing track the
      * same spectrum whether it is singing or playing an instrumental outro. This makes the depth
      * follow what is actually there, so a track is filtered out of the way smoothly when fading out
      * during the conclusion of a vocal.
+     *
+     * It spans the slice rather than the overlap because the overlap is what the render call
+     * decides; the engine crops this curve to whatever region it settles on.
      */
     private fun duckCurve(analysis: TrackAnalysis, start: Double, end: Double): FloatArray? {
         val mask = analysis.vocalActivityMask
@@ -307,7 +348,14 @@ class TransitionPreparer(
         /** Extra audio either side of the anchor, so the stretcher has room to work into. */
         const val MARGIN_SECONDS = 6.0
 
-        /** Control points spanning the overlap; the renderer interpolates between them. */
-        const val DUCK_POINTS = 64
+        /**
+         * Control points spanning the decoded slice; the engine interpolates between them and
+         * keeps detail in proportion when it crops.
+         *
+         * Enough of them that a point is worth roughly a tenth of a second across a typical
+         * slice, which is what the sustain below is shaped in terms of. Sixty-four covered an
+         * overlap at that resolution; a slice is two or three times longer.
+         */
+        const val DUCK_POINTS = 192
     }
 }

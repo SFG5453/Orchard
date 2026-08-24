@@ -26,6 +26,17 @@
 -keep class org.jni_zero.** { *; }
 -dontwarn org.jni_zero.**
 
+# The transition engine's generated bindings reach Rust through JNA, which resolves everything by
+# name at runtime and so cannot survive renaming. `Native.register` binds each `external fun` to
+# the native symbol *called the same thing*, and JNA reads the fields of its Structure subclasses
+# reflectively, so a renamed method or a stripped field is an UnsatisfiedLinkError on the first
+# transition rather than a build failure. JNA also references desktop AWT classes Android does
+# not have, on paths Orchard never reaches.
+-keep class com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.** { public *; }
+-keep class dev.sfg.orchard.earmark.** { *; }
+-dontwarn java.awt.**
+
 # NewPipeExtractor embeds Mozilla Rhino for YouTube cipher evaluation.
 -keep class org.mozilla.javascript.** { *; }
 -keep class org.mozilla.classfile.ClassFileWriter

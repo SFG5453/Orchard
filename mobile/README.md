@@ -131,7 +131,7 @@ Orchard Mobile is free software under the [GNU Affero General Public License v3.
 
 Copyright © 2026 SFG545.
 
-AGPL rather than GPL so code can move freely between here and Orchard desktop, which is also AGPL-3.0; the native analysis front end is already shared source, and more of it is expected to be. It is also what lets the Rubber Band time-stretch library (GPL-2-or-later) be linked into the transition renderer.
+AGPL rather than GPL so code can move freely between here and Orchard desktop, which is also AGPL-3.0. The native analysis front end and the transition engine are both shared source, and more is expected to be.
 
 ### Third-party components
 
@@ -140,4 +140,4 @@ Smart Crossfade ships trained models. Both were chosen because their **weights**
 * **[Beat This!](https://github.com/CPJKU/beat_this)** (Foscarin, Schlüter & Widmer, ISMIR 2024) — beat and downbeat tracking. Code and weights both MIT. Mobile ships the official `small0` checkpoint converted to ONNX and quantized to int8 to reduce model size and inference cost. See [docs/BEAT_MODEL.md](docs/BEAT_MODEL.md).
 * **open-unmix** (Stöter & Liutkus, Inria/SigSep) — used only to measure how much vocal content is present at a given instant. Code and the umxhq weights both MIT, confirmed on the weights' own [Zenodo deposit](https://zenodo.org/record/3370489). Only the `vocals` target ships. Meta's htdemucs separates better but releases its weights under CC-BY-NC-4.0, which a distributed app cannot ship.
 * **ONNX Runtime** (Microsoft) — MIT.
-* **Rubber Band** (Particular Programs Ltd) — time-stretching for beat-matched transitions, vendored at `android/app/src/main/cpp/vendor/rubberband`. **GPL-2-or-later**, and the reason this repository is copyleft rather than MIT.
+* **earmark** — the beat-aware crossfade engine that plans and renders every transition, shared with Orchard desktop and vendored at `native-audio-rust/vendor/earmark`. MIT OR Apache-2.0. It reaches Kotlin through [UniFFI](https://github.com/mozilla/uniffi-rs) (MPL-2.0) and [JNA](https://github.com/java-native-access/jna) (Apache-2.0 or LGPL-2.1-or-later), and time-stretches with [Signalsmith Stretch](https://github.com/Signalsmith-Audio/signalsmith-stretch) (MIT).

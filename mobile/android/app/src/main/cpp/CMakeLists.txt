@@ -8,7 +8,12 @@
 #
 # The shared DSP sources are compiled directly from Orchard's root native tree.
 # Keep Android-specific JNI and resampling code in this directory, but do not
-# maintain a second copy of the analyzer/transition implementation here.
+# maintain a second copy of the analyzer implementation here.
+#
+# Transitions are no longer built here at all. They are rendered by the earmark
+# engine, a Rust crate shared with the desktop app and cross-compiled by the
+# `buildEarmarkLibrary` Gradle task, which is also what retired this library's
+# vendored copy of Rubber Band.
 
 cmake_minimum_required(VERSION 3.22.1)
 project(orchard_analysis LANGUAGES CXX)
@@ -26,14 +31,6 @@ add_library(orchard_analysis SHARED
     ${ORCHARD_NATIVE_DIR}/analyzer/audio_analysis.cpp
     ${ORCHARD_NATIVE_DIR}/analyzer/tempo_analysis.cpp
     ${ORCHARD_NATIVE_DIR}/analyzer/vocal_spectrogram.cpp
-    ${ORCHARD_NATIVE_DIR}/transition/transition_render.cpp
-    ${ORCHARD_NATIVE_DIR}/transition/rubberband_stretch.cpp
-    # Rubber Band's own single-file build unit (vendored from breakfastquay/rubberband,
-    # GPL-2-or-later -- which is why this repository is AGPL). It #includes the rest of the
-    # library's sources itself via paths relative to its own directory, so only this one file
-    # is listed here.
-    ${ORCHARD_NATIVE_DIR}/vendor/rubberband/single/RubberBandSingle.cpp
-    jni/transition_jni.cpp
     jni/mel_jni.cpp
     jni/analysis_jni.cpp
     jni/vocal_jni.cpp
@@ -43,15 +40,6 @@ target_include_directories(orchard_analysis PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${ORCHARD_NATIVE_DIR}
     ${ORCHARD_NATIVE_DIR}/analyzer
-    ${ORCHARD_NATIVE_DIR}/vendor/rubberband
-)
-
-# Rubber Band selects an FFT and resampler at compile time. Android has neither vDSP nor IPP, so
-# it falls back to its own built-in implementations, which is what these select explicitly rather
-# than leaving to autodetection.
-target_compile_definitions(orchard_analysis PRIVATE
-    USE_BUILTIN_FFT
-    NO_THREADING
 )
 
 # The spectrogram is O(n log n) over a whole analysis window and runs off the

@@ -7,13 +7,55 @@ def orchardReleaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
 def orchardReleaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
 def orchardReleaseSigningReady = [orchardReleaseKeystore, orchardReleaseStorePassword, orchardReleaseKeyAlias, orchardReleaseKeyPassword].every { it }
 
+// The Rust transition engine, shared verbatim with the desktop app. Cross-compiled from source
+// rather than vendored as a prebuilt .so, so a change to the engine cannot reach one platform and
+// not the other.
+def earmarkCrateDir = file('../../../native-audio-rust/mobile')
+def earmarkCoreDir = file('../../../native-audio-rust/core/src')
+def earmarkEngineDir = file('../../../native-audio-rust/vendor/earmark/src')
+// Resolved eagerly: these are source-set roots, and a lazy provider added to `srcDirs` is
+// silently ignored rather than resolved.
+def earmarkJniLibsDir = layout.buildDirectory.dir('earmark/jniLibs').get().asFile
+def earmarkKotlinDir = layout.buildDirectory.dir('earmark/kotlin').get().asFile
+def earmarkTargetDir = layout.buildDirectory.dir('earmark/rust').get().asFile
+
+// Declared here rather than read back off the android extension because two toolchains consume
+// them and AGP no longer exposes the resolved NDK path to build scripts.
+def orchardNdkVersion = '28.2.13676358'
+def orchardMinSdk = 31
+// 64-bit only. minSdk predates the 64-bit requirement by years, and a 32-bit slice would double
+// the native payload for devices that do not exist in the install base.
+def orchardAbis = ['arm64-v8a', 'x86_64']
+
+def orchardNdkDir = {
+    def fromEnvironment = System.getenv('ANDROID_NDK_HOME') ?: System.getenv('ANDROID_NDK_ROOT')
+    if (fromEnvironment) return file(fromEnvironment)
+    def sdk = System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT')
+    def properties = file('../local.properties')
+    if (!sdk && properties.exists()) {
+        def loaded = new Properties()
+        properties.withInputStream { loaded.load(it) }
+        sdk = loaded.getProperty('sdk.dir')
+    }
+    if (!sdk) {
+        throw new GradleException(
+            'Cannot locate the Android NDK: set ANDROID_NDK_HOME, or ANDROID_HOME with ' +
+                "ndk/$orchardNdkVersion installed.")
+    }
+    return new File("$sdk/ndk/$orchardNdkVersion")
+}
+
 android {
     namespace = 'dev.sfg.orchard.connect'
     compileSdk = 37
+    // Pinned because two toolchains now have to agree on it: CMake builds the analyzer and
+    // cargo-ndk builds the transition engine, and a mismatch between them is a link error a long
+    // way from its cause.
+    ndkVersion = orchardNdkVersion
 
     defaultConfig {
         applicationId = 'dev.sfg.orchard.mobile'
-        minSdk = 31
+        minSdk = orchardMinSdk
         targetSdk = 36
         versionCode = 20000
         versionName = '2.0.0-beta.1'
@@ -24,10 +66,7 @@ android {
         buildConfigField 'boolean', 'UPDATER_ENABLED', 'true'
         testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
         ndk {
-            // 64-bit only. minSdk 31 predates the 64-bit requirement by years, and a 32-bit
-            // slice would double the native payload for devices that do not exist in the
-            // install base.
-            abiFilters += ['arm64-v8a', 'x86_64']
+            abiFilters += orchardAbis
         }
     }
 
@@ -35,6 +74,13 @@ android {
         cmake {
             path = file('src/main/cpp/CMakeLists.txt')
             version = '3.22.1'
+        }
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs += earmarkJniLibsDir
+            kotlin.srcDirs += earmarkKotlinDir
         }
     }
 
@@ -98,6 +144,65 @@ kotlin {
     jvmToolchain(17)
 }
 
+tasks.register('buildEarmarkLibrary', Exec) {
+    group = 'build'
+    description = 'Cross-compiles the earmark transition engine for every packaged ABI.'
+
+    // The whole engine, not just this crate: the bindings crate is a marshalling shell, and a
+    // change to the core or to earmark itself is exactly the change that must reach the device.
+    inputs.files(fileTree(earmarkCrateDir) { exclude 'target/**' })
+    inputs.dir earmarkCoreDir
+    inputs.dir earmarkEngineDir
+    outputs.dir earmarkJniLibsDir
+
+    // cargo-ndk reads `cargo metadata` from the working directory before it looks at any
+    // --manifest-path, so the crate has to *be* the working directory.
+    workingDir = earmarkCrateDir
+    environment 'ANDROID_NDK_HOME', orchardNdkDir().absolutePath
+    // Out of the shared workspace target directory, so `gradle clean` reclaims it.
+    environment 'CARGO_TARGET_DIR', earmarkTargetDir.absolutePath
+    commandLine(['cargo', 'ndk'] +
+        orchardAbis.collectMany { ['-t', it] } +
+        ['-P', orchardMinSdk.toString(),
+         '-o', earmarkJniLibsDir.absolutePath,
+         // Not --release: that profile strips the symbols UniFFI keeps its interface metadata in,
+         // and the bindings are generated by reading them back out of this library.
+         'build', '--profile', 'android'])
+}
+
+tasks.register('generateEarmarkBindings', Exec) {
+    group = 'build'
+    description = 'Generates the Kotlin bindings for the earmark transition engine.'
+    dependsOn 'buildEarmarkLibrary'
+
+    inputs.dir earmarkJniLibsDir
+    outputs.dir earmarkKotlinDir
+
+    def abi = orchardAbis.first()
+    workingDir = earmarkCrateDir
+    commandLine 'cargo', 'run', '--quiet', '--features', 'cli', '--bin', 'uniffi-bindgen',
+        '--manifest-path', new File(earmarkCrateDir, 'Cargo.toml').absolutePath,
+        '--', 'generate',
+        // Read from the library that was actually built rather than from its source. Bindings
+        // generated against a different UniFFI version than the scaffolding fail at the FFI
+        // boundary at runtime, and this is what makes that skew impossible.
+        '--library', new File(earmarkJniLibsDir, "$abi/liborchard_earmark.so").absolutePath,
+        // Reading a library gives no crate root, so the package name has to be handed over.
+        '--config', new File(earmarkCrateDir, 'uniffi-bindgen.toml').absolutePath,
+        '--language', 'kotlin',
+        '--out-dir', earmarkKotlinDir.absolutePath,
+        '--no-format'
+}
+
+// The generated Kotlin is a source root and the .so files are packaged, so both halves have to
+// exist before anything reads them.
+tasks.matching { it.name ==~ /^merge.*JniLibFolders$/ }.configureEach {
+    dependsOn 'buildEarmarkLibrary'
+}
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    dependsOn 'generateEarmarkBindings'
+}
+
 gradle.taskGraph.whenReady { graph ->
     if (graph.allTasks.any { it.name.toLowerCase().contains('release') } && !orchardReleaseSigningReady) {
         throw new GradleException("Release signing environment is required for Orchard Connect production builds.")
@@ -139,6 +244,10 @@ dependencies {
 
     implementation 'androidx.core:core:1.19.0'
     implementation 'androidx.webkit:webkit:1.16.0'
+
+    // UniFFI's generated Kotlin reaches the transition engine through JNA. The aar classifier is
+    // required: the plain jar carries desktop natives and none for Android.
+    implementation 'net.java.dev.jna:jna:5.19.1@aar'
 
     // Listening parties negotiate a peer-to-peer data channel with the desktop and web
     // clients. The `org.webrtc:google-webrtc` artifact the web client's protocol was

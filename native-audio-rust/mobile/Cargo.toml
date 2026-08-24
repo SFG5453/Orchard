@@ -1,0 +1,28 @@
+[package]
+name = "orchard-transition-mobile"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[lib]
+# The name Android loads. `System.loadLibrary("orchard_earmark")` and the generated
+# bindings both key off it.
+name = "orchard_earmark"
+crate-type = ["cdylib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+# Keeps Clap and the bindings generator out of every Android build. The generator runs on the
+# build host only, and cross-compiling it to arm64 would be pure waste.
+required-features = ["cli"]
+
+[features]
+cli = ["uniffi/cli"]
+
+[dependencies]
+orchard-transition-core = { path = "../core" }
+thiserror = "2.0.20"
+# Default features pull in cargo_metadata, which only the bindings generator needs.
+uniffi = { version = "0.32.0", default-features = false }

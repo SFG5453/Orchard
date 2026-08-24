@@ -35,10 +35,13 @@ import kotlin.math.min
  * real mixing rather than merely waiting for a clean boundary.
  *
  * This began as a port of the desktop app's `src/audio/crossfade/wsolaPlanner.js`. The mobile
- * experiment deliberately chooses earlier outgoing material and later incoming material while
- * continuing to feed the same native renderer (`native/transition/transition_render.cpp`, compiled
- * into this app by `cpp/CMakeLists.txt`). Keep renderer-facing invariants aligned, but do not copy
- * these anchor offsets to desktop until the experiment has proved itself.
+ * experiment deliberately chooses earlier outgoing material and later incoming material. Both
+ * platforms now render through earmark, so the anchors below are the only thing that still differs
+ * between them; do not copy these offsets to desktop until the experiment has proved itself.
+ *
+ * The anchors are cues, not commands. earmark searches for a beat-aligned transition around them
+ * and decides the overlap length and the strategy itself, so what it returns is what plays -- see
+ * [TransitionPreparer].
  *
  * Planning is pure and cheap so it can run on every playback tick. The heavy work -- decoding PCM
  * and rendering the overlap natively -- belongs to [TransitionPreparer], which calls this first to
@@ -62,9 +65,9 @@ private const val MAX_OVERLAP_SECONDS = 16.0
 // outgoing side; a real structural/energy exit has already supplied the earlier anchor.
 internal const val ARRANGEMENT_OVERLAP_BEATS = 8
 
-// One continuous equal-power fade across the whole overlap; see `handoff` and `bed` in
-// native/transition/transition_render.h, where 0.5/0.5 is documented as the plain symmetric
-// crossfade.
+// One continuous equal-power fade across the whole overlap, 0.5/0.5 being the plain symmetric
+// crossfade. These shape the *live* handoff in [TransitionHandoff]; a rendered overlap arrives
+// with its own fades already mixed in and takes none of its shape from here.
 //
 // The overlap used to be a bed plus a tail: the incoming intro rose to -8 dB while the outgoing
 // gave up 0.7 dB, and the outgoing then did its entire audible fade *after* the drop. Two things
