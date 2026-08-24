@@ -21,8 +21,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { normalizeTrackAnalysis } from '../shared/trackAnalysis.js';
 import {
+  MAX_DISCARDED_AUDIBLE_SECONDS,
   MAX_DETAILED_CANDIDATES,
   MAX_ROLE_CANDIDATES,
+  audibleTailEvidence,
   buildCandidatePairs,
   generateTransitionCandidates,
   harmonicEvidence,
@@ -207,6 +209,60 @@ test('keeps credible late incoming cues and caps each candidate side', () => {
   assert.ok(candidates.every((candidate) => !candidate.id.includes('drop')));
 });
 
+test('rejects early exits that discard continuing music but keeps verified silence trims', () => {
+  const boundary = {
+    time: 80,
+    observedTime: 80,
+    confidence: 0.99,
+    source: 'detected-change',
+    noveltyPeak: 0.95,
+    energyDelta: 0.8,
+    stabilityBefore: 0.9,
+    stabilityAfter: 0.9,
+    downbeatDistance: 0
+  };
+  const continuing = analysis({ duration: 120, boundaries: [boundary], energy: () => 0.8 });
+  const continuingTail = audibleTailEvidence(continuing, 80);
+  const continuingCandidates = generateTransitionCandidates(continuing, 'outgoing');
+
+  assert.ok(continuingTail.audibleSeconds > MAX_DISCARDED_AUDIBLE_SECONDS);
+  assert.equal(continuingTail.classification, 'continuing');
+  assert.ok(!continuingCandidates.some((candidate) => candidate.anchorTime === 80));
+  assert.ok(continuingCandidates.every((candidate) =>
+    candidate.tail.chargedAudibleSeconds <= MAX_DISCARDED_AUDIBLE_SECONDS
+  ));
+
+  const silentTail = analysis({
+    duration: 120,
+    boundaries: [boundary],
+    energy: (time) => time < 80 ? 0.8 : 0
+  });
+  const silenceEvidence = audibleTailEvidence(silentTail, 80);
+  const silenceCandidates = generateTransitionCandidates(silentTail, 'outgoing');
+
+  assert.equal(silenceEvidence.classification, 'silence');
+  assert.ok(silenceEvidence.audibleSeconds < 1);
+  assert.ok(silenceCandidates.some((candidate) =>
+    candidate.anchorTime === 80 && candidate.tail.classification === 'silence'
+  ));
+});
+
+test('missing tail energy errs toward playing the track', () => {
+  const raw = analysis({ duration: 120, boundaries: [{
+    time: 80,
+    confidence: 0.99,
+    source: 'detected-change'
+  }] });
+  const unknown = { ...raw, frames: [] };
+  const tail = audibleTailEvidence(unknown, 80);
+
+  assert.equal(tail.classification, 'unknown');
+  assert.equal(tail.chargedAudibleSeconds, 40);
+  assert.ok(!generateTransitionCandidates(unknown, 'outgoing').some(
+    (candidate) => candidate.anchorTime === 80
+  ));
+});
+
 test('prunes the cue cross-product to a deterministic detailed-search budget', () => {
   const boundaries = Array.from({ length: 24 }, (_, index) => ({
     time: index * 4 + 8,
@@ -248,7 +304,7 @@ test('allows a 32-beat option only for strong low-vocal structural evidence', ()
   const strong = analysis({
     duration: 180,
     boundaries: [
-      { time: 120, confidence: 0.9, source: 'detected-change', noveltyPeak: 0.9 },
+      { time: 168, confidence: 0.9, source: 'detected-change', noveltyPeak: 0.9 },
       { time: 32, confidence: 0.9, source: 'detected-change', noveltyPeak: 0.9 }
     ],
     vocal: () => 0.1
@@ -256,21 +312,29 @@ test('allows a 32-beat option only for strong low-vocal structural evidence', ()
   const weak = analysis({
     duration: 180,
     boundaries: [
-      { time: 120, confidence: 0.3, source: 'detected-change', noveltyPeak: 0.3 },
+      { time: 168, confidence: 0.3, source: 'detected-change', noveltyPeak: 0.3 },
       { time: 32, confidence: 0.3, source: 'detected-change', noveltyPeak: 0.3 }
     ],
     vocal: () => 0.8
   });
   const fit = tempoFit(120, 120);
+  const strongOutgoing = generateTransitionCandidates(strong, 'outgoing')
+    .find((candidate) => candidate.source === 'detected-change' && candidate.anchorTime === 168);
+  const strongIncoming = generateTransitionCandidates(strong, 'incoming')
+    .find((candidate) => candidate.source === 'detected-change' && candidate.anchorTime === 32);
+  const weakOutgoing = generateTransitionCandidates(weak, 'outgoing')
+    .find((candidate) => candidate.source === 'detected-change' && candidate.anchorTime === 168);
+  const weakIncoming = generateTransitionCandidates(weak, 'incoming')
+    .find((candidate) => candidate.source === 'detected-change' && candidate.anchorTime === 32);
   const strongPairs = buildCandidatePairs(
-    generateTransitionCandidates(strong, 'outgoing'),
-    generateTransitionCandidates(strong, 'incoming'),
+    [strongOutgoing],
+    [strongIncoming],
     fit,
     { outgoingAnalysis: strong, incomingAnalysis: strong }
   ).finalists;
   const weakPairs = buildCandidatePairs(
-    generateTransitionCandidates(weak, 'outgoing'),
-    generateTransitionCandidates(weak, 'incoming'),
+    [weakOutgoing],
+    [weakIncoming],
     fit,
     { outgoingAnalysis: weak, incomingAnalysis: weak }
   ).finalists;

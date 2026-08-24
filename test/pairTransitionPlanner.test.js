@@ -225,6 +225,7 @@ test('reports which tempo is missing when pair construction cannot begin', () =>
 test('avoids outgoing vocals at the end by choosing a cleaner earlier boundary', () => {
   const plan = planPairTransition(cleanPair({
     outgoing: {
+      contentEnd: 112,
       boundaryTimes: [104, 112],
       boundaryConfidence: [0.82, 0.96],
       vocal: (time) => time >= 106 ? 0.94 : 0.04
@@ -247,6 +248,7 @@ test('selects a useful incoming cue well after timestamp zero', () => {
 test('true pairwise scoring can reject the locally highest-ranked cue pair', () => {
   const plan = planPairTransition(cleanPair({
     outgoing: {
+      contentEnd: 112,
       boundaryTimes: [104, 112],
       boundaryConfidence: [0.82, 0.98],
       vocal: (time) => time >= 106 ? 0.95 : 0.05

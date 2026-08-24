@@ -517,6 +517,7 @@ function diagnosticCandidate(evaluation) {
     confidence: evaluation.confidence,
     quality: evaluation.quality,
     evidenceCoverage: evaluation.evidenceCoverage,
+    outgoingTail: evaluation.pair.outgoingCandidate.tail || null,
     components: evaluation.components,
     gates: evaluation.gates.map((gate) => gate.code)
   };

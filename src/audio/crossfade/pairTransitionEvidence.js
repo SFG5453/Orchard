@@ -24,9 +24,11 @@ import {
 
 export const MAX_ROLE_CANDIDATES = 12;
 export const MAX_DETAILED_CANDIDATES = 64;
+export const MAX_DISCARDED_AUDIBLE_SECONDS = 12;
 export const MAX_STRETCH_DEVIATION = 0.04;
 export const VOCAL_ACTIVE_THRESHOLD = 0.6;
 export const ORDINARY_BEAT_LENGTHS = Object.freeze([4, 8, 16]);
+const AUDIBLE_ENERGY_FRACTION = 0.1;
 
 const ROOTS = new Map([
   ['C', 0], ['B#', 0],
@@ -253,6 +255,75 @@ function candidateWindow(analysis, role) {
   };
 }
 
+/**
+ * Measures how much audible source material remains after an outgoing anchor.
+ * Unknown intervals are charged as audible: absence of frame evidence is not
+ * evidence of silence, and cutting a track short is the unsafe direction in
+ * which to guess.
+ */
+export function audibleTailEvidence(analysis = {}, anchorTime = 0) {
+  const range = analysis.audibleRange || { start: 0, end: analysis.duration || 0 };
+  const start = Math.max(range.start, Math.min(range.end, finite(anchorTime) ?? range.end));
+  const end = Math.max(start, finite(range.end) ?? start);
+  const spanSeconds = Math.max(0, end - start);
+  if (spanSeconds <= 1e-6) {
+    return {
+      spanSeconds: 0,
+      audibleSeconds: 0,
+      unknownSeconds: 0,
+      chargedAudibleSeconds: 0,
+      coverage: 1,
+      classification: 'endpoint'
+    };
+  }
+
+  const frames = (Array.isArray(analysis.frames) ? analysis.frames : [])
+    .map((frame) => ({ time: finite(frame?.time), energy: finite(frame?.energy) }))
+    .filter((frame) => frame.time !== null)
+    .sort((left, right) => left.time - right.time);
+  const knownEnergies = frames
+    .map((frame) => frame.energy)
+    .filter((value) => value !== null && value >= 0)
+    .sort((left, right) => left - right);
+  const reference = knownEnergies.length
+    ? knownEnergies[Math.floor((knownEnergies.length - 1) * 0.85)]
+    : null;
+  const threshold = reference !== null && reference > 0
+    ? reference * AUDIBLE_ENERGY_FRACTION
+    : Infinity;
+  let knownSeconds = 0;
+  let audibleSeconds = 0;
+  for (let index = 0; index + 1 < frames.length; index += 1) {
+    const left = frames[index];
+    const right = frames[index + 1];
+    const segmentStart = Math.max(start, left.time);
+    const segmentEnd = Math.min(end, right.time);
+    if (!(segmentEnd > segmentStart) || left.energy === null || right.energy === null) continue;
+    const seconds = segmentEnd - segmentStart;
+    knownSeconds += seconds;
+    if ((left.energy + right.energy) / 2 >= threshold) audibleSeconds += seconds;
+  }
+  knownSeconds = Math.min(spanSeconds, knownSeconds);
+  const unknownSeconds = Math.max(0, spanSeconds - knownSeconds);
+  const chargedAudibleSeconds = Math.min(spanSeconds, audibleSeconds + unknownSeconds);
+  const coverage = spanSeconds > 0 ? knownSeconds / spanSeconds : 1;
+  const classification = coverage < 0.5
+    ? 'unknown'
+    : audibleSeconds <= 0.5 && unknownSeconds <= 0.5
+      ? 'silence'
+      : chargedAudibleSeconds <= MAX_DISCARDED_AUDIBLE_SECONDS
+        ? 'short-tail'
+        : 'continuing';
+  return {
+    spanSeconds: rounded(spanSeconds),
+    audibleSeconds: rounded(audibleSeconds),
+    unknownSeconds: rounded(unknownSeconds),
+    chargedAudibleSeconds: rounded(chargedAudibleSeconds),
+    coverage: rounded(coverage),
+    classification
+  };
+}
+
 function summaryFor(analysis, role, anchorTime) {
   const range = analysis.audibleRange || { start: 0, end: analysis.duration || 0 };
   const seconds = 16;
@@ -266,7 +337,10 @@ function candidatePriority(candidate) {
   const stability = finite(candidate.summary?.stability) ?? 0.5;
   const vocal = finite(candidate.summary?.vocal);
   const clean = vocal === null ? 0.35 : 1 - clamp(vocal);
-  return source * 0.2 + candidate.confidence * 0.55 + stability * 0.15 + clean * 0.1;
+  const tailCost = candidate.tail
+    ? clamp(candidate.tail.chargedAudibleSeconds / MAX_DISCARDED_AUDIBLE_SECONDS)
+    : 0;
+  return source * 0.2 + candidate.confidence * 0.55 + stability * 0.15 + clean * 0.1 - tailCost * 0.15;
 }
 
 function candidateFrom(analysis, role, boundary) {
@@ -281,6 +355,7 @@ function candidateFrom(analysis, role, boundary) {
     source: String(boundary.source || 'rhythmic-fallback'),
     confidence: clamp(boundary.confidence, 0, 1),
     runwaySeconds: rounded(anchorTime - range.start),
+    ...(role === 'outgoing' ? { tail: audibleTailEvidence(analysis, anchorTime) } : {}),
     summary,
     evidence: boundary.evidence || null
   };
@@ -335,7 +410,11 @@ export function generateTransitionCandidates(analysis = {}, role = 'incoming') {
   }
 
   const beatInterval = finite(analysis.timing?.beatInterval) ?? 0.5;
-  return dedupeCandidates(candidates.filter(Boolean), Math.max(0.05, beatInterval / 2), role);
+  const eligible = candidates.filter((candidate) => candidate && (
+    role !== 'outgoing' ||
+    candidate.tail.chargedAudibleSeconds <= MAX_DISCARDED_AUDIBLE_SECONDS
+  ));
+  return dedupeCandidates(eligible, Math.max(0.05, beatInterval / 2), role);
 }
 
 function permitsLongTransition(outgoing, incoming, options) {
