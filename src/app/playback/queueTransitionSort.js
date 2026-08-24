@@ -24,6 +24,16 @@ import { fetchBatchCloudAnalysis } from '../../services/cloudAnalysisSync.js';
 
 const BEST_MIX_TRACK_LIMIT = 50;
 
+function persistCloudAnalysis(trackId, analysis) {
+  try {
+    const pending = globalThis.orchardAudioAnalysis?.store?.(trackId, analysis);
+    void Promise.resolve(pending).catch(() => {});
+  } catch {
+    // Cloud evidence remains usable for this sort even when the optional local
+    // bridge is unavailable or refuses a cache write.
+  }
+}
+
 const KEY_INDEX = new Map([
   ['C', 0], ['C♯', 1], ['D♭', 1], ['D', 2], ['D♯', 3], ['E♭', 3],
   ['E', 4], ['F', 5], ['F♯', 6], ['G♭', 6], ['G', 7], ['G♯', 8],
@@ -295,7 +305,7 @@ export function installQueueTransitionSort(ctx) {
       for (const [id, cloudData] of cloudResults.entries()) {
         map.set(id, cloudData);
         ctx.transitionQueueSortAnalyzedCount.value++;
-        void globalThis.orchardAudioAnalysis?.store?.(id, cloudData);
+        persistCloudAnalysis(id, cloudData);
       }
     }
     return map;
@@ -342,7 +352,7 @@ export function installQueueTransitionSort(ctx) {
           const cloudData = cloudResults.get(track.id);
           resultMap.set(track.id, cloudData);
           ctx.transitionQueueSortAnalyzedCount.value++;
-          void globalThis.orchardAudioAnalysis?.store?.(track.id, cloudData);
+          persistCloudAnalysis(track.id, cloudData);
         } else {
           stillNeeded.push(track);
         }

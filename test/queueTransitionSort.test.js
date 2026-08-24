@@ -21,14 +21,48 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { nextTick, ref } from 'vue';
 
+import { AUDIO_ANALYSIS_VERSION } from '../shared/audioAnalysis.js';
+import { finalizeTrackAnalysis } from '../shared/trackAnalysis.js';
 import {
   bestTransitionOrder,
   installQueueTransitionSort,
   transitionCost
 } from '../src/app/playback/queueTransitionSort.js';
+import { supabaseClient } from '../src/services/supabaseClient.js';
 
 function ids(tracks) {
   return tracks.map((track) => track.id);
+}
+
+function canonicalCloudAnalysis(bpm, key = 'C major') {
+  const duration = 20;
+  const beatInterval = 60 / bpm;
+  const beats = [];
+  const downbeats = [];
+  for (let time = 0, index = 0; time <= duration; time += beatInterval, index += 1) {
+    beats.push(time);
+    if (index % 4 === 0) downbeats.push(time);
+  }
+  return finalizeTrackAnalysis({
+    analysisVersion: AUDIO_ANALYSIS_VERSION,
+    duration,
+    bpm,
+    beatInterval,
+    beatConfidence: 0.9,
+    downbeatConfidence: 0.9,
+    beats,
+    downbeats,
+    audibleStartTime: 0,
+    contentEndTime: duration,
+    key,
+    keyConfidence: 0.8,
+    transitionFeatureFrames: [
+      { time: 0, energy: 0.4, vocal: 0.1 },
+      { time: duration, energy: 0.4, vocal: 0.1 }
+    ],
+    structuralBoundaryCandidates: [],
+    meter: { beatsPerBar: 4, confidence: 0.15, source: 'assumed-4-4' }
+  });
 }
 
 test('transition scoring ignores artist and album identity', () => {
@@ -236,6 +270,59 @@ test('Best mix does not wait for optional catalog metadata when local analysis i
     new Promise((_, reject) => setTimeout(() => reject(new Error('Best mix waited for catalog metadata')), 100))
   ]);
 
+  assert.equal(ctx.queue.value[0].id, 'smooth');
+});
+
+test('Best mix absorbs a rejected local write of valid cloud analysis', async (t) => {
+  const previousBridge = globalThis.orchardAudioAnalysis;
+  const originalFetch = supabaseClient.fetchTrackAnalysis;
+  t.after(() => {
+    supabaseClient.fetchTrackAnalysis = originalFetch;
+    if (previousBridge === undefined) delete globalThis.orchardAudioAnalysis;
+    else globalThis.orchardAudioAnalysis = previousBridge;
+  });
+
+  const analyses = new Map([
+    ['active', canonicalCloudAnalysis(100, 'C major')],
+    ['rough', canonicalCloudAnalysis(145, 'F♯ major')],
+    ['smooth', canonicalCloudAnalysis(102, 'G major')]
+  ]);
+  supabaseClient.fetchTrackAnalysis = async (trackIds) => trackIds.map((id) => {
+    const value = analyses.get(id);
+    return {
+      video_id: id,
+      duration: value.duration,
+      bpm: value.bpm,
+      musical_key: value.key,
+      key_confidence: value.keyConfidence,
+      beat_confidence: value.beatConfidence,
+      analysis_version: value.analysisVersion,
+      analysis_data: value
+    };
+  });
+  globalThis.orchardAudioAnalysis = {
+    get: async () => null,
+    store: async () => { throw new Error('cache write refused'); }
+  };
+
+  const ctx = {
+    activeTrack: ref({ id: 'active' }),
+    queue: ref([{ id: 'rough' }, { id: 'smooth' }]),
+    shuffleEnabled: ref(false),
+    shuffleSourceQueue: ref([]),
+    crossfadeAnalysis: ref({}),
+    crossfadeAnalysisByTrack: new Map(),
+    bpmMetadata: { lookupMany: async () => new Map() },
+    clearNextPreload() {},
+    preloadNextTrack: async () => {},
+    showShareMessage() {}
+  };
+
+  installQueueTransitionSort(ctx);
+  await ctx.toggleTransitionQueueSort();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(ctx.transitionQueueSorted.value, true);
   assert.equal(ctx.queue.value[0].id, 'smooth');
 });
 
