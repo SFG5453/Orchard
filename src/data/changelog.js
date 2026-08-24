@@ -19,6 +19,19 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '5.0.0-beta.4',
+    codename: 'Simpatico Gladden',
+    date: 'August 24, 2026',
+    sections: [
+      {
+        title: 'Fixed',
+        items: [
+          'Fixed Orchard Packages beta installs so beta releases are discovered, downloaded, and opened from their GitHub release instead of the stable package service.'
+        ]
+      }
+    ]
+  },
+  {
     version: '5.0.0-beta.3',
     codename: 'Curates Admixture',
     date: 'August 24, 2026',
