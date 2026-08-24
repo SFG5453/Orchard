@@ -34,6 +34,15 @@ import (
 )
 
 const packageBaseURL = "https://packages.sfg545.dev/"
+const githubReleaseBaseURL = "https://github.com/sfg5453/orchard/releases/download/"
+const githubReleasesAPIURL = "https://api.github.com/repos/sfg5453/orchard/releases?per_page=20"
+
+func releaseBaseURL(candidate release) string {
+	if candidate.Channel == "beta" {
+		return githubReleaseBaseURL + "v" + candidate.Version + "/"
+	}
+	return packageBaseURL
+}
 
 var (
 	sha256Pattern  = regexp.MustCompile(`^[a-f0-9]{64}$`)

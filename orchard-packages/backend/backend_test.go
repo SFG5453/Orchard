@@ -127,6 +127,36 @@ func TestDownloadUsesPartFileAndChecksSize(t *testing.T) {
 	}
 }
 
+func TestReleaseBaseURLUsesGitHubForBetaOnly(t *testing.T) {
+	if actual := releaseBaseURL(release{Version: "5.0.0-beta.3", Channel: "beta"}); actual != "https://github.com/sfg5453/orchard/releases/download/v5.0.0-beta.3/" {
+		t.Fatalf("beta base URL = %q", actual)
+	}
+	if actual := releaseBaseURL(release{Version: "5.0.0", Channel: "stable"}); actual != packageBaseURL {
+		t.Fatalf("stable base URL = %q", actual)
+	}
+}
+
+func TestLatestBetaManifestURLSkipsStableDraftAndUnsafeAssets(t *testing.T) {
+	releases := []githubRelease{
+		{Prerelease: false, Assets: []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+		}{{Name: "manifest.json", BrowserDownloadURL: "https://github.com/sfg5453/orchard/releases/download/v5.0.0/manifest.json"}}},
+		{Prerelease: true, Assets: []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+		}{{Name: "manifest.json", BrowserDownloadURL: "https://example.com/manifest.json"}}},
+		{Prerelease: true, Assets: []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+		}{{Name: "manifest.json", BrowserDownloadURL: "https://github.com/sfg5453/orchard/releases/download/v5.0.0-beta.3/manifest.json"}}},
+	}
+	want := "https://github.com/sfg5453/orchard/releases/download/v5.0.0-beta.3/manifest.json"
+	if actual := latestBetaManifestURL(releases); actual != want {
+		t.Fatalf("beta manifest URL = %q, want %q", actual, want)
+	}
+}
+
 func TestExtractTarZstWithoutExternalTools(t *testing.T) {
 	directory := t.TempDir()
 	archive := filepath.Join(directory, "sample.tar.zst")

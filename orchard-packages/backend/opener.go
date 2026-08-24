@@ -28,7 +28,7 @@ import (
 )
 
 func (i *installer) openRelease(ctx context.Context, version string) error {
-	manifest, err := i.fetchManifest(ctx)
+	manifest, err := i.fetchAvailableManifest(ctx)
 	if err != nil {
 		return err
 	}

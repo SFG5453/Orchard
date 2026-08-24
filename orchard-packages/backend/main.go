@@ -158,7 +158,7 @@ func (extension *extension) sendManifest(ctx context.Context, requestID string) 
 		extension.sendError(requestID, err)
 		return
 	}
-	manifest, err := newInstaller().fetchManifest(ctx)
+	manifest, err := newInstaller().fetchAvailableManifest(ctx)
 	if err != nil {
 		extension.sendError(requestID, err)
 		return

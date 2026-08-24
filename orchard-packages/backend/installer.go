@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -53,12 +54,13 @@ type installResult struct {
 type progressReporter func(installProgress)
 
 type installer struct {
-	baseURL string
-	client  *http.Client
+	baseURL           string
+	githubReleasesURL string
+	client            *http.Client
 }
 
 func newInstaller() *installer {
-	return &installer{baseURL: packageBaseURL, client: http.DefaultClient}
+	return &installer{baseURL: packageBaseURL, githubReleasesURL: githubReleasesAPIURL, client: http.DefaultClient}
 }
 
 func formatBytes(bytes int64) string {
@@ -76,7 +78,15 @@ func formatBytes(bytes int64) string {
 }
 
 func (i *installer) fetchManifest(ctx context.Context) (packageManifest, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, i.baseURL+"manifest.json", nil)
+	return i.fetchManifestFrom(ctx, i.baseURL)
+}
+
+func (i *installer) fetchManifestFrom(ctx context.Context, baseURL string) (packageManifest, error) {
+	return i.fetchManifestURL(ctx, baseURL+"manifest.json")
+}
+
+func (i *installer) fetchManifestURL(ctx context.Context, manifestURL string) (packageManifest, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
 	if err != nil {
 		return packageManifest{}, err
 	}
@@ -96,9 +106,81 @@ func (i *installer) fetchManifest(ctx context.Context) (packageManifest, error) 
 	return parseManifest(data)
 }
 
+type githubRelease struct {
+	Draft      bool `json:"draft"`
+	Prerelease bool `json:"prerelease"`
+	Assets     []struct {
+		Name               string `json:"name"`
+		BrowserDownloadURL string `json:"browser_download_url"`
+	} `json:"assets"`
+}
+
+func latestBetaManifestURL(releases []githubRelease) string {
+	for _, candidate := range releases {
+		if candidate.Draft || !candidate.Prerelease {
+			continue
+		}
+		for _, asset := range candidate.Assets {
+			if asset.Name != "manifest.json" {
+				continue
+			}
+			parsed, err := url.Parse(asset.BrowserDownloadURL)
+			if err == nil && parsed.Scheme == "https" && parsed.Hostname() == "github.com" {
+				return parsed.String()
+			}
+		}
+	}
+	return ""
+}
+
+func (i *installer) fetchAvailableManifest(ctx context.Context) (packageManifest, error) {
+	stableManifest, err := i.fetchManifest(ctx)
+	if err != nil {
+		return packageManifest{}, err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, i.githubReleasesURL, nil)
+	if err != nil {
+		return packageManifest{}, err
+	}
+	request.Header.Set("Accept", "application/vnd.github+json")
+	request.Header.Set("User-Agent", "Orchard-Packages")
+	response, err := i.client.Do(request)
+	if err != nil {
+		return packageManifest{}, fmt.Errorf("could not reach GitHub releases: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return packageManifest{}, fmt.Errorf("GitHub releases returned HTTP %d", response.StatusCode)
+	}
+	var releases []githubRelease
+	if err := json.NewDecoder(io.LimitReader(response.Body, 4*1024*1024)).Decode(&releases); err != nil {
+		return packageManifest{}, fmt.Errorf("GitHub releases could not be read: %w", err)
+	}
+	manifestURL := latestBetaManifestURL(releases)
+	if manifestURL == "" {
+		return packageManifest{}, fmt.Errorf("no Orchard beta package release is available on GitHub")
+	}
+	betaManifest, err := i.fetchManifestURL(ctx, manifestURL)
+	if err != nil {
+		return packageManifest{}, fmt.Errorf("could not read the latest GitHub beta manifest: %w", err)
+	}
+	available := packageManifest{SchemaVersion: 1}
+	for _, candidate := range stableManifest.Releases {
+		if candidate.Channel == "stable" {
+			available.Releases = append(available.Releases, candidate)
+		}
+	}
+	for _, candidate := range betaManifest.Releases {
+		if candidate.Channel == "beta" {
+			available.Releases = append(available.Releases, candidate)
+		}
+	}
+	return available, nil
+}
+
 func (i *installer) installRelease(ctx context.Context, version string, report progressReporter) (installResult, error) {
 	report(installProgress{Phase: "manifest", Message: "Reading the release manifest…", Percent: 2})
-	manifest, err := i.fetchManifest(ctx)
+	manifest, err := i.fetchAvailableManifest(ctx)
 	if err != nil {
 		return installResult{}, err
 	}
@@ -112,6 +194,23 @@ func (i *installer) installRelease(ctx context.Context, version string, report p
 	if selected == nil {
 		return installResult{}, fmt.Errorf("Orchard %s is not present in the package manifest", version)
 	}
+	assetBaseURL := releaseBaseURL(*selected)
+	if selected.Channel == "beta" {
+		githubManifest, err := i.fetchManifestFrom(ctx, assetBaseURL)
+		if err != nil {
+			return installResult{}, fmt.Errorf("could not read Orchard %s from its GitHub release: %w", version, err)
+		}
+		selected = nil
+		for index := range githubManifest.Releases {
+			if githubManifest.Releases[index].Version == version && githubManifest.Releases[index].Channel == "beta" {
+				selected = &githubManifest.Releases[index]
+				break
+			}
+		}
+		if selected == nil {
+			return installResult{}, fmt.Errorf("Orchard %s is not present in its GitHub release manifest", version)
+		}
+	}
 	target, err := detectTarget()
 	if err != nil {
 		return installResult{}, err
@@ -124,11 +223,11 @@ func (i *installer) installRelease(ctx context.Context, version string, report p
 	if err != nil {
 		return installResult{}, err
 	}
-	sharedName, err := archiveName(selected.Shared, i.baseURL)
+	sharedName, err := archiveName(selected.Shared, assetBaseURL)
 	if err != nil {
 		return installResult{}, err
 	}
-	nativeName, err := archiveName(native, i.baseURL)
+	nativeName, err := archiveName(native, assetBaseURL)
 	if err != nil {
 		return installResult{}, err
 	}
@@ -156,7 +255,7 @@ func (i *installer) installRelease(ctx context.Context, version string, report p
 	totalBytes := selected.Shared.Size + native.Size
 	var downloadedBefore int64
 	download := func(asset packageAsset, destination, label string) error {
-		assetURL, err := resolveAssetURL(asset, i.baseURL)
+		assetURL, err := resolveAssetURL(asset, assetBaseURL)
 		if err != nil {
 			return err
 		}
