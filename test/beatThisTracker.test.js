@@ -150,6 +150,32 @@ test('an agreeing model fixes the downbeat offset and raises confidence', async 
   assert.ok(Math.abs(merged.downbeats[1] - native.beats[6]) < 1e-9);
 });
 
+test('a double-time model grid agrees after folding to the native metrical level', async () => {
+  const native = nativeResult({ bpm: 85 });
+  const nativeInterval = 60 / 85;
+  const model = {
+    bpm: 170,
+    beatConfidence: 0.95,
+    beats: Array.from(
+      { length: 120 },
+      (_, index) => native.beats[0] + index * (nativeInterval / 2)
+    ),
+    downbeats: []
+  };
+  const merged = await refineBeatsWithModel(
+    native,
+    [{ samples: new Float32Array(10), sampleRate: 22050, offsetSeconds: 0 }],
+    stubDeps(model)
+  );
+
+  assert.ok(merged);
+  assert.equal(merged.beatConfidence, 0.95);
+  assert.ok(
+    merged.beatModelAgreement < 0.01,
+    `expected an aligned beat grid, got ${merged.beatModelAgreement}`
+  );
+});
+
 test('a metrically ambiguous model reading is no opinion, not a demotion', async () => {
   // 3:2 against the native tempo: two defensible readings of one rhythm. This
   // exact case, read as disagreement, is what sank the aubio experiment.

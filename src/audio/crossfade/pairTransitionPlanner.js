@@ -53,8 +53,7 @@ export const PAIR_TRANSITION_POLICY = Object.freeze({
     activeThreshold: 0.6,
     activeFraction: 0.3,
     minCoverage: 0.5,
-    sustainedBeats: 4,
-    denseMean: 0.65
+    sustainedBeats: 4
   }),
   confidence: Object.freeze({
     full: 0.78,
@@ -201,22 +200,25 @@ function energyScore(pair, outgoing, incoming, outgoingSummary, incomingSummary)
 }
 
 function vocalScore(collision, outgoingSummary, incomingSummary) {
-  const outgoingVocal = finite(outgoingSummary.vocal);
-  const incomingVocal = finite(incomingSummary.vocal);
-  const knownMeans = [outgoingVocal, incomingVocal].filter((value) => value !== null);
+  const knownMeans = [outgoingSummary.vocal, incomingSummary.vocal]
+    .map(finite)
+    .filter((value) => value !== null);
   if (collision.coverage <= 0 || !knownMeans.length) {
-    return { score: 0.5, coverage: 0, dense: false };
+    return { score: 0.5, coverage: 0 };
   }
   const collisionRisk = Math.max(
     clamp(collision.activeFraction ?? 0),
     clamp((collision.simultaneousMean ?? 0) * 1.15)
   );
+  // A vocal-heavy cue is still less desirable than a clean one, but a vocal
+  // on only one side is not a collision and must not veto beatmatching. Keep
+  // this as a modest ranking cost; mapped simultaneous activity owns the hard
+  // safety decision below.
   const soloDensity = Math.max(...knownMeans.map((value) => clamp(value)));
   const soloRisk = clamp((soloDensity - 0.18) / 0.82);
   return {
-    score: clamp(1 - collisionRisk * 0.72 - soloRisk * 0.42),
-    coverage: collision.coverage,
-    dense: soloDensity >= PAIR_TRANSITION_POLICY.vocal.denseMean
+    score: clamp(1 - collisionRisk * 0.72 - soloRisk * 0.24),
+    coverage: collision.coverage
   };
 }
 
@@ -265,9 +267,6 @@ function candidateGates({ pair, fit, outgoing, incoming, harmonic, collision, vo
     collision.activeFraction >= PAIR_TRANSITION_POLICY.vocal.activeFraction &&
     collision.longestRunBeats >= PAIR_TRANSITION_POLICY.vocal.sustainedBeats;
   if (sustainedCollision) lower('vocal-collision', 'simple_crossfade', 'veto');
-  if (vocal.dense && !sustainedCollision) {
-    lower('vocal-density', 'simple_crossfade', 'demotion');
-  }
 
   const left = pair.outgoingCandidate;
   const right = pair.incomingCandidate;
@@ -278,7 +277,9 @@ function candidateGates({ pair, fit, outgoing, incoming, harmonic, collision, vo
     clamp(incoming.timing?.meter?.confidence)
   );
   if (detected < 2 || structureConfidence < 0.55 || meterConfidence < 0.35) {
-    const ceiling = detected === 0 ? 'simple_crossfade' : 'conservative_beatmatched';
+    const usesRhythmicFallback = [left, right]
+      .some((candidate) => candidate.source === 'rhythmic-fallback');
+    const ceiling = usesRhythmicFallback ? 'simple_crossfade' : 'conservative_beatmatched';
     lower('structure-confidence', ceiling, 'demotion');
   }
 

@@ -347,6 +347,19 @@ export async function refineBeatsWithModel(rawResult, windows, {
     return Math.abs(nativeBeats[low] - time) <= Math.abs(nativeBeats[high] - time) ? low : high;
   };
 
+  const nearestDistance = (grid, time) => {
+    if (!grid.length) return Infinity;
+    if (grid.length === 1) return Math.abs(grid[0] - time);
+    let low = 0;
+    let high = grid.length - 1;
+    while (high - low > 1) {
+      const mid = (low + high) >> 1;
+      if (grid[mid] < time) low = mid;
+      else high = mid;
+    }
+    return Math.min(Math.abs(grid[low] - time), Math.abs(grid[high] - time));
+  };
+
   const offsetVotes = [0, 0, 0, 0];
   const agreements = [];
   let modelConfidence = 0;
@@ -381,14 +394,32 @@ export async function refineBeatsWithModel(rawResult, windows, {
       continue;
     }
 
-    // How well the two grids agree where they overlap, as a fraction of a beat.
-    const distances = found.beats
-      .map((time) => time + offsetSeconds)
-      .map((time) => Math.abs(nativeBeats[nearestIndex(time)] - time))
-      .sort((left, right) => left - right);
-    const agreement = distances.length
-      ? distances[Math.floor(distances.length / 2)] / interval
-      : 1;
+    // Compare phase at the same metrical level. Tempo octave alignment alone
+    // is insufficient: when the model reports 170 against an 85 BPM native
+    // grid, every other model beat is intentionally a native offbeat. Fold the
+    // faster grid and choose its best phase before deciding the trackers
+    // disagree. A genuine same-level offbeat disagreement remains untouched.
+    const shiftedModelBeats = found.beats.map((time) => time + offsetSeconds);
+    const fold = 2 ** Math.abs(octaves);
+    let phaseDistances;
+    if (octaves > 0 && fold > 1) {
+      phaseDistances = Array.from({ length: fold }, (_, phase) => shiftedModelBeats
+        .filter((_, index) => index % fold === phase)
+        .map((time) => Math.abs(nativeBeats[nearestIndex(time)] - time)));
+    } else if (octaves < 0 && fold > 1) {
+      phaseDistances = Array.from({ length: fold }, (_, phase) => {
+        const foldedNativeBeats = nativeBeats.filter((_, index) => index % fold === phase);
+        return shiftedModelBeats.map((time) => nearestDistance(foldedNativeBeats, time));
+      });
+    } else {
+      phaseDistances = [shiftedModelBeats.map(
+        (time) => Math.abs(nativeBeats[nearestIndex(time)] - time)
+      )];
+    }
+    const distances = phaseDistances.reduce((best, candidate) => (
+      !best || median(candidate) < median(best) ? candidate : best
+    ), null) || [];
+    const agreement = distances.length ? median(distances) / interval : 1;
     agreements.push(agreement);
     modelConfidence = Math.max(modelConfidence, Number(found.beatConfidence) || 0);
     modelBpm = modelBpm || found.bpm;

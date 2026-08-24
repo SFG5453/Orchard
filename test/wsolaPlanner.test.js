@@ -193,8 +193,8 @@ test('low-confidence timing cannot authorize a native renderer', () => {
 
 test('sustained mapped vocal collision is refused with the selected fallback', () => {
   const plan = planWsolaTransition(pair({
-    outgoing: { vocal: (time) => time >= 90 ? 0.92 : 0.05 },
-    incoming: { vocal: (time) => time <= 36 ? 0.9 : 0.05 }
+    outgoing: { vocal: (time) => time >= 70 ? 0.92 : 0.05 },
+    incoming: { vocal: (time) => time <= 60 ? 0.9 : 0.05 }
   }));
 
   assert.equal(plan.ok, false);

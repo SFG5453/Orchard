@@ -31,7 +31,10 @@ import { finalizeTrackAnalysis } from './trackAnalysis.js';
 // 11: desktop transition planning consumes canonical timing, feature-frame,
 // and boundary evidence. Older caches contain grid-derived semantic cues and
 // can become internally stale after the beat model moves the downbeat grid.
-export const AUDIO_ANALYSIS_VERSION = 11;
+// 12: octave-related native/model tempo readings compare beat positions at a
+// shared metrical level. Version-11 caches can contain false phase demotions
+// from comparing every double-time model beat to a half-time native grid.
+export const AUDIO_ANALYSIS_VERSION = 12;
 export const MIN_LOCAL_BPM = 40;
 export const MAX_LOCAL_BPM = 240;
 

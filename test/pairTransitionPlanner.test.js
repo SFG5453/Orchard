@@ -172,13 +172,29 @@ test('chooses a full beatmatched transition for a clean compatible pair', () => 
 
 test('demotes close-tempo candidates with sustained lead-vocal collision', () => {
   const plan = planPairTransition(cleanPair({
-    outgoing: { vocal: (time) => time >= 95 ? 0.92 : 0.05 },
-    incoming: { vocal: (time) => time <= 36 ? 0.9 : 0.05 }
+    // Cover the complete outgoing/incoming candidate windows so there is no
+    // clean alternate downbeat that can legitimately avoid the collision.
+    outgoing: { vocal: (time) => time >= 70 ? 0.92 : 0.05 },
+    incoming: { vocal: (time) => time <= 60 ? 0.9 : 0.05 }
   }));
 
   assert.ok(!['full_beatmatched', 'conservative_beatmatched'].includes(plan.transitionClass));
   assert.ok(reasonCount(plan, 'vocal-collision') > 0);
   assert.notEqual(plan.renderMode, 'native');
+});
+
+test('one-sided vocals over an instrumental bed remain beatmatch eligible', () => {
+  const plan = planPairTransition(cleanPair({
+    outgoing: { vocal: () => 0.92 },
+    incoming: { vocal: () => 0.03 }
+  }));
+
+  assert.ok(
+    ['full_beatmatched', 'conservative_beatmatched'].includes(plan.transitionClass),
+    `expected a beatmatched transition, got ${plan.transitionClass}`
+  );
+  assert.equal(plan.renderMode, 'native');
+  assert.equal(reasonCount(plan, 'vocal-collision'), 0);
 });
 
 test('vetoes elaborate overlap for a high-confidence severe harmonic clash', () => {
@@ -366,6 +382,17 @@ test('uses explicitly low-confidence rhythmic fallbacks when structure is unavai
   assert.ok(plan.diagnostics.topCandidates.some((candidate) =>
     candidate.sources.includes('rhythmic-fallback') || candidate.sources.includes('downbeat-evidence')
   ));
+});
+
+test('trustworthy downbeats can authorize conservative beatmatching without detected changes', () => {
+  const plan = planPairTransition(cleanPair({
+    outgoing: { boundaryTimes: [], meterConfidence: 0.15 },
+    incoming: { boundaryTimes: [], meterConfidence: 0.15 }
+  }));
+
+  assert.equal(plan.transitionClass, 'conservative_beatmatched');
+  assert.equal(plan.renderMode, 'native');
+  assert.ok(plan.diagnostics.selected.sources.includes('downbeat-evidence'));
 });
 
 test('conflicting low-confidence structural evidence cannot authorize a full mix', () => {
