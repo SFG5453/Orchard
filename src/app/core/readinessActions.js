@@ -465,6 +465,7 @@ export function installReadinessActions(ctx) {
     ctx.immersiveBackgroundIntensity.value = preferences.immersiveBackgroundIntensity;
     ctx.immersiveBackgroundMotion.value = preferences.immersiveBackgroundMotion;
     ctx.layoutPreset.value = preferences.layoutPreset;
+    ctx.keepOldVersions.value = preferences.keepOldVersions;
     ctx.uiScale.value = preferences.uiScale;
     ctx.sponsorBlockMode.value = preferences.sponsorBlockMode;
     ctx.volumeNormalizationEnabled.value = preferences.volumeNormalizationEnabled;

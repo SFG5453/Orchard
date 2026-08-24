@@ -1,5 +1,7 @@
 node_modules/
+orchard-packages/vendor/
 dist/
+artifacts/
 build/artist-packs/
 native/build/
 release/

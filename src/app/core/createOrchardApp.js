@@ -38,7 +38,6 @@ import { installLifecycle } from './lifecycle.js';
 import { installListeningPartyActions } from '../social/listeningPartyActions.js';
 import { installLastfmScrobbling } from '../social/lastfmScrobbling.js';
 import { installMediaHandlers } from '../playback/mediaHandlers.js';
-import { installMigrationActions } from '../platform/migrationActions.js';
 import { installNavigationActions } from './navigationActions.js';
 import { installPlaybackControls } from '../playback/playbackControls.js';
 import { installPlaybackResolve } from '../playback/playbackResolve.js';
@@ -117,7 +116,6 @@ export function createOrchardApp() {
   installSmartQueueActions(ctx);
   installCollectionActions(ctx);
   installAutoplayActions(ctx);
-  installMigrationActions(ctx);
   installUpdateActions(ctx);
   installNetworkActions(ctx);
   installChangelogActions(ctx);

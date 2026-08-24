@@ -579,6 +579,14 @@ export default {
           <q-toggle id="settings-beta-channel" v-model="updateChannelBetaToggle" color="primary" aria-label="Beta channel" />
         </div>
 
+        <div class="settings-row">
+          <div class="settings-row__copy">
+            <label for="settings-keep-old-versions">Keep old versions</label>
+            <p>Retain replaced Orchard application folders after an update. Turn this off to remove older versions when the new one is activated.</p>
+          </div>
+          <q-toggle id="settings-keep-old-versions" v-model="keepOldVersions" color="primary" aria-label="Keep old Orchard versions" />
+        </div>
+
         <div class="settings-actions">
           <button type="button" class="settings-link-button" @click="openChangelog">
             <q-icon name="new_releases" />

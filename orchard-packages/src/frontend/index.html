@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>Orchard Packages</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="installer" aria-labelledby="app-title">
+      <header class="masthead">
+        <img class="brand-mark" src="./icons/orchard-packages.png" alt="" width="52" height="52" />
+        <div class="identity">
+          <p class="eyebrow">ORCHARD · PACKAGE SERVICE</p>
+          <h1 id="app-title">Orchard Packages</h1>
+        </div>
+        <span class="target-badge" id="target-badge">Detecting system</span>
+      </header>
+
+      <section class="release-panel" aria-labelledby="version-label">
+        <div class="field-heading">
+          <label id="version-label" for="version-select">Version</label>
+          <span id="release-channel">Checking releases…</span>
+        </div>
+        <div class="select-wrap">
+          <select id="version-select" disabled aria-describedby="version-detail">
+            <option>Loading…</option>
+          </select>
+        </div>
+        <p class="version-detail" id="version-detail">Connecting to the package service.</p>
+      </section>
+
+      <button class="install-button" id="install-button" type="button" disabled>
+        <span id="install-button-label">Install Orchard</span>
+        <span aria-hidden="true">→</span>
+      </button>
+
+      <section class="operation" id="operation" aria-live="polite" aria-atomic="false">
+        <div class="operation-heading">
+          <p class="operation-text" id="operation-text">Ready when you are.</p>
+          <span class="progress-value" id="progress-value">0%</span>
+        </div>
+        <div
+          class="progress-track"
+          id="progress-track"
+          role="progressbar"
+          aria-label="Installation progress"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="0"
+        >
+          <span class="progress-fill" id="progress-fill"></span>
+          <span class="package-seam" aria-hidden="true"></span>
+        </div>
+        <div class="package-key" aria-hidden="true">
+          <span id="common-package-label">COMMON PACKAGE</span>
+          <span id="native-package-label">NATIVE PACKAGE</span>
+        </div>
+        <p class="operation-detail" id="operation-detail">Choose a version to install it for this computer.</p>
+      </section>
+
+      <p class="result-message" id="result-message" hidden></p>
+    </main>
+
+    <script src="./js/neutralino.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

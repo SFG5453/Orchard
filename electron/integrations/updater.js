@@ -20,43 +20,48 @@
 // Coordinates application and artist-pack updates while keeping updater lifecycle in the main process.
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
-import { access, mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
 import { createArtistPackService, readOfficialPackArchive } from './artistPackService.js';
 import {
-  cleanManagedUpdateManifest,
-  detectManagedUpdatePackage,
-  latestBetaManifestUrl,
-  managedUpdateAvailable,
-  selectManagedUpdateAsset
-} from './managedUpdatePackages.js';
-import { resolveBetaUpdateCheckFallback, updateErrorMessage } from './updateErrors.js';
+  formatUpdateBytes,
+  launchPreparedPackageServiceUpdate,
+  preparePackageServiceUpdate
+} from './packageServiceInstaller.js';
+import {
+  latestPackageManifest,
+  packageServiceTarget,
+  selectPackageServiceRelease
+} from './packageServiceUpdates.js';
+import { updateErrorMessage } from './updateErrors.js';
 
 const require = createRequire(import.meta.url);
-const { app, BrowserWindow, dialog, ipcMain, net, shell } = require('electron');
-const { autoUpdater } = require('electron-updater');
-
-const DEFAULT_UPDATE_URL = 'https://downloads.sfg545.dev/orchard/';
+const { app, BrowserWindow, dialog, ipcMain, net } = require('electron');
 const DEFAULT_ARTIST_PACK_INDEX_URL = 'https://artist-packs.sfg545.dev/v1/index.json';
 const { UPDATES } = IPC_CHANNELS;
 const ARTIST_PACK_MAX_BYTES = 50 * 1024 * 1024;
 const GITHUB_OWNER = 'sfg5453';
 const GITHUB_REPO = 'orchard';
+const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
+const GITHUB_RELEASES_API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=20`;
 const UPDATE_CHANNELS = ['stable', 'beta'];
-const DEFAULT_UPDATE_CHANNEL = 'stable';
+const DEFAULT_UPDATE_CHANNEL = 'beta';
 
+// Packages are published to GitHub releases and nowhere else. This override
+// exists so a developer can point a build at a locally served manifest; there
+// is no hosted fallback behind it.
 function normalizeUpdateUrl(value) {
-  const fallback = DEFAULT_UPDATE_URL;
+  if (!value) return '';
 
   try {
-    const url = new URL(value || fallback);
-    if (!['http:', 'https:'].includes(url.protocol)) return fallback;
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol)) return '';
     if (!url.pathname.endsWith('/')) url.pathname = `${url.pathname}/`;
     return url.toString();
   } catch {
-    return fallback;
+    return '';
   }
 }
 
@@ -82,15 +87,6 @@ function cleanProgress(progress) {
   };
 }
 
-function cleanReleaseNotes(releaseNotes) {
-  const entries = Array.isArray(releaseNotes) ? releaseNotes : [releaseNotes];
-
-  return entries
-    .flatMap((entry) => typeof entry === 'string' ? entry.split(/\r?\n/) : [entry?.note])
-    .map((entry) => String(entry || '').trim())
-    .filter(Boolean);
-}
-
 function updatePreferencesPath() {
   return path.join(app.getPath('userData'), 'update-preferences.json');
 }
@@ -106,15 +102,6 @@ async function readUpdateChannel() {
 
 async function writeUpdateChannel(channel) {
   await writeFile(updatePreferencesPath(), JSON.stringify({ channel }, null, 2));
-}
-
-function applyUpdateChannel(channel, updateUrl) {
-  autoUpdater.allowPrerelease = channel === 'beta';
-  autoUpdater.setFeedURL(
-    channel === 'beta'
-      ? { provider: 'github', owner: GITHUB_OWNER, repo: GITHUB_REPO }
-      : { provider: 'generic', url: updateUrl }
-  );
 }
 
 function contentStorePaths() {
@@ -250,13 +237,11 @@ async function fetchOfficialPackEntries(archiveUrl) {
 }
 
 export function setupOrchardUpdates({ isDev }) {
-  const updateUrl = normalizeUpdateUrl(process.env.ORCHARD_UPDATE_URL);
+  const packageUrlOverride = normalizeUpdateUrl(process.env.ORCHARD_PACKAGE_URL);
+  const updateUrl = packageUrlOverride || GITHUB_RELEASES_URL;
   const artistPackIndexUrl = normalizeContentIndexUrl(process.env.ORCHARD_ARTIST_PACK_INDEX_URL);
-  const managedPackage = detectManagedUpdatePackage();
   const sourceBuild = Boolean(isDev) || !app.isPackaged;
-  const selfUpdateEnabled = !managedPackage && !isDev && app.isPackaged;
-  const managedUpdatesEnabled = Boolean(managedPackage) && !isDev && app.isPackaged;
-  const updateChecksEnabled = selfUpdateEnabled || managedUpdatesEnabled;
+  const updateChecksEnabled = !sourceBuild;
   const artistPackService = createArtistPackService({
     app,
     BrowserWindow,
@@ -265,9 +250,10 @@ export function setupOrchardUpdates({ isDev }) {
   });
   const disabledMessage = 'Updates are disabled for development builds.';
   let checkPromise = null;
-  let externalDownloadPromise = null;
-  let managedUpdateAsset = null;
-  let downloadedManagedPath = '';
+  let availablePackageRelease = null;
+  let availablePackageBaseURL = packageUrlOverride;
+  let preparedPackageUpdate = null;
+  let packageUpdatePromise = null;
   const fetchWithNet = (url, options) => net.fetch(url, options);
   let state = {
     status: updateChecksEnabled ? 'idle' : 'disabled',
@@ -281,9 +267,9 @@ export function setupOrchardUpdates({ isDev }) {
     progress: null,
     error: '',
     dev: sourceBuild,
-    external: Boolean(managedPackage),
-    packageType: managedPackage?.type || '',
-    packageLabel: managedPackage?.label || '',
+    external: false,
+    packageType: '',
+    packageLabel: 'Orchard package service',
     downloadedFile: '',
     downloadAvailable: false,
     content: {
@@ -308,35 +294,7 @@ export function setupOrchardUpdates({ isDev }) {
     return state;
   }
 
-  function setUpdateInfo(status, info, message) {
-    return publish({
-      status,
-      message,
-      availableVersion: info?.version || '',
-      releaseDate: info?.releaseDate || '',
-      releaseNotes: cleanReleaseNotes(info?.releaseNotes),
-      progress: null,
-      error: '',
-      external: false,
-      downloadAvailable: false,
-      downloadedFile: ''
-    });
-  }
-
   function handleUpdateError(error) {
-    if (state.channel === 'beta') {
-      const fallback = resolveBetaUpdateCheckFallback(error, state.version);
-      if (fallback) {
-        return publish({
-          status: 'current',
-          message: fallback.message,
-          availableVersion: fallback.availableVersion,
-          error: '',
-          progress: null
-        });
-      }
-    }
-
     return publish({
       status: 'error',
       message: 'Update check failed.',
@@ -345,70 +303,127 @@ export function setupOrchardUpdates({ isDev }) {
     });
   }
 
-  async function managedManifestUrl() {
-    if (state.channel === 'stable') return new URL('latest-desktop.json', updateUrl).toString();
-
-    const releases = await fetchJson(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=20`, {
-      headers: {
-        accept: 'application/vnd.github+json',
-        'user-agent': `OrchardDesktop/${state.version}`
-      }
-    }, fetchWithNet);
-    const manifestUrl = latestBetaManifestUrl(releases);
-    if (!manifestUrl) throw new Error('No Orchard desktop beta release is currently available.');
-    return manifestUrl;
-  }
-
-  async function checkManagedPackageUpdate() {
-    publish({
-      status: 'checking',
-      message: 'Checking for updates...',
-      progress: null,
-      error: '',
-      downloadedFile: ''
-    });
-
-    const manifest = cleanManagedUpdateManifest(await fetchJson(await managedManifestUrl(), {}, fetchWithNet));
-    if (manifest.channel !== state.channel) {
-      throw new Error(`The update server returned ${manifest.channel} metadata for the ${state.channel} channel.`);
+  async function checkPackageServiceUpdate() {
+    publish({ status: 'checking', message: 'Checking for updates...', progress: null, error: '' });
+    let manifestUrl;
+    if (packageUrlOverride) {
+      manifestUrl = new URL('manifest.json', packageUrlOverride).toString();
+      availablePackageBaseURL = packageUrlOverride;
+    } else {
+      const releases = await fetchJson(GITHUB_RELEASES_API_URL, {
+        headers: {
+          accept: 'application/vnd.github+json',
+          'user-agent': `OrchardDesktop/${state.version}`
+        }
+      }, fetchWithNet);
+      const source = latestPackageManifest(releases, state.channel);
+      if (!source) throw new Error(`No ${state.channel} Orchard package release is currently available.`);
+      manifestUrl = source.manifestUrl;
+      availablePackageBaseURL = source.baseURL;
     }
-
-    managedUpdateAsset = selectManagedUpdateAsset(manifest, managedPackage.type, managedPackage.arch);
-    downloadedManagedPath = '';
-    if (!managedUpdateAvailable(state.version, manifest.version)) {
+    const manifest = await fetchJson(manifestUrl, {}, fetchWithNet);
+    const { latest, updateAvailable } = selectPackageServiceRelease(manifest, {
+      channel: state.channel,
+      currentVersion: state.version,
+      target: packageServiceTarget()
+    });
+    if (!latest) {
+      throw new Error(`No ${state.channel} Orchard package is available for ${packageServiceTarget()}.`);
+    }
+    availablePackageRelease = latest;
+    preparedPackageUpdate = null;
+    if (!updateAvailable) {
       return publish({
         status: 'current',
         message: 'Orchard is up to date.',
-        availableVersion: manifest.version,
-        releaseDate: manifest.releaseDate,
-        releaseNotes: manifest.releaseNotes,
+        availableVersion: latest.version,
+        releaseDate: '',
+        releaseNotes: [],
         progress: null,
         error: '',
-        downloadAvailable: false,
-        downloadedFile: ''
+        downloadAvailable: false
       });
     }
-
-    const packageMessage = managedUpdateAsset
-      ? `Orchard ${manifest.version} is available for your ${managedPackage.label}.`
-      : `Orchard ${manifest.version} is available, but no ${managedPackage.arch} ${managedPackage.label} download was published.`;
+    const native = latest.native[packageServiceTarget()];
+    const totalSize = Number(latest.shared?.size || 0) + Number(native?.size || 0);
     return publish({
-      status: 'external-available',
-      message: packageMessage,
-      availableVersion: manifest.version,
-      releaseDate: manifest.releaseDate,
-      releaseNotes: manifest.releaseNotes,
+      status: 'available',
+      message: `Orchard ${latest.version} is ready to download${totalSize > 0 ? ` (${formatUpdateBytes(totalSize)})` : ''}.`,
+      availableVersion: latest.version,
+      releaseDate: '',
+      releaseNotes: [],
       progress: null,
       error: '',
-      downloadAvailable: Boolean(managedUpdateAsset),
-      downloadedFile: ''
+      downloadAvailable: true
     });
+  }
+
+  async function installPackageServiceUpdate(options = {}) {
+    if (state.status === 'downloaded' && preparedPackageUpdate) {
+      publish({ status: 'installing', message: 'Restarting to install the update…', progress: null, error: '' });
+      await launchPreparedPackageServiceUpdate(preparedPackageUpdate, {
+        keepOldVersions: options?.keepOldVersions === true
+      });
+      setTimeout(() => app.quit(), 100);
+      return state;
+    }
+    if (state.status !== 'available' || !availablePackageRelease) return state;
+    if (packageUpdatePromise) return packageUpdatePromise;
+
+    const release = availablePackageRelease;
+    const target = packageServiceTarget();
+    packageUpdatePromise = (async () => {
+      try {
+        publish({
+          status: 'downloading',
+          message: `Downloading Orchard ${release.version}…`,
+          progress: { percent: 0, transferred: 0, total: 0, bytesPerSecond: 0 },
+          error: ''
+        });
+        preparedPackageUpdate = await preparePackageServiceUpdate({
+          appDataDirectory: app.getPath('appData'),
+          baseURL: availablePackageBaseURL,
+          cacheDirectory: app.getPath('cache'),
+          fetchImpl: fetchWithNet,
+          release,
+          target,
+          onProgress: ({ phase, label, transferred, total }) => {
+            const ratio = total > 0 ? Math.min(1, transferred / total) : 0;
+            const percent = phase === 'electron' ? 75 + ratio * 20 : ratio * 75;
+            publish({
+              status: 'downloading',
+              message: `Downloading ${label}… ${formatUpdateBytes(transferred)}${total > 0 ? ` of ${formatUpdateBytes(total)}` : ''}`,
+              progress: { percent, transferred, total, bytesPerSecond: 0 },
+              error: ''
+            });
+          }
+        });
+        return publish({
+          status: 'downloaded',
+          message: `Orchard ${release.version} is ready to install.`,
+          progress: null,
+          error: '',
+          downloadAvailable: false
+        });
+      } catch (error) {
+        preparedPackageUpdate = null;
+        return publish({
+          status: 'error',
+          message: 'Update download failed.',
+          progress: null,
+          error: updateErrorMessage(error),
+          downloadAvailable: true
+        });
+      } finally {
+        packageUpdatePromise = null;
+      }
+    })();
+    return packageUpdatePromise;
   }
 
   let channelReady = updateChecksEnabled
     ? readUpdateChannel().then((channel) => {
       state = { ...state, channel };
-      if (selfUpdateEnabled) applyUpdateChannel(channel, updateUrl);
       return channel;
     })
     : Promise.resolve(state.channel);
@@ -418,7 +433,7 @@ export function setupOrchardUpdates({ isDev }) {
     if (checkPromise) return checkPromise;
 
     checkPromise = channelReady
-      .then(() => managedUpdatesEnabled ? checkManagedPackageUpdate() : autoUpdater.checkForUpdates())
+      .then(() => checkPackageServiceUpdate())
       .then(() => state)
       .catch((error) => handleUpdateError(error))
       .finally(() => {
@@ -433,148 +448,10 @@ export function setupOrchardUpdates({ isDev }) {
 
     await channelReady;
     await writeUpdateChannel(channel);
-    if (selfUpdateEnabled) applyUpdateChannel(channel, updateUrl);
-    managedUpdateAsset = null;
-    downloadedManagedPath = '';
+    availablePackageRelease = null;
+    preparedPackageUpdate = null;
     publish({ channel, downloadAvailable: false, downloadedFile: '' });
     return runCheckForUpdates();
-  }
-
-  async function unusedDownloadPath(directory, fileName) {
-    async function exists(filePath) {
-      try {
-        await access(filePath);
-        return true;
-      } catch (error) {
-        if (error?.code === 'ENOENT') return false;
-        throw error;
-      }
-    }
-
-    const parsed = path.parse(path.basename(fileName));
-    for (let suffix = 0; suffix < 1000; suffix += 1) {
-      const candidateName = suffix ? `${parsed.name} (${suffix})${parsed.ext}` : parsed.base;
-      const candidate = path.join(directory, candidateName);
-      if (!await exists(candidate) && !await exists(`${candidate}.part`)) return candidate;
-    }
-    throw new Error('Could not choose an unused file name in Downloads.');
-  }
-
-  async function saveManagedUpdate(asset, destinationPath) {
-    const temporaryPath = `${destinationPath}.part`;
-    const response = await net.fetch(asset.url, { redirect: 'follow' });
-    if (!response.ok || !response.body) throw new Error(`Package download failed with HTTP ${response.status}.`);
-
-    const total = Number(response.headers.get('content-length') || asset.size || 0);
-    const hash = createHash('sha256');
-    const output = await open(temporaryPath, 'wx');
-    let transferred = 0;
-
-    try {
-      for await (const chunk of response.body) {
-        const bytes = Buffer.from(chunk);
-        let offset = 0;
-        while (offset < bytes.byteLength) {
-          const { bytesWritten } = await output.write(bytes, offset, bytes.byteLength - offset);
-          if (!bytesWritten) throw new Error('The package download stopped before it was complete.');
-          offset += bytesWritten;
-        }
-        hash.update(bytes);
-        transferred += bytes.byteLength;
-        if (transferred > asset.size) {
-          throw new Error('The downloaded package was larger than the release manifest declared.');
-        }
-        publish({
-          status: 'external-downloading',
-          message: total > 0
-            ? `Downloading update ${Math.min(100, Math.round((transferred / total) * 100))}%`
-            : 'Downloading update...',
-          progress: {
-            percent: total > 0 ? Math.min(100, (transferred / total) * 100) : 0,
-            transferred,
-            total,
-            bytesPerSecond: 0
-          },
-          error: ''
-        });
-      }
-      await output.close();
-
-      if (transferred !== asset.size) {
-        throw new Error('The downloaded package size did not match the release manifest.');
-      }
-      if (hash.digest('hex') !== asset.sha256) {
-        throw new Error('The downloaded package checksum did not match the release manifest.');
-      }
-      await rename(temporaryPath, destinationPath);
-      return destinationPath;
-    } catch (error) {
-      await output.close().catch(() => {});
-      await unlink(temporaryPath).catch(() => {});
-      throw error;
-    }
-  }
-
-  async function downloadManagedUpdate() {
-    if (!managedUpdatesEnabled || !state.downloadAvailable || !managedUpdateAsset) return state;
-    if (externalDownloadPromise) return externalDownloadPromise;
-
-    const asset = managedUpdateAsset;
-    const availableVersion = state.availableVersion;
-    externalDownloadPromise = (async () => {
-      try {
-        const parent = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
-        const confirmationOptions = {
-          type: 'question',
-          buttons: ['Download', 'Cancel'],
-          defaultId: 0,
-          cancelId: 1,
-          title: 'Download Orchard update',
-          message: `Download Orchard ${availableVersion}?`,
-          detail: `${asset.name} will be saved to your Downloads folder. ${managedPackage.installHint}`
-        };
-        const confirmation = parent
-          ? await dialog.showMessageBox(parent, confirmationOptions)
-          : await dialog.showMessageBox(confirmationOptions);
-        if (confirmation.response !== 0) return state;
-
-        const downloadsDirectory = app.getPath('downloads');
-        await mkdir(downloadsDirectory, { recursive: true });
-        const destination = await unusedDownloadPath(downloadsDirectory, asset.name);
-        publish({
-          status: 'external-downloading',
-          message: `Downloading ${asset.name}...`,
-          progress: null,
-          error: ''
-        });
-        downloadedManagedPath = await saveManagedUpdate(asset, destination);
-        return publish({
-          status: 'external-downloaded',
-          message: `${path.basename(destination)} was saved to Downloads.`,
-          progress: null,
-          error: '',
-          downloadedFile: path.basename(destination),
-          downloadAvailable: false
-        });
-      } catch (error) {
-        return publish({
-          status: 'error',
-          message: 'Package download failed.',
-          progress: null,
-          error: updateErrorMessage(error),
-          downloadAvailable: Boolean(asset)
-        });
-      } finally {
-        externalDownloadPromise = null;
-      }
-    })();
-
-    return externalDownloadPromise;
-  }
-
-  function revealManagedUpdate() {
-    if (downloadedManagedPath) shell.showItemInFolder(downloadedManagedPath);
-    return state;
   }
 
   async function importUserArtistPack() {
@@ -707,65 +584,13 @@ export function setupOrchardUpdates({ isDev }) {
 
   ipcMain.handle(UPDATES.READ_ARTIST_PACK_ARCHIVE, (_event, archiveUrl) => fetchOfficialPackEntries(archiveUrl));
 
-  ipcMain.handle(UPDATES.INSTALL, () => {
-    if (state.status !== 'downloaded') return state;
+  ipcMain.handle(UPDATES.INSTALL, (_event, options) => installPackageServiceUpdate(options));
 
-    autoUpdater.quitAndInstall(false, true);
-    return state;
-  });
+  ipcMain.handle(UPDATES.DOWNLOAD_EXTERNAL, () => state);
 
-  ipcMain.handle(UPDATES.DOWNLOAD_EXTERNAL, () => downloadManagedUpdate());
-
-  ipcMain.handle(UPDATES.REVEAL_EXTERNAL, () => revealManagedUpdate());
+  ipcMain.handle(UPDATES.REVEAL_EXTERNAL, () => state);
 
   ipcMain.handle(UPDATES.SET_CHANNEL, (_event, channel) => setUpdateChannel(channel));
-
-  if (!selfUpdateEnabled) {
-    return {
-      checkForUpdates: () => runCheckForUpdates(),
-      checkForContentUpdates: runCheckForContentUpdates,
-      importArtistPack: importUserArtistPack,
-      getState: () => state
-    };
-  }
-
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
-
-  autoUpdater.on('checking-for-update', () => {
-    publish({
-      status: 'checking',
-      message: 'Checking for updates...',
-      progress: null,
-      error: ''
-    });
-  });
-
-  autoUpdater.on('update-available', (info) => {
-    setUpdateInfo('available', info, `Downloading Orchard ${info?.version || 'update'}...`);
-  });
-
-  autoUpdater.on('update-not-available', (info) => {
-    setUpdateInfo('current', info, 'Orchard is up to date.');
-  });
-
-  autoUpdater.on('download-progress', (progress) => {
-    const percent = Math.round(Number(progress?.percent || 0));
-    publish({
-      status: 'downloading',
-      message: `Downloading update ${percent}%`,
-      progress: cleanProgress(progress),
-      error: ''
-    });
-  });
-
-  autoUpdater.on('update-downloaded', (info) => {
-    setUpdateInfo('downloaded', info, `Orchard ${info?.version || 'update'} is ready to install.`);
-  });
-
-  autoUpdater.on('error', (error) => {
-    handleUpdateError(error);
-  });
 
   return {
     checkForUpdates: () => runCheckForUpdates(),
