@@ -154,15 +154,23 @@ async function assertNoSymlinkParent(root, destination) {
 }
 
 export async function extractElectronArchive(archivePath, destination) {
-  await mkdir(destination, { recursive: true });
-  const root = path.resolve(destination);
-  const archive = await openZip(archivePath, {
-    autoClose: false,
-    decodeStrings: true,
-    strictFileNames: true,
-    validateEntrySizes: true
-  });
+  // Electron patches Node's filesystem APIs to treat every `.asar` path as an
+  // archive. A stock Electron ZIP contains resources/default_app.asar, so the
+  // patch can try to parse that file while yauzl is still writing it and throw
+  // "Invalid package". Disable ASAR interception for the duration of runtime
+  // extraction; these files are opaque payloads here.
+  const previousNoAsar = process.noAsar;
+  process.noAsar = true;
+  let archive;
   try {
+    await mkdir(destination, { recursive: true });
+    const root = path.resolve(destination);
+    archive = await openZip(archivePath, {
+      autoClose: false,
+      decodeStrings: true,
+      strictFileNames: true,
+      validateEntrySizes: true
+    });
     for await (const entry of archive.eachEntry()) {
       const output = safeZipDestination(root, entry.fileName);
       await assertNoSymlinkParent(root, output);
@@ -201,7 +209,8 @@ export async function extractElectronArchive(archivePath, destination) {
       await pipeline(input, createWriteStream(output, { mode: mode & 0o777 || 0o644 }));
     }
   } finally {
-    archive.close();
+    archive?.close();
+    process.noAsar = previousNoAsar;
   }
 }
 

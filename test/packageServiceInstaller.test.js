@@ -81,6 +81,26 @@ test('extracts Electron ZIP files without an external unzip command', async () =
   assert.equal(await readFile(path.join(output, 'runtime', 'electron'), 'utf8'), 'electron');
 });
 
+test('extracts Electron ASAR payloads as ordinary files and restores ASAR handling', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'orchard-electron-asar-test-'));
+  const archive = path.join(root, 'electron.zip');
+  const output = path.join(root, 'output');
+  const previousNoAsar = process.noAsar;
+  t.after(() => {
+    process.noAsar = previousNoAsar;
+    return rm(root, { recursive: true, force: true });
+  });
+
+  process.noAsar = false;
+  await writeFile(archive, zipSync({
+    'resources/default_app.asar': new TextEncoder().encode('asar payload')
+  }));
+  await extractElectronArchive(archive, output);
+
+  assert.equal(await readFile(path.join(output, 'resources', 'default_app.asar'), 'utf8'), 'asar payload');
+  assert.equal(process.noAsar, false);
+});
+
 test('restart helper retains or removes previous versions according to the setting', { skip: process.platform === 'win32' }, async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), 'orchard-update-helper-test-'));
   const versionsRoot = path.join(root, 'versions');
