@@ -17,6 +17,8 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { evaluateAutomationCurve } from './transitionChoreography.js';
+
 // Where the incoming track becomes the authoritative deck. This is a promotion
 // point for the session controller, not a shape in the fade: the gains stay
 // equal-power complementary the whole way across.
@@ -203,6 +205,15 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     scheduleGain(toNode, CURVES.fadeIn, target, handoffTime, duration, bedGain);
   }
 
+  function samplePointsToFloat32Array(points = [], size = 64) {
+    const array = new Float32Array(size);
+    for (let i = 0; i < size; i += 1) {
+      const t = i / (size - 1);
+      array[i] = evaluateAutomationCurve(points, t);
+    }
+    return array;
+  }
+
   function scheduleCrossfade({
     fromAudio,
     toAudio,
@@ -211,7 +222,8 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     handoffStartSeconds = 0,
     transitionStyle = 'equal_power',
     bassSwap = false,
-    leadTime = 0.05
+    leadTime = 0.05,
+    choreography = null
   }) {
     const fromNode = connectElement(fromAudio);
     const toNode = connectElement(toAudio);
@@ -233,6 +245,46 @@ export function createCrossfadeMixer({ connectElement, currentTime }) {
     const toGainParam = mixParam(toNode);
     toGainParam.cancelScheduledValues(currentTime());
     toGainParam.setValueAtTime(0, currentTime());
+
+    if (choreography?.curves) {
+      const { outgoingGain, incomingGain, outgoingLowPass, outgoingBass, incomingBass } = choreography.curves;
+      const hasGain = Array.isArray(outgoingGain) && outgoingGain.length > 0 && Array.isArray(incomingGain) && incomingGain.length > 0;
+      const hasLowPass = Array.isArray(outgoingLowPass) && outgoingLowPass.length > 0;
+      const hasBass = Array.isArray(outgoingBass) && outgoingBass.length > 0 && Array.isArray(incomingBass) && incomingBass.length > 0;
+
+      if (hasGain) {
+        const outGainArr = samplePointsToFloat32Array(outgoingGain, 64);
+        const inGainArr = samplePointsToFloat32Array(incomingGain, 64);
+        scheduleGain(fromNode, outGainArr, target, startTime, fadeDuration);
+        scheduleGain(toNode, inGainArr, target, startTime, fadeDuration);
+      } else {
+        scheduleGain(fromNode, CURVES.fadeOut, target, startTime, fadeDuration);
+        scheduleGain(toNode, CURVES.fadeIn, target, startTime, fadeDuration);
+      }
+
+      setBandSplit(fromNode, hasBass || hasLowPass);
+      setBandSplit(toNode, hasBass);
+
+      if (hasLowPass) {
+        const lowPassArr = samplePointsToFloat32Array(outgoingLowPass, 64);
+        scheduleParamCurve(fromNode.lowPass.frequency, lowPassArr, startTime, fadeDuration);
+      }
+
+      if (hasBass) {
+        const outBassArr = samplePointsToFloat32Array(outgoingBass, 256);
+        const inBassArr = samplePointsToFloat32Array(incomingBass, 256);
+        scheduleParamCurve(fromNode.bassGain.gain, outBassArr, startTime, fadeDuration);
+        scheduleParamCurve(toNode.bassGain.gain, inBassArr, startTime, fadeDuration);
+      }
+
+      const dominancePoint = typeof choreography.dominancePoint === 'number' ? choreography.dominancePoint : 0.5;
+      return {
+        startTime,
+        handoffStart: startTime,
+        promotionTime: startTime + fadeDuration * dominancePoint,
+        endTime: startTime + fadeDuration
+      };
+    }
 
     const djStyle = ['dj_switch', 'dj_filter', 'dj_blend'].includes(transitionStyle);
     // Arm both decks before anything is scheduled, so the crossover is settled

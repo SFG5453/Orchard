@@ -401,3 +401,89 @@ test('resetting a mix cancels its envelope without changing the master volume', 
   ]);
   assert.deepEqual(node.gain.gain.events, []);
 });
+
+import {
+  CHOREOGRAPHY_SCHEMA_VERSION,
+  CHOREOGRAPHY_STRATEGY,
+  CURVE_INTERPOLATION,
+  createAutomationPoint,
+  createTransitionChoreography
+} from '../src/audio/crossfade/transitionChoreography.js';
+
+test('scheduleCrossfade executes exact choreography curves for gains, low-pass, and bass', () => {
+  const { fromAudio, toAudio, fromNode, toNode, mixer } = pair(100);
+
+  const choreography = createTransitionChoreography({
+    strategy: CHOREOGRAPHY_STRATEGY.STAGED_BLEND,
+    outgoing: { start: 100, end: 108, tempoRatio: 1 },
+    incoming: { cue: 0, arrival: 4, resume: 8, tempoRatio: 1 },
+    duration: 8,
+    dominancePoint: 0.6,
+    curves: {
+      outgoingGain: [
+        createAutomationPoint(0.0, 1.0, CURVE_INTERPOLATION.SMOOTH_STEP),
+        createAutomationPoint(0.4, 0.9, CURVE_INTERPOLATION.SMOOTH_STEP),
+        createAutomationPoint(1.0, 0.0)
+      ],
+      incomingGain: [
+        createAutomationPoint(0.0, 0.0, CURVE_INTERPOLATION.SMOOTH_STEP),
+        createAutomationPoint(0.4, 0.4, CURVE_INTERPOLATION.SMOOTH_STEP),
+        createAutomationPoint(1.0, 1.0)
+      ],
+      outgoingLowPass: [
+        createAutomationPoint(0.0, 20000, CURVE_INTERPOLATION.LOGARITHMIC),
+        createAutomationPoint(0.4, 20000, CURVE_INTERPOLATION.LOGARITHMIC),
+        createAutomationPoint(1.0, 900)
+      ],
+      outgoingBass: [
+        createAutomationPoint(0.0, 1.0),
+        createAutomationPoint(0.5, 1.0, CURVE_INTERPOLATION.EQUAL_POWER_IN),
+        createAutomationPoint(0.6, 0.0),
+        createAutomationPoint(1.0, 0.0)
+      ],
+      incomingBass: [
+        createAutomationPoint(0.0, 0.0),
+        createAutomationPoint(0.5, 0.0, CURVE_INTERPOLATION.EQUAL_POWER_OUT),
+        createAutomationPoint(0.6, 1.0),
+        createAutomationPoint(1.0, 1.0)
+      ]
+    },
+    bassSwapPoint: 0.55
+  });
+
+  const timing = mixer.scheduleCrossfade({
+    fromAudio,
+    toAudio,
+    duration: 8,
+    leadTime: 0,
+    choreography
+  });
+
+  assert.equal(timing.startTime, 100);
+  assert.equal(timing.endTime, 108);
+  assert.equal(timing.promotionTime, 100 + 8 * 0.6);
+
+  const outGainCurve = lastCurve(fromNode.mixGain.gain);
+  const inGainCurve = lastCurve(toNode.mixGain.gain);
+  assert.ok(outGainCurve, 'missing outgoing gain curve');
+  assert.ok(inGainCurve, 'missing incoming gain curve');
+  assert.equal(outGainCurve.first, 1.0);
+  assert.equal(outGainCurve.last, 0.0);
+  assert.equal(inGainCurve.first, 0.0);
+  assert.equal(inGainCurve.last, 1.0);
+
+  const lowPassCurve = lastCurve(fromNode.lowPass.frequency);
+  assert.ok(lowPassCurve, 'missing low-pass curve');
+  assert.equal(lowPassCurve.first, 20000);
+  assert.equal(lowPassCurve.last, 900);
+
+  const outBassCurve = lastCurve(fromNode.bassGain.gain);
+  const inBassCurve = lastCurve(toNode.bassGain.gain);
+  assert.ok(outBassCurve, 'missing outgoing bass curve');
+  assert.ok(inBassCurve, 'missing incoming bass curve');
+  assert.equal(outBassCurve.first, 1.0);
+  assert.equal(outBassCurve.last, 0.0);
+  assert.equal(inBassCurve.first, 0.0);
+  assert.equal(inBassCurve.last, 1.0);
+});
+

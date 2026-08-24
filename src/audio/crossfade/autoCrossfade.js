@@ -316,7 +316,8 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
         handoffDuration: transition?.handoffDuration,
         handoffStartSeconds: transition?.handoffStartSeconds,
         bassSwap: transition?.bassSwap,
-        transitionStyle: transition?.transitionStyle
+        transitionStyle: transition?.transitionStyle,
+        choreography: transition?.choreography
       });
       if (!timing) throw new Error('Web Audio crossfade is unavailable');
 
