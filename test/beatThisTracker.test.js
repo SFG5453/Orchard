@@ -202,6 +202,61 @@ test('double-time grid folding keeps phase across missed model beats', async () 
   );
 });
 
+test('double-time grid folding keeps phase across extra model peaks', async () => {
+  const native = nativeResult({ bpm: 85 });
+  const nativeInterval = 60 / 85;
+  const modelInterval = nativeInterval / 2;
+  const model = {
+    bpm: 170,
+    beatConfidence: 0.95,
+    beats: Array.from(
+      { length: 120 },
+      (_, index) => native.beats[0] + index * modelInterval
+    ).flatMap((time, index) => (
+      [30, 60, 90].includes(index) ? [time, time + modelInterval / 2] : [time]
+    )),
+    downbeats: []
+  };
+  const merged = await refineBeatsWithModel(
+    native,
+    [{ samples: new Float32Array(10), sampleRate: 22050, offsetSeconds: 0 }],
+    stubDeps(model)
+  );
+
+  assert.ok(merged);
+  assert.equal(merged.beatConfidence, 0.95);
+  assert.ok(
+    merged.beatModelAgreement < 0.01,
+    `expected extra peaks to retain phase, got ${merged.beatModelAgreement}`
+  );
+});
+
+test('a half-time model uses the folded native interval for phase tolerance', async () => {
+  const native = nativeResult({ bpm: 170 });
+  const sharedInterval = 60 / 85;
+  const model = {
+    bpm: 85,
+    beatConfidence: 0.95,
+    beats: Array.from(
+      { length: 60 },
+      (_, index) => native.beats[0] + 0.15 + index * sharedInterval
+    ),
+    downbeats: []
+  };
+  const merged = await refineBeatsWithModel(
+    native,
+    [{ samples: new Float32Array(10), sampleRate: 22050, offsetSeconds: 0 }],
+    stubDeps(model)
+  );
+
+  assert.ok(merged);
+  assert.equal(merged.beatConfidence, 0.95);
+  assert.ok(
+    merged.beatModelAgreement < 0.3,
+    `expected shared-level agreement, got ${merged.beatModelAgreement}`
+  );
+});
+
 test('a metrically ambiguous model reading is no opinion, not a demotion', async () => {
   // 3:2 against the native tempo: two defensible readings of one rhythm. This
   // exact case, read as disagreement, is what sank the aubio experiment.

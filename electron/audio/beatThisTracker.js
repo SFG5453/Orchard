@@ -362,16 +362,12 @@ export async function refineBeatsWithModel(rawResult, windows, {
 
   const metricalPhases = (grid, expectedInterval, count) => {
     const phases = Array.from({ length: count }, () => []);
-    let position = 0;
-    for (let index = 0; index < grid.length; index += 1) {
-      if (index > 0) {
-        const elapsedBeats = Math.max(
-          1,
-          Math.round((grid[index] - grid[index - 1]) / expectedInterval)
-        );
-        position += elapsedBeats;
-      }
-      phases[position % count].push(grid[index]);
+    const origin = grid[0] ?? 0;
+    for (const time of grid) {
+      // Deriving the position from time, rather than observed array index,
+      // keeps both missed and extra peaks from flipping every later phase.
+      const position = Math.max(0, Math.round((time - origin) / expectedInterval));
+      phases[position % count].push(time);
     }
     return phases;
   };
@@ -434,7 +430,8 @@ export async function refineBeatsWithModel(rawResult, windows, {
     const distances = phaseDistances.reduce((best, candidate) => (
       !best || median(candidate) < median(best) ? candidate : best
     ), null) || [];
-    const agreement = distances.length ? median(distances) / interval : 1;
+    const sharedInterval = octaves < 0 ? interval * fold : interval;
+    const agreement = distances.length ? median(distances) / sharedInterval : 1;
     agreements.push(agreement);
     modelConfidence = Math.max(modelConfidence, Number(found.beatConfidence) || 0);
     modelBpm = modelBpm || found.bpm;

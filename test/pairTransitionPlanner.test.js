@@ -213,6 +213,19 @@ test('falls back when tempo distance exceeds transparent stretching', () => {
   assert.ok(reasonCount(plan, 'tempo-distance') > 0);
 });
 
+test('keeps the captured 135-to-85.5 BPM stress pair on a bounded simple fallback', () => {
+  const plan = planPairTransition(cleanPair({
+    outgoing: { bpm: 135 },
+    incoming: { bpm: 85.5 }
+  }));
+
+  assert.equal(plan.transitionClass, 'simple_crossfade');
+  assert.equal(plan.renderMode, 'live');
+  assert.equal(plan.fallbackReason, 'tempo-distance');
+  assert.ok(plan.fallback.durationSeconds > 0);
+  assert.ok(plan.fallback.durationSeconds <= 8);
+});
+
 test('does not authorize beatmatching from a low-confidence grid', () => {
   const plan = planPairTransition(cleanPair({ outgoing: { beatConfidence: 0.3 } }));
 
