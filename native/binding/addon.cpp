@@ -77,6 +77,51 @@ Napi::Array MixCueArray(Napi::Env env, const std::vector<orchard::MixCuePoint>& 
   return output;
 }
 
+Napi::Array TransitionFeatureFrameArray(
+  Napi::Env env,
+  const std::vector<orchard::TransitionFeatureFrame>& frames
+) {
+  auto output = Napi::Array::New(env, frames.size());
+  for (size_t index = 0; index < frames.size(); ++index) {
+    const auto& frame = frames[index];
+    auto value = Napi::Object::New(env);
+    value.Set("time", Compact(frame.time));
+    value.Set("energy", Compact(frame.energy));
+    value.Set("low", Compact(frame.low));
+    value.Set("mid", Compact(frame.mid));
+    value.Set("high", Compact(frame.high));
+    value.Set("vocal", Compact(frame.vocal));
+    value.Set("novelty", Compact(frame.novelty));
+    value.Set("transientDensity", Compact(frame.transient_density));
+    value.Set("stability", Compact(frame.stability));
+    output.Set(index, value);
+  }
+  return output;
+}
+
+Napi::Array StructuralBoundaryArray(
+  Napi::Env env,
+  const std::vector<orchard::StructuralBoundaryCandidate>& boundaries
+) {
+  auto output = Napi::Array::New(env, boundaries.size());
+  for (size_t index = 0; index < boundaries.size(); ++index) {
+    const auto& boundary = boundaries[index];
+    auto value = Napi::Object::New(env);
+    value.Set("time", Compact(boundary.time));
+    value.Set("confidence", Compact(boundary.confidence));
+    value.Set("source", boundary.source);
+    value.Set("noveltyPeak", Compact(boundary.novelty_peak));
+    value.Set("energyDelta", Compact(boundary.energy_delta));
+    value.Set("lowDelta", Compact(boundary.low_delta));
+    value.Set("vocalDelta", Compact(boundary.vocal_delta));
+    value.Set("stabilityBefore", Compact(boundary.stability_before));
+    value.Set("stabilityAfter", Compact(boundary.stability_after));
+    value.Set("downbeatDistance", Compact(boundary.downbeat_distance));
+    output.Set(index, value);
+  }
+  return output;
+}
+
 // Called only from OnOK: every Napi value must be created on the environment
 // thread, never from Execute(). The returned JS object copies all native data.
 Napi::Object ToObject(Napi::Env env, const orchard::AnalysisResult& result) {
@@ -115,6 +160,19 @@ Napi::Object ToObject(Napi::Env env, const orchard::AnalysisResult& result) {
   output.Set("vocalActivityMask", NumberArray(env, result.vocal_activity_mask));
   output.Set("mixInCandidates", MixCueArray(env, result.mix_in_candidates));
   output.Set("mixOutCandidates", MixCueArray(env, result.mix_out_candidates));
+  auto meter = Napi::Object::New(env);
+  meter.Set("beatsPerBar", result.meter.beats_per_bar);
+  meter.Set("confidence", Compact(result.meter.confidence));
+  meter.Set("source", result.meter.source);
+  output.Set("meter", meter);
+  output.Set(
+    "transitionFeatureFrames",
+    TransitionFeatureFrameArray(env, result.transition_feature_frames)
+  );
+  output.Set(
+    "structuralBoundaryCandidates",
+    StructuralBoundaryArray(env, result.structural_boundary_candidates)
+  );
 
   auto phrases = Napi::Array::New(env, result.phrases.size());
   for (size_t index = 0; index < result.phrases.size(); ++index) {

@@ -68,6 +68,41 @@ struct MixCuePoint {
   std::string type;
 };
 
+// Meter is currently a prior, not a detection. Keeping source/confidence in
+// the wire shape prevents a 4/4 assumption from becoming structural truth.
+struct MeterEvidence {
+  int beats_per_bar = 4;
+  double confidence = 0.15;
+  std::string source = "assumed-4-4";
+};
+
+// Compact, time-varying evidence for transition planning. These are measured
+// or derived signal properties; none claims a verse/chorus/drop label.
+struct TransitionFeatureFrame {
+  double time = 0;
+  double energy = 0;
+  double low = 0;
+  double mid = 0;
+  double high = 0;
+  double vocal = 0;
+  double novelty = 0;
+  double transient_density = 0;
+  double stability = 0;
+};
+
+struct StructuralBoundaryCandidate {
+  double time = 0;
+  double confidence = 0;
+  std::string source = "detected-change";
+  double novelty_peak = 0;
+  double energy_delta = 0;
+  double low_delta = 0;
+  double vocal_delta = 0;
+  double stability_before = 0;
+  double stability_after = 0;
+  double downbeat_distance = 0;
+};
+
 struct AnalysisResult {
   double duration = 0;
   double bpm = 0;
@@ -103,6 +138,9 @@ struct AnalysisResult {
   std::vector<MixCuePoint> mix_in_candidates;
   std::vector<MixCuePoint> mix_out_candidates;
   double vocal_probability = 0;
+  MeterEvidence meter;
+  std::vector<TransitionFeatureFrame> transition_feature_frames;
+  std::vector<StructuralBoundaryCandidate> structural_boundary_candidates;
 };
 
 /**

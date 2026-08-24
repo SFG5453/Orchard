@@ -80,6 +80,29 @@ test('native analyzer returns transition-ready musical features', async () => {
   assert.ok(result.mixOutCandidates.length > 0);
   assert.ok(result.vocalProbability >= 0 && result.vocalProbability <= 1);
   assert.ok(Math.abs(result.vocalProbability + result.instrumentalProbability - 1) < 0.001);
+  assert.deepEqual(result.meter, {
+    beatsPerBar: 4,
+    confidence: 0.15,
+    source: 'assumed-4-4'
+  });
+  assert.ok(result.transitionFeatureFrames.length > 20);
+  assert.ok(result.transitionFeatureFrames.length <= 240);
+  assert.ok(result.transitionFeatureFrames.every((frame) =>
+    Number.isFinite(frame.time) &&
+    Number.isFinite(frame.energy) &&
+    Number.isFinite(frame.novelty) &&
+    Number.isFinite(frame.stability)
+  ));
+  assert.ok(
+    result.structuralBoundaryCandidates.length >= 1,
+    'the synthetic section changes should produce measured boundary evidence'
+  );
+  assert.ok(result.structuralBoundaryCandidates.every((boundary) =>
+    boundary.source === 'detected-change' &&
+    !('type' in boundary) &&
+    Number.isFinite(boundary.noveltyPeak) &&
+    Number.isFinite(boundary.energyDelta)
+  ));
 });
 
 test('native analyzer recognizes a voice-like harmonic signal as vocal', async () => {

@@ -23,6 +23,7 @@
 import Meyda from 'meyda';
 import MusicTempo from 'music-tempo';
 import { AUDIO_ANALYSIS_VERSION } from '../../../shared/audioAnalysis.js';
+import { finalizeTrackAnalysis } from '../../../shared/trackAnalysis.js';
 
 // Krumhansl-Schmuckler pitch-class profiles; confidence is the top-two score gap.
 const KEY_NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
@@ -427,7 +428,7 @@ self.onmessage = (event) => {
       highEnergyCurve.push({ time, energy: 0.56 });
       vocalActivityMask.push(0.5);
     }
-    const result = {
+    const legacyResult = {
       analysisVersion: AUDIO_ANALYSIS_VERSION,
       duration,
       ...baseAnalysis,
@@ -439,7 +440,11 @@ self.onmessage = (event) => {
       highEnergyCurve,
       vocalActivityMask
     };
-    Object.assign(result, buildDjStructure(result, duration));
+    Object.assign(legacyResult, buildDjStructure(legacyResult, duration));
+    const result = finalizeTrackAnalysis({
+      ...legacyResult,
+      meter: { beatsPerBar: 4, confidence: 0.15, source: 'assumed-4-4' }
+    });
     self.postMessage({ id, result });
   } catch (error) {
     self.postMessage({ id, error: error?.message || 'Smart Crossfade analysis failed' });

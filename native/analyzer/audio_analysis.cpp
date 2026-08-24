@@ -576,6 +576,140 @@ void BuildStructure(const EnvelopeResult& envelope, AnalysisResult& result) {
   result.mix_out_candidates = std::move(mix_outs);
 }
 
+double LocalStability(
+  const std::vector<double>& energy,
+  const std::vector<double>& low,
+  const std::vector<double>& vocal,
+  size_t center
+) {
+  if (energy.empty()) return 0;
+  const size_t start = center > 2 ? center - 2 : 0;
+  const size_t end = std::min(energy.size(), center + 3);
+  const auto deviation = [start, end](const std::vector<double>& values, double scale) {
+    if (values.size() < end || end <= start) return 0.0;
+    const double mean = Average(values, start, end);
+    double total = 0;
+    for (size_t index = start; index < end; ++index) {
+      total += std::abs(values[index] - mean) / scale;
+    }
+    return total / (end - start);
+  };
+  const double variation =
+    deviation(energy, 1.5) * 0.55 +
+    deviation(low, 1.5) * 0.25 +
+    deviation(vocal, 1.0) * 0.20;
+  return 1.0 - Clamp(variation, 0, 1);
+}
+
+double AverageFrameStability(
+  const std::vector<TransitionFeatureFrame>& frames,
+  size_t start,
+  size_t end
+) {
+  start = std::min(start, frames.size());
+  end = std::min(std::max(start, end), frames.size());
+  if (end == start) return 0;
+  double sum = 0;
+  for (size_t index = start; index < end; ++index) sum += frames[index].stability;
+  return sum / (end - start);
+}
+
+// Builds observed change evidence on the compact whole-track grid. A local
+// maximum is a boundary candidate, not a semantic section; downstream code is
+// responsible for deciding whether it is useful as an outgoing or incoming cue.
+void BuildTransitionEvidence(AnalysisResult& result) {
+  const size_t count = result.energy_curve.size();
+  if (!count) return;
+
+  std::vector<double> energy(count, 0);
+  std::vector<double> low(count, 0);
+  std::vector<double> vocal(count, 0);
+  for (size_t index = 0; index < count; ++index) {
+    energy[index] = result.energy_curve[index].energy;
+    if (index < result.low_energy_curve.size()) low[index] = result.low_energy_curve[index].energy;
+    if (index < result.vocal_activity_mask.size()) vocal[index] = result.vocal_activity_mask[index];
+  }
+
+  result.transition_feature_frames.reserve(count);
+  for (size_t index = 0; index < count; ++index) {
+    const size_t previous = index > 0 ? index - 1 : index;
+    const size_t next = std::min(count - 1, index + 1);
+    const double energy_delta = std::abs(energy[next] - energy[previous]) / 1.5;
+    const double low_delta = std::abs(low[next] - low[previous]) / 1.5;
+    const double vocal_delta = std::abs(vocal[next] - vocal[previous]);
+    const double novelty = Clamp(
+      energy_delta * 0.55 + low_delta * 0.25 + vocal_delta * 0.20,
+      0,
+      1
+    );
+    const double transient = index > 0
+      ? Clamp((energy[index] - energy[index - 1]) / 1.5, 0, 1)
+      : 0;
+    result.transition_feature_frames.push_back({
+      result.energy_curve[index].time,
+      energy[index],
+      low[index],
+      index < result.mid_energy_curve.size() ? result.mid_energy_curve[index].energy : energy[index],
+      index < result.high_energy_curve.size() ? result.high_energy_curve[index].energy : energy[index],
+      vocal[index],
+      novelty,
+      transient,
+      LocalStability(energy, low, vocal, index)
+    });
+  }
+
+  constexpr double kMinimumNovelty = 0.14;
+  constexpr double kMinimumBoundarySpacing = 4.0;
+  constexpr size_t kMaximumBoundaries = 24;
+  for (size_t index = 1; index + 1 < result.transition_feature_frames.size(); ++index) {
+    const auto& previous = result.transition_feature_frames[index - 1];
+    const auto& frame = result.transition_feature_frames[index];
+    const auto& next = result.transition_feature_frames[index + 1];
+    if (frame.novelty < kMinimumNovelty ||
+        frame.novelty < previous.novelty ||
+        frame.novelty < next.novelty) {
+      continue;
+    }
+
+    const double nearest = NearestDownbeat(result.downbeats, frame.time, frame.time);
+    const double distance = std::abs(nearest - frame.time);
+    const double snap_tolerance = std::max(0.25, result.beat_interval);
+    const double time = distance <= snap_tolerance ? nearest : frame.time;
+    const size_t context = 4;
+    StructuralBoundaryCandidate candidate{
+      time,
+      Clamp(
+        frame.novelty * 0.65 +
+          result.beat_confidence * 0.20 +
+          std::max(
+            AverageFrameStability(result.transition_feature_frames, index > context ? index - context : 0, index),
+            AverageFrameStability(result.transition_feature_frames, index + 1, index + 1 + context)
+          ) * 0.15,
+        0,
+        1
+      ),
+      "detected-change",
+      frame.novelty,
+      std::abs(energy[std::min(count - 1, index + 1)] - energy[index - 1]) / 1.5,
+      std::abs(low[std::min(count - 1, index + 1)] - low[index - 1]) / 1.5,
+      std::abs(vocal[std::min(count - 1, index + 1)] - vocal[index - 1]),
+      AverageFrameStability(result.transition_feature_frames, index > context ? index - context : 0, index),
+      AverageFrameStability(result.transition_feature_frames, index + 1, index + 1 + context),
+      distance
+    };
+
+    if (!result.structural_boundary_candidates.empty() &&
+        time - result.structural_boundary_candidates.back().time < kMinimumBoundarySpacing) {
+      if (candidate.novelty_peak > result.structural_boundary_candidates.back().novelty_peak) {
+        result.structural_boundary_candidates.back() = candidate;
+      }
+      continue;
+    }
+    result.structural_boundary_candidates.push_back(std::move(candidate));
+    if (result.structural_boundary_candidates.size() >= kMaximumBoundaries) break;
+  }
+}
+
 }  // namespace
 
 // Orchestrates independent envelope, tempo, level, spectral, and structure
@@ -684,6 +818,7 @@ AnalysisResult AnalyzeAudio(
     );
   }
   BuildStructure(envelope, result);
+  BuildTransitionEvidence(result);
   return result;
 }
 
