@@ -176,6 +176,7 @@ export function transitionFromPairFallback(
     transitionBeats: 0,
     bassSwap: false,
     transitionStyle: fallback.transitionStyle,
+    choreography: fallback.choreography || pairPlan.choreography,
     policyReasons: pairPlan.diagnostics?.selected?.gates || [],
     fallbackReason: pairPlan.fallbackReason,
     fallback,

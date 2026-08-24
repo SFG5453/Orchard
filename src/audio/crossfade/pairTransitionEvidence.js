@@ -476,16 +476,28 @@ export function buildCandidatePairs(
 
   for (const outgoing of outgoingCandidates.slice(0, MAX_ROLE_CANDIDATES)) {
     for (const incoming of incomingCandidates.slice(0, MAX_ROLE_CANDIDATES)) {
-      const beatLengths = permitsLongTransition(outgoing, incoming, options)
-        ? [...ORDINARY_BEAT_LENGTHS, 32]
-        : ORDINARY_BEAT_LENGTHS;
-      for (const beats of beatLengths) {
+      const durationSpecs = fit.beatmatched
+        ? (permitsLongTransition(outgoing, incoming, options) ? [...ORDINARY_BEAT_LENGTHS, 32] : ORDINARY_BEAT_LENGTHS)
+            .map((beats) => ({ beats, durationSeconds: beats * 60 / targetBpm }))
+        : [
+            { beats: 0, durationSeconds: 2.0 },
+            { beats: 0, durationSeconds: 3.0 },
+            { beats: 0, durationSeconds: 4.0 },
+            ...(4 * 60 / targetBpm <= 4.0 ? [{ beats: 4, durationSeconds: 4 * 60 / targetBpm }] : [])
+          ];
+
+      for (const spec of durationSpecs) {
         combinations += 1;
-        const durationSeconds = beats * 60 / targetBpm;
+        const beats = spec.beats;
+        const durationSeconds = spec.durationSeconds;
         if (
           fit.beatmatched &&
           (beats < MIN_BEATMATCH_BEATS || durationSeconds < MIN_BEATMATCH_SECONDS - 1e-6)
         ) {
+          rejected.duration += 1;
+          continue;
+        }
+        if (!fit.beatmatched && durationSeconds > 4.0 + 1e-6) {
           rejected.duration += 1;
           continue;
         }
@@ -504,7 +516,7 @@ export function buildCandidatePairs(
           rejected.tempo += 1;
           continue;
         }
-        const id = `${outgoing.id}>${incoming.id}:${beats}`;
+        const id = `${outgoing.id}>${incoming.id}:${beats > 0 ? beats : durationSeconds.toFixed(1)}s`;
         pairs.push({
           id,
           outgoingCandidate: outgoing,

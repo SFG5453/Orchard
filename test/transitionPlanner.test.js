@@ -141,12 +141,14 @@ test('playback time only determines whether the fixed fallback should start', ()
 
 test('a missed cue moves the same fallback to the final usable boundary', () => {
   const early = planTransition(smartOptions({ currentTime: 0 }));
-  const late = planTransition(smartOptions({ currentTime: early.transitionEnd + 0.1 }));
+  const beforeLate = planTransition(smartOptions({ currentTime: early.transitionEnd + 0.1 }));
+  const late = planTransition(smartOptions({ currentTime: 119.5 }));
 
   assert.deepEqual(late.pairPlan, early.pairPlan);
   assert.ok(early.transitionEnd < 120);
   assert.equal(late.transitionEnd, 120);
   assert.equal(late.transitionStart, 120 - early.fadeSeconds);
+  assert.equal(beforeLate.reason, 'before-smart-pair-late-fallback-window');
   assert.equal(late.reason, 'smart-pair-late-fallback');
 });
 

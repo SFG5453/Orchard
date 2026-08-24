@@ -23,6 +23,13 @@ import {
   summarizeTrackWindow
 } from '../../../shared/trackAnalysis.js';
 import {
+  CHOREOGRAPHY_SCHEMA_VERSION,
+  CHOREOGRAPHY_STRATEGY,
+  CURVE_INTERPOLATION,
+  createAutomationPoint,
+  createTransitionChoreography
+} from './transitionChoreography.js';
+import {
   MAX_DETAILED_CANDIDATES,
   MAX_ROLE_CANDIDATES,
   buildCandidatePairs,
@@ -429,9 +436,18 @@ function compareEvaluations(left, right) {
 }
 
 function strategyFor(evaluation) {
-  if (evaluation.transitionClass === 'simple_crossfade') return 'equal_power_crossfade';
   if (evaluation.transitionClass === 'silence_trim') return 'boundary_handoff';
   if (evaluation.transitionClass === 'normal_boundary') return 'boundary_handoff';
+  if (evaluation.transitionClass === 'simple_crossfade') {
+    if (
+      (evaluation.collision.longestRunBeats ?? 0) >= 4 ||
+      (evaluation.collision.activeFraction ?? 0) >= 0.3 ||
+      (evaluation.collision.simultaneousMean ?? 0) > 0.25
+    ) {
+      return evaluation.pair.durationSeconds <= 0 ? 'boundary_handoff' : 'filtered_blend';
+    }
+    return 'filtered_blend';
+  }
   const outgoingLow = finite(evaluation.pair.outgoingCandidate.summary?.low);
   const incomingLow = finite(evaluation.pair.incomingCandidate.summary?.low);
   if (outgoingLow !== null && incomingLow !== null && outgoingLow >= 0.62 && incomingLow >= 0.62) {
@@ -451,6 +467,142 @@ function renderModeFor(transitionClass) {
   return 'boundary';
 }
 
+function buildChoreographyForPlan(pair, evaluation, strategy, native, outgoing, incoming) {
+  const duration = pair.durationSeconds;
+  const isCut = duration <= 1e-4;
+  const isStaged = native && duration >= 1.0;
+  const hasBassSwap = strategy === 'bass_swap' || (isStaged && pair.beats >= 8);
+  const isFiltered = strategy === 'filtered_blend' || isStaged;
+
+  let choreoStrategy = CHOREOGRAPHY_STRATEGY.CLEAN_CUT;
+  if (evaluation?.transitionClass === 'silence_trim') {
+    choreoStrategy = CHOREOGRAPHY_STRATEGY.SILENCE_TRIM;
+  } else if (isStaged) {
+    choreoStrategy = CHOREOGRAPHY_STRATEGY.STAGED_BLEND;
+  } else if (duration > 0) {
+    choreoStrategy = CHOREOGRAPHY_STRATEGY.FILTERED_HANDOFF;
+  }
+
+  // 1. Gain curves
+  let outgoingGain = [];
+  let incomingGain = [];
+  if (isCut) {
+    outgoingGain = [createAutomationPoint(0.0, 1.0), createAutomationPoint(1.0, 1.0)];
+    incomingGain = [createAutomationPoint(0.0, 1.0), createAutomationPoint(1.0, 1.0)];
+  } else if (isStaged) {
+    outgoingGain = [
+      createAutomationPoint(0.0, 1.0, CURVE_INTERPOLATION.SMOOTH_STEP),
+      createAutomationPoint(0.35, 0.95, CURVE_INTERPOLATION.SMOOTH_STEP),
+      createAutomationPoint(1.0, 0.0)
+    ];
+    incomingGain = [
+      createAutomationPoint(0.0, 0.0, CURVE_INTERPOLATION.SMOOTH_STEP),
+      createAutomationPoint(0.35, 0.38, CURVE_INTERPOLATION.SMOOTH_STEP),
+      createAutomationPoint(1.0, 1.0)
+    ];
+  } else {
+    outgoingGain = [
+      createAutomationPoint(0.0, 1.0, CURVE_INTERPOLATION.SMOOTH_STEP),
+      createAutomationPoint(1.0, 0.0)
+    ];
+    incomingGain = [
+      createAutomationPoint(0.0, 0.0, CURVE_INTERPOLATION.SMOOTH_STEP),
+      createAutomationPoint(1.0, 1.0)
+    ];
+  }
+
+  // 2. Low-pass curve
+  let outgoingLowPass = [];
+  const maxFreq = 20000;
+  const minFreq = isStaged ? 1200 : 700;
+  if (isCut) {
+    outgoingLowPass = [createAutomationPoint(0.0, maxFreq), createAutomationPoint(1.0, maxFreq)];
+  } else if (isFiltered) {
+    outgoingLowPass = [
+      createAutomationPoint(0.0, maxFreq, CURVE_INTERPOLATION.LOGARITHMIC),
+      createAutomationPoint(0.35, maxFreq, CURVE_INTERPOLATION.LOGARITHMIC),
+      createAutomationPoint(1.0, minFreq)
+    ];
+  } else {
+    outgoingLowPass = [createAutomationPoint(0.0, maxFreq), createAutomationPoint(1.0, maxFreq)];
+  }
+
+  // 3. Bass ownership curves
+  let outgoingBass = [];
+  let incomingBass = [];
+  let bassSwapPoint = null;
+
+  if (isCut) {
+    outgoingBass = [createAutomationPoint(0.0, 1.0), createAutomationPoint(1.0, 1.0)];
+    incomingBass = [createAutomationPoint(0.0, 1.0), createAutomationPoint(1.0, 1.0)];
+  } else if (hasBassSwap) {
+    bassSwapPoint = 0.55;
+    const rampHalf = Math.min(0.08, 0.35 / Math.max(1, duration));
+    const swapStart = Math.max(0.05, bassSwapPoint - rampHalf);
+    const swapEnd = Math.min(0.95, bassSwapPoint + rampHalf);
+    outgoingBass = [
+      createAutomationPoint(0.0, 1.0),
+      createAutomationPoint(swapStart, 1.0, CURVE_INTERPOLATION.EQUAL_POWER_IN),
+      createAutomationPoint(swapEnd, 0.0),
+      createAutomationPoint(1.0, 0.0)
+    ];
+    incomingBass = [
+      createAutomationPoint(0.0, 0.0),
+      createAutomationPoint(swapStart, 0.0, CURVE_INTERPOLATION.EQUAL_POWER_OUT),
+      createAutomationPoint(swapEnd, 1.0),
+      createAutomationPoint(1.0, 1.0)
+    ];
+  } else if (duration > 0) {
+    bassSwapPoint = 0.5;
+    const rampHalf = Math.min(0.08, 0.3 / Math.max(1, duration));
+    outgoingBass = [
+      createAutomationPoint(0.0, 1.0),
+      createAutomationPoint(0.5 - rampHalf, 1.0, CURVE_INTERPOLATION.EQUAL_POWER_IN),
+      createAutomationPoint(0.5 + rampHalf, 0.0),
+      createAutomationPoint(1.0, 0.0)
+    ];
+    incomingBass = [
+      createAutomationPoint(0.0, 0.0),
+      createAutomationPoint(0.5 - rampHalf, 0.0, CURVE_INTERPOLATION.EQUAL_POWER_OUT),
+      createAutomationPoint(0.5 + rampHalf, 1.0),
+      createAutomationPoint(1.0, 1.0)
+    ];
+  } else {
+    outgoingBass = [createAutomationPoint(0.0, 1.0), createAutomationPoint(1.0, 1.0)];
+    incomingBass = [createAutomationPoint(0.0, 1.0), createAutomationPoint(1.0, 1.0)];
+  }
+
+  const curves = {
+    outgoingGain,
+    incomingGain,
+    outgoingLowPass,
+    outgoingBass,
+    incomingBass
+  };
+
+  return createTransitionChoreography({
+    strategy: choreoStrategy,
+    outgoing: {
+      start: pair.outgoingStart,
+      end: pair.outgoingEnd,
+      tempoRatio: pair.outgoingRatio
+    },
+    incoming: {
+      cue: pair.incomingStart,
+      arrival: pair.incomingEnd,
+      resume: pair.incomingEnd,
+      tempoRatio: pair.incomingRatio
+    },
+    duration: pair.durationSeconds,
+    dominancePoint: isCut ? 0.5 : 0.55,
+    curves,
+    bassSwapPoint,
+    confidence: evaluation?.confidence ?? 0.5,
+    diagnostics: null,
+    fallback: null
+  });
+}
+
 function fallbackFor(outgoing, incoming, evaluation = null, reason = '') {
   const outgoingRange = outgoing.audibleRange || { start: 0, end: outgoing.duration || 0 };
   const incomingRange = incoming.audibleRange || { start: 0, end: incoming.duration || 0 };
@@ -465,6 +617,16 @@ function fallbackFor(outgoing, incoming, evaluation = null, reason = '') {
     const outgoingEnd = selectedClass === 'silence_trim'
       ? outgoingRange.end
       : ordinaryEnd;
+    const pair = {
+      outgoingStart: rounded(outgoingEnd),
+      outgoingEnd: rounded(outgoingEnd),
+      incomingStart: rounded(incomingRange.start),
+      incomingEnd: rounded(incomingRange.start),
+      durationSeconds: 0,
+      outgoingRatio: 1,
+      incomingRatio: 1
+    };
+    const choreo = buildChoreographyForPlan(pair, evaluation, 'boundary_handoff', false, outgoing, incoming);
     return {
       transitionClass: selectedClass,
       outgoingStart: rounded(outgoingEnd),
@@ -473,32 +635,63 @@ function fallbackFor(outgoing, incoming, evaluation = null, reason = '') {
       durationSeconds: 0,
       strategy: 'boundary_handoff',
       transitionStyle: selectedClass,
+      choreography: choreo,
       reason
     };
   }
 
   const outgoingEnd = evaluation?.pair.outgoingEnd ?? outgoingRange.end;
-  const incomingCue = evaluation?.pair.incomingStart ?? incomingRange.start;
   const availableOutgoing = Math.max(0, outgoingEnd - outgoingRange.start);
-  const availableIncoming = Math.max(0, incomingRange.end - incomingCue);
-  // A renderer refusal may execute this shape without another evidence pass,
-  // so it cannot overlap longer than the candidate interval that was scored.
-  const evaluatedDuration = evaluation?.pair.durationSeconds ?? 8;
-  const durationSeconds = rounded(Math.min(
-    8,
-    evaluatedDuration,
-    availableOutgoing,
-    availableIncoming
-  ));
-  const usable = durationSeconds >= 1;
+  const availableIncoming = evaluation
+    ? Math.max(0, (evaluation.pair.incomingEnd ?? incomingRange.start) - incomingRange.start)
+    : Math.max(0, incomingRange.end - incomingRange.start);
+
+  const native = ['full_beatmatched', 'conservative_beatmatched'].includes(selectedClass);
+  const evaluatedDuration = evaluation?.pair.durationSeconds ?? 4.0;
+  let durationSeconds = native
+    ? rounded(Math.min(4.0, Math.max(2.0, evaluatedDuration * 0.35)))
+    : rounded(Math.min(4.0, evaluatedDuration));
+
+  durationSeconds = rounded(Math.min(durationSeconds, availableOutgoing, availableIncoming));
+  const usable = durationSeconds >= 1.0;
+  if (!usable) durationSeconds = 0;
+
+  const incomingArrival = evaluation?.pair.incomingEnd ?? rounded(incomingRange.start + durationSeconds);
+  const outgoingStart = rounded(outgoingEnd - durationSeconds);
+  const incomingCue = rounded(incomingArrival - durationSeconds);
+  const filtered = selectedClass === 'conservative_beatmatched' ||
+    evaluation?.gates?.some((g) => ['vocal-collision', 'harmonic-clash', 'spectral-risk'].includes(g.code)) ||
+    (evaluation?.collision?.simultaneousMean ?? 0) > 0.25;
+  const strategy = usable ? (filtered ? 'filtered_blend' : 'equal_power_crossfade') : 'short_fade';
+  const transitionStyle = usable ? (filtered ? 'dj_filter' : 'equal_power') : 'normal';
+
+  const pair = {
+    outgoingStart,
+    outgoingEnd,
+    incomingStart: incomingCue,
+    incomingEnd: incomingArrival,
+    durationSeconds,
+    outgoingRatio: 1,
+    incomingRatio: 1
+  };
+  const choreo = buildChoreographyForPlan(
+    pair,
+    { ...evaluation, transitionClass: usable ? 'simple_crossfade' : 'normal_boundary' },
+    strategy,
+    false,
+    outgoing,
+    incoming
+  );
+
   return {
     transitionClass: usable ? 'simple_crossfade' : 'normal_boundary',
-    outgoingStart: rounded(Math.max(outgoingRange.start, outgoingEnd - durationSeconds)),
-    outgoingEnd: rounded(outgoingEnd),
-    incomingCue: rounded(incomingCue),
+    outgoingStart,
+    outgoingEnd,
+    incomingCue,
     durationSeconds,
-    strategy: usable ? 'equal_power_crossfade' : 'short_fade',
-    transitionStyle: usable ? 'equal_power' : 'normal',
+    strategy,
+    transitionStyle,
+    choreography: choreo,
     reason
   };
 }
@@ -560,6 +753,7 @@ function fallbackPlan(outgoing, incoming, generated, reason, confidence = 0) {
     confidence: rounded(confidence),
     fallbackReason: reason,
     fallback,
+    choreography: fallback.choreography,
     diagnostics: {
       generated,
       reasonCounts: { [reason]: 1 },
@@ -633,6 +827,12 @@ export function planPairTransition({
   const native = ['full_beatmatched', 'conservative_beatmatched'].includes(winner.transitionClass);
   const pair = winner.pair;
 
+  const mainChoreo = buildChoreographyForPlan(pair, winner, strategy, native, outgoing, incoming);
+  const completeChoreo = createTransitionChoreography({
+    ...mainChoreo,
+    fallback: fallback.choreography
+  });
+
   return {
     status: native ? 'planned' : 'fallback',
     transitionClass: winner.transitionClass,
@@ -665,6 +865,7 @@ export function planPairTransition({
     confidence: winner.confidence,
     fallbackReason,
     fallback,
+    choreography: completeChoreo,
     diagnostics: {
       generated,
       reasonCounts: reasonCounts(evaluations),

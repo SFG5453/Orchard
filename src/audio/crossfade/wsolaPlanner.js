@@ -123,6 +123,7 @@ export function planWsolaTransition({
     incomingDropTime: pairPlan.incoming.handoff,
     incomingResumeTime: pairPlan.incoming.resume,
     strategy: pairPlan.strategy,
+    choreography: pairPlan.choreography,
     outgoingSlice: sliceFor(
       pairPlan.outgoing.start,
       pairPlan.outgoing.end,
