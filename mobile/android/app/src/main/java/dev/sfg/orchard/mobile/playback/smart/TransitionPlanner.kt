@@ -133,6 +133,8 @@ data class TransitionPlan(
     val incomingBpm: Double = 0.0,
     /** Why the policy landed where it did, when it declined to be more ambitious. */
     val policyReasons: List<String> = emptyList(),
+    /** The complete portable choreography representation. */
+    val choreography: TransitionChoreography? = null,
 ) {
     /** Convenience for the engine, which schedules in milliseconds. */
     val fadeMs: Long get() = (fadeSeconds * 1000).roundToLong()
