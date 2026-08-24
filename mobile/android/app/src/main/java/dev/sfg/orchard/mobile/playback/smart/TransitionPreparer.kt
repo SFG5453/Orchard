@@ -151,7 +151,12 @@ class TransitionPreparer(
                 }
                 ready[key] = rendered
                 Log.d(TAG, "Prepared transition $key")
-            } catch (error: Exception) {
+            } catch (error: Throwable) {
+                // Throwable, not Exception: this decodes two stereo slices and runs a phase vocoder
+                // over them, so an OutOfMemoryError is the failure to expect, and it is an Error.
+                // Declined as well as logged, because retrying on the next tick would decode both
+                // tracks again into the heap that just ran out. The seam gets the plain fade.
+                declined.add(key)
                 Log.w(TAG, "Could not prepare $key", error)
             } finally {
                 running.remove(key)
@@ -268,13 +273,20 @@ class TransitionPreparer(
     private fun decodeAround(uri: Uri, anchor: Double, margin: Double): Pair<AudioDecoder.StereoPcm, Double>? {
         val from = max(0.0, anchor - margin)
         val source = cache.mediaDataSource(uri) ?: return null
-        val decoded = source.use { AudioDecoder.decodeRegionStereo(it, from, anchor + margin) } ?: return null
+        val decoded = source.use {
+            AudioDecoder.decodeRegionStereo(
+                it, from, anchor + margin, targetRate = TransitionRenderer.SAMPLE_RATE.toInt(),
+            )
+        } ?: return null
         val (pcm, actualStart) = decoded
-        val resampledLeft = MelSpectrogram.resample(pcm.left, pcm.sampleRate, TransitionRenderer.SAMPLE_RATE)
+        // Ordinarily already at the renderer's rate, and then this returns the decoder's own arrays
+        // rather than copies of them. The Opus decoder offers only its own rates, so that path
+        // still converts here, where both slices are live at once and a copy costs the most.
+        val left = MelSpectrogram.resample(pcm.left, pcm.sampleRate, TransitionRenderer.SAMPLE_RATE)
             ?: return null
-        val resampledRight = MelSpectrogram.resample(pcm.right, pcm.sampleRate, TransitionRenderer.SAMPLE_RATE)
+        val right = MelSpectrogram.resample(pcm.right, pcm.sampleRate, TransitionRenderer.SAMPLE_RATE)
             ?: return null
-        return AudioDecoder.StereoPcm(resampledLeft, resampledRight, TransitionRenderer.SAMPLE_RATE) to actualStart
+        return AudioDecoder.StereoPcm(left, right, TransitionRenderer.SAMPLE_RATE) to actualStart
     }
 
     /**

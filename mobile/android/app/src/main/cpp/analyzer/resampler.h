@@ -57,4 +57,49 @@ std::vector<float> Resample(
   double output_rate
 );
 
+/**
+ * Input samples spanning a whole number of output samples, or 0 when the rates
+ * admit no such period.
+ *
+ * Blocks measured in whole periods land on the same output grid the whole
+ * stream would have produced, which is what lets a caller resample a long
+ * stream a block at a time without the two drifting apart. Every rate this app
+ * decodes at is an integer, so a period always exists; 0 means the caller must
+ * resample in one call instead.
+ */
+size_t ResamplePeriod(double input_rate, double output_rate);
+
+/**
+ * Input samples of filter context `ResampleInterior` needs either side of a
+ * block, so that every output it returns is computed from a full window.
+ */
+size_t ResampleContext(double input_rate, double output_rate);
+
+/**
+ * Resamples one block of a longer stream and returns only the block's own
+ * output.
+ *
+ * `window` is `leading_context` samples of preceding audio, the block itself,
+ * then `trailing_context` samples of what follows. Given at least
+ * `ResampleContext` of each and a leading context that is a whole number of
+ * periods, the blocks concatenate into what resampling the whole stream would
+ * have produced: the same sample count, and the samples either side of a
+ * boundary identical to the bit. That is the property worth having, because a
+ * discontinuity at a boundary is an onset as far as the beat tracker is
+ * concerned. Interior samples can differ by one float ULP where the rate ratio
+ * is not a power of two, from `index / ratio` rounding against a block-local
+ * index rather than a stream-global one.
+ *
+ * A zero `trailing_context` means the block runs to the end of the stream, so
+ * everything from the block's first output onwards comes back. Returns empty
+ * when the rates admit no period or the contexts do not fit the window.
+ */
+std::vector<float> ResampleInterior(
+  const std::vector<float>& window,
+  double input_rate,
+  double output_rate,
+  size_t leading_context,
+  size_t trailing_context
+);
+
 }  // namespace orchard

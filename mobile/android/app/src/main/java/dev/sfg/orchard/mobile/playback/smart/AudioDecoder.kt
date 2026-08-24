@@ -35,6 +35,7 @@ import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
+import kotlin.math.max
 
 /**
  * Decodes a region of a cached track to mono float PCM at the beat model's rate.
@@ -82,7 +83,107 @@ object AudioDecoder {
         }
     }
 
-    /** Decoded mono PCM at the container's own sample rate; the caller resamples. */
+    /**
+     * Resamples a decoded stream as it arrives, so it is never held in full at the rate it was
+     * decoded at.
+     *
+     * Five minutes of 44.1 kHz mono is 53 MB of floats, and resampling that in one call needs the
+     * result live alongside it while the chunks it was assembled from are still reachable. Two
+     * model-grade analyses and a transition render overlap by design, so a 192 MB heap runs out --
+     * and the allocation that finally fails is some small one elsewhere, which is why this was slow
+     * to find. Feeding the resampler as the decoder produces buffers holds one block instead.
+     *
+     * Blocks are whole periods of the rate ratio and are padded with the filter's own context, so
+     * the result has the same length as resampling the whole stream at once and is bit-identical
+     * across every block boundary. That exactness is the point: a discontinuity at a boundary is an
+     * onset as far as the beat tracker is concerned, and a wrong beat grid is trusted by everything
+     * downstream.
+     */
+    private class StreamResampler private constructor(
+        private val inputRate: Double,
+        val outputRate: Double,
+        private val context: Int,
+        private val block: Int,
+        expectedOutput: Int,
+    ) {
+        private var staged = FloatArray(context + block + context)
+        private var stagedCount = 0
+
+        /** Samples at the front of [staged] that are context for the block behind them. */
+        private var leading = 0
+
+        private var output = FloatArray(max(expectedOutput, 4096))
+        private var produced = 0
+
+        /** Takes a count so a caller with a reusable buffer need not copy it out first. */
+        fun add(chunk: FloatArray, count: Int = chunk.size) {
+            if (count <= 0) return
+            if (stagedCount + count > staged.size) {
+                staged = staged.copyOf(max(staged.size * 2, stagedCount + count))
+            }
+            chunk.copyInto(staged, stagedCount, 0, count)
+            stagedCount += count
+
+            while (stagedCount >= leading + block + context) {
+                emit(leading + block + context, trailing = context)
+                // Everything but the trailing context is done with; that context is the next
+                // block's leading context, so it stays.
+                val consumed = leading + block - context
+                staged.copyInto(staged, 0, consumed, stagedCount)
+                stagedCount -= consumed
+                leading = context
+            }
+        }
+
+        fun finish(): FloatArray {
+            // No trailing context: what is left runs to the end of the stream, where clamping the
+            // filter window is the right answer rather than an artifact.
+            if (stagedCount > leading) emit(stagedCount, trailing = 0)
+            stagedCount = 0
+            return if (produced == output.size) output else output.copyOf(produced)
+        }
+
+        private fun emit(length: Int, trailing: Int) {
+            val chunk = MelSpectrogram.resampleInterior(
+                staged, 0, length, inputRate, outputRate, leading, trailing,
+            )
+            if (chunk.isEmpty()) return
+            if (produced + chunk.size > output.size) {
+                output = output.copyOf(max(output.size * 2, produced + chunk.size))
+            }
+            chunk.copyInto(output, produced)
+            produced += chunk.size
+        }
+
+        companion object {
+            /**
+             * A resampler for this pair of rates, or null when they admit no exact block period and
+             * the caller must resample the stream in one call instead. No rate this app decodes at
+             * is in that case: they are all whole numbers.
+             */
+            fun of(inputRate: Double, outputRate: Double, expectedSeconds: Double): StreamResampler? {
+                val period = MelSpectrogram.resamplePeriod(inputRate, outputRate)
+                val reach = MelSpectrogram.resampleContext(inputRate, outputRate)
+                if (period <= 0 || reach <= 0) return null
+
+                val context = roundUp(reach, period)
+                // Roughly a second of input per block, and never so few blocks that the context
+                // dominates: the shift after each block has to leave the next one's context behind.
+                val block = roundUp(max(inputRate.toInt(), context * 4), period)
+                // Sized from the region that was asked for so the ordinary decode never grows it.
+                // Clamped because a container's advertised duration is not always believable.
+                val expected = (expectedSeconds.coerceIn(0.0, MAX_PRESIZE_SECONDS) * outputRate).toInt()
+                return StreamResampler(inputRate, outputRate, context, block, expected)
+            }
+
+            private fun roundUp(value: Int, multiple: Int): Int =
+                (value + multiple - 1) / multiple * multiple
+
+            private const val MAX_PRESIZE_SECONDS = 1_200.0
+        }
+    }
+
+    /** Decoded mono PCM at [sampleRate], which is the rate asked for when one was. */
     data class Pcm(val samples: FloatArray, val sampleRate: Double) {
         val durationSeconds: Double get() = samples.size / sampleRate
 
@@ -99,6 +200,10 @@ object AudioDecoder {
      * The extractor seeks to the closest sync sample at or before the requested start, so a little
      * more audio than asked for may come back at the front; the caller is given the real start via
      * the returned offset so frame indices still map to true track times.
+     *
+     * [targetRate] is honoured by every codec, not only Opus: the audio is resampled as it is
+     * decoded, so a whole track is never held at the container's rate. Check the returned
+     * [Pcm.sampleRate] rather than assuming it, since the Opus decoder only offers its own rates.
      */
     fun decodeRegion(
         source: MediaDataSource,
@@ -129,7 +234,7 @@ object AudioDecoder {
 
             if (mime == "audio/opus") {
                 val rate = closestOpusRate(targetRate ?: inputRate.toInt())
-                decodeOpusMono(extractor, actualStart, endUs, rate, channels)?.let { return it }
+                decodeOpusMono(extractor, actualStart, endUs, rate, channels, targetRate)?.let { return it }
                 // Kopus could not do it. The platform decoder still can, but only from the
                 // top of the region: the extractor may have been advanced already.
                 extractor.seekTo((startSeconds * 1_000_000).toLong(), MediaExtractor.SEEK_TO_CLOSEST_SYNC)
@@ -143,6 +248,11 @@ object AudioDecoder {
 
             val latch = CountDownLatch(1)
             var fatalError: Throwable? = null
+            // Written from the codec's callback thread and read after the latch, which is what
+            // publishes it.
+            val downsampler = targetRate
+                ?.takeIf { abs(it - inputRate) > 1.0 }
+                ?.let { StreamResampler.of(inputRate, it.toDouble(), endSeconds - actualStart) }
             val collected = ArrayList<FloatArray>()
             var total = 0
             var outputEncoding = if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
@@ -177,7 +287,7 @@ object AudioDecoder {
                         val buffer = codec.getOutputBuffer(index)
                         if (buffer != null && info.size > 0) {
                             val chunk = downmix(buffer, info, outputEncoding, channels)
-                            collected += chunk
+                            if (downsampler != null) downsampler.add(chunk) else collected += chunk
                             total += chunk.size
                         }
                         codec.releaseOutputBuffer(index, false)
@@ -210,19 +320,21 @@ object AudioDecoder {
             fatalError?.let { throw it }
 
             if (total == 0) return null
-            val samples = FloatArray(total)
-            var offset = 0
-            for (chunk in collected) {
-                chunk.copyInto(samples, offset)
-                offset += chunk.size
+            val samples = downsampler?.finish() ?: FloatArray(total).also { merged ->
+                var offset = 0
+                for (chunk in collected) {
+                    chunk.copyInto(merged, offset)
+                    offset += chunk.size
+                }
             }
+            val rate = downsampler?.outputRate ?: inputRate
 
             Log.d(
                 TAG,
                 "decode ${System.currentTimeMillis() - decodeStarted}ms via ${codec.name} " +
-                    "(${samples.size} @ ${inputRate.toInt()}Hz, ${channels}ch)",
+                    "(${samples.size} @ ${rate.toInt()}Hz from ${inputRate.toInt()}Hz, ${channels}ch)",
             )
-            return Pcm(samples, inputRate) to actualStart
+            return Pcm(samples, rate) to actualStart
         } catch (error: Exception) {
             Log.w(TAG, "Decode of ${startSeconds}s..${endSeconds}s failed", error)
             return null
@@ -234,7 +346,7 @@ object AudioDecoder {
         }
     }
 
-    /** Decoded planar stereo PCM at the container's own rate, for the vocal model. */
+    /** Decoded planar stereo PCM at [sampleRate], which is the rate asked for when one was. */
     data class StereoPcm(val left: FloatArray, val right: FloatArray, val sampleRate: Double) {
         override fun equals(other: Any?): Boolean =
             this === other || (other is StereoPcm && sampleRate == other.sampleRate &&
@@ -252,6 +364,9 @@ object AudioDecoder {
      * paths would double the memory for data they immediately average away. A mono source is
      * duplicated across both channels, matching how the transition renderer treats every source as
      * having two.
+     *
+     * As in [decodeRegion], [targetRate] is applied during the decode rather than after it, and the
+     * rate actually delivered is on the returned [StereoPcm].
      */
     fun decodeRegionStereo(
         source: MediaDataSource,
@@ -282,7 +397,8 @@ object AudioDecoder {
 
             if (mime == "audio/opus") {
                 val rate = closestOpusRate(targetRate ?: inputRate.toInt())
-                decodeOpusStereo(extractor, actualStart, endUs, rate, channels)?.let { return it }
+                decodeOpusStereo(extractor, actualStart, endUs, rate, channels, targetRate)
+                    ?.let { return it }
                 extractor.seekTo((startSeconds * 1_000_000).toLong(), MediaExtractor.SEEK_TO_CLOSEST_SYNC)
             }
 
@@ -294,6 +410,9 @@ object AudioDecoder {
 
             val latch = CountDownLatch(1)
             var fatalError: Throwable? = null
+            val requested = targetRate?.takeIf { abs(it - inputRate) > 1.0 }?.toDouble()
+            val leftDown = requested?.let { StreamResampler.of(inputRate, it, endSeconds - actualStart) }
+            val rightDown = requested?.let { StreamResampler.of(inputRate, it, endSeconds - actualStart) }
             val leftChunks = ArrayList<FloatArray>()
             val rightChunks = ArrayList<FloatArray>()
             var total = 0
@@ -329,8 +448,13 @@ object AudioDecoder {
                         val buffer = codec.getOutputBuffer(index)
                         if (buffer != null && info.size > 0) {
                             val (left, right) = splitChannels(buffer, info, outputEncoding, channels)
-                            leftChunks += left
-                            rightChunks += right
+                            if (leftDown != null && rightDown != null) {
+                                leftDown.add(left)
+                                rightDown.add(right)
+                            } else {
+                                leftChunks += left
+                                rightChunks += right
+                            }
                             total += left.size
                         }
                         codec.releaseOutputBuffer(index, false)
@@ -363,21 +487,29 @@ object AudioDecoder {
             fatalError?.let { throw it }
 
             if (total == 0) return null
-            val left = FloatArray(total)
-            val right = FloatArray(total)
-            var offset = 0
-            for (index in leftChunks.indices) {
-                leftChunks[index].copyInto(left, offset)
-                rightChunks[index].copyInto(right, offset)
-                offset += leftChunks[index].size
+            val left: FloatArray
+            val right: FloatArray
+            if (leftDown != null && rightDown != null) {
+                left = leftDown.finish()
+                right = rightDown.finish()
+            } else {
+                left = FloatArray(total)
+                right = FloatArray(total)
+                var offset = 0
+                for (index in leftChunks.indices) {
+                    leftChunks[index].copyInto(left, offset)
+                    rightChunks[index].copyInto(right, offset)
+                    offset += leftChunks[index].size
+                }
             }
+            val rate = leftDown?.outputRate ?: inputRate
 
             Log.d(
                 TAG,
                 "stereo decode ${System.currentTimeMillis() - decodeStarted}ms via ${codec.name} " +
-                    "(${left.size} @ ${inputRate.toInt()}Hz, ${channels}ch)",
+                    "(${left.size} @ ${rate.toInt()}Hz from ${inputRate.toInt()}Hz, ${channels}ch)",
             )
-            return StereoPcm(left, right, inputRate) to actualStart
+            return StereoPcm(left, right, rate) to actualStart
         } catch (error: Exception) {
             Log.w(TAG, "Stereo decode of ${startSeconds}s..${endSeconds}s failed", error)
             return null
@@ -388,6 +520,19 @@ object AudioDecoder {
             runCatching { handlerThread?.quitSafely() }
         }
     }
+
+    /**
+     * A resampler from [decodedRate] to [outputRate] for a region running to [endUs], or null when
+     * the decoder already delivers the rate that was asked for.
+     */
+    private fun resamplerTo(
+        outputRate: Int?,
+        decodedRate: Int,
+        actualStart: Double,
+        endUs: Long,
+    ): StreamResampler? = outputRate
+        ?.takeIf { abs(it - decodedRate) > 1 }
+        ?.let { StreamResampler.of(decodedRate.toDouble(), it.toDouble(), endUs / 1_000_000.0 - actualStart) }
 
     /** Guards the one-time native load below. */
     private val opusLoadLock = Any()
@@ -429,14 +574,21 @@ object AudioDecoder {
         }
     }
 
+    /**
+     * [outputRate] is what the caller wants; [sampleRate] is the nearest rate Opus will decode at,
+     * which is rarely the same one. Converting here rather than afterwards keeps a whole track from
+     * being held at both rates at once.
+     */
     private fun decodeOpusMono(
         extractor: MediaExtractor,
         actualStart: Double,
         endUs: Long,
         sampleRate: Int,
         channels: Int,
+        outputRate: Int?,
     ): Pair<Pcm, Double>? {
         val decoder = openOpusDecoder(sampleRate, channels) ?: return null
+        val downsampler = resamplerTo(outputRate, sampleRate, actualStart, endUs)
         val collected = ArrayList<FloatArray>()
         var total = 0
         val inputBuffer = ByteBuffer.allocateDirect(16384)
@@ -462,7 +614,8 @@ object AudioDecoder {
                 val decodedSamples = decoder.decode(reusableData, 0, size, outPcm, 0, 5760, false)
                 if (decodedSamples > 0) {
                     if (bufferPos + decodedSamples > buffer.size) {
-                        collected += buffer.copyOf(bufferPos)
+                        if (downsampler != null) downsampler.add(buffer, bufferPos)
+                        else collected += buffer.copyOf(bufferPos)
                         bufferPos = 0
                     }
 
@@ -482,31 +635,44 @@ object AudioDecoder {
                 extractor.advance()
             }
 
-            if (bufferPos > 0) collected += buffer.copyOf(bufferPos)
+            if (bufferPos > 0) {
+                if (downsampler != null) downsampler.add(buffer, bufferPos)
+                else collected += buffer.copyOf(bufferPos)
+            }
             if (total == 0) return null
 
-            val samples = FloatArray(total)
-            var offset = 0
-            for (chunk in collected) {
-                chunk.copyInto(samples, offset)
-                offset += chunk.size
+            val samples = downsampler?.finish() ?: FloatArray(total).also { merged ->
+                var offset = 0
+                for (chunk in collected) {
+                    chunk.copyInto(merged, offset)
+                    offset += chunk.size
+                }
             }
+            val rate = downsampler?.outputRate ?: sampleRate.toDouble()
 
-            Log.d(TAG, "decode ${System.currentTimeMillis() - decodeStarted}ms via Kopus (mono, ${samples.size} samples)")
-            return Pcm(samples, sampleRate.toDouble()) to actualStart
+            Log.d(
+                TAG,
+                "decode ${System.currentTimeMillis() - decodeStarted}ms via Kopus " +
+                    "(mono, ${samples.size} @ ${rate.toInt()}Hz from ${sampleRate}Hz)",
+            )
+            return Pcm(samples, rate) to actualStart
         } finally {
             decoder.close()
         }
     }
 
+    /** As [decodeOpusMono]: [outputRate] is what was asked for, [sampleRate] what Opus can give. */
     private fun decodeOpusStereo(
         extractor: MediaExtractor,
         actualStart: Double,
         endUs: Long,
         sampleRate: Int,
         channels: Int,
+        outputRate: Int?,
     ): Pair<StereoPcm, Double>? {
         val decoder = openOpusDecoder(sampleRate, channels) ?: return null
+        val leftDown = resamplerTo(outputRate, sampleRate, actualStart, endUs)
+        val rightDown = resamplerTo(outputRate, sampleRate, actualStart, endUs)
         val leftChunks = ArrayList<FloatArray>()
         val rightChunks = ArrayList<FloatArray>()
         var total = 0
@@ -534,8 +700,13 @@ object AudioDecoder {
                 val decodedSamples = decoder.decode(reusableData, 0, size, outPcm, 0, 5760, false)
                 if (decodedSamples > 0) {
                     if (bufferPos + decodedSamples > leftBuf.size) {
-                        leftChunks += leftBuf.copyOf(bufferPos)
-                        rightChunks += rightBuf.copyOf(bufferPos)
+                        if (leftDown != null && rightDown != null) {
+                            leftDown.add(leftBuf, bufferPos)
+                            rightDown.add(rightBuf, bufferPos)
+                        } else {
+                            leftChunks += leftBuf.copyOf(bufferPos)
+                            rightChunks += rightBuf.copyOf(bufferPos)
+                        }
                         bufferPos = 0
                     }
 
@@ -555,22 +726,39 @@ object AudioDecoder {
             }
 
             if (bufferPos > 0) {
-                leftChunks += leftBuf.copyOf(bufferPos)
-                rightChunks += rightBuf.copyOf(bufferPos)
+                if (leftDown != null && rightDown != null) {
+                    leftDown.add(leftBuf, bufferPos)
+                    rightDown.add(rightBuf, bufferPos)
+                } else {
+                    leftChunks += leftBuf.copyOf(bufferPos)
+                    rightChunks += rightBuf.copyOf(bufferPos)
+                }
             }
             if (total == 0) return null
 
-            val left = FloatArray(total)
-            val right = FloatArray(total)
-            var offset = 0
-            for (i in leftChunks.indices) {
-                leftChunks[i].copyInto(left, offset)
-                rightChunks[i].copyInto(right, offset)
-                offset += leftChunks[i].size
+            val left: FloatArray
+            val right: FloatArray
+            if (leftDown != null && rightDown != null) {
+                left = leftDown.finish()
+                right = rightDown.finish()
+            } else {
+                left = FloatArray(total)
+                right = FloatArray(total)
+                var offset = 0
+                for (i in leftChunks.indices) {
+                    leftChunks[i].copyInto(left, offset)
+                    rightChunks[i].copyInto(right, offset)
+                    offset += leftChunks[i].size
+                }
             }
+            val rate = leftDown?.outputRate ?: sampleRate.toDouble()
 
-            Log.d(TAG, "decode ${System.currentTimeMillis() - decodeStarted}ms via Kopus (stereo, ${left.size} samples)")
-            return StereoPcm(left, right, sampleRate.toDouble()) to actualStart
+            Log.d(
+                TAG,
+                "decode ${System.currentTimeMillis() - decodeStarted}ms via Kopus " +
+                    "(stereo, ${left.size} @ ${rate.toInt()}Hz from ${sampleRate}Hz)",
+            )
+            return StereoPcm(left, right, rate) to actualStart
         } finally {
             decoder.close()
         }

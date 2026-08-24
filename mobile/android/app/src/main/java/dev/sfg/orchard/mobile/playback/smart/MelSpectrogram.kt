@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.playback.smart
 
+import kotlin.math.abs
+
 /**
  * The log-mel front end the Beat This! model expects, backed by the native analyzer.
  *
@@ -91,14 +93,69 @@ object MelSpectrogram {
      */
     fun resample(samples: FloatArray, inputRate: Double, outputRate: Double = sampleRate): FloatArray? {
         if (!available || samples.isEmpty() || inputRate <= 0 || outputRate <= 0) return null
+        // Matching rates are the ordinary case wherever a decode already targeted the rate that is
+        // wanted, and the native call would copy a whole track in and back out to return it
+        // unchanged. That copy is megabytes on the analysis path and buys nothing.
+        if (abs(inputRate - outputRate) < 1e-6) return samples
         return nativeResample(samples, inputRate, outputRate).takeIf { it.isNotEmpty() }
     }
+
+    /**
+     * Input samples spanning a whole number of output samples, or 0 when the rates admit no such
+     * period and the stream must be resampled in one call.
+     *
+     * Blocks measured in whole periods land on the same output grid the whole stream would have
+     * produced, which is what makes [resampleInterior] exact rather than approximate.
+     */
+    fun resamplePeriod(inputRate: Double, outputRate: Double): Int =
+        if (available) nativeResamplePeriod(inputRate, outputRate) else 0
+
+    /** Input samples of filter context [resampleInterior] needs either side of a block. */
+    fun resampleContext(inputRate: Double, outputRate: Double): Int =
+        if (available) nativeResampleContext(inputRate, outputRate) else 0
+
+    /**
+     * Resamples one block of a longer stream, returning only that block's own output.
+     *
+     * The window is [leadingContext] samples of preceding audio, then the block, then
+     * [trailingContext] samples of what follows; a zero trailing context means the block runs to
+     * the end of the stream. Given at least [resampleContext] of each, the concatenated results
+     * carry the same sample count as resampling the whole stream at once, and are identical to the
+     * bit across every block boundary, so none is left for the beat tracker to read as an onset.
+     */
+    fun resampleInterior(
+        samples: FloatArray,
+        offset: Int,
+        length: Int,
+        inputRate: Double,
+        outputRate: Double,
+        leadingContext: Int,
+        trailingContext: Int,
+    ): FloatArray =
+        if (available) {
+            nativeResampleInterior(
+                samples, offset, length, inputRate, outputRate, leadingContext, trailingContext,
+            )
+        } else {
+            FloatArray(0)
+        }
 
     @JvmStatic private external fun nativeCompute(samples: FloatArray, sampleRate: Double): FloatArray
     @JvmStatic private external fun nativeResample(
         samples: FloatArray,
         inputRate: Double,
         outputRate: Double,
+    ): FloatArray
+    @JvmStatic private external fun nativeResamplePeriod(inputRate: Double, outputRate: Double): Int
+    @JvmStatic private external fun nativeResampleContext(inputRate: Double, outputRate: Double): Int
+    @JvmStatic private external fun nativeResampleInterior(
+        samples: FloatArray,
+        offset: Int,
+        length: Int,
+        inputRate: Double,
+        outputRate: Double,
+        leadingContext: Int,
+        trailingContext: Int,
     ): FloatArray
     @JvmStatic private external fun nativeMelCount(): Int
     @JvmStatic private external fun nativeSampleRate(): Double

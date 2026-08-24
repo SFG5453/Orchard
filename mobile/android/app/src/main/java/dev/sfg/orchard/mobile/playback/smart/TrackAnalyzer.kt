@@ -283,25 +283,18 @@ class TrackAnalyzer(
         if (openSource() == null) return empty(track, durationSeconds)
 
         // Pass 1: Whole track mono at low rate for structural features (energy, phrases, etc.)
-        val structRate = TrackFeatures.sampleRate.toInt()
-        val structDecoded = openSource()?.use { AudioDecoder.decodeRegion(it, 0.0, durationSeconds, targetRate = structRate) }
-            ?: return empty(track, durationSeconds)
-        val (structPcm, _) = structDecoded
-        val structSamples = if (abs(structPcm.sampleRate - TrackFeatures.sampleRate) > 1.0) {
-            MelSpectrogram.resample(structPcm.samples, structPcm.sampleRate, TrackFeatures.sampleRate)
-                ?: return empty(track, durationSeconds)
-        } else structPcm.samples
-        val features = TrackFeatures.analyze(structSamples, durationSeconds)
+        val structural = structural(::openSource, durationSeconds) ?: return empty(track, durationSeconds)
+        val features = structural.features
 
         // Pass 2: High-resolution stereo regions for the models (head and tail only).
         // This avoids decoding minutes of audio at 48kHz that the models never see.
         val window = BeatTracker.WINDOW_SECONDS
         val tailStart = max(0.0, durationSeconds - window)
 
-        // 30s of 48kHz stereo is ~11MB, and the mono mix, the resampled copy and the mel buffer
-        // are all live at once on top of it. Each region is therefore decoded, reduced to the few
-        // numbers that outlive it, and dropped before the next one is opened, so a track's peak is
-        // one region rather than two. [modelPass] then keeps whole tracks from overlapping.
+        // 30s of stereo is ~10MB, and the mono mix, the resampled copy and the mel buffer are all
+        // live at once on top of it. Each region is therefore decoded, reduced to the few numbers
+        // that outlive it, and dropped before the next one is opened, so a track's peak is one
+        // region rather than two. [modelPass] then keeps whole tracks from overlapping.
         val head: Region?
         val tail: Region?
         modelPass.acquire()
@@ -495,6 +488,39 @@ class TrackAnalyzer(
     )
 
     /**
+     * What the structural pass contributes, once its audio has been let go of. Null [features]
+     * means the analyzer declined the track; a null [Structural] means it could not be decoded at
+     * all, which is worth abandoning the whole analysis for rather than paying for two more
+     * decodes of a container nothing can read.
+     */
+    private class Structural(val features: TrackFeatures.Features?)
+
+    /**
+     * Decodes the whole track at the structural analyzer's own low rate and returns only what it
+     * measured.
+     *
+     * A function rather than a block in [analyze] for the same reason as [region], and more
+     * urgently: this is the largest buffer the app ever allocates, and the model passes below want
+     * tens of megabytes of their own on top of it. Held as a local of [analyze] it stayed reachable
+     * until the whole analysis finished, so the two costs were paid at once.
+     */
+    private fun structural(
+        openSource: () -> MediaDataSource?,
+        durationSeconds: Double,
+    ): Structural? {
+        val decoded = openSource()?.use {
+            AudioDecoder.decodeRegion(it, 0.0, durationSeconds, targetRate = TrackFeatures.sampleRate.toInt())
+        } ?: return null
+        val (pcm, _) = decoded
+        // Ordinarily a no-op now that the decoder resamples as it goes; the Opus decoder offers
+        // only its own rates, so that path still arrives needing conversion.
+        val samples = if (abs(pcm.sampleRate - TrackFeatures.sampleRate) > 1.0) {
+            MelSpectrogram.resample(pcm.samples, pcm.sampleRate, TrackFeatures.sampleRate) ?: return null
+        } else pcm.samples
+        return Structural(TrackFeatures.analyze(samples, durationSeconds))
+    }
+
+    /**
      * Decodes one high-rate stereo region, runs both models over it, and returns only the results.
      *
      * The point of the function boundary is the audio: the stereo buffer, its mono mix and the
@@ -509,8 +535,13 @@ class TrackAnalyzer(
         features: TrackFeatures.Features?,
         durationSeconds: Double,
     ): Region? {
+        // Decoded at the vocal model's rate rather than the container's. It is the higher of the
+        // two rates this region feeds, so nothing is lost, and it saves resampling a stereo region
+        // for that model and holding both copies while the beat model's own copy is made.
         val decoded = openSource()?.use {
-            AudioDecoder.decodeRegionStereo(it, startSeconds, endSeconds, targetRate = 48000)
+            AudioDecoder.decodeRegionStereo(
+                it, startSeconds, endSeconds, targetRate = VocalSpectrogram.sampleRate.toInt(),
+            )
         } ?: return null
         val (stereo, actualStart) = decoded
         val mono = AudioDecoder.Pcm(
