@@ -198,6 +198,8 @@ object OfflineDetailSynthesizer {
                         Triple(CatalogKind.PLAYLIST, seed.playlist.author, seed.playlist.author)
                     is CatalogItem.Song ->
                         Triple(CatalogKind.PLAYLIST, seed.track.artist, seed.track.artist)
+                    is CatalogItem.Category ->
+                        Triple(CatalogKind.PLAYLIST, "", "")
                 }
 
             return BrowseDetail(

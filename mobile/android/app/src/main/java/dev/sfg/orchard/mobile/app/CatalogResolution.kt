@@ -60,6 +60,7 @@ internal fun BrowseDetail.withSeed(seed: CatalogItem?): BrowseDetail {
         is CatalogItem.Performer -> seed.artist.subtitle
         is CatalogItem.Collection -> seed.playlist.author
         is CatalogItem.Song -> seed.track.artist
+        is CatalogItem.Category -> ""
     }
     val cleanSeedArtist = if (seedSubtitle.equals("Playlist", ignoreCase = true) ||
         seedSubtitle.equals("Unlisted", ignoreCase = true) ||

@@ -148,9 +148,12 @@ object CatalogParser {
             ?: JsonTraversal.renderers(root, "musicImmersiveHeaderRenderer").firstOrNull()
             ?: JsonTraversal.renderers(root, "musicVisualHeaderRenderer").firstOrNull()
             ?: JsonTraversal.renderers(root, "musicEditablePlaylistDetailHeaderRenderer").firstOrNull()
+            ?: JsonTraversal.renderers(root, "musicHeaderRenderer").firstOrNull()
+            ?: root.optJSONObject("header")?.optJSONObject("musicHeaderRenderer")
         val header = rawHeader?.optJSONObject("musicEditablePlaylistDetailHeaderRenderer")?.optJSONObject("header")
             ?.optJSONObject("musicResponsiveHeaderRenderer")
             ?: rawHeader?.optJSONObject("header")?.optJSONObject("musicResponsiveHeaderRenderer")
+            ?: rawHeader?.optJSONObject("header")?.optJSONObject("musicHeaderRenderer")
             ?: rawHeader?.optJSONObject("header")
             ?: rawHeader
         val metadata = JsonTraversal.renderers(root, "musicMetadataRenderer").firstOrNull()
@@ -195,23 +198,33 @@ object CatalogParser {
             .map { it.track }
             .collapseDuplicates(kind)
 
-        val carouselShelves = JsonTraversal.renderers(root, "musicCarouselShelfRenderer")
-        val sections = carouselShelves.mapIndexedNotNull { index, shelf ->
-            val rawHeader = shelf.optJSONObject("header")
-            val headerNode = rawHeader?.optJSONObject("musicCarouselShelfBasicHeaderRenderer") ?: rawHeader
-            val sectionTitle = JsonTraversal.text(headerNode)
-                .ifBlank { JsonTraversal.renderers(rawHeader, "title").firstOrNull()?.let(JsonTraversal::text).orEmpty() }
+        val shelves = homeShelves(root)
+        val sections = shelves.mapIndexedNotNull { index, shelf ->
+            if (shelf == trackShelf && tracks.isNotEmpty()) return@mapIndexedNotNull null
+            val rawShelfHeader = shelf.optJSONObject("header")
+            val headerNode = rawShelfHeader?.optJSONObject("musicCarouselShelfBasicHeaderRenderer")
+                ?: rawShelfHeader?.optJSONObject("gridHeaderRenderer")
+                ?: rawShelfHeader?.optJSONObject("musicShelfHeaderRenderer")
+                ?: rawShelfHeader
+            val sectionTitle = JsonTraversal.text(shelf.optJSONObject("title"))
+                .ifBlank { JsonTraversal.text(headerNode?.optJSONObject("title")) }
+                .ifBlank { JsonTraversal.text(headerNode) }
+                .ifBlank { JsonTraversal.renderers(rawShelfHeader, "title").firstOrNull()?.let(JsonTraversal::text).orEmpty() }
                 .ifBlank { "More" }
 
             val moreButton = headerNode?.optJSONObject("moreContentButton")?.optJSONObject("buttonRenderer")
                 ?: headerNode?.optJSONObject("moreContentButton")?.optJSONObject("button")
                 ?: shelf.optJSONObject("moreContentButton")?.optJSONObject("buttonRenderer")
+                ?: shelf.optJSONObject("bottomEndpoint")
             val endpointNode = moreButton?.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")
                 ?: moreButton?.optJSONObject("endpoint")?.optJSONObject("payload")
-            val sectionBrowseId = endpointNode?.optString("browseId").orEmpty()
-            val sectionParams = endpointNode?.optString("params").orEmpty()
+                ?: moreButton?.optJSONObject("browseEndpoint")
+            val titleEndpoint = headerNode?.optJSONObject("title")?.optJSONArray("runs")?.optJSONObject(0)?.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")
+                ?: shelf.optJSONObject("title")?.optJSONArray("runs")?.optJSONObject(0)?.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")
+            val sectionBrowseId = endpointNode?.optString("browseId").orEmpty().ifBlank { titleEndpoint?.optString("browseId").orEmpty() }
+            val sectionParams = endpointNode?.optString("params").orEmpty().ifBlank { titleEndpoint?.optString("params").orEmpty() }
 
-            val contents = shelf.optJSONArray("contents") ?: JSONArray()
+            val contents = shelf.optJSONArray("contents") ?: shelf.optJSONArray("items") ?: JSONArray()
             val items = allItems(contents, albumArtistName).distinctBy(CatalogItem::stableId)
             if (items.isEmpty()) null else CatalogSection(
                 id = "detail-section-$index-$sectionTitle",
@@ -310,6 +323,29 @@ object CatalogParser {
         }
         JsonTraversal.renderers(root, "musicResponsiveListItemRenderer").mapNotNullTo(this) { responsive(it, fallbackArtist) }
         JsonTraversal.renderers(root, "musicTwoRowItemRenderer").mapNotNullTo(this) { twoRow(it) }
+        JsonTraversal.renderers(root, "musicNavigationButtonRenderer").mapNotNullTo(this) { navigationButton(it) }
+    }
+
+    private fun navigationButton(renderer: JSONObject): CatalogItem.Category? {
+        val title = JsonTraversal.text(renderer.optJSONObject("buttonText"))
+            .ifBlank { JsonTraversal.text(renderer.optJSONObject("title")) }
+        if (title.isBlank()) return null
+        val clickCommand = renderer.optJSONObject("clickCommand")
+            ?: renderer.optJSONObject("navigationEndpoint")
+            ?: renderer.optJSONObject("endpoint")
+        val endpoint = clickCommand?.optJSONObject("browseEndpoint")
+            ?: clickCommand?.optJSONObject("payload")
+            ?: clickCommand
+        val browseId = endpoint?.optString("browseId").orEmpty()
+        val params = endpoint?.optString("params").orEmpty()
+        val color = renderer.optJSONObject("solid")?.optLong("leftStripeColor")
+            ?: renderer.optLong("color").takeIf { it != 0L }
+        return CatalogItem.Category(
+            id = browseId.ifBlank { "FEmusic_moods_and_genres_category" },
+            title = title,
+            stripeColor = if (color != 0L && color != null) color else null,
+            params = params,
+        )
     }
 
     private fun cardShelf(shelf: JSONObject): CatalogItem? {

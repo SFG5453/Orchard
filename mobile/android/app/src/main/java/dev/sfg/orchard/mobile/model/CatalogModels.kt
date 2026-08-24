@@ -109,6 +109,7 @@ sealed interface CatalogItem {
             is Record -> album.explicit || album.tracks.any { it.explicit }
             is Collection -> playlist.explicit || playlist.tracks.any { it.explicit }
             is Performer -> false
+            is Category -> false
         }
 
     data class Song(val track: Track) : CatalogItem {
@@ -133,6 +134,16 @@ sealed interface CatalogItem {
         override val stableId = playlist.id
         override val title = playlist.title
         override val artworkUrl = playlist.artworkUrl
+    }
+
+    data class Category(
+        val id: String,
+        override val title: String,
+        val stripeColor: Long? = null,
+        val params: String = "",
+    ) : CatalogItem {
+        override val stableId: String = if (params.isNotBlank()) "$id:$params" else id
+        override val artworkUrl: String = ""
     }
 }
 

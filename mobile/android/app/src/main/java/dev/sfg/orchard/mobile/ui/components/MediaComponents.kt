@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -122,6 +123,10 @@ fun OrchardSectionHeader(
 /** Expressive rail card with soft rounded artwork (14dp or circular for artists) and clear typography. */
 @Composable
 fun CatalogCard(item: CatalogItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    if (item is CatalogItem.Category) {
+        CategoryCard(item = item, onClick = onClick, modifier = modifier)
+        return
+    }
     val isArtist = item is CatalogItem.Performer
     val cornerRadius = if (isArtist) 999.dp else 14.dp
     val artworkRadius = if (isArtist) 999 else 14
@@ -168,6 +173,50 @@ fun CatalogCard(item: CatalogItem, onClick: () -> Unit, modifier: Modifier = Mod
             textAlign = if (isArtist) TextAlign.Center else TextAlign.Start,
             modifier = Modifier.fillMaxWidth(),
         )
+    }
+}
+
+/** Expressive category / genre / mood card with left colored accent stripe. */
+@Composable
+fun CategoryCard(
+    item: CatalogItem.Category,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(12.dp)
+    val stripeColor = item.stripeColor?.let { Color(it.toInt()) } ?: LocalAccent.current
+
+    Surface(
+        modifier = modifier
+            .height(52.dp)
+            .glassPane(shape, GlassTone.CONTROL)
+            .clip(shape)
+            .clickable(onClick = onClick),
+        color = glassFill(CanopyColors.Surface),
+        shape = shape,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(6.dp)
+                    .fillMaxHeight()
+                    .background(stripeColor),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = CanopyColors.Text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 
@@ -533,6 +582,7 @@ private fun catalogSubtitle(item: CatalogItem): String = when (item) {
     is CatalogItem.Record -> albumSubtitle(item.album)
     is CatalogItem.Performer -> item.artist.subtitle.ifBlank { "Artist" }
     is CatalogItem.Collection -> item.playlist.author
+    is CatalogItem.Category -> ""
 }
 
 /**
@@ -559,4 +609,5 @@ private fun catalogKind(item: CatalogItem): String = when (item) {
     is CatalogItem.Record -> "Album"
     is CatalogItem.Performer -> "Artist"
     is CatalogItem.Collection -> "Playlist"
+    is CatalogItem.Category -> "Category"
 }

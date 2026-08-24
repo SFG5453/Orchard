@@ -29,18 +29,24 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Flare
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SentimentSatisfied
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,9 +57,12 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.model.LoadState
@@ -61,15 +70,17 @@ import dev.sfg.orchard.mobile.model.SearchResults
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.CatalogCard
 import dev.sfg.orchard.mobile.ui.components.MessagePanel
+import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
 import dev.sfg.orchard.mobile.ui.components.OrchardSectionHeader
 import dev.sfg.orchard.mobile.ui.components.TrackRow
 import dev.sfg.orchard.mobile.ui.components.TrackRowShimmer
-import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
 import dev.sfg.orchard.mobile.ui.glass.GlassTone
 import dev.sfg.orchard.mobile.ui.glass.glassFill
 import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
+
+private val ChipIconGreen = Color(0xFF4ADE80)
 
 @Composable
 fun SearchScreen(
@@ -79,6 +90,7 @@ fun SearchScreen(
     onQueryChange: (String) -> Unit,
     onSubmit: (String) -> Unit,
     onClearHistory: () -> Unit,
+    onRemoveHistoryItem: (String) -> Unit = {},
     downloadedTrackIds: Set<String> = emptySet(),
     downloadingTrackIds: Set<String> = emptySet(),
     onPlay: (Track) -> Unit,
@@ -90,17 +102,25 @@ fun SearchScreen(
     onOpenDetail: (String) -> Unit,
     onShare: ((Track) -> Unit)? = null,
 ) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = OrchardChromeHeight)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = OrchardChromeHeight + 16.dp)) {
         item {
             Column(Modifier.padding(horizontal = 16.dp).padding(top = 16.dp)) {
-                Text("Search", style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold))
+                Text("Search", style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold), color = CanopyColors.Text)
                 Spacer(Modifier.height(14.dp))
                 SearchField(query, onQueryChange, onSubmit)
+                Spacer(Modifier.height(14.dp))
+                SearchCategoryChips(onOpenDetail = onOpenDetail)
                 Spacer(Modifier.height(18.dp))
             }
         }
         when (state) {
-            LoadState.Idle -> history(history, onClearHistory, onSubmit)
+            LoadState.Idle -> history(
+                history = history,
+                onClear = onClearHistory,
+                onRemoveItem = onRemoveHistoryItem,
+                onQueryChange = onQueryChange,
+                onSearch = onSubmit,
+            )
             LoadState.Loading -> item {
                 Column {
                     repeat(5) { TrackRowShimmer() }
@@ -127,18 +147,23 @@ fun SearchScreen(
 
 @Composable
 private fun SearchField(query: String, onChange: (String) -> Unit, onSubmit: (String) -> Unit) {
+    val fieldShape = RoundedCornerShape(16.dp)
     TextField(
         value = query,
         onValueChange = onChange,
-        modifier = Modifier.fillMaxWidth().glassPane(CircleShape, GlassTone.CONTROL),
-        placeholder = { Text("Search songs, artists, albums, playlists…") },
-        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = LocalAccent.current) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassPane(fieldShape, GlassTone.CONTROL),
+        placeholder = { Text("Search songs, artists, albums, playlists…", color = CanopyColors.Muted) },
+        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = CanopyColors.Muted) },
         trailingIcon = {
-            if (query.isNotEmpty()) IconButton(onClick = { onChange("") }) {
-                Icon(Icons.Rounded.Close, contentDescription = "Clear search", tint = CanopyColors.Muted)
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onChange("") }) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Clear search", tint = CanopyColors.Muted)
+                }
             }
         },
-        shape = CircleShape,
+        shape = fieldShape,
         singleLine = true,
         textStyle = MaterialTheme.typography.bodyLarge,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -155,24 +180,158 @@ private fun SearchField(query: String, onChange: (String) -> Unit, onSubmit: (St
     )
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.history(
+@Composable
+private fun SearchCategoryChips(onOpenDetail: (String) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SearchCategoryChip(
+            icon = Icons.Rounded.Flare,
+            label = "New releases",
+            modifier = Modifier.weight(1f),
+            onClick = { onOpenDetail("FEmusic_new_releases") },
+        )
+        SearchCategoryChip(
+            icon = Icons.AutoMirrored.Rounded.TrendingUp,
+            label = "Charts",
+            modifier = Modifier.weight(1f),
+            onClick = { onOpenDetail("FEmusic_charts") },
+        )
+        SearchCategoryChip(
+            icon = Icons.Rounded.SentimentSatisfied,
+            label = "Moods & genres",
+            modifier = Modifier.weight(1f),
+            onClick = { onOpenDetail("FEmusic_moods_and_genres") },
+        )
+    }
+}
+
+@Composable
+private fun SearchCategoryChip(
+    icon: ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val chipShape = RoundedCornerShape(12.dp)
+    Surface(
+        modifier = modifier
+            .height(46.dp)
+            .glassPane(chipShape, GlassTone.CONTROL)
+            .clip(chipShape)
+            .clickable(onClick = onClick),
+        color = glassFill(CanopyColors.Surface),
+        shape = chipShape,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = ChipIconGreen,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                color = CanopyColors.Text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+private fun LazyListScope.history(
     history: List<String>,
     onClear: () -> Unit,
+    onRemoveItem: (String) -> Unit,
+    onQueryChange: (String) -> Unit,
     onSearch: (String) -> Unit,
 ) {
     if (history.isEmpty()) {
         item { MessagePanel("Start searching", "Find your favorite songs, artists, albums, or playlists.") }
         return
     }
-    item { OrchardSectionHeader("Recent searches", action = "Clear all", onAction = onClear) }
-    items(history, key = { it }) { value ->
-        Surface(
-            color = Color.Transparent,
-            modifier = Modifier.fillMaxWidth().clickable { onSearch(value) },
+    item {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.History, contentDescription = null, tint = CanopyColors.Muted)
-                Text(value, modifier = Modifier.padding(start = 14.dp), style = MaterialTheme.typography.bodyLarge, color = CanopyColors.Text)
+            Text(
+                text = "Recent searches",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = CanopyColors.Muted,
+            )
+            Text(
+                text = "Clear all",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = CanopyColors.Muted,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable(onClick = onClear)
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+            )
+        }
+    }
+    items(history, key = { it }) { value ->
+        val itemShape = RoundedCornerShape(14.dp)
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .glassPane(itemShape, GlassTone.CONTROL)
+                .clip(itemShape)
+                .clickable {
+                    onQueryChange(value)
+                    onSearch(value)
+                },
+            color = glassFill(CanopyColors.Surface),
+            shape = itemShape,
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.History,
+                    contentDescription = null,
+                    tint = CanopyColors.Muted,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    text = value,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 12.dp),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = CanopyColors.Text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                IconButton(
+                    onClick = { onRemoveItem(value) },
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Remove search",
+                        tint = CanopyColors.Muted,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
         }
     }
@@ -230,3 +389,4 @@ private fun LazyListScope.results(
         item { Spacer(Modifier.height(16.dp)) }
     }
 }
+

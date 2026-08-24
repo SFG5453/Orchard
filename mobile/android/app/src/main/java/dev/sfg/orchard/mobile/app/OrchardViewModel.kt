@@ -310,6 +310,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun clearSearchHistory() = graph.settings.clearSearchHistory()
+    fun removeSearchHistoryItem(query: String) = graph.settings.removeSearchHistoryItem(query)
     fun selectLibraryFilter(filter: LibraryFilter) { mutableLibraryFilter.value = filter }
 
     fun openDetail(id: String) {
@@ -666,6 +667,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
             is CatalogItem.Collection -> playCollection(item.playlist.id, contextTitle = item.title, shuffle = shuffle)
             is CatalogItem.Record -> playCollection(item.album.id, contextTitle = item.title, shuffle = shuffle)
             is CatalogItem.Performer -> playCollection(item.artist.id, contextTitle = item.title, shuffle = shuffle)
+            is CatalogItem.Category -> openDetail(item.stableId)
         }
     }
 

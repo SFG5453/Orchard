@@ -67,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.LoadState
@@ -76,6 +77,7 @@ import dev.sfg.orchard.mobile.ui.components.ArtistBioBottomSheet
 import dev.sfg.orchard.mobile.ui.components.ArtistHero
 import dev.sfg.orchard.mobile.ui.components.ArtistSectionBottomSheet
 import dev.sfg.orchard.mobile.ui.components.CatalogCard
+import dev.sfg.orchard.mobile.ui.components.CategoryCard
 import dev.sfg.orchard.mobile.ui.components.DetailBackButton
 import dev.sfg.orchard.mobile.ui.components.DetailDescriptionBottomSheet
 import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
@@ -129,9 +131,10 @@ fun DetailScreen(
             MessagePanel("Nothing here", state.message)
         }
         is LoadState.Content -> {
-            if (state.value.kind == CatalogKind.ARTIST) {
+            val detail = state.value
+            if (detail.kind == CatalogKind.ARTIST) {
                 ArtistDetailContent(
-                    detail = state.value,
+                    detail = detail,
                     onBack = onBack,
                     onPlayAll = onPlayAll,
                     onShuffle = onShuffle,
@@ -149,9 +152,17 @@ fun DetailScreen(
                     onShareCollection = onShareCollection,
                     onFetchSectionItems = onFetchSectionItems,
                 )
+            } else if (detail.tracks.isEmpty() && (detail.sections.isNotEmpty() || detail.related.isNotEmpty())) {
+                HubDetailContent(
+                    detail = detail,
+                    onBack = onBack,
+                    onOpen = onOpenDetail,
+                    onPlayTrack = onPlayTrack,
+                    onFetchSectionItems = onFetchSectionItems,
+                )
             } else {
                 CollectionDetailContent(
-                    detail = state.value,
+                    detail = detail,
                     onBack = onBack,
                     onPlayAll = onPlayAll,
                     onShuffle = onShuffle,
@@ -177,10 +188,168 @@ fun DetailScreen(
                     smartCrossfadeEnabled = smartCrossfadeEnabled,
                     bestMixSupabaseSync = bestMixSupabaseSync,
                     onPlayBestMix = onPlayBestMix,
+                    onFetchSectionItems = onFetchSectionItems,
                 )
             }
         }
         LoadState.Idle -> Unit
+    }
+}
+
+/** Canopy mobile layout for explore/hub pages such as Moods & genres, Charts, New releases, and genre categories. */
+@Composable
+private fun HubDetailContent(
+    detail: BrowseDetail,
+    onBack: () -> Unit,
+    onOpen: (String) -> Unit,
+    onPlayTrack: (List<Track>, Int, String) -> Unit,
+    onFetchSectionItems: (suspend (String, String) -> List<CatalogItem>)? = null,
+) {
+    var activeSectionSheet by remember { mutableStateOf<SectionSheetState?>(null) }
+
+    activeSectionSheet?.let { sheet ->
+        ArtistSectionBottomSheet(
+            title = sheet.title,
+            initialItems = sheet.initialItems,
+            browseId = sheet.browseId,
+            params = sheet.params,
+            onFetchFullItems = onFetchSectionItems,
+            onPlay = { track -> onPlayTrack(listOf(track), 0, sheet.title) },
+            onOpen = onOpen,
+            onDismiss = { activeSectionSheet = null },
+        )
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 128.dp),
+    ) {
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 16.dp, bottom = 8.dp),
+            ) {
+                DetailBackButton(onBack)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = detail.title,
+                    style = MaterialTheme.typography.displaySmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.5).sp,
+                    ),
+                    color = CanopyColors.Text,
+                )
+                if (detail.description.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = detail.description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = CanopyColors.Muted,
+                    )
+                }
+            }
+        }
+
+        if (detail.sections.isNotEmpty()) {
+            detail.sections.forEach { section ->
+                val allCategories = section.items.all { it is CatalogItem.Category }
+                val hasMoreViaApi = section.browseId.isNotBlank()
+                val canViewAll = !allCategories && (hasMoreViaApi || section.items.size > 3)
+
+                item {
+                    OrchardSectionHeader(
+                        title = section.title,
+                        action = if (canViewAll) "View all" else null,
+                        onAction = if (canViewAll) {
+                            {
+                                activeSectionSheet = SectionSheetState(
+                                    title = section.title,
+                                    initialItems = section.items,
+                                    browseId = section.browseId,
+                                    params = section.params,
+                                )
+                            }
+                        } else null,
+                    )
+                }
+
+                if (allCategories) {
+                    val pairs = section.items.filterIsInstance<CatalogItem.Category>().chunked(2)
+                    items(pairs) { rowItems ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            rowItems.forEach { catItem ->
+                                CategoryCard(
+                                    item = catItem,
+                                    onClick = { onOpen(catItem.stableId) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            if (rowItems.size == 1) {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
+                    item { Spacer(Modifier.height(10.dp)) }
+                } else {
+                    item {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            itemsIndexed(section.items, key = { index, it -> "${it.stableId}_$index" }) { _, item ->
+                                CatalogCard(item, onClick = {
+                                    if (item is CatalogItem.Song) {
+                                        onPlayTrack(listOf(item.track), 0, section.title)
+                                    } else {
+                                        onOpen(item.stableId)
+                                    }
+                                })
+                            }
+                        }
+                    }
+                    item { Spacer(Modifier.height(12.dp)) }
+                }
+            }
+        } else if (detail.related.isNotEmpty()) {
+            val canViewAll = detail.related.size > 3
+            item {
+                OrchardSectionHeader(
+                    title = "Explore",
+                    action = if (canViewAll) "View all" else null,
+                    onAction = if (canViewAll) {
+                        {
+                            activeSectionSheet = SectionSheetState(
+                                title = "Explore",
+                                initialItems = detail.related,
+                            )
+                        }
+                    } else null,
+                )
+            }
+            item {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    itemsIndexed(detail.related, key = { index, it -> "${it.stableId}_$index" }) { _, item ->
+                        CatalogCard(item, onClick = {
+                            if (item is CatalogItem.Song) {
+                                onPlayTrack(listOf(item.track), 0, detail.title)
+                            } else {
+                                onOpen(item.stableId)
+                            }
+                        })
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -390,11 +559,28 @@ private fun CollectionDetailContent(
     smartCrossfadeEnabled: Boolean = false,
     bestMixSupabaseSync: Boolean = false,
     onPlayBestMix: ((List<Track>, String, (String) -> Unit, () -> Unit) -> Unit)? = null,
+    onFetchSectionItems: (suspend (String, String) -> List<CatalogItem>)? = null,
 ) {
     var showDescriptionSheet by remember { mutableStateOf(false) }
+    var activeSectionSheet by remember { mutableStateOf<SectionSheetState?>(null) }
 
     // The cover's own colours carry the whole screen.
     val palette = rememberArtworkPalette(detail.artworkUrl)
+
+    if (activeSectionSheet != null) {
+        activeSectionSheet?.let { sheet ->
+            ArtistSectionBottomSheet(
+                title = sheet.title,
+                initialItems = sheet.initialItems,
+                browseId = sheet.browseId,
+                params = sheet.params,
+                onFetchFullItems = onFetchSectionItems,
+                onPlay = { track -> onPlayTrack(listOf(track), 0, sheet.title) },
+                onOpen = onOpen,
+                onDismiss = { activeSectionSheet = null },
+            )
+        }
+    }
 
     Box(
         Modifier
@@ -498,7 +684,44 @@ private fun CollectionDetailContent(
                     }
                 }
             }
-            if (detail.related.isNotEmpty()) {
+            if (detail.sections.isNotEmpty()) {
+                detail.sections.forEach { section ->
+                    val hasMoreViaApi = section.browseId.isNotBlank()
+                    val canViewAll = hasMoreViaApi || section.items.size > 3
+                    item {
+                        OrchardSectionHeader(
+                            title = section.title,
+                            action = if (canViewAll) "View all" else null,
+                            onAction = if (canViewAll) {
+                                {
+                                    activeSectionSheet = SectionSheetState(
+                                        title = section.title,
+                                        initialItems = section.items,
+                                        browseId = section.browseId,
+                                        params = section.params,
+                                    )
+                                }
+                            } else null,
+                        )
+                    }
+                    item {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            itemsIndexed(section.items, key = { index, it -> "${it.stableId}_$index" }) { _, item ->
+                                CatalogCard(item, onClick = {
+                                    if (item is CatalogItem.Song) {
+                                        onPlayTrack(listOf(item.track), 0, section.title)
+                                    } else {
+                                        onOpen(item.stableId)
+                                    }
+                                })
+                            }
+                        }
+                    }
+                }
+            } else if (detail.related.isNotEmpty()) {
                 item {
                     Text(
                         text = "More like this",

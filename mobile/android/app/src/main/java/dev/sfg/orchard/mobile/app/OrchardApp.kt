@@ -350,6 +350,7 @@ private fun OrchardNavigation(
                 onQueryChange = viewModel::updateQuery,
                 onSubmit = viewModel::runSearch,
                 onClearHistory = viewModel::clearSearchHistory,
+                onRemoveHistoryItem = viewModel::removeSearchHistoryItem,
                 downloadedTrackIds = downloadedTrackIds,
                 downloadingTrackIds = downloadingTrackIds,
                 onPlay = { viewModel.play(it, "Search") },

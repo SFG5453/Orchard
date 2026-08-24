@@ -69,7 +69,12 @@ class CatalogRepository(private val client: InnerTubeClient) {
      * [MAX_TRACK_PAGES] and the listener waits out every round trip staring at a spinner.
      */
     fun browsePages(id: String): Flow<BrowseDetail> = flow {
-        val root = client.browse(id)
+        val (browseId, params) = if (id.contains(":")) {
+            id.substringBefore(":") to id.substringAfter(":")
+        } else {
+            id to ""
+        }
+        val root = if (params.isNotBlank()) client.browsePayload(browseId, params) else client.browse(browseId)
         val detail = CatalogParser.detail(id, root)
         val tracks = detail.tracks.toMutableList()
         emit(detail)

@@ -143,12 +143,19 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         scope.launch { store.edit { it.remove(SEARCH_HISTORY) } }
     }
 
-    private fun decodeHistory(value: String): List<String> = runCatching {
-        val values = JSONArray(value)
-        buildList {
-            for (index in 0 until values.length()) values.optString(index).takeIf(String::isNotBlank)?.let(::add)
+    fun removeSearchHistoryItem(query: String) {
+        val normalized = query.trim()
+        if (normalized.isEmpty()) return
+        scope.launch {
+            store.edit { values ->
+                val next = decodeSearchHistory(values[SEARCH_HISTORY].orEmpty())
+                    .filterNot { it.equals(normalized, ignoreCase = true) }
+                values[SEARCH_HISTORY] = JSONArray(next).toString()
+            }
         }
-    }.getOrDefault(emptyList())
+    }
+
+    private fun decodeHistory(value: String): List<String> = decodeSearchHistory(value)
 
     private fun decodeFloatList(value: String, expectedSize: Int): List<Float> {
         if (value.isBlank()) return List(expectedSize) { 0f }
@@ -219,3 +226,10 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val BETA_CHANNEL_ENABLED = booleanPreferencesKey("beta_channel_enabled")
     }
 }
+
+internal fun decodeSearchHistory(value: String): List<String> = runCatching {
+    val values = JSONArray(value)
+    buildList {
+        for (index in 0 until values.length()) values.optString(index).takeIf(String::isNotBlank)?.let(::add)
+    }
+}.getOrDefault(emptyList())

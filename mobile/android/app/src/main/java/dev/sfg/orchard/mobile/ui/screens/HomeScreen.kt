@@ -164,6 +164,7 @@ fun HomeScreen(
                 is CatalogItem.Collection -> onPlayCollection(item.playlist.id, item.title)
                 is CatalogItem.Record -> onPlayCollection(item.album.id, item.title)
                 is CatalogItem.Performer -> onPlayCollection(item.artist.id, item.title)
+                is CatalogItem.Category -> onOpenDetail(item.stableId)
             }
         } else {
             when (item) {
@@ -1815,6 +1816,7 @@ private fun catalogItemBadge(item: CatalogItem): String =
                 "PLAYLIST"
             }
         }
+        is CatalogItem.Category -> "CATEGORY"
     }
 
 private fun catalogSubtitle(item: CatalogItem): String =
@@ -1823,6 +1825,7 @@ private fun catalogSubtitle(item: CatalogItem): String =
         is CatalogItem.Record -> item.album.artist
         is CatalogItem.Performer -> item.artist.subtitle.ifBlank { "Artist" }
         is CatalogItem.Collection -> item.playlist.author.ifBlank { "Playlist" }
+        is CatalogItem.Category -> ""
     }
 
 private fun openItem(item: CatalogItem, play: (Track) -> Unit, detail: (String) -> Unit) {
