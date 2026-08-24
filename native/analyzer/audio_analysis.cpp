@@ -321,6 +321,9 @@ void AnalyzeKeyAndTimbre(
   double end_time,
   AnalysisResult& result,
   std::vector<EnergyPoint>& low_frames,
+  std::vector<EnergyPoint>& mid_frames,
+  std::vector<EnergyPoint>& high_frames,
+  std::vector<EnergyPoint>& transient_frames,
   std::vector<EnergyPoint>& vocal_frames
 ) {
   constexpr size_t frame_size = 4096;
@@ -329,6 +332,8 @@ void AnalyzeKeyAndTimbre(
   const size_t final_sample = std::min(samples.size(), static_cast<size_t>(end_time * sample_rate));
   std::array<double, 12> chroma{};
   std::vector<std::complex<double>> spectrum(frame_size);
+  std::vector<double> previous_spectrum(frame_size / 2, 0);
+  bool has_previous_spectrum = false;
   double chroma_weight = 0;
   double low_energy = 0;
   double vocal_energy = 0;
@@ -355,11 +360,18 @@ void AnalyzeKeyAndTimbre(
     double frame_low = 0;
     double frame_vocal = 0;
     double frame_high = 0;
+    double positive_flux = 0;
+    double spectral_total = 0;
     for (size_t bin = 1; bin < frame_size / 2; ++bin) {
       const double frequency = bin * sample_rate / frame_size;
       if (frequency < 45 || frequency > std::min(5000.0, sample_rate * 0.48)) continue;
       const double power = std::norm(spectrum[bin]);
       const double perceptual_power = std::log1p(power);
+      spectral_total += perceptual_power;
+      if (has_previous_spectrum) {
+        positive_flux += std::max(0.0, perceptual_power - previous_spectrum[bin]);
+      }
+      previous_spectrum[bin] = perceptual_power;
       if (frequency < 250) frame_low += perceptual_power;
       else if (frequency <= 4000) {
         frame_vocal += perceptual_power;
@@ -385,11 +397,26 @@ void AnalyzeKeyAndTimbre(
       (start + frame_size / 2.0) / sample_rate,
       frame_low
     });
+    mid_frames.push_back({
+      (start + frame_size / 2.0) / sample_rate,
+      frame_vocal
+    });
+    high_frames.push_back({
+      (start + frame_size / 2.0) / sample_rate,
+      frame_high
+    });
+    transient_frames.push_back({
+      (start + frame_size / 2.0) / sample_rate,
+      has_previous_spectrum
+        ? Clamp(positive_flux / std::max(1e-9, spectral_total), 0, 1)
+        : 0
+    });
     vocal_frames.push_back({
       (start + frame_size / 2.0) / sample_rate,
       VocalProbabilityFrom(frame_low, frame_vocal, frame_high, frame_flatness)
     });
     chroma_weight += std::max(1e-9, frame_chroma * rms);
+    has_previous_spectrum = true;
     ++accepted_frames;
   }
 
@@ -617,17 +644,30 @@ double AverageFrameStability(
 // Builds observed change evidence on the compact whole-track grid. A local
 // maximum is a boundary candidate, not a semantic section; downstream code is
 // responsible for deciding whether it is useful as an outgoing or incoming cue.
-void BuildTransitionEvidence(AnalysisResult& result) {
+void BuildTransitionEvidence(
+  AnalysisResult& result,
+  const std::vector<EnergyPoint>& transient_frames
+) {
   const size_t count = result.energy_curve.size();
   if (!count) return;
 
   std::vector<double> energy(count, 0);
   std::vector<double> low(count, 0);
+  std::vector<double> transient(count, 0);
   std::vector<double> vocal(count, 0);
+  size_t transient_cursor = 0;
   for (size_t index = 0; index < count; ++index) {
     energy[index] = result.energy_curve[index].energy;
     if (index < result.low_energy_curve.size()) low[index] = result.low_energy_curve[index].energy;
     if (index < result.vocal_activity_mask.size()) vocal[index] = result.vocal_activity_mask[index];
+    while (transient_cursor + 1 < transient_frames.size() &&
+           std::abs(transient_frames[transient_cursor + 1].time - result.energy_curve[index].time) <
+             std::abs(transient_frames[transient_cursor].time - result.energy_curve[index].time)) {
+      ++transient_cursor;
+    }
+    if (!transient_frames.empty() && energy[index] > 0.1) {
+      transient[index] = transient_frames[transient_cursor].energy;
+    }
   }
 
   result.transition_feature_frames.reserve(count);
@@ -642,9 +682,6 @@ void BuildTransitionEvidence(AnalysisResult& result) {
       0,
       1
     );
-    const double transient = index > 0
-      ? Clamp((energy[index] - energy[index - 1]) / 1.5, 0, 1)
-      : 0;
     result.transition_feature_frames.push_back({
       result.energy_curve[index].time,
       energy[index],
@@ -653,7 +690,7 @@ void BuildTransitionEvidence(AnalysisResult& result) {
       index < result.high_energy_curve.size() ? result.high_energy_curve[index].energy : energy[index],
       vocal[index],
       novelty,
-      transient,
+      transient[index],
       LocalStability(energy, low, vocal, index)
     });
   }
@@ -765,10 +802,11 @@ AnalysisResult AnalyzeAudio(
     const double time = index * envelope.window_seconds;
     const double norm = Clamp(envelope.levels[index] / std::max(1e-6, envelope.reference), 0, 1.5);
     result.energy_curve.push_back({time, norm});
-    result.mid_energy_curve.push_back({time, norm * 1.0});
-    result.high_energy_curve.push_back({time, norm * 0.7});
   }
   std::vector<EnergyPoint> low_frames;
+  std::vector<EnergyPoint> mid_frames;
+  std::vector<EnergyPoint> high_frames;
+  std::vector<EnergyPoint> transient_frames;
   std::vector<EnergyPoint> vocal_frames;
   AnalyzeKeyAndTimbre(
     samples,
@@ -777,28 +815,38 @@ AnalysisResult AnalyzeAudio(
     envelope.content_end,
     result,
     low_frames,
+    mid_frames,
+    high_frames,
+    transient_frames,
     vocal_frames
   );
-  // Low-band frames come from actual FFT energy below 250 Hz. Resample them onto the compact
-  // envelope grid so the mobile planner can compare the same track-relative timestamps without
-  // storing another high-resolution curve. Silence remains zero rather than borrowing the nearest
-  // active spectral frame.
-  std::vector<double> low_values;
-  low_values.reserve(low_frames.size());
-  for (const EnergyPoint& frame : low_frames) low_values.push_back(frame.energy);
-  const double low_reference = Percentile(std::move(low_values), 0.85);
-  size_t low_cursor = 0;
-  for (const EnergyPoint& point : result.energy_curve) {
-    while (low_cursor + 1 < low_frames.size() &&
-           std::abs(low_frames[low_cursor + 1].time - point.time) <
-             std::abs(low_frames[low_cursor].time - point.time)) {
-      ++low_cursor;
+  // FFT-band frames are independently measured, then normalized against each
+  // band's own loud-end reference and resampled onto the compact envelope
+  // grid. Silence remains zero instead of borrowing a nearby active frame.
+  const auto resample_band = [&result](
+    const std::vector<EnergyPoint>& frames,
+    std::vector<EnergyPoint>& output
+  ) {
+    std::vector<double> values;
+    values.reserve(frames.size());
+    for (const EnergyPoint& frame : frames) values.push_back(frame.energy);
+    const double reference = Percentile(std::move(values), 0.85);
+    size_t cursor = 0;
+    for (const EnergyPoint& point : result.energy_curve) {
+      while (cursor + 1 < frames.size() &&
+             std::abs(frames[cursor + 1].time - point.time) <
+               std::abs(frames[cursor].time - point.time)) {
+        ++cursor;
+      }
+      const double band_energy = frames.empty() || point.energy <= 0.1 || reference <= 1e-9
+        ? 0.0
+        : Clamp(frames[cursor].energy / reference, 0, 1.5);
+      output.push_back({point.time, band_energy});
     }
-    const double energy = low_frames.empty() || point.energy <= 0.1 || low_reference <= 1e-9
-      ? 0.0
-      : Clamp(low_frames[low_cursor].energy / low_reference, 0, 1.5);
-    result.low_energy_curve.push_back({point.time, energy});
-  }
+  };
+  resample_band(low_frames, result.low_energy_curve);
+  resample_band(mid_frames, result.mid_energy_curve);
+  resample_band(high_frames, result.high_energy_curve);
   // The mask stays parallel to energy_curve -- callers index the two together --
   // so the analysis frames are resampled onto that grid rather than shipped on
   // their own. Frames are ~0.65s apart and the curve is ~1s, so nearest-frame
@@ -819,7 +867,7 @@ AnalysisResult AnalyzeAudio(
     );
   }
   BuildStructure(envelope, result);
-  BuildTransitionEvidence(result);
+  BuildTransitionEvidence(result, transient_frames);
   return result;
 }
 

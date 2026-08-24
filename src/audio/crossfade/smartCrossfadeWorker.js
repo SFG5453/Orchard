@@ -415,26 +415,38 @@ self.onmessage = (event) => {
       ...analyzeContentEnd(pcm, analysisSampleRate, duration),
       ...analyzeTempo(pcm, analysisSampleRate, duration)
     };
-    const energyCurve = [];
+    const levels = [];
     const lowEnergyCurve = [];
     const midEnergyCurve = [];
     const highEnergyCurve = [];
     const vocalActivityMask = [];
-    const stride = Math.max(1, Math.floor(pcm.length / 240));
-    for (let index = 0; index < pcm.length; index += stride) {
-      const time = index / analysisSampleRate;
-      energyCurve.push({ time, energy: 0.8 });
-      midEnergyCurve.push({ time, energy: 0.8 });
-      highEnergyCurve.push({ time, energy: 0.56 });
-      vocalActivityMask.push(0.5);
+    const windowSize = Math.max(1, Math.ceil(pcm.length / 240));
+    for (let start = 0; start < pcm.length; start += windowSize) {
+      const end = Math.min(pcm.length, start + windowSize);
+      let squareSum = 0;
+      for (let index = start; index < end; index += 1) {
+        const sample = Number(pcm[index]) || 0;
+        squareSum += sample * sample;
+      }
+      levels.push({
+        time: start / analysisSampleRate,
+        rms: Math.sqrt(squareSum / Math.max(1, end - start))
+      });
     }
+    const sortedLevels = levels.map((point) => point.rms).sort((left, right) => left - right);
+    const reference = sortedLevels[Math.floor((sortedLevels.length - 1) * 0.85)] || 0;
+    const energyCurve = levels.map((point) => ({
+      time: point.time,
+      energy: reference > 0 ? Math.min(1.5, point.rms / reference) : 0
+    }));
     const legacyResult = {
       analysisVersion: AUDIO_ANALYSIS_VERSION,
       duration,
       ...baseAnalysis,
       energyCurve,
-      // This DSP-only fallback does not run the native spectral band split. Empty means "no
-      // evidence" and lets the transition planner retain its calibrated bass-swap prior.
+      // This DSP-only fallback measures broadband RMS but does not run the
+      // native FFT split or vocal model. Empty means unknown; invented flat
+      // curves would look like measured spectral/vocal evidence downstream.
       lowEnergyCurve,
       midEnergyCurve,
       highEnergyCurve,
