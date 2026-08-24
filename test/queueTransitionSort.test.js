@@ -608,3 +608,27 @@ test('Best mix only looks up and reorders the next 50 queued songs', async () =>
   );
   assert.deepEqual(ctx.queue.value.slice(50).map((track) => track.id), originalTail);
 });
+
+test('Best Mix ranks pairs by executable choreography quality and confidence', () => {
+  const outgoing = plannerAnalysis({ role: 'outgoing', bpm: 120, key: 'C major' });
+  const beatmatched = plannerAnalysis({ role: 'incoming', bpm: 120, key: 'C major' });
+  const distant = plannerAnalysis({ role: 'incoming', bpm: 155, key: 'F# major' });
+
+  const costBeatmatched = transitionCost(outgoing, beatmatched);
+  const costDistant = transitionCost(outgoing, distant);
+
+  assert.ok(costBeatmatched < costDistant, 'Beatmatched staged blend must have lower cost than distant clash');
+
+  const queue = [
+    { id: 'distant', title: 'Distant' },
+    { id: 'beatmatched', title: 'Beatmatched' }
+  ];
+  const analysisByTrack = new Map([
+    ['distant', distant],
+    ['beatmatched', beatmatched]
+  ]);
+
+  const result = bestTransitionOrder(queue, analysisByTrack, outgoing);
+  assert.deepEqual(result.ordered.map((t) => t.id), ['beatmatched', 'distant']);
+});
+

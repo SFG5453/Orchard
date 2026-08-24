@@ -229,4 +229,25 @@ class BestMixSorterTest {
         // t2 was unanalyzed, so it stays at index 1
         assertEquals("t2", sorted[1].id)
     }
+
+    @Test
+    fun ranksPairsByExecutableChoreographyQualityAndConfidence() {
+        val outgoing = createTrack("out", "Outgoing")
+        val beatmatched = createTrack("beatmatched", "Beatmatched")
+        val distant = createTrack("distant", "Distant Clash")
+
+        val features = mapOf(
+            outgoing.id to createFeatures(bpm = 120.0, key = "C Major"),
+            beatmatched.id to createFeatures(bpm = 120.0, key = "C Major"),
+            distant.id to createFeatures(bpm = 155.0, key = "F# Major"),
+        )
+
+        val sorted = BestMixSorter.sort(
+            tracks = listOf(distant, beatmatched),
+            featuresMap = features,
+            initialFeatures = features[outgoing.id],
+        )
+
+        assertEquals(listOf(beatmatched, distant), sorted)
+    }
 }
