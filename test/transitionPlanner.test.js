@@ -21,7 +21,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { normalizeTrackAnalysis } from '../shared/trackAnalysis.js';
-import { planTransition } from '../src/audio/crossfade/transitionPlanner.js';
+import {
+  planTransition,
+  transitionFromPairFallback
+} from '../src/audio/crossfade/transitionPlanner.js';
 
 function track(role, {
   duration = 120,
@@ -176,6 +179,38 @@ test('missing tempo remains an explicit authoritative fallback reason', () => {
   assert.equal(plan.pairPlan.status, 'fallback');
   assert.equal(plan.fallbackReason, 'outgoing-tempo');
   assert.equal(plan.transitionStyle, 'equal_power');
+});
+
+test('boundary fallbacks stay zero-overlap through the live adapter', () => {
+  for (const [transitionClass, outgoingEnd] of [
+    ['silence_trim', 116],
+    ['normal_boundary', 120]
+  ]) {
+    const fallback = {
+      transitionClass,
+      outgoingStart: outgoingEnd,
+      outgoingEnd,
+      incomingCue: 0,
+      durationSeconds: 0,
+      strategy: 'boundary_handoff',
+      transitionStyle: transitionClass,
+      reason: `confidence-${transitionClass}`
+    };
+    const transition = transitionFromPairFallback({
+      fallback,
+      fallbackReason: fallback.reason,
+      incoming: { handoff: 16 },
+      diagnostics: { selected: null }
+    }, track('outgoing'), track('incoming'), 120, outgoingEnd - 0.1, 1);
+
+    assert.equal(transition.shouldStart, true);
+    assert.equal(transition.transitionStart, outgoingEnd);
+    assert.equal(transition.transitionEnd, outgoingEnd);
+    assert.equal(transition.fadeSeconds, 0);
+    assert.equal(transition.handoffDuration, 0);
+    assert.equal(transition.transitionStyle, transitionClass);
+    assert.strictEqual(transition.fallback, fallback);
+  }
 });
 
 test('pending analysis keeps the reliable standard fallback', () => {

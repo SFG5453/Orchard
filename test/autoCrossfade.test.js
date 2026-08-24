@@ -137,6 +137,58 @@ test('the active track is promoted at mix dominance instead of mix start', async
   }
 });
 
+test('a normal boundary handoff never enters the crossfade mixer', async () => {
+  const originalWindow = globalThis.window;
+  const clock = fakeClock();
+  globalThis.window = clock.window;
+  const events = [];
+  let scheduledCrossfades = 0;
+  const analyzer = {
+    connectElement() {},
+    currentTime: () => 10,
+    resetMixElement() {},
+    setMixVolume: () => true,
+    resume: async () => {},
+    scheduleCrossfade: () => {
+      scheduledCrossfades += 1;
+      return null;
+    },
+    setVolume() {}
+  };
+  const crossfade = createAutoCrossfade({ analyzer, settings: { mode: 'smart' } });
+  const outgoing = audio(119.9);
+  const incoming = audio();
+
+  try {
+    const result = crossfade.start({
+      fromAudio: outgoing,
+      toAudio: incoming,
+      transition: {
+        transitionStart: 120,
+        transitionEnd: 120,
+        fadeSeconds: 0,
+        handoffDuration: 0,
+        incomingCueTime: 0,
+        transitionStyle: 'normal_boundary'
+      },
+      volume: 1,
+      onPromote: () => events.push('promote'),
+      onComplete: () => events.push('complete')
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(scheduledCrossfades, 0);
+    assert.deepEqual(events, []);
+    assert.equal(clock.runNext(), true);
+    assert.equal(await result, true);
+    assert.deepEqual(events, ['promote', 'complete']);
+    assert.equal(outgoing.pauseCalls, 1);
+    assert.equal(incoming.currentTime, 0);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
 test('volume changes update both master gains while a transition is active', async () => {
   const originalWindow = globalThis.window;
   const clock = fakeClock();

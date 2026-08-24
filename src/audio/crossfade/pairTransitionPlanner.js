@@ -424,8 +424,8 @@ function compareEvaluations(left, right) {
 
 function strategyFor(evaluation) {
   if (evaluation.transitionClass === 'simple_crossfade') return 'equal_power_crossfade';
-  if (evaluation.transitionClass === 'silence_trim') return 'short_fade';
-  if (evaluation.transitionClass === 'normal_boundary') return 'short_fade';
+  if (evaluation.transitionClass === 'silence_trim') return 'boundary_handoff';
+  if (evaluation.transitionClass === 'normal_boundary') return 'boundary_handoff';
   const outgoingLow = finite(evaluation.pair.outgoingCandidate.summary?.low);
   const incomingLow = finite(evaluation.pair.incomingCandidate.summary?.low);
   if (outgoingLow !== null && incomingLow !== null && outgoingLow >= 0.62 && incomingLow >= 0.62) {
@@ -448,11 +448,42 @@ function renderModeFor(transitionClass) {
 function fallbackFor(outgoing, incoming, evaluation = null, reason = '') {
   const outgoingRange = outgoing.audibleRange || { start: 0, end: outgoing.duration || 0 };
   const incomingRange = incoming.audibleRange || { start: 0, end: incoming.duration || 0 };
+  const selectedClass = evaluation?.transitionClass;
+
+  // These classes explicitly refuse overlap. A silence trim advances at the
+  // measured end of audible content; a normal boundary lets the media reach
+  // its ordinary end. Keeping them as zero-duration handoffs prevents the
+  // live adapter from turning a low-confidence refusal into a crossfade.
+  if (selectedClass === 'silence_trim' || selectedClass === 'normal_boundary') {
+    const ordinaryEnd = Math.max(outgoingRange.end, finite(outgoing.duration) ?? 0);
+    const outgoingEnd = selectedClass === 'silence_trim'
+      ? outgoingRange.end
+      : ordinaryEnd;
+    return {
+      transitionClass: selectedClass,
+      outgoingStart: rounded(outgoingEnd),
+      outgoingEnd: rounded(outgoingEnd),
+      incomingCue: rounded(incomingRange.start),
+      durationSeconds: 0,
+      strategy: 'boundary_handoff',
+      transitionStyle: selectedClass,
+      reason
+    };
+  }
+
   const outgoingEnd = evaluation?.pair.outgoingEnd ?? outgoingRange.end;
   const incomingCue = evaluation?.pair.incomingStart ?? incomingRange.start;
   const availableOutgoing = Math.max(0, outgoingEnd - outgoingRange.start);
   const availableIncoming = Math.max(0, incomingRange.end - incomingCue);
-  const durationSeconds = rounded(Math.min(8, availableOutgoing, availableIncoming));
+  // A renderer refusal may execute this shape without another evidence pass,
+  // so it cannot overlap longer than the candidate interval that was scored.
+  const evaluatedDuration = evaluation?.pair.durationSeconds ?? 8;
+  const durationSeconds = rounded(Math.min(
+    8,
+    evaluatedDuration,
+    availableOutgoing,
+    availableIncoming
+  ));
   const usable = durationSeconds >= 1;
   return {
     transitionClass: usable ? 'simple_crossfade' : 'normal_boundary',

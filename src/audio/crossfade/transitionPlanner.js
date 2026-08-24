@@ -20,6 +20,7 @@
 import { planPairTransition } from './pairTransitionPlanner.js';
 
 export const CROSSFADE_MODES = ['standard', 'smart'];
+const BOUNDARY_PREPARE_LEAD_SECONDS = 0.25;
 
 export function normalizeCrossfadeMode(value) {
   return CROSSFADE_MODES.includes(value) ? value : 'standard';
@@ -141,19 +142,24 @@ export function transitionFromPairFallback(
   let fadeSeconds = Math.max(0, Number(fallback.durationSeconds) || 0);
   let incomingCueTime = Math.max(0, Number(fallback.incomingCue) || 0);
   let late = false;
+  const boundaryOnly = ['silence_trim', 'normal_boundary'].includes(
+    fallback.transitionClass
+  );
 
   // Playback time is a scheduling concern, not another musical choice. If the
   // selected exit has already passed, keep the attached fallback shape but
   // move it to the final usable boundary rather than running another planner.
-  if (playbackTime >= transitionEnd - 0.05 && transitionEnd < finalEnd - 0.05) {
+  if (!boundaryOnly && playbackTime >= transitionEnd - 0.05 && transitionEnd < finalEnd - 0.05) {
     transitionEnd = finalEnd;
     incomingCueTime = audibleStart(nextAnalysis);
     late = true;
   }
-  if (fadeSeconds <= 0 && transitionEnd > 0) fadeSeconds = minFadeSeconds;
+  if (!boundaryOnly && fadeSeconds <= 0 && transitionEnd > 0) fadeSeconds = minFadeSeconds;
   fadeSeconds = Math.min(fadeSeconds, transitionEnd);
   const transitionStart = Math.max(0, transitionEnd - fadeSeconds);
-  const shouldStart = playbackTime >= transitionStart;
+  const shouldStart = boundaryOnly
+    ? playbackTime >= Math.max(0, transitionEnd - BOUNDARY_PREPARE_LEAD_SECONDS)
+    : playbackTime >= transitionStart;
   const reasonBase = late ? 'smart-pair-late-fallback' : 'smart-pair-fallback';
   return {
     shouldStart,
@@ -164,12 +170,12 @@ export function transitionFromPairFallback(
     handoffDuration: fadeSeconds,
     handoffStartSeconds: 0,
     incomingCueTime,
-    incomingHandoffTime: pairPlan.incoming.handoff,
+    incomingHandoffTime: incomingCueTime + fadeSeconds,
     incomingPlaybackRate: 1,
     pickupSeconds: audibleStart(nextAnalysis),
     transitionBeats: 0,
     bassSwap: false,
-    transitionStyle: fallback.transitionStyle === 'normal' ? 'equal_power' : fallback.transitionStyle,
+    transitionStyle: fallback.transitionStyle,
     policyReasons: pairPlan.diagnostics?.selected?.gates || [],
     fallbackReason: pairPlan.fallbackReason,
     fallback,

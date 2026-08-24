@@ -289,6 +289,71 @@ test('rejects complex mixing when every candidate is poor', () => {
   assert.ok(plan.confidence < PAIR_TRANSITION_POLICY.confidence.conservative);
 });
 
+test('refusal classes keep executable boundary semantics', () => {
+  const silenceTrim = planPairTransition(cleanPair({
+    outgoing: {
+      beatConfidence: 0,
+      boundaryConfidence: 0,
+      contentEnd: 116,
+      key: '',
+      keyConfidence: 0,
+      chroma: [],
+      vocal: () => 1,
+      energy: () => 0,
+      stability: () => 0,
+      meterConfidence: 0
+    },
+    incoming: {
+      beatConfidence: 0,
+      boundaryConfidence: 0,
+      key: '',
+      keyConfidence: 0,
+      chroma: [],
+      vocal: () => 1,
+      energy: () => 0,
+      stability: () => 0,
+      meterConfidence: 0
+    }
+  }));
+  assert.equal(silenceTrim.transitionClass, 'silence_trim');
+  assert.equal(silenceTrim.fallback.transitionClass, 'silence_trim');
+  assert.equal(silenceTrim.fallback.outgoingStart, 116);
+  assert.equal(silenceTrim.fallback.outgoingEnd, 116);
+  assert.equal(silenceTrim.fallback.durationSeconds, 0);
+  assert.equal(silenceTrim.fallback.transitionStyle, 'silence_trim');
+
+  const normalBoundary = planPairTransition(cleanPair({
+    outgoing: {
+      beatConfidence: 0,
+      boundaryConfidence: 0,
+      bpm: 120,
+      key: 'C major',
+      keyConfidence: 1,
+      vocal: () => 1,
+      energy: () => 0,
+      stability: () => 0,
+      meterConfidence: 0
+    },
+    incoming: {
+      beatConfidence: 0,
+      boundaryConfidence: 0,
+      bpm: 130,
+      key: 'F♯ major',
+      keyConfidence: 1,
+      vocal: () => 1,
+      energy: () => 0,
+      stability: () => 0,
+      meterConfidence: 0
+    }
+  }));
+  assert.equal(normalBoundary.transitionClass, 'normal_boundary');
+  assert.equal(normalBoundary.fallback.transitionClass, 'normal_boundary');
+  assert.equal(normalBoundary.fallback.outgoingStart, 120);
+  assert.equal(normalBoundary.fallback.outgoingEnd, 120);
+  assert.equal(normalBoundary.fallback.durationSeconds, 0);
+  assert.equal(normalBoundary.fallback.transitionStyle, 'normal_boundary');
+});
+
 test('uses explicitly low-confidence rhythmic fallbacks when structure is unavailable', () => {
   const plan = planPairTransition(cleanPair({
     outgoing: { boundaryTimes: [], meterConfidence: 0.15 },

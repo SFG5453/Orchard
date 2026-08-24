@@ -51,6 +51,11 @@ export function alignTransitionToPlayback(transition = {}, playbackTime = 0) {
   const transitionEnd = Number(transition.transitionEnd);
   const currentTime = Math.max(0, Number(playbackTime) || 0);
   if (!Number.isFinite(transitionStart) || !Number.isFinite(transitionEnd)) return transition;
+  if (['silence_trim', 'normal_boundary'].includes(transition.transitionStyle)) {
+    // Boundary handoffs have no overlap to shorten and no incoming timeline to
+    // advance. A late poll executes the same boundary immediately.
+    return transition;
+  }
   if (currentTime >= transitionEnd - 0.05) return null;
 
   const lateBy = Math.max(0, currentTime - transitionStart);
@@ -211,6 +216,11 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       fromAudio.playbackRate = 1;
       toAudio.playbackRate = 1;
     };
+    const promote = () => {
+      if (promoted || !active || sequence !== transitionSequence) return;
+      onPromote?.();
+      promoted = true;
+    };
 
     try {
       analyzer?.connectElement(fromAudio);
@@ -251,6 +261,53 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       }
       await toAudio.play();
       if (!active || sequence !== transitionSequence) return false;
+
+      if (['silence_trim', 'normal_boundary'].includes(transition?.transitionStyle)) {
+        // Preload the incoming element while muted, then make one non-overlap
+        // deck switch at the requested boundary. Rewinding to the authoritative
+        // cue at the switch prevents the muted preparation lead from consuming
+        // any incoming music.
+        await new Promise((resolve) => {
+          completeResolve = resolve;
+          const delayMs = Math.max(
+            0,
+            (Number(transition.transitionEnd) - Number(fromAudio.currentTime)) * 1000
+          );
+          completeTimer = window.setTimeout(() => {
+            completeTimer = 0;
+            completeResolve = null;
+            try {
+              toAudio.currentTime = incomingCueTime;
+              analyzer?.setMixVolume?.(fromAudio, 0);
+              analyzer?.setMixVolume?.(toAudio, 1);
+              fromAudio.pause();
+              promote();
+            } catch (error) {
+              promotionError = error;
+            }
+            resolve();
+          }, delayMs);
+        });
+        if (promotionError) throw promotionError;
+        if (!active || sequence !== transitionSequence) return false;
+
+        toAudio.volume = 1;
+        fromAudio.removeAttribute('src');
+        fromAudio.load();
+        analyzer?.setVolume?.(fromAudio, 0);
+        analyzer?.setVolume?.(toAudio, targetVolume);
+        analyzer?.resetMixElement?.(fromAudio);
+        analyzer?.resetMixElement?.(toAudio);
+        fromAudio.playbackRate = 1;
+        toAudio.playbackRate = 1;
+        active = false;
+        activeCleanup = null;
+        activeFromAudio = null;
+        activeToAudio = null;
+        onComplete?.();
+        return true;
+      }
+
       const timing = analyzer?.scheduleCrossfade?.({
         fromAudio,
         toAudio,
@@ -294,11 +351,6 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
         }, delayMs);
       }
 
-      const promote = () => {
-        if (promoted || !active || sequence !== transitionSequence) return;
-        onPromote?.();
-        promoted = true;
-      };
       const promotionAt = Math.max(
         timing.startTime,
         Math.min(timing.endTime, Number(timing.promotionTime) || timing.handoffStart)
