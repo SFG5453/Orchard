@@ -24,6 +24,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
+import { isDevelopmentBuild } from '../main/buildMode.js';
 import { createArtistPackService, readOfficialPackArchive } from './artistPackService.js';
 import {
   formatUpdateBytes,
@@ -240,7 +241,7 @@ export function setupOrchardUpdates({ isDev }) {
   const packageUrlOverride = normalizeUpdateUrl(process.env.ORCHARD_PACKAGE_URL);
   const updateUrl = packageUrlOverride || GITHUB_RELEASES_URL;
   const artistPackIndexUrl = normalizeContentIndexUrl(process.env.ORCHARD_ARTIST_PACK_INDEX_URL);
-  const sourceBuild = Boolean(isDev) || !app.isPackaged;
+  const sourceBuild = isDevelopmentBuild({ app, isDev });
   const updateChecksEnabled = !sourceBuild;
   const artistPackService = createArtistPackService({
     app,
