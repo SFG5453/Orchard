@@ -266,7 +266,12 @@ function candidateGates({ pair, fit, outgoing, incoming, harmonic, collision, vo
   const sustainedCollision = collision.coverage >= PAIR_TRANSITION_POLICY.vocal.minCoverage &&
     collision.activeFraction >= PAIR_TRANSITION_POLICY.vocal.activeFraction &&
     collision.longestRunBeats >= PAIR_TRANSITION_POLICY.vocal.sustainedBeats;
-  if (sustainedCollision) lower('vocal-collision', 'simple_crossfade', 'veto');
+  // Analysis "vocal" values are broad spectral-risk estimates, so synth-heavy
+  // passages can look vocal. Keep a safe beatmatch eligible and let this risk
+  // cap confidence and select the filtered native blend instead of vetoing it.
+  if (sustainedCollision) {
+    lower('vocal-collision', 'conservative_beatmatched', 'demotion');
+  }
 
   const left = pair.outgoingCandidate;
   const right = pair.incomingCandidate;

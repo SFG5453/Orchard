@@ -170,7 +170,7 @@ test('chooses a full beatmatched transition for a clean compatible pair', () => 
   assert.equal(plan.fallbackReason, '');
 });
 
-test('demotes close-tempo candidates with sustained lead-vocal collision', () => {
+test('uses a conservative filtered beatmatch for sustained spectral vocal risk', () => {
   const plan = planPairTransition(cleanPair({
     // Cover the complete outgoing/incoming candidate windows so there is no
     // clean alternate downbeat that can legitimately avoid the collision.
@@ -178,9 +178,10 @@ test('demotes close-tempo candidates with sustained lead-vocal collision', () =>
     incoming: { vocal: (time) => time <= 60 ? 0.9 : 0.05 }
   }));
 
-  assert.ok(!['full_beatmatched', 'conservative_beatmatched'].includes(plan.transitionClass));
+  assert.equal(plan.transitionClass, 'conservative_beatmatched');
   assert.ok(reasonCount(plan, 'vocal-collision') > 0);
-  assert.notEqual(plan.renderMode, 'native');
+  assert.equal(plan.renderMode, 'native');
+  assert.equal(plan.strategy, 'filtered_blend');
 });
 
 test('one-sided vocals over an instrumental bed remain beatmatch eligible', () => {

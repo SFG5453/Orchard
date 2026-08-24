@@ -191,13 +191,16 @@ test('low-confidence timing cannot authorize a native renderer', () => {
   assert.deepEqual(plan.fallback, plan.pairPlan.fallback);
 });
 
-test('sustained mapped vocal collision is refused with the selected fallback', () => {
+test('sustained mapped vocal risk is forwarded as a conservative filtered mix', () => {
   const plan = planWsolaTransition(pair({
     outgoing: { vocal: (time) => time >= 70 ? 0.92 : 0.05 },
     incoming: { vocal: (time) => time <= 60 ? 0.9 : 0.05 }
   }));
 
-  assert.equal(plan.ok, false);
+  assert.equal(plan.ok, true, plan.reason);
+  assert.equal(plan.pairPlan.transitionClass, 'conservative_beatmatched');
+  assert.equal(plan.strategy, 'filtered_blend');
+  assert.equal(plan.vocalClash, true);
   assert.equal(plan.pairPlan.diagnostics.reasonCounts['vocal-collision'] > 0, true);
   assert.deepEqual(plan.fallback, plan.pairPlan.fallback);
 });

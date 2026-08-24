@@ -300,6 +300,40 @@ test('prunes the cue cross-product to a deterministic detailed-search budget', (
   );
 });
 
+test('excludes beatmatched candidates shorter than two bars or four seconds', () => {
+  const candidateBeats = (bpm) => {
+    const highRisk = analysis({
+      duration: 180,
+      bpm,
+      boundaries: [
+        { time: 168, confidence: 0.6, source: 'detected-change', noveltyPeak: 0.8 },
+        { time: 24, confidence: 0.6, source: 'detected-change', noveltyPeak: 0.8 }
+      ],
+      vocal: () => 0.8
+    });
+    const outgoing = generateTransitionCandidates(highRisk, 'outgoing')
+      .find((candidate) => candidate.source === 'detected-change' && candidate.anchorTime === 168);
+    const incoming = generateTransitionCandidates(highRisk, 'incoming')
+      .find((candidate) => candidate.source === 'detected-change' && candidate.anchorTime === 24);
+    assert.ok(outgoing);
+    assert.ok(incoming);
+
+    return buildCandidatePairs(
+      [outgoing],
+      [incoming],
+      tempoFit(bpm, bpm),
+      { outgoingAnalysis: highRisk, incomingAnalysis: highRisk }
+    ).finalists;
+  };
+
+  const slowTempo = candidateBeats(60);
+  const highTempo = candidateBeats(160);
+
+  assert.deepEqual(slowTempo.map((candidate) => candidate.beats).sort((a, b) => a - b), [8, 16]);
+  assert.deepEqual(highTempo.map((candidate) => candidate.beats), [16]);
+  assert.ok([...slowTempo, ...highTempo].every((candidate) => candidate.durationSeconds >= 4));
+});
+
 test('allows a 32-beat option only for strong low-vocal structural evidence', () => {
   const strong = analysis({
     duration: 180,

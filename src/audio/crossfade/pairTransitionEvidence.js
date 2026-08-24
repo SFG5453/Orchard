@@ -28,6 +28,8 @@ export const MAX_DISCARDED_AUDIBLE_SECONDS = 12;
 export const MAX_STRETCH_DEVIATION = 0.04;
 export const VOCAL_ACTIVE_THRESHOLD = 0.6;
 export const ORDINARY_BEAT_LENGTHS = Object.freeze([4, 8, 16]);
+const MIN_BEATMATCH_BEATS = 8;
+const MIN_BEATMATCH_SECONDS = 4;
 const AUDIBLE_ENERGY_FRACTION = 0.1;
 
 const ROOTS = new Map([
@@ -466,7 +468,7 @@ export function buildCandidatePairs(
   const outgoingRatio = finite(fit.outgoingRatio) ?? 1;
   const incomingRatio = finite(fit.incomingRatio) ?? 1;
   const pairs = [];
-  const rejected = { bounds: 0, tempo: 0 };
+  const rejected = { bounds: 0, tempo: 0, duration: 0 };
   let combinations = 0;
   if (!(targetBpm > 0)) {
     return { finalists: [], diagnostics: { combinations, rejected, detailed: 0 } };
@@ -480,6 +482,13 @@ export function buildCandidatePairs(
       for (const beats of beatLengths) {
         combinations += 1;
         const durationSeconds = beats * 60 / targetBpm;
+        if (
+          fit.beatmatched &&
+          (beats < MIN_BEATMATCH_BEATS || durationSeconds < MIN_BEATMATCH_SECONDS - 1e-6)
+        ) {
+          rejected.duration += 1;
+          continue;
+        }
         const outgoingStart = outgoing.anchorTime - durationSeconds * outgoingRatio;
         const incomingStart = incoming.anchorTime - durationSeconds * incomingRatio;
         if (
