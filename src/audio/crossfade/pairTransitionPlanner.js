@@ -559,9 +559,15 @@ export function planPairTransition({
     rejected: built.diagnostics.rejected
   };
   if (!built.finalists.length) {
-    const reason = !incomingCandidates.some((candidate) => candidate.runwaySeconds > 0)
-      ? 'incoming-runway'
-      : 'no-credible-candidate';
+    const outgoingBpm = finite(outgoing.timing?.bpm) ?? 0;
+    const incomingBpm = finite(incoming.timing?.bpm) ?? 0;
+    const reason = !(outgoingBpm > 0)
+      ? 'outgoing-tempo'
+      : !(incomingBpm > 0)
+        ? 'incoming-tempo'
+        : !incomingCandidates.some((candidate) => candidate.runwaySeconds > 0)
+          ? 'incoming-runway'
+          : 'no-credible-candidate';
     return fallbackPlan(outgoing, incoming, generated, reason);
   }
 

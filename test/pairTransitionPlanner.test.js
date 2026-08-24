@@ -194,6 +194,14 @@ test('uses a simple fallback when the incoming track has no usable intro runway'
   assert.match(plan.fallbackReason, /incoming|candidate|runway/);
 });
 
+test('reports which tempo is missing when pair construction cannot begin', () => {
+  const plan = planPairTransition(cleanPair({ outgoing: { bpm: 0 } }));
+
+  assert.equal(plan.status, 'fallback');
+  assert.equal(plan.fallbackReason, 'outgoing-tempo');
+  assert.equal(plan.diagnostics.reasonCounts['outgoing-tempo'], 1);
+});
+
 test('avoids outgoing vocals at the end by choosing a cleaner earlier boundary', () => {
   const plan = planPairTransition(cleanPair({
     outgoing: {
