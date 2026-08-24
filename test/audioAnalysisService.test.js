@@ -488,6 +488,67 @@ test('beat-model windows pre-empt Essentia, and its refusal restores it', async 
   }
 });
 
+test('analysis service rebuilds rhythmic evidence after the beat model moves downbeats', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-final-grid-'));
+  const ipc = fakeIpcMain();
+  const beats = Array.from({ length: 21 }, (_, index) => index * 0.5);
+  const raw = {
+    analysisVersion: AUDIO_ANALYSIS_VERSION,
+    duration: 10,
+    bpm: 120,
+    beatInterval: 0.5,
+    beatConfidence: 0.7,
+    beats,
+    downbeats: [0, 2, 4, 6, 8, 10],
+    phraseBoundaries: [0, 8],
+    audibleStartTime: 0,
+    contentEndTime: 10,
+    energyCurve: [{ time: 0, energy: 0.2 }, { time: 10, energy: 0.4 }]
+  };
+  const service = setupAudioAnalysisService({
+    cachePath: path.join(directory, 'cache.json'),
+    ipcMain: ipc,
+    nativeModulePath: 'test-native-addon',
+    loadNativeAddon: () => ({
+      analysisVersion: AUDIO_ANALYSIS_VERSION,
+      analyze: async () => raw,
+      beatSpectrogram: async () => ({ values: new Float32Array(1), frames: 1, mels: 1 })
+    }),
+    logger: () => {},
+    refineConfidence: () => null,
+    refineBeats: () => ({
+      beatConfidence: 0.9,
+      beatModelChecked: true,
+      beatModelAgreement: 0.01,
+      downbeats: [1, 3, 5, 7, 9]
+    }),
+    createModelHost: () => ({ track: async () => null, stop: () => {} })
+  });
+
+  try {
+    const audio = tone();
+    const result = await ipc.invoke('audio-analysis:analyze', {
+      trackId: 'final-grid',
+      samples: audio.samples,
+      sampleRate: audio.sampleRate,
+      duration: audio.duration,
+      priority: 1,
+      beatWindows: [{ samples: new Float32Array(22050), sampleRate: 22050, offsetSeconds: 0 }]
+    });
+
+    assert.deepEqual(result.timing.downbeats, [1, 3, 5, 7, 9]);
+    assert.deepEqual(
+      result.boundaries
+        .filter((boundary) => boundary.source === 'rhythmic-fallback')
+        .map((boundary) => boundary.time),
+      [1, 9]
+    );
+  } finally {
+    await service.stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('a declined model still stamps beatModelChecked so the track is not re-analysed forever', async () => {
   // `beatModelChecked` records that the pass ran, not that it produced a
   // verdict -- exactly like `essentiaChecked`. Without the stamp the renderer's

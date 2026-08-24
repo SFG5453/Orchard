@@ -17,6 +17,8 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { finalizeTrackAnalysis } from './trackAnalysis.js';
+
 // 8: vocalActivityMask became a real per-frame curve. Version 7 entries carry
 // the old track-wide scalar gated by loudness, which reads as plausible data
 // but says nothing about any particular moment, so they must not be reused.
@@ -26,7 +28,10 @@
 // 10: lowEnergyCurve became measured sub-250 Hz spectral energy rather than a
 // scaled copy of the broadband envelope. Cached version-9 curves cannot safely
 // choose a content-aware bass handoff.
-export const AUDIO_ANALYSIS_VERSION = 10;
+// 11: desktop transition planning consumes canonical timing, feature-frame,
+// and boundary evidence. Older caches contain grid-derived semantic cues and
+// can become internally stale after the beat model moves the downbeat grid.
+export const AUDIO_ANALYSIS_VERSION = 11;
 export const MIN_LOCAL_BPM = 40;
 export const MAX_LOCAL_BPM = 240;
 
@@ -45,23 +50,28 @@ export function isValidLocalAnalysis(value) {
     Number.isFinite(beatInterval) && beatInterval > 0 &&
     Array.isArray(value.beats) && value.beats.length >= 2 &&
     Array.isArray(value.downbeats) &&
-    Array.isArray(value.phraseBoundaries);
+    value.timing && typeof value.timing === 'object' &&
+    Array.isArray(value.timing.beats) && value.timing.beats.length >= 2 &&
+    Array.isArray(value.timing.downbeats) &&
+    Array.isArray(value.frames) &&
+    Array.isArray(value.boundaries);
 }
 
 export function localAnalysisWithSource(value, source) {
-  if (!isValidLocalAnalysis(value)) return null;
   const bpm = Number(value.bpm);
   const originalSource = String(value.analysisSource || value.bpmSource || '');
-  return {
+  const analysisSource = source === 'cache' ? (originalSource || 'local-cache') : source;
+  const result = finalizeTrackAnalysis({
     ...value,
     bpm,
     analyzedBpm: Number(value.analyzedBpm) || bpm,
     analyzedTempoConfidence: Number(value.analyzedTempoConfidence) ||
       Number(value.tempoConfidence) || Number(value.beatConfidence) || 0,
-    analysisSource: source === 'cache' ? (originalSource || 'local-cache') : source,
+    analysisSource,
     ...(source === 'cache' && originalSource ? { cachedBpmSource: originalSource } : {}),
     bpmSource: source
-  };
+  });
+  return isValidLocalAnalysis(result) ? result : null;
 }
 
 function redactText(value) {
