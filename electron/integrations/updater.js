@@ -47,7 +47,7 @@ const GITHUB_REPO = 'orchard';
 const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
 const GITHUB_RELEASES_API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases?per_page=20`;
 const UPDATE_CHANNELS = ['stable', 'beta'];
-const DEFAULT_UPDATE_CHANNEL = 'stable';
+const DEFAULT_UPDATE_CHANNEL = 'beta';
 
 // Packages are published to GitHub releases and nowhere else. This override
 // exists so a developer can point a build at a locally served manifest; there
