@@ -87,25 +87,31 @@ function pairKey(fromTrackId, toTrackId) {
   return `${String(fromTrackId || '')}>${String(toTrackId || '')}`;
 }
 
-// Longest overlap the engine may choose, plus the stretch it may apply to the
-// outgoing side. Slices carry this much audio before each anchor so every
-// candidate the engine is allowed to consider is actually present in the PCM.
-const MAX_SEARCH_SECONDS = 20;
+// Decoder and filter safety on either side of the exact selected source
+// windows. The renderer is still given one fixed plan inside these slices; the
+// padding is not a search region and cannot change any cue.
+const SLICE_PADDING_SECONDS = 1.5;
 
-// Audio kept beyond the anchor. The engine wants a little tail after the
-// transition ends, and the incoming element resumes from inside this slice.
-const SLICE_TAIL_SECONDS = 1.5;
+function decodedDuration(buffer) {
+  const declared = Number(buffer?.duration);
+  if (Number.isFinite(declared) && declared > 0) return declared;
+  const sampleRate = Number(buffer?.sampleRate);
+  const length = Number(buffer?.length);
+  return sampleRate > 0 && length >= 0 ? length / sampleRate : 0;
+}
 
-// How far from the requested anchor a transition may land, in seconds. Every
-// reachable end sits a whole number of bars from a downbeat, so a window
-// narrower than that lattice would refuse pairings that are perfectly good;
-// one bar at 60 BPM is the widest that lattice ever gets.
-const ANCHOR_TOLERANCE_SECONDS = 1.0;
-
-function searchSlice(anchorSeconds, durationSeconds) {
-  const start = Math.max(0, anchorSeconds - MAX_SEARCH_SECONDS - SLICE_TAIL_SECONDS);
-  const end = Math.min(durationSeconds || Infinity, anchorSeconds + SLICE_TAIL_SECONDS);
-  return { start, end };
+function selectedSlice(startSeconds, endSeconds, buffer) {
+  const sampleRate = Number(buffer?.sampleRate);
+  const duration = decodedDuration(buffer);
+  const selectedStart = Math.max(0, Number(startSeconds) || 0);
+  const selectedEnd = Math.max(selectedStart, Number(endSeconds) || 0);
+  const start = Math.max(0, selectedStart - SLICE_PADDING_SECONDS);
+  const end = Math.min(duration || Infinity, selectedEnd + SLICE_PADDING_SECONDS);
+  if (!(sampleRate > 0)) return { start, end };
+  return {
+    start: Math.floor(start * sampleRate) / sampleRate,
+    end: Math.ceil(end * sampleRate) / sampleRate
+  };
 }
 
 // Beat grids are absolute; the engine sees only the slice, so both arrays are
@@ -117,56 +123,60 @@ function localGrid(grid, slice) {
   return { beats: rebase(grid?.beats), downbeats: rebase(grid?.downbeats) };
 }
 
-function anchorWindow(anchorSeconds, slice) {
-  const local = anchorSeconds - slice.start;
+function selectedLocalPlan(transitionPlan, outgoingSlice, incomingSlice) {
   return {
-    endEarliest: local - ANCHOR_TOLERANCE_SECONDS,
-    endLatest: local + ANCHOR_TOLERANCE_SECONDS
+    outgoingStart: Number(transitionPlan.transitionStart) - outgoingSlice.start,
+    incomingStart: Number(transitionPlan.incomingCueTime) - incomingSlice.start,
+    duration: Number(transitionPlan.overlapSeconds),
+    beats: Number(transitionPlan.beats),
+    outgoingBpm: Number(transitionPlan.outgoingBpm),
+    incomingBpm: Number(transitionPlan.incomingBpm),
+    targetBpm: Number(transitionPlan.targetBpm),
+    outgoingTempoRatio: Number(transitionPlan.outgoingTempoRatio),
+    incomingTempoRatio: Number(transitionPlan.incomingTempoRatio),
+    strategy: String(transitionPlan.strategy || '')
   };
 }
 
-// Lengths the engine may choose from, capped at what the planner measured the
-// incoming intro to cover. Only the engine's own allowed lengths are offered;
-// anything else it would ignore.
-const ENGINE_BEAT_LENGTHS = [4, 8, 16, 32];
-
-function allowedBeatLengths(plannedBeats) {
-  const cap = Number(plannedBeats) || 0;
-  const allowed = ENGINE_BEAT_LENGTHS.filter((beats) => beats <= cap);
-  return allowed.length ? allowed : [ENGINE_BEAT_LENGTHS[0]];
+function strategyIdentity(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
 }
 
-/**
- * Rewrites the plan with the transition the engine actually chose.
- *
- * Everything the engine reports is relative to the slice it was given, so each
- * time is shifted back onto the track's own timeline. The bass-swap fraction is
- * the engine's own hand-over point rather than the planner's, and it is only
- * used here to decide when the outgoing element stops being authoritative.
- */
-function effectivePlan(plannedTransition, result, outgoingSlice, incomingSlice) {
-  const transitionStart = outgoingSlice.start + (Number(result.outgoingStart) || 0);
-  const incomingCueTime = incomingSlice.start + (Number(result.incomingStart) || 0);
-  const overlapSeconds = Number(result.duration) || 0;
-  return {
-    ...plannedTransition,
-    transitionStart,
-    transitionEnd: outgoingSlice.start + (Number(result.outgoingResume) || 0),
-    overlapSeconds,
-    beats: Number(result.beats) || plannedTransition.beats,
-    fadeBeats: Number(result.beats) || plannedTransition.beats,
-    incomingCueTime,
-    incomingResumeTime: incomingSlice.start + (Number(result.incomingResume) || 0),
-    bassSwapFraction: ENGINE_BASS_SWAP_FRACTION,
-    strategy: String(result.strategy || ''),
-    summary: String(result.summary || '')
+function renderMatchesSelectedPlan(result, selectedPlan) {
+  const sampleRate = Number(result?.sampleRate);
+  if (!(sampleRate > 0)) return false;
+  const tolerance = 1 / sampleRate;
+  const expected = {
+    outgoingStart: selectedPlan.outgoingStart,
+    incomingStart: selectedPlan.incomingStart,
+    duration: selectedPlan.duration,
+    outgoingResume: selectedPlan.outgoingStart +
+      selectedPlan.duration * selectedPlan.outgoingTempoRatio,
+    incomingResume: selectedPlan.incomingStart +
+      selectedPlan.duration * selectedPlan.incomingTempoRatio
   };
+  if (Object.entries(expected).some(([field, value]) => {
+    const actual = Number(result?.[field]);
+    return !Number.isFinite(actual) || Math.abs(actual - value) > tolerance + Number.EPSILON;
+  })) return false;
+  if (Number(result?.beats) !== selectedPlan.beats ||
+      strategyIdentity(result?.strategy) !== strategyIdentity(selectedPlan.strategy)) return false;
+  // Earmark stores tempo values as f32, so allow only the representational
+  // round-trip error while keeping timing identity at the stricter one-sample
+  // boundary above.
+  const representedNumbers = [
+    [result?.bpm, selectedPlan.targetBpm, 1e-4],
+    [result?.stretchRatio, selectedPlan.outgoingTempoRatio, 1e-6],
+    [result?.incomingStretchRatio, selectedPlan.incomingTempoRatio, 1e-6]
+  ];
+  return representedNumbers.every(([actual, expectedValue, maximumError]) =>
+    Number.isFinite(Number(actual)) && Math.abs(Number(actual) - expectedValue) <= maximumError
+  );
 }
-
-// Where the engine hands the low end over, as a fraction of the overlap. It
-// swaps across the middle of the transition, so the outgoing element stops
-// being authoritative there.
-const ENGINE_BASS_SWAP_FRACTION = 0.5;
 
 function sliceChannels(buffer, startSeconds, endSeconds) {
   const sampleRate = buffer.sampleRate;
@@ -213,11 +223,24 @@ export function createWsolaCrossfade({
     return { plan: preparation.plan, render: preparation.render };
   }
 
+  // A refused or late render must retain the fallback attached to the plan
+  // that entered preparation, even if analysis metadata changes afterward.
+  function preparationPlan(fromTrackId, toTrackId) {
+    if (!preparation || preparation.key !== pairKey(fromTrackId, toTrackId)) return null;
+    return preparation.plan || null;
+  }
+
   function prepare({ fromTrackId, toTrackId, fromUrl, toUrl, plan: transitionPlan }) {
     const key = pairKey(fromTrackId, toTrackId);
     if (preparation?.key === key && preparation.status !== 'failed') return preparation.promise;
     if (!transitionPlan?.ok || !fromUrl || !toUrl || typeof bridge?.renderTransition !== 'function') {
-      preparation = { key, status: 'failed', reason: 'unavailable', promise: Promise.resolve(null) };
+      preparation = {
+        key,
+        status: 'failed',
+        plan: transitionPlan,
+        reason: 'unavailable',
+        promise: Promise.resolve(null)
+      };
       return preparation.promise;
     }
 
@@ -235,12 +258,17 @@ export function createWsolaCrossfade({
       ]);
       if (!fromBuffer || !toBuffer) throw new Error('Transition PCM decoding returned no audio');
       const sampleRate = fromBuffer.sampleRate;
-      // Slices are cut around the *anchors* rather than around a pre-decided
-      // overlap: the engine chooses the transition itself inside those anchors,
-      // so it needs enough audio in front of each one to reach the longest
-      // overlap it is allowed to pick.
-      const outgoingSlice = searchSlice(transitionPlan.transitionEnd, fromBuffer.duration);
-      const incomingSlice = searchSlice(transitionPlan.incomingDropTime, toBuffer.duration);
+      const outgoingSlice = selectedSlice(
+        transitionPlan.transitionStart,
+        transitionPlan.transitionEnd,
+        fromBuffer
+      );
+      const incomingSlice = selectedSlice(
+        transitionPlan.incomingCueTime,
+        transitionPlan.incomingResumeTime,
+        toBuffer
+      );
+      const localPlan = selectedLocalPlan(transitionPlan, outgoingSlice, incomingSlice);
       const outgoing = {
         channels: sliceChannels(fromBuffer, outgoingSlice.start, outgoingSlice.end),
         sampleRate,
@@ -257,13 +285,18 @@ export function createWsolaCrossfade({
       // model how much the outgoing track is actually singing lets the engine
       // spend that ride only where there is a vocal to get out of the way.
       //
-      // Measured across the whole outgoing slice rather than the overlap,
-      // because the overlap is what this call is about to decide. The engine
-      // crops the curve to the region it settles on.
+      // This curve belongs to the already-selected overlap. Padding exists only
+      // for renderer safety and must not influence the vocal evidence supplied
+      // to the fixed plan.
       let duckCurve;
       if (typeof bridge?.vocalMask === 'function') {
-        const mask = outgoing.channels.length
-          ? await bridge.vocalMask(outgoing.channels, sampleRate).catch(() => null)
+        const selectedOutgoing = sliceChannels(
+          fromBuffer,
+          transitionPlan.transitionStart,
+          transitionPlan.transitionEnd
+        );
+        const mask = selectedOutgoing.length
+          ? await bridge.vocalMask(selectedOutgoing, sampleRate).catch(() => null)
           : null;
         if (mask?.curve?.length) duckCurve = mask.curve;
         report('wsola-vocal-mask', {
@@ -273,15 +306,7 @@ export function createWsolaCrossfade({
       }
 
       const result = await bridge.renderTransition(outgoing, incoming, {
-        // The anchors are the whole point of planning here rather than letting
-        // the engine roam: the mix-out came from this app's own structural
-        // analysis, and the drop is where the incoming track takes over.
-        outgoing: anchorWindow(transitionPlan.transitionEnd, outgoingSlice),
-        incoming: anchorWindow(transitionPlan.incomingDropTime, incomingSlice),
-        // Never longer than the intro was measured to cover; the engine may
-        // still shorten, which is the same "shorten to fit, never refuse" rule
-        // the planner applies.
-        beatLengths: allowedBeatLengths(transitionPlan.beats),
+        plan: localPlan,
         // Omitted rather than passed empty when the model had no opinion, so
         // the engine's own "no curve means full depth" default applies.
         ...(duckCurve ? { duckCurve } : {})
@@ -292,25 +317,26 @@ export function createWsolaCrossfade({
         report('wsola-prepare-refused', { trackId: String(toTrackId), reason: entry.reason });
         return null;
       }
+      if (!renderMatchesSelectedPlan(result, localPlan)) {
+        entry.status = 'failed';
+        entry.reason = 'render-plan-mismatch';
+        report('wsola-prepare-refused', { trackId: String(toTrackId), reason: entry.reason });
+        return null;
+      }
       entry.render = {
         channels: result.channels,
         sampleRate: result.sampleRate,
         stretchRatio: result.stretchRatio
       };
-      // The engine chose the transition, so the plan start() runs against has
-      // to be the one it chose -- not the estimate that was handed to it. Its
-      // times are on the slice timeline; these are back on the media timeline.
-      entry.plan = effectivePlan(transitionPlan, result, outgoingSlice, incomingSlice);
       entry.status = 'ready';
       report('wsola-prepare-ready', {
         trackId: String(toTrackId),
         elapsedMs: Date.now() - startedAt,
-        strategy: String(result.strategy || ''),
+        strategy: transitionPlan.strategy,
         stretchRatio: result.stretchRatio,
-        beats: result.beats,
-        plannedStart: transitionPlan.transitionStart,
-        chosenStart: entry.plan.transitionStart,
-        overlapSeconds: entry.plan.overlapSeconds
+        beats: transitionPlan.beats,
+        transitionStart: transitionPlan.transitionStart,
+        overlapSeconds: transitionPlan.overlapSeconds
       });
       return entry.render;
     })().catch((error) => {
@@ -545,6 +571,7 @@ export function createWsolaCrossfade({
     isActive,
     plan,
     prepare,
+    preparationPlan,
     preparationStatus,
     preparedTransition,
     setTargetVolume,

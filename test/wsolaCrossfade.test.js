@@ -126,7 +126,8 @@ function fakeElement(currentTime = 0) {
   };
 }
 
-function readyPlan({ transitionStart = 200, overlapSeconds = 7.6 } = {}) {
+function readyPlan({ transitionStart = 200, overlapSeconds = 16 * 60 / 126 } = {}) {
+  const targetBpm = 16 * 60 / overlapSeconds;
   return {
     ok: true,
     transitionStart,
@@ -134,13 +135,49 @@ function readyPlan({ transitionStart = 200, overlapSeconds = 7.6 } = {}) {
     overlapSeconds,
     beats: 16,
     bassSwapFraction: 0.75,
-    outgoingBpm: 126,
-    incomingBpm: 126,
+    outgoingBpm: targetBpm,
+    incomingBpm: targetBpm,
+    targetBpm,
+    outgoingTempoRatio: 1,
+    incomingTempoRatio: 1,
     stretchRatio: 1,
     incomingCueTime: 20,
     incomingResumeTime: 20 + overlapSeconds,
-    outgoingSlice: { start: 198.5, end: 209.1, anchor: 1.5 },
-    incomingSlice: { start: 18.5, end: 29.1, anchor: 1.5 }
+    strategy: 'beatmatched_crossfade',
+    outgoingSlice: {
+      start: Math.max(0, transitionStart - 1.5),
+      end: transitionStart + overlapSeconds + 1.5,
+      anchor: Math.min(1.5, transitionStart)
+    },
+    incomingSlice: {
+      start: 18.5,
+      end: 20 + overlapSeconds + 1.5,
+      anchor: 1.5
+    }
+  };
+}
+
+function exactRenderResult(outgoing, options, overrides = {}) {
+  const plan = options.plan;
+  return {
+    rendered: true,
+    rejected: '',
+    // The native result uses a human-readable diagnostic label while the
+    // selected-plan input uses the canonical wire spelling.
+    strategy: plan.strategy.replaceAll('_', ' '),
+    summary: '',
+    beats: plan.beats,
+    duration: plan.duration,
+    stretchRatio: Math.fround(plan.outgoingTempoRatio),
+    incomingStretchRatio: Math.fround(plan.incomingTempoRatio),
+    bpm: Math.fround(plan.targetBpm),
+    sampleRate: outgoing.sampleRate,
+    outgoingStart: plan.outgoingStart,
+    incomingStart: plan.incomingStart,
+    outgoingResume: plan.outgoingStart + plan.duration * plan.outgoingTempoRatio,
+    incomingResume: plan.incomingStart + plan.duration * plan.incomingTempoRatio,
+    channels: [new Float32Array(1000), new Float32Array(1000)],
+    ...overrides
   };
 }
 
@@ -180,41 +217,28 @@ test('only uses raw rendered PCM when per-source processing is flat', () => {
   }), true);
 });
 
-test('prepare slices around the anchors and constrains the engine to them', async () => {
+test('prepare sends the authoritative plan rebased into exact padded slices', async () => {
   const analyzer = fakeAnalyzer();
   const rendered = [];
+  const masked = [];
   const engine = createWsolaCrossfade({
     analyzer,
     bridge: {
+      vocalMask: async (channels, sampleRate) => {
+        masked.push({ channels, sampleRate });
+        return { curve: [0.2, 0.8] };
+      },
       renderTransition: async (outgoing, incoming, options) => {
         rendered.push({ outgoing, incoming, options });
-        // Answer with a transition the constraints would admit: ending exactly
-        // on each anchor, expressed on the slice timeline the engine was given.
-        return {
-          rendered: true,
-          rejected: '',
-          strategy: 'bass swap',
-          summary: '',
-          beats: 16,
-          duration: 7.6,
-          stretchRatio: 1,
-          bpm: 126,
-          sampleRate: outgoing.sampleRate,
-          outgoingStart: options.outgoing.endEarliest + 1 - 7.6,
-          incomingStart: options.incoming.endEarliest + 1 - 7.6,
-          outgoingResume: options.outgoing.endEarliest + 1,
-          incomingResume: options.incoming.endEarliest + 1,
-          channels: [new Float32Array(1000), new Float32Array(1000)]
-        };
+        return exactRenderResult(outgoing, options);
       }
     }
   });
 
   const plan = {
-    ...readyPlan({ transitionStart: 40 }),
-    incomingDropTime: 27.6,
-    outgoingGrid: { bpm: 126, beats: [46, 47.6, 49], downbeats: [46, 47.6] },
-    incomingGrid: { bpm: 126, beats: [26, 27.6, 29], downbeats: [26, 27.6] }
+    ...readyPlan({ transitionStart: 40, overlapSeconds: 16 * 60 / 126.123456 }),
+    outgoingGrid: { bpm: 120, beats: [39, 40, 44, 48, 49], downbeats: [40, 48] },
+    incomingGrid: { bpm: 120, beats: [19, 20, 24, 28, 29], downbeats: [20, 28] }
   };
   await engine.prepare({ fromTrackId: 'a', toTrackId: 'b', fromUrl: 'u1', toUrl: 'u2', plan });
 
@@ -226,29 +250,62 @@ test('prepare slices around the anchors and constrains the engine to them', asyn
   const call = rendered[0];
   assert.equal(call.outgoing.channels.length, 2);
   assert.equal(call.outgoing.sampleRate, 44100);
-  assert.equal(call.outgoing.bpm, 126);
+  assert.equal(call.outgoing.bpm, plan.outgoingBpm);
 
-  // The slice starts far enough before the anchor for the longest overlap the
-  // engine may pick, and the anchor sits one tolerance inside the end window.
-  const outgoingSliceStart = plan.transitionEnd - 20 - 1.5;
-  const expectedFrames = Math.round((plan.transitionEnd + 1.5 - outgoingSliceStart) * 44100);
+  const outgoingSliceStart = plan.transitionStart - 1.5;
+  const expectedFrames = Math.round((plan.overlapSeconds + 3) * 44100);
   assert.ok(Math.abs(call.outgoing.channels[0].length - expectedFrames) <= 1);
-  assert.ok(Math.abs(call.options.outgoing.endLatest - call.options.outgoing.endEarliest - 2) < 1e-9);
-  const anchorLocal = plan.transitionEnd - outgoingSliceStart;
-  assert.ok(Math.abs(call.options.outgoing.endEarliest - (anchorLocal - 1)) < 1e-9);
+  assert.deepEqual(call.outgoing.downbeats, [1.5, 9.5]);
+  assert.deepEqual(call.incoming.downbeats, [1.5, 9.5]);
+  assert.deepEqual(call.options.plan, {
+    outgoingStart: plan.transitionStart - outgoingSliceStart,
+    incomingStart: 1.5,
+    duration: plan.overlapSeconds,
+    beats: plan.beats,
+    outgoingBpm: plan.outgoingBpm,
+    incomingBpm: plan.incomingBpm,
+    targetBpm: plan.targetBpm,
+    outgoingTempoRatio: plan.outgoingTempoRatio,
+    incomingTempoRatio: plan.incomingTempoRatio,
+    strategy: plan.strategy
+  });
+  assert.equal('outgoing' in call.options, false);
+  assert.equal('incoming' in call.options, false);
+  assert.equal('beatLengths' in call.options, false);
+  assert.deepEqual(call.options.duckCurve, [0.2, 0.8]);
+  assert.equal(masked.length, 1);
+  assert.equal(masked[0].sampleRate, 44100);
+  assert.ok(Math.abs(masked[0].channels[0].length - plan.overlapSeconds * 44100) <= 1);
+  assert.strictEqual(engine.preparedTransition('a', 'b').plan, plan);
+});
 
-  // Grids arrive rebased onto the slice, so nothing outside it survives.
-  assert.ok(call.outgoing.downbeats.every((time) => time >= 0 && time <= 21.5));
-  assert.deepEqual(call.options.beatLengths, [4, 8, 16]);
+test('prepare refuses a returned plan identity mismatch greater than one sample', async () => {
+  const reports = [];
+  const engine = createWsolaCrossfade({
+    analyzer: fakeAnalyzer(),
+    bridge: {
+      renderTransition: async (outgoing, incoming, options) => exactRenderResult(outgoing, options, {
+        outgoingStart: options.plan.outgoingStart + 2 / outgoing.sampleRate
+      })
+    },
+    report: (event, detail) => reports.push({ event, detail })
+  });
 
-  // The plan start() runs against is the transition the engine chose, back on
-  // the media timeline.
-  const effective = engine.preparedTransition('a', 'b').plan;
-  assert.ok(Math.abs(effective.transitionEnd - plan.transitionEnd) < 1e-6);
-  assert.ok(Math.abs(effective.incomingResumeTime - plan.incomingDropTime) < 1e-6);
-  assert.ok(Math.abs(effective.transitionStart - (plan.transitionEnd - 7.6)) < 1e-6);
-  assert.equal(effective.overlapSeconds, 7.6);
-  assert.equal(effective.strategy, 'bass swap');
+  const result = await engine.prepare({
+    fromTrackId: 'a',
+    toTrackId: 'b',
+    fromUrl: 'u1',
+    toUrl: 'u2',
+    plan: readyPlan({ transitionStart: 40, overlapSeconds: 8 })
+  });
+
+  assert.equal(result, null);
+  assert.equal(engine.preparationStatus('a', 'b'), 'failed');
+  assert.equal(engine.preparedTransition('a', 'b'), null);
+  assert.equal(
+    reports.find((entry) => entry.event === 'wsola-prepare-refused')?.detail?.reason,
+    'render-plan-mismatch'
+  );
 });
 
 test('a refused render marks the pairing failed instead of throwing', async () => {

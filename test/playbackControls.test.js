@@ -270,7 +270,12 @@ test('playing from history does not enqueue the rest of listening history', () =
 
 // A WSOLA overlap already contains the incoming track, so the legacy engine
 // must never start its own fade on the same standby element underneath it.
-function crossfadeRoutingContext({ wsolaActive, wsolaPlan }) {
+function crossfadeRoutingContext({
+  wsolaActive,
+  wsolaPlan,
+  wsolaPreparationPlan = null,
+  wsolaStatus = 'idle'
+}) {
   const legacyStarts = [];
   const fromAudio = { currentTime: 200, duration: 240, pause() {}, play: async () => {} };
   const toAudio = { currentTime: 0, src: 'http://127.0.0.1/next', pause() {}, play: async () => {} };
@@ -322,8 +327,9 @@ function crossfadeRoutingContext({ wsolaActive, wsolaPlan }) {
     wsolaCrossfade: {
       isActive: () => wsolaActive,
       cancel: () => {},
-      plan: () => wsolaPlan,
-      preparationStatus: () => 'idle',
+      plan: () => typeof wsolaPlan === 'function' ? wsolaPlan() : wsolaPlan,
+      preparationPlan: () => wsolaPreparationPlan,
+      preparationStatus: () => wsolaStatus,
       preparedTransition: () => null,
       prepare: async () => null,
       start: async () => false
@@ -356,6 +362,55 @@ test('a refused WSOLA pairing still falls back to the legacy crossfade', async (
 
     assert.equal(await ctx.maybeStartAutoCrossfade(), true);
     assert.equal(legacyStarts.length, 1);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('a native refusal executes the attached fallback without planning the pair again', async () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { setTimeout: () => 1, clearTimeout: () => {} };
+  try {
+    const fallback = {
+      transitionClass: 'simple_crossfade',
+      outgoingStart: 196,
+      outgoingEnd: 204,
+      incomingCue: 4,
+      durationSeconds: 8,
+      strategy: 'equal_power_crossfade',
+      transitionStyle: 'equal_power',
+      reason: 'native-render-refused'
+    };
+    const pairPlan = {
+      fallback,
+      fallbackReason: 'native-render-refused',
+      incoming: { handoff: 12 },
+      diagnostics: { selected: { gates: ['native-render-refused'] } }
+    };
+    const { ctx, legacyStarts } = crossfadeRoutingContext({
+      wsolaActive: false,
+      wsolaStatus: 'failed',
+      wsolaPreparationPlan: {
+        ok: true,
+        transitionStart: 196,
+        fallback,
+        pairPlan
+      },
+      wsolaPlan: () => {
+        throw new Error('WSOLA pair planning ran again after native refusal');
+      }
+    });
+    ctx.autoCrossfade.transitionPlan = () => {
+      throw new Error('pair planning ran a second time');
+    };
+
+    assert.equal(await ctx.maybeStartAutoCrossfade(), true);
+    assert.equal(legacyStarts.length, 1);
+    assert.strictEqual(legacyStarts[0].transition.fallback, fallback);
+    assert.strictEqual(legacyStarts[0].transition.pairPlan, pairPlan);
+    assert.equal(legacyStarts[0].transition.transitionStart, fallback.outgoingStart);
+    assert.equal(legacyStarts[0].transition.transitionEnd, fallback.outgoingEnd);
+    assert.equal(legacyStarts[0].transition.incomingCueTime, fallback.incomingCue);
   } finally {
     globalThis.window = originalWindow;
   }

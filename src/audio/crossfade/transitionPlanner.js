@@ -100,7 +100,14 @@ function audibleStart(analysis = {}) {
   return candidates.length ? Math.min(...candidates) : 0;
 }
 
-function pairFallbackShape(pairPlan, analysis, nextAnalysis, length, playbackTime, minFadeSeconds) {
+export function transitionFromPairFallback(
+  pairPlan,
+  analysis,
+  nextAnalysis,
+  length,
+  playbackTime,
+  minFadeSeconds = 1
+) {
   const fallback = pairPlan.fallback;
   const finalEnd = audibleEnd(analysis, length) || length;
   let transitionEnd = clamp(fallback.outgoingEnd, 0, length);
@@ -208,7 +215,7 @@ export function planTransition({
     duration: length,
     nextDuration: trackDurationSeconds(nextTrack)
   });
-  return pairFallbackShape(
+  return transitionFromPairFallback(
     pairPlan,
     analysis,
     nextAnalysis,

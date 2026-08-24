@@ -27,6 +27,7 @@ import {
   WSOLA_START_LEAD_SECONDS,
   wsolaProcessingCompatible
 } from '../../audio/crossfade/wsolaCrossfade.js';
+import { transitionFromPairFallback } from '../../audio/crossfade/transitionPlanner.js';
 
 const LYRIC_AUTO_SCROLL_RESUME_DELAY_MS = 1800;
 
@@ -439,19 +440,41 @@ export function installPlaybackControls(ctx) {
   }
 
   // Routes a smart-mode transition to the beat-matched WSOLA engine when the
-  // pairing qualifies. Returns 'started' when the engine took over, 'hold'
-  // while a viable plan is waiting on its render (the legacy engine must not
-  // fire its own, earlier overlap in the meantime), and 'fallback' when the
-  // pairing is refused or preparation failed.
+  // pairing qualifies. The structured fallback is adapted from the same pair
+  // plan, so a native refusal never launches a second musical planning pass.
   async function maybeRunWsolaTransition({ next, fromAudio, toAudio, playbackTime, mediaDuration }) {
     const engine = ctx.wsolaCrossfade;
-    if (!engine) return 'fallback';
+    if (!engine) return { status: 'fallback', fallback: null };
     const fromVideo = ctx.activeTrackIsVideo.value ? ctx.videoRef.value : null;
     // An overlap already playing must hold, never fall back: the rendered
     // buffer already contains the incoming track, so letting the legacy engine
     // start its own fade on the same standby element plays it a second time.
-    if (engine.isActive()) return 'hold';
+    if (engine.isActive()) return { status: 'hold', fallback: null };
     const fromTrackId = ctx.activeTrack.value?.id;
+    const preparationStatus = engine.preparationStatus(fromTrackId, next.id);
+    const capturedPlan = engine.preparationPlan?.(fromTrackId, next.id) || null;
+    const plan = capturedPlan || engine.plan({
+      analysis: ctx.crossfadeAnalysis.value,
+      nextAnalysis: ctx.nextCrossfadeAnalysis.value,
+      duration: mediaDuration,
+      nextDuration: Number(next.durationSeconds) || 0
+    });
+    const attachedFallback = (sourcePlan = plan) => {
+      if (!sourcePlan?.pairPlan?.fallback) return null;
+      return transitionFromPairFallback(
+        sourcePlan.pairPlan,
+        ctx.crossfadeAnalysis.value,
+        ctx.nextCrossfadeAnalysis.value,
+        mediaDuration,
+        playbackTime,
+        1
+      );
+    };
+    const fallback = (sourcePlan = plan) => ({
+      status: 'fallback',
+      fallback: attachedFallback(sourcePlan)
+    });
+    if (preparationStatus === 'failed') return fallback();
     const trackGains = ctx.audioEngineTrackGains?.value || {};
     if (!wsolaProcessingCompatible({
       normalizationEnabled: ctx.volumeNormalizationEnabled?.value,
@@ -459,27 +482,19 @@ export function installPlaybackControls(ctx) {
       outgoingGainDb: trackGains[fromTrackId],
       incomingGainDb: trackGains[next.id]
     })) {
-      return 'fallback';
+      return fallback();
     }
-    const plan = engine.plan({
-      analysis: ctx.crossfadeAnalysis.value,
-      nextAnalysis: ctx.nextCrossfadeAnalysis.value,
-      duration: mediaDuration,
-      nextDuration: Number(next.durationSeconds) || 0
-    });
-    if (!plan.ok) return 'fallback';
-    if (engine.preparationStatus(fromTrackId, next.id) === 'failed') return 'fallback';
+    if (!plan.ok) return fallback();
 
-    // Once the engine has planned, its choice supersedes the estimate above:
-    // it may have picked a longer overlap, which starts earlier, and gating on
-    // the estimate would then call start() after the buffer was already due.
-    const prepared = engine.preparationStatus(fromTrackId, next.id) === 'ready'
+    // Once preparation captures a plan, timing remains pinned to that same
+    // object even if analysis metadata is enriched while rendering finishes.
+    const prepared = preparationStatus === 'ready'
       ? engine.preparedTransition(fromTrackId, next.id)
       : null;
     const untilStart = (prepared?.plan?.transitionStart ?? plan.transitionStart) - playbackTime;
     if (untilStart > WSOLA_START_LEAD_SECONDS) {
       if (untilStart <= WSOLA_PREPARE_LEAD_SECONDS &&
-          engine.preparationStatus(fromTrackId, next.id) === 'idle') {
+          preparationStatus === 'idle') {
         const fromUrl = fromAudio.currentSrc || fromAudio.src || '';
         const toUrl = ctx.nextTrackPreload.value?.resolved?.streamUrl || '';
         if (fromUrl && toUrl) {
@@ -488,17 +503,19 @@ export function installPlaybackControls(ctx) {
           void ctx.preloadNextTrack();
         }
       }
-      return 'hold';
+      return { status: 'hold', fallback: null };
     }
-    if (engine.preparationStatus(fromTrackId, next.id) !== 'ready') {
-      return untilStart > -0.2 ? 'hold' : 'fallback';
+    if (preparationStatus !== 'ready') {
+      return untilStart > -0.2
+        ? { status: 'hold', fallback: null }
+        : fallback();
     }
 
     const resolved = await confirmNextPreload(next, toAudio);
-    if (!resolved) return 'fallback';
+    if (!resolved) return fallback(prepared?.plan);
     // Start against the plan the buffer was rendered with; a fresher plan may
     // have shifted after metadata enrichment and would misplace the downbeats.
-    if (!prepared) return 'fallback';
+    if (!prepared) return fallback();
     const previousTrack = ctx.activeTrack.value;
     const nextTrack = ctx.activeTrackFromResolved(next, resolved);
     const nextDeck = ctx.activeAudioDeck.value === 'main' ? 'next' : 'main';
@@ -577,9 +594,9 @@ export function installPlaybackControls(ctx) {
     });
     if (!didStart) {
       ctx.dismissSmartCrossfadeMix();
-      return 'fallback';
+      return fallback(prepared.plan);
     }
-    return 'started';
+    return { status: 'started', fallback: null };
   }
 
   ctx.maybeStartAutoCrossfade = async function maybeStartAutoCrossfade(options = {}) {
@@ -618,6 +635,7 @@ export function installPlaybackControls(ctx) {
     // A beat-matched blend is still a mix. An album playthrough asks for the
     // record's own spacing, so the WSOLA route is skipped and the planner is
     // left to hand off gaplessly.
+    let routedFallback = null;
     if (!albumSequential && !options.force && ctx.crossfadeMode.value === 'smart' &&
         ctx.isPlaying.value && !ctx.isSeeking.value && !ctx.autoCrossfade.isActive()) {
       const routed = await maybeRunWsolaTransition({
@@ -627,8 +645,9 @@ export function installPlaybackControls(ctx) {
         playbackTime: Number.isFinite(mediaCurrentTime) ? mediaCurrentTime : ctx.currentTime.value,
         mediaDuration
       });
-      if (routed === 'started') return true;
-      if (routed === 'hold') return false;
+      if (routed.status === 'started') return true;
+      if (routed.status === 'hold') return false;
+      routedFallback = routed.fallback;
     }
 
     const forceFadeSeconds = options.reason === 'ended-handoff'
@@ -636,7 +655,7 @@ export function installPlaybackControls(ctx) {
       : Math.min(1, ctx.crossfadeSeconds.value || 1);
     const transition = options.force
       ? { shouldStart: true, fadeSeconds: forceFadeSeconds, reason: options.reason || 'forced-handoff' }
-      : ctx.autoCrossfade.transitionPlan({
+      : routedFallback || ctx.autoCrossfade.transitionPlan({
         albumSequential,
         currentAudio: fromAudio,
         currentTime: Number.isFinite(mediaCurrentTime) ? mediaCurrentTime : ctx.currentTime.value,
