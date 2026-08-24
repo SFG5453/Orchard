@@ -70,5 +70,8 @@ const addon = require('./native-audio-rust/build/orchard-audio-transition-${plat
 if (typeof addon.renderTransition !== 'function') {
   throw new Error('addon did not export renderTransition');
 }
+if (typeof addon.renderPlannedTransition !== 'function') {
+  throw new Error('addon did not export renderPlannedTransition');
+}
 console.log('transition addon OK: orchard-audio-transition-${platform}-${architecture}.node');
 ")

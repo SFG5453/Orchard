@@ -23,9 +23,11 @@
 //! not touch JS values, so the PCM is copied out first.
 
 use earmark::dsp::automation::{AutomationCurve, AutomationPoint, CurveShape};
-use earmark::{RegionConstraint, TimeWindow, TransitionConstraints};
+use earmark::{
+    RegionConstraint, SelectedTransition, TimeWindow, TransitionConstraints, TransitionStrategy,
+};
 
-use crate::{JsRegionConstraint, JsTransitionOptions};
+use crate::{JsRegionConstraint, JsSelectedTransition, JsTransitionOptions};
 
 /// Longest overlap worth accepting, as a guard against a caller passing whole tracks. The planner
 /// never asks for more than `max_duration`, so anything approaching this is a bug upstream.
@@ -40,6 +42,34 @@ pub fn constraints(options: &JsTransitionOptions) -> TransitionConstraints {
             .clone()
             .filter(|lengths| !lengths.is_empty()),
     }
+}
+
+/// Converts only the public, stable strategy vocabulary. The exact-render API
+/// is a contract boundary, so aliases and fuzzy matching would hide caller
+/// mistakes and could silently execute a different DSP shape.
+pub fn selected_transition(value: &JsSelectedTransition) -> Result<SelectedTransition, String> {
+    let strategy = match value.strategy.as_str() {
+        "equal_power_crossfade" => TransitionStrategy::EqualPowerCrossfade,
+        "beatmatched_crossfade" => TransitionStrategy::BeatmatchedCrossfade,
+        "bass_swap" => TransitionStrategy::BassSwap,
+        "filtered_blend" => TransitionStrategy::FilteredBlend,
+        "short_fade" => TransitionStrategy::ShortFade,
+        other => return Err(format!("unknown transition strategy '{other}'")),
+    };
+    Ok(SelectedTransition {
+        outgoing_start: value.outgoing_start,
+        incoming_start: value.incoming_start,
+        duration: value.duration,
+        beats: value.beats,
+        outgoing_bpm: value.outgoing_bpm as f32,
+        incoming_bpm: value.incoming_bpm as f32,
+        target_bpm: value.target_bpm as f32,
+        outgoing_tempo_ratio: value.outgoing_tempo_ratio as f32,
+        incoming_tempo_ratio: value.incoming_tempo_ratio as f32,
+        outgoing_pitch_semitones: value.outgoing_pitch_semitones.unwrap_or(0.0) as f32,
+        incoming_pitch_semitones: value.incoming_pitch_semitones.unwrap_or(0.0) as f32,
+        strategy,
+    })
 }
 
 fn region(source: Option<&JsRegionConstraint>) -> RegionConstraint {
@@ -153,6 +183,68 @@ pub fn validate_pcm(channels: &[Vec<f32>], sample_rate: f64, label: &str) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn js_selected(strategy: &str) -> crate::JsSelectedTransition {
+        crate::JsSelectedTransition {
+            outgoing_start: 4.0,
+            incoming_start: 2.0,
+            duration: 8.0,
+            beats: 16,
+            outgoing_bpm: 120.0,
+            incoming_bpm: 120.0,
+            target_bpm: 120.0,
+            outgoing_tempo_ratio: 1.0,
+            incoming_tempo_ratio: 1.0,
+            outgoing_pitch_semitones: Some(0.25),
+            incoming_pitch_semitones: Some(-0.25),
+            strategy: strategy.to_string(),
+        }
+    }
+
+    #[test]
+    fn every_public_strategy_name_maps_exactly_once() {
+        let cases = [
+            (
+                "equal_power_crossfade",
+                earmark::TransitionStrategy::EqualPowerCrossfade,
+            ),
+            (
+                "beatmatched_crossfade",
+                earmark::TransitionStrategy::BeatmatchedCrossfade,
+            ),
+            ("bass_swap", earmark::TransitionStrategy::BassSwap),
+            ("filtered_blend", earmark::TransitionStrategy::FilteredBlend),
+            ("short_fade", earmark::TransitionStrategy::ShortFade),
+        ];
+        for (name, expected) in cases {
+            assert_eq!(
+                selected_transition(&js_selected(name)).unwrap().strategy,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn selected_transition_conversion_preserves_exact_timing_and_ratios() {
+        let selected = selected_transition(&js_selected("filtered_blend")).unwrap();
+
+        assert_eq!(selected.outgoing_start, 4.0);
+        assert_eq!(selected.incoming_start, 2.0);
+        assert_eq!(selected.duration, 8.0);
+        assert_eq!(selected.beats, 16);
+        assert_eq!(selected.outgoing_tempo_ratio, 1.0);
+        assert_eq!(selected.incoming_tempo_ratio, 1.0);
+        assert_eq!(selected.outgoing_pitch_semitones, 0.25);
+        assert_eq!(selected.incoming_pitch_semitones, -0.25);
+    }
+
+    #[test]
+    fn unknown_strategy_names_are_stable_invalid_arguments() {
+        assert_eq!(
+            selected_transition(&js_selected("surprise_drop")).unwrap_err(),
+            "unknown transition strategy 'surprise_drop'"
+        );
+    }
 
     #[test]
     fn an_empty_curve_is_no_opinion() {

@@ -405,6 +405,109 @@ test('audio analysis service renders beat-matched transitions over IPC', async (
   }
 });
 
+test('planned transition payloads use the exact native method without search constraints', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'orchard-selected-transition-'));
+  const ipc = fakeIpcMain();
+  const plannedCalls = [];
+  const legacyCalls = [];
+  const logs = [];
+  const service = setupAudioAnalysisService({
+    cachePath: path.join(directory, 'cache.json'),
+    ipcMain: ipc,
+    nativeModulePath: 'analysis-addon',
+    transitionModulePath: 'transition-addon',
+    loadNativeAddon(modulePath) {
+      if (modulePath === 'analysis-addon') {
+        return { analysisVersion: AUDIO_ANALYSIS_VERSION, analyze: async () => null };
+      }
+      return {
+        renderTransition: async (...args) => {
+          legacyCalls.push(args);
+          throw new Error('free planning must not run');
+        },
+        renderPlannedTransition: async (outgoing, incoming, plan, options) => {
+          plannedCalls.push({ outgoing, incoming, plan, options });
+          return {
+            rendered: true,
+            rejected: '',
+            channels: [new Float32Array(64), new Float32Array(64)],
+            sampleRate: 8000,
+            duration: plan.duration,
+            beats: plan.beats,
+            strategy: plan.strategy,
+            outgoingStart: plan.outgoingStart,
+            incomingStart: plan.incomingStart,
+            outgoingResume: plan.outgoingStart + plan.duration * plan.outgoingTempoRatio,
+            incomingResume: plan.incomingStart + plan.duration * plan.incomingTempoRatio,
+            outgoingTempoRatio: plan.outgoingTempoRatio,
+            incomingTempoRatio: plan.incomingTempoRatio,
+            targetBpm: plan.targetBpm,
+            summary: 'selected'
+          };
+        }
+      };
+    },
+    logger: (event, details) => logs.push({ event, details })
+  });
+  const source = {
+    channels: [new Float32Array(8000 * 12), new Float32Array(8000 * 12)],
+    sampleRate: 8000,
+    bpm: 120,
+    beats: [0, 0.5, 1],
+    downbeats: [0]
+  };
+  const plan = {
+    outgoingStart: 1.5,
+    incomingStart: 1.5,
+    duration: 8,
+    beats: 16,
+    outgoingBpm: 120,
+    incomingBpm: 120,
+    targetBpm: 120,
+    outgoingTempoRatio: 1,
+    incomingTempoRatio: 1,
+    strategy: 'filtered_blend'
+  };
+
+  try {
+    const result = await ipc.invoke('audio-analysis:render-transition', {
+      outgoing: source,
+      incoming: source,
+      options: {
+        plan,
+        duckCurve: [0.1, 0.5, 0.9],
+        // These must never leak into an exact render even if a stale caller
+        // supplied them beside the authoritative plan.
+        outgoing: { endEarliest: 1, endLatest: 2 },
+        incoming: { endEarliest: 3, endLatest: 4 },
+        beatLengths: [4, 8, 16]
+      }
+    });
+
+    assert.equal(legacyCalls.length, 0);
+    assert.equal(plannedCalls.length, 1);
+    assert.deepEqual(plannedCalls[0].plan, plan);
+    assert.deepEqual(plannedCalls[0].options, { duckCurve: [0.1, 0.5, 0.9] });
+    assert.equal(result.outgoingStart, plan.outgoingStart);
+    assert.equal(result.incomingStart, plan.incomingStart);
+    assert.equal(result.outgoingResume, 9.5);
+    assert.equal(result.incomingResume, 9.5);
+    assert.ok(logs.some(({ event, details }) =>
+      event === 'transition-render-ready' && details.requestedOutgoingStart === 1.5
+    ));
+
+    await assert.rejects(ipc.invoke('audio-analysis:render-transition', {
+      outgoing: source,
+      incoming: source,
+      options: { plan: { ...plan, duration: Number.NaN } }
+    }), /Invalid transition plan/i);
+    assert.equal(plannedCalls.length, 1, 'invalid plans must be rejected before native work');
+  } finally {
+    await service.stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('beat-model windows pre-empt Essentia, and its refusal restores it', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
   const nativeModulePath = path.resolve('native/build/Release/orchard_audio_analysis.node');

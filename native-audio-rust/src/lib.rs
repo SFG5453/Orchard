@@ -33,8 +33,8 @@ mod convert;
 
 use earmark::dsp::filters::FilterKind;
 use earmark::{
-    AudioBuffer, BeatAnalysis, EngineConfig, SmartCrossfadeEngine, TransitionConstraints,
-    TransitionPlan,
+    AudioBuffer, BeatAnalysis, EngineConfig, SelectedTransition, SmartCrossfadeEngine,
+    TransitionConstraints, TransitionOutput, TransitionPlan,
 };
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -79,6 +79,30 @@ pub struct JsTransitionOptions {
     pub diagnostics: Option<bool>,
 }
 
+/// Exact caller-selected plan. napi-rs exposes these snake-case Rust fields as
+/// camelCase JavaScript properties.
+#[napi(object)]
+pub struct JsSelectedTransition {
+    pub outgoing_start: f64,
+    pub incoming_start: f64,
+    pub duration: f64,
+    pub beats: u32,
+    pub outgoing_bpm: f64,
+    pub incoming_bpm: f64,
+    pub target_bpm: f64,
+    pub outgoing_tempo_ratio: f64,
+    pub incoming_tempo_ratio: f64,
+    pub outgoing_pitch_semitones: Option<f64>,
+    pub incoming_pitch_semitones: Option<f64>,
+    pub strategy: String,
+}
+
+#[napi(object)]
+pub struct JsPlannedTransitionOptions {
+    /// Per-instant depth across the already-selected outgoing overlap.
+    pub duck_curve: Option<Vec<f64>>,
+}
+
 /// Mirrors the shape the C++ renderer returned, so the IPC handler is unchanged in kind:
 /// `rendered` false plus a `rejected` reason means "use the ordinary crossfade instead".
 #[napi(object)]
@@ -121,6 +145,28 @@ impl JsTransitionResult {
             incoming_tempo_ratio: 1.0,
             target_bpm: 0.0,
             summary: String::new(),
+        }
+    }
+
+    fn rendered(plan: &TransitionPlan, output: &TransitionOutput) -> Self {
+        Self {
+            rendered: true,
+            rejected: String::new(),
+            channels: (0..output.audio.channel_count())
+                .map(|index| Float32Array::new(output.audio.channel(index).to_vec()))
+                .collect(),
+            sample_rate: output.audio.sample_rate() as f64,
+            duration: plan.duration,
+            beats: plan.beats,
+            strategy: plan.strategy.describe().to_string(),
+            outgoing_start: plan.outgoing_start,
+            incoming_start: plan.incoming_start,
+            outgoing_resume: output.outgoing_resume,
+            incoming_resume: output.incoming_resume,
+            outgoing_tempo_ratio: plan.outgoing_tempo_ratio as f64,
+            incoming_tempo_ratio: plan.incoming_tempo_ratio as f64,
+            target_bpm: plan.target_bpm as f64,
+            summary: plan.summary(),
         }
     }
 }
@@ -213,25 +259,7 @@ impl RenderTransition {
             .render(&outgoing, &incoming, &plan)
             .map_err(describe)?;
 
-        Ok(JsTransitionResult {
-            rendered: true,
-            rejected: String::new(),
-            channels: (0..output.audio.channel_count())
-                .map(|index| Float32Array::new(output.audio.channel(index).to_vec()))
-                .collect(),
-            sample_rate: output.audio.sample_rate() as f64,
-            duration: plan.duration,
-            beats: plan.beats,
-            strategy: plan.strategy.describe().to_string(),
-            outgoing_start: plan.outgoing_start,
-            incoming_start: plan.incoming_start,
-            outgoing_resume: output.outgoing_resume,
-            incoming_resume: output.incoming_resume,
-            outgoing_tempo_ratio: plan.outgoing_tempo_ratio as f64,
-            incoming_tempo_ratio: plan.incoming_tempo_ratio as f64,
-            target_bpm: plan.target_bpm as f64,
-            summary: plan.summary(),
-        })
+        Ok(JsTransitionResult::rendered(&plan, &output))
     }
 
     /// Hands the caller's measurement to the outgoing low-pass ride, if the planner chose one.
@@ -269,6 +297,59 @@ impl RenderTransition {
     }
 }
 
+/// Worker task for the exact plan path. It owns no beat grid or constraints:
+/// those would be alternate choices, and the caller has already made them.
+pub struct RenderPlannedTransition {
+    outgoing: Side,
+    incoming: Side,
+    selected: SelectedTransition,
+    duck_points: Option<Vec<f64>>,
+}
+
+impl Task for RenderPlannedTransition {
+    type Output = JsTransitionResult;
+    type JsValue = JsTransitionResult;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        Ok(self.run().unwrap_or_else(JsTransitionResult::refused))
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(output)
+    }
+}
+
+impl RenderPlannedTransition {
+    fn run(&mut self) -> std::result::Result<JsTransitionResult, String> {
+        let describe = |error: earmark::CrossfadeError| error.to_string();
+        let outgoing = self.outgoing.audio().map_err(describe)?;
+        let incoming = self.incoming.audio().map_err(describe)?;
+        let mut engine = SmartCrossfadeEngine::new(EngineConfig::default()).map_err(describe)?;
+        let mut plan = engine
+            .plan_selected(&outgoing, &incoming, &self.selected)
+            .map_err(describe)?;
+        self.apply_duck_curve(&mut plan);
+        let output = engine
+            .render(&outgoing, &incoming, &plan)
+            .map_err(describe)?;
+        Ok(JsTransitionResult::rendered(&plan, &output))
+    }
+
+    fn apply_duck_curve(&self, plan: &mut TransitionPlan) {
+        let Some(points) = &self.duck_points else {
+            return;
+        };
+        let Some(curve) = convert::depth_curve(points, 0.0, 1.0) else {
+            return;
+        };
+        for filter in &mut plan.filters.outgoing {
+            if filter.kind == FilterKind::LowPass {
+                filter.depth = Some(curve.clone());
+            }
+        }
+    }
+}
+
 /// Plans a transition inside the caller's constraints and renders it.
 #[napi(ts_return_type = "Promise<JsTransitionResult>")]
 pub fn render_transition(
@@ -285,6 +366,25 @@ pub fn render_transition(
     }))
 }
 
+/// Renders the caller's exact transition without invoking Earmark analysis,
+/// candidate generation, scoring, or strategy selection.
+#[napi(ts_return_type = "Promise<JsTransitionResult>")]
+pub fn render_planned_transition(
+    outgoing: JsTransitionSource,
+    incoming: JsTransitionSource,
+    plan: JsSelectedTransition,
+    options: JsPlannedTransitionOptions,
+) -> Result<AsyncTask<RenderPlannedTransition>> {
+    let selected = convert::selected_transition(&plan)
+        .map_err(|reason| Error::new(Status::InvalidArg, reason))?;
+    Ok(AsyncTask::new(RenderPlannedTransition {
+        outgoing: Side::take(outgoing, "outgoing")?,
+        incoming: Side::take(incoming, "incoming")?,
+        selected,
+        duck_points: options.duck_curve.filter(|points| !points.is_empty()),
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,6 +393,23 @@ mod tests {
     use earmark::dsp::filters::FilterAutomation;
     use earmark::types::transition::{FadePlan, FilterPlan};
     use earmark::TransitionStrategy;
+
+    fn selected(strategy: TransitionStrategy) -> earmark::SelectedTransition {
+        earmark::SelectedTransition {
+            outgoing_start: 4.0,
+            incoming_start: 2.0,
+            duration: 8.0,
+            beats: 16,
+            outgoing_bpm: 120.0,
+            incoming_bpm: 120.0,
+            target_bpm: 120.0,
+            outgoing_tempo_ratio: 1.0,
+            incoming_tempo_ratio: 1.0,
+            outgoing_pitch_semitones: 0.0,
+            incoming_pitch_semitones: 0.0,
+            strategy,
+        }
+    }
 
     fn side() -> Side {
         Side {
@@ -312,6 +429,54 @@ mod tests {
             duck_points,
             diagnostics: false,
         }
+    }
+
+    fn planned_task(choice: earmark::SelectedTransition) -> RenderPlannedTransition {
+        let render_side = || Side {
+            channels: vec![vec![0.0; 20 * 8_000]; 2],
+            sample_rate: 8_000,
+            bpm: 120.0,
+            beats: Vec::new(),
+            downbeats: Vec::new(),
+        };
+        RenderPlannedTransition {
+            outgoing: render_side(),
+            incoming: render_side(),
+            selected: choice,
+            duck_points: None,
+        }
+    }
+
+    #[test]
+    fn planned_render_returns_the_exact_requested_timing() {
+        let result = planned_task(selected(TransitionStrategy::BeatmatchedCrossfade))
+            .run()
+            .unwrap();
+
+        assert!(result.rendered);
+        assert_eq!(result.outgoing_start, 4.0);
+        assert_eq!(result.incoming_start, 2.0);
+        assert_eq!(result.duration, 8.0);
+        assert_eq!(result.beats, 16);
+        assert_eq!(result.outgoing_resume, 12.0);
+        assert_eq!(result.incoming_resume, 10.0);
+        assert_eq!(result.outgoing_tempo_ratio, 1.0);
+        assert_eq!(result.incoming_tempo_ratio, 1.0);
+    }
+
+    #[test]
+    fn planned_render_refusal_keeps_the_earmark_reason() {
+        let mut choice = selected(TransitionStrategy::BeatmatchedCrossfade);
+        choice.outgoing_tempo_ratio = 1.05;
+        let reason = match planned_task(choice).run() {
+            Ok(_) => panic!("excessive stretch unexpectedly rendered"),
+            Err(reason) => reason,
+        };
+
+        assert_eq!(
+            reason,
+            "invalid selected transition: tempo ratio deviation 0.0500 exceeds the transparent limit 0.0400"
+        );
     }
 
     fn plan_with(filters: FilterPlan, strategy: TransitionStrategy) -> TransitionPlan {

@@ -107,6 +107,68 @@ function regionConstraint(value) {
   return Object.keys(bounds).length ? bounds : undefined;
 }
 
+const SELECTED_TRANSITION_STRATEGIES = new Set([
+  'equal_power_crossfade',
+  'beatmatched_crossfade',
+  'bass_swap',
+  'filtered_blend',
+  'short_fade'
+]);
+
+function selectedTransitionPlan(value, outgoing, incoming) {
+  if (!value || typeof value !== 'object') {
+    throw new Error('Invalid transition plan: expected an object.');
+  }
+  const plan = {
+    outgoingStart: Number(value.outgoingStart),
+    incomingStart: Number(value.incomingStart),
+    duration: Number(value.duration),
+    beats: Number(value.beats),
+    outgoingBpm: Number(value.outgoingBpm),
+    incomingBpm: Number(value.incomingBpm),
+    targetBpm: Number(value.targetBpm),
+    outgoingTempoRatio: Number(value.outgoingTempoRatio),
+    incomingTempoRatio: Number(value.incomingTempoRatio),
+    strategy: String(value.strategy || '')
+  };
+  const numeric = Object.entries(plan).filter(([, item]) => typeof item === 'number');
+  if (numeric.some(([, item]) => !Number.isFinite(item)) ||
+      plan.outgoingStart < 0 || plan.incomingStart < 0 || plan.duration <= 0 ||
+      !Number.isInteger(plan.beats) || plan.beats <= 0 ||
+      plan.outgoingBpm <= 0 || plan.incomingBpm <= 0 || plan.targetBpm <= 0 ||
+      plan.outgoingTempoRatio <= 0 || plan.incomingTempoRatio <= 0 ||
+      !SELECTED_TRANSITION_STRATEGIES.has(plan.strategy)) {
+    throw new Error('Invalid transition plan: finite positive timing, tempo, ratios, beats, and a known strategy are required.');
+  }
+  const ratioDeviation = Math.max(
+    Math.abs(plan.outgoingTempoRatio - 1),
+    Math.abs(plan.incomingTempoRatio - 1)
+  );
+  if (ratioDeviation > 0.04 + Number.EPSILON) {
+    throw new Error('Invalid transition plan: tempo ratio exceeds the 4% renderer limit.');
+  }
+  const timingTolerance = 1 / Math.max(outgoing.sampleRate, incoming.sampleRate);
+  const expectedDuration = plan.beats * 60 / plan.targetBpm;
+  if (Math.abs(plan.duration - expectedDuration) > timingTolerance) {
+    throw new Error('Invalid transition plan: duration does not match beats and target BPM.');
+  }
+  const outgoingDuration = outgoing.channels[0].length / outgoing.sampleRate;
+  const incomingDuration = incoming.channels[0].length / incoming.sampleRate;
+  if (plan.outgoingStart + plan.duration * plan.outgoingTempoRatio > outgoingDuration + timingTolerance ||
+      plan.incomingStart + plan.duration * plan.incomingTempoRatio > incomingDuration + timingTolerance) {
+    throw new Error('Invalid transition plan: selected source window exceeds supplied PCM.');
+  }
+  for (const field of ['outgoingPitchSemitones', 'incomingPitchSemitones']) {
+    if (value[field] === undefined) continue;
+    const semitones = Number(value[field]);
+    if (!Number.isFinite(semitones)) {
+      throw new Error(`Invalid transition plan: ${field} must be finite.`);
+    }
+    plan[field] = semitones;
+  }
+  return plan;
+}
+
 /**
  * Registers the privileged native-analysis IPC service and persistent LRU cache.
  * @param {object} options
@@ -183,13 +245,21 @@ export function setupAudioAnalysisService({
     transitionLoadAttempts += 1;
     try {
       const loaded = loadNativeAddon(transitionModulePath);
-      if (typeof loaded?.renderTransition === 'function') {
+      if (
+        typeof loaded?.renderTransition === 'function' ||
+        typeof loaded?.renderPlannedTransition === 'function'
+      ) {
         transitionAddon = loaded;
-        log('transition-load-ready', { attempt: transitionLoadAttempts });
+        log('transition-load-ready', {
+          attempt: transitionLoadAttempts,
+          hasRenderTransition: typeof loaded?.renderTransition === 'function',
+          hasRenderPlannedTransition: typeof loaded?.renderPlannedTransition === 'function'
+        });
       } else {
         log('transition-load-invalid', {
           attempt: transitionLoadAttempts,
-          hasRenderTransition: typeof loaded?.renderTransition === 'function'
+          hasRenderTransition: typeof loaded?.renderTransition === 'function',
+          hasRenderPlannedTransition: typeof loaded?.renderPlannedTransition === 'function'
         });
       }
     } catch (error) {
@@ -356,35 +426,59 @@ export function setupAudioAnalysisService({
     const outgoing = transitionSource(payload.outgoing, 'outgoing');
     const incoming = transitionSource(payload.incoming, 'incoming');
     const options = payload.options && typeof payload.options === 'object' ? payload.options : {};
+    const planned = options.plan === undefined
+      ? null
+      : selectedTransitionPlan(options.plan, outgoing, incoming);
+    if (planned && typeof engine.renderPlannedTransition !== 'function') {
+      throw new Error('Native planned transition rendering is unavailable.');
+    }
+    if (!planned && typeof engine.renderTransition !== 'function') {
+      throw new Error('Native transition compatibility rendering is unavailable.');
+    }
 
     const startedAt = Date.now();
     log('transition-render-start', {
+      planned: Boolean(planned),
       sampleRate: outgoing.sampleRate,
       outgoingBpm: outgoing.bpm,
       incomingBpm: incoming.bpm,
       outgoingDownbeats: outgoing.downbeats.length,
-      incomingDownbeats: incoming.downbeats.length
+      incomingDownbeats: incoming.downbeats.length,
+      requestedOutgoingStart: planned?.outgoingStart,
+      requestedIncomingStart: planned?.incomingStart,
+      requestedDuration: planned?.duration,
+      requestedStrategy: planned?.strategy
     });
 
-    const result = await engine.renderTransition(outgoing, incoming, {
-      outgoing: regionConstraint(options.outgoing),
-      incoming: regionConstraint(options.incoming),
-      ...(Array.isArray(options.beatLengths) ? { beatLengths: options.beatLengths.map(Number) } : {}),
-      // Omitted rather than passed empty when the model had no opinion, so the
-      // engine's own "no curve means full depth" default applies.
-      ...(Array.isArray(options.duckCurve) && options.duckCurve.length
-        ? { duckCurve: options.duckCurve.map(Number) }
-        : {}),
-      diagnostics: Boolean(options.diagnostics)
-    });
+    const duckOptions = Array.isArray(options.duckCurve) && options.duckCurve.length
+      ? { duckCurve: options.duckCurve.map(Number) }
+      : {};
+    const result = planned
+      ? await engine.renderPlannedTransition(outgoing, incoming, planned, duckOptions)
+      : await engine.renderTransition(outgoing, incoming, {
+        outgoing: regionConstraint(options.outgoing),
+        incoming: regionConstraint(options.incoming),
+        ...(Array.isArray(options.beatLengths) ? { beatLengths: options.beatLengths.map(Number) } : {}),
+        // Omitted rather than passed empty when the model had no opinion, so the
+        // engine's own "no curve means full depth" default applies.
+        ...duckOptions,
+        diagnostics: Boolean(options.diagnostics)
+      });
 
     log(result.rendered ? 'transition-render-ready' : 'transition-render-refused', {
+      planned: Boolean(planned),
       elapsedMs: Date.now() - startedAt,
       rejected: String(result.rejected || ''),
       strategy: String(result.strategy || ''),
       beats: Number(result.beats) || 0,
       stretchRatio: Number(result.outgoingTempoRatio) || 0,
-      overlapSamples: result.channels?.[0]?.length || 0
+      overlapSamples: result.channels?.[0]?.length || 0,
+      requestedOutgoingStart: planned?.outgoingStart,
+      returnedOutgoingStart: Number(result.outgoingStart) || 0,
+      requestedIncomingStart: planned?.incomingStart,
+      returnedIncomingStart: Number(result.incomingStart) || 0,
+      requestedDuration: planned?.duration,
+      returnedDuration: Number(result.duration) || 0
     });
     return {
       rendered: Boolean(result.rendered),
