@@ -189,7 +189,13 @@ class TransitionPreparer(
         val (incomingPcm, incomingSliceStart) = decodeAround(incomingUri, inAnchor, margin) ?: return null
         val outgoingSliceEnd = outgoingSliceStart + outgoingPcm.left.size / TransitionRenderer.SAMPLE_RATE
 
-        val rendered = TransitionRenderer.render(
+        val strategy = when (plan.transitionStyle) {
+            TransitionStyle.DJ_BLEND -> if (plan.bassSwap) "bass_swap" else "beatmatched_crossfade"
+            TransitionStyle.DJ_FILTER -> "filtered_blend"
+            TransitionStyle.EQUAL_POWER -> "equal_power_crossfade"
+            TransitionStyle.GAPLESS -> "short_fade"
+        }
+        val rendered = TransitionRenderer.renderPlanned(
             outgoing = TransitionRenderer.Source(
                 left = outgoingPcm.left,
                 right = outgoingPcm.right,
@@ -205,16 +211,21 @@ class TransitionPreparer(
                 beats = beatGrid(incomingAnalysis, incomingSliceStart, incomingPcm.left.size),
                 downbeats = rebased(incomingAnalysis.downbeats, incomingSliceStart, incomingPcm.left.size),
             ),
-            // The planner owns *where*; the engine owns how long the overlap is, what shape it
-            // takes, and which strategy suits the two spectra. That division is why none of
-            // [TransitionPlan]'s handoff, bed, bassSwap or filterSweep are passed any more: they
-            // described a renderer that decided nothing.
-            outgoingAnchor = TransitionRenderer.Anchor(
-                startSeconds = outAnchor - outgoingSliceStart,
-                endSeconds = plan.transitionEnd - outgoingSliceStart,
-            ),
-            incomingAnchor = TransitionRenderer.Anchor(
-                startSeconds = inAnchor - incomingSliceStart,
+            plan = TransitionRenderer.SelectedPlan(
+                outgoingStart = plan.transitionStart - outgoingSliceStart,
+                incomingStart = plan.incomingCueTime - incomingSliceStart,
+                duration = plan.fadeSeconds,
+                beats = plan.transitionBeats,
+                outgoingBpm = plan.outgoingBpm,
+                incomingBpm = plan.incomingBpm,
+                targetBpm = plan.incomingBpm,
+                outgoingTempoRatio = 1.0,
+                incomingTempoRatio = plan.incomingPlaybackRate,
+                strategy = strategy,
+                handoffFraction = plan.handoffFraction,
+                bedPosition = plan.bedPosition,
+                bassSwapFraction = plan.bassSwapFraction,
+                filterSweep = plan.filterSweep,
             ),
             vocalDuck = duckCurve(outgoingAnalysis, outgoingSliceStart, outgoingSliceEnd),
         ) ?: return null

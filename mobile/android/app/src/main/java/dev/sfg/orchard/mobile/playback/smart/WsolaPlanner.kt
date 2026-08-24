@@ -284,6 +284,7 @@ sealed interface WsolaPlanResult {
         /** Where the blend finishes on the incoming timeline, after the arrangement has arrived. */
         val incomingHandoffTime: Double,
         val incomingResumeTime: Double,
+        val choreography: TransitionChoreography? = null,
     ) : WsolaPlanResult
 }
 
@@ -453,19 +454,7 @@ fun planWsolaTransition(
         return WsolaPlanResult.Refused("incoming-too-short")
     }
 
-    return WsolaPlanResult.Planned(
-        tier = policy.tier,
-        beatConfidence = policy.beatConfidence,
-        mixOutType = mixOutAnchor.type,
-        vocalClash = fadeVocalClash,
-        transitionStart = transitionStart,
-        transitionEnd = transitionEnd,
-        overlapSeconds = overlapSeconds,
-        beats = overlapBeats,
-        fadeBeats = overlapBeats,
-        handoffFraction = HANDOFF_FRACTION,
-        bedPosition = BED_POSITION,
-        bassSwapFraction = bassSwapFractionFor(
+        val bassSwap = bassSwapFractionFor(
             analysis = analysis,
             nextAnalysis = nextAnalysis,
             transitionStart = transitionStart,
@@ -474,14 +463,75 @@ fun planWsolaTransition(
             incomingBeatSeconds = incomingBeatSeconds,
             overlapSeconds = overlapSeconds,
             overlapBeats = overlapBeats,
-        ),
-        filterSweep = FILTER_SWEEP,
-        outgoingBpm = outgoingBpm,
-        incomingBpm = incomingBpm,
-        stretchRatio = stretchRatio,
-        incomingCueTime = incomingCueTime,
-        incomingDropTime = incomingDropTime,
-        incomingHandoffTime = incomingHandoffTime,
-        incomingResumeTime = incomingResumeTime,
-    )
-}
+        )
+        val swapStart = max(0.0, bassSwap - 0.05)
+        val swapEnd = min(1.0, bassSwap + 0.05)
+        val choreography = TransitionChoreography(
+            strategy = ChoreographyStrategy.STAGED_BLEND,
+            outgoing = OutgoingChoreography(
+                start = transitionStart,
+                end = transitionEnd,
+                tempoRatio = 1.0,
+            ),
+            incoming = IncomingChoreography(
+                cue = incomingCueTime,
+                arrival = incomingDropTime,
+                resume = incomingResumeTime,
+                tempoRatio = stretchRatio,
+            ),
+            duration = overlapSeconds,
+            dominancePoint = HANDOFF_FRACTION.coerceIn(0.0, 1.0),
+            curves = AutomationCurves(
+                outgoingGain = listOf(
+                    AutomationPoint(0.0, 1.0, CurveInterpolation.SMOOTH_STEP),
+                    AutomationPoint(1.0, 0.0),
+                ),
+                incomingGain = listOf(
+                    AutomationPoint(0.0, 0.0, CurveInterpolation.SMOOTH_STEP),
+                    AutomationPoint(1.0, 1.0),
+                ),
+                outgoingLowPass = listOf(
+                    AutomationPoint(0.0, 20000.0, CurveInterpolation.LOGARITHMIC),
+                    AutomationPoint(0.3, 20000.0, CurveInterpolation.LOGARITHMIC),
+                    AutomationPoint(1.0, 800.0),
+                ),
+                outgoingBass = listOf(
+                    AutomationPoint(0.0, 1.0),
+                    AutomationPoint(swapStart, 1.0, CurveInterpolation.EQUAL_POWER_IN),
+                    AutomationPoint(swapEnd, 0.0),
+                    AutomationPoint(1.0, 0.0),
+                ),
+                incomingBass = listOf(
+                    AutomationPoint(0.0, 0.0),
+                    AutomationPoint(swapStart, 0.0, CurveInterpolation.EQUAL_POWER_OUT),
+                    AutomationPoint(swapEnd, 1.0),
+                    AutomationPoint(1.0, 1.0),
+                ),
+            ),
+            bassSwapPoint = bassSwap,
+        )
+
+        return WsolaPlanResult.Planned(
+            tier = policy.tier,
+            beatConfidence = policy.beatConfidence,
+            mixOutType = mixOutAnchor.type,
+            vocalClash = fadeVocalClash,
+            transitionStart = transitionStart,
+            transitionEnd = transitionEnd,
+            overlapSeconds = overlapSeconds,
+            beats = overlapBeats,
+            fadeBeats = overlapBeats,
+            handoffFraction = HANDOFF_FRACTION,
+            bedPosition = BED_POSITION,
+            bassSwapFraction = bassSwap,
+            filterSweep = FILTER_SWEEP,
+            outgoingBpm = outgoingBpm,
+            incomingBpm = incomingBpm,
+            stretchRatio = stretchRatio,
+            incomingCueTime = incomingCueTime,
+            incomingDropTime = incomingDropTime,
+            incomingHandoffTime = incomingHandoffTime,
+            incomingResumeTime = incomingResumeTime,
+            choreography = choreography,
+        )
+    }

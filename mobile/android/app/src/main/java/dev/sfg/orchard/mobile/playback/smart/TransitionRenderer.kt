@@ -21,8 +21,10 @@ package dev.sfg.orchard.mobile.playback.smart
 
 import android.util.Log
 import dev.sfg.orchard.earmark.RegionConstraint
+import dev.sfg.orchard.earmark.SelectedTransition
 import dev.sfg.orchard.earmark.TransitionOptions
 import dev.sfg.orchard.earmark.TransitionSource
+import dev.sfg.orchard.earmark.renderPlannedTransition
 import dev.sfg.orchard.earmark.renderTransition
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -89,6 +91,24 @@ object TransitionRenderer {
      */
     data class Anchor(val startSeconds: Double? = null, val endSeconds: Double? = null)
 
+    /** Caller-selected plan specifying the exact parameters to render. */
+    data class SelectedPlan(
+        val outgoingStart: Double,
+        val incomingStart: Double,
+        val duration: Double,
+        val beats: Int,
+        val outgoingBpm: Double,
+        val incomingBpm: Double,
+        val targetBpm: Double,
+        val outgoingTempoRatio: Double,
+        val incomingTempoRatio: Double,
+        val strategy: String,
+        val handoffFraction: Double? = null,
+        val bedPosition: Double? = null,
+        val bassSwapFraction: Double? = null,
+        val filterSweep: Double? = null,
+    )
+
     /** A rendered overlap, ready to be scheduled as a plain audio source. */
     data class Rendered(
         val left: FloatArray,
@@ -115,6 +135,65 @@ object TransitionRenderer {
 
         override fun hashCode(): Int =
             31 * (31 * left.contentHashCode() + right.contentHashCode()) + stretchRatio.hashCode()
+    }
+
+    /**
+     * Renders an exact caller-chosen transition plan without candidate generation or heuristic search.
+     */
+    fun renderPlanned(
+        outgoing: Source,
+        incoming: Source,
+        plan: SelectedPlan,
+        vocalDuck: FloatArray? = null,
+    ): Rendered? {
+        if (!available) return null
+
+        val result = runCatching {
+            renderPlannedTransition(
+                outgoing = outgoing.toFfi(),
+                incoming = incoming.toFfi(),
+                plan = SelectedTransition(
+                    outgoingStart = plan.outgoingStart,
+                    incomingStart = plan.incomingStart,
+                    duration = plan.duration,
+                    beats = plan.beats.toUInt(),
+                    outgoingBpm = plan.outgoingBpm,
+                    incomingBpm = plan.incomingBpm,
+                    targetBpm = plan.targetBpm,
+                    outgoingTempoRatio = plan.outgoingTempoRatio,
+                    incomingTempoRatio = plan.incomingTempoRatio,
+                    outgoingPitchSemitones = null,
+                    incomingPitchSemitones = null,
+                    strategy = plan.strategy,
+                    handoffFraction = plan.handoffFraction,
+                    bedPosition = plan.bedPosition,
+                    bassSwapFraction = plan.bassSwapFraction,
+                    filterSweep = plan.filterSweep,
+                ),
+                duckCurve = vocalDuck?.map { it.toDouble() },
+            )
+        }.onFailure { Log.w(TAG, "Planned transition render failed", it) }.getOrNull() ?: return null
+
+        if (!result.rendered) {
+            Log.d(TAG, "Refused: ${result.rejected.ifEmpty { "unknown" }}")
+            return null
+        }
+        val channels = result.pcm.toChannels(result.channelCount.toInt())
+        if (channels.size < 2 || channels[0].isEmpty()) return null
+
+        Log.d(TAG, "Rendered ${result.strategy}: ${result.summary}")
+        return Rendered(
+            left = channels[0],
+            right = channels[1],
+            stretchRatio = result.outgoingTempoRatio,
+            incomingStretchRatio = result.incomingTempoRatio,
+            outgoingStart = result.outgoingStart,
+            incomingStart = result.incomingStart,
+            outgoingResume = result.outgoingResume,
+            incomingResume = result.incomingResume,
+            beats = result.beats.toInt(),
+            strategy = result.strategy,
+        )
     }
 
     /**

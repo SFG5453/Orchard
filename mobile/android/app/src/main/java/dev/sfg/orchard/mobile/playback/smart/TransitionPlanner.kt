@@ -383,6 +383,7 @@ private fun phraseSwitch(
         outgoingBpm = planned.outgoingBpm,
         incomingBpm = planned.incomingBpm,
         transitionStyle = TransitionStyle.DJ_BLEND,
+        choreography = planned.choreography,
     )
 }
 
@@ -403,6 +404,17 @@ private fun adaptiveOverlap(analysis: TrackAnalysis, nextAnalysis: TrackAnalysis
     val ratio = normalizedTempoRatio(currentBpm, nextBpm)
     val distance = keyDistance(trustedKey(analysis), trustedKey(nextAnalysis))
     val vocalConflict = analysis.vocalProbability >= 0.62 && nextAnalysis.vocalProbability >= 0.62
+
+    val sameTempo = abs(1 - ratio) <= 0.05
+    if (!sameTempo) {
+        val nonBeatmatchedDuration = if (vocalConflict) 2.5 else 3.5
+        return Overlap(
+            overlap = clamp(nonBeatmatchedDuration, 2.0, 4.0),
+            transitionBeats = 0,
+            incomingPlaybackRate = 1.0,
+        )
+    }
+
     // A longer mix is how distance gets absorbed, unless both tracks are singing, where a longer
     // mix just means two vocals over each other for longer.
     val transitionBeats =
@@ -663,17 +675,19 @@ fun planTransition(
         finalIncomingCueTime =
             max(0.0, incomingHandoffTime - (mixEnd - transitionStart) * incomingPlaybackRate)
     } else {
-        val desiredOverlap = max(overlap, introPreroll + handoffSeconds * 0.42)
-        val actualOverlap = clamp(desiredOverlap, min(handoffSeconds, maximumOverlap), maximumOverlap)
+        val maxNonBeatmatched = minOf(4.0, maximumOverlap)
+        val desiredOverlap = clamp(overlap, 2.0, maxNonBeatmatched)
+        val actualOverlap = clamp(desiredOverlap, minOf(2.0, maxNonBeatmatched), maxNonBeatmatched)
         val targetStart = max(0.0, mixEnd - actualOverlap)
-        val earliestTransitionStart = max(0.0, mixEnd - maximumOverlap)
-        transitionStart = alignedTransitionStart(
+        val earliestTransitionStart = max(0.0, mixEnd - maxNonBeatmatched)
+        val alignedStart = alignedTransitionStart(
             analysis,
             targetStart,
             mixEnd - 0.05,
-            preferEarlier = desiredOverlap > overlap + 0.5,
+            preferEarlier = false,
             minimum = earliestTransitionStart,
         )
+        transitionStart = max(alignedStart, mixEnd - 4.0)
         finalIncomingCueTime = if (hasIncomingPreroll) {
             max(0.0, incomingHandoffTime - (mixEnd - transitionStart) * incomingPlaybackRate)
         } else {
@@ -684,6 +698,54 @@ fun planTransition(
     val alignedOverlap = mixEnd - transitionStart
     val hasBassContent = analysis.lowEnergyCurve.isNotEmpty() || nextAnalysis.lowEnergyCurve.isNotEmpty()
     val started = playbackTime >= transitionStart
+    val fallbackChoreography = TransitionChoreography(
+        strategy = if (sameBeatBlend) ChoreographyStrategy.STAGED_BLEND else ChoreographyStrategy.FILTERED_HANDOFF,
+        outgoing = OutgoingChoreography(
+            start = transitionStart,
+            end = mixEnd,
+            tempoRatio = 1.0,
+        ),
+        incoming = IncomingChoreography(
+            cue = finalIncomingCueTime,
+            arrival = incomingHandoffTime,
+            resume = incomingHandoffTime + alignedOverlap * incomingPlaybackRate,
+            tempoRatio = incomingPlaybackRate,
+        ),
+        duration = alignedOverlap,
+        dominancePoint = 0.5,
+        curves = AutomationCurves(
+            outgoingGain = listOf(
+                AutomationPoint(0.0, 1.0, CurveInterpolation.SMOOTH_STEP),
+                AutomationPoint(1.0, 0.0),
+            ),
+            incomingGain = listOf(
+                AutomationPoint(0.0, 0.0, CurveInterpolation.SMOOTH_STEP),
+                AutomationPoint(1.0, 1.0),
+            ),
+            outgoingLowPass = if (sameBeatBlend || hasBassContent) {
+                listOf(
+                    AutomationPoint(0.0, 20000.0, CurveInterpolation.LOGARITHMIC),
+                    AutomationPoint(0.3, 20000.0, CurveInterpolation.LOGARITHMIC),
+                    AutomationPoint(1.0, 800.0),
+                )
+            } else {
+                emptyList()
+            },
+            outgoingBass = listOf(
+                AutomationPoint(0.0, 1.0),
+                AutomationPoint(0.45, 1.0, CurveInterpolation.EQUAL_POWER_IN),
+                AutomationPoint(0.55, 0.0),
+                AutomationPoint(1.0, 0.0),
+            ),
+            incomingBass = listOf(
+                AutomationPoint(0.0, 0.0),
+                AutomationPoint(0.45, 0.0, CurveInterpolation.EQUAL_POWER_OUT),
+                AutomationPoint(0.55, 1.0),
+                AutomationPoint(1.0, 1.0),
+            ),
+        ),
+        bassSwapPoint = 0.5,
+    )
     return TransitionPlan(
         shouldStart = started,
         markerVisible = true,
@@ -702,6 +764,7 @@ fun planTransition(
         bassSwap = sameBeatBlend || hasBassContent,
         transitionStyle = if (sameBeatBlend) TransitionStyle.DJ_BLEND else TransitionStyle.DJ_FILTER,
         policyReasons = policy.reasons,
+        choreography = fallbackChoreography,
         reason = if (started) "smart-duration" else "before-smart-duration",
     )
 }

@@ -461,8 +461,8 @@ class CrossfadeEngine(
         outgoingFilter.gain = 10.0.pow(midDuckDb / 20.0)
 
         val mixGains = gains ?: djMixGains(progress.toDouble(), fadeWindowMs / 1000.0)
-        outgoingFilter.bassGain = 1.0
-        incomingFilter.bassGain = 1.0
+        outgoingFilter.bassGain = mixGains.outgoingBass
+        incomingFilter.bassGain = mixGains.incomingBass
         incomingFilter.lowPassHz = TransitionFilter.OPEN
         incomingFilter.gain = 1.0
     }
