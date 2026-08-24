@@ -14,6 +14,9 @@ pub enum CrossfadeError {
     #[error("unsupported configuration: {0}")]
     UnsupportedConfiguration(String),
 
+    #[error("invalid selected transition: {0}")]
+    InvalidTransitionPlan(String),
+
     #[error(
         "sample rate mismatch: outgoing is {outgoing} Hz, incoming is {incoming} Hz, and \
          resampling is disabled"
@@ -44,6 +47,10 @@ impl CrossfadeError {
 
     pub(crate) fn config(reason: impl Into<String>) -> Self {
         Self::UnsupportedConfiguration(reason.into())
+    }
+
+    pub(crate) fn plan(reason: impl Into<String>) -> Self {
+        Self::InvalidTransitionPlan(reason.into())
     }
 
     pub(crate) fn dsp(reason: impl Into<String>) -> Self {

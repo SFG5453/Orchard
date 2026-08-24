@@ -5,12 +5,152 @@ mod common;
 use common::{SR, Voice, beats, low_band_energy, rms, sine, sweep, track};
 use earmark::config::{AnalysisConfig, TempoTarget};
 use earmark::{
-    AudioBuffer, BeatAnalysis, CrossfadeError, EngineConfig, SmartCrossfadeEngine,
-    TransitionStrategy,
+    AudioBuffer, BeatAnalysis, CrossfadeError, EngineConfig, SelectedTransition,
+    SmartCrossfadeEngine, TransitionStrategy,
 };
 
 fn engine() -> SmartCrossfadeEngine {
     SmartCrossfadeEngine::new(EngineConfig::default()).unwrap()
+}
+
+fn selected(strategy: TransitionStrategy) -> SelectedTransition {
+    SelectedTransition {
+        outgoing_start: 4.0,
+        incoming_start: 2.0,
+        duration: 8.0,
+        beats: 16,
+        outgoing_bpm: 120.0,
+        incoming_bpm: 120.0,
+        target_bpm: 120.0,
+        outgoing_tempo_ratio: 1.0,
+        incoming_tempo_ratio: 1.0,
+        outgoing_pitch_semitones: 0.0,
+        incoming_pitch_semitones: 0.0,
+        strategy,
+    }
+}
+
+#[test]
+fn a_selected_plan_preserves_every_authoritative_field() {
+    let engine = engine();
+    let (outgoing, _) = track(120.0, 20.0, Voice::club(), 2, SR);
+    let (incoming, _) = track(120.0, 20.0, Voice::bright(), 2, SR);
+    let mut choice = selected(TransitionStrategy::FilteredBlend);
+    choice.outgoing_pitch_semitones = 0.25;
+    choice.incoming_pitch_semitones = -0.25;
+
+    let plan = engine.plan_selected(&outgoing, &incoming, &choice).unwrap();
+
+    assert_eq!(plan.outgoing_start, choice.outgoing_start);
+    assert_eq!(plan.incoming_start, choice.incoming_start);
+    assert_eq!(plan.duration, choice.duration);
+    assert_eq!(plan.beats, choice.beats);
+    assert_eq!(plan.outgoing_bpm, choice.outgoing_bpm);
+    assert_eq!(plan.incoming_bpm, choice.incoming_bpm);
+    assert_eq!(plan.target_bpm, choice.target_bpm);
+    assert_eq!(plan.outgoing_tempo_ratio, choice.outgoing_tempo_ratio);
+    assert_eq!(plan.incoming_tempo_ratio, choice.incoming_tempo_ratio);
+    assert_eq!(
+        plan.outgoing_pitch_semitones,
+        choice.outgoing_pitch_semitones
+    );
+    assert_eq!(
+        plan.incoming_pitch_semitones,
+        choice.incoming_pitch_semitones
+    );
+    assert_eq!(plan.strategy, TransitionStrategy::FilteredBlend);
+    assert!(!plan.filters.outgoing.is_empty());
+    assert!(plan.diagnostics.is_none());
+}
+
+#[test]
+fn selected_rendering_is_deterministic_and_never_reselects_strategy() {
+    let mut engine = engine();
+    let (outgoing, _) = track(120.0, 20.0, Voice::club(), 2, SR);
+    let (incoming, _) = track(120.0, 20.0, Voice::club(), 2, SR);
+    // The old analyzer would strongly prefer BassSwap for this pair. The
+    // caller's exact strategy remains authoritative.
+    let choice = selected(TransitionStrategy::BeatmatchedCrossfade);
+    let plan = engine.plan_selected(&outgoing, &incoming, &choice).unwrap();
+    let first = engine.render(&outgoing, &incoming, &plan).unwrap();
+    let second = engine.render(&outgoing, &incoming, &plan).unwrap();
+
+    assert_eq!(plan.strategy, TransitionStrategy::BeatmatchedCrossfade);
+    assert_eq!(first, second);
+    assert!((first.outgoing_resume - 12.0).abs() < 1e-6);
+    assert!((first.incoming_resume - 10.0).abs() < 1e-6);
+}
+
+#[test]
+fn selected_plans_measure_loudness_only_inside_the_fixed_windows() {
+    let engine = engine();
+    let (outgoing, _) = track(120.0, 20.0, Voice::club(), 2, SR);
+    let (mut incoming, _) = track(120.0, 20.0, Voice::club(), 2, SR);
+    incoming.apply_gain(0.15);
+
+    let plan = engine
+        .plan_selected(
+            &outgoing,
+            &incoming,
+            &selected(TransitionStrategy::BeatmatchedCrossfade),
+        )
+        .unwrap();
+
+    assert!(plan.outgoing_gain_db < -1.0);
+    assert_eq!(plan.incoming_gain_db, 0.0);
+    assert!(plan.fade.outgoing_gain.value_at(1.0) < 1.0);
+}
+
+#[test]
+fn selected_plans_reject_non_finite_or_out_of_bounds_windows() {
+    let engine = engine();
+    let (outgoing, _) = track(120.0, 20.0, Voice::club(), 2, SR);
+    let (incoming, _) = track(120.0, 20.0, Voice::club(), 2, SR);
+
+    let mut beyond_end = selected(TransitionStrategy::BeatmatchedCrossfade);
+    beyond_end.outgoing_start = 15.0;
+    assert!(matches!(
+        engine.plan_selected(&outgoing, &incoming, &beyond_end),
+        Err(CrossfadeError::InvalidTransitionPlan(_))
+    ));
+
+    let mut not_finite = selected(TransitionStrategy::BeatmatchedCrossfade);
+    not_finite.incoming_start = f64::NAN;
+    assert!(matches!(
+        engine.plan_selected(&outgoing, &incoming, &not_finite),
+        Err(CrossfadeError::InvalidTransitionPlan(_))
+    ));
+}
+
+#[test]
+fn selected_plans_reject_stretch_beyond_the_transparent_limit() {
+    let engine = engine();
+    let (outgoing, _) = track(120.0, 20.0, Voice::club(), 2, SR);
+    let (incoming, _) = track(120.0, 20.0, Voice::club(), 2, SR);
+    let mut choice = selected(TransitionStrategy::BeatmatchedCrossfade);
+    choice.outgoing_tempo_ratio = 1.05;
+
+    let error = engine
+        .plan_selected(&outgoing, &incoming, &choice)
+        .unwrap_err();
+    assert!(matches!(error, CrossfadeError::InvalidTransitionPlan(_)));
+    assert!(error.to_string().contains("tempo ratio"));
+}
+
+#[test]
+fn selected_plans_reject_too_little_wsola_output() {
+    let engine = engine();
+    let (outgoing, _) = track(120.0, 20.0, Voice::club(), 2, SR);
+    let (incoming, _) = track(120.0, 20.0, Voice::club(), 2, SR);
+    let mut choice = selected(TransitionStrategy::BeatmatchedCrossfade);
+    choice.duration = 1.0;
+    choice.beats = 2;
+
+    let error = engine
+        .plan_selected(&outgoing, &incoming, &choice)
+        .unwrap_err();
+    assert!(matches!(error, CrossfadeError::InvalidTransitionPlan(_)));
+    assert!(error.to_string().contains("minimum"));
 }
 
 #[test]

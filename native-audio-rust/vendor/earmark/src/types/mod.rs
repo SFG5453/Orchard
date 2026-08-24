@@ -8,4 +8,7 @@ pub mod transition;
 pub use analysis::{FeatureTrack, FrameFeatures, LoudnessStats, RegionFeatures};
 pub use beat::BeatAnalysis;
 pub use diagnostics::{Candidate, CandidateScore, ScoredCandidate, TransitionDiagnostics};
-pub use transition::{FadePlan, FilterPlan, TransitionOutput, TransitionPlan, TransitionStrategy};
+pub use transition::{
+    FadePlan, FilterPlan, MAX_SELECTED_TEMPO_RATIO_DEVIATION, SelectedTransition, TransitionOutput,
+    TransitionPlan, TransitionStrategy,
+};

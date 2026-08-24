@@ -78,6 +78,55 @@ impl FilterPlan {
     }
 }
 
+/// Hard source-rate deviation accepted by the exact selected-plan path.
+///
+/// Orchard uses this stricter limit before authorizing WSOLA. The free Earmark
+/// planner may explore wider ratios and demote them, but an already-selected
+/// plan must never make a second policy decision during rendering.
+pub const MAX_SELECTED_TEMPO_RATIO_DEVIATION: f32 = 0.04;
+
+/// A caller's authoritative musical decision, before render-shape metadata is
+/// filled from the two audio buffers.
+///
+/// Unlike [`TransitionPlan`], this carries no inferred loudness, filters, or
+/// diagnostics. [`crate::SmartCrossfadeEngine::plan_selected`] validates these
+/// exact fields and mechanically builds the automation implied by `strategy`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SelectedTransition {
+    pub outgoing_start: f64,
+    pub incoming_start: f64,
+    pub duration: f64,
+    pub beats: u32,
+
+    pub outgoing_bpm: f32,
+    pub incoming_bpm: f32,
+    pub target_bpm: f32,
+
+    /// Source seconds consumed per output second.
+    pub outgoing_tempo_ratio: f32,
+    pub incoming_tempo_ratio: f32,
+    pub outgoing_pitch_semitones: f32,
+    pub incoming_pitch_semitones: f32,
+
+    pub strategy: TransitionStrategy,
+}
+
+impl SelectedTransition {
+    pub fn outgoing_end(self) -> f64 {
+        self.outgoing_start + self.duration * self.outgoing_tempo_ratio as f64
+    }
+
+    pub fn incoming_end(self) -> f64 {
+        self.incoming_start + self.duration * self.incoming_tempo_ratio as f64
+    }
+
+    pub fn max_ratio_deviation(self) -> f32 {
+        (self.outgoing_tempo_ratio - 1.0)
+            .abs()
+            .max((self.incoming_tempo_ratio - 1.0).abs())
+    }
+}
+
 /// Everything the renderer needs, and everything a consumer needs to explain the decision.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransitionPlan {

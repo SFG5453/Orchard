@@ -142,6 +142,7 @@ pub use engine::SmartCrossfadeEngine;
 pub use error::{CrossfadeError, Result};
 pub use planner::constraints::{RegionConstraint, TimeWindow, TransitionConstraints};
 pub use types::{
-    BeatAnalysis, CandidateScore, ScoredCandidate, TransitionDiagnostics, TransitionOutput,
-    TransitionPlan, TransitionStrategy,
+    BeatAnalysis, CandidateScore, MAX_SELECTED_TEMPO_RATIO_DEVIATION, ScoredCandidate,
+    SelectedTransition, TransitionDiagnostics, TransitionOutput, TransitionPlan,
+    TransitionStrategy,
 };

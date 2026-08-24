@@ -1,14 +1,17 @@
 //! The public entry point.
 
-use crate::analysis::Analyzer;
+use crate::analysis::{Analyzer, loudness};
 use crate::audio::AudioBuffer;
 use crate::config::EngineConfig;
 use crate::error::{CrossfadeError, Result};
 use crate::planner::constraints::{RegionConstraint, TimeWindow, TransitionConstraints};
+use crate::planner::strategy;
 use crate::planner::{self, PlanInputs};
 use crate::render::Renderer;
 use crate::types::beat::BeatAnalysis;
-use crate::types::transition::{TransitionOutput, TransitionPlan};
+use crate::types::transition::{
+    MAX_SELECTED_TEMPO_RATIO_DEVIATION, SelectedTransition, TransitionOutput, TransitionPlan,
+};
 
 /// Analyses, plans, and renders transitions between decoded tracks.
 ///
@@ -168,6 +171,65 @@ impl SmartCrossfadeEngine {
         self.renderer.render(outgoing, incoming, plan, &self.config)
     }
 
+    /// Validates and materializes a caller-selected transition without
+    /// analyzing PCM, generating candidates, scoring, or choosing a strategy.
+    ///
+    /// The caller owns all musical decisions. This method only supplies the
+    /// output sample rate/channel layout and the deterministic fade/filter
+    /// automation implied by the selected strategy.
+    pub fn plan_selected(
+        &self,
+        outgoing: &AudioBuffer,
+        incoming: &AudioBuffer,
+        selected: &SelectedTransition,
+    ) -> Result<TransitionPlan> {
+        if outgoing.is_empty() || incoming.is_empty() {
+            return Err(CrossfadeError::plan("both tracks must contain audio"));
+        }
+        let sample_rate = self.output_sample_rate(outgoing, incoming)?;
+        let channels = self.output_channels(outgoing, incoming)?;
+        self.validate_selected(outgoing, incoming, selected, sample_rate)?;
+
+        // Loudness matching is a render-shape measurement over the exact
+        // selected regions. It cannot move a cue, change a duration, or pick a
+        // strategy, so musical ownership remains with the caller.
+        let outgoing_loudness = loudness::region_loudness(
+            outgoing,
+            selected.outgoing_start,
+            selected.duration * selected.outgoing_tempo_ratio as f64,
+        )?;
+        let incoming_loudness = loudness::region_loudness(
+            incoming,
+            selected.incoming_start,
+            selected.duration * selected.incoming_tempo_ratio as f64,
+        )?;
+        let gains = strategy::loudness_trim(
+            loudness::difference_db(outgoing_loudness, incoming_loudness),
+            &self.config.loudness,
+        );
+        Ok(TransitionPlan {
+            outgoing_start: selected.outgoing_start,
+            incoming_start: selected.incoming_start,
+            duration: selected.duration,
+            beats: selected.beats,
+            sample_rate,
+            channels,
+            outgoing_bpm: selected.outgoing_bpm,
+            incoming_bpm: selected.incoming_bpm,
+            target_bpm: selected.target_bpm,
+            outgoing_tempo_ratio: selected.outgoing_tempo_ratio,
+            incoming_tempo_ratio: selected.incoming_tempo_ratio,
+            outgoing_pitch_semitones: selected.outgoing_pitch_semitones,
+            incoming_pitch_semitones: selected.incoming_pitch_semitones,
+            outgoing_gain_db: gains.outgoing_db,
+            incoming_gain_db: gains.incoming_db,
+            strategy: selected.strategy,
+            fade: strategy::build_fade(selected.strategy, gains),
+            filters: strategy::build_filters(selected.strategy, &self.config),
+            diagnostics: None,
+        })
+    }
+
     /// Convenience wrapper over [`Self::analyze`] followed by [`Self::render`].
     pub fn transition(
         &mut self,
@@ -206,6 +268,93 @@ impl SmartCrossfadeEngine {
                 incoming: b,
             }),
         }
+    }
+
+    fn validate_selected(
+        &self,
+        outgoing: &AudioBuffer,
+        incoming: &AudioBuffer,
+        selected: &SelectedTransition,
+        sample_rate: u32,
+    ) -> Result<()> {
+        let seconds = [
+            selected.outgoing_start,
+            selected.incoming_start,
+            selected.duration,
+        ];
+        if seconds.iter().any(|value| !value.is_finite()) {
+            return Err(CrossfadeError::plan("times must be finite"));
+        }
+        if selected.outgoing_start < 0.0 || selected.incoming_start < 0.0 {
+            return Err(CrossfadeError::plan("source starts must be non-negative"));
+        }
+        if selected.duration < self.config.timing.min_duration {
+            return Err(CrossfadeError::plan(format!(
+                "duration {:.3}s is below the {:.3}s minimum",
+                selected.duration, self.config.timing.min_duration
+            )));
+        }
+        if selected.beats == 0 {
+            return Err(CrossfadeError::plan("beat count must be non-zero"));
+        }
+
+        let scalar_fields = [
+            selected.outgoing_bpm,
+            selected.incoming_bpm,
+            selected.target_bpm,
+            selected.outgoing_tempo_ratio,
+            selected.incoming_tempo_ratio,
+            selected.outgoing_pitch_semitones,
+            selected.incoming_pitch_semitones,
+        ];
+        if scalar_fields.iter().any(|value| !value.is_finite()) {
+            return Err(CrossfadeError::plan(
+                "tempo and pitch fields must be finite",
+            ));
+        }
+        if selected.outgoing_bpm <= 0.0
+            || selected.incoming_bpm <= 0.0
+            || selected.target_bpm <= 0.0
+        {
+            return Err(CrossfadeError::plan("BPM fields must be positive"));
+        }
+        if selected.outgoing_tempo_ratio <= 0.0 || selected.incoming_tempo_ratio <= 0.0 {
+            return Err(CrossfadeError::plan("tempo ratios must be positive"));
+        }
+        if selected.max_ratio_deviation() > MAX_SELECTED_TEMPO_RATIO_DEVIATION + f32::EPSILON {
+            return Err(CrossfadeError::plan(format!(
+                "tempo ratio deviation {:.4} exceeds the transparent limit {:.4}",
+                selected.max_ratio_deviation(),
+                MAX_SELECTED_TEMPO_RATIO_DEVIATION
+            )));
+        }
+
+        let expected_duration = selected.beats as f64 * 60.0 / selected.target_bpm as f64;
+        let timing_tolerance = (1.0 / sample_rate as f64).max(1e-5);
+        if (selected.duration - expected_duration).abs() > timing_tolerance {
+            return Err(CrossfadeError::plan(format!(
+                "duration {:.6}s does not match {} beats at {:.3} BPM ({expected_duration:.6}s)",
+                selected.duration, selected.beats, selected.target_bpm
+            )));
+        }
+
+        let outgoing_tolerance = 1.0 / outgoing.sample_rate() as f64;
+        if selected.outgoing_end() > outgoing.duration() + outgoing_tolerance {
+            return Err(CrossfadeError::plan(format!(
+                "outgoing window ends at {:.6}s beyond {:.6}s of audio",
+                selected.outgoing_end(),
+                outgoing.duration()
+            )));
+        }
+        let incoming_tolerance = 1.0 / incoming.sample_rate() as f64;
+        if selected.incoming_end() > incoming.duration() + incoming_tolerance {
+            return Err(CrossfadeError::plan(format!(
+                "incoming window ends at {:.6}s beyond {:.6}s of audio",
+                selected.incoming_end(),
+                incoming.duration()
+            )));
+        }
+        Ok(())
     }
 }
 
