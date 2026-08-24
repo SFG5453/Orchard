@@ -416,6 +416,23 @@ test('a native refusal executes the attached fallback without planning the pair 
   }
 });
 
+test('speech and live context guards run before WSOLA pair planning', async () => {
+  const { ctx, legacyStarts } = crossfadeRoutingContext({
+    wsolaActive: false,
+    wsolaPlan: () => {
+      throw new Error('WSOLA planned a content type that must not be mixed');
+    }
+  });
+  ctx.activeTrack.value.title = 'Live concert recording';
+  ctx.autoCrossfade.transitionPlan = () => ({
+    shouldStart: false,
+    reason: 'blocked-speech-or-live'
+  });
+
+  assert.equal(await ctx.maybeStartAutoCrossfade(), false);
+  assert.deepEqual(legacyStarts, []);
+});
+
 test('processed audio falls back to the legacy crossfade', async () => {
   const originalWindow = globalThis.window;
   globalThis.window = { setTimeout: () => 1, clearTimeout: () => {} };

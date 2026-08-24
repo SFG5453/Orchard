@@ -27,7 +27,10 @@ import {
   WSOLA_START_LEAD_SECONDS,
   wsolaProcessingCompatible
 } from '../../audio/crossfade/wsolaCrossfade.js';
-import { transitionFromPairFallback } from '../../audio/crossfade/transitionPlanner.js';
+import {
+  smartPairPlanningBlockReason,
+  transitionFromPairFallback
+} from '../../audio/crossfade/transitionPlanner.js';
 
 const LYRIC_AUTO_SCROLL_RESUME_DELAY_MS = 1800;
 
@@ -636,7 +639,15 @@ export function installPlaybackControls(ctx) {
     // record's own spacing, so the WSOLA route is skipped and the planner is
     // left to hand off gaplessly.
     let routedFallback = null;
-    if (!albumSequential && !options.force && ctx.crossfadeMode.value === 'smart' &&
+    const smartPairBlockReason = smartPairPlanningBlockReason({
+      albumSequential,
+      analysis: ctx.crossfadeAnalysis.value,
+      currentTrack: ctx.activeTrack.value,
+      duration: mediaDuration,
+      nextAnalysis: ctx.nextCrossfadeAnalysis.value,
+      nextTrack: next
+    });
+    if (!smartPairBlockReason && !options.force && ctx.crossfadeMode.value === 'smart' &&
         ctx.isPlaying.value && !ctx.isSeeking.value && !ctx.autoCrossfade.isActive()) {
       const routed = await maybeRunWsolaTransition({
         next,

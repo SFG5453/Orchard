@@ -80,6 +80,33 @@ function sameAlbum(left = {}, right = {}) {
   return Boolean(left.album && right.album && left.album === right.album && left.artist === right.artist);
 }
 
+// Queue/content eligibility is playback context, not pair scoring. Both the
+// live and native adapters consult this one guard before invoking the
+// authoritative pair planner so speech, album continuity, short tracks, and
+// incomplete analysis cannot slip through only one route.
+export function smartPairPlanningBlockReason({
+  albumSequential = false,
+  analysis = {},
+  currentTrack = null,
+  duration = 0,
+  nextAnalysis = {},
+  nextTrack = null
+} = {}) {
+  const length = Math.max(Number(duration) || 0, trackDurationSeconds(currentTrack));
+  if (length <= 0) return 'no-duration';
+  if (length < 45) return 'short-duration-guard';
+  if (albumSequential && sameAlbum(currentTrack, nextTrack)) return 'same-album-gapless';
+  const text = `${itemText(currentTrack)} ${itemText(nextTrack)}`;
+  if (/\b(podcast|episode|audiobook|live|concert|performance)\b/.test(text)) {
+    return 'blocked-speech-or-live';
+  }
+  if (
+    !analysisReadyForTrack(analysis, currentTrack) ||
+    !analysisReadyForTrack(nextAnalysis, nextTrack)
+  ) return 'smart-analysis-fallback';
+  return '';
+}
+
 function audibleEnd(analysis = {}, fallback = 0) {
   const candidates = [
     analysis.audibleRange?.end,
@@ -171,13 +198,21 @@ export function planTransition({
   if (normalizeCrossfadeMode(mode) !== 'smart') {
     return standardTransition(length, playbackTime, standardFade, minFadeSeconds);
   }
-  if (length < 45) {
+  const contextReason = smartPairPlanningBlockReason({
+    albumSequential,
+    analysis,
+    currentTrack,
+    duration: length,
+    nextAnalysis,
+    nextTrack
+  });
+  if (contextReason === 'short-duration-guard') {
     return blocked('short-duration-guard', { transitionStart: length, transitionEnd: length });
   }
 
   // Album playthroughs preserve the record's own spacing. Queue context owns
   // this exception, so no automatic pair search is allowed to override it.
-  if (albumSequential && sameAlbum(currentTrack, nextTrack)) {
+  if (contextReason === 'same-album-gapless') {
     const transitionStart = Math.max(0, length - 0.45);
     return {
       shouldStart: playbackTime >= transitionStart,
@@ -192,14 +227,10 @@ export function planTransition({
     };
   }
 
-  const text = `${itemText(currentTrack)} ${itemText(nextTrack)}`;
-  if (/\b(podcast|episode|audiobook|live|concert|performance)\b/.test(text)) {
+  if (contextReason === 'blocked-speech-or-live') {
     return blocked('blocked-speech-or-live');
   }
-  if (
-    !analysisReadyForTrack(analysis, currentTrack) ||
-    !analysisReadyForTrack(nextAnalysis, nextTrack)
-  ) {
+  if (contextReason === 'smart-analysis-fallback') {
     return standardTransition(
       length,
       playbackTime,
