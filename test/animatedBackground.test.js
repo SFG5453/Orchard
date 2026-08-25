@@ -19,7 +19,10 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { KawarpArtworkBackground } from '../src/components/animated-background/KawarpArtworkBackground.js';
+import {
+  immersiveBackingSize,
+  KawarpArtworkBackground
+} from '../src/components/animated-background/KawarpArtworkBackground.js';
 import { VideoArtworkBackground } from '../src/components/animated-background/VideoArtworkBackground.js';
 import {
   interpolateRgb,
@@ -38,6 +41,15 @@ test('palette interpolation clamps progress', () => {
   assert.deepEqual(interpolateRgb([0, 20, 40], [100, 120, 140], 0.5), [50, 70, 90]);
   assert.deepEqual(interpolateRgb([1, 2, 3], [9, 9, 9], -1), [1, 2, 3]);
   assert.equal(normalizeBackgroundUrl('  cover.jpg  '), 'cover.jpg');
+});
+
+test('immersive WebGL backing store is downscaled and capped at 720p', () => {
+  assert.deepEqual(immersiveBackingSize(1920, 1080), { width: 1152, height: 648 });
+  assert.deepEqual(immersiveBackingSize(3840, 2160), { width: 1280, height: 720 });
+
+  const ultrawide = immersiveBackingSize(5120, 1440);
+  assert.ok(ultrawide.width * ultrawide.height <= 1280 * 720);
+  assert.ok(Math.abs((ultrawide.width / ultrawide.height) - (5120 / 1440)) < 0.01);
 });
 
 test('static artwork renders one frame without starting the WebGL animation loop', () => {
