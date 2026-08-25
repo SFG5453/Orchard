@@ -21,6 +21,7 @@ import { nextTick } from 'vue';
 import { installPlaybackCollectionQueue, playlistPlayedTrackIds } from './playbackCollectionQueue.js';
 import { resumeMediaAt } from './playbackDuration.js';
 import { isHlsPlaybackMime, loadPlaybackSource } from './hlsPlayback.js';
+import { normalizeStreamQuality } from '../../../shared/streamQuality.js';
 
 function trackDurationSeconds(item = {}) {
   const direct = Number(item.durationSeconds || 0);
@@ -73,6 +74,12 @@ export function installPlaybackResolve(ctx) {
   let preloadTrackId = '';
 
   ctx.shouldPlayAsVideo = function shouldPlayAsVideo(item, options = {}) {
+    // Refusing video outright rather than only when it is guessed at: a video
+    // stream is several times the bytes of the same song's audio, and the
+    // audio-only resolve that follows also prefers the album version. The
+    // exception is the music-video fallback the main process picks for an
+    // age-gated song, which is the only way that song plays at all.
+    if (ctx.videoPlaybackEnabled?.value === false && !item?.musicVideoAudioFallback) return false;
     if (options.mediaKind === 'video' || item?.mediaKind === 'video') return true;
     if (options.mediaKind === 'audio' || item?.mediaKind === 'audio') return false;
     if (item?.isAudioOnly) return false;
@@ -114,6 +121,7 @@ export function installPlaybackResolve(ctx) {
       avoidItags: options.avoidItags || [],
       avoidMimeTypes: options.avoidMimeTypes || [],
       preferAudioOnly: mediaKind === 'audio' ? (options.preferAudioOnly ?? true) : false,
+      streamQuality: normalizeStreamQuality(ctx.streamQuality?.value),
       supportedMimes: ctx.supportedAudioMimes(),
       supportedVideoMimes: ctx.supportedVideoMimes()
     };

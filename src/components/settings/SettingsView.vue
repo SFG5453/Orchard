@@ -19,6 +19,7 @@
 
 <script>
 import AudioEngineSection from './AudioEngineSection.vue';
+import DataSavingSection from './DataSavingSection.vue';
 import BackupRestoreSection from './BackupRestoreSection.vue';
 import DiagnosticsSection from './DiagnosticsSection.vue';
 import LastfmSection from './LastfmSection.vue';
@@ -30,7 +31,7 @@ import { computed, ref, watch } from 'vue';
 
 export default {
   name: 'SettingsView',
-  components: { AudioEngineSection, BackupRestoreSection, DiagnosticsSection, LastfmSection, SpotifySection, SongCacheSection, ArtistPacksSection, OrchardAccountSection },
+  components: { AudioEngineSection, DataSavingSection, BackupRestoreSection, DiagnosticsSection, LastfmSection, SpotifySection, SongCacheSection, ArtistPacksSection, OrchardAccountSection },
   props: { app: { type: Object, required: true } },
   setup(props) {
     const layoutPresetDescription = computed(() => {
@@ -65,6 +66,10 @@ export default {
       <a href="#settings-song-cache">
         <q-icon name="offline_pin" />
         <span>Song Cache</span>
+      </a>
+      <a href="#settings-data-saving">
+        <q-icon name="data_saver_on" />
+        <span>Data Saving</span>
       </a>
       <a href="#settings-appearance">
         <q-icon name="palette" />
@@ -248,6 +253,7 @@ export default {
       </section>
 
       <SongCacheSection :app="app" />
+      <DataSavingSection :app="app" />
       <ArtistPacksSection :app="app" />
 
       <AudioEngineSection :app="app" />

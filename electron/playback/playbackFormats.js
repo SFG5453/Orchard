@@ -17,6 +17,8 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { maxAudioBitrateForQuality, maxVideoHeightForQuality } from '../../shared/streamQuality.js';
+
 // Selects compatible YouTube audio/video formats from renderer capability hints.
 const fallbackMimePreference = [
   'audio/mp4; codecs="mp4a.40.2"',
@@ -266,6 +268,13 @@ function formatBitrate(format) {
   return Number(format?.bitrate || format?.average_bitrate || format?.averageBitrate || 0);
 }
 
+// Same shape as the audio ladder: the tallest format within the tier's height
+// cap, or the shortest available when nothing fits under it.
+function videoFormatForQuality(matches, streamQuality) {
+  const ceiling = maxVideoHeightForQuality(streamQuality);
+  return matches.find((format) => formatHeight(format) <= ceiling) || matches[matches.length - 1];
+}
+
 export function compareVideoFormats(left, right) {
   return formatHeight(right) - formatHeight(left) ||
     formatWidth(right) - formatWidth(left) ||
@@ -283,7 +292,15 @@ function formatMatchesMime(format, mime) {
   return !mimeCodec || !formatCodec || formatCodec.includes(mimeCodec) || mimeCodec.includes(formatCodec);
 }
 
-export function chooseAudioFormatFromFormats(formats, supportedMimes = []) {
+// `matches` arrives sorted by descending bitrate. Anything above the tier's
+// ceiling is skipped; when every format is above it -- which is always true of
+// the saver tier -- the thriftiest one is taken instead.
+function audioFormatForQuality(matches, streamQuality) {
+  const ceiling = maxAudioBitrateForQuality(streamQuality);
+  return matches.find((format) => formatBitrate(format) <= ceiling) || matches[matches.length - 1];
+}
+
+export function chooseAudioFormatFromFormats(formats, supportedMimes = [], options = {}) {
   if (!formats.length) return undefined;
 
   const browserSupportedMimes = supportedMimes.filter((item) => item.support);
@@ -294,14 +311,14 @@ export function chooseAudioFormatFromFormats(formats, supportedMimes = []) {
 
   for (const { mimeType } of preferredMimes) {
     const matches = formats.filter((format) => formatMatchesMime(format, mimeType));
-    if (matches.length) return matches[0];
+    if (matches.length) return audioFormatForQuality(matches, options.streamQuality);
   }
 
   if (supportedMimes.length) {
     throw new Error('No browser-supported audio format was returned by InnerTube');
   }
 
-  return formats[0];
+  return audioFormatForQuality(formats, options.streamQuality);
 }
 
 export function chooseVideoFormatFromFormats(formats, supportedMimes = [], options = {}) {
@@ -313,16 +330,16 @@ export function chooseVideoFormatFromFormats(formats, supportedMimes = [], optio
   const matches = formats
     .filter((format) => preferredMimes.some(({ mimeType }) => formatMatchesMime(format, mimeType)))
     .sort(compareVideoFormats);
-  if (matches.length) return matches[0];
+  if (matches.length) return videoFormatForQuality(matches, options.streamQuality);
 
   if (supportedMimes.length) {
     if (options.allowUnsupportedFallback) return null;
     throw new Error('No browser-supported video format was returned by InnerTube');
   }
 
-  return formats[0];
+  return videoFormatForQuality(formats, options.streamQuality);
 }
 
-export function chooseVideoOnlyFormatFromFormats(formats, supportedMimes = []) {
-  return chooseVideoFormatFromFormats(formats, supportedMimes, { allowUnsupportedFallback: true });
+export function chooseVideoOnlyFormatFromFormats(formats, supportedMimes = [], options = {}) {
+  return chooseVideoFormatFromFormats(formats, supportedMimes, { ...options, allowUnsupportedFallback: true });
 }

@@ -387,6 +387,7 @@ export function createPlaybackService({
       ...(data.streamingData?.adaptiveFormats || [])
     ];
     const wantsVideo = options.mediaKind === 'video';
+    const qualityOption = { streamQuality: options.streamQuality };
     const audioFormats = rawPlayableAudioFormats(rawFormats);
     const videoOnlyFormats = rawPlayableVideoOnlyFormats(rawFormats);
     const inlineVideoFormats = rawPlayableVideoFormats(rawFormats);
@@ -404,11 +405,11 @@ export function createPlaybackService({
       ? formats.find((candidate) => String(candidate.itag) === String(options.itag))
       : wantsVideo
         ? (options.preferInlineVideo
-          ? (chooseVideoFormatFromFormats(selectableInlineVideoFormats, options.supportedMimes) || chooseVideoOnlyFormatFromFormats(selectableVideoOnlyFormats, options.supportedMimes))
-          : (chooseVideoOnlyFormatFromFormats(selectableVideoOnlyFormats, options.supportedMimes) || chooseVideoFormatFromFormats(selectableInlineVideoFormats, options.supportedMimes)))
-        : chooseAudioFormatFromFormats(selectableAudioFormats, options.supportedMimes);
+          ? (chooseVideoFormatFromFormats(selectableInlineVideoFormats, options.supportedMimes, qualityOption) || chooseVideoOnlyFormatFromFormats(selectableVideoOnlyFormats, options.supportedMimes, qualityOption))
+          : (chooseVideoOnlyFormatFromFormats(selectableVideoOnlyFormats, options.supportedMimes, qualityOption) || chooseVideoFormatFromFormats(selectableInlineVideoFormats, options.supportedMimes, qualityOption)))
+        : chooseAudioFormatFromFormats(selectableAudioFormats, options.supportedMimes, qualityOption);
     const audioFormat = wantsVideo && format && !formatHasInlineAudio(format)
-      ? chooseAudioFormatFromFormats(selectableAudioFormats, options.supportedAudioMimes || [])
+      ? chooseAudioFormatFromFormats(selectableAudioFormats, options.supportedAudioMimes || [], qualityOption)
       : null;
 
     if (!format) throw new Error(`No playable Android VR ${wantsVideo ? 'video' : 'audio'} format was returned by YouTube`);
@@ -529,6 +530,7 @@ export function createPlaybackService({
       poToken: contentPoToken
     });
     const audioFormats = playableAudioFormats(info);
+    const qualityOption = { streamQuality: options.streamQuality };
     const supportedAudioMimes = options.supportedMimes;
     const supportedCompanionMimes = options.supportedAudioMimes || [];
     const videoOnlyFormats = playableVideoOnlyFormats(info);
@@ -544,15 +546,15 @@ export function createPlaybackService({
       ? (wantsVideo ? videoFormats : audioFormats).find((candidate) => String(candidate.itag) === String(options.itag))
       : wantsVideo
         ? (options.preferInlineVideo
-          ? (chooseVideoFormatFromFormats(selectableInlineVideoFormats, options.supportedMimes) || chooseVideoOnlyFormatFromFormats(selectableVideoOnlyFormats, options.supportedMimes))
-          : (chooseVideoOnlyFormatFromFormats(selectableVideoOnlyFormats, options.supportedMimes) || chooseVideoFormatFromFormats(selectableInlineVideoFormats, options.supportedMimes)))
-        : chooseAudioFormatFromFormats(selectableAudioFormats, supportedAudioMimes);
+          ? (chooseVideoFormatFromFormats(selectableInlineVideoFormats, options.supportedMimes, qualityOption) || chooseVideoOnlyFormatFromFormats(selectableVideoOnlyFormats, options.supportedMimes, qualityOption))
+          : (chooseVideoOnlyFormatFromFormats(selectableVideoOnlyFormats, options.supportedMimes, qualityOption) || chooseVideoFormatFromFormats(selectableInlineVideoFormats, options.supportedMimes, qualityOption)))
+        : chooseAudioFormatFromFormats(selectableAudioFormats, supportedAudioMimes, qualityOption);
     if (!format) throw new Error(`No playable ${wantsVideo ? 'video' : 'audio'} format was returned by InnerTube`);
     const rejectedItags = new Set();
     let cacheEntry = null;
     while (format && !cacheEntry) {
       const audioFormat = wantsVideo && !formatHasInlineAudio(format)
-        ? chooseAudioFormatFromFormats(selectableAudioFormats, supportedCompanionMimes)
+        ? chooseAudioFormatFromFormats(selectableAudioFormats, supportedCompanionMimes, qualityOption)
         : null;
       if (wantsVideo && !formatHasInlineAudio(format) && !audioFormat) {
         throw new Error('No playable audio companion format was returned by InnerTube');
@@ -576,7 +578,7 @@ export function createPlaybackService({
       rejectedItags.add(String(format.itag));
       if (options.itag || wantsVideo) break;
       const remainingFormats = selectableAudioFormats.filter((candidate) => !rejectedItags.has(String(candidate.itag)));
-      format = remainingFormats.length ? chooseAudioFormatFromFormats(remainingFormats, supportedAudioMimes) : null;
+      format = remainingFormats.length ? chooseAudioFormatFromFormats(remainingFormats, supportedAudioMimes, qualityOption) : null;
     }
     if (!cacheEntry) throw new Error(`No validated ${wantsVideo ? 'video' : 'audio'} stream was returned by InnerTube`);
     streamCache.cacheStream(videoId, cacheKey, cacheEntry, options);

@@ -24,6 +24,10 @@ import {
   normalizeArtworkProviderResponse
 } from './artworkProviders.js';
 
+// Providers that only ever answer with motion artwork; with animated covers off
+// they are pure wasted round trips.
+const MOTION_ONLY_ARTWORK_PROVIDERS = ['m8tec', 'spotify'];
+
 export function installArtworkService(ctx) {
   ctx.normalizedArtworkText = function normalizedArtworkText(value = '') {
     return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -267,6 +271,11 @@ export function installArtworkService(ctx) {
 
   ctx.normalizeEnhancedArtwork = async function normalizeEnhancedArtwork(data) {
     if (!data?.static && !data?.videoUrl && !data?.animated) return null;
+    if (!ctx.animatedArtworkEnabled.value) {
+      return data.static
+        ? { name: data.name || '', artist: data.artist || '', albumId: data.albumId || '', static: data.static, animated: '', videoUrl: '' }
+        : null;
+    }
 
     return {
       name: data.name || '',
@@ -283,8 +292,18 @@ export function installArtworkService(ctx) {
     return ctx.normalizeEnhancedArtwork(data);
   };
 
+  // Motion artwork is the single largest download in a listening session -- an
+  // animated cover runs tens of megabytes where the static one is tens of
+  // kilobytes -- so the data-saving switch has to stop it being fetched at all,
+  // not merely hide it once it has arrived.
+  ctx.animatedArtworkProviderAllowed = function animatedArtworkProviderAllowed(provider) {
+    return ctx.animatedArtworkEnabled.value || !MOTION_ONLY_ARTWORK_PROVIDERS.includes(provider?.id);
+  };
+
   ctx.fetchArtworkFromProviders = async function fetchArtworkFromProviders(buildUrl, normalize, target = null) {
     for (const provider of ctx.artworkApiProviders) {
+      if (!ctx.animatedArtworkProviderAllowed(provider)) continue;
+
       if (provider.id === 'spotify') {
         if (window.orchardSpotify && target) {
           try {

@@ -18,6 +18,7 @@
  */
 
 import { onBeforeUnmount, ref, watch } from 'vue';
+import { DEFAULT_STREAM_QUALITY } from '../../../shared/streamQuality.js';
 
 const FALLBACK_VOLUME = 0.55;
 
@@ -67,6 +68,7 @@ function previewPayload(app, track) {
     avoidItags: [],
     avoidMimeTypes: [],
     preferAudioOnly: true,
+    streamQuality: app.streamQuality?.value || DEFAULT_STREAM_QUALITY,
     supportedMimes: app.supportedAudioMimes?.() || [],
     supportedVideoMimes: []
   };

@@ -111,7 +111,7 @@ export function setupConfiguredArtist(app, config, assets) {
       previews: config.previews || {}
     })
     : () => {};
-  const cleanupAnimatedArtwork = config.features?.animatedArtwork
+  const cleanupAnimatedArtwork = config.features?.animatedArtwork && app.animatedArtworkEnabled?.value !== false
     ? attachAnimatedArtworkPreviews(app, {
       artistId: config.artistId,
       artistName: config.artistName

@@ -28,6 +28,7 @@ import { registerYouTubeLikesBridge } from './youtubeLikesBridge.js';
 import { registerArtistGenreBridge } from './artistGenreBridge.js';
 import { registerSponsorBlockBridge } from './sponsorBlockBridge.js';
 import { playbackAudioBitrate } from '../playback/playbackFormats.js';
+import { DEFAULT_STREAM_QUALITY } from '../../shared/streamQuality.js';
 import { isAgeGatePlaybackError } from '../playback/playbackErrors.js';
 import { isAgeGateRiskTrack } from '../playback/musicVideoFallback.js';
 import {
@@ -179,7 +180,7 @@ export async function startBridgeServer({
     }
   }
 
-  async function resolveTrackRequest({ videoId, supportedMimes = [], supportedVideoMimes = [], mediaKind = 'audio', preload = false, refreshStream = false, avoidItags = [], avoidMimeTypes = [], ...trackHint }) {
+  async function resolveTrackRequest({ videoId, supportedMimes = [], supportedVideoMimes = [], mediaKind = 'audio', streamQuality = DEFAULT_STREAM_QUALITY, preload = false, refreshStream = false, avoidItags = [], avoidMimeTypes = [], ...trackHint }) {
     const preferBrowserPlayback = shouldPreferBrowserPlayback(
       trackHint,
       playback.androidVrCooldownActive()
@@ -227,6 +228,7 @@ export async function startBridgeServer({
         supportedMimes: streamAsVideo ? supportedVideoMimes : supportedMimes,
         supportedAudioMimes: supportedMimes,
         mediaKind: streamAsVideo ? 'video' : 'audio',
+        streamQuality,
         preferInlineVideo: playAsVideo,
         requiresAuth: Boolean(trackHint.isUpload),
         authenticatedAgeGate,
@@ -602,11 +604,11 @@ export async function startBridgeServer({
       }
     });
 
-    socket.on('music:track', async ({ videoId, supportedMimes = [], supportedVideoMimes = [], mediaKind = 'audio', preload = false, refreshStream = false, avoidItags = [], avoidMimeTypes = [], ...trackHint }, reply) => {
+    socket.on('music:track', async ({ videoId, supportedMimes = [], supportedVideoMimes = [], mediaKind = 'audio', streamQuality = DEFAULT_STREAM_QUALITY, preload = false, refreshStream = false, avoidItags = [], avoidMimeTypes = [], ...trackHint }, reply) => {
       try {
         reply({
           ok: true,
-          data: await resolveTrackRequest({ videoId, supportedMimes, supportedVideoMimes, mediaKind, preload, refreshStream, avoidItags, avoidMimeTypes, ...trackHint })
+          data: await resolveTrackRequest({ videoId, supportedMimes, supportedVideoMimes, mediaKind, streamQuality, preload, refreshStream, avoidItags, avoidMimeTypes, ...trackHint })
         });
       } catch (error) {
         reply({ ok: false, error: bridgeError(error) });

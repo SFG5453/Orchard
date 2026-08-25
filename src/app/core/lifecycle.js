@@ -93,6 +93,15 @@ export function installLifecycle(ctx) {
     ctx.loadDetailEnhancedArtwork(ctx.browseDetail.value);
   }, { immediate: true });
 
+  // Cached artwork entries were shaped by whatever the switch said when they
+  // were fetched, so both directions need a re-lookup: turning motion off has to
+  // drop covers already playing, and turning it back on has to go get them.
+  watch(ctx.animatedArtworkEnabled, () => {
+    ctx.artworkCache.clear();
+    ctx.loadEnhancedArtwork(ctx.activeTrack.value);
+    ctx.loadDetailEnhancedArtwork(ctx.browseDetail.value);
+  });
+
   watch(() => ctx.playlistArtworkCollageLookupKey(ctx.browseDetail.value), () => {
     ctx.loadPlaylistArtworkCollage(ctx.browseDetail.value);
   }, { immediate: true });
@@ -153,6 +162,9 @@ export function installLifecycle(ctx) {
     ctx.songCacheEnabled,
     ctx.songCacheMaxSizeMb,
     ctx.sponsorBlockMode,
+    ctx.streamQuality,
+    ctx.videoPlaybackEnabled,
+    ctx.animatedArtworkEnabled,
     ctx.volumeNormalizationEnabled,
     ctx.repeatMode,
     ctx.shuffleEnabled,
@@ -198,6 +210,9 @@ export function installLifecycle(ctx) {
       songCacheEnabled: ctx.songCacheEnabled.value,
       songCacheMaxSizeMb: ctx.songCacheMaxSizeMb.value,
       sponsorBlockMode: ctx.sponsorBlockMode.value,
+      streamQuality: ctx.streamQuality.value,
+      videoPlaybackEnabled: ctx.videoPlaybackEnabled.value,
+      animatedArtworkEnabled: ctx.animatedArtworkEnabled.value,
       volumeNormalizationEnabled: ctx.volumeNormalizationEnabled.value,
       repeatMode: ctx.repeatMode.value,
       shuffleEnabled: ctx.shuffleEnabled.value,

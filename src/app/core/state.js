@@ -56,6 +56,11 @@ import { VEIL_MIN_ALPHA } from '../appearance/immersiveVeil.js';
 import { SONG_CACHE_DEFAULTS, clampSongCacheMaxSizeMb } from '../playback/songCachePreferences.js';
 import { DEFAULT_QUEUE_LAYOUT, QUEUE_LAYOUT_OPTIONS, normalizeQueueLayout } from '../playback/queueLayout.js';
 import {
+  DEFAULT_STREAM_QUALITY,
+  STREAM_QUALITY_OPTIONS,
+  normalizeStreamQuality
+} from '../../../shared/streamQuality.js';
+import {
   DEFAULT_SPONSOR_BLOCK_MODE,
   SPONSOR_BLOCK_MODE_OPTIONS,
   normalizeSponsorBlockMode
@@ -83,6 +88,9 @@ export function installState(ctx) {
     songCacheEnabled: SONG_CACHE_DEFAULTS.enabled,
     songCacheMaxSizeMb: SONG_CACHE_DEFAULTS.maxSizeMb,
     sponsorBlockMode: DEFAULT_SPONSOR_BLOCK_MODE,
+    streamQuality: DEFAULT_STREAM_QUALITY,
+    videoPlaybackEnabled: true,
+    animatedArtworkEnabled: true,
     volumeNormalizationEnabled: false,
     repeatMode: 'off',
     shuffleEnabled: false,
@@ -91,6 +99,7 @@ export function installState(ctx) {
   ctx.accentColorSourceOptions = ACCENT_COLOR_SOURCE_OPTIONS;
   ctx.queueLayoutOptions = QUEUE_LAYOUT_OPTIONS;
   ctx.sponsorBlockModeOptions = SPONSOR_BLOCK_MODE_OPTIONS;
+  ctx.streamQualityOptions = STREAM_QUALITY_OPTIONS;
   ctx.graphicsModeOptions = GRAPHICS_MODE_OPTIONS;
   ctx.immersiveBackgroundIntensityOptions = IMMERSIVE_BACKGROUND_INTENSITY_OPTIONS;
   ctx.immersiveBackgroundMotionOptions = IMMERSIVE_BACKGROUND_MOTION_OPTIONS;
@@ -141,6 +150,13 @@ export function installState(ctx) {
         : ctx.DEFAULT_USER_PREFERENCES.songCacheEnabled,
       songCacheMaxSizeMb: clampSongCacheMaxSizeMb(preferences.songCacheMaxSizeMb),
       sponsorBlockMode: normalizeSponsorBlockMode(preferences.sponsorBlockMode ?? preferences.sponsorBlockEnabled),
+      streamQuality: normalizeStreamQuality(preferences.streamQuality),
+      videoPlaybackEnabled: typeof preferences.videoPlaybackEnabled === 'boolean'
+        ? preferences.videoPlaybackEnabled
+        : ctx.DEFAULT_USER_PREFERENCES.videoPlaybackEnabled,
+      animatedArtworkEnabled: typeof preferences.animatedArtworkEnabled === 'boolean'
+        ? preferences.animatedArtworkEnabled
+        : ctx.DEFAULT_USER_PREFERENCES.animatedArtworkEnabled,
       volumeNormalizationEnabled: typeof preferences.volumeNormalizationEnabled === 'boolean'
         ? preferences.volumeNormalizationEnabled
         : ctx.DEFAULT_USER_PREFERENCES.volumeNormalizationEnabled,
@@ -442,6 +458,9 @@ export function installState(ctx) {
   ctx.songCacheMessage = ref('');
   ctx.themePreference = ref(ctx.initialUserPreferences.themePreference);
   ctx.sponsorBlockMode = ref(ctx.initialUserPreferences.sponsorBlockMode);
+  ctx.streamQuality = ref(ctx.initialUserPreferences.streamQuality);
+  ctx.videoPlaybackEnabled = ref(ctx.initialUserPreferences.videoPlaybackEnabled);
+  ctx.animatedArtworkEnabled = ref(ctx.initialUserPreferences.animatedArtworkEnabled);
   ctx.volumeNormalizationEnabled = ref(ctx.initialUserPreferences.volumeNormalizationEnabled);
   ctx.repeatMode = ref(ctx.initialUserPreferences.repeatMode);
   ctx.shuffleEnabled = ref(ctx.initialUserPreferences.shuffleEnabled);
@@ -469,6 +488,9 @@ export function installState(ctx) {
     ctx.songCacheEnabled.value = defaults.songCacheEnabled;
     ctx.songCacheMaxSizeMb.value = defaults.songCacheMaxSizeMb;
     ctx.sponsorBlockMode.value = defaults.sponsorBlockMode;
+    ctx.streamQuality.value = defaults.streamQuality;
+    ctx.videoPlaybackEnabled.value = defaults.videoPlaybackEnabled;
+    ctx.animatedArtworkEnabled.value = defaults.animatedArtworkEnabled;
     ctx.volumeNormalizationEnabled.value = defaults.volumeNormalizationEnabled;
     ctx.repeatMode.value = defaults.repeatMode;
     ctx.shuffleEnabled.value = defaults.shuffleEnabled;

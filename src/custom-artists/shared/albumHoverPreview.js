@@ -18,6 +18,7 @@
  */
 
 import { watch } from 'vue';
+import { DEFAULT_STREAM_QUALITY } from '../../../shared/streamQuality.js';
 
 const DEFAULT_RETRY_LIMIT = 20;
 const DEFAULT_RETRY_MS = 300;
@@ -75,6 +76,7 @@ function previewTrackPayload(app, videoId) {
     avoidItags: [],
     avoidMimeTypes: [],
     preferAudioOnly: true,
+    streamQuality: app.streamQuality?.value || DEFAULT_STREAM_QUALITY,
     supportedMimes: app.supportedAudioMimes?.() || [],
     supportedVideoMimes: []
   };

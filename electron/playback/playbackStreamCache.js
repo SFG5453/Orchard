@@ -17,14 +17,21 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { normalizeStreamQuality } from '../../shared/streamQuality.js';
+
 // Keeps resolved playback URLs and option-specific selections bounded to the main process.
 export function createPlaybackStreamCache() {
   const streams = new Map();
   const options = new Map();
 
+  // An explicit itag names one byte stream, so it identifies the entry on its
+  // own. Automatic selection does not: the same request resolves to a different
+  // format once the listener changes streaming quality, so the tier joins the
+  // key rather than letting a high-bitrate entry answer a saver request.
   function key(videoId, opts = {}) {
     const mediaKind = opts.mediaKind === 'video' ? 'video' : 'audio';
-    return `${videoId}:${mediaKind}:${opts.itag || 'auto'}`;
+    if (opts.itag) return `${videoId}:${mediaKind}:${opts.itag}`;
+    return `${videoId}:${mediaKind}:auto:${normalizeStreamQuality(opts.streamQuality)}`;
   }
 
   function cacheableOptions(opts = {}) {
@@ -35,6 +42,7 @@ export function createPlaybackStreamCache() {
       avoidItags: opts.avoidItags || [],
       avoidMimeTypes: opts.avoidMimeTypes || [],
       preferInlineVideo: Boolean(opts.preferInlineVideo),
+      streamQuality: normalizeStreamQuality(opts.streamQuality),
       requiresAuth: Boolean(opts.requiresAuth),
       authenticatedAgeGate: Boolean(opts.authenticatedAgeGate),
       lowPriority: Boolean(opts.lowPriority)

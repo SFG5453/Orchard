@@ -182,7 +182,7 @@ export function installComputedState(ctx) {
 
   ctx.browseDetailVideoSection = computed(() => {
     const detail = ctx.browseDetail.value;
-    if (detail?.kind !== 'album') return null;
+    if (detail?.kind !== 'album' || !ctx.videoPlaybackEnabled.value) return null;
 
     const sectionVideos = (detail.sections || [])
       .filter(ctx.isVideoShelfSection)
