@@ -269,7 +269,18 @@ export default {
       <aside class="fullscreen-player__queue" :aria-label="continuousQueueEnabled ? 'Queue' : 'Up next'">
         <header class="fullscreen-player__queue-header">
           <strong>{{ continuousQueueEnabled ? 'Queue' : 'Up Next' }}</strong>
-          <button v-if="queue.length" type="button" @click="clearQueue">Clear</button>
+          <div class="fullscreen-player__queue-header-actions">
+            <button
+              v-if="queueTracksForPlaylist().length"
+              type="button"
+              title="Add queue to playlist"
+              aria-label="Add queue to playlist"
+              @click="openQueuePlaylistDialog"
+            >
+              Save
+            </button>
+            <button v-if="queue.length" type="button" @click="clearQueue">Clear</button>
+          </div>
         </header>
 
         <div v-if="continuousQueueEnabled" class="fullscreen-player__queue-list">

@@ -130,26 +130,35 @@
 }
 
 .queue-view__clear,
-.queue-view__sort {
+.queue-view__sort,
+.queue-view__save-playlist {
   padding: 5px 8px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
   font-size: 12px;
+  cursor: pointer;
 }
 
 .queue-view__clear:hover,
-.queue-view__sort:hover {
+.queue-view__sort:hover,
+.queue-view__save-playlist:hover {
   background: rgba(255, 255, 255, 0.05);
   color: var(--text);
 }
 
-.queue-view__sort {
+.queue-view__sort,
+.queue-view__save-playlist {
   display: flex;
   align-items: center;
   gap: 6px;
   font-weight: 500;
+}
+
+.queue-view__sort .q-icon,
+.queue-view__save-playlist .q-icon {
+  font-size: 14px;
 }
 
 .queue-view__sort--active {

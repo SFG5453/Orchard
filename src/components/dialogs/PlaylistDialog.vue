@@ -28,12 +28,19 @@ export default {
 </script>
 
 <template>
-  <q-dialog v-model="playlistDialogOpen" persistent aria-label="Add track to playlist">
+  <q-dialog v-model="playlistDialogOpen" persistent :aria-label="playlistDialogMode === 'queue' ? 'Add queue to playlist' : 'Add track to playlist'">
     <q-card class="playlist-dialog">
       <header class="playlist-dialog__header">
         <div>
-          <div class="playlist-dialog__title">Add to playlist</div>
-          <div class="playlist-dialog__track">{{ playlistDialogTrack?.title || 'Track' }}</div>
+          <div class="playlist-dialog__title">{{ playlistDialogMode === 'queue' ? 'Add queue to playlist' : 'Add to playlist' }}</div>
+          <div class="playlist-dialog__track">
+            <template v-if="playlistDialogMode === 'queue'">
+              {{ playlistDialogTracks.length }} {{ playlistDialogTracks.length === 1 ? 'song' : 'songs' }} in queue
+            </template>
+            <template v-else>
+              {{ playlistDialogTrack?.title || 'Track' }}
+            </template>
+          </div>
         </div>
         <q-btn
           flat
@@ -84,7 +91,7 @@ export default {
             :key="playlist.id"
             type="button"
             class="playlist-dialog__playlist"
-            :disabled="Boolean(playlistMutationPending) || playlist.containsTrack"
+            :disabled="Boolean(playlistMutationPending) || (playlistDialogMode !== 'queue' && playlist.containsTrack)"
             @click="addTrackToPlaylist(playlist)"
           >
             <q-img v-if="playlist.thumbnail" :src="playlist.thumbnail" class="playlist-dialog__cover" />
@@ -93,10 +100,10 @@ export default {
             </span>
             <span class="playlist-dialog__copy">
               <strong>{{ playlist.title }}</strong>
-              <span>{{ playlist.containsTrack ? 'Already added' : playlist.subtitle || 'Editable playlist' }}</span>
+              <span>{{ (playlistDialogMode !== 'queue' && playlist.containsTrack) ? 'Already added' : playlist.subtitle || 'Editable playlist' }}</span>
             </span>
             <q-spinner v-if="playlistMutationPending === playlist.id" size="18px" />
-            <q-icon v-else :name="playlist.containsTrack ? 'check' : 'add'" />
+            <q-icon v-else :name="(playlistDialogMode !== 'queue' && playlist.containsTrack) ? 'check' : 'add'" />
           </button>
         </template>
       </div>

@@ -144,17 +144,21 @@ html[data-theme-resolved='light'] .settings-option--active {
   color: #17231a;
 }
 
-html[data-theme-resolved='light'] .settings-cache-menu__action {
+html[data-theme-resolved='light'] .settings-cache-menu__action,
+html[data-theme-resolved='light'] .right-queue-menu__action {
   color: var(--muted-strong);
 }
 
 html[data-theme-resolved='light'] .settings-cache-menu__action:hover,
-html[data-theme-resolved='light'] .settings-cache-menu__action:focus-visible {
+html[data-theme-resolved='light'] .settings-cache-menu__action:focus-visible,
+html[data-theme-resolved='light'] .right-queue-menu__action:hover,
+html[data-theme-resolved='light'] .right-queue-menu__action:focus-visible {
   background: var(--panel-alt);
   color: var(--text);
 }
 
-html[data-theme-resolved='light'] .settings-cache-menu__action--danger {
+html[data-theme-resolved='light'] .settings-cache-menu__action--danger,
+html[data-theme-resolved='light'] .right-queue-menu__action--danger {
   border-top-color: var(--line);
   color: #98483e;
 }

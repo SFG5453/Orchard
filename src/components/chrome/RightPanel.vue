@@ -176,15 +176,35 @@ export default {
                   <span v-else>Best mix</span>
                 </button>
                 <button
-                  v-if="queue.length"
+                  v-if="queueTracksForPlaylist().length || queue.length"
                   type="button"
-                  class="right-queue-clear"
-                  title="Remove everything from the queue"
-                  aria-label="Remove everything from the queue"
-                  @click="clearQueue"
+                  class="right-queue-more"
+                  title="Queue options"
+                  aria-label="Queue options"
                 >
-                  <q-icon name="delete_sweep" />
-                  <span>Clear all</span>
+                  <q-icon name="more_horiz" />
+                  <q-menu anchor="bottom right" self="top right" class="right-queue-menu">
+                    <button
+                      v-if="queueTracksForPlaylist().length"
+                      v-close-popup
+                      type="button"
+                      class="right-queue-menu__action"
+                      @click="openQueuePlaylistDialog"
+                    >
+                      <q-icon name="playlist_add" />
+                      <span>Add to playlist</span>
+                    </button>
+                    <button
+                      v-if="queue.length"
+                      v-close-popup
+                      type="button"
+                      class="right-queue-menu__action right-queue-menu__action--danger"
+                      @click="clearQueue"
+                    >
+                      <q-icon name="delete_sweep" />
+                      <span>Clear queue</span>
+                    </button>
+                  </q-menu>
                 </button>
               </div>
             </div>

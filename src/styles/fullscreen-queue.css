@@ -39,6 +39,12 @@
   font-size: 14px;
 }
 
+.fullscreen-player__queue-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .fullscreen-player__queue-header button {
   border: 0;
   background: transparent;
