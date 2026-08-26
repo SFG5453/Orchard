@@ -25,6 +25,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.KeyEvent
+import androidx.core.content.IntentCompat
 import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -960,9 +962,113 @@ class OrchardPlaybackService : MediaLibraryService() {
                         .add(COMMAND_TOGGLE_SHUFFLE)
                         .add(COMMAND_TOGGLE_REPEAT)
                         .build()
+                val playerCommands =
+                    session.player.availableCommands.buildUpon()
+                        .add(Player.COMMAND_PLAY_PAUSE)
+                        .add(Player.COMMAND_PREPARE)
+                        .add(Player.COMMAND_STOP)
+                        .add(Player.COMMAND_SEEK_TO_DEFAULT_POSITION)
+                        .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+                        .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                        .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                        .add(Player.COMMAND_SEEK_TO_NEXT)
+                        .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                        .add(Player.COMMAND_SET_SHUFFLE_MODE)
+                        .add(Player.COMMAND_SET_REPEAT_MODE)
+                        .build()
                 return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
                     .setAvailableSessionCommands(sessionCommands)
+                    .setAvailablePlayerCommands(playerCommands)
                     .build()
+            }
+
+            override fun onMediaButtonEvent(
+                session: MediaSession,
+                controllerInfo: MediaSession.ControllerInfo,
+                intent: Intent,
+            ): Boolean {
+                val keyEvent =
+                    IntentCompat.getParcelableExtra(intent, Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+                if (keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (keyEvent.keyCode) {
+                        KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                            if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                            player.play()
+                            return true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                            player.pause()
+                            return true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                        KeyEvent.KEYCODE_HEADSETHOOK -> {
+                            if (player.isPlaying) {
+                                player.pause()
+                            } else {
+                                if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                                player.play()
+                            }
+                            return true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_NEXT -> {
+                            if (player.hasNextMediaItem()) {
+                                player.seekToNextMediaItem()
+                            }
+                            if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                            player.play()
+                            return true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
+                            if (player.currentPosition > 5_000) {
+                                player.seekTo(0)
+                            } else if (player.hasPreviousMediaItem()) {
+                                player.seekToPreviousMediaItem()
+                            } else {
+                                player.seekTo(0)
+                            }
+                            if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                            player.play()
+                            return true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_STOP -> {
+                            player.stop()
+                            return true
+                        }
+                    }
+                }
+                return super.onMediaButtonEvent(session, controllerInfo, intent)
+            }
+
+            override fun onPlaybackResumption(
+                mediaSession: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                isForPlayback: Boolean,
+            ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+                val queue = buildList {
+                    for (index in 0 until player.mediaItemCount) {
+                        add(player.getMediaItemAt(index))
+                    }
+                }
+                if (queue.isNotEmpty()) {
+                    return Futures.immediateFuture(
+                        MediaSession.MediaItemsWithStartPosition(
+                            queue,
+                            player.currentMediaItemIndex.coerceAtLeast(0),
+                            player.currentPosition.coerceAtLeast(0),
+                        )
+                    )
+                }
+                val restored = stateStore.load()
+                if (restored.queue.isNotEmpty()) {
+                    return Futures.immediateFuture(
+                        MediaSession.MediaItemsWithStartPosition(
+                            restored.queue.map(MediaItemMapper::toMediaItem),
+                            restored.currentIndex.coerceIn(0, restored.queue.lastIndex),
+                            restored.positionMs,
+                        )
+                    )
+                }
+                return Futures.immediateFailedFuture(UnsupportedOperationException())
             }
 
             override fun onSetMediaItems(
@@ -1144,6 +1250,21 @@ class OrchardPlaybackService : MediaLibraryService() {
                 .setSessionCommand(COMMAND_TOGGLE_REPEAT)
                 .build()
 
+        val previousButton =
+            CommandButton.Builder(CommandButton.ICON_PREVIOUS)
+                .setDisplayName("Previous")
+                .setPlayerCommand(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                .build()
+
+        val nextButton =
+            CommandButton.Builder(CommandButton.ICON_NEXT)
+                .setDisplayName("Next")
+                .setPlayerCommand(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                .build()
+
+        mediaSession.setMediaButtonPreferences(
+            listOf(previousButton, shuffleButton, repeatButton, nextButton)
+        )
         mediaSession.setCustomLayout(listOf(shuffleButton, repeatButton))
     }
 
