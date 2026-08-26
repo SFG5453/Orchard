@@ -32,6 +32,7 @@ export const IPC_CHANNELS = Object.freeze({
     GRAPHICS_MODE: 'app:graphics-mode',
     RESTART: 'app:restart',
     SHOW_WELCOME: 'app:show-welcome',
+    SYNC_SETTINGS: 'app:sync-settings',
     VIEW_LICENSE: 'app:view-license'
   }),
   AUDIO_ANALYSIS: Object.freeze({

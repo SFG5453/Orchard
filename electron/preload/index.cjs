@@ -54,7 +54,7 @@ contextBridge.exposeInMainWorld('orchardWindow', {
 contextBridge.exposeInMainWorld('orchardApp', {
   captureScreenshot: () => ipcRenderer.invoke('app:capture-screenshot'),
   diagnostics: () => ipcRenderer.invoke('app:diagnostics'),
-  finishWelcome: () => ipcRenderer.invoke('app:finish-welcome'),
+  finishWelcome: (settings = {}) => ipcRenderer.invoke('app:finish-welcome', settings),
   graphicsMode: (value) => value === undefined
     ? ipcRenderer.invoke('app:graphics-mode')
     : ipcRenderer.invoke('app:graphics-mode', value),
@@ -62,6 +62,12 @@ contextBridge.exposeInMainWorld('orchardApp', {
   showWelcome: (options = {}) => ipcRenderer.invoke('app:show-welcome', {
     resetCompletion: options?.resetCompletion === true
   }),
+  onSettingsSync: (listener) => {
+    if (typeof listener !== 'function') return () => {};
+    const handler = () => listener();
+    ipcRenderer.on('app:sync-settings', handler);
+    return () => ipcRenderer.removeListener('app:sync-settings', handler);
+  },
   viewLicense: () => ipcRenderer.invoke('app:view-license')
 });
 

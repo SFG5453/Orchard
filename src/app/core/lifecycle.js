@@ -19,6 +19,7 @@
 
 import { nextTick, onBeforeUnmount, onMounted, watch } from 'vue';
 import { io } from 'socket.io-client';
+import { bindSettingsStorageSync } from './settingsStorageSync.js';
 
 export function disableCrossfadePlayback(ctx) {
   ctx.stopCrossfadeClock();
@@ -424,6 +425,7 @@ export function installLifecycle(ctx) {
 
   onMounted(() => {
     ctx.syncViewportSize();
+    ctx.unbindSettingsStorageSync = bindSettingsStorageSync(ctx, window, window.orchardApp);
     ctx.bindSystemThemePreference();
     window.addEventListener('resize', ctx.syncViewportSize);
     document.addEventListener('fullscreenchange', ctx.onFullscreenPlayerChange);
@@ -515,6 +517,7 @@ export function installLifecycle(ctx) {
     ctx.clearDesktopControls();
     ctx.stopSupportPolling();
     ctx.clearMediaSessionHandlers();
+    ctx.unbindSettingsStorageSync?.();
     window.removeEventListener('keydown', ctx.onGlobalKeydown);
     window.removeEventListener('resize', ctx.syncViewportSize);
     window.removeEventListener('focus', ctx.refreshSupportOnFocus);

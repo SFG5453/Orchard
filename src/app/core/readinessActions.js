@@ -21,6 +21,7 @@ import { computed, ref } from 'vue';
 import { readPinnedTracks } from '../browse/pinsPersistence.js';
 import { copyTextToClipboard } from '../platform/clipboardText.js';
 import { readPlaybackState } from '../playback/queuePersistence.js';
+import { welcomeSettingsSnapshot } from './settingsStorageSync.js';
 
 const SETUP_STORAGE_KEY = 'orchard:setup-state';
 const LAST_RUN_VERSION_STORAGE_KEY = 'orchard:last-run-version';
@@ -301,7 +302,7 @@ export function installReadinessActions(ctx) {
       if (typeof window.orchardApp?.finishWelcome !== 'function') {
         throw new Error('The desktop bridge is unavailable.');
       }
-      await window.orchardApp.finishWelcome();
+      await window.orchardApp.finishWelcome(welcomeSettingsSnapshot(ctx));
       return true;
     } catch (error) {
       ctx.errorMessage.value = error?.message || 'Could not open Orchard.';

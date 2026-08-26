@@ -18,7 +18,7 @@
 -->
 
 <script>
-import { computed, onMounted, ref, watch, defineAsyncComponent } from 'vue';
+import { computed, onMounted, reactive, ref, watch, defineAsyncComponent } from 'vue';
 import welcomeMusicUrl from '../../assets/welcome-lofi.mp3';
 
 const SupportView = defineAsyncComponent(() => import('../views/SupportView.vue'));
@@ -131,7 +131,7 @@ export default {
 
     return {
       accountReady,
-      app: props.app,
+      app: reactive(props.app),
       audioRef,
       canGoNext,
       canopyUpgrade,
@@ -181,6 +181,7 @@ export default {
             v-for="(step, index) in steps"
             :key="step.key"
             type="button"
+            :aria-label="step.title"
             class="welcome-window__tracker-step"
             :class="{
               'welcome-window__tracker-step--active': index === stepIndex,

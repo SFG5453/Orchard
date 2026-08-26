@@ -76,6 +76,7 @@ import { setupDesktopControls } from '../platform/desktopControls.js';
 import { registerScreenshotCapture } from '../platform/screenshotCapture.js';
 import { setupSystemMediaHandlers } from '../platform/systemMedia.js';
 import { setWelcomeCompleted, welcomeRequiredAtLaunch } from '../platform/welcomeState.js';
+import { welcomeWindowBounds } from '../platform/welcomeWindowBounds.js';
 import { configureWindowOpenHandler, registerDevToolsShortcut, registerWindowControls } from '../platform/windowControls.js';
 import { createGraphicsModeController, GRAPHICS_MODE_FILENAME } from './graphicsMode.js';
 import { createSessionStateStore, SESSION_STATE_FILENAME } from './sessionState.js';
@@ -473,11 +474,9 @@ async function createMainWindow() {
 }
 
 async function createWelcomeWindow() {
+  const bounds = welcomeWindowBounds(screen.getPrimaryDisplay().workAreaSize);
   welcomeWindow = new BrowserWindow({
-    width: 880,
-    height: 720,
-    minWidth: 720,
-    minHeight: 620,
+    ...bounds,
     autoHideMenuBar: true,
     frame: useNativeTitlebar,
     show: false,

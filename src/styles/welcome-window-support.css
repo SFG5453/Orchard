@@ -52,21 +52,3 @@
   color: #fff;
   transform: scale(1.05);
 }
-
-@media (max-width: 760px) {
-  .welcome-window {
-    padding: 16px;
-  }
-
-  .welcome-window__stage {
-    width: calc(100vw - 32px);
-    min-height: calc(100vh - 32px);
-    border-radius: 16px;
-    padding: 20px 24px;
-  }
-
-  .welcome-window__sound-grid,
-  .welcome-window__connect-grid {
-    grid-template-columns: 1fr;
-  }
-}
