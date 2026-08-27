@@ -311,7 +311,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         val result = super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
             OrchardPlayerWidgetProvider.ACTION_TOGGLE -> {
-                if (player.isPlaying) player.pause()
+                if (player.playWhenReady) player.pause()
                 else {
                     if (player.playbackState == Player.STATE_IDLE) player.prepare()
                     player.play()
@@ -343,13 +343,13 @@ class OrchardPlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
-        browseScope.cancel()
         if (::crossfade.isInitialized) crossfade.release()
         if (::player.isInitialized) {
-            persistPlayback()
+            persistPlayback(sync = true)
             OrchardWidgetUpdater.onPlayerChanged(this, player, forcePaused = true)
             player.release()
         }
+        browseScope.cancel()
         if (::spare.isInitialized) spare.release()
         if (::mediaSession.isInitialized) mediaSession.release()
         OrchardGraph.from(this).analysisLookup = null
@@ -566,25 +566,30 @@ class OrchardPlaybackService : MediaLibraryService() {
         player.playWhenReady = restored.playWhenReady
     }
 
-    private fun persistPlayback() {
+    private fun persistPlayback(sync: Boolean = false) {
         if (!::player.isInitialized) return
         val queue = buildList {
             for (index in 0 until player.mediaItemCount) add(
                 MediaItemMapper.toTrack(player.getMediaItemAt(index))
             )
         }
-        stateStore.save(
-            RestoredPlayback(
-                queue = queue,
-                currentIndex = player.currentMediaItemIndex,
-                positionMs = player.currentPosition.coerceAtLeast(0),
-                shuffle = player.shuffleModeEnabled,
-                repeatMode = player.repeatMode.toRepeatMode(),
-                contextTitle = player.playlistMetadata.title?.toString().orEmpty(),
-                playWhenReady = player.playWhenReady,
-                unshuffledOrder = unshuffledOrder,
-            )
+        val restored = RestoredPlayback(
+            queue = queue,
+            currentIndex = player.currentMediaItemIndex,
+            positionMs = player.currentPosition.coerceAtLeast(0),
+            shuffle = player.shuffleModeEnabled,
+            repeatMode = player.repeatMode.toRepeatMode(),
+            contextTitle = player.playlistMetadata.title?.toString().orEmpty(),
+            playWhenReady = player.playWhenReady,
+            unshuffledOrder = unshuffledOrder,
         )
+        if (sync) {
+            stateStore.save(restored)
+        } else {
+            browseScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                stateStore.save(restored)
+            }
+        }
     }
 
     /**
@@ -668,7 +673,16 @@ class OrchardPlaybackService : MediaLibraryService() {
                         keepQueueOrderUnshuffled(this@OrchardPlaybackService.player)
                     }
                     persistPlayback()
-                    updateCustomLayout()
+                    if (
+                        events.containsAny(
+                            Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED,
+                            Player.EVENT_REPEAT_MODE_CHANGED,
+                            Player.EVENT_TIMELINE_CHANGED,
+                            Player.EVENT_MEDIA_ITEM_TRANSITION,
+                        )
+                    ) {
+                        updateCustomLayout()
+                    }
                 }
                 if (
                     events.containsAny(
@@ -989,26 +1003,50 @@ class OrchardPlaybackService : MediaLibraryService() {
             ): Boolean {
                 val keyEvent =
                     IntentCompat.getParcelableExtra(intent, Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
-                if (keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN) {
-                    when (keyEvent.keyCode) {
+                        ?: return super.onMediaButtonEvent(session, controllerInfo, intent)
+
+                val keyCode = keyEvent.keyCode
+                val isHandledKey = when (keyCode) {
+                    KeyEvent.KEYCODE_MEDIA_PLAY,
+                    KeyEvent.KEYCODE_MEDIA_PAUSE,
+                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                    KeyEvent.KEYCODE_HEADSETHOOK,
+                    KeyEvent.KEYCODE_MEDIA_NEXT,
+                    KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+                    KeyEvent.KEYCODE_MEDIA_STOP -> true
+                    else -> false
+                }
+
+                if (!isHandledKey) {
+                    return super.onMediaButtonEvent(session, controllerInfo, intent)
+                }
+
+                // If this is an ACTION_UP event or a repeated ACTION_DOWN event, consume it immediately
+                // without re-triggering or allowing super to run double-tap timeout detection.
+                if (keyEvent.action == KeyEvent.ACTION_UP) {
+                    return true
+                }
+
+                if (keyEvent.action == KeyEvent.ACTION_DOWN) {
+                    if (keyEvent.repeatCount > 0) {
+                        return true
+                    }
+                    when (keyCode) {
                         KeyEvent.KEYCODE_MEDIA_PLAY -> {
                             if (player.playbackState == Player.STATE_IDLE) player.prepare()
                             player.play()
-                            return true
                         }
                         KeyEvent.KEYCODE_MEDIA_PAUSE -> {
                             player.pause()
-                            return true
                         }
                         KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
                         KeyEvent.KEYCODE_HEADSETHOOK -> {
-                            if (player.isPlaying) {
+                            if (player.playWhenReady) {
                                 player.pause()
                             } else {
                                 if (player.playbackState == Player.STATE_IDLE) player.prepare()
                                 player.play()
                             }
-                            return true
                         }
                         KeyEvent.KEYCODE_MEDIA_NEXT -> {
                             if (player.hasNextMediaItem()) {
@@ -1016,7 +1054,6 @@ class OrchardPlaybackService : MediaLibraryService() {
                             }
                             if (player.playbackState == Player.STATE_IDLE) player.prepare()
                             player.play()
-                            return true
                         }
                         KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
                             if (player.currentPosition > 5_000) {
@@ -1028,13 +1065,12 @@ class OrchardPlaybackService : MediaLibraryService() {
                             }
                             if (player.playbackState == Player.STATE_IDLE) player.prepare()
                             player.play()
-                            return true
                         }
                         KeyEvent.KEYCODE_MEDIA_STOP -> {
                             player.stop()
-                            return true
                         }
                     }
+                    return true
                 }
                 return super.onMediaButtonEvent(session, controllerInfo, intent)
             }

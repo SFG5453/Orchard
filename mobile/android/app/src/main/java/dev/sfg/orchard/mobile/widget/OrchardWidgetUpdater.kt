@@ -34,16 +34,26 @@ object OrchardWidgetUpdater {
             ?.coerceAtLeast(0)
             ?: current?.durationMs
             ?: 0
-        OrchardWidgetStateStore(appContext).save(
-            OrchardWidgetState(
-                currentTrack = current,
-                recentlyPlayed = graph.library.library.value.recentlyPlayed.take(4),
-                isPlaying = player.isPlaying && !forcePaused,
-                positionMs = player.currentPosition.coerceAtLeast(0),
-                durationMs = duration,
-            )
+        val isPlaying = player.isPlaying && !forcePaused
+        val positionMs = player.currentPosition.coerceAtLeast(0)
+        val recentlyPlayed = graph.library.library.value.recentlyPlayed.take(4)
+        val state = OrchardWidgetState(
+            currentTrack = current,
+            recentlyPlayed = recentlyPlayed,
+            isPlaying = isPlaying,
+            positionMs = positionMs,
+            durationMs = duration,
         )
-        requestRender(appContext)
+        graph.applicationScope.launch(Dispatchers.IO) {
+            OrchardWidgetStateStore(appContext).save(state)
+            renderMutex.withLock {
+                OrchardWidgetRenderer.updateAll(
+                    context = appContext,
+                    state = state,
+                    client = graph.http,
+                )
+            }
+        }
     }
 
     fun requestRender(context: Context) {

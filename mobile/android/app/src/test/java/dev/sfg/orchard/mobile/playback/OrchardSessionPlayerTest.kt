@@ -198,4 +198,51 @@ class OrchardSessionPlayerTest {
         assertTrue(state.prepared)
         assertTrue(state.soughtNext)
     }
+
+    @Test
+    fun seekToNextMediaItemAdvancesWhenNextTrackExists() {
+        val state = PlayerState().apply {
+            this.state = Player.STATE_IDLE
+            this.hasNxt = true
+        }
+        val base = createTestPlayer(state)
+        val sessionPlayer = OrchardSessionPlayer(base)
+
+        sessionPlayer.seekToNextMediaItem()
+
+        assertTrue(state.prepared)
+        assertTrue(state.soughtNext)
+    }
+
+    @Test
+    fun seekToPreviousMediaItemRestartsWhenPastFiveSeconds() {
+        val state = PlayerState().apply {
+            this.state = Player.STATE_READY
+            this.position = 8_000L
+            this.hasPrev = true
+        }
+        val base = createTestPlayer(state)
+        val sessionPlayer = OrchardSessionPlayer(base)
+
+        sessionPlayer.seekToPreviousMediaItem()
+
+        assertEquals(0L, state.soughtPosition)
+        assertEquals(false, state.soughtPrev)
+    }
+
+    @Test
+    fun seekToPreviousMediaItemMovesToPreviousWhenWithinFiveSeconds() {
+        val state = PlayerState().apply {
+            this.state = Player.STATE_READY
+            this.position = 1_500L
+            this.hasPrev = true
+        }
+        val base = createTestPlayer(state)
+        val sessionPlayer = OrchardSessionPlayer(base)
+
+        sessionPlayer.seekToPreviousMediaItem()
+
+        assertTrue(state.soughtPrev)
+    }
 }
+
