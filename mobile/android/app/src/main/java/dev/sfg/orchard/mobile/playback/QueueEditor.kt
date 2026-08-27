@@ -68,6 +68,8 @@ object QueueEditor {
         return Result(queue.take(currentIndex + 1), currentIndex)
     }
 
+    fun clear(): Result = Result(emptyList(), -1)
+
     fun replaceAndPlay(tracks: List<Track>, startIndex: Int = 0): Result {
         val selectedId = tracks.getOrNull(startIndex)?.id.orEmpty()
         val playable = tracks.distinctBy { it.id }.filter { it.id.isNotBlank() }

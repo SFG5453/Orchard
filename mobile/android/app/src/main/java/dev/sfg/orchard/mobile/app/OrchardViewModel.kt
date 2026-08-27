@@ -810,6 +810,11 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         { if (connectProtocolVersion.value >= 2) graph.connect.clearUpcoming() },
         local::clearUpcoming,
     )
+    fun clearQueue() = partyOrLocal(
+        "clear-queue",
+        { if (connectProtocolVersion.value >= 2) graph.connect.clearUpcoming() },
+        local::clearQueue,
+    )
 
     fun setAutoplayEnabled(enabled: Boolean) {
         autoplayGate.value = enabled

@@ -128,6 +128,10 @@ class LocalPlaybackController(
         val from = it.currentMediaItemIndex + 1
         if (from in 0 until it.mediaItemCount) it.removeMediaItems(from, it.mediaItemCount)
     }
+    fun clearQueue() = withController {
+        it.stop()
+        it.clearMediaItems()
+    }
     fun playQueueIndex(index: Int) = withController {
         if (index in 0 until it.mediaItemCount) { it.seekToDefaultPosition(index); it.play() }
     }

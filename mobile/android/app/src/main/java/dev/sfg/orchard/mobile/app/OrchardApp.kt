@@ -193,6 +193,10 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                                 onToggle = viewModel::togglePlayback,
                                 onNext = viewModel::next,
                                 onPrevious = viewModel::previous,
+                                onClear = {
+                                    playerOpen = false
+                                    viewModel.clearQueue()
+                                },
                             )
                             OrchardBottomBar(route) { navController.openTopLevel(it) }
                         }

@@ -22,6 +22,7 @@ package dev.sfg.orchard.mobile.ui.components
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -36,7 +37,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -78,6 +82,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -96,6 +101,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -321,10 +327,19 @@ fun MiniPlayer(
     mixProgress: Float? = null,
     /** Reports the thumbnail's place on screen so the full player can fly its cover into it. */
     onArtworkBounds: ((Rect) -> Unit)? = null,
+    onClear: () -> Unit = {},
 ) {
     val track = playback.currentTrack ?: return
-    var offsetX by remember { mutableFloatStateOf(0f) }
+    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
+    val settleAnim = remember { Animatable(0f) }
     val coroutineScope = rememberCoroutineScope()
+    val density = LocalDensity.current
+
+    val currentOffsetY = if (isDragging) dragOffsetY else settleAnim.value
+    val dismissThresholdPx = with(density) { 44.dp.toPx() }
+    val dismissVelocityPx = with(density) { 300.dp.toPx() }
+    val fullDismissPx = with(density) { 80.dp.toPx() }
 
     val marker = transition?.takeIf {
         it.trackId.isNotBlank() && it.trackId == track.id && it.startMs > 0 && it.startMs < playback.durationMs
@@ -340,6 +355,35 @@ fun MiniPlayer(
     val palette = rememberArtworkPalette(track.artworkUrl)
     val glass = LocalGlass.current.enabled
 
+    val dragModifier = Modifier.draggable(
+        orientation = Orientation.Vertical,
+        state = rememberDraggableState { delta ->
+            dragOffsetY = (dragOffsetY + delta).coerceAtLeast(0f)
+        },
+        onDragStarted = {
+            dragOffsetY = settleAnim.value
+            isDragging = true
+        },
+        onDragStopped = { velocity ->
+            val committed = dragOffsetY > dismissThresholdPx || velocity > dismissVelocityPx
+            isDragging = false
+            coroutineScope.launch {
+                settleAnim.snapTo(dragOffsetY)
+                if (committed) {
+                    settleAnim.animateTo(fullDismissPx, tween(140))
+                    onClear()
+                    settleAnim.snapTo(0f)
+                    dragOffsetY = 0f
+                } else {
+                    settleAnim.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow))
+                    dragOffsetY = 0f
+                }
+            }
+        },
+    )
+
+    val dismissAlpha = (1f - (currentOffsetY / fullDismissPx)).coerceIn(0f, 1f)
+
     Card(
         shape = MiniPlayerShape,
         colors = CardDefaults.cardColors(
@@ -349,6 +393,9 @@ fun MiniPlayer(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 10.dp, vertical = 4.dp)
+            .offset { IntOffset(0, currentOffsetY.roundToInt()) }
+            .alpha(dismissAlpha)
+            .then(dragModifier)
             .glassPane(MiniPlayerShape, GlassTone.CHROME)
             .clip(MiniPlayerShape)
             .clickable(onClick = onClick)
@@ -372,9 +419,7 @@ fun MiniPlayer(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .offset { IntOffset(offsetX.roundToInt(), 0) }
-                    .padding(horizontal = 10.dp)
-                    .clickable(onClick = onClick),
+                    .padding(horizontal = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AnimatedContent(
