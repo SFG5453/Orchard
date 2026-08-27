@@ -196,6 +196,10 @@ class CrossfadeEngine(
             onPlan(plan.takeIf { it.markerVisible && !it.blocked })
 
             if (plan.blocked || !plan.shouldStart) return
+            // Gapless playback across sequential album tracks is handled natively and seamlessly
+            // by ExoPlayer within the active player. Beginning a multi-player handoff for gapless
+            // would cause buffer stalls and stutter.
+            if (plan.transitionStyle == TransitionStyle.GAPLESS) return
             // A smart plan can end before the file does, at an analyzed mix-out anchor. The ramp
             // has to close there, not at the end of the track.
             val endMs = (plan.transitionEnd * 1000).toLong().coerceAtMost(duration)
@@ -340,11 +344,12 @@ class CrossfadeEngine(
      * album, and a context naming it), and joining those two gaplessly is the likely intent anyway.
      * A real queue-origin field on the track would settle it properly.
      */
-    private fun isAlbumPlaythrough(player: ExoPlayer, currentTrack: Track?): Boolean {
+    internal fun isAlbumPlaythrough(player: ExoPlayer, currentTrack: Track?): Boolean {
         if (player.shuffleModeEnabled) return false
         if (player.nextMediaItemIndex != player.currentMediaItemIndex + 1) return false
         val album = currentTrack?.album?.takeIf { it.isNotBlank() } ?: return false
         val context = player.playlistMetadata.title?.toString().orEmpty()
+        if (context.endsWith("• Best Mix", ignoreCase = true) || context.equals("Best Mix", ignoreCase = true)) return false
         return context.equals(album, ignoreCase = true)
     }
 

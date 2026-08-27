@@ -647,7 +647,15 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
             onComplete()
             return@launch
         }
-        local.replaceUpcoming(sortedUpcoming)
+        val baseTitle = currentSnapshot.contextTitle.ifBlank { currentTrack?.album.orEmpty() }
+        val newTitle = if (baseTitle.isNotBlank() && !baseTitle.endsWith("• Best Mix", ignoreCase = true)) {
+            "$baseTitle • Best Mix"
+        } else if (baseTitle.isNotBlank()) {
+            baseTitle
+        } else {
+            "Best Mix"
+        }
+        local.replaceUpcoming(sortedUpcoming, contextTitle = newTitle)
         onComplete()
     }
 

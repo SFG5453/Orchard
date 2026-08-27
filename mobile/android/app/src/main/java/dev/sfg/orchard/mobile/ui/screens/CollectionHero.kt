@@ -243,7 +243,7 @@ fun CollectionHero(
             onSave = { onSave(detail) },
             isSaved = isSaved,
             onAbout = if (detail.description.isNotBlank()) onAbout else null,
-            onBestMix = if (smartCrossfadeEnabled && detail.kind == CatalogKind.PLAYLIST && detail.tracks.size > 1) (::triggerBestMix) else null,
+            onBestMix = if (smartCrossfadeEnabled && (detail.kind == CatalogKind.PLAYLIST || detail.kind == CatalogKind.ALBUM) && detail.tracks.size > 1) (::triggerBestMix) else null,
             aboutLabel = "About this ${if (detail.kind == CatalogKind.ALBUM) "album" else "playlist"}",
         )
     }
@@ -461,8 +461,8 @@ fun CollectionHero(
             downloadEnabled = detail.tracks.isNotEmpty(),
         )
 
-        // Best mix button at top of playlists (gated by smart crossfade)
-        if (smartCrossfadeEnabled && detail.kind == CatalogKind.PLAYLIST && detail.tracks.size > 1) {
+        // Best mix button at top of playlists and albums (gated by smart crossfade)
+        if (smartCrossfadeEnabled && (detail.kind == CatalogKind.PLAYLIST || detail.kind == CatalogKind.ALBUM) && detail.tracks.size > 1) {
             val transition = rememberInfiniteTransition(label = "BestMixGlow")
             val borderGlow by transition.animateFloat(
                 initialValue = 0.25f,
@@ -556,7 +556,7 @@ fun CollectionHero(
                 text = {
                     Column {
                         Text(
-                            "Best Mix analyzes harmonic keys, tempo, and cue points locally to arrange your playlist seamlessly.",
+                            "Best Mix analyzes harmonic keys, tempo, and cue points locally to arrange your music seamlessly.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.White.copy(alpha = 0.85f),
                         )

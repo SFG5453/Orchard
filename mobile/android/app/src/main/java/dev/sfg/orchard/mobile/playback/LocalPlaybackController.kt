@@ -152,7 +152,10 @@ class LocalPlaybackController(
     }
     fun seek(positionMs: Long) = withController { it.seekTo(positionMs.coerceAtLeast(0)) }
     fun setShuffle(enabled: Boolean) = withController { it.shuffleModeEnabled = enabled }
-    fun replaceUpcoming(tracks: List<Track>) = withController { player ->
+    fun replaceUpcoming(tracks: List<Track>, contextTitle: String? = null) = withController { player ->
+        if (contextTitle != null) {
+            player.setPlaylistMetadata(MediaMetadata.Builder().setTitle(contextTitle).build())
+        }
         val current = player.currentMediaItemIndex
         val total = player.mediaItemCount
         val from = (current + 1).coerceAtLeast(0)
