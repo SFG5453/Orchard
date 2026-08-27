@@ -41,9 +41,9 @@ function captureWarnings() {
 }
 
 // A search response carrying a renderer YouTube.js does not recognize is what
-// takes the parser down this path. Under electron-builder the stock handler
-// throws here, because it formats its warning out of a package.json `bugs`
-// field the asar packer strips, so the whole search fails instead of the
+// takes the parser down this path. In a minimal production package the stock
+// handler can throw here when it formats its warning from a package.json `bugs`
+// field that is absent, so the whole search fails instead of the
 // unknown item being skipped.
 test('an unrecognized renderer warns instead of failing the parse', () => {
   const warnings = captureWarnings();

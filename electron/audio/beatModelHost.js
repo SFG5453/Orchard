@@ -31,9 +31,9 @@ import { fileURLToPath } from 'node:url';
 import { createModelProcessHost } from './modelProcessHost.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// Resolved out of the asar: the entry is listed in asarUnpack, and
-// utilityProcess.fork needs the real file. In development the two paths are
-// identical, so the replace is a no-op.
+// Legacy ASAR installations kept utility-process entries outside the archive
+// because utilityProcess.fork needs a real file. Directory installations and
+// development builds take the unchanged path.
 const ENTRY_PATH = path
   .join(here, 'beatModelProcess.js')
   .replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);

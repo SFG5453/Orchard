@@ -144,9 +144,8 @@ npm run start
 | `npm run build:native`   | Build the native audio-analysis addon                  |
 | `npm run build:frontend` | Build only the Vue renderer                            |
 | `npm run test:native`    | Run the audio, transition, and related native tests    |
-| `npm run package`        | Create an unpacked Electron application                |
-| `npm run make`           | Create distributable packages for the current platform |
-| `npm run make:mac`       | Cross-build a universal macOS ZIP from Linux           |
+| `npm run package:orchard` | Build package-service application archives             |
+| `npm run package:linux-system` | Stage an app directory for system Electron       |
 
 ## Orchard Mobile for Android
 

@@ -231,7 +231,7 @@ async function fetchOfficialPackBytes(archiveUrl, expectedSize = 0) {
 
 async function fetchOfficialPackEntries(archiveUrl) {
   const bytes = await fetchOfficialPackBytes(archiveUrl);
-  const entries = readOfficialPackArchive(bytes);
+  const entries = await readOfficialPackArchive(bytes);
   return Object.fromEntries(
     [...entries.entries()].map(([entryPath, content]) => [entryPath, Buffer.from(content)])
   );

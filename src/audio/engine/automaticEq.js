@@ -19,7 +19,6 @@
 
 import Meyda from 'meyda';
 import { kmeans } from 'ml-kmeans';
-import { guess } from 'web-audio-beat-detector';
 import { loadLearnedAudioProfiles, saveLearnedAudioProfiles } from './audioProfileStore.js';
 
 const FEATURE_NAMES = [
@@ -152,36 +151,30 @@ export function createAutomaticEq({ analyzer }) {
     ready = true;
   }
 
-  async function analyzeTempo(track, streamUrl, token) {
-    if (!streamUrl) return;
-    const existing = profiles.find((profile) => profile.trackId === track.id);
-    if (existing?.tempo) {
-      if (token === analysisToken && currentTrack) currentTrack.tempo = existing.tempo;
-      return;
-    }
-    try {
-      const buffer = await analyzer.decodeAudio(streamUrl);
-      if (!buffer || token !== analysisToken) return;
-      const offset = buffer.duration > 70 ? Math.min(30, buffer.duration * 0.2) : 0;
-      const duration = Math.min(45, Math.max(5, buffer.duration - offset));
-      const result = await guess(buffer, offset, duration);
-      if (token === analysisToken && currentTrack) currentTrack.tempo = result.bpm || result.tempo || null;
-    } catch {
-      // Tempo enriches the profile but is not required for EQ operation.
-    }
-  }
-
   async function beginTrack(track) {
     const token = ++analysisToken;
     await initialize();
     if (token !== analysisToken) return;
     await persistCurrent();
     if (token !== analysisToken) return;
-    currentTrack = track?.id ? { id: track.id, title: track.title || '', tempo: null } : null;
+    const existing = profiles.find((profile) => profile.trackId === track?.id);
+    currentTrack = track?.id
+      ? { id: track.id, title: track.title || '', tempo: Number(existing?.tempo) || null }
+      : null;
     featureMean = Array(9).fill(0);
     gainMean = Array(10).fill(0);
     sampleCount = 0;
-    if (currentTrack) void analyzeTempo(currentTrack, track.streamUrl || track.audioStreamUrl, token);
+  }
+
+  function hasTempo(trackId) {
+    return currentTrack?.id === trackId && Number(currentTrack.tempo) > 0;
+  }
+
+  function setTempo(trackId, tempo) {
+    const value = Number(tempo);
+    if (currentTrack?.id !== trackId || !Number.isFinite(value) || value <= 0) return false;
+    currentTrack.tempo = value;
+    return true;
   }
 
   function update(element, previousGains = []) {
@@ -218,5 +211,5 @@ export function createAutomaticEq({ analyzer }) {
     };
   }
 
-  return { beginTrack, initialize, persistCurrent, update };
+  return { beginTrack, hasTempo, initialize, persistCurrent, setTempo, update };
 }

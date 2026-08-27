@@ -35,13 +35,8 @@ build() {
 }
 
 package() {
-  install -Dm644 "${srcdir}/system-electron/app.asar" \
-    "${pkgdir}/usr/lib/orchard/app.asar"
-
-  if [[ -d "${srcdir}/system-electron/app.asar.unpacked" ]]; then
-    cp -a "${srcdir}/system-electron/app.asar.unpacked" \
-      "${pkgdir}/usr/lib/orchard/app.asar.unpacked"
-  fi
+  install -d "${pkgdir}/usr/lib/orchard"
+  cp -a "${srcdir}/system-electron/app" "${pkgdir}/usr/lib/orchard/app"
 
   install -Dm755 "${srcdir}/orchard" "${pkgdir}/usr/bin/orchard"
   install -Dm644 "${srcdir}/dev.sfg.orchard.desktop" \

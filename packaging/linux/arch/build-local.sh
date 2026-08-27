@@ -65,11 +65,8 @@ else
     --output="$payload_dir"
 fi
 
-install -Dm644 "$payload_dir/app.asar" "$pkgdir/usr/lib/orchard/app.asar"
-if [[ -d "$payload_dir/app.asar.unpacked" ]]; then
-  mkdir -p "$pkgdir/usr/lib/orchard"
-  cp -a "$payload_dir/app.asar.unpacked" "$pkgdir/usr/lib/orchard/app.asar.unpacked"
-fi
+install -d "$pkgdir/usr/lib/orchard"
+cp -a "$payload_dir/app" "$pkgdir/usr/lib/orchard/app"
 
 install -Dm755 "$script_dir/orchard" "$pkgdir/usr/bin/orchard"
 install -Dm644 "$repo_root/packaging/linux/common/dev.sfg.orchard.desktop" \

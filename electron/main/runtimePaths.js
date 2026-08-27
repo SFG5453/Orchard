@@ -20,19 +20,16 @@
 import path from 'node:path';
 
 /**
- * Resolves files that live in the application archive and resources unpacked
- * beside it. Keeping these rules here prevents source-folder depth from
- * affecting development or packaged builds.
+ * Resolves files from either the current application directory or a legacy
+ * ASAR installation. Keeping these rules here prevents source-folder depth
+ * from affecting development or packaged builds.
  */
 export function resolveRuntimePaths({ app, isDev }) {
   const appRoot = app.getAppPath();
-  // Derived from the archive's own location rather than process.resourcesPath:
-  // the system-Electron package (scripts/package-system-electron.mjs) installs
-  // app.asar and app.asar.unpacked side by side under its own prefix while
-  // running on a shared Electron binary, so resourcesPath points at that
-  // runtime's directory instead of the payload. In development, and in
-  // electron-builder output where the two happen to coincide, the replace is a
-  // no-op. Matches the idiom in beatModelHost.js / vocalMaskHost.js.
+  // Legacy ASAR installations kept native assets in app.asar.unpacked. Current
+  // package-service and system-Electron installations use a normal directory,
+  // where these replacements are no-ops. Never derive application files from
+  // process.resourcesPath: shared Electron runtimes live somewhere else.
   const unpackedRoot = appRoot.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
     .replace(/app\.asar$/, 'app.asar.unpacked');
 
@@ -44,8 +41,8 @@ export function resolveRuntimePaths({ app, isDev }) {
     // per-platform binary itself, so this points at the resolver rather than a
     // .node file. Unpacked for the same reason as the addon above.
     transitionModulePath: path.join(unpackedRoot, 'native-audio-rust/index.cjs'),
-    // Opened by ONNX Runtime's native code, which cannot read inside an asar,
-    // so the packaged copy lives in app.asar.unpacked like the addon above.
+    // Opened by ONNX Runtime's native code, so legacy ASAR installations keep
+    // the packaged copy in app.asar.unpacked like the addon above.
     beatModelPath: path.join(unpackedRoot, 'models/beat-this/beat_this_int8.onnx'),
     vocalModelPath: path.join(unpackedRoot, 'models/vocal-separation/vocals_umxhq_int8.onnx'),
     preloadPath: path.join(appRoot, 'electron/preload/index.cjs'),

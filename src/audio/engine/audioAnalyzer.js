@@ -17,7 +17,6 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { AudioContext as StandardizedAudioContext } from 'standardized-audio-context';
 import { createCrossfadeMixer } from '../crossfade/crossfadeMixer.js';
 import { downloadAudioFile } from './audioFetch.js';
 
@@ -52,13 +51,9 @@ export function createAudioAnalyzer(options = {}) {
   function audioContext() {
     if (context) return context;
 
-    try {
-      context = new StandardizedAudioContext();
-    } catch {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContextClass) return null;
-      context = new AudioContextClass();
-    }
+    const AudioContextClass = globalThis.window?.AudioContext || globalThis.window?.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    context = new AudioContextClass();
     return context;
   }
 

@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { createModelProcessHost } from './modelProcessHost.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// Resolved out of the asar for the same reason as beatModelHost.js's
+// Supports legacy ASAR installations for the same reason as beatModelHost.js's
 // ENTRY_PATH: utilityProcess.fork needs a real file on disk.
 const ENTRY_PATH = path
   .join(here, 'vocalMaskProcess.js')

@@ -25,7 +25,6 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { createZstdCompress } from 'node:zlib';
-import { zipSync } from 'fflate';
 import { c as createTar } from 'tar';
 import {
   extractElectronArchive,
@@ -34,6 +33,15 @@ import {
   launchPreparedPackageServiceUpdate,
   packageServiceInstallPaths
 } from '../electron/integrations/packageServiceInstaller.js';
+
+const ELECTRON_ZIP = Buffer.from(
+  'UEsDBBQAAAAIADmcGl2RdNPMCgAAAAgAAAAQAAAAcnVudGltZS9lbGVjdHJvbkvNSU0uKcrPAwBQSwECFAAUAAAACAA5nBpdkXTTzAoAAAAIAAAAEAAAAAAAAAAAAAAAAAAAAAAAcnVudGltZS9lbGVjdHJvblBLBQYAAAAAAQABAD4AAAA4AAAAAAA=',
+  'base64'
+);
+const ELECTRON_ASAR_ZIP = Buffer.from(
+  'UEsDBBQAAAAIADmcGl3agaRpDgAAAAwAAAAaAAAAcmVzb3VyY2VzL2RlZmF1bHRfYXBwLmFzYXJLLE4sUihIrMzJT0wBAFBLAQIUABQAAAAIADmcGl3agaRpDgAAAAwAAAAaAAAAAAAAAAAAAAAAAAAAAAByZXNvdXJjZXMvZGVmYXVsdF9hcHAuYXNhclBLBQYAAAAAAQABAEgAAABGAAAAAAA=',
+  'base64'
+);
 
 test('uses the major-version slot and shared Electron runtime layout', () => {
   assert.deepEqual(packageServiceInstallPaths({
@@ -76,7 +84,7 @@ test('extracts Electron ZIP files without an external unzip command', async () =
   const root = await mkdtemp(path.join(tmpdir(), 'orchard-electron-zip-test-'));
   const archive = path.join(root, 'electron.zip');
   const output = path.join(root, 'output');
-  await writeFile(archive, zipSync({ 'runtime/electron': new TextEncoder().encode('electron') }));
+  await writeFile(archive, ELECTRON_ZIP);
   await extractElectronArchive(archive, output);
   assert.equal(await readFile(path.join(output, 'runtime', 'electron'), 'utf8'), 'electron');
 });
@@ -92,9 +100,7 @@ test('extracts Electron ASAR payloads as ordinary files and restores ASAR handli
   });
 
   process.noAsar = false;
-  await writeFile(archive, zipSync({
-    'resources/default_app.asar': new TextEncoder().encode('asar payload')
-  }));
+  await writeFile(archive, ELECTRON_ASAR_ZIP);
   await extractElectronArchive(archive, output);
 
   assert.equal(await readFile(path.join(output, 'resources', 'default_app.asar'), 'utf8'), 'asar payload');

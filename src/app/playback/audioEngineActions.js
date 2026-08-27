@@ -25,7 +25,22 @@ import {
   normalizeAudioEngineConfig
 } from '../../audio/engine/audioEngine.js';
 import { createAutomaticEq } from '../../audio/engine/automaticEq.js';
+import { ANALYSIS_PRIORITIES } from '../../audio/crossfade/smartCrossfadeAnalysis.js';
 import { parseAudioEngineProfile } from '../../audio/engine/audioEngineSchemas.js';
+
+export async function analyzeAutomaticEqTempo(smartAnalyzer, track) {
+  if (!track?.id || typeof smartAnalyzer?.analyze !== 'function') return null;
+  const analysis = await smartAnalyzer.analyze(
+    track.id,
+    track.streamUrl || track.audioStreamUrl || '',
+    {
+      duration: Number(track.durationSeconds || track.duration) || 0,
+      priority: ANALYSIS_PRIORITIES.background
+    }
+  );
+  const tempo = Number(analysis?.bpm) || Number(analysis?.analyzedBpm);
+  return Number.isFinite(tempo) && tempo > 0 ? tempo : null;
+}
 
 function downloadJson(filename, data) {
   const blob = new Blob([`${JSON.stringify(data, null, 2)}\n`], { type: 'application/json' });
@@ -48,7 +63,26 @@ function readFile(file) {
 
 export function installAudioEngineActions(ctx) {
   let autoEqTimer = 0;
+  let autoEqTempoRequest = 0;
+  let autoEqTrackReady = Promise.resolve();
   const automaticEq = createAutomaticEq({ analyzer: ctx.audioAnalyzer });
+
+  async function updateAutoEqTempo(track = ctx.activeTrack.value) {
+    const requestId = ++autoEqTempoRequest;
+    const ready = autoEqTrackReady;
+    await ready;
+    const config = ctx.audioEngineConfig.value;
+    if (requestId !== autoEqTempoRequest || !config.enabled || !config.autoEqEnabled ||
+        !track?.id || ctx.activeTrack.value?.id !== track.id || automaticEq.hasTempo(track.id)) return;
+    try {
+      const tempo = await analyzeAutomaticEqTempo(ctx.smartCrossfadeAnalyzer, track);
+      if (requestId !== autoEqTempoRequest || !ctx.audioEngineConfig.value.enabled ||
+          !ctx.audioEngineConfig.value.autoEqEnabled || ctx.activeTrack.value?.id !== track.id) return;
+      automaticEq.setTempo(track.id, tempo);
+    } catch {
+      // Tempo is informational; Automatic EQ continues using spectral features.
+    }
+  }
 
   function updateAutoEq() {
     const config = ctx.audioEngineConfig.value;
@@ -239,7 +273,16 @@ export function installAudioEngineActions(ctx) {
   watch(() => ctx.activeTrack.value?.id || '', () => {
     ctx.audioEngineAutoGains.value = ctx.audioEngineAutoGains.value.map(() => 0);
     ctx.audioEngine.setAutoEqGains(ctx.audioEngineAutoGains.value);
-    void automaticEq.beginTrack(ctx.activeTrack.value);
+    const track = ctx.activeTrack.value;
+    autoEqTrackReady = automaticEq.beginTrack(track);
+    void updateAutoEqTempo(track);
+  }, { immediate: true });
+
+  watch([
+    () => ctx.audioEngineConfig.value.enabled,
+    () => ctx.audioEngineConfig.value.autoEqEnabled
+  ], () => {
+    void updateAutoEqTempo();
   }, { immediate: true });
 
   watch([ctx.audioRef, ctx.nextAudioRef, ctx.videoRef, ctx.videoAudioRef], () => {
