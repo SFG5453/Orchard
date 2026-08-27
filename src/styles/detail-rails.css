@@ -20,32 +20,32 @@
 
 .detail-meta span {
   padding: 4px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 6px;
-  background: rgba(16, 13, 16, 0.65);
-  color: var(--muted-strong);
-  font-size: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11.5px;
 }
 
 .action-button {
   display: inline-flex;
-  min-height: 36px;
+  min-height: 34px;
   align-items: center;
   gap: 8px;
   padding: 0 14px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 7px;
-  background: rgba(7, 12, 10, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
   color: rgba(255, 255, 255, 0.9);
-  font-weight: 600;
+  font-weight: 550;
   line-height: 1;
   transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
 .action-button:hover,
 .action-button:focus-visible {
-  border-color: rgba(255, 255, 255, 0.24);
-  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 

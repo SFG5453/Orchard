@@ -23,20 +23,20 @@
  */
 
 html[data-layout-preset="canopy"] {
-  --canopy-radius: 6px;
-  --canopy-radius-sm: 4px;
-  --canopy-rule: rgba(255, 255, 255, 0.07);
-  --canopy-rule-strong: rgba(255, 255, 255, 0.13);
+  --canopy-radius: 8px;
+  --canopy-radius-sm: 6px;
+  --canopy-rule: rgba(255, 255, 255, 0.04);
+  --canopy-rule-strong: rgba(255, 255, 255, 0.08);
   --canopy-surface: rgba(255, 255, 255, 0.022);
   --canopy-surface-hover: rgba(255, 255, 255, 0.05);
-  --canopy-eyebrow: rgba(255, 255, 255, 0.42);
+  --canopy-eyebrow: rgba(255, 255, 255, 0.45);
   --canopy-bar-height: 68px;
 
   /* Chrome is the frame the canvas floats on; both carry a slight green cast so
    * the shell reads as tinted rather than the flat #000 Grove uses. */
-  --canopy-chrome: #0a0d0b;
-  --canopy-canvas: #0f1310;
-  --canopy-readout-bg: rgba(255, 255, 255, 0.035);
+  --canopy-chrome: #070908;
+  --canopy-canvas: #0a0e0b;
+  --canopy-readout-bg: rgba(255, 255, 255, 0.03);
 }
 
 html[data-layout-preset="canopy"] .app-shell {
@@ -455,8 +455,9 @@ html[data-layout-preset="canopy"] .viewport-toolbar {
 }
 
 html[data-layout-preset="canopy"] .back-button {
-  border: 1px solid var(--canopy-rule) !important;
-  border-radius: var(--canopy-radius-sm) !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.04) !important;
 }
 
 html[data-layout-preset="canopy"] .topbar-copy h1 {
@@ -552,7 +553,7 @@ html[data-layout-preset="canopy"] .library-link--active::before {
 html[data-layout-preset="canopy"] .sidebar-search-input,
 html[data-layout-preset="canopy"] .search-input {
   border: 1px solid var(--canopy-rule);
-  border-radius: var(--canopy-radius-sm);
+  border-radius: 999px;
   background: rgba(255, 255, 255, 0.03);
 }
 
@@ -614,8 +615,8 @@ html[data-layout-preset="canopy"] .section-header {
   align-items: baseline;
   justify-content: space-between;
   margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--canopy-rule);
+  padding-bottom: 4px;
+  border-bottom: 0;
   gap: 14px;
 }
 

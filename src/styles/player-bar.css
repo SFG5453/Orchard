@@ -30,14 +30,14 @@
   overflow: visible !important;
   left: calc(196px + 28px) !important;
   right: calc(320px + 28px) !important;
-  bottom: 24px;
+  bottom: 20px;
   width: auto !important;
-  min-height: 96px;
-  padding: 12px 24px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 20px;
-  background: rgba(10, 10, 10, 0.95);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  min-height: 84px;
+  padding: 10px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  border-radius: 16px;
+  background: rgba(12, 14, 13, 0.94);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.02);
   
   display: flex;
   align-items: center;
@@ -61,21 +61,21 @@
   flex: 1.8 1 340px;
   flex-direction: column;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .player-section--right {
   flex: 1.2 1 260px;
   flex-direction: column;
   align-items: flex-end;
-  gap: 8px;
+  gap: 6px;
 }
 
 /* Vertical Separators */
 .player-separator {
   width: 1px;
-  height: 48px;
-  background: rgba(255, 255, 255, 0.08);
+  height: 36px;
+  background: rgba(255, 255, 255, 0.035);
   flex-shrink: 0;
 }
 
@@ -87,19 +87,19 @@
   cursor: pointer;
   border-radius: 8px;
   overflow: hidden;
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   flex-shrink: 0;
-  transition: transform 0.2s;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .mini-cover-button:hover {
-  transform: scale(1.04);
+  transform: scale(1.03);
 }
 
 .mini-cover {
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   object-fit: cover;
   border-radius: 8px;
 }
@@ -127,8 +127,8 @@
 
 .mini-title {
   color: #fff;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 13.5px;
+  font-weight: 650;
   border: 0;
   background: transparent;
   padding: 0;
@@ -145,8 +145,8 @@
 }
 
 .track-action-btn {
-  color: #79817b;
-  opacity: 0.8;
+  color: rgba(255, 255, 255, 0.5);
+  opacity: 0.85;
   transition: opacity 0.2s, color 0.2s;
 }
 
@@ -156,8 +156,8 @@
 }
 
 .artist-link {
-  color: #79817b;
-  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11.5px;
   border: 0;
   background: transparent;
   padding: 0;
@@ -177,8 +177,8 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  color: #59615b;
-  font-size: 11px;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 10.5px;
 }
 
 .mini-album-name {
@@ -191,12 +191,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 4px;
+  margin-top: 2px;
   flex-wrap: wrap;
 }
 
 .quality-pill {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 600;
   padding: 2px 6px;
   border-radius: 4px;
@@ -204,13 +204,13 @@
 }
 
 .format-pill {
-  background: rgba(255, 255, 255, 0.06);
-  color: #aeb5b0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .duration-pill {
-  color: #59615b;
+  color: rgba(255, 255, 255, 0.38);
 }
 
 /* Center Section: Transport Controls */
@@ -241,11 +241,11 @@
 }
 
 .player-control--play {
-  width: 48px;
-  height: 48px;
-  min-width: 48px;
-  min-height: 48px;
-  font-size: 20px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 19px;
   box-shadow: 0 4px 12px rgba(var(--player-accent-rgb), 0.3);
   transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -288,7 +288,7 @@
 
 .progress-time {
   font-size: 11px;
-  color: #79817b;
+  color: rgba(255, 255, 255, 0.45);
   font-variant-numeric: tabular-nums;
   min-width: 32px;
 }
@@ -298,26 +298,26 @@
 .right-bottom-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   justify-content: flex-end;
 }
 
 .output-device-pill {
-  background: rgba(255, 255, 255, 0.06) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 99px;
-  color: #d9ddda;
+  color: rgba(255, 255, 255, 0.7);
   font-size: 11px;
-  font-weight: 600;
-  padding: 4px 12px;
+  font-weight: 550;
+  padding: 3px 10px;
   text-transform: none;
-  min-height: 28px;
+  min-height: 26px;
   max-width: 180px;
 }
 
 .output-device-pill:hover {
-  background: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
   color: #fff;
 }
 
@@ -346,7 +346,7 @@
 
 .volume-percentage {
   font-size: 11px;
-  color: #79817b;
+  color: rgba(255, 255, 255, 0.45);
   font-variant-numeric: tabular-nums;
   min-width: 28px;
   text-align: right;

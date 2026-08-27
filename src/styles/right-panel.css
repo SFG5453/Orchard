@@ -19,8 +19,8 @@
 
 /* Right Panel / Lyrics Sidebar Root */
 .lyrics-sidebar {
-  border-left: 1px solid rgba(255, 255, 255, 0.075);
-  background: #0b0f0d;
+  border-left: 1px solid rgba(255, 255, 255, 0.04);
+  background: #070a08;
 }
 
 .lyrics-sidebar__inner {
@@ -148,9 +148,16 @@
   border-radius: 7px;
 }
 
-.right-now-playing .queue-preview__cover--video {
-  display: block;
-  object-fit: cover;
+.right-now-playing .queue-preview__cover img {
+  border-radius: 7px;
+}
+
+.right-now-playing .queue-preview__title-row {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .right-now-playing .queue-preview__copy {
@@ -162,39 +169,73 @@
 }
 
 .right-now-playing .queue-preview__copy strong {
-  color: #ffffff;
-  font-size: 16px;
+  color: #f1f3f1;
+  font-size: 12px;
   font-weight: 700;
-  line-height: 1.3;
 }
 
 .right-now-playing .queue-preview__copy small {
-  color: #8b938d;
-  font-size: 11px;
+  color: #747b75;
+  font-size: 10px;
+  font-weight: 500;
 }
 
-/* Queue List */
+.right-now-playing__meta-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.right-now-playing__action-btn {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #8c938d;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.right-now-playing__action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.right-now-playing__action-btn--active {
+  color: rgb(var(--player-accent-soft-rgb));
+}
+
+.right-now-playing__action-btn .q-icon {
+  font-size: 14px;
+}
+
+/* Queue Section */
 .right-queue {
   display: flex;
-  flex-direction: column;
-  min-height: 0;
   flex: 1;
+  min-height: 0;
+  flex-direction: column;
 }
 
 .right-queue-header {
   display: flex;
+  min-height: 38px;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 14px 18px 8px;
+  padding: 4px 16px 8px;
+  gap: 8px;
 }
 
-.right-queue-header > div:first-child {
+.right-queue-header div {
   min-width: 0;
-  flex: 1;
 }
 
-.right-queue-header strong {
+.right-queue-header div strong {
   color: #7d8580;
   font-size: 10px;
   font-weight: 600;
@@ -228,10 +269,10 @@
   align-items: center;
   gap: 4px;
   padding: 0 8px;
-  border: 1px solid rgba(255, 255, 255, 0.085);
+  border: 1px solid rgba(255, 255, 255, 0.045);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.02);
-  color: #9aa19c;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.65);
   font-size: 9px;
   font-weight: 600;
   cursor: pointer;
@@ -247,10 +288,10 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.085);
+  border: 1px solid rgba(255, 255, 255, 0.045);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.02);
-  color: #9aa19c;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.65);
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -258,9 +299,9 @@
 .right-queue-expand:hover,
 .right-queue-sort:hover,
 .right-queue-more:hover {
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.045);
-  color: #dce5e0;
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
 }
 
 .right-queue-expand .q-icon,
@@ -282,10 +323,11 @@
 
 .right-queue-menu {
   width: 170px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  background: #0b0e0c;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  background: rgba(14, 16, 14, 0.96);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   color: #d7dcd8;
   padding: 4px 0;
 }

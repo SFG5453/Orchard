@@ -21,8 +21,8 @@
 .filter-pill--active,
 .action-button--primary,
 .device-card__actions button:hover {
-  border-color: rgba(211, 136, 114, 0.65);
-  background: rgba(211, 136, 114, 0.18);
+  border-color: rgba(var(--player-accent-rgb), 0.35);
+  background: rgba(var(--player-accent-rgb), 0.12);
 }
 
 .message-line {
@@ -30,19 +30,19 @@
   align-items: center;
   gap: 10px;
   margin-bottom: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel);
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .message-line--warning {
-  border-color: #54452c;
+  border-color: rgba(212, 169, 71, 0.25);
   color: #dbc384;
 }
 
 .message-line--update {
-  border-color: #365244;
+  border-color: rgba(47, 223, 147, 0.25);
   color: #9edcba;
 }
 
@@ -52,7 +52,7 @@
 }
 
 .message-line--error {
-  border-color: #5a3933;
+  border-color: rgba(255, 139, 125, 0.25);
   color: var(--error);
 }
 
@@ -73,9 +73,9 @@
 .now-panel {
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background-color: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 14px;
+  background-color: rgba(255, 255, 255, 0.015);
   background-position: center;
   background-size: cover;
 }

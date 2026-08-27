@@ -22,8 +22,8 @@ html[data-theme-resolved='oled'] {
   --panel: #000;
   --panel-alt: #050505;
   --panel-soft: #0b0b0b;
-  --line: #181818;
-  --line-strong: #292929;
+  --line: rgba(255, 255, 255, 0.04);
+  --line-strong: rgba(255, 255, 255, 0.08);
 }
 
 html[data-theme-resolved='oled'] .window-titlebar,
@@ -45,8 +45,8 @@ html[data-theme-resolved='light'] {
   --panel: #fff;
   --panel-alt: #eef1ee;
   --panel-soft: #e4e8e5;
-  --line: #d8ddd9;
-  --line-strong: #bfc7c1;
+  --line: rgba(0, 0, 0, 0.06);
+  --line-strong: rgba(0, 0, 0, 0.12);
   --text: #141714;
   --muted: #687069;
   --muted-strong: #343a35;
