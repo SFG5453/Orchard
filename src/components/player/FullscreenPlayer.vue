@@ -18,8 +18,9 @@
 -->
 
 <script>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { createVolumeWheelHandler } from '../../app/playback/volumeWheel.js';
+import { bitrateLabel } from '../../app/playback/trackQuality.js';
 
 export default {
   name: 'FullscreenPlayer',
@@ -29,6 +30,31 @@ export default {
     const closeButtonRef = ref(null);
     const fullscreenArtworkSrc = ref(app.fullscreenArtworkImage.value || app.nowArtworkImage.value);
     const onVolumeWheel = createVolumeWheelHandler(app.volume);
+
+    const volumeIcon = computed(() => {
+      const vol = app.volume.value;
+      if (vol === 0) return 'volume_off';
+      if (vol < 0.3) return 'volume_mute';
+      if (vol < 0.7) return 'volume_down';
+      return 'volume_up';
+    });
+
+    let savedVolume = 0.85;
+    const toggleMute = () => {
+      if (app.volume.value > 0) {
+        savedVolume = app.volume.value;
+        app.volume.value = 0;
+      } else {
+        app.volume.value = savedVolume || 0.85;
+      }
+    };
+
+    const queueCount = computed(() => {
+      if (app.continuousQueueEnabled?.value) {
+        return app.continuousQueuePreview?.value?.length || 0;
+      }
+      return app.queuePreview?.value?.length || app.queue?.value?.length || 0;
+    });
 
     function onFullscreenKeydown(event) {
       if (event.key === 'Escape') void app.closeFullscreenPlayer();
@@ -75,13 +101,17 @@ export default {
 
     return {
       ...app,
+      bitrateLabel,
       closeButtonRef,
       fullscreenArtworkSrc,
       keepFullscreenArtworkVideoPlaying,
       onFullscreenArtworkError,
       onVolumeWheel,
       playFullscreenArtworkVideo,
-      restartFullscreenArtworkVideo
+      queueCount,
+      restartFullscreenArtworkVideo,
+      toggleMute,
+      volumeIcon
     };
   }
 };
@@ -97,30 +127,38 @@ export default {
     aria-modal="true"
     aria-label="Fullscreen player"
   >
+    <div class="fullscreen-player__ambient" aria-hidden="true">
+      <div class="fullscreen-player__ambient-glow fullscreen-player__ambient-glow--primary" />
+      <div class="fullscreen-player__ambient-glow fullscreen-player__ambient-glow--secondary" />
+    </div>
     <div class="fullscreen-player__backdrop" aria-hidden="true" />
     <div class="fullscreen-player__shade" aria-hidden="true" />
 
     <header class="fullscreen-player__header">
       <div class="fullscreen-player__brand">
         <img :src="orchardLogoUrl" alt="" />
-        <span>Orchard</span>
+        <div class="fullscreen-player__brand-text">
+          <span class="fullscreen-player__brand-context">NOW PLAYING</span>
+          <span class="fullscreen-player__brand-title">Orchard</span>
+        </div>
       </div>
       <button
         ref="closeButtonRef"
         type="button"
         class="fullscreen-player__close"
-        title="Exit fullscreen player"
+        title="Exit fullscreen player (Esc)"
         aria-label="Exit fullscreen player"
         @click="closeFullscreenPlayer"
       >
         <q-icon name="close_fullscreen" />
         <span>Exit</span>
+        <kbd class="fullscreen-player__shortcut-badge">Esc</kbd>
       </button>
     </header>
 
     <main class="fullscreen-player__stage">
       <div class="fullscreen-player__left">
-        <div class="fullscreen-player__artwork">
+        <div class="fullscreen-player__artwork" :class="{ 'fullscreen-player__artwork--playing': isPlaying }">
           <transition name="artwork-fade">
             <video
               v-if="nowArtworkVideo"
@@ -155,14 +193,61 @@ export default {
         </div>
 
         <div class="fullscreen-player__track-copy">
-          <div>
-            <strong>{{ activeTrack?.title || 'Ready' }}</strong>
+          <div class="fullscreen-player__track-title-wrap">
+            <strong :title="activeTrack?.title || 'Ready'">{{ activeTrack?.title || 'Ready' }}</strong>
             <ExplicitBadge :explicit="activeTrack?.explicit" />
           </div>
-          <span>
-            <b>{{ activeArtist || 'Orchard' }}</b>
-            <template v-if="activeTrack?.album"> · {{ activeTrack.album }}</template>
-          </span>
+          <div class="fullscreen-player__track-sub-wrap">
+            <button
+              v-if="activeArtist"
+              type="button"
+              class="fullscreen-player__artist-link"
+              :disabled="!canOpenActiveTrackArtist()"
+              :title="`View artist: ${activeArtist}`"
+              @click="openTrackArtist"
+            >
+              {{ activeArtist }}
+            </button>
+            <span v-else class="fullscreen-player__artist-name">Orchard</span>
+            <template v-if="activeTrack?.album">
+              <span class="fullscreen-player__dot" aria-hidden="true">·</span>
+              <button
+                type="button"
+                class="fullscreen-player__album-link"
+                :title="`View album: ${activeTrack.album}`"
+                @click="openTrackAlbum"
+              >
+                {{ activeTrack.album }}
+              </button>
+            </template>
+          </div>
+
+          <!-- Quick Action Bar -->
+          <div v-if="activeTrack" class="fullscreen-player__track-actions">
+            <button
+              type="button"
+              class="fullscreen-player__action-btn"
+              :class="{ 'fullscreen-player__action-btn--active': isActiveTrackLiked }"
+              :disabled="!canToggleActiveTrackLike || activeTrackLikePending"
+              :title="isActiveTrackLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs'"
+              :aria-label="isActiveTrackLiked ? 'Remove from Liked Songs' : 'Add to Liked Songs'"
+              @click="toggleActiveTrackLike"
+            >
+              <q-icon :name="isActiveTrackLiked ? 'star' : 'star_border'" />
+            </button>
+            <button
+              type="button"
+              class="fullscreen-player__action-btn"
+              title="Song actions"
+              aria-label="Song actions"
+              @click="openSongActionMenu(activeTrack, $event)"
+            >
+              <q-icon name="more_horiz" />
+            </button>
+            <span v-if="bitrateLabel(activeTrack)" class="fullscreen-player__badge" title="Audio Bitrate">
+              {{ bitrateLabel(activeTrack) }} kbps
+            </span>
+          </div>
         </div>
       </div>
 
@@ -250,7 +335,11 @@ export default {
                   >{{ word.text }}</span>
                 </span>
               </template>
-              <span v-else class="fullscreen-player__pause" aria-label="Instrumental break">•••</span>
+              <span v-else class="fullscreen-player__pause" aria-label="Instrumental break">
+                <span class="fullscreen-player__pause-dot" />
+                <span class="fullscreen-player__pause-dot" />
+                <span class="fullscreen-player__pause-dot" />
+              </span>
             </div>
           </template>
         </div>
@@ -268,18 +357,32 @@ export default {
 
       <aside class="fullscreen-player__queue" :aria-label="continuousQueueEnabled ? 'Queue' : 'Up next'">
         <header class="fullscreen-player__queue-header">
-          <strong>{{ continuousQueueEnabled ? 'Queue' : 'Up Next' }}</strong>
+          <div class="fullscreen-player__queue-header-title">
+            <strong>{{ continuousQueueEnabled ? 'Queue' : 'Up Next' }}</strong>
+            <span v-if="queueCount" class="fullscreen-player__queue-count">{{ queueCount }}</span>
+          </div>
           <div class="fullscreen-player__queue-header-actions">
             <button
               v-if="queueTracksForPlaylist().length"
               type="button"
+              class="fullscreen-player__queue-btn"
               title="Add queue to playlist"
               aria-label="Add queue to playlist"
               @click="openQueuePlaylistDialog"
             >
-              Save
+              <q-icon name="playlist_add" size="14px" />
+              <span>Save</span>
             </button>
-            <button v-if="queue.length" type="button" @click="clearQueue">Clear</button>
+            <button
+              v-if="queue.length"
+              type="button"
+              class="fullscreen-player__queue-btn"
+              title="Clear queue"
+              aria-label="Clear queue"
+              @click="clearQueue"
+            >
+              Clear
+            </button>
           </div>
         </header>
 
@@ -316,8 +419,10 @@ export default {
             >
               <q-icon name="close" />
             </button>
-            <span v-else class="fullscreen-player__queue-remove" aria-hidden="true">
-              <q-icon name="graphic_eq" />
+            <span v-else class="fullscreen-player__queue-now-playing" aria-hidden="true">
+              <span class="fullscreen-player__eq-bar" />
+              <span class="fullscreen-player__eq-bar" />
+              <span class="fullscreen-player__eq-bar" />
             </span>
           </div>
 
@@ -372,7 +477,7 @@ export default {
 
     <footer class="fullscreen-player__transport">
       <div class="fullscreen-player__progress">
-        <span>{{ formatTime(displayedTime) }}</span>
+        <span class="fullscreen-player__time fullscreen-player__time--current">{{ formatTime(displayedTime) }}</span>
         <div class="progress-slider" :style="crossfadeProgressStyle">
           <q-slider
             v-model="seekPosition"
@@ -387,43 +492,73 @@ export default {
             @pan="onSeekPan"
           />
         </div>
-        <span>{{ durationLabel }}</span>
+        <span class="fullscreen-player__time fullscreen-player__time--duration">{{ durationLabel }}</span>
       </div>
 
       <div class="fullscreen-player__transport-row">
-        <div aria-hidden="true" />
+        <div class="fullscreen-player__transport-meta">
+          <div v-if="activeTrack" class="fullscreen-player__mini-info">
+            <button
+              type="button"
+              class="fullscreen-player__mini-title"
+              :title="activeTrack.title"
+              @click="openTrackAlbum"
+            >
+              {{ activeTrack.title }}
+            </button>
+            <span class="fullscreen-player__mini-artist">{{ activeArtist || 'Orchard' }}</span>
+          </div>
+        </div>
+
         <div class="fullscreen-player__buttons">
           <q-btn
             flat
             round
             icon="shuffle"
+            class="fullscreen-player__ctrl-btn"
+            :class="{ 'fullscreen-player__ctrl-btn--active': shuffleEnabled }"
             :color="shuffleEnabled ? 'primary' : undefined"
             :title="shuffleEnabled ? 'Shuffle on' : 'Shuffle off'"
             :aria-label="shuffleEnabled ? 'Turn shuffle off' : 'Turn shuffle on'"
             @click="toggleShuffle"
           />
-          <q-btn flat round icon="skip_previous" :disable="!activeTrack || buffering" aria-label="Previous" @click="playPrevious" />
+          <q-btn
+            flat
+            round
+            icon="skip_previous"
+            class="fullscreen-player__ctrl-btn fullscreen-player__ctrl-btn--skip"
+            :disable="!activeTrack || buffering"
+            aria-label="Previous track"
+            title="Previous"
+            @click="playPrevious"
+          />
           <q-btn
             round
             color="primary"
             size="lg"
+            class="fullscreen-player__ctrl-play"
             :loading="buffering"
             :disable="!activeTrack"
             :icon="isPlaying ? 'pause' : 'play_arrow'"
             :aria-label="isPlaying ? 'Pause' : 'Play'"
+            :title="isPlaying ? 'Pause' : 'Play'"
             @click="togglePlayback"
           />
           <q-btn
             flat
             round
             icon="skip_next"
+            class="fullscreen-player__ctrl-btn fullscreen-player__ctrl-btn--skip"
             :disable="(!queue.length && (!activeTrack || repeatMode === 'off')) || buffering"
-            aria-label="Next"
+            aria-label="Next track"
+            title="Next"
             @click="playNext({ skipRepeatOne: true })"
           />
           <q-btn
             flat
             round
+            class="fullscreen-player__ctrl-btn"
+            :class="{ 'fullscreen-player__ctrl-btn--active': repeatMode !== 'off' }"
             :icon="repeatMode === 'one' ? 'repeat_one' : 'repeat'"
             :color="repeatMode !== 'off' ? 'primary' : undefined"
             :title="repeatModeTitle()"
@@ -433,7 +568,15 @@ export default {
         </div>
 
         <div class="fullscreen-player__volume" title="Scroll to change volume" @wheel.prevent="onVolumeWheel">
-          <q-icon :name="volume === 0 ? 'volume_off' : 'volume_up'" />
+          <button
+            type="button"
+            class="fullscreen-player__volume-btn"
+            :title="volume === 0 ? 'Unmute' : 'Mute'"
+            :aria-label="volume === 0 ? 'Unmute' : 'Mute'"
+            @click="toggleMute"
+          >
+            <q-icon :name="volumeIcon" />
+          </button>
           <q-slider v-model="volume" :min="0" :max="1" :step="0.01" color="primary" aria-label="Volume" />
         </div>
       </div>

@@ -22,27 +22,27 @@
 .library-link__cover--empty {
   width: 24px;
   height: 24px;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
 .page {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  min-height: calc(100vh - 150px);
-  margin: 55px 7px 96px;
-  padding: 22px 34px 54px;
-  border: 1px solid rgba(91, 122, 99, 0.3);
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(9, 15, 10, 0.98), rgba(7, 11, 8, 0.98));
+  min-height: calc(100vh - 120px);
+  margin: 0;
+  padding: 24px 32px 100px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .topbar,
 .topbar--home {
   display: grid;
   align-items: stretch;
-  gap: 24px;
-  margin-bottom: 30px;
+  gap: 20px;
+  margin-bottom: 24px;
 }
 
 .viewport-toolbar {
@@ -59,12 +59,20 @@
 }
 
 .viewport-toolbar__left > .q-btn {
-  width: 30px;
-  min-width: 30px;
-  height: 30px;
-  min-height: 30px;
-  border: 1px solid rgba(103, 217, 139, 0.13);
-  color: #d9ddda;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.viewport-toolbar__left > .q-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .topbar-copy,
@@ -74,7 +82,9 @@
 }
 
 .topbar-copy h1 {
-  font-size: 27px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .topbar-controls,
@@ -83,7 +93,7 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
-  gap: 7px;
+  gap: 8px;
 }
 
 .content-shell,
@@ -108,7 +118,7 @@
 
 .playlist-card {
   aspect-ratio: 0.76;
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
 .playlist-card__title {
@@ -147,7 +157,7 @@
   right: calc(288px + 18px) !important;
   bottom: 10px;
   min-height: 68px;
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
 @media (max-width: 1023px) {
@@ -158,10 +168,9 @@
 
 @media (max-width: 900px) {
   .page {
-    margin: 48px 0 148px;
-    padding: 24px 18px 50px;
-    border-right: 0;
-    border-left: 0;
+    margin: 0;
+    padding: 20px 16px 148px;
+    border: 0;
     border-radius: 0;
   }
 
@@ -183,19 +192,28 @@
 
 .shelf-nav {
   display: flex;
-  gap: 7px;
+  align-items: center;
+  gap: 4px;
 }
 
 .shelf-nav button {
   display: grid;
-  width: 29px;
-  height: 29px;
+  width: 28px;
+  height: 28px;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.11);
+  border: 0;
   border-radius: 50%;
-  background: rgba(3, 5, 3, 0.66);
-  color: #b8beb9;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.shelf-nav button:hover,
+.shelf-nav button:focus-visible {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  transform: scale(1.04);
 }
 
 .playlist-rail {
