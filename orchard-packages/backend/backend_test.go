@@ -194,22 +194,9 @@ func TestExtractTarZstRejectsUnsafeEntries(t *testing.T) {
 func TestExtractElectronZipPreservesExecutable(t *testing.T) {
 	directory := t.TempDir()
 	archivePath := filepath.Join(directory, "electron.zip")
-	file, err := os.Create(archivePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	archive := zip.NewWriter(file)
 	header := &zip.FileHeader{Name: "electron", Method: zip.Deflate}
 	header.SetMode(0o755)
-	entry, err := archive.CreateHeader(header)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _ = io.WriteString(entry, "electron")
-	if err := archive.Close(); err != nil {
-		t.Fatal(err)
-	}
-	_ = file.Close()
+	writeTestZip(t, archivePath, []*zip.FileHeader{header}, []string{"electron"})
 
 	output := filepath.Join(directory, "runtime")
 	if err := extractZip(context.Background(), archivePath, output); err != nil {
@@ -218,6 +205,98 @@ func TestExtractElectronZipPreservesExecutable(t *testing.T) {
 	info, err := os.Stat(filepath.Join(output, "electron"))
 	if err != nil || info.Mode().Perm() != 0o755 {
 		t.Fatalf("Electron executable mode was not preserved: %v, %v", info, err)
+	}
+}
+
+func TestExtractElectronZipPreservesFrameworkSymlinks(t *testing.T) {
+	directory := t.TempDir()
+	archivePath := filepath.Join(directory, "electron.zip")
+	framework := "Electron.app/Contents/Frameworks/Electron Framework.framework"
+	fileHeader := &zip.FileHeader{Name: framework + "/Versions/A/Electron Framework", Method: zip.Deflate}
+	fileHeader.SetMode(0o755)
+	currentHeader := &zip.FileHeader{Name: framework + "/Versions/Current", Method: zip.Store}
+	currentHeader.SetMode(os.ModeSymlink | 0o777)
+	frameworkHeader := &zip.FileHeader{Name: framework + "/Electron Framework", Method: zip.Store}
+	frameworkHeader.SetMode(os.ModeSymlink | 0o777)
+	writeTestZip(t, archivePath, []*zip.FileHeader{fileHeader, currentHeader, frameworkHeader}, []string{"framework", "A", "Versions/Current/Electron Framework"})
+
+	output := filepath.Join(directory, "runtime")
+	if err := extractZip(context.Background(), archivePath, output); err != nil {
+		t.Fatal(err)
+	}
+	currentPath := filepath.Join(output, filepath.FromSlash(framework), "Versions", "Current")
+	info, err := os.Lstat(currentPath)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("framework version link was not preserved: %v, %v", info, err)
+	}
+	data, err := os.ReadFile(filepath.Join(output, filepath.FromSlash(framework), "Electron Framework"))
+	if err != nil || string(data) != "framework" {
+		t.Fatalf("framework link does not resolve to its binary: %q, %v", data, err)
+	}
+}
+
+func TestExtractElectronZipRejectsUnsafeSymlinks(t *testing.T) {
+	tests := []struct {
+		name     string
+		entries  []*zip.FileHeader
+		contents []string
+	}{
+		{
+			name:     "target outside extraction root",
+			entries:  []*zip.FileHeader{zipSymlinkHeader("Electron.app/escape")},
+			contents: []string{"../../outside"},
+		},
+		{
+			name:     "entry beneath a symlink",
+			entries:  []*zip.FileHeader{zipSymlinkHeader("Electron.app/Current"), zipRegularHeader("Electron.app/Current/file")},
+			contents: []string{"Versions/A", "malicious"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			directory := t.TempDir()
+			archivePath := filepath.Join(directory, "electron.zip")
+			writeTestZip(t, archivePath, test.entries, test.contents)
+			if err := extractZip(context.Background(), archivePath, filepath.Join(directory, "runtime")); err == nil {
+				t.Fatal("unsafe Electron archive was accepted")
+			}
+		})
+	}
+}
+
+func zipSymlinkHeader(name string) *zip.FileHeader {
+	header := &zip.FileHeader{Name: name, Method: zip.Store}
+	header.SetMode(os.ModeSymlink | 0o777)
+	return header
+}
+
+func zipRegularHeader(name string) *zip.FileHeader {
+	header := &zip.FileHeader{Name: name, Method: zip.Deflate}
+	header.SetMode(0o644)
+	return header
+}
+
+func writeTestZip(t *testing.T, output string, headers []*zip.FileHeader, contents []string) {
+	t.Helper()
+	file, err := os.Create(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive := zip.NewWriter(file)
+	for index, header := range headers {
+		entry, err := archive.CreateHeader(header)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.WriteString(entry, contents[index]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
 

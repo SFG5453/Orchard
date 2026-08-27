@@ -26,9 +26,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
+
+const maximumZipSymlinkTargetSize = 4096
 
 func electronArchive(version, target string) (string, string) {
 	name := fmt.Sprintf("electron-v%s-%s.zip", version, target)
@@ -79,12 +82,47 @@ func runtimeReady(directory, target string) bool {
 	return err == nil && !info.IsDir()
 }
 
+func makeZipDirectories(destination, relativeDirectory string) error {
+	current := destination
+	for _, part := range strings.Split(filepath.Clean(relativeDirectory), string(filepath.Separator)) {
+		if part == "" || part == "." {
+			continue
+		}
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if os.IsNotExist(err) {
+			if err := os.Mkdir(current, 0o755); err != nil {
+				return err
+			}
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("Electron archive path traverses a non-directory: %s", current)
+		}
+	}
+	return nil
+}
+
+func safeZipSymlinkTarget(entryName, target string) bool {
+	if target == "" || strings.ContainsRune(target, 0) || strings.Contains(target, `\`) || path.IsAbs(target) || windowsDrivePattern.MatchString(target) {
+		return false
+	}
+	resolved := path.Clean(path.Join(path.Dir(strings.TrimPrefix(entryName, "./")), target))
+	return resolved != "." && isSafeArchivePath(resolved)
+}
+
 func extractZip(ctx context.Context, archivePath, destination string) error {
 	reader, err := zip.OpenReader(archivePath)
 	if err != nil {
 		return err
 	}
 	defer reader.Close()
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+		return err
+	}
 	for _, entry := range reader.File {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -92,18 +130,43 @@ func extractZip(ctx context.Context, archivePath, destination string) error {
 		if !isSafeArchivePath(entry.Name) {
 			return fmt.Errorf("unsafe path in Electron archive: %s", entry.Name)
 		}
-		output := filepath.Join(destination, filepath.FromSlash(entry.Name))
+		relative := filepath.FromSlash(strings.TrimPrefix(entry.Name, "./"))
+		if relative == "" || relative == "." {
+			continue
+		}
+		output := filepath.Join(destination, relative)
 		if entry.FileInfo().IsDir() {
-			if err := os.MkdirAll(output, 0o755); err != nil {
+			if err := makeZipDirectories(destination, relative); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := makeZipDirectories(destination, filepath.Dir(relative)); err != nil {
+			return err
+		}
+		if entry.Mode()&os.ModeSymlink != 0 {
+			input, err := entry.Open()
+			if err != nil {
+				return err
+			}
+			data, readErr := io.ReadAll(io.LimitReader(&contextReader{ctx: ctx, reader: input}, maximumZipSymlinkTargetSize+1))
+			closeErr := input.Close()
+			if readErr != nil {
+				return readErr
+			}
+			if closeErr != nil {
+				return closeErr
+			}
+			if len(data) > maximumZipSymlinkTargetSize || !safeZipSymlinkTarget(entry.Name, string(data)) {
+				return fmt.Errorf("unsafe symbolic link in Electron archive: %s", entry.Name)
+			}
+			if err := os.Symlink(string(data), output); err != nil {
 				return err
 			}
 			continue
 		}
 		if !entry.Mode().IsRegular() {
 			return fmt.Errorf("unsupported entry in Electron archive: %s", entry.Name)
-		}
-		if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
-			return err
 		}
 		input, err := entry.Open()
 		if err != nil {
@@ -113,7 +176,7 @@ func extractZip(ctx context.Context, archivePath, destination string) error {
 		if mode == 0 {
 			mode = 0o644
 		}
-		file, err := os.OpenFile(output, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+		file, err := os.OpenFile(output, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
 		if err != nil {
 			input.Close()
 			return err
