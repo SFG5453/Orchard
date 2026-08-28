@@ -122,7 +122,7 @@ class UpdateDialogParserTest {
         assertEquals(4, sections.size)
         assertEquals("Added", sections[0].title)
         assertEquals(ReleaseNoteCategory.NEW, sections[0].category)
-        assertEquals(4, sections[0].items.size)
+        assertEquals(3, sections[0].items.size)
 
         assertEquals("Changed", sections[1].title)
         assertEquals(ReleaseNoteCategory.CHANGED, sections[1].category)
@@ -130,7 +130,7 @@ class UpdateDialogParserTest {
 
         assertEquals("Fixed", sections[2].title)
         assertEquals(ReleaseNoteCategory.FIXED, sections[2].category)
-        assertEquals(3, sections[2].items.size)
+        assertEquals(1, sections[2].items.size)
 
         assertEquals("Maintenance", sections[3].title)
         assertEquals(ReleaseNoteCategory.CHANGED, sections[3].category)

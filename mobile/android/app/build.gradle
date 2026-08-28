@@ -65,9 +65,9 @@ android {
         applicationId = 'dev.sfg.orchard.mobile'
         minSdk = orchardMinSdk
         targetSdk = 36
-        versionCode = 20001
-        versionName = '2.0.0-beta.2'
-        buildConfigField 'String', 'CODENAME', '"Disallow Thermoses"'
+        versionCode = 20002
+        versionName = '2.0.0-beta.3'
+        buildConfigField 'String', 'CODENAME', '"Kimberly Illegal"'
         // Only the build that is actually published may offer updates. Every other
         // build has its own applicationId, so the published APK is neither an
         // upgrade nor installable over it.
@@ -272,8 +272,8 @@ dependencies {
     implementation 'androidx.media3:media3-session:1.11.0'
     implementation 'androidx.media3:media3-ui:1.11.0'
 
-    implementation 'io.coil-kt.coil3:coil-compose:3.5.0'
-    implementation 'io.coil-kt.coil3:coil-network-okhttp:3.5.0'
+    implementation 'io.coil-kt.coil3:coil-compose:3.6.0'
+    implementation 'io.coil-kt.coil3:coil-network-okhttp:3.6.0'
 
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0'
     implementation 'com.squareup.okhttp3:okhttp:5.5.0'
@@ -290,7 +290,7 @@ dependencies {
     // written against was abandoned at the JCenter shutdown; this is the maintained
     // rebuild of the same `org.webrtc` package, so the API matches what the JS side
     // negotiates against.
-    implementation 'io.github.webrtc-sdk:android:144.7559.12'
+    implementation 'io.github.webrtc-sdk:android:144.7559.14'
 
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
     implementation 'eu.buney.kopus:kopus:1.6.1.3'

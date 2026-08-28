@@ -1,20 +1,17 @@
-## Orchard Mobile 2.0.0-beta.2 "Disallow Thermoses"
+## Orchard Mobile 2.0.0-beta.3 "Kimberly Illegal"
 
 ### Added
-- **Best Mix**: Added mobile Best Mix with offline audio analysis, cloud synchronization, and transition-aware queue sorting.
-- **Queue Controls**: Added Best Mix, Autoplay, and Sleep Timer controls to the redesigned queue header.
-- **Catalog Browsing**: Expanded search and added multi-section catalog browse pages.
-- **Adaptive Navigation**: The frosted bottom navigation bar now samples colors from the current album artwork.
+- **Connect Reverse Playback**: Paired devices can now send playback commands back to one another with negotiated protocol capabilities.
+- **Collection Search**: Added collection search across mobile library and detail surfaces.
+- **Album Best Mix**: Best Mix is now available from album views while preserving native gapless album playback when requested.
 
 ### Changed
-- Mobile now executes the same exact staged transition choreography as desktop.
-- Home prioritizes saved playlists and albums while catalog songs and related shelves play directly.
-- Audio decoding now resamples during decode and reuses vocal-model inference buffers for better performance.
+- **Media Controls**: External accessory, smartwatch, and notification media controls now prioritize skip actions and respond more quickly.
+- **Playback Persistence**: Playback and widget persistence work moves off the main thread, with redundant layout broadcasts avoided.
+- **Mini Player**: A vertical swipe now dismisses the mini player and clears the playback queue.
 
 ### Fixed
-- Improved transition timing, beat-grid agreement, cue boundaries, vocal-collision handling, and audible track-tail protection.
-- Fixed explicit-safe audio version resolution and clipped animated artwork to its container.
-- Removed the duplicate cloud audio-analysis setting.
+- **Connect Compatibility**: Playback state no longer silently renegotiates or downgrades an established Connect session.
 
 ### Maintenance
-- Updated cloud analysis to schema version 12 and bumped `@xmldom/xmldom` to 0.9.12.
+- Added Rust and `cargo-ndk` setup to the Android canary and release build workflows.

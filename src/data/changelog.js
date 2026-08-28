@@ -19,6 +19,42 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '5.0.0-beta.5',
+    codename: 'Teacup Obeisant',
+    date: 'August 28, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'Added Data Saving settings so playback, artwork, artist previews, and other network-heavy features can be controlled together.',
+          'Added queue-to-playlist actions throughout the queue and fullscreen player.',
+          'Connect now supports reverse playback commands between paired devices and collection search from the remote experience.',
+          'Redesigned the fullscreen player and queue with richer artwork presentation, clearer controls, improved responsive behavior, and reduced-motion support.'
+        ]
+      },
+      {
+        title: 'Changed',
+        items: [
+          'Softened the desktop visual hierarchy across the shell, home, search, cards, player bars, overlays, and sidebars.',
+          'Reduced immersive background rendering cost while preserving the artwork-driven presentation.'
+        ]
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Repaired welcome-window controls, sizing, and settings synchronization.',
+          'Preserved safe Electron archive symlinks during package installation.'
+        ]
+      },
+      {
+        title: 'Maintenance',
+        items: [
+          'Streamlined desktop packaging and audio runtime handling, removed the obsolete Windows launcher, and updated Vue to 3.5.42.'
+        ]
+      }
+    ]
+  },
+  {
     version: '5.0.0-beta.4',
     codename: 'Simpatico Gladden',
     date: 'August 24, 2026',
