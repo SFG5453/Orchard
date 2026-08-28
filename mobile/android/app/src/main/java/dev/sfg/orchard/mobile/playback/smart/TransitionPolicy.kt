@@ -53,7 +53,7 @@ const val MIN_DJ_CONFIDENCE = 0.2
 const val MIN_BPM = 40.0
 const val MAX_BPM = 220.0
 
-/** Mirrors `kMaxTransparentRatioDeviation` in Orchard's `native/transition/wsola.h`. */
+/** Maximum transparent stretch deviation shared with the Earmark transition policy. */
 const val MAX_STRETCH_DEVIATION = 0.04
 
 /**

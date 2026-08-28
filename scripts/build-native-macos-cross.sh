@@ -111,24 +111,18 @@ sources=$(node "$project_dir/scripts/native-sources.mjs")
 mkdir -p "$native_output"
 for architecture in x86_64 arm64; do
   output_path="$temporary_dir/orchard_audio_analysis-${architecture}.node"
-  # -fexceptions because the vendored Rubber Band source throws internally, and
-  # -framework Accelerate because RubberBandSingle.cpp selects the vDSP FFT on
-  # Apple targets. Both mirror the OS=='mac' conditions in native/binding.gyp.
   # shellcheck disable=SC2086 # $sources is a newline-separated path list.
   "$toolchain_dir/bin/${architecture}-apple-${OSXCROSS_TARGET}-clang++" \
     -std=c++17 \
     -stdlib=libc++ \
     -O3 \
-    -fexceptions \
     -bundle \
     -undefined dynamic_lookup \
     -DNAPI_DISABLE_CPP_EXCEPTIONS \
     -DBUILDING_NODE_EXTENSION \
     -I "$project_dir/node_modules/node-addon-api" \
     -I "$electron_dir/include/node" \
-    -I "$project_dir/native/vendor/rubberband" \
     $sources \
-    -framework Accelerate \
     -o "$output_path"
   file "$output_path" | grep -q "Mach-O 64-bit ${architecture} bundle"
   mv "$output_path" "$native_output/orchard_audio_analysis-${architecture}.node"

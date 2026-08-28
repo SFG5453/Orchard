@@ -4,10 +4,10 @@
 target of **open-unmix's umxhq** checkpoint (Stöter & Liutkus, Inria/SigSep),
 converted to ONNX at a fixed frame count and dynamically quantized to int8.
 
-Used to duck the *outgoing* track's vocal specifically through a WSOLA
-transition, instead of the flat mid-band EQ kill that shipped before it — see
-`electron/audio/vocalMaskTracker.js` and `filter_sweep`/`vocal_duck_curve` in
-`native/transition/transition_render.cpp`.
+Used to duck the *outgoing* track's vocal specifically through an Earmark
+transition, instead of applying the same filter depth to every passage — see
+`electron/audio/vocalMaskTracker.js` and the Earmark renderer under
+`native-audio-rust/vendor/earmark/src/render`.
 
 ## Licensing
 

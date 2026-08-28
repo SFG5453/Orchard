@@ -46,7 +46,7 @@ export const MIN_DJ_CONFIDENCE = 0.2;
 export const MIN_BPM = 40;
 export const MAX_BPM = 220;
 
-// Mirrors kMaxTransparentRatioDeviation in native/transition/wsola.h.
+// Shared with the Earmark transition policy through the canonical planner contract.
 export const MAX_STRETCH_DEVIATION = PAIR_TRANSITION_POLICY.maxStretchDeviation;
 
 // A vocal-activity mask value at or above this counts as singing. The JS

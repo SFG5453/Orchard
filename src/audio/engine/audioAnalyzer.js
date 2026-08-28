@@ -72,8 +72,8 @@ export function createAudioAnalyzer(options = {}) {
   // The mix bands the transition scheduler automates. Two LR4 halves of a
   // 200 Hz crossover -- a low branch carrying its own gain, and a high branch
   // -- so the low end can be handed over exclusively rather than fading two
-  // uncorrelated bass lines through each other. This mirrors the native
-  // renderer's split (see native/transition/transition_render.cpp); the live
+  // uncorrelated bass lines through each other. This mirrors Earmark's native
+  // renderer split; the live
   // path had only a full-range low-pass, which meant the outgoing track was
   // reduced to pure bass exactly as the incoming's bass arrived.
   //
