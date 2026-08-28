@@ -151,7 +151,15 @@ class LocalPlaybackController(
         if (it.currentPosition > 5_000) it.seekTo(0) else if (it.hasPreviousMediaItem()) it.seekToPreviousMediaItem()
     }
     fun seek(positionMs: Long) = withController { it.seekTo(positionMs.coerceAtLeast(0)) }
+    fun setVolume(volume: Float) = withController { it.volume = volume.coerceIn(0.0f, 1.0f) }
     fun setShuffle(enabled: Boolean) = withController { it.shuffleModeEnabled = enabled }
+    fun setRepeatMode(mode: RepeatMode) = withController {
+        it.repeatMode = when (mode) {
+            RepeatMode.OFF -> Player.REPEAT_MODE_OFF
+            RepeatMode.ALL -> Player.REPEAT_MODE_ALL
+            RepeatMode.ONE -> Player.REPEAT_MODE_ONE
+        }
+    }
     fun replaceUpcoming(tracks: List<Track>, contextTitle: String? = null) = withController { player ->
         if (contextTitle != null) {
             player.setPlaylistMetadata(MediaMetadata.Builder().setTitle(contextTitle).build())
@@ -300,6 +308,7 @@ class LocalPlaybackController(
             durationMs = duration,
             bufferedPositionMs = player.bufferedPosition.coerceAtLeast(0),
             isPlaying = player.isPlaying,
+            volume = player.volume,
             shuffle = player.shuffleModeEnabled,
             repeatMode = when (player.repeatMode) {
                 Player.REPEAT_MODE_ONE -> RepeatMode.ONE

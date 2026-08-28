@@ -33,6 +33,7 @@ data class PlaybackSnapshot(
     val durationMs: Long = 0,
     val bufferedPositionMs: Long = 0,
     val isPlaying: Boolean = false,
+    val volume: Float = 1.0f,
     val shuffle: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,
     val contextTitle: String = "",

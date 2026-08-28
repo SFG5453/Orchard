@@ -46,7 +46,8 @@ data class ConnectPlayback(
     val duration: Double = 0.0,
     val volume: Double = 0.0,
     val shuffle: Boolean = false,
-    val repeatMode: String = "off"
+    val repeatMode: String = "off",
+    val autoplay: Boolean = false
 )
 
 data class ConnectLyricWord(
@@ -173,4 +174,22 @@ sealed interface ConnectCommand {
     data object ToggleShuffle : ConnectCommand
     data object CycleRepeat : ConnectCommand
     data class PlayTrack(val item: ConnectRemoteItem) : ConnectCommand
+    data class PlayTrackPayload(val payload: JSONObject) : ConnectCommand
+    data class Transfer(
+        val track: JSONObject? = null,
+        val positionSeconds: Double = 0.0,
+        val queue: List<JSONObject> = emptyList(),
+        val shuffle: Boolean = false,
+        val repeatMode: String = "off",
+        val autoplay: Boolean = false,
+        val play: Boolean = true
+    ) : ConnectCommand
+    data class ReplaceQueue(
+        val tracks: List<JSONObject> = emptyList(),
+        val startIndex: Int = 0,
+        val positionSeconds: Double = 0.0,
+        val play: Boolean = true,
+        val contextTitle: String = ""
+    ) : ConnectCommand
+    data class Unknown(val type: String) : ConnectCommand
 }

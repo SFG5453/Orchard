@@ -28,7 +28,7 @@ import QRCode from 'qrcode';
 import { connectClientJs, connectCss, connectHtml } from './orchardConnectPage.js';
 
 const preferredConnectPort = 32145;
-const CONNECT_PROTOCOL_VERSION = 3;
+const CONNECT_PROTOCOL_VERSION = 4;
 
 function effectiveProtocolVersion(clientVersion = 1) {
   const version = Number(clientVersion) || 1;
@@ -100,6 +100,7 @@ function publicDevice(device) {
     id: device.id,
     name: device.name,
     connected: Boolean(device.connected),
+    protocolVersion: Number(device.protocolVersion) || 1,
     pairedAt: device.pairedAt,
     lastSeenAt: device.lastSeenAt
   };
@@ -126,6 +127,7 @@ function storedDevice(device) {
     id: device.id,
     tokenHash: device.tokenHash,
     name: device.name,
+    protocolVersion: Number(device.protocolVersion) || 1,
     pairedAt: device.pairedAt,
     lastSeenAt: device.lastSeenAt
   };
@@ -140,6 +142,7 @@ function importedStoredDevices(payload = {}) {
       tokenHash: String(device.tokenHash),
       name: String(device.name || 'Phone').slice(0, 60),
       connected: false,
+      protocolVersion: Number(device.protocolVersion) || 1,
       pairedAt: Number(device.pairedAt) || Date.now(),
       lastSeenAt: Number(device.lastSeenAt) || 0
     }));
@@ -158,6 +161,7 @@ async function loadStoredDevices(deviceStorePath) {
         tokenHash: String(device.tokenHash),
         name: String(device.name || 'Phone').slice(0, 60),
         connected: false,
+        protocolVersion: Number(device.protocolVersion) || 1,
         pairedAt: Number(device.pairedAt) || Date.now(),
         lastSeenAt: Number(device.lastSeenAt) || 0
       }));
@@ -338,6 +342,7 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
       tokenHash: '',
       name: request.name,
       connected: true,
+      protocolVersion: effectiveProtocolVersion(request.protocolVersion),
       pairedAt: Date.now(),
       lastSeenAt: Date.now()
     };
@@ -404,6 +409,7 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
         : null;
       if (existing) {
         existing.connected = true;
+        existing.protocolVersion = clientVersion;
         existing.lastSeenAt = Date.now();
         remoteSockets.set(socket.id, existing.id);
         socket.join('paired');
@@ -454,6 +460,12 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
       desktopIo.emit('connect:remote-command', { deviceId, command });
     });
 
+    socket.on('connect:device-state', (state = {}) => {
+      const deviceId = remoteSockets.get(socket.id);
+      if (!deviceId || !devices.has(deviceId)) return;
+      desktopIo.emit('connect:device-state', { deviceId, state });
+    });
+
     socket.on('connect:search', ({ query = '', requestId = '' } = {}) => {
       const deviceId = remoteSockets.get(socket.id);
       if (!deviceId || !devices.has(deviceId)) return;
@@ -500,6 +512,25 @@ export async function createOrchardConnectServer({ Server, desktopIo, deviceStor
       socket.on('connect:desktop-state', (state = {}) => {
         currentState = state;
         remoteIo.to('paired').emit('connect:state', currentState);
+      });
+      socket.on('connect:device-command', ({ deviceId, command } = {}, reply) => {
+        const device = devices.get(deviceId);
+        if (!device || !device.connected) {
+          jsonReply(reply, { delivered: false, reason: 'offline' });
+          return;
+        }
+        if ((Number(device.protocolVersion) || 1) < 4) {
+          jsonReply(reply, { delivered: false, reason: 'unsupported' });
+          return;
+        }
+        let delivered = false;
+        for (const [socketId, pairedDeviceId] of remoteSockets.entries()) {
+          if (pairedDeviceId === deviceId) {
+            remoteIo.to(socketId).emit('connect:command', command);
+            delivered = true;
+          }
+        }
+        jsonReply(reply, { delivered, reason: delivered ? '' : 'offline' });
       });
       socket.on('connect:remote-search-results', ({ deviceId, ...payload } = {}) => {
         for (const [socketId, pairedDeviceId] of remoteSockets.entries()) {

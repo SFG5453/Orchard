@@ -231,6 +231,8 @@ export function installState(ctx) {
     pending: [],
     devices: []
   });
+  ctx.activePlaybackTarget = ref('local');
+  ctx.remoteDeviceStates = ref({});
   ctx.orchardConnectPairingMessage = ref('');
   ctx.audioRef = ref(null);
   ctx.nextAudioRef = ref(null);

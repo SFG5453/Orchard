@@ -48,8 +48,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.first
@@ -94,6 +97,8 @@ class ConnectDeviceRepository(
     val device: StateFlow<PlaybackDevice?> = mutableDevice.asStateFlow()
     private val mutableRemoteAnalysis = MutableStateFlow<Map<String, dev.sfg.orchard.mobile.playback.smart.TrackFeatures.Features>>(emptyMap())
     val remoteAnalysis: StateFlow<Map<String, dev.sfg.orchard.mobile.playback.smart.TrackFeatures.Features>> = mutableRemoteAnalysis.asStateFlow()
+    private val mutableRemoteCommands = MutableSharedFlow<ConnectCommand>(extraBufferCapacity = 64)
+    val remoteCommands: SharedFlow<ConnectCommand> = mutableRemoteCommands.asSharedFlow()
     private val mutableMessage = MutableStateFlow("")
     val message: StateFlow<String> = mutableMessage.asStateFlow()
     @Volatile private var serverUrl = ""
@@ -257,6 +262,12 @@ class ConnectDeviceRepository(
         return true
     }
 
+    fun sendDeviceState(snapshot: PlaybackSnapshot, autoplay: Boolean): Boolean {
+        if (client.status() != ConnectClientStatus.APPROVED) return false
+        val payload = dev.sfg.orchard.connect.protocol.ConnectJsonCodec.deviceState(snapshot, client.protocolVersion(), autoplay)
+        return client.sendDeviceState(payload)
+    }
+
     override fun onStatusChanged(status: ConnectClientStatus) {
         mutableStatus.value = status
         mutableProtocolVersion.value = client.protocolVersion()
@@ -328,6 +339,10 @@ class ConnectDeviceRepository(
             )
         }
         mutableRemoteAnalysis.value = mutableRemoteAnalysis.value + mapped
+    }
+
+    override fun onCommandReceived(command: ConnectCommand) {
+        mutableRemoteCommands.tryEmit(command)
     }
 
     override fun onError(error: ConnectClientError) {
@@ -446,6 +461,7 @@ class ConnectDeviceRepository(
             durationMs = (playback.duration * 1_000).toLong(),
             bufferedPositionMs = 0,
             isPlaying = playback.isPlaying,
+            volume = playback.volume.toFloat().coerceIn(0.0f, 1.0f),
             shuffle = playback.shuffle,
             repeatMode = mappedRepeat,
         )

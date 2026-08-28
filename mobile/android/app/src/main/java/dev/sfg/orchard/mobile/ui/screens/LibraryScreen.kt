@@ -29,16 +29,35 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.download.DownloadItem
 import dev.sfg.orchard.mobile.download.DownloadStatus
 import dev.sfg.orchard.mobile.model.CatalogItem
@@ -47,10 +66,13 @@ import dev.sfg.orchard.mobile.model.LibrarySnapshot
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.CatalogCard
 import dev.sfg.orchard.mobile.ui.components.MessagePanel
+import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
 import dev.sfg.orchard.mobile.ui.components.OrchardFilterChips
 import dev.sfg.orchard.mobile.ui.components.OrchardSectionHeader
 import dev.sfg.orchard.mobile.ui.components.TrackRow
-import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
+import dev.sfg.orchard.mobile.ui.components.filterCatalogItems
+import dev.sfg.orchard.mobile.ui.components.filterTracks
+import dev.sfg.orchard.mobile.ui.components.normalizeSearchText
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -71,6 +93,8 @@ fun LibraryScreen(
     onRemoveDownloadTrack: ((String) -> Unit)? = null,
     onShare: ((Track) -> Unit)? = null,
 ) {
+    var searchQuery by remember { mutableStateOf("") }
+
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = OrchardChromeHeight)) {
         item {
             Column {
@@ -83,67 +107,172 @@ fun LibraryScreen(
                     label = { it.label },
                     onSelect = onFilterChange,
                 )
+                Spacer(Modifier.height(12.dp))
+
+                // Frosted search input
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.White.copy(alpha = 0.08f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Rounded.Search,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.50f),
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.CenterStart,
+                            ) {
+                                if (searchQuery.isEmpty()) {
+                                    Text(
+                                        text = "Search in ${filter.label.lowercase()}",
+                                        style = TextStyle(
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Normal,
+                                            color = Color.White.copy(alpha = 0.40f),
+                                        ),
+                                        maxLines = 1,
+                                    )
+                                }
+                                BasicTextField(
+                                    value = searchQuery,
+                                    onValueChange = { searchQuery = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textStyle = TextStyle(
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.White,
+                                    ),
+                                    cursorBrush = SolidColor(LocalAccent.current),
+                                    singleLine = true,
+                                )
+                            }
+                            if (searchQuery.isNotEmpty()) {
+                                Surface(
+                                    onClick = { searchQuery = "" },
+                                    shape = CircleShape,
+                                    color = Color.White.copy(alpha = 0.16f),
+                                    modifier = Modifier.size(22.dp),
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Rounded.Close,
+                                            contentDescription = "Clear",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(13.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 Spacer(Modifier.height(16.dp))
             }
         }
         when (filter) {
-            LibraryFilter.PLAYLISTS -> collections(
-                "Your playlists",
-                library.savedPlaylists.map { CatalogItem.Collection(it) },
-                "No saved playlists",
-                "Save a playlist and it will stay close at hand.",
-                onOpenDetail,
-            )
-            LibraryFilter.ARTISTS -> collections(
-                "Saved artists",
-                library.savedArtists.map { CatalogItem.Performer(it) },
-                "No saved artists",
-                "Follow an artist to build this shelf.",
-                onOpenDetail,
-            )
-            LibraryFilter.ALBUMS -> collections(
-                "Saved albums",
-                library.savedAlbums.map { CatalogItem.Record(it) },
-                "No saved albums",
-                "Albums you save will be available here.",
-                onOpenDetail,
-            )
-            LibraryFilter.SONGS -> songs(
-                title = "Songs",
-                values = library.likedTracks,
-                emptyTitle = "No songs saved",
-                emptyMessage = "Save songs to your library to see them here",
-                downloadedTrackIds = downloadedTrackIds,
-                downloadingTrackIds = downloadingTrackIds,
-                onPlay = onPlay,
-                onPlayNext = onPlayNext,
-                onAdd = onAddToQueue,
-                onDownloadTrack = onDownloadTrack,
-                onRemoveDownloadTrack = onRemoveDownloadTrack,
-                onOpen = onOpenDetail,
-                onShare = onShare,
-            )
-            LibraryFilter.RECENT -> tracks(
-                "Recently played",
-                library.recentlyPlayed,
-                "Nothing played yet",
-                "Start a song and Orchard will remember it here.",
-                downloadedTrackIds,
-                downloadingTrackIds,
-                onPlay,
-                onPlayNext,
-                onAddToQueue,
-                onDownloadTrack,
-                onRemoveDownloadTrack,
-                onShare,
-                onOpenDetail,
-            )
-            LibraryFilter.DOWNLOADS -> downloadsList(
-                downloads = downloads,
-                totalBytesUsed = totalBytesUsed,
-                onPlay = onPlay,
-                onRemoveDownload = { id -> onRemoveDownloadTrack?.invoke(id) },
-            )
+            LibraryFilter.PLAYLISTS -> {
+                val playlists = library.savedPlaylists.map { CatalogItem.Collection(it) }
+                val filtered = filterCatalogItems(playlists, searchQuery)
+                collections(
+                    "Your playlists",
+                    filtered,
+                    if (searchQuery.isNotBlank()) "No matching playlists" else "No saved playlists",
+                    if (searchQuery.isNotBlank()) "No playlists matching \"$searchQuery\"" else "Save a playlist and it will stay close at hand.",
+                    onOpenDetail,
+                )
+            }
+            LibraryFilter.ARTISTS -> {
+                val artists = library.savedArtists.map { CatalogItem.Performer(it) }
+                val filtered = filterCatalogItems(artists, searchQuery)
+                collections(
+                    "Saved artists",
+                    filtered,
+                    if (searchQuery.isNotBlank()) "No matching artists" else "No saved artists",
+                    if (searchQuery.isNotBlank()) "No artists matching \"$searchQuery\"" else "Follow an artist to build this shelf.",
+                    onOpenDetail,
+                )
+            }
+            LibraryFilter.ALBUMS -> {
+                val albums = library.savedAlbums.map { CatalogItem.Record(it) }
+                val filtered = filterCatalogItems(albums, searchQuery)
+                collections(
+                    "Saved albums",
+                    filtered,
+                    if (searchQuery.isNotBlank()) "No matching albums" else "No saved albums",
+                    if (searchQuery.isNotBlank()) "No albums matching \"$searchQuery\"" else "Albums you save will be available here.",
+                    onOpenDetail,
+                )
+            }
+            LibraryFilter.SONGS -> {
+                val filtered = filterTracks(library.likedTracks, searchQuery)
+                songs(
+                    title = "Songs",
+                    values = filtered,
+                    emptyTitle = if (searchQuery.isNotBlank()) "No matching songs" else "No songs saved",
+                    emptyMessage = if (searchQuery.isNotBlank()) "No songs matching \"$searchQuery\"" else "Save songs to your library to see them here",
+                    downloadedTrackIds = downloadedTrackIds,
+                    downloadingTrackIds = downloadingTrackIds,
+                    onPlay = onPlay,
+                    onPlayNext = onPlayNext,
+                    onAdd = onAddToQueue,
+                    onDownloadTrack = onDownloadTrack,
+                    onRemoveDownloadTrack = onRemoveDownloadTrack,
+                    onOpen = onOpenDetail,
+                    onShare = onShare,
+                )
+            }
+            LibraryFilter.RECENT -> {
+                val filtered = filterTracks(library.recentlyPlayed, searchQuery)
+                tracks(
+                    "Recently played",
+                    filtered,
+                    if (searchQuery.isNotBlank()) "No matching recent tracks" else "Nothing played yet",
+                    if (searchQuery.isNotBlank()) "No recently played tracks matching \"$searchQuery\"" else "Start a song and Orchard will remember it here.",
+                    downloadedTrackIds,
+                    downloadingTrackIds,
+                    onPlay,
+                    onPlayNext,
+                    onAddToQueue,
+                    onDownloadTrack,
+                    onRemoveDownloadTrack,
+                    onShare,
+                    onOpenDetail,
+                )
+            }
+            LibraryFilter.DOWNLOADS -> {
+                val normalizedQuery = normalizeSearchText(searchQuery)
+                val filtered = if (normalizedQuery.isNotBlank()) {
+                    downloads.filter {
+                        normalizeSearchText(it.track.title).contains(normalizedQuery) ||
+                            normalizeSearchText(it.track.artist).contains(normalizedQuery) ||
+                            normalizeSearchText(it.track.album).contains(normalizedQuery)
+                    }
+                } else downloads
+                downloadsList(
+                    downloads = filtered,
+                    totalBytesUsed = totalBytesUsed,
+                    onPlay = onPlay,
+                    onRemoveDownload = { id -> onRemoveDownloadTrack?.invoke(id) },
+                )
+            }
         }
     }
 }

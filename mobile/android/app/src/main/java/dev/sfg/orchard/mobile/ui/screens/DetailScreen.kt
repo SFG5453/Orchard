@@ -84,6 +84,7 @@ import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.MessagePanel
 import dev.sfg.orchard.mobile.ui.components.OrchardSectionHeader
 import dev.sfg.orchard.mobile.ui.components.TrackRow
+import dev.sfg.orchard.mobile.ui.components.filterTracks
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -563,9 +564,19 @@ private fun CollectionDetailContent(
 ) {
     var showDescriptionSheet by remember { mutableStateOf(false) }
     var activeSectionSheet by remember { mutableStateOf<SectionSheetState?>(null) }
+    var isSearching by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
 
     // The cover's own colours carry the whole screen.
     val palette = rememberArtworkPalette(detail.artworkUrl)
+
+    val filteredTracks = remember(detail.tracks, searchQuery, isSearching) {
+        if (isSearching && searchQuery.isNotBlank()) {
+            filterTracks(detail.tracks, searchQuery)
+        } else {
+            detail.tracks
+        }
+    }
 
     if (activeSectionSheet != null) {
         activeSectionSheet?.let { sheet ->
@@ -616,20 +627,70 @@ private fun CollectionDetailContent(
                     smartCrossfadeEnabled = smartCrossfadeEnabled,
                     bestMixSupabaseSync = bestMixSupabaseSync,
                     onPlayBestMix = onPlayBestMix,
+                    onSearch = { isSearching = true },
+                    isSearching = isSearching,
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = { searchQuery = it },
+                    onCloseSearch = {
+                        isSearching = false
+                        searchQuery = ""
+                    },
                 )
             }
-            if (detail.tracks.isNotEmpty()) {
-                itemsIndexed(detail.tracks, key = { index, track -> "${track.id}_$index" }) { index, track ->
+            if (isSearching && searchQuery.isNotBlank()) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = "${filteredTracks.size} ${if (filteredTracks.size == 1) "track" else "tracks"} found",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = CanopyColors.Muted,
+                        )
+                        Surface(
+                            onClick = { searchQuery = "" },
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color.White.copy(alpha = 0.12f),
+                        ) {
+                            Text(
+                                text = "Clear",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            )
+                        }
+                    }
+                }
+
+                if (filteredTracks.isEmpty()) {
+                    item {
+                        MessagePanel(
+                            title = "No matching tracks",
+                            message = "No songs matching \"$searchQuery\" found in ${detail.title}.",
+                            actionLabel = "Clear search",
+                            onAction = { searchQuery = "" },
+                        )
+                    }
+                }
+            }
+
+            if (filteredTracks.isNotEmpty()) {
+                itemsIndexed(filteredTracks, key = { index, track -> "${track.id}_$index" }) { index, track ->
                     val isAlbum = detail.kind == CatalogKind.ALBUM
                     val isDownloaded = downloadedTrackIds.contains(track.id)
                     val isDownloading = downloadingTrackIds.contains(track.id)
+                    val originalIndex = detail.tracks.indexOf(track).takeIf { it >= 0 } ?: index
                     TrackRow(
                         track = track,
-                        trackNumber = if (isAlbum) index + 1 else null,
+                        trackNumber = if (isAlbum) originalIndex + 1 else null,
                         showArtwork = !isAlbum,
                         parentArtist = if (isAlbum) detail.artist else "",
-                        showDivider = isAlbum && index < detail.tracks.lastIndex,
-                        onPlay = { onPlayTrack(detail.tracks, index, detail.title) },
+                        showDivider = isAlbum && index < filteredTracks.lastIndex,
+                        onPlay = { onPlayTrack(filteredTracks, index, detail.title) },
                         modifier = Modifier.padding(horizontal = 8.dp),
                         onPlayNext = onPlayNext?.let { action -> { action(track) } },
                         onAddToQueue = onAdd?.let { action -> { action(track) } },
@@ -647,44 +708,46 @@ private fun CollectionDetailContent(
                     )
                 }
 
-                item {
-                    val totalMs = remember(detail.tracks) { detail.tracks.sumOf { it.durationMs } }
-                    val totalSeconds = totalMs / 1000
-                    val hours = totalSeconds / 3600
-                    val remainingMinutes = (totalSeconds % 3600) / 60
-                    val durationSummary = buildString {
-                        if (hours > 0) {
-                            append(", $hours Hour${if (hours > 1) "s" else ""}")
-                            if (remainingMinutes > 0) {
-                                append(" $remainingMinutes Minute${if (remainingMinutes > 1) "s" else ""}")
+                if (!isSearching || searchQuery.isBlank()) {
+                    item {
+                        val totalMs = remember(detail.tracks) { detail.tracks.sumOf { it.durationMs } }
+                        val totalSeconds = totalMs / 1000
+                        val hours = totalSeconds / 3600
+                        val remainingMinutes = (totalSeconds % 3600) / 60
+                        val durationSummary = buildString {
+                            if (hours > 0) {
+                                append(", $hours Hour${if (hours > 1) "s" else ""}")
+                                if (remainingMinutes > 0) {
+                                    append(" $remainingMinutes Minute${if (remainingMinutes > 1) "s" else ""}")
+                                }
+                            } else if (remainingMinutes > 0) {
+                                append(", $remainingMinutes Minute${if (remainingMinutes > 1) "s" else ""}")
                             }
-                        } else if (remainingMinutes > 0) {
-                            append(", $remainingMinutes Minute${if (remainingMinutes > 1) "s" else ""}")
                         }
-                    }
-                    val countSummary = "${detail.tracks.size} Song${if (detail.tracks.size == 1) "" else "s"}$durationSummary"
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 20.dp),
-                    ) {
-                        if (detail.year.isNotBlank()) {
+                        val countSummary = "${detail.tracks.size} Song${if (detail.tracks.size == 1) "" else "s"}$durationSummary"
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 20.dp),
+                        ) {
+                            if (detail.year.isNotBlank()) {
+                                Text(
+                                    text = "Released ${detail.year}",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                    color = Color.White.copy(alpha = 0.50f),
+                                )
+                                Spacer(Modifier.height(2.dp))
+                            }
                             Text(
-                                text = "Released ${detail.year}",
+                                text = countSummary,
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                                 color = Color.White.copy(alpha = 0.50f),
                             )
-                            Spacer(Modifier.height(2.dp))
                         }
-                        Text(
-                            text = countSummary,
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                            color = Color.White.copy(alpha = 0.50f),
-                        )
                     }
                 }
             }
-            if (detail.sections.isNotEmpty()) {
+            if ((!isSearching || searchQuery.isBlank()) && detail.sections.isNotEmpty()) {
                 detail.sections.forEach { section ->
                     val hasMoreViaApi = section.browseId.isNotBlank()
                     val canViewAll = hasMoreViaApi || section.items.size > 3
@@ -721,7 +784,7 @@ private fun CollectionDetailContent(
                         }
                     }
                 }
-            } else if (detail.related.isNotEmpty()) {
+            } else if ((!isSearching || searchQuery.isBlank()) && detail.related.isNotEmpty()) {
                 item {
                     Text(
                         text = "More like this",

@@ -41,6 +41,7 @@ import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -251,9 +252,26 @@ fun CollectionTopBar(
     isSaved: Boolean,
     onAbout: (() -> Unit)? = null,
     onBestMix: (() -> Unit)? = null,
+    onSearch: (() -> Unit)? = null,
+    isSearching: Boolean = false,
+    searchQuery: String = "",
+    onSearchQueryChange: ((String) -> Unit)? = null,
+    onCloseSearch: (() -> Unit)? = null,
+    searchPlaceholder: String = "Find in playlist",
     aboutLabel: String = "About",
     modifier: Modifier = Modifier,
 ) {
+    if (isSearching && onSearchQueryChange != null && onCloseSearch != null) {
+        CollectionTopSearchBar(
+            query = searchQuery,
+            onQueryChange = onSearchQueryChange,
+            onClose = onCloseSearch,
+            placeholder = searchPlaceholder,
+            modifier = modifier,
+        )
+        return
+    }
+
     var menuOpen by remember { mutableStateOf(false) }
 
     Row(
@@ -284,6 +302,24 @@ fun CollectionTopBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (onSearch != null) {
+                Surface(
+                    onClick = onSearch,
+                    shape = CircleShape,
+                    color = Color.White.copy(alpha = 0.16f),
+                    modifier = Modifier.size(38.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Rounded.Search,
+                            contentDescription = "Search in collection",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+            }
+
             Surface(
                 onClick = onShare,
                 shape = CircleShape,
@@ -318,6 +354,15 @@ fun CollectionTopBar(
                 }
 
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    if (onSearch != null) {
+                        DropdownMenuItem(
+                            text = { Text("Find in ${if (aboutLabel.contains("album", true)) "album" else "playlist"}") },
+                            onClick = {
+                                menuOpen = false
+                                onSearch()
+                            },
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text(if (isSaved) "Remove from library" else "Add to library") },
                         onClick = {

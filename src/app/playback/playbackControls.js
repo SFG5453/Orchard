@@ -231,6 +231,10 @@ export function installPlaybackControls(ctx) {
   };
 
   ctx.togglePlayback = function togglePlayback() {
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      ctx.sendConnectTargetCommand?.({ type: 'play-pause' });
+      return;
+    }
     if (ctx.listeningParty.value?.status === 'connected' && !ctx.listeningPartyIsHost.value) {
       ctx.sendListeningPartyRequest({ action: ctx.isPlaying.value ? 'pause' : 'play' });
       return;
@@ -284,6 +288,15 @@ export function installPlaybackControls(ctx) {
 
   ctx.playContinuousQueueEntry = function playContinuousQueueEntry(entry, options = {}) {
     if (!entry?.track?.id) return;
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      const index = ctx.queue.value.findIndex((t) => t.id === entry.track.id);
+      if (index >= 0) {
+        ctx.sendConnectTargetCommand?.({ type: 'play-queue-index', value: index });
+      } else {
+        ctx.sendConnectTargetCommand?.({ type: 'play-track', value: entry.track });
+      }
+      return;
+    }
     if (entry.section === 'current') {
       ctx.seek(0);
       return;
@@ -348,6 +361,10 @@ export function installPlaybackControls(ctx) {
   };
 
   ctx.playNext = async function playNext(options = {}) {
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      ctx.sendConnectTargetCommand?.({ type: 'next' });
+      return;
+    }
     if (!options.fromListeningPartyRequest && ctx.listeningParty?.value?.status === 'connected' && !ctx.listeningPartyIsHost?.value) {
       ctx.requestListeningPartyHostControl?.({ action: 'next' });
       return;
@@ -784,6 +801,10 @@ export function installPlaybackControls(ctx) {
   };
 
   ctx.playPrevious = function playPrevious(options = {}) {
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      ctx.sendConnectTargetCommand?.({ type: 'previous' });
+      return;
+    }
     if (!options.fromListeningPartyRequest && ctx.requestListeningPartyHostControl?.({ action: 'previous' })) return;
     ctx.cancelActiveCrossfade('play-previous');
     const playlistContext = ctx.playbackPlaylistContext.value;
@@ -816,6 +837,10 @@ export function installPlaybackControls(ctx) {
   };
 
   ctx.toggleShuffle = function toggleShuffle(options = {}) {
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      ctx.sendConnectTargetCommand?.({ type: 'toggle-shuffle' });
+      return;
+    }
     if (!options.fromListeningPartyRequest && ctx.requestListeningPartyHostControl?.({ action: 'toggle-shuffle' })) return;
     const playlistContext = ctx.playbackPlaylistContext.value;
     if (ctx.shuffleEnabled.value) {
@@ -842,6 +867,10 @@ export function installPlaybackControls(ctx) {
   };
 
   ctx.cycleRepeatMode = function cycleRepeatMode(options = {}) {
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      ctx.sendConnectTargetCommand?.({ type: 'cycle-repeat' });
+      return;
+    }
     if (!options.fromListeningPartyRequest && ctx.requestListeningPartyHostControl?.({ action: 'cycle-repeat' })) return;
     const order = ['off', 'queue', 'one'];
     const nextIndex = (order.indexOf(ctx.repeatMode.value) + 1) % order.length;
@@ -855,6 +884,13 @@ export function installPlaybackControls(ctx) {
   };
 
   ctx.seek = function seek(value) {
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      const target = Math.max(0, Math.min(Number(value) || 0, ctx.duration.value || 0));
+      ctx.currentTime.value = target;
+      ctx.seekPosition.value = target;
+      ctx.sendConnectTargetCommand?.({ type: 'seek', value: target });
+      return;
+    }
     if (ctx.listeningParty.value?.status === 'connected' && !ctx.listeningPartyIsHost.value && !ctx.applyingListeningPartyState) {
       ctx.sendListeningPartyRequest({ action: 'seek', currentTime: Number(value) || 0 });
       return;

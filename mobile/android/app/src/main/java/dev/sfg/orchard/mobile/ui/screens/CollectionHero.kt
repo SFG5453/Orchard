@@ -116,6 +116,11 @@ fun CollectionHero(
     smartCrossfadeEnabled: Boolean = false,
     bestMixSupabaseSync: Boolean = false,
     onPlayBestMix: ((List<Track>, String, (String) -> Unit, () -> Unit) -> Unit)? = null,
+    onSearch: (() -> Unit)? = null,
+    isSearching: Boolean = false,
+    searchQuery: String = "",
+    onSearchQueryChange: ((String) -> Unit)? = null,
+    onCloseSearch: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -244,6 +249,12 @@ fun CollectionHero(
             isSaved = isSaved,
             onAbout = if (detail.description.isNotBlank()) onAbout else null,
             onBestMix = if (smartCrossfadeEnabled && (detail.kind == CatalogKind.PLAYLIST || detail.kind == CatalogKind.ALBUM) && detail.tracks.size > 1) (::triggerBestMix) else null,
+            onSearch = onSearch,
+            isSearching = isSearching,
+            searchQuery = searchQuery,
+            onSearchQueryChange = onSearchQueryChange,
+            onCloseSearch = onCloseSearch,
+            searchPlaceholder = "Find in ${if (detail.kind == CatalogKind.ALBUM) "album" else "playlist"}",
             aboutLabel = "About this ${if (detail.kind == CatalogKind.ALBUM) "album" else "playlist"}",
         )
     }

@@ -62,6 +62,30 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
+internal data class DesktopTransferPlan(
+    val tracks: List<Track>,
+    val startIndex: Int,
+    val repeatMode: RepeatMode,
+)
+
+internal fun desktopTransferPlan(track: Track?, queue: List<Track>, repeatMode: String): DesktopTransferPlan {
+    val tracks = when {
+        track == null -> queue
+        queue.any { it.id == track.id } -> queue
+        else -> listOf(track) + queue
+    }.filter { it.id.isNotBlank() }.distinctBy(Track::id)
+    val startIndex = track
+        ?.let { current -> tracks.indexOfFirst { it.id == current.id } }
+        ?.takeIf { it >= 0 }
+        ?: 0
+    val repeat = when (repeatMode.lowercase()) {
+        "one" -> RepeatMode.ONE
+        "queue", "all" -> RepeatMode.ALL
+        else -> RepeatMode.OFF
+    }
+    return DesktopTransferPlan(tracks, startIndex, repeat)
+}
+
 /** Presentation state holder for the standalone shell and both playback targets. */
 @OptIn(FlowPreview::class)
 class OrchardViewModel(application: Application) : AndroidViewModel(application) {
@@ -273,6 +297,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         observeWarnings()
         observeLocalAudioVersion()
         observeAutoplay()
+        observeConnectDeviceSync()
     }
 
     private fun observeNetworkState() {
@@ -868,6 +893,104 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                 .distinctUntilChanged()
                 .collect(::refillAutoplay)
         }
+    }
+
+    private fun observeConnectDeviceSync() {
+        viewModelScope.launch {
+            combine(
+                local.snapshot,
+                graph.connect.status,
+                settings.map { it.autoplayEnabled }.distinctUntilChanged(),
+            ) { snapshot, status, autoplay -> Triple(snapshot, status, autoplay) }
+                .collect { (snapshot, status, autoplay) ->
+                    if (status == dev.sfg.orchard.connect.protocol.ConnectClientStatus.APPROVED) {
+                        graph.connect.sendDeviceState(snapshot, autoplay)
+                    }
+                }
+        }
+        viewModelScope.launch {
+            graph.connect.remoteCommands.collect { command ->
+                handleRemoteCommand(command)
+            }
+        }
+    }
+
+    private fun handleRemoteCommand(command: ConnectCommand) {
+        if (targets.value.selected !is PlaybackTarget.LocalPhone) {
+            targetCoordinator.completeTransfer(PlaybackTarget.LocalPhone)
+            mutableTargets.value = targetCoordinator.state
+        }
+        fun upcomingIndex(index: Int): Int = local.snapshot.value.currentIndex.coerceAtLeast(-1) + 1 + index
+        when (command) {
+            ConnectCommand.TogglePlayback -> local.toggle()
+            ConnectCommand.Play -> local.play()
+            ConnectCommand.Pause -> local.pause()
+            ConnectCommand.Next -> local.next()
+            ConnectCommand.Previous -> local.previous()
+            is ConnectCommand.Seek -> local.seek((command.seconds * 1000).toLong())
+            is ConnectCommand.Volume -> local.setVolume(command.value.toFloat())
+            ConnectCommand.ToggleShuffle -> local.setShuffle(!local.snapshot.value.shuffle)
+            ConnectCommand.CycleRepeat -> local.cycleRepeat()
+            is ConnectCommand.PlayQueueIndex -> local.playQueueIndex(upcomingIndex(command.index))
+            is ConnectCommand.RemoveQueueIndex -> local.remove(upcomingIndex(command.index))
+            is ConnectCommand.MoveQueueIndex -> local.move(upcomingIndex(command.from), upcomingIndex(command.to))
+            ConnectCommand.ClearUpcoming -> local.clearUpcoming()
+            is ConnectCommand.PlayNext -> {
+                val track = jsonPayloadToTrack(command.track)
+                if (track.id.isNotBlank()) viewModelScope.launch { local.playNext(graph.audioVersions.audioVersion(track)) }
+            }
+            is ConnectCommand.AddToQueue -> {
+                val track = jsonPayloadToTrack(command.track)
+                if (track.id.isNotBlank()) viewModelScope.launch { local.addToQueue(graph.audioVersions.audioVersion(track)) }
+            }
+            is ConnectCommand.PlayTrack -> {
+                val track = jsonPayloadToTrack(command.item.playbackPayload)
+                if (track.id.isNotBlank()) viewModelScope.launch {
+                    local.replaceQueue(listOf(graph.audioVersions.audioVersion(track)), play = true, contextTitle = "Desktop")
+                }
+            }
+            is ConnectCommand.PlayTrackPayload -> {
+                val track = jsonPayloadToTrack(command.payload)
+                if (track.id.isNotBlank()) viewModelScope.launch {
+                    local.replaceQueue(listOf(graph.audioVersions.audioVersion(track)), play = true, contextTitle = "Desktop")
+                }
+            }
+            is ConnectCommand.Transfer -> {
+                val track = command.track?.let(::jsonPayloadToTrack)
+                val queue = command.queue.map(::jsonPayloadToTrack).filter { it.id.isNotBlank() }
+                val plan = desktopTransferPlan(track, queue, command.repeatMode)
+                if (plan.tracks.isNotEmpty()) {
+                    val posMs = (command.positionSeconds * 1000).toLong()
+                    local.replaceQueue(plan.tracks, plan.startIndex, posMs, play = command.play, contextTitle = "Desktop transfer")
+                    local.setShuffle(command.shuffle)
+                    local.setRepeatMode(plan.repeatMode)
+                    setAutoplayEnabled(command.autoplay)
+                }
+            }
+            is ConnectCommand.ReplaceQueue -> {
+                val tracks = command.tracks.map(::jsonPayloadToTrack).filter { it.id.isNotBlank() }
+                if (tracks.isNotEmpty()) {
+                    val posMs = (command.positionSeconds * 1000).toLong()
+                    local.replaceQueue(tracks, command.startIndex, posMs, play = command.play, contextTitle = command.contextTitle.ifBlank { "Desktop queue" })
+                }
+            }
+            is ConnectCommand.Unknown -> Unit
+            else -> Unit
+        }
+    }
+
+    private fun jsonPayloadToTrack(json: org.json.JSONObject): Track {
+        val playbackItem = json.optJSONObject("playbackItem") ?: json
+        return Track(
+            id = playbackItem.optString("id").ifBlank { json.optString("id") },
+            title = playbackItem.optString("title").ifBlank { json.optString("title") },
+            artist = playbackItem.optString("artist", playbackItem.optString("subtitle")).ifBlank { json.optString("artist", json.optString("subtitle")) },
+            album = playbackItem.optString("album").ifBlank { json.optString("album") },
+            artworkUrl = playbackItem.optString("artwork", playbackItem.optString("thumbnail")).ifBlank { json.optString("artwork", json.optString("thumbnail")) },
+            animatedArtworkUrl = playbackItem.optString("animatedArtwork").ifBlank { json.optString("animatedArtwork") },
+            animatedArtworkVerticalUrl = playbackItem.optString("animatedArtworkVertical").ifBlank { json.optString("animatedArtworkVertical") },
+            durationMs = (playbackItem.optDouble("durationSeconds", playbackItem.optDouble("duration", json.optDouble("durationSeconds", json.optDouble("duration", 0.0)))) * 1000).toLong()
+        )
     }
 
     private fun refillAutoplay(trigger: AutoplayTrigger) {

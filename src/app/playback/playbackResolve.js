@@ -22,6 +22,7 @@ import { installPlaybackCollectionQueue, playlistPlayedTrackIds } from './playba
 import { resumeMediaAt } from './playbackDuration.js';
 import { isHlsPlaybackMime, loadPlaybackSource } from './hlsPlayback.js';
 import { normalizeStreamQuality } from '../../../shared/streamQuality.js';
+import { connectTrack } from '../platform/connectActions.js';
 
 function trackDurationSeconds(item = {}) {
   const direct = Number(item.durationSeconds || 0);
@@ -273,6 +274,45 @@ export function installPlaybackResolve(ctx) {
 
   ctx.playTrack = async function playTrack(item, options = {}) {
     if (!ctx.isPlayableTrack(item)) return;
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local' && !options.forceLocal) {
+      const queueSource = options.queueSource || [item];
+      const selectedIndex = queueSource.findIndex((track) => track?.id === item.id);
+      const upcoming = (selectedIndex >= 0 ? queueSource.slice(selectedIndex + 1) : queueSource)
+        .filter((track) => track?.id && track.id !== item.id);
+      const trackPayload = connectTrack(item);
+      const queuePayload = [item, ...upcoming].map(connectTrack);
+
+      let delivered = false;
+      try {
+        delivered = await ctx.sendConnectDeviceCommand?.(ctx.activePlaybackTarget.value, {
+          type: 'transfer',
+          value: {
+            track: trackPayload,
+            positionSeconds: options.resumeAt || 0,
+            queue: queuePayload,
+            shuffle: Boolean(ctx.shuffleEnabled?.value),
+            repeatMode: ctx.repeatMode?.value || 'off',
+            autoplay: Boolean(ctx.autoplayEnabled?.value),
+            play: true
+          }
+        });
+      } catch {
+        delivered = false;
+      }
+      if (!delivered) {
+        ctx.buffering.value = false;
+        if (ctx.playbackError) ctx.playbackError.value = 'The selected phone could not receive playback.';
+        return;
+      }
+
+      ctx.activeTrack.value = item;
+      ctx.queue.value = upcoming;
+      ctx.isPlaying.value = true;
+      ctx.buffering.value = true;
+      ctx.currentTime.value = options.resumeAt || 0;
+      ctx.seekPosition.value = ctx.currentTime.value;
+      return;
+    }
     if (!options.listeningPartySync && ctx.requestListeningPartyHostControl?.({
       action: 'play-track',
       track: item,
@@ -462,7 +502,11 @@ export function installPlaybackResolve(ctx) {
       await ctx.audioAnalyzer.resume();
       if (stalePlayRequest()) return;
       await resumeMediaAt(media, options.resumeAt);
-      if (ctx.activeTrackIsVideo.value && resolved.audioStreamUrl && videoAudio) {
+      if (options.startPaused) {
+        media.pause();
+        videoAudio?.pause?.();
+        ctx.isPlaying.value = false;
+      } else if (ctx.activeTrackIsVideo.value && resolved.audioStreamUrl && videoAudio) {
         videoAudio.currentTime = media.currentTime || 0;
         await Promise.all([media.play(), videoAudio.play()]);
       } else {
@@ -470,7 +514,9 @@ export function installPlaybackResolve(ctx) {
       }
       if (stalePlayRequest()) return;
 
-      ctx.startYouTubeHistory?.(ctx.activeTrack.value?.youtubeVideoId || resolved.youtubeVideoId || ctx.activeTrack.value?.id);
+      if (!options.startPaused) {
+        ctx.startYouTubeHistory?.(ctx.activeTrack.value?.youtubeVideoId || resolved.youtubeVideoId || ctx.activeTrack.value?.id);
+      }
 
       ctx.recordSessionEvent?.(options.sessionAction || 'manual', ctx.activeTrack.value, {
         queue: ctx.queue.value,

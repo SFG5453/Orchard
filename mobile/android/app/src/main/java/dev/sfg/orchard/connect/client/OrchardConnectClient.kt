@@ -58,6 +58,7 @@ class OrchardConnectClient(
         fun onSearchResults(results: ConnectResults)
         fun onLibraryResults(results: ConnectResults)
         fun onAnalysisResults(results: ConnectAnalysisResults) {}
+        fun onCommandReceived(command: ConnectCommand) {}
         fun onError(error: ConnectClientError)
     }
 
@@ -99,6 +100,12 @@ class OrchardConnectClient(
     fun send(command: ConnectCommand): Boolean {
         if (status != ConnectClientStatus.APPROVED) return false
         currentTransport()?.emit(ConnectProtocol.Event.COMMAND, ConnectJsonCodec.command(command))
+        return true
+    }
+
+    fun sendDeviceState(state: JSONObject): Boolean {
+        if (status != ConnectClientStatus.APPROVED) return false
+        currentTransport()?.emit(ConnectProtocol.Event.DEVICE_STATE, state)
         return true
     }
 
@@ -173,9 +180,17 @@ class OrchardConnectClient(
             when (name) {
                 ConnectProtocol.Event.APPROVED -> handleApproval(payload as? JSONObject ?: JSONObject())
                 ConnectProtocol.Event.STATE -> {
-                    val snap = ConnectJsonCodec.snapshot(payload as? JSONObject ?: JSONObject(), protocolVersion)
-                    protocolVersion = snap.protocolVersion
+                    // The hello/approval handshake owns capability negotiation. A playback
+                    // snapshot is state, not a renegotiation message, and must not silently
+                    // downgrade a v4 session because an older desktop field leaked through.
+                    val snap = ConnectJsonCodec
+                        .snapshot(payload as? JSONObject ?: JSONObject(), protocolVersion)
+                        .copy(protocolVersion = protocolVersion)
                     publishSnapshot(snap)
+                }
+                ConnectProtocol.Event.COMMAND -> {
+                    val command = ConnectJsonCodec.commandFromPayload(payload as? JSONObject ?: JSONObject())
+                    publishCommand(command)
                 }
                 ConnectProtocol.Event.SEARCH_RESULTS -> publishSearch(ConnectJsonCodec.results(payload as? JSONObject ?: JSONObject()))
                 ConnectProtocol.Event.LIBRARY_RESULTS -> publishLibrary(ConnectJsonCodec.results(payload as? JSONObject ?: JSONObject()))
@@ -216,6 +231,7 @@ class OrchardConnectClient(
     }
 
     private fun publishSnapshot(value: ConnectSnapshot) = callbackExecutor.execute { listener.onSnapshot(value) }
+    private fun publishCommand(value: ConnectCommand) = callbackExecutor.execute { listener.onCommandReceived(value) }
     private fun publishSearch(value: ConnectResults) = callbackExecutor.execute { listener.onSearchResults(value) }
     private fun publishLibrary(value: ConnectResults) = callbackExecutor.execute { listener.onLibraryResults(value) }
     private fun publishAnalysis(value: ConnectAnalysisResults) = callbackExecutor.execute { listener.onAnalysisResults(value) }

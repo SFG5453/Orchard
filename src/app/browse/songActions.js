@@ -125,6 +125,11 @@ export function installSongActions(ctx) {
 
   ctx.playTrackNext = function playTrackNext(track) {
     if (!ctx.isPlayableTrack(track) || track.id === ctx.activeTrack.value?.id) return;
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      ctx.sendConnectTargetCommand?.({ type: 'play-next', value: track });
+      ctx.showShareMessage?.(`${trackLabel(track)} will play next.`);
+      return;
+    }
     if (ctx.requestListeningPartyHostControl?.({ action: 'play-next', track })) return;
     ctx.queue.value = [track, ...ctx.queue.value.filter((item) => item.id !== track.id)].slice(0, 100);
     ctx.syncManualQueueOrder();
@@ -133,6 +138,11 @@ export function installSongActions(ctx) {
 
   ctx.addTrackToQueue = function addTrackToQueue(track) {
     if (!ctx.isPlayableTrack(track) || track.id === ctx.activeTrack.value?.id) return;
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      ctx.sendConnectTargetCommand?.({ type: 'add-to-queue', value: track });
+      ctx.showShareMessage?.(`Added ${trackLabel(track)} to the queue.`);
+      return;
+    }
     if (ctx.requestListeningPartyHostControl?.({ action: 'add-queue', track })) return;
     if (ctx.queue.value.some((item) => item.id === track.id)) {
       ctx.showShareMessage?.(`${trackLabel(track)} is already in the queue.`);
@@ -146,6 +156,11 @@ export function installSongActions(ctx) {
   ctx.removeQueueTrack = function removeQueueTrack(index) {
     const track = ctx.queue.value[index];
     if (!track) return;
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      ctx.sendConnectTargetCommand?.({ type: 'remove-queue-index', value: index });
+      ctx.showShareMessage?.(`Removed ${trackLabel(track)} from the queue.`);
+      return;
+    }
     if (ctx.requestListeningPartyHostControl?.({ action: 'remove-queue', index })) return;
     ctx.queue.value = ctx.queue.value.filter((_, itemIndex) => itemIndex !== index);
     ctx.syncManualQueueOrder();
@@ -166,6 +181,11 @@ export function installSongActions(ctx) {
 
   ctx.clearQueue = function clearQueue() {
     if (!ctx.queue.value.length) return;
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      ctx.sendConnectTargetCommand?.({ type: 'clear-upcoming' });
+      ctx.showShareMessage?.('Cleared the queue.');
+      return;
+    }
     if (ctx.requestListeningPartyHostControl?.({ action: 'clear-queue' })) return;
     ctx.queue.value = [];
     ctx.shuffleSourceQueue.value = [];
@@ -178,6 +198,10 @@ export function installSongActions(ctx) {
 
   ctx.moveQueueTrack = function moveQueueTrack(fromIndex, toIndex) {
     if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      ctx.sendConnectTargetCommand?.({ type: 'move-queue-index', value: { from: fromIndex, to: toIndex } });
+      return;
+    }
     if (ctx.requestListeningPartyHostControl?.({ action: 'move-queue', fromIndex, toIndex })) return;
     const queue = [...ctx.queue.value];
     const [track] = queue.splice(fromIndex, 1);
