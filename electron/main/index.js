@@ -386,11 +386,12 @@ async function startBridge() {
 
 function rendererUrl(mode = 'main') {
   const url = isDev
-    ? new URL(process.env.VITE_DEV_SERVER_URL)
-    : pathToFileURL(runtimePaths.rendererEntryPath);
+    ? new URL(mode === 'welcome' ? 'welcome.html' : '', process.env.VITE_DEV_SERVER_URL)
+    : pathToFileURL(mode === 'welcome'
+      ? path.join(path.dirname(runtimePaths.rendererEntryPath), 'welcome.html')
+      : runtimePaths.rendererEntryPath);
   url.searchParams.set('socketPort', bridge.port);
   if (useNativeTitlebar) url.searchParams.set('nativeTitlebar', '1');
-  if (mode === 'welcome') url.searchParams.set('welcome', '1');
   return url.toString();
 }
 
