@@ -115,14 +115,16 @@ export function installComputedState(ctx) {
 
   ctx.flatHomeItems = computed(() => [
     ...ctx.homeData.value.library.sections.flatMap((section) => section.items),
-    ...ctx.homeData.value.home.sections.flatMap((section) => section.items)
+    ...ctx.homeData.value.home.sections.flatMap((section) => section.items),
+    ...(ctx.networkOffline?.value ? (ctx.downloadedTracks?.value || []) : [])
   ]);
 
   ctx.flatPlayableHomeItems = computed(() => ctx.flatHomeItems.value.filter(ctx.isPlayableTrack));
 
   ctx.hasHomeContent = computed(() =>
     ctx.homeData.value.library.sections.some((section) => section.items.length) ||
-    ctx.homeData.value.home.sections.some((section) => section.items.length)
+    ctx.homeData.value.home.sections.some((section) => section.items.length) ||
+    Boolean(ctx.networkOffline?.value && ctx.downloadedTracks?.value?.length)
   );
 
   ctx.showAuthGate = computed(() => (
@@ -339,6 +341,67 @@ export function installComputedState(ctx) {
 
     if (libraryIndex < 0 && playlists.length) {
       mergedSections.unshift({ key: 'library-playlists', title: 'Library', items: playlists });
+    }
+
+    const downloaded = ctx.networkOffline?.value ? (ctx.downloadedTracks?.value || []) : [];
+    if (downloaded.length) {
+      const albums = new Map();
+      const artists = new Map();
+      const downloadedPlaylists = new Map();
+      for (const track of downloaded) {
+        if (track.album) {
+          const key = track.albumId || `offline-album-${track.album.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+          if (!albums.has(key)) albums.set(key, {
+            browseId: key,
+            title: track.album,
+            artist: track.artist,
+            subtitle: track.artist,
+            thumbnail: track.thumbnail,
+            type: 'album',
+            offlineDownload: true
+          });
+        }
+        if (track.artist) {
+          const key = track.artistBrowseId || `offline-artist-${track.artist.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+          if (!artists.has(key)) artists.set(key, {
+            browseId: key,
+            title: track.artist,
+            subtitle: 'Downloaded artist',
+            thumbnail: track.thumbnail,
+            type: 'artist',
+            offlineDownload: true
+          });
+        }
+        for (const collection of track.downloadCollections || []) {
+          if (collection.kind !== 'playlist' || !collection.browseId || downloadedPlaylists.has(collection.browseId)) continue;
+          downloadedPlaylists.set(collection.browseId, {
+            browseId: collection.browseId,
+            title: collection.title || 'Downloaded Playlist',
+            subtitle: 'Downloaded playlist',
+            thumbnail: collection.thumbnail || track.thumbnail,
+            type: 'playlist',
+            offlineDownload: true
+          });
+        }
+      }
+
+      mergedSections.unshift(
+        {
+          key: 'offline-downloads',
+          title: 'Downloaded Music',
+          items: [{
+            browseId: 'offline_downloads',
+            title: 'All Downloads',
+            subtitle: `${downloaded.length} songs`,
+            thumbnail: downloaded.find((track) => track.thumbnail)?.thumbnail || '',
+            type: 'playlist',
+            offlineDownload: true
+          }, ...downloaded]
+        },
+        ...(downloadedPlaylists.size ? [{ key: 'offline-playlists', title: 'Downloaded Playlists', items: [...downloadedPlaylists.values()] }] : []),
+        ...(albums.size ? [{ key: 'offline-albums', title: 'Downloaded Albums', items: [...albums.values()] }] : []),
+        ...(artists.size ? [{ key: 'offline-artists', title: 'Downloaded Artists', items: [...artists.values()] }] : [])
+      );
     }
 
     return mergedSections.filter((section) => section.items?.length);

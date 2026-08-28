@@ -27,10 +27,48 @@ export function setupBrowseDetailView(props) {
   const detailPageRef = ref(null);
   const virtualPlaylistRef = ref(null);
   const analysisRunner = createPlaylistAnalysisRunner(props.app);
+  const bestMixPromptOpen = ref(false);
+  const bestMixPromptDetail = ref(null);
 
-  function analyzeCurrentCollection(detail) {
-    const tracks = detail?.tracks || detail?.items || [];
-    return analysisRunner.analyzePlaylist(tracks);
+  const bestMixUndownloadedTracks = computed(() => {
+    const detail = bestMixPromptDetail.value;
+    return (detail?.tracks || [])
+      .map((track) => props.app.trackWithCollectionContext(track, detail))
+      .filter((track) => props.app.isPlayableTrack(track) && !props.app.isTrackDownloaded(track));
+  });
+
+  const bestMixEstimatedDownloadMb = computed(() => {
+    const seconds = bestMixUndownloadedTracks.value.reduce((total, track) =>
+      total + (Number(track.durationSeconds) > 0 ? Number(track.durationSeconds) : 210), 0);
+    return Math.max(1, Math.round(seconds * 20 / 1024));
+  });
+
+  async function runBestMixAnalysis(detail) {
+    bestMixPromptOpen.value = false;
+    if (!detail?.tracks?.length) return;
+    await props.app.downloadTracks(detail.tracks, detail);
+    await analysisRunner.analyzePlaylist(
+      detail.tracks.map((track) => props.app.trackWithCollectionContext(track, detail))
+    );
+  }
+
+  async function analyzeCurrentCollection(detail) {
+    if (!detail?.tracks?.length || analysisRunner.isAnalyzing.value) return;
+    const browseId = detail.browseId;
+    if (browseId) props.app.downloadPreparingCollectionId.value = browseId;
+    try {
+      bestMixPromptDetail.value = await props.app.prepareDownloadCollection(detail);
+    } finally {
+      if (props.app.downloadPreparingCollectionId.value === browseId) {
+        props.app.downloadPreparingCollectionId.value = '';
+      }
+    }
+
+    if (bestMixUndownloadedTracks.value.length) {
+      bestMixPromptOpen.value = true;
+      return;
+    }
+    await runBestMixAnalysis(bestMixPromptDetail.value);
   }
 
   function scrollToCollectionTrack(index) {
@@ -121,6 +159,10 @@ export function setupBrowseDetailView(props) {
   watch(
     () => props.app.browseDetail.value,
     (detail) => {
+      if (detail?.offline) {
+        props.app.resetArtistGenre?.(detail);
+        return;
+      }
       props.app.loadArtistGenre?.(detail);
       if (detail?.kind === 'artist') props.app.loadArtistSubscription?.(detail.browseId);
     },
@@ -138,7 +180,7 @@ export function setupBrowseDetailView(props) {
     }
     highlightWords.value = [];
 
-    if (!pagesEnabled || !detail || detail.kind !== 'artist' || !newId) return;
+    if (!pagesEnabled || !detail || detail.kind !== 'artist' || !newId || detail.offline) return;
 
     try {
       const config = await fetchCustomArtistConfig(newId);
@@ -192,10 +234,15 @@ export function setupBrowseDetailView(props) {
     virtualPlaylistRef,
     isCustomArtistPage,
     customArtistAlbumWallTiles,
+    bestMixEstimatedDownloadMb,
+    bestMixPromptDetail,
+    bestMixPromptOpen,
+    bestMixUndownloadedTracks,
     isAnalyzingPlaylist: analysisRunner.isAnalyzing,
     playlistAnalysisProgress: analysisRunner.progress,
     playlistAnalysisStatus: analysisRunner.currentStatus,
     analyzeCurrentCollection,
+    runBestMixAnalysis,
     cancelPlaylistAnalysis: analysisRunner.cancel
   };
 }

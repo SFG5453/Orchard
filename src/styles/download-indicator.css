@@ -17,26 +17,34 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { createApp } from 'vue';
-import { Quasar } from 'quasar';
-import '@quasar/extras/material-icons/material-icons.css';
-import 'quasar/dist/quasar.css';
-import './styles.css';
-import App from './App.vue';
-import ExplicitBadge from './components/controls/ExplicitBadge.vue';
-import DownloadIndicator from './components/controls/DownloadIndicator.vue';
+.download-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--primary, #2fdf93);
+  vertical-align: middle;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
 
-createApp(App)
-  .component('ExplicitBadge', ExplicitBadge)
-  .component('DownloadIndicator', DownloadIndicator)
-  .use(Quasar, {
-    config: {
-      brand: {
-        primary: '#67d98b',
-        secondary: '#8d948f',
-        accent: '#83eca2',
-        dark: '#050605'
-      }
-    }
-  })
-  .mount('#app');
+.download-indicator--downloaded {
+  color: var(--primary, #2fdf93);
+}
+
+.download-indicator--downloading {
+  color: var(--primary, #2fdf93);
+  animation: download-indicator-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes download-indicator-pulse {
+  0%, 100% {
+    opacity: 0.45;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}

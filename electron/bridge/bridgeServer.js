@@ -117,6 +117,27 @@ export async function startBridgeServer({
       }
       return;
     }
+    if (requestUrl.pathname.startsWith('/download/')) {
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, streamCorsHeaders);
+        res.end();
+        return;
+      }
+      const videoId = decodeURIComponent(requestUrl.pathname.replace('/download/', ''));
+      try {
+        if (await playback.songCache.serveDownload(videoId, req, res)) return;
+        res.writeHead(404, { ...streamCorsHeaders, 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Downloaded song was not found' }));
+      } catch (error) {
+        if (res.headersSent) {
+          if (!res.writableEnded) res.destroy(error);
+          return;
+        }
+        res.writeHead(500, { ...streamCorsHeaders, 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message }));
+      }
+      return;
+    }
     if (requestUrl.pathname.startsWith('/stream/')) {
       if (req.method === 'OPTIONS') {
         res.writeHead(204, streamCorsHeaders);
@@ -181,6 +202,27 @@ export async function startBridgeServer({
   }
 
   async function resolveTrackRequest({ videoId, supportedMimes = [], supportedVideoMimes = [], mediaKind = 'audio', streamQuality = DEFAULT_STREAM_QUALITY, preload = false, refreshStream = false, avoidItags = [], avoidMimeTypes = [], ...trackHint }) {
+    if (mediaKind !== 'video') {
+      const downloaded = await playback.songCache.findDownloaded(videoId);
+      if (downloaded) {
+        const downloadBaseUrl = `http://127.0.0.1:${httpServer.address().port}/download/${encodeURIComponent(downloaded.videoId)}`;
+        return {
+          id: downloaded.videoId,
+          youtubeVideoId: downloaded.sourceVideoId || downloaded.videoId,
+          title: downloaded.title || trackHint.title || 'Downloaded song',
+          artist: downloaded.artist || trackHint.artist || '',
+          album: downloaded.album || trackHint.album || '',
+          thumbnail: downloaded.thumbnail || trackHint.thumbnail || '',
+          durationSeconds: downloaded.durationSeconds || Number(trackHint.durationSeconds || 0),
+          mediaKind: 'audio',
+          mimeType: downloaded.mimeType || 'audio/mp4',
+          itag: downloaded.itag || '',
+          streamUrl: downloadBaseUrl,
+          streamExpiresAt: 0,
+          playbackSource: 'download'
+        };
+      }
+    }
     const preferBrowserPlayback = shouldPreferBrowserPlayback(
       trackHint,
       playback.androidVrCooldownActive()

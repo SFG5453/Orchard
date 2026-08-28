@@ -34,6 +34,18 @@ export function disableCrossfadePlayback(ctx) {
 }
 
 export function installLifecycle(ctx) {
+  const refreshHomeAfterReconnect = () => {
+    ctx.networkOffline.value = false;
+    if (ctx.authState.value.signedIn) void ctx.loadHomeLibrary();
+  };
+  const showOfflineHome = () => {
+    ctx.networkOffline.value = true;
+    if (ctx.activeView.value === 'home') {
+      ctx.errorMessage.value = '';
+      ctx.warningMessage.value = 'Orchard is offline. Showing downloaded music.';
+    }
+  };
+
   watch(ctx.volume, (value) => {
     ctx.autoCrossfade.setTargetVolume(value);
     ctx.wsolaCrossfade?.setTargetVolume?.(value);
@@ -428,6 +440,8 @@ export function installLifecycle(ctx) {
     ctx.unbindSettingsStorageSync = bindSettingsStorageSync(ctx, window, window.orchardApp);
     ctx.bindSystemThemePreference();
     window.addEventListener('resize', ctx.syncViewportSize);
+    window.addEventListener('online', refreshHomeAfterReconnect);
+    window.addEventListener('offline', showOfflineHome);
     document.addEventListener('fullscreenchange', ctx.onFullscreenPlayerChange);
     ctx.registerMediaSessionHandlers();
     window.addEventListener('keydown', ctx.onGlobalKeydown);
@@ -520,6 +534,8 @@ export function installLifecycle(ctx) {
     ctx.unbindSettingsStorageSync?.();
     window.removeEventListener('keydown', ctx.onGlobalKeydown);
     window.removeEventListener('resize', ctx.syncViewportSize);
+    window.removeEventListener('online', refreshHomeAfterReconnect);
+    window.removeEventListener('offline', showOfflineHome);
     window.removeEventListener('focus', ctx.refreshSupportOnFocus);
     document.removeEventListener('fullscreenchange', ctx.onFullscreenPlayerChange);
     ctx.socket.value?.disconnect();

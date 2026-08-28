@@ -112,6 +112,10 @@ export default {
             <strong class="explicit-title">
               <span class="explicit-title__text">{{ cell.row.track.title }}</span>
               <ExplicitBadge :explicit="cell.row.track.explicit" />
+              <DownloadIndicator
+                :downloaded="app.isTrackDownloaded(cell.row.track)"
+                :downloading="app.isTrackDownloading(cell.row.track)"
+              />
             </strong>
             <small>{{ app.itemMeta(cell.row.track) }}</small>
           </span>
@@ -174,6 +178,10 @@ export default {
             <strong class="explicit-title">
               <span class="explicit-title__text">{{ cell.row.title }}</span>
               <ExplicitBadge :explicit="cell.row.explicit" />
+              <DownloadIndicator
+                :downloaded="app.isTrackDownloaded(cell.row)"
+                :downloading="app.isTrackDownloading(cell.row)"
+              />
             </strong>
             <small>{{ app.itemMeta(cell.row) }}</small>
           </span>

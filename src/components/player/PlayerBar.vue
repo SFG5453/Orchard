@@ -157,6 +157,11 @@ export default {
             {{ activeTrack?.title || 'Nothing playing' }}
           </button>
           <ExplicitBadge :explicit="activeTrack?.explicit" />
+          <DownloadIndicator
+            v-if="activeTrack"
+            :downloaded="isTrackDownloaded(activeTrack)"
+            :downloading="isTrackDownloading(activeTrack)"
+          />
 
           <!-- YouTube Liked Songs Button -->
           <q-btn

@@ -21,6 +21,11 @@ import { nextTick } from 'vue';
 import { releaseHlsPlayback } from '../playback/hlsPlayback.js';
 import { installLyricsActions } from '../playback/lyricsActions.js';
 
+function confirmsNoInternet(error) {
+  return /ERR_INTERNET_DISCONNECTED|\b(?:ENETDOWN|ENETUNREACH|EHOSTUNREACH)\b|network is unreachable|not connected to (?:the )?internet/i
+    .test(String(error?.message || error || ''));
+}
+
 export function installConnectionActions(ctx) {
   installLyricsActions(ctx);
 
@@ -469,6 +474,7 @@ export function installConnectionActions(ctx) {
 
   ctx.loadHomeLibrary = async function loadHomeLibrary() {
     if (!ctx.socket.value?.connected) return;
+    if (ctx.networkOffline.value) return;
     if (ctx.homeLoadPromise) return ctx.homeLoadPromise;
 
     ctx.homeLoadPromise = (async () => {
@@ -485,7 +491,13 @@ export function installConnectionActions(ctx) {
         ctx.warningMessage.value = data.warnings?.join(' ') || '';
         ctx.syncAuthState(data.auth || { signedIn: true, status: 'signed_in' });
       } catch (error) {
-        ctx.errorMessage.value = error.message;
+        if (confirmsNoInternet(error)) {
+          ctx.networkOffline.value = true;
+          ctx.errorMessage.value = '';
+          ctx.warningMessage.value = 'Orchard is offline. Showing downloaded music.';
+        } else {
+          ctx.errorMessage.value = error.message;
+        }
       } finally {
         ctx.homeLoading.value = false;
         ctx.homeLoadPromise = null;

@@ -28,7 +28,7 @@ export default {
     const menuStyle = computed(() => {
       const menu = props.app.songActionMenu.value;
       const width = 268;
-      const height = 430;
+      const height = 480;
       const gutter = 12;
 
       return {
@@ -95,6 +95,10 @@ export default {
             <strong class="explicit-title">
               <span class="explicit-title__text">{{ songActionMenu.track?.title }}</span>
               <ExplicitBadge :explicit="songActionMenu.track?.explicit" />
+              <DownloadIndicator
+                :downloaded="isTrackDownloaded(songActionMenu.track)"
+                :downloading="isTrackDownloading(songActionMenu.track)"
+              />
             </strong>
             <span>{{ itemMeta(songActionMenu.track, songActionMenu.detail?.artist) }}</span>
           </span>
@@ -131,6 +135,15 @@ export default {
           <button type="button" role="menuitem" @click="runSongAction('pin')">
             <q-icon :name="isTrackPinned(songActionMenu.track) ? 'push_pin' : 'push_pin'" />
             <span>{{ isTrackPinned(songActionMenu.track) ? 'Unpin' : 'Pin' }}</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            :disabled="isTrackDownloading(songActionMenu.track)"
+            @click="runSongAction('download')"
+          >
+            <q-icon :name="isTrackDownloading(songActionMenu.track) ? 'downloading' : isTrackDownloaded(songActionMenu.track) ? 'download_done' : 'download'" />
+            <span>{{ isTrackDownloading(songActionMenu.track) ? 'Downloading' : isTrackDownloaded(songActionMenu.track) ? 'Remove download' : 'Download' }}</span>
           </button>
           <button
             type="button"
