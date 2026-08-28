@@ -209,22 +209,33 @@ export default {
                       <span>Shuffle</span>
                     </button>
                     <button
+                      v-if="['album', 'artist', 'playlist'].includes(browseDetail.kind)"
+                      type="button"
+                      class="action-button"
+                      :disabled="isCollectionDownloading(browseDetail) || !browseDetail.tracks.length"
+                      :aria-pressed="isCollectionDownloaded(browseDetail)"
+                      @click="toggleCollectionDownload(browseDetail)"
+                    >
+                      <q-icon :name="isCollectionDownloading(browseDetail) ? 'downloading' : isCollectionDownloaded(browseDetail) ? 'download_done' : 'download'" />
+                      <span>{{ isCollectionDownloading(browseDetail) ? 'Downloading…' : isCollectionDownloaded(browseDetail) ? 'Remove Download' : 'Download' }}</span>
+                    </button>
+                    <button
                       v-if="browseDetail.kind === 'playlist' || browseDetail.kind === 'album'"
                       type="button"
                       class="action-button action-button--sync"
-                      :disabled="isAnalyzingPlaylist"
-                      title="Analyze tracks and sync audio features to Cloud for instant mobile Best Mix"
+                      :disabled="isAnalyzingPlaylist || isCollectionDownloading(browseDetail)"
+                      title="Download the collection and analyze it locally for Best Mix"
                       @click="analyzeCurrentCollection(browseDetail)"
                     >
-                      <q-icon :name="isAnalyzingPlaylist ? 'sync' : 'auto_graph'" :class="{ 'spin-animation': isAnalyzingPlaylist }" />
-                      <span>{{ isAnalyzingPlaylist ? `${Math.round(playlistAnalysisProgress * 100)}%` : 'Analyze for Cloud Sync' }}</span>
+                      <q-icon :name="isAnalyzingPlaylist ? 'sync' : 'auto_awesome'" :class="{ 'spin-animation': isAnalyzingPlaylist }" />
+                      <span>{{ isAnalyzingPlaylist ? `${Math.round(playlistAnalysisProgress * 100)}%` : 'Prepare Best Mix' }}</span>
                     </button>
                     <button type="button" class="action-button" @click="shareBrowseDetailLink">
                       <q-icon name="ios_share" />
                       <span>Share</span>
                     </button>
                     <button
-                      v-if="browseDetail.kind === 'artist'"
+                      v-if="browseDetail.kind === 'artist' && !browseDetail.offline"
                       type="button"
                       class="action-button"
                       :disabled="artistSubscription.status === 'loading' || artistSubscription.status === 'saving'"
@@ -244,8 +255,8 @@ export default {
                       <span>Delete</span>
                     </button>
                   </div>
-                  <div v-if="playlistAnalysisStatus" class="detail-actions__status">
-                    <span class="analysis-status-text">{{ playlistAnalysisStatus }}</span>
+                  <div v-if="playlistAnalysisStatus || isCollectionDownloading(browseDetail)" class="detail-actions__status">
+                    <span class="analysis-status-text">{{ playlistAnalysisStatus || downloadMessage }}</span>
                     <button v-if="isAnalyzingPlaylist" type="button" class="analysis-cancel-button" @click="cancelPlaylistAnalysis">
                       Cancel
                     </button>
@@ -272,6 +283,40 @@ export default {
                     <span v-if="segment.highlight" class="artist-highlight">{{ segment.text }}</span>
                     <template v-else>{{ segment.text }}</template>
                   </template>
+                </div>
+              </q-card>
+            </q-dialog>
+
+            <q-dialog v-model="bestMixPromptOpen" aria-label="Best Mix offline analysis">
+              <q-card class="description-dialog-card best-mix-download-dialog">
+                <div class="description-dialog__header">
+                  <h3><q-icon name="auto_awesome" /> Best Mix Offline Analysis</h3>
+                  <button
+                    type="button"
+                    class="description-dialog__close"
+                    aria-label="Cancel Best Mix analysis"
+                    @click="bestMixPromptOpen = false"
+                  >
+                    <q-icon name="close" />
+                  </button>
+                </div>
+                <div class="description-dialog__body best-mix-download-dialog__body">
+                  <p>Best Mix analyzes harmonic keys, tempo, and cue points locally to arrange your music seamlessly.</p>
+                  <strong>
+                    Downloading {{ bestMixUndownloadedTracks.length }}
+                    {{ bestMixUndownloadedTracks.length === 1 ? 'song' : 'songs' }} could take up to
+                    ~{{ bestMixEstimatedDownloadMb }} MB of storage.
+                  </strong>
+                  <div class="best-mix-download-dialog__actions">
+                    <button type="button" @click="bestMixPromptOpen = false">Cancel</button>
+                    <button
+                      type="button"
+                      class="best-mix-download-dialog__confirm"
+                      @click="runBestMixAnalysis(bestMixPromptDetail)"
+                    >
+                      Download &amp; Analyze
+                    </button>
+                  </div>
                 </div>
               </q-card>
             </q-dialog>
@@ -337,6 +382,7 @@ export default {
                     <span class="explicit-title">
                       <strong @contextmenu="shareTrackSongLink(track, $event, browseDetail)">{{ track.title }}</strong>
                       <ExplicitBadge :explicit="track.explicit" />
+                      <DownloadIndicator :downloaded="isTrackDownloaded(track)" :downloading="isTrackDownloading(track)" />
                     </span>
                     <small>{{ itemMeta(track, browseDetail.artist) }}</small>
                   </span>

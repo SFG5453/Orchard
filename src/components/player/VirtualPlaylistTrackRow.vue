@@ -37,6 +37,8 @@ export default {
     const isPlayable = computed(() => props.app.isPlayableTrack(props.track));
     const itemMetadata = computed(() => props.app.itemMeta(props.track, props.detail.artist));
     const albumLabel = computed(() => props.app.trackAlbumLabel(props.track));
+    const isDownloaded = computed(() => Boolean(props.app.isTrackDownloaded?.(props.track)));
+    const isDownloading = computed(() => Boolean(props.app.isTrackDownloading?.(props.track)));
 
     watch(() => props.artworkUrl, () => {
       artworkLoaded.value = false;
@@ -60,6 +62,8 @@ export default {
       artworkLoaded,
       albumLabel,
       artistLinks,
+      isDownloaded,
+      isDownloading,
       isPlayable,
       itemMetadata,
       onArtworkError,
@@ -107,6 +111,7 @@ export default {
         <span class="explicit-title">
           <strong @contextmenu="app.shareTrackSongLink(track, $event, detail)">{{ track.title }}</strong>
           <ExplicitBadge :explicit="track.explicit" />
+          <DownloadIndicator :downloaded="isDownloaded" :downloading="isDownloading" />
         </span>
         <small>{{ itemMetadata }}</small>
       </span>

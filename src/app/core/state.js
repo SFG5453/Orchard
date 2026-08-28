@@ -307,6 +307,7 @@ export function installState(ctx) {
   ctx.browseTrackPageLoading = ref(false);
   ctx.browseTrackPageError = ref('');
   ctx.socketState = ref('connecting');
+  ctx.networkOffline = ref(typeof navigator !== 'undefined' && navigator.onLine === false);
   ctx.errorMessage = ref('');
   ctx.artistSubscription = ref({ browseId: '', subscribed: false, status: 'idle', error: '' });
   ctx.warningMessage = ref('');
@@ -453,11 +454,17 @@ export function installState(ctx) {
     settings: { enabled: ctx.songCacheEnabled.value, maxSizeMb: ctx.songCacheMaxSizeMb.value },
     directory: '',
     totalBytes: 0,
+    cacheBytes: 0,
+    downloadedBytes: 0,
+    downloads: [],
     entries: []
   });
   ctx.songCacheLoading = ref(false);
   ctx.songCachePrefetching = ref(false);
   ctx.songCacheMessage = ref('');
+  ctx.downloadBusyTrackIds = ref([]);
+  ctx.downloadPreparingCollectionId = ref('');
+  ctx.downloadMessage = ref('');
   ctx.themePreference = ref(ctx.initialUserPreferences.themePreference);
   ctx.sponsorBlockMode = ref(ctx.initialUserPreferences.sponsorBlockMode);
   ctx.streamQuality = ref(ctx.initialUserPreferences.streamQuality);

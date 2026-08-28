@@ -126,8 +126,8 @@ data class TransitionPlan(
      *
      * Handing the renderer the raw pair instead is not a near-miss, it is a refusal: it computes
      * `outgoing.bpm / incoming.bpm` without aligning octaves and rejects anything beyond
-     * `kMaxTransparentRatioDeviation`, so an octave-distant pairing decodes both tracks and then
-     * throws the work away. Zero when the plan is not beat-matched.
+     * the configured transparent stretch window, so an octave-distant pairing decodes both tracks
+     * and then throws the work away. Zero when the plan is not beat-matched.
      */
     val outgoingBpm: Double = 0.0,
     val incomingBpm: Double = 0.0,

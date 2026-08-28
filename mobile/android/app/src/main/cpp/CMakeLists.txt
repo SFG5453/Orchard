@@ -12,8 +12,7 @@
 #
 # Transitions are no longer built here at all. They are rendered by the earmark
 # engine, a Rust crate shared with the desktop app and cross-compiled by the
-# `buildEarmarkLibrary` Gradle task, which is also what retired this library's
-# vendored copy of Rubber Band.
+# `buildEarmarkLibrary` Gradle task.
 
 cmake_minimum_required(VERSION 3.22.1)
 project(orchard_analysis LANGUAGES CXX)

@@ -696,7 +696,18 @@ export function createPlaybackService({
 }
 
 function cacheMetadata(options = {}) {
-  return { title: options.title || '', artist: options.artist || options.artists?.[0] || '', album: options.album || '', thumbnail: options.thumbnail || '', durationSeconds: Number(options.durationSeconds || 0) };
+  return {
+    title: options.title || '',
+    artist: options.artist || options.artists?.[0] || '',
+    artistId: options.artistId || options.artistBrowseId || options.artistBrowseIds?.[0] || '',
+    artistBrowseIds: options.artistBrowseIds || [],
+    album: options.album || '',
+    albumId: options.albumId || '',
+    collections: options.downloadCollections || [],
+    thumbnail: options.thumbnail || '',
+    durationSeconds: Number(options.durationSeconds || 0),
+    downloadRequested: Boolean(options.downloadRequested)
+  };
 }
 
 function formatMetadata(format) {

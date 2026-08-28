@@ -25,6 +25,12 @@ const require = createRequire(import.meta.url);
 const native = require('../native/build/Release/orchard_audio_analysis.node');
 const { AUDIO_ANALYSIS_VERSION } = await import('../shared/audioAnalysis.js');
 
+test('native analysis addon does not bundle the retired transition renderer', () => {
+  assert.equal(native.timeStretch, undefined);
+  assert.equal(native.renderTransition, undefined);
+  assert.equal(native.maxTransparentRatioDeviation, undefined);
+});
+
 function syntheticTrack({ bpm = 120, duration = 48, sampleRate = 11025 } = {}) {
   const samples = new Float32Array(Math.floor(duration * sampleRate));
   const beatSeconds = 60 / bpm;

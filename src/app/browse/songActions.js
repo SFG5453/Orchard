@@ -259,6 +259,7 @@ export function installSongActions(ctx) {
     else if (action === 'add-queue') ctx.addTrackToQueue(track);
     else if (action === 'smart-queue') void ctx.buildSmartQueueFromSeed(track);
     else if (action === 'pin') ctx.togglePinnedTrack(track);
+    else if (action === 'download') void ctx.toggleTrackDownload(track, detail);
     else if (action === 'playlist') ctx.openPlaylistDialog(track);
     else if (action === 'remove-playlist') void ctx.removeTrackFromPlaylist(track, detail);
     else if (action === 'share') void ctx.shareSongLinkPayload(ctx.songLinkPayloadForTrack(track, detail), trackLabel(track));

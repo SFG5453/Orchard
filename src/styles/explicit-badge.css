@@ -81,7 +81,9 @@
 .queue-preview__copy .explicit-title__text,
 .song-action-menu__copy .explicit-title__text,
 .video-player__copy .explicit-title__text {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  max-width: fit-content;
+  min-width: 0;
 }
 
 .player-track__title-line {

@@ -18,10 +18,28 @@
  */
 
 import { ref } from 'vue';
-import { ANALYSIS_PRIORITIES } from '../../audio/crossfade/smartCrossfadeAnalysis.js';
+import {
+  ANALYSIS_PREPARATION_CONCURRENCY,
+  ANALYSIS_PRIORITIES
+} from '../../audio/crossfade/smartCrossfadeAnalysis.js';
 import { syncTrackAnalysisToCloud, fetchBatchCloudAnalysis } from '../../services/cloudAnalysisSync.js';
 
-export function createPlaylistAnalysisRunner(ctx) {
+function persistCloudAnalysis(trackId, analysis) {
+  try {
+    const pending = globalThis.orchardAudioAnalysis?.store?.(trackId, analysis);
+    void Promise.resolve(pending).catch(() => {});
+  } catch {
+    // Cloud evidence remains useful for this run when the optional desktop
+    // analysis cache is unavailable or refuses a write.
+  }
+}
+
+export function createPlaylistAnalysisRunner(ctx, {
+  fetchCloudAnalysis = fetchBatchCloudAnalysis,
+  syncAnalysis = syncTrackAnalysisToCloud,
+  storeAnalysis = persistCloudAnalysis,
+  concurrency = ANALYSIS_PREPARATION_CONCURRENCY
+} = {}) {
   const isAnalyzing = ref(false);
   const progress = ref(0);
   const totalTracks = ref(0);
@@ -77,21 +95,24 @@ export function createPlaylistAnalysisRunner(ctx) {
     progress.value = 0;
     currentStatus.value = 'Checking cloud analysis cache…';
 
-    abortController = new AbortController();
-    const signal = abortController.signal;
+    const controller = new AbortController();
+    abortController = controller;
+    const signal = controller.signal;
 
     const stats = { success: 0, failed: 0, cached: 0 };
 
     try {
       // 1. Check Cloud Cache for existing analysis
       const videoIds = uniqueTracks.map(t => t.id);
-      const cloudMetadata = await fetchBatchCloudAnalysis(videoIds);
+      const cloudMetadata = await fetchCloudAnalysis(videoIds);
+      if (signal.aborted) return stats;
 
       const missingTracks = [];
       for (const track of uniqueTracks) {
         if (cloudMetadata.has(track.id)) {
           stats.cached++;
           completedTracks.value++;
+          storeAnalysis(track.id, cloudMetadata.get(track.id));
         } else {
           missingTracks.push(track);
         }
@@ -114,59 +135,76 @@ export function createPlaylistAnalysisRunner(ctx) {
         return stats;
       }
 
-      // 2. Sequentially analyze missing tracks
-      for (let i = 0; i < missingTracks.length; i++) {
-        if (signal.aborted) break;
+      // 2. Feed the analyzer concurrently. It applies its own matching bounded
+      // queue, so audio preparation can use the desktop without overwhelming it.
+      let nextTrackIndex = 0;
+      const workerCount = Math.min(
+        missingTracks.length,
+        Math.max(1, Number(concurrency) || 1)
+      );
 
-        const track = missingTracks[i];
-        currentStatus.value = `Analyzing (${completedTracks.value + 1}/${totalTracks.value}): ${track.title || track.name || track.id}`;
+      async function analyzeNextTrack() {
+        while (!signal.aborted) {
+          const trackIndex = nextTrackIndex++;
+          if (trackIndex >= missingTracks.length) return;
 
-        try {
-          // Resolve stream
-          const resolved = await resolvePlayable.call(ctx, track).catch(() => null);
-          const streamUrl = resolved?.streamUrl || '';
+          const track = missingTracks[trackIndex];
+          currentStatus.value = `Analyzing audio (${completedTracks.value}/${totalTracks.value})…`;
 
-          if (!streamUrl) {
+          try {
+            const resolved = await resolvePlayable.call(ctx, track).catch(() => null);
+            if (signal.aborted) return;
+            const streamUrl = resolved?.streamUrl || '';
+
+            if (!streamUrl) {
+              stats.failed++;
+            } else {
+              const durationSeconds = Number(track.durationSeconds || track.duration) || 0;
+              const analysis = await analyze.call(
+                ctx.smartCrossfadeAnalyzer,
+                track.id,
+                streamUrl,
+                {
+                  duration: durationSeconds,
+                  priority: ANALYSIS_PRIORITIES.background,
+                  signal
+                }
+              );
+
+              if (analysis && (analysis.bpm > 0 || analysis.analyzedBpm > 0)) {
+                stats.success++;
+                void syncAnalysis(track.id, analysis);
+              } else {
+                stats.failed++;
+              }
+            }
+          } catch (err) {
+            if (signal.aborted || err?.name === 'AbortError') return;
+            // Failure on one song must not stop the batch.
             stats.failed++;
-            completedTracks.value++;
-            progress.value = completedTracks.value / totalTracks.value;
-            continue;
+            console.warn(`Analysis skipped for song ${track.id}:`, err);
           }
 
-          const durationSeconds = Number(track.durationSeconds || track.duration) || 0;
-          const analysis = await analyze.call(
-            ctx.smartCrossfadeAnalyzer,
-            track.id,
-            streamUrl,
-            { duration: durationSeconds, priority: ANALYSIS_PRIORITIES.background }
-          );
-
-          if (analysis && (analysis.bpm > 0 || analysis.analyzedBpm > 0)) {
-            stats.success++;
-            // Push to cloud
-            void syncTrackAnalysisToCloud(track.id, analysis);
-          } else {
-            stats.failed++;
-          }
-        } catch (err) {
-          // Failure on single song must not stop the batch
-          stats.failed++;
-          console.warn(`Analysis skipped for song ${track.id}:`, err);
+          completedTracks.value++;
+          progress.value = completedTracks.value / totalTracks.value;
         }
-
-        completedTracks.value++;
-        progress.value = completedTracks.value / totalTracks.value;
-
-        // Brief yield to keep UI responsive
-        await new Promise(resolve => setTimeout(resolve, 50));
       }
 
-      currentStatus.value = `Done. ${stats.success + stats.cached} analyzed (${stats.cached} from cloud, ${stats.success} newly processed).`;
+      await Promise.all(Array.from({ length: workerCount }, () => analyzeNextTrack()));
+
+      if (!signal.aborted) {
+        currentStatus.value = `Done. ${stats.success + stats.cached} analyzed (${stats.cached} from cloud, ${stats.success} newly processed).`;
+      }
     } catch (err) {
-      console.error('Playlist analysis runner error:', err);
-      currentStatus.value = 'Analysis ended unexpectedly.';
+      if (!signal.aborted) {
+        console.error('Playlist analysis runner error:', err);
+        currentStatus.value = 'Analysis ended unexpectedly.';
+      }
     } finally {
-      isAnalyzing.value = false;
+      if (abortController === controller) {
+        abortController = null;
+        isAnalyzing.value = false;
+      }
     }
 
     return stats;
