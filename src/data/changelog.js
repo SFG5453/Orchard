@@ -19,6 +19,39 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '5.0.0-beta.6',
+    codename: 'Promos Imbecile',
+    date: 'August 29, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'Added offline music downloads for individual songs and full albums, artists, and playlists, with dedicated download management and playback while Orchard is offline.',
+          'Improved Browse detail actions with visible labels, descriptive accessible names, and clearer responsive styling across artist and collection views.'
+        ]
+      },
+      {
+        title: 'Changed',
+        items: [
+          'Moved the welcome and setup experience into a standalone renderer so it loads only the onboarding state it needs while preserving preferences, sign-in, Orchard Connect, and diagnostics.'
+        ]
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Corrected Windows launcher path resolution across installed Orchard Packages layouts and added coverage for package asset and opener behavior.'
+        ]
+      },
+      {
+        title: 'Maintenance',
+        items: [
+          'Removed the retired Rubber Band native renderer and vendored sources now that Earmark handles desktop and mobile transitions, reducing native build and package overhead.',
+          'Slimmed production package payloads, improved platform-native asset selection, updated Quasar to 2.28.0 and Zod to 4.5.2, restored complete AGPL headers in the welcome renderer, and refreshed the main and mobile documentation and screenshots.'
+        ]
+      }
+    ]
+  },
+  {
     version: '5.0.0-beta.5',
     codename: 'Teacup Obeisant',
     date: 'August 28, 2026',

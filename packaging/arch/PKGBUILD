@@ -2,7 +2,7 @@
 
 pkgname=orchard-packages
 pkgver=5.0.0
-pkgrel=3
+pkgrel=4
 pkgdesc='Small desktop installer and version manager for Orchard'
 arch=('x86_64')
 url='https://github.com/sfg5453/orchard'
