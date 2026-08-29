@@ -54,6 +54,8 @@ By pairing an embedded browser session with a native C++ audio engine and machin
 
 Orchard reproduces beat-matched, phrase-aligned AutoMix transitions inspired by [Apple Music's AutoMix](https://support.apple.com/en-us/105067), utilizing 3-phase volume curves, progressive filter sweeps, downbeat quantization, and seamless bass frequency swaps.
 
+https://github.com/user-attachments/assets/d846542c-b65a-44f3-809f-6a65527322a9
+
 ---
 
 ## Features
