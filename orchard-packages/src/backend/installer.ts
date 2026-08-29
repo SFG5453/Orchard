@@ -72,6 +72,7 @@ async function validateInstallation(directory: string, version: string, target: 
   const required = [
     "package.json",
     "dist/index.html",
+    "dist/welcome.html",
     "electron/main/index.js",
     ".orchard-package.json",
     `.orchard-native/${target}.json`,

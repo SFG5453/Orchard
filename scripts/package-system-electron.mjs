@@ -195,6 +195,7 @@ try {
     'package.json',
     '.orchard-package.json',
     'dist/index.html',
+    'dist/welcome.html',
     'electron/main/index.js',
     'native/build/Release/orchard_audio_analysis.node',
     `native-media/build/orchard-system-media-${target}.node`,

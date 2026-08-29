@@ -21,12 +21,10 @@ import { describe, expect, test } from "bun:test";
 import { launcherContents } from "../scripts/native-assets.ts";
 
 describe("native package launchers", () => {
-  test("removes the trailing separator from the Windows Electron app path", () => {
+  test("terminates the Windows Electron app path after a dot", () => {
     expect(launcherContents("win32-x64", "43.4.1")).toBe(
       "@echo off\r\n" +
-      "set \"app_root=%~dp0\"\r\n" +
-      "set \"app_root=%app_root:~0,-1%\"\r\n" +
-      "\"%app_root%\\..\\..\\runtimes\\electron\\43.4.1\\win32-x64\\electron.exe\" \"%app_root%\" %*\r\n"
+      "\"%~dp0..\\..\\runtimes\\electron\\43.4.1\\win32-x64\\electron.exe\" \"%~dp0.\" %*\r\n"
     );
   });
 });

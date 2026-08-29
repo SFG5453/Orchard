@@ -65,13 +65,11 @@ test('formats update progress in readable units', () => {
   assert.equal(formatUpdateBytes(1536), '1.5 KB');
 });
 
-test('Windows launcher removes the trailing separator from the Electron app path', () => {
+test('Windows launcher terminates the Electron app path after a dot', () => {
   assert.equal(
     packageServiceLauncherContents('win32-x64', '43.4.1'),
     '@echo off\r\n' +
-      'set "app_root=%~dp0"\r\n' +
-      'set "app_root=%app_root:~0,-1%"\r\n' +
-      '"%app_root%\\..\\..\\runtimes\\electron\\43.4.1\\win32-x64\\electron.exe" "%app_root%" %*\r\n'
+      '"%~dp0..\\..\\runtimes\\electron\\43.4.1\\win32-x64\\electron.exe" "%~dp0." %*\r\n'
   );
 });
 

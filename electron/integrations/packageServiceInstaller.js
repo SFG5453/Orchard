@@ -243,9 +243,9 @@ async function fetchElectronChecksum(fetchImpl, version, archiveName) {
 
 export function packageServiceLauncherContents(target, electronVersion) {
   if (target.startsWith('win32-')) {
-    // %~dp0 includes a trailing backslash, which escapes the closing quote in
-    // Electron's Windows argument parser unless it is removed first.
-    return `@echo off\r\nset "app_root=%~dp0"\r\nset "app_root=%app_root:~0,-1%"\r\n"%app_root%\\..\\..\\runtimes\\electron\\${electronVersion}\\${target}\\electron.exe" "%app_root%" %*\r\n`;
+    // %~dp0 always ends in a backslash. Appending a dot keeps that backslash
+    // away from the closing quote while still resolving to this directory.
+    return `@echo off\r\n"%~dp0..\\..\\runtimes\\electron\\${electronVersion}\\${target}\\electron.exe" "%~dp0." %*\r\n`;
   }
   if (target.startsWith('darwin-')) {
     return `#!/bin/sh\napp_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$app_root/../../runtimes/electron/${electronVersion}/${target}/Electron.app/Contents/MacOS/Electron" "$app_root" "$@"\n`;
@@ -269,6 +269,7 @@ async function validateStagedInstall(directory, version, target) {
   const required = [
     'package.json',
     'dist/index.html',
+    'dist/welcome.html',
     'electron/main/index.js',
     '.orchard-package.json',
     `.orchard-native/${target}.json`,

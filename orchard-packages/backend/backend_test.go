@@ -208,7 +208,7 @@ func TestExtractElectronZipPreservesExecutable(t *testing.T) {
 	}
 }
 
-func TestWindowsLauncherRemovesTrailingSeparatorFromAppPath(t *testing.T) {
+func TestWindowsLauncherTerminatesAppPathAfterDot(t *testing.T) {
 	directory := t.TempDir()
 	if err := writeLauncher(directory, "win32-x64", "43.4.1"); err != nil {
 		t.Fatal(err)
@@ -218,11 +218,26 @@ func TestWindowsLauncherRemovesTrailingSeparatorFromAppPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := "@echo off\r\n" +
-		"set \"app_root=%~dp0\"\r\n" +
-		"set \"app_root=%app_root:~0,-1%\"\r\n" +
-		"\"%app_root%\\..\\..\\runtimes\\electron\\43.4.1\\win32-x64\\electron.exe\" \"%app_root%\" %*\r\n"
+		"\"%~dp0..\\..\\runtimes\\electron\\43.4.1\\win32-x64\\electron.exe\" \"%~dp0.\" %*\r\n"
 	if string(data) != expected {
 		t.Fatalf("unexpected Windows launcher:\n%s", data)
+	}
+}
+
+func TestValidateInstallationRequiresWelcomeEntryPoint(t *testing.T) {
+	directory := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(directory, "dist"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, relativePath := range []string{"package.json", filepath.Join("dist", "index.html")} {
+		if err := os.WriteFile(filepath.Join(directory, relativePath), []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	err := validateInstallation(directory, "5.0.0-beta.6", "win32-x64")
+	if err == nil || !strings.Contains(err.Error(), "dist/welcome.html is missing") {
+		t.Fatalf("expected missing welcome entry point error, got %v", err)
 	}
 }
 

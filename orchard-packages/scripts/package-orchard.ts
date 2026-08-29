@@ -112,6 +112,7 @@ async function validateComposedInstall(directory: string, target: string): Promi
   const required = [
     "package.json",
     "dist/index.html",
+    "dist/welcome.html",
     "electron/main/index.js",
     ".orchard-package.json",
     `.orchard-native/${target}.json`,
@@ -162,6 +163,7 @@ try {
   console.log("Staging platform-neutral Orchard files…");
   await Promise.all([
     copyRequired(path.join(projectRoot, "dist", "index.html"), path.join(sharedRoot, "dist", "index.html")),
+    copyRequired(path.join(projectRoot, "dist", "welcome.html"), path.join(sharedRoot, "dist", "welcome.html")),
     copyRequired(path.join(projectRoot, "dist", "assets"), path.join(sharedRoot, "dist", "assets")),
     copyRequired(path.join(projectRoot, "dist", "favicon.png"), path.join(sharedRoot, "dist", "favicon.png")),
     copyRequired(path.join(projectRoot, "dist", "orchard-logo.png"), path.join(sharedRoot, "dist", "orchard-logo.png")),
