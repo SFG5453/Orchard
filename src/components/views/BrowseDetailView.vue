@@ -192,7 +192,7 @@ export default {
                   v-if="canOpenDescription"
                   type="button"
                   class="detail-description-trigger"
-                  :aria-label="`Read full description for ${browseDetail.title}`"
+                  :aria-label="`${descriptionActionLabel} for ${browseDetail.title}`"
                   @click="openDescriptionDialog"
                 >
                   <q-icon name="open_in_full" />
@@ -200,11 +200,21 @@ export default {
                 </button>
                 <div class="detail-actions">
                   <div class="detail-actions__primary">
-                    <button type="button" class="action-button action-button--primary" @click="playCollection(browseDetail)">
+                    <button
+                      type="button"
+                      class="action-button action-button--primary"
+                      :aria-label="`Play ${browseDetail.title}`"
+                      @click="playCollection(browseDetail)"
+                    >
                       <q-icon name="play_arrow" />
                       <span>Play</span>
                     </button>
-                    <button type="button" class="action-button" @click="playCollection(browseDetail, { shuffle: true })">
+                    <button
+                      type="button"
+                      class="action-button"
+                      :aria-label="`Shuffle ${browseDetail.title}`"
+                      @click="playCollection(browseDetail, { shuffle: true })"
+                    >
                       <q-icon name="shuffle" />
                       <span>Shuffle</span>
                     </button>
@@ -214,6 +224,7 @@ export default {
                       class="action-button"
                       :disabled="isCollectionDownloading(browseDetail) || !browseDetail.tracks.length"
                       :aria-pressed="isCollectionDownloaded(browseDetail)"
+                      :aria-label="`${isCollectionDownloading(browseDetail) ? 'Downloading' : isCollectionDownloaded(browseDetail) ? 'Remove download for' : 'Download'} ${browseDetail.title}`"
                       @click="toggleCollectionDownload(browseDetail)"
                     >
                       <q-icon :name="isCollectionDownloading(browseDetail) ? 'downloading' : isCollectionDownloaded(browseDetail) ? 'download_done' : 'download'" />
@@ -230,7 +241,12 @@ export default {
                       <q-icon :name="isAnalyzingPlaylist ? 'sync' : 'auto_awesome'" :class="{ 'spin-animation': isAnalyzingPlaylist }" />
                       <span>{{ isAnalyzingPlaylist ? `${Math.round(playlistAnalysisProgress * 100)}%` : 'Prepare Best Mix' }}</span>
                     </button>
-                    <button type="button" class="action-button" @click="shareBrowseDetailLink">
+                    <button
+                      type="button"
+                      class="action-button"
+                      :aria-label="`Share ${browseDetail.title}`"
+                      @click="shareBrowseDetailLink"
+                    >
                       <q-icon name="ios_share" />
                       <span>Share</span>
                     </button>
@@ -240,6 +256,7 @@ export default {
                       class="action-button"
                       :disabled="artistSubscription.status === 'loading' || artistSubscription.status === 'saving'"
                       :aria-pressed="artistSubscription.subscribed"
+                      :aria-label="`${artistSubscription.subscribed ? 'Unsubscribe from' : 'Subscribe to'} ${browseDetail.title}`"
                       @click="toggleArtistSubscription(browseDetail)"
                     >
                       <q-icon :name="artistSubscription.subscribed ? 'notifications_off' : 'person_add'" />

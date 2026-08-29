@@ -906,19 +906,23 @@ html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary 
 }
 
 html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary .action-button {
-  width: 44px;
+  width: auto;
+  min-width: 0;
   height: 44px;
-  border-radius: 50%;
-  padding: 0;
+  border-radius: 999px;
+  padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(7, 9, 8, 0.66);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+  color: #fff;
+  backdrop-filter: blur(10px);
 }
 
 html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary .action-button span {
-  display: none;
+  display: inline;
 }
 
 html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary .action-button .q-icon {
@@ -927,8 +931,9 @@ html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary 
 }
 
 html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary .action-button--primary {
-  width: 56px;
-  height: 56px;
+  width: auto;
+  height: 48px;
+  padding: 0 19px;
   background: var(--canopy-accent);
   color: #000;
 }
