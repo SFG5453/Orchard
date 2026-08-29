@@ -28,10 +28,11 @@ Orchard Mobile is the phone half of [Orchard](../) — a standalone native Andro
 ## Screenshots
 
 <div align="center">
-  <img src="docs/screenshots/home.png" width="24%" alt="Home">
-  <img src="docs/screenshots/now-playing.png" width="24%" alt="Now Playing">
-  <img src="docs/screenshots/lyrics.png" width="24%" alt="Synced lyrics">
-  <img src="docs/screenshots/queue.png" width="24%" alt="Queue">
+  <img src="docs/screenshots/home.png" width="19%" alt="Home">
+  <img src="docs/screenshots/now-playing.png" width="19%" alt="Now Playing">
+  <img src="docs/screenshots/lyrics.png" width="19%" alt="Synced lyrics">
+  <img src="docs/screenshots/queue.png" width="19%" alt="Queue">
+  <img src="docs/screenshots/album.png" width="19%" alt="Album">
 </div>
 
 ## Features
