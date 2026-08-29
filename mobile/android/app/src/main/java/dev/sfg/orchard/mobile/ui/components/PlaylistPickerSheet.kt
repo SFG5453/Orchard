@@ -21,13 +21,16 @@
 package dev.sfg.orchard.mobile.ui.components
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material3.BottomSheetDefaults
@@ -41,6 +44,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,30 +68,39 @@ internal fun PlaylistPickerSheet(
         containerColor = CanopyColors.Surface,
         dragHandle = { BottomSheetDefaults.DragHandle(color = CanopyColors.Muted.copy(alpha = 0.4f)) },
     ) {
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
-            Text("Add to playlist", style = MaterialTheme.typography.titleLarge, color = CanopyColors.Text)
-            Text(
-                track.title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = CanopyColors.Muted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(14.dp))
-            if (playlists.isEmpty()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            contentPadding = PaddingValues(bottom = 28.dp),
+        ) {
+            item {
+                Text("Add to playlist", style = MaterialTheme.typography.titleLarge, color = CanopyColors.Text)
                 Text(
-                    "No saved playlists yet. Save or create a playlist first.",
+                    track.title,
                     style = MaterialTheme.typography.bodyMedium,
                     color = CanopyColors.Muted,
-                    modifier = Modifier.padding(vertical = 16.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                Spacer(Modifier.height(14.dp))
+            }
+            if (playlists.isEmpty()) {
+                item {
+                    Text(
+                        "No saved playlists yet. Save or create a playlist first.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = CanopyColors.Muted,
+                        modifier = Modifier.padding(vertical = 16.dp),
+                    )
+                }
             } else {
-                playlists.forEach { playlist ->
+                items(playlists, key = { it.id }) { playlist ->
                     val containsTrack = playlist.tracks.any { it.id == track.id }
                     Surface(
                         onClick = { if (!containsTrack) onSelect(playlist) },
                         enabled = !containsTrack,
-                        color = androidx.compose.ui.graphics.Color.Transparent,
+                        color = Color.Transparent,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(
