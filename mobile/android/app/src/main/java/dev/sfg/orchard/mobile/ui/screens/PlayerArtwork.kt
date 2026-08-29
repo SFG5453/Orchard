@@ -31,11 +31,14 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,7 +50,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -161,84 +166,146 @@ fun FullBleedPlayerBackdrop(
                 ),
         )
 
-        // Artwork container with an alpha gradient mask (BlendMode.DstIn) so the artwork
-        // dissolves completely and seamlessly into the sampled backdrop with zero visual seam or gap.
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(ARTWORK_HEIGHT_FRACTION)
-                .align(Alignment.TopCenter)
-                .onGloballyPositioned { onArtworkBounds?.invoke(it.boundsInRoot()) }
-                .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
-                .drawWithContent {
-                    drawContent()
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            0.0f to Color.Black,
-                            0.38f to Color.Black,
-                            0.88f to Color.Transparent,
-                            1.0f to Color.Transparent,
-                        ),
-                        blendMode = BlendMode.DstIn,
-                    )
-                },
-        ) {
-            AnimatedContent(
-                targetState = track,
-                transitionSpec = {
-                    fadeIn(animationSpec = tween(500)) togetherWith fadeOut(animationSpec = tween(560))
-                },
-                label = "FullBleedArtworkTransition",
-                modifier = Modifier.fillMaxSize(),
-            ) { currentTrack ->
-                val currentVideo = currentTrack.animatedArtworkVerticalUrl.ifBlank { currentTrack.animatedArtworkUrl }
-                val currentRich = animatedArtworkEnabled && currentVideo.isNotBlank()
+        val currentVideo = track.animatedArtworkVerticalUrl.ifBlank { track.animatedArtworkUrl }
+        val currentRich = animatedArtworkEnabled && currentVideo.isNotBlank()
 
-                // The cover draws back into the screen as the mix builds, then keeps
-                // receding as it hands over while the arriving cover fades up at full
-                // size behind it. The enter/exit state is what keeps the two apart: the
-                // departing cover must not snap back to full size when the marker clears.
-                // Qualified because the ambience animation above shadows the scope's name.
-                val isArriving = this.transition.targetState == EnterExitState.Visible
-                val liveScale = 1f - HANDOFF_SHRINK * transitionProgress.coerceIn(0f, 1f)
-                val scale by animateFloatAsState(
-                    targetValue = if (isArriving) liveScale else 1f - DEPARTURE_SHRINK,
-                    animationSpec = tween(560),
-                    label = "ArtworkHandoffScale",
-                )
-                // Pulling away from the edges is what turns the full bleed into a card,
-                // so the corners round in step with the shrink rather than on their own.
-                val cornerRadius = (ARTWORK_CORNER_SPAN * (1f - scale)).coerceAtLeast(0f)
-
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        // The departing cover stays on top, so the arriving one is revealed
-                        // filling the frame behind it rather than sliding over it.
-                        .zIndex(if (isArriving) 0f else 1f)
-                        .graphicsLayer {
-                            scaleX = scale
-                            scaleY = scale
-                            shape = RoundedCornerShape(cornerRadius.dp)
-                            clip = cornerRadius > 0.5f
-                        },
-                ) {
-                    RemoteArtwork(
-                        url = currentTrack.artworkUrl,
-                        description = "Artwork for ${currentTrack.title}",
-                        modifier = Modifier.fillMaxSize(),
-                    )
-
-                    if (currentRich) {
-                        AnimatedArtworkVideo(
-                            url = currentVideo,
-                            active = isPlaying,
-                            modifier = Modifier.fillMaxSize(),
-                            onFrame = onVideoFrame,
+        if (currentRich) {
+            // Artwork container with an alpha gradient mask (BlendMode.DstIn) so the artwork
+            // dissolves completely and seamlessly into the sampled backdrop with zero visual seam or gap.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(ARTWORK_HEIGHT_FRACTION)
+                    .align(Alignment.TopCenter)
+                    .onGloballyPositioned { onArtworkBounds?.invoke(it.boundsInRoot()) }
+                    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                0.0f to Color.Black,
+                                0.38f to Color.Black,
+                                0.88f to Color.Transparent,
+                                1.0f to Color.Transparent,
+                            ),
+                            blendMode = BlendMode.DstIn,
                         )
+                    },
+            ) {
+                AnimatedContent(
+                    targetState = track,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(500)) togetherWith fadeOut(animationSpec = tween(560))
+                    },
+                    label = "FullBleedArtworkTransition",
+                    modifier = Modifier.fillMaxSize(),
+                ) { currentTrack ->
+                    val videoUrl = currentTrack.animatedArtworkVerticalUrl.ifBlank { currentTrack.animatedArtworkUrl }
+                    val rich = animatedArtworkEnabled && videoUrl.isNotBlank()
+
+                    // The cover draws back into the screen as the mix builds, then keeps
+                    // receding as it hands over while the arriving cover fades up at full
+                    // size behind it. The enter/exit state is what keeps the two apart: the
+                    // departing cover must not snap back to full size when the marker clears.
+                    // Qualified because the ambience animation above shadows the scope's name.
+                    val isArriving = this.transition.targetState == EnterExitState.Visible
+                    val liveScale = 1f - HANDOFF_SHRINK * transitionProgress.coerceIn(0f, 1f)
+                    val scale by animateFloatAsState(
+                        targetValue = if (isArriving) liveScale else 1f - DEPARTURE_SHRINK,
+                        animationSpec = tween(560),
+                        label = "ArtworkHandoffScale",
+                    )
+                    // Pulling away from the edges is what turns the full bleed into a card,
+                    // so the corners round in step with the shrink rather than on their own.
+                    val cornerRadius = (ARTWORK_CORNER_SPAN * (1f - scale)).coerceAtLeast(0f)
+
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            // The departing cover stays on top, so the arriving one is revealed
+                            // filling the frame behind it rather than sliding over it.
+                            .zIndex(if (isArriving) 0f else 1f)
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                                shape = RoundedCornerShape(cornerRadius.dp)
+                                clip = cornerRadius > 0.5f
+                            },
+                    ) {
+                        RemoteArtwork(
+                            url = currentTrack.artworkUrl,
+                            description = "Artwork for ${currentTrack.title}",
+                            modifier = Modifier.fillMaxSize(),
+                        )
+
+                        if (rich) {
+                            AnimatedArtworkVideo(
+                                url = videoUrl,
+                                active = isPlaying,
+                                modifier = Modifier.fillMaxSize(),
+                                onFrame = onVideoFrame,
+                            )
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Prominent centered square artwork card for non-animated tracks on phone layouts.
+ *
+ * Supports soft drop shadow, refined corner radius, track handoff scaling, and
+ * reporting bounds for the collapse flight into the mini-player pill.
+ */
+@Composable
+fun NowPlayingArtworkCard(
+    track: Track,
+    transitionProgress: Float = 0f,
+    onArtworkBounds: ((Rect) -> Unit)? = null,
+    modifier: Modifier = Modifier,
+) {
+    AnimatedContent(
+        targetState = track,
+        transitionSpec = {
+            (fadeIn(tween(500)) + scaleIn(initialScale = 0.92f, animationSpec = tween(500)))
+                .togetherWith(fadeOut(tween(400)) + scaleOut(targetScale = 1.05f, animationSpec = tween(400)))
+        },
+        label = "NowPlayingArtworkCardTransition",
+        modifier = modifier,
+    ) { currentTrack ->
+        val isArriving = this.transition.targetState == EnterExitState.Visible
+        val liveScale = 1f - HANDOFF_SHRINK * transitionProgress.coerceIn(0f, 1f)
+        val scale by animateFloatAsState(
+            targetValue = if (isArriving) liveScale else 1f - DEPARTURE_SHRINK,
+            animationSpec = tween(560),
+            label = "CardHandoffScale",
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .aspectRatio(1f)
+                .onGloballyPositioned { onArtworkBounds?.invoke(it.boundsInRoot()) }
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .shadow(
+                    elevation = 24.dp,
+                    shape = RoundedCornerShape(22.dp),
+                    spotColor = Color.Black.copy(alpha = 0.65f),
+                    ambientColor = Color.Black.copy(alpha = 0.35f),
+                )
+                .clip(RoundedCornerShape(22.dp))
+                .background(Color(0xFF181A1B)),
+            contentAlignment = Alignment.Center,
+        ) {
+            RemoteArtwork(
+                url = currentTrack.artworkUrl,
+                description = "Artwork for ${currentTrack.title}",
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }

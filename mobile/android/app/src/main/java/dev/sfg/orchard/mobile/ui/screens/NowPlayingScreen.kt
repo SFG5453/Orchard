@@ -298,6 +298,7 @@ fun NowPlayingScreen(
             // One sample feeds the backdrop and the lyrics, so sung words carry the same
             // colour the artwork bleeds into rather than a second, squarer sample of the cover.
             val verticalVideo = track.animatedArtworkVerticalUrl.ifBlank { track.animatedArtworkUrl }
+            val hasRichArtwork = animatedArtworkEnabled && verticalVideo.isNotBlank()
             var videoFrame by remember(verticalVideo) { mutableStateOf<Bitmap?>(null) }
             val palette = rememberFullBleedPalette(track, videoFrame)
             val lyricAccent = palette.accent
@@ -312,7 +313,7 @@ fun NowPlayingScreen(
                 onLiked = onLiked,
                 palette = palette,
                 onVideoFrame = { videoFrame = it },
-                onArtworkBounds = { if (!wideLayout && progress == 0f) onRestingCoverBounds(it) },
+                onArtworkBounds = { if (!wideLayout && hasRichArtwork && progress == 0f) onRestingCoverBounds(it) },
                 transitionProgress = activeMixProgress,
                 modifier = Modifier.blur(backdropBlur),
             )
@@ -458,6 +459,20 @@ fun NowPlayingScreen(
                             is LoadState.Error -> LyricsNotice(lyrics.message)
                             LoadState.Idle -> LyricsNotice("Start a song to see its lyrics.")
                         }
+                    }
+                } else if (!hasRichArtwork) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(horizontal = 32.dp, vertical = 12.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        NowPlayingArtworkCard(
+                            track = track,
+                            transitionProgress = activeMixProgress,
+                            onArtworkBounds = { if (!wideLayout && progress == 0f) onRestingCoverBounds(it) },
+                        )
                     }
                 } else {
                     Spacer(Modifier.weight(1f))
