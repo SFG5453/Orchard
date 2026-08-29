@@ -17,7 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { chmod, cp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { access, chmod, cp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { TARGETS, type Target } from "../src/backend/target.ts";
 import { binaryTargets } from "./native-binary.ts";
@@ -35,6 +35,21 @@ export type NativeCollection = {
 };
 
 const NATIVE_NAME = /(?:\.node|\.dll|\.dylib|\.so(?:\.\d+)*|\.exe)$/i;
+const ONNX_WEB_FILES = [
+  "package.json",
+  "dist/ort.wasm.bundle.min.mjs",
+  "dist/ort-wasm-simd-threaded.mjs",
+  "dist/ort-wasm-simd-threaded.wasm"
+] as const;
+
+async function exists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function walk(root: string): Promise<string[]> {
   const files: string[] = [];
@@ -66,12 +81,33 @@ export async function collectNativeAssets(options: {
     analysis: false,
     audio: false,
     media: false,
-    onnx: target === "darwin-x64"
+    onnx: false
   }])) as Record<Target, Evidence>;
   const overlay = (target: Target): string => path.join(options.overlaysRoot, target);
   await Promise.all(TARGETS.map((target) => mkdir(overlay(target), { recursive: true })));
 
   const nodeModulesRoot = path.join(options.sharedRoot, "node_modules");
+  const onnxWebRoot = path.join(nodeModulesRoot, "onnxruntime-web");
+  if (!(await exists(onnxWebRoot))) {
+    throw new Error("onnxruntime-web is required for the Intel macOS fallback but was not installed.");
+  }
+  const missingOnnxWebFiles = [] as string[];
+  for (const relativePath of ONNX_WEB_FILES) {
+    if (!(await exists(path.join(onnxWebRoot, relativePath)))) missingOnnxWebFiles.push(relativePath);
+  }
+  if (missingOnnxWebFiles.length > 0) {
+    throw new Error(`onnxruntime-web is missing required files: ${missingOnnxWebFiles.join(", ")}`);
+  }
+  for (const relativePath of ONNX_WEB_FILES) {
+    await copyToOverlay(
+      path.join(onnxWebRoot, relativePath),
+      path.join("node_modules", "onnxruntime-web", relativePath),
+      overlay("darwin-x64")
+    );
+  }
+  await rm(onnxWebRoot, { recursive: true, force: true });
+  evidence["darwin-x64"].onnx = true;
+
   for (const filePath of await walk(nodeModulesRoot)) {
     const relativePath = path.relative(options.sharedRoot, filePath);
     const targets = await binaryTargets(filePath);

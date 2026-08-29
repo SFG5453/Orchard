@@ -46,6 +46,35 @@ function run(command, args, cwd) {
   if (result.status !== 0) throw new Error(`${command} exited with ${result.status ?? 'no status'}.`);
 }
 
+const STRIPPED_DEPENDENCY_DIRECTORIES = new Set([
+  'test',
+  'tests',
+  'docs',
+  'demo',
+  'demos',
+  'example',
+  'examples'
+]);
+
+async function pruneProductionDependencyPayload(nodeModulesRoot) {
+  const pending = [nodeModulesRoot];
+  while (pending.length > 0) {
+    const directory = pending.pop();
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        if (STRIPPED_DEPENDENCY_DIRECTORIES.has(entry.name)) {
+          await rm(entryPath, { recursive: true, force: true });
+        } else {
+          pending.push(entryPath);
+        }
+      } else if (entry.isFile() && /\.map$/i.test(entry.name)) {
+        await rm(entryPath, { force: true });
+      }
+    }
+  }
+}
+
 async function pruneOnnxRuntime(appDir, architecture) {
   const runtimeRoot = path.join(appDir, 'node_modules', 'onnxruntime-node', 'bin', 'napi-v6');
   const platformRoot = path.join(runtimeRoot, 'linux');
@@ -159,6 +188,7 @@ try {
     force: true
   });
   await rm(path.join(appDir, 'node_modules', '.bin'), { recursive: true, force: true });
+  await pruneProductionDependencyPayload(path.join(appDir, 'node_modules'));
   await pruneOnnxRuntime(appDir, architecture);
 
   const required = [

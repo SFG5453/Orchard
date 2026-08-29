@@ -67,6 +67,35 @@ async function walk(root: string): Promise<string[]> {
   return files;
 }
 
+const STRIPPED_DEPENDENCY_DIRECTORIES = new Set([
+  "test",
+  "tests",
+  "docs",
+  "demo",
+  "demos",
+  "example",
+  "examples"
+]);
+
+async function pruneProductionDependencyPayload(nodeModulesRoot: string): Promise<void> {
+  const pending = [nodeModulesRoot];
+  while (pending.length > 0) {
+    const directory = pending.pop()!;
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        if (STRIPPED_DEPENDENCY_DIRECTORIES.has(entry.name)) {
+          await rm(entryPath, { recursive: true, force: true });
+        } else {
+          pending.push(entryPath);
+        }
+      } else if (entry.isFile() && /\.map$/i.test(entry.name)) {
+        await rm(entryPath, { force: true });
+      }
+    }
+  }
+}
+
 async function assertSharedIsPlatformNeutral(): Promise<void> {
   for (const filePath of await walk(sharedRoot)) {
     const targets = await binaryTargets(filePath);
@@ -93,6 +122,18 @@ async function validateComposedInstall(directory: string, target: string): Promi
   for (const relativePath of required) {
     if (!(await exists(path.join(directory, relativePath)))) {
       throw new Error(`Composed ${target} installation is missing ${relativePath}.`);
+    }
+  }
+  if (target === "darwin-x64") {
+    for (const relativePath of [
+      "node_modules/onnxruntime-web/package.json",
+      "node_modules/onnxruntime-web/dist/ort.wasm.bundle.min.mjs",
+      "node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs",
+      "node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm"
+    ]) {
+      if (!(await exists(path.join(directory, relativePath)))) {
+        throw new Error(`Composed ${target} installation is missing ${relativePath}.`);
+      }
     }
   }
 }
@@ -173,6 +214,7 @@ try {
     dereference: true,
     force: true
   });
+  await pruneProductionDependencyPayload(path.join(sharedRoot, "node_modules"));
   await rm(path.join(sharedRoot, "node_modules", ".bin"), { recursive: true, force: true });
 
   console.log("Separating and validating native assets…");

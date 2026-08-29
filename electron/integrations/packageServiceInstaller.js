@@ -274,6 +274,13 @@ async function validateStagedInstall(directory, version, target) {
   if (target !== 'darwin-x64') {
     const [platform, architecture] = target.split('-');
     required.push(`node_modules/onnxruntime-node/bin/napi-v6/${platform}/${architecture}/onnxruntime_binding.node`);
+  } else {
+    required.push(
+      'node_modules/onnxruntime-web/package.json',
+      'node_modules/onnxruntime-web/dist/ort.wasm.bundle.min.mjs',
+      'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs',
+      'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm'
+    );
   }
   for (const relativePath of required) {
     if (!await exists(path.join(directory, relativePath))) {
