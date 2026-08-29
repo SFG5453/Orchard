@@ -31,6 +31,7 @@ import {
   extractPackageArchive,
   formatUpdateBytes,
   launchPreparedPackageServiceUpdate,
+  packageServiceLauncherContents,
   packageServiceInstallPaths
 } from '../electron/integrations/packageServiceInstaller.js';
 
@@ -62,6 +63,16 @@ test('formats update progress in readable units', () => {
   assert.equal(formatUpdateBytes(98566144), '94.0 MB');
   assert.equal(formatUpdateBytes(101034560), '96.4 MB');
   assert.equal(formatUpdateBytes(1536), '1.5 KB');
+});
+
+test('Windows launcher removes the trailing separator from the Electron app path', () => {
+  assert.equal(
+    packageServiceLauncherContents('win32-x64', '43.4.1'),
+    '@echo off\r\n' +
+      'set "app_root=%~dp0"\r\n' +
+      'set "app_root=%app_root:~0,-1%"\r\n' +
+      '"%app_root%\\..\\..\\runtimes\\electron\\43.4.1\\win32-x64\\electron.exe" "%app_root%" %*\r\n'
+  );
 });
 
 test('extracts tar.zst packages without system tar or zstd', async () => {

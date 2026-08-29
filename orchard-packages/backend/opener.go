@@ -60,6 +60,9 @@ func (i *installer) openRelease(ctx context.Context, version string) error {
 	launcher := filepath.Join(installDirectory, "orchard")
 	var command *exec.Cmd
 	if strings.HasPrefix(target, "win32-") {
+		if err := writeLauncher(installDirectory, target, selected.ElectronVersion); err != nil {
+			return fmt.Errorf("could not repair the Orchard launcher: %w", err)
+		}
 		launcher = filepath.Join(installDirectory, "orchard.cmd")
 		command = exec.Command("cmd", "/c", launcher)
 	} else {

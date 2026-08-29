@@ -202,7 +202,9 @@ func writeLauncher(directory, target, electronVersion string) error {
 	switch {
 	case strings.HasPrefix(target, "win32-"):
 		name = "orchard.cmd"
-		contents = fmt.Sprintf("@echo off\r\n\"%%~dp0..\\..\\runtimes\\electron\\%s\\%s\\electron.exe\" \"%%~dp0\" %%*\r\n", electronVersion, target)
+		// %~dp0 includes a trailing backslash. Remove it before quoting the app
+		// directory, or Electron receives the closing quote as part of the path.
+		contents = fmt.Sprintf("@echo off\r\nset \"app_root=%%~dp0\"\r\nset \"app_root=%%app_root:~0,-1%%\"\r\n\"%%app_root%%\\..\\..\\runtimes\\electron\\%s\\%s\\electron.exe\" \"%%app_root%%\" %%*\r\n", electronVersion, target)
 	case strings.HasPrefix(target, "darwin-"):
 		name = "orchard"
 		contents = fmt.Sprintf("#!/bin/sh\napp_root=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\nexec \"$app_root/../../runtimes/electron/%s/%s/Electron.app/Contents/MacOS/Electron\" \"$app_root\" \"$@\"\n", electronVersion, target)

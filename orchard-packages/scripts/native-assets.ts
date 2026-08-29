@@ -34,6 +34,18 @@ export type NativeCollection = {
   overlay: (target: Target) => string;
 };
 
+export function launcherContents(target: Target, electronVersion: string): string {
+  if (target.startsWith("win32-")) {
+    // %~dp0 includes a trailing backslash, which escapes the closing quote in
+    // Electron's Windows argument parser unless it is removed first.
+    return `@echo off\r\nset "app_root=%~dp0"\r\nset "app_root=%app_root:~0,-1%"\r\n"%app_root%\\..\\..\\runtimes\\electron\\${electronVersion}\\${target}\\electron.exe" "%app_root%" %*\r\n`;
+  }
+  if (target.startsWith("darwin-")) {
+    return `#!/bin/sh\napp_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$app_root/../../runtimes/electron/${electronVersion}/${target}/Electron.app/Contents/MacOS/Electron" "$app_root" "$@"\n`;
+  }
+  return `#!/bin/sh\napp_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$app_root/../../runtimes/electron/${electronVersion}/${target}/electron" --disable-setuid-sandbox "$app_root" "$@"\n`;
+}
+
 const NATIVE_NAME = /(?:\.node|\.dll|\.dylib|\.so(?:\.\d+)*|\.exe)$/i;
 const ONNX_WEB_FILES = [
   "package.json",
@@ -175,12 +187,7 @@ export async function collectNativeAssets(options: {
     await writeFile(marker, `${JSON.stringify({ schemaVersion: 1, target }, null, 2)}\n`);
 
     const launcherPath = path.join(overlay(target), target.startsWith("win32-") ? "orchard.cmd" : "orchard");
-    const launcher = target.startsWith("win32-")
-      ? `@echo off\r\n"%~dp0..\\..\\runtimes\\electron\\${options.electronVersion}\\${target}\\electron.exe" "%~dp0" %*\r\n`
-      : target.startsWith("darwin-")
-        ? `#!/bin/sh\napp_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$app_root/../../runtimes/electron/${options.electronVersion}/${target}/Electron.app/Contents/MacOS/Electron" "$app_root" "$@"\n`
-        : `#!/bin/sh\napp_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$app_root/../../runtimes/electron/${options.electronVersion}/${target}/electron" --disable-setuid-sandbox "$app_root" "$@"\n`;
-    await writeFile(launcherPath, launcher);
+    await writeFile(launcherPath, launcherContents(target, options.electronVersion));
     if (!target.startsWith("win32-")) await chmod(launcherPath, 0o755);
   }
 

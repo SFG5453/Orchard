@@ -241,21 +241,27 @@ async function fetchElectronChecksum(fetchImpl, version, archiveName) {
   throw new Error(`Electron's checksums do not contain ${archiveName}.`);
 }
 
+export function packageServiceLauncherContents(target, electronVersion) {
+  if (target.startsWith('win32-')) {
+    // %~dp0 includes a trailing backslash, which escapes the closing quote in
+    // Electron's Windows argument parser unless it is removed first.
+    return `@echo off\r\nset "app_root=%~dp0"\r\nset "app_root=%app_root:~0,-1%"\r\n"%app_root%\\..\\..\\runtimes\\electron\\${electronVersion}\\${target}\\electron.exe" "%app_root%" %*\r\n`;
+  }
+  if (target.startsWith('darwin-')) {
+    return `#!/bin/sh\napp_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$app_root/../../runtimes/electron/${electronVersion}/${target}/Electron.app/Contents/MacOS/Electron" "$app_root" "$@"\n`;
+  }
+  return `#!/bin/sh\napp_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$app_root/../../runtimes/electron/${electronVersion}/${target}/electron" --disable-setuid-sandbox "$app_root" "$@"\n`;
+}
+
 async function writeLauncher(directory, target, electronVersion) {
   let name;
-  let contents;
   if (target.startsWith('win32-')) {
     name = 'orchard.cmd';
-    contents = `@echo off\r\n"%~dp0..\\..\\runtimes\\electron\\${electronVersion}\\${target}\\electron.exe" "%~dp0" %*\r\n`;
-  } else if (target.startsWith('darwin-')) {
-    name = 'orchard';
-    contents = `#!/bin/sh\napp_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$app_root/../../runtimes/electron/${electronVersion}/${target}/Electron.app/Contents/MacOS/Electron" "$app_root" "$@"\n`;
   } else {
     name = 'orchard';
-    contents = `#!/bin/sh\napp_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec "$app_root/../../runtimes/electron/${electronVersion}/${target}/electron" --disable-setuid-sandbox "$app_root" "$@"\n`;
   }
   const launcher = path.join(directory, name);
-  await writeFile(launcher, contents, { mode: 0o755 });
+  await writeFile(launcher, packageServiceLauncherContents(target, electronVersion), { mode: 0o755 });
   if (!target.startsWith('win32-')) await chmod(launcher, 0o755);
 }
 

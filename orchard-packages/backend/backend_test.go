@@ -208,6 +208,24 @@ func TestExtractElectronZipPreservesExecutable(t *testing.T) {
 	}
 }
 
+func TestWindowsLauncherRemovesTrailingSeparatorFromAppPath(t *testing.T) {
+	directory := t.TempDir()
+	if err := writeLauncher(directory, "win32-x64", "43.4.1"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(directory, "orchard.cmd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := "@echo off\r\n" +
+		"set \"app_root=%~dp0\"\r\n" +
+		"set \"app_root=%app_root:~0,-1%\"\r\n" +
+		"\"%app_root%\\..\\..\\runtimes\\electron\\43.4.1\\win32-x64\\electron.exe\" \"%app_root%\" %*\r\n"
+	if string(data) != expected {
+		t.Fatalf("unexpected Windows launcher:\n%s", data)
+	}
+}
+
 func TestExtractElectronZipPreservesFrameworkSymlinks(t *testing.T) {
 	directory := t.TempDir()
 	archivePath := filepath.Join(directory, "electron.zip")
