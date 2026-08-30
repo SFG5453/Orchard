@@ -1,17 +1,17 @@
-## Orchard Mobile 2.0.0-beta.3 "Kimberly Illegal"
+## Orchard Mobile 2.0.0-beta.4 "Boogieman Elliot"
 
 ### Added
-- **Connect Reverse Playback**: Paired devices can now send playback commands back to one another with negotiated protocol capabilities.
-- **Collection Search**: Added collection search across mobile library and detail surfaces.
-- **Album Best Mix**: Best Mix is now available from album views while preserving native gapless album playback when requested.
+- **Square Now Playing Artwork**: Non-animated artwork now appears as a centered square card with rounded corners, a soft shadow, and smooth track transitions.
+- **Shared Rust Audio Analysis**: Mobile audio analysis now runs through the shared Rust/Earmark analyzer while keeping the trained beat-model input contract intact.
+- **Quality-Aware Public Playback**: Public YouTube streams now use NewPipe across all quality tiers while preserving Innertube fallbacks for private and account-only tracks.
 
 ### Changed
-- **Media Controls**: External accessory, smartwatch, and notification media controls now prioritize skip actions and respond more quickly.
-- **Playback Persistence**: Playback and widget persistence work moves off the main thread, with redundant layout broadcasts avoided.
-- **Mini Player**: A vertical swipe now dismisses the mini player and clears the playback queue.
+- **Best Mix Preparation**: Download validation, progress reporting, and local analysis now agree on which tracks have usable files before sorting.
 
 ### Fixed
-- **Connect Compatibility**: Playback state no longer silently renegotiates or downgrades an established Connect session.
+- **Playlist Picker**: Long playlist lists can now be scrolled inside the add-to-playlist sheet.
+- **Stale Downloads**: Missing or empty files no longer remain marked as completed and are automatically eligible for re-download.
+- **Best Mix Resilience**: A decoder or native-analysis failure no longer prevents a collection from playing; Orchard falls back to the original order with a warning.
 
 ### Maintenance
-- Added Rust and `cargo-ndk` setup to the Android canary and release build workflows.
+- Replaced the retired mobile C++ analysis JNI bridge with the shared Rust/Earmark library and refreshed mobile documentation and screenshots.
