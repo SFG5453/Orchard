@@ -244,7 +244,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes flatpak flatpak-builder zstd
+          sudo apt-get install --yes flatpak flatpak-builder rpm zstd
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user --noninteractive flathub \
             org.gnome.Platform//${FLATPAK_RUNTIME} \
@@ -265,6 +265,8 @@ jobs:
           ZSTD_CLEVEL=6 tar --zstd -cf \
             "release-assets/orchard-packages-$manager_version-linux-arm64.tar.zst" \
             -C "$bundle" .
+          bun run --cwd orchard-packages package:linux linux-arm64
+          cp artifacts/linux/linux-arm64/*.deb artifacts/linux/linux-arm64/*.rpm release-assets/
           bun run --cwd orchard-packages package:flatpak linux-arm64
           cp artifacts/flatpak/*.flatpak release-assets/
 
@@ -341,6 +343,10 @@ jobs:
           $bundle = "orchard-packages/dist/releases/orchard-packages-$managerVersion-win32-${{ matrix.arch }}"
           New-Item -ItemType Directory -Force release-assets | Out-Null
           Compress-Archive -Path "$bundle/*" -DestinationPath "release-assets/orchard-packages-$managerVersion-win32-${{ matrix.arch }}.zip"
+          pwsh -NoProfile -ExecutionPolicy Bypass -File orchard-packages/scripts/build-windows-installer.ps1 -Architecture '${{ matrix.arch }}'
+          $installers = @(Get-ChildItem "artifacts/windows/win32-${{ matrix.arch }}" -File -Filter '*.exe')
+          if ($installers.Count -ne 1) { throw "Expected one Windows installer, found $($installers.Count)." }
+          $installers | Copy-Item -Destination release-assets
 
       - name: Save Windows native inputs
         uses: actions/upload-artifact@v7
@@ -470,7 +476,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes flatpak flatpak-builder zstd
+          sudo apt-get install --yes flatpak flatpak-builder rpm zstd
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user --noninteractive flathub \
             org.gnome.Platform//${FLATPAK_RUNTIME} \
@@ -485,6 +491,7 @@ jobs:
           node scripts/stage-package-native.mjs linux-x64 native-inputs
           bun install --cwd orchard-packages --frozen-lockfile
           bun run --cwd orchard-packages build:release linux-x64
+          bun run --cwd orchard-packages package:linux linux-x64
           bun run --cwd orchard-packages package:flatpak linux-x64
 
       - name: Stage Linux x64 artifacts
@@ -496,6 +503,7 @@ jobs:
           ZSTD_CLEVEL=6 tar --zstd -cf \
             "release-assets/orchard-packages-$manager_version-linux-x64.tar.zst" \
             -C "$bundle" .
+          cp artifacts/linux/linux-x64/*.deb artifacts/linux/linux-x64/*.rpm release-assets/
           cp artifacts/flatpak/*.flatpak release-assets/
           find release-assets -maxdepth 1 -type f -print
 
@@ -732,6 +740,10 @@ jobs:
             --exclude '*' \
             --include 'orchard*.tar.zst' \
             --include 'orchard*.zip' \
+            --include 'orchard*.deb' \
+            --include 'orchard*.rpm' \
+            --include 'orchard*.exe' \
+            --include 'Orchard*.exe' \
             --include 'orchard*.flatpak' \
             --recursive
 

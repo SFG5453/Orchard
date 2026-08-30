@@ -10,6 +10,8 @@
     "build:release": "bun run scripts/build-release.ts",
     "dev": "bun run scripts/dev.ts",
     "package:orchard": "bun run scripts/package-orchard.ts",
+    "package:linux": "sh scripts/build-linux-packages.sh",
+    "package:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows-installer.ps1",
     "package:arch": "sh scripts/build-arch-package.sh",
     "package:flatpak": "sh scripts/build-flatpak.sh",
     "test": "bun test && go test ./backend",

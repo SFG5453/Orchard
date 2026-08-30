@@ -2,7 +2,7 @@
 
 Orchard Packages is a small Neutralino desktop installer backed by a compiled
 Go extension. Bun and Go are build dependencies only; release bundles and the
-Arch package contain a standalone backend executable.
+platform installers contain a standalone backend executable.
 
 ## Development
 
@@ -42,9 +42,35 @@ Build portable Neutralino bundles for every shell published by Neutralino:
 bun run build:release all
 ```
 
-The resulting bundles are under `dist/releases/`. Neutralino currently does not
-publish a Windows ARM64 shell, so `win32-arm64` has a standalone backend build
-but no claimed desktop bundle. No substitute or fabricated shell is emitted.
+The resulting bundles are under `dist/releases/`. Neutralino does not publish a
+Windows ARM64 shell, so `win32-arm64` uses its x64 shell under Windows
+emulation while pairing it with the native ARM64 backend and Orchard payload.
+
+## Platform installers
+
+Build the Debian and RPM installers for a Linux bundle that has already been
+built:
+
+```bash
+bun run package:linux linux-x64
+bun run package:linux linux-arm64
+```
+
+The packages are written to `../artifacts/linux/<target>/`. They install the
+Orchard Packages manager as `orchard`, provide the legacy `orchard` package
+name, and replace the old direct Orchard system install when the distribution's
+package manager upgrades it.
+
+Build the Windows NSIS installer from a Windows manager bundle:
+
+```powershell
+bun run package:windows -- -Architecture x64
+bun run package:windows -- -Architecture arm64
+```
+
+The installer is written to `../artifacts/windows/<target>/` and uses the old
+Orchard application directory so installing it removes the direct Electron
+installation while leaving managed Orchard versions in the user data directory.
 
 ## Orchard payloads
 

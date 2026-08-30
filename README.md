@@ -109,15 +109,15 @@ https://github.com/user-attachments/assets/d846542c-b65a-44f3-809f-6a65527322a9
 
 | Platform | Package Formats | Architecture |
 | :--- | :--- | :--- |
-| **Windows** | NSIS Installer (`.exe`) | x64, arm64 |
-| **Linux** | AppImage (`.AppImage`), Debian (`.deb`), RPM (`.rpm`), Arch Linux (`.pkg.tar.zst`) | x64, arm64 |
+| **Windows** | NSIS Installer (`.exe`), manager ZIP (`.zip`) | x64, arm64 |
+| **Linux** | Debian (`.deb`), RPM (`.rpm`), Flatpak (`.flatpak`), Arch Linux (`.pkg.tar.zst`), manager archive (`.tar.zst`) | x64, arm64 |
 | **macOS** | ZIP Packages (`.zip`) | Apple Silicon, Intel |
 | **Android** | Standalone APK (`.apk`), Canary ZIP (`.zip`) | arm64-v8a, armeabi-v7a, x86_64 |
 
 Release files and `SHA256SUMS.txt` are also published at [downloads.sfg545.dev/orchard](https://downloads.sfg545.dev/orchard/).
 
 > [!NOTE]
-> Current Windows and macOS builds are unsigned. If your operating system displays a security prompt during the first launch, select **"More info" → "Run anyway"** (Windows) or allow it under **System Settings → Privacy & Security** (macOS).
+> Desktop installers install Orchard Packages. On first launch, Orchard Packages downloads the matching Orchard application and Electron runtime; later updates replace that managed version without requiring another system installer. Current Windows and macOS builds are unsigned. If your operating system displays a security prompt during the first launch, select **"More info" → "Run anyway"** (Windows) or allow it under **System Settings → Privacy & Security** (macOS).
 
 ---
 
@@ -193,7 +193,8 @@ The mobile app can act as a standalone player or connect to your desktop session
 | `npm test` | Run complete Node test suite |
 | `npm run test:native` | Run audio, transition planner, and native DSP tests |
 | `npm run package:orchard` | Build package-service application archives |
-| `npm run package:linux-system` | Stage application directory for system Electron |
+| `npm run package:orchard-packages:linux -- linux-x64` | Build Debian and RPM Orchard Packages installers |
+| `npm run package:orchard-packages:windows -- -Architecture x64` | Build the Windows Orchard Packages NSIS installer |
 
 ---
 
@@ -211,6 +212,7 @@ orchard/
 │   ├── connect/                 Orchard Connect encrypted LAN WebSocket service
 │   └── playback/                Stream resolution, caching, and proxying
 ├── native-audio-rust/           Rust/Earmark analyzer, transition engine, and platform bindings
+├── orchard-packages/             Cross-platform installer and version manager
 ├── mobile/                      Native Android / Kotlin client (Jetpack Compose)
 ├── workers/                     Cloudflare Workers and Durable Objects for P2P sync
 ├── services/artwork-converter/  Animated-artwork conversion service

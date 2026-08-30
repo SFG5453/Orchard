@@ -18,13 +18,14 @@
     "build:frontend": "vite build",
     "start": "npm run build:frontend && node scripts/launch-electron.mjs",
     "build:artist-pack": "node scripts/build-official-artist-pack.mjs",
-    "package:linux-system": "npm run build && node scripts/package-system-electron.mjs",
     "test": "node --test test/*.test.js",
     "test:native": "node --test test/nativeAudioAnalysis.test.js test/audioAnalysisService.test.js test/smartCrossfadeAnalysis.test.js test/queueTransitionSort.test.js test/transitionPlanner.test.js test/crossfadeMixer.test.js test/autoCrossfade.test.js test/subscribedArtists.test.js test/libraryCategory.test.js",
     "fetch:beat-model": "node scripts/fetch-beat-this-model.mjs",
     "build:potoken-bundle": "node scripts/build-potoken-bundle.mjs",
     "build:native:media": "sh scripts/build-native-media.sh",
     "package:orchard": "bun run --cwd orchard-packages package:orchard",
+    "package:orchard-packages:linux": "bun run --cwd orchard-packages package:linux",
+    "package:orchard-packages:windows": "bun run --cwd orchard-packages package:windows",
     "package:orchard-packages:arch": "bun run --cwd orchard-packages package:arch"
   },
   "keywords": [
