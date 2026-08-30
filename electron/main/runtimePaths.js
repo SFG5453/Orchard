@@ -36,10 +36,9 @@ export function resolveRuntimePaths({ app, isDev }) {
   return {
     appIconPath: path.join(appRoot, isDev ? 'build/icon.png' : 'dist/orchard-logo.png'),
     licensePath: path.join(appRoot, 'LICENSE'),
-    nativeModulePath: path.join(unpackedRoot, 'native/build/Release/orchard_audio_analysis.node'),
-    // The transition engine is a separate napi-rs addon. Its loader picks the
-    // per-platform binary itself, so this points at the resolver rather than a
-    // .node file. Unpacked for the same reason as the addon above.
+    // Whole-track analysis and transition rendering share one napi-rs addon.
+    // Its loader picks the per-platform binary itself.
+    nativeModulePath: path.join(unpackedRoot, 'native-audio-rust/index.cjs'),
     transitionModulePath: path.join(unpackedRoot, 'native-audio-rust/index.cjs'),
     // Opened by ONNX Runtime's native code, so legacy ASAR installations keep
     // the packaged copy in app.asar.unpacked like the addon above.

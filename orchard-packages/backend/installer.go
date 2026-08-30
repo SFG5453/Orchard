@@ -518,9 +518,8 @@ func validateInstallation(directory, version, target string) error {
 	required := []string{
 		"package.json", "dist/index.html", "dist/welcome.html", "electron/main/index.js", ".orchard-package.json",
 		filepath.Join(".orchard-native", target+".json"),
-		filepath.Join("native", "build", "Release", "orchard_audio_analysis.node"),
 		filepath.Join("native-media", "build", "orchard-system-media-"+target+".node"),
-		filepath.Join("native-audio-rust", "build", "orchard-audio-transition-"+target+".node"),
+		filepath.Join("native-audio-rust", "build", "orchard-audio-"+target+".node"),
 	}
 	if target != "darwin-x64" {
 		parts := strings.SplitN(target, "-", 2)

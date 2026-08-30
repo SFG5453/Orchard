@@ -33,7 +33,7 @@ import {
 function rawAnalysis(overrides = {}) {
   const beats = Array.from({ length: 41 }, (_, index) => index * 0.5);
   return {
-    analysisVersion: 12,
+    analysisVersion: 13,
     duration: 20,
     bpm: 120,
     beatInterval: 0.5,
@@ -186,10 +186,10 @@ test('sorts, clips, and deduplicates timing arrays without mutating raw analysis
 });
 
 test('accepts only current canonical analysis in the persisted cache contract', () => {
-  const legacy = finalizeTrackAnalysis(rawAnalysis({ analysisVersion: 11 }));
-  const current = finalizeTrackAnalysis(rawAnalysis({ analysisVersion: 12 }));
+  const legacy = finalizeTrackAnalysis(rawAnalysis({ analysisVersion: 12 }));
+  const current = finalizeTrackAnalysis(rawAnalysis({ analysisVersion: 13 }));
 
   assert.equal(isValidLocalAnalysis(legacy), false);
   assert.equal(isValidLocalAnalysis(current), true);
-  assert.equal(AUDIO_ANALYSIS_VERSION, 12);
+  assert.equal(AUDIO_ANALYSIS_VERSION, 13);
 });

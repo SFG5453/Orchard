@@ -22,7 +22,10 @@ required-features = ["cli"]
 cli = ["uniffi/cli"]
 
 [dependencies]
+earmark = { path = "../vendor/earmark" }
+jni = "=0.21.1"
 orchard-transition-core = { path = "../core" }
+serde_json = "1.0.145"
 thiserror = "2.0.20"
 # Default features pull in cargo_metadata, which only the bindings generator needs.
 uniffi = { version = "0.32.0", default-features = false }

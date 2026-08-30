@@ -25,7 +25,7 @@ that enters on beat three of the bar sounds wrong even when every beat lines up.
 
 - Input `input_spectrogram`: `[1, frames, 128]` log-mel spectrogram, 22,050 Hz
   audio, n_fft 1024, hop 441 (50 fps), Slaney mel 30–11,000 Hz,
-  `log1p(1000·mag)` — produced by `src/main/cpp/analyzer/mel_spectrogram.cpp`.
+  `log1p(1000·mag)` — produced by Earmark's shared Rust model frontend.
 - Outputs `beat`, `downbeat`: `[1, frames]` logits, peak-picked by
   `BeatTracker.pickPeaks`.
 - Chunked at 1500 frames with a 6-frame border discarded from each edge, which

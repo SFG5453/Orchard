@@ -22,7 +22,7 @@ package dev.sfg.orchard.mobile.playback.smart
 import kotlin.math.abs
 
 /**
- * The log-mel front end the Beat This! model expects, backed by the native analyzer.
+ * The log-mel front end the Beat This! model expects, backed by Earmark's Rust analyzer.
  *
  * Every constant is dictated by the trained network rather than chosen: it was trained on
  * torchaudio's MelSpectrogram at 22,050 Hz with n_fft 1024, hop 441 (so exactly 50 frames per
@@ -36,7 +36,10 @@ import kotlin.math.abs
 object MelSpectrogram {
 
     /** True when the native library loaded. Analysis is optional, so this is a fact, not a fault. */
-    val available: Boolean = runCatching { System.loadLibrary("orchard_analysis") }.isSuccess
+    val available: Boolean = runCatching {
+        System.loadLibrary("orchard_resampler")
+        System.loadLibrary("orchard_earmark")
+    }.isSuccess
 
     /** Mel bands per frame; the model's input width. */
     val mels: Int by lazy { if (available) nativeMelCount() else 128 }

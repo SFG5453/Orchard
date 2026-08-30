@@ -23,7 +23,6 @@ import { TARGETS, type Target } from "../src/backend/target.ts";
 import { binaryTargets } from "./native-binary.ts";
 
 type Evidence = {
-  analysis: boolean;
   audio: boolean;
   media: boolean;
   onnx: boolean;
@@ -90,7 +89,6 @@ export async function collectNativeAssets(options: {
   electronVersion: string;
 }): Promise<NativeCollection> {
   const evidence = Object.fromEntries(TARGETS.map((target) => [target, {
-    analysis: false,
     audio: false,
     media: false,
     onnx: false
@@ -140,20 +138,10 @@ export async function collectNativeAssets(options: {
     await rm(filePath, { force: true });
   }
 
-  const analysisCandidates = (await walk(path.join(options.projectRoot, "native", "build")))
-    .filter((candidate) => /orchard_audio_analysis(?:-[\w-]+)?\.node$/.test(candidate))
-    .filter((candidate) => !candidate.includes(`${path.sep}obj.target${path.sep}`));
-  for (const candidate of analysisCandidates) {
-    for (const target of await binaryTargets(candidate)) {
-      await copyToOverlay(candidate, "native/build/Release/orchard_audio_analysis.node", overlay(target));
-      evidence[target].analysis = true;
-    }
-  }
-
   const namedAddons: Array<{ root: string; pattern: RegExp; kind: "audio" | "media" }> = [
     {
       root: path.join(options.projectRoot, "native-audio-rust", "build"),
-      pattern: /^orchard-audio-transition-(linux|win32|darwin)-(x64|arm64)\.node$/,
+      pattern: /^orchard-audio-(linux|win32|darwin)-(x64|arm64)\.node$/,
       kind: "audio"
     },
     {

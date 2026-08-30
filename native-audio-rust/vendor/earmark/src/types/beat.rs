@@ -1,7 +1,4 @@
-//! Beat metadata supplied by the caller.
-//!
-//! This crate never detects beats. The times below come from an external beat tracker (Beat
-//! This ONNX in Orchard's case) and are treated as ground truth.
+//! Beat metadata supplied by a caller or produced by whole-track analysis.
 
 use crate::error::{CrossfadeError, Result};
 

@@ -14,9 +14,7 @@
   "scripts": {
     "dev": "npm run build:native && concurrently -k \"vite --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && node scripts/launch-electron.mjs --dev-server=http://127.0.0.1:5173\"",
     "build": "npm run build:native && npm run build:frontend",
-    "build:native": "node-gyp rebuild --directory native && npm run build:native:media && sh scripts/build-native-audio.sh",
-    "build:native:macos:cross": "sh scripts/build-native-macos-cross.sh",
-    "build:native:windows": "sh scripts/build-native-windows.sh",
+    "build:native": "npm run build:native:media && sh scripts/build-native-audio.sh",
     "build:frontend": "vite build",
     "start": "npm run build:frontend && node scripts/launch-electron.mjs",
     "build:artist-pack": "node scripts/build-official-artist-pack.mjs",
@@ -26,8 +24,6 @@
     "fetch:beat-model": "node scripts/fetch-beat-this-model.mjs",
     "build:potoken-bundle": "node scripts/build-potoken-bundle.mjs",
     "build:native:media": "sh scripts/build-native-media.sh",
-    "build:native:media:windows": "sh scripts/build-native-media-windows.sh",
-    "build:native:media:macos:cross": "sh scripts/build-native-media-macos-cross.sh",
     "package:orchard": "bun run --cwd orchard-packages package:orchard",
     "package:orchard-packages:arch": "bun run --cwd orchard-packages package:arch"
   },
@@ -81,8 +77,6 @@
     "electron": "43.4.1",
     "gsap": "^3.15.0",
     "hls.js": "^1.7.1",
-    "node-addon-api": "^8.9.2",
-    "node-gyp": "^13.0.2",
     "quasar": "^2.28.0",
     "vite": "^8.2.2",
     "vue": "^3.5.42",

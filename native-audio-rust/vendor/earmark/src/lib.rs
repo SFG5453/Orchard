@@ -1,10 +1,10 @@
 //! Beat-aware smart crossfade engine.
 //!
-//! Given decoded PCM for two tracks and a beat grid for each, this crate works out where and how
-//! they should be joined, then renders the transition. It is significantly more involved than a
-//! fixed-duration crossfade: entry points come from downbeats, lengths come from phrases, tempo
-//! is reconciled by time stretching rather than resampling, and the transition style is chosen
-//! from measurements of the audio itself.
+//! Given decoded PCM, this crate can perform whole-track musical analysis. Given two tracks and a
+//! beat grid for each, it also works out where and how they should be joined and renders the
+//! transition. It is significantly more involved than a fixed-duration crossfade: entry points
+//! come from downbeats, lengths come from phrases, tempo is reconciled by time stretching rather
+//! than resampling, and the transition style is chosen from measurements of the audio itself.
 //!
 //! ```no_run
 //! use earmark::{AudioBuffer, BeatAnalysis, EngineConfig, SmartCrossfadeEngine};
@@ -47,9 +47,9 @@
 //!
 //! # Beat metadata
 //!
-//! **This crate does not detect beats.** BPM, beat times, and downbeat times are supplied by the
-//! caller in [`BeatAnalysis`], all in seconds. Orchard sources them from a Beat This ONNX
-//! pipeline; anything producing the same shape works. Downbeats drive candidate placement and
+//! [`analysis::WholeTrackAnalyzer`] detects BPM, beat times, and downbeat times from decoded mono
+//! PCM. Existing transition APIs continue to accept caller-supplied [`BeatAnalysis`] so hosts can
+//! use a model-refined grid without recomputing analysis. Downbeats drive candidate placement and
 //! phrase alignment, so a grid without them still works but scores blind on structure.
 //!
 //! # PCM format
@@ -136,6 +136,7 @@ pub mod planner;
 pub mod render;
 pub mod types;
 
+pub use analysis::{WholeTrackAnalysis, WholeTrackAnalyzer};
 pub use audio::AudioBuffer;
 pub use config::EngineConfig;
 pub use engine::SmartCrossfadeEngine;

@@ -31,7 +31,7 @@
 
 **Orchard** is an open-source, high-performance YouTube Music desktop client built for listeners who demand more control over playback dynamics, sound quality, queue intelligence, and connected devices than the web player provides.
 
-By pairing an embedded browser session with a native C++ audio engine and machine-learning analysis, Orchard delivers audiophile-grade processing, seamless DJ-style transitions, LAN multi-device sync, and deep desktop integration—all while honoring your existing library and playlists.
+By pairing an embedded browser session with a native Rust audio engine and machine-learning analysis, Orchard delivers audiophile-grade processing, seamless DJ-style transitions, LAN multi-device sync, and deep desktop integration—all while honoring your existing library and playlists.
 
 > [!NOTE]
 > Orchard connects directly to YouTube Music via browser-backed InnerTube requests. It is an independent open-source project and is not affiliated with or endorsed by Google or YouTube.
@@ -150,8 +150,8 @@ The mobile app can act as a standalone player or connect to your desktop session
 
 ### Requirements
 * **Node.js**: v24.x LTS and **npm**
-* **Python**: 3.10+ (for `node-gyp`)
-* **C++17 Toolchain**: GCC/Clang (Linux/macOS) or Visual Studio C++ Build Tools (Windows)
+* **Rust**: stable toolchain with Cargo
+* **C/C++ Toolchain**: required by the system-media addon and Rust audio dependencies
 
 ### Quick Start
 
@@ -187,9 +187,9 @@ The mobile app can act as a standalone player or connect to your desktop session
 | Command | Purpose |
 | :--- | :--- |
 | `npm run dev` | Launch Vite + Electron in development mode |
-| `npm run build` | Full build (Native C++ DSP + Vue frontend + Electron main) |
+| `npm run build` | Full build (Rust Earmark DSP + Vue frontend + Electron main) |
 | `npm run build:frontend` | Build only the Vue renderer bundle |
-| `npm run build:native` | Compile the native audio-analysis C++ addon |
+| `npm run build:native` | Compile the shared Rust audio-analysis/transition addon and system-media addon |
 | `npm test` | Run complete Node test suite |
 | `npm run test:native` | Run audio, transition planner, and native DSP tests |
 | `npm run package:orchard` | Build package-service application archives |
@@ -210,7 +210,7 @@ orchard/
 │   ├── auth/                    Browser-backed YouTube authentication
 │   ├── connect/                 Orchard Connect encrypted LAN WebSocket service
 │   └── playback/                Stream resolution, caching, and proxying
-├── native/                      C++ audio analyzer and N-API bindings
+├── native-audio-rust/           Rust/Earmark analyzer, transition engine, and platform bindings
 ├── mobile/                      Native Android / Kotlin client (Jetpack Compose)
 ├── workers/                     Cloudflare Workers and Durable Objects for P2P sync
 ├── services/artwork-converter/  Animated-artwork conversion service

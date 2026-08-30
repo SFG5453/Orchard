@@ -7,9 +7,8 @@ def orchardReleaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
 def orchardReleaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
 def orchardReleaseSigningReady = [orchardReleaseKeystore, orchardReleaseStorePassword, orchardReleaseKeyAlias, orchardReleaseKeyPassword].every { it }
 
-// The Rust transition engine, shared verbatim with the desktop app. Cross-compiled from source
-// rather than vendored as a prebuilt .so, so a change to the engine cannot reach one platform and
-// not the other.
+// The Rust Earmark analyzer and transition engine, shared verbatim with desktop. Cross-compiled
+// from source so DSP changes cannot reach one platform and not the other.
 def earmarkCrateDir = file('../../../native-audio-rust/mobile')
 def earmarkCoreDir = file('../../../native-audio-rust/core/src')
 def earmarkEngineDir = file('../../../native-audio-rust/vendor/earmark/src')
@@ -28,9 +27,9 @@ def orchardMinSdk = 31
 def orchardAbis = ['arm64-v8a', 'x86_64']
 
 // Where the NDK keeps its C++ runtime, per ABI. Needed because the transition engine links
-// Signalsmith Stretch and cargo-ndk links the *shared* runtime, while AGP only packages
-// libc++_shared.so on behalf of its own CMake modules -- and the analyzer is not one that needs it,
-// since CMake defaults to the static runtime. So without this nothing puts the runtime in the APK
+// Signalsmith Stretch and cargo-ndk link the *shared* runtime, while AGP only packages
+// libc++_shared.so on behalf of its small CMake resampler module. Without this nothing puts the
+// runtime in the APK,
 // and `System.loadLibrary("orchard_earmark")` fails at the first transition, which is silent: the
 // engine reports itself unavailable and every mix comes out as the plain volume ramp.
 def orchardStlTriples = ['arm64-v8a': 'aarch64-linux-android', 'x86_64': 'x86_64-linux-android']
@@ -56,8 +55,8 @@ def orchardNdkDir = {
 android {
     namespace = 'dev.sfg.orchard.connect'
     compileSdk = 37
-    // Pinned because two toolchains now have to agree on it: CMake builds the analyzer and
-    // cargo-ndk builds the transition engine, and a mismatch between them is a link error a long
+    // Pinned because two toolchains agree on it: CMake builds the streaming resampler and
+    // cargo-ndk builds Earmark, and a mismatch between them is a link error a long
     // way from its cause.
     ndkVersion = orchardNdkVersion
 
@@ -158,7 +157,7 @@ kotlin {
 
 tasks.register('buildEarmarkLibrary', Exec) {
     group = 'build'
-    description = 'Cross-compiles the earmark transition engine for every packaged ABI.'
+    description = 'Cross-compiles the Earmark analyzer and transition engine for every packaged ABI.'
 
     // The whole engine, not just this crate: the bindings crate is a marshalling shell, and a
     // change to the core or to earmark itself is exactly the change that must reach the device.
@@ -208,7 +207,7 @@ tasks.register('buildEarmarkLibrary', Exec) {
 
 tasks.register('generateEarmarkBindings', Exec) {
     group = 'build'
-    description = 'Generates the Kotlin bindings for the earmark transition engine.'
+    description = 'Generates the Kotlin bindings for the Earmark native library.'
     dependsOn 'buildEarmarkLibrary'
 
     inputs.dir earmarkJniLibsDir

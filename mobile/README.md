@@ -49,7 +49,7 @@ Orchard Mobile is the phone half of [Orchard](../) — a standalone native Andro
 
 ### On-device analysis
 
-Orchard listens to the audio rather than trusting a catalog. Beat and downbeat tracking runs a quantized [Beat This!](https://github.com/CPJKU/beat_this) model, vocal presence comes from open-unmix, and tempo, key, and energy come from a native C++ analyzer. Everything feeds the transition planner, which decides where a mix belongs and how ambitious it can afford to be.
+Orchard listens to the audio rather than trusting a catalog. Beat and downbeat tracking runs a quantized [Beat This!](https://github.com/CPJKU/beat_this) model, vocal presence comes from open-unmix, and tempo, key, and energy come from the shared Rust/Earmark analyzer. Everything feeds the transition planner, which decides where a mix belongs and how ambitious it can afford to be.
 
 ### Library and browsing
 

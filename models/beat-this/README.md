@@ -39,7 +39,7 @@ comes from the MIT-licensed C++ port
 
 - Input `input_spectrogram`: `[1, frames, 128]` log-mel spectrogram,
   22,050 Hz audio, n_fft 1024, hop 441 (50 fps), Slaney mel 30–11,000 Hz,
-  `log1p(1000·mag)` — produced by `native/analyzer/mel_spectrogram.cpp`.
+  `log1p(1000·mag)` — produced by Earmark's Rust Beat This frontend.
 - Outputs `beat`, `downbeat`: `[1, frames]` logits, peak-picked by
   `electron/audio/beatThisTracker.js`.
 

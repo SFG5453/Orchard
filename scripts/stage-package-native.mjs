@@ -9,16 +9,12 @@ if (!/^(linux|win32|darwin)-(x64|arm64)$/.test(target || '')) {
 
 const files = [
   {
-    source: 'native/build/Release/orchard_audio_analysis.node',
-    destination: `native/build/Release/orchard_audio_analysis-${target}.node`
-  },
-  {
     source: `native-media/build/orchard-system-media-${target}.node`,
     destination: `native-media/build/orchard-system-media-${target}.node`
   },
   {
-    source: `native-audio-rust/build/orchard-audio-transition-${target}.node`,
-    destination: `native-audio-rust/build/orchard-audio-transition-${target}.node`
+    source: `native-audio-rust/build/orchard-audio-${target}.node`,
+    destination: `native-audio-rust/build/orchard-audio-${target}.node`
   }
 ];
 

@@ -273,9 +273,8 @@ async function validateStagedInstall(directory, version, target) {
     'electron/main/index.js',
     '.orchard-package.json',
     `.orchard-native/${target}.json`,
-    'native/build/Release/orchard_audio_analysis.node',
     `native-media/build/orchard-system-media-${target}.node`,
-    `native-audio-rust/build/orchard-audio-transition-${target}.node`,
+    `native-audio-rust/build/orchard-audio-${target}.node`,
     target.startsWith('win32-') ? 'orchard.cmd' : 'orchard'
   ];
   if (target !== 'darwin-x64') {

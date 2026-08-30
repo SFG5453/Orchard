@@ -33,7 +33,7 @@ test('development runtime paths stay rooted at the application directory', () =>
   assert.equal(resolved.appIconPath, path.join(appRoot, 'build/icon.png'));
   assert.equal(resolved.preloadPath, path.join(appRoot, 'electron/preload/index.cjs'));
   assert.equal(resolved.rendererEntryPath, path.join(appRoot, 'dist/index.html'));
-  assert.equal(resolved.nativeModulePath, path.join(appRoot, 'native/build/Release/orchard_audio_analysis.node'));
+  assert.equal(resolved.nativeModulePath, path.join(appRoot, 'native-audio-rust/index.cjs'));
 });
 
 test('packaged runtime paths keep native code outside app.asar', () => {
@@ -49,7 +49,7 @@ test('packaged runtime paths keep native code outside app.asar', () => {
   assert.equal(resolved.rendererEntryPath, path.join(appRoot, 'dist/index.html'));
   assert.equal(
     resolved.nativeModulePath,
-    path.join(resourcesPath, 'app.asar.unpacked/native/build/Release/orchard_audio_analysis.node')
+    path.join(resourcesPath, 'app.asar.unpacked/native-audio-rust/index.cjs')
   );
 });
 
@@ -60,7 +60,7 @@ test('system-Electron runtime paths stay inside the staged application directory
     isDev: false
   });
 
-  assert.equal(resolved.nativeModulePath, path.join(appRoot, 'native/build/Release/orchard_audio_analysis.node'));
+  assert.equal(resolved.nativeModulePath, path.join(appRoot, 'native-audio-rust/index.cjs'));
   assert.equal(resolved.beatModelPath, path.join(appRoot, 'models/beat-this/beat_this_int8.onnx'));
   assert.equal(resolved.vocalModelPath, path.join(appRoot, 'models/vocal-separation/vocals_umxhq_int8.onnx'));
   assert.equal(resolved.preloadPath, path.join(appRoot, 'electron/preload/index.cjs'));
@@ -75,7 +75,7 @@ test('legacy system-Electron runtime paths follow the archive, not the shared ru
   });
 
   const unpacked = '/usr/lib/orchard/app.asar.unpacked';
-  assert.equal(resolved.nativeModulePath, path.join(unpacked, 'native/build/Release/orchard_audio_analysis.node'));
+  assert.equal(resolved.nativeModulePath, path.join(unpacked, 'native-audio-rust/index.cjs'));
   assert.equal(resolved.beatModelPath, path.join(unpacked, 'models/beat-this/beat_this_int8.onnx'));
   assert.equal(resolved.vocalModelPath, path.join(unpacked, 'models/vocal-separation/vocals_umxhq_int8.onnx'));
 

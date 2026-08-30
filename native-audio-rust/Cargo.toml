@@ -1,5 +1,5 @@
 [package]
-name = "orchard-audio-transition"
+name = "orchard-audio"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
@@ -13,6 +13,7 @@ members = ["core", "mobile"]
 exclude = ["vendor/earmark"]
 
 [lib]
+name = "orchard_audio"
 crate-type = ["cdylib"]
 
 [dependencies]
@@ -22,6 +23,7 @@ crate-type = ["cdylib"]
 # fails on undefined napi symbols, since Electron ships no import lib to link.
 napi = { version = "3.12.1", default-features = false, features = ["napi4", "dyn-symbols"] }
 napi-derive = "3.6.3"
+earmark = { path = "vendor/earmark" }
 orchard-transition-core = { path = "core" }
 
 [build-dependencies]

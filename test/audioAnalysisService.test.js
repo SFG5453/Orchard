@@ -54,7 +54,7 @@ test('only the tracks around a transition pay for the Essentia pass', async () =
   // so Best Mix -- which analyses up to fifty tracks at background priority --
   // must never trigger it.
   const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
-  const nativeModulePath = path.resolve('native/build/Release/orchard_audio_analysis.node');
+  const nativeModulePath = path.resolve('native-audio-rust/index.cjs');
   const calls = [];
   const ipc = fakeIpcMain();
   const service = setupAudioAnalysisService({
@@ -101,7 +101,7 @@ test('only the tracks around a transition pay for the Essentia pass', async () =
 
 test('a refusal from Essentia leaves the native confidence untouched', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
-  const nativeModulePath = path.resolve('native/build/Release/orchard_audio_analysis.node');
+  const nativeModulePath = path.resolve('native-audio-rust/index.cjs');
   const ipc = fakeIpcMain();
   const service = setupAudioAnalysisService({
     cachePath: path.join(directory, 'cache.json'),
@@ -132,7 +132,7 @@ test('a refusal from Essentia leaves the native confidence untouched', async () 
 test('audio analysis service caches native results across service restarts', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
   const cachePath = path.join(directory, 'cache.json');
-  const nativeModulePath = path.resolve('native/build/Release/orchard_audio_analysis.node');
+  const nativeModulePath = path.resolve('native-audio-rust/index.cjs');
   const firstIpc = fakeIpcMain();
   const firstService = setupAudioAnalysisService({
     cachePath,
@@ -323,7 +323,7 @@ test('audio analysis service renders beat-matched transitions over IPC', async (
   const service = setupAudioAnalysisService({
     cachePath,
     ipcMain: ipc,
-    nativeModulePath: path.resolve('native/build/Release/orchard_audio_analysis.node'),
+    nativeModulePath: path.resolve('native-audio-rust/index.cjs'),
     transitionModulePath: path.resolve('native-audio-rust/index.cjs'),
     logger: () => {}
   });
@@ -519,7 +519,7 @@ test('planned transition payloads use the exact native method without search con
 
 test('beat-model windows pre-empt Essentia, and its refusal restores it', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
-  const nativeModulePath = path.resolve('native/build/Release/orchard_audio_analysis.node');
+  const nativeModulePath = path.resolve('native-audio-rust/index.cjs');
   const essentiaCalls = [];
   const modelCalls = [];
   const ipc = fakeIpcMain();
@@ -666,7 +666,7 @@ test('a declined model still stamps beatModelChecked so the track is not re-anal
   // verdict -- exactly like `essentiaChecked`. Without the stamp the renderer's
   // cache gate would re-decode and re-analyse the track on every play.
   const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
-  const nativeModulePath = path.resolve('native/build/Release/orchard_audio_analysis.node');
+  const nativeModulePath = path.resolve('native-audio-rust/index.cjs');
   const ipc = fakeIpcMain();
   const service = setupAudioAnalysisService({
     cachePath: path.join(directory, 'cache.json'),

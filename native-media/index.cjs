@@ -18,7 +18,7 @@
  */
 
 // Resolves the per-platform binary produced by scripts/build-native-media*.sh.
-// Unlike the node-gyp addon this one is not tied to an Electron version: napi-rs
+// This napi-rs addon is not tied to an Electron version: napi-rs
 // resolves every napi_* symbol from the host executable at runtime, so the same
 // binary loads under node and electron alike.
 const path = require('node:path');

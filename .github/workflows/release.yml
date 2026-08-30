@@ -396,7 +396,7 @@ jobs:
           npm ci
           npm run build:native
           for addon in \
-            native/build/Release/orchard_audio_analysis.node \
+            native-audio-rust/build/orchard-audio-darwin-${{ matrix.arch }}.node \
             native-media/build/orchard-system-media-darwin-${{ matrix.arch }}.node; do
             file "$addon" | grep -q '${{ matrix.file_arch }}'
           done

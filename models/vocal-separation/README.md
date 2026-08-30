@@ -54,7 +54,7 @@ outgoing track's *vocal* content is present at a given instant, not full
 - Input `mix_magnitude`: `[1, 2, 2049, 960]` float32 — linear-frequency STFT
   magnitude (not mel), n_fft 4096, hop 1024, Hann window, `center=True`,
   44,100 Hz audio, stereo. Produced by
-  `native/analyzer/vocal_spectrogram.cpp`. The 2049 bins are the model's
+  `earmark::analysis::WholeTrackAnalyzer::vocal_spectrogram`. The 2049 bins are the model's
   full output range; internally it only reads the first 1487 (16 kHz
   bandwidth) via a checkpoint-supplied `max_bin`, exactly as trained --
   everything above that passes through unmodeled, which is fine since

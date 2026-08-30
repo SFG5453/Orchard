@@ -235,10 +235,9 @@ export function setupAudioAnalysisService({
     return nativeAddon;
   }
 
-  // The transition engine lives in its own napi-rs addon (native-audio-rust),
-  // separate from the analysis addon above: it carries no analysis version
-  // because it caches nothing, and unlike the node-gyp addon the same binary
-  // loads under any Electron version.
+  // Transition rendering is exported by the same napi-rs binary as analysis.
+  // It remains a separate lazy handle here so tests and callers can override
+  // the two service paths independently.
   function transition() {
     if (transitionAddon) return transitionAddon;
     if (!transitionModulePath) return null;

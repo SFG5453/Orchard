@@ -116,9 +116,8 @@ async function validateComposedInstall(directory: string, target: string): Promi
     "electron/main/index.js",
     ".orchard-package.json",
     `.orchard-native/${target}.json`,
-    "native/build/Release/orchard_audio_analysis.node",
     `native-media/build/orchard-system-media-${target}.node`,
-    `native-audio-rust/build/orchard-audio-transition-${target}.node`
+    `native-audio-rust/build/orchard-audio-${target}.node`
   ];
   for (const relativePath of required) {
     if (!(await exists(path.join(directory, relativePath)))) {

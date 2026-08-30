@@ -165,7 +165,9 @@ fn apply_selected_shape(plan: &mut TransitionPlan, selected: &SelectedPlan) {
     }
 
     if selected.filter_sweep == Some(0.0) {
-        plan.filters.outgoing.retain(|f| f.kind != FilterKind::LowPass);
+        plan.filters
+            .outgoing
+            .retain(|f| f.kind != FilterKind::LowPass);
     }
 }
 

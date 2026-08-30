@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with Orchard. If not, see <https://www.gnu.org/licenses/>.
 
-# Builds the transition-engine addon for the host platform.
+# Builds the shared Earmark analysis and transition addon for the host platform.
 
 set -eu
 
@@ -25,7 +25,7 @@ crate_dir="$project_dir/native-audio-rust"
 output_dir="$crate_dir/build"
 
 command -v cargo >/dev/null || {
-  echo 'cargo not found; install a Rust toolchain to build the transition addon.' >&2
+  echo 'cargo not found; install a Rust toolchain to build the audio addon.' >&2
   exit 1
 }
 
@@ -53,25 +53,28 @@ if [ "$platform" = win32 ]; then
   esac
   rustup target add "$target" >/dev/null
   cargo build --release --target "$target" --manifest-path "$crate_dir/Cargo.toml"
-  binary="$crate_dir/target/$target/release/orchard_audio_transition.dll"
+  binary="$crate_dir/target/$target/release/orchard_audio.dll"
 else
   cargo build --release --manifest-path "$crate_dir/Cargo.toml"
-  binary="$crate_dir/target/release/${prefix}orchard_audio_transition.${extension}"
+  binary="$crate_dir/target/release/${prefix}orchard_audio.${extension}"
 fi
 
 mkdir -p "$output_dir"
 cp "$binary" \
-  "$output_dir/orchard-audio-transition-${platform}-${architecture}.node"
+  "$output_dir/orchard-audio-${platform}-${architecture}.node"
 
 # The addon is useless if it cannot register with Node, and a silently
 # entry-point-less binary would only surface as a confusing runtime failure.
 (cd "$project_dir" && node -e "
-const addon = require('./native-audio-rust/build/orchard-audio-transition-${platform}-${architecture}.node');
+const addon = require('./native-audio-rust/build/orchard-audio-${platform}-${architecture}.node');
+if (addon.analysisVersion !== 13 || typeof addon.analyze !== 'function') {
+  throw new Error('addon did not export analysis version 13');
+}
 if (typeof addon.renderTransition !== 'function') {
   throw new Error('addon did not export renderTransition');
 }
 if (typeof addon.renderPlannedTransition !== 'function') {
   throw new Error('addon did not export renderPlannedTransition');
 }
-console.log('transition addon OK: orchard-audio-transition-${platform}-${architecture}.node');
+console.log('Earmark addon OK: orchard-audio-${platform}-${architecture}.node');
 ")

@@ -1,9 +1,25 @@
 //! Feature extraction. Nothing here decides anything — it only measures.
 
 pub mod energy;
+mod fft;
 pub mod loudness;
+mod model_frontends;
 pub mod phrase;
 pub mod spectrum;
+mod tempo;
+mod track;
+
+pub use model_frontends::{
+    BEAT_SPECTROGRAM_FFT, BEAT_SPECTROGRAM_HOP, BEAT_SPECTROGRAM_MELS,
+    BEAT_SPECTROGRAM_SAMPLE_RATE, BeatSpectrogram, VOCAL_SPECTROGRAM_BINS,
+    VOCAL_SPECTROGRAM_CHANNELS, VOCAL_SPECTROGRAM_FFT, VOCAL_SPECTROGRAM_HOP,
+    VOCAL_SPECTROGRAM_SAMPLE_RATE, VocalSpectrogram,
+};
+pub use tempo::TempoResult;
+pub use track::{
+    EnergyPoint, MeterEvidence, MixCuePoint, Phrase, StructuralBoundaryCandidate,
+    TransitionFeatureFrame, WholeTrackAnalysis, WholeTrackAnalyzer,
+};
 
 pub use phrase::PhraseGrid;
 pub use spectrum::SpectrumAnalyzer;

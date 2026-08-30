@@ -35,6 +35,415 @@
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use orchard_transition_core as core;
+use std::sync::{Mutex, OnceLock};
+
+use earmark::analysis::{
+    BEAT_SPECTROGRAM_HOP, BEAT_SPECTROGRAM_MELS, BEAT_SPECTROGRAM_SAMPLE_RATE, BeatSpectrogram,
+    VOCAL_SPECTROGRAM_BINS, VOCAL_SPECTROGRAM_CHANNELS, VOCAL_SPECTROGRAM_HOP,
+    VOCAL_SPECTROGRAM_SAMPLE_RATE, VocalSpectrogram, WholeTrackAnalysis, WholeTrackAnalyzer,
+};
+
+/// Persisted Orchard analysis/cache contract. The language changed; its meaning did not.
+pub const ANALYSIS_VERSION: u32 = 13;
+
+#[napi(module_exports)]
+#[allow(dead_code)]
+fn export_analysis_version(mut exports: Object) -> Result<()> {
+    exports.set_named_property("analysisVersion", ANALYSIS_VERSION)
+}
+
+static ANALYZER_POOL: OnceLock<Mutex<Vec<WholeTrackAnalyzer>>> = OnceLock::new();
+
+fn with_analyzer<T>(
+    operation: impl FnOnce(&mut WholeTrackAnalyzer) -> earmark::Result<T>,
+) -> earmark::Result<T> {
+    let pool = ANALYZER_POOL.get_or_init(|| Mutex::new(Vec::new()));
+    let mut analyzer = pool
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .pop()
+        .map_or_else(WholeTrackAnalyzer::new, Ok)?;
+    let result = operation(&mut analyzer);
+    pool.lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .push(analyzer);
+    result
+}
+
+fn analysis_error(error: earmark::CrossfadeError) -> Error {
+    Error::new(Status::GenericFailure, error.to_string())
+}
+
+fn compact(value: f64) -> f64 {
+    (value * 10_000.0).round() / 10_000.0
+}
+
+fn compact_vec(values: Vec<f64>) -> Vec<f64> {
+    values.into_iter().map(compact).collect()
+}
+
+#[napi(object)]
+pub struct JsEnergyPoint {
+    pub time: f64,
+    pub energy: f64,
+}
+
+#[napi(object)]
+pub struct JsPhrase {
+    pub start: f64,
+    pub end: f64,
+    pub r#type: String,
+    pub confidence: f64,
+}
+
+#[napi(object)]
+pub struct JsMixCuePoint {
+    pub time: f64,
+    pub score: f64,
+    pub r#type: String,
+}
+
+#[napi(object)]
+pub struct JsMeterEvidence {
+    pub beats_per_bar: u32,
+    pub confidence: f64,
+    pub source: String,
+}
+
+#[napi(object)]
+pub struct JsTransitionFeatureFrame {
+    pub time: f64,
+    pub energy: f64,
+    pub low: f64,
+    pub mid: f64,
+    pub high: f64,
+    pub vocal: f64,
+    pub novelty: f64,
+    pub transient_density: f64,
+    pub stability: f64,
+}
+
+#[napi(object)]
+pub struct JsStructuralBoundaryCandidate {
+    pub time: f64,
+    pub observed_time: f64,
+    pub confidence: f64,
+    pub source: String,
+    pub novelty_peak: f64,
+    pub energy_delta: f64,
+    pub low_delta: f64,
+    pub vocal_delta: f64,
+    pub stability_before: f64,
+    pub stability_after: f64,
+    pub downbeat_distance: f64,
+}
+
+#[napi(object)]
+pub struct JsTrackAnalysis {
+    pub analysis_version: u32,
+    pub duration: f64,
+    pub bpm: f64,
+    pub beat_interval: f64,
+    pub first_beat: f64,
+    pub beat_confidence: f64,
+    pub beats: Vec<f64>,
+    pub downbeats: Vec<f64>,
+    pub phrase_boundaries: Vec<f64>,
+    pub phrases: Vec<JsPhrase>,
+    pub key: String,
+    pub key_confidence: f64,
+    pub chroma: Vec<f64>,
+    pub audible_start_time: f64,
+    pub pickup_time: f64,
+    pub pickup_confidence: f64,
+    pub mix_in_time: f64,
+    pub mix_in_confidence: f64,
+    pub intro_end_time: f64,
+    pub outro_start_time: f64,
+    pub content_end_time: f64,
+    pub mix_out_time: f64,
+    pub loudness_lufs: f64,
+    pub peak_dbfs: f64,
+    pub dynamic_range_db: f64,
+    pub energy_curve: Vec<JsEnergyPoint>,
+    pub low_energy_curve: Vec<JsEnergyPoint>,
+    pub mid_energy_curve: Vec<JsEnergyPoint>,
+    pub high_energy_curve: Vec<JsEnergyPoint>,
+    pub vocal_activity_mask: Vec<f64>,
+    pub vocal_probability: f64,
+    pub instrumental_probability: f64,
+    pub mix_in_candidates: Vec<JsMixCuePoint>,
+    pub mix_out_candidates: Vec<JsMixCuePoint>,
+    pub meter: JsMeterEvidence,
+    pub transition_feature_frames: Vec<JsTransitionFeatureFrame>,
+    pub structural_boundary_candidates: Vec<JsStructuralBoundaryCandidate>,
+}
+
+impl From<WholeTrackAnalysis> for JsTrackAnalysis {
+    fn from(result: WholeTrackAnalysis) -> Self {
+        let vocal_probability = compact(result.vocal_probability);
+        let instrumental_probability = compact(result.instrumental_probability);
+        Self {
+            analysis_version: ANALYSIS_VERSION,
+            duration: compact(result.duration),
+            bpm: compact(result.bpm),
+            beat_interval: compact(result.beat_interval),
+            first_beat: compact(result.first_beat),
+            beat_confidence: compact(result.beat_confidence),
+            beats: compact_vec(result.beats),
+            downbeats: compact_vec(result.downbeats),
+            phrase_boundaries: compact_vec(result.phrase_boundaries),
+            phrases: result
+                .phrases
+                .into_iter()
+                .map(|phrase| JsPhrase {
+                    start: compact(phrase.start),
+                    end: compact(phrase.end),
+                    r#type: phrase.kind,
+                    confidence: compact(phrase.confidence),
+                })
+                .collect(),
+            key: result.key,
+            key_confidence: compact(result.key_confidence),
+            chroma: compact_vec(result.chroma),
+            audible_start_time: compact(result.audible_start_time),
+            pickup_time: compact(result.pickup_time),
+            pickup_confidence: compact(result.pickup_confidence),
+            mix_in_time: compact(result.mix_in_time),
+            mix_in_confidence: compact(result.mix_in_confidence),
+            intro_end_time: compact(result.intro_end_time),
+            outro_start_time: compact(result.outro_start_time),
+            content_end_time: compact(result.content_end_time),
+            mix_out_time: compact(result.mix_out_time),
+            loudness_lufs: compact(result.loudness_lufs),
+            peak_dbfs: compact(result.peak_dbfs),
+            dynamic_range_db: compact(result.dynamic_range_db),
+            energy_curve: js_curve(result.energy_curve),
+            low_energy_curve: js_curve(result.low_energy_curve),
+            mid_energy_curve: js_curve(result.mid_energy_curve),
+            high_energy_curve: js_curve(result.high_energy_curve),
+            vocal_activity_mask: compact_vec(result.vocal_activity_mask),
+            vocal_probability,
+            instrumental_probability,
+            mix_in_candidates: result
+                .mix_in_candidates
+                .into_iter()
+                .map(|cue| JsMixCuePoint {
+                    time: compact(cue.time),
+                    score: compact(cue.score),
+                    r#type: cue.kind,
+                })
+                .collect(),
+            mix_out_candidates: result
+                .mix_out_candidates
+                .into_iter()
+                .map(|cue| JsMixCuePoint {
+                    time: compact(cue.time),
+                    score: compact(cue.score),
+                    r#type: cue.kind,
+                })
+                .collect(),
+            meter: JsMeterEvidence {
+                beats_per_bar: result.meter.beats_per_bar,
+                confidence: compact(result.meter.confidence),
+                source: result.meter.source,
+            },
+            transition_feature_frames: result
+                .transition_feature_frames
+                .into_iter()
+                .map(|frame| JsTransitionFeatureFrame {
+                    time: compact(frame.time),
+                    energy: compact(frame.energy),
+                    low: compact(frame.low),
+                    mid: compact(frame.mid),
+                    high: compact(frame.high),
+                    vocal: compact(frame.vocal),
+                    novelty: compact(frame.novelty),
+                    transient_density: compact(frame.transient_density),
+                    stability: compact(frame.stability),
+                })
+                .collect(),
+            structural_boundary_candidates: result
+                .structural_boundary_candidates
+                .into_iter()
+                .map(|boundary| JsStructuralBoundaryCandidate {
+                    time: compact(boundary.time),
+                    observed_time: compact(boundary.observed_time),
+                    confidence: compact(boundary.confidence),
+                    source: boundary.source,
+                    novelty_peak: compact(boundary.novelty_peak),
+                    energy_delta: compact(boundary.energy_delta),
+                    low_delta: compact(boundary.low_delta),
+                    vocal_delta: compact(boundary.vocal_delta),
+                    stability_before: compact(boundary.stability_before),
+                    stability_after: compact(boundary.stability_after),
+                    downbeat_distance: compact(boundary.downbeat_distance),
+                })
+                .collect(),
+        }
+    }
+}
+
+fn js_curve(points: Vec<earmark::analysis::EnergyPoint>) -> Vec<JsEnergyPoint> {
+    points
+        .into_iter()
+        .map(|point| JsEnergyPoint {
+            time: compact(point.time),
+            energy: compact(point.energy),
+        })
+        .collect()
+}
+
+pub struct AnalyzeAudioTask {
+    samples: Vec<f32>,
+    sample_rate: f64,
+    duration: f64,
+}
+
+impl Task for AnalyzeAudioTask {
+    type Output = WholeTrackAnalysis;
+    type JsValue = JsTrackAnalysis;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        with_analyzer(|analyzer| analyzer.analyze(&self.samples, self.sample_rate, self.duration))
+            .map_err(analysis_error)
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(output.into())
+    }
+}
+
+#[napi(ts_return_type = "Promise<JsTrackAnalysis>")]
+pub fn analyze(
+    samples: Float32Array,
+    sample_rate: f64,
+    duration: f64,
+) -> Result<AsyncTask<AnalyzeAudioTask>> {
+    if samples.is_empty()
+        || !sample_rate.is_finite()
+        || sample_rate < 1000.0
+        || !duration.is_finite()
+        || duration <= 0.0
+    {
+        return Err(Error::new(
+            Status::InvalidArg,
+            "audio samples, sample rate, and duration must be valid",
+        ));
+    }
+    Ok(AsyncTask::new(AnalyzeAudioTask {
+        samples: samples.as_ref().to_vec(),
+        sample_rate,
+        duration,
+    }))
+}
+
+#[napi(object)]
+pub struct JsBeatSpectrogram {
+    pub values: Float32Array,
+    pub frames: u32,
+    pub mels: u32,
+    pub frames_per_second: f64,
+}
+
+pub struct BeatSpectrogramTask {
+    samples: Vec<f32>,
+    sample_rate: f64,
+}
+
+impl Task for BeatSpectrogramTask {
+    type Output = BeatSpectrogram;
+    type JsValue = JsBeatSpectrogram;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        with_analyzer(|analyzer| analyzer.beat_spectrogram(&self.samples, self.sample_rate))
+            .map_err(analysis_error)
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(JsBeatSpectrogram {
+            values: Float32Array::new(output.values),
+            frames: output.frames as u32,
+            mels: BEAT_SPECTROGRAM_MELS as u32,
+            frames_per_second: BEAT_SPECTROGRAM_SAMPLE_RATE / BEAT_SPECTROGRAM_HOP as f64,
+        })
+    }
+}
+
+#[napi(ts_return_type = "Promise<JsBeatSpectrogram>")]
+pub fn beat_spectrogram(
+    samples: Float32Array,
+    sample_rate: f64,
+) -> Result<AsyncTask<BeatSpectrogramTask>> {
+    if samples.is_empty() || !sample_rate.is_finite() || sample_rate < 1000.0 {
+        return Err(Error::new(
+            Status::InvalidArg,
+            "audio samples and sample rate must be valid",
+        ));
+    }
+    Ok(AsyncTask::new(BeatSpectrogramTask {
+        samples: samples.as_ref().to_vec(),
+        sample_rate,
+    }))
+}
+
+#[napi(object)]
+pub struct JsVocalSpectrogram {
+    pub values: Float32Array,
+    pub frames: u32,
+    pub channels: u32,
+    pub bins: u32,
+    pub frames_per_second: f64,
+}
+
+pub struct VocalSpectrogramTask {
+    channels: Vec<Vec<f32>>,
+    sample_rate: f64,
+}
+
+impl Task for VocalSpectrogramTask {
+    type Output = VocalSpectrogram;
+    type JsValue = JsVocalSpectrogram;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        let channels: Vec<&[f32]> = self.channels.iter().map(Vec::as_slice).collect();
+        with_analyzer(|analyzer| analyzer.vocal_spectrogram(&channels, self.sample_rate))
+            .map_err(analysis_error)
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(JsVocalSpectrogram {
+            values: Float32Array::new(output.values),
+            frames: output.frames as u32,
+            channels: VOCAL_SPECTROGRAM_CHANNELS as u32,
+            bins: VOCAL_SPECTROGRAM_BINS as u32,
+            frames_per_second: VOCAL_SPECTROGRAM_SAMPLE_RATE / VOCAL_SPECTROGRAM_HOP as f64,
+        })
+    }
+}
+
+#[napi(ts_return_type = "Promise<JsVocalSpectrogram>")]
+pub fn vocal_spectrogram(
+    channels: Vec<Float32Array>,
+    sample_rate: f64,
+) -> Result<AsyncTask<VocalSpectrogramTask>> {
+    if channels.iter().any(|channel| channel.as_ref().is_empty())
+        || !sample_rate.is_finite()
+        || sample_rate < 1000.0
+    {
+        return Err(Error::new(
+            Status::InvalidArg,
+            "channels and sample rate must be valid",
+        ));
+    }
+    Ok(AsyncTask::new(VocalSpectrogramTask {
+        channels: channels
+            .iter()
+            .map(|channel| channel.as_ref().to_vec())
+            .collect(),
+        sample_rate,
+    }))
+}
 
 /// One side of the transition: planar PCM plus the beat grid the caller already has.
 #[napi(object)]

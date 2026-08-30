@@ -47,7 +47,7 @@ import { loadOnnxModel, loadOnnxRuntime, onnxExecutionProviders } from './onnxRu
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-// Matches native/analyzer/vocal_spectrogram.h and the fixed shape the model
+// Matches Earmark's vocal spectrogram frontend and the fixed shape the model
 // was exported at -- see scripts/convert-umx-vocals-to-onnx.py for why the
 // export is fixed-frame rather than dynamic.
 const BINS = 2049;

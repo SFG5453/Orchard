@@ -152,12 +152,8 @@ try {
     ),
     copyRequired(path.join(projectDir, 'native-audio-rust', 'index.cjs'), path.join(appDir, 'native-audio-rust', 'index.cjs')),
     copyRequired(
-      path.join(projectDir, 'native-audio-rust', 'build', `orchard-audio-transition-${target}.node`),
-      path.join(appDir, 'native-audio-rust', 'build', `orchard-audio-transition-${target}.node`)
-    ),
-    copyRequired(
-      path.join(projectDir, 'native', 'build', 'Release', 'orchard_audio_analysis.node'),
-      path.join(appDir, 'native', 'build', 'Release', 'orchard_audio_analysis.node')
+      path.join(projectDir, 'native-audio-rust', 'build', `orchard-audio-${target}.node`),
+      path.join(appDir, 'native-audio-rust', 'build', `orchard-audio-${target}.node`)
     ),
     copyRequired(
       path.join(projectDir, 'models', 'beat-this', 'beat_this_int8.onnx'),
@@ -197,9 +193,8 @@ try {
     'dist/index.html',
     'dist/welcome.html',
     'electron/main/index.js',
-    'native/build/Release/orchard_audio_analysis.node',
     `native-media/build/orchard-system-media-${target}.node`,
-    `native-audio-rust/build/orchard-audio-transition-${target}.node`,
+    `native-audio-rust/build/orchard-audio-${target}.node`,
     `node_modules/onnxruntime-node/bin/napi-v6/linux/${architecture}/onnxruntime_binding.node`
   ];
   for (const relativePath of required) {

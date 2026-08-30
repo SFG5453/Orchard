@@ -31,7 +31,7 @@ import org.junit.Test
  * Bridge tests for the native mel front end.
  *
  * The DSP itself is a byte-for-byte port of Orchard desktop's validated
- * `native/analyzer/mel_spectrogram.cpp`, so its correctness is inherited rather than re-derived
+ * Earmark's shared Rust mel frontend, so its correctness is inherited rather than re-derived
  * here. What is new on Android, and therefore what these test, is the JNI marshalling and the
  * frame/time mapping the beat grid is read through, a spectrogram that is right but off by a frame
  * would put every predicted beat 20 ms out.
@@ -49,7 +49,7 @@ class MelSpectrogramTest {
 
     @Test
     fun nativeLibraryLoads() {
-        assertTrue("liborchard_analysis.so did not load", MelSpectrogram.available)
+        assertTrue("Rust analyzer and resampler libraries did not load", MelSpectrogram.available)
         assertEquals(128, MelSpectrogram.mels)
         assertEquals(22_050.0, MelSpectrogram.sampleRate, 0.0)
         assertEquals(441, MelSpectrogram.hop)

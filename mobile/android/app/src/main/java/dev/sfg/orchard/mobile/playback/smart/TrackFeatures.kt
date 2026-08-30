@@ -32,7 +32,7 @@ import org.json.JSONObject
  * it how to mix, and these features tell it *where*; and, through the energy curve, whether an
  * interior mix-out anchor would skip silence or skip a minute of music.
  *
- * Ported unchanged from Orchard desktop's `native/analyzer`, and deliberately so: the mix-out
+ * Ported into Earmark's Rust analyzer without redesign, deliberately so: the mix-out
  * budget, phrase detection and cue scoring were tuned against real material, and reimplementing
  * them from the header would produce different numbers that the policy's thresholds are not
  * calibrated for.

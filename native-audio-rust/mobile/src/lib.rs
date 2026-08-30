@@ -32,8 +32,289 @@
 //! timeline, which is what the caller adds its slice offset to.
 
 use orchard_transition_core as core;
+use std::sync::{Mutex, OnceLock};
+
+use earmark::analysis::{
+    BEAT_SPECTROGRAM_HOP, BEAT_SPECTROGRAM_MELS, BEAT_SPECTROGRAM_SAMPLE_RATE,
+    VOCAL_SPECTROGRAM_BINS, VOCAL_SPECTROGRAM_CHANNELS, VOCAL_SPECTROGRAM_FFT,
+    VOCAL_SPECTROGRAM_HOP, VOCAL_SPECTROGRAM_SAMPLE_RATE, WholeTrackAnalysis, WholeTrackAnalyzer,
+};
+use jni::JNIEnv;
+use jni::objects::{JByteBuffer, JClass, JFloatArray};
+use jni::sys::{jdouble, jfloatArray, jint, jstring};
+use serde_json::json;
 
 uniffi::setup_scaffolding!("orchard_earmark");
+
+static ANALYZER_POOL: OnceLock<Mutex<Vec<WholeTrackAnalyzer>>> = OnceLock::new();
+
+fn with_analyzer<T>(
+    operation: impl FnOnce(&mut WholeTrackAnalyzer) -> earmark::Result<T>,
+) -> earmark::Result<T> {
+    let pool = ANALYZER_POOL.get_or_init(|| Mutex::new(Vec::new()));
+    let mut analyzer = pool
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .pop()
+        .map_or_else(WholeTrackAnalyzer::new, Ok)?;
+    let result = operation(&mut analyzer);
+    pool.lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .push(analyzer);
+    result
+}
+
+fn read_floats(env: &mut JNIEnv<'_>, input: &JFloatArray<'_>) -> jni::errors::Result<Vec<f32>> {
+    let mut values = vec![0.0; env.get_array_length(input)? as usize];
+    env.get_float_array_region(input, 0, &mut values)?;
+    Ok(values)
+}
+
+fn float_array(env: &mut JNIEnv<'_>, values: &[f32]) -> jfloatArray {
+    let Ok(output) = env.new_float_array(values.len() as i32) else {
+        return std::ptr::null_mut();
+    };
+    if env.set_float_array_region(&output, 0, values).is_err() {
+        return std::ptr::null_mut();
+    }
+    output.into_raw()
+}
+
+fn empty_float_array(env: &mut JNIEnv<'_>) -> jfloatArray {
+    float_array(env, &[])
+}
+
+fn mobile_analysis_json(result: &WholeTrackAnalysis) -> String {
+    let curve = |points: &[earmark::analysis::EnergyPoint]| {
+        points
+            .iter()
+            .map(|point| json!({ "t": point.time, "e": point.energy }))
+            .collect::<Vec<_>>()
+    };
+    let cues = |points: &[earmark::analysis::MixCuePoint]| {
+        points
+            .iter()
+            .map(|point| json!({ "t": point.time, "s": point.score, "y": point.kind }))
+            .collect::<Vec<_>>()
+    };
+    json!({
+        "duration": result.duration,
+        "bpm": result.bpm,
+        "beatInterval": result.beat_interval,
+        "firstBeat": result.first_beat,
+        "beatConfidence": result.beat_confidence,
+        "key": result.key,
+        "keyConfidence": result.key_confidence,
+        "audibleStartTime": result.audible_start_time,
+        "pickupTime": result.pickup_time,
+        "introEndTime": result.intro_end_time,
+        "outroStartTime": result.outro_start_time,
+        "contentEndTime": result.content_end_time,
+        "mixInTime": result.mix_in_time,
+        "mixOutTime": result.mix_out_time,
+        "vocalProbability": result.vocal_probability,
+        "instrumentalProbability": result.instrumental_probability,
+        "downbeats": result.downbeats,
+        "phraseBoundaries": result.phrase_boundaries,
+        "vocalActivityMask": result.vocal_activity_mask,
+        "energyCurve": curve(&result.energy_curve),
+        "lowEnergyCurve": curve(&result.low_energy_curve),
+        "mixInCandidates": cues(&result.mix_in_candidates),
+        "mixOutCandidates": cues(&result.mix_out_candidates),
+    })
+    .to_string()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_TrackFeatures_nativeAnalyze(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    samples: JFloatArray<'_>,
+    sample_rate: jdouble,
+    duration: jdouble,
+) -> jstring {
+    let json = read_floats(&mut env, &samples)
+        .ok()
+        .and_then(|samples| {
+            with_analyzer(|analyzer| analyzer.analyze(&samples, sample_rate, duration)).ok()
+        })
+        .map_or_else(|| "{}".to_owned(), |result| mobile_analysis_json(&result));
+    env.new_string(json)
+        .map_or(std::ptr::null_mut(), |value| value.into_raw())
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_TrackFeatures_nativeSampleRate(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) -> jdouble {
+    11_025.0
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MelSpectrogram_nativeCompute(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    samples: JFloatArray<'_>,
+    sample_rate: jdouble,
+) -> jfloatArray {
+    let Some(spectrogram) = read_floats(&mut env, &samples).ok().and_then(|samples| {
+        with_analyzer(|analyzer| analyzer.beat_spectrogram(&samples, sample_rate)).ok()
+    }) else {
+        return empty_float_array(&mut env);
+    };
+    float_array(&mut env, &spectrogram.values)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MelSpectrogram_nativeMelCount(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) -> jint {
+    BEAT_SPECTROGRAM_MELS as jint
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MelSpectrogram_nativeSampleRate(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) -> jdouble {
+    BEAT_SPECTROGRAM_SAMPLE_RATE
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MelSpectrogram_nativeHop(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) -> jint {
+    BEAT_SPECTROGRAM_HOP as jint
+}
+
+fn vocal_window(
+    env: &mut JNIEnv<'_>,
+    left: &JFloatArray<'_>,
+    right: &JFloatArray<'_>,
+    offset: jint,
+    length: jint,
+    sample_rate: jdouble,
+) -> Option<earmark::analysis::VocalSpectrogram> {
+    if offset < 0 || length <= 0 {
+        return None;
+    }
+    let left = read_floats(env, left).ok()?;
+    let right = read_floats(env, right).ok()?;
+    let end = offset as usize + length as usize;
+    if end > left.len() || end > right.len() {
+        return None;
+    }
+    with_analyzer(|analyzer| {
+        analyzer.vocal_spectrogram(
+            &[&left[offset as usize..end], &right[offset as usize..end]],
+            sample_rate,
+        )
+    })
+    .ok()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_VocalSpectrogram_nativeCompute(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    left: JFloatArray<'_>,
+    right: JFloatArray<'_>,
+    offset: jint,
+    length: jint,
+    sample_rate: jdouble,
+) -> jfloatArray {
+    let Some(spectrogram) = vocal_window(&mut env, &left, &right, offset, length, sample_rate)
+    else {
+        return empty_float_array(&mut env);
+    };
+    float_array(&mut env, &spectrogram.values)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_VocalSpectrogram_nativeComputeInto(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    left: JFloatArray<'_>,
+    right: JFloatArray<'_>,
+    offset: jint,
+    length: jint,
+    sample_rate: jdouble,
+    destination: JByteBuffer<'_>,
+    frame_stride: jint,
+) -> jint {
+    if frame_stride <= 0 {
+        return 0;
+    }
+    let Some(spectrogram) = vocal_window(&mut env, &left, &right, offset, length, sample_rate)
+    else {
+        return 0;
+    };
+    let stride = frame_stride as usize;
+    if spectrogram.frames == 0 || spectrogram.frames > stride {
+        return 0;
+    }
+    let required = VOCAL_SPECTROGRAM_CHANNELS * VOCAL_SPECTROGRAM_BINS * stride;
+    let Ok(capacity) = env.get_direct_buffer_capacity(&destination) else {
+        return 0;
+    };
+    let Ok(address) = env.get_direct_buffer_address(&destination) else {
+        return 0;
+    };
+    if capacity < required * size_of::<f32>()
+        || !(address as usize).is_multiple_of(align_of::<f32>())
+    {
+        return 0;
+    }
+    // JNI guarantees the direct-buffer address remains valid for this call. Capacity and
+    // alignment were checked above, and no Java code can run concurrently on this synchronized
+    // model input buffer, so this is the sole unsafe operation in the analyzer migration.
+    let output = unsafe { std::slice::from_raw_parts_mut(address.cast::<f32>(), required) };
+    output.fill(0.0);
+    for channel in 0..VOCAL_SPECTROGRAM_CHANNELS {
+        for bin in 0..VOCAL_SPECTROGRAM_BINS {
+            let row = channel * VOCAL_SPECTROGRAM_BINS + bin;
+            let source =
+                &spectrogram.values[row * spectrogram.frames..(row + 1) * spectrogram.frames];
+            output[row * stride..row * stride + spectrogram.frames].copy_from_slice(source);
+        }
+    }
+    spectrogram.frames as jint
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_VocalSpectrogram_nativeBins(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) -> jint {
+    VOCAL_SPECTROGRAM_BINS as jint
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_VocalSpectrogram_nativeSampleRate(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) -> jdouble {
+    VOCAL_SPECTROGRAM_SAMPLE_RATE
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_VocalSpectrogram_nativeHop(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) -> jint {
+    VOCAL_SPECTROGRAM_HOP as jint
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_VocalSpectrogram_nativeFftSize(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) -> jint {
+    VOCAL_SPECTROGRAM_FFT as jint
+}
 
 /// Structurally invalid input: the caller built the request wrong. Distinct from a refusal,
 /// which is a verdict on the audio and arrives as [`TransitionResult::rendered`] false.
@@ -93,7 +374,7 @@ fn planar(pcm: &[u8], channel_count: u32, label: &str) -> Result<Vec<Vec<f32>>, 
             "{label} PCM has no channels"
         )));
     }
-    if pcm.len() % (SAMPLE_BYTES * channels) != 0 {
+    if !pcm.len().is_multiple_of(SAMPLE_BYTES * channels) {
         return Err(TransitionError::invalid(format!(
             "{label} PCM is {} bytes, which is not a whole number of {channels}-channel frames",
             pcm.len()
@@ -105,8 +386,10 @@ fn planar(pcm: &[u8], channel_count: u32, label: &str) -> Result<Vec<Vec<f32>>, 
         .chunks_exact(frames * SAMPLE_BYTES)
         .map(|channel| {
             channel
-                .chunks_exact(SAMPLE_BYTES)
-                .map(|sample| f32::from_le_bytes(sample.try_into().expect("four bytes")))
+                .as_chunks::<SAMPLE_BYTES>()
+                .0
+                .iter()
+                .map(|sample| f32::from_le_bytes(*sample))
                 .collect()
         })
         .collect())

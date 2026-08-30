@@ -22,13 +22,13 @@ import { createRequire } from 'node:module';
 import test from 'node:test';
 
 const require = createRequire(import.meta.url);
-const native = require('../native/build/Release/orchard_audio_analysis.node');
+const native = require('../native-audio-rust/index.cjs');
 const { AUDIO_ANALYSIS_VERSION } = await import('../shared/audioAnalysis.js');
 
-test('native analysis addon does not bundle the retired transition renderer', () => {
-  assert.equal(native.timeStretch, undefined);
-  assert.equal(native.renderTransition, undefined);
-  assert.equal(native.maxTransparentRatioDeviation, undefined);
+test('Rust native addon exposes analysis and transition rendering together', () => {
+  assert.equal(typeof native.analyze, 'function');
+  assert.equal(typeof native.renderTransition, 'function');
+  assert.equal(typeof native.renderPlannedTransition, 'function');
 });
 
 function syntheticTrack({ bpm = 120, duration = 48, sampleRate = 11025 } = {}) {

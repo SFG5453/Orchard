@@ -34,7 +34,10 @@ import { finalizeTrackAnalysis } from './trackAnalysis.js';
 // 12: octave-related native/model tempo readings compare beat positions at a
 // shared metrical level. Version-11 caches can contain false phase demotions
 // from comparing every double-time model beat to a half-time native grid.
-export const AUDIO_ANALYSIS_VERSION = 12;
+// 13: the whole-track analyzer moved to Earmark's Rust DSP implementation.
+// Floating-point FFT differences can move compacted evidence and model inputs,
+// so version-12 C++ analysis is deliberately not mixed with Rust results.
+export const AUDIO_ANALYSIS_VERSION = 13;
 export const MIN_LOCAL_BPM = 40;
 export const MAX_LOCAL_BPM = 240;
 

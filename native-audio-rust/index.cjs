@@ -18,16 +18,15 @@
  */
 
 // Resolves the per-platform binary produced by scripts/build-native-audio*.sh.
-// Unlike the node-gyp addon this one is not tied to an Electron version: napi-rs
-// resolves every napi_* symbol from the host executable at runtime, so the same
-// binary loads under node and electron alike.
+// napi-rs resolves every napi_* symbol from the host executable at runtime, so
+// the same analysis/transition binary loads under Node and Electron alike.
 const path = require('node:path');
 
 const BINARY_DIRECTORY = path.join(__dirname, 'build');
 
 function binaryName() {
   const architecture = process.arch === 'arm64' ? 'arm64' : 'x64';
-  return `orchard-audio-transition-${process.platform}-${architecture}.node`;
+  return `orchard-audio-${process.platform}-${architecture}.node`;
 }
 
 module.exports = require(path.join(BINARY_DIRECTORY, binaryName()));
