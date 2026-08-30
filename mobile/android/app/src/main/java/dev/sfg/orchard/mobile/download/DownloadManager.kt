@@ -237,7 +237,7 @@ class DownloadManager(
 
     companion object {
         private const val TAG = "DownloadManager"
-        // MAX-quality tracks may use four bounded range requests each. Three tracks keeps enough
+        // NewPipe-resolved tracks may use four bounded range requests each. Three tracks keeps enough
         // parallelism to beat per-connection throttling without creating a request storm.
         private const val MAX_CONCURRENT_DOWNLOADS = 3
         private const val MAX_DOWNLOAD_ATTEMPTS = 6

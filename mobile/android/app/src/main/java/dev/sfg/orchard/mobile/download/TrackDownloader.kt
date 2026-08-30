@@ -43,8 +43,8 @@ import kotlin.coroutines.coroutineContext
 /**
  * Downloads audio tracks through the same client-profile resolver used for playback.
  *
- * NewPipe is intentionally absent from the retry path. [YouTubeStreamResolver] invokes it only
- * when the user explicitly selects [AudioQuality.MAX]; every other quality remains Innertube-only.
+ * Public tracks use NewPipe through [YouTubeStreamResolver], with Innertube retained for
+ * extraction failures and account-only uploads. The selected [AudioQuality] is preserved.
  */
 class TrackDownloader(
     private val http: OkHttpClient,
