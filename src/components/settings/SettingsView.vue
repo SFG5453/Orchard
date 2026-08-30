@@ -27,11 +27,12 @@ import SpotifySection from './SpotifySection.vue';
 import SongCacheSection from './SongCacheSection.vue';
 import ArtistPacksSection from './ArtistPacksSection.vue';
 import OrchardAccountSection from './OrchardAccountSection.vue';
+import NavigationLayoutSection from './NavigationLayoutSection.vue';
 import { computed, ref, watch } from 'vue';
 
 export default {
   name: 'SettingsView',
-  components: { AudioEngineSection, DataSavingSection, BackupRestoreSection, DiagnosticsSection, LastfmSection, SpotifySection, SongCacheSection, ArtistPacksSection, OrchardAccountSection },
+  components: { AudioEngineSection, DataSavingSection, BackupRestoreSection, DiagnosticsSection, LastfmSection, SpotifySection, SongCacheSection, ArtistPacksSection, OrchardAccountSection, NavigationLayoutSection },
   props: { app: { type: Object, required: true } },
   setup(props) {
     const layoutPresetDescription = computed(() => {
@@ -70,6 +71,10 @@ export default {
       <a href="#settings-data-saving">
         <q-icon name="data_saver_on" />
         <span>Data Saving</span>
+      </a>
+      <a href="#settings-layout">
+        <q-icon name="space_dashboard" />
+        <span>Home &amp; sidebar</span>
       </a>
       <a href="#settings-appearance">
         <q-icon name="palette" />
@@ -257,6 +262,8 @@ export default {
       <ArtistPacksSection :app="app" />
 
       <AudioEngineSection :app="app" />
+
+      <NavigationLayoutSection :app="app" />
 
       <section id="settings-appearance" class="settings-section" aria-labelledby="settings-appearance-title">
         <div class="settings-section__heading">

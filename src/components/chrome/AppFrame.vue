@@ -202,6 +202,7 @@ export default {
               <q-btn flat round dense icon="chevron_left" class="back-button" :disable="!navigationHistory.length" @click="goBack" />
             </div>
             <div class="topbar-controls">
+              <q-btn v-if="activeView === 'home'" flat round dense icon="tune" title="Customize Home" aria-label="Customize Home" @click="showLayoutSettings" />
               <q-btn v-if="activeView === 'home' && authState.signedIn" flat round dense icon="refresh" :loading="homeLoading" @click="loadHomeLibrary" />
               <q-btn v-if="activeView === 'podcasts'" flat round dense icon="refresh" :loading="podcastLoading" @click="loadPodcasts({ force: true })" />
               <q-btn v-if="activeView === 'releaseRadar'" flat round dense icon="refresh" :loading="releaseRadarLoading" @click="loadReleaseRadar({ force: true })" />

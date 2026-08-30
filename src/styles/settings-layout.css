@@ -1,0 +1,269 @@
+/*
+ * Copyright (C) 2026 SFG545
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.layout-editor {
+  padding: 18px 0 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.layout-editor:last-child {
+  border-bottom: 0;
+}
+
+.layout-editor__heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+
+.layout-editor__heading h3,
+.layout-editor__group h4 {
+  margin: 0;
+  color: #d9ddda;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.layout-editor__heading p {
+  margin: 4px 0 0;
+  color: #79817b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.layout-editor__reset {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 5px;
+  background: transparent;
+  color: #929a94;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.layout-editor__reset:hover,
+.layout-editor__reset:focus-visible {
+  border-color: rgba(var(--player-accent-rgb), 0.34);
+  color: #fff;
+}
+
+.layout-editor__reset:focus-visible,
+.layout-editor__moves button:focus-visible {
+  outline: 1px solid rgba(var(--player-accent-rgb), 0.68);
+  outline-offset: 2px;
+}
+
+.layout-editor__group {
+  margin-top: 16px;
+}
+
+.layout-editor__group h4 {
+  margin-bottom: 6px;
+  color: #79817b;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.layout-editor__list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.layout-editor__item {
+  display: grid;
+  min-height: 58px;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 4px 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.018);
+  transition: border-color 150ms ease, background-color 150ms ease, opacity 150ms ease;
+}
+
+.layout-editor__item:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.layout-editor__item--compact {
+  min-height: 44px;
+  grid-template-columns: 28px 20px minmax(0, 1fr) auto auto;
+}
+
+.layout-editor__item--hidden {
+  opacity: 0.52;
+}
+
+.layout-editor__position {
+  color: rgba(var(--player-accent-rgb), 0.62);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.layout-editor__icon {
+  color: #717a73;
+  font-size: 17px;
+}
+
+.layout-editor__copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.layout-editor__copy strong {
+  overflow: hidden;
+  color: #d9ddda;
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layout-editor__copy small {
+  overflow: hidden;
+  color: #79817b;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layout-editor__moves {
+  display: flex;
+  gap: 3px;
+}
+
+.layout-editor__moves button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #79817b;
+  cursor: pointer;
+}
+
+.layout-editor__moves button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.055);
+  color: #fff;
+}
+
+.layout-editor__moves button:disabled {
+  cursor: default;
+  opacity: 0.22;
+}
+
+.layout-editor__moves .q-icon {
+  font-size: 15px;
+}
+
+.layout-editor__item .q-toggle {
+  margin-right: -5px;
+}
+
+.home-layout-empty {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.home-layout-empty > .q-icon {
+  color: rgba(var(--player-accent-rgb), 0.64);
+  font-size: 28px;
+}
+
+.home-layout-empty strong {
+  color: #d9ddda;
+  font-size: 13px;
+}
+
+.home-layout-empty span {
+  color: #79817b;
+  font-size: 11px;
+}
+
+.home-layout-empty button {
+  min-height: 32px;
+  margin-top: 4px;
+  padding: 0 12px;
+  border: 1px solid rgba(var(--player-accent-rgb), 0.36);
+  border-radius: 6px;
+  background: rgba(var(--player-accent-deep-rgb), 0.32);
+  color: #eaffef;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.home-layout-empty button:hover,
+.home-layout-empty button:focus-visible {
+  background: rgba(var(--player-accent-deep-rgb), 0.5);
+  outline: 1px solid rgba(var(--player-accent-rgb), 0.68);
+  outline-offset: 2px;
+}
+
+@media (max-width: 520px) {
+  .layout-editor__item {
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+  }
+
+  .layout-editor__item--compact {
+    grid-template-columns: 22px 20px minmax(0, 1fr) auto;
+  }
+
+  .layout-editor__moves {
+    grid-column: 2 / 3;
+    grid-row: 2;
+  }
+
+  .layout-editor__item--compact .layout-editor__moves {
+    grid-column: 3 / 4;
+  }
+
+  .layout-editor__position,
+  .layout-editor__item--compact > .layout-editor__icon,
+  .layout-editor__item > .q-toggle {
+    grid-row: 1 / 3;
+  }
+
+  .layout-editor__item > .q-toggle {
+    grid-column: 3;
+  }
+
+  .layout-editor__item--compact > .q-toggle {
+    grid-column: 4;
+  }
+}

@@ -52,6 +52,7 @@
 @import './styles/sidebar-nav.css';
 @import './styles/sidebar-nav-account.css';
 @import './styles/settings.css';
+@import './styles/settings-layout.css';
 @import './styles/settings-song-cache.css';
 @import './styles/audio-engine.css';
 @import './styles/settings-readiness.css';

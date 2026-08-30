@@ -465,6 +465,10 @@ export function installReadinessActions(ctx) {
     ctx.immersiveBackgroundsEnabled.value = preferences.immersiveBackgroundsEnabled;
     ctx.immersiveBackgroundIntensity.value = preferences.immersiveBackgroundIntensity;
     ctx.immersiveBackgroundMotion.value = preferences.immersiveBackgroundMotion;
+    ctx.homeSectionOrder.value = preferences.homeSectionOrder;
+    ctx.hiddenHomeSectionIds.value = preferences.hiddenHomeSectionIds;
+    ctx.sidebarItemOrder.value = preferences.sidebarItemOrder;
+    ctx.hiddenSidebarItemIds.value = preferences.hiddenSidebarItemIds;
     ctx.layoutPreset.value = preferences.layoutPreset;
     ctx.keepOldVersions.value = preferences.keepOldVersions;
     ctx.uiScale.value = preferences.uiScale;

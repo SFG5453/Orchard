@@ -120,6 +120,40 @@ html[data-theme-resolved='light'] .settings-row__copy p {
   color: var(--muted);
 }
 
+html[data-theme-resolved='light'] .layout-editor,
+html[data-theme-resolved='light'] .layout-editor__item {
+  border-color: var(--line);
+}
+
+html[data-theme-resolved='light'] .layout-editor__item {
+  background: rgba(18, 24, 19, 0.018);
+}
+
+html[data-theme-resolved='light'] .layout-editor__item:hover,
+html[data-theme-resolved='light'] .layout-editor__moves button:hover:not(:disabled) {
+  background: var(--panel-alt);
+}
+
+html[data-theme-resolved='light'] .layout-editor__heading h3,
+html[data-theme-resolved='light'] .layout-editor__copy strong,
+html[data-theme-resolved='light'] .home-layout-empty strong {
+  color: var(--text);
+}
+
+html[data-theme-resolved='light'] .layout-editor__heading p,
+html[data-theme-resolved='light'] .layout-editor__group h4,
+html[data-theme-resolved='light'] .layout-editor__copy small,
+html[data-theme-resolved='light'] .layout-editor__icon,
+html[data-theme-resolved='light'] .layout-editor__moves button,
+html[data-theme-resolved='light'] .home-layout-empty span {
+  color: var(--muted);
+}
+
+html[data-theme-resolved='light'] .layout-editor__reset {
+  border-color: var(--line);
+  color: var(--muted-strong);
+}
+
 html[data-theme-resolved='light'] .settings-option,
 html[data-theme-resolved='light'] .settings-button,
 html[data-theme-resolved='light'] .settings-link-button,

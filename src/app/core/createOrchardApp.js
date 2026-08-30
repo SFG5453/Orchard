@@ -39,6 +39,7 @@ import { installListeningPartyActions } from '../social/listeningPartyActions.js
 import { installLastfmScrobbling } from '../social/lastfmScrobbling.js';
 import { installMediaHandlers } from '../playback/mediaHandlers.js';
 import { installNavigationActions } from './navigationActions.js';
+import { installNavigationLayout } from './navigationLayout.js';
 import { installPlaybackControls } from '../playback/playbackControls.js';
 import { installPlaybackResolve } from '../playback/playbackResolve.js';
 import { installPlaylistActions } from '../browse/playlistActions.js';
@@ -80,6 +81,7 @@ export function createOrchardApp() {
   installVisualUtils(ctx);
   installAudioEngineState(ctx);
   installState(ctx);
+  installNavigationLayout(ctx);
   installLastfmScrobbling(ctx);
   installYouTubeHistoryActions(ctx);
   installYouTubeLikesActions(ctx);

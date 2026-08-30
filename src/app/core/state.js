@@ -65,6 +65,7 @@ import {
   SPONSOR_BLOCK_MODE_OPTIONS,
   normalizeSponsorBlockMode
 } from '../playback/sponsorBlockActions.js';
+import { normalizeLayoutIds } from './navigationLayout.js';
 
 export function installState(ctx) {
   ctx.orchardLogoUrl = orchardLogoUrl;
@@ -84,6 +85,9 @@ export function installState(ctx) {
     youtubeHistoryEnabled: true,
     discordRpcEnabled: true,
     immersiveBackgroundsEnabled: true,
+    hiddenHomeSectionIds: [],
+    hiddenSidebarItemIds: [],
+    homeSectionOrder: [],
     keepOldVersions: false,
     songCacheEnabled: SONG_CACHE_DEFAULTS.enabled,
     songCacheMaxSizeMb: SONG_CACHE_DEFAULTS.maxSizeMb,
@@ -94,6 +98,7 @@ export function installState(ctx) {
     volumeNormalizationEnabled: false,
     repeatMode: 'off',
     shuffleEnabled: false,
+    sidebarItemOrder: [],
     volume: 0.85
   };
   ctx.accentColorSourceOptions = ACCENT_COLOR_SOURCE_OPTIONS;
@@ -138,6 +143,9 @@ export function installState(ctx) {
       immersiveBackgroundsEnabled: typeof preferences.immersiveBackgroundsEnabled === 'boolean'
         ? preferences.immersiveBackgroundsEnabled
         : ctx.DEFAULT_USER_PREFERENCES.immersiveBackgroundsEnabled,
+      hiddenHomeSectionIds: normalizeLayoutIds(preferences.hiddenHomeSectionIds),
+      hiddenSidebarItemIds: normalizeLayoutIds(preferences.hiddenSidebarItemIds),
+      homeSectionOrder: normalizeLayoutIds(preferences.homeSectionOrder),
       keepOldVersions: typeof preferences.keepOldVersions === 'boolean'
         ? preferences.keepOldVersions
         : ctx.DEFAULT_USER_PREFERENCES.keepOldVersions,
@@ -164,6 +172,7 @@ export function installState(ctx) {
       shuffleEnabled: typeof preferences.shuffleEnabled === 'boolean'
         ? preferences.shuffleEnabled
         : ctx.DEFAULT_USER_PREFERENCES.shuffleEnabled,
+      sidebarItemOrder: normalizeLayoutIds(preferences.sidebarItemOrder),
       themePreference: normalizeThemePreference(preferences.themePreference),
       volume: clampVolume(preferences.volume ?? ctx.DEFAULT_USER_PREFERENCES.volume)
     };
@@ -491,6 +500,10 @@ export function installState(ctx) {
     ctx.immersiveBackgroundsEnabled.value = defaults.immersiveBackgroundsEnabled;
     ctx.immersiveBackgroundIntensity.value = defaults.immersiveBackgroundIntensity;
     ctx.immersiveBackgroundMotion.value = defaults.immersiveBackgroundMotion;
+    ctx.homeSectionOrder.value = defaults.homeSectionOrder;
+    ctx.hiddenHomeSectionIds.value = defaults.hiddenHomeSectionIds;
+    ctx.sidebarItemOrder.value = defaults.sidebarItemOrder;
+    ctx.hiddenSidebarItemIds.value = defaults.hiddenSidebarItemIds;
     ctx.layoutPreset.value = defaults.layoutPreset;
     ctx.keepOldVersions.value = defaults.keepOldVersions;
     ctx.uiScale.value = defaults.uiScale;
