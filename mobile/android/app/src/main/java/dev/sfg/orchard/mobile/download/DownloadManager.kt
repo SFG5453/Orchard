@@ -37,6 +37,11 @@ import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
+internal fun DownloadItem.completedFileOrNull(): File? {
+    if (status != DownloadStatus.COMPLETED || filePath.isBlank()) return null
+    return File(filePath).takeIf { it.exists() && it.length() > 0L }
+}
+
 /**
  * Application-scoped download queue controller supporting concurrent background downloads,
  * cancellation, deletion, and reactive state flows.
@@ -104,9 +109,27 @@ class DownloadManager(
     fun downloadTrack(track: Track) {
         if (track.id.isBlank()) return
         val current = mutableDownloads.value[track.id]
-        if (current?.status == DownloadStatus.COMPLETED || current?.isDownloading == true) {
+        if (current?.status == DownloadStatus.COMPLETED && current.completedFileOrNull() != null) {
             Log.d(TAG, "Track ${track.id} already downloaded or queued")
             return
+        }
+        if (current?.isDownloading == true) {
+            Log.d(TAG, "Track ${track.id} already downloaded or queued")
+            return
+        }
+
+        // Android or the user may remove an external-files entry while the process is alive.
+        // A COMPLETED row is only a download while its non-empty file still exists; otherwise a
+        // Best Mix request sees the missing file, asks us to fetch it, and this method used to
+        // reject that fetch as "already downloaded". Besides making the sort wait on a download
+        // that never starts, that disagreement produced the apparently random one-song download
+        // stage reported from collection Best Mix.
+        if (current?.status == DownloadStatus.COMPLETED) {
+            synchronized(stateLock) {
+                val updated = mutableDownloads.value.toMutableMap().apply { remove(track.id) }
+                mutableDownloads.value = updated
+                updateDerivedStates(updated)
+            }
         }
 
         val item = DownloadItem(
@@ -178,9 +201,7 @@ class DownloadManager(
     /** Returns the local file for a downloaded track, or null if not downloaded. */
     fun getDownloadedFile(videoId: String): File? {
         val item = mutableDownloads.value[videoId] ?: return null
-        if (item.status != DownloadStatus.COMPLETED || item.filePath.isBlank()) return null
-        val file = File(item.filePath)
-        return if (file.exists() && file.length() > 0) file else null
+        return item.completedFileOrNull()
     }
 
     private suspend fun processDownload(queuedItem: DownloadItem) {
@@ -226,7 +247,7 @@ class DownloadManager(
 
     private fun updateDerivedStates(map: Map<String, DownloadItem>) {
         mutableDownloadedIds.value = map.values
-            .filter { it.status == DownloadStatus.COMPLETED && it.filePath.isNotBlank() }
+            .filter { it.completedFileOrNull() != null }
             .map { it.track.id }
             .toSet()
         mutableDownloadingIds.value = map.values
