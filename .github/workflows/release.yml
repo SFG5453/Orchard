@@ -192,6 +192,16 @@ jobs:
           distribution: temurin
           cache: gradle
 
+      - name: Set up Rust
+        if: steps.release.outputs.mobile_only == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - name: Install cargo-ndk
+        if: steps.release.outputs.mobile_only == 'true'
+        run: cargo install cargo-ndk --locked
+
       - name: Run mobile tests
         if: steps.release.outputs.mobile_only == 'true'
         working-directory: mobile/android
