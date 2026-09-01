@@ -25,7 +25,8 @@ export default defineConfig({
     strictPort: false
   },
   build: {
-    target: 'es2022',
+    chunkSizeWarningLimit: 900,
+    target: 'esnext',
     emptyOutDir: true,
     rolldownOptions: {
       input: {

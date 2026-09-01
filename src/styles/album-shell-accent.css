@@ -1,0 +1,62 @@
+/*
+ * Copyright (C) 2026 SFG545
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Album rails are enabled only while Accent color is set to Artwork. The
+   variables are sampled from the album being viewed, not the playing track. */
+html body .app-shell[data-album-artwork-accent] .sidebar,
+html body .app-shell[data-album-artwork-accent] .lyrics-sidebar {
+  --player-accent-rgb: var(--album-rail-accent-rgb) !important;
+  --player-accent-soft-rgb: var(--album-rail-accent-soft-rgb) !important;
+  --player-accent-deep-rgb: var(--album-rail-deep-rgb) !important;
+  backdrop-filter: blur(26px) saturate(1.16) !important;
+}
+
+html body .app-shell[data-album-artwork-accent] .sidebar {
+  border-right-color: rgba(var(--album-rail-accent-soft-rgb), 0.14) !important;
+  background:
+    radial-gradient(ellipse 125% 58% at 112% 14%, rgba(var(--album-rail-left-rgb), 0.42), transparent 70%),
+    linear-gradient(90deg, rgba(var(--album-rail-ink-rgb), 0.98), rgba(var(--album-rail-seam-rgb), 0.52)),
+    rgb(var(--album-rail-ink-rgb)) !important;
+  box-shadow: inset -1px 0 rgba(var(--album-rail-accent-soft-rgb), 0.08);
+}
+
+html body .app-shell[data-album-artwork-accent] .sidebar .q-drawer__content {
+  background: transparent !important;
+}
+
+html body .app-shell[data-album-artwork-accent] .sidebar-mini {
+  background:
+    radial-gradient(ellipse 125% 58% at 112% 14%, rgba(var(--album-rail-left-rgb), 0.42), transparent 70%),
+    linear-gradient(90deg, rgba(var(--album-rail-ink-rgb), 0.98), rgba(var(--album-rail-seam-rgb), 0.52)),
+    rgb(var(--album-rail-ink-rgb)) !important;
+}
+
+html body .app-shell[data-album-artwork-accent] .lyrics-sidebar {
+  border-left-color: rgba(var(--album-rail-accent-soft-rgb), 0.14) !important;
+  background:
+    radial-gradient(ellipse 125% 58% at -12% 14%, rgba(var(--album-rail-right-rgb), 0.4), transparent 70%),
+    linear-gradient(90deg, rgba(var(--album-rail-seam-rgb), 0.5), rgba(var(--album-rail-ink-rgb), 0.98)),
+    rgb(var(--album-rail-ink-rgb)) !important;
+  box-shadow: inset 1px 0 rgba(var(--album-rail-accent-soft-rgb), 0.08);
+}
+
+html body .app-shell[data-album-artwork-accent] .lyrics-sidebar .q-drawer__content,
+html body .app-shell[data-album-artwork-accent] .lyrics-sidebar__inner {
+  background: transparent !important;
+}

@@ -23,6 +23,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { Platform } from 'youtubei.js';
+import { registerArtworkColorSampler } from '../appearance/artworkColorSampler.js';
 import { createAccountSummary } from '../auth/accountSummary.js';
 import { createAuthService } from '../auth/authService.js';
 import { createBrowserMusicApi } from '../auth/browserMusicApi.js';
@@ -520,6 +521,7 @@ app.whenReady().then(async () => {
   });
   registerWindowControls({ BrowserWindow, ipcMain, screen });
   registerClipboardHandlers({ clipboard, ipcMain });
+  registerArtworkColorSampler({ ipcMain, net });
   // Awaited here so the stored proxy mode is in force before any window requests
   // its first image; applying it later would leave the opening screen's artwork
   // going out through the proxy the listener asked Orchard to ignore.

@@ -71,6 +71,34 @@ contextBridge.exposeInMainWorld('orchardApp', {
   viewLicense: () => ipcRenderer.invoke('app:view-license')
 });
 
+contextBridge.exposeInMainWorld('orchardArtwork', {
+  sampleColors: (artworkUrl) => ipcRenderer.invoke('artwork:sample-colors', String(artworkUrl || '').slice(0, 8192)),
+  sampleFrameColors: (frame = {}) => {
+    const width = Number(frame.width);
+    const height = Number(frame.height);
+    const source = frame.data;
+    if (
+      !Number.isInteger(width) ||
+      !Number.isInteger(height) ||
+      width < 1 ||
+      height < 1 ||
+      width > 256 ||
+      height > 256 ||
+      !ArrayBuffer.isView(source) ||
+      source.byteLength !== width * height * 4
+    ) {
+      return Promise.resolve(null);
+    }
+
+    return ipcRenderer.invoke('artwork:sample-frame-colors', {
+      width,
+      height,
+      channels: 4,
+      data: Uint8Array.from(source)
+    });
+  }
+});
+
 contextBridge.exposeInMainWorld('orchardDiscord', {
   setPresence: (presence) => ipcRenderer.invoke('discord:set-presence', presence),
   clearPresence: () => ipcRenderer.invoke('discord:clear-presence')

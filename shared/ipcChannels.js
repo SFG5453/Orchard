@@ -35,6 +35,10 @@ export const IPC_CHANNELS = Object.freeze({
     SYNC_SETTINGS: 'app:sync-settings',
     VIEW_LICENSE: 'app:view-license'
   }),
+  ARTWORK: Object.freeze({
+    SAMPLE_COLORS: 'artwork:sample-colors',
+    SAMPLE_FRAME_COLORS: 'artwork:sample-frame-colors'
+  }),
   AUDIO_ANALYSIS: Object.freeze({
     ANALYZE: 'audio-analysis:analyze',
     AVAILABLE: 'audio-analysis:available',

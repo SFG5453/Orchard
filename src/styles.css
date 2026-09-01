@@ -77,9 +77,11 @@
 @import './styles/collection-quick-search.css';
 @import './styles/live-shows.css';
 @import './styles/windowed-shell.css';
+@import './styles/album-detail.css';
 @import './styles/listening-party.css';
 @import './styles/orchard-full-bleed.css';
 @import './styles/compact-settings.css';
 @import './styles/player-bar.css';
 @import './styles/immersive-background.css';
+@import './styles/album-shell-accent.css';
 @import './styles/motion.css';
