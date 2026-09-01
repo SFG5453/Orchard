@@ -365,7 +365,9 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
             // endless mix exhausts its continuation budget.
             try {
                 graph.catalog.browsePages(id).collect { page ->
-                    mutableDetail.value = LoadState.Content(page.withSeed(seed))
+                    val resolved = page.withSeed(seed)
+                    mutableDetail.value = LoadState.Content(resolved)
+                    graph.library.cacheDetail(resolved)
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -622,86 +624,106 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         onProgress: (String) -> Unit = {},
         onComplete: () -> Unit = {},
     ) = viewModelScope.launch {
-        val currentSnapshot = playback.value
-        val upcoming = currentSnapshot.upcoming
-        if (upcoming.size <= 1) {
-            onComplete()
-            return@launch
-        }
-        val queueRequest = BestMixQueueRequest.capture(currentSnapshot)
-        val currentSettings = settings.value
-        val syncService = SupabaseSyncService(getApplication())
-        val featuresMap = mutableMapOf<String, TrackFeatures.Features>()
-        val currentTrack = currentSnapshot.currentTrack
-        val analysisTracks = (listOfNotNull(currentTrack) + upcoming).distinctBy(Track::id)
+        try {
+            val currentSnapshot = playback.value
+            val upcoming = currentSnapshot.upcoming
+            if (upcoming.size <= 1) return@launch
+            val queueRequest = BestMixQueueRequest.capture(currentSnapshot)
+            val currentSettings = settings.value
+            val syncService = SupabaseSyncService(getApplication())
+            val featuresMap = mutableMapOf<String, TrackFeatures.Features>()
+            val currentTrack = currentSnapshot.currentTrack
+            val analysisTracks = (listOfNotNull(currentTrack) + upcoming).distinctBy(Track::id)
 
-        // 1. Check in-memory cache
-        for (track in analysisTracks) {
-            BestMixSorter.getCachedFeatures(track.id)?.let { featuresMap[track.id] = it }
-        }
-
-        // 2. Fetch from Supabase if enabled
-        if (currentSettings.bestMixSupabaseSync && featuresMap.size < analysisTracks.size) {
-            val neededIds = analysisTracks.map { it.id }.filter { it !in featuresMap }
-            onProgress("Checking cloud analysis...")
-            val cloudFeatures = withContext(Dispatchers.IO) { syncService.fetchTrackFeatures(neededIds) }
-            cloudFeatures.forEach { (id, features) ->
-                featuresMap[id] = features
-                BestMixSorter.cacheFeatures(id, features)
+            // 1. Check in-memory cache
+            for (track in analysisTracks) {
+                BestMixSorter.getCachedFeatures(track.id)?.let { featuresMap[track.id] = it }
             }
-        }
 
-        // 3. Analyze local files in parallel for remaining
-        val missing = analysisTracks.filter { it.id !in featuresMap }
-        if (missing.isNotEmpty()) {
-            val allDownloads = graph.downloads.store.loadAll()
-            val totalToAnalyze = missing.size
-            val completedCount = AtomicInteger(0)
-            val parallelism = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
-            val semaphore = Semaphore(parallelism)
+            // 2. Fetch from Supabase if enabled
+            if (currentSettings.bestMixSupabaseSync && featuresMap.size < analysisTracks.size) {
+                val neededIds = analysisTracks.map { it.id }.filter { it !in featuresMap }
+                onProgress("Checking cloud analysis...")
+                val cloudFeatures = withContext(Dispatchers.IO) { syncService.fetchTrackFeatures(neededIds) }
+                cloudFeatures.forEach { (id, features) ->
+                    featuresMap[id] = features
+                    BestMixSorter.cacheFeatures(id, features)
+                }
+            }
 
-            onProgress("Analyzing audio (0/$totalToAnalyze)...")
-            coroutineScope {
-                missing.map { track ->
-                    async(Dispatchers.Default) {
-                        semaphore.withPermit {
-                            val file = allDownloads[track.id]?.filePath?.let { File(it) }
-                            if (file != null && file.exists()) {
-                                val localFeatures = analyzeBestMixTrack(track, file)
-                                if (localFeatures != null) {
+            // 3. Make missing tracks locally analyzable. Previously this action only inspected
+            // files that happened to be downloaded already, then silently returned the original
+            // queue when there was no evidence to sort on.
+            val missing = analysisTracks.filter { it.id !in featuresMap }
+            val undownloaded = missing.filter { graph.downloads.getDownloadedFile(it.id) == null }
+            if (undownloaded.isNotEmpty()) {
+                onProgress("Downloading tracks (0/${undownloaded.size})...")
+                graph.downloads.downloadTracks(undownloaded)
+                val targetIds = undownloaded.mapTo(mutableSetOf(), Track::id)
+                val startTime = System.currentTimeMillis()
+                while (System.currentTimeMillis() - startTime < BEST_MIX_DOWNLOAD_TIMEOUT_MS) {
+                    val currentDownloads = graph.downloads.downloads.value
+                    val finished = targetIds.count { id ->
+                        graph.downloads.getDownloadedFile(id) != null ||
+                            currentDownloads[id]?.status == dev.sfg.orchard.mobile.download.DownloadStatus.FAILED
+                    }
+                    onProgress("Downloading tracks ($finished/${targetIds.size})...")
+                    if (finished >= targetIds.size) break
+                    delay(500)
+                }
+            }
+
+            val filesToAnalyze = missing.mapNotNull { track ->
+                graph.downloads.getDownloadedFile(track.id)?.let { track to it }
+            }
+            if (filesToAnalyze.isNotEmpty()) {
+                val totalToAnalyze = filesToAnalyze.size
+                val completedCount = AtomicInteger(0)
+                val parallelism = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
+                val semaphore = Semaphore(parallelism)
+
+                onProgress("Analyzing audio (0/$totalToAnalyze)...")
+                coroutineScope {
+                    filesToAnalyze.map { (track, file) ->
+                        async(Dispatchers.Default) {
+                            semaphore.withPermit {
+                                analyzeBestMixTrack(track, file)?.let { localFeatures ->
                                     synchronized(featuresMap) { featuresMap[track.id] = localFeatures }
                                 }
+                                val done = completedCount.incrementAndGet()
+                                onProgress("Analyzing audio ($done/$totalToAnalyze)...")
                             }
-                            val done = completedCount.incrementAndGet()
-                            onProgress("Analyzing audio ($done/$totalToAnalyze)...")
                         }
-                    }
-                }.awaitAll()
+                    }.awaitAll()
+                }
             }
-        }
 
-        onProgress("Sorting queue...")
-        val sortedUpcoming = withContext(Dispatchers.Default) {
-            BestMixSorter.sort(
-                tracks = upcoming,
-                featuresMap = featuresMap,
-                initialFeatures = currentTrack?.id?.let(featuresMap::get),
-            )
-        }
-        if (!queueRequest.matches(playback.value)) {
+            onProgress("Sorting queue...")
+            val sortedUpcoming = withContext(Dispatchers.Default) {
+                BestMixSorter.sort(
+                    tracks = upcoming,
+                    featuresMap = featuresMap,
+                    initialFeatures = currentTrack?.id?.let(featuresMap::get),
+                )
+            }
+            val reconciled = queueRequest.reconcile(playback.value, sortedUpcoming) ?: return@launch
+            val baseTitle = currentSnapshot.contextTitle.ifBlank { currentTrack?.album.orEmpty() }
+            val newTitle = if (baseTitle.isNotBlank() && !baseTitle.endsWith("• Best Mix", ignoreCase = true)) {
+                "$baseTitle • Best Mix"
+            } else if (baseTitle.isNotBlank()) {
+                baseTitle
+            } else {
+                "Best Mix"
+            }
+            local.replaceUpcoming(reconciled, contextTitle = newTitle)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            Log.w(TAG, "Could not prepare Best Mix for the upcoming queue", error)
+            showWarning("Best Mix could not finish preparing the queue.")
+        } finally {
             onComplete()
-            return@launch
         }
-        val baseTitle = currentSnapshot.contextTitle.ifBlank { currentTrack?.album.orEmpty() }
-        val newTitle = if (baseTitle.isNotBlank() && !baseTitle.endsWith("• Best Mix", ignoreCase = true)) {
-            "$baseTitle • Best Mix"
-        } else if (baseTitle.isNotBlank()) {
-            baseTitle
-        } else {
-            "Best Mix"
-        }
-        local.replaceUpcoming(sortedUpcoming, contextTitle = newTitle)
-        onComplete()
     }
 
     /**
@@ -1368,6 +1390,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         const val AUTOPLAY_REFILL_THRESHOLD = 3
         const val AUTOPLAY_QUEUE_LIMIT = 20
         const val AUTOPLAY_TOTAL_LIMIT = 100
+        const val BEST_MIX_DOWNLOAD_TIMEOUT_MS = 90_000L
     }
 }
 

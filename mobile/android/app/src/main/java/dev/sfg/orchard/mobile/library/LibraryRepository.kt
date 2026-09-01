@@ -23,6 +23,8 @@ import dev.sfg.orchard.mobile.catalog.CatalogRepository
 import dev.sfg.orchard.mobile.model.Album
 import dev.sfg.orchard.mobile.model.Artist
 import dev.sfg.orchard.mobile.model.CatalogItem
+import dev.sfg.orchard.mobile.model.BrowseDetail
+import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.LibrarySnapshot
 import dev.sfg.orchard.mobile.model.Playlist
 import dev.sfg.orchard.mobile.model.Track
@@ -83,6 +85,51 @@ class LibraryRepository(
         })
     }
 
+    /** Stores full collection membership after a browse page loads, without changing saved state. */
+    fun cacheDetail(detail: BrowseDetail) {
+        val saved = when (detail.kind) {
+            CatalogKind.PLAYLIST -> mutableLibrary.value.savedPlaylists.any {
+                it.id.removePrefix("VL") == detail.id.removePrefix("VL")
+            }
+            CatalogKind.ALBUM -> mutableLibrary.value.savedAlbums.any { it.id == detail.id }
+            else -> false
+        }
+        if (!saved) return
+
+        update { current ->
+            when (detail.kind) {
+                CatalogKind.PLAYLIST -> current.copy(
+                    savedPlaylists = current.savedPlaylists.map { saved ->
+                        if (saved.id.removePrefix("VL") == detail.id.removePrefix("VL")) {
+                            Playlist(
+                                id = saved.id,
+                                title = detail.title.ifBlank { saved.title },
+                                author = detail.artist.ifBlank { detail.subtitle.ifBlank { saved.author } },
+                                artworkUrl = detail.artworkUrl.ifBlank { saved.artworkUrl },
+                                description = detail.description.ifBlank { saved.description },
+                                tracks = detail.tracks.ifEmpty { saved.tracks },
+                                explicit = detail.explicit || saved.explicit,
+                            )
+                        } else saved
+                    },
+                )
+                CatalogKind.ALBUM -> current.copy(
+                    savedAlbums = current.savedAlbums.map { saved ->
+                        if (saved.id == detail.id) saved.copy(
+                            title = detail.title.ifBlank { saved.title },
+                            artist = detail.artist.ifBlank { detail.subtitle.ifBlank { saved.artist } },
+                            artworkUrl = detail.artworkUrl.ifBlank { saved.artworkUrl },
+                            year = detail.year.ifBlank { saved.year },
+                            tracks = detail.tracks.ifEmpty { saved.tracks },
+                            explicit = detail.explicit || saved.explicit,
+                        ) else saved
+                    },
+                )
+                else -> current
+            }
+        }
+    }
+
     fun recordPlayed(track: Track) = update { current ->
         val currentCount = current.playCounts[track.id] ?: 0
         val updatedCounts = current.playCounts + (track.id to currentCount + 1)
@@ -119,7 +166,8 @@ class LibraryRepository(
             savedArtists = items.filterIsInstance<CatalogItem.Performer>().map { it.artist }.distinctBy(Artist::id),
             savedPlaylists = savedPlaylists
                 .ifEmpty { items.filterIsInstance<CatalogItem.Collection>().map { it.playlist }.distinctBy(Playlist::id) }
-                .ifEmpty { current.savedPlaylists },
+                .ifEmpty { current.savedPlaylists }
+                .map { remote -> remote.withCachedTracksFrom(current.savedPlaylists) },
         )
         mutableLibrary.value = refreshed
         cacheUpdates.trySend(refreshed).getOrThrow()
@@ -142,4 +190,11 @@ class LibraryRepository(
         /** The complete saved-playlist grid; the library landing page contains only recent items. */
         const val LIKED_PLAYLISTS = "FEmusic_liked_playlists"
     }
+}
+
+/** Library grid payloads are metadata-only; never let one erase cached offline membership. */
+internal fun Playlist.withCachedTracksFrom(cached: List<Playlist>): Playlist {
+    if (tracks.isNotEmpty()) return this
+    val previous = cached.firstOrNull { it.id.removePrefix("VL") == id.removePrefix("VL") }
+    return if (previous?.tracks?.isNotEmpty() == true) copy(tracks = previous.tracks) else this
 }

@@ -140,6 +140,52 @@ class OfflineDetailSynthesizerTest {
     }
 
     @Test
+    fun `playlist with unknown membership never receives every downloaded track`() {
+        val unknownLibrary = library.copy(
+            savedPlaylists = listOf(Playlist(id = "pl_unknown", title = "Unknown Playlist")),
+        )
+
+        val result = OfflineDetailSynthesizer.synthesize(
+            id = "pl_unknown",
+            seed = CatalogItem.Collection(Playlist(id = "pl_unknown", title = "Unknown Playlist")),
+            downloadedItems = downloadItems,
+            library = unknownLibrary,
+        )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `playlist seed membership is used when saved card has no tracks`() {
+        val sparseLibrary = library.copy(
+            savedPlaylists = listOf(Playlist(id = "pl_sparse", title = "Sparse Playlist")),
+        )
+        val result = OfflineDetailSynthesizer.synthesize(
+            id = "pl_sparse",
+            seed = CatalogItem.Collection(
+                Playlist(id = "pl_sparse", title = "Sparse Playlist", tracks = listOf(track2)),
+            ),
+            downloadedItems = downloadItems,
+            library = sparseLibrary,
+        )
+
+        assertNotNull(result)
+        assertEquals(listOf(track2), result!!.tracks)
+    }
+
+    @Test
+    fun `unknown collection id does not fall back to all downloads`() {
+        val result = OfflineDetailSynthesizer.synthesize(
+            id = "not_cached",
+            seed = null,
+            downloadedItems = downloadItems,
+            library = library,
+        )
+
+        assertNull(result)
+    }
+
+    @Test
     fun `synthesizes album with only completed downloaded tracks`() {
         val result = OfflineDetailSynthesizer.synthesize(
             id = "alb_1",
@@ -167,6 +213,19 @@ class OfflineDetailSynthesizerTest {
         assertNotNull(result)
         assertEquals("Downloaded Music", result!!.title)
         assertEquals(listOf(track1, track2), result.tracks)
+    }
+
+    @Test
+    fun `liked songs offline contains only downloaded liked membership`() {
+        val result = OfflineDetailSynthesizer.synthesize(
+            id = "FEmusic_liked_videos",
+            seed = null,
+            downloadedItems = downloadItems,
+            library = library.copy(likedTracks = listOf(track2, track3)),
+        )
+
+        assertNotNull(result)
+        assertEquals(listOf(track2), result!!.tracks)
     }
 
     @Test

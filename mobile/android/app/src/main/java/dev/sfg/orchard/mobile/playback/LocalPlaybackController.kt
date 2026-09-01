@@ -192,6 +192,16 @@ class LocalPlaybackController(
      * from reinserting whatever became current while it was waiting.
      */
     fun appendUpcoming(tracks: List<Track>, totalLimit: Int) = withController { player ->
+        // Heal any duplicate generated rows already present before adding another refill. This is
+        // deliberately limited to upcoming Autoplay rows: duplicate songs explicitly placed in a
+        // playlist or queue remain literal user choices.
+        val before = (0 until player.mediaItemCount)
+            .map { MediaItemMapper.toTrack(player.getMediaItemAt(it)) }
+        AutoplayRecommendations.duplicateGeneratedIndices(before)
+            .asReversed()
+            .filter { it > player.currentMediaItemIndex }
+            .forEach(player::removeMediaItem)
+
         val existing = (0 until player.mediaItemCount)
             .map { MediaItemMapper.toTrack(player.getMediaItemAt(it)) }
         val upcoming = player.mediaItemCount - player.currentMediaItemIndex - 1

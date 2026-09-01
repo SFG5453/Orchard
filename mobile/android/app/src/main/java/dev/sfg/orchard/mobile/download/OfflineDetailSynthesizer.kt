@@ -48,44 +48,54 @@ object OfflineDetailSynthesizer {
 
         if (completedTracks.isEmpty()) return null
 
-        // 1. Is it a saved playlist?
-        val savedPlaylist = library.savedPlaylists.firstOrNull { it.id == id }
-        if (savedPlaylist != null) {
-            val playlistTrackIds = savedPlaylist.tracks.map { it.id }.toSet()
-            val matchedTracks =
-                if (playlistTrackIds.isNotEmpty()) {
-                    completedTracks.filter { it.id in playlistTrackIds }
-                } else {
-                    completedTracks
-                }
-            if (matchedTracks.isNotEmpty()) {
-                return BrowseDetail(
-                    id = savedPlaylist.id,
-                    title = savedPlaylist.title,
-                    subtitle =
-                        "${matchedTracks.size} downloaded ${if (matchedTracks.size == 1) "song" else "songs"}",
-                    artworkUrl =
-                        savedPlaylist.artworkUrl.ifBlank {
-                            matchedTracks.firstOrNull()?.artworkUrl.orEmpty()
-                        },
-                    kind = CatalogKind.PLAYLIST,
-                    tracks = matchedTracks,
-                    description = savedPlaylist.description,
-                )
-            }
+        // 1. Is it a known playlist? Library grid cards frequently carry no tracks, so prefer the
+        // most complete membership available between the saved row and the navigation seed. An
+        // empty membership is unknown, never permission to expose every cached song.
+        val normalizedId = id.removePrefix("VL")
+        val savedPlaylist = library.savedPlaylists.firstOrNull { it.id.removePrefix("VL") == normalizedId }
+        val seedPlaylist = (seed as? CatalogItem.Collection)?.playlist
+            ?.takeIf { it.id.removePrefix("VL") == normalizedId }
+        val playlist = listOfNotNull(savedPlaylist, seedPlaylist).maxByOrNull { it.tracks.size }
+        if (playlist != null && playlist.tracks.isNotEmpty()) {
+            val completedById = completedTracks.associateBy { it.id }
+            // Walk playlist membership, not the download index: this preserves playlist order and
+            // intentional repeated rows while still projecting only files available offline.
+            val matchedTracks = playlist.tracks.mapNotNull { completedById[it.id] }
+            return BrowseDetail(
+                id = playlist.id,
+                title = playlist.title,
+                subtitle =
+                    "${matchedTracks.size} downloaded ${if (matchedTracks.size == 1) "song" else "songs"}",
+                artworkUrl =
+                    playlist.artworkUrl.ifBlank {
+                        matchedTracks.firstOrNull()?.artworkUrl.orEmpty()
+                    },
+                kind = CatalogKind.PLAYLIST,
+                tracks = matchedTracks,
+                description = playlist.description,
+            )
         }
 
-        // 2. Liked songs or generic offline downloads playlist
-        if (
-            id == "FEmusic_liked_videos" ||
-                id == "offline_downloads" ||
-                id == "downloads" ||
-                id == "local_downloads"
-        ) {
-            val title = if (id == "FEmusic_liked_videos") "Liked Songs" else "Downloaded Music"
+        // 2. Liked songs have real membership too; only the dedicated Downloads screens aggregate
+        // every file on the device.
+        if (id == "FEmusic_liked_videos") {
+            val completedById = completedTracks.associateBy { it.id }
+            val likedTracks = library.likedTracks.mapNotNull { completedById[it.id] }
             return BrowseDetail(
                 id = id,
-                title = title,
+                title = "Liked Songs",
+                subtitle =
+                    "${likedTracks.size} downloaded ${if (likedTracks.size == 1) "song" else "songs"}",
+                artworkUrl = likedTracks.firstOrNull { it.artworkUrl.isNotBlank() }?.artworkUrl.orEmpty(),
+                kind = CatalogKind.PLAYLIST,
+                tracks = likedTracks,
+            )
+        }
+
+        if (id == "offline_downloads" || id == "downloads" || id == "local_downloads") {
+            return BrowseDetail(
+                id = id,
+                title = "Downloaded Music",
                 subtitle =
                     "${completedTracks.size} downloaded ${if (completedTracks.size == 1) "song" else "songs"}",
                 artworkUrl =
@@ -176,9 +186,11 @@ object OfflineDetailSynthesizer {
             )
         }
 
-        // 5. Seed fallback: If seed exists, build detail with matching tracks or all downloaded
-        // tracks
+        // 5. Seed fallback for artists/albums. A playlist without known membership cannot be
+        // reconstructed safely; returning all downloads is the cross-playlist leak this path must
+        // prevent.
         if (seed != null) {
+            if (seed is CatalogItem.Collection) return null
             val matchingSeedTracks =
                 completedTracks
                     .filter { track ->
@@ -186,7 +198,8 @@ object OfflineDetailSynthesizer {
                             track.album.contains(seed.title, ignoreCase = true) ||
                             track.title.contains(seed.title, ignoreCase = true)
                     }
-                    .ifEmpty { completedTracks }
+
+            if (matchingSeedTracks.isEmpty()) return null
 
             val (kind, subtitle, artistName) =
                 when (seed) {
@@ -219,15 +232,8 @@ object OfflineDetailSynthesizer {
             )
         }
 
-        // 6. Generic fallback: Return all downloaded tracks
-        return BrowseDetail(
-            id = id,
-            title = "Downloaded Collection",
-            subtitle = "${completedTracks.size} downloaded songs",
-            artworkUrl =
-                completedTracks.firstOrNull { it.artworkUrl.isNotBlank() }?.artworkUrl.orEmpty(),
-            kind = CatalogKind.PLAYLIST,
-            tracks = completedTracks,
-        )
+        // An unknown collection has no trustworthy local membership. The explicit Downloads ids
+        // above are the only screens that intentionally aggregate the full cache.
+        return null
     }
 }

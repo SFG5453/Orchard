@@ -21,8 +21,8 @@ package dev.sfg.orchard.mobile.app
 
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.Track
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class BestMixQueueRequestTest {
@@ -50,7 +50,7 @@ class BestMixQueueRequestTest {
 
         val latest = snapshot(current.copy(title = "Updated metadata"), listOf(track("a"), track("b")))
 
-        assertTrue(request.matches(latest))
+        assertEquals(listOf("b", "a"), request.reconcile(latest, listOf(track("b"), track("a")))?.map(Track::id))
     }
 
     @Test
@@ -65,15 +65,27 @@ class BestMixQueueRequestTest {
             currentIndex = 1,
         )
 
-        assertFalse(request.matches(advanced))
+        assertNull(request.reconcile(advanced, listOf(second, first)))
     }
 
     @Test
-    fun queueEditsDuringAnalysisInvalidateTheRequest() {
+    fun autoplaySuffixDuringAnalysisIsPreserved() {
         val current = track("current")
         val request = BestMixQueueRequest.capture(snapshot(current, listOf(track("a"), track("b"))))
         val appended = snapshot(current, listOf(track("a"), track("b"), track("refill")))
 
-        assertFalse(request.matches(appended))
+        assertEquals(
+            listOf("b", "a", "refill"),
+            request.reconcile(appended, listOf(track("b"), track("a")))?.map(Track::id),
+        )
+    }
+
+    @Test
+    fun queueEditsInsideCapturedTailInvalidateTheRequest() {
+        val current = track("current")
+        val request = BestMixQueueRequest.capture(snapshot(current, listOf(track("a"), track("b"))))
+        val edited = snapshot(current, listOf(track("replacement"), track("b")))
+
+        assertNull(request.reconcile(edited, listOf(track("b"), track("a"))))
     }
 }

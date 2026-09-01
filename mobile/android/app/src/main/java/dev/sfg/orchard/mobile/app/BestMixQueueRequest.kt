@@ -20,14 +20,30 @@
 package dev.sfg.orchard.mobile.app
 
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
+import dev.sfg.orchard.mobile.model.Track
 
 internal data class BestMixQueueRequest(
     private val currentTrackId: String?,
     private val upcomingTrackIds: List<String>,
 ) {
-    fun matches(snapshot: PlaybackSnapshot): Boolean =
-        snapshot.currentTrack?.id == currentTrackId &&
-            snapshot.upcoming.map { it.id } == upcomingTrackIds
+    /**
+     * Applies a sorted copy of the captured tail to the latest queue.
+     *
+     * Autoplay is allowed to append while analysis runs. Requiring the complete tail to remain
+     * byte-for-byte identical made Best Mix reliably discard its result when it was used with two
+     * or three songs left -- exactly the point where Autoplay refills. A suffix is safe to retain;
+     * a changed current item or any edit inside the captured prefix still invalidates the request.
+     */
+    fun reconcile(snapshot: PlaybackSnapshot, sortedUpcoming: List<Track>): List<Track>? {
+        if (snapshot.currentTrack?.id != currentTrackId) return null
+        if (sortedUpcoming.map(Track::id).toSet() != upcomingTrackIds.toSet()) return null
+
+        val latest = snapshot.upcoming
+        if (latest.size < upcomingTrackIds.size) return null
+        if (latest.take(upcomingTrackIds.size).map(Track::id) != upcomingTrackIds) return null
+
+        return sortedUpcoming + latest.drop(upcomingTrackIds.size)
+    }
 
     companion object {
         fun capture(snapshot: PlaybackSnapshot): BestMixQueueRequest = BestMixQueueRequest(
