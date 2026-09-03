@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile.playback
 
 import android.util.Log
+import dev.sfg.orchard.mobile.model.AudioQuality
 import okhttp3.OkHttpClient
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
@@ -28,12 +29,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.util.concurrent.TimeUnit
 
 /**
- * Resolves the highest-bitrate audio stream for a YouTube video using NewPipeExtractor.
+ * Resolves an audio stream for a YouTube video using NewPipeExtractor.
  *
  * NewPipe extracts streams by parsing the YouTube web page directly, which often exposes
  * higher-bitrate Opus streams (up to ~320 kbps) that the innertube player API withholds.
  * This class is the sole consumer of NewPipeExtractor in the app; it lives behind
- * [YouTubeStreamResolver] and is called only when the user selects MAX quality.
+ * [YouTubeStreamResolver], which uses it for public tracks and keeps Innertube as the fallback.
  */
 class NewPipeStreamResolver(
     client: OkHttpClient,
@@ -50,27 +51,32 @@ class NewPipeStreamResolver(
     }
 
     /**
-     * Extracts the best audio stream for [videoId].
+     * Extracts the best audio stream for [videoId] within [quality]'s bitrate tier.
      *
      * @return a [ResolvedStream] with the CDN URL, or `null` when extraction fails.
      */
-    fun resolve(videoId: String): ResolvedStream? = runCatching {
+    fun resolve(
+        videoId: String,
+        quality: AudioQuality = AudioQuality.MAX,
+    ): ResolvedStream? = runCatching {
         val url = "https://www.youtube.com/watch?v=$videoId"
         val extractor = ServiceList.YouTube.getStreamExtractor(url)
         extractor.fetchPage()
         val streams: List<AudioStream> = extractor.audioStreams.orEmpty()
-        val best = streams
-            .filter { it.content.isNotBlank() }
-            .maxByOrNull { it.averageBitrate }
-            ?: return null
+        val playable = streams.filter { it.content.isNotBlank() }
+        val selectedIndex = selectNewPipeStreamIndex(
+            playable.map { it.averageBitrate },
+            quality,
+        ) ?: return null
+        val best = playable[selectedIndex]
         val format = runCatching { best.format }.getOrNull()
         val identity = YouTubeStreamRequestIdentity.fromUrl(
             best.content,
             YouTubeStreamRequestIdentity.WEB_USER_AGENT,
         )
+        val bitrateKbps = newPipeBitrateKbps(best.averageBitrate)
         Log.d(TAG, "NewPipe resolved ${format?.name ?: "?"} " +
-            "@${best.averageBitrate}kbps for $videoId")
-        val bitrateKbps = if (best.averageBitrate > 1000) best.averageBitrate / 1000 else best.averageBitrate
+            "@${bitrateKbps}kbps for $videoId (${quality.name})")
         val contentLength = best.itagItem?.contentLength?.takeIf { it > 0L }
             ?: best.content.toHttpUrlOrNull()?.queryParameter("clen")?.toLongOrNull()
             ?: 0L
@@ -98,3 +104,33 @@ class NewPipeStreamResolver(
         @Volatile private var initialized = false
     }
 }
+
+internal fun newPipeBitrateKbps(rawBitrate: Int): Int =
+    (if (rawBitrate > 1_000) rawBitrate / 1_000 else rawBitrate).coerceAtLeast(0)
+
+/** Returns the stream index that best preserves Orchard's four quality tiers. */
+internal fun selectNewPipeStreamIndex(
+    rawBitrates: List<Int>,
+    quality: AudioQuality,
+): Int? {
+    if (rawBitrates.isEmpty()) return null
+    val bitrates = rawBitrates.map(::newPipeBitrateKbps)
+    val known = bitrates.indices.filter { bitrates[it] > 0 }
+    val candidates = known.ifEmpty { bitrates.indices.toList() }
+    val capped = when (quality) {
+        AudioQuality.DATA_SAVER -> emptyList()
+        AudioQuality.NORMAL -> candidates.filter { bitrates[it] <= NORMAL_MAX_KBPS }
+        AudioQuality.HIGH -> candidates.filter { bitrates[it] <= HIGH_MAX_KBPS }
+        AudioQuality.MAX -> candidates
+    }
+    return when (quality) {
+        AudioQuality.DATA_SAVER -> candidates.minByOrNull { bitrates[it] }
+        AudioQuality.NORMAL, AudioQuality.HIGH ->
+            capped.maxByOrNull { bitrates[it] }
+                ?: candidates.minByOrNull { bitrates[it] }
+        AudioQuality.MAX -> candidates.maxByOrNull { bitrates[it] }
+    }
+}
+
+private const val NORMAL_MAX_KBPS = 140
+private const val HIGH_MAX_KBPS = 160

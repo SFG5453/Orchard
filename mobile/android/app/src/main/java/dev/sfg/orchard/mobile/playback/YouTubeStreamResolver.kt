@@ -52,7 +52,7 @@ data class ResolvedStream(
     val referer: String? = null,
     /** Stable key used to avoid immediately retrying a CDN-rejected client profile. */
     val clientKey: String = "",
-    /** NewPipe/MAX URLs can safely be fetched as independent bounded ranges. */
+    /** NewPipe URLs can safely be fetched as independent bounded ranges. */
     val supportsParallelRanges: Boolean = false,
 ) {
     val requestHeaders: Map<String, String>
@@ -212,22 +212,29 @@ class YouTubeStreamResolver(
         val cacheKey = "$videoId:${quality.name}"
         cached(cacheKey)?.let { return it }
         var maxQualityFallback = false
-        // MAX uses NewPipe for the highest bitrate stream. NewPipe reads the public watch page,
-        // which does not exist for an upload, so that path is skipped rather than paid for.
-        if (quality == AudioQuality.MAX && videoId !in accountOnlyVideos) {
-            val newPipeStream = newPipeResolver.resolve(videoId)
+        // Public watch-page extraction is the primary path for every quality tier. The native
+        // Innertube clients can still mint plausible googlevideo URLs while the CDN rejects every
+        // byte with 403; NewPipe's WEB URL remains fetchable and also avoids waiting on a failed
+        // PO-token warm-up. Uploads have no public watch page, so they stay on signed-in Innertube.
+        if (videoId !in accountOnlyVideos) {
+            val newPipeStream = newPipeResolver.resolve(videoId, quality)
             if (newPipeStream != null) {
                 streams[cacheKey] = newPipeStream
                 return newPipeStream
             }
-            // NewPipe failed; fall back to HIGH. We only warn the user if HIGH resolution actually succeeds.
-            Log.w(TAG, "NewPipe extraction failed for $videoId; attempting fallback to HIGH quality")
-            maxQualityFallback = true
-            val fallbackKey = "$videoId:${AudioQuality.HIGH.name}"
-            cached(fallbackKey)?.let {
-                onWarning?.invoke("Max quality unavailable, using High")
-                streams[cacheKey] = it
-                return it
+            if (quality == AudioQuality.MAX) {
+                // MAX has no Innertube equivalent, so its fallback is HIGH. Warn only if that
+                // fallback resolves successfully rather than showing a misleading early toast.
+                Log.w(TAG, "NewPipe extraction failed for $videoId; attempting fallback to HIGH quality")
+                maxQualityFallback = true
+                val fallbackKey = "$videoId:${AudioQuality.HIGH.name}"
+                cached(fallbackKey)?.let {
+                    onWarning?.invoke("Max quality unavailable, using High")
+                    streams[cacheKey] = it
+                    return it
+                }
+            } else {
+                Log.w(TAG, "NewPipe extraction failed for $videoId; attempting Innertube fallback")
             }
         }
         // Only one caller resolves a given track; a prefetch already in flight is worth
@@ -315,8 +322,8 @@ class YouTubeStreamResolver(
                 }
             }
 
-            // Signed web playback remains the last normal fallback for account-only or
-            // age-gated music. It is never replaced with NewPipe; NewPipe belongs to MAX only.
+            // Signed web playback remains the last fallback for account-only or age-gated music.
+            // NewPipe cannot replace it because those tracks do not have a usable public page.
             // Deliberately outside the budget check: this is the only client that can play
             // account-only music, and dropping it because the guest attempts ran long turns a
             // playable upload into "Video unavailable".
