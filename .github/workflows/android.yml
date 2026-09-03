@@ -2,11 +2,11 @@ name: Android CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "beta", "canary" ]
     paths:
       - 'mobile/android/**'
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "beta", "canary" ]
     paths:
       - 'mobile/android/**'
 
