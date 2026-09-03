@@ -119,14 +119,18 @@ class UpdateDialogParserTest {
         val notes = dev.sfg.orchard.mobile.MobileChangelog.CURRENT_RELEASE_NOTES
         val sections = parseReleaseNoteSections(notes)
 
-        assertEquals(2, sections.size)
-        assertEquals("Added", sections[0].title)
-        assertEquals(ReleaseNoteCategory.NEW, sections[0].category)
-        assertEquals(1, sections[0].items.size)
-
-        assertEquals("Changed", sections[1].title)
-        assertEquals(ReleaseNoteCategory.CHANGED, sections[1].category)
-        assertEquals(1, sections[1].items.size)
+        assertEquals(1, sections.size)
+        assertEquals("Fixed", sections[0].title)
+        assertEquals(ReleaseNoteCategory.FIXED, sections[0].category)
+        assertEquals(2, sections[0].items.size)
+        assertEquals(
+            "**Public Stream Playback**: Fixed public YouTube tracks failing with CDN errors by routing every quality tier through NewPipe while preserving the selected bitrate.",
+            sections[0].items[0],
+        )
+        assertEquals(
+            "**Public Stream Downloads**: Downloads now use the same quality-aware public resolver as playback, while account-only uploads retain the Innertube fallback.",
+            sections[0].items[1],
+        )
     }
 
     @Test

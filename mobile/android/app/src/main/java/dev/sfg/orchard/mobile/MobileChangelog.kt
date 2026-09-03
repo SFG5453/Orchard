@@ -28,11 +28,9 @@ object MobileChangelog {
 
     val CURRENT_RELEASE_NOTES =
         """
-        ### Added
-        - **Beta Channel**: Opt in to receive beta builds directly from GitHub releases with prerelease semver update checks and release notes.
-
-        ### Changed
-        - Updated markdown library to 0.7.9.
+        ### Fixed
+        - **Public Stream Playback**: Fixed public YouTube tracks failing with CDN errors by routing every quality tier through NewPipe while preserving the selected bitrate.
+        - **Public Stream Downloads**: Downloads now use the same quality-aware public resolver as playback, while account-only uploads retain the Innertube fallback.
         """
             .trimIndent()
 }
