@@ -210,7 +210,7 @@ export function installNavigationLayout(ctx) {
       case 'radio': return ctx.activeView.value === 'browse' && ctx.browseDetail.value?.title === 'My Supermix';
       case 'concerts': return ctx.activeView.value === 'search' && ctx.searchResult.value.source === 'ticketmaster';
       case 'queue': return ctx.activeView.value === 'queue';
-      case 'history': return ctx.activeView.value === 'history';
+      case 'history': return ctx.activeView.value === 'search' && sectionKey === 'library-recently-added';
       case 'replay': return ctx.activeView.value === 'replay';
       case 'playlists': return ctx.activeView.value === 'search' && sectionKey === 'library-playlists';
       case 'songs': return ctx.activeView.value === 'search' && sectionKey === 'library-songs';
@@ -229,7 +229,7 @@ export function installNavigationLayout(ctx) {
       case 'radio': return ctx.openPersonalizedRadio();
       case 'concerts': return ctx.openLiveShows();
       case 'queue': return ctx.selectView('queue');
-      case 'history': return ctx.selectView('history');
+      case 'history': return ctx.showRecentlyAdded();
       case 'replay': return ctx.selectView('replay');
       case 'playlists': return ctx.showLibraryPlaylists();
       case 'songs': return ctx.showLibrarySongs();

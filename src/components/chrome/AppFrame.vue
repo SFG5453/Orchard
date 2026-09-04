@@ -24,6 +24,7 @@ import NowSideColumn from './NowSideColumn.vue';
 import PlayerBar from '../player/PlayerBar.vue';
 import SidebarNav from './SidebarNav.vue';
 import WindowTitlebar from './WindowTitlebar.vue';
+import NativeAudioDecks from '../platform/NativeAudioDecks.vue';
 
 const AuthGate = defineAsyncComponent(() => import('./AuthGate.vue'));
 const CollectionActionMenu = defineAsyncComponent(() => import('../controls/CollectionActionMenu.vue'));
@@ -73,6 +74,7 @@ export default {
     ListeningPartyDialog,
     FullscreenPlayer,
     NowSideColumn,
+    NativeAudioDecks,
     PlayerBar,
     PinsView,
     PodcastsView,
@@ -98,6 +100,7 @@ export default {
   },
   props: { app: { type: Object, required: true } },
   setup(props) {
+    props.app.nativeAudioPlayback = Boolean(window.orchardNativeAudio);
     return props.app;
   }
 };
@@ -296,7 +299,9 @@ export default {
 
     <VideoPlayer :app="app" />
     <SponsorSkipButton :app="app" />
+    <NativeAudioDecks v-if="nativeAudioPlayback" :app="app" />
     <audio
+      v-else
       ref="audioRef"
       crossorigin="anonymous"
       @timeupdate="onAudioTime"
@@ -310,6 +315,7 @@ export default {
       @ended="onAudioEnded"
     />
     <audio
+      v-if="!nativeAudioPlayback"
       ref="nextAudioRef"
       crossorigin="anonymous"
       preload="auto"

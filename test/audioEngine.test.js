@@ -68,3 +68,28 @@ test('global output gain remains active while the rest of the engine is bypassed
   engine.update({ enabled: false, outputGainDb: -12 });
   assert.ok(Math.abs(processor.output.gain.value - dbToGain(-12)) < 1e-12);
 });
+
+test('native audio receives EQ, automatic gains, and per-deck gain changes', () => {
+  const original = globalThis.orchardNativeAudio;
+  const calls = [];
+  globalThis.orchardNativeAudio = {
+    setEngineConfig: (config) => calls.push(['config', config]),
+    setAutoEqGains: (gains) => calls.push(['auto', gains]),
+    setTrackGain: (deck, gain) => calls.push(['track', deck, gain])
+  };
+
+  try {
+    const engine = createAudioEngine();
+    engine.update({ enabled: true, eqEnabled: true, gains: [2, 1] });
+    engine.setAutoEqGains([1, -1]);
+    engine.setTrackGain({ __orchardNative: true, deck: 'next' }, -3);
+  } finally {
+    if (original === undefined) delete globalThis.orchardNativeAudio;
+    else globalThis.orchardNativeAudio = original;
+  }
+
+  assert.equal(calls[0][0], 'config');
+  assert.equal(calls[0][1].gains.length, 10);
+  assert.deepEqual(calls[1], ['auto', [1, -1, 0, 0, 0, 0, 0, 0, 0, 0]]);
+  assert.deepEqual(calls[2], ['track', 'next', -3]);
+});

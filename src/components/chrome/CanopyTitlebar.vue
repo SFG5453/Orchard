@@ -74,7 +74,7 @@ export default {
 </script>
 
 <template>
-  <header class="canopy-bar" :class="{ 'canopy-bar--native': nativeTitlebar }">
+  <header class="canopy-bar" :class="{ 'canopy-bar--native': nativeTitlebar }" data-tauri-drag-region="deep">
     <div class="canopy-bar__brand">
       <img class="canopy-bar__mark" :src="orchardLogoUrl" alt="Orchard" />
     </div>

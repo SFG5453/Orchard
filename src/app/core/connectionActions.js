@@ -265,6 +265,10 @@ export function installConnectionActions(ctx) {
     return showRemoteLibraryCategory('Artists', 'music:subscribed-artists', 'Could not load subscribed artists.');
   };
 
+  ctx.showRecentlyAdded = function showRecentlyAdded() {
+    return showRemoteLibraryCategory('Recently Added', 'music:library-category', 'Could not load recently added music.');
+  };
+
   ctx.loadArtistSubscription = async function loadArtistSubscription(browseId) {
     const id = String(browseId || '').trim();
     if (!id || !ctx.authState.value.signedIn) return;
@@ -472,6 +476,15 @@ export function installConnectionActions(ctx) {
     }
   };
 
+  ctx.applyHomeLibraryData = function applyHomeLibraryData(data = {}) {
+    ctx.homeData.value = {
+      home: data.home || { sections: [] },
+      library: data.library || { sections: [] }
+    };
+    ctx.warningMessage.value = data.warnings?.join(' ') || '';
+    ctx.syncAuthState(data.auth || { signedIn: true, status: 'signed_in' });
+  };
+
   ctx.loadHomeLibrary = async function loadHomeLibrary() {
     if (!ctx.socket.value?.connected) return;
     if (ctx.networkOffline.value) return;
@@ -484,12 +497,7 @@ export function installConnectionActions(ctx) {
 
       try {
         const data = await ctx.emitWithReply('music:home');
-        ctx.homeData.value = {
-          home: data.home || { sections: [] },
-          library: data.library || { sections: [] }
-        };
-        ctx.warningMessage.value = data.warnings?.join(' ') || '';
-        ctx.syncAuthState(data.auth || { signedIn: true, status: 'signed_in' });
+        ctx.applyHomeLibraryData(data);
       } catch (error) {
         if (confirmsNoInternet(error)) {
           ctx.networkOffline.value = true;

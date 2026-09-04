@@ -19,11 +19,13 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { ref } from 'vue';
 import {
   LIBRARY_HOME_SECTION_ID,
   RECENTLY_PLAYED_HOME_SECTION_ID,
   SIDEBAR_NAV_ITEM_IDS,
   homeSectionId,
+  installNavigationLayout,
   normalizeLayoutIds,
   orderLayoutItems,
   visibleLayoutItems
@@ -61,5 +63,57 @@ test('sidebar preference ids cover every configurable navigation link', () => {
     'home', 'new', 'radio', 'concerts',
     'queue', 'history', 'replay', 'playlists', 'songs', 'albums', 'artists', 'podcasts',
     'pins'
+  ]);
+});
+
+test('every sidebar item dispatches to a concrete destination action', () => {
+  const calls = [];
+  const action = (name) => (...args) => {
+    calls.push([name, ...args]);
+    return name;
+  };
+  const ctx = {
+    initialUserPreferences: {
+      homeSectionOrder: [],
+      hiddenHomeSectionIds: [],
+      sidebarItemOrder: [],
+      hiddenSidebarItemIds: []
+    },
+    homeShelfSections: ref([]),
+    activeView: ref('home'),
+    browseDetail: ref(null),
+    searchResult: ref({ sections: [] }),
+    selectView: action('selectView'),
+    showReleaseRadar: action('showReleaseRadar'),
+    openPersonalizedRadio: action('openPersonalizedRadio'),
+    openLiveShows: action('openLiveShows'),
+    showRecentlyAdded: action('showRecentlyAdded'),
+    showLibraryPlaylists: action('showLibraryPlaylists'),
+    showLibrarySongs: action('showLibrarySongs'),
+    showLibraryAlbums: action('showLibraryAlbums'),
+    showSubscribedArtists: action('showSubscribedArtists'),
+    loadPodcasts: action('loadPodcasts'),
+    showPins: action('showPins')
+  };
+  installNavigationLayout(ctx);
+
+  for (const group of ctx.visibleSidebarNavGroups.value) {
+    for (const item of group.items) ctx.openSidebarItem(item);
+  }
+
+  assert.deepEqual(calls, [
+    ['selectView', 'home'],
+    ['showReleaseRadar'],
+    ['openPersonalizedRadio'],
+    ['openLiveShows'],
+    ['selectView', 'queue'],
+    ['showRecentlyAdded'],
+    ['selectView', 'replay'],
+    ['showLibraryPlaylists'],
+    ['showLibrarySongs'],
+    ['showLibraryAlbums'],
+    ['showSubscribedArtists'],
+    ['loadPodcasts'],
+    ['showPins']
   ]);
 });

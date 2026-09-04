@@ -1,7 +1,7 @@
 {
   "name": "orchard",
   "version": "5.0.0-beta.6",
-  "description": "A Quasar, Vue, Socket.IO, Electron YouTube Music client backed by InnerTube.",
+  "description": "A Quasar and Vue YouTube Music client with Electron and Linux-native Tauri shells.",
   "homepage": "https://github.com/sfg5453/orchard",
   "repository": {
     "type": "git",
@@ -12,11 +12,13 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "npm run build:native && concurrently -k \"vite --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && node scripts/launch-electron.mjs --dev-server=http://127.0.0.1:5173\"",
+    "dev": "npm run build:native && concurrently -k \"npm run dev:frontend\" \"wait-on http://127.0.0.1:5173 && node scripts/launch-electron.mjs --dev-server=http://127.0.0.1:5173\"",
+    "dev:frontend": "vite --host 127.0.0.1 --port 5173",
+    "dev:linux": "tauri dev --config linux/tauri.conf.json",
     "build": "npm run build:native && npm run build:frontend",
     "build:native": "npm run build:native:media && sh scripts/build-native-audio.sh",
     "build:frontend": "vite build",
-    "build:linux": "vite build && cd linux && cargo build",
+    "build:linux": "tauri build --config linux/tauri.conf.json",
     "start": "npm run build:frontend && node scripts/launch-electron.mjs",
     "build:artist-pack": "node scripts/build-official-artist-pack.mjs",
     "test": "node --test test/*.test.js",
@@ -43,6 +45,7 @@
   "license": "AGPL-3.0-or-later",
   "dependencies": {
     "@kawarp/core": "^1.2.0",
+    "@tauri-apps/plugin-http": "^2.6.0",
     "@vibrant/core": "^4.0.4",
     "@vibrant/generator-default": "^4.0.4",
     "@vibrant/image-browser": "^4.0.4",
@@ -76,6 +79,8 @@
   "devDependencies": {
     "@quasar/extras": "^2.0.4",
     "@quasar/vite-plugin": "^2.0.2",
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/cli": "^2.11.4",
     "@vitejs/plugin-vue": "^6.0.8",
     "concurrently": "^10.0.5",
     "electron": "43.5.1",

@@ -27,6 +27,7 @@ export default {
     const spectrum = ref(Array.from({ length: 32 }, () => 0));
     const profileInput = ref(null);
     let animationFrame = 0;
+    let previousFrameTime = 0;
 
     const autoEqStatus = computed(() => {
       const profile = props.app.audioEngineAutoProfile.value || props.app.audioEngineAutoProfile;
@@ -50,9 +51,16 @@ export default {
       return points.length ? `M ${points.join(' L ')}` : 'M 8,60 L 292,60';
     });
 
-    function updateSpectrum() {
+    function updateSpectrum(frameTime = performance.now()) {
       const next = props.app.audioSpectrum?.(32) || [];
-      spectrum.value = spectrum.value.map((value, index) => Math.max(next[index] || 0, value * 0.78));
+      const elapsed = previousFrameTime ? Math.min(50, frameTime - previousFrameTime) : 16.67;
+      previousFrameTime = frameTime;
+      spectrum.value = spectrum.value.map((value, index) => {
+        const target = Math.max(0, Math.min(1, Number(next[index]) || 0));
+        const responseMs = target > value ? 52 : 135;
+        const response = 1 - Math.exp(-elapsed / responseMs);
+        return value + ((target - value) * response);
+      });
       animationFrame = window.requestAnimationFrame(updateSpectrum);
     }
 
@@ -145,15 +153,17 @@ export default {
     <div class="audio-engine__equalizer" :class="{ 'audio-engine__disabled': !audioEngineConfig.enabled || !audioEngineConfig.eqEnabled }">
       <label v-for="(band, index) in audioEngineBands" :key="band.frequency" class="audio-engine__band">
         <output>{{ Number(audioEngineConfig.gains[index]).toFixed(1) }}</output>
-        <input
-          v-model.number="audioEngineConfig.gains[index]"
-          type="range"
-          min="-12"
-          max="12"
-          step="0.5"
-          :disabled="!audioEngineConfig.enabled || !audioEngineConfig.eqEnabled"
-          :aria-label="`${band.frequency} hertz gain`"
-        />
+        <span class="audio-engine__band-slider">
+          <input
+            v-model.number="audioEngineConfig.gains[index]"
+            type="range"
+            min="-12"
+            max="12"
+            step="0.5"
+            :disabled="!audioEngineConfig.enabled || !audioEngineConfig.eqEnabled"
+            :aria-label="`${band.frequency} hertz gain`"
+          />
+        </span>
         <span>{{ band.label }}</span>
       </label>
     </div>

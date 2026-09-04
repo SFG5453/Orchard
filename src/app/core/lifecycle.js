@@ -18,7 +18,7 @@
  */
 
 import { nextTick, onBeforeUnmount, onMounted, watch } from 'vue';
-import { io } from 'socket.io-client';
+import { createDesktopTransport } from '../../platform/desktop/transport.js';
 import { bindSettingsStorageSync } from './settingsStorageSync.js';
 
 export function disableCrossfadePlayback(ctx) {
@@ -443,7 +443,7 @@ export function installLifecycle(ctx) {
     ctx.queueConnectSync();
   }, { deep: true });
 
-  onMounted(() => {
+  onMounted(async () => {
     ctx.syncViewportSize();
     ctx.unbindSettingsStorageSync = bindSettingsStorageSync(ctx, window, window.orchardApp);
     ctx.bindSystemThemePreference();
@@ -471,9 +471,7 @@ export function installLifecycle(ctx) {
       window.addEventListener('focus', ctx.refreshSupportOnFocus);
     }
 
-    ctx.socket.value = io(`http://127.0.0.1:${ctx.socketPort()}`, {
-      transports: ['websocket']
-    });
+    ctx.socket.value = await createDesktopTransport(ctx.socketPort());
 
     ctx.socket.value.on('connect', async () => {
       ctx.socketState.value = 'connected';
@@ -499,6 +497,10 @@ export function installLifecycle(ctx) {
       const updatedId = String(browseId || '').replace(/^VL/, '');
       if (ctx.browseDetail.value?.kind !== 'playlist' || !currentId || currentId !== updatedId) return;
       ctx.browseDetail.value = { ...ctx.browseDetail.value, editable: Boolean(editable) };
+    });
+
+    ctx.socket.value.on('music:home:update', (data) => {
+      ctx.applyHomeLibraryData(data);
     });
 
     ctx.socket.value.on('disconnect', () => {

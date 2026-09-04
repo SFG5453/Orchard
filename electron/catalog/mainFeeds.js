@@ -142,7 +142,11 @@ export function createMainFeeds({
 
   async function fetchMusicLibraryCategory(yt, title) {
     const normalizedTitle = title.trim().toLowerCase();
-    const directBrowseId = normalizedTitle === 'playlists' ? 'FEmusic_liked_playlists' : '';
+    const directBrowseId = normalizedTitle === 'playlists'
+      ? 'FEmusic_liked_playlists'
+      : /^(?:recent|recently) (?:added|activity)$/.test(normalizedTitle)
+        ? 'FEmusic_library_landing'
+        : '';
     const landing = directBrowseId
       ? null
       : await fetchRawLibraryPage(yt, { browseId: 'FEmusic_library_landing' });
