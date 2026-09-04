@@ -198,6 +198,25 @@ test('loads every saved playlist from the dedicated playlist grid', async () => 
   assert.deepEqual(requests, ['FEmusic_liked_playlists', 'playlist-page-2']);
 });
 
+test('loads Recently Added directly from the library landing feed', async () => {
+  const recent = { id: 'recent', title: 'Recently saved', type: 'track' };
+  const requests = [];
+  const yt = {
+    actions: {
+      execute: async (_path, request) => {
+        requests.push(request.browseId);
+        return { data: { items: [recent] } };
+      }
+    }
+  };
+
+  assert.deepEqual(
+    await mainFeeds().fetchMusicLibraryCategory(yt, 'Recently Added'),
+    [recent]
+  );
+  assert.deepEqual(requests, ['FEmusic_library_landing']);
+});
+
 test('omits the YouTube Music shuffle action from library song data', async () => {
   const shuffleAction = { id: null, title: 'Shuffle all', type: 'track' };
   const song = { id: 'song-id', title: 'A saved song', type: 'track' };

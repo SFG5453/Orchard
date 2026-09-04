@@ -26,11 +26,12 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 900,
-    target: 'esnext',
+    target: 'es2020',
     emptyOutDir: true,
     rolldownOptions: {
       input: {
         main: 'index.html',
+        linux: 'linux.html',
         welcome: 'welcome.html'
       },
       output: {

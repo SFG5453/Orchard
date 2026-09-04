@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-capability",
+  "description": "Orchard's local Linux desktop window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://youtube.com/**" },
+        { "url": "https://*.youtube.com/**" },
+        { "url": "https://*.googlevideo.com/**" },
+        { "url": "https://*.ytimg.com/**" }
+      ]
+    }
+  ]
+}

@@ -29,12 +29,29 @@ export default {
 
     function animateShelves() {
       nextTick(() => {
-        const shelves = homeViewRoot.value?.querySelectorAll('.home-shelf');
-        if (!shelves?.length) return;
+        const shelves = Array.from(homeViewRoot.value?.querySelectorAll('.home-shelf') || []);
+        if (!shelves.length) return;
+
+        const pageBounds = homeViewRoot.value?.closest('.page')?.getBoundingClientRect();
+        const viewportBottom = pageBounds?.bottom || window.innerHeight;
+        const visibleShelves = shelves.filter(
+          (shelf) => shelf.getBoundingClientRect().top <= viewportBottom + 96
+        );
+        if (!visibleShelves.length) return;
+
+        gsap.killTweensOf(shelves);
         gsap.fromTo(
-          shelves,
+          visibleShelves,
           { opacity: 0, y: 16 },
-          { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out', stagger: 0.06, clearProps: 'opacity,transform' }
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.45,
+            ease: 'power2.out',
+            stagger: 0.06,
+            clearProps: 'opacity,transform',
+            overwrite: true
+          }
         );
       });
     }

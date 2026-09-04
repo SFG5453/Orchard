@@ -177,12 +177,16 @@ export function createAudioEngine(initialConfig = {}) {
   function update(nextConfig) {
     config = normalizeAudioEngineConfig(nextConfig);
     processors.forEach(applyProcessor);
+    globalThis.orchardNativeAudio?.setEngineConfig?.(config);
   }
 
   function setTrackGain(element, value) {
     if (!element) return;
     const gainDb = clamp(value, -12, 12);
     pendingTrackGains.set(element, gainDb);
+    if (element.__orchardNative) {
+      globalThis.orchardNativeAudio?.setTrackGain?.(element.deck, gainDb);
+    }
     for (const processor of processors) {
       if (processor.element !== element) continue;
       processor.trackGainDb = gainDb;
@@ -193,6 +197,7 @@ export function createAudioEngine(initialConfig = {}) {
   function setAutoEqGains(values = []) {
     autoEqGains = EQ_BANDS.map((_, index) => clamp(values[index], -3, 3));
     processors.forEach(applyProcessor);
+    globalThis.orchardNativeAudio?.setAutoEqGains?.(autoEqGains);
   }
 
   async function setOutputDevice(deviceId = 'default') {

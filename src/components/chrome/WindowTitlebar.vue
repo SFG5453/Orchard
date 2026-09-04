@@ -29,7 +29,7 @@ export default {
 
 <template>
 
-    <header class="window-titlebar">
+    <header class="window-titlebar" data-tauri-drag-region="deep">
       <div class="titlebar-transport">
         <q-btn flat round dense icon="skip_previous" :disable="!activeTrack || buffering" @click="playPrevious" />
         <q-btn
@@ -47,13 +47,13 @@ export default {
         <img class="titlebar-orchard-mark" :src="orchardLogoUrl" alt="Orchard" />
       </div>
       <div class="window-titlebar__controls">
-        <button type="button" title="Minimize" @click="minimizeWindow">
+        <button type="button" title="Minimize" aria-label="Minimize" @click="minimizeWindow">
           <q-icon name="remove" />
         </button>
-        <button type="button" title="Maximize" @click="toggleMaximizeWindow">
+        <button type="button" title="Maximize" aria-label="Maximize" @click="toggleMaximizeWindow">
           <q-icon name="crop_square" />
         </button>
-        <button type="button" title="Close" class="window-titlebar__close" @click="closeWindow">
+        <button type="button" title="Close" aria-label="Close" class="window-titlebar__close" @click="closeWindow">
           <q-icon name="close" />
         </button>
       </div>

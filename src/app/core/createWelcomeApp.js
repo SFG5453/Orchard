@@ -18,7 +18,7 @@
  */
 
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { io } from 'socket.io-client';
+import { createDesktopTransport } from '../../platform/desktop/transport.js';
 import {
   IMMERSIVE_BACKGROUND_MOTION_OPTIONS,
   LAYOUT_PRESET_OPTIONS,
@@ -275,9 +275,9 @@ export function createWelcomeApp() {
   ], ctx.persistPreferences, { immediate: true });
   watch(ctx.audioEngineConfig, ctx.persistAudioEngine, { deep: true, immediate: true });
 
-  onMounted(() => {
+  onMounted(async () => {
     const socketPort = new URLSearchParams(window.location.search).get('socketPort') || '0';
-    ctx.socket.value = io(`http://127.0.0.1:${socketPort}`, { transports: ['websocket'] });
+    ctx.socket.value = await createDesktopTransport(socketPort);
     ctx.socket.value.on('connect', async () => {
       ctx.socketState.value = 'connected';
       try {

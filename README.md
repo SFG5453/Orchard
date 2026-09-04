@@ -187,7 +187,9 @@ The mobile app can act as a standalone player or connect to your desktop session
 | Command | Purpose |
 | :--- | :--- |
 | `npm run dev` | Launch Vite + Electron in development mode |
+| `npm run dev:linux` | Launch Vite + the Linux-only Tauri shell |
 | `npm run build` | Full build (Rust Earmark DSP + Vue frontend + Electron main) |
+| `npm run build:linux` | Build the Linux Tauri AppImage, Debian, and RPM packages |
 | `npm run build:frontend` | Build only the Vue renderer bundle |
 | `npm run build:native` | Compile the shared Rust audio-analysis/transition addon and system-media addon |
 | `npm test` | Run complete Node test suite |
@@ -204,6 +206,7 @@ The mobile app can act as a standalone player or connect to your desktop session
 orchard/
 ├── src/                         Vue renderer and application state
 │   └── audio/                   Web Audio DSP engine and Smart Crossfade pipeline
+├── linux/                       Linux-only Tauri, FFmpeg, CPAL, and Playwire shell
 ├── electron/                    Electron main process
 │   ├── main/                    Electron composition root
 │   ├── preload/                 Sandboxed renderer IPC bridge

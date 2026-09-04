@@ -56,7 +56,7 @@
   width: 100%;
   min-height: 3px;
   background: rgba(var(--player-accent-rgb), 0.68);
-  transition: height 80ms linear;
+  will-change: height;
 }
 
 .audio-engine__response {
@@ -115,12 +115,23 @@
 
 .audio-engine__band output { color: #b5bcb7; }
 
-.audio-engine__band input {
+.audio-engine__band-slider {
+  display: flex;
   width: 24px;
   height: 132px;
+  align-items: center;
+  justify-content: center;
+}
+
+.audio-engine__band-slider input {
+  flex: 0 0 132px;
+  width: 132px;
+  height: 24px;
   margin: 0;
-  direction: rtl;
-  writing-mode: vertical-lr;
+  direction: ltr;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  writing-mode: horizontal-tb;
   accent-color: rgb(var(--player-accent-rgb));
 }
 

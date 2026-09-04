@@ -96,6 +96,7 @@ export function createAudioAnalyzer(options = {}) {
 
   function connectElement(element) {
     if (!element) return null;
+    if (element.__orchardNative) return null;
     const existing = nodes.get(element);
     if (existing) return existing;
 
@@ -562,6 +563,9 @@ export function createAudioAnalyzer(options = {}) {
   }
 
   function spectrum(element, size = 32) {
+    if (element?.__orchardNative && typeof element.spectrum === 'function') {
+      return element.spectrum(size);
+    }
     const node = connectElement(element);
     if (!node || !context) return Array.from({ length: size }, () => 0);
     node.analyser.getByteFrequencyData(node.data);
@@ -576,6 +580,9 @@ export function createAudioAnalyzer(options = {}) {
   }
 
   function samples(element) {
+    if (element?.__orchardNative && typeof element.samples === 'function') {
+      return element.samples();
+    }
     const node = connectElement(element);
     if (!node || !context) return null;
     const values = new Float32Array(node.analyser.fftSize);

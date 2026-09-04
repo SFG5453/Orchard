@@ -23,16 +23,22 @@ import '@quasar/extras/material-icons/material-icons.css';
 import 'quasar/dist/quasar.css';
 import './styles.css';
 import WelcomeApp from './WelcomeApp.vue';
+import { installDesktopPlatform } from './platform/desktop/install.js';
 
-createApp(WelcomeApp)
-  .use(Quasar, {
-    config: {
-      brand: {
-        primary: '#67d98b',
-        secondary: '#8d948f',
-        accent: '#83eca2',
-        dark: '#050605'
+async function start() {
+  await installDesktopPlatform();
+  createApp(WelcomeApp)
+    .use(Quasar, {
+      config: {
+        brand: {
+          primary: '#67d98b',
+          secondary: '#8d948f',
+          accent: '#83eca2',
+          dark: '#050605'
+        }
       }
-    }
-  })
-  .mount('#app');
+    })
+    .mount('#app');
+}
+
+void start();
