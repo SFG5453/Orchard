@@ -18,11 +18,12 @@
 -->
 
 <script>
+import FullscreenLyricStack from '../player/FullscreenLyricStack.vue';
 import VirtualQueueList from './VirtualQueueList.vue';
 
 export default {
   name: 'RightPanel',
-  components: { VirtualQueueList },
+  components: { FullscreenLyricStack, VirtualQueueList },
   props: { app: { type: Object, required: true } },
   setup(props) {
     // The queue list takes the whole app rather than the spread, because it
@@ -242,109 +243,14 @@ export default {
           <span class="lyrics-sidebar__status">{{ lyricsStatusText }}</span>
         </div>
 
-        <div v-if="lyricsState.status === 'loading'" class="lyrics-provider-list" aria-live="polite">
-          <div
-            v-for="provider in lyricsState.providers"
-            :key="provider.id"
-            class="lyrics-provider"
-            :class="`lyrics-provider--${provider.status}`"
-          >
-            <span class="lyrics-provider__status" aria-hidden="true">
-              {{ provider.status === 'failed' ? 'x' : provider.status === 'ready' ? '✓' : '/' }}
-            </span>
-            <span>{{ provider.label }}</span>
-          </div>
-        </div>
-
-        <div
-          v-else-if="lyricsState.status === 'ready'"
-          class="lyrics-list"
-          :class="{ 'lyrics-list--synced': lyricsState.mode === 'synced' }"
-          @scroll.passive="onLyricsUserScroll"
-          @wheel.passive="onLyricsUserScrollStart"
-          @touchstart.passive="onLyricsUserScrollStart"
-          @pointerdown="onLyricsPointerdown"
-        >
-          <template v-for="item in lyricDisplayItems" :key="item.key">
-            <button
-              v-if="item.type === 'line' && item.canSeek"
-              type="button"
-              class="lyrics-item lyrics-line lyrics-line--button"
-              :class="{
-                'lyrics-line--active': item.active,
-                'lyrics-line--word-synced': item.words?.length || item.adlibs?.length,
-                'lyrics-line--alternate-agent': item.agentLane === 'alternate'
-              }"
-              @click="seekToLyric(item)"
-            >
-              <span v-if="item.words?.length" class="lyrics-line__words">
-                <span
-                  v-for="word in item.words"
-                  :key="word.key"
-                  class="lyrics-word"
-                  :class="`lyrics-word--${word.state}`"
-                  :style="{ '--word-progress': word.progress }"
-                >{{ word.text }}</span>
-              </span>
-              <span v-else>{{ item.text }}</span>
-              <span v-if="item.adlibs?.length" class="lyrics-line__adlibs">
-                <span
-                  v-for="word in item.adlibs"
-                  :key="word.key"
-                  class="lyrics-word"
-                  :class="`lyrics-word--${word.state}`"
-                  :style="{ '--word-progress': word.progress }"
-                >{{ word.text }}</span>
-              </span>
-            </button>
-
-            <div
-              v-else
-              class="lyrics-item"
-              :class="{
-                'lyrics-line': item.type === 'line',
-                'lyrics-line--static': item.type === 'line',
-                'lyrics-line--active': item.type === 'line' && item.active,
-                'lyrics-line--word-synced': item.type === 'line' && (item.words?.length || item.adlibs?.length),
-                'lyrics-line--alternate-agent': item.type === 'line' && item.agentLane === 'alternate',
-                'lyrics-pause': item.type === 'pause',
-                'lyrics-pause--active': item.type === 'pause' && item.active
-              }"
-            >
-              <template v-if="item.type === 'line'">
-                <span v-if="item.words?.length" class="lyrics-line__words">
-                  <span
-                    v-for="word in item.words"
-                    :key="word.key"
-                    class="lyrics-word"
-                    :class="`lyrics-word--${word.state}`"
-                    :style="{ '--word-progress': word.progress }"
-                  >{{ word.text }}</span>
-                </span>
-                <span v-else>{{ item.text }}</span>
-                <span v-if="item.adlibs?.length" class="lyrics-line__adlibs">
-                  <span
-                    v-for="word in item.adlibs"
-                    :key="word.key"
-                    class="lyrics-word"
-                    :class="`lyrics-word--${word.state}`"
-                    :style="{ '--word-progress': word.progress }"
-                  >{{ word.text }}</span>
-                </span>
-              </template>
-              <span v-else class="lyrics-ellipsis" aria-label="Pause">
-                <i />
-                <i />
-                <i />
-              </span>
-            </div>
-          </template>
-        </div>
-
-        <div v-else class="lyrics-message">
-          <q-icon :name="activeTrack ? 'speaker_notes_off' : 'music_note'" />
-          <span>{{ activeTrack ? 'No Lyrics :/' : lyricsStatusText }}</span>
-        </div>
+        <section class="fullscreen-player__lyrics lyrics-sidebar__fullscreen" aria-label="Lyrics">
+          <FullscreenLyricStack
+            :app="app"
+            :items="lyricDisplayItems"
+            :mode="lyricsState.mode"
+            :status="lyricsState.status"
+          />
+        </section>
         </template>
 
         <template v-else-if="rightPanelMode === 'party' && listeningParty.status === 'connected'">

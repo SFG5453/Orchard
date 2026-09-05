@@ -1077,8 +1077,8 @@ export function installPlaybackControls(ctx) {
 
     await nextTick();
     const lyricRoot = ctx.fullscreenPlayerOpen.value
-      ? document.querySelector('.fullscreen-player__lyrics-scroll')
-      : document;
+      ? ctx.fullscreenPlayerRef.value?.querySelector('.fullscreen-player__lyrics-scroll')
+      : document.querySelector('.lyrics-sidebar .fullscreen-player__lyrics-scroll');
     const activeLine = lyricRoot?.querySelector('.lyrics-pause--active, .lyrics-line--active');
     activeLine?.scrollIntoView?.({
       block: 'center',

@@ -82,6 +82,25 @@ class LyricsParserTest {
     }
 
     @Test
+    fun syllablesWithoutWhitespaceUseTheFullLineForWordBoundaries() {
+        val root = JSONObject(
+            """{"lyrics":[
+              {"time":100,"duration":900,"text":"Top Cobain","syllabus":[
+                {"text":"Top","time":100,"duration":200},
+                {"text":"Co","time":300,"duration":250},
+                {"text":"bain","time":550,"duration":450}
+              ]}
+            ]}""",
+        )
+
+        val words = LyricsParser.amPayload(root).single().words
+
+        assertEquals(listOf("Top", "Cobain"), words.map { it.text })
+        assertEquals(listOf(100L, 300L), words.map { it.startMs })
+        assertEquals(listOf(300L, 1_000L), words.map { it.endMs })
+    }
+
+    @Test
     fun appleTtmlLineTimingIsNormalized() {
         val lines = LyricsParser.ttml(
             """<tt xmlns="http://www.w3.org/ns/ttml"><body><div>

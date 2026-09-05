@@ -91,6 +91,29 @@
   padding-top: 12px;
 }
 
+/* The sidebar deliberately uses the same lyric stage as the immersive player.
+   Only its frame is adapted to the narrower drawer; typography, word fills,
+   pauses, seeking and edge fades stay owned by the shared fullscreen stack. */
+.lyrics-sidebar .lyrics-sidebar__fullscreen {
+  flex: 1 1 auto;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  margin: 0 14px;
+}
+
+.lyrics-sidebar .lyrics-sidebar__fullscreen .fullscreen-player__lyrics-scroll {
+  padding: 34% 4px;
+}
+
+.lyrics-sidebar .lyrics-sidebar__fullscreen .lyrics-line {
+  font-size: clamp(20px, 1.7vw, 28px);
+}
+
+.lyrics-sidebar .lyrics-sidebar__fullscreen .lyrics-line--alternate-agent {
+  padding-left: 34px;
+}
+
 .right-party {
   display: flex;
   flex-direction: column;

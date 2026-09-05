@@ -250,7 +250,7 @@ internal object LyricsParser {
                 val duration = timeMs(entry.opt("duration"))
                 val explicitEnd = timeMs(entry.opt("endTime"))
                 val end = explicitEnd.takeIf { it > start } ?: (start + duration).takeIf { duration > 0 }
-                val (words, adlibs) = timedWords(syllables, start, end)
+                val (words, adlibs) = timedWords(syllables, start, end, text)
                 add(LyricLine(text, start.takeIf { hasTiming }, end, words, adlibs))
             }
         }.sortedBy { it.startMs ?: Long.MAX_VALUE }
@@ -280,7 +280,7 @@ internal object LyricsParser {
                 val text = paragraph.textContent.orEmpty().replace(Regex("\\s+"), " ").trim()
                 if (text.isBlank()) continue
                 val spans = paragraph.getElementsByTagNameNS("*", "span")
-                val (words, adlibs) = timedTtmlWords(paragraph, spans)
+                val (words, adlibs) = timedTtmlWords(paragraph, spans, text)
                 val start = paragraph.getAttribute("begin").takeIf(String::isNotBlank)?.let(::timeMs)
                     ?: words.firstOrNull()?.startMs ?: adlibs.firstOrNull()?.startMs
                 val end = paragraph.getAttribute("end").takeIf(String::isNotBlank)?.let(::timeMs)
@@ -304,6 +304,7 @@ internal object LyricsParser {
         syllables: JSONArray?,
         lineStartMs: Long,
         lineEndMs: Long?,
+        lineText: String,
     ): Pair<List<LyricWord>, List<LyricWord>> {
         if (syllables == null) return emptyList<LyricWord>() to emptyList()
         val words = mutableListOf<LyricWord>()
@@ -319,12 +320,13 @@ internal object LyricsParser {
             val word = LyricWord(text, start, end)
             if (syllable.optBoolean("isBackground")) adlibs += word else words += word
         }
-        return mergeTimedWords(words) to mergeTimedWords(adlibs)
+        return mergeTimedWords(words, lineText) to mergeTimedWords(adlibs)
     }
 
     private fun timedTtmlWords(
         paragraph: Element,
         spans: NodeList,
+        lineText: String,
     ): Pair<List<LyricWord>, List<LyricWord>> {
         val words = mutableListOf<LyricWord>()
         val adlibs = mutableListOf<LyricWord>()
@@ -341,18 +343,20 @@ internal object LyricsParser {
             )
             if (span.isBackgroundSpan(paragraph)) adlibs += word else words += word
         }
-        return mergeTimedWords(words) to mergeTimedWords(adlibs)
+        return mergeTimedWords(words, lineText) to mergeTimedWords(adlibs)
     }
 
-    private fun mergeTimedWords(input: List<LyricWord>): List<LyricWord> {
+    private fun mergeTimedWords(input: List<LyricWord>, lineText: String = ""): List<LyricWord> {
         val clean = input.filter { it.text.isNotBlank() }
-        if (clean.none { it.text.any(Char::isWhitespace) }) {
+        val canonicalLine = lineText.replace(Regex("\\s+"), " ").trim()
+        if (canonicalLine.isBlank() && clean.none { it.text.any(Char::isWhitespace) }) {
             return clean.map { it.copy(text = it.text.trim()) }.filter { it.text.isNotBlank() }
         }
         val output = mutableListOf<LyricWord>()
         var currentText = ""
         var currentStart = 0L
         var currentEnd: Long? = null
+        var lineCursor = 0
         fun finish() {
             if (currentText.isNotBlank()) output += LyricWord(currentText, currentStart, currentEnd)
             currentText = ""
@@ -360,10 +364,16 @@ internal object LyricsParser {
         }
         clean.forEach { word ->
             Regex("\\s*\\S+\\s*").findAll(word.text).forEach { match ->
-                if (match.value.firstOrNull()?.isWhitespace() == true) finish()
+                val syllable = match.value.trim()
+                val syllableIndex = canonicalLine.indexOf(syllable, lineCursor)
+                val canonicalWordBreak = syllableIndex >= lineCursor &&
+                    canonicalLine.substring(lineCursor, syllableIndex).any(Char::isWhitespace)
+                val tokenWordBreak = syllableIndex < 0 && match.value.firstOrNull()?.isWhitespace() == true
+                if (canonicalWordBreak || tokenWordBreak) finish()
                 if (currentText.isBlank()) currentStart = word.startMs
-                currentText += match.value.trim()
+                currentText += syllable
                 if (word.endMs != null && (currentEnd == null || word.endMs > currentEnd!!)) currentEnd = word.endMs
+                if (syllableIndex >= 0) lineCursor = syllableIndex + syllable.length
                 if (match.value.lastOrNull()?.isWhitespace() == true) finish()
             }
         }

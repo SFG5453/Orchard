@@ -19,10 +19,6 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +40,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
@@ -65,6 +64,7 @@ import dev.sfg.orchard.mobile.ui.components.AmbientArtworkHaze
 import dev.sfg.orchard.mobile.ui.components.ArtworkTile
 import dev.sfg.orchard.mobile.ui.components.MessagePanel
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
+import kotlin.math.abs
 
 /** Auto-scrolling, word-timed lyric list. Shared by the player's inline lyrics mode. */
 @Composable
@@ -77,12 +77,46 @@ internal fun LyricLines(
     contentPadding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 32.dp),
     accent: Color = CanopyColors.LyricActive,
 ) {
-    val smoothPosition by animateFloatAsState(
-        targetValue = positionMs.toFloat() + if (playing) PLAYER_POSITION_TICK_MS else 0f,
-        animationSpec = if (playing) tween(PLAYER_POSITION_TICK_MS.toInt(), easing = LinearEasing) else snap(),
-        label = "smooth lyric position",
-    )
-    val activeIndex = lines.indexOfLast { line -> line.startMs != null && line.startMs.toFloat() <= smoothPosition }
+    // Playback snapshots arrive twice a second. Keep one frame-clock coroutine alive between
+    // them and fold small clock corrections in gently; restarting the animation at every
+    // snapshot makes the highlight visibly hop backwards on some devices.
+    val latestPosition by rememberUpdatedState(positionMs)
+    val latestPlaying by rememberUpdatedState(playing)
+    val smoothPosition by produceState(positionMs.toFloat()) {
+        var observedPosition = latestPosition
+        var wasPlaying = latestPlaying
+        var anchorPosition = observedPosition.toFloat()
+        var anchorFrame = withFrameNanos { it }
+        while (true) {
+            withFrameNanos { frame ->
+                val reportedPosition = latestPosition
+                val isPlaying = latestPlaying
+                var projectedPosition = anchorPosition + if (wasPlaying) {
+                    (frame - anchorFrame) / NANOS_PER_MILLISECOND
+                } else {
+                    0f
+                }
+
+                if (reportedPosition != observedPosition || isPlaying != wasPlaying) {
+                    val drift = reportedPosition - projectedPosition
+                    projectedPosition = when {
+                        !isPlaying || !wasPlaying -> reportedPosition.toFloat()
+                        abs(drift) >= SEEK_SNAP_THRESHOLD_MS -> reportedPosition.toFloat()
+                        else -> projectedPosition + drift * CLOCK_CORRECTION_FACTOR
+                    }
+                    observedPosition = reportedPosition
+                    wasPlaying = isPlaying
+                    anchorPosition = projectedPosition
+                    anchorFrame = frame
+                }
+
+                value = projectedPosition
+            }
+        }
+    }
+    val activeIndex = lines.indexOfLast { line ->
+        line.startMs != null && line.startMs.toFloat() <= smoothPosition + LYRIC_LINE_LEAD_MS
+    }
     val listState = rememberLazyListState()
     LaunchedEffect(activeIndex) {
         if (activeIndex < 0) return@LaunchedEffect
@@ -159,7 +193,7 @@ private fun TimedWords(
 ) {
     FlowRow(modifier = Modifier.fillMaxWidth()) {
         words.forEach { word ->
-            SmoothTimedWord(word, positionMs, lineActive, adlib, accent)
+            SmoothTimedWord(word, positionMs + LYRIC_WORD_LEAD_MS, lineActive, adlib, accent)
         }
     }
 }
@@ -186,19 +220,25 @@ private fun SmoothTimedWord(
     val unsung = Color.White.copy(
         alpha = when {
             !lineActive -> INACTIVE_ALPHA
-            adlib -> 0.48f
+            adlib -> ADLIB_UNSUNG_ALPHA
             else -> UNSUNG_ALPHA
         },
     )
     val fill = if (adlib) sung else lerp(Color.White, accent, 0.4f)
+    val restingStyle = when {
+        completed && !adlib -> style.copy(
+            shadow = Shadow(Color.White.copy(alpha = 0.40f), blurRadius = 8f),
+        )
+        else -> style
+    }
     Box(Modifier.padding(end = 8.dp, bottom = 3.dp)) {
         Text(
             text = text,
             color = if (completed) sung else unsung,
-            style = style,
+            style = restingStyle,
         )
         if (progress in 0.0001f..0.9999f) {
-            val fadeEnd = (progress + 0.10f).coerceAtMost(1f)
+            val fadeEnd = (progress + HIGHLIGHT_FEATHER).coerceAtMost(1f)
             Text(
                 text = text,
                 style = style.copy(
@@ -217,9 +257,15 @@ private fun SmoothTimedWord(
     }
 }
 
-private const val PLAYER_POSITION_TICK_MS = 500f
+private const val NANOS_PER_MILLISECOND = 1_000_000f
+private const val SEEK_SNAP_THRESHOLD_MS = 250f
+private const val CLOCK_CORRECTION_FACTOR = 0.35f
+private const val LYRIC_LINE_LEAD_MS = 250f
+private const val LYRIC_WORD_LEAD_MS = 80f
+private const val HIGHLIGHT_FEATHER = 0.075f
 
 /** Colour ramp mirrored from the desktop `.lyrics-line` rules. */
-private const val INACTIVE_ALPHA = 0.18f
-private const val UNSUNG_ALPHA = 0.35f
+private const val INACTIVE_ALPHA = 0.24f
+private const val UNSUNG_ALPHA = 0.28f
+private const val ADLIB_UNSUNG_ALPHA = 0.28f
 private val LINE_SPACING = 10.dp
