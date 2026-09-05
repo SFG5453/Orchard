@@ -55,11 +55,10 @@ class LibraryRepository(
     }
 
     fun toggleLiked(track: Track) = update { current ->
-        val liked = current.likedTracks.toMutableList()
-        val existing = liked.indexOfFirst { it.id == track.id }
-        if (existing >= 0) liked.removeAt(existing) else liked.add(0, track)
-        current.copy(likedTracks = liked)
+        current.withLiked(track, current.likedTracks.none { it.id == track.id })
     }
+
+    fun setLiked(track: Track, liked: Boolean) = update { current -> current.withLiked(track, liked) }
 
     fun saveAlbum(album: Album) = update { current ->
         current.copy(savedAlbums = toggle(current.savedAlbums, album, Album::id))
@@ -190,6 +189,11 @@ class LibraryRepository(
         /** The complete saved-playlist grid; the library landing page contains only recent items. */
         const val LIKED_PLAYLISTS = "FEmusic_liked_playlists"
     }
+}
+
+private fun LibrarySnapshot.withLiked(track: Track, liked: Boolean): LibrarySnapshot {
+    val withoutTrack = likedTracks.filterNot { it.id == track.id }
+    return copy(likedTracks = if (liked) listOf(track) + withoutTrack else withoutTrack)
 }
 
 /** Library grid payloads are metadata-only; never let one erase cached offline membership. */

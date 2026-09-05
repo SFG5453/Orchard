@@ -35,6 +35,8 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
@@ -72,6 +74,8 @@ internal fun TrackActionsPopup(
     onAddToQueue: (() -> Unit)? = null,
     onAddToPlaylist: (() -> Unit)? = null,
     onRemoveFromPlaylist: (() -> Unit)? = null,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null,
     onViewQueue: (() -> Unit)? = null,
     onDownload: (() -> Unit)? = null,
     onRemoveDownload: (() -> Unit)? = null,
@@ -135,6 +139,12 @@ internal fun TrackActionsPopup(
             }
             onRemoveFromPlaylist?.let { action ->
                 PopupActionRow(Icons.Rounded.Delete, "Remove from Playlist") { onDismiss(); action() }
+            }
+            onMoveUp?.let { action ->
+                PopupActionRow(Icons.Rounded.KeyboardArrowUp, "Move Up") { onDismiss(); action() }
+            }
+            onMoveDown?.let { action ->
+                PopupActionRow(Icons.Rounded.KeyboardArrowDown, "Move Down") { onDismiss(); action() }
             }
             onViewQueue?.let { action ->
                 PopupActionRow(Icons.AutoMirrored.Rounded.List, "View Queue") { onDismiss(); action() }

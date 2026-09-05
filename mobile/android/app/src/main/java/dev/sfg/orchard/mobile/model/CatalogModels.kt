@@ -168,6 +168,8 @@ data class BrowseDetail(
     val artist: String = "",
     val year: String = "",
     val explicit: Boolean = false,
+    /** True when YouTube identifies this as a playlist the signed-in listener may edit. */
+    val editable: Boolean = false,
 )
 
 data class SearchResults(

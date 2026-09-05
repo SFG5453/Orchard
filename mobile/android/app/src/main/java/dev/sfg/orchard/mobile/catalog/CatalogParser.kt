@@ -143,6 +143,7 @@ object CatalogParser {
     }
 
     fun detail(id: String, root: JSONObject): BrowseDetail {
+        val editablePlaylist = JsonTraversal.renderers(root, "musicEditablePlaylistDetailHeaderRenderer").isNotEmpty()
         val rawHeader = JsonTraversal.renderers(root, "musicResponsiveHeaderRenderer").firstOrNull()
             ?: JsonTraversal.renderers(root, "musicDetailHeaderRenderer").firstOrNull()
             ?: JsonTraversal.renderers(root, "musicImmersiveHeaderRenderer").firstOrNull()
@@ -263,6 +264,7 @@ object CatalogParser {
             sections = sections,
             artist = albumArtistName,
             year = year,
+            editable = editablePlaylist,
         )
     }
 

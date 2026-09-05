@@ -249,6 +249,7 @@ class CatalogParserTest {
         assertEquals("https://lh3.googleusercontent.com/example=w540-h540-l90-rj", detail.artworkUrl)
         assertEquals("Moneybagg Yo", detail.tracks.single().artist)
         assertEquals("", detail.tracks.single().album)
+        assertEquals(true, detail.editable)
     }
 
     @Test

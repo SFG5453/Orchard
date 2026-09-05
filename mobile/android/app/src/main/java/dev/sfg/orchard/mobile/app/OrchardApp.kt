@@ -263,6 +263,7 @@ private fun OrchardNavigation(
     val search by viewModel.search.collectAsStateWithLifecycle()
     val history by viewModel.searchHistory.collectAsStateWithLifecycle()
     val detail by viewModel.detail.collectAsStateWithLifecycle()
+    val detailRefreshing by viewModel.detailRefreshing.collectAsStateWithLifecycle()
     val detailArtwork by viewModel.detailArtwork.collectAsStateWithLifecycle()
     val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
     val artistImages by viewModel.artistImages.collectAsStateWithLifecycle()
@@ -500,6 +501,7 @@ private fun OrchardNavigation(
                 onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
                 onAddToPlaylist = { playlistPickerTrack = it },
                 onRemoveFromPlaylist = viewModel::removeTrackFromCurrentPlaylist,
+                onMovePlaylistTrack = viewModel::moveTrackInCurrentPlaylist,
                 onSave = viewModel::saveDetail,
                 onOpenDetail = { next -> viewModel.openDetail(next); nav.navigate(Routes.detail(next)) },
                 isSaved = isSaved,
@@ -517,6 +519,8 @@ private fun OrchardNavigation(
                 smartCrossfadeEnabled = settings.smartCrossfade,
                 bestMixSupabaseSync = settings.bestMixSupabaseSync,
                 onPlayBestMix = viewModel::playBestMix,
+                isRefreshing = detailRefreshing,
+                onRefresh = viewModel::refreshDetail,
             )
         }
         composable(Routes.DEVICES) {

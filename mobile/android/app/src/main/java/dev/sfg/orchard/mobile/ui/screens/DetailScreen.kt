@@ -53,6 +53,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -101,6 +102,7 @@ fun DetailScreen(
     onAddToQueue: ((Track) -> Unit)?,
     onAddToPlaylist: ((Track) -> Unit)? = null,
     onRemoveFromPlaylist: ((Track) -> Unit)? = null,
+    onMovePlaylistTrack: ((Int, Int) -> Unit)? = null,
     onSave: (BrowseDetail) -> Unit,
     onOpenDetail: (String) -> Unit,
     isSaved: Boolean = false,
@@ -118,6 +120,8 @@ fun DetailScreen(
     smartCrossfadeEnabled: Boolean = false,
     bestMixSupabaseSync: Boolean = false,
     onPlayBestMix: ((List<Track>, String, (String) -> Unit, () -> Unit) -> Unit)? = null,
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
 ) {
     when (state) {
         LoadState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -133,8 +137,13 @@ fun DetailScreen(
         }
         is LoadState.Content -> {
             val detail = state.value
-            if (detail.kind == CatalogKind.ARTIST) {
-                ArtistDetailContent(
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = onRefresh,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                if (detail.kind == CatalogKind.ARTIST) {
+                    ArtistDetailContent(
                     detail = detail,
                     onBack = onBack,
                     onPlayAll = onPlayAll,
@@ -153,16 +162,16 @@ fun DetailScreen(
                     onShareCollection = onShareCollection,
                     onFetchSectionItems = onFetchSectionItems,
                 )
-            } else if (detail.tracks.isEmpty() && (detail.sections.isNotEmpty() || detail.related.isNotEmpty())) {
-                HubDetailContent(
+                } else if (detail.tracks.isEmpty() && (detail.sections.isNotEmpty() || detail.related.isNotEmpty())) {
+                    HubDetailContent(
                     detail = detail,
                     onBack = onBack,
                     onOpen = onOpenDetail,
                     onPlayTrack = onPlayTrack,
                     onFetchSectionItems = onFetchSectionItems,
                 )
-            } else {
-                CollectionDetailContent(
+                } else {
+                    CollectionDetailContent(
                     detail = detail,
                     onBack = onBack,
                     onPlayAll = onPlayAll,
@@ -173,6 +182,7 @@ fun DetailScreen(
                     onAdd = onAddToQueue,
                     onAddToPlaylist = onAddToPlaylist,
                     onRemoveFromPlaylist = onRemoveFromPlaylist,
+                    onMovePlaylistTrack = onMovePlaylistTrack,
                     onSave = onSave,
                     onOpen = onOpenDetail,
                     isSaved = isSaved,
@@ -190,7 +200,8 @@ fun DetailScreen(
                     bestMixSupabaseSync = bestMixSupabaseSync,
                     onPlayBestMix = onPlayBestMix,
                     onFetchSectionItems = onFetchSectionItems,
-                )
+                    )
+                }
             }
         }
         LoadState.Idle -> Unit
@@ -544,6 +555,7 @@ private fun CollectionDetailContent(
     onAdd: ((Track) -> Unit)?,
     onAddToPlaylist: ((Track) -> Unit)? = null,
     onRemoveFromPlaylist: ((Track) -> Unit)? = null,
+    onMovePlaylistTrack: ((Int, Int) -> Unit)? = null,
     onSave: (BrowseDetail) -> Unit,
     onOpen: (String) -> Unit,
     isSaved: Boolean = false,
@@ -698,6 +710,10 @@ private fun CollectionDetailContent(
                             onAddToPlaylist?.let { action -> { action(track) } } else null,
                         onRemoveFromPlaylist = if (detail.kind == CatalogKind.PLAYLIST)
                             onRemoveFromPlaylist?.let { action -> { action(track) } } else null,
+                        onMoveUp = if (detail.editable && !isSearching && index > 0)
+                            onMovePlaylistTrack?.let { action -> { action(index, index - 1) } } else null,
+                        onMoveDown = if (detail.editable && !isSearching && index < detail.tracks.lastIndex)
+                            onMovePlaylistTrack?.let { action -> { action(index, index + 1) } } else null,
                         onDownload = onDownloadTrack?.let { action -> { action(track) } },
                         onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
                         isDownloaded = isDownloaded,

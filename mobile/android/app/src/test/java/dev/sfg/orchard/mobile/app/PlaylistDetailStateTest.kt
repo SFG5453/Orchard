@@ -48,4 +48,27 @@ class PlaylistDetailStateTest {
 
         assertSame(detail, detail.withPlaylistTrackRemoved("missing"))
     }
+
+    @Test
+    fun `moving a playlist row preserves duplicate occurrences`() {
+        val first = Track("song-1", "First", "Artist")
+        val duplicate = first.copy(title = "Duplicate row")
+        val detail = BrowseDetail(
+            id = "VLPL123",
+            kind = CatalogKind.PLAYLIST,
+            title = "Playlist",
+            tracks = listOf(first, Track("song-2", "Second", "Artist"), duplicate),
+        )
+
+        val updated = detail.withPlaylistTrackMoved(2, 0)
+
+        assertEquals(listOf("Duplicate row", "First", "Second"), updated.tracks.map(Track::title))
+    }
+
+    @Test
+    fun `invalid playlist move leaves state unchanged`() {
+        val detail = BrowseDetail("VLPL123", CatalogKind.PLAYLIST, "Playlist")
+
+        assertSame(detail, detail.withPlaylistTrackMoved(0, 1))
+    }
 }

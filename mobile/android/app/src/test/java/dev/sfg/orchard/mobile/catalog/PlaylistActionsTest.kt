@@ -67,6 +67,57 @@ class PlaylistActionsTest {
     }
 
     @Test
+    fun `liking a track matches the desktop WEB_REMIX target shape`() {
+        val recordedRequests = mutableListOf<Pair<String, JSONObject>>()
+        val mock = MockEngine { endpoint, payload ->
+            recordedRequests.add(endpoint to payload)
+            JSONObject().put("status", "STATUS_SUCCEEDED")
+        }
+        val actions = PlaylistActions(InnerTubeClient(mock.okHttpClient))
+
+        actions.setLiked("song-liked", true)
+
+        assertEquals("like", recordedRequests.single().first)
+        assertEquals("song-liked", recordedRequests.single().second.getJSONObject("target").optString("videoId"))
+        assertEquals(
+            "WEB_REMIX",
+            recordedRequests.single().second.getJSONObject("context").getJSONObject("client").optString("clientName"),
+        )
+    }
+
+    @Test
+    fun `adding to Liked Music rates the track instead of editing the auto playlist`() {
+        val recordedRequests = mutableListOf<Pair<String, JSONObject>>()
+        val mock = MockEngine { endpoint, payload ->
+            recordedRequests.add(endpoint to payload)
+            JSONObject().put("status", "STATUS_SUCCEEDED")
+        }
+        val actions = PlaylistActions(InnerTubeClient(mock.okHttpClient))
+
+        actions.add("LM", "song-liked")
+
+        assertEquals(1, recordedRequests.size)
+        assertEquals("like", recordedRequests.single().first)
+        assertEquals("song-liked", recordedRequests.single().second.getJSONObject("target").optString("videoId"))
+    }
+
+    @Test
+    fun `removing from Liked Music removes the rating`() {
+        val recordedRequests = mutableListOf<Pair<String, JSONObject>>()
+        val mock = MockEngine { endpoint, payload ->
+            recordedRequests.add(endpoint to payload)
+            JSONObject().put("status", "STATUS_SUCCEEDED")
+        }
+        val actions = PlaylistActions(InnerTubeClient(mock.okHttpClient))
+
+        actions.remove("FEmusic_liked_videos", "song-liked")
+
+        assertEquals(1, recordedRequests.size)
+        assertEquals("removelike", recordedRequests.single().first)
+        assertEquals("song-liked", recordedRequests.single().second.getJSONObject("target").optString("videoId"))
+    }
+
+    @Test
     fun `add track to playlist sends addedVideoId in edit_playlist action`() {
         val recordedRequests = mutableListOf<Pair<String, JSONObject>>()
         val mock = MockEngine { endpoint, payload ->
@@ -175,4 +226,62 @@ class PlaylistActionsTest {
         val action = recordedRequests[2].second.getJSONArray("actions").getJSONObject(0)
         assertEquals("set-after-first-page", action.optString("setVideoId"))
     }
+
+    @Test
+    fun `move down places the selected playlist occurrence before its new successor`() {
+        val recordedRequests = mutableListOf<Pair<String, JSONObject>>()
+        val mock = MockEngine { endpoint, payload ->
+            recordedRequests.add(endpoint to payload)
+            when (endpoint) {
+                "browse" -> playlistPage("set-a", "set-b", "set-c", "set-d")
+                "edit_playlist" -> JSONObject().put("status", "STATUS_SUCCEEDED")
+                else -> JSONObject()
+            }
+        }
+
+        PlaylistActions(InnerTubeClient(mock.okHttpClient)).move("VLPL12345", 1, 2)
+
+        val payload = recordedRequests.last().second
+        assertEquals("PL12345", payload.optString("playlistId"))
+        val action = payload.getJSONArray("actions").getJSONObject(0)
+        assertEquals("ACTION_MOVE_VIDEO_BEFORE", action.optString("action"))
+        assertEquals("set-b", action.optString("setVideoId"))
+        assertEquals("set-d", action.optString("movedSetVideoIdSuccessor"))
+    }
+
+    @Test
+    fun `move to end omits a successor`() {
+        val recordedRequests = mutableListOf<Pair<String, JSONObject>>()
+        val mock = MockEngine { endpoint, payload ->
+            recordedRequests.add(endpoint to payload)
+            when (endpoint) {
+                "browse" -> playlistPage("set-a", "set-b", "set-c")
+                "edit_playlist" -> JSONObject().put("status", "STATUS_SUCCEEDED")
+                else -> JSONObject()
+            }
+        }
+
+        PlaylistActions(InnerTubeClient(mock.okHttpClient)).move("PL12345", 0, 2)
+
+        val action = recordedRequests.last().second.getJSONArray("actions").getJSONObject(0)
+        assertEquals("set-a", action.optString("setVideoId"))
+        assertEquals(false, action.has("movedSetVideoIdSuccessor"))
+    }
+
+    private fun playlistPage(vararg setVideoIds: String): JSONObject = JSONObject().put(
+        "contents",
+        JSONArray().apply {
+            setVideoIds.forEachIndexed { index, setVideoId ->
+                put(JSONObject().put(
+                    "musicResponsiveListItemRenderer",
+                    JSONObject().put(
+                        "playlistItemData",
+                        JSONObject()
+                            .put("videoId", "song-$index")
+                            .put("playlistSetVideoId", setVideoId),
+                    ),
+                ))
+            }
+        },
+    )
 }

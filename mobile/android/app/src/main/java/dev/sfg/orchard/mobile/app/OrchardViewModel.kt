@@ -32,6 +32,7 @@ import dev.sfg.orchard.mobile.auth.AuthState
 import dev.sfg.orchard.mobile.artwork.ArtistImages
 import dev.sfg.orchard.mobile.artwork.TrackArtwork
 import dev.sfg.orchard.mobile.catalog.needsAudioVersionLookup
+import dev.sfg.orchard.mobile.catalog.PlaylistActions
 import dev.sfg.orchard.mobile.model.*
 import dev.sfg.orchard.mobile.connect.PlaybackTargetCoordinator
 import dev.sfg.orchard.mobile.playback.AutoplayRecommendations
@@ -149,6 +150,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val search: StateFlow<LoadState<SearchResults>> = mutableSearch.asStateFlow()
     private val mutableDetail = MutableStateFlow<LoadState<BrowseDetail>>(LoadState.Idle)
     val detail: StateFlow<LoadState<BrowseDetail>> = mutableDetail.asStateFlow()
+    private val mutableDetailRefreshing = MutableStateFlow(false)
+    val detailRefreshing: StateFlow<Boolean> = mutableDetailRefreshing.asStateFlow()
     private val mutableDetailArtwork = MutableStateFlow<TrackArtwork?>(null)
     val detailArtwork: StateFlow<TrackArtwork?> = mutableDetailArtwork.asStateFlow()
     private val mutableArtistImages = MutableStateFlow<ArtistImages?>(null)
@@ -189,17 +192,25 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
             .onFailure { graph.postWarning(it.message ?: "Could not create playlist.") }
     }
     fun addTrackToPlaylist(playlistId: String, track: Track) = viewModelScope.launch {
+        val likedMusic = PlaylistActions.isLikedMusicPlaylist(playlistId)
         runCatching {
             withContext(Dispatchers.IO) {
                 graph.playlistActions.add(playlistId, track.id)
-                graph.catalog.browse(playlistId)
+                graph.catalog.browse(if (likedMusic) PlaylistActions.LIKED_MUSIC_BROWSE_ID else playlistId)
             }
-        }.onSuccess(::applyRefreshedPlaylist)
+        }.onSuccess {
+            if (likedMusic) graph.library.setLiked(track, true)
+            applyRefreshedPlaylist(it)
+        }
             .onFailure { graph.postWarning(it.message ?: "Could not add track to playlist.") }
     }
     fun removeTrackFromPlaylist(playlistId: String, track: Track) = viewModelScope.launch {
+        val likedMusic = PlaylistActions.isLikedMusicPlaylist(playlistId)
         runCatching { withContext(Dispatchers.IO) { graph.playlistActions.remove(playlistId, track.id) } }
-            .onSuccess { applyRemovedPlaylistTrack(playlistId, track.id) }
+            .onSuccess {
+                if (likedMusic) graph.library.setLiked(track, false)
+                applyRemovedPlaylistTrack(playlistId, track.id)
+            }
             .onFailure { graph.postWarning(it.message ?: "Could not remove track from playlist.") }
     }
 
@@ -239,6 +250,24 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         if (id.isNotBlank()) removeTrackFromPlaylist(id, track)
     }
 
+    fun moveTrackInCurrentPlaylist(fromIndex: Int, toIndex: Int) {
+        val active = (detail.value as? LoadState.Content)?.value ?: return
+        if (active.kind != CatalogKind.PLAYLIST || !active.editable) return
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { graph.playlistActions.move(active.id, fromIndex, toIndex) }
+            }.onSuccess {
+                val current = (mutableDetail.value as? LoadState.Content)?.value ?: return@onSuccess
+                if (current.id.removePrefix("VL") != active.id.removePrefix("VL")) return@onSuccess
+                val updated = current.withPlaylistTrackMoved(fromIndex, toIndex)
+                mutableDetail.value = LoadState.Content(updated)
+                graph.library.refreshPlaylist(
+                    Playlist(updated.id, updated.title, updated.subtitle, updated.artworkUrl, updated.description, updated.tracks),
+                )
+            }.onFailure { graph.postWarning(it.message ?: "Could not reorder the playlist.") }
+        }
+    }
+
     /**
      * Autoplay: once the queue is nearly out, ask YouTube Music what would come next after the last
      * queued track and append it. Only the local player is refilled, because a Connect device owns
@@ -273,6 +302,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val sleepTimerEndOfTrack: StateFlow<Boolean> = mutableSleepTimerEndOfTrack.asStateFlow()
     private var sleepTimerJob: Job? = null
     private var detailJob: Job? = null
+    private var detailLoadGeneration = 0
 
     val updateState: StateFlow<dev.sfg.orchard.mobile.UpdateState> = graph.updates.state
 
@@ -338,13 +368,26 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun removeSearchHistoryItem(query: String) = graph.settings.removeSearchHistoryItem(query)
     fun selectLibraryFilter(filter: LibraryFilter) { mutableLibraryFilter.value = filter }
 
-    fun openDetail(id: String) {
+    fun openDetail(id: String) = loadDetail(id, preserveContent = false)
+
+    fun refreshDetail() {
+        val id = (mutableDetail.value as? LoadState.Content)?.value?.id.orEmpty()
+        if (id.isNotBlank()) loadDetail(id, preserveContent = true)
+    }
+
+    private fun loadDetail(id: String, preserveContent: Boolean) {
         val seed = findCatalogItem(id, home.value, search.value, library.value, detail.value)
         // A collection now publishes several times as its pages land, so a load left running after
         // the listener moved on would keep writing its pages over the collection they opened next.
         detailJob?.cancel()
+        val generation = ++detailLoadGeneration
         detailJob = viewModelScope.launch {
-            mutableDetail.value = LoadState.Loading
+            if (preserveContent) {
+                mutableDetailRefreshing.value = true
+            } else {
+                mutableDetailRefreshing.value = false
+                mutableDetail.value = LoadState.Loading
+            }
 
             // When offline or if network is down, immediately synthesize from downloaded tracks
             if (!graph.networkMonitor.checkIsOnline()) {
@@ -356,6 +399,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                 )
                 if (offlineDetail != null) {
                     mutableDetail.value = LoadState.Content(offlineDetail)
+                    mutableDetailRefreshing.value = false
                     return@launch
                 }
             }
@@ -382,6 +426,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                 )
                 mutableDetail.value = offline?.let { LoadState.Content(it) }
                     ?: LoadState.Error(error.message ?: "This collection could not be loaded.")
+            } finally {
+                if (detailLoadGeneration == generation) mutableDetailRefreshing.value = false
             }
         }
     }
@@ -1119,7 +1165,17 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun removeDevice(deviceId: String) = graph.connect.removeDevice(deviceId)
-    fun toggleLiked(track: Track) = graph.library.toggleLiked(track)
+    fun toggleLiked(track: Track) {
+        val liked = graph.library.library.value.likedTracks.none { it.id == track.id }
+        graph.library.setLiked(track, liked)
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { graph.playlistActions.setLiked(track.id, liked) } }
+                .onFailure {
+                    graph.library.setLiked(track, !liked)
+                    graph.postWarning(it.message ?: "Could not update liked music.")
+                }
+        }
+    }
     fun updateSettings(value: OrchardSettings) = graph.settings.updateSettings(value)
     fun beginSignIn() = graph.auth.beginSignIn()
     fun completeSignIn(cookie: String, visitorData: String, dataSyncId: String) = graph.auth.completeSignIn(cookie, visitorData, dataSyncId)
@@ -1399,4 +1455,10 @@ internal fun BrowseDetail.withPlaylistTrackRemoved(videoId: String): BrowseDetai
     val index = tracks.indexOfFirst { it.id == videoId }
     if (index < 0) return this
     return copy(tracks = tracks.toMutableList().apply { removeAt(index) })
+}
+
+/** Returns the same instance for invalid/no-op moves; otherwise relocates exactly one row. */
+internal fun BrowseDetail.withPlaylistTrackMoved(fromIndex: Int, toIndex: Int): BrowseDetail {
+    if (fromIndex !in tracks.indices || toIndex !in tracks.indices || fromIndex == toIndex) return this
+    return copy(tracks = tracks.toMutableList().apply { add(toIndex, removeAt(fromIndex)) })
 }

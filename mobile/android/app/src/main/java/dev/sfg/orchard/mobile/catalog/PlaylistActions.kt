@@ -24,6 +24,20 @@ import org.json.JSONObject
 
 /** Authenticated mutations for playlists.  The client supplies the session and request headers. */
 class PlaylistActions(private val client: InnerTubeClient) {
+    /**
+     * YouTube's Liked Music collection is a rating feed, not an editable playlist. Match the
+     * desktop WEB_REMIX request: its raw Actions call wraps the video id in LikeEndpoint.target;
+     * browse/edit_playlist rejects this special collection with INVALID_ARGUMENT.
+     */
+    fun setLiked(videoId: String, liked: Boolean) {
+        val id = videoId.trim()
+        require(id.isNotEmpty()) { "This track cannot be liked." }
+        client.post(
+            if (liked) "like/like" else "like/removelike",
+            JSONObject().put("target", JSONObject().put("videoId", id)),
+        )
+    }
+
     fun create(title: String, videoId: String): String {
         val cleanTitle = title.trim()
         require(cleanTitle.isNotEmpty()) { "Enter a playlist name." }
@@ -36,6 +50,10 @@ class PlaylistActions(private val client: InnerTubeClient) {
     }
 
     fun add(playlistId: String, videoId: String) {
+        if (isLikedMusicPlaylist(playlistId)) {
+            setLiked(videoId, true)
+            return
+        }
         val id = playlistId.removePrefix("VL").trim()
         require(id.isNotEmpty() && videoId.isNotBlank()) { "Playlist or track information is missing." }
         val page = client.post("browse", JSONObject().put("browseId", "VL$id"))
@@ -44,6 +62,10 @@ class PlaylistActions(private val client: InnerTubeClient) {
     }
 
     fun remove(playlistId: String, videoId: String) {
+        if (isLikedMusicPlaylist(playlistId)) {
+            setLiked(videoId, false)
+            return
+        }
         val id = playlistId.removePrefix("VL").trim()
         require(id.isNotEmpty() && videoId.isNotBlank()) { "Playlist or track information is missing." }
         var page = client.post("browse", JSONObject().put("browseId", "VL$id"))
@@ -66,6 +88,34 @@ class PlaylistActions(private val client: InnerTubeClient) {
                 .put("setVideoId", setVideoId))))
     }
 
+    /** Permanently moves one playlist occurrence to [toIndex], preserving duplicate songs. */
+    fun move(playlistId: String, fromIndex: Int, toIndex: Int) {
+        require(!isLikedMusicPlaylist(playlistId)) { "Liked Music cannot be reordered." }
+        val id = playlistId.removePrefix("VL").trim()
+        require(id.isNotEmpty()) { "Playlist information is missing." }
+        require(fromIndex >= 0 && toIndex >= 0) { "Playlist position is invalid." }
+        if (fromIndex == toIndex) return
+
+        val entries = playlistEntries(id)
+        require(fromIndex in entries.indices && toIndex in entries.indices) {
+            "The playlist changed. Refresh it and try again."
+        }
+        val movedSetVideoId = entries[fromIndex]
+        val remaining = entries.toMutableList().apply { removeAt(fromIndex) }
+        val successor = remaining.getOrNull(toIndex)
+        val action = JSONObject()
+            .put("action", "ACTION_MOVE_VIDEO_BEFORE")
+            .put("setVideoId", movedSetVideoId)
+        if (successor != null) action.put("movedSetVideoIdSuccessor", successor)
+
+        client.post(
+            "browse/edit_playlist",
+            JSONObject()
+                .put("playlistId", id)
+                .put("actions", JSONArray().put(action)),
+        )
+    }
+
     fun delete(playlistId: String) {
         val id = playlistId.removePrefix("VL").trim()
         require(id.isNotEmpty()) { "Playlist information is missing." }
@@ -85,6 +135,26 @@ class PlaylistActions(private val client: InnerTubeClient) {
             .put("playlistId", id)
             .put("actions", JSONArray().put(actionObj)))
     }
+
+    private fun playlistEntries(playlistId: String): List<String> {
+        var page = client.post("browse", JSONObject().put("browseId", "VL$playlistId"))
+        val entries = playlistSetVideoIds(page).toMutableList()
+        var continuation = CatalogParser.continuationToken(page)
+        var pages = 0
+        while (continuation.isNotBlank() && pages < MAX_PLAYLIST_PAGES) {
+            page = client.browseContinuation(continuation)
+            entries += playlistSetVideoIds(page)
+            val next = CatalogParser.continuationToken(page)
+            if (next == continuation) break
+            continuation = next
+            pages++
+        }
+        return entries.distinct()
+    }
+
+    private fun playlistSetVideoIds(page: JSONObject): List<String> =
+        JsonTraversal.renderers(page, "playlistItemData")
+            .mapNotNull { item -> item.optString("playlistSetVideoId").takeIf(String::isNotBlank) }
 
     private fun findSetVideoId(value: Any?, videoId: String, inheritedSetId: String = "", depth: Int = 0): String {
         if (depth > 20) return ""
@@ -122,8 +192,12 @@ class PlaylistActions(private val client: InnerTubeClient) {
         else -> false
     }
 
-    private companion object {
+    companion object {
         /** YouTube Music returns roughly 100 playlist rows per browse page. */
-        const val MAX_PLAYLIST_PAGES = 50
+        private const val MAX_PLAYLIST_PAGES = 50
+        const val LIKED_MUSIC_BROWSE_ID = "FEmusic_liked_videos"
+
+        fun isLikedMusicPlaylist(playlistId: String): Boolean =
+            playlistId.removePrefix("VL").trim() in setOf("LM", LIKED_MUSIC_BROWSE_ID)
     }
 }
