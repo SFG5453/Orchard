@@ -1017,6 +1017,7 @@ export function installPlaybackControls(ctx) {
     if (typeof media.fastSeek === 'function') media.fastSeek(target);
     else media.currentTime = target;
     ctx.syncVideoCompanionAudio(target);
+    ctx.syncNowArtworkVideoPlayback?.();
 
     ctx.queueDiscordPresenceSync();
   };
@@ -1066,6 +1067,7 @@ export function installPlaybackControls(ctx) {
     if (phase === 'end') {
       ctx.seek(ctx.seekPosition.value);
       ctx.isSeeking.value = false;
+      ctx.syncNowArtworkVideoPlayback?.();
     }
   };
 

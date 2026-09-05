@@ -24,6 +24,7 @@ import { bitrateLabel } from '../../app/playback/trackQuality.js';
 import { FALLBACK_ARTWORK_PALETTE } from '../animated-background/useArtworkPalette.js';
 import FullscreenArtworkStage from './FullscreenArtworkStage.vue';
 import FullscreenLyrics from './FullscreenLyrics.vue';
+import FullscreenVirtualQueue from './FullscreenVirtualQueue.vue';
 import {
   createFullscreenEnvironment,
   fullscreenArtworkMotion,
@@ -33,7 +34,7 @@ import {
 
 export default {
   name: 'FullscreenPlayer',
-  components: { FullscreenArtworkStage, FullscreenLyrics },
+  components: { FullscreenArtworkStage, FullscreenLyrics, FullscreenVirtualQueue },
   props: { app: { type: Object, required: true } },
   setup(props) {
     const app = props.app;
@@ -45,9 +46,9 @@ export default {
 
     const queueCount = computed(() => {
       if (app.continuousQueueEnabled?.value) {
-        return app.continuousQueuePreview?.value?.length || 0;
+        return app.continuousQueue?.value?.length || 0;
       }
-      return app.queuePreview?.value?.length || app.queue?.value?.length || 0;
+      return app.queue?.value?.length || 0;
     });
 
     const volumeIcon = computed(() => {
@@ -444,76 +445,12 @@ export default {
             </div>
           </header>
 
-          <div v-if="continuousQueueEnabled" class="fullscreen-player__queue-list">
-            <div
-              v-for="entry in continuousQueuePreview"
-              :key="`fullscreen-queue-${entry.key}`"
-              class="fullscreen-player__queue-item"
-              :class="`fullscreen-player__queue-item--${entry.section}`"
-              role="button"
-              tabindex="0"
-              :aria-current="entry.section === 'current' ? 'true' : undefined"
-              @click="playContinuousQueueEntry(entry)"
-              @keydown.enter.prevent="playContinuousQueueEntry(entry)"
-              @keydown.space.prevent="playContinuousQueueEntry(entry)"
-            >
-              <img v-if="entry.track.thumbnail" :src="entry.track.thumbnail" alt="" />
-              <span v-else class="fullscreen-player__queue-cover"><q-icon name="music_note" /></span>
-              <span class="fullscreen-player__queue-copy">
-                <strong>{{ entry.track.title }}</strong>
-                <span>{{ entry.track.artist || entry.track.artists?.join(', ') || entry.track.album || 'Orchard' }}</span>
-              </span>
-              <span class="fullscreen-player__queue-time">{{ entry.track.duration || '' }}</span>
-              <button
-                v-if="entry.section !== 'current'"
-                type="button"
-                class="fullscreen-player__queue-remove"
-                :aria-label="`Remove ${entry.track.title} from the queue`"
-                title="Remove from queue"
-                @click.stop="removeContinuousQueueEntry(entry)"
-                @keydown.stop
-              >
-                <q-icon name="close" />
-              </button>
-              <span v-else class="fullscreen-player__queue-now-playing" aria-hidden="true">
-                <span class="fullscreen-player__eq-bar" />
-                <span class="fullscreen-player__eq-bar" />
-                <span class="fullscreen-player__eq-bar" />
-              </span>
-            </div>
-            <div v-if="!continuousQueuePreview.length" class="fullscreen-player__queue-empty">The queue is empty.</div>
-          </div>
-
-          <div v-else class="fullscreen-player__queue-list">
-            <div
-              v-for="(item, index) in queuePreview"
-              :key="`fullscreen-queue-${item.id}-${index}`"
-              class="fullscreen-player__queue-item"
-              role="button"
-              tabindex="0"
-              @click="playTrack(item, { queueSource: queue })"
-              @keydown.enter.prevent="playTrack(item, { queueSource: queue })"
-              @keydown.space.prevent="playTrack(item, { queueSource: queue })"
-            >
-              <img v-if="item.thumbnail" :src="item.thumbnail" alt="" />
-              <span v-else class="fullscreen-player__queue-cover"><q-icon name="music_note" /></span>
-              <span class="fullscreen-player__queue-copy">
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.artist || item.artists?.join(', ') || item.album || 'Orchard' }}</span>
-              </span>
-              <span class="fullscreen-player__queue-time">{{ item.duration || '' }}</span>
-              <button
-                type="button"
-                class="fullscreen-player__queue-remove"
-                :aria-label="`Remove ${item.title} from queue`"
-                title="Remove from queue"
-                @click.stop="removeQueueTrack(index)"
-                @keydown.stop
-              >
-                <q-icon name="close" />
-              </button>
-            </div>
-            <div v-if="!queue.length" class="fullscreen-player__queue-empty">The queue is empty.</div>
+          <div class="fullscreen-player__queue-list">
+            <FullscreenVirtualQueue
+              :app="app"
+              :continuous="continuousQueueEnabled"
+              :entries="continuousQueueEnabled ? continuousQueue : queue"
+            />
           </div>
 
           <label class="fullscreen-player__autoplay">

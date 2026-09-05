@@ -79,10 +79,14 @@ export function installMediaHandlers(ctx) {
   };
 
   ctx.syncNowArtworkVideoPlayback = function syncNowArtworkVideoPlayback() {
-    const artworkVideoRefs = [ctx.nowArtworkVideoRef, ctx.rightPanelArtworkVideoRef];
+    const artworkVideoRefs = [
+      ctx.nowArtworkVideoRef,
+      ctx.rightPanelArtworkVideoRef,
+      ctx.fullscreenArtworkVideoRef
+    ];
 
     for (const videoRef of artworkVideoRefs) {
-      const video = videoRef.value;
+      const video = videoRef?.value;
       if (!video) continue;
 
       if (ctx.isPlaying.value) {

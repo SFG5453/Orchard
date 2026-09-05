@@ -61,6 +61,58 @@ test('paused playback leaves buffering so the play control is usable again', () 
   assert.equal(ctx.isPlaying.value, false);
 });
 
+test('seeking resynchronizes fullscreen animated artwork', () => {
+  const media = { currentTime: 105 };
+  let artworkSyncs = 0;
+  const ctx = {
+    activeTrackIsLive: { value: false },
+    applyingListeningPartyState: false,
+    currentPlaybackElement: () => media,
+    currentTime: { value: 105 },
+    duration: { value: 180 },
+    isPlaying: { value: true },
+    listeningParty: { value: { status: 'offline' } },
+    listeningPartyIsHost: { value: true },
+    queueDiscordPresenceSync() {},
+    seekPosition: { value: 105 },
+    syncNowArtworkVideoPlayback() {
+      artworkSyncs += 1;
+    },
+    syncVideoCompanionAudio() {}
+  };
+
+  installPlaybackControls(ctx);
+  ctx.cancelActiveCrossfade = () => {};
+  ctx.seek(60);
+
+  assert.equal(artworkSyncs, 1);
+});
+
+test('animated artwork playback sync includes the fullscreen video', async () => {
+  const fullscreenVideo = {
+    paused: true,
+    playCalls: 0,
+    play() {
+      this.playCalls += 1;
+      return Promise.resolve();
+    },
+    pause() {}
+  };
+  const ctx = {
+    fullscreenArtworkVideoRef: { value: fullscreenVideo },
+    isPlaying: { value: true },
+    nowArtworkVideoFailed: { value: false },
+    nowArtworkVideoRef: { value: null },
+    rightPanelArtworkVideoRef: { value: null }
+  };
+
+  installMediaHandlers(ctx);
+  ctx.syncNowArtworkVideoPlayback();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(fullscreenVideo.playCalls, 1);
+});
+
 test('ended, failed, and source-less media require a fresh stream', () => {
   assert.equal(playbackNeedsFreshStream({ ended: true }), true);
   assert.equal(playbackNeedsFreshStream({ error: { code: 2 } }), true);
