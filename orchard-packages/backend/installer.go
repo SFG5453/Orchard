@@ -515,11 +515,17 @@ func (reader *contextReader) Read(buffer []byte) (int, error) {
 }
 
 func validateInstallation(directory, version, target string) error {
+	currentAudio := filepath.Join(directory, "native-audio-rust", "build", "orchard-audio-"+target+".node")
+	legacyAudio := filepath.Join(directory, "native-audio-rust", "build", "orchard-audio-transition-"+target+".node")
+	legacyAnalysis := filepath.Join(directory, "native", "build", "Release", "orchard_audio_analysis.node")
+	_, legacyAudioErr := os.Stat(legacyAudio)
+	_, legacyAnalysisErr := os.Stat(legacyAnalysis)
+	legacyLayout := legacyAudioErr == nil && legacyAnalysisErr == nil
+
 	required := []string{
 		"package.json", "dist/index.html", "dist/welcome.html", "electron/main/index.js", ".orchard-package.json",
 		filepath.Join(".orchard-native", target+".json"),
 		filepath.Join("native-media", "build", "orchard-system-media-"+target+".node"),
-		filepath.Join("native-audio-rust", "build", "orchard-audio-"+target+".node"),
 	}
 	if target != "darwin-x64" {
 		parts := strings.SplitN(target, "-", 2)
@@ -531,8 +537,16 @@ func validateInstallation(directory, version, target string) error {
 		required = append(required, "orchard")
 	}
 	for _, relative := range required {
+		if relative == "dist/welcome.html" && legacyLayout {
+			continue
+		}
 		if _, err := os.Stat(filepath.Join(directory, relative)); err != nil {
 			return fmt.Errorf("the staged installation is incomplete: %s is missing", filepath.ToSlash(relative))
+		}
+	}
+	if _, err := os.Stat(currentAudio); err != nil {
+		if !legacyLayout {
+			return fmt.Errorf("the staged installation is incomplete: %s is missing", filepath.ToSlash(filepath.Join("native-audio-rust", "build", "orchard-audio-"+target+".node")))
 		}
 	}
 	metadataData, err := os.ReadFile(filepath.Join(directory, ".orchard-package.json"))

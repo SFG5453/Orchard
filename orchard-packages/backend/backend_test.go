@@ -241,6 +241,38 @@ func TestValidateInstallationRequiresWelcomeEntryPoint(t *testing.T) {
 	}
 }
 
+func TestValidateInstallationAcceptsLegacyBeta6WindowsLayout(t *testing.T) {
+	directory := t.TempDir()
+	files := []string{
+		"package.json",
+		"dist/index.html",
+		"electron/main/index.js",
+		".orchard-package.json",
+		".orchard-native/win32-x64.json",
+		"native-media/build/orchard-system-media-win32-x64.node",
+		"native-audio-rust/build/orchard-audio-transition-win32-x64.node",
+		"native/build/Release/orchard_audio_analysis.node",
+		"node_modules/onnxruntime-node/bin/napi-v6/win32/x64/onnxruntime_binding.node",
+		"orchard.cmd",
+	}
+	for _, relative := range files {
+		filePath := filepath.Join(directory, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		contents := []byte("fixture")
+		if relative == ".orchard-package.json" {
+			contents = []byte(`{"schemaVersion":1,"version":"5.0.0-beta.6"}`)
+		}
+		if err := os.WriteFile(filePath, contents, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := validateInstallation(directory, "5.0.0-beta.6", "win32-x64"); err != nil {
+		t.Fatalf("legacy Windows audio addon was rejected: %v", err)
+	}
+}
+
 func TestExtractElectronZipPreservesFrameworkSymlinks(t *testing.T) {
 	directory := t.TempDir()
 	archivePath := filepath.Join(directory, "electron.zip")
