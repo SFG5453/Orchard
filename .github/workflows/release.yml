@@ -28,7 +28,7 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: '24'
+  NODE_VERSION: '26'
   BUN_VERSION: '1.4.0'
   GO_VERSION: '1.24.x'
   FLATPAK_RUNTIME: '50'
