@@ -53,6 +53,25 @@ export function seedsPlaylistContext({ isPlayFromQueue = false, queueAlreadyShuf
   return !isPlayFromQueue || Boolean(queueAlreadyShuffled);
 }
 
+/**
+ * Tracks that must stay behind the playback cursor when a playlist context is
+ * created. A listener selecting a specific row establishes that row as the
+ * start of playback even when shuffle is already enabled, so earlier rows are
+ * skipped. The explicit Shuffle collection action is different: it supplies a
+ * pre-shuffled source, making its first track an arbitrary draw from the whole
+ * playlist rather than a cursor into the ordered list.
+ */
+export function playlistPlayedTrackIdsForStart(
+  allTracks = [],
+  activeTrackId = '',
+  { shuffleEnabled = false, queueAlreadyShuffled = false } = {}
+) {
+  if (shuffleEnabled && queueAlreadyShuffled) {
+    return [activeTrackId].filter(Boolean);
+  }
+  return playlistPlayedTrackIds(allTracks, activeTrackId);
+}
+
 export function playbackQueueSourceMatches(source, queue = [], activeTrack = null) {
   if (!Array.isArray(source)) return false;
   if (source === queue) return true;
@@ -419,13 +438,10 @@ export function installPlaybackResolve(ctx) {
             continuation: detail.continuation || '',
             hasMoreTracks: Boolean(detail.hasMoreTracks),
             shuffled: ctx.shuffleEnabled.value,
-            // Starting part way down a playlist means the tracks above were
-            // skipped past. Under shuffle it means nothing of the sort -- the
-            // starting track is simply the one that came up first, and treating
-            // its predecessors as played would bar them from ever being drawn.
-            playedTrackIds: ctx.shuffleEnabled.value
-              ? [trackItem.id].filter(Boolean)
-              : playlistPlayedTrackIds(allTracks, trackItem.id),
+            playedTrackIds: playlistPlayedTrackIdsForStart(allTracks, trackItem.id, {
+              shuffleEnabled: ctx.shuffleEnabled.value,
+              queueAlreadyShuffled: Boolean(options.queueAlreadyShuffled)
+            }),
             allTracks
           };
           return true;

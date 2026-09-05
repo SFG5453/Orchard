@@ -21,6 +21,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   installPlaybackResolve,
+  playlistPlayedTrackIdsForStart,
   playbackQueueSourceMatches,
   seedsPlaylistContext
 } from '../src/app/playback/playbackResolve.js';
@@ -165,5 +166,31 @@ test('a shuffled collection play is recognized as already-shuffled, not as a fre
       queueAlreadyShuffled: true
     }),
     true
+  );
+});
+
+test('clicking a playlist row with shuffle on excludes every earlier row', () => {
+  const playlist = Array.from({ length: 39 }, (_, index) => ({ id: `track-${index + 1}` }));
+  const selected = playlist[28];
+
+  assert.deepEqual(
+    playlistPlayedTrackIdsForStart(playlist, selected.id, {
+      shuffleEnabled: true,
+      queueAlreadyShuffled: false
+    }),
+    playlist.slice(0, 29).map((track) => track.id)
+  );
+});
+
+test('shuffling a whole collection keeps rows before the first draw eligible', () => {
+  const playlist = Array.from({ length: 39 }, (_, index) => ({ id: `track-${index + 1}` }));
+  const firstDraw = playlist[28];
+
+  assert.deepEqual(
+    playlistPlayedTrackIdsForStart(playlist, firstDraw.id, {
+      shuffleEnabled: true,
+      queueAlreadyShuffled: true
+    }),
+    [firstDraw.id]
   );
 });
