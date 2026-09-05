@@ -273,6 +273,24 @@ class WsolaPlannerTest {
     }
 
     @Test
+    fun `nearby tempos produce the same valid outgoing stretch contract as desktop`() {
+        val plan = planned(
+            planWsolaTransition(
+                analysis = analysisFor(bpm = 126.0, duration = 240.0),
+                nextAnalysis = analysisFor(bpm = 124.0, duration = 200.0, mixInTime = 20.0),
+                duration = 240.0,
+                nextDuration = 200.0,
+            ),
+        )
+
+        assertEquals(124.0 / 126.0, plan.stretchRatio, 1e-9)
+        assertEquals(plan.stretchRatio, plan.choreography?.outgoing?.tempoRatio ?: 0.0, 1e-9)
+        assertEquals(1.0, plan.choreography?.incoming?.tempoRatio ?: 0.0, 1e-9)
+        val validation = plan.choreography?.validate()
+        assertTrue(validation?.errors.orEmpty().joinToString(), validation?.isValid == true)
+    }
+
+    @Test
     fun `the low end hands over late in the fade`() {
         val plan = planned(
             planWsolaTransition(

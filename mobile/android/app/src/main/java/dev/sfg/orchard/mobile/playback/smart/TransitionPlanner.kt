@@ -369,10 +369,11 @@ private fun phraseSwitch(
         handoffDuration = overlap,
         incomingCueTime = planned.incomingCueTime,
         incomingHandoffTime = planned.incomingHandoffTime,
-        // Only the volume-ramp fallback uses this; a rendered overlap is already beat-matched by the
-        // native stretcher and plays back at 1.0. Matching the incoming to the outgoing tempo is the
-        // same ratio the renderer applies to the outgoing side.
-        incomingPlaybackRate = (planned.stretchRatio * 10000).roundToInt() / 10000.0,
+        // Only the volume-ramp fallback uses this; a rendered overlap follows the incoming grid and
+        // stretches the outgoing source instead. The live fallback cannot change the already-playing
+        // outgoing deck without moving its timeline, so it performs the inverse operation and nudges
+        // the incoming deck onto the outgoing grid.
+        incomingPlaybackRate = ((1 / planned.stretchRatio) * 10000).roundToInt() / 10000.0,
         pickupSeconds = incomingAudibleStart(nextAnalysis),
         transitionBeats = planned.beats,
         bassSwap = true,

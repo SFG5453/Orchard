@@ -34,6 +34,51 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
+ * Converts the mobile playback plan to the exact contract consumed by the shared Rust renderer.
+ *
+ * The rendered timeline follows the incoming grid, exactly as it does on desktop.
+ * [TransitionPlan.fadeSeconds] measures the outgoing source window for the live fallback and is
+ * therefore not necessarily the rendered duration. Deriving all three tempo fields together keeps
+ * the beat count, wall-clock duration, and source consumption internally consistent for
+ * non-identical BPM pairs.
+ */
+internal fun selectedRenderPlan(
+    plan: TransitionPlan,
+    outgoingSliceStart: Double,
+    incomingSliceStart: Double,
+): TransitionRenderer.SelectedPlan? {
+    if (
+        plan.transitionBeats <= 0 ||
+        !plan.outgoingBpm.isFinite() || plan.outgoingBpm <= 0 ||
+        !plan.incomingBpm.isFinite() || plan.incomingBpm <= 0
+    ) return null
+
+    val strategy = when (plan.transitionStyle) {
+        TransitionStyle.DJ_BLEND -> if (plan.bassSwap) "bass_swap" else "beatmatched_crossfade"
+        TransitionStyle.DJ_FILTER -> "filtered_blend"
+        TransitionStyle.EQUAL_POWER -> "equal_power_crossfade"
+        TransitionStyle.GAPLESS -> "short_fade"
+    }
+    val targetBpm = plan.incomingBpm
+    return TransitionRenderer.SelectedPlan(
+        outgoingStart = plan.transitionStart - outgoingSliceStart,
+        incomingStart = plan.incomingCueTime - incomingSliceStart,
+        duration = plan.transitionBeats * 60 / targetBpm,
+        beats = plan.transitionBeats,
+        outgoingBpm = plan.outgoingBpm,
+        incomingBpm = plan.incomingBpm,
+        targetBpm = targetBpm,
+        outgoingTempoRatio = targetBpm / plan.outgoingBpm,
+        incomingTempoRatio = 1.0,
+        strategy = strategy,
+        handoffFraction = plan.handoffFraction,
+        bedPosition = plan.bedPosition,
+        bassSwapFraction = plan.bassSwapFraction,
+        filterSweep = plan.filterSweep,
+    )
+}
+
+/**
  * Renders a beat-matched overlap ahead of the seam, so it is on disk before the playhead needs it.
  *
  * The timing is the whole design constraint. Rendering means decoding two stereo regions and
@@ -189,12 +234,8 @@ class TransitionPreparer(
         val (incomingPcm, incomingSliceStart) = decodeAround(incomingUri, inAnchor, margin) ?: return null
         val outgoingSliceEnd = outgoingSliceStart + outgoingPcm.left.size / TransitionRenderer.SAMPLE_RATE
 
-        val strategy = when (plan.transitionStyle) {
-            TransitionStyle.DJ_BLEND -> if (plan.bassSwap) "bass_swap" else "beatmatched_crossfade"
-            TransitionStyle.DJ_FILTER -> "filtered_blend"
-            TransitionStyle.EQUAL_POWER -> "equal_power_crossfade"
-            TransitionStyle.GAPLESS -> "short_fade"
-        }
+        val selectedPlan = selectedRenderPlan(plan, outgoingSliceStart, incomingSliceStart)
+            ?: return null
         val rendered = TransitionRenderer.renderPlanned(
             outgoing = TransitionRenderer.Source(
                 left = outgoingPcm.left,
@@ -211,22 +252,7 @@ class TransitionPreparer(
                 beats = beatGrid(incomingAnalysis, incomingSliceStart, incomingPcm.left.size),
                 downbeats = rebased(incomingAnalysis.downbeats, incomingSliceStart, incomingPcm.left.size),
             ),
-            plan = TransitionRenderer.SelectedPlan(
-                outgoingStart = plan.transitionStart - outgoingSliceStart,
-                incomingStart = plan.incomingCueTime - incomingSliceStart,
-                duration = plan.fadeSeconds,
-                beats = plan.transitionBeats,
-                outgoingBpm = plan.outgoingBpm,
-                incomingBpm = plan.incomingBpm,
-                targetBpm = plan.incomingBpm,
-                outgoingTempoRatio = 1.0,
-                incomingTempoRatio = plan.incomingPlaybackRate,
-                strategy = strategy,
-                handoffFraction = plan.handoffFraction,
-                bedPosition = plan.bedPosition,
-                bassSwapFraction = plan.bassSwapFraction,
-                filterSweep = plan.filterSweep,
-            ),
+            plan = selectedPlan,
             vocalDuck = duckCurve(outgoingAnalysis, outgoingSliceStart, outgoingSliceEnd),
         ) ?: return null
 

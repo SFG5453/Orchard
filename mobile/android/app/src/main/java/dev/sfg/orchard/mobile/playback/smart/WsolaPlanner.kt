@@ -278,6 +278,7 @@ sealed interface WsolaPlanResult {
         val filterSweep: Double,
         val outgoingBpm: Double,
         val incomingBpm: Double,
+        /** Source seconds consumed by the outgoing deck per rendered output second. */
         val stretchRatio: Double,
         val incomingCueTime: Double,
         val incomingDropTime: Double,
@@ -333,7 +334,10 @@ fun planWsolaTransition(
 
     val outgoingBpm = analysis.bpm.orZero()
     val incomingBpm = alignTempoOctave(outgoingBpm, nextAnalysis.bpm.orZero())
-    val stretchRatio = outgoingBpm / incomingBpm
+    // Match the desktop/native contract: the output grid follows the incoming track, so the
+    // outgoing source is the side that is stretched. A 126 -> 124 BPM transition consumes
+    // 124/126 seconds of outgoing audio per output second; the incoming side stays at 1.0.
+    val stretchRatio = incomingBpm / outgoingBpm
 
     val outgoingLength = max(duration.orZero(), analysis.duration.orZero())
     val incomingLength = max(nextDuration.orZero(), nextAnalysis.duration.orZero())
@@ -471,13 +475,13 @@ fun planWsolaTransition(
             outgoing = OutgoingChoreography(
                 start = transitionStart,
                 end = transitionEnd,
-                tempoRatio = 1.0,
+                tempoRatio = stretchRatio,
             ),
             incoming = IncomingChoreography(
                 cue = incomingCueTime,
                 arrival = incomingDropTime,
                 resume = incomingResumeTime,
-                tempoRatio = stretchRatio,
+                tempoRatio = 1.0,
             ),
             duration = overlapSeconds,
             dominancePoint = HANDOFF_FRACTION.coerceIn(0.0, 1.0),

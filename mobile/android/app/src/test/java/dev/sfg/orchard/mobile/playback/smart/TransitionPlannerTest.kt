@@ -393,6 +393,25 @@ class TransitionPlannerTest {
     }
 
     @Test
+    fun `live fallback still nudges incoming audio onto the outgoing grid`() {
+        val plan = planTransition(
+            analysis = grid(126.0, 240.0).copy(key = "A minor", keyConfidence = 0.8),
+            nextAnalysis = grid(124.0, 240.0).copy(
+                key = "A minor",
+                keyConfidence = 0.8,
+                mixInTime = 16.0,
+                mixInCandidates = listOf(MixCandidate(16.0, 0.8, "main_drop")),
+            ),
+            currentTrack = track(seconds = 240.0),
+            nextTrack = track(id = "b"),
+            currentTime = 200.0,
+            mode = CrossfadeMode.SMART,
+        )
+
+        assertEquals(126.0 / 124.0, plan.incomingPlaybackRate, 1e-4)
+    }
+
+    @Test
     fun `regression blinding lights to dont start now is never beatmatched and duration is 0 to 4s`() {
         val outgoing = TrackAnalysis(
             trackId = "blinding_lights",
@@ -492,4 +511,3 @@ class TransitionPlannerTest {
         assertTrue(plan.incomingCueTime <= plan.incomingHandoffTime)
     }
 }
-
