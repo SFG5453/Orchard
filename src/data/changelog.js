@@ -19,6 +19,43 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '5.0.0-beta.7',
+    codename: 'Tiles Dogcart',
+    date: 'September 5, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'Redesigned the fullscreen player with artwork-led visuals, responsive layouts, unified lyrics, a richer queue surface, and virtualized long queues.',
+          'Refreshed album detail pages with artwork-derived accent palettes, ambient album and video presentation, and more expressive responsive visuals.',
+          'Added customizable Home and sidebar layouts with persistent ordering, visibility controls, and reset actions.',
+          'Added Linux Debian/RPM and Windows NSIS installers for Orchard Packages, with managed package upgrades that replace direct Orchard installs.'
+        ]
+      },
+      {
+        title: 'Changed',
+        items: [
+          'Orchard Packages now reports shared, native, and Electron runtime sizes, reuses one downloaded Electron runtime across versions, and supports opening or uninstalling managed releases without removing that runtime.',
+          'Unified desktop audio analysis and transition rendering in the Earmark native runtime and expanded platform-native asset collection for packaged releases.'
+        ]
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Fixed shuffled playlist queues so starting from a track does not discard the remaining tracks, and fixed fullscreen queue performance and artwork synchronization while seeking.',
+          'Fixed Windows Orchard Packages launchers by safely terminating app paths and requiring the welcome entry point during installation validation, including legacy beta 6 layouts.'
+        ]
+      },
+      {
+        title: 'Maintenance',
+        items: [
+          'Updated Electron to 43.6.0, Quasar to 2.30.0, HLS.js to 1.7.2, Zod to 4.5.4, and the Undici override to 6.28.0; added Sharp and OGL for artwork visuals and removed the obsolete node-gyp and node-addon-api toolchain.',
+          'Added regression coverage for package installation, uninstallation, launchers, Electron runtime handling, legacy layouts, and cross-platform native assets.'
+        ]
+      }
+    ]
+  },
+  {
     version: '5.0.0-beta.6',
     codename: 'Promos Imbecile',
     date: 'August 29, 2026',

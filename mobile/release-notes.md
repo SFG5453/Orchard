@@ -1,17 +1,21 @@
-## Orchard Mobile 2.0.0-beta.4 "Boogieman Elliot"
+## Orchard Mobile 2.0.0-beta.5 "Singed Carload"
 
 ### Added
-- **Square Now Playing Artwork**: Non-animated artwork now appears as a centered square card with rounded corners, a soft shadow, and smooth track transitions.
-- **Shared Rust Audio Analysis**: Mobile audio analysis now runs through the shared Rust/Earmark analyzer while keeping the trained beat-model input contract intact.
-- **Quality-Aware Public Playback**: Public YouTube streams now use NewPipe across all quality tiers while preserving Innertube fallbacks for private and account-only tracks.
+- **Offline Collection Fidelity**: Saved playlists and Liked Songs now reconstruct offline views from their actual local membership, preserving playlist order and intentional duplicate rows while showing only completed downloads.
+- **Best Mix Preparation**: Best Mix can download missing tracks for local analysis, preserve autoplay additions while sorting, and keep the live queue usable when analysis completes.
+- **Editable Playlists**: Authenticated editable playlists now support pull-to-refresh, server-backed reordering, and Move Up/Move Down actions.
+- **Autoplay Deduplication**: Autoplay removes duplicate generated recordings without removing intentional duplicates from user-authored queues.
 
 ### Changed
-- **Best Mix Preparation**: Download validation, progress reporting, and local analysis now agree on which tracks have usable files before sorting.
+- **Library Synchronization**: Liked Music uses YouTube's like/removelike actions with optimistic local state and rollback on failure; saved collection metadata no longer discards cached track membership.
+- **Synchronized Lyrics**: Frame-clock playback interpolation, corrected word parsing, seek-aware timing, and softer word highlighting align mobile lyrics with the desktop presentation.
+- **Smart Crossfade**: Mobile transitions now follow the shared Rust/desktop tempo contract, with the outgoing deck stretched onto the incoming grid and consistent native render timing.
 
 ### Fixed
-- **Playlist Picker**: Long playlist lists can now be scrolled inside the add-to-playlist sheet.
-- **Stale Downloads**: Missing or empty files no longer remain marked as completed and are automatically eligible for re-download.
-- **Best Mix Resilience**: A decoder or native-analysis failure no longer prevents a collection from playing; Orchard falls back to the original order with a warning.
+- **Offline Playlist Isolation**: Unknown or incomplete collections no longer fall back to every downloaded track.
+- **Queue Races**: Autoplay refills and Best Mix results no longer overwrite or reinsert tracks that changed while work was in flight.
+- **Tempo Alignment**: Non-identical BPM transitions now use the correct tempo ratios for rendered and live fallback playback.
 
 ### Maintenance
-- Replaced the retired mobile C++ analysis JNI bridge with the shared Rust/Earmark library and refreshed mobile documentation and screenshots.
+- **Android Dependencies**: Updated Coil to 3.6.2, WebRTC to 150.7871.01, and Markdown to 0.7.12.
+- **Regression Coverage**: Added tests for offline membership, autoplay deduplication, playlist actions and reordering, lyrics parsing, and the Smart Crossfade render contract.
