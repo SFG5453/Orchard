@@ -97,6 +97,11 @@ func runExtension() error {
 			}
 			continue
 		}
+		if event.Event == "packages.shutdown" {
+			cancel()
+			installs.Wait()
+			return nil
+		}
 		data, ok := event.Data.(map[string]any)
 		if !ok {
 			continue
@@ -111,7 +116,7 @@ func runExtension() error {
 		case "packages.install":
 			version, _ := data["version"].(string)
 			if !service.beginInstall() {
-				_ = service.broadcast("packages.error", map[string]any{"requestId": requestID, "message": "Another Orchard installation is already running."})
+				_ = service.broadcast("packages.error", map[string]any{"requestId": requestID, "message": "Another Orchard package operation is already running."})
 				continue
 			}
 			installs.Add(1)
@@ -119,6 +124,18 @@ func runExtension() error {
 				defer installs.Done()
 				defer service.finishInstall()
 				service.install(ctx, requestID, version)
+			}()
+		case "packages.uninstall":
+			version, _ := data["version"].(string)
+			if !service.beginInstall() {
+				_ = service.broadcast("packages.error", map[string]any{"requestId": requestID, "message": "Another Orchard package operation is already running."})
+				continue
+			}
+			installs.Add(1)
+			go func() {
+				defer installs.Done()
+				defer service.finishInstall()
+				service.uninstall(ctx, requestID, version)
 			}()
 		case "packages.open":
 			version, _ := data["version"].(string)
@@ -158,29 +175,53 @@ func (extension *extension) sendManifest(ctx context.Context, requestID string) 
 		extension.sendError(requestID, err)
 		return
 	}
-	manifest, err := newInstaller().fetchAvailableManifest(ctx)
+	service := newInstaller()
+	manifest, err := service.fetchAvailableManifest(ctx)
 	if err != nil {
 		extension.sendError(requestID, err)
 		return
 	}
 	sortReleases(manifest.Releases)
 	releases := make([]map[string]any, 0, len(manifest.Releases))
+	electronSizes := make(map[string]int64)
+	unknownElectronSizes := make(map[string]bool)
 	for _, candidate := range manifest.Releases {
 		native, ok := candidate.Native[target]
 		if !ok {
 			continue
 		}
 		installed := false
+		electronInstalled := false
 		installDirectory, runtimeDirectory, _, pathErr := installPaths(target, candidate.Version, candidate.ElectronVersion)
-		if pathErr == nil && runtimeReady(runtimeDirectory, target) && validateInstallation(installDirectory, candidate.Version, target) == nil {
-			installed = true
+		if pathErr == nil {
+			electronInstalled = runtimeReady(runtimeDirectory, target)
+			installed = validateInstallation(installDirectory, candidate.Version, target) == nil
+		}
+		electronSize, electronSizeKnown := electronSizes[candidate.ElectronVersion]
+		if !electronInstalled && !electronSizeKnown && !unknownElectronSizes[candidate.ElectronVersion] {
+			if size, sizeErr := service.electronDownloadSize(ctx, candidate.ElectronVersion, target); sizeErr == nil {
+				electronSize = size
+				electronSizeKnown = true
+				electronSizes[candidate.ElectronVersion] = size
+			} else {
+				unknownElectronSizes[candidate.ElectronVersion] = true
+			}
 		}
 		releases = append(releases, map[string]any{
 			"version": candidate.Version, "channel": candidate.Channel,
 			"sharedSize": candidate.Shared.Size, "nativeSize": native.Size, "installed": installed,
+			"electronSize": electronSize, "electronSizeKnown": electronSizeKnown, "electronInstalled": electronInstalled,
 		})
 	}
 	_ = extension.broadcast("packages.manifest", map[string]any{"requestId": requestID, "target": target, "releases": releases})
+}
+
+func (extension *extension) uninstall(ctx context.Context, requestID, version string) {
+	if err := newInstaller().uninstallRelease(ctx, version); err != nil {
+		extension.sendError(requestID, err)
+		return
+	}
+	_ = extension.broadcast("packages.uninstalled", map[string]any{"requestId": requestID, "version": version})
 }
 
 func (extension *extension) open(ctx context.Context, requestID, version string) {

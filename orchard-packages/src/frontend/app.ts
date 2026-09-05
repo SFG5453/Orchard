@@ -24,6 +24,9 @@ type ReleaseSummary = {
   channel: "stable" | "beta";
   sharedSize: number;
   nativeSize: number;
+  electronSize: number;
+  electronSizeKnown: boolean;
+  electronInstalled: boolean;
   installed: boolean;
 };
 
@@ -66,6 +69,7 @@ declare const Neutralino: {
 
 const elements = {
   commonPackageLabel: document.querySelector<HTMLElement>("#common-package-label")!,
+  electronPackageLabel: document.querySelector<HTMLElement>("#electron-package-label")!,
   installButton: document.querySelector<HTMLButtonElement>("#install-button")!,
   installButtonLabel: document.querySelector<HTMLElement>("#install-button-label")!,
   nativePackageLabel: document.querySelector<HTMLElement>("#native-package-label")!,
@@ -77,13 +81,14 @@ const elements = {
   releaseChannel: document.querySelector<HTMLElement>("#release-channel")!,
   resultMessage: document.querySelector<HTMLElement>("#result-message")!,
   targetBadge: document.querySelector<HTMLElement>("#target-badge")!,
+  uninstallButton: document.querySelector<HTMLButtonElement>("#uninstall-button")!,
   versionDetail: document.querySelector<HTMLElement>("#version-detail")!,
   versionSelect: document.querySelector<HTMLSelectElement>("#version-select")!
 };
 
 let activeRequestId = "";
 let releases: ReleaseSummary[] = [];
-let installing = false;
+let operationActive = false;
 
 function requestId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
@@ -110,11 +115,25 @@ function updateReleaseDetail(): void {
   if (!release) return;
   const commonSize = formatBytes(release.sharedSize);
   const nativeSize = formatBytes(release.nativeSize);
+  const packageSize = release.sharedSize + release.nativeSize;
+  const needsElectron = !release.electronInstalled;
+  const downloadSize = packageSize + (needsElectron && release.electronSizeKnown ? release.electronSize : 0);
+  const electronDetail = release.electronInstalled
+    ? "Electron already installed"
+    : release.electronSizeKnown
+      ? `${formatBytes(release.electronSize)} Electron`
+      : "Electron size unavailable";
   elements.releaseChannel.textContent = release.channel === "stable" ? "Stable release" : "Beta release";
-  elements.versionDetail.textContent = `${formatBytes(release.sharedSize + release.nativeSize)} download · ${commonSize} common + ${nativeSize} native.`;
+  elements.versionDetail.textContent = `${formatBytes(downloadSize)} download${needsElectron && !release.electronSizeKnown ? " + Electron" : ""} · ${commonSize} common + ${nativeSize} native + ${electronDetail}.`;
   elements.commonPackageLabel.textContent = `COMMON · ${commonSize}`;
   elements.nativePackageLabel.textContent = `${elements.targetBadge.textContent?.toUpperCase()} · ${nativeSize}`;
+  elements.electronPackageLabel.textContent = release.electronInstalled
+    ? "ELECTRON · INSTALLED"
+    : release.electronSizeKnown
+      ? `ELECTRON · ${formatBytes(release.electronSize)}`
+      : "ELECTRON · SIZE UNKNOWN";
   elements.installButtonLabel.textContent = release.installed ? "Open Orchard" : "Install Orchard";
+  elements.uninstallButton.hidden = !release.installed;
 }
 
 function setProgress(percent: number, message: string, detail = ""): void {
@@ -149,12 +168,13 @@ async function loadManifest(): Promise<void> {
 
 async function installSelected(): Promise<void> {
   const release = selectedRelease();
-  if (!release || installing) return;
+  if (!release || operationActive) return;
 
-  installing = true;
+  operationActive = true;
   activeRequestId = requestId();
   clearResult();
   elements.installButton.disabled = true;
+  elements.uninstallButton.disabled = true;
   elements.versionSelect.disabled = true;
   elements.installButtonLabel.textContent = "Installing…";
   setProgress(1, `Preparing Orchard ${release.version}…`, "Resolving packages for this computer.");
@@ -167,19 +187,38 @@ async function installSelected(): Promise<void> {
 
 async function runSelectedAction(): Promise<void> {
   const release = selectedRelease();
-  if (!release || installing) return;
+  if (!release || operationActive) return;
   if (!release.installed) {
     await installSelected();
     return;
   }
 
-  installing = true;
+  operationActive = true;
   activeRequestId = requestId();
   clearResult();
   elements.installButton.disabled = true;
+  elements.uninstallButton.disabled = true;
   elements.versionSelect.disabled = true;
   elements.installButtonLabel.textContent = "Opening…";
   await Neutralino.extensions.dispatch(EXTENSION_ID, "packages.open", {
+    requestId: activeRequestId,
+    version: release.version
+  });
+}
+
+async function uninstallSelected(): Promise<void> {
+  const release = selectedRelease();
+  if (!release?.installed || operationActive) return;
+  if (!window.confirm(`Uninstall Orchard ${release.version}? The reusable Electron runtime will be kept.`)) return;
+
+  operationActive = true;
+  activeRequestId = requestId();
+  clearResult();
+  elements.installButton.disabled = true;
+  elements.uninstallButton.disabled = true;
+  elements.versionSelect.disabled = true;
+  setProgress(1, `Uninstalling Orchard ${release.version}…`, "The shared Electron runtime will be kept for other versions.");
+  await Neutralino.extensions.dispatch(EXTENSION_ID, "packages.uninstall", {
     requestId: activeRequestId,
     version: release.version
   });
@@ -203,6 +242,7 @@ function onManifest(payload: ManifestResponse): void {
     elements.versionSelect.append(new Option("No compatible releases", ""));
     elements.versionSelect.disabled = true;
     elements.installButton.disabled = true;
+    elements.uninstallButton.hidden = true;
     setProgress(0, "No compatible release found.", `The manifest has no native package for ${payload.target}.`);
     return;
   }
@@ -225,27 +265,57 @@ function onProgress(payload: ProgressEvent): void {
 
 function onSuccess(payload: SuccessEvent): void {
   if (payload.requestId !== activeRequestId) return;
-  installing = false;
+  operationActive = false;
   const release = releases.find((candidate) => candidate.version === payload.version);
-  if (release) release.installed = true;
+  if (release) {
+    release.installed = true;
+    release.electronInstalled = true;
+  }
   elements.installButton.disabled = false;
+  elements.uninstallButton.disabled = false;
   elements.versionSelect.disabled = false;
-  elements.installButtonLabel.textContent = "Open Orchard";
+  updateReleaseDetail();
   setProgress(100, `Orchard ${payload.version} installed.`, `${payload.target} package verified and activated.`);
   setResult(`Installed to ${payload.installPath}`);
 }
 
+function onUninstalled(payload: { requestId: string; version: string }): void {
+  if (payload.requestId !== activeRequestId) return;
+  operationActive = false;
+  const release = releases.find((candidate) => candidate.version === payload.version);
+  if (release) release.installed = false;
+  elements.installButton.disabled = false;
+  elements.uninstallButton.disabled = false;
+  elements.versionSelect.disabled = false;
+  updateReleaseDetail();
+  setProgress(0, `Orchard ${payload.version} uninstalled.`, "The reusable Electron runtime was kept.");
+  setResult(`Removed Orchard ${payload.version}.`);
+}
+
+async function exitApplication(): Promise<void> {
+  try {
+    await Neutralino.extensions.dispatch(EXTENSION_ID, "packages.shutdown", {
+      requestId: requestId()
+    });
+  } catch {
+    // The extension may already be gone during operating-system shutdown.
+  }
+  await Neutralino.app.exit();
+}
+
 function onOpened(payload: { requestId: string }): void {
   if (payload.requestId !== activeRequestId) return;
-  void Neutralino.app.exit();
+  void exitApplication();
 }
 
 function onError(payload: ErrorEvent): void {
   if (payload.requestId !== activeRequestId) return;
-  installing = false;
+  operationActive = false;
   elements.installButton.disabled = releases.length === 0;
+  elements.uninstallButton.disabled = releases.length === 0;
   elements.versionSelect.disabled = releases.length === 0;
   elements.installButtonLabel.textContent = selectedRelease()?.installed ? "Open Orchard" : "Try again";
+  elements.uninstallButton.hidden = !selectedRelease()?.installed;
   elements.operationText.textContent = "Operation stopped.";
   elements.operationDetail.textContent = "No existing Orchard installation was changed.";
   setResult(payload.message, true);
@@ -253,11 +323,12 @@ function onError(payload: ErrorEvent): void {
 
 Neutralino.init();
 void Neutralino.events.on("windowClose", () => {
-  void Neutralino.app.exit();
+  void exitApplication();
 });
 void Neutralino.events.on("packages.manifest", (event) => onManifest(event.detail as ManifestResponse));
 void Neutralino.events.on("packages.progress", (event) => onProgress(event.detail as ProgressEvent));
 void Neutralino.events.on("packages.success", (event) => onSuccess(event.detail as SuccessEvent));
+void Neutralino.events.on("packages.uninstalled", (event) => onUninstalled(event.detail as { requestId: string; version: string }));
 void Neutralino.events.on("packages.opened", (event) => onOpened(event.detail as { requestId: string }));
 void Neutralino.events.on("packages.error", (event) => onError(event.detail as ErrorEvent));
 void Neutralino.events.on("ready", () => {
@@ -269,6 +340,11 @@ void Neutralino.events.on("ready", () => {
 elements.versionSelect.addEventListener("change", updateReleaseDetail);
 elements.installButton.addEventListener("click", () => {
   void runSelectedAction().catch((error: unknown) => {
+    onError({ requestId: activeRequestId, message: error instanceof Error ? error.message : String(error) });
+  });
+});
+elements.uninstallButton.addEventListener("click", () => {
+  void uninstallSelected().catch((error: unknown) => {
     onError({ requestId: activeRequestId, message: error instanceof Error ? error.message : String(error) });
   });
 });

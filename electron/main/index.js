@@ -76,6 +76,7 @@ import { registerNetworkPreferences } from '../platform/networkPreferences.js';
 import { setupDesktopControls } from '../platform/desktopControls.js';
 import { registerScreenshotCapture } from '../platform/screenshotCapture.js';
 import { setupSystemMediaHandlers } from '../platform/systemMedia.js';
+import { ORCHARD_APP_USER_MODEL_ID, setWindowsAppDetails } from '../platform/windowsAppIdentity.js';
 import { setWelcomeCompleted, welcomeRequiredAtLaunch } from '../platform/welcomeState.js';
 import { welcomeWindowBounds } from '../platform/welcomeWindowBounds.js';
 import { configureWindowOpenHandler, registerDevToolsShortcut, registerWindowControls } from '../platform/windowControls.js';
@@ -91,6 +92,7 @@ installInnertubeParserErrorHandler();
 const require = createRequire(import.meta.url);
 const windowStateKeeper = require('electron-window-state');
 const { app, BrowserWindow, Menu, Tray, clipboard, globalShortcut, ipcMain, nativeImage, net, safeStorage, screen, session, shell } = require('electron');
+if (process.platform === 'win32') app.setAppUserModelId(ORCHARD_APP_USER_MODEL_ID);
 const isDev = !app.isPackaged && Boolean(process.env.VITE_DEV_SERVER_URL);
 const isNiriSession = process.platform === 'linux' && (
   Boolean(process.env.NIRI_SOCKET) || /(?:^|:)niri(?:$|:)/i.test(process.env.XDG_CURRENT_DESKTOP || '')
@@ -123,7 +125,7 @@ let welcomeCompleted = false;
 // real quit, where the close must be allowed through.
 let quitting = false;
 
-const { appIconPath } = runtimePaths;
+const { appIconPath, taskbarIconPath } = runtimePaths;
 const useNativeTitlebar = false;
 const youtubeMusicOrigin = 'https://music.youtube.com';
 const youtubeWebOrigin = 'https://www.youtube.com';
@@ -450,6 +452,7 @@ async function createMainWindow() {
       sandbox: true
     }
   });
+  setWindowsAppDetails(mainWindow, { appIconPath: taskbarIconPath, appPath: app.getAppPath() });
 
   // Niri is authoritative for tiled geometry. electron-window-state restoring or
   // recording bounds fights the compositor and produces visible edge oscillation.
@@ -492,6 +495,7 @@ async function createWelcomeWindow() {
       sandbox: true
     }
   });
+  setWindowsAppDetails(welcomeWindow, { appIconPath: taskbarIconPath, appPath: app.getAppPath() });
 
   configureWindowOpenHandler(welcomeWindow, shell);
   if (allowDevTools) registerDevToolsShortcut(welcomeWindow);

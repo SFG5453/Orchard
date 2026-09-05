@@ -90,6 +90,19 @@ against the official `SHASUMS256.txt`, and stored once under Orchard's reusable
 runtime directory. Orchard `5.x` releases install into the `versions/5.0.0`
 slot and reuse the same matching Electron runtime.
 
+For an unpublished test build, host `manifest.json` and its relative archive
+files together on a public HTTPS origin, then launch Orchard Packages with that
+origin in `ORCHARD_PACKAGE_BASE_URL`. The override uses that manifest directly
+for stable and beta releases and does not consult GitHub release discovery:
+
+```powershell
+$env:ORCHARD_PACKAGE_BASE_URL = "https://pub.example.com/orchard-preview/"
+& "$env:LOCALAPPDATA\Programs\Orchard\orchard-packages.exe"
+```
+
+URLs containing credentials, a query, or a fragment are rejected. Package size,
+SHA-256, archive-path, and same-origin asset checks remain enabled.
+
 ## Arch package
 
 Build the current x86_64 test package from the repository root:

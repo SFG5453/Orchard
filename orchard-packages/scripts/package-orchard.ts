@@ -96,6 +96,32 @@ async function pruneProductionDependencyPayload(nodeModulesRoot: string): Promis
   }
 }
 
+async function installCrossPlatformSharpPackages(dependencyRoot: string): Promise<void> {
+  const sharpPackage = JSON.parse(await readFile(
+    path.join(dependencyRoot, "node_modules", "sharp", "package.json"),
+    "utf8"
+  )) as { optionalDependencies?: Record<string, string> };
+  const packages = Object.entries(sharpPackage.optionalDependencies ?? {})
+    .filter(([name]) => /^@img\/sharp-(?:libvips-)?(?:darwin|linux|win32)-(?:arm64|x64)$/.test(name))
+    .map(([name, version]) => `${name}@${version}`)
+    .sort();
+  if (packages.length !== 10) {
+    throw new Error(`Expected 10 cross-platform Sharp packages, found ${packages.length}.`);
+  }
+  await runCommand("npm", [
+    "install",
+    "--no-save",
+    "--package-lock=false",
+    "--omit=dev",
+    "--include=optional",
+    "--ignore-scripts",
+    "--no-audit",
+    "--no-fund",
+    "--force",
+    ...packages
+  ], { cwd: dependencyRoot });
+}
+
 async function assertSharedIsPlatformNeutral(): Promise<void> {
   for (const filePath of await walk(sharedRoot)) {
     const targets = await binaryTargets(filePath);
@@ -185,7 +211,8 @@ try {
       path.join(sharedRoot, "native-audio-rust", "index.cjs")
     ),
     copyRequired(path.join(projectRoot, "LICENSE"), path.join(sharedRoot, "LICENSE")),
-    copyRequired(path.join(projectRoot, "build", "icon.png"), path.join(sharedRoot, "resources", "icon.png"))
+    copyRequired(path.join(projectRoot, "build", "icon.png"), path.join(sharedRoot, "resources", "icon.png")),
+    copyRequired(path.join(projectRoot, "build", "icon.ico"), path.join(sharedRoot, "resources", "icon.ico"))
   ]);
 
   const sourcePackage = JSON.parse(await readFile(path.join(projectRoot, "package.json"), "utf8")) as Record<string, unknown>;
@@ -210,6 +237,8 @@ try {
   await runCommand("npm", ["ci", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"], {
     cwd: dependencyRoot
   });
+  console.log("Installing locked Sharp binaries for every release target…");
+  await installCrossPlatformSharpPackages(dependencyRoot);
   await cp(path.join(dependencyRoot, "node_modules"), path.join(sharedRoot, "node_modules"), {
     recursive: true,
     dereference: true,

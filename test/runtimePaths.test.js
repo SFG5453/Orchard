@@ -31,6 +31,7 @@ test('development runtime paths stay rooted at the application directory', () =>
   });
 
   assert.equal(resolved.appIconPath, path.join(appRoot, 'build/icon.png'));
+  assert.equal(resolved.taskbarIconPath, path.join(appRoot, 'build/icon.ico'));
   assert.equal(resolved.preloadPath, path.join(appRoot, 'electron/preload/index.cjs'));
   assert.equal(resolved.rendererEntryPath, path.join(appRoot, 'dist/index.html'));
   assert.equal(resolved.nativeModulePath, path.join(appRoot, 'native-audio-rust/index.cjs'));
@@ -45,6 +46,7 @@ test('packaged runtime paths keep native code outside app.asar', () => {
   });
 
   assert.equal(resolved.appIconPath, path.join(appRoot, 'dist/orchard-logo.png'));
+  assert.equal(resolved.taskbarIconPath, path.join(appRoot, 'resources/icon.ico'));
   assert.equal(resolved.preloadPath, path.join(appRoot, 'electron/preload/index.cjs'));
   assert.equal(resolved.rendererEntryPath, path.join(appRoot, 'dist/index.html'));
   assert.equal(

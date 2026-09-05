@@ -160,9 +160,14 @@ select:disabled {
   font-size: 12px;
 }
 
+.release-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .install-button {
   display: flex;
-  width: 100%;
+  flex: 1;
   height: 50px;
   align-items: center;
   justify-content: space-between;
@@ -192,6 +197,30 @@ select:disabled {
 .install-button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
+}
+
+.uninstall-button {
+  min-width: 104px;
+  padding: 0 16px;
+  border: 1px solid #c7aaa7;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--error);
+  cursor: pointer;
+  font-weight: 680;
+}
+
+.uninstall-button:hover:not(:disabled) {
+  background: rgb(163 61 56 / 7%);
+}
+
+.uninstall-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.uninstall-button[hidden] {
+  display: none;
 }
 
 .operation {
@@ -247,14 +276,14 @@ select:disabled {
 
 .package-key {
   display: grid;
-  grid-template-columns: 64fr 36fr;
+  grid-template-columns: repeat(3, 1fr);
   margin-top: 7px;
   color: #82918c;
   font: 650 9px/1.2 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   letter-spacing: 0.07em;
 }
 
-.package-key span:last-child {
+.package-key span:not(:first-child) {
   padding-left: 10px;
 }
 

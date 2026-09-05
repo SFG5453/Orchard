@@ -31,10 +31,13 @@
         <p class="version-detail" id="version-detail">Connecting to the package service.</p>
       </section>
 
-      <button class="install-button" id="install-button" type="button" disabled>
-        <span id="install-button-label">Install Orchard</span>
-        <span aria-hidden="true">→</span>
-      </button>
+      <div class="release-actions">
+        <button class="install-button" id="install-button" type="button" disabled>
+          <span id="install-button-label">Install Orchard</span>
+          <span aria-hidden="true">→</span>
+        </button>
+        <button class="uninstall-button" id="uninstall-button" type="button" hidden>Uninstall</button>
+      </div>
 
       <section class="operation" id="operation" aria-live="polite" aria-atomic="false">
         <div class="operation-heading">
@@ -56,6 +59,7 @@
         <div class="package-key" aria-hidden="true">
           <span id="common-package-label">COMMON PACKAGE</span>
           <span id="native-package-label">NATIVE PACKAGE</span>
+          <span id="electron-package-label">ELECTRON RUNTIME</span>
         </div>
         <p class="operation-detail" id="operation-detail">Choose a version to install it for this computer.</p>
       </section>

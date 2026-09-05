@@ -34,6 +34,7 @@ import (
 )
 
 const packageBaseURL = "https://packages.sfg545.dev/"
+const packageBaseURLEnvironment = "ORCHARD_PACKAGE_BASE_URL"
 const githubReleaseBaseURL = "https://github.com/sfg5453/orchard/releases/download/"
 const githubReleasesAPIURL = "https://api.github.com/repos/sfg5453/orchard/releases?per_page=20"
 
@@ -42,6 +43,24 @@ func releaseBaseURL(candidate release) string {
 		return githubReleaseBaseURL + "v" + candidate.Version + "/"
 	}
 	return packageBaseURL
+}
+
+func normalizePackageBaseURL(value string) (string, error) {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("%s must be an HTTPS base URL without credentials, a query, or a fragment", packageBaseURLEnvironment)
+	}
+	if !strings.HasSuffix(parsed.Path, "/") {
+		parsed.Path += "/"
+	}
+	return parsed.String(), nil
+}
+
+func (i *installer) releaseBaseURL(candidate release) string {
+	if i.packageBaseOverride {
+		return i.baseURL
+	}
+	return releaseBaseURL(candidate)
 }
 
 var (

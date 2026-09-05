@@ -54,13 +54,22 @@ type installResult struct {
 type progressReporter func(installProgress)
 
 type installer struct {
-	baseURL           string
-	githubReleasesURL string
-	client            *http.Client
+	baseURL             string
+	githubReleasesURL   string
+	client              *http.Client
+	packageBaseOverride bool
+	configurationError  error
 }
 
 func newInstaller() *installer {
-	return &installer{baseURL: packageBaseURL, githubReleasesURL: githubReleasesAPIURL, client: http.DefaultClient}
+	service := &installer{baseURL: packageBaseURL, githubReleasesURL: githubReleasesAPIURL, client: http.DefaultClient}
+	override := strings.TrimSpace(os.Getenv(packageBaseURLEnvironment))
+	if override == "" {
+		return service
+	}
+	service.baseURL, service.configurationError = normalizePackageBaseURL(override)
+	service.packageBaseOverride = service.configurationError == nil
+	return service
 }
 
 func formatBytes(bytes int64) string {
@@ -134,9 +143,15 @@ func latestBetaManifestURL(releases []githubRelease) string {
 }
 
 func (i *installer) fetchAvailableManifest(ctx context.Context) (packageManifest, error) {
+	if i.configurationError != nil {
+		return packageManifest{}, i.configurationError
+	}
 	stableManifest, err := i.fetchManifest(ctx)
 	if err != nil {
 		return packageManifest{}, err
+	}
+	if i.packageBaseOverride {
+		return stableManifest, nil
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, i.githubReleasesURL, nil)
 	if err != nil {
@@ -194,8 +209,8 @@ func (i *installer) installRelease(ctx context.Context, version string, report p
 	if selected == nil {
 		return installResult{}, fmt.Errorf("Orchard %s is not present in the package manifest", version)
 	}
-	assetBaseURL := releaseBaseURL(*selected)
-	if selected.Channel == "beta" {
+	assetBaseURL := i.releaseBaseURL(*selected)
+	if selected.Channel == "beta" && !i.packageBaseOverride {
 		githubManifest, err := i.fetchManifestFrom(ctx, assetBaseURL)
 		if err != nil {
 			return installResult{}, fmt.Errorf("could not read Orchard %s from its GitHub release: %w", version, err)

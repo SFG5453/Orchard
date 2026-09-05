@@ -30,6 +30,15 @@ function elfX64(): Buffer {
   return binary;
 }
 
+function peX64(): Buffer {
+  const binary = Buffer.alloc(256);
+  binary.set([0x4d, 0x5a]);
+  binary.writeUInt32LE(128, 60);
+  binary.set([0x50, 0x45, 0x00, 0x00], 128);
+  binary.writeUInt16LE(0x8664, 132);
+  return binary;
+}
+
 async function put(
   root: string,
   relativePath: string,
@@ -99,6 +108,53 @@ describe("native package launchers", () => {
       expect(await exists(path.join(
         overlay,
         "native/build/Release/orchard_audio_analysis.node"
+      ))).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps Windows runtime DLLs beside a complete native addon", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "orchard-native-assets-"));
+    const projectRoot = path.join(root, "project");
+    const sharedRoot = path.join(root, "shared");
+    const overlaysRoot = path.join(root, "overlays");
+    try {
+      const binary = peX64();
+      await put(projectRoot, "native-audio-rust/build/orchard-audio-win32-x64.node", binary);
+      await put(projectRoot, "native-audio-rust/build/libstdc++-6.dll", binary);
+      await put(projectRoot, "native-media/build/orchard-system-media-win32-x64.node", binary);
+      await put(sharedRoot, "node_modules/onnxruntime-node/bin/napi-v6/win32/x64/onnxruntime_binding.node", binary);
+      await put(sharedRoot, "node_modules/@img/sharp-win32-x64/package.json", "{}");
+      await put(sharedRoot, "node_modules/@img/sharp-win32-x64/lib/sharp-win32-x64.node", binary);
+      for (const relativePath of [
+        "package.json",
+        "dist/ort.wasm.bundle.min.mjs",
+        "dist/ort-wasm-simd-threaded.mjs",
+        "dist/ort-wasm-simd-threaded.wasm"
+      ]) {
+        await put(sharedRoot, path.join("node_modules/onnxruntime-web", relativePath));
+      }
+
+      const collection = await collectNativeAssets({
+        projectRoot,
+        sharedRoot,
+        overlaysRoot,
+        electronVersion: "43.4.1"
+      });
+
+      expect(collection.completeTargets).toEqual(["win32-x64"]);
+      expect(await exists(path.join(
+        collection.overlay("win32-x64"),
+        "native-audio-rust/build/libstdc++-6.dll"
+      ))).toBe(true);
+      expect(await exists(path.join(
+        collection.overlay("win32-x64"),
+        "node_modules/@img/sharp-win32-x64/package.json"
+      ))).toBe(true);
+      expect(await exists(path.join(
+        sharedRoot,
+        "node_modules/@img/sharp-win32-x64/package.json"
       ))).toBe(false);
     } finally {
       await rm(root, { recursive: true, force: true });

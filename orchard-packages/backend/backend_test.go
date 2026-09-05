@@ -127,12 +127,83 @@ func TestDownloadUsesPartFileAndChecksSize(t *testing.T) {
 	}
 }
 
+func TestRemoteFileSizeUsesHeadContentLength(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodHead {
+			t.Fatalf("expected HEAD request, got %s", request.Method)
+		}
+		response.Header().Set("Content-Length", "12345")
+	}))
+	defer server.Close()
+	service := &installer{client: server.Client()}
+	size, err := service.remoteFileSize(context.Background(), server.URL+"/electron.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size != 12345 {
+		t.Fatalf("download size = %d, want 12345", size)
+	}
+}
+
 func TestReleaseBaseURLUsesGitHubForBetaOnly(t *testing.T) {
 	if actual := releaseBaseURL(release{Version: "5.0.0-beta.3", Channel: "beta"}); actual != "https://github.com/sfg5453/orchard/releases/download/v5.0.0-beta.3/" {
 		t.Fatalf("beta base URL = %q", actual)
 	}
 	if actual := releaseBaseURL(release{Version: "5.0.0", Channel: "stable"}); actual != packageBaseURL {
 		t.Fatalf("stable base URL = %q", actual)
+	}
+}
+
+func TestPackageBaseOverrideNormalizesHTTPSURL(t *testing.T) {
+	t.Setenv(packageBaseURLEnvironment, " https://pub.example.com/orchard-preview ")
+	service := newInstaller()
+	if service.configurationError != nil {
+		t.Fatal(service.configurationError)
+	}
+	if service.baseURL != "https://pub.example.com/orchard-preview/" || !service.packageBaseOverride {
+		t.Fatalf("unexpected package override: %#v", service)
+	}
+	if actual := service.releaseBaseURL(release{Version: "5.0.0-beta.6", Channel: "beta"}); actual != service.baseURL {
+		t.Fatalf("overridden beta base URL = %q", actual)
+	}
+}
+
+func TestPackageBaseOverrideRejectsUnsafeURL(t *testing.T) {
+	for _, value := range []string{
+		"http://pub.example.com/preview/",
+		"https://user:secret@pub.example.com/preview/",
+		"https://pub.example.com/preview/?channel=dev",
+	} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv(packageBaseURLEnvironment, value)
+			service := newInstaller()
+			if service.configurationError == nil {
+				t.Fatalf("unsafe package override was accepted: %s", value)
+			}
+		})
+	}
+}
+
+func TestPackageBaseOverrideSkipsGitHubBetaDiscovery(t *testing.T) {
+	manifest := `{"schemaVersion":1,"releases":[{"version":"5.0.0-beta.6","channel":"beta","electronVersion":"43.6.0","shared":{"url":"orchard.tar.zst","size":10,"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"native":{"win32-x64":{"url":"native.tar.zst","size":5,"sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}}]}`
+	server := httptest.NewTLSServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/preview/manifest.json" {
+			t.Fatalf("unexpected request path: %s", request.URL.Path)
+		}
+		_, _ = io.WriteString(response, manifest)
+	}))
+	defer server.Close()
+
+	service := &installer{
+		baseURL: server.URL + "/preview/", githubReleasesURL: "https://invalid.example/",
+		client: server.Client(), packageBaseOverride: true,
+	}
+	available, err := service.fetchAvailableManifest(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(available.Releases) != 1 || available.Releases[0].Channel != "beta" {
+		t.Fatalf("override manifest was not returned directly: %#v", available)
 	}
 }
 
@@ -270,6 +341,73 @@ func TestValidateInstallationAcceptsLegacyBeta6WindowsLayout(t *testing.T) {
 	}
 	if err := validateInstallation(directory, "5.0.0-beta.6", "win32-x64"); err != nil {
 		t.Fatalf("legacy Windows audio addon was rejected: %v", err)
+	}
+}
+
+func TestUninstallReleaseRemovesOnlyVersionDirectory(t *testing.T) {
+	target, err := detectTarget()
+	if err != nil {
+		t.Fatal(err)
+	}
+	configRoot := t.TempDir()
+	cacheRoot := t.TempDir()
+	t.Setenv("HOME", configRoot)
+	t.Setenv("XDG_CONFIG_HOME", configRoot)
+	t.Setenv("XDG_CACHE_HOME", cacheRoot)
+	t.Setenv("APPDATA", configRoot)
+	t.Setenv("LOCALAPPDATA", cacheRoot)
+	version := "5.0.0"
+	electronVersion := "43.6.0"
+	installDirectory, runtimeDirectory, _, err := installPaths(target, version, electronVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.SplitN(target, "-", 2)
+	files := []string{
+		"package.json",
+		"dist/index.html",
+		"dist/welcome.html",
+		"electron/main/index.js",
+		".orchard-package.json",
+		".orchard-native/" + target + ".json",
+		"native-media/build/orchard-system-media-" + target + ".node",
+		"native-audio-rust/build/orchard-audio-" + target + ".node",
+		"node_modules/onnxruntime-node/bin/napi-v6/" + parts[0] + "/" + parts[1] + "/onnxruntime_binding.node",
+	}
+	if strings.HasPrefix(target, "win32-") {
+		files = append(files, "orchard.cmd")
+	} else {
+		files = append(files, "orchard")
+	}
+	for _, relative := range files {
+		filePath := filepath.Join(installDirectory, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		contents := []byte("fixture")
+		if relative == ".orchard-package.json" {
+			contents = []byte(`{"schemaVersion":1,"version":"5.0.0"}`)
+		}
+		if err := os.WriteFile(filePath, contents, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(runtimeDirectory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runtimeMarker := filepath.Join(runtimeDirectory, "keep-me")
+	if err := os.WriteFile(runtimeMarker, []byte("runtime"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	service := &installer{}
+	if err := service.uninstallRelease(context.Background(), version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(installDirectory); !os.IsNotExist(err) {
+		t.Fatalf("version directory still exists: %v", err)
+	}
+	if _, err := os.Stat(runtimeMarker); err != nil {
+		t.Fatalf("Electron runtime was removed: %v", err)
 	}
 }
 

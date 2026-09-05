@@ -29,6 +29,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const maximumZipSymlinkTargetSize = 4096
@@ -37,6 +38,33 @@ func electronArchive(version, target string) (string, string) {
 	name := fmt.Sprintf("electron-v%s-%s.zip", version, target)
 	base := fmt.Sprintf("https://github.com/electron/electron/releases/download/v%s/", version)
 	return base + name, name
+}
+
+func (i *installer) electronDownloadSize(ctx context.Context, version, target string) (int64, error) {
+	archiveURL, _ := electronArchive(version, target)
+	sizeContext, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return i.remoteFileSize(sizeContext, archiveURL)
+}
+
+func (i *installer) remoteFileSize(ctx context.Context, archiveURL string) (int64, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodHead, archiveURL, nil)
+	if err != nil {
+		return 0, err
+	}
+	request.Header.Set("User-Agent", "Orchard-Packages")
+	response, err := i.client.Do(request)
+	if err != nil {
+		return 0, fmt.Errorf("could not read the Electron download size: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return 0, fmt.Errorf("Electron download size returned HTTP %d", response.StatusCode)
+	}
+	if response.ContentLength <= 0 {
+		return 0, fmt.Errorf("Electron download size is unavailable")
+	}
+	return response.ContentLength, nil
 }
 
 func (i *installer) fetchElectronChecksum(ctx context.Context, version, archiveName string) (string, error) {

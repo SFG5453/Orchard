@@ -35,6 +35,7 @@ export function resolveRuntimePaths({ app, isDev }) {
 
   return {
     appIconPath: path.join(appRoot, isDev ? 'build/icon.png' : 'dist/orchard-logo.png'),
+    taskbarIconPath: path.join(appRoot, isDev ? 'build/icon.ico' : 'resources/icon.ico'),
     licensePath: path.join(appRoot, 'LICENSE'),
     // Whole-track analysis and transition rendering share one napi-rs addon.
     // Its loader picks the per-platform binary itself.
