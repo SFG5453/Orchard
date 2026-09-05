@@ -18,6 +18,7 @@
  */
 
 import { normalizeCrossfadeMode, planTransition } from './transitionPlanner.js';
+import { equalPowerMixWeights } from './crossfadeVisualState.js';
 
 export const AUTO_CROSSFADE_DEFAULTS = {
   fadeSeconds: 6,
@@ -99,6 +100,7 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
   let promoteTimer = 0;
   let tempoTimer = 0;
   let tempoStartTimer = 0;
+  let mixFrame = 0;
   let completeResolve = null;
   let activeCleanup = null;
   let activeFromAudio = null;
@@ -168,10 +170,12 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
     window.clearTimeout(promoteTimer);
     window.clearTimeout(tempoStartTimer);
     window.clearInterval(tempoTimer);
+    window.cancelAnimationFrame?.(mixFrame);
     completeTimer = 0;
     promoteTimer = 0;
     tempoTimer = 0;
     tempoStartTimer = 0;
+    mixFrame = 0;
     active = false;
     activeCleanup?.();
     activeCleanup = null;
@@ -185,7 +189,7 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
     completeResolve = null;
   }
 
-  async function start({ fromAudio, toAudio, transition = null, volume, onPromote, onComplete, onError }) {
+  async function start({ fromAudio, toAudio, transition = null, volume, onPromote, onComplete, onError, onMixState }) {
     if (active || !fromAudio || !toAudio) {
       return false;
     }
@@ -321,6 +325,45 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       });
       if (!timing) throw new Error('Web Audio crossfade is unavailable');
 
+      const visualDuration = Math.max(0.001, timing.endTime - timing.startTime);
+      const visualHandoffProgress = clamp01(
+        (timing.promotionTime - timing.startTime) / visualDuration
+      );
+      const publishMixState = (complete = false) => {
+        if (typeof onMixState !== 'function') return;
+        const contextTime = analyzer?.currentTime?.() || timing.startTime;
+        const progress = complete
+          ? 1
+          : clamp01((contextTime - timing.startTime) / visualDuration);
+        const fallback = equalPowerMixWeights(progress);
+        const outgoingGain = analyzer?.mixVolume?.(fromAudio);
+        const incomingGain = analyzer?.mixVolume?.(toAudio);
+        try {
+          onMixState({
+            complete,
+            contextTime,
+            endTime: timing.endTime,
+            handoffProgress: visualHandoffProgress,
+            incomingGain: complete ? 1 : Number.isFinite(incomingGain) ? incomingGain : fallback.incomingGain,
+            outgoingGain: complete ? 0 : Number.isFinite(outgoingGain) ? outgoingGain : fallback.outgoingGain,
+            progress,
+            started: complete || contextTime >= timing.startTime,
+            startTime: timing.startTime
+          });
+        } catch {
+          // Visual subscribers cannot be allowed to interrupt audio scheduling.
+        }
+      };
+      const followMixState = () => {
+        mixFrame = 0;
+        if (!active || sequence !== transitionSequence) return;
+        publishMixState(false);
+        if ((analyzer?.currentTime?.() || timing.startTime) >= timing.endTime) return;
+        mixFrame = window.requestAnimationFrame?.(followMixState) || 0;
+      };
+      publishMixState(false);
+      mixFrame = window.requestAnimationFrame?.(followMixState) || 0;
+
       if (incomingRate !== 1) {
         const startTempoRelease = () => {
           const releaseSeconds = Math.min(
@@ -390,6 +433,9 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       promote();
 
       if (active) {
+        window.cancelAnimationFrame?.(mixFrame);
+        mixFrame = 0;
+        publishMixState(true);
         toAudio.volume = 1;
         fromAudio.pause();
         fromAudio.removeAttribute('src');
@@ -407,8 +453,10 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       promoteTimer = 0;
       window.clearTimeout(tempoStartTimer);
       window.clearInterval(tempoTimer);
+      window.cancelAnimationFrame?.(mixFrame);
       tempoTimer = 0;
       tempoStartTimer = 0;
+      mixFrame = 0;
       activeCleanup = null;
       activeFromAudio = null;
       activeToAudio = null;
@@ -424,8 +472,10 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       promoteTimer = 0;
       window.clearTimeout(tempoStartTimer);
       window.clearInterval(tempoTimer);
+      window.cancelAnimationFrame?.(mixFrame);
       tempoTimer = 0;
       tempoStartTimer = 0;
+      mixFrame = 0;
       completeResolve = null;
       activeCleanup = null;
       activeFromAudio = null;

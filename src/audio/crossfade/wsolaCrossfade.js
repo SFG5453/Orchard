@@ -27,6 +27,7 @@
 // elements keep playing silently underneath so a cancel at any point can
 // restore ordinary playback without re-buffering.
 import { planWsolaTransition } from './wsolaPlanner.js';
+import { clampMixProgress, renderedMixWeights } from './crossfadeVisualState.js';
 
 // How far ahead of the transition preparation may begin. Decoding two tracks
 // and rendering the overlap takes a few seconds; starting ~30s out leaves
@@ -421,6 +422,8 @@ export function createWsolaCrossfade({
   function clearTimers(state) {
     state.timers.forEach((timer) => window.clearTimeout(timer));
     state.timers.length = 0;
+    window.cancelAnimationFrame?.(state.mixFrame);
+    state.mixFrame = 0;
   }
 
   // `reason` names the caller, so a session that ends early can be told apart
@@ -486,7 +489,7 @@ export function createWsolaCrossfade({
     });
   }
 
-  async function start({ fromAudio, toAudio, plan: transitionPlan, render, volume, onPromote, onComplete, onError }) {
+  async function start({ fromAudio, toAudio, plan: transitionPlan, render, volume, onPromote, onComplete, onError, onMixState }) {
     if (session || !fromAudio || !toAudio || !transitionPlan?.ok || !render?.channels?.length) {
       return false;
     }
@@ -543,9 +546,47 @@ export function createWsolaCrossfade({
         // every mapping between the overlap and the media timelines.
         overlapStartTime: when - offset,
         promoted: false,
+        mixFrame: 0,
         timers: []
       };
       session = state;
+
+      const visualHandoffProgress = clampMixProgress(transitionPlan.bassSwapFraction ?? 0.5);
+      const publishMixState = (complete = false) => {
+        if (typeof onMixState !== 'function') return;
+        const contextTime = analyzer.currentTime();
+        const progress = complete
+          ? 1
+          : clampMixProgress(
+            (contextTime - state.overlapStartTime) / Math.max(0.001, transitionPlan.overlapSeconds)
+          );
+        const weights = complete
+          ? { outgoingGain: 0, incomingGain: 1 }
+          : renderedMixWeights(progress, transitionPlan.choreography);
+        try {
+          onMixState({
+            complete,
+            contextTime,
+            endTime: handle.endTime,
+            handoffProgress: visualHandoffProgress,
+            ...weights,
+            progress,
+            started: complete || contextTime >= state.overlapStartTime,
+            startTime: state.overlapStartTime
+          });
+        } catch {
+          // The audio handoff remains authoritative if presentation code fails.
+        }
+      };
+      const followMixState = () => {
+        state.mixFrame = 0;
+        if (session !== state || mySequence !== sequence) return;
+        publishMixState(false);
+        if (analyzer.currentTime() >= handle.endTime) return;
+        state.mixFrame = window.requestAnimationFrame?.(followMixState) || 0;
+      };
+      publishMixState(false);
+      state.mixFrame = window.requestAnimationFrame?.(followMixState) || 0;
 
       // Hand over from the outgoing element to the buffer with complementary
       // fades over the same instant, so the two never both carry the outgoing
@@ -614,6 +655,9 @@ export function createWsolaCrossfade({
       });
       if (mySequence !== sequence) return false;
 
+      window.cancelAnimationFrame?.(state.mixFrame);
+      state.mixFrame = 0;
+      publishMixState(true);
       session = null;
       clearTimers(state);
       analyzer.resetMixElement?.(toAudio);

@@ -80,6 +80,7 @@ export function installState(ctx) {
     crossfadeMode: AUTO_CROSSFADE_DEFAULTS.mode,
     crossfadeSeconds: AUTO_CROSSFADE_DEFAULTS.fadeSeconds,
     customArtistPagesEnabled: true,
+    fullscreenLyricsVisible: true,
     playbackStatePersistenceEnabled: true,
     queueLayout: DEFAULT_QUEUE_LAYOUT,
     youtubeHistoryEnabled: true,
@@ -128,6 +129,9 @@ export function installState(ctx) {
       customArtistPagesEnabled: typeof preferences.customArtistPagesEnabled === 'boolean'
         ? preferences.customArtistPagesEnabled
         : ctx.DEFAULT_USER_PREFERENCES.customArtistPagesEnabled,
+      fullscreenLyricsVisible: typeof preferences.fullscreenLyricsVisible === 'boolean'
+        ? preferences.fullscreenLyricsVisible
+        : ctx.DEFAULT_USER_PREFERENCES.fullscreenLyricsVisible,
       playbackStatePersistenceEnabled: typeof preferences.playbackStatePersistenceEnabled === 'boolean'
         ? preferences.playbackStatePersistenceEnabled
         : ctx.DEFAULT_USER_PREFERENCES.playbackStatePersistenceEnabled,
@@ -265,6 +269,14 @@ export function installState(ctx) {
   ctx.smartCrossfadeMix = ref({
     id: 0,
     visible: false,
+    phase: 'idle',
+    progress: 0,
+    preparationProgress: 0,
+    secondsUntilStart: 0,
+    outgoingGain: 1,
+    incomingGain: 0,
+    incomingWeight: 0,
+    handoffProgress: 0.5,
     durationMs: 0,
     fadeDurationMs: 0,
     style: 'equal_power',
@@ -437,6 +449,7 @@ export function installState(ctx) {
   ];
   ctx.crossfadeSeconds = ref(ctx.initialUserPreferences.crossfadeSeconds);
   ctx.customArtistPagesEnabled = ref(ctx.initialUserPreferences.customArtistPagesEnabled);
+  ctx.fullscreenLyricsVisible = ref(ctx.initialUserPreferences.fullscreenLyricsVisible);
   ctx.playbackStatePersistenceEnabled = ref(ctx.initialUserPreferences.playbackStatePersistenceEnabled);
   ctx.queueLayout = ref(ctx.initialUserPreferences.queueLayout);
   ctx.youtubeHistoryEnabled = ref(ctx.initialUserPreferences.youtubeHistoryEnabled);
@@ -491,6 +504,7 @@ export function installState(ctx) {
     ctx.crossfadeMode.value = defaults.crossfadeMode;
     ctx.crossfadeSeconds.value = defaults.crossfadeSeconds;
     ctx.customArtistPagesEnabled.value = defaults.customArtistPagesEnabled;
+    ctx.fullscreenLyricsVisible.value = defaults.fullscreenLyricsVisible;
     ctx.playbackStatePersistenceEnabled.value = defaults.playbackStatePersistenceEnabled;
     ctx.queueLayout.value = defaults.queueLayout;
     ctx.youtubeHistoryEnabled.value = defaults.youtubeHistoryEnabled;

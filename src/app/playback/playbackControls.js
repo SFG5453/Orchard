@@ -21,7 +21,10 @@ import { nextTick } from 'vue';
 import { playlistPreviousState } from './playbackCollectionQueue.js';
 import { advanceToQueueEntry, rewindToHistoryEntry } from './queueLayout.js';
 import { reliablePlaybackDuration } from './playbackDuration.js';
-import { createSmartCrossfadeMixPresentation } from './smartCrossfadeMixPresentation.js';
+import {
+  createSmartCrossfadeMixPresentation,
+  updateSmartCrossfadeMixPresentation
+} from './smartCrossfadeMixPresentation.js';
 import {
   WSOLA_PREPARE_LEAD_SECONDS,
   WSOLA_START_LEAD_SECONDS,
@@ -88,24 +91,89 @@ export function installPlaybackControls(ctx) {
     window.clearTimeout(ctx.smartCrossfadeMixTimer);
     ctx.smartCrossfadeMixTimer = 0;
     if (!ctx.smartCrossfadeMix.value.visible) return;
-    ctx.smartCrossfadeMix.value = { ...ctx.smartCrossfadeMix.value, visible: false };
+    ctx.smartCrossfadeMix.value = {
+      ...ctx.smartCrossfadeMix.value,
+      visible: false,
+      phase: 'idle',
+      progress: 0,
+      preparationProgress: 0,
+      secondsUntilStart: 0,
+      outgoingGain: 1,
+      incomingGain: 0,
+      incomingWeight: 0
+    };
+  };
+
+  ctx.prepareSmartCrossfadeMix = function prepareSmartCrossfadeMix(details, secondsUntilStart) {
+    const current = ctx.smartCrossfadeMix.value;
+    const fromId = String(details.fromTrack?.id || '');
+    const toId = String(details.toTrack?.id || '');
+    const samePair = current.visible && current.from?.id === fromId && current.to?.id === toId;
+    if (samePair && current.phase !== 'preparing') return;
+
+    const presentation = samePair
+      ? current
+      : createSmartCrossfadeMixPresentation({
+        id: ++ctx.smartCrossfadeMixSequence,
+        currentArtwork: ctx.nowArtworkImage.value,
+        ...details,
+        phase: 'preparing',
+        secondsUntilStart
+      });
+    ctx.smartCrossfadeMix.value = {
+      ...presentation,
+      phase: 'preparing',
+      progress: 0,
+      preparationProgress: Math.max(0, Math.min(1, 1 - (Number(secondsUntilStart) || 0) / 8)),
+      secondsUntilStart: Math.max(0, Number(secondsUntilStart) || 0),
+      outgoingGain: 1,
+      incomingGain: 0,
+      incomingWeight: 0
+    };
+  };
+
+  ctx.clearPreparingSmartCrossfadeMix = function clearPreparingSmartCrossfadeMix() {
+    if (ctx.smartCrossfadeMix.value.phase === 'preparing') ctx.dismissSmartCrossfadeMix();
   };
 
   ctx.showSmartCrossfadeMix = function showSmartCrossfadeMix(details) {
     window.clearTimeout(ctx.smartCrossfadeMixTimer);
+    ctx.smartCrossfadeMixTimer = 0;
+    const current = ctx.smartCrossfadeMix.value;
+    const samePair = current.visible &&
+      current.from?.id === String(details.fromTrack?.id || '') &&
+      current.to?.id === String(details.toTrack?.id || '');
     const presentation = createSmartCrossfadeMixPresentation({
-      id: ++ctx.smartCrossfadeMixSequence,
+      id: samePair ? current.id : ++ctx.smartCrossfadeMixSequence,
       currentArtwork: ctx.nowArtworkImage.value,
       ...details
     });
     ctx.smartCrossfadeMix.value = presentation;
-    const timerMs = ctx.fullscreenPlayerOpen.value
-      ? presentation.durationMs
-      : presentation.fadeDurationMs;
-    ctx.smartCrossfadeMixTimer = window.setTimeout(
-      ctx.dismissSmartCrossfadeMix,
-      timerMs
+  };
+
+  ctx.updateSmartCrossfadeMix = function updateSmartCrossfadeMix(sample) {
+    if (!ctx.smartCrossfadeMix.value.visible) return;
+    ctx.smartCrossfadeMix.value = updateSmartCrossfadeMixPresentation(
+      ctx.smartCrossfadeMix.value,
+      sample
     );
+  };
+
+  ctx.completeSmartCrossfadeMix = function completeSmartCrossfadeMix() {
+    if (!ctx.smartCrossfadeMix.value.visible) return;
+    ctx.updateSmartCrossfadeMix({
+      complete: true,
+      handoffProgress: ctx.smartCrossfadeMix.value.handoffProgress,
+      incomingGain: 1,
+      outgoingGain: 0,
+      progress: 1,
+      started: true
+    });
+    // The mix itself is already complete. This short hold only lets the incoming
+    // artwork settle onto the normal resting geometry before its duplicate is
+    // removed, making the handoff mathematically seamless.
+    window.clearTimeout(ctx.smartCrossfadeMixTimer);
+    ctx.smartCrossfadeMixTimer = window.setTimeout(ctx.dismissSmartCrossfadeMix, 420);
   };
 
   ctx.cancelActiveCrossfade = function cancelActiveCrossfade(reason = 'unspecified') {
@@ -515,6 +583,29 @@ export function installPlaybackControls(ctx) {
       ? engine.preparedTransition(fromTrackId, next.id)
       : null;
     const untilStart = (prepared?.plan?.transitionStart ?? plan.transitionStart) - playbackTime;
+    const visualPlan = prepared?.plan || plan;
+    const visualTransition = {
+      transitionStart: visualPlan.transitionStart,
+      transitionEnd: visualPlan.transitionEnd,
+      fadeSeconds: visualPlan.overlapSeconds,
+      transitionStyle: 'wsola_blend',
+      transitionBeats: visualPlan.beats,
+      incomingCueTime: visualPlan.incomingCueTime,
+      incomingPlaybackRate: 1,
+      choreography: visualPlan.choreography,
+      handoffFraction: visualPlan.bassSwapFraction
+    };
+    if (untilStart > 0 && untilStart <= 8) {
+      ctx.prepareSmartCrossfadeMix({
+        fromTrack: ctx.activeTrack.value,
+        toTrack: next,
+        transition: visualTransition,
+        analysis: ctx.crossfadeAnalysis.value,
+        nextAnalysis: ctx.nextCrossfadeAnalysis.value
+      }, untilStart);
+    } else if (untilStart > 8) {
+      ctx.clearPreparingSmartCrossfadeMix();
+    }
     if (untilStart > WSOLA_START_LEAD_SECONDS) {
       if (untilStart <= WSOLA_PREPARE_LEAD_SECONDS &&
           preparationStatus === 'idle') {
@@ -547,8 +638,11 @@ export function installPlaybackControls(ctx) {
       transitionEnd: prepared.plan.transitionEnd,
       fadeSeconds: prepared.plan.overlapSeconds,
       transitionStyle: 'wsola_blend',
+      transitionBeats: prepared.plan.beats,
       incomingCueTime: prepared.plan.incomingCueTime,
       incomingPlaybackRate: 1,
+      choreography: prepared.plan.choreography,
+      handoffFraction: prepared.plan.bassSwapFraction,
       reason: 'wsola-beat-match'
     };
     ctx.showSmartCrossfadeMix({
@@ -604,6 +698,7 @@ export function installPlaybackControls(ctx) {
         });
       },
       onComplete: () => {
+        ctx.completeSmartCrossfadeMix();
         ctx.clearAudioElement(fromAudio);
         // The companion audio stream is what fromAudio refers to for a music
         // video; the picture is a second element and has to be released too.
@@ -613,7 +708,8 @@ export function installPlaybackControls(ctx) {
       onError: (error) => {
         ctx.dismissSmartCrossfadeMix();
         ctx.playbackError.value = error.message;
-      }
+      },
+      onMixState: ctx.updateSmartCrossfadeMix
     });
     if (!didStart) {
       ctx.dismissSmartCrossfadeMix();
@@ -644,6 +740,7 @@ export function installPlaybackControls(ctx) {
     const toAudio = ctx.standbyAudio();
 
     if (!next?.id || !fromAudio || !toAudio) {
+      ctx.clearPreparingSmartCrossfadeMix();
       return false;
     }
     const mediaCurrentTime = Number(fromAudio.currentTime);
@@ -696,6 +793,23 @@ export function installPlaybackControls(ctx) {
         analysis: ctx.crossfadeAnalysis.value,
         nextAnalysis: ctx.nextCrossfadeAnalysis.value
       });
+    const showSmartMix = ctx.crossfadeMode.value === 'smart' &&
+      !options.force &&
+      transition.transitionStyle !== 'gapless' &&
+      !['normal_boundary', 'silence_trim'].includes(transition.transitionStyle);
+    const secondsUntilStart = Number(transition.transitionStart) -
+      (Number.isFinite(mediaCurrentTime) ? mediaCurrentTime : ctx.currentTime.value);
+    if (!transition.shouldStart && showSmartMix && secondsUntilStart > 0 && secondsUntilStart <= 8) {
+      ctx.prepareSmartCrossfadeMix({
+        fromTrack: ctx.activeTrack.value,
+        toTrack: next,
+        transition,
+        analysis: ctx.crossfadeAnalysis.value,
+        nextAnalysis: ctx.nextCrossfadeAnalysis.value
+      }, secondsUntilStart);
+    } else if (!transition.shouldStart && (secondsUntilStart > 8 || !showSmartMix)) {
+      ctx.clearPreparingSmartCrossfadeMix();
+    }
     if (!transition.shouldStart || (!options.force && !ctx.isPlaying.value) || ctx.isSeeking.value || ctx.autoCrossfade.isActive()) {
       return false;
     }
@@ -715,10 +829,6 @@ export function installPlaybackControls(ctx) {
     const previousTrack = ctx.activeTrack.value;
     const nextTrack = ctx.activeTrackFromResolved(next, resolved);
     const nextDeck = ctx.activeAudioDeck.value === 'main' ? 'next' : 'main';
-    const showSmartMix = ctx.crossfadeMode.value === 'smart' &&
-      !options.force &&
-      transition.transitionStyle !== 'gapless';
-
     if (showSmartMix) {
       ctx.showSmartCrossfadeMix({
         fromTrack: previousTrack,
@@ -774,6 +884,7 @@ export function installPlaybackControls(ctx) {
         });
       },
       onComplete: () => {
+        if (showSmartMix) ctx.completeSmartCrossfadeMix();
         ctx.clearAudioElement(fromAudio);
         // The companion audio stream is what fromAudio refers to for a music
         // video; the picture is a second element and has to be released too.
@@ -783,7 +894,8 @@ export function installPlaybackControls(ctx) {
       onError: (error) => {
         if (showSmartMix) ctx.dismissSmartCrossfadeMix();
         ctx.playbackError.value = error.message;
-      }
+      },
+      onMixState: showSmartMix ? ctx.updateSmartCrossfadeMix : undefined
     });
 
     if (!didCrossfade && showSmartMix) ctx.dismissSmartCrossfadeMix();

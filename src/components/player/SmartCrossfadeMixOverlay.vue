@@ -28,15 +28,18 @@ export default {
     const isFullscreen = computed(() => props.app.fullscreenPlayerOpen.value);
     const layoutPreset = computed(() => props.app.layoutPreset.value);
 
-    const fullscreenMixStyle = computed(() => ({
-      ...props.app.playerBarStyle.value,
-      '--smart-mix-duration': `${mix.value.durationMs || 3200}ms`
-    }));
-
     const barMixStyle = computed(() => ({
       ...props.app.playerBarStyle.value,
-      '--smart-mix-duration': `${mix.value.fadeDurationMs || mix.value.durationMs || 3200}ms`
+      '--smart-mix-progress': mix.value.progress || 0
     }));
+
+    const barVisible = computed(() => (
+      mix.value.visible && !isFullscreen.value && mix.value.phase !== 'preparing'
+    ));
+
+    const statusLabel = computed(() => (
+      ['handoff', 'complete'].includes(mix.value.phase) ? 'Handoff' : 'Mixing'
+    ));
 
     const transitionDetail = computed(() => {
       if (mix.value.transitionBeats) return `${mix.value.transitionBeats}-beat handoff`;
@@ -82,96 +85,17 @@ export default {
       props.app.dismissSmartCrossfadeMix?.();
     }
 
-    return { mix, isFullscreen, layoutPreset, barTarget, fullscreenMixStyle, barMixStyle, transitionDetail, dismiss };
+    return { mix, layoutPreset, barTarget, barMixStyle, barVisible, statusLabel, transitionDetail, dismiss };
   }
 };
 </script>
 
 <template>
-  <!-- Full-screen overlay: teleported inside .fullscreen-player so it
-       remains visible when the browser enters the top layer via
-       requestFullscreen(). Only mounted when fullscreen is active. -->
-  <Teleport v-if="isFullscreen" to=".fullscreen-player">
-    <Transition name="smart-crossfade-mix" appear>
-      <section
-        v-if="mix.visible"
-        :key="`fs-${mix.id}`"
-        class="smart-crossfade-mix"
-        :style="fullscreenMixStyle"
-        role="status"
-        aria-live="polite"
-        :aria-label="`Smart Crossfade mixing ${mix.from.title} into ${mix.to.title}`"
-      >
-        <header class="smart-crossfade-mix__header">
-          <div class="smart-crossfade-mix__status">
-            <q-icon name="graphic_eq" />
-            <span>Mixing</span>
-          </div>
-          <span class="smart-crossfade-mix__style">{{ mix.styleLabel }}</span>
-        </header>
-
-        <div class="smart-crossfade-mix__stage">
-          <article class="smart-crossfade-mix__track smart-crossfade-mix__track--from">
-            <span class="smart-crossfade-mix__track-role">Current</span>
-            <div class="smart-crossfade-mix__artwork">
-              <img v-if="mix.from.artwork" :src="mix.from.artwork" alt="" />
-              <span v-else class="smart-crossfade-mix__artwork-empty">
-                <q-icon name="music_note" />
-              </span>
-            </div>
-            <div class="smart-crossfade-mix__track-copy">
-              <strong>{{ mix.from.title }}</strong>
-              <span>{{ mix.from.artist }}</span>
-            </div>
-            <div v-if="mix.fromBpm || mix.fromKey" class="smart-crossfade-mix__metadata">
-              <span v-if="mix.fromBpm">{{ mix.fromBpm }} BPM</span>
-              <span v-if="mix.fromKey">{{ mix.fromKey }}</span>
-            </div>
-          </article>
-
-          <div class="smart-crossfade-mix__handoff" aria-hidden="true">
-            <q-icon name="arrow_forward" />
-            <div class="smart-crossfade-mix__fader">
-              <span class="smart-crossfade-mix__fader-fill" />
-              <i />
-            </div>
-            <span>{{ transitionDetail }}</span>
-          </div>
-
-          <article class="smart-crossfade-mix__track smart-crossfade-mix__track--to">
-            <span class="smart-crossfade-mix__track-role">Next</span>
-            <div class="smart-crossfade-mix__artwork">
-              <img v-if="mix.to.artwork" :src="mix.to.artwork" alt="" />
-              <span v-else class="smart-crossfade-mix__artwork-empty">
-                <q-icon name="music_note" />
-              </span>
-            </div>
-            <div class="smart-crossfade-mix__track-copy">
-              <strong>{{ mix.to.title }}</strong>
-              <span>{{ mix.to.artist }}</span>
-            </div>
-            <div v-if="mix.toBpm || mix.toKey" class="smart-crossfade-mix__metadata">
-              <span v-if="mix.toBpm">{{ mix.toBpm }} BPM</span>
-              <span v-if="mix.toKey">{{ mix.toKey }}</span>
-            </div>
-          </article>
-        </div>
-
-        <footer class="smart-crossfade-mix__footer">
-          <div class="smart-crossfade-mix__progress"><i /></div>
-          <span>{{ mix.from.title }}</span>
-          <q-icon name="arrow_forward" />
-          <strong>{{ mix.to.title }}</strong>
-        </footer>
-      </section>
-    </Transition>
-  </Teleport>
-
-  <!-- Compact bar: teleported to canopy readout if preset is canopy, else body -->
+  <!-- Compact bar: fullscreen has an in-composition handoff of its own. -->
   <Teleport :to="barTarget">
     <Transition name="smart-crossfade-bar" appear>
       <div
-        v-if="mix.visible && !isFullscreen"
+        v-if="barVisible"
         :key="`bar-${mix.id}`"
         class="smart-crossfade-mix--bar"
         :style="barMixStyle"
@@ -182,7 +106,7 @@ export default {
       >
         <div class="smart-crossfade-bar__content">
           <q-icon name="graphic_eq" class="smart-crossfade-bar__icon" />
-          <span class="smart-crossfade-bar__label">Mixing</span>
+          <span class="smart-crossfade-bar__label">{{ statusLabel }}</span>
 
           <div class="smart-crossfade-bar__track">
             <img v-if="mix.from.artwork" :src="mix.from.artwork" class="smart-crossfade-bar__thumb" alt="" />

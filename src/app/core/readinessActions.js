@@ -456,6 +456,7 @@ export function installReadinessActions(ctx) {
     ctx.crossfadeMode.value = preferences.crossfadeMode;
     ctx.crossfadeSeconds.value = preferences.crossfadeSeconds;
     ctx.customArtistPagesEnabled.value = preferences.customArtistPagesEnabled;
+    ctx.fullscreenLyricsVisible.value = preferences.fullscreenLyricsVisible;
     ctx.playbackStatePersistenceEnabled.value = preferences.playbackStatePersistenceEnabled;
     ctx.queueLayout.value = preferences.queueLayout;
     ctx.youtubeHistoryEnabled.value = preferences.youtubeHistoryEnabled;

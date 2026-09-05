@@ -69,28 +69,6 @@ export function createAudioAnalyzer(options = {}) {
     return { lowPass, highPass };
   }
 
-  // The mix bands the transition scheduler automates. Two LR4 halves of a
-  // 200 Hz crossover -- a low branch carrying its own gain, and a high branch
-  // -- so the low end can be handed over exclusively rather than fading two
-  // uncorrelated bass lines through each other. This mirrors Earmark's native
-  // renderer split; the live
-  // path had only a full-range low-pass, which meant the outgoing track was
-  // reduced to pure bass exactly as the incoming's bass arrived.
-  //
-  // `midDuck` is one peaking section rather than a second crossover: the
-  // renderer can afford a three-way split offline, but here a single
-  // automatable dip covers the same band without adding two more phase-shifted
-  // branches that would have to sum flat. At 0 dB it is transparent.
-  //
-  // This network is switched *out* of circuit for ordinary playback, because
-  // "transparent" is only true of its magnitude response. An LR4 low/high pair
-  // sums to an allpass: dead flat within 0.03 dB, which is why it never showed
-  // up as a tone-balance problem, but it redistributes phase across the low
-  // mids and that grows transient peaks. Measured against real masters it adds
-  // 0.7-3.4 dB of peak with no change in level, so a track mastered near full
-  // scale -- which is most of them -- was driven past the destination's ceiling
-  // and hard-clipped on every transient, with EQ and every gain at unity. That
-  // was the "distorted even with the audio engine off" report.
   const BASS_CROSSOVER_HZ = 200;
   const MID_DUCK_HZ = 1200;
 
@@ -162,16 +140,8 @@ export function createAudioAnalyzer(options = {}) {
     normalizer.connect(normalizedGain);
     normalizedGain.connect(gain);
     gain.connect(mixGain);
-    // Ordinary playback: mix envelope straight to the output, no filters in
-    // the path at all. `splitInput` sits at zero, so the crossover branches
-    // below are silent and their filter state decays away until armed.
     mixGain.connect(directBand);
     directBand.connect(ctx.destination);
-    // The sweep filter sits on the high branch only. Sweeping a low-pass down
-    // to 200 Hz across a band that starts at 200 Hz is meaningless, and running
-    // it full-range is what made the outgoing track lose its body and its low
-    // end at the same time. The static output pair is common to both branches
-    // and lives after the sum, so the crossover halves stay phase-matched.
     mixGain.connect(splitInput);
     splitInput.connect(bassLow[0]);
     splitInput.connect(bassHigh[0]);
@@ -281,6 +251,16 @@ export function createAudioAnalyzer(options = {}) {
     node.mixGain.gain.cancelScheduledValues(now);
     node.mixGain.gain.setValueAtTime(clamp01(value), now);
     return true;
+  }
+
+  // Read the live normalized mix envelope without touching the element's
+  // master volume. AudioParam.value follows scheduled automation on the audio
+  // context clock, so fullscreen visuals can mirror the gain curves that are
+  // actually audible instead of recreating them from a wall-clock timer.
+  function mixVolume(element) {
+    const node = nodes.get(element);
+    if (!node) return null;
+    return clamp01(node.mixGain.gain.value);
   }
 
   async function decodeAudio(url, signal) {
@@ -694,6 +674,7 @@ export function createAudioAnalyzer(options = {}) {
     samples,
     resetMixElement: mixer.resetElement,
     scheduleCrossfade: mixer.scheduleCrossfade,
+    mixVolume,
     setMixVolume,
     setNormalization,
     setVolume,

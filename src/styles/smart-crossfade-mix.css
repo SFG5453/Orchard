@@ -503,7 +503,8 @@
   height: 100%;
   background: rgb(var(--player-accent-rgb));
   transform-origin: left;
-  animation: smart-mix-progress var(--smart-mix-duration) linear both;
+  transform: scaleX(var(--smart-mix-progress, 0));
+  transition: transform 80ms linear;
 }
 
 .smart-crossfade-bar-enter-active {
