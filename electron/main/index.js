@@ -557,7 +557,8 @@ app.whenReady().then(async () => {
     resetWelcome: () => setWelcomeCompleted(sessionState, false)
   });
   audioAnalysis = setupAudioAnalysisService({
-    cachePath: path.join(app.getPath('userData'), 'audio-analysis-cache.json'),
+    cachePath: path.join(app.getPath('userData'), 'audio-analysis-cache.sqlite3'),
+    legacyCachePath: path.join(app.getPath('userData'), 'audio-analysis-cache.json'),
     ipcMain,
     nativeModulePath: runtimePaths.nativeModulePath,
     transitionModulePath: runtimePaths.transitionModulePath,

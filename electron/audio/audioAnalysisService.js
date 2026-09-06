@@ -18,7 +18,6 @@
  */
 
 import { createRequire } from 'node:module';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
 import {
@@ -32,9 +31,10 @@ import { DEFAULT_MODEL_PATH, refineBeatsWithModel } from './beatThisTracker.js';
 import { createBeatModelHost } from './beatModelHost.js';
 import { DEFAULT_MODEL_PATH as DEFAULT_VOCAL_MODEL_PATH } from './vocalMaskTracker.js';
 import { createVocalMaskHost } from './vocalMaskHost.js';
+import { createAudioAnalysisCache } from './audioAnalysisCache.js';
 
 // Owns native-addon loading, analysis request de-duplication, and the persisted
-// result cache. `stop()` removes every IPC handler and flushes pending cache data.
+// result cache. `stop()` removes every IPC handler and closes the cache database.
 
 const require = createRequire(import.meta.url);
 const { AUDIO_ANALYSIS } = IPC_CHANNELS;
@@ -172,13 +172,15 @@ function selectedTransitionPlan(value, outgoing, incoming) {
 /**
  * Registers the privileged native-analysis IPC service and persistent LRU cache.
  * @param {object} options
- * @param {string} options.cachePath Atomic JSON cache destination.
+ * @param {string} options.cachePath SQLite cache destination.
+ * @param {string} [options.legacyCachePath] JSON cache migrated on first use.
  * @param {Electron.IpcMain} options.ipcMain IPC registrar owned by Electron.
  * @param {string} options.nativeModulePath Development or asar-unpacked addon path.
  * @returns {{stop: Function}} Cleanup that removes handlers and flushes cache data.
  */
 export function setupAudioAnalysisService({
   cachePath,
+  legacyCachePath,
   ipcMain,
   nativeModulePath,
   transitionModulePath,
@@ -195,14 +197,11 @@ export function setupAudioAnalysisService({
   createModelHost = createBeatModelHost,
   createVocalHost = createVocalMaskHost
 }) {
-  const cache = new Map();
   const inFlight = new Map();
   let nativeAddon = null;
   let nativeLoadAttempts = 0;
   let transitionAddon = null;
   let transitionLoadAttempts = 0;
-  let saveTimer = null;
-  let savePromise = Promise.resolve();
 
   function log(event, details = {}) {
     try {
@@ -273,52 +272,19 @@ export function setupAudioAnalysisService({
   addon();
   transition();
 
-  const cacheReady = readFile(cachePath, 'utf8')
-    .then((contents) => JSON.parse(contents))
-    .then((stored) => {
-      if (stored?.version !== CACHE_VERSION || !Array.isArray(stored.items)) return;
-      stored.items.slice(-MAX_CACHE_ITEMS).forEach((item) => {
-        const trackId = cleanTrackId(item?.trackId);
-        if (!trackId || !isValidLocalAnalysis(item?.result)) return;
-        cache.set(trackId, {
-          lastUsed: Number(item.lastUsed) || 0,
-          result: item.result
-        });
-      });
-    })
-    .catch(() => {});
+  const cache = createAudioAnalysisCache({
+    databasePath: cachePath,
+    legacyPath: legacyCachePath,
+    version: CACHE_VERSION,
+    maxItems: MAX_CACHE_ITEMS,
+    cleanTrackId,
+    validate: isValidLocalAnalysis,
+    log
+  });
+  const cacheReady = cache.ready;
 
   function cached(trackId) {
-    const entry = cache.get(trackId);
-    if (!entry) return null;
-    if (!isValidLocalAnalysis(entry.result)) {
-      cache.delete(trackId);
-      return null;
-    }
-    cache.delete(trackId);
-    cache.set(trackId, { ...entry, lastUsed: Date.now() });
-    return entry.result;
-  }
-
-  function persist() {
-    const items = Array.from(cache, ([trackId, entry]) => ({ trackId, ...entry }));
-    const temporaryPath = `${cachePath}.tmp`;
-    savePromise = savePromise
-      .catch(() => {})
-      .then(async () => {
-        await mkdir(path.dirname(cachePath), { recursive: true });
-        await writeFile(temporaryPath, JSON.stringify({ version: CACHE_VERSION, items }), 'utf8');
-        await rename(temporaryPath, cachePath);
-      });
-    return savePromise;
-  }
-
-  function schedulePersist() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      saveTimer = null;
-      void persist();
-    }, 750);
+    return cache.get(trackId);
   }
 
   ipcMain.handle(AUDIO_ANALYSIS.AVAILABLE, async () => {
@@ -507,10 +473,7 @@ export function setupAudioAnalysisService({
       log('cache-store-invalid', { trackId, bpm: Number(payload?.result?.bpm) || 0 });
       throw new Error('A complete local audio analysis is required for caching.');
     }
-    cache.delete(trackId);
-    cache.set(trackId, { lastUsed: Date.now(), result });
-    while (cache.size > MAX_CACHE_ITEMS) cache.delete(cache.keys().next().value);
-    schedulePersist();
+    cache.set(trackId, result);
     log('cache-store-ready', { trackId, bpm: result.bpm, analysisSource: result.analysisSource });
     return true;
   });
@@ -700,9 +663,7 @@ export function setupAudioAnalysisService({
           log('native-analysis-invalid', { trackId, bpm: Number(rawResult?.bpm) || 0 });
           throw new Error('Native audio analysis returned an invalid BPM.');
         }
-        cache.set(trackId, { lastUsed: Date.now(), result });
-        while (cache.size > MAX_CACHE_ITEMS) cache.delete(cache.keys().next().value);
-        schedulePersist();
+        cache.set(trackId, result);
         log('native-analysis-ready', {
           trackId,
           elapsedMs: Date.now() - startedAt,
@@ -724,10 +685,8 @@ export function setupAudioAnalysisService({
 
   return {
     async stop() {
-      // Queued native AsyncWorkers cannot be cancelled. Removing ingress and
-      // flushing the current cache is therefore best-effort process teardown.
-      clearTimeout(saveTimer);
-      saveTimer = null;
+      // Queued native AsyncWorkers cannot be cancelled. Removing ingress is
+      // therefore best-effort process teardown.
       ipcMain.removeHandler(AUDIO_ANALYSIS.AVAILABLE);
       ipcMain.removeHandler(AUDIO_ANALYSIS.GET);
       ipcMain.removeHandler(AUDIO_ANALYSIS.DEBUG);
@@ -739,7 +698,8 @@ export function setupAudioAnalysisService({
       modelHost = null;
       vocalMaskHost?.stop();
       vocalMaskHost = null;
-      if (cache.size) await persist().catch(() => {});
+      await cacheReady;
+      cache.close();
     }
   };
 }
