@@ -76,6 +76,7 @@ fun PlayerControlStack(
     mixProgress: Float? = null,
     showBitrate: Boolean,
     bitrateKbps: Int,
+    isQobuz: Boolean = false,
     remoteVolume: Float,
     lyricsActive: Boolean,
     queueActive: Boolean,
@@ -99,6 +100,7 @@ fun PlayerControlStack(
         mixProgress = mixProgress,
         showBitrate = showBitrate,
         bitrateKbps = bitrateKbps,
+        isQobuz = isQobuz,
     )
     Spacer(Modifier.height(16.dp))
     PlayerTransportControls(

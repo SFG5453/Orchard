@@ -170,6 +170,13 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val lyrics: StateFlow<LoadState<List<LyricLine>>> = mutableLyrics.asStateFlow()
     val discordAuth: StateFlow<dev.sfg.orchard.mobile.discord.DiscordAuthState> = graph.discordAuth.authState
     val discordConnection: StateFlow<dev.sfg.orchard.mobile.discord.GatewayConnectionState> = graph.discordPresence.connectionState
+    val qobuzStatus: StateFlow<dev.sfg.orchard.mobile.qobuz.QobuzStatus> = graph.qobuz.status
+    val activeTrackIsQobuz: StateFlow<Boolean> = graph.activeTrackIsQobuz.asStateFlow()
+
+    fun connectQobuz(token: String, userId: Long) = graph.qobuz.connect(token, userId)
+    fun disconnectQobuz() = graph.qobuz.disconnect()
+    fun setQobuzEnabled(enabled: Boolean) = graph.qobuz.setEnabled(enabled)
+    fun setQobuzQuality(quality: dev.sfg.orchard.mobile.qobuz.QobuzQuality) = graph.qobuz.setQuality(quality)
 
     val activeBitrate: StateFlow<Int> = graph.activeBitrate.asStateFlow()
     val isOnline: StateFlow<Boolean> = graph.networkMonitor.isOnline

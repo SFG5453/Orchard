@@ -49,6 +49,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.model.LibraryFilter
@@ -93,6 +94,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val warning by viewModel.warning.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val transitionMarker by viewModel.transitionMarker.collectAsStateWithLifecycle()
+    val qobuzStatus by viewModel.qobuzStatus.collectAsStateWithLifecycle()
     // Transition plans belong to the phone's two-player engine, never a selected Connect target.
     val localTransitionMarker =
         transitionMarker.takeIf { targets.selected is PlaybackTarget.LocalPhone }
@@ -113,7 +115,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     // Outlives the player so the cover can fly on the way in as well as on the way out.
     var playerCoverBounds by remember { mutableStateOf<Rect?>(null) }
 
-    val chromeHidden = (route == Routes.DEVICES && !settings.frostedGlass) || route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME
+    val chromeHidden = (route == Routes.DEVICES && !settings.frostedGlass) || route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME || route == Routes.QOBUZ_LOGIN
     // Collection artwork runs under the status bar, so these screens take no top inset and
     // apply it themselves where the content actually needs it.
     val isDetail = route == Routes.DETAIL || route?.startsWith("detail") == true
@@ -277,6 +279,7 @@ private fun OrchardNavigation(
     val downloadedTrackIds by viewModel.downloadedTrackIds.collectAsStateWithLifecycle()
     val downloadingTrackIds by viewModel.downloadingTrackIds.collectAsStateWithLifecycle()
     val totalBytesUsed by viewModel.totalBytesUsed.collectAsStateWithLifecycle()
+    val qobuzStatus by viewModel.qobuzStatus.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val connectMessage by viewModel.connectMessage.collectAsStateWithLifecycle()
     val connectProtocolVersion by viewModel.connectProtocolVersion.collectAsStateWithLifecycle()
@@ -409,6 +412,11 @@ private fun OrchardNavigation(
                 onConnectDiscord = { viewModel.connectDiscord(context) },
                 onDisconnectDiscord = viewModel::disconnectDiscord,
                 onConnectSpotify = { nav.navigate(Routes.SPOTIFY_LOGIN) },
+                qobuzStatus = qobuzStatus,
+                onConnectQobuz = { nav.navigate(Routes.QOBUZ_LOGIN) },
+                onDisconnectQobuz = viewModel::disconnectQobuz,
+                onQobuzEnabledChange = viewModel::setQobuzEnabled,
+                onQobuzQualityChange = viewModel::setQobuzQuality,
                 onDevices = { nav.navigate(Routes.DEVICES) },
                 onWelcome = { nav.navigate(Routes.WELCOME) },
                 onCheckForUpdates = viewModel::checkForUpdates,
@@ -450,6 +458,17 @@ private fun OrchardNavigation(
             dev.sfg.orchard.mobile.ui.screens.SpotifyLoginScreen(
                 onSpdcCaptured = { spdc ->
                     viewModel.updateSettings(settings.copy(spotifySpdc = spdc))
+                    nav.popBackStack()
+                },
+                onCancel = { nav.popBackStack() },
+            )
+        }
+        composable(Routes.QOBUZ_LOGIN) {
+            val graph = OrchardGraph.from(context)
+            dev.sfg.orchard.mobile.ui.screens.QobuzLoginScreen(
+                bootstrapLoader = graph.qobuzResolver.bootstrapLoader,
+                onSuccess = { token, userId ->
+                    viewModel.connectQobuz(token, userId)
                     nav.popBackStack()
                 },
                 onCancel = { nav.popBackStack() },

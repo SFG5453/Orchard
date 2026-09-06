@@ -57,7 +57,14 @@ data class Track(
      * the signed-in web player.
      */
     val isUpload: Boolean = false,
+    val playbackSource: String = "youtube",
+    val bitDepth: Int? = null,
+    val sampleRate: Int? = null,
+    val hires: Boolean = false,
 ) {
+    val isQobuz: Boolean
+        get() = playbackSource.equals("qobuz", ignoreCase = true)
+
     /** True for album audio, which is the version a listener expects from an album or search. */
     val isAudioOnly: Boolean
         get() = musicVideoType == MUSIC_VIDEO_TYPE_ATV

@@ -356,6 +356,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         if (::preparer.isInitialized) preparer.release()
         if (::analyzer.isInitialized) analyzer.release()
         if (::streamCache.isInitialized) streamCache.release()
+        OrchardGraph.from(this).qobuzResolver.release()
         super.onDestroy()
     }
 
@@ -391,15 +392,58 @@ class OrchardPlaybackService : MediaLibraryService() {
                 if (!MediaItemMapper.isOrchardUri(original.uri)) return@Factory original
                 val videoId = original.uri.lastPathSegment.orEmpty()
                 Log.d(TAG, "resolvingFactory: resolving videoId=$videoId")
-                val stream =
+                val graph = OrchardGraph.from(this@OrchardPlaybackService)
+                val isMaxQuality = graph.settings.settings.value.audioQuality == dev.sfg.orchard.mobile.model.AudioQuality.MAX
+                var qobuzStream: ResolvedStream? = null
+
+                if (isMaxQuality && !MediaItemMapper.requiresAuthenticatedDirect(original.uri) && !MediaItemMapper.requiresAuthenticatedHls(original.uri)) {
+                    val track = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) {
+                        if (::player.isInitialized) {
+                            for (i in 0 until player.mediaItemCount) {
+                                val item = player.getMediaItemAt(i)
+                                if (item.mediaId == videoId) return@runBlocking MediaItemMapper.toTrack(item)
+                            }
+                        }
+                        null
+                    }
+                    if (track != null && !track.isUpload) {
+                        val qobuzResult = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                            runCatching {
+                                graph.qobuzResolver.resolve(
+                                    title = track.title,
+                                    artists = listOf(track.artist),
+                                    album = track.album,
+                                    durationMs = track.durationMs,
+                                    explicit = track.explicit,
+                                )
+                            }.getOrNull()
+                        }
+                        if (qobuzResult != null) {
+                            Log.i(TAG, "resolvingFactory: resolved $videoId via Qobuz (${qobuzResult.bitrateKbps} kbps)")
+                            qobuzStream = ResolvedStream(
+                                url = qobuzResult.streamUrl,
+                                mimeType = "audio/flac",
+                                expiresAtMs = System.currentTimeMillis() + 4 * 3600_000L,
+                                bitrateKbps = qobuzResult.bitrateKbps,
+                                isQobuz = true,
+                                bitDepth = qobuzResult.bitDepth,
+                                sampleRate = qobuzResult.sampleRate,
+                                hires = qobuzResult.hires,
+                            )
+                        }
+                    }
+                }
+
+                val stream = qobuzStream ?: run {
                     if (MediaItemMapper.requiresAuthenticatedDirect(original.uri)) {
                         streamResolver.resolveAuthenticatedDirect(videoId)
                     } else {
                         streamResolver.resolve(videoId)
                     }
+                }
                 if (stream.bitrateKbps > 0)
-                    OrchardGraph.from(this@OrchardPlaybackService).activeBitrate.value =
-                        stream.bitrateKbps
+                    graph.activeBitrate.value = stream.bitrateKbps
+                graph.activeTrackIsQobuz.value = stream.isQobuz
                 resolvedStreams[original.uri.toString()] = stream
                 Log.d(TAG, "resolvingFactory: resolved $videoId to url=${stream.url.take(60)}...")
                 // The CDN checks the URL against the client it was issued to, so the fetch
@@ -608,9 +652,17 @@ class OrchardPlaybackService : MediaLibraryService() {
         val graph = OrchardGraph.from(this)
         if (item == null) {
             graph.activeBitrate.value = 0
+            graph.activeTrackIsQobuz.value = false
             return
         }
         val uri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri
+        val resolved = uri?.let { resolvedStreams[it.toString()] }
+        if (resolved != null && resolved.isQobuz) {
+            graph.activeBitrate.value = resolved.bitrateKbps
+            graph.activeTrackIsQobuz.value = true
+            return
+        }
+        graph.activeTrackIsQobuz.value = false
         val duration = player.duration.takeIf { it > 0 } ?: 0L
         val measured = uri?.let { streamCache.cachedBitrateKbps(it, duration) } ?: 0
         graph.activeBitrate.value =

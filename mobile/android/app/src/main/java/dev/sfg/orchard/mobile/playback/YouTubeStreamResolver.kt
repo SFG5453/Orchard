@@ -54,6 +54,10 @@ data class ResolvedStream(
     val clientKey: String = "",
     /** NewPipe URLs can safely be fetched as independent bounded ranges. */
     val supportsParallelRanges: Boolean = false,
+    val isQobuz: Boolean = false,
+    val bitDepth: Int? = null,
+    val sampleRate: Int? = null,
+    val hires: Boolean = false,
 ) {
     val requestHeaders: Map<String, String>
         get() = buildMap {

@@ -108,6 +108,11 @@ fun SettingsScreen(
     onConnectDiscord: () -> Unit = {},
     onDisconnectDiscord: () -> Unit = {},
     onConnectSpotify: () -> Unit = {},
+    qobuzStatus: dev.sfg.orchard.mobile.qobuz.QobuzStatus = dev.sfg.orchard.mobile.qobuz.QobuzStatus(),
+    onConnectQobuz: () -> Unit = {},
+    onDisconnectQobuz: () -> Unit = {},
+    onQobuzEnabledChange: (Boolean) -> Unit = {},
+    onQobuzQualityChange: (dev.sfg.orchard.mobile.qobuz.QobuzQuality) -> Unit = {},
     onDevices: () -> Unit,
     onWelcome: () -> Unit = {},
     onCheckForUpdates: () -> Unit = {},
@@ -186,6 +191,14 @@ fun SettingsScreen(
             settings = settings,
             onSettings = onSettings,
             onConnectSpotify = onConnectSpotify,
+        )
+        Spacer(Modifier.height(12.dp))
+        QobuzSettingsCard(
+            status = qobuzStatus,
+            onConnect = onConnectQobuz,
+            onDisconnect = onDisconnectQobuz,
+            onEnabledChange = onQobuzEnabledChange,
+            onQualityChange = onQobuzQualityChange,
         )
         Spacer(Modifier.height(12.dp))
         OrchardAccountSettingsCard(

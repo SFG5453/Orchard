@@ -120,6 +120,9 @@ class OrchardGraph(context: Context) {
     val transitionMarker = kotlinx.coroutines.flow.MutableStateFlow<dev.sfg.orchard.mobile.model.TransitionMarker?>(null)
     val warningEvent = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 16)
     val activeBitrate = kotlinx.coroutines.flow.MutableStateFlow(0)
+    val activeTrackIsQobuz = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val qobuz = dev.sfg.orchard.mobile.qobuz.QobuzRepository(context, applicationScope)
+    val qobuzResolver = dev.sfg.orchard.mobile.qobuz.QobuzResolver(qobuz, http)
     val discordAuth = dev.sfg.orchard.mobile.discord.DiscordOAuthRepository(context, http, applicationScope)
     val discordPresence = dev.sfg.orchard.mobile.discord.DiscordPresenceCoordinator(
         http = http,

@@ -71,6 +71,7 @@ fun NowPlayingOverlay(
 
     val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
     val activeBitrate by viewModel.activeBitrate.collectAsStateWithLifecycle()
+    val activeTrackIsQobuz by viewModel.activeTrackIsQobuz.collectAsStateWithLifecycle()
     val autoplayLoading by viewModel.autoplayLoading.collectAsStateWithLifecycle()
     val autoplayError by viewModel.autoplayError.collectAsStateWithLifecycle()
     val connectProtocolVersion by viewModel.connectProtocolVersion.collectAsStateWithLifecycle()
@@ -108,6 +109,7 @@ fun NowPlayingOverlay(
         gesturesEnabled = settings.playerGesturesEnabled,
         showBitrate = settings.showBitrate,
         bitrateKbps = activeBitrate,
+        isQobuz = activeTrackIsQobuz || currentTrack.isQobuz,
         liked = liked,
         protocolVersion = connectProtocolVersion,
         remoteVolume = connectRemoteVolume,

@@ -39,6 +39,10 @@ object CatalogJson {
         .put("musicVideoType", value.musicVideoType)
         .put("autoplayGenerated", value.autoplayGenerated)
         .put("isUpload", value.isUpload)
+        .put("playbackSource", value.playbackSource)
+        .put("bitDepth", value.bitDepth)
+        .put("sampleRate", value.sampleRate)
+        .put("hires", value.hires)
 
     fun track(value: JSONObject): Track = Track(
         id = value.cleanString("id"),
@@ -55,6 +59,10 @@ object CatalogJson {
         musicVideoType = value.cleanString("musicVideoType"),
         autoplayGenerated = value.optBoolean("autoplayGenerated"),
         isUpload = value.optBoolean("isUpload"),
+        playbackSource = value.optString("playbackSource").ifBlank { "youtube" },
+        bitDepth = value.optInt("bitDepth", 0).takeIf { it > 0 },
+        sampleRate = value.optInt("sampleRate", 0).takeIf { it > 0 },
+        hires = value.optBoolean("hires", false),
     )
 
     fun tracks(values: List<Track>): JSONArray = JSONArray().also { output ->
