@@ -47,18 +47,13 @@ class QobuzPlaybackSession(
     private val httpClient: OkHttpClient,
     val contentKey: ByteArray?,
 ) {
-    private val segmentCache = object : LinkedHashMap<Int, ByteArray>(8, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, ByteArray>?): Boolean {
-            return size > 6
-        }
+    // All sessions share one byte budget. Keeping six lossless segments per resolution
+    // retained audio from every previous track (and every parallel cache range).
+    private companion object {
+        val segmentCache = QobuzSegmentCache(8 * 1024 * 1024)
     }
-    private val segmentLock = Any()
 
-    fun fetchSegment(number: Int): ByteArray {
-        synchronized(segmentLock) {
-            segmentCache[number]?.let { return it }
-        }
-
+    fun fetchSegment(number: Int): ByteArray = segmentCache.getOrLoad(playbackId, number) {
         val url = source.urlTemplate.replace("\$SEGMENT\$", number.toString())
         val request = Request.Builder()
             .url(url)
@@ -72,11 +67,7 @@ class QobuzPlaybackSession(
             response.body.bytes()
         }
 
-        val decrypted = decryptQobuzAudioSegment(rawBytes, contentKey)
-        synchronized(segmentLock) {
-            segmentCache[number] = decrypted
-        }
-        return decrypted
+        decryptQobuzAudioSegment(rawBytes, contentKey)
     }
 
     fun streamRange(rangeStart: Long, rangeEnd: Long, output: OutputStream) {

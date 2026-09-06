@@ -116,6 +116,14 @@ class OrchardPlaybackService : MediaLibraryService() {
     /** The exact client identity behind each stable Orchard URI's most recent media fetch. */
     private val resolvedStreams = ConcurrentHashMap<String, ResolvedStream>()
 
+    /**
+     * Media3 can open the same stable URI from the active player, the spare crossfade player, and
+     * the whole-track prefetcher at the same time. Keep resolution itself single-flight per URI;
+     * otherwise each range request mints another Qobuz session and the last callback can replace
+     * the source metadata for the song that is actually playing.
+     */
+    private val streamResolutionLocks = ConcurrentHashMap<String, Any>()
+
     private val positionSaver =
         object : Runnable {
             override fun run() {
@@ -357,6 +365,8 @@ class OrchardPlaybackService : MediaLibraryService() {
         if (::analyzer.isInitialized) analyzer.release()
         if (::streamCache.isInitialized) streamCache.release()
         OrchardGraph.from(this).qobuzResolver.release()
+        resolvedStreams.clear()
+        streamResolutionLocks.clear()
         super.onDestroy()
     }
 
@@ -391,70 +401,87 @@ class OrchardPlaybackService : MediaLibraryService() {
                 Log.d(TAG, "resolvingFactory: request uri=${original.uri}")
                 if (!MediaItemMapper.isOrchardUri(original.uri)) return@Factory original
                 val videoId = original.uri.lastPathSegment.orEmpty()
-                Log.d(TAG, "resolvingFactory: resolving videoId=$videoId")
-                val graph = OrchardGraph.from(this@OrchardPlaybackService)
-                val isMaxQuality = graph.settings.settings.value.audioQuality == dev.sfg.orchard.mobile.model.AudioQuality.MAX
-                var qobuzStream: ResolvedStream? = null
+                val stableUri = original.uri.toString()
+                val lock = streamResolutionLocks.computeIfAbsent(stableUri) { Any() }
+                synchronized(lock) {
+                    // A single track can be opened by both ExoPlayer decks and by several cache
+                    // range workers. Reuse the first valid stream instead of re-running Qobuz
+                    // matching (which creates a new local session on every call).
+                    val cached = cachedResolvedStream(stableUri)
+                    if (cached != null) {
+                        Log.d(TAG, "resolvingFactory: reusing resolved stream for $videoId")
+                        publishResolvedStream(stableUri, cached)
+                        return@synchronized bounded(
+                            original
+                                .withUri(cached.url.toUri())
+                                .withAdditionalHeaders(cached.requestHeaders),
+                            cached,
+                        )
+                    }
 
-                if (isMaxQuality && !MediaItemMapper.requiresAuthenticatedDirect(original.uri) && !MediaItemMapper.requiresAuthenticatedHls(original.uri)) {
-                    val track = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) {
-                        if (::player.isInitialized) {
-                            for (i in 0 until player.mediaItemCount) {
-                                val item = player.getMediaItemAt(i)
-                                if (item.mediaId == videoId) return@runBlocking MediaItemMapper.toTrack(item)
+                    Log.d(TAG, "resolvingFactory: resolving videoId=$videoId")
+                    val graph = OrchardGraph.from(this@OrchardPlaybackService)
+                    val isMaxQuality = graph.settings.settings.value.audioQuality == dev.sfg.orchard.mobile.model.AudioQuality.MAX
+                    var qobuzStream: ResolvedStream? = null
+
+                    if (isMaxQuality && !MediaItemMapper.requiresAuthenticatedDirect(original.uri) && !MediaItemMapper.requiresAuthenticatedHls(original.uri)) {
+                        val track = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) {
+                            if (::player.isInitialized) {
+                                for (i in 0 until player.mediaItemCount) {
+                                    val item = player.getMediaItemAt(i)
+                                    if (item.mediaId == videoId) return@runBlocking MediaItemMapper.toTrack(item)
+                                }
+                            }
+                            null
+                        }
+                        if (track != null && !track.isUpload) {
+                            val qobuzResult = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                                runCatching {
+                                    graph.qobuzResolver.resolve(
+                                        title = track.title,
+                                        artists = listOf(track.artist),
+                                        album = track.album,
+                                        durationMs = track.durationMs,
+                                        explicit = track.explicit,
+                                    )
+                                }.getOrNull()
+                            }
+                            if (qobuzResult != null) {
+                                Log.i(TAG, "resolvingFactory: resolved $videoId via Qobuz (${qobuzResult.bitrateKbps} kbps)")
+                                qobuzStream = ResolvedStream(
+                                    url = qobuzResult.streamUrl,
+                                    mimeType = "audio/flac",
+                                    expiresAtMs = System.currentTimeMillis() + 4 * 3600_000L,
+                                    bitrateKbps = qobuzResult.bitrateKbps,
+                                    isQobuz = true,
+                                    bitDepth = qobuzResult.bitDepth,
+                                    sampleRate = qobuzResult.sampleRate,
+                                    hires = qobuzResult.hires,
+                                )
                             }
                         }
-                        null
                     }
-                    if (track != null && !track.isUpload) {
-                        val qobuzResult = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                            runCatching {
-                                graph.qobuzResolver.resolve(
-                                    title = track.title,
-                                    artists = listOf(track.artist),
-                                    album = track.album,
-                                    durationMs = track.durationMs,
-                                    explicit = track.explicit,
-                                )
-                            }.getOrNull()
-                        }
-                        if (qobuzResult != null) {
-                            Log.i(TAG, "resolvingFactory: resolved $videoId via Qobuz (${qobuzResult.bitrateKbps} kbps)")
-                            qobuzStream = ResolvedStream(
-                                url = qobuzResult.streamUrl,
-                                mimeType = "audio/flac",
-                                expiresAtMs = System.currentTimeMillis() + 4 * 3600_000L,
-                                bitrateKbps = qobuzResult.bitrateKbps,
-                                isQobuz = true,
-                                bitDepth = qobuzResult.bitDepth,
-                                sampleRate = qobuzResult.sampleRate,
-                                hires = qobuzResult.hires,
-                            )
-                        }
-                    }
-                }
 
-                val stream = qobuzStream ?: run {
-                    if (MediaItemMapper.requiresAuthenticatedDirect(original.uri)) {
-                        streamResolver.resolveAuthenticatedDirect(videoId)
-                    } else {
-                        streamResolver.resolve(videoId)
+                    val stream = qobuzStream ?: run {
+                        if (MediaItemMapper.requiresAuthenticatedDirect(original.uri)) {
+                            streamResolver.resolveAuthenticatedDirect(videoId)
+                        } else {
+                            streamResolver.resolve(videoId)
+                        }
                     }
+                    resolvedStreams[stableUri] = stream
+                    publishResolvedStream(stableUri, stream)
+                    Log.d(TAG, "resolvingFactory: resolved $videoId to url=${stream.url.take(60)}...")
+                    // The CDN checks the URL against the client it was issued to, so the fetch
+                    // has to claim the identity that resolved it rather than the factory's
+                    // default. Getting this wrong resolves fine and then 403s on the audio.
+                    bounded(
+                        original
+                            .withUri(stream.url.toUri())
+                            .withAdditionalHeaders(stream.requestHeaders),
+                        stream,
+                    )
                 }
-                if (stream.bitrateKbps > 0)
-                    graph.activeBitrate.value = stream.bitrateKbps
-                graph.activeTrackIsQobuz.value = stream.isQobuz
-                resolvedStreams[original.uri.toString()] = stream
-                Log.d(TAG, "resolvingFactory: resolved $videoId to url=${stream.url.take(60)}...")
-                // The CDN checks the URL against the client it was issued to, so the fetch
-                // has to claim the identity that resolved it rather than the factory's
-                // default. Getting this wrong resolves fine and then 403s on the audio.
-                bounded(
-                    original
-                        .withUri(stream.url.toUri())
-                        .withAdditionalHeaders(stream.requestHeaders),
-                    stream,
-                )
             }
         // HLS segment requests are created after the orchard manifest URI has been
         // resolved, so they do not inherit that DataSpec's headers. Give the entire
@@ -656,7 +683,7 @@ class OrchardPlaybackService : MediaLibraryService() {
             return
         }
         val uri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri
-        val resolved = uri?.let { resolvedStreams[it.toString()] }
+        val resolved = uri?.let { cachedResolvedStream(it.toString()) }
         if (resolved != null && resolved.isQobuz) {
             graph.activeBitrate.value = resolved.bitrateKbps
             graph.activeTrackIsQobuz.value = true
@@ -918,6 +945,38 @@ class OrchardPlaybackService : MediaLibraryService() {
         val remaining = stream.contentLength - spec.position
         if (stream.contentLength <= 0 || remaining <= 0) return spec
         return spec.subrange(0, remaining)
+    }
+
+    /** Returns a still-usable stream for a stable URI and drops expired CDN/session URLs. */
+    private fun cachedResolvedStream(stableUri: String): ResolvedStream? {
+        val stream = resolvedStreams[stableUri] ?: return null
+        if (stream.expiresAtMs > System.currentTimeMillis() + RESOLVED_STREAM_EXPIRY_BUFFER_MS) {
+            return stream
+        }
+        resolvedStreams.remove(stableUri, stream)
+        return null
+    }
+
+    /**
+     * Resolution callbacks run on Media3/cache threads, including callbacks for queued items.
+     * Only publish a result when that URI is still the current media item, so prefetch cannot
+     * repaint the badge for another song.
+     */
+    private fun publishResolvedStream(stableUri: String, stream: ResolvedStream) {
+        handler.post {
+            if (!::player.isInitialized) return@post
+            val item = player.currentMediaItem ?: return@post
+            val currentUri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri
+            if (currentUri?.toString() != stableUri) return@post
+            if (!::streamCache.isInitialized) return@post
+            if (stream.isQobuz) {
+                val graph = OrchardGraph.from(this)
+                graph.activeBitrate.value = stream.bitrateKbps
+                graph.activeTrackIsQobuz.value = true
+            } else {
+                publishBitrate()
+            }
+        }
     }
 
     private fun shuffleUpcomingItems(targetPlayer: Player) {
@@ -1516,6 +1575,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 2_000
         private const val WHOLE_TRACK_BUFFER_MS = 20 * 60 * 1_000
         private const val TARGET_BUFFER_BYTES = 32 * 1024 * 1024
+        private const val RESOLVED_STREAM_EXPIRY_BUFFER_MS = 60_000L
         /**
          * How much track has to be left before a model pass is worth starting.
          *
