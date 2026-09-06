@@ -22,6 +22,7 @@
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
+import { setupQobuzElectron } from '@orchardmusic/qobuz/electron';
 import { Platform } from 'youtubei.js';
 import { registerArtworkColorSampler } from '../appearance/artworkColorSampler.js';
 import { createAccountSummary } from '../auth/accountSummary.js';
@@ -70,6 +71,7 @@ import { setupOrchardUpdates } from '../integrations/updater.js';
 import { createPreferredAudioTrack, createTrackInfoNormalizer } from '../playback/playbackFormats.js';
 import { createMusicVideoFallback } from '../playback/musicVideoFallback.js';
 import { createPlaybackService } from '../playback/playbackService.js';
+import { createPlaybackProviderCoordinator } from '../providers/playbackProvider.js';
 import { registerAppHandlers } from '../platform/appHandlers.js';
 import { registerClipboardHandlers } from '../platform/clipboard.js';
 import { registerNetworkPreferences } from '../platform/networkPreferences.js';
@@ -120,6 +122,7 @@ let audioAnalysis;
 let updates;
 let systemMedia;
 let desktopControls;
+let playbackProviders;
 let welcomeCompleted = false;
 // Distinguishes "user closed the window" (which may mean hide-to-tray) from a
 // real quit, where the close must be allowed through.
@@ -360,6 +363,7 @@ async function startBridge() {
     normalizeTrackInfo,
     personalizedRadio,
     playback: playbackService,
+    playbackProviders,
     preferredAudioTrack,
     proxyHlsResource,
     proxyStream,
@@ -394,6 +398,7 @@ function rendererUrl(mode = 'main') {
       ? path.join(path.dirname(runtimePaths.rendererEntryPath), 'welcome.html')
       : runtimePaths.rendererEntryPath);
   url.searchParams.set('socketPort', bridge.port);
+  url.searchParams.set('rendererToken', bridge.rendererToken);
   if (useNativeTitlebar) url.searchParams.set('nativeTitlebar', '1');
   return url.toString();
 }
@@ -570,6 +575,18 @@ app.whenReady().then(async () => {
   setupGithubAuth({ app, ipcMain, net, safeStorage, shell });
   setupLastfm({ app, ipcMain, net, safeStorage, shell });
   setupSpotify({ app, ipcMain, net, safeStorage });
+  const qobuz = setupQobuzElectron({
+    app,
+    applicationName: 'Orchard',
+    BrowserWindow,
+    ipcChannels: IPC_CHANNELS.QOBUZ,
+    ipcMain,
+    net,
+    partition: 'persist:orchard-qobuz',
+    safeStorage,
+    session
+  });
+  playbackProviders = createPlaybackProviderCoordinator({ providers: [qobuz] });
   updates = setupOrchardUpdates({ isDev });
   await startBridge();
   await createMainWindow();
@@ -607,5 +624,6 @@ app.on('before-quit', () => {
   resetDiscordRpcClient();
   systemMedia?.stop();
   desktopControls?.stop();
+  void playbackProviders?.close();
   bridge?.close();
 });

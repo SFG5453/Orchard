@@ -43,6 +43,7 @@
   "license": "AGPL-3.0-or-later",
   "dependencies": {
     "@kawarp/core": "^1.2.0",
+    "@orchardmusic/qobuz": "file:packages/qobuz",
     "@vibrant/core": "^4.0.4",
     "@vibrant/generator-default": "^4.0.4",
     "@vibrant/image-browser": "^4.0.4",

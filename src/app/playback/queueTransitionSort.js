@@ -364,7 +364,12 @@ export function installQueueTransitionSort(ctx) {
     const prepared = ctx.nextTrackPreload?.value;
     if (prepared?.track?.id === track?.id && prepared.resolved?.streamUrl) return prepared.resolved.streamUrl;
     return async () => {
-      const resolved = await ctx.resolvePlayableTrack(track, { mediaKind: 'audio', preload: true });
+      const resolved = await ctx.resolvePlayableTrack(track, {
+        mediaKind: 'audio',
+        preload: true,
+        streamQuality: 'saver',
+        usePlaybackProvider: false
+      });
       return resolved?.streamUrl || '';
     };
   }

@@ -21,7 +21,7 @@
 import { computed, onMounted } from 'vue';
 import CompactSettingsMenu from '../controls/CompactSettingsMenu.vue';
 import { createVolumeWheelHandler } from '../../app/playback/volumeWheel.js';
-import { bitrateLabel } from '../../app/playback/trackQuality.js';
+import { bitrateLabel, playbackQualityLabel } from '../../app/playback/trackQuality.js';
 
 export default {
   name: 'PlayerBar',
@@ -99,6 +99,7 @@ export default {
       ...props.app,
       app: props.app,
       bitrateLabel,
+      playbackQualityLabel,
       currentOutputDeviceLabel,
       currentOutputDeviceIcon,
       connectedConnectDevices,
@@ -215,6 +216,9 @@ export default {
 
         <!-- Quality Pills Row -->
         <div v-if="activeTrack" class="quality-pills-row">
+          <span v-if="playbackQualityLabel(activeTrack)" class="quality-pill format-pill">
+            {{ playbackQualityLabel(activeTrack) }}
+          </span>
           <span v-if="bitrateLabel(activeTrack)" class="quality-pill format-pill">
             {{ bitrateLabel(activeTrack) }} kbps
           </span>

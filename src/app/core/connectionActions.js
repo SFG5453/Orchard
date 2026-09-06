@@ -33,6 +33,10 @@ export function installConnectionActions(ctx) {
     return new URLSearchParams(window.location.search).get('socketPort') || '0';
   };
 
+  ctx.rendererToken = function rendererToken() {
+    return new URLSearchParams(window.location.search).get('rendererToken') || '';
+  };
+
   ctx.minimizeWindow = function minimizeWindow() {
     window.orchardWindow?.minimize();
   };

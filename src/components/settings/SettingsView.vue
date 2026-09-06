@@ -23,6 +23,7 @@ import DataSavingSection from './DataSavingSection.vue';
 import BackupRestoreSection from './BackupRestoreSection.vue';
 import DiagnosticsSection from './DiagnosticsSection.vue';
 import LastfmSection from './LastfmSection.vue';
+import QobuzSection from './QobuzSection.vue';
 import SpotifySection from './SpotifySection.vue';
 import SongCacheSection from './SongCacheSection.vue';
 import ArtistPacksSection from './ArtistPacksSection.vue';
@@ -32,7 +33,7 @@ import { computed, ref, watch } from 'vue';
 
 export default {
   name: 'SettingsView',
-  components: { AudioEngineSection, DataSavingSection, BackupRestoreSection, DiagnosticsSection, LastfmSection, SpotifySection, SongCacheSection, ArtistPacksSection, OrchardAccountSection, NavigationLayoutSection },
+  components: { AudioEngineSection, DataSavingSection, BackupRestoreSection, DiagnosticsSection, LastfmSection, QobuzSection, SpotifySection, SongCacheSection, ArtistPacksSection, OrchardAccountSection, NavigationLayoutSection },
   props: { app: { type: Object, required: true } },
   setup(props) {
     const layoutPresetDescription = computed(() => {
@@ -459,6 +460,7 @@ export default {
 
         <LastfmSection :app="app" />
         <SpotifySection :app="app" />
+        <QobuzSection />
         <OrchardAccountSection :app="app" />
 
         <div class="settings-row">

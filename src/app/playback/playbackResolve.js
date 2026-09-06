@@ -37,6 +37,10 @@ function isUnavailableTrackError(error) {
     .test(String(error?.message || error || ''));
 }
 
+export function playbackPreloadMode(resolved = {}) {
+  return resolved.preloadMode === 'metadata' ? 'metadata' : 'auto';
+}
+
 /**
  * Whether a play should seed a fresh playlist context, which is what lets the
  * queue reach past the playlist's first page.
@@ -130,6 +134,7 @@ export function installPlaybackResolve(ctx) {
       artistBrowseIds: item.artistBrowseIds || [],
       album: item.album || '',
       albumId: item.albumId || '',
+      isrc: item.isrc || '',
       downloadCollections: item.downloadCollections || [],
       thumbnail: item.thumbnail || '',
       durationSeconds: trackDurationSeconds(item),
@@ -146,7 +151,8 @@ export function installPlaybackResolve(ctx) {
       avoidItags: options.avoidItags || [],
       avoidMimeTypes: options.avoidMimeTypes || [],
       preferAudioOnly: mediaKind === 'audio' ? (options.preferAudioOnly ?? true) : false,
-      streamQuality: normalizeStreamQuality(ctx.streamQuality?.value),
+      streamQuality: normalizeStreamQuality(options.streamQuality ?? ctx.streamQuality?.value),
+      usePlaybackProvider: options.usePlaybackProvider !== false,
       supportedMimes: ctx.supportedAudioMimes(),
       supportedVideoMimes: ctx.supportedVideoMimes()
     };
@@ -177,6 +183,14 @@ export function installPlaybackResolve(ctx) {
       playbackSource: resolved.playbackSource || 'youtube',
       authenticatedPlayback: Boolean(resolved.authenticatedPlayback),
       externalSource: resolved.externalSource || '',
+      providerPlaybackId: resolved.providerPlaybackId || '',
+      qobuzTrackId: resolved.qobuzTrackId || null,
+      matchMethod: resolved.matchMethod || '',
+      matchConfidence: Number(resolved.matchConfidence || 0),
+      hires: Boolean(resolved.hires),
+      bitDepth: Number(resolved.bitDepth || 0),
+      sampleRate: Number(resolved.sampleRate || 0),
+      channels: Number(resolved.channels || 0),
       musicVideoAudioFallback: Boolean(resolved.musicVideoAudioFallback),
       musicVideoFallbackId: resolved.musicVideoFallbackId || '',
       thumbnail: item.thumbnail || resolved.thumbnail,
@@ -270,6 +284,7 @@ export function installPlaybackResolve(ctx) {
         ctx.audioAnalyzer.connectElement(audio);
         ctx.setAudioNormalization(audio);
         ctx.audioAnalyzer.setVolume(audio, 0);
+        audio.preload = playbackPreloadMode(resolved);
         await loadPlaybackSource(audio, resolved.streamUrl, resolved.mimeType);
         if (ctx.crossfadeMode.value === 'smart' && !isHlsPlaybackMime(resolved.mimeType)) {
           void ctx.analyzeNextCrossfadeTrack(next, resolved.streamUrl, trackDurationSeconds(next));
@@ -382,6 +397,16 @@ export function installPlaybackResolve(ctx) {
       const usedPreload = !options.refreshStream && ctx.preloadedTrackMatches(trackItem);
       const resolved = options.resolved || (usedPreload ? ctx.nextTrackPreload.value?.resolved : null) || await ctx.resolvePlayableTrack(trackItem, options);
       if (stalePlayRequest()) return;
+      const previousProviderTrack = ctx.activeTrack.value?.providerPlaybackId
+        ? {
+            provider: ctx.activeTrack.value.playbackSource,
+            playbackId: ctx.activeTrack.value.providerPlaybackId,
+            position: Number(ctx.currentTime.value || 0)
+          }
+        : null;
+      if (previousProviderTrack && previousProviderTrack.playbackId !== resolved.providerPlaybackId) {
+        ctx.socket.value?.emit('playback:provider-end', previousProviderTrack);
+      }
       ctx.activeMediaKind.value = resolved.mediaKind || (wantsVideo ? 'video' : 'audio');
       ctx.activeTrack.value = ctx.activeTrackFromResolved(trackItem, resolved);
       ctx.videoPlayerMinimized.value = Boolean(resolved.musicVideoAudioFallback);
@@ -534,6 +559,14 @@ export function installPlaybackResolve(ctx) {
         await media.play();
       }
       if (stalePlayRequest()) return;
+
+      if (!options.startPaused && ctx.activeTrack.value?.providerPlaybackId) {
+        ctx.socket.value?.emit('playback:provider-start', {
+          provider: ctx.activeTrack.value.playbackSource,
+          playbackId: ctx.activeTrack.value.providerPlaybackId,
+          position: Number(media.currentTime || 0)
+        });
+      }
 
       if (!options.startPaused) {
         ctx.startYouTubeHistory?.(ctx.activeTrack.value?.youtubeVideoId || resolved.youtubeVideoId || ctx.activeTrack.value?.id);

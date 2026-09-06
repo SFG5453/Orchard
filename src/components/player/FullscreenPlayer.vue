@@ -20,7 +20,7 @@
 <script>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { createVolumeWheelHandler } from '../../app/playback/volumeWheel.js';
-import { bitrateLabel } from '../../app/playback/trackQuality.js';
+import { bitrateLabel, playbackQualityLabel } from '../../app/playback/trackQuality.js';
 import { FALLBACK_ARTWORK_PALETTE } from '../animated-background/useArtworkPalette.js';
 import FullscreenArtworkStage from './FullscreenArtworkStage.vue';
 import FullscreenLyrics from './FullscreenLyrics.vue';
@@ -183,6 +183,7 @@ export default {
     return {
       ...app,
       bitrateLabel,
+      playbackQualityLabel,
       closeButtonRef,
       fullscreenStyle,
       mix,
@@ -388,6 +389,7 @@ export default {
               </button>
               <ExplicitBadge :explicit="activeTrack?.explicit" />
               <small v-if="bitrateLabel(activeTrack)">{{ bitrateLabel(activeTrack) }} kbps</small>
+              <small v-if="playbackQualityLabel(activeTrack)">{{ playbackQualityLabel(activeTrack) }}</small>
             </div>
             <div class="fullscreen-player__volume" title="Scroll to change volume" @wheel.prevent="onVolumeWheel">
               <button

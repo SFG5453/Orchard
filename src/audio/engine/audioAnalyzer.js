@@ -18,7 +18,9 @@
  */
 
 import { createCrossfadeMixer } from '../crossfade/crossfadeMixer.js';
-import { downloadAudioFile } from './audioFetch.js';
+import { downloadAudioFile as downloadEncodedAudioFile } from './audioFetch.js';
+
+const PROVIDER_DECODE_CACHE_LIMIT = 2;
 
 function clamp01(value) {
   const number = Number(value);
@@ -46,7 +48,85 @@ export function createAudioAnalyzer(options = {}) {
   };
   const nodes = new WeakMap();
   const contentEndCache = new Map();
+  const providerDecodeCache = new Map();
+  const downloadAudioFile = options.downloadAudioFile || downloadEncodedAudioFile;
   let context = null;
+
+  function cacheableProviderUrl(value) {
+    try {
+      const url = new URL(String(value || ''));
+      return ['127.0.0.1', 'localhost'].includes(url.hostname) &&
+        url.pathname.startsWith('/provider/');
+    } catch {
+      return false;
+    }
+  }
+
+  function touchProviderAudio(url, cached) {
+    providerDecodeCache.delete(url);
+    providerDecodeCache.set(url, cached);
+    return cached;
+  }
+
+  function trimProviderAudioCache() {
+    const readyKeys = [...providerDecodeCache]
+      .filter(([, entry]) => entry.buffer)
+      .map(([url]) => url);
+    while (readyKeys.length > PROVIDER_DECODE_CACHE_LIMIT) {
+      providerDecodeCache.delete(readyKeys.shift());
+    }
+  }
+
+  function providerAudio(url, ctx) {
+    const cached = providerDecodeCache.get(url);
+    if (cached) {
+      touchProviderAudio(url, cached);
+      return cached.buffer ? Promise.resolve(cached.buffer) : cached.promise;
+    }
+
+    const controller = new AbortController();
+    const entry = { buffer: null, controller, promise: null };
+    entry.promise = (async () => {
+      const data = await downloadAudioFile(url, { signal: controller.signal });
+      const buffer = await ctx.decodeAudioData(data);
+      entry.buffer = buffer;
+      entry.controller = null;
+      if (providerDecodeCache.get(url) === entry) {
+        touchProviderAudio(url, entry);
+        trimProviderAudioCache();
+      }
+      return buffer;
+    })().catch((error) => {
+      if (providerDecodeCache.get(url) === entry) providerDecodeCache.delete(url);
+      throw error;
+    });
+    providerDecodeCache.set(url, entry);
+    return entry.promise;
+  }
+
+  function callerAbortError(signal) {
+    if (signal?.reason instanceof Error) return signal.reason;
+    const error = new Error('Audio decoding was cancelled');
+    error.name = 'AbortError';
+    return error;
+  }
+
+  function waitForCaller(promise, signal) {
+    if (!signal) return promise;
+    if (signal.aborted) return Promise.reject(callerAbortError(signal));
+    return new Promise((resolve, reject) => {
+      const aborted = () => {
+        cleanup();
+        reject(callerAbortError(signal));
+      };
+      const cleanup = () => signal.removeEventListener('abort', aborted);
+      signal.addEventListener('abort', aborted, { once: true });
+      promise.then(
+        (value) => { cleanup(); resolve(value); },
+        (error) => { cleanup(); reject(error); }
+      );
+    });
+  }
 
   function audioContext() {
     if (context) return context;
@@ -267,8 +347,17 @@ export function createAudioAnalyzer(options = {}) {
     const ctx = audioContext();
     if (!ctx) return null;
 
+    if (cacheableProviderUrl(url)) return waitForCaller(providerAudio(url, ctx), signal);
+    if (signal?.aborted) throw callerAbortError(signal);
+
     const data = await downloadAudioFile(url, { signal });
     return ctx.decodeAudioData(data);
+  }
+
+  function warmDecodedAudio(url) {
+    if (!cacheableProviderUrl(url)) return Promise.resolve(null);
+    const ctx = audioContext();
+    return ctx ? providerAudio(url, ctx) : Promise.resolve(null);
   }
 
   function average(values) {
@@ -654,6 +743,8 @@ export function createAudioAnalyzer(options = {}) {
   }
 
   function destroy() {
+    for (const entry of providerDecodeCache.values()) entry.controller?.abort();
+    providerDecodeCache.clear();
     if (!context) return;
     context.close().catch(() => {});
     context = null;
@@ -678,6 +769,7 @@ export function createAudioAnalyzer(options = {}) {
     setMixVolume,
     setNormalization,
     setVolume,
-    spectrum
+    spectrum,
+    warmDecodedAudio
   };
 }

@@ -21,10 +21,31 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   installPlaybackResolve,
+  playbackPreloadMode,
   playlistPlayedTrackIdsForStart,
   playbackQueueSourceMatches,
   seedsPlaylistContext
 } from '../src/app/playback/playbackResolve.js';
+
+test('provider sources can limit standby loading to metadata', () => {
+  assert.equal(playbackPreloadMode({ preloadMode: 'metadata' }), 'metadata');
+  assert.equal(playbackPreloadMode({ preloadMode: 'unexpected' }), 'auto');
+  assert.equal(playbackPreloadMode(), 'auto');
+});
+
+test('analysis resolves can request a smaller non-provider stream without changing playback settings', () => {
+  const ctx = playbackContext();
+  ctx.streamQuality = { value: 'high' };
+
+  const payload = ctx.trackResolvePayload(
+    { id: 'song-id', title: 'Analysis target' },
+    { mediaKind: 'audio', streamQuality: 'saver', usePlaybackProvider: false }
+  );
+
+  assert.equal(payload.streamQuality, 'saver');
+  assert.equal(payload.usePlaybackProvider, false);
+  assert.equal(ctx.streamQuality.value, 'high');
+});
 
 function playbackContext() {
   const ctx = {

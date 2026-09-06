@@ -27,3 +27,16 @@ export function bitrateLabel(track) {
   if (!Number.isFinite(value) || value <= 0) return '';
   return String(Math.round(value >= 1000 ? value / 1000 : value));
 }
+
+export function playbackQualityLabel(track) {
+  if (track?.playbackSource !== 'qobuz') return '';
+  const bitDepth = Number(track.bitDepth || 0);
+  const rawSampleRate = Number(track.sampleRate || 0);
+  const sampleRate = rawSampleRate >= 1000 ? rawSampleRate / 1000 : rawSampleRate;
+  const tier = track.hires || bitDepth > 16 || sampleRate > 48 ? 'Qobuz Hi-Res' : 'Qobuz Lossless';
+  const format = [
+    bitDepth ? `${bitDepth}-bit` : '',
+    sampleRate ? `${Number(sampleRate.toFixed(1))} kHz` : ''
+  ].filter(Boolean).join(' / ');
+  return format ? `${tier} · ${format}` : tier;
+}

@@ -130,6 +130,20 @@ contextBridge.exposeInMainWorld('orchardSpotify', {
   })
 });
 
+contextBridge.exposeInMainWorld('orchardQobuz', {
+  status: () => ipcRenderer.invoke('qobuz:status'),
+  connect: () => ipcRenderer.invoke('qobuz:connect'),
+  disconnect: () => ipcRenderer.invoke('qobuz:disconnect'),
+  update: (settings = {}) => ipcRenderer.invoke('qobuz:update', {
+    ...(Object.prototype.hasOwnProperty.call(settings, 'enabled')
+      ? { enabled: settings.enabled === true }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(settings, 'quality')
+      ? { quality: String(settings.quality || '') }
+      : {})
+  })
+});
+
 // "Where was I?" state: the playback queue and the last page. Read
 // synchronously because the renderer seeds its initial state from it; written
 // fire-and-forget because the main process owns the flush at quit.

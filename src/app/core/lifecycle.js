@@ -474,6 +474,7 @@ export function installLifecycle(ctx) {
     }
 
     ctx.socket.value = io(`http://127.0.0.1:${ctx.socketPort()}`, {
+      auth: { rendererToken: ctx.rendererToken() },
       transports: ['websocket']
     });
 

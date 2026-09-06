@@ -277,7 +277,11 @@ export function createWelcomeApp() {
 
   onMounted(() => {
     const socketPort = new URLSearchParams(window.location.search).get('socketPort') || '0';
-    ctx.socket.value = io(`http://127.0.0.1:${socketPort}`, { transports: ['websocket'] });
+    const rendererToken = new URLSearchParams(window.location.search).get('rendererToken') || '';
+    ctx.socket.value = io(`http://127.0.0.1:${socketPort}`, {
+      auth: { rendererToken },
+      transports: ['websocket']
+    });
     ctx.socket.value.on('connect', async () => {
       ctx.socketState.value = 'connected';
       try {

@@ -17,6 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import { createPlaylistMutations } from './playlistMutations.js';
@@ -62,6 +63,7 @@ export async function startBridgeServer({
   normalizeTrackInfo,
   personalizedRadio,
   playback,
+  playbackProviders,
   preferredAudioTrack,
   proxyHlsResource,
   proxyStream,
@@ -87,6 +89,7 @@ export async function startBridgeServer({
   youtubeLikes,
   connectDevicesPath
 }) {
+  const rendererToken = randomBytes(32).toString('base64url');
   const playlistMutations = createPlaylistMutations({ ensureSignedIn, refreshBrowserAuth });
   const streamCorsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -113,6 +116,26 @@ export async function startBridgeServer({
           ...streamCorsHeaders,
           'Content-Type': 'application/json'
         });
+        res.end(JSON.stringify({ error: error.message }));
+      }
+      return;
+    }
+    if (requestUrl.pathname.startsWith('/provider/')) {
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, streamCorsHeaders);
+        res.end();
+        return;
+      }
+      const [, , providerId, encodedPlaybackId] = requestUrl.pathname.split('/');
+      try {
+        await playbackProviders.proxyStream(providerId, decodeURIComponent(encodedPlaybackId || ''), req, res);
+      } catch (error) {
+        console.warn(`Provider stream failed: ${error.message}`);
+        if (res.headersSent) {
+          if (!res.writableEnded) res.destroy(error);
+          return;
+        }
+        res.writeHead(502, { ...streamCorsHeaders, 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: error.message }));
       }
       return;
@@ -201,7 +224,60 @@ export async function startBridgeServer({
     }
   }
 
-  async function resolveTrackRequest({ videoId, supportedMimes = [], supportedVideoMimes = [], mediaKind = 'audio', streamQuality = DEFAULT_STREAM_QUALITY, preload = false, refreshStream = false, avoidItags = [], avoidMimeTypes = [], ...trackHint }) {
+  async function resolveTrackRequest({ videoId, supportedMimes = [], supportedVideoMimes = [], mediaKind = 'audio', streamQuality = DEFAULT_STREAM_QUALITY, preload = false, refreshStream = false, avoidItags = [], avoidMimeTypes = [], allowProviders = false, usePlaybackProvider = true, ...trackHint }) {
+    if (allowProviders && usePlaybackProvider && mediaKind !== 'video' && !trackHint.isUpload) {
+      const providerResult = await playbackProviders?.resolve({
+        ...trackHint,
+        durationMs: Number(trackHint.durationSeconds || 0) * 1000
+      });
+      if (providerResult) {
+        const { match, source } = providerResult;
+        console.info('[Qobuz] playback resolved', {
+          qobuzTrackId: match.qobuzTrackId,
+          matchMethod: match.method,
+          matchConfidence: match.confidence,
+          hires: match.hires,
+          bitDepth: source.bitDepth,
+          sampleRate: source.sampleRate,
+          channels: source.channels,
+          codec: source.codec,
+          formatId: source.formatId,
+          segmentCount: source.segmentCount,
+          seekPointCount: source.seekPointCount,
+          tableSamples: source.tableSamples,
+          totalSamples: source.totalSamples,
+          totalBytes: source.totalBytes,
+          expiresAt: source.expiresAt || null
+        });
+        return {
+          id: trackHint.originalVideoId || videoId,
+          title: trackHint.title || match.title || 'Untitled',
+          artist: trackHint.artist || trackHint.artists?.[0] || match.artist || '',
+          durationSeconds: Number(trackHint.durationSeconds || source.durationSeconds || 0),
+          thumbnail: trackHint.thumbnail || '',
+          isLive: false,
+          youtubeVideoId: videoId,
+          mediaKind: 'audio',
+          mimeType: source.mimeType,
+          preloadMode: source.preloadMode || 'auto',
+          itag: `qobuz-${source.formatId}`,
+          bitrate: 0,
+          playbackSource: providerResult.provider,
+          authenticatedPlayback: true,
+          externalSource: 'Qobuz',
+          streamUrl: `http://127.0.0.1:${httpServer.address().port}/provider/${providerResult.provider}/${encodeURIComponent(source.playbackId)}`,
+          streamExpiresAt: source.expiresAt || 0,
+          providerPlaybackId: source.playbackId,
+          qobuzTrackId: match.qobuzTrackId,
+          matchMethod: match.method,
+          matchConfidence: match.confidence,
+          hires: match.hires,
+          bitDepth: source.bitDepth,
+          sampleRate: source.sampleRate,
+          channels: source.channels
+        };
+      }
+    }
     if (mediaKind !== 'video') {
       const downloaded = await playback.songCache.findDownloaded(videoId);
       if (downloaded) {
@@ -405,6 +481,7 @@ export async function startBridgeServer({
     }
   }
   ioServer.on('connection', (socket) => {
+    socket.data.trustedRenderer = socket.handshake.auth?.rendererToken === rendererToken;
     registerYouTubeHistoryBridge({ socket, youtubeHistory });
     registerYouTubeLikesBridge({ socket, youtubeLikes, bridgeError });
     socket.emit('bridge:ready', { port: httpServer.address().port });
@@ -650,11 +727,23 @@ export async function startBridgeServer({
       try {
         reply({
           ok: true,
-          data: await resolveTrackRequest({ videoId, supportedMimes, supportedVideoMimes, mediaKind, streamQuality, preload, refreshStream, avoidItags, avoidMimeTypes, ...trackHint })
+          data: await resolveTrackRequest({ videoId, supportedMimes, supportedVideoMimes, mediaKind, streamQuality, preload, refreshStream, avoidItags, avoidMimeTypes, allowProviders: socket.data.trustedRenderer, ...trackHint })
         });
       } catch (error) {
         reply({ ok: false, error: bridgeError(error) });
       }
+    });
+    socket.on('playback:provider-start', ({ provider, playbackId, position = 0 } = {}) => {
+      if (!socket.data.trustedRenderer) return;
+      void playbackProviders?.playbackStarted(provider, playbackId, position).catch((error) => {
+        console.warn(`Provider playback-start handling failed: ${error.message}`);
+      });
+    });
+    socket.on('playback:provider-end', ({ provider, playbackId, position = 0 } = {}) => {
+      if (!socket.data.trustedRenderer) return;
+      void playbackProviders?.playbackEnded(provider, playbackId, position).catch((error) => {
+        console.warn(`Provider playback-end handling failed: ${error.message}`);
+      });
     });
     socket.on('music:lyrics', async ({ provider = 'amlyrics', ...track }, reply) => {
       try {
@@ -681,6 +770,7 @@ export async function startBridgeServer({
   // The main-process lifecycle owns this handle and calls `close()` before quitting.
   return {
     port: httpServer.address().port,
+    rendererToken,
     emit(event, payload) {
       ioServer.emit(event, payload);
     },

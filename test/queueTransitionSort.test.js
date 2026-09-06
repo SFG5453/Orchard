@@ -344,7 +344,12 @@ test('Best mix locally analyzes cache misses through the authenticated resolver 
   assert.equal(requests[0].streamSourceType, 'string');
   assert.ok(requests.every(({ forPlayback }) => forPlayback !== true));
   assert.deepEqual(resolved.map((entry) => entry.trackId), ['rough', 'smooth', 'followup']);
-  assert.ok(resolved.every((entry) => entry.options.preload && entry.options.mediaKind === 'audio'));
+  assert.ok(resolved.every((entry) =>
+    entry.options.preload &&
+    entry.options.mediaKind === 'audio' &&
+    entry.options.streamQuality === 'saver' &&
+    entry.options.usePlaybackProvider === false
+  ));
   assert.equal(ctx.queue.value[0].id, 'smooth');
 });
 
@@ -631,4 +636,3 @@ test('Best Mix ranks pairs by executable choreography quality and confidence', (
   const result = bestTransitionOrder(queue, analysisByTrack, outgoing);
   assert.deepEqual(result.ordered.map((t) => t.id), ['beatmatched', 'distant']);
 });
-

@@ -79,6 +79,12 @@ export const IPC_CHANNELS = Object.freeze({
     GET_PROXY_MODE: 'network:get-proxy-mode',
     SET_PROXY_MODE: 'network:set-proxy-mode'
   }),
+  QOBUZ: Object.freeze({
+    CONNECT: 'qobuz:connect',
+    DISCONNECT: 'qobuz:disconnect',
+    STATUS: 'qobuz:status',
+    UPDATE: 'qobuz:update'
+  }),
   SESSION_STATE: Object.freeze({
     GET: 'session-state:get',
     SET: 'session-state:set'

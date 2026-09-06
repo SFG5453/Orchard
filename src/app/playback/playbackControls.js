@@ -87,6 +87,23 @@ export function installPlaybackControls(ctx) {
   let crossfadeClockTimer = 0;
   let fullscreenPlayerDomActive = false;
 
+  function reportProviderPromotion(previousTrack, nextTrack, fromAudio, toAudio) {
+    if (previousTrack?.providerPlaybackId) {
+      ctx.socket?.value?.emit('playback:provider-end', {
+        provider: previousTrack.playbackSource,
+        playbackId: previousTrack.providerPlaybackId,
+        position: Number(fromAudio?.currentTime || ctx.currentTime.value || 0)
+      });
+    }
+    if (nextTrack?.providerPlaybackId) {
+      ctx.socket?.value?.emit('playback:provider-start', {
+        provider: nextTrack.playbackSource,
+        playbackId: nextTrack.providerPlaybackId,
+        position: Number(toAudio?.currentTime || 0)
+      });
+    }
+  }
+
   ctx.dismissSmartCrossfadeMix = function dismissSmartCrossfadeMix() {
     window.clearTimeout(ctx.smartCrossfadeMixTimer);
     ctx.smartCrossfadeMixTimer = 0;
@@ -661,6 +678,7 @@ export function installPlaybackControls(ctx) {
       volume: ctx.volume.value,
       onPromote: () => {
         const nextQueue = queueAfterTransitionPromotion(ctx.queue.value, next.id);
+        reportProviderPromotion(previousTrack, nextTrack, fromAudio, toAudio);
         ctx.finishYouTubeHistory?.();
         ctx.markPlaylistTrackPlayed?.(previousTrack);
         if (previousTrack?.id) {
@@ -846,6 +864,7 @@ export function installPlaybackControls(ctx) {
       volume: ctx.volume.value,
       onPromote: () => {
         const nextQueue = queueAfterTransitionPromotion(ctx.queue.value, next.id);
+        reportProviderPromotion(previousTrack, nextTrack, fromAudio, toAudio);
         ctx.finishYouTubeHistory?.();
         ctx.markPlaylistTrackPlayed?.(previousTrack);
         if (previousTrack?.id) {

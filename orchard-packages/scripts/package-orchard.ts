@@ -232,7 +232,8 @@ try {
   await mkdir(dependencyRoot, { recursive: true });
   await Promise.all([
     cp(path.join(projectRoot, "package.json"), path.join(dependencyRoot, "package.json")),
-    cp(path.join(projectRoot, "package-lock.json"), path.join(dependencyRoot, "package-lock.json"))
+    cp(path.join(projectRoot, "package-lock.json"), path.join(dependencyRoot, "package-lock.json")),
+    copyRequired(path.join(projectRoot, "packages", "qobuz"), path.join(dependencyRoot, "packages", "qobuz"))
   ]);
   await runCommand("npm", ["ci", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"], {
     cwd: dependencyRoot
