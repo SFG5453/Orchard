@@ -63,7 +63,7 @@ test('system-Electron runtime paths stay inside the staged application directory
   });
 
   assert.equal(resolved.nativeModulePath, path.join(appRoot, 'native-audio-rust/index.cjs'));
-  assert.equal(resolved.beatModelPath, path.join(appRoot, 'models/beat-this/beat_this_int8.onnx'));
+  assert.equal(resolved.beatModelPath, path.join(appRoot, 'models/beat-this/beat_this.onnx'));
   assert.equal(resolved.vocalModelPath, path.join(appRoot, 'models/vocal-separation/vocals_umxhq_int8.onnx'));
   assert.equal(resolved.preloadPath, path.join(appRoot, 'electron/preload/index.cjs'));
   assert.equal(resolved.rendererEntryPath, path.join(appRoot, 'dist/index.html'));
@@ -78,7 +78,7 @@ test('legacy system-Electron runtime paths follow the archive, not the shared ru
 
   const unpacked = '/usr/lib/orchard/app.asar.unpacked';
   assert.equal(resolved.nativeModulePath, path.join(unpacked, 'native-audio-rust/index.cjs'));
-  assert.equal(resolved.beatModelPath, path.join(unpacked, 'models/beat-this/beat_this_int8.onnx'));
+  assert.equal(resolved.beatModelPath, path.join(unpacked, 'models/beat-this/beat_this.onnx'));
   assert.equal(resolved.vocalModelPath, path.join(unpacked, 'models/vocal-separation/vocals_umxhq_int8.onnx'));
 
   assert.equal(resolved.preloadPath, path.join(appRoot, 'electron/preload/index.cjs'));

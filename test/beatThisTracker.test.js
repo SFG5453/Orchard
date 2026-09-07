@@ -347,7 +347,7 @@ test('trackBeats runs the whole chain against a stubbed session', async () => {
   };
   const result = await trackBeats(
     { frames, mels: MELS, framesPerSecond: 50, values: flatSpectrogram(frames) },
-    { modelPath: 'models/beat-this/beat_this_int8.onnx', load: async () => fakeRuntime }
+    { modelPath: 'models/beat-this/beat_this.onnx', load: async () => fakeRuntime }
   );
   assert.ok(result);
   assert.ok(Math.abs(result.bpm - 120) < 0.2, `expected 120, got ${result.bpm}`);

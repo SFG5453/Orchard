@@ -195,8 +195,8 @@ try {
     copyRequired(path.join(projectRoot, "electron"), path.join(sharedRoot, "electron")),
     copyRequired(path.join(projectRoot, "shared"), path.join(sharedRoot, "shared")),
     copyRequired(
-      path.join(projectRoot, "models", "beat-this", "beat_this_int8.onnx"),
-      path.join(sharedRoot, "models", "beat-this", "beat_this_int8.onnx")
+      path.join(projectRoot, "models", "beat-this", "beat_this.onnx"),
+      path.join(sharedRoot, "models", "beat-this", "beat_this.onnx")
     ),
     copyRequired(
       path.join(projectRoot, "models", "vocal-separation", "vocals_umxhq_int8.onnx"),

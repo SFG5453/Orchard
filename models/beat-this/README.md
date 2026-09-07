@@ -1,13 +1,19 @@
 # Beat This! beat/downbeat model
 
-`beat_this_int8.onnx` is the committed, shipping model: the published
-**Beat This!** weights (Foscarin, Schlüter & Widmer, ISMIR 2024 — the
-`final0` checkpoint) converted to ONNX and dynamically quantized to int8.
+`beat_this.onnx` is the committed desktop model: the published **Beat This!**
+weights (Foscarin, Schlüter & Widmer, ISMIR 2024 — the `final0` checkpoint)
+converted to an fp32 ONNX graph. Supported desktop targets run it with ONNX
+Runtime's WebGPU execution provider so analysis does not occupy the CPU cores
+needed by playback and other foreground applications.
 
-Measured against the fp32 original on Orchard's synthetic harness the int8
-predictions are identical to within peak-picking noise (beat counts exact,
-median beat error 2.7–10 ms), at roughly half the inference time and 23 MB
-instead of 83.
+On a Radeon RX 5700, a 1500-frame (30-second) chunk measured 105 ms through
+fp32/WebGPU and consumed 14 ms of process CPU time. The former int8/CPU path
+measured 1536 ms and 3030 ms respectively. The fp32 WebGPU output matched the
+fp32 CPU reference; an experimental fp16 conversion did not produce valid
+logits through that WebGPU implementation and was rejected.
+
+Android keeps its separately packaged int8 model. Mobile execution-provider
+and memory constraints are different from the desktop WebGPU path.
 
 ## Licensing
 
@@ -20,20 +26,11 @@ comes from the MIT-licensed C++ port
 
 ## Provenance
 
-1. `scripts/fetch-beat-this-model.mjs` downloads the fp32 ONNX conversion,
-   pinned to commit `07ab790a` of `mosynthkey/beat_this_cpp` and verified
-   against sha256
-   `c5c1466e08abdb03fdeb50668a06f244b787d564c212490482231a9cfbe9ccbd`.
-   That file (`beat_this.onnx`, 83 MB) is a build input and is gitignored.
-2. The committed int8 file was derived from it with ONNX Runtime's dynamic
-   quantization:
-
-   ```python
-   from onnxruntime.quantization import quantize_dynamic, QuantType
-   quantize_dynamic('beat_this.onnx', 'beat_this_int8.onnx', weight_type=QuantType.QInt8)
-   ```
-
-   sha256 `fffa976489337c7b7fb01db01fb0513eb7fae2960f451c814b6127b43f969a58`.
+`scripts/fetch-beat-this-model.mjs` retrieves the committed fp32 ONNX
+conversion from `mosynthkey/beat_this_cpp`, pinned to commit `07ab790a` and
+verified against sha256
+`c5c1466e08abdb03fdeb50668a06f244b787d564c212490482231a9cfbe9ccbd`.
+The file is 83,077,778 bytes.
 
 ## Contract
 

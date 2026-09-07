@@ -116,7 +116,7 @@ export default {
               :disabled="!crossfadeEnabled"
               :aria-label="`Crossfade mode: ${option.label}`"
               :aria-pressed="crossfadeMode === option.value"
-              @click="crossfadeMode = option.value"
+              @click="app.setCrossfadeMode(option.value)"
             >
               {{ option.label }}
             </button>

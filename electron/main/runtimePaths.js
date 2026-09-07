@@ -43,7 +43,7 @@ export function resolveRuntimePaths({ app, isDev }) {
     transitionModulePath: path.join(unpackedRoot, 'native-audio-rust/index.cjs'),
     // Opened by ONNX Runtime's native code, so legacy ASAR installations keep
     // the packaged copy in app.asar.unpacked like the addon above.
-    beatModelPath: path.join(unpackedRoot, 'models/beat-this/beat_this_int8.onnx'),
+    beatModelPath: path.join(unpackedRoot, 'models/beat-this/beat_this.onnx'),
     vocalModelPath: path.join(unpackedRoot, 'models/vocal-separation/vocals_umxhq_int8.onnx'),
     preloadPath: path.join(appRoot, 'electron/preload/index.cjs'),
     rendererEntryPath: path.join(appRoot, 'dist/index.html')

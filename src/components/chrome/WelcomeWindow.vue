@@ -297,7 +297,7 @@ export default {
                   type="button"
                   class="welcome-window__sound-card"
                   :class="{ 'welcome-window__choice--active': app.crossfadeEnabled && app.crossfadeMode === option.value }"
-                  @click="app.crossfadeEnabled = true; app.crossfadeMode = option.value"
+                  @click="app.crossfadeEnabled = true; app.setCrossfadeMode(option.value)"
                 >
                   <q-icon :name="option.value === 'smart' ? 'auto_awesome' : 'waves'" />
                   <strong>{{ option.label }}</strong>

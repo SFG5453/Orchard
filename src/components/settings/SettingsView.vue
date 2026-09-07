@@ -192,7 +192,7 @@ export default {
               :class="{ 'settings-option--active': crossfadeMode === option.value }"
               :aria-pressed="crossfadeMode === option.value"
               :disabled="!crossfadeEnabled"
-              @click="crossfadeMode = option.value"
+              @click="setCrossfadeMode(option.value)"
             >
               {{ option.label }}
             </button>

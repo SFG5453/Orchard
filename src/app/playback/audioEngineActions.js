@@ -25,6 +25,10 @@ import {
   normalizeAudioEngineConfig
 } from '../../audio/engine/audioEngine.js';
 import { createAutomaticEq } from '../../audio/engine/automaticEq.js';
+import {
+  audioEngineConfigForCrossfadeMode,
+  crossfadeModeForAudioEngine
+} from '../../audio/engine/audioFeatureCompatibility.js';
 import { ANALYSIS_PRIORITIES } from '../../audio/crossfade/smartCrossfadeAnalysis.js';
 import { parseAudioEngineProfile } from '../../audio/engine/audioEngineSchemas.js';
 
@@ -137,6 +141,7 @@ export function installAudioEngineActions(ctx) {
   ctx.applyAudioEnginePreset = function applyAudioEnginePreset(name) {
     const preset = EQ_PRESETS[name];
     if (!preset) return;
+    ctx.crossfadeMode.value = 'standard';
     ctx.audioEngineConfig.value = {
       ...ctx.audioEngineConfig.value,
       enabled: true,
@@ -148,6 +153,7 @@ export function installAudioEngineActions(ctx) {
   };
 
   ctx.setAutoEqEnabled = function setAutoEqEnabled(enabled) {
+    if (enabled) ctx.crossfadeMode.value = 'standard';
     ctx.audioEngineConfig.value = {
       ...ctx.audioEngineConfig.value,
       enabled: enabled ? true : ctx.audioEngineConfig.value.enabled,
@@ -161,12 +167,22 @@ export function installAudioEngineActions(ctx) {
   };
 
   ctx.setManualEqEnabled = function setManualEqEnabled(enabled) {
+    if (enabled) ctx.crossfadeMode.value = 'standard';
     ctx.audioEngineConfig.value = {
       ...ctx.audioEngineConfig.value,
       enabled: enabled ? true : ctx.audioEngineConfig.value.enabled,
       autoEqEnabled: enabled ? false : ctx.audioEngineConfig.value.autoEqEnabled,
       eqEnabled: Boolean(enabled)
     };
+  };
+
+  ctx.setCrossfadeMode = function setCrossfadeMode(mode) {
+    const nextMode = mode === 'smart' ? 'smart' : 'standard';
+    ctx.audioEngineConfig.value = audioEngineConfigForCrossfadeMode(
+      ctx.audioEngineConfig.value,
+      nextMode
+    );
+    ctx.crossfadeMode.value = nextMode;
   };
 
   ctx.resetAudioEngine = function resetAudioEngine() {
@@ -238,7 +254,9 @@ export function installAudioEngineActions(ctx) {
   ctx.importAudioEngineProfile = async function importAudioEngineProfile(file) {
     if (!file) return;
     const profile = parseAudioEngineProfile(JSON.parse(await readFile(file)));
-    ctx.audioEngineConfig.value = normalizeAudioEngineConfig(profile.config);
+    const config = normalizeAudioEngineConfig(profile.config);
+    if (config.autoEqEnabled || config.eqEnabled) ctx.crossfadeMode.value = 'standard';
+    ctx.audioEngineConfig.value = config;
     ctx.audioEngineMessage.value = 'Audio profile imported.';
   };
 
@@ -249,6 +267,7 @@ export function installAudioEngineActions(ctx) {
   };
 
   watch(ctx.audioEngineConfig, (config) => {
+    ctx.crossfadeMode.value = crossfadeModeForAudioEngine(ctx.crossfadeMode.value, config);
     ctx.audioEngine.update(config);
     const match = Object.entries(EQ_PRESETS).find(([, preset]) =>
       preset.gains.every((gain, index) => Math.abs(gain - config.gains[index]) < 0.05));

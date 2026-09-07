@@ -27,6 +27,21 @@ export function onnxExecutionProviders(platform = process.platform, architecture
   return isIntelMacOS(platform, architecture) ? ['wasm'] : ['cpu'];
 }
 
+/**
+ * Beat This uses its fp32 graph on WebGPU to keep analysis off the CPU while
+ * audio (and often a game) is running. The prebuilt Linux arm64 binding does
+ * not include WebGPU, and Intel macOS already uses the WASM compatibility
+ * runtime because no native binding is shipped for that target.
+ */
+export function beatOnnxExecutionProviders(
+  platform = process.platform,
+  architecture = process.arch
+) {
+  if (isIntelMacOS(platform, architecture)) return ['wasm'];
+  if (platform === 'linux' && architecture === 'arm64') return ['cpu'];
+  return ['webgpu', 'cpu'];
+}
+
 export function configureOnnxWebRuntime(runtime, wasmDirectory) {
   if (runtime?.env?.wasm) {
     // The utility process is deliberately kept single-threaded. This avoids

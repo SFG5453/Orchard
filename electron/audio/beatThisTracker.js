@@ -42,7 +42,7 @@
 import path from 'node:path';
 import { stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { loadOnnxModel, loadOnnxRuntime, onnxExecutionProviders } from './onnxRuntime.js';
+import { beatOnnxExecutionProviders, loadOnnxModel, loadOnnxRuntime } from './onnxRuntime.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -63,14 +63,12 @@ const MIN_BPM = 40;
 const MAX_BPM = 220;
 
 /**
- * The committed model: the published fp32 weights dynamically quantized to
- * int8 (models/beat-this/README.md records the derivation). Measured against
- * the fp32 original on the synthetic harness the predictions are identical to
- * within peak-picking noise, at half the inference time and 23 MB instead
- * of 83.
+ * The committed fp32 model runs through WebGPU on supported desktop targets.
+ * Keeping this graph in floating point avoids the CPU-heavy fallback produced
+ * by its dynamically quantized int8 variant.
  */
 export const DEFAULT_MODEL_PATH =
-  path.join(here, '..', '..', 'models', 'beat-this', 'beat_this_int8.onnx');
+  path.join(here, '..', '..', 'models', 'beat-this', 'beat_this.onnx');
 
 /**
  * Window length that costs exactly one model inference. The model reads
@@ -103,7 +101,7 @@ async function session(modelPath, load) {
       const Tensor = runtime?.Tensor || runtime?.default?.Tensor;
       if (!InferenceSession || !Tensor) throw new Error('ONNX Runtime exports were unusable');
       const created = await InferenceSession.create(model, {
-        executionProviders: onnxExecutionProviders(),
+        executionProviders: beatOnnxExecutionProviders(),
         graphOptimizationLevel: 'all',
         // Analysis runs while audio is playing. Leaving this at the default
         // takes every core and has been the cause of glitching in other

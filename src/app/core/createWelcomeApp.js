@@ -27,6 +27,10 @@ import {
 } from '../appearance/appearancePreferences.js';
 import { copyTextToClipboard } from '../platform/clipboardText.js';
 import { installSupportActions } from '../platform/supportActions.js';
+import {
+  audioEngineConfigForCrossfadeMode,
+  crossfadeModeForAudioEngine
+} from '../../audio/engine/audioFeatureCompatibility.js';
 
 const USER_PREFERENCES_STORAGE_KEY = 'orchard:user-preferences';
 const AUDIO_ENGINE_STORAGE_KEY = 'orchard:audio-engine';
@@ -151,12 +155,22 @@ export function createWelcomeApp() {
   };
 
   ctx.setAutoEqEnabled = function setAutoEqEnabled(enabled) {
+    if (enabled) ctx.crossfadeMode.value = 'standard';
     ctx.audioEngineConfig.value = {
       ...ctx.audioEngineConfig.value,
       enabled: enabled ? true : ctx.audioEngineConfig.value.enabled,
       autoEqEnabled: Boolean(enabled),
       eqEnabled: enabled ? false : ctx.audioEngineConfig.value.eqEnabled
     };
+  };
+
+  ctx.setCrossfadeMode = function setCrossfadeMode(mode) {
+    const nextMode = mode === 'smart' ? 'smart' : 'standard';
+    ctx.audioEngineConfig.value = audioEngineConfigForCrossfadeMode(
+      ctx.audioEngineConfig.value,
+      nextMode
+    );
+    ctx.crossfadeMode.value = nextMode;
   };
 
   ctx.minimizeWindow = () => window.orchardWindow?.minimize();
@@ -274,6 +288,9 @@ export function createWelcomeApp() {
     ctx.discordRpcEnabled
   ], ctx.persistPreferences, { immediate: true });
   watch(ctx.audioEngineConfig, ctx.persistAudioEngine, { deep: true, immediate: true });
+  watch(ctx.audioEngineConfig, (config) => {
+    ctx.crossfadeMode.value = crossfadeModeForAudioEngine(ctx.crossfadeMode.value, config);
+  }, { immediate: true });
 
   onMounted(() => {
     const socketPort = new URLSearchParams(window.location.search).get('socketPort') || '0';
