@@ -19,6 +19,40 @@
 
 export const ORCHARD_RELEASES = [
   {
+    version: '5.0.0-beta.8',
+    codename: 'Attained Silts',
+    date: 'September 7, 2026',
+    sections: [
+      {
+        title: 'New & improved',
+        items: [
+          'Added Qobuz account connection and confidently matched CD-quality lossless or Hi-Res playback with selectable quality and YouTube fallback.',
+          'Accelerated Beat This analysis with the full FP32 model through ONNX Runtime WebGPU on supported systems, while retaining CPU and WASM fallbacks.'
+        ]
+      },
+      {
+        title: 'Changed',
+        items: [
+          'Reworked persisted audio analysis into a compact SQLite cache with a small hot in-memory LRU, version cleanup, and migration from the legacy JSON cache to reduce memory use.',
+          'Made Smart Crossfade and EQ mutually exclusive so equalization cannot interfere with transition analysis, and added Qobuz lossless and Hi-Res playback quality labels.'
+        ]
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Qobuz matching only replaces a stream when it identifies the same recording confidently, while unsupported WebGPU targets and missing beat models continue through existing fallback paths.'
+        ]
+      },
+      {
+        title: 'Maintenance',
+        items: [
+          'Updated Quasar to 2.30.1, added the Qobuz package to production packaging, and switched the shipped desktop beat model to the self-contained FP32 artifact.',
+          'Added coverage for Qobuz authentication and streaming, audio-analysis cache persistence, WebGPU compatibility, playback quality labels, and crossfade/EQ compatibility.'
+        ]
+      }
+    ]
+  },
+  {
     version: '5.0.0-beta.7',
     codename: 'Tiles Dogcart',
     date: 'September 5, 2026',
