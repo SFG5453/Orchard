@@ -33,7 +33,8 @@ import {
   extractQobuzBootstrap,
   parseQobuzInitSegment,
   qobuzRequestSignature,
-  selectQobuzMatch
+  selectQobuzMatch,
+  normalizeQobuzAlbumQuality
 } from '@orchardmusic/qobuz';
 import { createPlaybackProviderCoordinator } from '../electron/providers/playbackProvider.js';
 import { playbackQualityLabel } from '../src/app/playback/trackQuality.js';
@@ -100,6 +101,147 @@ test('Qobuz core composes without Electron and keeps the adapter on its subpath'
   const electron = await import('@orchardmusic/qobuz/electron');
   assert.equal(core.setupQobuzElectron, undefined);
   assert.equal(typeof electron.setupQobuzElectron, 'function');
+  await qobuz.close();
+});
+
+test('Qobuz catalog quality helpers normalize album and track metadata', async () => {
+  const calls = [];
+  const client = createQobuzClient({
+    bootstrap: { get: async () => ({ appId: '123456789' }) },
+    credentials: async () => ({ token: 'user-token', userId: 7 }),
+    fetchImpl: async (url, options = {}) => {
+      const requestUrl = new URL(url);
+      calls.push({ requestUrl, options });
+      if (requestUrl.pathname.endsWith('/album/get')) {
+        if (requestUrl.searchParams.get('album_id') === 'ez17kizzmln0b') {
+          return new Response(JSON.stringify({
+            id: 'ez17kizzmln0b',
+            maximum_bit_depth: 16,
+            maximum_sampling_rate: 44.1,
+            maximum_channel_count: 2,
+            streamable: false
+          }), { status: 200 });
+        }
+        return new Response(JSON.stringify({
+          audio_info: {
+            maximum_bit_depth: 24,
+            maximum_sampling_rate: 96,
+            maximum_channel_count: 2
+          },
+          rights: { hires_streamable: false, streamable: true }
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        id: 42,
+        maximum_bit_depth: 24,
+        maximum_sampling_rate: 192,
+        maximum_channel_count: 2,
+        hires_streamable: true,
+        streamable: false
+      }), { status: 200 });
+    }
+  });
+
+  assert.deepEqual(await client.albumQuality('0886445438048'), {
+    albumId: '0886445438048',
+    bitDepth: 24,
+    sampleRate: 96_000,
+    channels: 2,
+    hiresStreamable: false,
+    streamable: true
+  });
+  assert.deepEqual(await client.albumQuality('ez17kizzmln0b'), {
+    albumId: 'ez17kizzmln0b',
+    bitDepth: 16,
+    sampleRate: 44_100,
+    channels: 2,
+    streamable: false
+  });
+  assert.deepEqual(normalizeQobuzAlbumQuality({ id: 'ez17kizzmln0b' }), {
+    albumId: 'ez17kizzmln0b'
+  });
+  assert.deepEqual(normalizeQobuzAlbumQuality({}, '0886445438048'), {
+    albumId: '0886445438048'
+  });
+  assert.deepEqual(await client.trackQuality(42), {
+    trackId: 42,
+    bitDepth: 24,
+    sampleRate: 192_000,
+    channels: 2,
+    hiresStreamable: true,
+    streamable: false
+  });
+
+  assert.equal(calls[0].requestUrl.pathname, '/api.json/0.2/album/get');
+  assert.equal(calls[0].requestUrl.searchParams.get('album_id'), '0886445438048');
+  assert.equal(calls[1].requestUrl.pathname, '/api.json/0.2/album/get');
+  assert.equal(calls[1].requestUrl.searchParams.get('album_id'), 'ez17kizzmln0b');
+  assert.equal(calls[2].requestUrl.pathname, '/api.json/0.2/track/get');
+  assert.equal(calls[2].requestUrl.searchParams.get('track_id'), '42');
+  assert.equal(calls[0].options.headers['X-App-Id'], '123456789');
+  assert.equal(calls[0].options.headers['X-User-Auth-Token'], 'user-token');
+});
+
+test('Qobuz track quality batches at most 50 IDs and preserves unknown fields', async () => {
+  const calls = [];
+  const client = createQobuzClient({
+    bootstrap: { get: async () => ({ appId: '123456789' }) },
+    credentials: async () => ({ token: 'user-token', userId: 7 }),
+    fetchImpl: async (url, options = {}) => {
+      const requestUrl = new URL(url);
+      const body = JSON.parse(options.body);
+      calls.push({ requestUrl, options, body });
+      return new Response(JSON.stringify({
+        tracks: {
+          items: body.tracks_id.map((id) => id === 1
+            ? { id, maximum_bit_depth: 24, maximum_sampling_rate: 96, streamable: false }
+            : { id })
+        }
+      }), { status: 200 });
+    }
+  });
+
+  const qualities = await client.trackQualities(Array.from({ length: 51 }, (_, index) => index + 1));
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].requestUrl.pathname, '/api.json/0.2/track/getList');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(calls[0].options.headers['Content-Type'], 'application/json');
+  assert.equal(calls[0].options.headers['X-User-Auth-Token'], 'user-token');
+  assert.equal(calls[0].body.tracks_id.length, 50);
+  assert.deepEqual(calls[1].body.tracks_id, [51]);
+  assert.equal(qualities.length, 51);
+  assert.deepEqual(qualities[0], {
+    trackId: 1,
+    bitDepth: 24,
+    sampleRate: 96_000,
+    streamable: false
+  });
+  assert.deepEqual(qualities[50], { trackId: 51 });
+});
+
+test('createQobuz forwards catalog quality helpers through its service API', async () => {
+  const qobuz = createQobuz({
+    bootstrap: { get: async () => ({ appId: '123456789' }) },
+    credentials: async () => ({ token: 'user-token', userId: 7 }),
+    fetchImpl: async (url) => {
+      const requestUrl = new URL(url);
+      if (requestUrl.pathname.endsWith('/album/get')) {
+        return new Response(JSON.stringify({ id: 'i5ato02r0jvy', audio_info: { maximum_sampling_rate: 48 } }), { status: 200 });
+      }
+      if (requestUrl.pathname.endsWith('/track/get')) {
+        return new Response(JSON.stringify({ id: 42, maximum_sampling_rate: 44.1 }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ tracks: [{ id: 42, maximum_sampling_rate: 44.1 }] }), { status: 200 });
+    }
+  });
+
+  assert.equal(qobuz.albumQuality, qobuz.client.albumQuality);
+  assert.equal(qobuz.trackQuality, qobuz.client.trackQuality);
+  assert.equal(qobuz.trackQualities, qobuz.client.trackQualities);
+  assert.deepEqual(await qobuz.albumQuality('i5ato02r0jvy'), { albumId: 'i5ato02r0jvy', sampleRate: 48_000 });
+  assert.deepEqual(await qobuz.trackQuality(42), { trackId: 42, sampleRate: 44_100 });
+  assert.deepEqual(await qobuz.trackQualities([42]), [{ trackId: 42, sampleRate: 44_100 }]);
   await qobuz.close();
 });
 

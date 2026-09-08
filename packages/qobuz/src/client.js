@@ -24,6 +24,13 @@ import {
   QOBUZ_USER_AGENT,
   normalizeQobuzQuality
 } from './types.js';
+import {
+  normalizeQobuzAlbumQuality,
+  normalizeQobuzTrackQuality,
+  qobuzTrackItems
+} from './quality.js';
+
+const QOBUZ_TRACK_BATCH_SIZE = 50;
 
 function signedRequest(method, args, timestamp, secret) {
   const serialized = Object.entries(args)
@@ -126,6 +133,38 @@ export function createQobuzClient({
     return apiGet('catalog/search', { query, limit: 20 });
   }
 
+  async function albumQuality(albumId) {
+    const id = String(albumId);
+    const value = await apiGet('album/get', { album_id: id });
+    return normalizeQobuzAlbumQuality(value, id);
+  }
+
+  async function trackQuality(trackId) {
+    const id = Number(trackId);
+    const value = await apiGet('track/get', { track_id: id });
+    return normalizeQobuzTrackQuality(value, id);
+  }
+
+  async function trackQualities(trackIds) {
+    if (!Array.isArray(trackIds)) throw new TypeError('Qobuz trackQualities requires an array of track IDs');
+    const ids = trackIds.map((trackId) => Number(trackId));
+    if (!ids.length) return [];
+
+    const values = [];
+    for (let offset = 0; offset < ids.length; offset += QOBUZ_TRACK_BATCH_SIZE) {
+      const batch = ids.slice(offset, offset + QOBUZ_TRACK_BATCH_SIZE);
+      const value = await apiPost('track/getList', { tracks_id: batch }, { json: true });
+      values.push(...qobuzTrackItems(value));
+    }
+
+    const byId = new Map();
+    for (const value of values) {
+      const id = Number(value?.id);
+      if (Number.isSafeInteger(id) && !byId.has(id)) byId.set(id, value);
+    }
+    return ids.map((id) => normalizeQobuzTrackQuality(byId.get(id) || {}, id));
+  }
+
   async function streamingInfo(trackId, quality, { retry = true } = {}) {
     await ensureSession();
     const { web, headers } = await authHeaders({ withSession: true });
@@ -186,6 +225,12 @@ export function createQobuzClient({
     reportStreamingStart,
     reset,
     search,
-    streamingInfo
+    streamingInfo,
+    albumQuality,
+    trackQuality,
+    trackQualities,
+    getAlbumQuality: albumQuality,
+    getTrackQuality: trackQuality,
+    getTrackQualities: trackQualities
   };
 }

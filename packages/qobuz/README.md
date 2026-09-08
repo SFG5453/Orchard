@@ -109,6 +109,7 @@ Creates the high-level service. Options:
 The service exposes:
 
 - `search(query)` and `streamingInfo(trackId, quality)` for direct API use.
+- `albumQuality(albumId)`, `trackQuality(trackId)`, and `trackQualities(trackIds)` for catalog quality metadata. The `getAlbumQuality`, `getTrackQuality`, and `getTrackQualities` names are equivalent aliases.
 - `matchTrack(track)` to match canonical metadata without resolving media.
 - `resolveStream(match, quality)` to resolve an existing match.
 - `resolveTrack(track, quality)` to match and resolve in one call.
@@ -118,6 +119,12 @@ The service exposes:
 
 Supported quality values are `auto`, `lossless`, and `hires`.
 
+### Catalog quality metadata
+
+The catalog helpers call Qobuz's album and track metadata endpoints with the authenticated client headers. Album IDs are opaque strings and are preserved exactly; track IDs remain numeric. `trackQualities()` sends batches of at most 50 IDs to the track list endpoint. Returned `bitDepth`, `sampleRate`, `channels`, `hiresStreamable`, and `streamable` fields are optional because Qobuz may omit them; an explicit `false` streamability flag is retained. Catalog `sampleRate` is normalized from Qobuz's kHz value to Hz, matching the playback source unit.
+
+Catalog values describe the highest quality Qobuz advertises for the album or track. They do not guarantee the quality of a particular playback session; use `streamingInfo()` or the resolved playback source for the media actually selected.
+
 ### Lower-level exports
 
 The package root also exports the individual building blocks:
@@ -125,6 +132,7 @@ The package root also exports the individual building blocks:
 - `createQobuzClient`, `createQobuzBootstrapLoader`, `fetchQobuzBootstrap`, and `extractQobuzBootstrap`.
 - `createQobuzAuthorizationUrl` and `exchangeQobuzAuthorizationCode` for host-owned login flows.
 - `createQobuzMatcher`, `selectQobuzMatch`, `canonicalTrack`, and `normalizedQobuzText`.
+- `normalizeQobuzAlbumQuality` and `normalizeQobuzTrackQuality` for hosts that already have catalog response objects.
 - `createQobuzPlayback` and `createQobuzReporter`.
 - `parseQobuzInitSegment`, `parseQobuzAudioSegment`, key derivation helpers, and segment decryption helpers.
 - API URLs, format IDs, CMAF UUIDs, quality values, and normalization helpers.

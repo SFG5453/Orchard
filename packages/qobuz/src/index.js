@@ -89,7 +89,13 @@ export function createQobuz({
     resolveStream,
     resolveTrack,
     search: client.search,
-    streamingInfo: client.streamingInfo
+    streamingInfo: client.streamingInfo,
+    albumQuality: client.albumQuality,
+    trackQuality: client.trackQuality,
+    trackQualities: client.trackQualities,
+    getAlbumQuality: client.getAlbumQuality,
+    getTrackQuality: client.getTrackQuality,
+    getTrackQualities: client.getTrackQualities
   };
 }
 
@@ -111,6 +117,7 @@ export { createQobuzMatcher, normalizedQobuzText, selectQobuzMatch } from './mat
 export { createQobuzAuthorizationUrl, exchangeQobuzAuthorizationCode } from './oauth.js';
 export { createQobuzPlayback } from './playback.js';
 export { createQobuzReporter } from './reports.js';
+export { normalizeQobuzAlbumQuality, normalizeQobuzTrackQuality } from './quality.js';
 export {
   QOBUZ_AUDIO_QUALITIES,
   QOBUZ_BASE_URL,

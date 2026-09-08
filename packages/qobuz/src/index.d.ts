@@ -53,6 +53,24 @@ export interface QobuzMatch {
   sampleRate?: number;
 }
 
+/** Catalog maximum quality. sampleRate is normalized to Hz; source values are kHz. */
+export interface QobuzQualityMetadata {
+  bitDepth?: number;
+  /** Sample rate in Hz; Qobuz catalog responses report this value in kHz. */
+  sampleRate?: number;
+  channels?: number;
+  hiresStreamable?: boolean;
+  streamable?: boolean;
+}
+
+export interface QobuzAlbumQuality extends QobuzQualityMetadata {
+  albumId: string;
+}
+
+export interface QobuzTrackQuality extends QobuzQualityMetadata {
+  trackId: number;
+}
+
 export interface QobuzPlaybackSource {
   provider: 'qobuz';
   playbackId: string;
@@ -79,6 +97,12 @@ export interface QobuzClient {
   reset(): void;
   search(query: string): Promise<any>;
   streamingInfo(trackId: number | string, quality: QobuzQuality): Promise<any>;
+  albumQuality(albumId: string): Promise<QobuzAlbumQuality>;
+  trackQuality(trackId: number | string): Promise<QobuzTrackQuality>;
+  trackQualities(trackIds: Array<number | string>): Promise<QobuzTrackQuality[]>;
+  getAlbumQuality(albumId: string): Promise<QobuzAlbumQuality>;
+  getTrackQuality(trackId: number | string): Promise<QobuzTrackQuality>;
+  getTrackQualities(trackIds: Array<number | string>): Promise<QobuzTrackQuality[]>;
 }
 
 export interface QobuzService {
@@ -96,6 +120,12 @@ export interface QobuzService {
   } | null>;
   search(query: string): Promise<any>;
   streamingInfo(trackId: number | string, quality: QobuzQuality): Promise<any>;
+  albumQuality(albumId: string): Promise<QobuzAlbumQuality>;
+  trackQuality(trackId: number | string): Promise<QobuzTrackQuality>;
+  trackQualities(trackIds: Array<number | string>): Promise<QobuzTrackQuality[]>;
+  getAlbumQuality(albumId: string): Promise<QobuzAlbumQuality>;
+  getTrackQuality(trackId: number | string): Promise<QobuzTrackQuality>;
+  getTrackQualities(trackIds: Array<number | string>): Promise<QobuzTrackQuality[]>;
 }
 
 export interface CreateQobuzOptions {
@@ -190,6 +220,8 @@ export function decryptQobuzAudioSegment(
 ): Uint8Array;
 export function canonicalTrack(input?: CanonicalTrackInput): CanonicalTrack;
 export function normalizeQobuzQuality(value: unknown): QobuzQuality;
+export function normalizeQobuzAlbumQuality(raw: unknown, fallbackId?: string): QobuzAlbumQuality;
+export function normalizeQobuzTrackQuality(raw: unknown, fallbackId?: number | string): QobuzTrackQuality;
 
 export const QOBUZ_AUDIO_QUALITIES: readonly QobuzQuality[];
 export const QOBUZ_BASE_URL: string;
