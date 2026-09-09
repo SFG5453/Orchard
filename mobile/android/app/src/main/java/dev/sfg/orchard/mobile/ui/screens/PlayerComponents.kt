@@ -254,6 +254,8 @@ fun TrackInfoRow(
             onDownload = if (!isDownloaded) onDownload else null,
             onRemoveDownload = if (isDownloaded) onRemoveDownload else null,
             onShare = onShare,
+            onViewArtist = onOpenArtist,
+            onViewAlbum = onOpenAlbum,
         )
     }
 
@@ -285,9 +287,9 @@ fun TrackInfoRow(
                 ) {
                     Text(
                         text = currentTrack.title,
-                        style = MaterialTheme.typography.headlineSmall.copy(
+                        style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
-                            fontSize = 21.sp,
+                            fontSize = 20.sp,
                         ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -312,8 +314,8 @@ fun TrackInfoRow(
                 Text(
                     text = currentTrack.artist,
                     color = Color.White.copy(alpha = 0.65f),
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 17.sp,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
                     ),
                     maxLines = 1,

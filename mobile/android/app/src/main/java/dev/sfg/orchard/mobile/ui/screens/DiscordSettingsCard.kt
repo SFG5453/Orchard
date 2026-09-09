@@ -20,7 +20,6 @@
 package dev.sfg.orchard.mobile.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,14 +33,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Animation
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Podcasts
 import androidx.compose.material.icons.rounded.Sync
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -59,13 +54,10 @@ import coil3.compose.AsyncImage
 import dev.sfg.orchard.mobile.discord.DiscordAuthState
 import dev.sfg.orchard.mobile.discord.GatewayConnectionState
 import dev.sfg.orchard.mobile.model.OrchardSettings
-import dev.sfg.orchard.mobile.ui.glass.glassFill
-import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
 private val DiscordBlurple = Color(0xFF5865F2)
-private val DiscordGreen = Color(0xFF57F287)
 
 @Composable
 fun DiscordSettingsCard(
@@ -78,9 +70,9 @@ fun DiscordSettingsCard(
 ) {
     val shape = RoundedCornerShape(20.dp)
     Surface(
-        color = glassFill(CanopyColors.Surface),
+        color = Color.Transparent,
         shape = shape,
-        modifier = Modifier.fillMaxWidth().glassPane(shape),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(16.dp)) {
             when (discordAuth) {
@@ -123,7 +115,7 @@ fun DiscordSettingsCard(
                             val subtitle = if (account?.username != null && account.globalName != null) {
                                 "@${account.username}"
                             } else {
-                                "Connected"
+                                "Discord"
                             }
                             Text(
                                 subtitle,
@@ -132,17 +124,10 @@ fun DiscordSettingsCard(
                             )
                         }
 
-                        ConnectionBadge(discordConnection, settings.discordPresenceEnabled)
                     }
 
                     Spacer(Modifier.height(14.dp))
-                    OutlinedButton(
-                        onClick = onDisconnect,
-                        shape = CircleShape,
-                        modifier = Modifier.fillMaxWidth().height(42.dp),
-                    ) {
-                        Text("Disconnect", color = CanopyColors.Danger, fontWeight = FontWeight.SemiBold)
-                    }
+                    IntegrationAction("Sign out of Discord", destructive = true, onClick = onDisconnect)
 
                     Spacer(Modifier.height(16.dp))
                     Box(
@@ -191,13 +176,13 @@ fun DiscordSettingsCard(
 
                 is DiscordAuthState.SignedOut, is DiscordAuthState.Error -> {
                     Text(
-                        "Discord Rich Presence",
+                        "Discord",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = CanopyColors.Text,
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Broadcast what you're listening to with animated artwork and smart universal song links.",
+                        "Share what you’re listening to on Discord.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = CanopyColors.Muted,
                     )
@@ -210,53 +195,9 @@ fun DiscordSettingsCard(
                         )
                     }
                     Spacer(Modifier.height(14.dp))
-                    Button(
-                        onClick = onConnect,
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = DiscordBlurple,
-                            contentColor = Color.White,
-                        ),
-                        modifier = Modifier.fillMaxWidth().height(46.dp),
-                    ) {
-                        Text("Connect Discord", fontWeight = FontWeight.Bold)
-                    }
+                    IntegrationAction("Sign in to Discord", onClick = onConnect)
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun ConnectionBadge(connection: GatewayConnectionState, isPresenceEnabled: Boolean) {
-    val (label, color) = when {
-        !isPresenceEnabled -> "Paused" to CanopyColors.Muted
-        connection is GatewayConnectionState.Ready -> "Online" to DiscordGreen
-        connection is GatewayConnectionState.Connected -> "Ready" to DiscordGreen
-        connection is GatewayConnectionState.Connecting -> "Connecting" to LocalAccent.current
-        else -> "Offline" to CanopyColors.Muted
-    }
-
-    Surface(
-        color = color.copy(alpha = 0.15f),
-        shape = CircleShape,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Box(
-                Modifier
-                    .size(6.dp)
-                    .background(color, CircleShape)
-            )
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                color = color,
-                fontWeight = FontWeight.SemiBold,
-            )
         }
     }
 }
@@ -305,7 +246,7 @@ private fun DiscordToggleRow(
             enabled = enabled,
             onCheckedChange = onChecked,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.Black,
+                checkedThumbColor = Color.White,
                 checkedTrackColor = LocalAccent.current,
                 uncheckedThumbColor = CanopyColors.Muted,
                 uncheckedTrackColor = CanopyColors.Canvas,

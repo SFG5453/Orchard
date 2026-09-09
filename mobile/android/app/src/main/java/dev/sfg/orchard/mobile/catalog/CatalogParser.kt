@@ -138,6 +138,15 @@ object CatalogParser {
             )
         }
 
+    fun trackArtists(root: JSONObject, videoId: String): List<Artist> =
+        JsonTraversal.renderers(root, "playlistPanelVideoRenderer")
+            .firstOrNull { renderer ->
+                renderer.optString("videoId") == videoId ||
+                    JsonTraversal.videoId(JsonTraversal.navigation(renderer)) == videoId
+            }
+            ?.let(::extractTrackArtists)
+            .orEmpty()
+
     fun sectionItems(root: JSONObject, defaultArtist: String = ""): List<CatalogItem> {
         return allItems(root, defaultArtist).distinctBy(CatalogItem::stableId)
     }
@@ -555,6 +564,7 @@ object CatalogParser {
             explicit = explicit,
             musicVideoType = musicVideoType,
             isUpload = JsonTraversal.isPrivatelyOwned(renderer),
+            artists = extractTrackArtists(renderer),
         )
     }
 
@@ -642,7 +652,6 @@ object CatalogParser {
                 if (name.isNotBlank() && name.isArtistCandidate()) return name
             }
         }
-
         val subtitle = texts.drop(1).joinToString(" • ")
         val parts = subtitle.split(" • ").map(String::trim).filter(String::isNotBlank)
         val candidate = parts.firstOrNull { it.isArtistCandidate() }
@@ -651,6 +660,31 @@ object CatalogParser {
         if (fallbackArtist.isNotBlank() && fallbackArtist.isArtistCandidate()) return fallbackArtist
 
         return "Unknown artist"
+    }
+
+    private fun extractTrackArtists(renderer: JSONObject): List<Artist> {
+        val runs = mutableListOf<JSONObject>()
+        val columns = renderer.optJSONArray("flexColumns") ?: JSONArray()
+        for (i in 0 until columns.length()) {
+            val col = columns.optJSONObject(i)?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
+            runs += JsonTraversal.runs(col?.optJSONObject("text"))
+        }
+        // `playlistPanelVideoRenderer`, used by Autoplay and restored radio queues, has no flex
+        // columns. Its credited artists live in the long/short byline instead.
+        runs += JsonTraversal.runs(renderer.optJSONObject("longBylineText"))
+        runs += JsonTraversal.runs(renderer.optJSONObject("shortBylineText"))
+
+        return runs.mapNotNull { run ->
+            val endpoint = JsonTraversal.navigation(run) ?: run.optJSONObject("navigationEndpoint")
+            val pageType = JsonTraversal.pageType(endpoint)
+            val browseId = JsonTraversal.browseId(endpoint)
+            if (browseId.isNotBlank() && (pageType.contains("ARTIST", true) || browseId.startsWith("UC"))) {
+                val name = JsonTraversal.text(run)
+                if (name.isNotBlank() && name.isArtistCandidate()) Artist(id = browseId, name = name) else null
+            } else {
+                null
+            }
+        }.distinctBy(Artist::id)
     }
 
     private fun browsable(id: String, title: String, subtitle: String, art: String, pageType: String, renderer: JSONObject? = null): CatalogItem? {

@@ -42,6 +42,7 @@ import dev.sfg.orchard.mobile.playback.QueueEditor
 import dev.sfg.orchard.mobile.auth.SupabaseSyncService
 import dev.sfg.orchard.mobile.playback.smart.BestMixSorter
 import dev.sfg.orchard.mobile.playback.smart.TrackFeatures
+import dev.sfg.orchard.mobile.settings.CacheManager
 import dev.sfg.orchard.mobile.social.PartyState
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
@@ -131,13 +132,25 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PlaybackSnapshot())
     private val mutableArtwork = MutableStateFlow<TrackArtwork?>(null)
-    val playback: StateFlow<PlaybackSnapshot> = combine(targetPlayback, mutableArtwork) { snapshot, artwork ->
+    private val mutableArtistCredits = MutableStateFlow<Pair<String, List<dev.sfg.orchard.mobile.model.Artist>>?>(null)
+    val playback: StateFlow<PlaybackSnapshot> = combine(
+        targetPlayback,
+        mutableArtwork,
+        mutableArtistCredits,
+    ) { snapshot, artwork, artistCredits ->
         val track = snapshot.currentTrack
-        if (track == null || artwork?.trackId != track.id) snapshot else snapshot.copy(
+        if (track == null) return@combine snapshot
+        val matchingArtwork = artwork?.takeIf { it.trackId == track.id }
+        val matchingArtists = artistCredits?.takeIf { it.first == track.id }?.second.orEmpty()
+        snapshot.copy(
             currentTrack = track.copy(
-                artworkUrl = artwork.staticUrl.ifBlank { track.artworkUrl },
-                animatedArtworkUrl = artwork.videoUrl.ifBlank { track.animatedArtworkUrl },
-                animatedArtworkVerticalUrl = artwork.videoUrlVertical.ifBlank { track.animatedArtworkVerticalUrl },
+                artworkUrl = matchingArtwork?.staticUrl?.ifBlank { track.artworkUrl } ?: track.artworkUrl,
+                animatedArtworkUrl = matchingArtwork?.videoUrl?.ifBlank { track.animatedArtworkUrl }
+                    ?: track.animatedArtworkUrl,
+                animatedArtworkVerticalUrl = matchingArtwork?.videoUrlVertical
+                    ?.ifBlank { track.animatedArtworkVerticalUrl }
+                    ?: track.animatedArtworkVerticalUrl,
+                artists = matchingArtists.ifEmpty { track.artists },
             ),
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PlaybackSnapshot())
@@ -313,6 +326,12 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     val updateState: StateFlow<dev.sfg.orchard.mobile.UpdateState> = graph.updates.state
 
+    private val mutableCacheSizeBytes = MutableStateFlow(0L)
+    val cacheSizeBytes: StateFlow<Long> = mutableCacheSizeBytes.asStateFlow()
+
+    private val mutableIsClearingCache = MutableStateFlow(false)
+    val isClearingCache: StateFlow<Boolean> = mutableIsClearingCache.asStateFlow()
+
     fun checkForUpdates() = graph.updates.checkForUpdates()
 
     fun installUpdate(metadata: dev.sfg.orchard.mobile.MobileUpdateMetadata) =
@@ -322,11 +341,13 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         refreshHome()
+        refreshCacheSize()
         observeNetworkState()
         observeSearch()
         observeRemoteDevice()
         observeLocalDeviceName()
         observeArtwork()
+        observeArtistCredits()
         observeDetailArtwork()
         observeLyrics()
         observeAuthentication()
@@ -825,13 +846,32 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                     explicit = detail.explicit,
                 ),
             )
-            CatalogKind.ARTIST -> graph.library.saveArtist(
-                Artist(detail.id, detail.title, detail.artworkUrl, detail.subtitle),
-            )
+            CatalogKind.ARTIST -> setArtistSubscription(detail)
             CatalogKind.PLAYLIST -> graph.library.savePlaylist(
                 Playlist(detail.id, detail.title, detail.subtitle, detail.artworkUrl, detail.description, detail.tracks),
             )
             CatalogKind.TRACK -> Unit
+        }
+    }
+
+    private fun setArtistSubscription(detail: BrowseDetail) {
+        if (auth.value !is AuthState.SignedIn) {
+            showWarning("Sign in to YouTube Music to follow artists.")
+            return
+        }
+        val artist = Artist(detail.id, detail.title, detail.artworkUrl, detail.subtitle)
+        val wasSubscribed = library.value.savedArtists.any { it.id == artist.id }
+        val subscribe = !wasSubscribed
+        graph.library.setArtistSaved(artist, subscribe)
+        viewModelScope.launch {
+            runCatching { graph.catalog.setArtistSubscription(artist.id, subscribe) }
+                .onFailure { error ->
+                    graph.library.setArtistSaved(artist, wasSubscribed)
+                    showWarning(
+                        error.message ?: if (subscribe) "Could not follow this artist."
+                        else "Could not unfollow this artist.",
+                    )
+                }
         }
     }
 
@@ -1184,6 +1224,29 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         }
     }
     fun updateSettings(value: OrchardSettings) = graph.settings.updateSettings(value)
+
+    fun refreshCacheSize() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val size = CacheManager.calculateCacheSizeBytes(getApplication())
+            mutableCacheSizeBytes.value = size
+        }
+    }
+
+    fun clearCache(onComplete: ((Long) -> Unit)? = null) {
+        if (mutableIsClearingCache.value) return
+        viewModelScope.launch {
+            mutableIsClearingCache.value = true
+            val bytesCleared = withContext(Dispatchers.IO) {
+                CacheManager.clearAllCache(getApplication(), graph)
+            }
+            mutableCacheSizeBytes.value = withContext(Dispatchers.IO) {
+                CacheManager.calculateCacheSizeBytes(getApplication())
+            }
+            mutableIsClearingCache.value = false
+            onComplete?.invoke(bytesCleared)
+        }
+    }
+
     fun beginSignIn() = graph.auth.beginSignIn()
     fun completeSignIn(cookie: String, visitorData: String, dataSyncId: String) = graph.auth.completeSignIn(cookie, visitorData, dataSyncId)
     fun cancelSignIn() = graph.auth.cancelSignIn()
@@ -1321,6 +1384,27 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                             TrackArtwork(track.id, track.artworkUrl, track.animatedArtworkUrl, track.animatedArtworkVerticalUrl)
                         else -> graph.artwork.artwork(track)
                     }
+                }
+        }
+    }
+
+    private fun observeArtistCredits() {
+        viewModelScope.launch {
+            targetPlayback.map { it.currentTrack }.distinctUntilChanged { old, new -> old?.id == new?.id }
+                .collectLatest { track ->
+                    if (track == null) {
+                        mutableArtistCredits.value = null
+                        return@collectLatest
+                    }
+                    val existing = track.artists
+                        .filter { it.id.isNotBlank() }
+                        .distinctBy { it.id }
+                    mutableArtistCredits.value = track.id to existing
+                    if (!track.playbackSource.equals("youtube", ignoreCase = true) || existing.size > 1) {
+                        return@collectLatest
+                    }
+                    val resolved = runCatching { graph.catalog.trackArtists(track.id) }.getOrDefault(emptyList())
+                    if (resolved.isNotEmpty()) mutableArtistCredits.value = track.id to resolved
                 }
         }
     }

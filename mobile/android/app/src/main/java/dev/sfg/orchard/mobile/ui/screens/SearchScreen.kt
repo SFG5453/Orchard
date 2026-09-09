@@ -19,8 +19,10 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -55,6 +57,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,6 +78,11 @@ import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
 import dev.sfg.orchard.mobile.ui.components.OrchardSectionHeader
 import dev.sfg.orchard.mobile.ui.components.TrackRow
 import dev.sfg.orchard.mobile.ui.components.TrackRowShimmer
+import dev.sfg.orchard.mobile.ui.glass.GlassStyle
+import dev.sfg.orchard.mobile.ui.glass.LocalGlass
+import dev.sfg.orchard.mobile.ui.glass.LocalGlassScene
+import dev.sfg.orchard.mobile.ui.glass.glassSceneSource
+import dev.sfg.orchard.mobile.ui.glass.rememberGlassScene
 import dev.sfg.orchard.mobile.ui.glass.GlassTone
 import dev.sfg.orchard.mobile.ui.glass.glassFill
 import dev.sfg.orchard.mobile.ui.glass.glassPane
@@ -102,45 +111,56 @@ fun SearchScreen(
     onOpenDetail: (String) -> Unit,
     onShare: ((Track) -> Unit)? = null,
 ) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = OrchardChromeHeight + 16.dp)) {
-        item {
-            Column(Modifier.padding(horizontal = 16.dp).padding(top = 16.dp)) {
-                Text("Search", style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold), color = CanopyColors.Text)
-                Spacer(Modifier.height(14.dp))
-                SearchField(query, onQueryChange, onSubmit)
-                Spacer(Modifier.height(14.dp))
-                SearchCategoryChips(onOpenDetail = onOpenDetail)
-                Spacer(Modifier.height(18.dp))
-            }
-        }
-        when (state) {
-            LoadState.Idle -> history(
-                history = history,
-                onClear = onClearHistory,
-                onRemoveItem = onRemoveHistoryItem,
-                onQueryChange = onQueryChange,
-                onSearch = onSubmit,
-            )
-            LoadState.Loading -> item {
-                Column {
-                    repeat(5) { TrackRowShimmer() }
+    val plainStyle = remember { GlassStyle(enabled = false) }
+    // Record only the scrolling content. The floating field must never sample itself
+    // from the app-wide scene used by the mini-player and navigation.
+    val searchScene = if (LocalGlass.current.enabled) rememberGlassScene(downscale = 8f, chromeBlur = 24.dp) else null
+    Box(Modifier.fillMaxSize()) {
+        CompositionLocalProvider(LocalGlass provides plainStyle) {
+            LazyColumn(Modifier.fillMaxSize().glassSceneSource(searchScene), contentPadding = PaddingValues(top = 84.dp, bottom = OrchardChromeHeight + 16.dp)) {
+                item {
+                    Column(Modifier.padding(horizontal = 16.dp).padding(top = 16.dp)) {
+                        Text("Search", style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold), color = CanopyColors.Text)
+                        Spacer(Modifier.height(14.dp))
+                        SearchCategoryChips(onOpenDetail = onOpenDetail)
+                        Spacer(Modifier.height(18.dp))
+                    }
+                }
+                when (state) {
+                    LoadState.Idle -> history(
+                        history = history,
+                        onClear = onClearHistory,
+                        onRemoveItem = onRemoveHistoryItem,
+                        onQueryChange = onQueryChange,
+                        onSearch = onSubmit,
+                    )
+                    LoadState.Loading -> item {
+                        Column {
+                            repeat(5) { TrackRowShimmer() }
+                        }
+                    }
+                    is LoadState.Content -> results(
+                        results = state.value,
+                        downloadedTrackIds = downloadedTrackIds,
+                        downloadingTrackIds = downloadingTrackIds,
+                        onPlay = onPlay,
+                        onPlayNext = onPlayNext,
+                        onAdd = onAddToQueue,
+                        onAddToPlaylist = onAddToPlaylist,
+                        onDownloadTrack = onDownloadTrack,
+                        onRemoveDownloadTrack = onRemoveDownloadTrack,
+                        onOpen = onOpenDetail,
+                        onShare = onShare,
+                    )
+                    is LoadState.Empty -> item { MessagePanel("No matches", state.message) }
+                    is LoadState.Error -> item { MessagePanel("Search is unavailable", state.message, "Try again") { onSubmit(query) } }
                 }
             }
-            is LoadState.Content -> results(
-                results = state.value,
-                downloadedTrackIds = downloadedTrackIds,
-                downloadingTrackIds = downloadingTrackIds,
-                onPlay = onPlay,
-                onPlayNext = onPlayNext,
-                onAdd = onAddToQueue,
-                onAddToPlaylist = onAddToPlaylist,
-                onDownloadTrack = onDownloadTrack,
-                onRemoveDownloadTrack = onRemoveDownloadTrack,
-                onOpen = onOpenDetail,
-                onShare = onShare,
-            )
-            is LoadState.Empty -> item { MessagePanel("No matches", state.message) }
-            is LoadState.Error -> item { MessagePanel("Search is unavailable", state.message, "Try again") { onSubmit(query) } }
+        }
+        CompositionLocalProvider(LocalGlassScene provides searchScene) {
+            Box(Modifier.align(Alignment.TopCenter).padding(horizontal = 16.dp, vertical = 12.dp)) {
+                SearchField(query, onQueryChange, onSubmit)
+            }
         }
     }
 }
@@ -153,7 +173,11 @@ private fun SearchField(query: String, onChange: (String) -> Unit, onSubmit: (St
         onValueChange = onChange,
         modifier = Modifier
             .fillMaxWidth()
-            .glassPane(fieldShape, GlassTone.CONTROL),
+            // The local recording contains transparent gaps between results. Without a
+            // solid underlay, those gaps expose the original sharp text beneath the blur.
+            // Draw this first, then the softened colors, then TextField's sharp foreground.
+            .background(CanopyColors.Canvas, fieldShape)
+            .glassPane(fieldShape, GlassTone.CHROME),
         placeholder = { Text("Search songs, artists, albums, playlists…", color = CanopyColors.Muted) },
         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = CanopyColors.Muted) },
         trailingIcon = {
@@ -218,10 +242,9 @@ private fun SearchCategoryChip(
     Surface(
         modifier = modifier
             .height(46.dp)
-            .glassPane(chipShape, GlassTone.CONTROL)
             .clip(chipShape)
             .clickable(onClick = onClick),
-        color = glassFill(CanopyColors.Surface),
+        color = CanopyColors.Surface,
         shape = chipShape,
     ) {
         Row(
@@ -290,13 +313,12 @@ private fun LazyListScope.history(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 4.dp)
-                .glassPane(itemShape, GlassTone.CONTROL)
                 .clip(itemShape)
                 .clickable {
                     onQueryChange(value)
                     onSearch(value)
                 },
-            color = glassFill(CanopyColors.Surface),
+            color = CanopyColors.Surface,
             shape = itemShape,
         ) {
             Row(

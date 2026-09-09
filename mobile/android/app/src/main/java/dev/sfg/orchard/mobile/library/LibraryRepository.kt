@@ -68,6 +68,16 @@ class LibraryRepository(
         current.copy(savedArtists = toggle(current.savedArtists, artist, Artist::id))
     }
 
+    fun setArtistSaved(artist: Artist, saved: Boolean) = update { current ->
+        current.copy(
+            savedArtists = if (saved) {
+                (current.savedArtists.filterNot { it.id == artist.id } + artist)
+            } else {
+                current.savedArtists.filterNot { it.id == artist.id }
+            },
+        )
+    }
+
     fun savePlaylist(playlist: Playlist) = update { current ->
         current.copy(savedPlaylists = toggle(current.savedPlaylists, playlist, Playlist::id))
     }

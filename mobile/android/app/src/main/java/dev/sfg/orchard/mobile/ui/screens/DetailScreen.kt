@@ -153,6 +153,7 @@ fun DetailScreen(
                     shuffleAvailable = shuffleAvailable,
                     onAdd = onAddToQueue,
                     onSave = onSave,
+                    isSaved = isSaved,
                     onOpen = onOpenDetail,
                     downloadedTrackIds = downloadedTrackIds,
                     downloadingTrackIds = downloadingTrackIds,
@@ -385,6 +386,7 @@ private fun ArtistDetailContent(
     shuffleAvailable: Boolean,
     onAdd: ((Track) -> Unit)?,
     onSave: (BrowseDetail) -> Unit,
+    isSaved: Boolean,
     onOpen: (String) -> Unit,
     downloadedTrackIds: Set<String> = emptySet(),
     downloadingTrackIds: Set<String> = emptySet(),
@@ -394,6 +396,7 @@ private fun ArtistDetailContent(
     onShareCollection: ((BrowseDetail) -> Unit)? = null,
     onFetchSectionItems: (suspend (String, String) -> List<CatalogItem>)? = null,
 ) {
+    val palette = rememberArtworkPalette(detail.artworkUrl)
     var showBioSheet by remember { mutableStateOf(false) }
     var activeSectionSheet by remember { mutableStateOf<SectionSheetState?>(null) }
     var showAllPopularTracks by remember { mutableStateOf(false) }
@@ -415,58 +418,83 @@ private fun ArtistDetailContent(
         )
     }
 
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 128.dp)) {
-        item {
-            ArtistHero(
-                detail = detail,
-                onBack = onBack,
-                onPlayAll = onPlayAll,
-                onShuffle = onShuffle,
-                shuffleAvailable = shuffleAvailable,
-                onSave = onSave,
-                onOpenBio = { showBioSheet = true },
-            )
-        }
-        if (detail.tracks.isNotEmpty()) {
-            val hasMorePopular = detail.tracks.size > 5
-            val displayedTracks = if (showAllPopularTracks || !hasMorePopular) {
-                detail.tracks
-            } else {
-                detail.tracks.take(5)
-            }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    0f to palette.top.copy(alpha = 0.6f),
+                    0.4f to palette.deep,
+                    1f to CanopyColors.Chrome,
+                ),
+            ),
+    ) {
+        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 128.dp)) {
             item {
-                OrchardSectionHeader(
-                    title = "Popular",
-                    action = if (hasMorePopular) {
-                        if (showAllPopularTracks) "Show less" else "View all"
-                    } else null,
-                    onAction = if (hasMorePopular) {
-                        { showAllPopularTracks = !showAllPopularTracks }
-                    } else null,
+                ArtistHero(
+                    detail = detail,
+                    palette = palette,
+                    onBack = onBack,
+                    onPlayAll = onPlayAll,
+                    onShuffle = onShuffle,
+                    shuffleAvailable = shuffleAvailable,
+                    onSave = onSave,
+                    isSaved = isSaved,
+                    onOpenBio = { showBioSheet = true },
                 )
             }
-            // A collection may legitimately list the same track twice, so the id alone is not
-            // a unique key and LazyColumn throws the moment the duplicate scrolls in.
-            itemsIndexed(displayedTracks, key = { index, track -> "${track.id}_$index" }) { index, track ->
-                val trackIndex = detail.tracks.indexOf(track).coerceAtLeast(index)
-                val isDownloaded = downloadedTrackIds.contains(track.id)
-                val isDownloading = downloadingTrackIds.contains(track.id)
-                TrackRow(
-                    track = track,
-                    onPlay = { onPlayTrack(detail.tracks, trackIndex, detail.title) },
-                    modifier = Modifier.padding(horizontal = 8.dp),
-                    onPlayNext = onPlayNext?.let { action -> { action(track) } },
-                    onAddToQueue = onAdd?.let { action -> { action(track) } },
-                    onDownload = onDownloadTrack?.let { action -> { action(track) } },
-                    onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
-                    isDownloaded = isDownloaded,
-                    isDownloading = isDownloading,
-                    onShare = onShareTrack?.let { action -> { action(track) } },
-                    onViewAlbum = if (track.albumId.isNotBlank()) {{ onOpen(track.albumId) }} else null,
-                    onViewArtist = if (track.artistId.isNotBlank()) {{ onOpen(track.artistId) }} else null,
-                )
+
+            val latestRelease = detail.sections.flatMap { it.items }.firstOrNull { it is CatalogItem.Record } as? CatalogItem.Record
+            if (latestRelease != null) {
+                item {
+                    dev.sfg.orchard.mobile.ui.components.LatestReleaseCard(
+                        item = latestRelease,
+                        onClick = { onOpen(latestRelease.stableId) }
+                    )
+                }
             }
-        }
+
+            if (detail.tracks.isNotEmpty()) {
+                val hasMorePopular = detail.tracks.size > 5
+                val displayedTracks = if (showAllPopularTracks || !hasMorePopular) {
+                    detail.tracks
+                } else {
+                    detail.tracks.take(5)
+                }
+                item {
+                    OrchardSectionHeader(
+                        title = "Popular",
+                        action = if (hasMorePopular) {
+                            if (showAllPopularTracks) "Show less" else "View all"
+                        } else null,
+                        onAction = if (hasMorePopular) {
+                            { showAllPopularTracks = !showAllPopularTracks }
+                        } else null,
+                    )
+                }
+                // A collection may legitimately list the same track twice, so the id alone is not
+                // a unique key and LazyColumn throws the moment the duplicate scrolls in.
+                itemsIndexed(displayedTracks, key = { index, track -> "${track.id}_$index" }) { index, track ->
+                    val trackIndex = detail.tracks.indexOf(track).coerceAtLeast(index)
+                    val isDownloaded = downloadedTrackIds.contains(track.id)
+                    val isDownloading = downloadingTrackIds.contains(track.id)
+                    TrackRow(
+                        track = track,
+                        onPlay = { onPlayTrack(detail.tracks, trackIndex, detail.title) },
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                        onPlayNext = onPlayNext?.let { action -> { action(track) } },
+                        onAddToQueue = onAdd?.let { action -> { action(track) } },
+                        onDownload = onDownloadTrack?.let { action -> { action(track) } },
+                        onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
+                        isDownloaded = isDownloaded,
+                        isDownloading = isDownloading,
+                        onShare = onShareTrack?.let { action -> { action(track) } },
+                        onViewAlbum = if (track.albumId.isNotBlank()) {{ onOpen(track.albumId) }} else null,
+                        onViewArtist = if (track.artistId.isNotBlank()) {{ onOpen(track.artistId) }} else null,
+                        compact = true,
+                    )
+                }
+            }
         if (detail.sections.isNotEmpty()) {
             detail.sections.forEach { section ->
                 // Show "View all" when the section has a browse endpoint (can load more from API)
@@ -540,6 +568,7 @@ private fun ArtistDetailContent(
             }
         }
     }
+}
 }
 
 /** Standard album and playlist presentation. */

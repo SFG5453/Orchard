@@ -271,7 +271,7 @@ fun CollectionHero(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1f)
+                    .aspectRatio(0.75f)
                     .clipToBounds(),
             ) {
                 ArtworkTile(
@@ -294,8 +294,8 @@ fun CollectionHero(
                 Box(
                     Modifier.fillMaxSize().background(
                         Brush.verticalGradient(
-                            0.52f to Color.Transparent,
-                            0.80f to palette.deep.copy(alpha = 0.72f),
+                            0.70f to Color.Transparent,
+                            0.90f to palette.deep.copy(alpha = 0.72f),
                             1.00f to palette.deep,
                         ),
                     ),
@@ -334,8 +334,8 @@ fun CollectionHero(
                     }
                     if (artistName.isNotBlank()) {
                         Text(
-                            text = artistName,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                            text = artistName.uppercase(),
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp),
                             color = artistAccent,
                             textAlign = TextAlign.Center,
                             maxLines = 1,

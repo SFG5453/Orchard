@@ -52,6 +52,8 @@ import androidx.compose.material.icons.rounded.ClearAll
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -101,6 +103,8 @@ fun PlayerQueuePanel(
     onMove: (Int, Int) -> Unit,
     onClearUpcoming: () -> Unit,
     onShuffleUpcoming: (() -> Unit)? = null,
+    onShuffle: (() -> Unit)? = null,
+    onRepeat: (() -> Unit)? = null,
     autoplayEnabled: Boolean = true,
     autoplayLoading: Boolean = false,
     autoplayError: String = "",
@@ -121,6 +125,10 @@ fun PlayerQueuePanel(
         Box(modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
                 QueueTopControls(
+                    shuffle = playback.shuffle,
+                    repeatMode = playback.repeatMode,
+                    onShuffle = onShuffle,
+                    onRepeat = onRepeat,
                     smartCrossfade = smartCrossfade,
                     onBestMixUpcoming = onBestMixUpcoming,
                     upcomingCount = 0,
@@ -146,6 +154,10 @@ fun PlayerQueuePanel(
     ) {
         item {
             QueueTopControls(
+                shuffle = playback.shuffle,
+                repeatMode = playback.repeatMode,
+                onShuffle = onShuffle,
+                onRepeat = onRepeat,
                 smartCrossfade = smartCrossfade,
                 onBestMixUpcoming = onBestMixUpcoming,
                 upcomingCount = playback.upcoming.size,
@@ -207,6 +219,10 @@ fun PlayerQueuePanel(
  */
 @Composable
 fun QueueTopControls(
+    shuffle: Boolean,
+    repeatMode: dev.sfg.orchard.mobile.model.RepeatMode,
+    onShuffle: (() -> Unit)?,
+    onRepeat: (() -> Unit)?,
     smartCrossfade: Boolean,
     onBestMixUpcoming: ((onProgress: (String) -> Unit, onComplete: () -> Unit) -> Unit)?,
     upcomingCount: Int,
@@ -222,208 +238,53 @@ fun QueueTopControls(
     var isSorting by remember { mutableStateOf(false) }
     var sortStatusText by remember { mutableStateOf("") }
 
-    val transition = rememberInfiniteTransition(label = "QueueTopGlow")
-    val borderGlow by transition.animateFloat(
-        initialValue = 0.30f,
-        targetValue = 0.85f,
-        animationSpec = infiniteRepeatable(tween(2000), RepeatMode.Reverse),
-        label = "QueueTopBorderGlow",
-    )
-    val sparkleScale by transition.animateFloat(
-        initialValue = 0.90f,
-        targetValue = 1.15f,
-        animationSpec = infiniteRepeatable(tween(1600), RepeatMode.Reverse),
-        label = "QueueTopSparkleScale",
-    )
-
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        if (smartCrossfade) {
-            // Featured Best Mix Card
-            Surface(
-                color = Color.White.copy(alpha = 0.08f),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(
-                        width = 1.dp,
-                        brush = Brush.horizontalGradient(
-                            listOf(
-                                LocalAccent.current.copy(alpha = borderGlow * 0.7f),
-                                Color.White.copy(alpha = 0.35f),
-                                LocalAccent.current.copy(alpha = borderGlow),
-                            ),
-                        ),
-                        shape = RoundedCornerShape(20.dp),
-                    ),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .background(LocalAccent.current.copy(alpha = 0.18f), CircleShape),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Rounded.AutoAwesome,
-                                contentDescription = "Best Mix",
-                                tint = LocalAccent.current,
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .graphicsLayer {
-                                        scaleX = sparkleScale
-                                        scaleY = sparkleScale
-                                    },
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "Best Mix",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White,
-                            )
-                            Text(
-                                "Harmonic & tempo transition ordering",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.65f),
-                            )
-                        }
-                    }
-
-                    Button(
-                        onClick = {
-                            if (!isSorting && upcomingCount > 1 && onBestMixUpcoming != null) {
-                                isSorting = true
-                                sortStatusText = "Analyzing queue..."
-                                onBestMixUpcoming(
-                                    { status -> sortStatusText = status },
-                                    {
-                                        isSorting = false
-                                        sortStatusText = ""
-                                    },
-                                )
-                            }
-                        },
-                        enabled = !isSorting && upcomingCount > 1 && onBestMixUpcoming != null,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = LocalAccent.current,
-                            contentColor = Color.Black,
-                            disabledContainerColor = Color.White.copy(alpha = 0.12f),
-                            disabledContentColor = Color.White.copy(alpha = 0.45f),
-                        ),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(38.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                        ) {
-                            if (isSorting) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    color = Color.Black,
-                                    strokeWidth = 2.dp,
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    sortStatusText.ifBlank { "Sorting queue..." },
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp,
-                                )
-                            } else {
-                                Icon(
-                                    Icons.Rounded.AutoAwesome,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    if (upcomingCount <= 1) "Need 2+ upcoming tracks" else "Mix Upcoming Queue",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Quick Controls Row: Autoplay & Sleep Timer Pills
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Autoplay Pill
-            Surface(
-                color = Color.White.copy(alpha = if (autoplayEnabled) 0.14f else 0.07f),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable(enabled = onAutoplayEnabled != null) {
-                        onAutoplayEnabled?.invoke(!autoplayEnabled)
-                    },
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .background(
-                                if (autoplayEnabled) LocalAccent.current.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.10f),
-                                CircleShape,
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Rounded.AllInclusive,
-                            contentDescription = "Autoplay",
-                            tint = if (autoplayEnabled) LocalAccent.current else Color.White.copy(alpha = 0.6f),
-                            modifier = Modifier.size(18.dp),
+            QueueTopPill(
+                icon = Icons.Rounded.Shuffle,
+                active = shuffle,
+                onClick = { onShuffle?.invoke() },
+                modifier = Modifier.weight(1f)
+            )
+            QueueTopPill(
+                icon = if (repeatMode == dev.sfg.orchard.mobile.model.RepeatMode.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                active = repeatMode != dev.sfg.orchard.mobile.model.RepeatMode.OFF,
+                onClick = { onRepeat?.invoke() },
+                modifier = Modifier.weight(1f)
+            )
+            QueueTopPill(
+                icon = Icons.Rounded.AllInclusive,
+                active = autoplayEnabled,
+                onClick = { onAutoplayEnabled?.invoke(!autoplayEnabled) },
+                modifier = Modifier.weight(1f)
+            )
+            QueueTopPill(
+                icon = Icons.Rounded.AutoAwesome,
+                active = smartCrossfade || isSorting,
+                onClick = {
+                    if (!isSorting && upcomingCount > 1 && onBestMixUpcoming != null) {
+                        isSorting = true
+                        onBestMixUpcoming(
+                            { status -> sortStatusText = status },
+                            { isSorting = false; sortStatusText = "" },
                         )
                     }
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "Autoplay",
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                            color = Color.White,
-                        )
-                        Text(
-                            when {
-                                !autoplayEnabled -> "Off"
-                                autoplayLoading -> "Loading…"
-                                autoplayError.isNotBlank() -> "Error"
-                                else -> "On"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (autoplayEnabled) LocalAccent.current else Color.White.copy(alpha = 0.55f),
-                        )
-                    }
-                }
-            }
+                },
+                modifier = Modifier.weight(1f)
+            )
+        }
 
-            // Sleep Timer Pill
-            val isSleepActive = sleepTimerRemainingSeconds > 0 || sleepTimerEndOfTrack
+        // Keep sleep timer below if active or available
+        val isSleepActive = sleepTimerRemainingSeconds > 0 || sleepTimerEndOfTrack
+        if (isSleepActive || onAutoplayEnabled != null) {
             val sleepTimerText = when {
                 sleepTimerEndOfTrack -> "End of track"
                 sleepTimerRemainingSeconds > 0 -> "${(sleepTimerRemainingSeconds + 59) / 60}m remaining"
@@ -434,7 +295,7 @@ fun QueueTopControls(
                 color = Color.White.copy(alpha = if (isSleepActive) 0.14f else 0.07f),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .clickable(onClick = onSleepTimer),
             ) {
@@ -475,6 +336,34 @@ fun QueueTopControls(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun QueueTopPill(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    active: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val backgroundColor = if (active) Color.White.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.12f)
+    val iconColor = if (active) Color.Black else Color.White
+    Surface(
+        color = backgroundColor,
+        shape = CircleShape,
+        modifier = modifier
+            .height(38.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(19.dp)
+            )
         }
     }
 }

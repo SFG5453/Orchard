@@ -43,6 +43,7 @@ object CatalogJson {
         .put("bitDepth", value.bitDepth)
         .put("sampleRate", value.sampleRate)
         .put("hires", value.hires)
+        .put("artists", artists(value.artists))
 
     fun track(value: JSONObject): Track = Track(
         id = value.cleanString("id"),
@@ -63,6 +64,7 @@ object CatalogJson {
         bitDepth = value.optInt("bitDepth", 0).takeIf { it > 0 },
         sampleRate = value.optInt("sampleRate", 0).takeIf { it > 0 },
         hires = value.optBoolean("hires", false),
+        artists = artists(value.optJSONArray("artists")),
     )
 
     fun tracks(values: List<Track>): JSONArray = JSONArray().also { output ->
@@ -74,6 +76,19 @@ object CatalogJson {
         for (index in 0 until values.length()) {
             val value = values.optJSONObject(index) ?: continue
             val decoded = track(value)
+            if (decoded.id.isNotBlank()) add(decoded)
+        }
+    }
+
+    fun artists(values: List<Artist>): JSONArray = JSONArray().also { output ->
+        values.forEach { output.put(artist(it)) }
+    }
+
+    fun artists(values: JSONArray?): List<Artist> = buildList {
+        if (values == null) return@buildList
+        for (index in 0 until values.length()) {
+            val value = values.optJSONObject(index) ?: continue
+            val decoded = artist(value)
             if (decoded.id.isNotBlank()) add(decoded)
         }
     }

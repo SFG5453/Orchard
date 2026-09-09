@@ -33,8 +33,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -59,7 +61,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
 import dev.sfg.orchard.mobile.model.BrowseDetail
+import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.glass.GlassTone
 import dev.sfg.orchard.mobile.ui.glass.glassFill
@@ -71,17 +76,19 @@ import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 @Composable
 fun ArtistHero(
     detail: BrowseDetail,
+    palette: ArtworkPalette,
     onBack: () -> Unit,
     onPlayAll: (List<Track>, String) -> Unit,
     onShuffle: (List<Track>, String) -> Unit,
     shuffleAvailable: Boolean,
     onSave: (BrowseDetail) -> Unit,
+    isSaved: Boolean,
     onOpenBio: () -> Unit,
 ) {
     Box(
         Modifier
             .fillMaxWidth()
-            .height(370.dp),
+            .height(450.dp),
     ) {
         ArtworkTile(detail.artworkUrl, detail.title, Modifier.fillMaxSize(), 0)
         Box(
@@ -89,10 +96,10 @@ fun ArtistHero(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to Color.Black.copy(alpha = 0.45f),
-                        0.4f to Color.Transparent,
-                        0.7f to CanopyColors.Chrome.copy(alpha = 0.8f),
-                        1f to CanopyColors.Chrome,
+                        0f to Color.Black.copy(alpha = 0.25f),
+                        0.5f to Color.Transparent,
+                        0.75f to palette.deep.copy(alpha = 0.6f),
+                        1f to palette.deep,
                     ),
                 ),
         )
@@ -107,67 +114,35 @@ fun ArtistHero(
             if (detail.description.isNotBlank()) {
                 Surface(
                     onClick = onOpenBio,
-                    color = Color.Black.copy(alpha = 0.4f),
+                    color = glassFill(CanopyColors.Surface),
                     shape = CircleShape,
-                    modifier = Modifier.padding(end = 8.dp),
+                    modifier = Modifier.padding(end = 8.dp).size(40.dp).glassPane(CircleShape, GlassTone.CONTROL),
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    ) {
-                        Icon(Icons.Rounded.Info, contentDescription = "About", tint = CanopyColors.Text, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("About", style = MaterialTheme.typography.labelMedium, color = CanopyColors.Text)
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.Info, contentDescription = "About", tint = CanopyColors.Text, modifier = Modifier.size(20.dp))
                     }
                 }
             }
         }
         Column(
             Modifier
-                .align(Alignment.BottomStart)
-                .padding(horizontal = 20.dp, vertical = 14.dp),
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 20.dp, vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Surface(
-                color = Color.White.copy(alpha = 0.15f),
-                shape = CircleShape,
-                modifier = Modifier.padding(bottom = 8.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                ) {
-                    Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = LocalAccent.current, modifier = Modifier.size(12.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Text(
-                        text = detail.subtitle.ifBlank { "ARTIST" }.uppercase(),
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp),
-                        color = Color.White,
-                    )
-                }
-            }
             Text(
                 text = detail.title,
-                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Black, letterSpacing = (-1).sp),
+                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold, letterSpacing = (-1).sp),
                 color = Color.White,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(16.dp))
             Row(
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Surface(
-                    onClick = { onPlayAll(detail.tracks, detail.title) },
-                    enabled = detail.tracks.isNotEmpty(),
-                    color = LocalAccent.current,
-                    shape = CircleShape,
-                    modifier = Modifier.size(52.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.PlayArrow, contentDescription = "Play all", tint = Color.Black, modifier = Modifier.size(28.dp))
-                    }
-                }
                 Surface(
                     onClick = { onShuffle(detail.tracks, detail.title) },
                     enabled = detail.tracks.isNotEmpty() && shuffleAvailable,
@@ -180,16 +155,82 @@ fun ArtistHero(
                     }
                 }
                 Surface(
+                    onClick = { onPlayAll(detail.tracks, detail.title) },
+                    enabled = detail.tracks.isNotEmpty(),
+                    color = LocalAccent.current,
+                    shape = CircleShape,
+                    modifier = Modifier.size(56.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.PlayArrow, contentDescription = "Play all", tint = Color.Black, modifier = Modifier.size(32.dp))
+                    }
+                }
+                Surface(
                     onClick = { onSave(detail) },
                     color = glassFill(CanopyColors.Surface),
                     shape = CircleShape,
                     modifier = Modifier.size(44.dp).glassPane(CircleShape, GlassTone.CONTROL),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.FavoriteBorder, contentDescription = "Favorite", tint = CanopyColors.Favorite, modifier = Modifier.size(20.dp))
+                        Icon(
+                            imageVector = if (isSaved) Icons.Filled.Favorite else Icons.Rounded.FavoriteBorder,
+                            contentDescription = if (isSaved) "Unfollow artist" else "Follow artist",
+                            tint = CanopyColors.Favorite,
+                            modifier = Modifier.size(20.dp),
+                        )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun LatestReleaseCard(
+    item: CatalogItem.Record,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onClick,
+        color = Color.White.copy(alpha = 0.06f),
+        shape = RoundedCornerShape(16.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(10.dp)
+        ) {
+            Box(
+                Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(10.dp))
+            ) {
+                ArtworkTile(item.artworkUrl, item.title, Modifier.fillMaxSize(), 10)
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "LATEST RELEASE",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
+                    color = CanopyColors.Muted,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = CanopyColors.Text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Icon(
+                Icons.Rounded.PlayArrow,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.5f),
+                modifier = Modifier.padding(horizontal = 8.dp).size(24.dp)
+            )
         }
     }
 }

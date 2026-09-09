@@ -19,8 +19,6 @@
 
 package dev.sfg.orchard.mobile.ui.glass
 
-import android.graphics.ColorMatrix
-import android.graphics.ColorMatrixColorFilter
 import android.graphics.RuntimeShader
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -42,6 +40,7 @@ import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.GraphicsLayer
@@ -55,27 +54,18 @@ import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.node.requireLayoutCoordinates
 import androidx.compose.ui.platform.InspectorInfo
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
-import kotlin.math.roundToInt
+import kotlin.math.ceil
 
 /**
  * Cuts a frosted pane out of the backdrop recorded by [glassWashSource] / [glassSceneSource].
  *
- * The pane is a real blur, not a tinted film over what is behind it: the region of the recording
- * that sits under the pane is redrawn into a small offscreen layer, blurred there, and scaled back
- * up. Blurring at [DOWNSCALE]× less than screen resolution is what makes it affordable — a nav bar
- * spanning a 1080px screen blurs 270px of width instead, and the result is a blur, so there is no
- * detail in it left to lose on the way back up. The blur and the saturation lift ride in one
- * [android.graphics.RenderEffect] chain, evaluated by the GPU as the layer is composited.
- *
- * AGSL then draws the frost itself over that blurred base — tint, grain, rim light and the rounded
- * mask in a single pass, with no offscreen buffer and no extra layers for clipping or a border.
- * Android 12 has [android.graphics.RenderEffect] but no [RuntimeShader], so it gets the blur with a
- * plainer gradient finish.
+ * Shared quarter-resolution backdrops are softened once in [GlassScene]. Each pane refracts
+ * a crop with one texture lookup per low-resolution pixel on Android 13 and later.
+ * A full-resolution finish supplies tint and a crisp rim without blurring the foreground.
+ * Android 12 uses the shared softened backdrop and a gradient finish.
  *
  * The receiver is returned untouched when the setting is off, so users who never turn it on pay
  * nothing at all — not even a branch during draw.
@@ -88,11 +78,10 @@ fun Modifier.glassPane(shape: Shape, tone: GlassTone = GlassTone.PANEL): Modifie
 }
 
 /**
- * How much smaller than the screen the blur is computed at. Four is the point where the cost has
- * dropped sixteenfold and upscaling still shows nothing, because everything above the blur's own
- * cutoff frequency is gone by then anyway.
+ * Backdrop processing uses the scene’s reduced resolution.
+ * Foreground content and the rim remain at native resolution.
  */
-private const val DOWNSCALE = 4f
+private const val SAMPLE_PADDING = 4f
 
 private data class GlassPaneElement(
     private val shape: Shape,
@@ -122,7 +111,7 @@ private class GlassPaneNode(
     private val seed = SEEDS[System.identityHashCode(this).mod(SEEDS.size)]
 
     private var blur: GraphicsLayer? = null
-    private var blurRadius = Float.NaN
+    private var lens: LiquidLens? = null
 
     /** Held rather than re-required on the way out: releasing is not worth a detach-order risk. */
     private var graphics: GraphicsContext? = null
@@ -131,6 +120,7 @@ private class GlassPaneNode(
     private var fallback: GlassFrostGradient? = null
 
     private var outlineSize = Size.Unspecified
+    private var outlineDensity = Float.NaN
     private var outlineDirection: LayoutDirection? = null
     private var outline: Outline? = null
     private var clip: Path? = null
@@ -140,8 +130,7 @@ private class GlassPaneNode(
 
     fun update(shape: Shape, tone: GlassTone, style: GlassStyle, scene: GlassScene?) {
         if (this.tone != tone) {
-            // Tone decides the blur radius and the weight of the frost over it.
-            blurRadius = Float.NaN
+            // Tone decides the weight of the finish over the shared backdrop.
             fallback = null
         }
         this.shape = shape
@@ -156,13 +145,18 @@ private class GlassPaneNode(
         if (size.minDimension > 0.5f) {
             val spec = tone.spec()
             val shapeOutline = outline()
-            val blurred = drawBackdrop(spec)
+            val blurred = drawBackdrop()
             // Reading the tint here rather than at composition keeps a cover change in the draw
             // phase: panes repaint, nothing recomposes.
             val tint = style.tint
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val painter = frost ?: GlassFrostShader(seed).also { frost = it }
-                painter.draw(this, size, corners, spec, tint, blurred)
+                val path = clip
+                if (shapeOutline is Outline.Generic && path != null) {
+                    clipPath(path) { painter.draw(this, size, corners, spec, tint, blurred) }
+                } else {
+                    painter.draw(this, size, corners, spec, tint, blurred)
+                }
             } else {
                 val painter = fallback ?: GlassFrostGradient(spec).also { fallback = it }
                 painter.draw(this, shapeOutline, tint, blurred)
@@ -172,14 +166,14 @@ private class GlassPaneNode(
     }
 
     /**
-     * Redraws the slice of the recording that sits under this pane into a downscaled layer,
-     * blurred. Returns false before the first frame has been recorded, or on a screen with no
-     * source at all, and the frost then falls back to standing on its own.
+     * Crops the shared softened texture beneath this pane into a padded refraction layer.
+     * Before a source is recorded, the finish supplies a standalone fallback.
      */
-    private fun DrawScope.drawBackdrop(spec: GlassSpec): Boolean {
+    private fun DrawScope.drawBackdrop(): Boolean {
         val scene = scene ?: return false
+        val downscale = scene.downscale
         val chrome = tone == GlassTone.CHROME
-        val source = if (chrome) scene.scene else scene.wash
+        val source = if (chrome) scene.sceneSample else scene.washSample
         if (if (chrome) !scene.sceneRecorded else !scene.washRecorded) return false
 
         val origin = if (chrome) scene.sceneOrigin else scene.washOrigin
@@ -193,25 +187,28 @@ private class GlassPaneNode(
                     graphics = context
                     context.createGraphicsLayer().also { blur = it }
                 }
-        val radius = spec.blur.toPx() / DOWNSCALE
-        if (radius != blurRadius) {
-            layer.renderEffect = frostedBackdropEffect(radius)
-            blurRadius = radius
+        val width = ceil(size.width / downscale).toInt().coerceAtLeast(1)
+        val height = ceil(size.height / downscale).toInt().coerceAtLeast(1)
+        // A padded crop lets refraction sample outside the pane instead of stretching its edge.
+        // The full-resolution finish below supplies the antialiased mask and crisp rim.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val painter = lens ?: LiquidLens().also { lens = it }
+            layer.renderEffect = painter.effect(size, corners, density, downscale)
         }
-
-        val width = (size.width / DOWNSCALE).roundToInt().coerceAtLeast(1)
-        val height = (size.height / DOWNSCALE).roundToInt().coerceAtLeast(1)
-        layer.record(IntSize(width, height)) {
-            scale(1f / DOWNSCALE, pivot = Offset.Zero) {
-                translate(-offset.x, -offset.y) { drawLayer(source) }
+        layer.record(IntSize(width + 8, height + 8)) {
+            translate(SAMPLE_PADDING - offset.x / downscale,
+                SAMPLE_PADDING - offset.y / downscale) { drawLayer(source) }
+        }
+        val paint: DrawScope.() -> Unit = {
+            scale(downscale, pivot = Offset.Zero) {
+                translate(-SAMPLE_PADDING, -SAMPLE_PADDING) { drawLayer(layer) }
             }
         }
-
         val path = clip
         if (path == null) {
-            scale(DOWNSCALE, pivot = Offset.Zero) { drawLayer(layer) }
+            clipRect { paint() }
         } else {
-            clipPath(path) { scale(DOWNSCALE, pivot = Offset.Zero) { drawLayer(layer) } }
+            clipPath(path) { paint() }
         }
         return true
     }
@@ -219,12 +216,11 @@ private class GlassPaneNode(
     /**
      * Resolves the caller's [Shape] once per size, into a clip path for the blurred backdrop and
      * the four corner radii the frost's distance field needs. Square corners need no clip and no
-     * path, which is the common case for a bar; the shader squares off anything that is not a
-     * rounded rectangle, so a caller using one of those is expected to be clipping already.
+     * path. Generic outlines clip both the background and the finish to the caller’s shape.
      */
     private fun DrawScope.outline(): Outline {
         outline
-            ?.takeIf { size == outlineSize && layoutDirection == outlineDirection }
+            ?.takeIf { size == outlineSize && layoutDirection == outlineDirection && density == outlineDensity }
             ?.let {
                 return it
             }
@@ -241,6 +237,7 @@ private class GlassPaneNode(
         }
         clip = if (resolved is Outline.Rectangle) null else Path().apply { addOutline(resolved) }
         outline = resolved
+        outlineDensity = density
         outlineSize = size
         outlineDirection = layoutDirection
         return resolved
@@ -250,29 +247,69 @@ private class GlassPaneNode(
         blur?.let { layer -> graphics?.releaseGraphicsLayer(layer) }
         blur = null
         graphics = null
-        blurRadius = Float.NaN
+        lens = null
         frost = null
         fallback = null
         outline = null
+        outlineSize = Size.Unspecified
+        outlineDirection = null
         clip = null
     }
 }
 
-/**
- * Blur plus a saturation lift, in one chain. Real frosted glass scatters rather than dims, and a
- * plain blur of a dark app reads as a smudge; pushing saturation back up is what makes the cover
- * behind a pane still look like the cover.
- */
-private fun frostedBackdropEffect(radius: Float) =
-    android.graphics.RenderEffect.createColorFilterEffect(
-            ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(1.7f) }),
-            android.graphics.RenderEffect.createBlurEffect(
-                radius,
-                radius,
-                android.graphics.Shader.TileMode.CLAMP,
-            ),
-        )
-        .asComposeRenderEffect()
+/** A single texture lookup per low-resolution fragment; no blur loop or bitmap readback. */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+private class LiquidLens {
+    private val shader = RuntimeShader(LIQUID_LENS_SHADER)
+    private var lastSize = Size.Unspecified
+    private var lastDensity = Float.NaN
+    private var lastDownscale = Float.NaN
+    private val lastCorners = FloatArray(4) { Float.NaN }
+    private var cached: androidx.compose.ui.graphics.RenderEffect? = null
+
+    fun effect(size: Size, corners: FloatArray, density: Float, downscale: Float): androidx.compose.ui.graphics.RenderEffect {
+        if (size != lastSize || density != lastDensity || downscale != lastDownscale || !corners.contentEquals(lastCorners)) {
+            shader.setFloatUniform("extent", size.width / downscale, size.height / downscale)
+            shader.setFloatUniform("radii", corners[0] / downscale, corners[1] / downscale,
+                corners[2] / downscale, corners[3] / downscale)
+            shader.setFloatUniform("bevel", (10f * density / downscale).coerceAtLeast(1f))
+            // RenderEffect snapshots uniforms: replace only when geometry changes.
+            cached = android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "backdrop")
+                .asComposeRenderEffect()
+            lastSize = size
+            lastDensity = density
+            lastDownscale = downscale
+            corners.copyInto(lastCorners)
+        }
+        return checkNotNull(cached)
+    }
+}
+
+private const val LIQUID_LENS_SHADER = """
+uniform shader backdrop;
+uniform float2 extent;
+uniform float4 radii;
+uniform float bevel;
+half4 main(float2 coord) {
+    float2 p = coord - float2(4.0) - extent * 0.5;
+    float r = p.x > 0.0 ? (p.y > 0.0 ? radii.z : radii.y)
+                         : (p.y > 0.0 ? radii.w : radii.x);
+    float2 q = abs(p) - extent * 0.5 + r;
+    float2 outer = max(q, float2(0.0));
+    float len = length(outer);
+    float distance = min(max(q.x, q.y), 0.0) + len - r;
+    float2 normal = len > 0.001 ? outer / max(len, 0.001)
+        : (q.x > q.y ? float2(1.0, 0.0) : float2(0.0, 1.0));
+    normal *= sign(p);
+    float edge = clamp(1.0 + distance / bevel, 0.0, 1.0);
+    // Curved edge bends the transmitted image inward, leaving the body undistorted.
+    float2 sampleAt = coord - normal * (edge * edge * min(bevel * 0.65, 3.0));
+    half4 color = backdrop.eval(sampleAt);
+    half luminance = dot(color.rgb, half3(0.2126, 0.7152, 0.0722));
+    color.rgb = clamp(mix(half3(luminance), color.rgb, 1.15), 0.0, color.a);
+    return color;
+}
+"""
 
 /** The frost over the blurred backdrop: tint, light film, grain, rim and the rounded mask. */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -395,7 +432,6 @@ private class GlassFrostGradient(private val spec: GlassSpec) {
  * the frost has to carry the whole pane on its own.
  */
 private class GlassSpec(
-    val blur: Dp,
     val base: Color,
     val film: Float,
     val tintMix: Float,
@@ -408,7 +444,6 @@ private class GlassSpec(
 
 private val PanelSpec =
     GlassSpec(
-        blur = 28.dp,
         base = CanopyColors.Glass,
         film = 0.14f,
         tintMix = 0.06f,
@@ -421,7 +456,6 @@ private val PanelSpec =
 
 private val SecondarySpec =
     GlassSpec(
-        blur = 22.dp,
         base = CanopyColors.Glass,
         film = 0.18f,
         tintMix = 0.05f,
@@ -434,11 +468,10 @@ private val SecondarySpec =
 
 private val ChromeSpec =
     GlassSpec(
-        blur = 36.dp,
         base = CanopyColors.GlassChrome,
-        film = 0.44f,
+        film = 0.18f,
         tintMix = 0.07f,
-        contrastUndercoat = 0.28f,
+        contrastUndercoat = 0.18f,
         solidBase = CanopyColors.Chrome,
         solidFilm = 0.98f,
         solidTintMix = 0.04f,
@@ -447,7 +480,6 @@ private val ChromeSpec =
 
 private val OverlaySpec =
     GlassSpec(
-        blur = 42.dp,
         base = CanopyColors.GlassChrome,
         film = 0.74f,
         tintMix = 0.05f,
@@ -460,7 +492,6 @@ private val OverlaySpec =
 
 private val ControlSpec =
     GlassSpec(
-        blur = 18.dp,
         base = CanopyColors.Glass,
         film = 0.16f,
         tintMix = 0.05f,
@@ -509,7 +540,7 @@ float roundedBox(float2 p, float2 halfExtent, float4 radii) {
 }
 
 float hash(float2 p) {
-    return fract(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
+    return fract(52.9829189 * fract(dot(p, float2(0.06711056, 0.00583715))));
 }
 
 // Silky satin micro-frost noise (authentic etched glass finish, eliminates banding)
@@ -552,16 +583,16 @@ half4 main(float2 coord) {
     float alpha = clamp(undercoatAlpha + frostAlpha * (1.0 - undercoatAlpha * 0.40), 0.0, 1.0);
 
     // 3. Tactile satin micro-frost (breaks up gradient banding, adds velvety etched texture)
-    body = body + satinFrost(coord + uSeed) * 0.020;
+    body = body + (hash(coord + uSeed) - 0.5) * 0.004;
 
     // 4. Architectural etched edge treatment:
     // Crisp 1.0px inner perimeter hairline (strictly inside shape: d in [-1.2, 0.0])
     float innerHairline = smoothstep(-1.2, -0.1, d) * mask;
     float topGlint = clamp(1.0 - uv.y * 1.9, 0.0, 1.0) * (0.58 + 0.42 * clamp(1.0 - uv.x * 1.3, 0.0, 1.0));
-    float rimHighlight = innerHairline * (0.13 + 0.32 * topGlint);
+    float rimHighlight = innerHairline * (0.22 + 0.65 * topGlint);
 
     // Soft subsurface perimeter light scattering (0 to 5px inside edge)
-    float innerScatter = smoothstep(-5.0, 0.0, d) * (ambientTop * 0.032 + ambientLeft * 0.016);
+    float innerScatter = smoothstep(-8.0, 0.0, d) * (ambientTop * 0.10 + ambientLeft * 0.05);
 
     float totalEdge = rimHighlight + innerScatter;
     body = body + totalEdge;

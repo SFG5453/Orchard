@@ -86,6 +86,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,6 +94,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -115,6 +117,7 @@ import dev.sfg.orchard.mobile.social.PartyState
 import dev.sfg.orchard.mobile.social.PartyStatus
 import dev.sfg.orchard.mobile.social.cleanRoomCode
 import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
+import dev.sfg.orchard.mobile.ui.glass.GlassStyle
 import dev.sfg.orchard.mobile.ui.glass.GlassTone
 import dev.sfg.orchard.mobile.ui.glass.LocalGlass
 import dev.sfg.orchard.mobile.ui.glass.glassFill
@@ -156,29 +159,10 @@ fun DevicesScreen(
     onRenameDevice: (PlaybackDevice, String) -> Unit = { _, _ -> },
     onRemoveDevice: (String) -> Unit = {},
 ) {
-    val glass = LocalGlass.current.enabled
-    if (glass) {
+    val plainStyle = remember { GlassStyle(enabled = false) }
+    val accent = lerp(LocalAccent.current, Color.White, 0.35f)
+    CompositionLocalProvider(LocalGlass provides plainStyle, LocalAccent provides accent) {
         FrostedDevicesScreenContent(
-            targets = targets,
-            connectMessage = connectMessage,
-            protocolVersion = protocolVersion,
-            audioEngine = audioEngine,
-            party = party,
-            onBack = onBack,
-            onSelect = onSelect,
-            onPair = onPair,
-            onDisconnect = onDisconnect,
-            onPresetSelect = onPresetSelect,
-            onToggleAutoEq = onToggleAutoEq,
-            onToggleManualEq = onToggleManualEq,
-            onCreateParty = onCreateParty,
-            onJoinParty = onJoinParty,
-            onLeaveParty = onLeaveParty,
-            onRenameDevice = onRenameDevice,
-            onRemoveDevice = onRemoveDevice,
-        )
-    } else {
-        StandardDevicesScreenContent(
             targets = targets,
             connectMessage = connectMessage,
             protocolVersion = protocolVersion,
@@ -201,7 +185,7 @@ fun DevicesScreen(
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// REVAMPED FROSTED GLASS CONNECT SCREEN
+// CONNECT SCREEN
 // ══════════════════════════════════════════════════════════════════════════════
 
 @Composable
@@ -244,99 +228,99 @@ private fun FrostedDevicesScreenContent(
     val hasRemote = targets.devices.any { !it.isLocal }
     val message = targets.message.ifBlank { connectMessage }
 
-    Column(
-        modifier =
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)
-    ) {
-        Spacer(Modifier.height(12.dp))
-
-        // Top Navigation & Header Row
-        FrostedHeaderRow(party = party, hasRemote = hasRemote, onBack = onBack)
-
-        Spacer(Modifier.height(18.dp))
-
-        // Hero Active Output Destination Card
-        activeDevice?.let { device ->
-            FrostedActiveDeviceHeroCard(
-                device = device,
-                isTransferring = targets.isTransferring,
-                deviceWord = context.selfDeviceWord(),
-                onRename = { deviceToRename = device },
-            )
-            Spacer(Modifier.height(14.dp))
+    Column(Modifier.fillMaxSize().background(Color.Black)) {
+        Box(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
+            FrostedHeaderRow(onBack = onBack)
         }
-
-        // Status or Error Message Banner
-        if (message.isNotBlank()) {
-            FrostedMessageBanner(message = message)
-            Spacer(Modifier.height(14.dp))
-        }
-
-        // Available Playback Targets (if any additional devices exist)
-        if (availableDevices.isNotEmpty()) {
-            FrostedSectionHeader(
-                title = "Available Devices",
-                badge = "${availableDevices.size} paired",
-            )
-            Spacer(Modifier.height(8.dp))
-
-            availableDevices.forEach { device ->
-                FrostedDeviceRow(
+        PanelDivider()
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+            Spacer(Modifier.height(18.dp))
+            // Hero Active Output Destination Card
+            activeDevice?.let { device ->
+                FrostedActiveDeviceHeroCard(
                     device = device,
-                    onClick = {
-                        onSelect(
-                            if (device.isLocal) PlaybackTarget.LocalPhone
-                            else PlaybackTarget.Remote(device.id)
-                        )
-                    },
+                    isTransferring = targets.isTransferring,
+                    deviceWord = context.selfDeviceWord(),
                     onRename = { deviceToRename = device },
-                    onRemove = if (!device.isLocal) { { onRemoveDevice(device.id) } } else null,
+                )
+                Spacer(Modifier.height(14.dp))
+            }
+
+            // Status or Error Message Banner
+            if (message.isNotBlank()) {
+                FrostedMessageBanner(message = message)
+                Spacer(Modifier.height(14.dp))
+            }
+
+            // Available Playback Targets (if any additional devices exist)
+            if (availableDevices.isNotEmpty()) {
+                FrostedSectionHeader(
+                    title = "Available devices",
                 )
                 Spacer(Modifier.height(8.dp))
+
+                availableDevices.forEach { device ->
+                    FrostedDeviceRow(
+                        device = device,
+                        onClick = {
+                            onSelect(
+                                if (device.isLocal) PlaybackTarget.LocalPhone
+                                else PlaybackTarget.Remote(device.id)
+                            )
+                        },
+                        onRename = { deviceToRename = device },
+                        onRemove = if (!device.isLocal) { { onRemoveDevice(device.id) } } else null,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                Spacer(Modifier.height(8.dp))
             }
-            Spacer(Modifier.height(8.dp))
-        }
 
-        // Remote DSP Audio Engine (when targeting remote desktop with v2+ protocol)
-        if (protocolVersion >= 2 && targets.selected is PlaybackTarget.Remote) {
-            FrostedRemoteAudioEngineCard(
-                audioEngine = audioEngine,
-                onPresetSelect = onPresetSelect,
-                onToggleAutoEq = onToggleAutoEq,
-                onToggleManualEq = onToggleManualEq,
-            )
-            Spacer(Modifier.height(14.dp))
-        }
-
-        // Desktop LAN Pairing Hub
-        FrostedPairingPanel(
-            input = pairingInput,
-            onInput = { pairingInput = it },
-            onPair = { onPair(pairingInput) },
-            onScan = {
-                scanner.launch(
-                    Intent(context, PairingScanActivity::class.java).apply {
-                        action = "com.google.zxing.client.android.SCAN"
-                        putExtra("SCAN_FORMATS", "QR_CODE")
-                    }
+            // Remote DSP Audio Engine (when targeting remote desktop with v2+ protocol)
+            if (protocolVersion >= 2 && targets.selected is PlaybackTarget.Remote) {
+                FrostedRemoteAudioEngineCard(
+                    audioEngine = audioEngine,
+                    onPresetSelect = onPresetSelect,
+                    onToggleAutoEq = onToggleAutoEq,
+                    onToggleManualEq = onToggleManualEq,
                 )
-            },
-            onDisconnect = onDisconnect,
-            hasRemote = hasRemote,
-        )
+                Spacer(Modifier.height(14.dp))
+            }
 
-        Spacer(Modifier.height(14.dp))
+            PanelDivider()
 
-        // Real-time Listening Party Hub
-        FrostedListeningPartyPanel(
-            party = party,
-            onCreate = onCreateParty,
-            onJoin = onJoinParty,
-            onLeave = onLeaveParty,
-        )
+            // Desktop LAN Pairing Hub
+            FrostedPairingPanel(
+                input = pairingInput,
+                onInput = { pairingInput = it },
+                onPair = { onPair(pairingInput) },
+                onScan = {
+                    scanner.launch(
+                        Intent(context, PairingScanActivity::class.java).apply {
+                            action = "com.google.zxing.client.android.SCAN"
+                            putExtra("SCAN_FORMATS", "QR_CODE")
+                        }
+                    )
+                },
+                onDisconnect = onDisconnect,
+                hasRemote = hasRemote,
+            )
 
-        // Bottom space so floating navigation bar & mini player do not overlap contents
-        Spacer(Modifier.height(OrchardChromeHeight + 20.dp))
+            Spacer(Modifier.height(14.dp))
+
+            PanelDivider()
+
+            // Real-time Listening Party Hub
+            FrostedListeningPartyPanel(
+                party = party,
+                onCreate = onCreateParty,
+                onJoin = onJoinParty,
+                onLeave = onLeaveParty,
+            )
+
+            // Bottom space so floating navigation bar & mini player do not overlap contents
+            Spacer(Modifier.height(OrchardChromeHeight + 20.dp))
+        }
     }
 
     deviceToRename?.let { dev ->
@@ -519,87 +503,12 @@ fun RenameDeviceDialog(
 // ──────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun FrostedHeaderRow(party: PartyState, hasRemote: Boolean, onBack: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Surface(
-                onClick = onBack,
-                shape = CircleShape,
-                color = glassFill(CanopyColors.Surface),
-                modifier =
-                    Modifier.size(42.dp)
-                        .glassPane(CircleShape, GlassTone.CONTROL)
-                        .border(1.dp, CanopyColors.Rule, CircleShape),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Back",
-                        tint = CanopyColors.Text,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-
-            Spacer(Modifier.width(12.dp))
-
-            Column {
-                Text(
-                    text = "Connect",
-                    style =
-                        MaterialTheme.typography.displayLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 28.sp,
-                            letterSpacing = (-0.5).sp,
-                        ),
-                    color = CanopyColors.Text,
-                )
-                Text(
-                    text = "Devices & listening parties",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = CanopyColors.Muted,
-                )
-            }
+private fun FrostedHeaderRow(onBack: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = LocalAccent.current)
         }
-
-        // Live connection badge chip
-        val (badgeLabel, badgeColor, badgeIcon) =
-            when {
-                party.isActive -> Triple("Party Live", LocalAccent.current, Icons.Rounded.Groups)
-                hasRemote ->
-                    Triple("LAN Paired", CanopyColors.SecondaryAccent, Icons.Rounded.Computer)
-                else -> Triple("LAN Ready", CanopyColors.Muted, Icons.Rounded.Sensors)
-            }
-
-        Surface(
-            shape = CircleShape,
-            color = glassFill(CanopyColors.Surface, badgeColor.copy(alpha = 0.12f)),
-            modifier =
-                Modifier.glassPane(CircleShape, GlassTone.CONTROL)
-                    .border(1.dp, CanopyColors.Rule, CircleShape),
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Icon(
-                    imageVector = badgeIcon,
-                    contentDescription = null,
-                    tint = badgeColor,
-                    modifier = Modifier.size(14.dp),
-                )
-                Text(
-                    text = badgeLabel,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = CanopyColors.Text,
-                )
-            }
-        }
+        Text("Connect", style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold), color = CanopyColors.Text)
     }
 }
 
@@ -615,13 +524,11 @@ private fun FrostedActiveDeviceHeroCard(
 
     Surface(
         shape = shape,
-        color = glassFill(CanopyColors.Surface, accent.copy(alpha = 0.14f)),
+        color = Color.Transparent,
         modifier =
-            Modifier.fillMaxWidth()
-                .glassPane(shape, GlassTone.PANEL)
-                .border(1.dp, CanopyColors.RuleStrong, shape),
+            Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(vertical = 16.dp, horizontal = 4.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -632,7 +539,7 @@ private fun FrostedActiveDeviceHeroCard(
                         Modifier.size(48.dp)
                             .clip(CircleShape)
                             .background(accent.copy(alpha = 0.2f))
-                            .glassPane(CircleShape, GlassTone.CONTROL)
+
                             .border(1.dp, accent.copy(alpha = 0.35f), CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -653,7 +560,7 @@ private fun FrostedActiveDeviceHeroCard(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "CURRENT OUTPUT",
+                        text = "Current output",
                         style =
                             MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
@@ -686,15 +593,15 @@ private fun FrostedActiveDeviceHeroCard(
                     val subtitlePrefix = if (device.customName.isNotBlank()) "(${device.name}) • " else ""
                     Text(
                         text =
-                            subtitlePrefix + if (device.isLocal) "Playing locally on this $deviceWord"
-                            else "Streaming via Orchard Connect LAN",
+                            subtitlePrefix + if (device.isLocal) "This $deviceWord"
+                            else "Playing on this device",
                         style = MaterialTheme.typography.bodySmall,
                         color = CanopyColors.Muted,
                     )
                 }
 
                 // Live Equalizer wave animation
-                LiveEqualizerWave(color = accent)
+                Icon(Icons.Rounded.CheckCircle, "Current output", tint = accent)
             }
 
             if (isTransferring) {
@@ -738,11 +645,9 @@ private fun FrostedDeviceRow(
     Surface(
         onClick = onClick,
         shape = shape,
-        color = glassFill(CanopyColors.Surface),
+        color = Color.Transparent,
         modifier =
-            Modifier.fillMaxWidth()
-                .glassPane(shape, GlassTone.PANEL)
-                .border(1.dp, CanopyColors.Rule, shape),
+            Modifier.fillMaxWidth(),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -792,7 +697,7 @@ private fun FrostedDeviceRow(
                     Text(
                         text =
                             customSubtitle + when (device.availability) {
-                                DeviceAvailability.ONLINE -> "Online • Tap to stream"
+                                DeviceAvailability.ONLINE -> "Available"
                                 DeviceAvailability.OFFLINE -> "Offline"
                                 else -> "Unavailable"
                             },
@@ -839,7 +744,7 @@ private fun FrostedDeviceRow(
                     shape = CircleShape,
                     color = glassFill(CanopyColors.Canvas),
                     modifier =
-                        Modifier.glassPane(CircleShape, GlassTone.CONTROL)
+                        Modifier
                             .border(1.dp, CanopyColors.Rule, CircleShape),
                 ) {
                     Row(
@@ -878,13 +783,11 @@ private fun FrostedRemoteAudioEngineCard(
 
     Surface(
         shape = shape,
-        color = glassFill(CanopyColors.Surface),
+        color = Color.Transparent,
         modifier =
-            Modifier.fillMaxWidth()
-                .glassPane(shape, GlassTone.PANEL)
-                .border(1.dp, CanopyColors.Rule, shape),
+            Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(vertical = 16.dp, horizontal = 4.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -910,7 +813,7 @@ private fun FrostedRemoteAudioEngineCard(
                     shape = CircleShape,
                     color = glassFill(CanopyColors.Canvas, accent.copy(alpha = 0.15f)),
                     modifier =
-                        Modifier.glassPane(CircleShape, GlassTone.CONTROL)
+                        Modifier
                             .border(1.dp, CanopyColors.Rule, CircleShape),
                 ) {
                     Text(
@@ -957,7 +860,7 @@ private fun FrostedRemoteAudioEngineCard(
                             modifier =
                                 Modifier.then(
                                         if (selected) Modifier
-                                        else Modifier.glassPane(CircleShape, GlassTone.CONTROL)
+                                        else Modifier
                                     )
                                     .border(
                                         1.dp,
@@ -1148,13 +1051,11 @@ private fun FrostedPairingPanel(
 
     Surface(
         shape = shape,
-        color = glassFill(CanopyColors.Surface),
+        color = Color.Transparent,
         modifier =
-            Modifier.fillMaxWidth()
-                .glassPane(shape, GlassTone.PANEL)
-                .border(1.dp, CanopyColors.Rule, shape),
+            Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(vertical = 16.dp, horizontal = 4.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1167,7 +1068,7 @@ private fun FrostedPairingPanel(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "Pair Orchard Desktop",
+                    text = "Add a device",
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = CanopyColors.Text,
                 )
@@ -1182,39 +1083,8 @@ private fun FrostedPairingPanel(
 
             Spacer(Modifier.height(14.dp))
 
-            // Primary QR Scanner Button
-            Surface(
-                onClick = onScan,
-                shape = CircleShape,
-                color = glassFill(CanopyColors.Canvas, accent.copy(alpha = 0.15f)),
-                modifier =
-                    Modifier.fillMaxWidth()
-                        .height(48.dp)
-                        .glassPane(CircleShape, GlassTone.CONTROL)
-                        .border(1.dp, accent.copy(alpha = 0.4f), CircleShape),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    Icon(
-                        Icons.Rounded.QrCodeScanner,
-                        contentDescription = null,
-                        tint = accent,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = "Scan QR Code with Camera",
-                        style =
-                            MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = CanopyColors.Text,
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
+            IntegrationAction("Scan QR code", onClick = onScan)
+            Spacer(Modifier.height(8.dp))
 
             // Manual Pairing Link Input Field with Paste & Clear actions
             TextField(
@@ -1295,7 +1165,7 @@ private fun FrostedPairingPanel(
                     modifier =
                         Modifier.fillMaxWidth()
                             .height(44.dp)
-                            .glassPane(CircleShape, GlassTone.CONTROL)
+
                             .border(1.dp, CanopyColors.Danger.copy(alpha = 0.35f), CircleShape),
                 ) {
                     Icon(
@@ -1306,7 +1176,7 @@ private fun FrostedPairingPanel(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Disconnect Remembered Desktop",
+                        "Disconnect desktop",
                         fontWeight = FontWeight.SemiBold,
                         color = CanopyColors.Danger,
                     )
@@ -1328,13 +1198,11 @@ private fun FrostedListeningPartyPanel(
 
     Surface(
         shape = shape,
-        color = glassFill(CanopyColors.Surface),
+        color = Color.Transparent,
         modifier =
-            Modifier.fillMaxWidth()
-                .glassPane(shape, GlassTone.PANEL)
-                .border(1.dp, CanopyColors.Rule, shape),
+            Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(vertical = 16.dp, horizontal = 4.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1349,32 +1217,14 @@ private fun FrostedListeningPartyPanel(
                     )
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        text = "Listening Party",
+                        text = "Listening party",
                         style =
                             MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = CanopyColors.Text,
                     )
                 }
 
-                Surface(
-                    shape = CircleShape,
-                    color =
-                        glassFill(
-                            CanopyColors.Canvas,
-                            if (party.isActive) accent.copy(alpha = 0.15f) else Color.Transparent,
-                        ),
-                    modifier =
-                        Modifier.glassPane(CircleShape, GlassTone.CONTROL)
-                            .border(1.dp, CanopyColors.Rule, CircleShape),
-                ) {
-                    Text(
-                        text = if (party.isActive) "LIVE SESSION" else "SYNC PLAYBACK",
-                        style =
-                            MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = if (party.isActive) accent else CanopyColors.Muted,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
-                }
+
             }
 
             Spacer(Modifier.height(4.dp))
@@ -1404,7 +1254,7 @@ private fun FrostedInactiveParty(
     val accent = LocalAccent.current
 
     Text(
-        text = "Listen together in real time with synchronized queues and smart crossfade.",
+        text = "Listen to the same music together.",
         style = MaterialTheme.typography.bodyMedium,
         color = CanopyColors.Muted,
     )
@@ -1415,7 +1265,7 @@ private fun FrostedInactiveParty(
     TextField(
         value = codeInput,
         onValueChange = { codeInput = cleanRoomCode(it).take(ROOM_CODE_LENGTH) },
-        placeholder = { Text("ROOM CODE (e.g. A3F8K2)", color = CanopyColors.Muted) },
+        placeholder = { Text("Room code", color = CanopyColors.Muted) },
         singleLine = true,
         leadingIcon = {
             Icon(
@@ -1470,7 +1320,7 @@ private fun FrostedInactiveParty(
                 ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.Black),
             modifier = Modifier.weight(1f).height(44.dp),
         ) {
-            Text("Join Party", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text("Join party", fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
 
         OutlinedButton(
@@ -1480,11 +1330,11 @@ private fun FrostedInactiveParty(
             modifier =
                 Modifier.weight(1f)
                     .height(44.dp)
-                    .glassPane(CircleShape, GlassTone.CONTROL)
+
                     .border(1.dp, CanopyColors.Rule, CircleShape),
         ) {
             Text(
-                "Host a Party",
+                "Start a party",
                 fontWeight = FontWeight.Bold,
                 color = CanopyColors.Text,
                 fontSize = 14.sp,
@@ -1523,7 +1373,7 @@ private fun FrostedActiveParty(party: PartyState, onLeave: () -> Unit) {
             color = glassFill(CanopyColors.Canvas),
             modifier =
                 Modifier.fillMaxWidth()
-                    .glassPane(RoundedCornerShape(16.dp), GlassTone.CONTROL)
+
                     .border(1.dp, CanopyColors.Rule, RoundedCornerShape(16.dp)),
         ) {
             Column(
@@ -1570,11 +1420,11 @@ private fun FrostedActiveParty(party: PartyState, onLeave: () -> Unit) {
                                 .show()
                         },
                         shape = CircleShape,
-                        color = glassFill(CanopyColors.Surface),
+                        color = Color.Transparent,
                         modifier =
                             Modifier.weight(1f)
                                 .height(38.dp)
-                                .glassPane(CircleShape, GlassTone.CONTROL)
+
                                 .border(1.dp, CanopyColors.Rule, CircleShape),
                     ) {
                         Row(
@@ -1619,11 +1469,11 @@ private fun FrostedActiveParty(party: PartyState, onLeave: () -> Unit) {
                             )
                         },
                         shape = CircleShape,
-                        color = glassFill(CanopyColors.Surface),
+                        color = Color.Transparent,
                         modifier =
                             Modifier.weight(1f)
                                 .height(38.dp)
-                                .glassPane(CircleShape, GlassTone.CONTROL)
+
                                 .border(1.dp, CanopyColors.Rule, CircleShape),
                     ) {
                         Row(
@@ -1659,8 +1509,8 @@ private fun FrostedActiveParty(party: PartyState, onLeave: () -> Unit) {
         text =
             when (party.peers.size) {
                 0 -> "No other listeners in the room yet"
-                1 -> "1 other listener connected"
-                else -> "${party.peers.size} other listeners connected"
+                1 -> "1 other listener"
+                else -> "${party.peers.size} other listeners"
             },
         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
         color = CanopyColors.Muted,
@@ -1681,7 +1531,7 @@ private fun FrostedActiveParty(party: PartyState, onLeave: () -> Unit) {
         modifier =
             Modifier.fillMaxWidth()
                 .height(44.dp)
-                .glassPane(CircleShape, GlassTone.CONTROL)
+
                 .border(1.dp, CanopyColors.Danger.copy(alpha = 0.35f), CircleShape),
     ) {
         Text(
@@ -1699,7 +1549,7 @@ private fun FrostedPeerRow(peer: PartyPeer) {
         color = glassFill(CanopyColors.Canvas),
         modifier =
             Modifier.fillMaxWidth()
-                .glassPane(RoundedCornerShape(12.dp), GlassTone.CONTROL)
+
                 .border(1.dp, CanopyColors.Rule, RoundedCornerShape(12.dp)),
     ) {
         Row(
@@ -1773,7 +1623,7 @@ private fun FrostedMessageBanner(message: String, isError: Boolean = false) {
         color = glassFill(CanopyColors.Surface, tint.copy(alpha = 0.12f)),
         modifier =
             Modifier.fillMaxWidth()
-                .glassPane(RoundedCornerShape(14.dp), GlassTone.PANEL)
+
                 .border(1.dp, tint.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
     ) {
         Row(

@@ -30,14 +30,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -52,10 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.qobuz.QobuzQuality
 import dev.sfg.orchard.mobile.qobuz.QobuzStatus
-import dev.sfg.orchard.mobile.ui.glass.glassFill
-import dev.sfg.orchard.mobile.ui.glass.glassPane
-import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
+import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
 val QobuzGold = Color(0xFFDFB15B)
 
@@ -72,43 +64,26 @@ fun QobuzSettingsCard(
     val shape = RoundedCornerShape(20.dp)
 
     Surface(
-        color = glassFill(CanopyColors.Surface),
+        color = Color.Transparent,
         shape = shape,
-        modifier = modifier.fillMaxWidth().glassPane(shape),
+        modifier = modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .background(QobuzGold.copy(alpha = 0.15f), CircleShape)
-                        .border(1.dp, QobuzGold.copy(alpha = 0.35f), CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
+                Column(Modifier.weight(1f).padding(end = 16.dp)) {
                     Text(
-                        "Q",
-                        color = QobuzGold,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                    )
-                }
-
-                Spacer(Modifier.width(14.dp))
-
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = "Qobuz Lossless",
+                        text = "Qobuz",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = CanopyColors.Text,
                     )
                     Text(
-                        text = if (isConnected) "Connected" else "Not connected",
+                        "Lossless and Hi-Res audio",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (isConnected) QobuzGold else CanopyColors.Muted,
+                        color = CanopyColors.Muted,
                     )
                 }
 
@@ -117,8 +92,8 @@ fun QobuzSettingsCard(
                         checked = status.enabled,
                         onCheckedChange = onEnabledChange,
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = QobuzGold,
-                            checkedTrackColor = QobuzGold.copy(alpha = 0.35f),
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = LocalAccent.current,
                             uncheckedThumbColor = CanopyColors.Muted,
                             uncheckedTrackColor = CanopyColors.SurfaceHover,
                         ),
@@ -129,11 +104,7 @@ fun QobuzSettingsCard(
             Spacer(Modifier.height(12.dp))
 
             Text(
-                text = if (isConnected) {
-                    "Use your Qobuz subscription for lossless and Hi-Res streaming. Requires Audio Quality set to MAX."
-                } else {
-                    "Connect your Qobuz account to stream lossless CD-quality and 24-bit Hi-Res audio for matched tracks on MAX quality."
-                },
+                text = "Requires a Qobuz subscription and Audio quality set to Max.",
                 style = MaterialTheme.typography.bodySmall,
                 color = CanopyColors.Muted,
                 lineHeight = 18.sp,
@@ -151,21 +122,11 @@ fun QobuzSettingsCard(
             Spacer(Modifier.height(14.dp))
 
             if (!isConnected) {
-                Button(
-                    onClick = onConnect,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = QobuzGold,
-                        contentColor = Color.Black,
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Connect Qobuz", fontWeight = FontWeight.SemiBold)
-                }
+                IntegrationAction("Sign in to Qobuz", onClick = onConnect)
             } else {
                 // Quality options row
                 Text(
-                    text = "Streaming Quality",
+                    text = "Streaming quality",
                     style = MaterialTheme.typography.labelMedium,
                     color = CanopyColors.MutedStrong,
                     fontWeight = FontWeight.SemiBold,
@@ -184,12 +145,12 @@ fun QobuzSettingsCard(
                                 .weight(1f)
                                 .clip(chipShape)
                                 .background(
-                                    if (isSelected) QobuzGold.copy(alpha = 0.20f)
+                                    if (isSelected) LocalAccent.current.copy(alpha = 0.20f)
                                     else CanopyColors.SurfaceHover
                                 )
                                 .border(
                                     1.dp,
-                                    if (isSelected) QobuzGold else Color.Transparent,
+                                    if (isSelected) LocalAccent.current else Color.Transparent,
                                     chipShape
                                 )
                                 .clickable { onQualityChange(quality) }
@@ -200,7 +161,7 @@ fun QobuzSettingsCard(
                                 text = quality.label,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) QobuzGold else CanopyColors.Text,
+                                color = if (isSelected) LocalAccent.current else CanopyColors.Text,
                             )
                         }
                     }
@@ -208,16 +169,7 @@ fun QobuzSettingsCard(
 
                 Spacer(Modifier.height(12.dp))
 
-                OutlinedButton(
-                    onClick = onDisconnect,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) {
-                    Text("Disconnect Qobuz")
-                }
+                IntegrationAction("Sign out of Qobuz", destructive = true, onClick = onDisconnect)
             }
         }
     }

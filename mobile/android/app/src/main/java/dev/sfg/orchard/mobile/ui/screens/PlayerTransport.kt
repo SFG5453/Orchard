@@ -61,10 +61,11 @@ import dev.sfg.orchard.mobile.model.PlaybackStatus
 import dev.sfg.orchard.mobile.model.RepeatMode
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
+import dev.sfg.orchard.mobile.ui.theme.legibleOnDarkChrome
 
 /**
- * Ergonomic transport controls row providing direct access to Shuffle, Previous,
- * Hero Play/Pause with active state indicators, Next, and Repeat cycling.
+ * Ergonomic transport controls row providing direct access to Previous,
+ * Hero Play/Pause with artwork accent tint, and Next.
  */
 @Composable
 fun PlayerTransportControls(
@@ -83,33 +84,24 @@ fun PlayerTransportControls(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(40.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Shuffle Button
-        TransportToggleOption(
-            icon = Icons.Rounded.Shuffle,
-            description = if (shuffle) "Shuffle is on" else "Shuffle is off",
-            active = shuffle,
-            enabled = localControls,
-            onClick = onShuffle,
-        )
-
         // Previous Button
         IconButton(
             onClick = onPrevious,
-            modifier = Modifier.size(56.dp),
+            modifier = Modifier.size(52.dp),
         ) {
             Icon(
                 imageVector = Icons.Rounded.SkipPrevious,
                 contentDescription = "Previous track",
                 tint = Color.White,
-                modifier = Modifier.size(42.dp),
+                modifier = Modifier.size(34.dp),
             )
         }
 
-        // Large solid hero play/pause button
+        // Hero Play/Pause Button
         HeroPlayButton(
             isPlaying = isPlaying,
             isBuffering = status == PlaybackStatus.BUFFERING || status == PlaybackStatus.LOADING,
@@ -119,28 +111,15 @@ fun PlayerTransportControls(
         // Next Button
         IconButton(
             onClick = onNext,
-            modifier = Modifier.size(56.dp),
+            modifier = Modifier.size(52.dp),
         ) {
             Icon(
                 imageVector = Icons.Rounded.SkipNext,
                 contentDescription = "Next track",
                 tint = Color.White,
-                modifier = Modifier.size(42.dp),
+                modifier = Modifier.size(34.dp),
             )
         }
-
-        // Repeat Button
-        TransportToggleOption(
-            icon = if (repeatMode == RepeatMode.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-            description = when (repeatMode) {
-                RepeatMode.ONE -> "Repeat one"
-                RepeatMode.ALL -> "Repeat all"
-                RepeatMode.OFF -> "Repeat off"
-            },
-            active = repeatMode != RepeatMode.OFF,
-            enabled = localControls,
-            onClick = onRepeat,
-        )
     }
 }
 
@@ -150,18 +129,19 @@ private fun HeroPlayButton(
     isBuffering: Boolean,
     onClick: () -> Unit,
 ) {
+    val accent = LocalAccent.current.legibleOnDarkChrome()
     IconButton(
         onClick = onClick,
-        modifier = Modifier.size(80.dp),
+        modifier = Modifier.size(64.dp),
     ) {
         Box(
-            modifier = Modifier.size(80.dp),
+            modifier = Modifier.size(64.dp),
             contentAlignment = Alignment.Center,
         ) {
             if (isBuffering) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(44.dp),
-                    color = Color.White,
+                    modifier = Modifier.size(38.dp),
+                    color = accent,
                     strokeWidth = 3.dp,
                 )
             } else {
@@ -169,8 +149,8 @@ private fun HeroPlayButton(
                     Icon(
                         imageVector = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         contentDescription = if (playing) "Pause" else "Play",
-                        tint = Color.White,
-                        modifier = Modifier.size(60.dp),
+                        tint = accent,
+                        modifier = Modifier.size(46.dp),
                     )
                 }
             }

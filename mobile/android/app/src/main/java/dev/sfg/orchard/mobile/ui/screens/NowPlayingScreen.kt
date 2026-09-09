@@ -26,6 +26,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
@@ -45,6 +46,8 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -178,6 +181,25 @@ fun NowPlayingScreen(
         return
     }
 
+    var showArtistDialog by remember(track.id) { mutableStateOf(false) }
+    val selectableArtists = remember(track.artists) { selectableTrackArtists(track) }
+    val onOpenArtist = artistOpenAction(
+        track = track,
+        onOpenCollection = onOpenCollection,
+        onMultipleArtists = { showArtistDialog = true },
+    )
+
+    if (showArtistDialog) {
+        dev.sfg.orchard.mobile.ui.components.ArtistSelectionDialog(
+            artists = selectableArtists,
+            onDismiss = { showArtistDialog = false },
+            onArtistSelected = { id ->
+                showArtistDialog = false
+                onOpenCollection?.invoke(id)
+            },
+        )
+    }
+
     val localControls = targets.selected is PlaybackTarget.LocalPhone
     val canControl = localControls || protocolVersion >= 2
     val activeMixProgress =
@@ -287,15 +309,25 @@ fun NowPlayingScreen(
             // gradient already protects them, and only blurs when a panel opens.
             // The tablet's right column sits over the middle of the image, so the
             // backdrop stays out of focus there the whole time.
+            val panelObscuresArtwork = panel != PlayerPanel.NONE && !wideLayout
             val backdropBlur by animateDpAsState(
                 targetValue = when {
-                    wideLayout -> 44.dp
-                    panel != PlayerPanel.NONE -> 34.dp
+                    wideLayout || panel == PlayerPanel.LYRICS -> 44.dp
                     else -> 0.dp
                 },
                 animationSpec = tween(420),
                 label = "LyricsBackdropBlur",
             )
+            val artworkAlpha by animateFloatAsState(
+                targetValue = when {
+                    !panelObscuresArtwork -> 1f
+                    panel == PlayerPanel.LYRICS -> 0.35f
+                    else -> 0f
+                },
+                animationSpec = tween(420),
+                label = "ArtworkAlpha",
+            )
+
             // One sample feeds the backdrop and the lyrics, so sung words carry the same
             // colour the artwork bleeds into rather than a second, squarer sample of the cover.
             val verticalVideo = track.animatedArtworkVerticalUrl.ifBlank { track.animatedArtworkUrl }
@@ -306,7 +338,7 @@ fun NowPlayingScreen(
 
             FullBleedPlayerBackdrop(
                 track = track,
-                isPlaying = playback.isPlaying,
+                isPlaying = playback.isPlaying && (panel == PlayerPanel.LYRICS || !panelObscuresArtwork),
                 animatedArtworkEnabled = animatedArtworkEnabled,
                 gesturesEnabled = gesturesEnabled,
                 onNext = onNext,
@@ -316,11 +348,17 @@ fun NowPlayingScreen(
                 onVideoFrame = { videoFrame = it },
                 onArtworkBounds = { if (!wideLayout && hasRichArtwork && progress == 0f) onRestingCoverBounds(it) },
                 transitionProgress = activeMixProgress,
+                artworkAlpha = artworkAlpha,
                 modifier = Modifier.blur(backdropBlur),
             )
             // Blur is a no-op below API 31, so darken as well to keep lyrics legible everywhere.
             if (wideLayout || panel != PlayerPanel.NONE) {
-                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (wideLayout) 0.42f else 0.28f)))
+                val scrimAlpha = when {
+                    panel == PlayerPanel.LYRICS -> 0.38f
+                    wideLayout -> 0.25f
+                    else -> 0.15f
+                }
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = scrimAlpha)))
             }
 
             // A tablet has room to stop trading one thing for another: the cover
@@ -366,6 +404,7 @@ fun NowPlayingScreen(
                     onAddToPlaylist = onAddToPlaylist,
                     onShare = onShare,
                     onOpenCollection = onOpenCollection,
+                    onOpenArtist = onOpenArtist,
                     onLyricsPanel = { panel = if (lyricsOpen) PlayerPanel.NONE else PlayerPanel.LYRICS },
                     onQueuePanel = onQueue,
                     sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
@@ -409,21 +448,26 @@ fun NowPlayingScreen(
                         Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            // Lines dissolve at both ends instead of being sliced off by the
-                            // header above and the scrubber below.
-                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                            .drawWithContent {
-                                drawContent()
-                                drawRect(
-                                    brush = Brush.verticalGradient(
-                                        0f to Color.Transparent,
-                                        0.08f to Color.Black,
-                                        0.88f to Color.Black,
-                                        1f to Color.Transparent,
-                                    ),
-                                    blendMode = BlendMode.DstIn,
-                                )
-                            },
+                            // When the queue is open, dissolve at both ends. For lyrics,
+                            // LyricLines manages its own inner list edge fade.
+                            .then(
+                                if (queueOpen) {
+                                    Modifier
+                                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                                        .drawWithContent {
+                                            drawContent()
+                                            drawRect(
+                                                brush = Brush.verticalGradient(
+                                                    0f to Color.Transparent,
+                                                    0.08f to Color.Black,
+                                                    0.88f to Color.Black,
+                                                    1f to Color.Transparent,
+                                                ),
+                                                blendMode = BlendMode.DstIn,
+                                            )
+                                        }
+                                } else Modifier
+                            ),
                     ) {
                         if (queueOpen) {
                             PlayerQueuePanel(
@@ -434,6 +478,8 @@ fun NowPlayingScreen(
                                 onMove = onMoveQueueItem,
                                 onClearUpcoming = onClearUpcoming,
                                 onShuffleUpcoming = onShuffle,
+                                onShuffle = onShuffle,
+                                onRepeat = onRepeat,
                                 autoplayEnabled = autoplayEnabled,
                                 autoplayLoading = autoplayLoading,
                                 autoplayError = autoplayError,
@@ -456,10 +502,10 @@ fun NowPlayingScreen(
                                 accent = lyricAccent,
                             )
 
-                            LoadState.Loading -> LyricsNotice("Finding lyrics…")
-                            is LoadState.Empty -> LyricsNotice(lyrics.message)
-                            is LoadState.Error -> LyricsNotice(lyrics.message)
-                            LoadState.Idle -> LyricsNotice("Start a song to see its lyrics.")
+                            LoadState.Loading -> LyricsNotice("Finding lyrics…", isLoading = true)
+                            is LoadState.Empty -> LyricsNotice(lyrics.message, icon = Icons.Rounded.MusicNote)
+                            is LoadState.Error -> LyricsNotice(lyrics.message, icon = Icons.Rounded.Info)
+                            LoadState.Idle -> LyricsNotice("Start a song to see its lyrics.", icon = Icons.Rounded.MusicNote)
                         }
                     }
                 } else if (!hasRichArtwork) {
@@ -467,7 +513,7 @@ fun NowPlayingScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .padding(horizontal = 32.dp, vertical = 12.dp),
+                            .padding(horizontal = 24.dp, vertical = 12.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         NowPlayingArtworkCard(
@@ -503,8 +549,7 @@ fun NowPlayingScreen(
                             onAddToPlaylist = onAddToPlaylist?.let { action -> { action(track) } },
                             onOpenAlbum = track.albumId.takeIf { it.isNotBlank() }
                                 ?.let { id -> onOpenCollection?.let { open -> { open(id) } } },
-                            onOpenArtist = track.artistId.takeIf { it.isNotBlank() }
-                                ?.let { id -> onOpenCollection?.let { open -> { open(id) } } },
+                            onOpenArtist = onOpenArtist,
                         )
                         Spacer(Modifier.height(18.dp))
                     }
@@ -578,6 +623,25 @@ fun NowPlayingScreen(
                 }
             },
         )
+    }
+}
+
+internal fun selectableTrackArtists(track: Track) = track.artists
+    .filter { it.id.isNotBlank() }
+    .distinctBy { it.id }
+
+internal fun artistOpenAction(
+    track: Track,
+    onOpenCollection: ((String) -> Unit)?,
+    onMultipleArtists: () -> Unit,
+): (() -> Unit)? {
+    val artists = selectableTrackArtists(track)
+    val openCollection = onOpenCollection ?: return null
+    return when {
+        artists.size > 1 -> onMultipleArtists
+        artists.size == 1 -> ({ openCollection(artists.single().id) })
+        track.artistId.isNotBlank() -> ({ openCollection(track.artistId) })
+        else -> null
     }
 }
 

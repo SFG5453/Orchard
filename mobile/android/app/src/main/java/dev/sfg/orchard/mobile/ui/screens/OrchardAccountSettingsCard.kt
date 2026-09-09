@@ -48,12 +48,12 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -65,10 +65,7 @@ import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.auth.SUPABASE_SYNC_DISCLAIMER
 import dev.sfg.orchard.mobile.auth.SupabaseSyncService
 import dev.sfg.orchard.mobile.model.OrchardSettings
-import dev.sfg.orchard.mobile.ui.glass.glassFill
-import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
-import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import kotlinx.coroutines.launch
 
 private val CloudAccent = Color(0xFF7B9FE8)
@@ -90,9 +87,9 @@ fun OrchardAccountSettingsCard(
 
     val shape = RoundedCornerShape(20.dp)
     Surface(
-        color = glassFill(CanopyColors.Surface),
+        color = Color.Transparent,
         shape = shape,
-        modifier = Modifier.fillMaxWidth().glassPane(shape),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(

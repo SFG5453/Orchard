@@ -32,6 +32,7 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import org.w3c.dom.Element
+import org.w3c.dom.Node
 import org.w3c.dom.NodeList
 import org.xml.sax.InputSource
 import java.io.StringReader
@@ -251,10 +252,11 @@ internal object LyricsParser {
                 val explicitEnd = timeMs(entry.opt("endTime"))
                 val end = explicitEnd.takeIf { it > start } ?: (start + duration).takeIf { duration > 0 }
                 val (words, adlibs) = timedWords(syllables, start, end, text)
-                add(LyricLine(text, start.takeIf { hasTiming }, end, words, adlibs))
+                val agent = entry.optString("agent").ifBlank { entry.optString("singer") }
+                add(LyricLine(text, start.takeIf { hasTiming }, end, words, adlibs) to agent)
             }
-        }.sortedBy { it.startMs ?: Long.MAX_VALUE }
-        return withInferredEnds(lines)
+        }.sortedBy { it.first.startMs ?: Long.MAX_VALUE }
+        return withInferredEnds(withAgentLanes(lines))
     }
 
     fun ttml(value: String): List<LyricLine> {
@@ -285,10 +287,43 @@ internal object LyricsParser {
                     ?: words.firstOrNull()?.startMs ?: adlibs.firstOrNull()?.startMs
                 val end = paragraph.getAttribute("end").takeIf(String::isNotBlank)?.let(::timeMs)
                     ?: (words + adlibs).mapNotNull(LyricWord::endMs).maxOrNull()
-                add(LyricLine(text, start, end, words, adlibs))
+                val agent = paragraph.resolveAgent()
+                add(LyricLine(text, start, end, words, adlibs) to agent)
             }
-        }.sortedBy { it.startMs ?: Long.MAX_VALUE }
-        return withInferredEnds(lines)
+        }.sortedBy { it.first.startMs ?: Long.MAX_VALUE }
+        return withInferredEnds(withAgentLanes(lines))
+    }
+
+    private fun withAgentLanes(rawLines: List<Pair<LyricLine, String>>): List<LyricLine> {
+        val agentCounts = rawLines
+            .map { it.second }
+            .filter { it.isNotBlank() }
+            .groupingBy { it }
+            .eachCount()
+
+        val primaryAgent = agentCounts.maxByOrNull { it.value }?.key.orEmpty()
+        val hasMultipleAgents = primaryAgent.isNotBlank() && agentCounts.size > 1
+
+        return rawLines.map { (line, agent) ->
+            val agentLane = if (hasMultipleAgents && agent.isNotBlank()) {
+                if (agent != primaryAgent) "alternate" else "primary"
+            } else {
+                null
+            }
+            line.copy(agentLane = agentLane)
+        }
+    }
+
+    private fun Element.resolveAgent(): String {
+        var current: Node? = this
+        while (current is Element) {
+            val agent = current.getAttribute("ttm:agent").takeIf(String::isNotBlank)
+                ?: current.getAttributeNS("http://www.w3.org/ns/ttml#metadata", "agent").takeIf(String::isNotBlank)
+                ?: current.getAttribute("agent").takeIf(String::isNotBlank)
+            if (!agent.isNullOrBlank()) return agent
+            current = current.parentNode
+        }
+        return ""
     }
 
     private fun withInferredEnds(lines: List<LyricLine>): List<LyricLine> = lines.mapIndexed { index, line ->

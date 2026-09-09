@@ -30,6 +30,39 @@ import org.junit.Test
 
 class CatalogParserTest {
     @Test
+    fun nextQueueRowsPreserveEveryCreditedArtist() {
+        val root = JSONObject(
+            """{
+              "contents": [{"playlistPanelVideoRenderer": {
+                "videoId": "duet-video",
+                "title": {"runs": [{"text": "Duet"}]},
+                "longBylineText": {"runs": [
+                  {"text": "DaBaby", "navigationEndpoint": {"browseEndpoint": {
+                    "browseId": "UC-dababy", "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {"pageType": "MUSIC_PAGE_TYPE_ARTIST"}
+                    }
+                  }}},
+                  {"text": " & "},
+                  {"text": "YoungBoy Never Broke Again", "navigationEndpoint": {"browseEndpoint": {
+                    "browseId": "UC-youngboy", "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {"pageType": "MUSIC_PAGE_TYPE_ARTIST"}
+                    }
+                  }}},
+                  {"text": " • Album • 3:00"}
+                ]}
+              }}]
+            }""",
+        )
+
+        val expected = listOf(
+            dev.sfg.orchard.mobile.model.Artist("UC-dababy", "DaBaby"),
+            dev.sfg.orchard.mobile.model.Artist("UC-youngboy", "YoungBoy Never Broke Again"),
+        )
+        assertEquals(expected, CatalogParser.upNext(root).single().artists)
+        assertEquals(expected, CatalogParser.trackArtists(root, "duet-video"))
+    }
+
+    @Test
     fun searchNormalizesTrackAndAlbumRenderers() {
         val root = JSONObject(
             """{

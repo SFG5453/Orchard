@@ -91,6 +91,7 @@ fun FullBleedPlayerBackdrop(
     /** 0f outside a transition, rising to 1f at the handoff. Drives the cover handoff. */
     transitionProgress: Float = 0f,
     gesturesEnabled: Boolean = false,
+    artworkAlpha: Float = 1f,
     onNext: () -> Unit = {},
     onPrevious: () -> Unit = {},
     onLiked: () -> Unit = {},
@@ -177,6 +178,7 @@ fun FullBleedPlayerBackdrop(
                     .fillMaxWidth()
                     .fillMaxHeight(ARTWORK_HEIGHT_FRACTION)
                     .align(Alignment.TopCenter)
+                    .graphicsLayer { alpha = artworkAlpha }
                     .onGloballyPositioned { onArtworkBounds?.invoke(it.boundsInRoot()) }
                     .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
                     .drawWithContent {

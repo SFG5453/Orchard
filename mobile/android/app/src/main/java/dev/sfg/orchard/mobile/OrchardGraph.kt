@@ -115,6 +115,13 @@ class OrchardGraph(context: Context) {
     var analysisLookup: ((dev.sfg.orchard.mobile.model.Track) ->
         dev.sfg.orchard.mobile.playback.smart.TrackAnalysis)? = null
 
+    /**
+     * Clear hook for the active playback service's [StreamCache].
+     * Null before the playback service starts or after it is destroyed.
+     */
+    @Volatile
+    var onClearStreamCache: (() -> Unit)? = null
+
 
 
     val transitionMarker = kotlinx.coroutines.flow.MutableStateFlow<dev.sfg.orchard.mobile.model.TransitionMarker?>(null)

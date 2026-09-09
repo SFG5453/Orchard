@@ -163,6 +163,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         analyzer = dev.sfg.orchard.mobile.playback.smart.TrackAnalyzer(this, streamCache)
         preparer = dev.sfg.orchard.mobile.playback.smart.TransitionPreparer(this, streamCache)
         graph.analysisLookup = analyzer::analysisFor
+        graph.onClearStreamCache = streamCache::clear
         // Caching finishes seconds after the player events that asked for it, so completion
         // has to
         // re-drive analysis itself. Hopped onto the main thread because prefetchAround
@@ -361,6 +362,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         if (::spare.isInitialized) spare.release()
         if (::mediaSession.isInitialized) mediaSession.release()
         OrchardGraph.from(this).analysisLookup = null
+        OrchardGraph.from(this).onClearStreamCache = null
         if (::preparer.isInitialized) preparer.release()
         if (::analyzer.isInitialized) analyzer.release()
         if (::streamCache.isInitialized) streamCache.release()

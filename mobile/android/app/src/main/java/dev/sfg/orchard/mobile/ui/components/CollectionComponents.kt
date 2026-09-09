@@ -28,16 +28,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -45,7 +43,6 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -67,12 +64,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
 /**
- * Collection action buttons row:
- * [ Circular Shuffle ]  [ Wide White Play Pill ]  [ Circular Add/Favorite ]  [ Circular Download ]
+ * Collection action buttons row: [ Circular Shuffle ] [ Wide White Play Pill ]
+ * [ Circular Add/Favorite ] [ Circular Download ]
  */
 @Composable
 fun CollectionActionRow(
@@ -91,9 +87,7 @@ fun CollectionActionRow(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -119,16 +113,15 @@ fun CollectionActionRow(
         Button(
             onClick = onPlay,
             enabled = playEnabled,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = accent,
-                contentColor = Color.Black,
-                disabledContainerColor = accent.copy(alpha = 0.30f),
-                disabledContentColor = Color.Black.copy(alpha = 0.40f),
-            ),
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = accent,
+                    contentColor = Color.Black,
+                    disabledContainerColor = accent.copy(alpha = 0.30f),
+                    disabledContentColor = Color.Black.copy(alpha = 0.40f),
+                ),
             shape = RoundedCornerShape(24.dp),
-            modifier = Modifier
-                .weight(1f)
-                .height(44.dp),
+            modifier = Modifier.weight(1f).height(44.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -166,40 +159,10 @@ fun CollectionActionRow(
                 )
             }
         }
-
-        // Download / Offline button (frosted glass circle)
-        if (onDownload != null) {
-            Surface(
-                onClick = onDownload,
-                enabled = downloadEnabled,
-                shape = CircleShape,
-                color = Color.White.copy(alpha = 0.14f),
-                modifier = Modifier.size(44.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    if (isDownloading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = LocalAccent.current,
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Icon(
-                            if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
-                            contentDescription = if (isDownloaded) "Downloaded offline" else "Download collection",
-                            tint = if (isDownloaded) LocalAccent.current else if (downloadEnabled) Color.White else Color.White.copy(alpha = 0.35f),
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 
-/**
- * Editorial review / description preview with inline "MORE".
- */
+/** Editorial review / description preview with inline "MORE". */
 @Composable
 fun AlbumEditorialReview(
     description: String,
@@ -214,29 +177,21 @@ fun AlbumEditorialReview(
     val annotated = buildAnnotatedString {
         append(previewText)
         append(" ")
-        withStyle(
-            SpanStyle(
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-            )
-        ) {
+        withStyle(SpanStyle(color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)) {
             append("MORE")
         }
     }
 
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onOpenAbout)
-            .padding(horizontal = 24.dp, vertical = 6.dp)
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpenAbout)
+                .padding(horizontal = 24.dp, vertical = 6.dp)
     ) {
         Text(
             text = annotated,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                lineHeight = 18.sp,
-                fontSize = 13.sp,
-            ),
+            style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 18.sp, fontSize = 13.sp),
             color = Color.White.copy(alpha = 0.72f),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -275,10 +230,11 @@ fun CollectionTopBar(
     var menuOpen by remember { mutableStateOf(false) }
 
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -356,7 +312,11 @@ fun CollectionTopBar(
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     if (onSearch != null) {
                         DropdownMenuItem(
-                            text = { Text("Find in ${if (aboutLabel.contains("album", true)) "album" else "playlist"}") },
+                            text = {
+                                Text(
+                                    "Find in ${if (aboutLabel.contains("album", true)) "album" else "playlist"}"
+                                )
+                            },
                             onClick = {
                                 menuOpen = false
                                 onSearch()

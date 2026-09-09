@@ -19,8 +19,6 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,7 +38,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -100,10 +97,7 @@ import dev.sfg.orchard.mobile.ui.components.HomeSectionShimmer
 import dev.sfg.orchard.mobile.ui.components.MessagePanel
 import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
 import dev.sfg.orchard.mobile.ui.components.OrchardMark
-import dev.sfg.orchard.mobile.ui.glass.GlassTone
 import dev.sfg.orchard.mobile.ui.glass.LocalGlass
-import dev.sfg.orchard.mobile.ui.glass.glassFill
-import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import java.util.Calendar
@@ -152,7 +146,6 @@ fun HomeScreen(
     onPlayCollection: ((String, String) -> Unit)? = null,
 ) {
     val glass = LocalGlass.current.enabled
-    var selectedMood by remember { mutableStateOf("All") }
     var activeSectionSheet by remember { mutableStateOf<HomeSectionSheetState?>(null) }
 
     val playCatalogItem: (CatalogItem) -> Unit = { item ->
@@ -301,22 +294,6 @@ fun HomeScreen(
         combined
     }
 
-    val activeSections = remember(state, selectedMood) {
-        if (state !is LoadState.Content) emptyList()
-        else if (selectedMood == "All") state.value
-        else {
-            val query = selectedMood.lowercase()
-            val matched = state.value.filter {
-                it.title.lowercase().contains(query) ||
-                it.items.any { item ->
-                    item.title.lowercase().contains(query) ||
-                    catalogSubtitle(item).lowercase().contains(query)
-                }
-            }
-            matched.ifEmpty { state.value }
-        }
-    }
-
     // Spotify-style 6-grid quick access items
     val quickGridItems = remember(library, state) {
         buildList {
@@ -377,19 +354,8 @@ fun HomeScreen(
             }
         }
 
-        // Mood & Activity Filter Chips (ArchiveTune / YouTube Music)
-        if (!effectiveOffline) {
-            item {
-                MoodFilterChipsRow(
-                    selectedMood = selectedMood,
-                    onSelectMood = { selectedMood = it },
-                )
-                Spacer(Modifier.height(10.dp))
-            }
-        }
-
         // Spotify 2x3 Quick-Access Grid (Top Playlists & Saved Items)
-        if (selectedMood == "All" && quickGridItems.isNotEmpty() && !effectiveOffline) {
+        if (quickGridItems.isNotEmpty() && !effectiveOffline) {
             item {
                 SpotifyQuickGrid(
                     items = quickGridItems,
@@ -414,10 +380,9 @@ fun HomeScreen(
         if (effectiveOffline) {
             item {
                 Surface(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
-                        .then(if (glass) Modifier.glassPane(RoundedCornerShape(14.dp)) else Modifier),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                     shape = RoundedCornerShape(14.dp),
-                    color = glassFill(CanopyColors.Surface),
+                    color = CanopyColors.Surface,
                     border = BorderStroke(1.dp, LocalAccent.current.copy(alpha = 0.35f)),
                 ) {
                     Row(
@@ -591,7 +556,7 @@ fun HomeScreen(
                     if (effectiveOffline) return@forEach
                     when (state) {
                         is LoadState.Content -> {
-                            activeSections.forEachIndexed { sectionIndex, section ->
+                            state.value.forEachIndexed { sectionIndex, section ->
                                 item(key = "head:${section.id}") {
                                     HomeSectionHeader(
                                         title = section.title,
@@ -863,7 +828,7 @@ private fun GlassHomeHeader(
             .statusBarsPadding()
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 10.dp)
     ) {
-        // Top Row: Orchard Logo & Frosted Action Buttons
+        // Orchard mark and standard action buttons
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -877,14 +842,13 @@ private fun GlassHomeHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                // Search circular frosted button
+                // Search action
                 Surface(
                     onClick = onSearch,
-                    color = glassFill(CanopyColors.Surface),
+                    color = Color.Transparent,
                     shape = CircleShape,
                     modifier = Modifier
-                        .size(40.dp)
-                        .glassPane(CircleShape, GlassTone.CONTROL),
+                        .size(44.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Icon(
@@ -896,15 +860,13 @@ private fun GlassHomeHeader(
                     }
                 }
 
-                // Profile avatar circular button with glowing border
+                // Profile avatar
                 Surface(
                     onClick = onProfile,
-                    color = glassFill(CanopyColors.Surface),
+                    color = Color.Transparent,
                     shape = CircleShape,
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
                     modifier = Modifier
-                        .size(40.dp)
-                        .glassPane(CircleShape, GlassTone.CONTROL),
+                        .size(44.dp),
                 ) {
                     if (avatarUrl.isNotBlank()) {
                         ArtworkTile(
@@ -939,67 +901,6 @@ private fun GlassHomeHeader(
             ),
             color = CanopyColors.Text.copy(alpha = 0.95f),
         )
-    }
-}
-
-/**
- * Mood and activity filter pills row (YouTube Music & ArchiveTune).
- */
-@Composable
-private fun MoodFilterChipsRow(
-    selectedMood: String,
-    onSelectMood: (String) -> Unit,
-) {
-    val moods = remember {
-        listOf("All", "Energize", "Relax", "Workout", "Commute", "Focus", "Feel good", "Party")
-    }
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-    ) {
-        items(moods) { mood ->
-            val isSelected = selectedMood == mood
-            val shape = CircleShape
-            val animatedBackground by animateColorAsState(
-                targetValue = if (isSelected) Color.White.copy(alpha = 0.92f) else glassFill(CanopyColors.Surface),
-                animationSpec = tween(200),
-                label = "MoodBg",
-            )
-            val animatedTextColor by animateColorAsState(
-                targetValue = if (isSelected) Color(0xFF101318) else CanopyColors.Text.copy(alpha = 0.85f),
-                animationSpec = tween(200),
-                label = "MoodText",
-            )
-
-            Surface(
-                onClick = {
-                    onSelectMood(if (isSelected && mood != "All") "All" else mood)
-                },
-                shape = shape,
-                color = animatedBackground,
-                modifier = Modifier
-                    .height(36.dp)
-                    .then(
-                        if (!isSelected) Modifier.glassPane(shape, GlassTone.CONTROL)
-                        else Modifier
-                    ),
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                ) {
-                    Text(
-                        text = mood,
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            fontSize = 13.sp,
-                        ),
-                        color = animatedTextColor,
-                    )
-                }
-            }
-        }
     }
 }
 
@@ -1049,11 +950,10 @@ private fun QuickGridCard(
     Surface(
         onClick = item.onClick,
         shape = shape,
-        color = glassFill(CanopyColors.Surface),
+        color = CanopyColors.Surface,
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
-            .glassPane(shape, GlassTone.PANEL),
+            .height(56.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
@@ -1165,10 +1065,9 @@ private fun HomeHeader(auth: AuthState, onSearch: () -> Unit) {
         // Search Bar Input Pill
         Surface(
             onClick = onSearch,
-            color = glassFill(CanopyColors.Surface),
+            color = CanopyColors.Surface,
             shape = CircleShape,
-            modifier = Modifier.fillMaxWidth().height(48.dp)
-                .glassPane(CircleShape, GlassTone.CONTROL),
+            modifier = Modifier.fillMaxWidth().height(48.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -1221,7 +1120,6 @@ private fun FeaturedHeroCarousel(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(shape)
-                    .glassPane(shape, GlassTone.PANEL)
                     .clickable { onClick(item) }
             ) {
                 // Background Artwork
@@ -1252,11 +1150,10 @@ private fun FeaturedHeroCarousel(
                         .padding(20.dp),
                     verticalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    // Top: Frosted pill badge with dynamic editorial kind (Apple Music style)
+                    // Editorial kind badge
                     Surface(
-                        color = glassFill(CanopyColors.Surface),
+                        color = CanopyColors.Surface,
                         shape = CircleShape,
-                        modifier = Modifier.glassPane(CircleShape, GlassTone.CONTROL),
                     ) {
                         Text(
                             text = catalogItemBadge(item),
@@ -1342,7 +1239,7 @@ private fun FeaturedHeroCarousel(
 }
 
 /**
- * Squircle frosted card for "Made for you" section with bottom-right floating play button.
+ * Artwork card for "Made for you" section with bottom-right floating play button.
  */
 @Composable
 private fun GlassSquircleCard(
@@ -1356,7 +1253,6 @@ private fun GlassSquircleCard(
             .width(140.dp)
             .aspectRatio(1f)
             .clip(shape)
-            .glassPane(shape, GlassTone.PANEL)
             .clickable(onClick = onClick)
     ) {
         ArtworkTile(item.artworkUrl, item.title, Modifier.fillMaxSize(), 0)
@@ -1417,7 +1313,7 @@ private fun GlassSquircleCard(
 }
 
 /**
- * Wide frosted glass pill card for "Jump back in" section.
+ * Compact card for "Jump back in" section.
  */
 @Composable
 private fun GlassJumpBackInCard(
@@ -1429,11 +1325,10 @@ private fun GlassJumpBackInCard(
     Surface(
         onClick = onClick,
         shape = shape,
-        color = glassFill(CanopyColors.Surface),
+        color = CanopyColors.Surface,
         modifier = Modifier
             .width(220.dp)
-            .height(68.dp)
-            .glassPane(shape, GlassTone.PANEL),
+            .height(68.dp),
     ) {
         Row(
             modifier = Modifier

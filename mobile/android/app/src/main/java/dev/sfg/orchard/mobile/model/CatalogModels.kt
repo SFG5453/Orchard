@@ -61,6 +61,7 @@ data class Track(
     val bitDepth: Int? = null,
     val sampleRate: Int? = null,
     val hires: Boolean = false,
+    val artists: List<Artist> = emptyList(),
 ) {
     val isQobuz: Boolean
         get() = playbackSource.equals("qobuz", ignoreCase = true)
@@ -195,6 +196,7 @@ data class LyricLine(
     val endMs: Long? = null,
     val words: List<LyricWord> = emptyList(),
     val adlibs: List<LyricWord> = emptyList(),
+    val agentLane: String? = null,
 )
 
 data class LyricWord(

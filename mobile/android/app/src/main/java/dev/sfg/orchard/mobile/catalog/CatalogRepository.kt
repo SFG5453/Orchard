@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile.catalog
 
 import dev.sfg.orchard.mobile.model.BrowseDetail
+import dev.sfg.orchard.mobile.model.Artist
 import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.CatalogSection
 import dev.sfg.orchard.mobile.model.SearchResults
@@ -101,6 +102,16 @@ class CatalogRepository(private val client: InnerTubeClient) {
     /** Radio continuation for a seed track, used to keep the queue from running dry. */
     suspend fun upNext(videoId: String): List<Track> = withContext(Dispatchers.IO) {
         if (videoId.isBlank()) emptyList() else CatalogParser.upNext(client.upNext(videoId))
+    }
+
+    /** Repairs artist credits missing from old/restored Media3 queue entries. */
+    suspend fun trackArtists(videoId: String): List<Artist> = withContext(Dispatchers.IO) {
+        if (videoId.isBlank()) emptyList()
+        else CatalogParser.trackArtists(client.trackInfo(videoId), videoId)
+    }
+
+    suspend fun setArtistSubscription(channelId: String, subscribed: Boolean) = withContext(Dispatchers.IO) {
+        client.setArtistSubscription(channelId, subscribed)
     }
 
     suspend fun likedSongs(): BrowseDetail = browse("FEmusic_liked_videos")

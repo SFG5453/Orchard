@@ -26,6 +26,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,6 +36,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -102,7 +106,7 @@ fun PlayerControlStack(
         bitrateKbps = bitrateKbps,
         isQobuz = isQobuz,
     )
-    Spacer(Modifier.height(16.dp))
+    Spacer(Modifier.height(14.dp))
     PlayerTransportControls(
         isPlaying = playback.isPlaying,
         status = playback.status,
@@ -115,14 +119,14 @@ fun PlayerControlStack(
         onShuffle = onShuffle,
         onRepeat = onRepeat,
     )
-    Spacer(Modifier.height(24.dp))
+    Spacer(Modifier.height(18.dp))
     DeviceVolumeSlider(
         enabled = canControl,
         isRemote = !localControls,
         remoteVolume = remoteVolume,
         onRemoteVolumeChange = onRemoteVolumeChange,
     )
-    Spacer(Modifier.height(20.dp))
+    Spacer(Modifier.height(16.dp))
     PlayerBottomDestinations(
         targets = targets,
         upcomingCount = playback.upcoming.size,
@@ -207,15 +211,38 @@ fun PanelTrackHeader(
     }
 }
 
-/** Centred status text for the states where there is nothing to sing along to. */
+/** Centred status text and indicator for the states where lyrics are loading or unavailable. */
 @Composable
-fun LyricsNotice(message: String) {
+fun LyricsNotice(
+    message: String,
+    isLoading: Boolean = false,
+    icon: ImageVector? = null,
+) {
     Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(
-            message,
-            style = MaterialTheme.typography.titleMedium,
-            color = Color.White.copy(alpha = 0.70f),
-            textAlign = TextAlign.Center,
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    color = Color.White.copy(alpha = 0.70f),
+                    strokeWidth = 2.5.dp,
+                )
+            } else if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White.copy(alpha = 0.50f),
+                )
+            }
+            Text(
+                message,
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White.copy(alpha = 0.70f),
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }

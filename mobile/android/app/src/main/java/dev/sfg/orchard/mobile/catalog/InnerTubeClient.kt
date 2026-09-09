@@ -28,6 +28,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import org.json.JSONArray
 
 /**
  * Narrow native boundary for YouTube Music's JSON catalog API.
@@ -77,6 +78,23 @@ class InnerTubeClient(
             .put("playlistId", "RDAMVM$videoId")
             .put("isAudioOnly", true),
     )
+
+    /** Current queue row, whose byline contains every credited artist and browse id. */
+    fun trackInfo(videoId: String): JSONObject =
+        post("next", JSONObject().put("videoId", videoId))
+
+    /** Follows or unfollows an artist channel using the authenticated Music web session. */
+    fun setArtistSubscription(channelId: String, subscribed: Boolean) {
+        require(channelId.isNotBlank()) { "Artist channel ID is required." }
+        val endpoint = if (subscribed) "subscription/subscribe" else "subscription/unsubscribe"
+        val params = if (subscribed) "EgIIAhgA" else "CgIIAhgA"
+        post(
+            endpoint,
+            JSONObject()
+                .put("channelIds", JSONArray().put(channelId))
+                .put("params", params),
+        )
+    }
 
     fun browseContinuation(token: String): JSONObject =
         post("browse", JSONObject().put("continuation", token))

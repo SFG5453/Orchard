@@ -161,9 +161,7 @@ internal fun TrackActionsPopup(
                 }
             }
             onViewArtist?.let { action ->
-                if (track.artistId.isNotBlank()) {
-                    PopupActionRow(Icons.Rounded.Person, "View Artist") { onDismiss(); action() }
-                }
+                PopupActionRow(Icons.Rounded.Person, "View Artist") { onDismiss(); action() }
             }
             onShare?.let { action ->
                 PopupActionRow(Icons.Rounded.Share, "Share Song") { onDismiss(); action() }

@@ -67,6 +67,40 @@ class PlaylistActionsTest {
     }
 
     @Test
+    fun `artist follow uses WEB_REMIX subscription endpoint`() {
+        val recordedRequests = mutableListOf<Pair<String, JSONObject>>()
+        val mock = MockEngine { endpoint, payload ->
+            recordedRequests.add(endpoint to payload)
+            JSONObject()
+        }
+
+        InnerTubeClient(mock.okHttpClient).setArtistSubscription("UC-artist", true)
+
+        val (endpoint, payload) = recordedRequests.single()
+        assertEquals("subscribe", endpoint)
+        assertEquals("UC-artist", payload.getJSONArray("channelIds").getString(0))
+        assertEquals("EgIIAhgA", payload.optString("params"))
+        assertEquals("WEB_REMIX", payload.getJSONObject("context").getJSONObject("client").optString("clientName"))
+    }
+
+    @Test
+    fun `artist unfollow uses WEB_REMIX unsubscription endpoint`() {
+        val recordedRequests = mutableListOf<Pair<String, JSONObject>>()
+        val mock = MockEngine { endpoint, payload ->
+            recordedRequests.add(endpoint to payload)
+            JSONObject()
+        }
+
+        InnerTubeClient(mock.okHttpClient).setArtistSubscription("UC-artist", false)
+
+        val (endpoint, payload) = recordedRequests.single()
+        assertEquals("unsubscribe", endpoint)
+        assertEquals("UC-artist", payload.getJSONArray("channelIds").getString(0))
+        assertEquals("CgIIAhgA", payload.optString("params"))
+        assertEquals("WEB_REMIX", payload.getJSONObject("context").getJSONObject("client").optString("clientName"))
+    }
+
+    @Test
     fun `liking a track matches the desktop WEB_REMIX target shape`() {
         val recordedRequests = mutableListOf<Pair<String, JSONObject>>()
         val mock = MockEngine { endpoint, payload ->

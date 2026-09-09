@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.glass
 
+import android.graphics.RenderEffect
+import android.graphics.Shader
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
@@ -30,12 +32,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalGraphicsContext
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
+import kotlin.math.ceil
 
 /**
  * Material hierarchy and density for frosted architectural glass panes.
@@ -93,15 +101,20 @@ val LocalGlass = staticCompositionLocalOf { GlassStyle() }
  *  - [scene] holds the backdrop plus the whole screen. The bottom bar and the mini player are
  *    drawn after it and on top of it, so they blur real album art as the list moves under them.
  *
- * Both are full-resolution recordings, composited straight back to the screen, so recording them
- * costs one extra layer rather than a second pass over the content. The downscaling happens per
- * pane, where the blur does.
+ * Full-resolution recordings draw the original content unchanged. Two shared quarter-size
+ * textures provide softened inputs for every pane, so blur cost does not grow with pane count.
  */
 @Stable
 class GlassScene internal constructor(
     internal val wash: GraphicsLayer,
     internal val scene: GraphicsLayer,
+    internal val washSample: GraphicsLayer,
+    internal val sceneSample: GraphicsLayer,
+    internal val downscale: Float,
+    internal val chromeBlur: Dp,
 ) {
+    internal var washBlurRadius = Float.NaN
+    internal var sceneBlurRadius = Float.NaN
     internal var washOrigin = Offset.Zero
     internal var sceneOrigin = Offset.Zero
     internal var washRecorded = false
@@ -111,13 +124,24 @@ class GlassScene internal constructor(
 val LocalGlassScene = staticCompositionLocalOf<GlassScene?> { null }
 
 @Composable
-fun rememberGlassScene(): GlassScene {
+fun rememberGlassScene(
+    downscale: Float = GLASS_DOWNSCALE,
+    chromeBlur: Dp = 9.dp,
+): GlassScene {
+    require(downscale.isFinite() && downscale >= 1f)
+    require(chromeBlur.value.isFinite() && chromeBlur > 0.dp)
     val context = LocalGraphicsContext.current
-    val scene = remember(context) {
-        GlassScene(context.createGraphicsLayer(), context.createGraphicsLayer())
+    val scene = remember(context, downscale, chromeBlur) {
+        GlassScene(
+            context.createGraphicsLayer(), context.createGraphicsLayer(),
+            context.createGraphicsLayer(), context.createGraphicsLayer(),
+            downscale, chromeBlur,
+        )
     }
     DisposableEffect(scene) {
         onDispose {
+            context.releaseGraphicsLayer(scene.washSample)
+            context.releaseGraphicsLayer(scene.sceneSample)
             context.releaseGraphicsLayer(scene.wash)
             context.releaseGraphicsLayer(scene.scene)
         }
@@ -144,6 +168,22 @@ private fun Modifier.recordInto(scene: GlassScene, wash: Boolean) = this
     .drawWithContent {
         val layer = if (wash) scene.wash else scene.scene
         layer.record { this@drawWithContent.drawContent() }
+        // Resolve the backdrop once per source at reduced resolution. Every pane reuses
+        // this GPU texture; never read pixels back to the CPU or blur once per list item.
+        val sample = if (wash) scene.washSample else scene.sceneSample
+        val radius = (if (wash) 6.dp else scene.chromeBlur).toPx() / scene.downscale
+        val previous = if (wash) scene.washBlurRadius else scene.sceneBlurRadius
+        if (radius != previous) {
+            sample.renderEffect = RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP)
+                .asComposeRenderEffect()
+            if (wash) scene.washBlurRadius = radius else scene.sceneBlurRadius = radius
+        }
+        sample.record(IntSize(
+            ceil(size.width / scene.downscale).toInt().coerceAtLeast(1),
+            ceil(size.height / scene.downscale).toInt().coerceAtLeast(1),
+        )) {
+            scale(1f / scene.downscale, pivot = Offset.Zero) { drawLayer(layer) }
+        }
         if (wash) scene.washRecorded = true else scene.sceneRecorded = true
         drawLayer(layer)
     }
@@ -167,3 +207,5 @@ fun glassFill(color: Color, whenGlass: Color = Color.Transparent): Color =
 @Composable
 fun rememberGlassStyle(enabled: Boolean, tint: State<Color>): GlassStyle =
     remember(enabled, tint) { GlassStyle(enabled, tint) }
+
+internal const val GLASS_DOWNSCALE = 4f

@@ -27,6 +27,9 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -106,6 +109,7 @@ fun TabletPlayerBody(
     onAddToPlaylist: ((Track) -> Unit)? = null,
     onShare: (() -> Unit)?,
     onOpenCollection: ((String) -> Unit)?,
+    onOpenArtist: (() -> Unit)?,
     onLyricsPanel: () -> Unit,
     onQueuePanel: () -> Unit,
     sleepTimerRemainingSeconds: Long = 0L,
@@ -174,8 +178,7 @@ fun TabletPlayerBody(
                     onAddToPlaylist = onAddToPlaylist?.let { action -> { action(track) } },
                     onOpenAlbum = track.albumId.takeIf { it.isNotBlank() }
                         ?.let { id -> onOpenCollection?.let { open -> { open(id) } } },
-                    onOpenArtist = track.artistId.takeIf { it.isNotBlank() }
-                        ?.let { id -> onOpenCollection?.let { open -> { open(id) } } },
+                    onOpenArtist = onOpenArtist,
                 )
 
                 if (panel != PlayerPanel.NONE) {
@@ -184,21 +187,26 @@ fun TabletPlayerBody(
                         Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            // Same dissolve as the phone panel, so lines fade
-                            // into the column rather than being cut by its edges.
-                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                            .drawWithContent {
-                                drawContent()
-                                drawRect(
-                                    brush = Brush.verticalGradient(
-                                        0f to Color.Transparent,
-                                        0.08f to Color.Black,
-                                        0.9f to Color.Black,
-                                        1f to Color.Transparent,
-                                    ),
-                                    blendMode = BlendMode.DstIn,
-                                )
-                            },
+                            // Same dissolve as the phone panel for queue; for lyrics,
+                            // LyricLines handles its own inner edge fade.
+                            .then(
+                                if (panel == PlayerPanel.QUEUE) {
+                                    Modifier
+                                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                                        .drawWithContent {
+                                            drawContent()
+                                            drawRect(
+                                                brush = Brush.verticalGradient(
+                                                    0f to Color.Transparent,
+                                                    0.08f to Color.Black,
+                                                    0.9f to Color.Black,
+                                                    1f to Color.Transparent,
+                                                ),
+                                                blendMode = BlendMode.DstIn,
+                                            )
+                                        }
+                                } else Modifier
+                            ),
                     ) {
                         if (panel == PlayerPanel.QUEUE) {
                             PlayerQueuePanel(
@@ -230,10 +238,10 @@ fun TabletPlayerBody(
                                     accent = lyricAccent,
                                 )
 
-                                LoadState.Loading -> LyricsNotice("Finding lyrics…")
-                                is LoadState.Empty -> LyricsNotice(lyrics.message)
-                                is LoadState.Error -> LyricsNotice(lyrics.message)
-                                LoadState.Idle -> LyricsNotice("Start a song to see its lyrics.")
+                                LoadState.Loading -> LyricsNotice("Finding lyrics…", isLoading = true)
+                                is LoadState.Empty -> LyricsNotice(lyrics.message, icon = Icons.Rounded.MusicNote)
+                                is LoadState.Error -> LyricsNotice(lyrics.message, icon = Icons.Rounded.Info)
+                                LoadState.Idle -> LyricsNotice("Start a song to see its lyrics.", icon = Icons.Rounded.MusicNote)
                             }
                         }
                     }

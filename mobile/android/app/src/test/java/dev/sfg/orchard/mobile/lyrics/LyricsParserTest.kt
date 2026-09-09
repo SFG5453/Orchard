@@ -122,4 +122,20 @@ class LyricsParserTest {
             LyricsParser.lrcLib(JSONObject().put("instrumental", true)).map { it.text },
         )
     }
+
+    @Test
+    fun duetTtmlAssignsPrimaryAndAlternateAgentLanes() {
+        val lines = LyricsParser.ttml(
+            """<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body><div>
+              <p begin="1.0s" end="3.0s" ttm:agent="v1"><span>Line one from primary</span></p>
+              <p begin="4.0s" end="6.0s" ttm:agent="v2"><span>Line two from secondary</span></p>
+              <p begin="7.0s" end="9.0s" ttm:agent="v1"><span>Line three from primary</span></p>
+            </div></body></tt>""",
+        )
+
+        assertEquals(3, lines.size)
+        assertEquals("primary", lines[0].agentLane)
+        assertEquals("alternate", lines[1].agentLane)
+        assertEquals("primary", lines[2].agentLane)
+    }
 }

@@ -279,6 +279,8 @@ private fun OrchardNavigation(
     val downloadedTrackIds by viewModel.downloadedTrackIds.collectAsStateWithLifecycle()
     val downloadingTrackIds by viewModel.downloadingTrackIds.collectAsStateWithLifecycle()
     val totalBytesUsed by viewModel.totalBytesUsed.collectAsStateWithLifecycle()
+    val cacheSizeBytes by viewModel.cacheSizeBytes.collectAsStateWithLifecycle()
+    val isClearingCache by viewModel.isClearingCache.collectAsStateWithLifecycle()
     val qobuzStatus by viewModel.qobuzStatus.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val connectMessage by viewModel.connectMessage.collectAsStateWithLifecycle()
@@ -404,6 +406,15 @@ private fun OrchardNavigation(
                 discordAuth = discordAuth,
                 discordConnection = discordConnection,
                 updateState = updateState,
+                cacheSizeBytes = cacheSizeBytes,
+                isClearingCache = isClearingCache,
+                onClearCache = {
+                    viewModel.clearCache { bytesCleared ->
+                        val formatted = dev.sfg.orchard.mobile.settings.CacheManager.formatStorageSize(bytesCleared)
+                        android.widget.Toast.makeText(context, "Cache cleared ($formatted freed)", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onRefreshCacheSize = viewModel::refreshCacheSize,
                 onSettings = viewModel::updateSettings,
                 onAutoplayEnabled = viewModel::setAutoplayEnabled,
                 onSignIn = { nav.navigate(Routes.LOGIN) },

@@ -46,6 +46,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +74,8 @@ import dev.sfg.orchard.mobile.ui.components.TrackRow
 import dev.sfg.orchard.mobile.ui.components.filterCatalogItems
 import dev.sfg.orchard.mobile.ui.components.filterTracks
 import dev.sfg.orchard.mobile.ui.components.normalizeSearchText
+import dev.sfg.orchard.mobile.ui.glass.GlassStyle
+import dev.sfg.orchard.mobile.ui.glass.LocalGlass
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -95,183 +98,187 @@ fun LibraryScreen(
 ) {
     var searchQuery by remember { mutableStateOf("") }
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = OrchardChromeHeight)) {
-        item {
-            Column {
-                Column(Modifier.padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 12.dp)) {
-                    Text("Library", style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold))
-                }
-                OrchardFilterChips(
-                    options = LibraryFilter.entries,
-                    selected = filter,
-                    label = { it.label },
-                    onSelect = onFilterChange,
-                )
-                Spacer(Modifier.height(12.dp))
+    // Shared library controls use their regular fills, independently of the floating chrome.
+    val plainStyle = remember { GlassStyle(enabled = false) }
+    CompositionLocalProvider(LocalGlass provides plainStyle) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = OrchardChromeHeight)) {
+            item {
+                Column {
+                    Column(Modifier.padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 12.dp)) {
+                        Text("Library", style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold))
+                    }
+                    OrchardFilterChips(
+                        options = LibraryFilter.entries,
+                        selected = filter,
+                        label = { it.label },
+                        onSelect = onFilterChange,
+                    )
+                    Spacer(Modifier.height(12.dp))
 
-                // Frosted search input
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color.White.copy(alpha = 0.08f),
+                    // Plain search field
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(40.dp),
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = CanopyColors.Surface,
                             modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                                .fillMaxWidth()
+                                .height(40.dp),
                         ) {
-                            Icon(
-                                Icons.Rounded.Search,
-                                contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.50f),
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier.weight(1f),
-                                contentAlignment = Alignment.CenterStart,
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                if (searchQuery.isEmpty()) {
-                                    Text(
-                                        text = "Search in ${filter.label.lowercase()}",
-                                        style = TextStyle(
+                                Icon(
+                                    Icons.Rounded.Search,
+                                    contentDescription = null,
+                                    tint = CanopyColors.Muted,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.CenterStart,
+                                ) {
+                                    if (searchQuery.isEmpty()) {
+                                        Text(
+                                            text = "Search in ${filter.label.lowercase()}",
+                                            style = TextStyle(
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Normal,
+                                                color = CanopyColors.Muted,
+                                            ),
+                                            maxLines = 1,
+                                        )
+                                    }
+                                    BasicTextField(
+                                        value = searchQuery,
+                                        onValueChange = { searchQuery = it },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textStyle = TextStyle(
                                             fontSize = 14.sp,
-                                            fontWeight = FontWeight.Normal,
-                                            color = Color.White.copy(alpha = 0.40f),
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color.White,
                                         ),
-                                        maxLines = 1,
+                                        cursorBrush = SolidColor(LocalAccent.current),
+                                        singleLine = true,
                                     )
                                 }
-                                BasicTextField(
-                                    value = searchQuery,
-                                    onValueChange = { searchQuery = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textStyle = TextStyle(
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = Color.White,
-                                    ),
-                                    cursorBrush = SolidColor(LocalAccent.current),
-                                    singleLine = true,
-                                )
-                            }
-                            if (searchQuery.isNotEmpty()) {
-                                Surface(
-                                    onClick = { searchQuery = "" },
-                                    shape = CircleShape,
-                                    color = Color.White.copy(alpha = 0.16f),
-                                    modifier = Modifier.size(22.dp),
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            Icons.Rounded.Close,
-                                            contentDescription = "Clear",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(13.dp),
-                                        )
+                                if (searchQuery.isNotEmpty()) {
+                                    Surface(
+                                        onClick = { searchQuery = "" },
+                                        shape = CircleShape,
+                                        color = Color.Transparent,
+                                        modifier = Modifier.size(22.dp),
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                Icons.Rounded.Close,
+                                                contentDescription = "Clear",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(13.dp),
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                    Spacer(Modifier.height(16.dp))
                 }
-                Spacer(Modifier.height(16.dp))
             }
-        }
-        when (filter) {
-            LibraryFilter.PLAYLISTS -> {
-                val playlists = library.savedPlaylists.map { CatalogItem.Collection(it) }
-                val filtered = filterCatalogItems(playlists, searchQuery)
-                collections(
-                    "Your playlists",
-                    filtered,
-                    if (searchQuery.isNotBlank()) "No matching playlists" else "No saved playlists",
-                    if (searchQuery.isNotBlank()) "No playlists matching \"$searchQuery\"" else "Save a playlist and it will stay close at hand.",
-                    onOpenDetail,
-                )
-            }
-            LibraryFilter.ARTISTS -> {
-                val artists = library.savedArtists.map { CatalogItem.Performer(it) }
-                val filtered = filterCatalogItems(artists, searchQuery)
-                collections(
-                    "Saved artists",
-                    filtered,
-                    if (searchQuery.isNotBlank()) "No matching artists" else "No saved artists",
-                    if (searchQuery.isNotBlank()) "No artists matching \"$searchQuery\"" else "Follow an artist to build this shelf.",
-                    onOpenDetail,
-                )
-            }
-            LibraryFilter.ALBUMS -> {
-                val albums = library.savedAlbums.map { CatalogItem.Record(it) }
-                val filtered = filterCatalogItems(albums, searchQuery)
-                collections(
-                    "Saved albums",
-                    filtered,
-                    if (searchQuery.isNotBlank()) "No matching albums" else "No saved albums",
-                    if (searchQuery.isNotBlank()) "No albums matching \"$searchQuery\"" else "Albums you save will be available here.",
-                    onOpenDetail,
-                )
-            }
-            LibraryFilter.SONGS -> {
-                val filtered = filterTracks(library.likedTracks, searchQuery)
-                songs(
-                    title = "Songs",
-                    values = filtered,
-                    emptyTitle = if (searchQuery.isNotBlank()) "No matching songs" else "No songs saved",
-                    emptyMessage = if (searchQuery.isNotBlank()) "No songs matching \"$searchQuery\"" else "Save songs to your library to see them here",
-                    downloadedTrackIds = downloadedTrackIds,
-                    downloadingTrackIds = downloadingTrackIds,
-                    onPlay = onPlay,
-                    onPlayNext = onPlayNext,
-                    onAdd = onAddToQueue,
-                    onDownloadTrack = onDownloadTrack,
-                    onRemoveDownloadTrack = onRemoveDownloadTrack,
-                    onOpen = onOpenDetail,
-                    onShare = onShare,
-                )
-            }
-            LibraryFilter.RECENT -> {
-                val filtered = filterTracks(library.recentlyPlayed, searchQuery)
-                tracks(
-                    "Recently played",
-                    filtered,
-                    if (searchQuery.isNotBlank()) "No matching recent tracks" else "Nothing played yet",
-                    if (searchQuery.isNotBlank()) "No recently played tracks matching \"$searchQuery\"" else "Start a song and Orchard will remember it here.",
-                    downloadedTrackIds,
-                    downloadingTrackIds,
-                    onPlay,
-                    onPlayNext,
-                    onAddToQueue,
-                    onDownloadTrack,
-                    onRemoveDownloadTrack,
-                    onShare,
-                    onOpenDetail,
-                )
-            }
-            LibraryFilter.DOWNLOADS -> {
-                val normalizedQuery = normalizeSearchText(searchQuery)
-                val filtered = if (normalizedQuery.isNotBlank()) {
-                    downloads.filter {
-                        normalizeSearchText(it.track.title).contains(normalizedQuery) ||
-                            normalizeSearchText(it.track.artist).contains(normalizedQuery) ||
-                            normalizeSearchText(it.track.album).contains(normalizedQuery)
-                    }
-                } else downloads
-                downloadsList(
-                    downloads = filtered,
-                    totalBytesUsed = totalBytesUsed,
-                    onPlay = onPlay,
-                    onRemoveDownload = { id -> onRemoveDownloadTrack?.invoke(id) },
-                )
+            when (filter) {
+                LibraryFilter.PLAYLISTS -> {
+                    val playlists = library.savedPlaylists.map { CatalogItem.Collection(it) }
+                    val filtered = filterCatalogItems(playlists, searchQuery)
+                    collections(
+                        "Your playlists",
+                        filtered,
+                        if (searchQuery.isNotBlank()) "No matching playlists" else "No saved playlists",
+                        if (searchQuery.isNotBlank()) "No playlists matching \"$searchQuery\"" else "Save a playlist and it will stay close at hand.",
+                        onOpenDetail,
+                    )
+                }
+                LibraryFilter.ARTISTS -> {
+                    val artists = library.savedArtists.map { CatalogItem.Performer(it) }
+                    val filtered = filterCatalogItems(artists, searchQuery)
+                    collections(
+                        "Saved artists",
+                        filtered,
+                        if (searchQuery.isNotBlank()) "No matching artists" else "No saved artists",
+                        if (searchQuery.isNotBlank()) "No artists matching \"$searchQuery\"" else "Follow an artist to build this shelf.",
+                        onOpenDetail,
+                    )
+                }
+                LibraryFilter.ALBUMS -> {
+                    val albums = library.savedAlbums.map { CatalogItem.Record(it) }
+                    val filtered = filterCatalogItems(albums, searchQuery)
+                    collections(
+                        "Saved albums",
+                        filtered,
+                        if (searchQuery.isNotBlank()) "No matching albums" else "No saved albums",
+                        if (searchQuery.isNotBlank()) "No albums matching \"$searchQuery\"" else "Albums you save will be available here.",
+                        onOpenDetail,
+                    )
+                }
+                LibraryFilter.SONGS -> {
+                    val filtered = filterTracks(library.likedTracks, searchQuery)
+                    songs(
+                        title = "Songs",
+                        values = filtered,
+                        emptyTitle = if (searchQuery.isNotBlank()) "No matching songs" else "No songs saved",
+                        emptyMessage = if (searchQuery.isNotBlank()) "No songs matching \"$searchQuery\"" else "Save songs to your library to see them here",
+                        downloadedTrackIds = downloadedTrackIds,
+                        downloadingTrackIds = downloadingTrackIds,
+                        onPlay = onPlay,
+                        onPlayNext = onPlayNext,
+                        onAdd = onAddToQueue,
+                        onDownloadTrack = onDownloadTrack,
+                        onRemoveDownloadTrack = onRemoveDownloadTrack,
+                        onOpen = onOpenDetail,
+                        onShare = onShare,
+                    )
+                }
+                LibraryFilter.RECENT -> {
+                    val filtered = filterTracks(library.recentlyPlayed, searchQuery)
+                    tracks(
+                        "Recently played",
+                        filtered,
+                        if (searchQuery.isNotBlank()) "No matching recent tracks" else "Nothing played yet",
+                        if (searchQuery.isNotBlank()) "No recently played tracks matching \"$searchQuery\"" else "Start a song and Orchard will remember it here.",
+                        downloadedTrackIds,
+                        downloadingTrackIds,
+                        onPlay,
+                        onPlayNext,
+                        onAddToQueue,
+                        onDownloadTrack,
+                        onRemoveDownloadTrack,
+                        onShare,
+                        onOpenDetail,
+                    )
+                }
+                LibraryFilter.DOWNLOADS -> {
+                    val normalizedQuery = normalizeSearchText(searchQuery)
+                    val filtered = if (normalizedQuery.isNotBlank()) {
+                        downloads.filter {
+                            normalizeSearchText(it.track.title).contains(normalizedQuery) ||
+                                normalizeSearchText(it.track.artist).contains(normalizedQuery) ||
+                                normalizeSearchText(it.track.album).contains(normalizedQuery)
+                        }
+                    } else downloads
+                    downloadsList(
+                        downloads = filtered,
+                        totalBytesUsed = totalBytesUsed,
+                        onPlay = onPlay,
+                        onRemoveDownload = { id -> onRemoveDownloadTrack?.invoke(id) },
+                    )
+                }
             }
         }
     }

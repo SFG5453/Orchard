@@ -323,12 +323,19 @@ fun TrackRow(
     onViewArtist: (() -> Unit)? = null,
     trailingText: String = durationText(track.durationMs),
     highlighted: Boolean = false,
+    compact: Boolean = false,
 ) {
     var popupOpen by remember { mutableStateOf(false) }
     val bgColor by animateColorAsState(
         if (highlighted) LocalAccent.current.copy(alpha = 0.15f) else Color.Transparent,
         label = "TrackRowBg"
     )
+    val artworkSize = if (compact) 40.dp else 46.dp
+    val verticalPad = if (compact) 6.dp else 10.dp
+    val titleStyle = if (compact) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        else MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+    val subtitleStyle = if (compact) MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp)
+        else MaterialTheme.typography.bodySmall
 
     if (popupOpen) {
         TrackActionsPopup(
@@ -353,23 +360,23 @@ fun TrackRow(
         Surface(
             onClick = onPlay,
             color = bgColor,
-            shape = RoundedCornerShape(10.dp),
+            shape = RoundedCornerShape(if (compact) 8.dp else 10.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 1.dp)
         ) {
             Row(
-                Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                Modifier.padding(horizontal = 8.dp, vertical = verticalPad),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (showArtwork && trackNumber == null) {
                     Box(contentAlignment = Alignment.Center) {
-                        ArtworkTile(track.artworkUrl, "Artwork for ${track.title}", Modifier.size(46.dp), 10)
+                        ArtworkTile(track.artworkUrl, "Artwork for ${track.title}", Modifier.size(artworkSize), if (compact) 8 else 10)
                         if (highlighted) {
                             Box(
                                 Modifier
-                                    .size(46.dp)
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .size(artworkSize)
+                                    .clip(RoundedCornerShape(if (compact) 8.dp else 10.dp))
                                     .background(Color.Black.copy(alpha = 0.45f)),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -416,10 +423,7 @@ fun TrackRow(
                         Text(
                             track.title,
                             color = if (highlighted) LocalAccent.current else Color.White,
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp,
-                            ),
+                            style = titleStyle,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
@@ -440,7 +444,7 @@ fun TrackRow(
                         Text(
                             subtitle,
                             color = Color.White.copy(alpha = 0.60f),
-                            style = MaterialTheme.typography.bodySmall,
+                            style = subtitleStyle,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -464,7 +468,7 @@ fun TrackRow(
                     Text(
                         trailingText,
                         color = Color.White.copy(alpha = 0.45f),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = subtitleStyle,
                         modifier = Modifier.padding(horizontal = 6.dp)
                     )
                 }
