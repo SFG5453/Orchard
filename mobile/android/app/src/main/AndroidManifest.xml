@@ -38,6 +38,8 @@
     android:theme="@style/AppTheme"
     android:supportsRtl="true"
     android:usesCleartextTraffic="true">
+    <!-- Android 12+ requires explicit access to the vendor FastRPC transport used by QNN HTP. -->
+    <uses-native-library android:name="libcdsprpc.so" android:required="false" />
     
     <meta-data
       android:name="com.google.android.gms.car.application"

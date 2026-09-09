@@ -34,6 +34,7 @@ def orchardAbis = orchardDebugAbis
 // dependency and cannot accidentally select the stock ARM64 library during JNI merging.
 def onnxRuntimeJavaVersion = '1.27.0'
 def onnxRuntimeQnnVersion = '1.27.1'
+def qnnRuntimeVersion = '2.45.0'
 def onnxRuntimeQnnUrl =
     'https://github.com/Lucchetto/onnxruntime-android-qnn-builds/releases/download/' +
         "v$onnxRuntimeQnnVersion/onnxruntime-android-qnn.zip"
@@ -49,13 +50,18 @@ configurations {
         canBeResolved = true
         transitive = false
     }
+    onnxRuntimeQnnBridge {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
 }
 
 def prepareOnnxRuntimeQnn = tasks.register('prepareOnnxRuntimeQnn') {
     group = 'build setup'
     description = 'Builds the pinned ONNX Runtime Android AAR with the QNN-enabled ARM64 library.'
 
-    inputs.files(configurations.onnxRuntimeBase)
+    inputs.files(configurations.onnxRuntimeBase, configurations.onnxRuntimeQnnBridge)
     inputs.property('qnnUrl', onnxRuntimeQnnUrl)
     inputs.property('qnnSha256', onnxRuntimeQnnSha256)
     outputs.file(onnxRuntimeQnnAar)
@@ -95,6 +101,14 @@ def prepareOnnxRuntimeQnn = tasks.register('prepareOnnxRuntimeQnn') {
             from zipTree(configurations.onnxRuntimeBase.singleFile)
             into expandedAar
         }
+        // The ordinary Android JNI bridge is linked against NNAPI as well as CPU. The supplied
+        // QNN-only runtime does not export NNAPI, so use the bridge from Microsoft's QNN AAR.
+        copy {
+            from(zipTree(configurations.onnxRuntimeQnnBridge.singleFile)) {
+                include 'jni/arm64-v8a/libonnxruntime4j_jni.so'
+            }
+            into expandedAar
+        }
         copy {
             from(zipTree(download)) {
                 include onnxRuntimeQnnEntry
@@ -109,6 +123,75 @@ def prepareOnnxRuntimeQnn = tasks.register('prepareOnnxRuntimeQnn') {
             throw new GradleException(
                 "ONNX Runtime QNN archive did not contain $onnxRuntimeQnnEntry")
         }
+
+        // Microsoft did not publish a 1.27.1 Android AAR. This patch release did not change the
+        // Java/C API, but ELF symbol versions still include the patch number. Retarget the QNN JNI
+        // bridge's version requirement to the supplied runtime so Android's linker can bind them.
+        def qnnBridge = new File(expandedAar, 'jni/arm64-v8a/libonnxruntime4j_jni.so')
+        def oldVersion = "VERS_$onnxRuntimeJavaVersion".getBytes(java.nio.charset.StandardCharsets.US_ASCII)
+        def newVersion = "VERS_$onnxRuntimeQnnVersion".getBytes(java.nio.charset.StandardCharsets.US_ASCII)
+        if (oldVersion.length != newVersion.length) {
+            throw new GradleException('ONNX Runtime ELF version replacement must preserve its length')
+        }
+        def bridgeBytes = qnnBridge.bytes
+        int replacements = 0
+        for (int offset = 0; offset <= bridgeBytes.length - oldVersion.length; offset++) {
+            boolean matches = true
+            for (int index = 0; index < oldVersion.length; index++) {
+                if (bridgeBytes[offset + index] != oldVersion[index]) {
+                    matches = false
+                    break
+                }
+            }
+            if (matches) {
+                System.arraycopy(newVersion, 0, bridgeBytes, offset, newVersion.length)
+                replacements++
+            }
+        }
+        if (replacements != 1) {
+            throw new GradleException(
+                "Expected one $onnxRuntimeJavaVersion ELF version in the QNN JNI bridge, found $replacements")
+        }
+
+        // The ELF version-need record stores the System V hash alongside the text. Android's
+        // linker compares both, so changing only the equally-sized string still fails lookup.
+        def elfHash = { byte[] value ->
+            long hash = 0
+            value.each { current ->
+                hash = (hash << 4) + (current & 0xff)
+                long high = hash & 0xf0000000L
+                if (high != 0) hash ^= high >> 24
+                hash &= ~high
+            }
+            (int) hash
+        }
+        def littleEndianInt = { int value ->
+            java.nio.ByteBuffer.allocate(Integer.BYTES)
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                .putInt(value)
+                .array()
+        }
+        def oldHash = littleEndianInt(elfHash(oldVersion))
+        def newHash = littleEndianInt(elfHash(newVersion))
+        int hashReplacements = 0
+        for (int offset = 0; offset <= bridgeBytes.length - oldHash.length; offset++) {
+            boolean matches = true
+            for (int index = 0; index < oldHash.length; index++) {
+                if (bridgeBytes[offset + index] != oldHash[index]) {
+                    matches = false
+                    break
+                }
+            }
+            if (matches) {
+                System.arraycopy(newHash, 0, bridgeBytes, offset, newHash.length)
+                hashReplacements++
+            }
+        }
+        if (hashReplacements != 1) {
+            throw new GradleException(
+                "Expected one $onnxRuntimeJavaVersion ELF version hash, found $hashReplacements")
+        }
+        qnnBridge.bytes = bridgeBytes
 
         outputAar.parentFile.mkdirs()
         ant.zip(destfile: outputAar, basedir: expandedAar)
@@ -243,6 +326,14 @@ android {
         compose = true
         buildConfig = true
         resValues = true
+    }
+
+    packaging {
+        jniLibs {
+            // QNN's HTP host library hands a filesystem directory to the CDSP so it can load the
+            // matching Skel binary. A path inside an unextracted APK is not usable by the DSP.
+            useLegacyPackaging = true
+        }
     }
 }
 
@@ -397,7 +488,12 @@ dependencies {
     // x86_64 emulator library. prepareOnnxRuntimeQnn replaces its ARM64 native library with the
     // pinned QNN-enabled 1.27.1 build before any Android task consumes it.
     onnxRuntimeBase "com.microsoft.onnxruntime:onnxruntime-android:$onnxRuntimeJavaVersion@aar"
+    onnxRuntimeQnnBridge(
+        "com.microsoft.onnxruntime:onnxruntime-android-qnn:$onnxRuntimeJavaVersion@aar")
     implementation onnxRuntimeQnnFiles
+    // The custom ORT build was compiled against QAIRT 2.45.0.260326. Qualcomm publishes that
+    // runtime as Maven version 2.45.0, including the HTP backends for supported Snapdragon NPUs.
+    implementation "com.qualcomm.qti:qnn-runtime:$qnnRuntimeVersion"
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20260719'

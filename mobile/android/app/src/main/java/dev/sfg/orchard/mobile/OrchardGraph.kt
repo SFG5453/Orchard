@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile
 
 import android.content.Context
+import android.util.Log
 import dev.sfg.orchard.mobile.artwork.ArtistImageRepository
 import dev.sfg.orchard.mobile.artwork.ArtworkRepository
 import dev.sfg.orchard.mobile.auth.NativeYouTubeAuthRepository
@@ -35,6 +36,8 @@ import dev.sfg.orchard.mobile.lyrics.LyricsRepository
 import dev.sfg.orchard.mobile.settings.SettingsRepository
 import dev.sfg.orchard.mobile.download.DownloadManager
 import dev.sfg.orchard.mobile.playback.YouTubePoTokenMinter
+import dev.sfg.orchard.mobile.playback.smart.QnnNpuCapability
+import dev.sfg.orchard.mobile.playback.smart.QnnNpuDetector
 import dev.sfg.orchard.mobile.songlinks.SongLinksRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +52,7 @@ import java.util.concurrent.TimeUnit
  */
 class OrchardGraph(context: Context) {
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val qnnNpuCapability = kotlinx.coroutines.flow.MutableStateFlow<QnnNpuCapability?>(null)
     val http: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS)
@@ -146,6 +150,11 @@ class OrchardGraph(context: Context) {
 
     init {
         applicationScope.launch { auth.restore() }
+        applicationScope.launch {
+            val capability = QnnNpuDetector.detect()
+            qnnNpuCapability.value = capability
+            Log.i("OrchardQnnDetector", "${capability.status}: ${capability.detail}")
+        }
         updates.checkForUpdates()
     }
 
