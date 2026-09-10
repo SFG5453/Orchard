@@ -95,12 +95,13 @@ class TransitionChoreographyParityTest {
         assertTrue(choreography!!.duration <= 4.0 + 1e-4)
         assertTrue(
             choreography.strategy == ChoreographyStrategy.FILTERED_HANDOFF ||
-            choreography.strategy == ChoreographyStrategy.CLEAN_CUT
+            choreography.strategy == ChoreographyStrategy.CLEAN_CUT ||
+            choreography.strategy == ChoreographyStrategy.SILENCE_TRIM
         )
     }
 
     @Test
-    fun `safe instrumental blend receives staged blend with single bass owner`() {
+    fun `legacy analysis uses desktop fallback with single bass owner`() {
         val outgoing = TrackAnalysis(
             trackId = "inst_a",
             duration = 210.0,
@@ -148,12 +149,12 @@ class TransitionChoreographyParityTest {
         )
 
         assertFalse(plan.blocked)
-        assertEquals(TransitionStyle.DJ_BLEND, plan.transitionStyle)
-        assertTrue("Beats must be in 8..16 but got ${plan.transitionBeats}", plan.transitionBeats in 8..16)
+        assertEquals(TransitionStyle.EQUAL_POWER, plan.transitionStyle)
+        assertEquals(0, plan.transitionBeats)
 
         val choreography = plan.choreography
         assertNotNull(choreography)
-        assertEquals(ChoreographyStrategy.STAGED_BLEND, choreography!!.strategy)
+        assertEquals(ChoreographyStrategy.FILTERED_HANDOFF, choreography!!.strategy)
 
         // Test single bass owner automation
         val outBassStart = evaluateAutomationCurve(choreography.curves.outgoingBass, 0.0)

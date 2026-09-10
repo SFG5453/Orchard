@@ -349,6 +349,7 @@ class TrackAnalyzer(
             mixOutCandidates = features?.mixOutCandidates.orEmpty(),
             energyCurve = features?.energyCurve.orEmpty(),
             lowEnergyCurve = features?.lowEnergyCurve.orEmpty(),
+            plannerFeaturesJson = features?.plannerFeaturesJson ?: "{}",
             // Vocal mask only where we have stereo model data.
             vocalActivityMask = features?.let {
                 mergeMasks(it.energyCurve.size, head?.vocalMask, tail?.vocalMask)
@@ -415,6 +416,7 @@ class TrackAnalyzer(
             mixOutCandidates = features.mixOutCandidates,
             energyCurve = features.energyCurve,
             lowEnergyCurve = features.lowEnergyCurve,
+            plannerFeaturesJson = features.plannerFeaturesJson,
             vocalActivityMask = features.vocalActivityMask,
             vocalProbability = features.vocalProbability,
         )

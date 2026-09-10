@@ -68,10 +68,11 @@ object TrackFeatures {
     /**
      * The subset of the analyzer's output the transition policy reads.
      *
-     * The analyzer also produces chroma, mid/high energy curves, loudness, peak and dynamic range;
-     * none is consumed downstream, so none crosses the JNI boundary.
+     * Typed fields serve mobile's beat/vocal refinement. The full native payload is retained for
+     * desktop's structural, spectral, and harmonic scoring, including fields added in the future.
      */
     data class Features(
+        val plannerFeaturesJson: String = "{}",
         val duration: Double,
         val bpm: Double,
         val beatInterval: Double,
@@ -97,6 +98,7 @@ object TrackFeatures {
     )
 
     fun parse(root: JSONObject): Features = Features(
+        plannerFeaturesJson = root.toString(),
         duration = root.optDouble("duration", 0.0).orZero(),
         bpm = root.optDouble("bpm", 0.0).orZero(),
         beatInterval = root.optDouble("beatInterval", 0.0).orZero(),

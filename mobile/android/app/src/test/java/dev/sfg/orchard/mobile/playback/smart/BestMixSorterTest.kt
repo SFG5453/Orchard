@@ -164,7 +164,7 @@ class BestMixSorterTest {
     }
 
     @Test
-    fun djAssistedFallbackOutranksAPlainCrossfade() {
+    fun untrustedOutgoingGridDoesNotEarnAnAssistedMixFromIncomingConfidenceAlone() {
         val plain = createTrack("plain", "Exact But Untrusted")
         val assisted = createTrack("assisted", "Trusted Incoming Grid")
         val current = createFeatures(
@@ -187,7 +187,7 @@ class BestMixSorterTest {
             initialFeatures = current,
         )
 
-        assertEquals(listOf(assisted, plain), sorted)
+        assertEquals(listOf(plain, assisted), sorted)
     }
 
     @Test

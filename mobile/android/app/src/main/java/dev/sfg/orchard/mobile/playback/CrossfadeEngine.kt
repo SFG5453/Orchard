@@ -123,6 +123,14 @@ class CrossfadeEngine(
         val mode: CrossfadeMode,
     )
 
+    // Pair scoring belongs off the playback/UI thread. The shared planner caches musical choices;
+    // subsequent ticks only schedule the cached result. Never queue work faster than it completes.
+    private val planningExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
+        Thread(task, "orchard-transition-plan").apply { isDaemon = true }
+    }
+    private var planning = false
+    private var planningGeneration = 0L
+
     private var active: ExoPlayer? = null
     private var standby: ExoPlayer? = null
     private var fading = false
@@ -132,6 +140,7 @@ class CrossfadeEngine(
 
     /** Begins watching [active] for the end of each track. Safe to call again to re-seat the pair. */
     fun start(active: ExoPlayer, standby: ExoPlayer) {
+        planningGeneration++
         this.active = active
         this.standby = standby
         fading = false
@@ -147,6 +156,7 @@ class CrossfadeEngine(
      * snapshot the standby was loaded with (a manual skip, a seek, a queue edit) must call this.
      */
     fun abort() {
+        planningGeneration++
         if (!fading) return
         fading = false
         handler.removeCallbacks(ramp)
@@ -167,6 +177,8 @@ class CrossfadeEngine(
     }
 
     fun release() {
+        planningGeneration++
+        planningExecutor.shutdownNow()
         handler.removeCallbacks(watcher)
         handler.removeCallbacks(ramp)
         fading = false
@@ -189,51 +201,64 @@ class CrossfadeEngine(
             val duration = player.duration
             if (duration == C.TIME_UNSET) return
             if (player.nextMediaItemIndex == C.INDEX_UNSET) return
-            // A track shorter than two fades would spend most of itself fading.
-            if (duration < settings.fadeSeconds * 2000) return
 
-            val plan = planFor(player, settings, duration)
-            onPlan(plan.takeIf { it.markerVisible && !it.blocked })
+            requestPlan(player, settings, duration)
+        }
+    }
 
-            if (plan.blocked || !plan.shouldStart) return
-            // Gapless playback across sequential album tracks is handled natively and seamlessly
-            // by ExoPlayer within the active player. Beginning a multi-player handoff for gapless
-            // would cause buffer stalls and stutter.
-            if (plan.transitionStyle == TransitionStyle.GAPLESS) return
-            // A smart plan can end before the file does, at an analyzed mix-out anchor. The ramp
-            // has to close there, not at the end of the track.
-            val endMs = (plan.transitionEnd * 1000).toLong().coerceAtMost(duration)
+    private fun executePlan(player: ExoPlayer, plan: TransitionPlan, duration: Long) {
+        onPlan(plan.takeIf { it.markerVisible && !it.blocked })
 
-            // A rendered overlap replaces the ramp entirely rather than augmenting it: the mix is
-            // already in the buffer, complete with its own fades, so ramping the players on top
-            // would fade a finished mix in and out of itself.
-            val prepared = currentPair(player)?.let { (out, into) -> preparedFor(out, into) }
-            if (prepared != null && beginRenderedTransition(plan, prepared)) {
-                Log.d(
-                    TAG,
-                    "Transition: rendered overlap, style=${plan.transitionStyle} " +
-                        "beats=${plan.transitionBeats} stretch=${prepared.stretchRatio} " +
-                        "out=${plan.transitionStart}..${plan.transitionEnd} " +
-                        "in=${plan.incomingCueTime}->${plan.incomingHandoffTime} " +
-                        "reason=${plan.reason}",
-                )
-                return
-            }
+        if (plan.blocked) return
+        // Gapless playback across sequential album tracks is handled natively and seamlessly
+        // by ExoPlayer within the active player. Beginning a multi-player handoff for gapless
+        // would cause buffer stalls and stutter.
+        if (plan.transitionStyle == TransitionStyle.GAPLESS) return
+        // A smart plan can end before the file does, at an analyzed mix-out anchor. The ramp
+        // has to close there, not at the end of the track.
+        val endMs = (plan.transitionEnd * 1000).toLong().coerceAtMost(duration)
 
-            // The one line that says whether you heard the mix or the fallback. A render that was
-            // planned but not ready is the interesting case: the plan asked for a beat-matched
-            // blend and the ramp is what actually played.
+        // A rendered overlap replaces the ramp entirely rather than augmenting it: the mix is
+        // already in the buffer, complete with its own fades, so ramping the players on top
+        // would fade a finished mix in and out of itself.
+        val prepared = currentPair(player)?.let { (out, into) -> preparedFor(out, into) }
+        if (prepared != null && prepared.selectedPlan == plan.nativePlan && plan.nativePlan != null &&
+            player.currentPosition / 1000.0 >= prepared.startSeconds &&
+            player.currentPosition / 1000.0 < prepared.endSeconds && beginRenderedTransition(plan, prepared)) {
             Log.d(
                 TAG,
-                "Transition: volume ramp, style=${plan.transitionStyle} " +
-                    "fadeMs=${plan.fadeMs} rate=${plan.incomingPlaybackRate} " +
-                    "renderReady=${prepared != null} " +
+                "Transition: rendered overlap, style=${plan.transitionStyle} " +
+                    "beats=${plan.transitionBeats} stretch=${prepared.stretchRatio} " +
                     "out=${plan.transitionStart}..${plan.transitionEnd} " +
                     "in=${plan.incomingCueTime}->${plan.incomingHandoffTime} " +
                     "reason=${plan.reason}",
             )
-            beginFade(plan, remainingMs = endMs - player.currentPosition)
+            return
         }
+
+        if (!plan.shouldStart) return
+        // Zero-duration desktop refusals must never become a minimum-length volume ramp.
+        // Wait for the selected boundary, then advance with the exact incoming cue.
+        if (plan.fadeSeconds <= 0) {
+            if (player.currentPosition < endMs) return
+            val next = player.nextMediaItemIndex
+            if (next != C.INDEX_UNSET) player.seekTo(next, (plan.incomingCueTime * 1000).toLong())
+            return
+        }
+
+        // The one line that says whether you heard the mix or the fallback. A render that was
+        // planned but not ready is the interesting case: the plan asked for a beat-matched
+        // blend and the ramp is what actually played.
+        Log.d(
+            TAG,
+            "Transition: volume ramp, style=${plan.transitionStyle} " +
+                "fadeMs=${plan.fadeMs} rate=${plan.incomingPlaybackRate} " +
+                "renderReady=${prepared != null} " +
+                "out=${plan.transitionStart}..${plan.transitionEnd} " +
+                "in=${plan.incomingCueTime}->${plan.incomingHandoffTime} " +
+                "reason=${plan.reason}",
+        )
+        beginFade(plan, remainingMs = endMs - player.currentPosition)
     }
 
     /** The outgoing and incoming tracks of the transition about to happen. */
@@ -314,20 +339,33 @@ class CrossfadeEngine(
         return true
     }
 
-    private fun planFor(player: ExoPlayer, settings: Config, durationMs: Long): TransitionPlan {
-        val currentTrack = player.currentMediaItem?.let(MediaItemMapper::toTrack)
+    private fun requestPlan(player: ExoPlayer, settings: Config, durationMs: Long) {
+        if (planning) return
+        val currentTrack = player.currentMediaItem?.let(MediaItemMapper::toTrack) ?: return
         val nextTrack = player.getMediaItemAt(player.nextMediaItemIndex).let(MediaItemMapper::toTrack)
-        return planTransition(
-            analysis = currentTrack?.let(analysisFor) ?: TrackAnalysis(),
-            nextAnalysis = analysisFor(nextTrack),
-            currentTrack = currentTrack,
-            nextTrack = nextTrack,
-            currentTime = player.currentPosition / 1000.0,
-            duration = durationMs / 1000.0,
-            fadeSeconds = settings.fadeSeconds,
-            mode = settings.mode,
-            albumSequential = isAlbumPlaythrough(player, currentTrack),
-        )
+        val analysis = analysisFor(currentTrack)
+        val nextAnalysis = analysisFor(nextTrack)
+        val position = player.currentPosition
+        val albumSequential = isAlbumPlaythrough(player, currentTrack)
+        val generation = planningGeneration
+        planning = true
+        planningExecutor.execute {
+            val result = runCatching {
+                planTransition(analysis, nextAnalysis, currentTrack, nextTrack,
+                    currentTime = position / 1000.0, duration = durationMs / 1000.0,
+                    fadeSeconds = settings.fadeSeconds, mode = settings.mode, albumSequential = albumSequential)
+            }
+            handler.post {
+                planning = false
+                if (generation != planningGeneration || active !== player || fading || !player.isPlaying ||
+                    config() != settings || currentPair(player) != (currentTrack to nextTrack) ||
+                    analysisFor(currentTrack) != analysis || analysisFor(nextTrack) != nextAnalysis ||
+                    isAlbumPlaythrough(player, currentTrack) != albumSequential ||
+                    kotlin.math.abs(player.currentPosition - position) > WATCH_INTERVAL_MS * 2) return@post
+                result.onSuccess { executePlan(player, it, durationMs) }
+                    .onFailure { Log.w(TAG, "Desktop transition planning failed", it) }
+            }
+        }
     }
 
     /**

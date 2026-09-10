@@ -79,6 +79,9 @@ data class TrackAnalysis(
     val vocalActivityMask: List<Double> = emptyList(),
     /** Whole-track vocal likelihood, distinct from the per-sample [vocalActivityMask]. */
     val vocalProbability: Double = 0.0,
+    /** Native structural, spectral, and meter evidence consumed by the shared desktop planner. */
+    val plannerFeaturesJson: String = "{}",
+
 ) {
     companion object {
         const val STATUS_READY = "ready"

@@ -92,6 +92,7 @@ android {
         main {
             jniLibs.srcDirs += earmarkJniLibsDir
             kotlin.srcDirs += earmarkKotlinDir
+            resources.srcDir layout.buildDirectory.dir("generated/transitionPlanner").get().asFile
         }
     }
 
@@ -310,8 +311,39 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20260719'
     testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0'
-    testImplementation 'org.mozilla:rhino:1.9.1'
+    implementation 'org.mozilla:rhino:1.9.1'
 
     androidTestImplementation 'androidx.test.ext:junit:1.3.0'
     androidTestImplementation 'androidx.test:runner:1.7.0'
+}
+
+// Rebuild from the desktop sources, so changing its policy cannot leave Android on a stale port.
+tasks.register('bundleTransitionPlanner', Exec) {
+    workingDir rootProject.file('../..')
+    inputs.files(fileTree(rootProject.file('../../src/audio/crossfade')) { include '*.js' })
+    inputs.file rootProject.file('../../shared/trackAnalysis.js')
+    inputs.file rootProject.file('../tools/transition-planner/index.js')
+    inputs.file rootProject.file('../../scripts/build-mobile-transition-planner.mjs')
+    inputs.file rootProject.file('../../package-lock.json')
+    outputs.dir layout.buildDirectory.dir('generated/transitionPlanner')
+    commandLine 'node', 'scripts/build-mobile-transition-planner.mjs',
+        layout.buildDirectory.dir('generated/transitionPlanner').get().asFile.absolutePath
+}
+tasks.matching { it.name ==~ /^process.*JavaRes$/ }.configureEach {
+    dependsOn 'bundleTransitionPlanner'
+}
+
+android.sourceSets.test.resources.srcDir layout.buildDirectory.dir('generated/transitionPlannerTest').get().asFile
+tasks.register('generateTransitionPlannerFixtures', Exec) {
+    workingDir rootProject.file('../..')
+    inputs.files(fileTree(rootProject.file('../../src/audio/crossfade')) { include '*.js' })
+    inputs.file rootProject.file('../../shared/trackAnalysis.js')
+    inputs.file rootProject.file('../../test/fixtures/mobileTransitionPlanner.js')
+    inputs.file rootProject.file('../../scripts/generate-mobile-planner-fixtures.mjs')
+    outputs.dir layout.buildDirectory.dir('generated/transitionPlannerTest')
+    commandLine 'node', 'scripts/generate-mobile-planner-fixtures.mjs',
+        layout.buildDirectory.dir('generated/transitionPlannerTest').get().asFile.absolutePath
+}
+tasks.matching { it.name ==~ /^process.*UnitTestJavaRes$/ }.configureEach {
+    dependsOn 'generateTransitionPlannerFixtures'
 }

@@ -9,8 +9,8 @@
  * later version.
  *
  * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
  * You should have received a copy of the GNU Affero General Public License
@@ -19,45 +19,27 @@
 
 package dev.sfg.orchard.mobile.playback.smart
 
-import org.junit.Assert.assertEquals
+import org.junit.Assert.*
 import org.junit.Test
 
 class TransitionPreparerPlanTest {
-
-    @Test
-    fun `native plan measures duration on target grid and stretches outgoing deck`() {
-        val beats = 16
-        val outgoingBpm = 126.0
-        val incomingBpm = 124.0
-        val outgoingDuration = beats * 60 / outgoingBpm
-        val plan = TransitionPlan(
-            transitionStart = 220.0,
-            transitionEnd = 220.0 + outgoingDuration,
-            fadeSeconds = outgoingDuration,
-            transitionStyle = TransitionStyle.DJ_BLEND,
-            incomingCueTime = 12.0,
-            transitionBeats = beats,
-            bassSwap = true,
-            outgoingBpm = outgoingBpm,
-            incomingBpm = incomingBpm,
-        )
-
-        val selected = checkNotNull(
-            selectedRenderPlan(
-                plan = plan,
-                outgoingSliceStart = 210.0,
-                incomingSliceStart = 8.0,
-            ),
-        )
-        assertEquals(beats * 60 / incomingBpm, selected.duration, 1e-9)
-        assertEquals(incomingBpm, selected.targetBpm, 1e-9)
-        assertEquals(incomingBpm / outgoingBpm, selected.outgoingTempoRatio, 1e-9)
-        assertEquals(1.0, selected.incomingTempoRatio, 1e-9)
-        assertEquals(
-            "the native plan must consume the outgoing window selected by the planner",
-            outgoingDuration,
-            selected.duration * selected.outgoingTempoRatio,
-            1e-9,
-        )
+    @Test fun `renderer consumes selected desktop fields without recomputing tempo or strategy`() {
+        var rendered = 0
+        for (case in desktopCases()) {
+            val plan = mobilePlan(case.getJSONObject("input"))
+            val selected = selectedRenderPlan(plan, 90.0, 1.0)
+            val native = plan.nativePlan
+            if (native == null) { assertNull(selected); continue }
+            rendered++
+            checkNotNull(selected)
+            assertEquals(native.transitionStart - 90.0, selected.outgoingStart, 1e-9)
+            assertEquals(native.incomingCueTime - 1.0, selected.incomingStart, 1e-9)
+            assertEquals(native.overlapSeconds, selected.duration, 1e-9)
+            assertEquals(native.targetBpm, selected.targetBpm, 1e-9)
+            assertEquals(native.outgoingTempoRatio, selected.outgoingTempoRatio, 1e-9)
+            assertEquals(native.incomingTempoRatio, selected.incomingTempoRatio, 1e-9)
+            assertEquals(native.strategy, selected.strategy)
+        }
+        assertTrue(rendered > 0)
     }
 }
