@@ -21,6 +21,7 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { Innertube, UniversalCache } from 'youtubei.js';
+import { createBrowserSessionRecovery } from './browserSessionRecovery.js';
 import { createAccountProfileProbe } from './accountProfileProbe.js';
 import { createBrowserAccountSelectionStore } from './browserAccountSelection.js';
 import { createBrowserMusicFetch } from './browserMusicApi.js';
@@ -70,6 +71,12 @@ export function createAuthService({
     BrowserWindow,
     partition: browserAuthPartition,
     userDataPath: app.getPath('userData')
+  });
+  const recoverBrowserSession = createBrowserSessionRecovery({
+    BrowserWindow,
+    partition: browserAuthPartition,
+    capturePageAuth: captureBrowserPageAuth,
+    getAccountIndex: () => authState.browser.accountIndex
   });
   const browserAccountSelection = createBrowserAccountSelectionStore(app.getPath('userData'));
   const savedBrowserAccount = browserAccountSelection.cached();
@@ -336,6 +343,14 @@ export function createAuthService({
     const wasSigningIn = authState.status === 'starting' || authState.status === 'pending';
     const wasSignedIn = publicAuthState().signedIn;
     await collectBrowserCookies();
+    if (!webContents && !hasBrowserLoginCookie() && !browserAuthWindow) {
+      try {
+        await recoverBrowserSession();
+        await collectBrowserCookies();
+      } catch (error) {
+        console.warn(`Could not renew browser session: ${error.message}`);
+      }
+    }
     const identityChanged = browserIdentity() !== previousIdentity;
     if (identityChanged || forceAccountRefresh) {
       browserInnertubePromise = null;
@@ -537,6 +552,7 @@ export function createAuthService({
   }
 
   async function ensureSignedIn() {
+    await refreshBrowserAuth();
     const yt = await getInnertube();
     if (yt.session.logged_in) return yt;
     if (await restoreCachedSignIn(yt)) return yt;
@@ -546,6 +562,7 @@ export function createAuthService({
   }
 
   async function musicClientForBrowse() {
+    await refreshBrowserAuth();
     const yt = await getInnertube();
     if (yt.session.logged_in || await restoreCachedSignIn(yt)) return yt;
     const browserYt = getBrowserInnertube();
@@ -554,7 +571,7 @@ export function createAuthService({
   }
 
   async function musicClientForPlayback(preferBrowserAuth = false) {
-    if (preferBrowserAuth) await refreshBrowserAuth();
+    await refreshBrowserAuth();
     if (preferBrowserAuth) {
       const browserYt = getBrowserInnertube();
       if (browserYt) return browserYt;
