@@ -31,50 +31,27 @@ import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
-import kotlin.math.min
 
-/**
- * Converts the mobile playback plan to the exact contract consumed by the shared Rust renderer.
- *
- * The rendered timeline follows the incoming grid, exactly as it does on desktop.
- * [TransitionPlan.fadeSeconds] measures the outgoing source window for the live fallback and is
- * therefore not necessarily the rendered duration. Deriving all three tempo fields together keeps
- * the beat count, wall-clock duration, and source consumption internally consistent for
- * non-identical BPM pairs.
+/** Maps desktop's native plan to the renderer, rebasing only the decoded slice coordinates.
+ * The live fallback has its own window; it must never be used to reconstruct native timing.
  */
 internal fun selectedRenderPlan(
     plan: TransitionPlan,
     outgoingSliceStart: Double,
     incomingSliceStart: Double,
 ): TransitionRenderer.SelectedPlan? {
-    if (
-        plan.transitionBeats <= 0 ||
-        !plan.outgoingBpm.isFinite() || plan.outgoingBpm <= 0 ||
-        !plan.incomingBpm.isFinite() || plan.incomingBpm <= 0
-    ) return null
-
-    val strategy = when (plan.transitionStyle) {
-        TransitionStyle.DJ_BLEND -> if (plan.bassSwap) "bass_swap" else "beatmatched_crossfade"
-        TransitionStyle.DJ_FILTER -> "filtered_blend"
-        TransitionStyle.EQUAL_POWER -> "equal_power_crossfade"
-        TransitionStyle.GAPLESS -> "short_fade"
-    }
-    val targetBpm = plan.incomingBpm
+    val selected = plan.nativePlan ?: return null
     return TransitionRenderer.SelectedPlan(
-        outgoingStart = plan.transitionStart - outgoingSliceStart,
-        incomingStart = plan.incomingCueTime - incomingSliceStart,
-        duration = plan.transitionBeats * 60 / targetBpm,
-        beats = plan.transitionBeats,
-        outgoingBpm = plan.outgoingBpm,
-        incomingBpm = plan.incomingBpm,
-        targetBpm = targetBpm,
-        outgoingTempoRatio = targetBpm / plan.outgoingBpm,
-        incomingTempoRatio = 1.0,
-        strategy = strategy,
-        handoffFraction = plan.handoffFraction,
-        bedPosition = plan.bedPosition,
-        bassSwapFraction = plan.bassSwapFraction,
-        filterSweep = plan.filterSweep,
+        outgoingStart = selected.transitionStart - outgoingSliceStart,
+        incomingStart = selected.incomingCueTime - incomingSliceStart,
+        duration = selected.overlapSeconds, beats = selected.beats,
+        outgoingBpm = selected.outgoingBpm, incomingBpm = selected.incomingBpm,
+        targetBpm = selected.targetBpm,
+        outgoingTempoRatio = selected.outgoingTempoRatio,
+        incomingTempoRatio = selected.incomingTempoRatio,
+        strategy = selected.strategy,
+        handoffFraction = selected.handoffFraction, bedPosition = selected.bedPosition,
+        bassSwapFraction = selected.bassSwapFraction, filterSweep = selected.filterSweep,
     )
 }
 
@@ -103,9 +80,11 @@ class TransitionPreparer(
         /** Where the incoming track resumes once the overlap ends, on its own timeline. */
         val incomingResumeSeconds: Double,
         val stretchRatio: Double,
+        val selectedPlan: WsolaPlanResult.Planned? = null,
     )
 
     private val ready = ConcurrentHashMap<String, Prepared>()
+    private val selections = ConcurrentHashMap<String, WsolaPlanResult.Planned>()
     private val running = ConcurrentHashMap.newKeySet<String>()
 
     /** Pairs whose refusal has already been reported, so a per-tick gate logs once. */
@@ -154,22 +133,11 @@ class TransitionPreparer(
         plan: TransitionPlan,
     ) {
         val key = key(outgoing, incoming)
-        // Only the top tier earns a render. Anything less has already been judged not to support
-        // beat-matching, and stretching against a grid nobody trusts is exactly what the policy
-        // ladder exists to prevent.
-        //
-        // Every gate below reports itself once per pair. This runs on every tick, so logging each
-        // refusal outright would bury the log; but a pair that silently never renders is the whole
-        // reason a mix turns into a fade, and that has to be answerable after the fact.
-        if (plan.transitionStyle != TransitionStyle.DJ_BLEND) {
-            return explainOnce(key, "style is ${plan.transitionStyle}, not DJ_BLEND")
-        }
-        if (plan.transitionBeats <= 0 || plan.fadeSeconds <= 0) {
-            return explainOnce(key, "empty window: beats=${plan.transitionBeats} fade=${plan.fadeSeconds}s")
-        }
-        val policy = assessTransitionTier(outgoingAnalysis, incomingAnalysis)
-        if (policy.tier != TransitionTier.BEATMATCHED) {
-            return explainOnce(key, "tier is ${policy.tier}, not BEATMATCHED")
+        val selected = plan.nativePlan ?: return explainOnce(key, "desktop declined native rendering")
+        if (selections.put(key, selected) != selected) {
+            ready.remove(key)?.file?.delete()
+            declined.remove(key)
+            explained.remove(key)
         }
 
         if (ready.containsKey(key) || declined.contains(key) || !running.add(key)) return
@@ -184,14 +152,20 @@ class TransitionPreparer(
 
         executor.execute {
             try {
-                val rendered = render(key, outgoingUri, outgoingAnalysis, incomingUri, incomingAnalysis, plan)
+                val rendered = AudioWorkLimiter.run {
+                    render(key, outgoingUri, outgoingAnalysis, incomingUri, incomingAnalysis, plan)
+                }
                 if (rendered == null) {
                     // `prepare` is called on every tick for the whole run-up to the transition, and
                     // a refusal is final, so without this the pair decodes both tracks again every
                     // few hundred milliseconds for a minute or more and throws all of it away. That
                     // is how this was found. The engine's volume ramp covers the seam.
-                    declined.add(key)
+                    if (selections[key] == selected) declined.add(key)
                     explainOnce(key, "renderer declined; see the OrchardTransition log for why")
+                    return@execute
+                }
+                if (selections[key] != selected) {
+                    rendered.file.delete()
                     return@execute
                 }
                 ready[key] = rendered
@@ -201,7 +175,7 @@ class TransitionPreparer(
                 // over them, so an OutOfMemoryError is the failure to expect, and it is an Error.
                 // Declined as well as logged, because retrying on the next tick would decode both
                 // tracks again into the heap that just ran out. The seam gets the plain fade.
-                declined.add(key)
+                if (selections[key] == selected) declined.add(key)
                 Log.w(TAG, "Could not prepare $key", error)
             } finally {
                 running.remove(key)
@@ -218,17 +192,11 @@ class TransitionPreparer(
         plan: TransitionPlan,
     ): Prepared? {
         val started = System.currentTimeMillis()
-        val overlap = plan.fadeSeconds
-
-        // Both sources are cropped around the beat the mix aligns on, with margin either side: the
-        // renderer needs room to stretch into, and the anchor is not at the edge of the overlap.
-        val margin = overlap * 0.5 + MARGIN_SECONDS
-        val outAnchor = nearestDownbeat(outgoingAnalysis, plan.transitionStart) ?: return null
-        // The rendered buffer must start at the same cue the live two-player fallback uses. Using
-        // the handoff/drop here silently discarded the intro and made rendered and live versions
-        // of the same plan play different sections of the incoming track.
-        val inAnchor = nearestDownbeat(incomingAnalysis, plan.incomingCueTime)
-            ?: plan.incomingCueTime
+        val selected = plan.nativePlan ?: return null
+        val overlap = selected.overlapSeconds
+        val margin = maxOf(overlap, selected.transitionEnd - selected.transitionStart) + MARGIN_SECONDS
+        val outAnchor = selected.transitionStart
+        val inAnchor = selected.incomingCueTime
 
         val (outgoingPcm, outgoingSliceStart) = decodeAround(outgoingUri, outAnchor, margin) ?: return null
         val (incomingPcm, incomingSliceStart) = decodeAround(incomingUri, inAnchor, margin) ?: return null
@@ -240,15 +208,15 @@ class TransitionPreparer(
             outgoing = TransitionRenderer.Source(
                 left = outgoingPcm.left,
                 right = outgoingPcm.right,
-                bpm = plan.outgoingBpm,
+                bpm = selected.outgoingBpm,
                 beats = beatGrid(outgoingAnalysis, outgoingSliceStart, outgoingPcm.left.size),
                 downbeats = rebased(outgoingAnalysis.downbeats, outgoingSliceStart, outgoingPcm.left.size),
             ),
             incoming = TransitionRenderer.Source(
                 left = incomingPcm.left,
                 right = incomingPcm.right,
-                // Octave-aligned by the planner, not the analyzed BPM: see [TransitionPlan].
-                bpm = plan.incomingBpm,
+                // Preserve the raw grid BPM; the selected tempo ratios carry octave alignment.
+                bpm = selected.incomingBpm,
                 beats = beatGrid(incomingAnalysis, incomingSliceStart, incomingPcm.left.size),
                 downbeats = rebased(incomingAnalysis.downbeats, incomingSliceStart, incomingPcm.left.size),
             ),
@@ -263,19 +231,18 @@ class TransitionPreparer(
                 "stretch=${rendered.stretchRatio} in ${System.currentTimeMillis() - started}ms",
         )
 
-        // Every timing below is the engine's own, not the anchor it was asked for. It picks a
-        // beat-aligned start inside the requested window and the overlap length from the phrase
-        // structure, so re-deriving these from the plan would place the mix at a cue that was
-        // never rendered.
+        // The renderer executes the selected source window; the outgoing endpoint remains on
+        // the source timeline, while the WAV duration follows the selected target tempo.
         val startSeconds = outgoingSliceStart + rendered.outgoingStart
         return Prepared(
             file = file,
             startSeconds = startSeconds,
-            endSeconds = startSeconds + rendered.durationSeconds,
+            endSeconds = selected.transitionEnd,
             // The overlap already contains the incoming track from its entry point through to the
             // end of the mix, so playback resumes past all of it.
             incomingResumeSeconds = incomingSliceStart + rendered.incomingResume,
             stretchRatio = rendered.stretchRatio,
+            selectedPlan = selected,
         )
     }
 
@@ -361,9 +328,6 @@ class TransitionPreparer(
         return shaped
     }
 
-    private fun nearestDownbeat(analysis: TrackAnalysis, target: Double): Double? =
-        analysis.downbeats.minByOrNull { abs(it - target) }?.takeIf { abs(it - target) < 2.0 }
-
     /**
      * Drops renders for pairs that are no longer next, so the cache directory cannot grow.
      *
@@ -376,6 +340,7 @@ class TransitionPreparer(
             if (key in keys) continue
             ready.remove(key)?.file?.delete()
         }
+        selections.keys.retainAll(keys)
         declined.retainAll(keys)
         explained.retainAll(keys)
     }
@@ -388,6 +353,7 @@ class TransitionPreparer(
         executor.shutdownNow()
         ready.values.forEach { runCatching { it.file.delete() } }
         ready.clear()
+        selections.clear()
         runCatching { directory().deleteRecursively() }
     }
 

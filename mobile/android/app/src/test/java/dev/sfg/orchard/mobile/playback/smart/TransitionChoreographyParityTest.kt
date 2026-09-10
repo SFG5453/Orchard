@@ -20,9 +20,9 @@
 package dev.sfg.orchard.mobile.playback.smart
 
 import dev.sfg.orchard.mobile.model.Track
-import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -95,12 +95,13 @@ class TransitionChoreographyParityTest {
         assertTrue(choreography!!.duration <= 4.0 + 1e-4)
         assertTrue(
             choreography.strategy == ChoreographyStrategy.FILTERED_HANDOFF ||
-            choreography.strategy == ChoreographyStrategy.CLEAN_CUT
+            choreography.strategy == ChoreographyStrategy.CLEAN_CUT ||
+            choreography.strategy == ChoreographyStrategy.SILENCE_TRIM
         )
     }
 
     @Test
-    fun `safe instrumental blend receives staged blend with single bass owner`() {
+    fun `non beatmatched legacy analysis uses normal configured fade`() {
         val outgoing = TrackAnalysis(
             trackId = "inst_a",
             duration = 210.0,
@@ -148,22 +149,11 @@ class TransitionChoreographyParityTest {
         )
 
         assertFalse(plan.blocked)
-        assertEquals(TransitionStyle.DJ_BLEND, plan.transitionStyle)
-        assertTrue("Beats must be in 8..16 but got ${plan.transitionBeats}", plan.transitionBeats in 8..16)
+        assertEquals(TransitionStyle.EQUAL_POWER, plan.transitionStyle)
+        assertEquals(0, plan.transitionBeats)
 
-        val choreography = plan.choreography
-        assertNotNull(choreography)
-        assertEquals(ChoreographyStrategy.STAGED_BLEND, choreography!!.strategy)
-
-        // Test single bass owner automation
-        val outBassStart = evaluateAutomationCurve(choreography.curves.outgoingBass, 0.0)
-        val inBassStart = evaluateAutomationCurve(choreography.curves.incomingBass, 0.0)
-        assertTrue(abs(outBassStart - 1.0) < 1e-3)
-        assertTrue(abs(inBassStart - 0.0) < 1e-3)
-
-        val outBassEnd = evaluateAutomationCurve(choreography.curves.outgoingBass, 1.0)
-        val inBassEnd = evaluateAutomationCurve(choreography.curves.incomingBass, 1.0)
-        assertTrue(abs(outBassEnd - 0.0) < 1e-3)
-        assertTrue(abs(inBassEnd - 1.0) < 1e-3)
+        assertEquals(6.0, plan.fadeSeconds, 1e-9)
+        assertFalse(plan.bassSwap)
+        assertNull(plan.choreography)
     }
 }

@@ -161,6 +161,8 @@ class VocalTracker(private val context: Context) {
                     }
                 }
                 val options = OrtSession.SessionOptions().apply {
+                    // Keep the shipping dynamic-INT8 separator on the CPU provider.
+                    addCPU(false)
                     setIntraOpNumThreads(INFERENCE_THREADS)
                     setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
                     // Same reasoning as BeatTracker: the arena retains every block it allocates for

@@ -575,7 +575,8 @@ export function installPlaybackControls(ctx) {
         ctx.nextCrossfadeAnalysis.value,
         mediaDuration,
         playbackTime,
-        1
+        1,
+        ctx.crossfadeSeconds.value
       );
     };
     const fallback = (sourcePlan = plan) => ({

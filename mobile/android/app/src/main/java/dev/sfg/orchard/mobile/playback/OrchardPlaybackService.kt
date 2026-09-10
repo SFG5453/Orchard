@@ -255,31 +255,11 @@ class OrchardPlaybackService : MediaLibraryService() {
                             } else {
                                 null
                             }
-                        val renderedDuration =
-                            prepared
-                                ?.let { mix -> (mix.endSeconds - mix.startSeconds).coerceAtLeast(0.0) }
-                                ?: 0.0
-                        // A rendered mix plays the incoming audio at 1x and may snap its cue to the
-                        // nearest downbeat. Deriving the start from its resume point keeps the UI's
-                        // incoming progress on the exact samples being heard.
-                        val incomingCue =
-                            prepared
-                                ?.let { mix -> mix.incomingResumeSeconds - renderedDuration }
-                                ?: it.incomingCueTime
-                        dev.sfg.orchard.mobile.model.TransitionMarker(
-                            trackId = player.currentMediaItem?.mediaId.orEmpty(),
-                            startMs = (it.transitionStart * 1000).toLong(),
-                            endMs = (it.transitionEnd * 1000).toLong(),
-                            style = it.transitionStyle.name.lowercase(),
+                        dev.sfg.orchard.mobile.playback.smart.transitionMarkerFor(
+                            it,
+                            trackId = outgoing?.id.orEmpty(),
                             incomingTrackId = incoming?.id.orEmpty(),
-                            incomingCueMs = (incomingCue * 1000).toLong().coerceAtLeast(0),
-                            incomingPlaybackRate = if (prepared != null) 1.0 else it.incomingPlaybackRate,
-                            audibleHandoffProgress =
-                                dev.sfg.orchard.mobile.playback.smart.audibleHandoffProgress(
-                                    it,
-                                    rendered = prepared != null,
-                                ),
-                            renderedDurationMs = (renderedDuration * 1000).toLong(),
+                            rendered = it.nativePlan != null && prepared?.selectedPlan == it.nativePlan,
                         )
                     }
                 },
@@ -580,6 +560,10 @@ class OrchardPlaybackService : MediaLibraryService() {
             .setLoadControl(loadControl)
             .build()
             .apply {
+                // Downloaded cache bytes alone do not prepare the next media period. In
+                // particular the short rendered WAV must preload the clipped incoming song
+                // before its endpoint, instead of opening/seeking it after the mix ends.
+                setPreloadConfiguration(ExoPlayer.PreloadConfiguration(5_000_000L))
                 setAudioAttributes(AUDIO_ATTRIBUTES, handlesAudioFocus)
                 setHandleAudioBecomingNoisy(true)
                 setWakeMode(C.WAKE_MODE_NETWORK)
@@ -649,7 +633,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         val restored = RestoredPlayback(
             queue = queue,
             currentIndex = player.currentMediaItemIndex,
-            positionMs = player.currentPosition.coerceAtLeast(0),
+            positionMs = player.sourcePositionMs(),
             shuffle = player.shuffleModeEnabled,
             repeatMode = player.repeatMode.toRepeatMode(),
             contextTitle = player.playlistMetadata.title?.toString().orEmpty(),
@@ -1461,7 +1445,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         // improve. The plain fade is the right answer here, and it costs nothing to reach.
         val remainingSeconds =
             if (player.duration != C.TIME_UNSET) {
-                (player.duration - player.currentPosition) / 1000.0
+                (player.sourceDurationMs() - player.sourcePositionMs()) / 1000.0
             } else {
                 Double.MAX_VALUE
             }
@@ -1480,7 +1464,7 @@ class OrchardPlaybackService : MediaLibraryService() {
             val track = MediaItemMapper.toTrack(item)
             val duration =
                 if (index == player.currentMediaItemIndex && player.duration != C.TIME_UNSET) {
-                    player.duration / 1000.0
+                    player.sourceDurationMs() / 1000.0
                 } else {
                     track.durationMs / 1000.0
                 }
@@ -1576,7 +1560,8 @@ class OrchardPlaybackService : MediaLibraryService() {
         private const val BUFFER_FOR_PLAYBACK_MS = 500
         private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 2_000
         private const val WHOLE_TRACK_BUFFER_MS = 20 * 60 * 1_000
-        private const val TARGET_BUFFER_BYTES = 32 * 1024 * 1024
+        // Two players plus playlist preloading share the app heap with audio analysis.
+        private const val TARGET_BUFFER_BYTES = 8 * 1024 * 1024
         private const val RESOLVED_STREAM_EXPIRY_BUFFER_MS = 60_000L
         /**
          * How much track has to be left before a model pass is worth starting.

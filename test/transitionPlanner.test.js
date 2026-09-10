@@ -268,7 +268,7 @@ const fixtureData = JSON.parse(
   fs.readFileSync(new URL('./fixtures/transitionChoreography.json', import.meta.url), 'utf8')
 );
 
-test('regression: planTransition on Blinding Lights -> Dont Start Now never plans long equal-power fade', () => {
+test('non-beatmatched mix uses configured fade from outgoing start into incoming arrival', () => {
   const fixture = fixtureData.blinding_lights_to_dont_start_now;
   const plan = planTransition(smartOptions({
     analysis: normalizeTrackAnalysis(fixture.outgoing),
@@ -278,7 +278,30 @@ test('regression: planTransition on Blinding Lights -> Dont Start Now never plan
     nextTrack: { id: fixture.incoming.trackId, durationSeconds: fixture.incoming.duration }
   }));
 
-  assert.ok(plan.fadeSeconds <= 4.0, `fadeSeconds should be <= 4.0s, got ${plan.fadeSeconds}`);
-  assert.notEqual(plan.transitionStyle, 'equal_power');
+  assert.equal(plan.fadeSeconds, 6);
+  assert.equal(plan.transitionStyle, 'equal_power');
+  assert.equal(plan.transitionStart, plan.pairPlan.outgoing.start);
+  assert.equal(plan.incomingCueTime, plan.pairPlan.incoming.handoff);
+  assert.equal(plan.transitionEnd, plan.transitionStart + 6);
+  assert.equal(plan.choreography, null);
+  const longer = transitionFromPairFallback(plan.pairPlan, fixture.outgoing, fixture.incoming,
+    fixture.outgoing.duration, 0, 1, 10);
+  assert.equal(longer.fadeSeconds, 10);
+  assert.equal(longer.transitionStart, plan.transitionStart);
+  assert.equal(longer.incomingCueTime, plan.incomingCueTime);
 });
 
+
+test('configured non-beatmatched fade keeps both entry cues when remaining audio is short', () => {
+  const pairPlan = {
+    renderMode: 'live', transitionClass: 'simple_crossfade',
+    outgoing: { start: 98 }, incoming: { handoff: 19 }, fallback: {}
+  };
+  const plan = transitionFromPairFallback(pairPlan, {}, { duration: 20 }, 100, 98, 1, 10);
+  assert.equal(plan.transitionStart, 98);
+  assert.equal(plan.incomingCueTime, 19);
+  assert.equal(plan.fadeSeconds, 1);
+  assert.equal(plan.transitionEnd, 99);
+  assert.equal(plan.incomingHandoffTime, 20);
+  assert.equal(plan.shouldStart, true);
+});

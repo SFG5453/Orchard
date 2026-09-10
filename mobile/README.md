@@ -49,7 +49,7 @@ Orchard Mobile is the phone half of [Orchard](../) — a standalone native Andro
 
 ### On-device analysis
 
-Orchard listens to the audio rather than trusting a catalog. Beat and downbeat tracking runs a quantized [Beat This!](https://github.com/CPJKU/beat_this) model, vocal presence comes from open-unmix, and tempo, key, and energy come from the shared Rust/Earmark analyzer. Everything feeds the transition planner, which decides where a mix belongs and how ambitious it can afford to be.
+Orchard listens to the audio rather than trusting a catalog. Beat and downbeat tracking runs a quantized [Beat This!](https://github.com/CPJKU/beat_this) model, vocal presence comes from open-unmix, and tempo, key, and energy come from the shared Rust/Earmark analyzer. Everything feeds the same transition planner used by desktop. Gradle bundles the desktop JavaScript sources into the APK, and an isolated Rhino interpreter runs them off the playback thread. Mobile preserves the selected cues, tempo ratios, choreography, and fallback; there is no separate mobile timing policy. Unit tests compare the Android runtime and Kotlin adapters against fixtures generated directly by desktop. Different audio or analysis can still produce different plans.
 
 ### Library and browsing
 
@@ -68,8 +68,11 @@ Orchard listens to the audio rather than trusting a catalog. Beat and downbeat t
 
 - Download the latest apk at https://sfg545.dev/orchard
 
+From the repository root, install the JavaScript build dependencies first (Node.js 24.11+):
+
 ```bash
-cd android
+npm ci
+cd mobile/android
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```

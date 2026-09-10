@@ -39,3 +39,28 @@ internal fun audibleHandoffProgress(plan: TransitionPlan, rendered: Boolean): Fl
             ).toFloat()
         TransitionStyle.EQUAL_POWER -> plan.handoffFraction.toFloat()
     }.coerceIn(0f, 1f)
+
+/** Keep source scheduling, rendered wall time, and incoming media time from the same plan. */
+internal fun transitionMarkerFor(
+    plan: TransitionPlan,
+    trackId: String,
+    incomingTrackId: String,
+    rendered: Boolean,
+): dev.sfg.orchard.mobile.model.TransitionMarker {
+    val native = plan.nativePlan.takeIf { rendered }
+    return dev.sfg.orchard.mobile.model.TransitionMarker(
+        trackId = trackId,
+        startMs = ((native?.transitionStart ?: plan.transitionStart) * 1000).toLong(),
+        endMs = ((native?.transitionEnd ?: plan.transitionEnd) * 1000).toLong(),
+        style = if (native != null) {
+            if (native.strategy == "filtered_blend") "dj_filter" else "dj_blend"
+        } else plan.transitionStyle.name.lowercase(),
+        incomingTrackId = incomingTrackId,
+        incomingCueMs = ((native?.incomingCueTime ?: plan.incomingCueTime) * 1000).toLong().coerceAtLeast(0),
+        incomingPlaybackRate = native?.incomingTempoRatio ?: plan.incomingPlaybackRate,
+        audibleHandoffProgress = if (native != null) {
+            max(native.handoffFraction, native.bassSwapFraction).toFloat().coerceIn(0f, 1f)
+        } else audibleHandoffProgress(plan, rendered = false),
+        renderedDurationMs = ((native?.overlapSeconds ?: 0.0) * 1000).toLong(),
+    )
+}

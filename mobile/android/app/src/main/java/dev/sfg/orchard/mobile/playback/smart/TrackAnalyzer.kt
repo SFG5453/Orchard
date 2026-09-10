@@ -28,7 +28,6 @@ import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.playback.StreamCache
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.PriorityBlockingQueue
-import java.util.concurrent.Semaphore
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -110,8 +109,8 @@ class TrackAnalyzer(
      * which [PriorityBlockingQueue] does not do on its own.
      */
     private val executor = ThreadPoolExecutor(
-        3,
-        3,
+        1,
+        1,
         0L,
         TimeUnit.MILLISECONDS,
         PriorityBlockingQueue<Runnable>(16) { left, right ->
@@ -131,21 +130,6 @@ class TrackAnalyzer(
             priority = Thread.NORM_PRIORITY
         }
     }
-
-    /**
-     * Lets the two tracks of one transition through the model-grade passes together, and no more.
-     *
-     * The pool runs three jobs so queue-scope work, which is one cheap mono decode, keeps up with a
-     * whole playlist. The playback-scope pass is a different animal: high-rate stereo audio and two
-     * ONNX models, tens of megabytes live. Three of those at once exhausted a 192MB heap and took
-     * the process down inside MediaCodec's own callback.
-     *
-     * Two, not one, because a transition needs *both* of its tracks analysed before it starts, and
-     * serialising them puts the second one's whole runtime on the critical path — which is how a
-     * pair came to finish eighteen seconds after the transition it was for. Now that each region is
-     * released before the next is decoded, two passes cost about what one used to.
-     */
-    private val modelPass = Semaphore(2)
 
     private class Job(
         val scope: AnalysisScope,
@@ -224,7 +208,9 @@ class TrackAnalyzer(
                         return@Job
                     }
                     Log.d(TAG, "Analysing ${track.id} (${track.title}), ${effectiveDuration}s, $scope")
-                    val result = analyze(track, uri, effectiveDuration, scope)
+                    val result = AudioWorkLimiter.run {
+                        analyze(track, uri, effectiveDuration, scope)
+                    }
                     store[track.id] = result
                     Log.d(
                         TAG,
@@ -294,11 +280,10 @@ class TrackAnalyzer(
         // 30s of stereo is ~10MB, and the mono mix, the resampled copy and the mel buffer are all
         // live at once on top of it. Each region is therefore decoded, reduced to the few numbers
         // that outlive it, and dropped before the next one is opened, so a track's peak is one
-        // region rather than two. [modelPass] then keeps whole tracks from overlapping.
+        // region rather than two. AudioWorkLimiter also excludes concurrent renders and decodes.
         val head: Region?
         val tail: Region?
-        modelPass.acquire()
-        try {
+        run {
             // The vocal model's window is shorter than the region, so each region keeps the end a
             // transition actually reads: the head is entered near its start, the tail is left from
             // its end.
@@ -306,8 +291,6 @@ class TrackAnalyzer(
             tail = if (tailStart > window / 2) {
                 region(::openSource, tailStart, durationSeconds, features, VocalTracker.Keep.TRAILING)
             } else null
-        } finally {
-            modelPass.release()
         }
 
         val headGrid = head?.grid
@@ -349,6 +332,7 @@ class TrackAnalyzer(
             mixOutCandidates = features?.mixOutCandidates.orEmpty(),
             energyCurve = features?.energyCurve.orEmpty(),
             lowEnergyCurve = features?.lowEnergyCurve.orEmpty(),
+            plannerFeaturesJson = features?.plannerFeaturesJson ?: "{}",
             // Vocal mask only where we have stereo model data.
             vocalActivityMask = features?.let {
                 mergeMasks(it.energyCurve.size, head?.vocalMask, tail?.vocalMask)
@@ -415,6 +399,7 @@ class TrackAnalyzer(
             mixOutCandidates = features.mixOutCandidates,
             energyCurve = features.energyCurve,
             lowEnergyCurve = features.lowEnergyCurve,
+            plannerFeaturesJson = features.plannerFeaturesJson,
             vocalActivityMask = features.vocalActivityMask,
             vocalProbability = features.vocalProbability,
         )

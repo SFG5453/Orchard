@@ -123,6 +123,17 @@ class CrossfadeEngine(
         val mode: CrossfadeMode,
     )
 
+    // Pair scoring belongs off the playback/UI thread. The shared planner caches musical choices;
+    // subsequent ticks only schedule the cached result. Never queue work faster than it completes.
+    private val planningExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
+        Thread(task, "orchard-transition-plan").apply { isDaemon = true }
+    }
+    private var stagedRender: TransitionPreparer.Prepared? = null
+    private var stagedPlaybackStarted = false
+    private var renderedPlaying = false
+    private var planning = false
+    private var planningGeneration = 0L
+
     private var active: ExoPlayer? = null
     private var standby: ExoPlayer? = null
     private var fading = false
@@ -132,6 +143,7 @@ class CrossfadeEngine(
 
     /** Begins watching [active] for the end of each track. Safe to call again to re-seat the pair. */
     fun start(active: ExoPlayer, standby: ExoPlayer) {
+        planningGeneration++
         this.active = active
         this.standby = standby
         fading = false
@@ -147,6 +159,13 @@ class CrossfadeEngine(
      * snapshot the standby was loaded with (a manual skip, a seek, a queue edit) must call this.
      */
     fun abort() {
+        planningGeneration++
+        if (stagedRender != null && !fading) {
+            standby?.stop()
+            standby?.clearMediaItems()
+        }
+        stagedRender = null
+        stagedPlaybackStarted = false
         if (!fading) return
         fading = false
         handler.removeCallbacks(ramp)
@@ -167,6 +186,8 @@ class CrossfadeEngine(
     }
 
     fun release() {
+        planningGeneration++
+        planningExecutor.shutdownNow()
         handler.removeCallbacks(watcher)
         handler.removeCallbacks(ramp)
         fading = false
@@ -179,6 +200,13 @@ class CrossfadeEngine(
             handler.postDelayed(this, WATCH_INTERVAL_MS)
             if (fading) return
             val player = active ?: return
+            // The temporary mix is already executing a fixed plan. Replanning it clears the
+            // active marker and mistakes its short duration for a full outgoing song.
+            if (player.isRenderedMix()) return
+            if (renderedPlaying) {
+                renderedPlaying = false
+                onPlan(null)
+            }
             val settings = config()
             if (!settings.enabled || !player.isPlaying) {
                 if (!settings.enabled) onPlan(null)
@@ -186,54 +214,79 @@ class CrossfadeEngine(
             }
             // Repeating one track would fade it into itself.
             if (player.repeatMode == Player.REPEAT_MODE_ONE) return
-            val duration = player.duration
+            val duration = player.sourceDurationMs()
             if (duration == C.TIME_UNSET) return
             if (player.nextMediaItemIndex == C.INDEX_UNSET) return
-            // A track shorter than two fades would spend most of itself fading.
-            if (duration < settings.fadeSeconds * 2000) return
 
-            val plan = planFor(player, settings, duration)
-            onPlan(plan.takeIf { it.markerVisible && !it.blocked })
+            requestPlan(player, settings, duration)
+        }
+    }
 
-            if (plan.blocked || !plan.shouldStart) return
-            // Gapless playback across sequential album tracks is handled natively and seamlessly
-            // by ExoPlayer within the active player. Beginning a multi-player handoff for gapless
-            // would cause buffer stalls and stutter.
-            if (plan.transitionStyle == TransitionStyle.GAPLESS) return
-            // A smart plan can end before the file does, at an analyzed mix-out anchor. The ramp
-            // has to close there, not at the end of the track.
-            val endMs = (plan.transitionEnd * 1000).toLong().coerceAtMost(duration)
+    private fun executePlan(player: ExoPlayer, plan: TransitionPlan, duration: Long) {
+        onPlan(plan.takeIf { it.markerVisible && !it.blocked })
 
-            // A rendered overlap replaces the ramp entirely rather than augmenting it: the mix is
-            // already in the buffer, complete with its own fades, so ramping the players on top
-            // would fade a finished mix in and out of itself.
-            val prepared = currentPair(player)?.let { (out, into) -> preparedFor(out, into) }
-            if (prepared != null && beginRenderedTransition(plan, prepared)) {
-                Log.d(
-                    TAG,
-                    "Transition: rendered overlap, style=${plan.transitionStyle} " +
-                        "beats=${plan.transitionBeats} stretch=${prepared.stretchRatio} " +
-                        "out=${plan.transitionStart}..${plan.transitionEnd} " +
-                        "in=${plan.incomingCueTime}->${plan.incomingHandoffTime} " +
-                        "reason=${plan.reason}",
-                )
-                return
-            }
+        if (plan.blocked) return
+        // Gapless playback across sequential album tracks is handled natively and seamlessly
+        // by ExoPlayer within the active player. Beginning a multi-player handoff for gapless
+        // would cause buffer stalls and stutter.
+        if (plan.transitionStyle == TransitionStyle.GAPLESS) return
+        // A smart plan can end before the file does, at an analyzed mix-out anchor. The ramp
+        // has to close there, not at the end of the track.
+        val endMs = (plan.transitionEnd * 1000).toLong().coerceAtMost(duration)
 
-            // The one line that says whether you heard the mix or the fallback. A render that was
-            // planned but not ready is the interesting case: the plan asked for a beat-matched
-            // blend and the ramp is what actually played.
+        // A rendered overlap replaces the ramp entirely rather than augmenting it: the mix is
+        // already in the buffer, complete with its own fades, so ramping the players on top
+        // would fade a finished mix in and out of itself.
+        val prepared = currentPair(player)?.let { (out, into) -> preparedFor(out, into) }
+        if (prepared != null && prepared.selectedPlan == plan.nativePlan && plan.nativePlan != null &&
+            player.sourcePositionMs() / 1000.0 < prepared.startSeconds) {
+            stageRenderedTransition(prepared)
+        }
+        if (prepared != null && prepared.selectedPlan == plan.nativePlan && plan.nativePlan != null &&
+            player.sourcePositionMs() / 1000.0 >= prepared.startSeconds &&
+            player.sourcePositionMs() / 1000.0 < prepared.endSeconds && beginRenderedTransition(plan, prepared)) {
             Log.d(
                 TAG,
-                "Transition: volume ramp, style=${plan.transitionStyle} " +
-                    "fadeMs=${plan.fadeMs} rate=${plan.incomingPlaybackRate} " +
-                    "renderReady=${prepared != null} " +
+                "Transition: rendered overlap, style=${plan.transitionStyle} " +
+                    "beats=${plan.transitionBeats} stretch=${prepared.stretchRatio} " +
                     "out=${plan.transitionStart}..${plan.transitionEnd} " +
                     "in=${plan.incomingCueTime}->${plan.incomingHandoffTime} " +
                     "reason=${plan.reason}",
             )
-            beginFade(plan, remainingMs = endMs - player.currentPosition)
+            return
         }
+
+        if (prepared != null && stagedRender != prepared && player.sourcePositionMs() / 1000.0 >= prepared.startSeconds) {
+            // The native window opened, but playback could not enter it. Do not animate a mix
+            // that is not playing while waiting for the later live fallback window.
+            onPlan(plan.copy(nativePlan = null))
+        }
+        if (!plan.shouldStart) return
+        // Zero-duration desktop refusals must never become a minimum-length volume ramp.
+        // Wait for the selected boundary, then advance with the exact incoming cue.
+        if (plan.fadeSeconds <= 0) {
+            if (player.sourcePositionMs() < endMs) return
+            val next = player.nextMediaItemIndex
+            if (next != C.INDEX_UNSET) player.seekTo(next, (plan.incomingCueTime * 1000).toLong())
+            return
+        }
+
+        // The one line that says whether you heard the mix or the fallback. A render that was
+        // planned but not ready is the interesting case: the plan asked for a beat-matched
+        // blend and the ramp is what actually played.
+        Log.d(
+            TAG,
+            "Transition: volume ramp, style=${plan.transitionStyle} " +
+                "fadeMs=${plan.fadeMs} rate=${plan.incomingPlaybackRate} " +
+                "renderReady=${prepared != null} " +
+                "out=${plan.transitionStart}..${plan.transitionEnd} " +
+                "in=${plan.incomingCueTime}->${plan.incomingHandoffTime} " +
+                "reason=${plan.reason}",
+        )
+        // A prepared render can still be refused (for example a repeat-all queue wrap).
+        // Freeze the marker to the live path before the watcher pauses during the fade.
+        onPlan(plan.copy(nativePlan = null))
+        beginFade(plan, remainingMs = endMs - player.sourcePositionMs())
     }
 
     /** The outgoing and incoming tracks of the transition about to happen. */
@@ -262,10 +315,8 @@ class CrossfadeEngine(
      * through a phase vocoder, so they are not phase-aligned; a hard cut there is a click and a
      * long crossfade is comb filtering. A very short fade is the one option that is neither.
      */
-    private fun beginRenderedTransition(
-        plan: TransitionPlan,
-        prepared: TransitionPreparer.Prepared,
-    ): Boolean {
+    private fun stageRenderedTransition(prepared: TransitionPreparer.Prepared): Boolean {
+        if (stagedRender == prepared) return true
         val outgoing = active ?: return false
         val incoming = standby ?: return false
         val currentIndex = outgoing.currentMediaItemIndex
@@ -284,6 +335,13 @@ class CrossfadeEngine(
         // media id, metadata and the track JSON the queue and persistence are rebuilt from. Only
         // the URI changes, and a file URI passes the stream resolver through untouched.
         val mix = queue[currentIndex].buildUpon()
+            .setMediaMetadata(queue[currentIndex].mediaMetadata.buildUpon().setExtras(
+                android.os.Bundle(queue[currentIndex].mediaMetadata.extras ?: android.os.Bundle()).apply {
+                    putLong(MIX_SOURCE_START, (prepared.startSeconds * 1000).toLong())
+                    putLong(MIX_SOURCE_DURATION, outgoing.sourceDurationMs())
+                    putDouble(MIX_SOURCE_RATE, prepared.selectedPlan?.outgoingTempoRatio ?: 1.0)
+                }
+            ).build())
             .setUri(android.net.Uri.fromFile(prepared.file))
             .setClippingConfiguration(MediaItem.ClippingConfiguration.UNSET)
             .build()
@@ -296,38 +354,70 @@ class CrossfadeEngine(
             .build()
         val playlist = spliceInPlace(queue, currentIndex, mix, remainder)
 
-        fading = true
-        fadeStartedAt = SystemClock.elapsedRealtime()
-        fadeWindowMs = SPLICE_FADE_MS
-        fadeStyle = TransitionStyle.GAPLESS
-        outgoing.pauseAtEndOfMediaItems = true
-
-        incoming.volume = 1f
+        incoming.pause()
+        incoming.volume = 0f
         incoming.repeatMode = outgoing.repeatMode
         incoming.shuffleModeEnabled = outgoing.shuffleModeEnabled
         incoming.setPlaylistMetadata(outgoing.playlistMetadata)
         incoming.setMediaItems(playlist, currentIndex, 0L)
         incoming.setPlaybackParameters(PlaybackParameters.DEFAULT)
         incoming.prepare()
-        incoming.play()
+        stagedRender = prepared
+        stagedPlaybackStarted = false
+        return true
+    }
+
+    private fun beginRenderedTransition(plan: TransitionPlan, prepared: TransitionPreparer.Prepared): Boolean {
+        val outgoing = active ?: return false
+        val incoming = standby ?: return false
+        if (!stageRenderedTransition(prepared)) return false
+        if (incoming.playerError != null || incoming.playbackState != Player.STATE_READY) return false
+        if (!stagedPlaybackStarted) {
+            val elapsedSource = (outgoing.sourcePositionMs() - (prepared.startSeconds * 1000).toLong()).coerceAtLeast(0)
+            val rate = prepared.selectedPlan?.outgoingTempoRatio ?: 1.0
+            incoming.seekTo((elapsedSource / rate).toLong())
+            incoming.play()
+            stagedPlaybackStarted = true
+            if (incoming.playbackState != Player.STATE_READY) return false
+        }
+        incoming.volume = 1f
+        fading = true
+        renderedPlaying = true
+        fadeStartedAt = SystemClock.elapsedRealtime()
+        fadeWindowMs = SPLICE_FADE_MS
+        fadeStyle = TransitionStyle.GAPLESS
+        outgoing.pauseAtEndOfMediaItems = true
         handler.post(ramp)
         return true
     }
 
-    private fun planFor(player: ExoPlayer, settings: Config, durationMs: Long): TransitionPlan {
-        val currentTrack = player.currentMediaItem?.let(MediaItemMapper::toTrack)
+    private fun requestPlan(player: ExoPlayer, settings: Config, durationMs: Long) {
+        if (planning) return
+        val currentTrack = player.currentMediaItem?.let(MediaItemMapper::toTrack) ?: return
         val nextTrack = player.getMediaItemAt(player.nextMediaItemIndex).let(MediaItemMapper::toTrack)
-        return planTransition(
-            analysis = currentTrack?.let(analysisFor) ?: TrackAnalysis(),
-            nextAnalysis = analysisFor(nextTrack),
-            currentTrack = currentTrack,
-            nextTrack = nextTrack,
-            currentTime = player.currentPosition / 1000.0,
-            duration = durationMs / 1000.0,
-            fadeSeconds = settings.fadeSeconds,
-            mode = settings.mode,
-            albumSequential = isAlbumPlaythrough(player, currentTrack),
-        )
+        val analysis = analysisFor(currentTrack)
+        val nextAnalysis = analysisFor(nextTrack)
+        val position = player.sourcePositionMs()
+        val albumSequential = isAlbumPlaythrough(player, currentTrack)
+        val generation = planningGeneration
+        planning = true
+        planningExecutor.execute {
+            val result = runCatching {
+                planTransition(analysis, nextAnalysis, currentTrack, nextTrack,
+                    currentTime = position / 1000.0, duration = durationMs / 1000.0,
+                    fadeSeconds = settings.fadeSeconds, mode = settings.mode, albumSequential = albumSequential)
+            }
+            handler.post {
+                planning = false
+                if (generation != planningGeneration || active !== player || fading || !player.isPlaying ||
+                    config() != settings || currentPair(player) != (currentTrack to nextTrack) ||
+                    analysisFor(currentTrack) != analysis || analysisFor(nextTrack) != nextAnalysis ||
+                    isAlbumPlaythrough(player, currentTrack) != albumSequential ||
+                    kotlin.math.abs(player.sourcePositionMs() - position) > WATCH_INTERVAL_MS * 2) return@post
+                result.onSuccess { executePlan(player, it, durationMs) }
+                    .onFailure { Log.w(TAG, "Desktop transition planning failed", it) }
+            }
+        }
     }
 
     /**
@@ -483,6 +573,8 @@ class CrossfadeEngine(
             outgoingFilter.clearAutomation()
             incomingFilter.clearAutomation()
         }
+        stagedRender = null
+        stagedPlaybackStarted = false
         active = incoming
         standby = outgoing
         fading = false

@@ -112,7 +112,7 @@ https://github.com/user-attachments/assets/d846542c-b65a-44f3-809f-6a65527322a9
 | **Windows** | NSIS Installer (`.exe`), manager ZIP (`.zip`) | x64, arm64 |
 | **Linux** | Debian (`.deb`), RPM (`.rpm`), Flatpak (`.flatpak`), Arch Linux (`.pkg.tar.zst`), manager archive (`.tar.zst`) | x64, arm64 |
 | **macOS** | ZIP Packages (`.zip`) | Apple Silicon, Intel |
-| **Android** | Standalone APK (`.apk`), Canary ZIP (`.zip`) | arm64-v8a, armeabi-v7a, x86_64 |
+| **Android** | Standalone APK (`.apk`), Canary ZIP (`.zip`) | arm64-v8a |
 
 Release files and `SHA256SUMS.txt` are also published at [downloads.sfg545.dev/orchard](https://downloads.sfg545.dev/orchard/).
 

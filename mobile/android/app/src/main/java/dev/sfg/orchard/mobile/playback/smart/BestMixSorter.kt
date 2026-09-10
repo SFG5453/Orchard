@@ -150,6 +150,7 @@ object BestMixSorter {
         vocalActivityMask = vocalActivityMask,
         energyCurve = energyCurve,
         lowEnergyCurve = lowEnergyCurve,
+        plannerFeaturesJson = plannerFeaturesJson,
         mixInCandidates = mixInCandidates,
         mixOutCandidates = mixOutCandidates,
     )

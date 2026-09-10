@@ -119,4 +119,60 @@ class TransitionPresentationTest {
         assertEquals(0f, transitionProgress(playback, marker()), 0f)
         assertFalse(transitionPresentation(playback, marker()).incomingDominant)
     }
+
+    @Test
+    fun `stretched render projects incoming time using rendered duration`() {
+        val playback = PlaybackSnapshot(
+            currentTrack = outgoing, queue = listOf(outgoing, incoming), currentIndex = 0,
+            positionMs = 6_000, durationMs = 8_000,
+        )
+        val presentation = transitionPresentation(playback, marker(renderedDurationMs = 8_000))
+        assertEquals(0.75f, presentation.progress, 0.0001f)
+        assertTrue(presentation.incomingDominant)
+        assertEquals(18_000L, presentation.playback.positionMs)
+    }
+
+    @Test
+    fun `incoming remainder never restarts the completed rendered animation`() {
+        val playback = PlaybackSnapshot(
+            currentTrack = incoming, queue = listOf(outgoing, incoming), currentIndex = 1,
+            positionMs = 18_000, durationMs = incoming.durationMs,
+        )
+        assertEquals(0f, transitionProgress(playback, marker(renderedDurationMs = 8_000)), 0f)
+    }
+
+    @Test fun `explicit mix clock keeps full duration before identity handoff`() {
+        val playback = PlaybackSnapshot(
+            currentTrack = outgoing, queue = listOf(outgoing, incoming), currentIndex = 0,
+            positionMs = 202_500, durationMs = outgoing.durationMs, renderedMixPositionMs = 2_000,
+        )
+        val result = transitionPresentation(playback, marker(renderedDurationMs = 8_000))
+        assertEquals(0.25f, result.progress, 0f)
+        assertEquals(240_000L, result.playback.durationMs)
+        assertEquals(202_500L, result.playback.positionMs)
+        assertFalse(result.incomingDominant)
+    }
+
+    @Test fun `explicit mix clock hands identity over without showing mix duration`() {
+        val playback = PlaybackSnapshot(
+            currentTrack = outgoing, queue = listOf(outgoing, incoming), currentIndex = 0,
+            positionMs = 207_500, durationMs = outgoing.durationMs, renderedMixPositionMs = 6_000,
+        )
+        val result = transitionPresentation(playback, marker(renderedDurationMs = 8_000))
+        assertEquals(0.75f, result.progress, 0f)
+        assertEquals(incoming.durationMs, result.playback.durationMs)
+        assertEquals(18_000L, result.playback.positionMs)
+        assertTrue(result.incomingDominant)
+    }
+
+    @Test fun `render timestamp rounding cannot reset the animation at its endpoint`() {
+        val playback = PlaybackSnapshot(
+            currentTrack = outgoing, queue = listOf(outgoing, incoming), currentIndex = 0,
+            positionMs = 210_001, durationMs = outgoing.durationMs, renderedMixPositionMs = 8_001,
+        )
+        val result = transitionPresentation(playback, marker(renderedDurationMs = 8_000))
+        assertEquals(1f, result.progress, 0f)
+        assertTrue(result.incomingDominant)
+        assertEquals(20_000L, result.playback.positionMs)
+    }
 }

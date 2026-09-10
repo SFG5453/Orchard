@@ -38,6 +38,8 @@ data class PlaybackSnapshot(
     val repeatMode: RepeatMode = RepeatMode.OFF,
     val contextTitle: String = "",
     val errorMessage: String = "",
+    /** Decoder position in the temporary mix; all other times remain full-song times. */
+    val renderedMixPositionMs: Long? = null,
 ) {
     val history: List<Track>
         get() = if (currentIndex > 0) queue.take(currentIndex) else emptyList()

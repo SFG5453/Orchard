@@ -61,21 +61,22 @@ class BeatTracker(private val context: Context) {
     @Volatile private var session: OrtSession? = null
     private val lock = Any()
 
-    /** Parsing a 23 MB graph is far too expensive to repeat per track, so one session is kept. */
+    /** Parsing a 21 MB graph is far too expensive to repeat per track, so one session is kept. */
     private fun session(): OrtSession? {
         session?.let { return it }
         synchronized(lock) {
             session?.let { return it }
             return runCatching {
-                val file = File(context.filesDir, MODEL_ASSET)
+                // A new cache identity prevents an existing small0 extraction surviving the upgrade.
+                val file = File(context.filesDir, MODEL_CACHE)
                 if (!file.exists() || file.length() == 0L) {
                     context.assets.open(MODEL_ASSET).use { input ->
                         file.outputStream().use { output -> input.copyTo(output) }
                     }
                 }
                 val options = OrtSession.SessionOptions().apply {
-                    // Measured on a Snapdragon 7 Gen 1: 4 threads runs a 30 s chunk in ~2.3 s,
-                    // roughly 13x faster than realtime, against ~4.5 s single-threaded.
+                    // final0 dynamic INT8 uses CPU; accelerator variants remain experiments.
+                    addCPU(false)
                     setIntraOpNumThreads(INFERENCE_THREADS)
                     setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
                     // ORT's arena allocator keeps every block it has ever needed, which for this
@@ -171,8 +172,11 @@ class BeatTracker(private val context: Context) {
             // A chunk shorter than the border padding carries no usable centre.
             if (length <= 2 * BORDER_FRAMES && start > 0) break
 
-            val chunk = spectrogram.values.copyOfRange(start * mels, (start + length) * mels)
-            val shape = longArrayOf(1, length.toLong(), mels.toLong())
+            // The final0 export has a fixed 1500-frame input. Pad short windows and
+            // the last chunk, then discard padded output using length below.
+            val chunk = FloatArray(CHUNK_FRAMES * mels)
+            spectrogram.values.copyInto(chunk, 0, start * mels, (start + length) * mels)
+            val shape = longArrayOf(1, CHUNK_FRAMES.toLong(), mels.toLong())
 
             OnnxTensor.createTensor(environment, FloatBuffer.wrap(chunk), shape).use { tensor ->
                 session.run(mapOf(name to tensor)).use { outputs ->
@@ -206,6 +210,7 @@ class BeatTracker(private val context: Context) {
     companion object {
         private const val TAG = "OrchardBeatTracker"
         private const val MODEL_ASSET = "beat_this_int8.onnx"
+        private const val MODEL_CACHE = "beat_this_final0_int8_33920bdf.onnx"
         private const val INFERENCE_THREADS = 4
 
         /** The window the model was trained on, and the margin discarded from each chunk's edges. */

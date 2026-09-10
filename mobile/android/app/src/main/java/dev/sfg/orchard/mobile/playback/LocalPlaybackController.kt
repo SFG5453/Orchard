@@ -150,7 +150,14 @@ class LocalPlaybackController(
     fun previous() = withController {
         if (it.currentPosition > 5_000) it.seekTo(0) else if (it.hasPreviousMediaItem()) it.seekToPreviousMediaItem()
     }
-    fun seek(positionMs: Long) = withController { it.seekTo(positionMs.coerceAtLeast(0)) }
+    fun seek(positionMs: Long) = withController { player ->
+        val item = player.currentMediaItem ?: return@withController
+        // Restore the full source for explicit seeks, including seeks before a clipped intro.
+        if (player.isRenderedMix() || item.clippingConfiguration.startPositionMs > 0) {
+            player.replaceMediaItem(player.currentMediaItemIndex, MediaItemMapper.toMediaItem(MediaItemMapper.toTrack(item)))
+        }
+        player.seekTo(positionMs.coerceAtLeast(0))
+    }
     fun setVolume(volume: Float) = withController { it.volume = volume.coerceIn(0.0f, 1.0f) }
     fun setShuffle(enabled: Boolean) = withController { it.shuffleModeEnabled = enabled }
     fun setRepeatMode(mode: RepeatMode) = withController {
@@ -299,9 +306,7 @@ class LocalPlaybackController(
         val error = explicitError.ifBlank { lastError }
         // A restored queue is not prepared until playback starts, so the player reports no
         // duration. The catalog already knows it, which keeps the scrubber honest until then.
-        val duration = player.duration.takeUnless { it == C.TIME_UNSET }?.coerceAtLeast(0)
-            ?: current?.durationMs?.coerceAtLeast(0)
-            ?: 0
+        val duration = player.sourceDurationMs()
         mutableSnapshot.value = PlaybackSnapshot(
             status = when {
                 error.isNotBlank() -> PlaybackStatus.ERROR
@@ -314,9 +319,10 @@ class LocalPlaybackController(
             currentTrack = current,
             queue = queue,
             currentIndex = player.currentMediaItemIndex,
-            positionMs = player.currentPosition.coerceAtLeast(0),
+            positionMs = player.sourcePositionMs(),
+            renderedMixPositionMs = player.currentPosition.takeIf { player.isRenderedMix() },
             durationMs = duration,
-            bufferedPositionMs = player.bufferedPosition.coerceAtLeast(0),
+            bufferedPositionMs = player.sourceClock().sourcePosition(player.bufferedPosition),
             isPlaying = player.isPlaying,
             volume = player.volume,
             shuffle = player.shuffleModeEnabled,

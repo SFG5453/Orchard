@@ -149,7 +149,9 @@ object AudioDecoder {
             )
             if (chunk.isEmpty()) return
             if (produced + chunk.size > output.size) {
-                output = output.copyOf(max(output.size * 2, produced + chunk.size))
+                // Codec frames can overshoot the requested endpoint slightly. Do not double
+                // an entire track buffer just to accommodate that final frame.
+                output = output.copyOf(max(output.size + outputRate.toInt(), produced + chunk.size))
             }
             chunk.copyInto(output, produced)
             produced += chunk.size
