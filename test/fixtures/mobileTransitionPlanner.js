@@ -51,6 +51,7 @@ const pairs = [
   ['unmeasured', { analysis: {}, nextAnalysis: {} }],
   ['tempo-shift', { nextAnalysis: analysis('incoming', { bpm: 122 }) }],
   ['octave', { nextAnalysis: analysis('incoming', { bpm: 60 }) }],
+  ['distant-tempo-long-fade', { fadeSeconds: 10, nextAnalysis: analysis('incoming', { bpm: 87 }) }],
   ['distant-tempo', { nextAnalysis: analysis('incoming', { bpm: 87 }) }],
   ['missing-tempo', { analysis: analysis('outgoing', { bpm: 0 }) }],
   ['weak-grid', { analysis: analysis('outgoing', { beatConfidence: 0.1 }) }],

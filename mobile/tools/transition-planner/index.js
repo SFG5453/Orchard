@@ -40,7 +40,7 @@ export function invoke(method, json) {
     return JSON.stringify(transitionFromPairFallback(
       plan.pairPlan, input.analysis, input.nextAnalysis,
       Math.max(input.duration || 0, input.currentTrack?.durationSeconds || 0),
-      currentTime, input.minFadeSeconds ?? 1
+      currentTime, input.minFadeSeconds ?? 1, input.fadeSeconds ?? 6
     ));
   }
   if (!plan.markerVisible) return JSON.stringify(plan);

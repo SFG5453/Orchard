@@ -152,7 +152,9 @@ class TransitionPreparer(
 
         executor.execute {
             try {
-                val rendered = render(key, outgoingUri, outgoingAnalysis, incomingUri, incomingAnalysis, plan)
+                val rendered = AudioWorkLimiter.run {
+                    render(key, outgoingUri, outgoingAnalysis, incomingUri, incomingAnalysis, plan)
+                }
                 if (rendered == null) {
                     // `prepare` is called on every tick for the whole run-up to the transition, and
                     // a refusal is final, so without this the pair decodes both tracks again every

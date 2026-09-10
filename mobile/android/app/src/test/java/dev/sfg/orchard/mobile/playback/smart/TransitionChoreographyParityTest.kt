@@ -20,9 +20,9 @@
 package dev.sfg.orchard.mobile.playback.smart
 
 import dev.sfg.orchard.mobile.model.Track
-import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -101,7 +101,7 @@ class TransitionChoreographyParityTest {
     }
 
     @Test
-    fun `legacy analysis uses desktop fallback with single bass owner`() {
+    fun `non beatmatched legacy analysis uses normal configured fade`() {
         val outgoing = TrackAnalysis(
             trackId = "inst_a",
             duration = 210.0,
@@ -152,19 +152,8 @@ class TransitionChoreographyParityTest {
         assertEquals(TransitionStyle.EQUAL_POWER, plan.transitionStyle)
         assertEquals(0, plan.transitionBeats)
 
-        val choreography = plan.choreography
-        assertNotNull(choreography)
-        assertEquals(ChoreographyStrategy.FILTERED_HANDOFF, choreography!!.strategy)
-
-        // Test single bass owner automation
-        val outBassStart = evaluateAutomationCurve(choreography.curves.outgoingBass, 0.0)
-        val inBassStart = evaluateAutomationCurve(choreography.curves.incomingBass, 0.0)
-        assertTrue(abs(outBassStart - 1.0) < 1e-3)
-        assertTrue(abs(inBassStart - 0.0) < 1e-3)
-
-        val outBassEnd = evaluateAutomationCurve(choreography.curves.outgoingBass, 1.0)
-        val inBassEnd = evaluateAutomationCurve(choreography.curves.incomingBass, 1.0)
-        assertTrue(abs(outBassEnd - 0.0) < 1e-3)
-        assertTrue(abs(inBassEnd - 1.0) < 1e-3)
+        assertEquals(6.0, plan.fadeSeconds, 1e-9)
+        assertFalse(plan.bassSwap)
+        assertNull(plan.choreography)
     }
 }

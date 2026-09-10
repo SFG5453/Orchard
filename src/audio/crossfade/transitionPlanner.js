@@ -134,9 +134,35 @@ export function transitionFromPairFallback(
   nextAnalysis,
   length,
   playbackTime,
-  minFadeSeconds = 1
+  minFadeSeconds = 1,
+  configuredFadeSeconds = 6
 ) {
   const fallback = pairPlan.fallback;
+  // Non-beatmatched mixes use the listener's ordinary fade. The selected outgoing
+  // start and incoming arrival are entry cues, not endpoints to back-time a short filter ride.
+  if (pairPlan.renderMode === 'live' && pairPlan.transitionClass === 'simple_crossfade') {
+    const transitionStart = clamp(pairPlan.outgoing.start, 0, length);
+    const incomingCueTime = Math.max(0, Number(pairPlan.incoming.handoff) || 0);
+    const incomingEnd = audibleEnd(nextAnalysis, Number(nextAnalysis.duration) || 0);
+    const availableIncoming = incomingEnd > 0 ? Math.max(0, incomingEnd - incomingCueTime) : Infinity;
+    const fadeSeconds = Math.min(
+      clamp(configuredFadeSeconds, minFadeSeconds, 12),
+      Math.max(0, length - transitionStart), availableIncoming
+    );
+    const shouldStart = playbackTime >= transitionStart;
+    return {
+      shouldStart, markerVisible: true, transitionStart,
+      transitionEnd: transitionStart + fadeSeconds,
+      fadeSeconds, handoffDuration: fadeSeconds, handoffStartSeconds: 0,
+      incomingCueTime, incomingHandoffTime: incomingCueTime + fadeSeconds,
+      incomingPlaybackRate: 1, pickupSeconds: audibleStart(nextAnalysis),
+      transitionBeats: 0, bassSwap: false, transitionStyle: 'equal_power',
+      choreography: null,
+      policyReasons: pairPlan.diagnostics?.selected?.gates || [],
+      fallbackReason: pairPlan.fallbackReason, fallback, pairPlan,
+      reason: shouldStart ? 'smart-pair-fallback' : 'before-smart-pair-fallback-window'
+    };
+  }
   const finalEnd = audibleEnd(analysis, length) || length;
   let transitionEnd = clamp(fallback.outgoingEnd, 0, length);
   let fadeSeconds = Math.max(0, Number(fallback.durationSeconds) || 0);
@@ -259,6 +285,7 @@ export function planTransition({
     nextAnalysis,
     length,
     playbackTime,
-    minFadeSeconds
+    minFadeSeconds,
+    standardFade
   );
 }
