@@ -29,178 +29,6 @@ def orchardDebugAbis = orchardReleaseAbis + ['x86_64']
 // Both toolchains build every ABI that any build type can package.
 def orchardAbis = orchardDebugAbis
 
-// The QNN build is published as a single ARM64 libonnxruntime.so rather than an AAR. Repack it
-// with ONNX Runtime's Java bindings and non-ARM64 libraries so Gradle sees one coherent Android
-// dependency and cannot accidentally select the stock ARM64 library during JNI merging.
-def onnxRuntimeJavaVersion = '1.27.0'
-def onnxRuntimeQnnVersion = '1.27.1'
-def qnnRuntimeVersion = '2.45.0'
-def onnxRuntimeQnnUrl =
-    'https://github.com/Lucchetto/onnxruntime-android-qnn-builds/releases/download/' +
-        "v$onnxRuntimeQnnVersion/onnxruntime-android-qnn.zip"
-def onnxRuntimeQnnSha256 = 'f0d795125207cdcac6eff2f74ddb525ec52cee3d4403fd171196943d30b3fe4e'
-def onnxRuntimeQnnEntry =
-    'onnxruntime/build/android/arm64-v8a/Release/libonnxruntime.so'
-def onnxRuntimeQnnAar = layout.buildDirectory.file(
-    "onnxruntime/onnxruntime-android-qnn-${onnxRuntimeQnnVersion}.aar")
-
-configurations {
-    onnxRuntimeBase {
-        canBeConsumed = false
-        canBeResolved = true
-        transitive = false
-    }
-    onnxRuntimeQnnBridge {
-        canBeConsumed = false
-        canBeResolved = true
-        transitive = false
-    }
-}
-
-def prepareOnnxRuntimeQnn = tasks.register('prepareOnnxRuntimeQnn') {
-    group = 'build setup'
-    description = 'Builds the pinned ONNX Runtime Android AAR with the QNN-enabled ARM64 library.'
-
-    inputs.files(configurations.onnxRuntimeBase, configurations.onnxRuntimeQnnBridge)
-    inputs.property('qnnUrl', onnxRuntimeQnnUrl)
-    inputs.property('qnnSha256', onnxRuntimeQnnSha256)
-    outputs.file(onnxRuntimeQnnAar)
-
-    doLast {
-        def workDir = layout.buildDirectory.dir('tmp/prepareOnnxRuntimeQnn').get().asFile
-        def download = new File(workDir, 'onnxruntime-android-qnn.zip')
-        def expandedAar = new File(workDir, 'aar')
-        def outputAar = onnxRuntimeQnnAar.get().asFile
-
-        delete(workDir)
-        workDir.mkdirs()
-
-        def connection = java.net.URI.create(onnxRuntimeQnnUrl).toURL().openConnection()
-        connection.setRequestProperty('User-Agent', 'Orchard Android build')
-        connection.connectTimeout = 30_000
-        connection.readTimeout = 120_000
-        connection.inputStream.withCloseable { input ->
-            download.withOutputStream { output -> input.transferTo(output) }
-        }
-
-        def digest = java.security.MessageDigest.getInstance('SHA-256')
-        download.withInputStream { input ->
-            def buffer = new byte[64 * 1024]
-            for (int count = input.read(buffer); count != -1; count = input.read(buffer)) {
-                digest.update(buffer, 0, count)
-            }
-        }
-        def actualSha256 = digest.digest().encodeHex().toString()
-        if (actualSha256 != onnxRuntimeQnnSha256) {
-            throw new GradleException(
-                "ONNX Runtime QNN checksum mismatch: expected $onnxRuntimeQnnSha256, " +
-                    "got $actualSha256")
-        }
-
-        copy {
-            from zipTree(configurations.onnxRuntimeBase.singleFile)
-            into expandedAar
-        }
-        // The ordinary Android JNI bridge is linked against NNAPI as well as CPU. The supplied
-        // QNN-only runtime does not export NNAPI, so use the bridge from Microsoft's QNN AAR.
-        copy {
-            from(zipTree(configurations.onnxRuntimeQnnBridge.singleFile)) {
-                include 'jni/arm64-v8a/libonnxruntime4j_jni.so'
-            }
-            into expandedAar
-        }
-        copy {
-            from(zipTree(download)) {
-                include onnxRuntimeQnnEntry
-                eachFile { details -> details.path = 'libonnxruntime.so' }
-                includeEmptyDirs = false
-            }
-            into new File(expandedAar, 'jni/arm64-v8a')
-        }
-
-        def qnnLibrary = new File(expandedAar, 'jni/arm64-v8a/libonnxruntime.so')
-        if (!qnnLibrary.isFile() || qnnLibrary.length() == 0L) {
-            throw new GradleException(
-                "ONNX Runtime QNN archive did not contain $onnxRuntimeQnnEntry")
-        }
-
-        // Microsoft did not publish a 1.27.1 Android AAR. This patch release did not change the
-        // Java/C API, but ELF symbol versions still include the patch number. Retarget the QNN JNI
-        // bridge's version requirement to the supplied runtime so Android's linker can bind them.
-        def qnnBridge = new File(expandedAar, 'jni/arm64-v8a/libonnxruntime4j_jni.so')
-        def oldVersion = "VERS_$onnxRuntimeJavaVersion".getBytes(java.nio.charset.StandardCharsets.US_ASCII)
-        def newVersion = "VERS_$onnxRuntimeQnnVersion".getBytes(java.nio.charset.StandardCharsets.US_ASCII)
-        if (oldVersion.length != newVersion.length) {
-            throw new GradleException('ONNX Runtime ELF version replacement must preserve its length')
-        }
-        def bridgeBytes = qnnBridge.bytes
-        int replacements = 0
-        for (int offset = 0; offset <= bridgeBytes.length - oldVersion.length; offset++) {
-            boolean matches = true
-            for (int index = 0; index < oldVersion.length; index++) {
-                if (bridgeBytes[offset + index] != oldVersion[index]) {
-                    matches = false
-                    break
-                }
-            }
-            if (matches) {
-                System.arraycopy(newVersion, 0, bridgeBytes, offset, newVersion.length)
-                replacements++
-            }
-        }
-        if (replacements != 1) {
-            throw new GradleException(
-                "Expected one $onnxRuntimeJavaVersion ELF version in the QNN JNI bridge, found $replacements")
-        }
-
-        // The ELF version-need record stores the System V hash alongside the text. Android's
-        // linker compares both, so changing only the equally-sized string still fails lookup.
-        def elfHash = { byte[] value ->
-            long hash = 0
-            value.each { current ->
-                hash = (hash << 4) + (current & 0xff)
-                long high = hash & 0xf0000000L
-                if (high != 0) hash ^= high >> 24
-                hash &= ~high
-            }
-            (int) hash
-        }
-        def littleEndianInt = { int value ->
-            java.nio.ByteBuffer.allocate(Integer.BYTES)
-                .order(java.nio.ByteOrder.LITTLE_ENDIAN)
-                .putInt(value)
-                .array()
-        }
-        def oldHash = littleEndianInt(elfHash(oldVersion))
-        def newHash = littleEndianInt(elfHash(newVersion))
-        int hashReplacements = 0
-        for (int offset = 0; offset <= bridgeBytes.length - oldHash.length; offset++) {
-            boolean matches = true
-            for (int index = 0; index < oldHash.length; index++) {
-                if (bridgeBytes[offset + index] != oldHash[index]) {
-                    matches = false
-                    break
-                }
-            }
-            if (matches) {
-                System.arraycopy(newHash, 0, bridgeBytes, offset, newHash.length)
-                hashReplacements++
-            }
-        }
-        if (hashReplacements != 1) {
-            throw new GradleException(
-                "Expected one $onnxRuntimeJavaVersion ELF version hash, found $hashReplacements")
-        }
-        qnnBridge.bytes = bridgeBytes
-
-        outputAar.parentFile.mkdirs()
-        ant.zip(destfile: outputAar, basedir: expandedAar)
-    }
-}
-
-def onnxRuntimeQnnFiles = files(onnxRuntimeQnnAar)
-onnxRuntimeQnnFiles.builtBy(prepareOnnxRuntimeQnn)
-
 // Where the NDK keeps its C++ runtime, per ABI. Needed because the transition engine links
 // Signalsmith Stretch and cargo-ndk link the *shared* runtime, while AGP only packages
 // libc++_shared.so on behalf of its small CMake resampler module. Without this nothing puts the
@@ -328,13 +156,6 @@ android {
         resValues = true
     }
 
-    packaging {
-        jniLibs {
-            // QNN's HTP host library hands a filesystem directory to the CDSP so it can load the
-            // matching Skel binary. A path inside an unextracted APK is not usable by the DSP.
-            useLegacyPackaging = true
-        }
-    }
 }
 
 kotlin {
@@ -484,16 +305,7 @@ dependencies {
 
     debugImplementation 'androidx.compose.ui:ui-tooling'
 
-    // 1.27.1 has no published Android AAR, so 1.27.0 supplies its matching Java API and the
-    // x86_64 emulator library. prepareOnnxRuntimeQnn replaces its ARM64 native library with the
-    // pinned QNN-enabled 1.27.1 build before any Android task consumes it.
-    onnxRuntimeBase "com.microsoft.onnxruntime:onnxruntime-android:$onnxRuntimeJavaVersion@aar"
-    onnxRuntimeQnnBridge(
-        "com.microsoft.onnxruntime:onnxruntime-android-qnn:$onnxRuntimeJavaVersion@aar")
-    implementation onnxRuntimeQnnFiles
-    // The custom ORT build was compiled against QAIRT 2.45.0.260326. Qualcomm publishes that
-    // runtime as Maven version 2.45.0, including the HTP backends for supported Snapdragon NPUs.
-    implementation "com.qualcomm.qti:qnn-runtime:$qnnRuntimeVersion"
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.29.0'
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20260719'

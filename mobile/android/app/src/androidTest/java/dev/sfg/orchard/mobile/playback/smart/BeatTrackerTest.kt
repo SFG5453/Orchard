@@ -112,6 +112,14 @@ class BeatTrackerTest {
     }
 
     @Test
+    fun tracksAcrossFixedModelChunks() {
+        val grid = trackAt(120.0, seconds = 45.0)
+        assertNotNull("no grid returned across a full chunk and a padded tail", grid)
+        assertTrue("tail chunk produced no late beats", grid!!.beats.last() > 40.0)
+        assertTrue("padding produced beats beyond the audio", grid.beats.all { it < 45.0 })
+    }
+
+    @Test
     fun tracksAFasterTempo() {
         // A second tempo guards against a grid that happens to be right at one rate because of an
         // off-by-one that cancels there.

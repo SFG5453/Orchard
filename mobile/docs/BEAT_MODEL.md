@@ -1,19 +1,30 @@
 # Beat This! beat/downbeat model
 
-`android/app/src/main/assets/beat_this_int8.onnx` is the committed, shipping
-model: the published **Beat This!** weights (Foscarin, Schlüter & Widmer, ISMIR
-2024 — the `small0` checkpoint) converted to ONNX and dynamically quantized to
-int8. The resulting mobile graph is about 4.4 MB, versus roughly 23 MB for
-the previous quantized `final0` graph.
+`android/app/src/main/assets/beat_this_int8.onnx` ships the official **final0**
+checkpoint as a fixed 1500-frame, dynamically quantized INT8 graph (21,068,518
+bytes). Production `BeatTracker` explicitly uses CPU with four threads; the
+open-unmix vocal separator also explicitly uses CPU. Stock ONNX Runtime Android 1.29.0 supplies the runtime. QNN dependencies, startup
+probing and NPU device tests have been removed.
+
+The asset SHA-256 is
+`33920bdfe3342cabe0f17350f0e9b3fe1dca6aedca2831a4ad18b45407a41d0d`.
+It is the `final0_int8.onnx` artifact from the September 2026 benchmark,
+exported from the official checkpoint with upstream CPJKU code and prepared
+using `tools/prepare_beat_quant.py`. The versioned extracted filename prevents
+older installed copies of small0 from being reused after an app update.
+
+APK compression is retained. Both trackers stream the asset to an extracted
+file and pass its path to ONNX Runtime; they do not read the complete compressed
+and decompressed models into Java byte arrays. Compression affects package size
+and first-use extraction, not the model's inference working-set requirement.
 
 ## Licensing
 
 Both the Beat This! **code and trained weights are MIT-licensed**
 (<https://github.com/CPJKU/beat_this>), which is the reason this model was
 chosen: most published MIR model weights (including Essentia's) are
-CC BY-NC-SA and cannot ship in a distributed application. The ONNX conversion
-comes from the MIT-licensed C++ port
-(<https://github.com/mosynthkey/beat_this_cpp>).
+CC BY-NC-SA and cannot ship in a distributed application. This export uses the official CPJKU implementation; earlier mobile exports
+used the MIT-licensed C++ port (<https://github.com/mosynthkey/beat_this_cpp>).
 
 ## Why a model at all
 
@@ -23,13 +34,19 @@ that enters on beat three of the bar sounds wrong even when every beat lines up.
 
 ## Contract
 
-- Input `input_spectrogram`: `[1, frames, 128]` log-mel spectrogram, 22,050 Hz
+- Input `input_spectrogram`: `[1, 1500, 128]` log-mel spectrogram, 22,050 Hz
   audio, n_fft 1024, hop 441 (50 fps), Slaney mel 30–11,000 Hz,
   `log1p(1000·mag)` — produced by Earmark's shared Rust model frontend.
-- Outputs `beat`, `downbeat`: `[1, frames]` logits, peak-picked by
+- Outputs `beat`, `downbeat`: `[1, 1500]` logits, peak-picked by
   `BeatTracker.pickPeaks`.
 - Chunked at 1500 frames with a 6-frame border discarded from each edge, which
-  is what upstream's inference does and is part of reproducing its predictions.
+  discards unreliable boundary predictions. Short inputs and the final partial
+  chunk are zero-padded to 1500 frames; padded outputs are ignored.
+
+For the September 2026 CPU/NPU quantization experiment on both official checkpoints,
+see [BEAT_QUANT_BENCHMARK.md](BEAT_QUANT_BENCHMARK.md) and the subsequent
+[100-track accuracy evaluation](BEAT_MODEL_ACCURACY.md). The measurements below
+are the earlier experiment and use a different model/build configuration.
 
 ## Quantization: why int8 and not fp16
 
