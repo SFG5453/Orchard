@@ -265,14 +265,17 @@ fun CollectionHero(
     ) {
 
 
+        val isFoldable = dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
+
         // Albums get a full-bleed cover with the titles laid over it; playlists keep the
         // centred card, which suits their mixed artwork better.
         if (detail.kind == CatalogKind.ALBUM) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(0.75f)
-                    .clipToBounds(),
+                modifier = if (isFoldable) {
+                    Modifier.fillMaxWidth().height(450.dp).clipToBounds()
+                } else {
+                    Modifier.fillMaxWidth().aspectRatio(0.75f).clipToBounds()
+                },
             ) {
                 ArtworkTile(
                     url = detail.artworkUrl,

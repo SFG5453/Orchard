@@ -22,10 +22,6 @@ package dev.sfg.orchard.mobile.ui.screens
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import dev.sfg.orchard.mobile.audio.AudioOutputType
-import dev.sfg.orchard.mobile.audio.canReadBluetoothNames
-import dev.sfg.orchard.mobile.audio.rememberAudioOutput
-import dev.sfg.orchard.mobile.ui.components.TrackActionsPopup
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -59,7 +55,7 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarOutline
 import androidx.compose.material.icons.rounded.Cast
-import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.DevicesFold
 import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material.icons.rounded.Earbuds
 import androidx.compose.material.icons.rounded.Headphones
@@ -67,8 +63,8 @@ import androidx.compose.material.icons.rounded.Headset
 import androidx.compose.material.icons.rounded.Hearing
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Speaker
-import androidx.compose.material.icons.rounded.TabletAndroid
 import androidx.compose.material.icons.rounded.Subtitles
+import androidx.compose.material.icons.rounded.TabletAndroid
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Usb
 import androidx.compose.material3.Badge
@@ -86,23 +82,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.sfg.orchard.mobile.model.DeviceType
+import dev.sfg.orchard.mobile.audio.AudioOutputType
+import dev.sfg.orchard.mobile.audio.canReadBluetoothNames
+import dev.sfg.orchard.mobile.audio.isFoldableHardware
+import dev.sfg.orchard.mobile.audio.isTabletForm
+import dev.sfg.orchard.mobile.audio.rememberAudioOutput
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.PlaybackTarget
 import dev.sfg.orchard.mobile.model.PlaybackTargetState
+import dev.sfg.orchard.mobile.ui.components.TrackActionsPopup
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
 @Composable
@@ -120,22 +117,22 @@ fun ExplicitBadge(modifier: Modifier = Modifier) {
 
 /** Animated popping favorite button. */
 @Composable
-fun AnimatedFavoriteButton(
-    liked: Boolean,
-    onLiked: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val heartScale by animateFloatAsState(
-        targetValue = if (liked) 1.15f else 1.0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "HeartScale",
-    )
+fun AnimatedFavoriteButton(liked: Boolean, onLiked: () -> Unit, modifier: Modifier = Modifier) {
+    val heartScale by
+        animateFloatAsState(
+            targetValue = if (liked) 1.15f else 1.0f,
+            animationSpec =
+                spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium,
+                ),
+            label = "HeartScale",
+        )
 
     IconButton(
         onClick = onLiked,
-        modifier = modifier
-            .size(48.dp)
-            .graphicsLayer {
+        modifier =
+            modifier.size(48.dp).graphicsLayer {
                 scaleX = heartScale
                 scaleY = heartScale
             },
@@ -203,25 +200,23 @@ fun TrackActionButtons(
  * handle still works for anyone who cannot complete a drag.
  */
 @Composable
-fun PlayerTopHandle(
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+fun PlayerTopHandle(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onDismiss)
-            // Generous vertical padding: the visible pill is 5dp tall, far under the 48dp
-            // minimum a drag needs to be reliably grabbable.
-            .padding(top = 16.dp, bottom = 16.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clickable(onClick = onDismiss)
+                // Generous vertical padding: the visible pill is 5dp tall, far under the 48dp
+                // minimum a drag needs to be reliably grabbable.
+                .padding(top = 16.dp, bottom = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
         Box(
-            modifier = Modifier
-                .width(38.dp)
-                .height(5.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.45f)),
+            modifier =
+                Modifier.width(38.dp)
+                    .height(5.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.45f))
         )
     }
 }
@@ -260,9 +255,7 @@ fun TrackInfoRow(
     }
 
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -270,11 +263,23 @@ fun TrackInfoRow(
         androidx.compose.animation.AnimatedContent(
             targetState = track,
             transitionSpec = {
-                (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(400, delayMillis = 60)) +
-                    androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(400, delayMillis = 60)) { it / 3 })
+                (androidx.compose.animation.fadeIn(
+                        androidx.compose.animation.core.tween(400, delayMillis = 60)
+                    ) +
+                        androidx.compose.animation.slideInVertically(
+                            androidx.compose.animation.core.tween(400, delayMillis = 60)
+                        ) {
+                            it / 3
+                        })
                     .togetherWith(
-                        androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) +
-                            androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(200)) { -it / 3 },
+                        androidx.compose.animation.fadeOut(
+                            androidx.compose.animation.core.tween(200)
+                        ) +
+                            androidx.compose.animation.slideOutVertically(
+                                androidx.compose.animation.core.tween(200)
+                            ) {
+                                -it / 3
+                            }
                     )
             },
             label = "TrackInfoTransition",
@@ -287,23 +292,24 @@ fun TrackInfoRow(
                 ) {
                     Text(
                         text = currentTrack.title,
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                        ),
+                        style =
+                            MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                            ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         color = Color.White,
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .then(
-                                if (onOpenAlbum != null) {
-                                    Modifier.clickable(onClick = onOpenAlbum)
-                                } else {
-                                    Modifier
-                                },
-                            )
-                            .basicMarquee(initialDelayMillis = 4000, repeatDelayMillis = 3000),
+                        modifier =
+                            Modifier.weight(1f, fill = false)
+                                .then(
+                                    if (onOpenAlbum != null) {
+                                        Modifier.clickable(onClick = onOpenAlbum)
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .basicMarquee(initialDelayMillis = 4000, repeatDelayMillis = 3000),
                     )
                     if (currentTrack.explicit) {
                         Spacer(Modifier.width(6.dp))
@@ -314,21 +320,22 @@ fun TrackInfoRow(
                 Text(
                     text = currentTrack.artist,
                     color = Color.White.copy(alpha = 0.65f),
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                    ),
+                    style =
+                        MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                        ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .then(
-                            if (onOpenArtist != null) {
-                                Modifier.clickable(onClick = onOpenArtist)
-                            } else {
-                                Modifier
-                            },
-                        )
-                        .basicMarquee(initialDelayMillis = 4000, repeatDelayMillis = 3000),
+                    modifier =
+                        Modifier.then(
+                                if (onOpenArtist != null) {
+                                    Modifier.clickable(onClick = onOpenArtist)
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .basicMarquee(initialDelayMillis = 4000, repeatDelayMillis = 3000),
                 )
             }
         }
@@ -343,7 +350,6 @@ fun TrackInfoRow(
     }
 }
 
-
 /** Bottom quick destinations bar with player tools, active output route, and queue badge count. */
 @Composable
 fun PlayerBottomDestinations(
@@ -357,17 +363,12 @@ fun PlayerBottomDestinations(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Lyrics Action Button
-        IconButton(
-            onClick = onLyrics,
-            modifier = Modifier.size(44.dp),
-        ) {
+        IconButton(onClick = onLyrics, modifier = Modifier.size(44.dp)) {
             Icon(
                 imageVector = Icons.Rounded.Subtitles,
                 contentDescription = if (lyricsActive) "Hide lyrics" else "Lyrics",
@@ -380,10 +381,7 @@ fun PlayerBottomDestinations(
         OutputRoutePill(targets = targets, onClick = onDevices)
 
         // Queue Action Button with upcoming badge
-        IconButton(
-            onClick = onQueue,
-            modifier = Modifier.size(44.dp),
-        ) {
+        IconButton(onClick = onQueue, modifier = Modifier.size(44.dp)) {
             BadgedBox(
                 badge = {
                     if (upcomingCount > 0) {
@@ -398,7 +396,7 @@ fun PlayerBottomDestinations(
                             )
                         }
                     }
-                },
+                }
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.List,
@@ -412,40 +410,39 @@ fun PlayerBottomDestinations(
 }
 
 @Composable
-private fun OutputRoutePill(
-    targets: PlaybackTargetState,
-    onClick: () -> Unit,
-) {
+private fun OutputRoutePill(targets: PlaybackTargetState, onClick: () -> Unit) {
     val isLocal = targets.selected is PlaybackTarget.LocalPhone
     val output by rememberAudioOutput()
 
-    // Local playback follows the phone's real output route; remote playback names the Connect device.
-    val activeDeviceName = if (isLocal) {
-        output.name
-    } else {
-        targets.devices.firstOrNull { it.isActive }?.name ?: "Connected Device"
-    }
-    val tablet = LocalConfiguration.current.smallestScreenWidthDp >= 600
-    val routeIcon = if (isLocal) output.type.icon(tablet) else Icons.Rounded.Cast
+    // Local playback follows the phone's real output route; remote playback names the Connect
+    // device.
+    val activeDeviceName =
+        if (isLocal) {
+            output.name
+        } else {
+            targets.devices.firstOrNull { it.isActive }?.name ?: "Connected Device"
+        }
+    val context = LocalContext.current
+    val routeIcon = if (isLocal) output.type.icon(context) else Icons.Rounded.Cast
 
     // Asked for on tap rather than at launch: the user has just expressed interest in output
     // devices, so it is the one moment a Bluetooth prompt explains itself.
-    val context = LocalContext.current
-    val nameAccess = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { /* Denied just means the pill keeps showing the generic route label. */ }
+    val nameAccess =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+            /* Denied just means the pill keeps showing the generic route label. */
+        }
     val needsNameAccess = isLocal && output.type.isBluetooth && !context.canReadBluetoothNames()
 
     Row(
-        modifier = Modifier
-            .clip(CircleShape)
-            .clickable {
-                if (needsNameAccess) {
-                    nameAccess.launch(Manifest.permission.BLUETOOTH_CONNECT)
+        modifier =
+            Modifier.clip(CircleShape)
+                .clickable {
+                    if (needsNameAccess) {
+                        nameAccess.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                    }
+                    onClick()
                 }
-                onClick()
-            }
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
@@ -458,10 +455,11 @@ private fun OutputRoutePill(
         Spacer(Modifier.width(6.dp))
         Text(
             text = activeDeviceName,
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = FontWeight.Medium,
-                fontSize = 13.sp,
-            ),
+            style =
+                MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                ),
             color = Color.White.copy(alpha = 0.85f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -470,22 +468,31 @@ private fun OutputRoutePill(
 }
 
 /** Maps a physical output route to the glyph that reads fastest at 16dp. */
-private fun AudioOutputType.icon(tablet: Boolean = false): ImageVector = when (this) {
-    AudioOutputType.PHONE_SPEAKER, AudioOutputType.EARPIECE ->
-        if (tablet) Icons.Rounded.TabletAndroid else Icons.Rounded.PhoneAndroid
-    AudioOutputType.WIRED_HEADPHONES -> Icons.Rounded.Headphones
-    AudioOutputType.BLUETOOTH_HEADPHONES -> Icons.Rounded.Headphones
-    AudioOutputType.BLUETOOTH_EARBUDS -> Icons.Rounded.Earbuds
-    AudioOutputType.BLUETOOTH_SPEAKER -> Icons.Rounded.Speaker
-    AudioOutputType.CAR -> Icons.Rounded.DirectionsCar
-    AudioOutputType.USB -> Icons.Rounded.Usb
-    AudioOutputType.HDMI -> Icons.Rounded.Tv
-    AudioOutputType.HEARING_AID -> Icons.Rounded.Hearing
-    AudioOutputType.UNKNOWN -> Icons.Rounded.Headset
-}
+private fun AudioOutputType.icon(context: android.content.Context): ImageVector =
+    when (this) {
+        AudioOutputType.PHONE_SPEAKER,
+        AudioOutputType.EARPIECE ->
+            if (context.isFoldableHardware() && context.isTabletForm()) {
+                Icons.Rounded.DevicesFold
+            } else if (context.isTabletForm()) {
+                Icons.Rounded.TabletAndroid
+            } else {
+                Icons.Rounded.PhoneAndroid
+            }
+        AudioOutputType.WIRED_HEADPHONES -> Icons.Rounded.Headphones
+        AudioOutputType.BLUETOOTH_HEADPHONES -> Icons.Rounded.Headphones
+        AudioOutputType.BLUETOOTH_EARBUDS -> Icons.Rounded.Earbuds
+        AudioOutputType.BLUETOOTH_SPEAKER -> Icons.Rounded.Speaker
+        AudioOutputType.CAR -> Icons.Rounded.DirectionsCar
+        AudioOutputType.USB -> Icons.Rounded.Usb
+        AudioOutputType.HDMI -> Icons.Rounded.Tv
+        AudioOutputType.HEARING_AID -> Icons.Rounded.Hearing
+        AudioOutputType.UNKNOWN -> Icons.Rounded.Headset
+    }
 
 fun PlaybackSnapshot.playingFromLabel(): String {
-    val engagement = Regex("\\b(?:plays?|views?|listeners?|subscribers?)\\b", RegexOption.IGNORE_CASE)
+    val engagement =
+        Regex("\\b(?:plays?|views?|listeners?|subscribers?)\\b", RegexOption.IGNORE_CASE)
     return contextTitle.takeIf { it.isNotBlank() && !engagement.containsMatchIn(it) }
         ?: currentTrack?.album?.takeIf { it.isNotBlank() && !engagement.containsMatchIn(it) }
         ?: "Your Queue"

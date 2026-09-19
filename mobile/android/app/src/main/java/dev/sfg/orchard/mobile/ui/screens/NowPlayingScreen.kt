@@ -79,6 +79,11 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.util.lerp
 import androidx.compose.ui.unit.dp
+import androidx.window.layout.FoldingFeature
+import androidx.window.layout.WindowInfoTracker
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.collectAsState
+import dev.sfg.orchard.mobile.audio.isTabletForm
 import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.model.LyricLine
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
@@ -88,6 +93,8 @@ import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.model.TransitionMarker
 import dev.sfg.orchard.mobile.ui.components.MessagePanel
 import dev.sfg.orchard.mobile.ui.components.RemoteArtwork
+import dev.sfg.orchard.mobile.ui.foldable.FoldableNowPlayingBody
+import dev.sfg.orchard.mobile.ui.foldable.isFoldableActive
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -163,6 +170,21 @@ fun NowPlayingScreen(
     val lyricsOpen = panel == PlayerPanel.LYRICS
     val queueOpen = panel == PlayerPanel.QUEUE
     val onQueue = { panel = if (queueOpen) PlayerPanel.NONE else PlayerPanel.QUEUE }
+    
+    val context = LocalContext.current
+    val windowInfoTracker = remember { WindowInfoTracker.getOrCreate(context) }
+    val layoutInfo by windowInfoTracker.windowLayoutInfo(context as android.app.Activity).collectAsState(initial = null)
+    
+    val foldingFeature = layoutInfo?.displayFeatures
+        ?.filterIsInstance<FoldingFeature>()
+        ?.firstOrNull()
+        
+    LaunchedEffect(foldingFeature?.state) {
+        if (foldingFeature?.state == FoldingFeature.State.HALF_OPENED && panel == PlayerPanel.NONE) {
+            panel = PlayerPanel.QUEUE
+        }
+    }
+
     // The queue used to be its own page, so back must still close it rather than the player.
     BackHandler(enabled = panel != PlayerPanel.NONE) { panel = PlayerPanel.NONE }
     val track = playback.currentTrack
@@ -208,6 +230,7 @@ fun NowPlayingScreen(
     // Two panes need room for a square cover and a readable column beside it.
     // Below this a tablet in portrait, or a large phone in landscape, is better
     // served by the stacked layout it already has.
+    val isFoldable = isFoldableActive()
     val wideLayout = LocalConfiguration.current.screenWidthDp >= 840
 
     // Swipe-down-to-dismiss. The collapse runs 0 (filling the screen) to 1 (sitting exactly on
@@ -309,9 +332,10 @@ fun NowPlayingScreen(
             // gradient already protects them, and only blurs when a panel opens.
             // The tablet's right column sits over the middle of the image, so the
             // backdrop stays out of focus there the whole time.
-            val panelObscuresArtwork = panel != PlayerPanel.NONE && !wideLayout
+            val panelObscuresArtwork = panel != PlayerPanel.NONE && !wideLayout && !isFoldable
             val backdropBlur by animateDpAsState(
                 targetValue = when {
+                    isFoldable -> 0.dp
                     wideLayout || panel == PlayerPanel.LYRICS -> 44.dp
                     else -> 0.dp
                 },
@@ -320,6 +344,7 @@ fun NowPlayingScreen(
             )
             val artworkAlpha by animateFloatAsState(
                 targetValue = when {
+                    isFoldable -> 1f
                     !panelObscuresArtwork -> 1f
                     panel == PlayerPanel.LYRICS -> 0.35f
                     else -> 0f
@@ -336,29 +361,91 @@ fun NowPlayingScreen(
             val palette = rememberFullBleedPalette(track, videoFrame)
             val lyricAccent = palette.accent
 
+            val isSplitModeFoldable = isFoldable && panel != PlayerPanel.NONE
             FullBleedPlayerBackdrop(
                 track = track,
                 isPlaying = playback.isPlaying && (panel == PlayerPanel.LYRICS || !panelObscuresArtwork),
                 animatedArtworkEnabled = animatedArtworkEnabled,
-                gesturesEnabled = gesturesEnabled,
+                gesturesEnabled = gesturesEnabled || (isFoldable && hasRichArtwork),
                 onNext = onNext,
                 onPrevious = onPrevious,
                 onLiked = onLiked,
                 palette = palette,
                 onVideoFrame = { videoFrame = it },
-                onArtworkBounds = { if (!wideLayout && hasRichArtwork && progress == 0f) onRestingCoverBounds(it) },
+                onArtworkBounds = { if ((!wideLayout || isFoldable) && hasRichArtwork && progress == 0f) onRestingCoverBounds(it) },
                 transitionProgress = activeMixProgress,
                 artworkAlpha = artworkAlpha,
-                modifier = Modifier.blur(backdropBlur),
+                modifier = Modifier
+                    .blur(backdropBlur)
+                    .then(if (isSplitModeFoldable) Modifier.fillMaxWidth(0.512f) else Modifier.fillMaxWidth()),
             )
             // Blur is a no-op below API 31, so darken as well to keep lyrics legible everywhere.
-            if (wideLayout || panel != PlayerPanel.NONE) {
+            if (wideLayout || isFoldable || panel != PlayerPanel.NONE) {
                 val scrimAlpha = when {
+                    isFoldable && panel == PlayerPanel.NONE && hasRichArtwork -> 0.05f
+                    isFoldable && panel == PlayerPanel.NONE -> 0.15f
+                    isFoldable -> 0.18f
                     panel == PlayerPanel.LYRICS -> 0.38f
                     wideLayout -> 0.25f
                     else -> 0.15f
                 }
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = scrimAlpha)))
+            }
+
+            if (isFoldable) {
+                FoldableNowPlayingBody(
+                    track = track,
+                    playback = playback,
+                    targets = targets,
+                    lyrics = lyrics,
+                    lyricAccent = lyricAccent,
+                    onCoverBounds = { if (progress == 0f) onRestingCoverBounds(it) },
+                    animatedArtworkEnabled = animatedArtworkEnabled,
+                    liked = liked,
+                    panel = panel,
+                    canControl = canControl,
+                    localControls = localControls,
+                    transition = transition,
+                    mixProgress = activeMixProgress,
+                    showBitrate = showBitrate,
+                    bitrateKbps = bitrateKbps,
+                    isQobuz = isQobuz,
+                    remoteVolume = remoteVolume,
+                    dragHandle = dragHandle,
+                    onRemoteVolumeChange = onRemoteVolumeChange,
+                    onBack = onBack,
+                    onSeek = onSeek,
+                    onToggle = onToggle,
+                    onPrevious = onPrevious,
+                    onNext = onNext,
+                    onShuffle = onShuffle,
+                    onRepeat = onRepeat,
+                    onLiked = onLiked,
+                    onDevices = onDevices,
+                    onPlayQueueIndex = onPlayQueueIndex,
+                    onRemoveQueueIndex = onRemoveQueueIndex,
+                    onMoveQueueItem = onMoveQueueItem,
+                    onClearUpcoming = onClearUpcoming,
+                    downloadedTrackIds = downloadedTrackIds,
+                    onDownloadTrack = onDownloadTrack,
+                    onRemoveDownloadTrack = onRemoveDownloadTrack,
+                    onAddToPlaylist = onAddToPlaylist,
+                    onShare = onShare,
+                    onOpenCollection = onOpenCollection,
+                    onOpenArtist = onOpenArtist,
+                    onLyricsPanel = { panel = if (lyricsOpen) PlayerPanel.NONE else PlayerPanel.LYRICS },
+                    onQueuePanel = onQueue,
+                    sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
+                    sleepTimerEndOfTrack = sleepTimerEndOfTrack,
+                    onSleepTimer = { sleepTimerDialogOpen = true },
+                    autoplayEnabled = autoplayEnabled,
+                    autoplayLoading = autoplayLoading,
+                    autoplayError = autoplayError,
+                    onAutoplayEnabled = onAutoplayEnabled,
+                    smartCrossfade = smartCrossfade,
+                    onBestMixUpcoming = onBestMixUpcoming,
+                )
+                return@Box
             }
 
             // A tablet has room to stop trading one thing for another: the cover

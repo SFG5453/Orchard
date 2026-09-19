@@ -145,6 +145,35 @@ fun HomeScreen(
     onPlayItem: ((CatalogItem) -> Unit)? = null,
     onPlayCollection: ((String, String) -> Unit)? = null,
 ) {
+    if (dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()) {
+        dev.sfg.orchard.mobile.ui.foldable.FoldableHomeScreen(
+            settings = settings,
+            state = state,
+            library = library,
+            auth = auth,
+            downloads = downloads,
+            downloadedTrackIds = downloadedTrackIds,
+            isOffline = isOffline,
+            onRefresh = onRefresh,
+            onSearch = onSearch,
+            onLibrary = onLibrary,
+            onDevices = onDevices,
+            onPlay = onPlay,
+            onOpenDetail = onOpenDetail,
+            onEditLayout = onEditLayout,
+            onToggleLike = onToggleLike,
+            onPlayNext = onPlayNext,
+            onAddToQueue = onAddToQueue,
+            onAddToPlaylist = onAddToPlaylist,
+            onShare = onShare,
+            onOpenProfile = onOpenProfile,
+            onFetchSectionItems = onFetchSectionItems,
+            onPlayItem = onPlayItem,
+            onPlayCollection = onPlayCollection,
+        )
+        return
+    }
+
     val glass = LocalGlass.current.enabled
     var activeSectionSheet by remember { mutableStateOf<HomeSectionSheetState?>(null) }
 

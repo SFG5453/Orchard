@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -176,20 +177,45 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                     modifier = Modifier.glassWashSource(glassScene),
                 )
 
-                Box(Modifier.fillMaxSize().then(contentInset)) {
+                val isFoldable = dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
+                val contentModifier = if (isFoldable && !chromeHidden) {
+                    Modifier
+                        .fillMaxSize()
+                        .padding(start = dev.sfg.orchard.mobile.ui.foldable.FoldableNavRailWidth)
+                        .then(contentInset)
+                } else {
+                    Modifier.fillMaxSize().then(contentInset)
+                }
+
+                Box(contentModifier) {
                     OrchardNavigation(navController, viewModel, playback, targets, library, settings)
                 }
             }
 
             Box(Modifier.fillMaxSize()) {
+                val isFoldable = dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
                 if (!chromeHidden) {
-                    Box(Modifier.fillMaxSize().then(contentInset)) {
-                        Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+                    if (isFoldable) {
+                        dev.sfg.orchard.mobile.ui.foldable.OrchardNavigationRail(
+                            currentRoute = route,
+                            onSelect = { navController.openTopLevel(it) },
+                            modifier = Modifier.align(Alignment.CenterStart),
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(start = dev.sfg.orchard.mobile.ui.foldable.FoldableNavRailWidth)
+                                .then(contentInset),
+                            contentAlignment = Alignment.BottomCenter,
+                        ) {
                             CanopyReadout(
                                 playback = playerPlayback,
                                 transition = playerMarker,
                                 mixProgress = playerPresentation.progress,
-                                modifier = Modifier.onGloballyPositioned { readoutBounds = it.boundsInRoot() },
+                                modifier = Modifier
+                                    .padding(horizontal = 24.dp, vertical = 12.dp)
+                                    .onGloballyPositioned { readoutBounds = it.boundsInRoot() },
                                 onArtworkBounds = { readoutArtworkBounds = it },
                                 onOpen = { playerOpen = true },
                                 onToggle = viewModel::togglePlayback,
@@ -200,7 +226,27 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                                     viewModel.clearQueue()
                                 },
                             )
-                            OrchardBottomBar(route) { navController.openTopLevel(it) }
+                        }
+                    } else {
+                        Box(Modifier.fillMaxSize().then(contentInset)) {
+                            Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+                                CanopyReadout(
+                                    playback = playerPlayback,
+                                    transition = playerMarker,
+                                    mixProgress = playerPresentation.progress,
+                                    modifier = Modifier.onGloballyPositioned { readoutBounds = it.boundsInRoot() },
+                                    onArtworkBounds = { readoutArtworkBounds = it },
+                                    onOpen = { playerOpen = true },
+                                    onToggle = viewModel::togglePlayback,
+                                    onNext = viewModel::next,
+                                    onPrevious = viewModel::previous,
+                                    onClear = {
+                                        playerOpen = false
+                                        viewModel.clearQueue()
+                                    },
+                                )
+                                OrchardBottomBar(route) { navController.openTopLevel(it) }
+                            }
                         }
                     }
                 }

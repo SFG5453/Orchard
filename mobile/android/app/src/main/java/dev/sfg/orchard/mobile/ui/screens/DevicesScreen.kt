@@ -62,6 +62,7 @@ import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Devices
+import androidx.compose.material.icons.rounded.DevicesFold
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Groups
@@ -70,9 +71,9 @@ import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.RestartAlt
-import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SwapHoriz
+import androidx.compose.material.icons.rounded.TabletMac
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -94,8 +95,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -105,6 +106,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import dev.sfg.orchard.connect.protocol.ConnectAudioEngine
 import dev.sfg.orchard.connect.ui.PairingScanActivity
+import dev.sfg.orchard.mobile.audio.isFoldableHardware
+import dev.sfg.orchard.mobile.audio.isTabletForm
 import dev.sfg.orchard.mobile.audio.selfDeviceWord
 import dev.sfg.orchard.mobile.model.DeviceAvailability
 import dev.sfg.orchard.mobile.model.DeviceType
@@ -233,7 +236,9 @@ private fun FrostedDevicesScreenContent(
             FrostedHeaderRow(onBack = onBack)
         }
         PanelDivider()
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+        Column(
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)
+        ) {
             Spacer(Modifier.height(18.dp))
             // Hero Active Output Destination Card
             activeDevice?.let { device ->
@@ -254,9 +259,7 @@ private fun FrostedDevicesScreenContent(
 
             // Available Playback Targets (if any additional devices exist)
             if (availableDevices.isNotEmpty()) {
-                FrostedSectionHeader(
-                    title = "Available devices",
-                )
+                FrostedSectionHeader(title = "Available devices")
                 Spacer(Modifier.height(8.dp))
 
                 availableDevices.forEach { device ->
@@ -269,7 +272,10 @@ private fun FrostedDevicesScreenContent(
                             )
                         },
                         onRename = { deviceToRename = device },
-                        onRemove = if (!device.isLocal) { { onRemoveDevice(device.id) } } else null,
+                        onRemove =
+                            if (!device.isLocal) {
+                                { onRemoveDevice(device.id) }
+                            } else null,
                     )
                     Spacer(Modifier.height(8.dp))
                 }
@@ -336,11 +342,7 @@ private fun FrostedDevicesScreenContent(
 }
 
 @Composable
-fun RenameDeviceDialog(
-    device: PlaybackDevice,
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
-) {
+fun RenameDeviceDialog(device: PlaybackDevice, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var nameInput by remember(device) { mutableStateOf(device.displayName) }
     val accent = LocalAccent.current
     val shape = RoundedCornerShape(24.dp)
@@ -369,12 +371,7 @@ fun RenameDeviceDialog(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector =
-                            when (device.type) {
-                                DeviceType.PHONE -> Icons.Rounded.PhoneAndroid
-                                DeviceType.COMPUTER -> Icons.Rounded.Computer
-                                else -> Icons.Rounded.Devices
-                            },
+                        imageVector = getDeviceIcon(device),
                         contentDescription = null,
                         tint = accent,
                         modifier = Modifier.size(24.dp),
@@ -508,7 +505,11 @@ private fun FrostedHeaderRow(onBack: () -> Unit) {
         IconButton(onClick = onBack) {
             Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = LocalAccent.current)
         }
-        Text("Connect", style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold), color = CanopyColors.Text)
+        Text(
+            "Connect",
+            style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+            color = CanopyColors.Text,
+        )
     }
 }
 
@@ -522,12 +523,7 @@ private fun FrostedActiveDeviceHeroCard(
     val shape = RoundedCornerShape(22.dp)
     val accent = LocalAccent.current
 
-    Surface(
-        shape = shape,
-        color = Color.Transparent,
-        modifier =
-            Modifier.fillMaxWidth(),
-    ) {
+    Surface(shape = shape, color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(vertical = 16.dp, horizontal = 4.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -539,17 +535,11 @@ private fun FrostedActiveDeviceHeroCard(
                         Modifier.size(48.dp)
                             .clip(CircleShape)
                             .background(accent.copy(alpha = 0.2f))
-
                             .border(1.dp, accent.copy(alpha = 0.35f), CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector =
-                            when (device.type) {
-                                DeviceType.PHONE -> Icons.Rounded.PhoneAndroid
-                                DeviceType.COMPUTER -> Icons.Rounded.Computer
-                                else -> Icons.Rounded.Devices
-                            },
+                        imageVector = getDeviceIcon(device),
                         contentDescription = null,
                         tint = accent,
                         modifier = Modifier.size(24.dp),
@@ -572,15 +562,14 @@ private fun FrostedActiveDeviceHeroCard(
                         Text(
                             text = device.displayName,
                             style =
-                                MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
                             color = CanopyColors.Text,
                         )
                         if (onRename != null) {
                             Spacer(Modifier.width(6.dp))
-                            IconButton(
-                                onClick = onRename,
-                                modifier = Modifier.size(28.dp),
-                            ) {
+                            IconButton(onClick = onRename, modifier = Modifier.size(28.dp)) {
                                 Icon(
                                     Icons.Rounded.Edit,
                                     contentDescription = "Rename ${device.displayName}",
@@ -590,11 +579,13 @@ private fun FrostedActiveDeviceHeroCard(
                             }
                         }
                     }
-                    val subtitlePrefix = if (device.customName.isNotBlank()) "(${device.name}) • " else ""
+                    val subtitlePrefix =
+                        if (device.customName.isNotBlank()) "(${device.name}) • " else ""
                     Text(
                         text =
-                            subtitlePrefix + if (device.isLocal) "This $deviceWord"
-                            else "Playing on this device",
+                            subtitlePrefix +
+                                if (device.isLocal) "This $deviceWord"
+                                else "Playing on this device",
                         style = MaterialTheme.typography.bodySmall,
                         color = CanopyColors.Muted,
                     )
@@ -646,8 +637,7 @@ private fun FrostedDeviceRow(
         onClick = onClick,
         shape = shape,
         color = Color.Transparent,
-        modifier =
-            Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -662,12 +652,7 @@ private fun FrostedDeviceRow(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector =
-                        when (device.type) {
-                            DeviceType.PHONE -> Icons.Rounded.PhoneAndroid
-                            DeviceType.COMPUTER -> Icons.Rounded.Computer
-                            else -> Icons.Rounded.Devices
-                        },
+                    imageVector = getDeviceIcon(device),
                     contentDescription = null,
                     tint = CanopyColors.MutedStrong,
                     modifier = Modifier.size(20.dp),
@@ -693,14 +678,16 @@ private fun FrostedDeviceRow(
                                 )
                     )
                     Spacer(Modifier.width(6.dp))
-                    val customSubtitle = if (device.customName.isNotBlank()) "(${device.name}) • " else ""
+                    val customSubtitle =
+                        if (device.customName.isNotBlank()) "(${device.name}) • " else ""
                     Text(
                         text =
-                            customSubtitle + when (device.availability) {
-                                DeviceAvailability.ONLINE -> "Available"
-                                DeviceAvailability.OFFLINE -> "Offline"
-                                else -> "Unavailable"
-                            },
+                            customSubtitle +
+                                when (device.availability) {
+                                    DeviceAvailability.ONLINE -> "Available"
+                                    DeviceAvailability.OFFLINE -> "Offline"
+                                    else -> "Unavailable"
+                                },
                         style = MaterialTheme.typography.bodySmall,
                         color = CanopyColors.Muted,
                     )
@@ -712,10 +699,7 @@ private fun FrostedDeviceRow(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 if (onRename != null) {
-                    IconButton(
-                        onClick = onRename,
-                        modifier = Modifier.size(34.dp),
-                    ) {
+                    IconButton(onClick = onRename, modifier = Modifier.size(34.dp)) {
                         Icon(
                             Icons.Rounded.Edit,
                             contentDescription = "Rename",
@@ -726,10 +710,7 @@ private fun FrostedDeviceRow(
                 }
 
                 if (onRemove != null) {
-                    IconButton(
-                        onClick = onRemove,
-                        modifier = Modifier.size(34.dp),
-                    ) {
+                    IconButton(onClick = onRemove, modifier = Modifier.size(34.dp)) {
                         Icon(
                             Icons.Rounded.DeleteOutline,
                             contentDescription = "Forget device",
@@ -743,9 +724,7 @@ private fun FrostedDeviceRow(
                 Surface(
                     shape = CircleShape,
                     color = glassFill(CanopyColors.Canvas),
-                    modifier =
-                        Modifier
-                            .border(1.dp, CanopyColors.Rule, CircleShape),
+                    modifier = Modifier.border(1.dp, CanopyColors.Rule, CircleShape),
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -761,7 +740,9 @@ private fun FrostedDeviceRow(
                         Text(
                             text = "Switch",
                             style =
-                                MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
                             color = CanopyColors.Text,
                         )
                     }
@@ -781,12 +762,7 @@ private fun FrostedRemoteAudioEngineCard(
     val shape = RoundedCornerShape(22.dp)
     val accent = LocalAccent.current
 
-    Surface(
-        shape = shape,
-        color = Color.Transparent,
-        modifier =
-            Modifier.fillMaxWidth(),
-    ) {
+    Surface(shape = shape, color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(vertical = 16.dp, horizontal = 4.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -812,9 +788,7 @@ private fun FrostedRemoteAudioEngineCard(
                 Surface(
                     shape = CircleShape,
                     color = glassFill(CanopyColors.Canvas, accent.copy(alpha = 0.15f)),
-                    modifier =
-                        Modifier
-                            .border(1.dp, CanopyColors.Rule, CircleShape),
+                    modifier = Modifier.border(1.dp, CanopyColors.Rule, CircleShape),
                 ) {
                     Text(
                         text = "DSP Active",
@@ -858,10 +832,7 @@ private fun FrostedRemoteAudioEngineCard(
                             shape = CircleShape,
                             color = if (selected) accent else glassFill(CanopyColors.Canvas),
                             modifier =
-                                Modifier.then(
-                                        if (selected) Modifier
-                                        else Modifier
-                                    )
+                                Modifier.then(if (selected) Modifier else Modifier)
                                     .border(
                                         1.dp,
                                         if (selected) accent else CanopyColors.Rule,
@@ -1049,12 +1020,7 @@ private fun FrostedPairingPanel(
     val context = LocalContext.current
     val accent = LocalAccent.current
 
-    Surface(
-        shape = shape,
-        color = Color.Transparent,
-        modifier =
-            Modifier.fillMaxWidth(),
-    ) {
+    Surface(shape = shape, color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(vertical = 16.dp, horizontal = 4.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1165,7 +1131,6 @@ private fun FrostedPairingPanel(
                     modifier =
                         Modifier.fillMaxWidth()
                             .height(44.dp)
-
                             .border(1.dp, CanopyColors.Danger.copy(alpha = 0.35f), CircleShape),
                 ) {
                     Icon(
@@ -1196,12 +1161,7 @@ private fun FrostedListeningPartyPanel(
     val shape = RoundedCornerShape(22.dp)
     val accent = LocalAccent.current
 
-    Surface(
-        shape = shape,
-        color = Color.Transparent,
-        modifier =
-            Modifier.fillMaxWidth(),
-    ) {
+    Surface(shape = shape, color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(vertical = 16.dp, horizontal = 4.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1223,8 +1183,6 @@ private fun FrostedListeningPartyPanel(
                         color = CanopyColors.Text,
                     )
                 }
-
-
             }
 
             Spacer(Modifier.height(4.dp))
@@ -1328,10 +1286,7 @@ private fun FrostedInactiveParty(
             enabled = party.status != PartyStatus.CONNECTING,
             shape = CircleShape,
             modifier =
-                Modifier.weight(1f)
-                    .height(44.dp)
-
-                    .border(1.dp, CanopyColors.Rule, CircleShape),
+                Modifier.weight(1f).height(44.dp).border(1.dp, CanopyColors.Rule, CircleShape),
         ) {
             Text(
                 "Start a party",
@@ -1372,9 +1327,7 @@ private fun FrostedActiveParty(party: PartyState, onLeave: () -> Unit) {
             shape = RoundedCornerShape(16.dp),
             color = glassFill(CanopyColors.Canvas),
             modifier =
-                Modifier.fillMaxWidth()
-
-                    .border(1.dp, CanopyColors.Rule, RoundedCornerShape(16.dp)),
+                Modifier.fillMaxWidth().border(1.dp, CanopyColors.Rule, RoundedCornerShape(16.dp)),
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -1424,7 +1377,6 @@ private fun FrostedActiveParty(party: PartyState, onLeave: () -> Unit) {
                         modifier =
                             Modifier.weight(1f)
                                 .height(38.dp)
-
                                 .border(1.dp, CanopyColors.Rule, CircleShape),
                     ) {
                         Row(
@@ -1473,7 +1425,6 @@ private fun FrostedActiveParty(party: PartyState, onLeave: () -> Unit) {
                         modifier =
                             Modifier.weight(1f)
                                 .height(38.dp)
-
                                 .border(1.dp, CanopyColors.Rule, CircleShape),
                     ) {
                         Row(
@@ -1531,7 +1482,6 @@ private fun FrostedActiveParty(party: PartyState, onLeave: () -> Unit) {
         modifier =
             Modifier.fillMaxWidth()
                 .height(44.dp)
-
                 .border(1.dp, CanopyColors.Danger.copy(alpha = 0.35f), CircleShape),
     ) {
         Text(
@@ -1548,9 +1498,7 @@ private fun FrostedPeerRow(peer: PartyPeer) {
         shape = RoundedCornerShape(12.dp),
         color = glassFill(CanopyColors.Canvas),
         modifier =
-            Modifier.fillMaxWidth()
-
-                .border(1.dp, CanopyColors.Rule, RoundedCornerShape(12.dp)),
+            Modifier.fillMaxWidth().border(1.dp, CanopyColors.Rule, RoundedCornerShape(12.dp)),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -1623,7 +1571,6 @@ private fun FrostedMessageBanner(message: String, isError: Boolean = false) {
         color = glassFill(CanopyColors.Surface, tint.copy(alpha = 0.12f)),
         modifier =
             Modifier.fillMaxWidth()
-
                 .border(1.dp, tint.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
     ) {
         Row(
@@ -1784,7 +1731,10 @@ private fun StandardDevicesScreenContent(
                     )
                 },
                 onRename = { deviceToRename = device },
-                onRemove = if (!device.isLocal) { { onRemoveDevice(device.id) } } else null,
+                onRemove =
+                    if (!device.isLocal) {
+                        { onRemoveDevice(device.id) }
+                    } else null,
             )
         }
         if (targets.isTransferring) {
@@ -2142,6 +2092,22 @@ private fun StandardRemoteAudioEngineCard(
 }
 
 @Composable
+private fun getDeviceIcon(device: PlaybackDevice): androidx.compose.ui.graphics.vector.ImageVector {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    return if (device.isLocal && context.isFoldableHardware()) {
+        Icons.Rounded.DevicesFold
+    } else if (device.isLocal && context.isTabletForm()) {
+        Icons.Rounded.TabletMac
+    } else {
+        when (device.type) {
+            DeviceType.PHONE -> Icons.Rounded.PhoneAndroid
+            DeviceType.COMPUTER -> Icons.Rounded.Computer
+            else -> Icons.Rounded.Devices
+        }
+    }
+}
+
+@Composable
 private fun StandardDeviceRow(
     device: PlaybackDevice,
     onClick: () -> Unit,
@@ -2180,12 +2146,13 @@ private fun StandardDeviceRow(
                 )
                 val customPrefix = if (device.customName.isNotBlank()) "(${device.name}) • " else ""
                 Text(
-                    customPrefix + when {
-                        device.isActive -> "Playing here"
-                        device.availability == DeviceAvailability.ONLINE -> "Available"
-                        device.availability == DeviceAvailability.OFFLINE -> "Offline"
-                        else -> "Unavailable"
-                    },
+                    customPrefix +
+                        when {
+                            device.isActive -> "Playing here"
+                            device.availability == DeviceAvailability.ONLINE -> "Available"
+                            device.availability == DeviceAvailability.OFFLINE -> "Offline"
+                            else -> "Unavailable"
+                        },
                     color = if (device.isActive) LocalAccent.current else CanopyColors.Muted,
                     style = MaterialTheme.typography.bodyMedium,
                 )
