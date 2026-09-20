@@ -19,10 +19,26 @@
 
 package dev.sfg.orchard.mobile.playback.smart
 
+import java.io.File
 import org.junit.Assert.*
 import org.junit.Test
 
 class TransitionPreparerPlanTest {
+    @Test fun `silent lead starts on the stretched outgoing source clock`() {
+        val prepared = TransitionPreparer.Prepared(
+            file = File("mix.wav"),
+            startSeconds = 120.0,
+            endSeconds = 128.0,
+            leadInSeconds = 1.0,
+            renderedDurationSeconds = 8.0,
+            incomingResumeSeconds = 24.0,
+            stretchRatio = 1.05,
+        )
+
+        assertEquals(118.95, prepared.playbackStartSeconds, 1e-9)
+        assertEquals(9.0, prepared.outputDurationSeconds, 1e-9)
+    }
+
     @Test fun `renderer consumes selected desktop fields without recomputing tempo or strategy`() {
         var rendered = 0
         for (case in desktopCases()) {

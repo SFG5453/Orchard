@@ -80,4 +80,22 @@ class CrossfadeSpliceTest {
             CrossfadeEngine.spliceInPlace(queue, currentIndex = queue.lastIndex, mix = "mix", remainder = "rest")
         }
     }
+
+    @Test
+    fun `rendered tail preroll maps output time onto incoming source time`() {
+        assertEquals(43_350L, renderedContinuationPositionMs(
+            incomingResumeSeconds = 45.0,
+            renderedRemainingMs = 1_500,
+            incomingTempoRatio = 1.1,
+        ))
+    }
+
+    @Test
+    fun `rendered tail preroll never seeks before the incoming source`() {
+        assertEquals(0L, renderedContinuationPositionMs(
+            incomingResumeSeconds = 0.5,
+            renderedRemainingMs = 1_500,
+            incomingTempoRatio = 1.0,
+        ))
+    }
 }

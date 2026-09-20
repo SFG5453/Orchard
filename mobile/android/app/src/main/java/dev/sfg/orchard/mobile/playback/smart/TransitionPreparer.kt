@@ -75,13 +75,25 @@ class TransitionPreparer(
     /** A rendered overlap on disk, and where it sits on the outgoing track's timeline. */
     data class Prepared(
         val file: File,
+        /** Where the audible rendered mix starts on the outgoing source timeline. */
         val startSeconds: Double,
         val endSeconds: Double,
+        /** Silent decoder warm-up stored before the first rendered sample. */
+        val leadInSeconds: Double = 0.0,
+        /** Duration of the audible rendered buffer, excluding [leadInSeconds]. */
+        val renderedDurationSeconds: Double = 0.0,
         /** Where the incoming track resumes once the overlap ends, on its own timeline. */
         val incomingResumeSeconds: Double,
         val stretchRatio: Double,
+        val incomingStretchRatio: Double = 1.0,
         val selectedPlan: WsolaPlanResult.Planned? = null,
-    )
+    ) {
+        /** Outgoing source position at which the silent warm-up must start playing. */
+        val playbackStartSeconds: Double
+            get() = (startSeconds - leadInSeconds * stretchRatio).coerceAtLeast(0.0)
+
+        val outputDurationSeconds: Double get() = leadInSeconds + renderedDurationSeconds
+    }
 
     private val ready = ConcurrentHashMap<String, Prepared>()
     private val selections = ConcurrentHashMap<String, WsolaPlanResult.Planned>()
@@ -224,7 +236,11 @@ class TransitionPreparer(
             vocalDuck = duckCurve(outgoingAnalysis, outgoingSliceStart, outgoingSliceEnd),
         ) ?: return null
 
-        val file = TransitionAudio.writeWav(rendered, File(directory(), "$key.wav")) ?: return null
+        val file = TransitionAudio.writeWav(
+            rendered,
+            File(directory(), "$key.wav"),
+            leadingSilenceSeconds = PLAYBACK_PREROLL_SECONDS,
+        ) ?: return null
         Log.d(
             TAG,
             "Rendered ${rendered.durationSeconds}s ${rendered.strategy} beats=${rendered.beats} " +
@@ -238,10 +254,13 @@ class TransitionPreparer(
             file = file,
             startSeconds = startSeconds,
             endSeconds = selected.transitionEnd,
+            leadInSeconds = PLAYBACK_PREROLL_SECONDS,
+            renderedDurationSeconds = rendered.durationSeconds,
             // The overlap already contains the incoming track from its entry point through to the
             // end of the mix, so playback resumes past all of it.
             incomingResumeSeconds = incomingSliceStart + rendered.incomingResume,
             stretchRatio = rendered.stretchRatio,
+            incomingStretchRatio = rendered.incomingStretchRatio,
             selectedPlan = selected,
         )
     }
@@ -362,6 +381,9 @@ class TransitionPreparer(
 
         /** Extra audio either side of the anchor, so the stretcher has room to work into. */
         const val MARGIN_SECONDS = 6.0
+
+        /** Enough silent PCM to start the decoder and audio sink before the first mix sample. */
+        const val PLAYBACK_PREROLL_SECONDS = 1.0
 
         /**
          * Control points spanning the decoded slice; the engine interpolates between them and

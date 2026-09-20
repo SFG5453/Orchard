@@ -37,6 +37,7 @@ import dev.sfg.orchard.mobile.playback.smart.TransitionPreparer
 import dev.sfg.orchard.mobile.playback.smart.TransitionStyle
 import dev.sfg.orchard.mobile.playback.smart.planTransition
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.pow
@@ -68,6 +69,17 @@ internal fun djMixGains(progress: Double, fadeSeconds: Double = 0.0): DjMixGains
         incomingBass = incoming,
     )
 }
+
+/** Incoming source position matching a point near the end of a rendered transition. */
+internal fun renderedContinuationPositionMs(
+    incomingResumeSeconds: Double,
+    renderedRemainingMs: Long,
+    incomingTempoRatio: Double,
+): Long =
+    ((incomingResumeSeconds * 1000.0) -
+        renderedRemainingMs.coerceAtLeast(0) * incomingTempoRatio.coerceAtLeast(0.0))
+        .toLong()
+        .coerceAtLeast(0)
 
 /**
  * True overlapping crossfade across a pair of ExoPlayers.
@@ -131,6 +143,16 @@ class CrossfadeEngine(
     private var stagedRender: TransitionPreparer.Prepared? = null
     private var stagedPlaybackStarted = false
     private var renderedPlaying = false
+    private data class RenderedPlayback(
+        val prepared: TransitionPreparer.Prepared,
+        val originalQueue: List<MediaItem>,
+        val nextIndex: Int,
+    )
+    private var stagedRenderedPlayback: RenderedPlayback? = null
+    private var activeRenderedPlayback: RenderedPlayback? = null
+    private var continuationStaged = false
+    private var continuationStarted = false
+    private var renderedTailRunning = false
     private var planning = false
     private var planningGeneration = 0L
 
@@ -144,9 +166,17 @@ class CrossfadeEngine(
     /** Begins watching [active] for the end of each track. Safe to call again to re-seat the pair. */
     fun start(active: ExoPlayer, standby: ExoPlayer) {
         planningGeneration++
+        handler.removeCallbacks(renderedTail)
+        renderedTailRunning = false
         this.active = active
         this.standby = standby
         fading = false
+        stagedRender = null
+        stagedRenderedPlayback = null
+        activeRenderedPlayback = null
+        stagedPlaybackStarted = false
+        continuationStaged = false
+        continuationStarted = false
         handler.removeCallbacks(watcher)
         handler.removeCallbacks(ramp)
         active.volume = 1f
@@ -160,12 +190,18 @@ class CrossfadeEngine(
      */
     fun abort() {
         planningGeneration++
-        if (stagedRender != null && !fading) {
+        handler.removeCallbacks(renderedTail)
+        renderedTailRunning = false
+        if ((stagedRender != null || activeRenderedPlayback != null) && !fading) {
             standby?.stop()
             standby?.clearMediaItems()
         }
         stagedRender = null
+        stagedRenderedPlayback = null
+        activeRenderedPlayback = null
         stagedPlaybackStarted = false
+        continuationStaged = false
+        continuationStarted = false
         if (!fading) return
         fading = false
         handler.removeCallbacks(ramp)
@@ -190,6 +226,8 @@ class CrossfadeEngine(
         planningExecutor.shutdownNow()
         handler.removeCallbacks(watcher)
         handler.removeCallbacks(ramp)
+        handler.removeCallbacks(renderedTail)
+        renderedTailRunning = false
         fading = false
         active = null
         standby = null
@@ -202,7 +240,10 @@ class CrossfadeEngine(
             val player = active ?: return
             // The temporary mix is already executing a fixed plan. Replanning it clears the
             // active marker and mistakes its short duration for a full outgoing song.
-            if (player.isRenderedMix()) return
+            if (player.isRenderedMix()) {
+                scheduleRenderedTail()
+                return
+            }
             if (renderedPlaying) {
                 renderedPlaying = false
                 onPlan(null)
@@ -238,13 +279,18 @@ class CrossfadeEngine(
         // already in the buffer, complete with its own fades, so ramping the players on top
         // would fade a finished mix in and out of itself.
         val prepared = currentPair(player)?.let { (out, into) -> preparedFor(out, into) }
-        if (prepared != null && prepared.selectedPlan == plan.nativePlan && plan.nativePlan != null &&
-            player.sourcePositionMs() / 1000.0 < prepared.startSeconds) {
-            stageRenderedTransition(prepared)
+        val sourceSeconds = player.sourcePositionMs() / 1000.0
+        val matchingRender = prepared?.takeIf {
+            it.selectedPlan == plan.nativePlan && plan.nativePlan != null
         }
-        if (prepared != null && prepared.selectedPlan == plan.nativePlan && plan.nativePlan != null &&
-            player.sourcePositionMs() / 1000.0 >= prepared.startSeconds &&
-            player.sourcePositionMs() / 1000.0 < prepared.endSeconds && beginRenderedTransition(plan, prepared)) {
+        if (matchingRender != null && sourceSeconds < matchingRender.startSeconds) {
+            stageRenderedTransition(matchingRender)
+            if (sourceSeconds >= matchingRender.playbackStartSeconds) {
+                primeRenderedTransition(matchingRender)
+            }
+        }
+        if (matchingRender != null && sourceSeconds >= matchingRender.startSeconds &&
+            sourceSeconds < matchingRender.endSeconds && beginRenderedTransition(matchingRender)) {
             Log.d(
                 TAG,
                 "Transition: rendered overlap, style=${plan.transitionStyle} " +
@@ -256,7 +302,7 @@ class CrossfadeEngine(
             return
         }
 
-        if (prepared != null && stagedRender != prepared && player.sourcePositionMs() / 1000.0 >= prepared.startSeconds) {
+        if (prepared != null && stagedRender != prepared && sourceSeconds >= prepared.startSeconds) {
             // The native window opened, but playback could not enter it. Do not animate a mix
             // that is not playing while waiting for the later live fallback window.
             onPlan(plan.copy(nativePlan = null))
@@ -302,8 +348,9 @@ class CrossfadeEngine(
      *
      * The standby player is given the whole queue with two slots rewritten: the outgoing track's
      * slot becomes the rendered mix, and the incoming track's becomes the rest of itself clipped to
-     * resume where the mix left it. ExoPlayer's own item transition then covers the join rather
-     * than anything here having to.
+     * resume where the mix left it. The clipped item is a fail-safe; ordinarily the freed player is
+     * warmed on the original queue and takes over through a short equal-power splice before the WAV
+     * reaches that decoder boundary.
      *
      * Rewriting in place rather than handing over a two-item playlist is what keeps the queue
      * intact. The standby player becomes authoritative at [finish], and the service persists it
@@ -337,9 +384,9 @@ class CrossfadeEngine(
         val mix = queue[currentIndex].buildUpon()
             .setMediaMetadata(queue[currentIndex].mediaMetadata.buildUpon().setExtras(
                 android.os.Bundle(queue[currentIndex].mediaMetadata.extras ?: android.os.Bundle()).apply {
-                    putLong(MIX_SOURCE_START, (prepared.startSeconds * 1000).toLong())
+                    putLong(MIX_SOURCE_START, (prepared.playbackStartSeconds * 1000).toLong())
                     putLong(MIX_SOURCE_DURATION, outgoing.sourceDurationMs())
-                    putDouble(MIX_SOURCE_RATE, prepared.selectedPlan?.outgoingTempoRatio ?: 1.0)
+                    putDouble(MIX_SOURCE_RATE, prepared.stretchRatio)
                 }
             ).build())
             .setUri(android.net.Uri.fromFile(prepared.file))
@@ -363,32 +410,184 @@ class CrossfadeEngine(
         incoming.setPlaybackParameters(PlaybackParameters.DEFAULT)
         incoming.prepare()
         stagedRender = prepared
+        stagedRenderedPlayback = RenderedPlayback(prepared, queue, nextIndex)
         stagedPlaybackStarted = false
         return true
     }
 
-    private fun beginRenderedTransition(plan: TransitionPlan, prepared: TransitionPreparer.Prepared): Boolean {
+    /** Starts the rendered player's silent lead-in while the live outgoing deck is still audible. */
+    private fun primeRenderedTransition(prepared: TransitionPreparer.Prepared): Boolean {
         val outgoing = active ?: return false
         val incoming = standby ?: return false
         if (!stageRenderedTransition(prepared)) return false
         if (incoming.playerError != null || incoming.playbackState != Player.STATE_READY) return false
-        if (!stagedPlaybackStarted) {
-            val elapsedSource = (outgoing.sourcePositionMs() - (prepared.startSeconds * 1000).toLong()).coerceAtLeast(0)
-            val rate = prepared.selectedPlan?.outgoingTempoRatio ?: 1.0
-            incoming.seekTo((elapsedSource / rate).toLong())
-            incoming.play()
-            stagedPlaybackStarted = true
-            if (incoming.playbackState != Player.STATE_READY) return false
+        if (stagedPlaybackStarted) return true
+
+        val elapsedSource =
+            (outgoing.sourcePositionMs() - (prepared.playbackStartSeconds * 1000).toLong())
+                .coerceAtLeast(0)
+        val rate = prepared.stretchRatio.coerceAtLeast(MIN_PLAYBACK_RATE)
+        incoming.seekTo((elapsedSource / rate).toLong())
+        incoming.volume = 0f
+        incoming.play()
+        stagedPlaybackStarted = true
+        return true
+    }
+
+    private fun beginRenderedTransition(prepared: TransitionPreparer.Prepared): Boolean {
+        val outgoing = active ?: return false
+        val incoming = standby ?: return false
+        if (!primeRenderedTransition(prepared)) return false
+        if (incoming.playerError != null || incoming.playbackState != Player.STATE_READY || !incoming.isPlaying) {
+            return false
         }
-        incoming.volume = 1f
+
+        // The silent lead-in makes decoder startup inaudible. If the standby clock did not stay
+        // with the live deck, repair it while it is still muted instead of fading into stale PCM.
+        val rate = prepared.stretchRatio.coerceAtLeast(MIN_PLAYBACK_RATE)
+        val expectedPosition =
+            ((outgoing.sourcePositionMs() - (prepared.playbackStartSeconds * 1000).toLong()) / rate)
+                .toLong()
+        if (abs(incoming.currentPosition - expectedPosition) > MAX_SPLICE_DRIFT_MS) {
+            incoming.seekTo(expectedPosition.coerceAtLeast(0))
+            return false
+        }
+
+        val rendered = stagedRenderedPlayback ?: return false
+        incoming.volume = 0f
         fading = true
         renderedPlaying = true
+        activeRenderedPlayback = rendered
         fadeStartedAt = SystemClock.elapsedRealtime()
         fadeWindowMs = SPLICE_FADE_MS
-        fadeStyle = TransitionStyle.GAPLESS
+        fadeStyle = TransitionStyle.EQUAL_POWER
         outgoing.pauseAtEndOfMediaItems = true
         handler.post(ramp)
         return true
+    }
+
+    /**
+     * Prepares the real incoming item on the now-free deck while the rendered WAV is playing.
+     * Keeping this decoder hot avoids the format switch (PCM WAV to the original stream) that used
+     * to create the second audible hole at the far edge of every rendered transition.
+     */
+    private fun stageRenderedContinuation(rendered: RenderedPlayback): Boolean {
+        if (continuationStaged) return true
+        val outgoing = active ?: return false
+        val incoming = standby ?: return false
+        if (rendered.nextIndex !in rendered.originalQueue.indices) return false
+
+        if (rendered.prepared.selectedPlan == null) return false
+        val incomingRate = rendered.prepared.incomingStretchRatio.coerceAtLeast(MIN_PLAYBACK_RATE)
+        val prerollMs = minOf(
+            CONTINUATION_PREROLL_MS,
+            (rendered.prepared.renderedDurationSeconds * 1000).toLong(),
+        )
+        val startPosition = renderedContinuationPositionMs(
+            rendered.prepared.incomingResumeSeconds,
+            prerollMs,
+            incomingRate,
+        )
+
+        incoming.pause()
+        incoming.volume = 0f
+        incoming.pauseAtEndOfMediaItems = false
+        incoming.repeatMode = outgoing.repeatMode
+        incoming.shuffleModeEnabled = outgoing.shuffleModeEnabled
+        incoming.setPlaylistMetadata(outgoing.playlistMetadata)
+        incoming.setMediaItems(rendered.originalQueue, rendered.nextIndex, startPosition)
+        incoming.setPlaybackParameters(
+            PlaybackParameters(incomingRate.toFloat()),
+        )
+        incoming.prepare()
+        continuationStaged = true
+        continuationStarted = false
+        return true
+    }
+
+    private fun scheduleRenderedTail() {
+        if (activeRenderedPlayback == null || renderedTailRunning) return
+        renderedTailRunning = true
+        handler.post(renderedTail)
+    }
+
+    private val renderedTail = object : Runnable {
+        override fun run() {
+            val rendered = activeRenderedPlayback
+            val outgoing = active
+            val incoming = standby
+            if (rendered == null || outgoing == null || incoming == null) {
+                renderedTailRunning = false
+                return
+            }
+            if (!outgoing.isRenderedMix()) {
+                // The fail-safe playlist has already advanced into its clipped remainder. It is
+                // better to leave that authoritative than to swap to a standby that missed sync.
+                activeRenderedPlayback = null
+                if (continuationStaged) {
+                    incoming.stop()
+                    incoming.clearMediaItems()
+                }
+                continuationStaged = false
+                continuationStarted = false
+                renderedTailRunning = false
+                return
+            }
+            if (fading) {
+                handler.postDelayed(this, RAMP_INTERVAL_MS)
+                return
+            }
+            if (!stageRenderedContinuation(rendered)) {
+                handler.postDelayed(this, RAMP_INTERVAL_MS)
+                return
+            }
+            if (incoming.playerError != null) {
+                renderedTailRunning = false
+                return
+            }
+
+            val durationMs = (rendered.prepared.outputDurationSeconds * 1000).toLong()
+            val remainingMs = (durationMs - outgoing.currentPosition).coerceAtLeast(0)
+            if (rendered.prepared.selectedPlan == null) {
+                renderedTailRunning = false
+                return
+            }
+            val incomingRate = rendered.prepared.incomingStretchRatio.coerceAtLeast(MIN_PLAYBACK_RATE)
+            if (!continuationStarted && remainingMs <= CONTINUATION_PREROLL_MS &&
+                incoming.playbackState == Player.STATE_READY) {
+                incoming.seekTo(
+                    renderedContinuationPositionMs(
+                        rendered.prepared.incomingResumeSeconds,
+                        remainingMs,
+                        incomingRate,
+                    ),
+                )
+                incoming.play()
+                continuationStarted = true
+            }
+
+            if (continuationStarted && incoming.playbackState == Player.STATE_READY && incoming.isPlaying) {
+                val expectedPosition = renderedContinuationPositionMs(
+                    rendered.prepared.incomingResumeSeconds,
+                    remainingMs,
+                    incomingRate,
+                )
+                val drift = abs(incoming.currentPosition - expectedPosition)
+                if (remainingMs > SPLICE_FADE_MS * 2 && drift > MAX_SPLICE_DRIFT_MS) {
+                    // Still muted and comfortably ahead of the seam: repair startup skew now.
+                    incoming.seekTo(expectedPosition)
+                } else if (remainingMs <= SPLICE_FADE_MS + RAMP_INTERVAL_MS &&
+                    drift <= MAX_SPLICE_DRIFT_MS) {
+                    fading = true
+                    fadeStartedAt = SystemClock.elapsedRealtime()
+                    fadeWindowMs = min(SPLICE_FADE_MS, remainingMs).coerceAtLeast(MIN_RAMP_MS)
+                    fadeStyle = TransitionStyle.EQUAL_POWER
+                    handler.post(ramp)
+                    return
+                }
+            }
+            handler.postDelayed(this, RAMP_INTERVAL_MS)
+        }
     }
 
     private fun requestPlan(player: ExoPlayer, settings: Config, durationMs: Long) {
@@ -563,6 +762,8 @@ class CrossfadeEngine(
     }
 
     private fun finish(outgoing: ExoPlayer, incoming: ExoPlayer) {
+        val enteringRenderedPlayback = incoming.isRenderedMix()
+        val leavingRenderedPlayback = activeRenderedPlayback != null && !enteringRenderedPlayback
         incoming.volume = 1f
         incoming.pauseAtEndOfMediaItems = false
         // The nudge only ever existed to align the two grids through the overlap.
@@ -574,7 +775,15 @@ class CrossfadeEngine(
             incomingFilter.clearAutomation()
         }
         stagedRender = null
+        stagedRenderedPlayback = null
         stagedPlaybackStarted = false
+        if (leavingRenderedPlayback) {
+            activeRenderedPlayback = null
+            continuationStaged = false
+            continuationStarted = false
+            handler.removeCallbacks(renderedTail)
+            renderedTailRunning = false
+        }
         active = incoming
         standby = outgoing
         fading = false
@@ -583,6 +792,7 @@ class CrossfadeEngine(
         outgoing.clearMediaItems()
         outgoing.volume = 1f
         outgoing.pauseAtEndOfMediaItems = false
+        if (enteringRenderedPlayback) scheduleRenderedTail()
     }
 
     companion object {
@@ -606,7 +816,7 @@ class CrossfadeEngine(
         private const val TAG = "OrchardCrossfade"
 
         private const val WATCH_INTERVAL_MS = 200L
-        private const val RAMP_INTERVAL_MS = 40L
+        private const val RAMP_INTERVAL_MS = 20L
 
         /** One ramp tick. Below this a fade is a cut, not a ramp. */
         private const val MIN_RAMP_MS = 40L
@@ -616,7 +826,15 @@ class CrossfadeEngine(
          * that two phase-divergent copies of the same audio never overlap audibly, long enough that
          * the cut is not a click.
          */
-        private const val SPLICE_FADE_MS = 60L
+        private const val SPLICE_FADE_MS = 120L
+
+        /** Starts the original incoming decoder early, muted, so its first audible sample is hot. */
+        private const val CONTINUATION_PREROLL_MS = 1_500L
+
+        /** Maximum clock skew tolerated while crossfading two copies of the incoming track. */
+        private const val MAX_SPLICE_DRIFT_MS = 120L
+
+        private const val MIN_PLAYBACK_RATE = 0.01
 
         /**
          * How far the low-pass travels toward the bass crossover by the end of the overlap. Short of

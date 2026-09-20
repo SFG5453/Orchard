@@ -28,10 +28,10 @@ import java.nio.ByteOrder
  * Writes a rendered overlap to a WAV file the player can open as an ordinary media item.
  *
  * A file rather than an in-memory source because that is what lets the rendered mix be scheduled
- * through the same playlist machinery as everything else: the overlap becomes item one and the
- * remainder of the incoming track item two, and ExoPlayer's own item transition covers the seam
- * between them. Feeding raw PCM into the player would mean a custom MediaSource and a second code
- * path through the part of playback least tolerant of bugs.
+ * through the same playlist machinery as everything else. The overlap becomes an ordinary media
+ * item, while the second player is warmed on the incoming source for the handoff at its far edge.
+ * Feeding raw PCM into the player would mean a custom MediaSource and a second code path through
+ * the part of playback least tolerant of bugs.
  *
  * 16-bit rather than float: universally decodable, half the size, and the renderer's output has
  * already been through a filter bank and a resampler, so the last 8 bits are not carrying anything
@@ -49,9 +49,19 @@ object TransitionAudio {
      * Returns null if writing fails, which the caller treats as "no prepared transition" and falls
      * back to the volume ramp.
      */
-    fun writeWav(rendered: TransitionRenderer.Rendered, target: File): File? = runCatching {
+    fun writeWav(
+        rendered: TransitionRenderer.Rendered,
+        target: File,
+        leadingSilenceSeconds: Double = 0.0,
+    ): File? = runCatching {
         val frames = rendered.frames
-        val dataBytes = frames * CHANNELS * (BITS / 8)
+        // A short silent head lets the standby player open its decoder and AudioTrack before the
+        // rendered transition is audible. Starting a prepared-but-paused player at the first mix
+        // sample still has to start Android's audio sink, which is exactly the small hole listeners
+        // heard at the near edge of a rendered transition.
+        val leadingFrames =
+            (leadingSilenceSeconds.coerceAtLeast(0.0) * TransitionRenderer.SAMPLE_RATE).toInt()
+        val dataBytes = (leadingFrames + frames) * CHANNELS * (BITS / 8)
         target.parentFile?.mkdirs()
 
         RandomAccessFile(target, "rw").use { file ->
@@ -63,6 +73,14 @@ object TransitionAudio {
             // has to be ready before the playhead reaches it.
             val block = 8192
             val buffer = ByteBuffer.allocate(block * CHANNELS * 2).order(ByteOrder.LITTLE_ENDIAN)
+            var silence = leadingFrames
+            while (silence > 0) {
+                buffer.clear()
+                val count = minOf(silence, block)
+                repeat(count * CHANNELS) { buffer.putShort(0) }
+                file.write(buffer.array(), 0, buffer.position())
+                silence -= count
+            }
             var frame = 0
             while (frame < frames) {
                 buffer.clear()
