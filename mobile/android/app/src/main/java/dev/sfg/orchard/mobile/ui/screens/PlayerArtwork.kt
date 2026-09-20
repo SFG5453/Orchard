@@ -65,6 +65,12 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalDensity
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.AnimatedArtworkVideo
 import dev.sfg.orchard.mobile.ui.components.RemoteArtwork
@@ -85,6 +91,7 @@ fun FullBleedPlayerBackdrop(
     /** Hoisted so anything drawn over the backdrop tints from the same sample. */
     palette: ArtworkPalette,
     onVideoFrame: (Bitmap?) -> Unit,
+    incomingPalette: ArtworkPalette? = null,
     /** Where the cover actually sits, so a dismissal can fly it into the pill. */
     onArtworkBounds: ((Rect) -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -96,19 +103,36 @@ fun FullBleedPlayerBackdrop(
     onPrevious: () -> Unit = {},
     onLiked: () -> Unit = {},
 ) {
+    val progress = transitionProgress.coerceIn(0f, 1f)
+    val targetBottom = if (incomingPalette != null && progress in 0.001f..0.999f) {
+        lerp(palette.bottom, incomingPalette.bottom, progress)
+    } else {
+        palette.bottom
+    }
+    val targetDeep = if (incomingPalette != null && progress in 0.001f..0.999f) {
+        lerp(palette.deep, incomingPalette.deep, progress)
+    } else {
+        palette.deep
+    }
+    val targetAccent = if (incomingPalette != null && progress in 0.001f..0.999f) {
+        lerp(palette.accent, incomingPalette.accent, progress)
+    } else {
+        palette.accent
+    }
+
     val animatedBottom by animateColorAsState(
-        targetValue = palette.bottom,
-        animationSpec = tween(600),
+        targetValue = targetBottom,
+        animationSpec = tween(500),
         label = "PaletteBottom",
     )
     val animatedDeep by animateColorAsState(
-        targetValue = palette.deep,
-        animationSpec = tween(600),
+        targetValue = targetDeep,
+        animationSpec = tween(500),
         label = "PaletteDeep",
     )
     val animatedAccent by animateColorAsState(
-        targetValue = palette.accent,
-        animationSpec = tween(600),
+        targetValue = targetAccent,
+        animationSpec = tween(500),
         label = "PaletteAccent",
     )
 
@@ -256,58 +280,175 @@ fun FullBleedPlayerBackdrop(
 }
 
 /**
- * Prominent centered square artwork card for non-animated tracks on phone layouts.
- *
- * Supports soft drop shadow, refined corner radius, track handoff scaling, and
- * reporting bounds for the collapse flight into the mini-player pill.
+ * Centered square artwork card supporting intelligent dual-deck Smart Crossfade
+ * mixing, constant-power energy dissolves, subtle 3D spatial docking, micro beat pulses,
+ * soft drop shadow, refined corner radius, and reporting bounds for the collapse flight.
  */
 @Composable
 fun NowPlayingArtworkCard(
     track: Track,
+    incomingTrack: Track? = null,
+    outgoingTrack: Track? = null,
     transitionProgress: Float = 0f,
+    transitionStyle: String = "",
     onArtworkBounds: ((Rect) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    AnimatedContent(
-        targetState = track,
-        transitionSpec = {
-            (fadeIn(tween(500)) + scaleIn(initialScale = 0.92f, animationSpec = tween(500)))
-                .togetherWith(fadeOut(tween(400)) + scaleOut(targetScale = 1.05f, animationSpec = tween(400)))
-        },
-        label = "NowPlayingArtworkCardTransition",
-        modifier = modifier,
-    ) { currentTrack ->
-        val isArriving = this.transition.targetState == EnterExitState.Visible
-        val liveScale = 1f - HANDOFF_SHRINK * transitionProgress.coerceIn(0f, 1f)
-        val scale by animateFloatAsState(
-            targetValue = if (isArriving) liveScale else 1f - DEPARTURE_SHRINK,
-            animationSpec = tween(560),
-            label = "CardHandoffScale",
+    val density = LocalDensity.current
+    val progress = transitionProgress.coerceIn(0f, 1f)
+    val outTrack = outgoingTrack ?: track
+    val inTrack = incomingTrack
+    val isDualDeckActive = inTrack != null && outTrack.id != inTrack.id && progress in 0.001f..0.999f
+
+    if (isDualDeckActive) {
+        // Dual-deck Smart Crossfade visual mix stage
+        val motionProgress = FastOutSlowInEasing.transform(progress)
+
+        // Constant-power energy curves matching acoustic DJ crossfade
+        val outgoingGain = cos(progress * (PI.toFloat() / 2f))
+        val incomingGain = sin(progress * (PI.toFloat() / 2f))
+
+        // Subtle rhythmic micro-pulse (0.7%) conveying live beat-matching
+        val beatPulseTransition = rememberInfiniteTransition(label = "CrossfadeBeatPulse")
+        val beatPulse by beatPulseTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(520, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "CrossfadeBeatPulsePhase",
         )
+        val beatScale = 1f + 0.007f * beatPulse
+
+        // Outgoing deck parameters (receding into the background to the left)
+        val outgoingScale = (1f - 0.12f * motionProgress) * beatScale
+        val outgoingOffsetX = with(density) { (-22.dp * motionProgress).toPx() }
+        val outgoingAlpha = (outgoingGain * outgoingGain).coerceIn(0f, 1f)
+        val outgoingScrim = 0.28f * motionProgress
+
+        // Incoming deck parameters (docking in from the right to the foreground)
+        val incomingScale = (0.90f + 0.10f * motionProgress) * beatScale
+        val incomingOffsetX = with(density) { (26.dp * (1f - motionProgress)).toPx() }
+        val incomingAlpha = (incomingGain * incomingGain).coerceIn(0f, 1f)
+        val incomingElevation = (18 + 10 * motionProgress).dp
+
         Box(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxHeight()
-                .aspectRatio(1f)
-                .onGloballyPositioned { onArtworkBounds?.invoke(it.boundsInRoot()) }
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                }
-                .shadow(
-                    elevation = 24.dp,
-                    shape = RoundedCornerShape(22.dp),
-                    spotColor = Color.Black.copy(alpha = 0.65f),
-                    ambientColor = Color.Black.copy(alpha = 0.35f),
-                )
-                .clip(RoundedCornerShape(22.dp))
-                .background(Color(0xFF181A1B)),
+                .aspectRatio(1f),
             contentAlignment = Alignment.Center,
         ) {
-            RemoteArtwork(
-                url = currentTrack.artworkUrl,
-                description = "Artwork for ${currentTrack.title}",
-                modifier = Modifier.fillMaxSize(),
-            )
+            // Outgoing Deck (receding to left in depth)
+            if (outgoingAlpha > 0.005f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .onGloballyPositioned {
+                            // Dominant before handoff (0.5)
+                            if (progress < 0.5f) {
+                                onArtworkBounds?.invoke(it.boundsInRoot())
+                            }
+                        }
+                        .graphicsLayer {
+                            scaleX = outgoingScale
+                            scaleY = outgoingScale
+                            translationX = outgoingOffsetX
+                            alpha = outgoingAlpha
+                        }
+                        .shadow(
+                            elevation = 18.dp,
+                            shape = RoundedCornerShape(22.dp),
+                            spotColor = Color.Black.copy(alpha = 0.60f),
+                            ambientColor = Color.Black.copy(alpha = 0.30f),
+                        )
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color(0xFF181A1B)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    RemoteArtwork(
+                        url = outTrack.artworkUrl,
+                        description = "Artwork for ${outTrack.title}",
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    // Depth scrim as it departs
+                    if (outgoingScrim > 0.01f) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = outgoingScrim)),
+                        )
+                    }
+                }
+            }
+
+            // Incoming Deck (docking in from right)
+            if (incomingAlpha > 0.005f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .onGloballyPositioned {
+                            // Dominant at and after handoff (0.5)
+                            if (progress >= 0.5f) {
+                                onArtworkBounds?.invoke(it.boundsInRoot())
+                            }
+                        }
+                        .graphicsLayer {
+                            scaleX = incomingScale
+                            scaleY = incomingScale
+                            translationX = incomingOffsetX
+                            alpha = incomingAlpha
+                        }
+                        .shadow(
+                            elevation = incomingElevation,
+                            shape = RoundedCornerShape(22.dp),
+                            spotColor = Color.Black.copy(alpha = 0.70f),
+                            ambientColor = Color.Black.copy(alpha = 0.35f),
+                        )
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color(0xFF181A1B)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    RemoteArtwork(
+                        url = inTrack.artworkUrl,
+                        description = "Artwork for ${inTrack.title}",
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+    } else {
+        // Standard single-deck state (outside of transition, or during manual skip)
+        AnimatedContent(
+            targetState = track,
+            transitionSpec = {
+                (fadeIn(tween(500)) + scaleIn(initialScale = 0.92f, animationSpec = tween(500)))
+                    .togetherWith(fadeOut(tween(400)) + scaleOut(targetScale = 1.05f, animationSpec = tween(400)))
+            },
+            label = "NowPlayingArtworkCardTransition",
+            modifier = modifier,
+        ) { currentTrack ->
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .aspectRatio(1f)
+                    .onGloballyPositioned { onArtworkBounds?.invoke(it.boundsInRoot()) }
+                    .shadow(
+                        elevation = 24.dp,
+                        shape = RoundedCornerShape(22.dp),
+                        spotColor = Color.Black.copy(alpha = 0.65f),
+                        ambientColor = Color.Black.copy(alpha = 0.35f),
+                    )
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(Color(0xFF181A1B)),
+                contentAlignment = Alignment.Center,
+            ) {
+                RemoteArtwork(
+                    url = currentTrack.artworkUrl,
+                    description = "Artwork for ${currentTrack.title}",
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 }

@@ -124,6 +124,16 @@ fun TabletPlayerBody(
 ) {
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
         PlayerTopHandle(onDismiss = onBack, modifier = dragHandle)
+        val activeProgress = mixProgress ?: dev.sfg.orchard.mobile.ui.components.transitionProgress(playback, transition)
+        val incomingTrack = remember(playback.queue, transition?.incomingTrackId) {
+            val id = transition?.incomingTrackId
+            if (id.isNullOrBlank()) null else playback.queue.firstOrNull { it.id == id }
+        }
+        val outgoingTrack = remember(playback.queue, transition?.trackId, track) {
+            val id = transition?.trackId
+            if (id.isNullOrBlank()) track else playback.queue.firstOrNull { it.id == id } ?: track
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxSize()
@@ -136,28 +146,18 @@ fun TabletPlayerBody(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .aspectRatio(1f)
-                    .onGloballyPositioned { onCoverBounds?.invoke(it.boundsInRoot()) }
-                    .clip(RoundedCornerShape(20.dp)),
+                    .aspectRatio(1f),
+                contentAlignment = Alignment.Center,
             ) {
-                AnimatedContent(
-                    targetState = track,
-                    transitionSpec = {
-                        (fadeIn(tween(500)) + scaleIn(initialScale = 0.94f, animationSpec = tween(500)))
-                            .togetherWith(fadeOut(tween(400)) + scaleOut(targetScale = 1.04f, animationSpec = tween(400)))
-                    },
-                    label = "TabletArtworkTransition",
+                NowPlayingArtworkCard(
+                    track = track,
+                    incomingTrack = incomingTrack,
+                    outgoingTrack = outgoingTrack,
+                    transitionProgress = activeProgress,
+                    transitionStyle = transition?.style.orEmpty(),
+                    onArtworkBounds = onCoverBounds,
                     modifier = Modifier.fillMaxSize(),
-                ) { currentTrack ->
-                    val motion = currentTrack.animatedArtworkUrl.ifBlank { currentTrack.animatedArtworkVerticalUrl }
-                    Box(Modifier.fillMaxSize()) {
-                        if (animatedArtworkEnabled && motion.isNotBlank()) {
-                            AnimatedArtworkVideo(motion, playback.isPlaying, Modifier.fillMaxSize())
-                        } else {
-                            RemoteArtwork(currentTrack.artworkUrl, currentTrack.title, Modifier.fillMaxSize())
-                        }
-                    }
-                }
+                )
             }
 
             Spacer(Modifier.width(40.dp))
@@ -166,6 +166,13 @@ fun TabletPlayerBody(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 verticalArrangement = Arrangement.Center,
             ) {
+                dev.sfg.orchard.mobile.ui.components.SmartCrossfadeBadge(
+                    visible = activeProgress in 0.001f..0.999f && transition != null,
+                    style = transition?.style.orEmpty(),
+                    incomingTrack = incomingTrack,
+                    progress = activeProgress,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
                 TrackInfoRow(
                     track = track,
                     liked = liked,

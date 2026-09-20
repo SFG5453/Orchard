@@ -93,6 +93,7 @@ import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.model.TransitionMarker
 import dev.sfg.orchard.mobile.ui.components.MessagePanel
 import dev.sfg.orchard.mobile.ui.components.RemoteArtwork
+import dev.sfg.orchard.mobile.ui.components.SmartCrossfadeBadge
 import dev.sfg.orchard.mobile.ui.foldable.FoldableNowPlayingBody
 import dev.sfg.orchard.mobile.ui.foldable.isFoldableActive
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
@@ -226,6 +227,15 @@ fun NowPlayingScreen(
     val canControl = localControls || protocolVersion >= 2
     val activeMixProgress =
         mixProgress ?: dev.sfg.orchard.mobile.ui.components.transitionProgress(playback, transition)
+    val incomingTrack = remember(playback.queue, transition?.incomingTrackId) {
+        val id = transition?.incomingTrackId
+        if (id.isNullOrBlank()) null else playback.queue.firstOrNull { it.id == id }
+    }
+    val outgoingTrack = remember(playback.queue, transition?.trackId, track) {
+        val id = transition?.trackId
+        if (id.isNullOrBlank()) track else playback.queue.firstOrNull { it.id == id } ?: track
+    }
+    val incomingPalette = incomingTrack?.let { rememberFullBleedPalette(it) }
 
     // Two panes need room for a square cover and a readable column beside it.
     // Below this a tablet in portrait, or a large phone in landscape, is better
@@ -372,6 +382,7 @@ fun NowPlayingScreen(
                 onLiked = onLiked,
                 palette = palette,
                 onVideoFrame = { videoFrame = it },
+                incomingPalette = incomingPalette,
                 onArtworkBounds = { if ((!wideLayout || isFoldable) && hasRichArtwork && progress == 0f) onRestingCoverBounds(it) },
                 transitionProgress = activeMixProgress,
                 artworkAlpha = artworkAlpha,
@@ -605,7 +616,10 @@ fun NowPlayingScreen(
                     ) {
                         NowPlayingArtworkCard(
                             track = track,
+                            incomingTrack = incomingTrack,
+                            outgoingTrack = outgoingTrack,
                             transitionProgress = activeMixProgress,
+                            transitionStyle = transition?.style.orEmpty(),
                             onArtworkBounds = { if (!wideLayout && progress == 0f) onRestingCoverBounds(it) },
                         )
                     }
@@ -624,6 +638,13 @@ fun NowPlayingScreen(
                     // Track Title, Artist, Explicit Badge, Star & More Buttons. The lyrics header
                     // carries this information while lyrics are open.
                     if (panel == PlayerPanel.NONE) {
+                        SmartCrossfadeBadge(
+                            visible = activeMixProgress in 0.001f..0.999f && transition != null,
+                            style = transition?.style.orEmpty(),
+                            incomingTrack = incomingTrack,
+                            progress = activeMixProgress,
+                            modifier = Modifier.padding(bottom = 14.dp),
+                        )
                         TrackInfoRow(
                             track = track,
                             liked = liked,

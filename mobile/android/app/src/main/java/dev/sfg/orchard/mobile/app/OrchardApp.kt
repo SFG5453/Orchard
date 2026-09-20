@@ -264,7 +264,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                     nav = navController,
                     viewModel = viewModel,
                     playback = playerPlayback,
-                    transition = playerMarker,
+                    transition = localTransitionMarker,
                     mixProgress = playerPresentation.progress,
                     targets = targets,
                     library = library,

@@ -58,6 +58,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,8 +81,11 @@ import dev.sfg.orchard.mobile.model.PlaybackTargetState
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.model.TransitionMarker
 import dev.sfg.orchard.mobile.ui.components.RemoteArtwork
+import dev.sfg.orchard.mobile.ui.components.SmartCrossfadeBadge
+import dev.sfg.orchard.mobile.ui.components.transitionProgress
 import dev.sfg.orchard.mobile.ui.screens.LyricLines
 import dev.sfg.orchard.mobile.ui.screens.LyricsNotice
+import dev.sfg.orchard.mobile.ui.screens.NowPlayingArtworkCard
 import dev.sfg.orchard.mobile.ui.screens.PlayerControlStack
 import dev.sfg.orchard.mobile.ui.screens.PlayerPanel
 import dev.sfg.orchard.mobile.ui.screens.PlayerQueuePanel
@@ -300,6 +304,15 @@ private fun FoldableNowPlayingHero(
 ) {
     val motion = track.animatedArtworkVerticalUrl.ifBlank { track.animatedArtworkUrl }
     val hasRichArtwork = animatedArtworkEnabled && motion.isNotBlank()
+    val activeProgress = mixProgress ?: transitionProgress(playback, transition)
+    val incomingTrack = remember(playback.queue, transition?.incomingTrackId) {
+        val id = transition?.incomingTrackId
+        if (id.isNullOrBlank()) null else playback.queue.firstOrNull { it.id == id }
+    }
+    val outgoingTrack = remember(playback.queue, transition?.trackId, track) {
+        val id = transition?.trackId
+        if (id.isNullOrBlank()) track else playback.queue.firstOrNull { it.id == id } ?: track
+    }
 
     Column(
         modifier = Modifier
@@ -339,28 +352,18 @@ private fun FoldableNowPlayingHero(
                         .fillMaxHeight(0.88f)
                         .aspectRatio(1f)
                         .widthIn(max = 480.dp)
-                        .heightIn(max = 480.dp)
-                        .onGloballyPositioned { onCoverBounds?.invoke(it.boundsInRoot()) }
-                        .shadow(
-                            elevation = 28.dp,
-                            shape = RoundedCornerShape(26.dp),
-                            spotColor = Color.Black.copy(alpha = 0.65f),
-                            ambientColor = lyricAccent.copy(alpha = 0.32f),
-                        )
-                        .clip(RoundedCornerShape(26.dp))
-                        .background(Color(0xFF141618)),
+                        .heightIn(max = 480.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    AnimatedContent(
-                        targetState = track,
-                        transitionSpec = {
-                            (fadeIn(tween(450)) + scaleIn(initialScale = 0.94f, animationSpec = tween(450)))
-                                .togetherWith(fadeOut(tween(350)) + scaleOut(targetScale = 1.04f, animationSpec = tween(350)))
-                        },
-                        label = "FoldableArtworkHeroTransition",
+                    NowPlayingArtworkCard(
+                        track = track,
+                        incomingTrack = incomingTrack,
+                        outgoingTrack = outgoingTrack,
+                        transitionProgress = activeProgress,
+                        transitionStyle = transition?.style.orEmpty(),
+                        onArtworkBounds = onCoverBounds,
                         modifier = Modifier.fillMaxSize(),
-                    ) { currentTrack ->
-                        RemoteArtwork(currentTrack.artworkUrl, currentTrack.title, Modifier.fillMaxSize())
-                    }
+                    )
                 }
             }
         } else {
@@ -379,6 +382,13 @@ private fun FoldableNowPlayingHero(
                 .padding(bottom = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            SmartCrossfadeBadge(
+                visible = activeProgress in 0.001f..0.999f && transition != null,
+                style = transition?.style.orEmpty(),
+                incomingTrack = incomingTrack,
+                progress = activeProgress,
+                modifier = Modifier.padding(bottom = 12.dp),
+            )
             TrackInfoRow(
                 track = track,
                 liked = liked,
@@ -480,6 +490,15 @@ private fun FoldableNowPlayingSplit(
 ) {
     val motion = track.animatedArtworkVerticalUrl.ifBlank { track.animatedArtworkUrl }
     val hasRichArtwork = animatedArtworkEnabled && motion.isNotBlank()
+    val activeProgress = mixProgress ?: transitionProgress(playback, transition)
+    val incomingTrack = remember(playback.queue, transition?.incomingTrackId) {
+        val id = transition?.incomingTrackId
+        if (id.isNullOrBlank()) null else playback.queue.firstOrNull { it.id == id }
+    }
+    val outgoingTrack = remember(playback.queue, transition?.trackId, track) {
+        val id = transition?.trackId
+        if (id.isNullOrBlank()) track else playback.queue.firstOrNull { it.id == id } ?: track
+    }
 
     Row(
         modifier = Modifier
@@ -506,28 +525,18 @@ private fun FoldableNowPlayingSplit(
                             .fillMaxHeight(0.92f)
                             .aspectRatio(1f)
                             .widthIn(max = 380.dp)
-                            .heightIn(max = 380.dp)
-                            .onGloballyPositioned { onCoverBounds?.invoke(it.boundsInRoot()) }
-                            .shadow(
-                                elevation = 20.dp,
-                                shape = RoundedCornerShape(22.dp),
-                                spotColor = Color.Black.copy(alpha = 0.55f),
-                                ambientColor = lyricAccent.copy(alpha = 0.25f),
-                            )
-                            .clip(RoundedCornerShape(22.dp))
-                            .background(Color(0xFF141618)),
+                            .heightIn(max = 380.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        AnimatedContent(
-                            targetState = track,
-                            transitionSpec = {
-                                (fadeIn(tween(400)) + scaleIn(initialScale = 0.94f, animationSpec = tween(400)))
-                                    .togetherWith(fadeOut(tween(300)) + scaleOut(targetScale = 1.04f, animationSpec = tween(300)))
-                            },
-                            label = "FoldableArtworkSplitTransition",
+                        NowPlayingArtworkCard(
+                            track = track,
+                            incomingTrack = incomingTrack,
+                            outgoingTrack = outgoingTrack,
+                            transitionProgress = activeProgress,
+                            transitionStyle = transition?.style.orEmpty(),
+                            onArtworkBounds = onCoverBounds,
                             modifier = Modifier.fillMaxSize(),
-                        ) { currentTrack ->
-                            RemoteArtwork(currentTrack.artworkUrl, currentTrack.title, Modifier.fillMaxSize())
-                        }
+                        )
                     }
                 }
             } else {
@@ -537,6 +546,13 @@ private fun FoldableNowPlayingSplit(
 
             Spacer(Modifier.height(10.dp))
 
+            SmartCrossfadeBadge(
+                visible = activeProgress in 0.001f..0.999f && transition != null,
+                style = transition?.style.orEmpty(),
+                incomingTrack = incomingTrack,
+                progress = activeProgress,
+                modifier = Modifier.padding(bottom = 10.dp),
+            )
             TrackInfoRow(
                 track = track,
                 liked = liked,

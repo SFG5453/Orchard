@@ -68,6 +68,7 @@ import dev.sfg.orchard.mobile.ui.components.durationText
 import dev.sfg.orchard.mobile.ui.components.rememberRainbowBrush
 import dev.sfg.orchard.mobile.ui.components.rememberTransitionGlow
 import dev.sfg.orchard.mobile.ui.components.transitionProgress
+import dev.sfg.orchard.mobile.ui.components.transitionStyleLabel
 
 /**
  * Expressive scrubber progress bar with active dragging state,
@@ -244,8 +245,10 @@ fun PlayerScrubber(
                 ),
             )
             if (glow > 0.01f) {
+                val styleDesc = transition?.style?.takeIf { it.isNotBlank() }?.let { transitionStyleLabel(it) }
+                val labelText = if (styleDesc != null) "$TRANSITION_LABEL • $styleDesc" else TRANSITION_LABEL
                 Text(
-                    text = TRANSITION_LABEL,
+                    text = labelText,
                     modifier = Modifier.alpha(glow),
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = 11.sp,
