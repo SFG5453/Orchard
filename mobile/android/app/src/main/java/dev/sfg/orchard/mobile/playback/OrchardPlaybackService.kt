@@ -165,7 +165,11 @@ class OrchardPlaybackService : MediaLibraryService() {
             StreamCache(context = this, maxBytes = graph.settings.settings.value.cacheSizeBytes) {
                 graph.settings.settings.value.audioQuality
             }
-        analyzer = dev.sfg.orchard.mobile.playback.smart.TrackAnalyzer(this, streamCache)
+        analyzer = dev.sfg.orchard.mobile.playback.smart.TrackAnalyzer(
+            this,
+            streamCache,
+            graph.bestMixFeatures,
+        )
         preparer = dev.sfg.orchard.mobile.playback.smart.TransitionPreparer(this, streamCache)
         graph.analysisLookup = analyzer::analysisFor
         graph.onClearStreamCache = streamCache::clear

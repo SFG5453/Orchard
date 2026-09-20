@@ -45,6 +45,7 @@ import dev.sfg.orchard.mobile.playback.smart.TrackFeatures
 import dev.sfg.orchard.mobile.settings.CacheManager
 import dev.sfg.orchard.mobile.social.PartyState
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import dev.sfg.orchard.mobile.songlinks.LinkResolution
 import dev.sfg.orchard.mobile.songlinks.SongLinksCoordinator
@@ -580,6 +581,18 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         null
     }
 
+    private suspend fun loadBestMixFeatures(tracks: Collection<Track>): Map<String, TrackFeatures.Features> =
+        withContext(Dispatchers.IO) {
+            graph.bestMixFeatures.load(tracks.map(Track::id))
+        }
+
+    private suspend fun persistBestMixFeatures(features: Map<String, TrackFeatures.Features>) {
+        if (features.isEmpty()) return
+        withContext(Dispatchers.IO) {
+            graph.bestMixFeatures.putAll(features)
+        }
+    }
+
     /**
      * Orders [tracks] via Best Mix algorithm and starts playback.
      * If cloud sync is enabled, attempts to fetch features from Supabase first.
@@ -601,10 +614,9 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
             val syncService = SupabaseSyncService(getApplication())
             val featuresMap = mutableMapOf<String, TrackFeatures.Features>()
 
-            // 1. Check in-memory cached features first
-            for (track in playable) {
-                BestMixSorter.getCachedFeatures(track.id)?.let { featuresMap[track.id] = it }
-            }
+            // 1. Reuse process-memory or versioned SQLite analysis first.
+            featuresMap.putAll(loadBestMixFeatures(playable))
+            Log.d(TAG, "Best Mix reused ${featuresMap.size}/${playable.size} persisted analyses")
 
             // 2. Fetch from Supabase if enabled and tracks are missing
             if (currentSettings.bestMixSupabaseSync && featuresMap.size < playable.size) {
@@ -615,8 +627,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                 }
                 cloudFeatures.forEach { (id, features) ->
                     featuresMap[id] = features
-                    BestMixSorter.cacheFeatures(id, features)
                 }
+                persistBestMixFeatures(cloudFeatures)
             }
 
             // 3. For remaining tracks missing features, analyze downloaded files in parallel
@@ -653,6 +665,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                     val completedCount = AtomicInteger(0)
                     val parallelism = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
                     val semaphore = Semaphore(parallelism)
+                    val analyzedFeatures = ConcurrentHashMap<String, TrackFeatures.Features>()
 
                     onProgress("Analyzing audio (0/$totalToAnalyze)...")
                     coroutineScope {
@@ -660,9 +673,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                             async(Dispatchers.Default) {
                                 semaphore.withPermit {
                                     analyzeBestMixTrack(track, file)?.let { localFeatures ->
-                                        synchronized(featuresMap) {
-                                            featuresMap[track.id] = localFeatures
-                                        }
+                                        analyzedFeatures[track.id] = localFeatures
                                     }
                                     val done = completedCount.incrementAndGet()
                                     onProgress("Analyzing audio ($done/$totalToAnalyze)...")
@@ -670,13 +681,21 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                             }
                         }.awaitAll()
                     }
+                    featuresMap.putAll(analyzedFeatures)
+                    persistBestMixFeatures(analyzedFeatures)
                 }
             }
 
             onProgress("Sorting Best Mix...")
+            val sortStarted = System.currentTimeMillis()
             val sorted = withContext(Dispatchers.Default) {
                 BestMixSorter.sort(playable, featuresMap)
             }
+            Log.d(
+                TAG,
+                "Best Mix sorted ${playable.size} tracks with ${featuresMap.size} analyses " +
+                    "in ${System.currentTimeMillis() - sortStarted}ms",
+            )
             playAll(sorted, contextTitle = bestMixTitle)
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -712,10 +731,9 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
             val currentTrack = currentSnapshot.currentTrack
             val analysisTracks = (listOfNotNull(currentTrack) + upcoming).distinctBy(Track::id)
 
-            // 1. Check in-memory cache
-            for (track in analysisTracks) {
-                BestMixSorter.getCachedFeatures(track.id)?.let { featuresMap[track.id] = it }
-            }
+            // 1. Reuse process-memory or versioned SQLite analysis.
+            featuresMap.putAll(loadBestMixFeatures(analysisTracks))
+            Log.d(TAG, "Queue Best Mix reused ${featuresMap.size}/${analysisTracks.size} persisted analyses")
 
             // 2. Fetch from Supabase if enabled
             if (currentSettings.bestMixSupabaseSync && featuresMap.size < analysisTracks.size) {
@@ -724,8 +742,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                 val cloudFeatures = withContext(Dispatchers.IO) { syncService.fetchTrackFeatures(neededIds) }
                 cloudFeatures.forEach { (id, features) ->
                     featuresMap[id] = features
-                    BestMixSorter.cacheFeatures(id, features)
                 }
+                persistBestMixFeatures(cloudFeatures)
             }
 
             // 3. Make missing tracks locally analyzable. Previously this action only inspected
@@ -758,6 +776,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                 val completedCount = AtomicInteger(0)
                 val parallelism = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
                 val semaphore = Semaphore(parallelism)
+                val analyzedFeatures = ConcurrentHashMap<String, TrackFeatures.Features>()
 
                 onProgress("Analyzing audio (0/$totalToAnalyze)...")
                 coroutineScope {
@@ -765,7 +784,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                         async(Dispatchers.Default) {
                             semaphore.withPermit {
                                 analyzeBestMixTrack(track, file)?.let { localFeatures ->
-                                    synchronized(featuresMap) { featuresMap[track.id] = localFeatures }
+                                    analyzedFeatures[track.id] = localFeatures
                                 }
                                 val done = completedCount.incrementAndGet()
                                 onProgress("Analyzing audio ($done/$totalToAnalyze)...")
@@ -773,9 +792,12 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                         }
                     }.awaitAll()
                 }
+                featuresMap.putAll(analyzedFeatures)
+                persistBestMixFeatures(analyzedFeatures)
             }
 
             onProgress("Sorting queue...")
+            val sortStarted = System.currentTimeMillis()
             val sortedUpcoming = withContext(Dispatchers.Default) {
                 BestMixSorter.sort(
                     tracks = upcoming,
@@ -783,6 +805,11 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                     initialFeatures = currentTrack?.id?.let(featuresMap::get),
                 )
             }
+            Log.d(
+                TAG,
+                "Queue Best Mix sorted ${upcoming.size} tracks with ${featuresMap.size} analyses " +
+                    "in ${System.currentTimeMillis() - sortStarted}ms",
+            )
             val reconciled = queueRequest.reconcile(playback.value, sortedUpcoming) ?: return@launch
             val baseTitle = currentSnapshot.contextTitle.ifBlank { currentTrack?.album.orEmpty() }
             val newTitle = if (baseTitle.isNotBlank() && !baseTitle.endsWith("• Best Mix", ignoreCase = true)) {

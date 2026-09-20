@@ -22,6 +22,7 @@ import { planTransition, transitionFromPairFallback } from '../../../src/audio/c
 import { planWsolaTransition } from '../../../src/audio/crossfade/wsolaPlanner.js';
 
 const cache = new Map();
+const MAX_CACHE_ENTRIES = 2;
 export function invoke(method, json) {
   const input = JSON.parse(json);
   input.currentTrack ||= {};
@@ -32,7 +33,10 @@ export function invoke(method, json) {
   let plan = cache.get(key);
   if (!plan) {
     plan = method === 'native' ? planWsolaTransition(input) : planTransition(input);
-    if (cache.size >= 16) cache.delete(cache.keys().next().value);
+    // One live and one native result cover the active playback pair. Retaining sixteen complete
+    // analyses and planner graphs consumed nearly the entire Android Java heap after Best Mix had
+    // visited a queue, even though no caller could use those old pair decisions again.
+    if (cache.size >= MAX_CACHE_ENTRIES) cache.delete(cache.keys().next().value);
     cache.set(key, plan);
   }
   if (method === 'native') return JSON.stringify(plan);

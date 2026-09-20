@@ -37,6 +37,7 @@ import dev.sfg.orchard.mobile.listenbrainz.ListenBrainzRepository
 import dev.sfg.orchard.mobile.settings.SettingsRepository
 import dev.sfg.orchard.mobile.download.DownloadManager
 import dev.sfg.orchard.mobile.playback.YouTubePoTokenMinter
+import dev.sfg.orchard.mobile.playback.smart.BestMixFeatureStore
 import dev.sfg.orchard.mobile.songlinks.SongLinksRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +64,7 @@ class OrchardGraph(context: Context) {
     )
     private val innerTube: InnerTubeClient = InnerTubeClient(http, auth)
     val settings = SettingsRepository(context, applicationScope)
+    val bestMixFeatures = BestMixFeatureStore(context)
     val networkMonitor = dev.sfg.orchard.mobile.network.NetworkMonitor(context)
     /**
      * Shared by playback and downloads: attesting is expensive once and free afterwards, so the

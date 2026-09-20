@@ -39,6 +39,12 @@ import org.json.JSONObject
  */
 object TrackFeatures {
 
+    /**
+     * Persisted analysis contract, shared with `shared/audioAnalysis.js` and the desktop native
+     * addon. Bump all three together whenever old whole-track evidence is no longer safe to reuse.
+     */
+    const val ANALYSIS_VERSION = 13
+
     /** True when the native library loaded. Analysis is optional, so this is a fact, not a fault. */
     val available: Boolean get() = MelSpectrogram.available
 
@@ -122,6 +128,49 @@ object TrackFeatures {
         mixInCandidates = root.cuePoints("mixInCandidates"),
         mixOutCandidates = root.cuePoints("mixOutCandidates"),
     )
+
+    /**
+     * Restores the typed mobile fields to the full planner payload before it is persisted.
+     *
+     * Cloud results and the native analyzer normally already carry these values in
+     * [Features.plannerFeaturesJson]. Constructed or refined features need not, so writing the raw
+     * payload alone would turn a valid in-memory result into an empty cache entry after restart.
+     */
+    fun toJson(features: Features): JSONObject = runCatching {
+        JSONObject(features.plannerFeaturesJson)
+    }.getOrElse { JSONObject() }.apply {
+        put("analysisVersion", ANALYSIS_VERSION)
+        put("duration", features.duration)
+        put("bpm", features.bpm)
+        put("beatInterval", features.beatInterval)
+        put("firstBeat", features.firstBeat)
+        put("beatConfidence", features.beatConfidence)
+        put("key", features.key)
+        put("keyConfidence", features.keyConfidence)
+        put("audibleStartTime", features.audibleStartTime)
+        put("pickupTime", features.pickupTime)
+        put("introEndTime", features.introEndTime)
+        put("outroStartTime", features.outroStartTime)
+        put("contentEndTime", features.contentEndTime)
+        put("mixInTime", features.mixInTime)
+        put("mixOutTime", features.mixOutTime)
+        put("vocalProbability", features.vocalProbability)
+        put("downbeats", JSONArray(features.downbeats))
+        put("phraseBoundaries", JSONArray(features.phraseBoundaries))
+        put("vocalActivityMask", JSONArray(features.vocalActivityMask))
+        put("energyCurve", JSONArray(features.energyCurve.map { point ->
+            JSONObject().put("t", point.time).put("e", point.energy)
+        }))
+        put("lowEnergyCurve", JSONArray(features.lowEnergyCurve.map { point ->
+            JSONObject().put("t", point.time).put("e", point.energy)
+        }))
+        put("mixInCandidates", JSONArray(features.mixInCandidates.map { candidate ->
+            JSONObject().put("t", candidate.time).put("s", candidate.score).put("y", candidate.type)
+        }))
+        put("mixOutCandidates", JSONArray(features.mixOutCandidates.map { candidate ->
+            JSONObject().put("t", candidate.time).put("s", candidate.score).put("y", candidate.type)
+        }))
+    }
 
     private fun JSONObject.doubles(name: String): List<Double> {
         val array = optJSONArray(name) ?: return emptyList()

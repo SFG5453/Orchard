@@ -21,6 +21,8 @@ package dev.sfg.orchard.mobile.playback.smart
 
 import dev.sfg.orchard.mobile.model.Track
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.json.JSONObject
 import org.junit.Test
 
 class BestMixSorterTest {
@@ -249,5 +251,42 @@ class BestMixSorterTest {
         )
 
         assertEquals(listOf(beatmatched, distant), sorted)
+    }
+
+    @Test(timeout = 2_000L)
+    fun fiftyTrackSortDoesNotRunTheFullPlannerForEveryPair() {
+        val tracks = (0 until 50).map { index -> createTrack("track-$index", "Track $index") }
+        val features = tracks.associate { track ->
+            val index = track.id.substringAfterLast('-').toInt()
+            track.id to createFeatures(
+                bpm = 96.0 + index % 36,
+                key = listOf("C Major", "G Major", "D Minor", "A Minor")[index % 4],
+            )
+        }
+
+        val sorted = BestMixSorter.sort(tracks, features)
+
+        assertEquals(tracks.size, sorted.size)
+        assertEquals(tracks.map(Track::id).toSet(), sorted.map(Track::id).toSet())
+    }
+
+    @Test
+    fun persistedFeaturePayloadRoundTripsTypedAndPlannerEvidence() {
+        val original = createFeatures(123.0, "D Minor").copy(
+            plannerFeaturesJson = JSONObject()
+                .put("customPlannerEvidence", JSONObject().put("score", 0.75))
+                .toString(),
+        )
+
+        val json = TrackFeatures.toJson(original)
+        val restored = TrackFeatures.parse(json)
+
+        assertEquals(TrackFeatures.ANALYSIS_VERSION, json.getInt("analysisVersion"))
+        assertEquals(0.75, json.getJSONObject("customPlannerEvidence").getDouble("score"), 0.0)
+        assertEquals(original.bpm, restored.bpm, 0.0)
+        assertEquals(original.key, restored.key)
+        assertEquals(original.energyCurve, restored.energyCurve)
+        assertEquals(original.mixInCandidates, restored.mixInCandidates)
+        assertTrue(restored.plannerFeaturesJson.contains("customPlannerEvidence"))
     }
 }

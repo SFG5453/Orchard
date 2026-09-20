@@ -72,6 +72,7 @@ internal fun analysisDuration(catalogSeconds: Double, containerSeconds: Double?)
 class TrackAnalyzer(
     context: Context,
     private val cache: StreamCache,
+    private val featureStore: BestMixFeatureStore? = null,
 ) {
     private val tracker = BeatTracker(context)
     private val vocals = VocalTracker(context)
@@ -271,6 +272,7 @@ class TrackAnalyzer(
         // Pass 1: Whole track mono at low rate for structural features (energy, phrases, etc.)
         val structural = structural(::openSource, durationSeconds) ?: return empty(track, durationSeconds)
         val features = structural.features
+        features?.let { featureStore?.put(track.id, it) }
 
         // Pass 2: High-resolution stereo regions for the models (head and tail only).
         // This avoids decoding minutes of audio at 48kHz that the models never see.
@@ -369,6 +371,7 @@ class TrackAnalyzer(
 
         val features = TrackFeatures.analyze(samples, durationSeconds)
             ?: return empty(track, durationSeconds)
+        featureStore?.put(track.id, features)
 
         Log.d(
             TAG,
