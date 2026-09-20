@@ -1,12 +1,20 @@
 <resources>
-  <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+  <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
     <item name="android:fontFamily">sans</item>
     <item name="android:windowNoTitle">true</item>
     <item name="android:windowActionBar">false</item>
+    <item name="android:colorPrimary">@color/colorPrimary</item>
+    <item name="colorPrimary">@color/colorPrimary</item>
+    <item name="android:colorPrimaryDark">@color/orchard_night</item>
+    <item name="colorPrimaryDark">@color/orchard_night</item>
     <item name="android:colorAccent">@color/colorPrimary</item>
+    <item name="colorAccent">@color/colorPrimary</item>
     <item name="android:windowBackground">@color/orchard_night</item>
+    <item name="android:colorBackground">@color/orchard_night</item>
+    <item name="isLightTheme">false</item>
     <item name="android:navigationBarColor">@color/orchard_night</item>
     <item name="android:statusBarColor">@color/orchard_night</item>
     <item name="android:windowLightStatusBar">false</item>
+    <item name="mediaRouteTheme">@style/Theme.MediaRouter</item>
   </style>
 </resources>

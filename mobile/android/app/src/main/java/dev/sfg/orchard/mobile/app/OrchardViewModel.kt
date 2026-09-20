@@ -191,6 +191,9 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun setQobuzEnabled(enabled: Boolean) = graph.qobuz.setEnabled(enabled)
     fun setQobuzQuality(quality: dev.sfg.orchard.mobile.qobuz.QobuzQuality) = graph.qobuz.setQuality(quality)
 
+    val lastfmState: StateFlow<dev.sfg.orchard.mobile.lastfm.LastfmState> = graph.lastfm.state
+    val listenBrainzState: StateFlow<dev.sfg.orchard.mobile.listenbrainz.ListenBrainzState> = graph.listenBrainz.state
+
     val activeBitrate: StateFlow<Int> = graph.activeBitrate.asStateFlow()
     val isOnline: StateFlow<Boolean> = graph.networkMonitor.isOnline
     val downloads: StateFlow<Map<String, dev.sfg.orchard.mobile.download.DownloadItem>> = graph.downloads.downloads
@@ -1487,6 +1490,29 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun disconnectDiscord() = viewModelScope.launch { graph.discordAuth.signOut() }
     fun handleDiscordAuthCallback(code: String, state: String?) =
         viewModelScope.launch { graph.discordAuth.handleAuthorizationCode(code, state) }
+
+    fun connectLastfm(context: android.content.Context) = viewModelScope.launch {
+        runCatching { graph.lastfm.connect() }
+            .onSuccess { url ->
+                context.startActivity(
+                    android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+            .onFailure { showWarning(it.message ?: "Could not start Last.fm connection.") }
+    }
+
+    fun completeLastfmConnection() = viewModelScope.launch {
+        if (!graph.lastfm.complete()) showWarning("Approve Orchard on Last.fm, then try again.")
+    }
+
+    fun disconnectLastfm() = graph.lastfm.disconnect()
+
+    fun connectListenBrainz(token: String) = viewModelScope.launch {
+        if (!graph.listenBrainz.connect(token)) showWarning("ListenBrainz did not accept that token.")
+    }
+
+    fun disconnectListenBrainz() = graph.listenBrainz.disconnect()
 
     private suspend fun transferToRemote(target: PlaybackTarget.Remote) {
         performTransferToRemote(target, local, graph, targetCoordinator)

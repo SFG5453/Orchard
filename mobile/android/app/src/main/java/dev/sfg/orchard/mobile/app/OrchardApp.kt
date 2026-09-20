@@ -318,6 +318,8 @@ private fun OrchardNavigation(
     val auth by viewModel.auth.collectAsStateWithLifecycle()
     val discordAuth by viewModel.discordAuth.collectAsStateWithLifecycle()
     val discordConnection by viewModel.discordConnection.collectAsStateWithLifecycle()
+    val lastfmState by viewModel.lastfmState.collectAsStateWithLifecycle()
+    val listenBrainzState by viewModel.listenBrainzState.collectAsStateWithLifecycle()
     val libraryFilter by viewModel.libraryFilter.collectAsStateWithLifecycle()
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
@@ -451,6 +453,8 @@ private fun OrchardNavigation(
                 auth = auth,
                 discordAuth = discordAuth,
                 discordConnection = discordConnection,
+                lastfmState = lastfmState,
+                listenBrainzState = listenBrainzState,
                 updateState = updateState,
                 cacheSizeBytes = cacheSizeBytes,
                 isClearingCache = isClearingCache,
@@ -468,6 +472,11 @@ private fun OrchardNavigation(
                 onSignOut = viewModel::signOut,
                 onConnectDiscord = { viewModel.connectDiscord(context) },
                 onDisconnectDiscord = viewModel::disconnectDiscord,
+                onConnectLastfm = { viewModel.connectLastfm(context) },
+                onCompleteLastfm = viewModel::completeLastfmConnection,
+                onDisconnectLastfm = viewModel::disconnectLastfm,
+                onConnectListenBrainz = viewModel::connectListenBrainz,
+                onDisconnectListenBrainz = viewModel::disconnectListenBrainz,
                 onConnectSpotify = { nav.navigate(Routes.SPOTIFY_LOGIN) },
                 qobuzStatus = qobuzStatus,
                 onConnectQobuz = { nav.navigate(Routes.QOBUZ_LOGIN) },

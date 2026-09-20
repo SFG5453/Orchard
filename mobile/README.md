@@ -61,6 +61,8 @@ Orchard listens to the audio rather than trusting a catalog. Beat and downbeat t
 ### Connected listening
 
 * **Orchard Connect** - hand playback to a paired Orchard desktop and take it back, over the local network
+* **Chromecast** - move the active queue to Cast speakers and displays, then bring it back without losing position
+* **Last.fm and ListenBrainz** - encrypted account credentials, now-playing updates, and seek-resistant scrobbling
 * Discord Rich Presence, with animated artwork where available
 * Shareable Orchard Song Links
 
@@ -118,6 +120,8 @@ android/app/src/main/java/dev/sfg/orchard/
   mobile/auth/        Cookie-session auth and Keystore storage
   mobile/lyrics/      Lyrics resolver chain
   mobile/connect/     Orchard Connect target selection and transfer
+  mobile/lastfm/      Last.fm authorization and scrobbling
+  mobile/listenbrainz/ Direct ListenBrainz submission
   mobile/ui/          Compose theme, navigation, screens
   connect/            Typed Socket.IO protocol and pairing client
 android/app/src/main/cpp/

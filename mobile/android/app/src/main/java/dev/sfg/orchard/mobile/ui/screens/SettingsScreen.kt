@@ -75,6 +75,8 @@ import dev.sfg.orchard.mobile.UpdateState
 import dev.sfg.orchard.mobile.auth.AuthState
 import dev.sfg.orchard.mobile.discord.DiscordAuthState
 import dev.sfg.orchard.mobile.discord.GatewayConnectionState
+import dev.sfg.orchard.mobile.lastfm.LastfmState
+import dev.sfg.orchard.mobile.listenbrainz.ListenBrainzState
 import dev.sfg.orchard.mobile.model.AudioQuality
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
@@ -91,6 +93,8 @@ fun SettingsScreen(
     auth: AuthState,
     discordAuth: DiscordAuthState = DiscordAuthState.SignedOut,
     discordConnection: GatewayConnectionState = GatewayConnectionState.Disconnected,
+    lastfmState: LastfmState = LastfmState.SignedOut,
+    listenBrainzState: ListenBrainzState = ListenBrainzState.SignedOut,
     updateState: UpdateState = UpdateState.Idle,
     onSettings: (OrchardSettings) -> Unit,
     onSignIn: () -> Unit,
@@ -98,6 +102,11 @@ fun SettingsScreen(
     onSignOut: () -> Unit,
     onConnectDiscord: () -> Unit = {},
     onDisconnectDiscord: () -> Unit = {},
+    onConnectLastfm: () -> Unit = {},
+    onCompleteLastfm: () -> Unit = {},
+    onDisconnectLastfm: () -> Unit = {},
+    onConnectListenBrainz: (String) -> Unit = {},
+    onDisconnectListenBrainz: () -> Unit = {},
     onConnectSpotify: () -> Unit = {},
     qobuzStatus: dev.sfg.orchard.mobile.qobuz.QobuzStatus = dev.sfg.orchard.mobile.qobuz.QobuzStatus(),
     onConnectQobuz: () -> Unit = {},
@@ -191,6 +200,19 @@ fun SettingsScreen(
                     onDisconnect = onDisconnectDiscord,
                 )
                 PanelDivider()
+                LastfmSettingsCard(
+                    state = lastfmState,
+                    onConnect = onConnectLastfm,
+                    onComplete = onCompleteLastfm,
+                    onDisconnect = onDisconnectLastfm,
+                )
+                PanelDivider()
+                ListenBrainzSettingsCard(
+                    state = listenBrainzState,
+                    onConnect = onConnectListenBrainz,
+                    onDisconnect = onDisconnectListenBrainz,
+                )
+                PanelDivider()
                 SpotifySettingsCard(
                     settings = settings,
                     onSettings = onSettings,
@@ -268,6 +290,8 @@ fun SettingsScreen(
                         subtitle = "Choose where Orchard plays",
                         onClick = onDevices,
                     )
+                    PanelDivider()
+                    ChromecastSettingsRow()
                 }
 
                 SectionLabel("Updates")

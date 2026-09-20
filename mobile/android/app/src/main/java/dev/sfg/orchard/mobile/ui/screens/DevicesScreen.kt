@@ -282,6 +282,12 @@ private fun FrostedDevicesScreenContent(
                 Spacer(Modifier.height(8.dp))
             }
 
+            // Google Cast / Chromecast
+            FrostedSectionHeader(title = "Chromecast")
+            Spacer(Modifier.height(8.dp))
+            ChromecastConnectRow()
+            Spacer(Modifier.height(14.dp))
+
             // Remote DSP Audio Engine (when targeting remote desktop with v2+ protocol)
             if (protocolVersion >= 2 && targets.selected is PlaybackTarget.Remote) {
                 FrostedRemoteAudioEngineCard(

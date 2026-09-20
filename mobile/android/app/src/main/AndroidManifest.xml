@@ -38,6 +38,10 @@
     android:theme="@style/AppTheme"
     android:supportsRtl="true"
     android:usesCleartextTraffic="true">
+
+    <meta-data
+      android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+      android:value="dev.sfg.orchard.mobile.playback.OrchardCastOptionsProvider" />
     
     <meta-data
       android:name="com.google.android.gms.car.application"
@@ -113,6 +117,11 @@
         <action android:name="android.intent.action.MEDIA_BUTTON" />
       </intent-filter>
     </receiver>
+
+    <!-- Lets Android's media output switcher discover and hand off to Cast receivers. -->
+    <receiver
+      android:name="androidx.mediarouter.media.MediaTransferReceiver"
+      android:exported="true" />
 
     <receiver
       android:name="dev.sfg.orchard.mobile.widget.OrchardPlayerWidgetProvider"

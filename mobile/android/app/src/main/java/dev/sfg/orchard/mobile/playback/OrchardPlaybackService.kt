@@ -61,6 +61,7 @@ import com.google.common.util.concurrent.SettableFuture
 import dev.sfg.orchard.connect.R
 import dev.sfg.orchard.connect.app.MainActivity
 import dev.sfg.orchard.mobile.OrchardGraph
+import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.RepeatMode
 import dev.sfg.orchard.mobile.playback.smart.CrossfadeMode
 import dev.sfg.orchard.mobile.widget.OrchardWidgetUpdater
@@ -92,6 +93,8 @@ class OrchardPlaybackService : MediaLibraryService() {
     private lateinit var stateStore: PlaybackStateStore
     private lateinit var streamResolver: YouTubeStreamResolver
     private lateinit var streamCache: StreamCache
+    private lateinit var chromecastStreamServer: ChromecastStreamServer
+    private lateinit var chromecastPlayback: ChromecastPlayback
     private lateinit var analyzer: dev.sfg.orchard.mobile.playback.smart.TrackAnalyzer
     private lateinit var preparer: dev.sfg.orchard.mobile.playback.smart.TransitionPreparer
     // One filter per player, inserted in each one's audio pipeline. They follow the players
@@ -128,10 +131,12 @@ class OrchardPlaybackService : MediaLibraryService() {
         object : Runnable {
             override fun run() {
                 persistPlayback()
-                if (::player.isInitialized) {
-                    OrchardWidgetUpdater.onPlayerChanged(this@OrchardPlaybackService, player)
+                val source = authoritativePlayer()
+                if (source != null) {
+                    OrchardWidgetUpdater.onPlayerChanged(this@OrchardPlaybackService, source)
+                    updateScrobbling(source)
                 }
-                if (::player.isInitialized && player.isPlaying)
+                if (source?.isPlaying == true)
                     handler.postDelayed(this, POSITION_SAVE_INTERVAL_MS)
             }
         }
@@ -267,6 +272,31 @@ class OrchardPlaybackService : MediaLibraryService() {
             )
         crossfade.start(player, spare)
         player.addListener(playbackListener)
+        chromecastStreamServer = ChromecastStreamServer(this, graph.http, streamResolver)
+        chromecastPlayback =
+            ChromecastPlayback(
+                context = this,
+                converter = ChromecastMediaItemConverter(chromecastStreamServer),
+                localPlayer = { player },
+                onCastStarted = { castPlayer ->
+                    crossfade.abort()
+                    castPlayer.addListener(castPlaybackListener)
+                    mediaSession.player = OrchardSessionPlayer(castPlayer)
+                    persistPlayback()
+                    updateCustomLayout()
+                    OrchardWidgetUpdater.onPlayerChanged(this, castPlayer)
+                },
+                onCastEnded = { localPlayer ->
+                    chromecastPlayback.player.removeListener(castPlaybackListener)
+                    mediaSession.player = OrchardSessionPlayer(localPlayer)
+                    crossfade.start(player, spare)
+                    persistPlayback()
+                    updateCustomLayout()
+                    OrchardWidgetUpdater.onPlayerChanged(this, localPlayer)
+                },
+                onError = graph::postWarning,
+            )
+        chromecastPlayback.start()
         OrchardWidgetUpdater.onPlayerChanged(this, player)
     }
 
@@ -298,32 +328,33 @@ class OrchardPlaybackService : MediaLibraryService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val result = super.onStartCommand(intent, flags, startId)
+        val target = authoritativePlayer() ?: return result
         when (intent?.action) {
             OrchardPlayerWidgetProvider.ACTION_TOGGLE -> {
-                if (player.playWhenReady) player.pause()
+                if (target.playWhenReady) target.pause()
                 else {
-                    if (player.playbackState == Player.STATE_IDLE) player.prepare()
-                    player.play()
+                    if (target.playbackState == Player.STATE_IDLE) target.prepare()
+                    target.play()
                 }
             }
             OrchardPlayerWidgetProvider.ACTION_PREVIOUS -> {
-                if (player.currentPosition > 5_000) player.seekTo(0)
-                else if (player.hasPreviousMediaItem()) player.seekToPreviousMediaItem()
-                if (player.playbackState == Player.STATE_IDLE) player.prepare()
-                player.play()
+                if (target.currentPosition > 5_000) target.seekTo(0)
+                else if (target.hasPreviousMediaItem()) target.seekToPreviousMediaItem()
+                if (target.playbackState == Player.STATE_IDLE) target.prepare()
+                target.play()
             }
             OrchardPlayerWidgetProvider.ACTION_NEXT -> {
-                if (player.hasNextMediaItem()) player.seekToNextMediaItem()
-                if (player.playbackState == Player.STATE_IDLE) player.prepare()
-                player.play()
+                if (target.hasNextMediaItem()) target.seekToNextMediaItem()
+                if (target.playbackState == Player.STATE_IDLE) target.prepare()
+                target.play()
             }
             OrchardPlayerWidgetProvider.ACTION_PLAY_RECENT -> {
                 intent.getStringExtra(OrchardPlayerWidgetProvider.EXTRA_TRACK_JSON)
                     ?.let { json -> runCatching { dev.sfg.orchard.mobile.model.CatalogJson.track(JSONObject(json)) }.getOrNull() }
                     ?.let { track ->
-                        player.setMediaItem(MediaItemMapper.toMediaItem(track))
-                        player.prepare()
-                        player.play()
+                        target.setMediaItem(MediaItemMapper.toMediaItem(track))
+                        target.prepare()
+                        target.play()
                     }
             }
         }
@@ -332,10 +363,15 @@ class OrchardPlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
-        if (::crossfade.isInitialized) crossfade.release()
-        if (::player.isInitialized) {
+        val finalSource = authoritativePlayer()
+        if (finalSource != null) {
             persistPlayback(sync = true)
-            OrchardWidgetUpdater.onPlayerChanged(this, player, forcePaused = true)
+            OrchardWidgetUpdater.onPlayerChanged(this, finalSource, forcePaused = true)
+        }
+        if (::crossfade.isInitialized) crossfade.release()
+        if (::chromecastPlayback.isInitialized) chromecastPlayback.close()
+        if (::chromecastStreamServer.isInitialized) chromecastStreamServer.close()
+        if (::player.isInitialized) {
             player.release()
         }
         browseScope.cancel()
@@ -624,20 +660,20 @@ class OrchardPlaybackService : MediaLibraryService() {
     }
 
     private fun persistPlayback(sync: Boolean = false) {
-        if (!::player.isInitialized) return
+        val source = authoritativePlayer() ?: return
         val queue = buildList {
-            for (index in 0 until player.mediaItemCount) add(
-                MediaItemMapper.toTrack(player.getMediaItemAt(index))
+            for (index in 0 until source.mediaItemCount) add(
+                MediaItemMapper.toTrack(source.getMediaItemAt(index))
             )
         }
         val restored = RestoredPlayback(
             queue = queue,
-            currentIndex = player.currentMediaItemIndex,
-            positionMs = player.sourcePositionMs(),
-            shuffle = player.shuffleModeEnabled,
-            repeatMode = player.repeatMode.toRepeatMode(),
-            contextTitle = player.playlistMetadata.title?.toString().orEmpty(),
-            playWhenReady = player.playWhenReady,
+            currentIndex = source.currentMediaItemIndex,
+            positionMs = source.sourcePositionMs(),
+            shuffle = source.shuffleModeEnabled,
+            repeatMode = source.repeatMode.toRepeatMode(),
+            contextTitle = source.playlistMetadata.title?.toString().orEmpty(),
+            playWhenReady = source.playWhenReady,
             unshuffledOrder = unshuffledOrder,
         )
         if (sync) {
@@ -717,6 +753,62 @@ class OrchardPlaybackService : MediaLibraryService() {
 
     private fun graphHttp(): OkHttpClient = OrchardGraph.from(this).http
 
+    private fun authoritativePlayer(): Player? = when {
+        ::chromecastPlayback.isInitialized && chromecastPlayback.isActive -> chromecastPlayback.player
+        ::player.isInitialized -> player
+        else -> null
+    }
+
+    /**
+     * Scrobbling belongs to the foreground playback service, not the activity: it must continue
+     * when Android removes the UI while a local or Cast queue is still playing.
+     */
+    private fun updateScrobbling(source: Player) {
+        val track = source.currentMediaItem?.let(MediaItemMapper::toTrack)
+        val duration =
+            source.duration.takeUnless { it == C.TIME_UNSET }?.coerceAtLeast(0)
+                ?: track?.durationMs?.coerceAtLeast(0)
+                ?: 0
+        val snapshot =
+            PlaybackSnapshot(
+                currentTrack = track,
+                positionMs = source.currentPosition.coerceAtLeast(0),
+                durationMs = duration,
+                isPlaying = source.isPlaying,
+            )
+        val graph = OrchardGraph.from(this)
+        graph.lastfm.updatePlayback(snapshot)
+        graph.listenBrainz.updatePlayback(snapshot)
+    }
+
+    /** Cast does not use Orchard's local resolver/crossfade recovery, only shared state updates. */
+    private val castPlaybackListener =
+        object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                if (
+                    events.containsAny(
+                        Player.EVENT_TIMELINE_CHANGED,
+                        Player.EVENT_MEDIA_ITEM_TRANSITION,
+                        Player.EVENT_PLAY_WHEN_READY_CHANGED,
+                        Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED,
+                        Player.EVENT_REPEAT_MODE_CHANGED,
+                        Player.EVENT_PLAYLIST_METADATA_CHANGED,
+                    )
+                ) {
+                    persistPlayback()
+                    updateCustomLayout()
+                }
+                OrchardWidgetUpdater.onPlayerChanged(this@OrchardPlaybackService, player)
+                updateScrobbling(player)
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                handler.removeCallbacks(positionSaver)
+                if (isPlaying) handler.postDelayed(positionSaver, POSITION_SAVE_INTERVAL_MS)
+                else persistPlayback()
+            }
+        }
+
     private val playbackListener =
         object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
@@ -770,6 +862,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                         this@OrchardPlaybackService.player,
                     )
                 }
+                updateScrobbling(player)
             }
 
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
@@ -1128,43 +1221,44 @@ class OrchardPlaybackService : MediaLibraryService() {
                     if (keyEvent.repeatCount > 0) {
                         return true
                     }
+                    val target = authoritativePlayer() ?: return false
                     when (keyCode) {
                         KeyEvent.KEYCODE_MEDIA_PLAY -> {
-                            if (player.playbackState == Player.STATE_IDLE) player.prepare()
-                            player.play()
+                            if (target.playbackState == Player.STATE_IDLE) target.prepare()
+                            target.play()
                         }
                         KeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                            player.pause()
+                            target.pause()
                         }
                         KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
                         KeyEvent.KEYCODE_HEADSETHOOK -> {
-                            if (player.playWhenReady) {
-                                player.pause()
+                            if (target.playWhenReady) {
+                                target.pause()
                             } else {
-                                if (player.playbackState == Player.STATE_IDLE) player.prepare()
-                                player.play()
+                                if (target.playbackState == Player.STATE_IDLE) target.prepare()
+                                target.play()
                             }
                         }
                         KeyEvent.KEYCODE_MEDIA_NEXT -> {
-                            if (player.hasNextMediaItem()) {
-                                player.seekToNextMediaItem()
+                            if (target.hasNextMediaItem()) {
+                                target.seekToNextMediaItem()
                             }
-                            if (player.playbackState == Player.STATE_IDLE) player.prepare()
-                            player.play()
+                            if (target.playbackState == Player.STATE_IDLE) target.prepare()
+                            target.play()
                         }
                         KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
-                            if (player.currentPosition > 5_000) {
-                                player.seekTo(0)
-                            } else if (player.hasPreviousMediaItem()) {
-                                player.seekToPreviousMediaItem()
+                            if (target.currentPosition > 5_000) {
+                                target.seekTo(0)
+                            } else if (target.hasPreviousMediaItem()) {
+                                target.seekToPreviousMediaItem()
                             } else {
-                                player.seekTo(0)
+                                target.seekTo(0)
                             }
-                            if (player.playbackState == Player.STATE_IDLE) player.prepare()
-                            player.play()
+                            if (target.playbackState == Player.STATE_IDLE) target.prepare()
+                            target.play()
                         }
                         KeyEvent.KEYCODE_MEDIA_STOP -> {
-                            player.stop()
+                            target.stop()
                         }
                     }
                     return true
@@ -1177,17 +1271,18 @@ class OrchardPlaybackService : MediaLibraryService() {
                 controller: MediaSession.ControllerInfo,
                 isForPlayback: Boolean,
             ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+                val source = authoritativePlayer() ?: player
                 val queue = buildList {
-                    for (index in 0 until player.mediaItemCount) {
-                        add(player.getMediaItemAt(index))
+                    for (index in 0 until source.mediaItemCount) {
+                        add(source.getMediaItemAt(index))
                     }
                 }
                 if (queue.isNotEmpty()) {
                     return Futures.immediateFuture(
                         MediaSession.MediaItemsWithStartPosition(
                             queue,
-                            player.currentMediaItemIndex.coerceAtLeast(0),
-                            player.currentPosition.coerceAtLeast(0),
+                            source.currentMediaItemIndex.coerceAtLeast(0),
+                            source.currentPosition.coerceAtLeast(0),
                         )
                     )
                 }
@@ -1340,11 +1435,12 @@ class OrchardPlaybackService : MediaLibraryService() {
                 customCommand: SessionCommand,
                 args: Bundle,
             ): ListenableFuture<SessionResult> {
+                val target = authoritativePlayer() ?: player
                 when (customCommand.customAction) {
-                    ACTION_TOGGLE_SHUFFLE -> player.shuffleModeEnabled = !player.shuffleModeEnabled
+                    ACTION_TOGGLE_SHUFFLE -> target.shuffleModeEnabled = !target.shuffleModeEnabled
                     ACTION_TOGGLE_REPEAT ->
-                        player.repeatMode =
-                            when (player.repeatMode) {
+                        target.repeatMode =
+                            when (target.repeatMode) {
                                 Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
                                 Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
                                 else -> Player.REPEAT_MODE_OFF
@@ -1356,8 +1452,9 @@ class OrchardPlaybackService : MediaLibraryService() {
         }
 
     private fun updateCustomLayout() {
-        if (!::mediaSession.isInitialized || !::player.isInitialized) return
-        val shuffleOn = player.shuffleModeEnabled
+        if (!::mediaSession.isInitialized) return
+        val source = authoritativePlayer() ?: return
+        val shuffleOn = source.shuffleModeEnabled
         val shuffleIcon =
             if (shuffleOn) CommandButton.ICON_SHUFFLE_ON else CommandButton.ICON_SHUFFLE_OFF
         val shuffleRes = if (shuffleOn) R.drawable.ic_shuffle_on else R.drawable.ic_shuffle
@@ -1369,7 +1466,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                 .build()
 
         val (repeatIcon, repeatRes, repeatTitle) =
-            when (player.repeatMode) {
+            when (source.repeatMode) {
                 Player.REPEAT_MODE_ONE ->
                     Triple(CommandButton.ICON_REPEAT_ONE, R.drawable.ic_repeat_one_on, "Repeat one")
                 Player.REPEAT_MODE_ALL ->

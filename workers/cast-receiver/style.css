@@ -1,0 +1,426 @@
+/* ========================================================================== */
+/* Orchard Custom Cast Web Receiver Stylesheet                               */
+/* Restrained TV layout for 1080p and 4K displays.                           */
+/* ========================================================================== */
+
+:root {
+  --bg-base: #090807;
+  --bg-card: #1a1715;
+  --border-highlight: rgba(255, 255, 255, 0.18);
+  --accent-coral: #f0524d;
+  --accent-warm: #ff756b;
+  --accent-deep: #d93833;
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.74);
+  --text-tertiary: rgba(255, 255, 255, 0.48);
+  --tv-safe-h: 5vw;
+  --tv-safe-v: 5vh;
+  --font-sans: "Inter", sans-serif;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+
+/* Cast media element, managed by CAF. */
+.castMediaElement {
+  display: none !important;
+  visibility: hidden !important;
+  position: absolute;
+  top: -9999px;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+/* Background media is deliberately quiet. It provides context, not decoration. */
+.ambient-container {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--bg-base);
+}
+
+.ambient-art,
+.ambient-warp {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.ambient-art {
+  background-size: cover;
+  background-position: center;
+  filter: saturate(0.75) brightness(0.30);
+}
+
+.ambient-warp {
+  display: block;
+}
+
+.ambient-art.active {
+  opacity: 0.24;
+}
+
+.ambient-warp.active {
+  opacity: 0.8;
+}
+
+.ambient-gradient-mesh {
+  display: none;
+}
+
+.ambient-vignette {
+  position: absolute;
+  inset: 0;
+  background: rgba(9, 8, 7, 0.56);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-art,
+  .ambient-warp {
+    transition: none;
+  }
+}
+
+/* Main application frame. */
+.receiver-app {
+  position: relative;
+  z-index: 1;
+  width: 100vw;
+  height: 100vh;
+  padding: var(--tv-safe-v) var(--tv-safe-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.screen-view {
+  display: none;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  transition: opacity 160ms ease;
+}
+
+.screen-view.active {
+  display: flex;
+  opacity: 1;
+}
+
+/* Idle state. */
+#idle-view {
+  align-items: center;
+  justify-content: center;
+}
+
+.idle-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: min(36rem, 100%);
+  padding: 2rem;
+}
+
+.logo-wrapper {
+  position: relative;
+  width: 5.5rem;
+  height: 5.5rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orchard-mark {
+  width: 100%;
+  height: 100%;
+}
+
+.logo-pulse-ring {
+  display: none;
+}
+
+.idle-title {
+  margin-bottom: 0.65rem;
+  color: var(--text-primary);
+  font-size: 2.6rem;
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+}
+
+.idle-subtitle {
+  max-width: 30rem;
+  margin-bottom: 1.65rem;
+  color: var(--text-secondary);
+  font-size: 1.12rem;
+  font-weight: 450;
+  line-height: 1.5;
+}
+
+/* Now playing. */
+#player-view {
+  align-items: center;
+}
+
+.player-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+  align-items: center;
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
+  gap: 4rem;
+}
+
+.artwork-column {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.artwork-card {
+  position: relative;
+  width: min(440px, 100%);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid var(--border-highlight);
+  border-radius: 10px;
+  background: var(--bg-card);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.34);
+}
+
+.artwork-img,
+.artwork-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.artwork-img.active,
+.artwork-video.active {
+  opacity: 1;
+}
+
+.artwork-glass-sheen {
+  display: none;
+}
+
+.details-column {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.track-header {
+  margin-bottom: 2.6rem;
+}
+
+.track-title {
+  display: -webkit-box;
+  margin-bottom: 0.65rem;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: clamp(2.5rem, 3.4vw, 3.7rem);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  text-overflow: ellipsis;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.track-artist {
+  margin-bottom: 0.45rem;
+  overflow: hidden;
+  color: var(--accent-warm);
+  font-size: 1.75rem;
+  font-weight: 550;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-album {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 1.15rem;
+  font-weight: 450;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline-container {
+  width: 100%;
+}
+
+.progress-bar-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 20px;
+  cursor: default;
+}
+
+.progress-track {
+  position: relative;
+  width: 100%;
+  height: 5px;
+  overflow: visible;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.progress-fill {
+  position: relative;
+  width: 0%;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent-coral);
+  transition: width 180ms linear;
+}
+
+.progress-glow-head {
+  position: absolute;
+  top: 50%;
+  right: -5px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--bg-base);
+  border-radius: 50%;
+  background: var(--accent-coral);
+  transform: translateY(-50%);
+}
+
+.time-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  margin-top: 0.55rem;
+}
+
+.time-label {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.time-label:last-child {
+  justify-self: end;
+}
+
+.playback-indicator {
+  display: inline-block;
+  color: var(--text-tertiary);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.playback-indicator.playing {
+  color: var(--accent-warm);
+}
+
+.playback-indicator.paused {
+  color: #e9c27f;
+}
+
+/* 4K TV scaling. */
+@media (min-width: 2560px) {
+  :root {
+    --tv-safe-h: 6vw;
+    --tv-safe-v: 6vh;
+  }
+
+  .player-layout {
+    grid-template-columns: 560px minmax(0, 1fr);
+    max-width: 2080px;
+    gap: 5.5rem;
+  }
+
+  .artwork-card {
+    width: 560px;
+    border-radius: 12px;
+  }
+
+  .track-title {
+    font-size: 4.6rem;
+  }
+
+  .track-artist {
+    font-size: 2.25rem;
+  }
+
+  .track-album {
+    font-size: 1.55rem;
+  }
+
+  .idle-card {
+    width: min(44rem, 100%);
+    padding: 2.5rem;
+  }
+
+  .logo-wrapper {
+    width: 7rem;
+    height: 7rem;
+  }
+
+  .idle-title {
+    font-size: 3.5rem;
+  }
+
+  .idle-subtitle {
+    font-size: 1.45rem;
+  }
+
+  .progress-track {
+    height: 7px;
+  }
+
+  .progress-glow-head {
+    right: -6px;
+    width: 12px;
+    height: 12px;
+  }
+
+  .time-label {
+    font-size: 1.3rem;
+  }
+
+  .playback-indicator {
+    font-size: 1.05rem;
+  }
+}

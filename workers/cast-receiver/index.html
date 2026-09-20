@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Orchard Cast Receiver</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <!-- Google Cast Application Framework (CAF) v3 Web Receiver SDK -->
+  <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+  <script src="vendor/hls.min.js"></script>
+  <script src="vendor/kawarp.min.js"></script>
+  <script src="receiver.js" defer></script>
+</head>
+<body>
+  <!-- Cast Audio Pipeline: CAF v3 binds audio playback to this element -->
+  <audio class="castMediaElement" id="castMediaElement" preload="auto"></audio>
+
+  <!-- Ambient Dynamic Background (fills entire screen) -->
+  <div id="ambient-container" class="ambient-container">
+    <div id="ambient-art" class="ambient-art"></div>
+    <canvas id="ambient-warp" class="ambient-warp" aria-hidden="true"></canvas>
+    <div class="ambient-gradient-mesh"></div>
+    <div class="ambient-vignette"></div>
+  </div>
+
+  <main id="receiver-app" class="receiver-app">
+    <!-- Idle Screen (shown before cast session or when queue is empty) -->
+    <section id="idle-view" class="screen-view active">
+      <div class="idle-card">
+        <div class="logo-wrapper">
+          <svg class="orchard-mark" viewBox="0 0 108 108" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="orchardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#FF756B" />
+                <stop offset="50%" stop-color="#F0524D" />
+                <stop offset="100%" stop-color="#D93833" />
+              </linearGradient>
+              <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="8" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+            <g transform="rotate(-8 54 54)">
+              <path
+                d="M77.64,45.86 A25,25 0 1 1 66.12,32.13"
+                stroke="url(#orchardGrad)"
+                stroke-width="18"
+                stroke-linecap="butt"
+                filter="url(#glow)"
+              />
+            </g>
+          </svg>
+          <div class="logo-pulse-ring"></div>
+        </div>
+
+        <h1 class="idle-title">Orchard</h1>
+        <p class="idle-subtitle">Ready to cast from your phone</p>
+
+      </div>
+    </section>
+
+    <!-- Now Playing Screen (shown during playback) -->
+    <section id="player-view" class="screen-view">
+      <div class="player-layout">
+        <!-- Left: Album Art / Canvas Video Stage -->
+        <div class="artwork-column">
+          <div class="artwork-card" id="artwork-card">
+            <img id="artwork-img" class="artwork-img active" alt="Album Artwork" />
+            <video id="artwork-video" class="artwork-video" loop muted playsinline></video>
+            <div class="artwork-glass-sheen"></div>
+          </div>
+        </div>
+
+        <!-- Right: Metadata & Timeline Controls -->
+        <div class="details-column">
+          <div class="track-header">
+            <h1 id="track-title" class="track-title">--</h1>
+            <h2 id="track-artist" class="track-artist">--</h2>
+            <p id="track-album" class="track-album">--</p>
+          </div>
+
+          <div class="timeline-container">
+            <div class="progress-bar-container" id="progress-bar-container">
+              <div class="progress-track">
+                <div id="progress-fill" class="progress-fill">
+                  <div class="progress-glow-head"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="time-row">
+              <span id="current-time" class="time-label">0:00</span>
+              <span id="playback-indicator" class="playback-indicator buffering" aria-live="polite">Buffering</span>
+              <span id="total-time" class="time-label">0:00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

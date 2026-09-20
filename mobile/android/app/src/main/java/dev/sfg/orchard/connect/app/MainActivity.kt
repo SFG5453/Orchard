@@ -26,7 +26,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -39,7 +39,7 @@ import dev.sfg.orchard.mobile.app.OrchardViewModel
 import dev.sfg.orchard.mobile.ui.theme.OrchardTheme
 
 /** Thin Android entry point; app behavior lives in repositories and state holders. */
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private val viewModel by viewModels<OrchardViewModel>()
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -48,6 +48,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        runCatching {
+            com.google.android.gms.cast.framework.CastContext.getSharedInstance(this)
+        }
         handleIntent(intent)
         requestNotificationPermission()
         setContent {

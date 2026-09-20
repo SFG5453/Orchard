@@ -32,6 +32,8 @@ import dev.sfg.orchard.mobile.connect.ConnectDeviceRepository
 import dev.sfg.orchard.mobile.library.LibraryCache
 import dev.sfg.orchard.mobile.library.LibraryRepository
 import dev.sfg.orchard.mobile.lyrics.LyricsRepository
+import dev.sfg.orchard.mobile.lastfm.LastfmRepository
+import dev.sfg.orchard.mobile.listenbrainz.ListenBrainzRepository
 import dev.sfg.orchard.mobile.settings.SettingsRepository
 import dev.sfg.orchard.mobile.download.DownloadManager
 import dev.sfg.orchard.mobile.playback.YouTubePoTokenMinter
@@ -96,6 +98,8 @@ class OrchardGraph(context: Context) {
     val lyrics = LyricsRepository(http, innerTube)
     val connect = ConnectDeviceRepository(context, applicationScope)
     val songLinks = SongLinksRepository(http)
+    val lastfm = LastfmRepository(context, http, applicationScope)
+    val listenBrainz = ListenBrainzRepository(context, http, applicationScope)
 
     /**
      * The transition the playback service has planned, or null when there is none.
