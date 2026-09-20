@@ -28,26 +28,26 @@ import kotlin.math.max
  * presentation waits for both crossovers so the cover, metadata, and progress never claim the
  * incoming song while the outgoing song is still louder in a retained band.
  */
-internal fun audibleHandoffProgress(plan: TransitionPlan, rendered: Boolean): Float =
+internal fun audibleHandoffProgress(plan: TransitionPlan, usesSelectedPlan: Boolean): Float =
     when (plan.transitionStyle) {
         TransitionStyle.GAPLESS -> 0f
         TransitionStyle.DJ_BLEND,
         TransitionStyle.DJ_FILTER ->
             max(
                 plan.handoffFraction,
-                if (rendered) plan.bassSwapFraction else plan.handoffFraction,
+                if (usesSelectedPlan) plan.bassSwapFraction else plan.handoffFraction,
             ).toFloat()
         TransitionStyle.EQUAL_POWER -> plan.handoffFraction.toFloat()
     }.coerceIn(0f, 1f)
 
-/** Keep source scheduling, rendered wall time, and incoming media time from the same plan. */
+/** Keep source scheduling, transition wall time, and incoming media time from the same plan. */
 internal fun transitionMarkerFor(
     plan: TransitionPlan,
     trackId: String,
     incomingTrackId: String,
-    rendered: Boolean,
+    usesSelectedPlan: Boolean,
 ): dev.sfg.orchard.mobile.model.TransitionMarker {
-    val native = plan.nativePlan.takeIf { rendered }
+    val native = plan.nativePlan.takeIf { usesSelectedPlan }
     return dev.sfg.orchard.mobile.model.TransitionMarker(
         trackId = trackId,
         startMs = ((native?.transitionStart ?: plan.transitionStart) * 1000).toLong(),
@@ -60,7 +60,7 @@ internal fun transitionMarkerFor(
         incomingPlaybackRate = native?.incomingTempoRatio ?: plan.incomingPlaybackRate,
         audibleHandoffProgress = if (native != null) {
             max(native.handoffFraction, native.bassSwapFraction).toFloat().coerceIn(0f, 1f)
-        } else audibleHandoffProgress(plan, rendered = false),
+        } else audibleHandoffProgress(plan, usesSelectedPlan = false),
         renderedDurationMs = ((native?.overlapSeconds ?: 0.0) * 1000).toLong(),
     )
 }

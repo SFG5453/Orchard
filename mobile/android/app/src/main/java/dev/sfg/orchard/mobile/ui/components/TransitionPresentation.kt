@@ -33,9 +33,8 @@ data class TransitionPresentation(
 /**
  * How far into the active overlap playback is.
  *
- * A rendered Smart Crossfade becomes a short mix item whose clock starts at zero, while a live
- * crossfade remains on the outgoing track's original timeline. Supporting both clocks here keeps
- * every transition affordance synchronized to the audio that is actually playing.
+ * Live crossfades remain on the outgoing track's source timeline. The legacy rendered clock is
+ * still understood so playback restored across an app upgrade cannot corrupt presentation.
  */
 fun transitionProgress(playback: PlaybackSnapshot, marker: TransitionMarker?): Float {
     val track = playback.currentTrack ?: return 0f

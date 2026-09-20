@@ -282,7 +282,7 @@ class TrackAnalyzer(
         // 30s of stereo is ~10MB, and the mono mix, the resampled copy and the mel buffer are all
         // live at once on top of it. Each region is therefore decoded, reduced to the few numbers
         // that outlive it, and dropped before the next one is opened, so a track's peak is one
-        // region rather than two. AudioWorkLimiter also excludes concurrent renders and decodes.
+        // region rather than two. AudioWorkLimiter also excludes concurrent analysis decodes.
         val head: Region?
         val tail: Region?
         run {

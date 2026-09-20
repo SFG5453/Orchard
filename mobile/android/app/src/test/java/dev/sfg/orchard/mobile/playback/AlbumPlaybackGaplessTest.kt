@@ -68,7 +68,6 @@ class AlbumPlaybackGaplessTest {
             },
             analysisFor = { TrackAnalysis() },
             onPlan = {},
-            preparedFor = { _, _ -> null },
             filters = { null },
             onHandoff = { _, _ -> },
         )

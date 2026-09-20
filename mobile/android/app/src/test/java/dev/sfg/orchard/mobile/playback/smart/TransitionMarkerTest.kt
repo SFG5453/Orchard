@@ -34,8 +34,8 @@ class TransitionMarkerTest {
             incomingCueTime = 17.0, nativePlan = native)
     }
 
-    @Test fun `prepared marker takes all timing from the native plan`() {
-        val marker = transitionMarkerFor(plan(), "out", "in", rendered = true)
+    @Test fun `selected live marker takes all timing from the shared plan`() {
+        val marker = transitionMarkerFor(plan(), "out", "in", usesSelectedPlan = true)
         assertEquals(200_000L, marker.startMs)
         assertEquals(210_000L, marker.endMs)
         assertEquals(8_000L, marker.renderedDurationMs)
@@ -43,12 +43,15 @@ class TransitionMarkerTest {
         assertEquals(0.7f, marker.audibleHandoffProgress, 0f)
     }
 
-    @Test fun `unavailable or refused render presents the complete live fallback`() {
+    @Test fun `unselected or refused plan presents the complete live fallback`() {
         val plan = plan()
-        val fallback = transitionMarkerFor(plan, "out", "in", rendered = false)
+        val fallback = transitionMarkerFor(plan, "out", "in", usesSelectedPlan = false)
         assertEquals(207_000L, fallback.startMs)
         assertEquals(0L, fallback.renderedDurationMs)
         assertEquals(17_000L, fallback.incomingCueMs)
-        assertEquals(fallback, transitionMarkerFor(plan.copy(nativePlan = null), "out", "in", rendered = true))
+        assertEquals(
+            fallback,
+            transitionMarkerFor(plan.copy(nativePlan = null), "out", "in", usesSelectedPlan = true),
+        )
     }
 }

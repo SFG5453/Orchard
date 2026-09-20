@@ -21,10 +21,9 @@ package dev.sfg.orchard.mobile.playback.smart
 import java.util.concurrent.locks.ReentrantLock
 
 /**
- * One decoded-audio job at a time across analysis and rendering. The permit covers the entire
- * job, including structural decoding and native PCM conversion, not just model inference.
- * A fair lock lets a waiting transition render run before the analyzer starts another track.
- * Callbacks run after releasing it; playback itself never takes this lock.
+ * One decoded-audio analysis job at a time. The permit covers the entire job, including structural
+ * decoding and native PCM conversion, not just model inference. Callbacks run after releasing it;
+ * playback itself never takes this lock.
  */
 internal object AudioWorkLimiter {
     private val lock = ReentrantLock(true)

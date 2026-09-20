@@ -59,6 +59,56 @@ class TransitionPlannerTest {
             if (!expected.has("pairPlan")) assertNull(name, plan.nativePlan)
         }
     }
+
+    @Test fun `selected shared plan is executed live with its exact clocks and rates`() {
+        val source = mobilePlan(desktopCases().first().getJSONObject("input"))
+        val selected = checkNotNull(source.nativePlan).copy(
+            transitionStart = 100.0,
+            transitionEnd = 110.0,
+            overlapSeconds = 8.0,
+            outgoingTempoRatio = 1.25,
+            incomingTempoRatio = 0.9,
+            incomingCueTime = 12.0,
+            incomingResumeTime = 19.2,
+            strategy = "filtered_blend",
+            choreography = null,
+        )
+        val plan = source.copy(nativePlan = selected)
+
+        val waiting = plan.forLivePlayback(99.0)
+        assertFalse(waiting.shouldStart)
+        assertEquals(100.0, waiting.transitionStart, 0.0)
+        assertEquals(110.0, waiting.transitionEnd, 0.0)
+        assertEquals(8.0, waiting.fadeSeconds, 0.0)
+        assertEquals(12.0, waiting.incomingCueTime, 0.0)
+        assertEquals(1.25, waiting.outgoingPlaybackRate, 0.0)
+        assertEquals(0.9, waiting.incomingPlaybackRate, 0.0)
+        assertEquals(TransitionStyle.DJ_FILTER, waiting.transitionStyle)
+
+        // Five outgoing source seconds at 1.25x are four wall seconds: exactly half the mix.
+        val late = plan.forLivePlayback(105.0)
+        assertTrue(late.shouldStart)
+        assertEquals(0.5, late.initialProgress, 1e-9)
+        assertEquals(4.0, late.fadeSeconds, 1e-9)
+        assertEquals(15.6, late.incomingCueTime, 1e-9)
+        assertEquals(selected, late.nativePlan)
+    }
+
+    @Test fun `missed selected window falls back without inventing another plan`() {
+        val source = mobilePlan(desktopCases().first().getJSONObject("input"))
+        val selected = checkNotNull(source.nativePlan).copy(
+            transitionStart = 100.0,
+            transitionEnd = 108.0,
+        )
+        val plan = source.copy(nativePlan = selected)
+
+        val fallback = plan.forLivePlayback(107.96)
+        assertNull(fallback.nativePlan)
+        assertEquals(plan.transitionStart, fallback.transitionStart, 0.0)
+        assertEquals(plan.transitionEnd, fallback.transitionEnd, 0.0)
+        assertEquals(plan.incomingCueTime, fallback.incomingCueTime, 0.0)
+        assertEquals(plan.reason, fallback.reason)
+    }
 }
 
 internal fun desktopCases(): List<JSONObject> {

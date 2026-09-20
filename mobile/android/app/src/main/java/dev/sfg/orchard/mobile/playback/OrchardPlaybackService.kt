@@ -96,7 +96,6 @@ class OrchardPlaybackService : MediaLibraryService() {
     private lateinit var chromecastStreamServer: ChromecastStreamServer
     private lateinit var chromecastPlayback: ChromecastPlayback
     private lateinit var analyzer: dev.sfg.orchard.mobile.playback.smart.TrackAnalyzer
-    private lateinit var preparer: dev.sfg.orchard.mobile.playback.smart.TransitionPreparer
     // One filter per player, inserted in each one's audio pipeline. They follow the players
     // through
     // a handoff rather than the roles, so a filter never ends up automating the wrong track.
@@ -170,7 +169,6 @@ class OrchardPlaybackService : MediaLibraryService() {
             streamCache,
             graph.bestMixFeatures,
         )
-        preparer = dev.sfg.orchard.mobile.playback.smart.TransitionPreparer(this, streamCache)
         graph.analysisLookup = analyzer::analysisFor
         graph.onClearStreamCache = streamCache::clear
         // Caching finishes seconds after the player events that asked for it, so completion
@@ -246,10 +244,8 @@ class OrchardPlaybackService : MediaLibraryService() {
                     )
                 },
                 analysisFor = analyzer::analysisFor,
-                preparedFor = { outgoing, incoming -> preparer.preparedFor(outgoing, incoming) },
                 filters = { playerFilter to spareFilter },
                 onPlan = { plan ->
-                    if (plan != null) prepareTransition(plan)
                     graph.transitionMarker.value = plan?.let {
                         val outgoing = player.currentMediaItem?.let(MediaItemMapper::toTrack)
                         val nextIndex = player.nextMediaItemIndex
@@ -258,17 +254,11 @@ class OrchardPlaybackService : MediaLibraryService() {
                                 .takeIf { index -> index != C.INDEX_UNSET }
                                 ?.let(player::getMediaItemAt)
                                 ?.let(MediaItemMapper::toTrack)
-                        val prepared =
-                            if (outgoing != null && incoming != null) {
-                                preparer.preparedFor(outgoing, incoming)
-                            } else {
-                                null
-                            }
                         dev.sfg.orchard.mobile.playback.smart.transitionMarkerFor(
                             it,
                             trackId = outgoing?.id.orEmpty(),
                             incomingTrackId = incoming?.id.orEmpty(),
-                            rendered = it.nativePlan != null && prepared?.selectedPlan == it.nativePlan,
+                            usesSelectedPlan = it.nativePlan != null,
                         )
                     }
                 },
@@ -383,7 +373,6 @@ class OrchardPlaybackService : MediaLibraryService() {
         if (::mediaSession.isInitialized) mediaSession.release()
         OrchardGraph.from(this).analysisLookup = null
         OrchardGraph.from(this).onClearStreamCache = null
-        if (::preparer.isInitialized) preparer.release()
         if (::analyzer.isInitialized) analyzer.release()
         if (::streamCache.isInitialized) streamCache.release()
         OrchardGraph.from(this).qobuzResolver.release()
@@ -600,9 +589,7 @@ class OrchardPlaybackService : MediaLibraryService() {
             .setLoadControl(loadControl)
             .build()
             .apply {
-                // Downloaded cache bytes alone do not prepare the next media period. In
-                // particular the short rendered WAV must preload the clipped incoming song
-                // before its endpoint, instead of opening/seeking it after the mix ends.
+                // Give Media3 room to prepare upcoming periods while the active deck is playing.
                 setPreloadConfiguration(ExoPlayer.PreloadConfiguration(5_000_000L))
                 setAudioAttributes(AUDIO_ATTRIBUTES, handlesAudioFocus)
                 setHandleAudioBecomingNoisy(true)
@@ -622,27 +609,6 @@ class OrchardPlaybackService : MediaLibraryService() {
     private fun keepQueueOrderUnshuffled(target: ExoPlayer) {
         if (target.shuffleOrder is ShuffleOrder.UnshuffledShuffleOrder) return
         target.setShuffleOrder(ShuffleOrder.UnshuffledShuffleOrder(target.mediaItemCount))
-    }
-
-    /**
-     * Rebuilds queue items a rendered transition left pointing at a temp mix file or clipped past
-     * its overlap, restoring the canonical stream URI from the track JSON they still carry.
-     *
-     * Only items behind the playhead: the clip is still owed its effect until it plays, and during
-     * a transition that item sits directly ahead of the mix.
-     */
-    private fun clearSpentClipping(target: Player) {
-        for (index in 0 until target.currentMediaItemIndex) {
-            val item = target.getMediaItemAt(index)
-            val uri = item.localConfiguration?.uri
-            val spent =
-                item.clippingConfiguration != MediaItem.ClippingConfiguration.UNSET ||
-                    (uri != null && !MediaItemMapper.isOrchardUri(uri))
-            if (!spent) continue
-            val restored = MediaItemMapper.toMediaItem(MediaItemMapper.toTrack(item))
-            if (restored.mediaId.isBlank()) continue
-            target.replaceMediaItem(index, restored)
-        }
     }
 
     private fun restorePlayback() {
@@ -851,7 +817,6 @@ class OrchardPlaybackService : MediaLibraryService() {
                         Player.EVENT_MEDIA_ITEM_TRANSITION,
                     )
                 ) {
-                    clearSpentClipping(player)
                     prefetchAround(player)
                     // A transition alone cannot measure anything: the duration
                     // the measurement
@@ -1571,36 +1536,6 @@ class OrchardPlaybackService : MediaLibraryService() {
                 }
             analyzer.request(track, uri, duration)
         }
-    }
-
-    /**
-     * Asks for the overlap of the upcoming transition to be rendered, well ahead of the seam.
-     *
-     * Called from the plan callback rather than from the transition itself, because rendering means
-     * decoding two stereo regions and running a phase vocoder over one of them: seconds of work
-     * that has to be finished before the playhead arrives, not started when it does.
-     */
-    private fun prepareTransition(plan: dev.sfg.orchard.mobile.playback.smart.TransitionPlan) {
-        if (!::preparer.isInitialized || !::player.isInitialized) return
-        val current = player.currentMediaItem ?: return
-        val nextIndex = player.nextMediaItemIndex
-        if (nextIndex == C.INDEX_UNSET) return
-        val next = player.getMediaItemAt(nextIndex)
-        val currentUri = current.localConfiguration?.uri ?: return
-        val nextUri = next.localConfiguration?.uri ?: return
-        val outgoing = MediaItemMapper.toTrack(current)
-        val incoming = MediaItemMapper.toTrack(next)
-
-        preparer.retainOnly(setOf(preparer.key(outgoing, incoming)))
-        preparer.prepare(
-            outgoing = outgoing,
-            outgoingUri = currentUri,
-            outgoingAnalysis = analyzer.analysisFor(outgoing),
-            incoming = incoming,
-            incomingUri = nextUri,
-            incomingAnalysis = analyzer.analysisFor(incoming),
-            plan = plan,
-        )
     }
 
     /** Analysis costs battery, so it only runs when the listener has actually asked for it. */

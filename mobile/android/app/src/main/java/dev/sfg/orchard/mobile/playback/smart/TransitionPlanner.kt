@@ -20,11 +20,12 @@
 package dev.sfg.orchard.mobile.playback.smart
 
 import dev.sfg.orchard.mobile.model.Track
+import kotlin.math.max
 import kotlin.math.roundToLong
 
 enum class CrossfadeMode { STANDARD, SMART }
 
-/** How the renderer should execute a planned transition. */
+/** How the playback engine should execute a planned transition. */
 enum class TransitionStyle {
     /** A constant-power fade. The only style the bottom tier permits. */
     EQUAL_POWER,
@@ -59,19 +60,20 @@ data class TransitionPlan(
     val incomingCueTime: Double = 0.0,
     /** Where the incoming track's arrangement lands, on its own timeline. */
     val incomingHandoffTime: Double = 0.0,
+    /** Source seconds consumed by the outgoing player per wall-clock second. */
+    val outgoingPlaybackRate: Double = 1.0,
     val incomingPlaybackRate: Double = 1.0,
+    /** Curve position when live execution begins after a small scheduling delay. */
+    val initialProgress: Double = 0.0,
     val handoffStartSeconds: Double = 0.0,
     val handoffDuration: Double = 0.0,
     val pickupSeconds: Double = 0.0,
     val transitionBeats: Int = 0,
     val bassSwap: Boolean = false,
     /**
-     * The shape of the rendered overlap, for the renderer's `handoff`, `bed`, `bass_swap` and
-     * `filter_sweep` inputs. Only a beat-matched plan sets these; the defaults are the renderer's
-     * own and are never read on a plan that is not rendered. They travel on the plan rather than
-     * being constants at the render site because the planner is what decides them -- the bass swap
-     * in particular is a function of the overlap's length, so a fixed value hands the low end over
-     * at the wrong instant on any overlap but one.
+     * Portable execution parameters selected by the shared planner. They travel on the plan rather
+     * than being constants at the playback site because the bass swap in particular is a function
+     * of the overlap's length; a fixed value hands the low end over at the wrong instant.
      */
     val handoffFraction: Double = HANDOFF_FRACTION,
     val bedPosition: Double = BED_POSITION,
@@ -80,12 +82,8 @@ data class TransitionPlan(
     /**
      * The tempi the overlap is built on, which are **not** the analyses' raw BPMs: the incoming one
      * has been folded into the outgoing one's octave. A 63 BPM track mixed against a 126 BPM one is
-     * counted at 126, the way a DJ counts it, and that is the grid the renderer lays the overlap on.
-     *
-     * Handing the renderer the raw pair instead is not a near-miss, it is a refusal: it computes
-     * `outgoing.bpm / incoming.bpm` without aligning octaves and rejects anything beyond
-     * the configured transparent stretch window, so an octave-distant pairing decodes both tracks
-     * and then throws the work away. Zero when the plan is not beat-matched.
+     * counted at 126, the way a DJ counts it, and that is the grid playback follows. Zero when the
+     * plan is not beat-matched.
      */
     val outgoingBpm: Double = 0.0,
     val incomingBpm: Double = 0.0,
@@ -93,12 +91,73 @@ data class TransitionPlan(
     val policyReasons: List<String> = emptyList(),
     /** The complete portable choreography representation. */
     val choreography: TransitionChoreography? = null,
-    /** Exact desktop native plan; the live fields above are its attached fallback. */
+    /** Exact shared selected plan; the live fields above are its attached fallback. */
     val nativePlan: WsolaPlanResult.Planned? = null,
 ) {
     /** Convenience for the engine, which schedules in milliseconds. */
     val fadeMs: Long get() = (fadeSeconds * 1000).roundToLong()
 }
+
+/**
+ * Maps the shared planner's selected native plan onto the two live Android players.
+ *
+ * The selected plan used to be rendered into a temporary WAV. Executing the same cues, tempo
+ * ratios, duration, and automation curves live removes both decoder boundaries without moving any
+ * musical decision into Kotlin. If scheduling has already missed the selected window, the shared
+ * plan's attached live fallback remains authoritative.
+ */
+internal fun TransitionPlan.forLivePlayback(currentTime: Double): TransitionPlan {
+    val selected = nativePlan ?: return this
+    val now = currentTime.takeIf(Double::isFinite)?.coerceAtLeast(0.0) ?: 0.0
+    if (now >= selected.transitionEnd - LIVE_SELECTION_END_TOLERANCE_SECONDS) {
+        return copy(nativePlan = null)
+    }
+
+    val outgoingRate = selected.outgoingTempoRatio.coerceAtLeast(MIN_LIVE_TEMPO_RATIO)
+    val incomingRate = selected.incomingTempoRatio.coerceAtLeast(MIN_LIVE_TEMPO_RATIO)
+    val duration = selected.overlapSeconds.coerceAtLeast(0.0)
+    val elapsedWall = if (now > selected.transitionStart) {
+        ((now - selected.transitionStart) / outgoingRate).coerceIn(0.0, duration)
+    } else {
+        0.0
+    }
+    val initialProgress = if (duration > 0.0) elapsedWall / duration else 0.0
+    val remainingDuration = max(0.0, duration - elapsedWall)
+    val style = if (selected.strategy == "filtered_blend") {
+        TransitionStyle.DJ_FILTER
+    } else {
+        TransitionStyle.DJ_BLEND
+    }
+    val started = now >= selected.transitionStart
+
+    return copy(
+        shouldStart = started,
+        reason = if (started) "smart-live-selected" else "before-smart-live-selected-window",
+        transitionStart = selected.transitionStart,
+        transitionEnd = selected.transitionEnd,
+        fadeSeconds = remainingDuration,
+        transitionStyle = style,
+        incomingCueTime = selected.incomingCueTime + elapsedWall * incomingRate,
+        incomingHandoffTime = selected.incomingResumeTime,
+        outgoingPlaybackRate = outgoingRate,
+        incomingPlaybackRate = incomingRate,
+        initialProgress = initialProgress,
+        handoffStartSeconds = 0.0,
+        handoffDuration = duration,
+        transitionBeats = selected.beats,
+        bassSwap = selected.choreography?.curves?.outgoingBass?.isNotEmpty() == true,
+        handoffFraction = selected.handoffFraction,
+        bedPosition = selected.bedPosition,
+        bassSwapFraction = selected.bassSwapFraction,
+        filterSweep = selected.filterSweep,
+        outgoingBpm = selected.outgoingBpm,
+        incomingBpm = selected.incomingBpm,
+        choreography = selected.choreography,
+    )
+}
+
+private const val MIN_LIVE_TEMPO_RATIO = 0.01
+private const val LIVE_SELECTION_END_TOLERANCE_SECONDS = 0.05
 
 
 /** Desktop owns musical decisions and scheduling. This only maps its portable result to Kotlin. */

@@ -73,7 +73,7 @@ data class TransitionMarker(
      * outgoing bass until its separate handoff.
      */
     val audibleHandoffProgress: Float = 0.5f,
-    /** Duration of the rendered mix item, or zero when the transition uses the two live players. */
+    /** Selected transition duration in wall-clock time; zero for ordinary live fallbacks. */
     val renderedDurationMs: Long = 0,
 )
 

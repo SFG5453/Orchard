@@ -34,7 +34,7 @@ class TransitionHandoffTest {
                 bassSwapFraction = 0.6,
             )
 
-        assertEquals(0.5f, audibleHandoffProgress(plan, rendered = false), 0f)
+        assertEquals(0.5f, audibleHandoffProgress(plan, usesSelectedPlan = false), 0f)
 
         val pastMidpoint = djMixGains(progress = 0.51, fadeSeconds = 7.5)
         assertTrue(pastMidpoint.incomingUpper > pastMidpoint.outgoingUpper)
@@ -42,7 +42,7 @@ class TransitionHandoffTest {
     }
 
     @Test
-    fun `rendered DJ blend waits for whichever rendered band crosses last`() {
+    fun `selected DJ blend waits for whichever planned band crosses last`() {
         val lateBass =
             TransitionPlan(
                 transitionStyle = TransitionStyle.DJ_BLEND,
@@ -51,8 +51,8 @@ class TransitionHandoffTest {
             )
         val earlyBass = lateBass.copy(bassSwapFraction = 0.4)
 
-        assertEquals(0.68f, audibleHandoffProgress(lateBass, rendered = true), 0f)
-        assertEquals(0.5f, audibleHandoffProgress(earlyBass, rendered = true), 0f)
+        assertEquals(0.68f, audibleHandoffProgress(lateBass, usesSelectedPlan = true), 0f)
+        assertEquals(0.5f, audibleHandoffProgress(earlyBass, usesSelectedPlan = true), 0f)
     }
 
     @Test
@@ -61,7 +61,7 @@ class TransitionHandoffTest {
             0.5f,
             audibleHandoffProgress(
                 TransitionPlan(transitionStyle = TransitionStyle.EQUAL_POWER),
-                rendered = false,
+                usesSelectedPlan = false,
             ),
             0f,
         )
@@ -69,7 +69,7 @@ class TransitionHandoffTest {
             0f,
             audibleHandoffProgress(
                 TransitionPlan(transitionStyle = TransitionStyle.GAPLESS),
-                rendered = false,
+                usesSelectedPlan = false,
             ),
             0f,
         )

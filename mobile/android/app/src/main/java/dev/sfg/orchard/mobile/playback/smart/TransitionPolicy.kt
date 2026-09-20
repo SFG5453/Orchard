@@ -37,7 +37,7 @@ import kotlin.math.min
  */
 
 /**
- * Below this the analyzer's beat grid is treated as a guess, and no renderer may stretch or
+ * Below this the analyzer's beat grid is treated as a guess, and playback may not stretch or
  * phase-align against it. Catalog tempo lookups merge in with `beatConfidence` 0, so a metadata BPM
  * alone can never authorize beat-matching.
  */
@@ -261,7 +261,7 @@ private fun mixOutCandidatesOf(analysis: TrackAnalysis, contentEnd: Double): Lis
     // incoming instrumental runway can begin under an outgoing vocal; promoting vocal boundaries
     // to exit anchors waits for the easy gap (or skips the vocal tail entirely) instead of asking
     // the filter ride and gain curves to blend it. Only structural and energy candidates choose
-    // the exit. Vocal activity remains available to the WSOLA clash check and renderer duck curve.
+    // the exit. Vocal activity remains available to pair scoring and the planned gain curves.
     // The transition always has somewhere to end: where the content does.
     if (candidates.none { abs(it.time - contentEnd) < 0.05 }) {
         candidates += MixCandidate(contentEnd, 0.75, "content_end")
