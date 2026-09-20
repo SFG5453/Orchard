@@ -69,29 +69,32 @@ class AudioVersionResolver(private val client: InnerTubeClient) {
      * Titles must match once video-only decorations are stripped, otherwise a search for a track
      * can happily return a remix, a live take, or the next song on the album.
      */
-    private fun Track.matchScore(target: Track): Int {
-        if (normalizedTitle() != target.normalizedTitle()) return 0
-        var score = 1
-        if (artist.normalized() == target.artist.normalized()) score += 4
-        else if (artist.normalized().contains(target.artist.normalized())) score += 2
-        // Album audio runs close to the album listing; videos carry intros and outros.
-        if (target.durationMs > 0 && durationMs > 0) {
-            val drift = abs(durationMs - target.durationMs)
-            if (drift <= 3_000) score += 4 else if (drift <= 15_000) score += 1 else score -= 2
-        }
-        return score.coerceAtLeast(0)
-    }
-
-    private fun Track.normalizedTitle(): String = title
-        .replace(Regex("\\((?:official\\s+)?(?:music\\s+)?(?:video|audio|visualizer)\\)", RegexOption.IGNORE_CASE), "")
-        .replace(Regex("\\[[^]]*]"), "")
-        .normalized()
-
-    private fun String.normalized(): String = lowercase()
-        .replace(Regex("[^a-z0-9]+"), " ")
-        .trim()
-
     private companion object {
         const val TAG = "AudioVersionResolver"
     }
 }
+
+internal fun Track.matchScore(target: Track): Int {
+    if (normalizedTitle() != target.normalizedTitle()) return 0
+    var score = 1
+    if (artist.normalized() == target.artist.normalized()) score += 4
+    else if (artist.normalized().contains(target.artist.normalized())) score += 2
+    // Album audio runs close to the album listing; videos carry intros and outros.
+    if (target.durationMs > 0 && durationMs > 0) {
+        val drift = abs(durationMs - target.durationMs)
+        // A title and artist can also belong to a different song. Reject implausible runtimes.
+        val maximumPlausibleDrift = maxOf(15_000L, target.durationMs / 4)
+        if (drift > maximumPlausibleDrift) return 0
+        if (drift <= 3_000) score += 4 else score += 1
+    }
+    return score.coerceAtLeast(0)
+}
+
+private fun Track.normalizedTitle(): String = title
+    .replace(Regex("\\((?:official\\s+)?(?:music\\s+)?(?:video|audio|visualizer)\\)", RegexOption.IGNORE_CASE), "")
+    .replace(Regex("\\[[^]]*]"), "")
+    .normalized()
+
+private fun String.normalized(): String = lowercase()
+    .replace(Regex("[^a-z0-9]+"), " ")
+    .trim()
