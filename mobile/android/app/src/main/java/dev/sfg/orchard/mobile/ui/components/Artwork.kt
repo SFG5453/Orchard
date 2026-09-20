@@ -22,6 +22,7 @@ package dev.sfg.orchard.mobile.ui.components
 import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
 import android.util.Log
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.TextureView
 import androidx.compose.animation.core.RepeatMode
@@ -74,6 +75,7 @@ fun RemoteArtwork(
     description: String,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
+    alignment: Alignment = Alignment.Center,
 ) {
     val context = LocalContext.current
     val source = remember(url) { highResolutionArtworkUrl(url) }
@@ -84,6 +86,7 @@ fun RemoteArtwork(
                 model = artworkRequest(context, source),
                 contentDescription = description,
                 contentScale = contentScale,
+                alignment = alignment,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -138,6 +141,7 @@ fun AnimatedArtworkVideo(
     active: Boolean,
     modifier: Modifier = Modifier,
     onFrame: ((Bitmap) -> Unit)? = null,
+    alignment: Alignment = Alignment.Center,
 ) {
     if (url.isBlank()) return
     val context = LocalContext.current
@@ -258,6 +262,7 @@ fun AnimatedArtworkVideo(
     AndroidView(
         factory = { targetContext ->
             (LayoutInflater.from(targetContext).inflate(R.layout.animated_artwork_player, null) as PlayerView).apply {
+                setVideoSurfaceAlignment(alignment)
                 this.player = player
                 setShutterBackgroundColor(AndroidColor.TRANSPARENT)
                 // PlayerView/video surfaces may request that the display stay awake while
@@ -269,6 +274,7 @@ fun AnimatedArtworkVideo(
             }
         },
         update = { view ->
+            view.setVideoSurfaceAlignment(alignment)
             view.alpha = animatedAlpha
             // Reassert after player state changes in case Media3 refreshed the surface flags.
             view.keepScreenOn = false
@@ -283,6 +289,21 @@ fun AnimatedArtworkVideo(
     )
 }
 
+private fun PlayerView.setVideoSurfaceAlignment(alignment: Alignment) {
+    val surface = videoSurfaceView ?: return
+    val gravity = if (alignment == Alignment.TopCenter) {
+        Gravity.TOP or Gravity.CENTER_HORIZONTAL
+    } else {
+        Gravity.CENTER
+    }
+    val params = surface.layoutParams as? android.widget.FrameLayout.LayoutParams
+        ?: android.widget.FrameLayout.LayoutParams(surface.layoutParams)
+    if (params.gravity != gravity) {
+        params.gravity = gravity
+        surface.layoutParams = params
+    }
+}
+
 private const val FRAME_SAMPLE_WIDTH = 64
 private const val FRAME_SAMPLE_INTERVAL_MS = 1_500L
 
@@ -292,10 +313,12 @@ fun ArtworkTile(
     description: String,
     modifier: Modifier = Modifier,
     radius: Int = 14,
+    alignment: Alignment = Alignment.Center,
 ) {
     RemoteArtwork(
         url = url,
         description = description,
         modifier = modifier.clip(RoundedCornerShape(radius.dp)),
+        alignment = alignment,
     )
 }

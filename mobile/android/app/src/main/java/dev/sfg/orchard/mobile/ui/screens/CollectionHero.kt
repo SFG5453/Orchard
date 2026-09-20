@@ -265,23 +265,21 @@ fun CollectionHero(
     ) {
 
 
-        val isFoldable = dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
+        val isWideLayout = dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
 
-        // Albums get a full-bleed cover with the titles laid over it; playlists keep the
-        // centred card, which suits their mixed artwork better.
-        if (detail.kind == CatalogKind.ALBUM) {
+        // Phones get a full-bleed album cover with the titles laid over it. Foldables and
+        // tablets use the centred square cover treatment so the larger canvas has room for
+        // the collection metadata below it.
+        if (detail.kind == CatalogKind.ALBUM && !isWideLayout) {
             Box(
-                modifier = if (isFoldable) {
-                    Modifier.fillMaxWidth().height(450.dp).clipToBounds()
-                } else {
-                    Modifier.fillMaxWidth().aspectRatio(0.75f).clipToBounds()
-                },
+                modifier = Modifier.fillMaxWidth().aspectRatio(0.75f).clipToBounds(),
             ) {
                 ArtworkTile(
                     url = detail.artworkUrl,
                     description = "Artwork for ${detail.title}",
                     modifier = Modifier.fillMaxSize(),
                     radius = 0,
+                    alignment = Alignment.Center,
                 )
 
                 if (animatedArtworkUrl.isNotBlank()) {
@@ -289,6 +287,7 @@ fun CollectionHero(
                         url = animatedArtworkUrl,
                         active = true,
                         modifier = Modifier.fillMaxSize(),
+                        alignment = Alignment.Center,
                     )
                 }
 
@@ -363,7 +362,7 @@ fun CollectionHero(
             // Prominent Centered Artwork Card with motion cover support & soft drop shadow
             Box(
                 modifier = Modifier
-                    .size(260.dp)
+                    .size(if (isWideLayout && isAlbum) 450.dp else 260.dp)
                     .shadow(
                         elevation = 28.dp,
                         shape = RoundedCornerShape(16.dp),
