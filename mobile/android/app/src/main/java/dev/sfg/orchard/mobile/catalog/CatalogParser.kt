@@ -544,7 +544,12 @@ object CatalogParser {
         val artist = extractTrackArtist(renderer, texts, fallbackArtist)
         val subtitle = texts.drop(1).joinToString(" • ")
         val parts = subtitle.split(" • ").filter(String::isNotBlank)
-        val duration = parts.lastOrNull()?.let(::durationMs) ?: 0
+        // Search rows may put an engagement metric after the runtime
+        // ("Artist • Album • 2:52 • 214 plays"), so the duration is not reliably the
+        // final byline field. Find the actual clock token wherever YouTube places it.
+        val duration = parts.firstNotNullOfOrNull { part ->
+            durationMs(part).takeIf { it > 0 }
+        } ?: 0
         val album = parts.firstOrNull {
             it != artist && it.isArtistCandidate()
         }.orEmpty()

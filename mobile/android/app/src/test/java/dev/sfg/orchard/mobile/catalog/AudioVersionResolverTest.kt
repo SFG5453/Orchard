@@ -21,6 +21,7 @@ package dev.sfg.orchard.mobile.catalog
 
 import dev.sfg.orchard.mobile.model.MUSIC_VIDEO_TYPE_ATV
 import dev.sfg.orchard.mobile.model.MUSIC_VIDEO_TYPE_OMV
+import dev.sfg.orchard.mobile.model.MUSIC_VIDEO_TYPE_UGC
 import dev.sfg.orchard.mobile.model.Track
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -85,6 +86,26 @@ class AudioVersionResolverTest {
         val explicit = audio("explicit-audio", explicit = true, durationMs = mislabeled.durationMs)
 
         assertEquals("explicit-audio", bestAudioMatch(mislabeled, listOf(cleanCurrent, explicit))?.id)
+    }
+
+    @Test
+    fun `same title and artist cannot replace a track with a radically different duration`() {
+        val playlistTrack = Track(
+            id = "QZZCSmPnIG0",
+            title = "Mania / Hoodtrap",
+            artist = "okksu",
+            durationMs = 77_000,
+            musicVideoType = MUSIC_VIDEO_TYPE_UGC,
+        )
+        val wrongAudio = Track(
+            id = "2MTBSJkyEIY",
+            title = "Mania / Hoodtrap",
+            artist = "okksu",
+            durationMs = 170_000,
+            musicVideoType = MUSIC_VIDEO_TYPE_ATV,
+        )
+
+        assertNull(bestAudioMatch(playlistTrack, listOf(wrongAudio)))
     }
 
     private fun audio(id: String, explicit: Boolean, durationMs: Long) = Track(

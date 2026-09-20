@@ -103,6 +103,34 @@ class CatalogParserTest {
     }
 
     @Test
+    fun searchReadsDurationBeforeTrailingPlayCount() {
+        val root = JSONObject(
+            """{
+              "contents": [{"musicResponsiveListItemRenderer": {
+                "flexColumns": [
+                  {"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [
+                    {"text": "Mania - Hoodtrap", "navigationEndpoint": {"watchEndpoint": {
+                      "videoId": "2MTBSJkyEIY",
+                      "watchEndpointMusicSupportedConfigs": {"watchEndpointMusicConfig": {
+                        "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                      }}
+                    }}}
+                  ]}}},
+                  {"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [
+                    {"text": "okksu • Mania - Hoodtrap • 2:52 • 214 plays"}
+                  ]}}}
+                ],
+                "playlistItemData": {"videoId": "2MTBSJkyEIY"}
+              }}]
+            }""",
+        )
+
+        val track = CatalogParser.search(root).tracks.single()
+
+        assertEquals(172_000, track.durationMs)
+    }
+
+    @Test
     fun artistAlbumCardPrefersItsBrowseActionOverAPlayableTitle() {
         val root = JSONObject(
             """{

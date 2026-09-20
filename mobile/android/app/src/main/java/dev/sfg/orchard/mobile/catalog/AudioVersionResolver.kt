@@ -115,7 +115,14 @@ private fun Track.matchScore(target: Track): Int {
     // Album audio runs close to the album listing; videos carry intros and outros.
     if (target.durationMs > 0 && durationMs > 0) {
         val drift = abs(durationMs - target.durationMs)
-        if (drift <= 3_000) score += 4 else if (drift <= 15_000) score += 1 else score -= 2
+        // Title and artist are not a unique identity. YouTube Music can return a different song
+        // with the same credits (issue #134 returned a 2:50 ATV for a 1:17 playlist entry), and
+        // the old score still selected it after applying only a small duration penalty. Allow the
+        // usual video intro/outro difference, but never replace a known-length track with a
+        // candidate whose runtime makes it implausible that they are two versions of one song.
+        val maximumPlausibleDrift = maxOf(15_000L, target.durationMs / 4)
+        if (drift > maximumPlausibleDrift) return 0
+        if (drift <= 3_000) score += 4 else score += 1
     }
     return score.coerceAtLeast(0)
 }
