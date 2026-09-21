@@ -262,6 +262,13 @@ fun SettingsScreen(
                     )
                     PanelDivider()
                     ToggleRow(
+                        title = "Download animated artwork",
+                        subtitle = "Save motion covers with new downloads for offline playback",
+                        checked = settings.downloadAnimatedArtwork,
+                        onChecked = { onSettings(settings.copy(downloadAnimatedArtwork = it)) },
+                    )
+                    PanelDivider()
+                    ToggleRow(
                         title = "Animated background",
                         subtitle = "Let the cover's colours drift behind the app",
                         checked = settings.animatedBackground,

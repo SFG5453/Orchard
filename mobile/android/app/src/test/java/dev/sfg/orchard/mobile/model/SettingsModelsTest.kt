@@ -31,6 +31,7 @@ class SettingsModelsTest {
         val settings = OrchardSettings()
         assertFalse(settings.onboardingCompleted)
         assertTrue(settings.animatedArtwork)
+        assertFalse(settings.downloadAnimatedArtwork)
         assertFalse(settings.animatedBackground)
         assertFalse(settings.crossfadeEnabled)
         assertFalse(settings.smartCrossfade)

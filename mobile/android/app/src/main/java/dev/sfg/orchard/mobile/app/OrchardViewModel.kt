@@ -200,10 +200,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val downloads: StateFlow<Map<String, dev.sfg.orchard.mobile.download.DownloadItem>> = graph.downloads.downloads
     val downloadedTrackIds: StateFlow<Set<String>> = graph.downloads.downloadedTrackIds
     val downloadingTrackIds: StateFlow<Set<String>> = graph.downloads.downloadingTrackIds
-    val totalBytesUsed: StateFlow<Long> = downloads.map { map ->
-        map.values.filter { it.status == dev.sfg.orchard.mobile.download.DownloadStatus.COMPLETED }
-            .sumOf { it.bytesDownloaded }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), graph.downloads.totalBytesUsed())
+    val totalBytesUsed: StateFlow<Long> = graph.downloads.totalBytesUsedFlow
 
     fun downloadTrack(track: Track) = graph.downloads.downloadTrack(track)
     fun downloadTracks(tracks: List<Track>) = graph.downloads.downloadTracks(tracks)
@@ -1415,10 +1412,27 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     private fun observeArtwork() {
         viewModelScope.launch {
-            targetPlayback.map { it.currentTrack }.distinctUntilChanged { old, new -> old?.id == new?.id }
-                .collectLatest { track ->
+            combine(
+                targetPlayback.map { it.currentTrack },
+                graph.downloads.downloads,
+            ) { track, downloaded -> track to track?.id?.let(downloaded::get) }
+                .distinctUntilChanged { old, new ->
+                    old.first?.id == new.first?.id &&
+                        old.second?.cachedAnimatedArtworkUrl == new.second?.cachedAnimatedArtworkUrl &&
+                        old.second?.cachedAnimatedArtworkVerticalUrl == new.second?.cachedAnimatedArtworkVerticalUrl
+                }
+                .collectLatest { (track, downloaded) ->
                     mutableArtwork.value = when {
                         track == null -> null
+                        downloaded != null && (
+                            downloaded.cachedAnimatedArtworkUrl.isNotBlank() ||
+                                downloaded.cachedAnimatedArtworkVerticalUrl.isNotBlank()
+                        ) -> TrackArtwork(
+                            track.id,
+                            track.artworkUrl,
+                            downloaded.cachedAnimatedArtworkUrl,
+                            downloaded.cachedAnimatedArtworkVerticalUrl,
+                        )
                         track.animatedArtworkVerticalUrl.isNotBlank() || track.animatedArtworkUrl.isNotBlank() ->
                             TrackArtwork(track.id, track.artworkUrl, track.animatedArtworkUrl, track.animatedArtworkVerticalUrl)
                         else -> graph.artwork.artwork(track)

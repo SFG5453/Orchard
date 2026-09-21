@@ -63,6 +63,8 @@ data class LibrarySnapshot(
 
 data class OrchardSettings(
     val animatedArtwork: Boolean = true,
+    /** Save motion covers alongside newly downloaded songs for offline playback. */
+    val downloadAnimatedArtwork: Boolean = false,
     val audioQuality: AudioQuality = AudioQuality.HIGH,
     /** Take the accent from the system's wallpaper palette instead of Orchard's own green. */
     val useSystemColors: Boolean = false,

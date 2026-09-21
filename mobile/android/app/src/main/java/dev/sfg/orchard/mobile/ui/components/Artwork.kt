@@ -65,6 +65,7 @@ import coil3.request.crossfade
 import coil3.size.Size
 import dev.sfg.orchard.connect.R
 import dev.sfg.orchard.mobile.artwork.highResolutionArtworkUrl
+import dev.sfg.orchard.mobile.download.AnimatedArtworkCache
 import dev.sfg.orchard.mobile.ui.theme.OrchardColors
 import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.delay
@@ -150,13 +151,8 @@ fun AnimatedArtworkVideo(
     if (failed) return
 
     val player = remember(url) {
-        val httpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
-            .setUserAgent("Orchard Android/2.0")
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(10_000)
-            .setReadTimeoutMs(10_000)
         val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context)
-            .setDataSourceFactory(httpDataSourceFactory)
+            .setDataSourceFactory(AnimatedArtworkCache.dataSourceFactory(context))
 
         // Motion covers are short silent loops, so the stock buffering targets (which hold
         // playback until seconds of video are ready) just delay the first frame. Start as soon

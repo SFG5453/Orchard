@@ -32,8 +32,8 @@ class DownloadStore(
     context: Context? = null,
     baseDir: File? = null,
 ) {
-    val downloadDir: File = baseDir ?: File(
-        context?.getExternalFilesDir(null) ?: context?.filesDir ?: File(System.getProperty("java.io.tmpdir"), "orchard-downloads"),
+    val downloadDir: File = baseDir ?: context?.let(::defaultDownloadDir) ?: File(
+        File(System.getProperty("java.io.tmpdir"), "orchard-downloads"),
         DOWNLOADS_FOLDER,
     ).apply { if (!exists()) mkdirs() }
 
@@ -138,5 +138,10 @@ class DownloadStore(
         private const val TAG = "DownloadStore"
         private const val DOWNLOADS_FOLDER = "offline_downloads"
         private const val INDEX_FILE_NAME = "downloads.json"
+
+        fun defaultDownloadDir(context: Context): File = File(
+            context.getExternalFilesDir(null) ?: context.filesDir,
+            DOWNLOADS_FOLDER,
+        ).apply { if (!exists()) mkdirs() }
     }
 }

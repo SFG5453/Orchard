@@ -80,18 +80,19 @@ class OrchardGraph(context: Context) {
     val challengeSolver: dev.sfg.orchard.mobile.playback.YouTubeChallengeSolver by lazy {
         dev.sfg.orchard.mobile.playback.YouTubeChallengeSolver(context, http)
     }
-    val downloads = DownloadManager(
-        context,
-        http,
-        auth,
-        applicationScope,
-        { poTokenMinter },
-        { challengeSolver },
-    ) {
-        settings.settings.value.audioQuality
-    }
     val spotifyCanvas = dev.sfg.orchard.mobile.spotify.SpotifyCanvasRepository(context, http, settings)
     val artwork = ArtworkRepository(http, spotifyCanvas)
+    val downloads = DownloadManager(
+        context = context,
+        http = http,
+        sessionProvider = auth,
+        scope = applicationScope,
+        poTokenMinter = { poTokenMinter },
+        challengeSolver = { challengeSolver },
+        artworkResolver = artwork::artwork,
+        downloadAnimatedArtworkProvider = { settings.settings.value.downloadAnimatedArtwork },
+        qualityProvider = { settings.settings.value.audioQuality },
+    )
     val artistImages = ArtistImageRepository(http)
     val catalog = CatalogRepository(innerTube)
     val playlistActions = PlaylistActions(innerTube)
