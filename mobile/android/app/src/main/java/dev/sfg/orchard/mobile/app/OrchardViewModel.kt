@@ -149,14 +149,23 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun removeDownloads(tracks: List<Track>) = graph.downloads.removeDownloads(tracks.map { it.id })
 
     fun createPlaylist(title: String, track: Track, onCreated: (String) -> Unit = {}) = viewModelScope.launch {
-        runCatching { withContext(Dispatchers.IO) { graph.playlistActions.create(title, track.id) } }
+        runCatching {
+            withContext(Dispatchers.IO) {
+                val playbackTrack = graph.audioVersions.audioVersion(track)
+                graph.playlistActions.create(title, playbackTrack.id)
+            }
+        }
             .onSuccess(onCreated)
             .onFailure { graph.postWarning(it.message ?: "Could not create playlist.") }
     }
     fun addTrackToPlaylist(playlistId: String, track: Track) = viewModelScope.launch {
         runCatching {
             withContext(Dispatchers.IO) {
-                graph.playlistActions.add(playlistId, track.id)
+                // Album and playlist rows can point at an official video even though playback
+                // replaces it with the matching album-audio id. Persist that same version so
+                // adding a row and playing it cannot select two different recordings.
+                val playbackTrack = graph.audioVersions.audioVersion(track)
+                graph.playlistActions.add(playlistId, playbackTrack.id)
                 graph.catalog.browse(playlistId)
             }
         }.onSuccess(::applyRefreshedPlaylist)
