@@ -73,6 +73,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.AnimatedArtworkVideo
+import dev.sfg.orchard.mobile.ui.components.KawarpArtworkBackdrop
 import dev.sfg.orchard.mobile.ui.components.RemoteArtwork
 import dev.sfg.orchard.mobile.ui.components.ArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
@@ -91,6 +92,10 @@ fun FullBleedPlayerBackdrop(
     /** Hoisted so anything drawn over the backdrop tints from the same sample. */
     palette: ArtworkPalette,
     onVideoFrame: (Bitmap?) -> Unit,
+    /** Use a tiny static cover and AGSL motion instead of decoding full-screen video. */
+    warpedArtworkEnabled: Boolean = false,
+    /** Tablets let Kawarp own the ambient motion; this avoids a second full-rate redraw loop. */
+    ambientGlowEnabled: Boolean = true,
     incomingPalette: ArtworkPalette? = null,
     /** Where the cover actually sits, so a dismissal can fly it into the pill. */
     onArtworkBounds: ((Rect) -> Unit)? = null,
@@ -136,14 +141,6 @@ fun FullBleedPlayerBackdrop(
         label = "PaletteAccent",
     )
 
-    val transition = rememberInfiniteTransition(label = "PlayerAmbience")
-    val glow by transition.animateFloat(
-        initialValue = 0.28f,
-        targetValue = 0.52f,
-        animationSpec = infiniteRepeatable(tween(9_000), RepeatMode.Reverse),
-        label = "PlayerAmbienceGlow",
-    )
-
     Box(
         modifier
             .fillMaxSize()
@@ -176,25 +173,42 @@ fun FullBleedPlayerBackdrop(
                 ),
             ),
     ) {
-        // Ambient wash of the cover's dominant colour, breathing while a track plays.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            animatedAccent.copy(alpha = if (isPlaying) glow else 0.24f),
-                            Color.Transparent,
+        if (ambientGlowEnabled) {
+            val transition = rememberInfiniteTransition(label = "PlayerAmbience")
+            val glow by transition.animateFloat(
+                initialValue = 0.28f,
+                targetValue = 0.52f,
+                animationSpec = infiniteRepeatable(tween(9_000), RepeatMode.Reverse),
+                label = "PlayerAmbienceGlow",
+            )
+            // Ambient wash of the cover's dominant colour, breathing while a track plays.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                animatedAccent.copy(alpha = if (isPlaying) glow else 0.24f),
+                                Color.Transparent,
+                            ),
+                            radius = AMBIENCE_RADIUS,
                         ),
-                        radius = AMBIENCE_RADIUS,
                     ),
-                ),
-        )
+            )
+        }
 
         val currentVideo = track.animatedArtworkVerticalUrl.ifBlank { track.animatedArtworkUrl }
-        val currentRich = animatedArtworkEnabled && currentVideo.isNotBlank()
+        val currentRich = !warpedArtworkEnabled && animatedArtworkEnabled && currentVideo.isNotBlank()
 
-        if (currentRich) {
+        if (warpedArtworkEnabled) {
+            KawarpArtworkBackdrop(
+                artworkUrl = track.artworkUrl,
+                isPlaying = isPlaying,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = artworkAlpha },
+            )
+        } else if (currentRich) {
             // Artwork container with an alpha gradient mask (BlendMode.DstIn) so the artwork
             // dissolves completely and seamlessly into the sampled backdrop with zero visual seam or gap.
             Box(
@@ -291,6 +305,8 @@ fun NowPlayingArtworkCard(
     outgoingTrack: Track? = null,
     transitionProgress: Float = 0f,
     transitionStyle: String = "",
+    animatedArtworkEnabled: Boolean = false,
+    isPlaying: Boolean = false,
     onArtworkBounds: ((Rect) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -371,6 +387,11 @@ fun NowPlayingArtworkCard(
                         description = "Artwork for ${outTrack.title}",
                         modifier = Modifier.fillMaxSize(),
                     )
+                    SquareAnimatedArtwork(
+                        track = outTrack,
+                        enabled = animatedArtworkEnabled && track.id == outTrack.id,
+                        isPlaying = isPlaying,
+                    )
                     // Depth scrim as it departs
                     if (outgoingScrim > 0.01f) {
                         Box(
@@ -414,6 +435,11 @@ fun NowPlayingArtworkCard(
                         description = "Artwork for ${inTrack.title}",
                         modifier = Modifier.fillMaxSize(),
                     )
+                    SquareAnimatedArtwork(
+                        track = inTrack,
+                        enabled = animatedArtworkEnabled && track.id == inTrack.id,
+                        isPlaying = isPlaying,
+                    )
                 }
             }
         }
@@ -448,9 +474,33 @@ fun NowPlayingArtworkCard(
                     description = "Artwork for ${currentTrack.title}",
                     modifier = Modifier.fillMaxSize(),
                 )
+                SquareAnimatedArtwork(
+                    track = currentTrack,
+                    // AnimatedContent keeps the departing item composed during its fade. Only
+                    // the current identity may own a decoder, so that fade uses its still cover.
+                    enabled = animatedArtworkEnabled && currentTrack.id == track.id,
+                    isPlaying = isPlaying,
+                )
             }
         }
     }
+}
+
+/** Exactly one square motion-cover decoder is alive, including during a dual-deck handoff. */
+@Composable
+private fun SquareAnimatedArtwork(
+    track: Track,
+    enabled: Boolean,
+    isPlaying: Boolean,
+) {
+    if (!enabled) return
+    val url = track.animatedArtworkUrl.ifBlank { track.animatedArtworkVerticalUrl }
+    if (url.isBlank()) return
+    AnimatedArtworkVideo(
+        url = url,
+        active = isPlaying,
+        modifier = Modifier.fillMaxSize(),
+    )
 }
 
 /**

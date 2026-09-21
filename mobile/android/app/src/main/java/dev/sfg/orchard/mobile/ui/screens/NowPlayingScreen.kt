@@ -110,6 +110,7 @@ fun NowPlayingScreen(
     targets: PlaybackTargetState,
     lyrics: LoadState<List<LyricLine>>,
     animatedArtworkEnabled: Boolean,
+    animatedBackgroundEnabled: Boolean,
     gesturesEnabled: Boolean = false,
     liked: Boolean,
     modifier: Modifier = Modifier,
@@ -340,13 +341,13 @@ fun NowPlayingScreen(
             // replacing it, so the song's colour still carries the screen.
             // The phone puts its controls over the foot of the cover, where the
             // gradient already protects them, and only blurs when a panel opens.
-            // The tablet's right column sits over the middle of the image, so the
-            // backdrop stays out of focus there the whole time.
+            // Tablets use a pre-blurred 128px Kawarp source instead of applying a large live
+            // RenderEffect over decoded video. Phones still blur only when lyrics need it.
             val panelObscuresArtwork = panel != PlayerPanel.NONE && !wideLayout && !isFoldable
             val backdropBlur by animateDpAsState(
                 targetValue = when {
                     isFoldable -> 0.dp
-                    wideLayout || panel == PlayerPanel.LYRICS -> 44.dp
+                    !wideLayout && panel == PlayerPanel.LYRICS -> 44.dp
                     else -> 0.dp
                 },
                 animationSpec = tween(420),
@@ -375,7 +376,11 @@ fun NowPlayingScreen(
             FullBleedPlayerBackdrop(
                 track = track,
                 isPlaying = playback.isPlaying && (panel == PlayerPanel.LYRICS || !panelObscuresArtwork),
-                animatedArtworkEnabled = animatedArtworkEnabled,
+                // A tablet's real motion cover belongs only in the framed square. Its full-screen
+                // layer is either the tiny Kawarp source or the static palette fallback.
+                animatedArtworkEnabled = animatedArtworkEnabled && !wideLayout,
+                warpedArtworkEnabled = wideLayout && animatedBackgroundEnabled,
+                ambientGlowEnabled = !wideLayout,
                 gesturesEnabled = gesturesEnabled || (isFoldable && hasRichArtwork),
                 onNext = onNext,
                 onPrevious = onPrevious,

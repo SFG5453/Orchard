@@ -155,6 +155,8 @@ fun TabletPlayerBody(
                     outgoingTrack = outgoingTrack,
                     transitionProgress = activeProgress,
                     transitionStyle = transition?.style.orEmpty(),
+                    animatedArtworkEnabled = animatedArtworkEnabled,
+                    isPlaying = playback.isPlaying,
                     onArtworkBounds = onCoverBounds,
                     modifier = Modifier.fillMaxSize(),
                 )

@@ -284,6 +284,10 @@ dependencies {
     implementation 'io.coil-kt.coil3:coil-compose:3.6.3'
     implementation 'io.coil-kt.coil3:coil-network-okhttp:3.6.3'
 
+    // No release tag exists upstream yet, so keep the working JitPack build reproducible by
+    // pinning the exact Kawarp-AGSL commit rather than following main-SNAPSHOT.
+    implementation 'com.github.meowarex:kawarp-agsl:30715d619a'
+
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0'
     implementation 'com.squareup.okhttp3:okhttp:5.5.0'
 
