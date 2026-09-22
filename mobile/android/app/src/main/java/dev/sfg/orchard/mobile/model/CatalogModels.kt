@@ -62,6 +62,8 @@ data class Track(
     val sampleRate: Int? = null,
     val hires: Boolean = false,
     val artists: List<Artist> = emptyList(),
+    /** Official/user-uploaded video paired with this album-audio queue item, when known. */
+    val musicVideoId: String = "",
 ) {
     val isQobuz: Boolean
         get() = playbackSource.equals("qobuz", ignoreCase = true)

@@ -40,6 +40,8 @@ data class PlaybackSnapshot(
     val errorMessage: String = "",
     /** Decoder position in the temporary mix; all other times remain full-song times. */
     val renderedMixPositionMs: Long? = null,
+    /** The current queue item is using its music-video source rather than album audio. */
+    val playingVideo: Boolean = false,
 ) {
     val history: List<Track>
         get() = if (currentIndex > 0) queue.take(currentIndex) else emptyList()

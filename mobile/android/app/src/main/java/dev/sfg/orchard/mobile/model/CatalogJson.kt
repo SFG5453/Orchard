@@ -44,6 +44,7 @@ object CatalogJson {
         .put("sampleRate", value.sampleRate)
         .put("hires", value.hires)
         .put("artists", artists(value.artists))
+        .put("musicVideoId", value.musicVideoId)
 
     fun track(value: JSONObject): Track = Track(
         id = value.cleanString("id"),
@@ -65,6 +66,7 @@ object CatalogJson {
         sampleRate = value.optInt("sampleRate", 0).takeIf { it > 0 },
         hires = value.optBoolean("hires", false),
         artists = artists(value.optJSONArray("artists")),
+        musicVideoId = value.cleanString("musicVideoId"),
     )
 
     fun tracks(values: List<Track>): JSONArray = JSONArray().also { output ->

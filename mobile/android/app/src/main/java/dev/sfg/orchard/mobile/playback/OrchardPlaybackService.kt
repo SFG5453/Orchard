@@ -317,6 +317,39 @@ class OrchardPlaybackService : MediaLibraryService() {
         prefetchAround(incoming)
     }
 
+    /** Change the decoder source as one service-side operation, including the crossfade deck. */
+    private fun setVideoMode(expectedTrackId: String, videoId: String) {
+        if (authoritativePlayer() !== player) return
+        val index = player.currentMediaItemIndex
+        if (index !in 0 until player.mediaItemCount) return
+        val current = player.getMediaItemAt(index)
+        if (current.mediaId != expectedTrackId) return
+        val currentUri = current.localConfiguration?.uri
+        val isVideo = MediaItemMapper.isVideoUri(currentUri)
+        if (videoId.isBlank() && !isVideo) return
+        if (isVideo && currentUri != null && MediaItemMapper.sourceId(currentUri) == videoId) return
+
+        val sourcePosition = player.sourcePositionMs().coerceAtLeast(0)
+        val audioDuration = MediaItemMapper.toTrack(current).durationMs
+        val position = if (videoId.isBlank() && audioDuration > 0) {
+            sourcePosition.coerceAtMost(audioDuration - 1)
+        } else {
+            sourcePosition
+        }
+        val resume = player.playWhenReady
+        val updated = if (videoId.isBlank()) MediaItemMapper.asAudio(current)
+        else MediaItemMapper.asVideo(MediaItemMapper.withMusicVideoId(current, videoId), videoId)
+
+        crossfade.abort()
+        // Replacing a current item can keep its old decoder alive until the new timeline is
+        // prepared. Stop it first so audio and video never run side by side after a toggle.
+        player.stop()
+        player.replaceMediaItem(index, updated)
+        player.seekTo(index, position)
+        player.prepare()
+        player.playWhenReady = resume
+    }
+
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession =
         mediaSession
 
@@ -412,6 +445,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                 Log.d(TAG, "resolvingFactory: request uri=${original.uri}")
                 if (!MediaItemMapper.isOrchardUri(original.uri)) return@Factory original
                 val videoId = original.uri.lastPathSegment.orEmpty()
+                val isVideoRequest = MediaItemMapper.isVideoUri(original.uri)
                 val stableUri = original.uri.toString()
                 val lock = streamResolutionLocks.computeIfAbsent(stableUri) { Any() }
                 synchronized(lock) {
@@ -435,7 +469,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                     val isMaxQuality = graph.settings.settings.value.audioQuality == dev.sfg.orchard.mobile.model.AudioQuality.MAX
                     var qobuzStream: ResolvedStream? = null
 
-                    if (isMaxQuality && !MediaItemMapper.requiresAuthenticatedDirect(original.uri) && !MediaItemMapper.requiresAuthenticatedHls(original.uri)) {
+                    if (!isVideoRequest && isMaxQuality && !MediaItemMapper.requiresAuthenticatedDirect(original.uri) && !MediaItemMapper.requiresAuthenticatedHls(original.uri)) {
                         val track = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) {
                             if (::player.isInitialized) {
                                 for (i in 0 until player.mediaItemCount) {
@@ -474,7 +508,9 @@ class OrchardPlaybackService : MediaLibraryService() {
                     }
 
                     val stream = qobuzStream ?: run {
-                        if (MediaItemMapper.requiresAuthenticatedDirect(original.uri)) {
+                        if (isVideoRequest) {
+                            streamResolver.resolveVideo(videoId)
+                        } else if (MediaItemMapper.requiresAuthenticatedDirect(original.uri)) {
                             streamResolver.resolveAuthenticatedDirect(videoId)
                         } else {
                             streamResolver.resolve(videoId)
@@ -521,15 +557,20 @@ class OrchardPlaybackService : MediaLibraryService() {
         val cachingFactory = streamCache.dataSourceFactory(resolvingFactory)
         val progressiveMediaSourceFactory =
             DefaultMediaSourceFactory(this).setDataSourceFactory(cachingFactory)
+        // Video is viewed on demand and can be hundreds of megabytes. Do not evict the listener's
+        // audio cache by writing the movie into the whole-track cache behind their back.
+        val videoMediaSourceFactory =
+            DefaultMediaSourceFactory(this).setDataSourceFactory(resolvingFactory)
         val hlsMediaSourceFactory = HlsMediaSource.Factory(hlsResolvingFactory)
         val mediaSourceFactory =
             object : MediaSource.Factory {
                 override fun createMediaSource(mediaItem: MediaItem): MediaSource {
                     val uri = mediaItem.localConfiguration?.uri
-                    return if (uri != null && MediaItemMapper.requiresAuthenticatedHls(uri)) {
-                        hlsMediaSourceFactory.createMediaSource(mediaItem)
-                    } else {
-                        progressiveMediaSourceFactory.createMediaSource(mediaItem)
+                    return when {
+                        uri != null && MediaItemMapper.requiresAuthenticatedHls(uri) ->
+                            hlsMediaSourceFactory.createMediaSource(mediaItem)
+                        MediaItemMapper.isVideoUri(uri) -> videoMediaSourceFactory.createMediaSource(mediaItem)
+                        else -> progressiveMediaSourceFactory.createMediaSource(mediaItem)
                     }
                 }
 
@@ -542,6 +583,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                     drmSessionManagerProvider: DrmSessionManagerProvider,
                 ): MediaSource.Factory = apply {
                     progressiveMediaSourceFactory.setDrmSessionManagerProvider(drmSessionManagerProvider)
+                    videoMediaSourceFactory.setDrmSessionManagerProvider(drmSessionManagerProvider)
                     hlsMediaSourceFactory.setDrmSessionManagerProvider(drmSessionManagerProvider)
                 }
 
@@ -549,6 +591,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                     loadErrorHandlingPolicy: LoadErrorHandlingPolicy,
                 ): MediaSource.Factory = apply {
                     progressiveMediaSourceFactory.setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
+                    videoMediaSourceFactory.setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
                     hlsMediaSourceFactory.setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
                 }
             }
@@ -615,7 +658,12 @@ class OrchardPlaybackService : MediaLibraryService() {
         val restored = stateStore.load()
         if (restored.queue.isEmpty()) return
         player.setMediaItems(
-            restored.queue.map(MediaItemMapper::toMediaItem),
+            restored.queue.mapIndexed { index, track ->
+                MediaItemMapper.toMediaItem(
+                    track,
+                    restored.currentVideoId.takeIf { index == restored.currentIndex }.orEmpty(),
+                )
+            },
             restored.currentIndex.coerceIn(0, restored.queue.lastIndex),
             restored.positionMs,
         )
@@ -645,6 +693,11 @@ class OrchardPlaybackService : MediaLibraryService() {
             contextTitle = source.playlistMetadata.title?.toString().orEmpty(),
             playWhenReady = source.playWhenReady,
             unshuffledOrder = unshuffledOrder,
+            currentVideoId = source.currentMediaItem
+                ?.localConfiguration?.uri
+                ?.takeIf(MediaItemMapper::isVideoUri)
+                ?.let(MediaItemMapper::sourceId)
+                .orEmpty(),
         )
         if (sync) {
             stateStore.save(restored)
@@ -676,6 +729,11 @@ class OrchardPlaybackService : MediaLibraryService() {
         }
         val uri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri
         val resolved = uri?.let { cachedResolvedStream(it.toString()) }
+        if (MediaItemMapper.isVideoUri(uri)) {
+            graph.activeBitrate.value = 0
+            graph.activeTrackIsQobuz.value = false
+            return
+        }
         if (resolved != null && resolved.isQobuz) {
             graph.activeBitrate.value = resolved.bitrateKbps
             graph.activeTrackIsQobuz.value = true
@@ -897,15 +955,37 @@ class OrchardPlaybackService : MediaLibraryService() {
                     Log.e(TAG, "Playback failed without a recoverable media item", error)
                     return
                 }
+                val sourceId = MediaItemMapper.sourceId(failedUri)
+                if (MediaItemMapper.isVideoUri(failedUri)) {
+                    val index = player.currentMediaItemIndex
+                    val audioDuration = MediaItemMapper.toTrack(failedItem).durationMs
+                    val sourcePosition = player.currentPosition.coerceAtLeast(0)
+                    val position = if (audioDuration > 0) {
+                        sourcePosition.coerceAtMost(audioDuration - 1)
+                    } else {
+                        sourcePosition
+                    }
+                    val resume = player.playWhenReady
+                    streamResolver.resetForRetry(sourceId)
+                    resolvedStreams.remove(failedUri.toString())
+                    Log.w(TAG, "Video playback failed; continuing with album audio", error)
+                    player.replaceMediaItem(index, MediaItemMapper.asAudio(failedItem))
+                    player.seekTo(index, position)
+                    player.prepare()
+                    if (resume) player.play()
+                    OrchardGraph.from(this@OrchardPlaybackService)
+                        .postWarning("Video unavailable. Continuing with audio.")
+                    return
+                }
                 val resolvedStream = resolvedStreams.remove(failedUri.toString())
                 val responseCode = playbackHttpResponseCode(error)
                 val rejectedClient =
                     if (resolvedStream != null && responseCode != null) {
-                        streamResolver.reject(mediaId, resolvedStream, responseCode)
+                        streamResolver.reject(sourceId, resolvedStream, responseCode)
                     } else {
                         false
                     }
-                if (!rejectedClient) streamResolver.resetForRetry(mediaId)
+                if (!rejectedClient) streamResolver.resetForRetry(sourceId)
                 if (
                     MediaItemMapper.requiresAuthenticatedDirect(failedUri)
                 ) {
@@ -1134,6 +1214,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                     MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
                         .add(COMMAND_TOGGLE_SHUFFLE)
                         .add(COMMAND_TOGGLE_REPEAT)
+                        .add(COMMAND_SET_VIDEO_MODE)
                         .build()
                 val playerCommands =
                     session.player.availableCommands.buildUpon()
@@ -1259,7 +1340,12 @@ class OrchardPlaybackService : MediaLibraryService() {
                 if (restored.queue.isNotEmpty()) {
                     return Futures.immediateFuture(
                         MediaSession.MediaItemsWithStartPosition(
-                            restored.queue.map(MediaItemMapper::toMediaItem),
+                            restored.queue.mapIndexed { index, track ->
+                                MediaItemMapper.toMediaItem(
+                                    track,
+                                    restored.currentVideoId.takeIf { index == restored.currentIndex }.orEmpty(),
+                                )
+                            },
                             restored.currentIndex.coerceIn(0, restored.queue.lastIndex),
                             restored.positionMs,
                         )
@@ -1414,6 +1500,10 @@ class OrchardPlaybackService : MediaLibraryService() {
                                 Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
                                 else -> Player.REPEAT_MODE_OFF
                             }
+                    ACTION_SET_VIDEO_MODE -> setVideoMode(
+                        args.getString(VIDEO_MODE_TRACK_ID).orEmpty(),
+                        args.getString(VIDEO_MODE_VIDEO_ID).orEmpty(),
+                    )
                 }
                 updateCustomLayout()
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
@@ -1477,9 +1567,10 @@ class OrchardPlaybackService : MediaLibraryService() {
             // below, whose DataSource invokes their signed-in resolver. Running the
             // ordinary resolver beside that would issue a competing guest fallback chain.
             if (
-                uri == null ||
+                (uri == null ||
                     (!MediaItemMapper.requiresAuthenticatedHls(uri) &&
-                        !MediaItemMapper.requiresAuthenticatedDirect(uri))
+                        !MediaItemMapper.requiresAuthenticatedDirect(uri))) &&
+                    !MediaItemMapper.isVideoUri(uri)
             ) {
                 streamResolver.prefetch(item.mediaId)
             }
@@ -1489,6 +1580,7 @@ class OrchardPlaybackService : MediaLibraryService() {
             (current..current + 1)
                 .filter { it in 0 until player.mediaItemCount }
                 .mapNotNull { player.getMediaItemAt(it).localConfiguration?.uri }
+                .filterNot(MediaItemMapper::isVideoUri)
         streamCache.retainOnly(wanted)
         wanted.forEach(streamCache::prefetch)
 
@@ -1527,6 +1619,7 @@ class OrchardPlaybackService : MediaLibraryService() {
             if (index !in 0 until player.mediaItemCount) continue
             val item = player.getMediaItemAt(index)
             val uri = item.localConfiguration?.uri ?: continue
+            if (MediaItemMapper.isVideoUri(uri)) continue
             val track = MediaItemMapper.toTrack(item)
             val duration =
                 if (index == player.currentMediaItemIndex && player.duration != C.TIME_UNSET) {
@@ -1609,8 +1702,12 @@ class OrchardPlaybackService : MediaLibraryService() {
 
         private const val ACTION_TOGGLE_SHUFFLE = "dev.sfg.orchard.ACTION_TOGGLE_SHUFFLE"
         private const val ACTION_TOGGLE_REPEAT = "dev.sfg.orchard.ACTION_TOGGLE_REPEAT"
+        private const val ACTION_SET_VIDEO_MODE = "dev.sfg.orchard.ACTION_SET_VIDEO_MODE"
+        internal const val VIDEO_MODE_TRACK_ID = "track_id"
+        internal const val VIDEO_MODE_VIDEO_ID = "video_id"
         private val COMMAND_TOGGLE_SHUFFLE = SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY)
         private val COMMAND_TOGGLE_REPEAT = SessionCommand(ACTION_TOGGLE_REPEAT, Bundle.EMPTY)
+        internal val COMMAND_SET_VIDEO_MODE = SessionCommand(ACTION_SET_VIDEO_MODE, Bundle.EMPTY)
         private val AUDIO_ATTRIBUTES =
             AudioAttributes.Builder()
                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)

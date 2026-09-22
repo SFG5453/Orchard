@@ -71,6 +71,15 @@ internal data class DesktopTransferPlan(
     val repeatMode: RepeatMode,
 )
 
+data class MusicVideoState(
+    val trackId: String = "",
+    val videoId: String = "",
+    val checking: Boolean = false,
+    val playing: Boolean = false,
+) {
+    val available: Boolean get() = videoId.isNotBlank()
+}
+
 internal fun desktopTransferPlan(track: Track?, queue: List<Track>, repeatMode: String): DesktopTransferPlan {
     val tracks = when {
         track == null -> queue
@@ -96,6 +105,9 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     private val songLinksCoordinator = SongLinksCoordinator(graph.songLinks, viewModelScope)
     val shareState: StateFlow<SongShareState?> = songLinksCoordinator.shareState
     private val local = LocalPlaybackController(application, viewModelScope)
+    val videoPlayer: StateFlow<androidx.media3.common.Player?> = local.player
+    private val mutableMusicVideo = MutableStateFlow(MusicVideoState())
+    val musicVideo: StateFlow<MusicVideoState> = mutableMusicVideo.asStateFlow()
 
     /**
      * Scoped here rather than on the graph, unlike most repositories: it drives
@@ -364,6 +376,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         observeDiscordPresence()
         observeWarnings()
         observeLocalAudioVersion()
+        observeMusicVideo()
         observeAutoplay()
         observeConnectDeviceSync()
     }
@@ -374,6 +387,41 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                 if (online && mutableHome.value is LoadState.Error) {
                     refreshHome()
                 }
+            }
+        }
+    }
+
+    private fun observeMusicVideo() {
+        viewModelScope.launch {
+            combine(local.snapshot, targets) { snapshot, targetState ->
+                snapshot.currentTrack.takeIf { targetState.selected is PlaybackTarget.LocalPhone }
+            }
+                .distinctUntilChangedBy { track ->
+                    track?.let { Triple(it.id, it.musicVideoType, it.musicVideoId) }
+                }
+                .collectLatest { track ->
+                    if (track == null || track.isQobuz) {
+                        mutableMusicVideo.value = MusicVideoState()
+                        return@collectLatest
+                    }
+                    mutableMusicVideo.value = MusicVideoState(
+                        trackId = track.id,
+                        checking = true,
+                        playing = local.snapshot.value.playingVideo,
+                    )
+                    val videoId = graph.videoVersions.videoId(track).orEmpty()
+                    mutableMusicVideo.value = MusicVideoState(
+                        trackId = track.id,
+                        videoId = videoId,
+                        playing = local.snapshot.value.playingVideo,
+                    )
+                }
+        }
+        viewModelScope.launch {
+            combine(local.snapshot, targets) { snapshot, targetState ->
+                snapshot.playingVideo && targetState.selected is PlaybackTarget.LocalPhone
+            }.distinctUntilChanged().collect { playing ->
+                mutableMusicVideo.update { it.copy(playing = playing) }
             }
         }
     }
@@ -930,6 +978,22 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         { graph.connect.send(ConnectCommand.TogglePlayback) },
         local::toggle,
     )
+
+    fun toggleMusicVideo() {
+        if (targets.value.selected !is PlaybackTarget.LocalPhone) {
+            showWarning("Music videos play on this device only.")
+            return
+        }
+        val state = musicVideo.value
+        val currentId = local.snapshot.value.currentTrack?.id
+        if (state.trackId != currentId) return
+        when {
+            state.playing -> local.setVideoMode(null)
+            state.videoId.isNotBlank() -> local.setVideoMode(state.videoId)
+            state.checking -> Unit
+            else -> showWarning("No music video is available for this track.")
+        }
+    }
     fun startSleepTimer(minutes: Int) {
         if (minutes <= 0) return
         cancelSleepTimer()

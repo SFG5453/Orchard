@@ -21,6 +21,7 @@ package dev.sfg.orchard.mobile.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Bundle
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.media3.common.C
@@ -50,6 +51,9 @@ class LocalPlaybackController(
 ) : AutoCloseable {
     private val mutableSnapshot = MutableStateFlow(PlaybackSnapshot(status = PlaybackStatus.LOADING))
     val snapshot: StateFlow<PlaybackSnapshot> = mutableSnapshot.asStateFlow()
+    private val mutablePlayer = MutableStateFlow<Player?>(null)
+    /** The session-backed player a PlayerView can attach to; null until the service connects. */
+    val player: StateFlow<Player?> = mutablePlayer.asStateFlow()
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
     private var progressJob: Job? = null
@@ -108,9 +112,20 @@ class LocalPlaybackController(
     fun replaceCurrent(expectedId: String, track: Track) = withController { player ->
         val index = player.currentMediaItemIndex
         if (index !in 0 until player.mediaItemCount) return@withController
-        if (player.getMediaItemAt(index).mediaId != expectedId) return@withController
+        val current = player.getMediaItemAt(index)
+        if (current.mediaId != expectedId) return@withController
         val position = player.currentPosition.coerceAtLeast(0)
-        player.replaceMediaItem(index, MediaItemMapper.toMediaItem(track))
+        val videoId = current.localConfiguration?.uri
+            ?.takeIf(MediaItemMapper::isVideoUri)
+            ?.let(MediaItemMapper::sourceId)
+            .orEmpty()
+        player.replaceMediaItem(
+            index,
+            MediaItemMapper.toMediaItem(
+                track.copy(musicVideoId = track.musicVideoId.ifBlank { videoId }),
+                videoId,
+            ),
+        )
         player.seekTo(index, position)
     }
 
@@ -157,6 +172,19 @@ class LocalPlaybackController(
             player.replaceMediaItem(player.currentMediaItemIndex, MediaItemMapper.toMediaItem(MediaItemMapper.toTrack(item)))
         }
         player.seekTo(positionMs.coerceAtLeast(0))
+    }
+
+    /** Switches the current item between its audio and video source at the same position. */
+    fun setVideoMode(videoId: String?) = withController { player ->
+        val currentId = player.currentMediaItem?.mediaId ?: return@withController
+        clearError()
+        player.sendCustomCommand(
+            OrchardPlaybackService.COMMAND_SET_VIDEO_MODE,
+            Bundle().apply {
+                putString(OrchardPlaybackService.VIDEO_MODE_TRACK_ID, currentId)
+                putString(OrchardPlaybackService.VIDEO_MODE_VIDEO_ID, videoId.orEmpty())
+            },
+        )
     }
     fun setVolume(volume: Float) = withController { it.volume = volume.coerceIn(0.0f, 1.0f) }
     fun setShuffle(enabled: Boolean) = withController { it.shuffleModeEnabled = enabled }
@@ -233,6 +261,7 @@ class LocalPlaybackController(
         controller?.removeListener(listener)
         controller?.release()
         controller = null
+        mutablePlayer.value = null
         controllerFuture?.cancel(true)
         pendingActions.clear()
     }
@@ -247,6 +276,7 @@ class LocalPlaybackController(
                 runCatching { future.get() }.onSuccess { connected ->
                     Log.d(TAG, "connect: MediaController connected successfully")
                     controller = connected
+                    mutablePlayer.value = connected
                     connected.addListener(listener)
                     while (pendingActions.isNotEmpty()) pendingActions.removeFirst()(connected)
                     publish(connected)
@@ -333,6 +363,7 @@ class LocalPlaybackController(
             },
             contextTitle = player.playlistMetadata.title?.toString().orEmpty(),
             errorMessage = error,
+            playingVideo = MediaItemMapper.isVideoUri(player.currentMediaItem?.localConfiguration?.uri),
         )
         syncProgress(player.isPlaying)
     }

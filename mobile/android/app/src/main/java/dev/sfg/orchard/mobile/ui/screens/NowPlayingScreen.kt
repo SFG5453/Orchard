@@ -55,6 +55,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -74,16 +75,17 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.util.lerp
-import androidx.compose.ui.unit.dp
+import androidx.media3.common.Player
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.runtime.collectAsState
 import dev.sfg.orchard.mobile.audio.isTabletForm
+import dev.sfg.orchard.mobile.app.MusicVideoState
 import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.model.LyricLine
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
@@ -164,11 +166,15 @@ fun NowPlayingScreen(
     onCancelSleepTimer: () -> Unit = {},
     smartCrossfade: Boolean = false,
     onBestMixUpcoming: ((onProgress: (String) -> Unit, onComplete: () -> Unit) -> Unit)? = null,
+    musicVideo: MusicVideoState = MusicVideoState(),
+    videoPlayer: Player? = null,
+    onToggleMusicVideo: () -> Unit = {},
 ) {
     // Lyrics and the queue are modes of the player, not destinations, so their state lives here.
     // Only one can hold the panel at a time.
     var panel by remember { mutableStateOf(PlayerPanel.NONE) }
     var sleepTimerDialogOpen by remember { mutableStateOf(false) }
+    var videoFullscreen by remember(playback.currentTrack?.id) { mutableStateOf(false) }
     val lyricsOpen = panel == PlayerPanel.LYRICS
     val queueOpen = panel == PlayerPanel.QUEUE
     val onQueue = { panel = if (queueOpen) PlayerPanel.NONE else PlayerPanel.QUEUE }
@@ -704,6 +710,25 @@ fun NowPlayingScreen(
             source = restingCoverBounds,
             destination = collapseArtworkBounds,
         )
+
+        if (musicVideo.playing) {
+            MusicVideoPlayer(
+                player = videoPlayer,
+                fullscreen = videoFullscreen,
+                onFullscreenChange = { videoFullscreen = it },
+                onAudio = onToggleMusicVideo,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else if (musicVideo.available || musicVideo.checking) {
+            MusicVideoToggle(
+                state = musicVideo,
+                onClick = onToggleMusicVideo,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .systemBarsPadding()
+                    .padding(top = 52.dp, end = 16.dp),
+            )
+        }
     }
 
     if (sleepTimerDialogOpen) {

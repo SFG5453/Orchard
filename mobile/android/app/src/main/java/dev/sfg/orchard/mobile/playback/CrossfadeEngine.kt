@@ -211,6 +211,17 @@ class CrossfadeEngine(
                 if (!settings.enabled) onPlan(null)
                 return
             }
+            // Either side of a video transition needs the session's visible surface. Keep both
+            // sources on the session player instead of starting the audio-only standby deck.
+            val nextIndex = player.nextMediaItemIndex
+            if (MediaItemMapper.isVideoUri(player.currentMediaItem?.localConfiguration?.uri) ||
+                (nextIndex != C.INDEX_UNSET &&
+                    MediaItemMapper.isVideoUri(player.getMediaItemAt(nextIndex).localConfiguration?.uri))
+            ) {
+                discardStagedLiveTransition()
+                onPlan(null)
+                return
+            }
             // Repeating one track would fade it into itself.
             if (player.repeatMode == Player.REPEAT_MODE_ONE) {
                 discardStagedLiveTransition()

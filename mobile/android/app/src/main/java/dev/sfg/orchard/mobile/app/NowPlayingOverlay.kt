@@ -79,6 +79,8 @@ fun NowPlayingOverlay(
     val downloadedTrackIds by viewModel.downloadedTrackIds.collectAsStateWithLifecycle()
     val sleepTimerRemainingSeconds by viewModel.sleepTimerRemainingSeconds.collectAsStateWithLifecycle()
     val sleepTimerEndOfTrack by viewModel.sleepTimerEndOfTrack.collectAsStateWithLifecycle()
+    val musicVideo by viewModel.musicVideo.collectAsStateWithLifecycle()
+    val videoPlayer by viewModel.videoPlayer.collectAsStateWithLifecycle()
     var playlistPickerTrack by remember { mutableStateOf<Track?>(null) }
 
     val liked = library.likedTracks.any { it.id == currentTrack.id }
@@ -100,6 +102,9 @@ fun NowPlayingOverlay(
         onCancelSleepTimer = viewModel::cancelSleepTimer,
         smartCrossfade = settings.smartCrossfade,
         onBestMixUpcoming = viewModel::bestMixUpcoming,
+        musicVideo = musicVideo,
+        videoPlayer = videoPlayer,
+        onToggleMusicVideo = viewModel::toggleMusicVideo,
         playback = playback,
         transition = transition,
         mixProgress = mixProgress,

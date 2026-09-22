@@ -32,7 +32,14 @@ class PlaybackStateCodecTest {
     fun queuePositionShuffleAndRepeatSurviveRoundTrip() {
         val queue = listOf(
             Track("a", "First", "Artist"),
-            Track("b", "Second", "Artist", explicit = true, musicVideoType = MUSIC_VIDEO_TYPE_ATV),
+            Track(
+                "b",
+                "Second",
+                "Artist",
+                explicit = true,
+                musicVideoType = MUSIC_VIDEO_TYPE_ATV,
+                musicVideoId = "video-b",
+            ),
         )
         val restored = PlaybackStateCodec.decode(PlaybackStateCodec.encode(
             RestoredPlayback(
@@ -43,6 +50,7 @@ class PlaybackStateCodecTest {
                 repeatMode = RepeatMode.ALL,
                 contextTitle = "Late-night mix",
                 playWhenReady = true,
+                currentVideoId = "video-b",
             ),
         ))
 
@@ -51,6 +59,7 @@ class PlaybackStateCodecTest {
         assertEquals(42_000, restored.positionMs)
         assertEquals(RepeatMode.ALL, restored.repeatMode)
         assertEquals("Late-night mix", restored.contextTitle)
+        assertEquals("video-b", restored.currentVideoId)
         assertFalse(restored.playWhenReady)
     }
 

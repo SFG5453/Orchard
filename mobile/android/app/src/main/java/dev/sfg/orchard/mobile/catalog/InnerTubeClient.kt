@@ -56,6 +56,10 @@ class InnerTubeClient(
     fun searchSongs(query: String): JSONObject =
         post("search", JSONObject().put("query", query).put("params", SONGS_FILTER), anonymous = true)
 
+    /** Anonymous video-only search used to find the visual companion of an audio queue item. */
+    fun searchVideos(query: String): JSONObject =
+        post("search", JSONObject().put("query", query).put("params", VIDEOS_FILTER), anonymous = true)
+
     fun browse(browseId: String): JSONObject = post("browse", JSONObject().put("browseId", browseId))
 
     fun browsePayload(browseId: String, params: String = ""): JSONObject {
@@ -248,6 +252,8 @@ class InnerTubeClient(
     companion object {
         /** InnerTube search filter that restricts results to songs. */
         private const val SONGS_FILTER = "EgWKAQIIAWoKEAoQAxAEEAkQBQ%3D%3D"
+        /** InnerTube search filter that restricts results to music videos. */
+        private const val VIDEOS_FILTER = "EgWKAQIQAWoKEAoQAxAEEAkQBQ%3D%3D"
         private val JSON = "application/json; charset=utf-8".toMediaType()
         private val API_KEY = Regex("INNERTUBE_API_KEY(?:\\\"|&quot;)?\\s*:\\s*\\\"([^\\\"]+)")
         private val CLIENT_VERSION = Regex("INNERTUBE_CLIENT_VERSION(?:\\\"|&quot;)?\\s*:\\s*\\\"([^\\\"]+)")

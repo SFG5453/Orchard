@@ -156,6 +156,7 @@ object PartyTrackJson {
         .put("animatedArtworkVerticalUrl", track.animatedArtworkVerticalUrl)
         .put("durationMs", track.durationMs)
         .put("musicVideoType", track.musicVideoType)
+        .put("musicVideoId", track.musicVideoId)
         .put("autoplayGenerated", track.autoplayGenerated)
         .put("isUpload", track.isUpload)
 
@@ -181,6 +182,7 @@ object PartyTrackJson {
             durationMs = durationMs.coerceAtLeast(0),
             explicit = value.optBoolean("explicit"),
             musicVideoType = value.string("musicVideoType"),
+            musicVideoId = value.string("musicVideoId"),
             autoplayGenerated = value.optBoolean("autoplayGenerated"),
             isUpload = value.optBoolean("isUpload"),
         )

@@ -29,11 +29,14 @@ import dev.sfg.orchard.mobile.model.Track
 /** Converts provider-neutral tracks to Media3 items without persisting stream URLs. */
 object MediaItemMapper {
     private const val SCHEME = "orchard"
+    private const val AUDIO_AUTHORITY = "stream"
+    private const val VIDEO_AUTHORITY = "video"
     private const val TRACK_JSON = "orchard.track.json"
 
-    fun toMediaItem(track: Track): MediaItem {
+    fun toMediaItem(track: Track, videoId: String = ""): MediaItem {
+        val storedTrack = track.copy(musicVideoId = track.musicVideoId.ifBlank { videoId })
         val extras = Bundle().apply {
-            putString(TRACK_JSON, dev.sfg.orchard.mobile.model.CatalogJson.track(track).toString())
+            putString(TRACK_JSON, dev.sfg.orchard.mobile.model.CatalogJson.track(storedTrack).toString())
             putBoolean("explicit", track.explicit)
         }
         val metadata = MediaMetadata.Builder()
@@ -47,8 +50,8 @@ object MediaItemMapper {
             .build()
         val uri = Uri.Builder()
             .scheme(SCHEME)
-            .authority("stream")
-            .appendPath(track.id)
+            .authority(if (videoId.isBlank()) AUDIO_AUTHORITY else VIDEO_AUTHORITY)
+            .appendPath(videoId.ifBlank { track.id })
             .build()
         val requestMetadata = MediaItem.RequestMetadata.Builder()
             .setMediaUri(uri)
@@ -78,7 +81,43 @@ object MediaItemMapper {
         )
     }
 
-    fun isOrchardUri(uri: Uri): Boolean = uri.scheme == SCHEME && uri.host == "stream"
+    fun isOrchardUri(uri: Uri): Boolean =
+        uri.scheme == SCHEME && (uri.host == AUDIO_AUTHORITY || uri.host == VIDEO_AUTHORITY)
+
+    fun isVideoUri(uri: Uri?): Boolean = uri?.scheme == SCHEME && uri.host == VIDEO_AUTHORITY
+
+    fun sourceId(uri: Uri): String = uri.lastPathSegment.orEmpty()
+
+    /** Replaces only the source; media id, metadata, and queue position remain unchanged. */
+    fun asVideo(item: MediaItem, videoId: String): MediaItem {
+        require(videoId.isNotBlank()) { "A music video id is required" }
+        val uri = Uri.Builder().scheme(SCHEME).authority(VIDEO_AUTHORITY).appendPath(videoId).build()
+        return item.buildUpon()
+            .setUri(uri)
+            .setMimeType(null)
+            .setRequestMetadata(item.requestMetadata.buildUpon().setMediaUri(uri).build())
+            .build()
+    }
+
+    fun withMusicVideoId(item: MediaItem, videoId: String): MediaItem {
+        if (videoId.isBlank()) return item
+        val track = toTrack(item).copy(musicVideoId = videoId)
+        val extras = Bundle(item.mediaMetadata.extras ?: Bundle()).apply {
+            putString(TRACK_JSON, dev.sfg.orchard.mobile.model.CatalogJson.track(track).toString())
+        }
+        return item.buildUpon()
+            .setMediaMetadata(item.mediaMetadata.buildUpon().setExtras(extras).build())
+            .build()
+    }
+
+    fun asAudio(item: MediaItem): MediaItem {
+        val uri = Uri.Builder().scheme(SCHEME).authority(AUDIO_AUTHORITY).appendPath(item.mediaId).build()
+        return item.buildUpon()
+            .setUri(uri)
+            .setMimeType(null)
+            .setRequestMetadata(item.requestMetadata.buildUpon().setMediaUri(uri).build())
+            .build()
+    }
 
     fun requiresAuthenticatedHls(uri: Uri): Boolean =
         isOrchardUri(uri) && uri.getQueryParameter(AUTHENTICATED_HLS) == "1"

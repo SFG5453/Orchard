@@ -356,6 +356,22 @@ class YouTubeStreamResolver(
         }
     }
 
+    /** Resolves a muxed music-video stream. A failure is handled by the service's audio fallback. */
+    fun resolveVideo(videoId: String): ResolvedStream {
+        require(videoId.isNotBlank()) { "A YouTube video id is required" }
+        val quality = qualityProvider()
+        val cacheKey = "$videoId:VIDEO:${quality.name}"
+        cached(cacheKey)?.let { return it }
+        val lock = locks.computeIfAbsent(cacheKey) { Any() }
+        synchronized(lock) {
+            cached(cacheKey)?.let { return it }
+            val stream = newPipeResolver.resolveVideo(videoId, quality)
+                ?: error("No playable video format was returned")
+            streams[cacheKey] = stream
+            return stream
+        }
+    }
+
     /**
      * Fetches the visitor identity off the critical path. It costs a full watch-page download,
      * which is the single largest part of a cold first play.

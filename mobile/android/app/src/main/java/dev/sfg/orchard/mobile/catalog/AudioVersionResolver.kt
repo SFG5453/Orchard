@@ -74,7 +74,11 @@ class AudioVersionResolver(private val client: InnerTubeClient) {
     // Keep the original metadata: the album page knows the album, artwork and track order, and
     // search results routinely disagree on all three.
     private fun Track.withVersion(version: ResolvedVersion): Track =
-        copy(id = version.id, musicVideoType = version.musicVideoType)
+        copy(
+            id = version.id,
+            musicVideoType = version.musicVideoType,
+            musicVideoId = musicVideoId.ifBlank { id.takeIf { isVideoUpload }.orEmpty() },
+        )
 
     private companion object {
         const val TAG = "AudioVersionResolver"
