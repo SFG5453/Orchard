@@ -71,6 +71,26 @@ object TrackFeatures {
             .getOrNull()
     }
 
+    /** Builds the same bounded planner payload as orchardv3 from one decoded window. */
+    fun plannerWindow(
+        samples: FloatArray,
+        sampleRate: Double,
+        offsetSeconds: Double,
+        trackDurationSeconds: Double,
+        grid: BeatTracker.Grid,
+    ): String? {
+        if (!available || samples.isEmpty()) return null
+        val json = runCatching {
+            nativeAnalyzePlannerWindow(
+                samples, sampleRate, offsetSeconds, trackDurationSeconds,
+                grid.bpm, grid.beatConfidence,
+                grid.beats.map { it - offsetSeconds }.toDoubleArray(),
+                grid.downbeats.map { it - offsetSeconds }.toDoubleArray(),
+            )
+        }.onFailure { Log.w(TAG, "Bounded planner analysis failed", it) }.getOrNull() ?: return null
+        return json.takeIf { it != "{}" }
+    }
+
     /**
      * The subset of the analyzer's output the transition policy reads.
      *
@@ -217,6 +237,17 @@ object TrackFeatures {
         samples: FloatArray,
         sampleRate: Double,
         duration: Double,
+    ): String
+
+    @JvmStatic private external fun nativeAnalyzePlannerWindow(
+        samples: FloatArray,
+        sampleRate: Double,
+        offsetSeconds: Double,
+        trackDurationSeconds: Double,
+        bpm: Double,
+        confidence: Double,
+        beats: DoubleArray,
+        downbeats: DoubleArray,
     ): String
 
     @JvmStatic private external fun nativeSampleRate(): Double

@@ -1,6 +1,6 @@
 # Beat This accuracy on GTZAN mini
 
-> Historical experiment: production now uses stock ONNX Runtime CPU. QNN dependencies and NPU harness code have been removed; the NPU results below describe the earlier experimental build.
+> Historical experiment: playback analysis now prefers FP32 LiteRT GPU and falls back to stock ONNX Runtime INT8 CPU. QNN dependencies and NPU harness code have been removed; the NPU results below describe the earlier experimental build.
 
 Measured September 9, 2026 using the same six-second `small0` and `final0` models as the [phone speed benchmark](BEAT_QUANT_BENCHMARK.md). The phone was a Motorola razr 2023 (SM7450). Phone inference was sequential; CPU variants were A8W8 and dynamic INT8 only. FP32 references ran on the host.
 

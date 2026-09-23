@@ -96,6 +96,10 @@ android {
         }
     }
 
+    androidResources {
+        noCompress += ['tflite']
+    }
+
     signingConfigs {
         if (orchardReleaseSigningReady) {
             release {
@@ -313,6 +317,7 @@ dependencies {
     debugImplementation 'androidx.compose.ui:ui-tooling'
 
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.30.0'
+    implementation 'com.google.ai.edge.litert:litert:2.2.0'
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20260719'

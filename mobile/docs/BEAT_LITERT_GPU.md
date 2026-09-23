@@ -3,8 +3,8 @@
 Direct checkpoint export now works. The experiment uses the official `final0`
 checkpoint and Beat This source, [LiteRT Torch's PyTorch converter](https://developers.google.com/edge/litert/conversion/pytorch/overview), and the fixed `[1,1500,128]` input used by mobile. The reproducible exporter is
 [`../tools/export_beat_litert.py`](../tools/export_beat_litert.py). The resulting
-model is an **experimental FP32 GPU candidate**. The shipping mobile model
-remains dynamic INT8 ONNX on CPU.
+model is now the FP32 GPU path for playback analysis. Dynamic INT8 ONNX remains
+the CPU fallback.
 
 ## Export
 
@@ -64,7 +64,13 @@ earlier at about 2.3 s per chunk on this phone, so this candidate is faster
 at inference but much larger than the 21 MB shipping asset.
 
 The phone benchmark uses generated input and reports no output tensors.
-GPU-device logits and beat/downbeat peak agreement against the checkpoint
-still need validation on real mel inputs before this model can be selected in
-the app. Model loading, runtime lifetime, thermal behavior, and the user choice
-between INT8 CPU and FP32 GPU also need app integration testing.
+GPU-device beat and downbeat grids were subsequently checked against the v3
+planner result on the Motorola razr 2023 with the real `Illegal` and
+`Girl Like Me` 60-second planner windows. LiteRT 2.2.0's `CompiledModel` needs
+both GPU and CPU accelerators enabled because `BROADCAST_TO` stays on CPU. Its
+default GPU precision returned constant logits on this phone; explicit OpenCL
+FP32 precision produced usable grids (173/50 outgoing beats/downbeats and
+138/39 incoming) and the shared planner selected a 6.998-second bass swap.
+The device-selected plan starts `Illegal` at 132.749 s and cues `Girl Like Me`
+at 44.578 s, versus orchardv3's 132.701 s and 44.553 s. The phone-derived
+listening render is in `artifacts/transition-pinkpantheress/`.

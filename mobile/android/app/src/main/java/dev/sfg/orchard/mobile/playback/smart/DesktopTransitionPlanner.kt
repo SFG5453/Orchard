@@ -58,7 +58,8 @@ internal object DesktopTransitionPlanner {
 internal fun plannerInput(
     analysis: TrackAnalysis, nextAnalysis: TrackAnalysis, duration: Double, nextDuration: Double,
 ): JSONObject = JSONObject()
-    .put("analysis", analysis.plannerJson()).put("nextAnalysis", nextAnalysis.plannerJson())
+    .put("analysis", analysis.plannerJson(incoming = false))
+    .put("nextAnalysis", nextAnalysis.plannerJson(incoming = true))
     .put("duration", duration.orZero()).put("nextDuration", nextDuration.orZero())
 
 internal fun Track.plannerJson(): JSONObject = JSONObject()
@@ -66,7 +67,13 @@ internal fun Track.plannerJson(): JSONObject = JSONObject()
     .put("artist", artist).put("album", album).put("albumId", albumId)
     .put("durationSeconds", durationMs / 1000.0)
 
-internal fun TrackAnalysis.plannerJson(): JSONObject = JSONObject(plannerFeaturesJson).apply {
+internal fun TrackAnalysis.plannerJson(incoming: Boolean = false): JSONObject {
+    val bounded = if (incoming) plannerHeadJson else plannerTailJson
+    if (bounded.isNotEmpty()) return JSONObject(bounded).apply {
+        put("status", status)
+        put("trackId", trackId)
+    }
+    return JSONObject(plannerFeaturesJson).apply {
     // Re-normalize against mobile's final refined grid, rather than retaining a pre-refinement grid.
     listOf("timing", "audibleRange", "harmonic", "frames", "boundaries").forEach { remove(it) }
 
@@ -96,6 +103,7 @@ internal fun TrackAnalysis.plannerJson(): JSONObject = JSONObject(plannerFeature
     })
     put("energyCurve", energy(energyCurve)); put("lowEnergyCurve", energy(lowEnergyCurve))
     put("mixInCandidates", candidates(mixInCandidates)); put("mixOutCandidates", candidates(mixOutCandidates))
+}
 }
 
 internal fun JSONObject.number(name: String, fallback: Double = 0.0) = optDouble(name, fallback)

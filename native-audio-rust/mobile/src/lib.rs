@@ -40,7 +40,7 @@ use earmark::analysis::{
     VOCAL_SPECTROGRAM_HOP, VOCAL_SPECTROGRAM_SAMPLE_RATE, WholeTrackAnalysis, WholeTrackAnalyzer,
 };
 use jni::JNIEnv;
-use jni::objects::{JByteBuffer, JClass, JFloatArray};
+use jni::objects::{JByteBuffer, JClass, JDoubleArray, JFloatArray};
 use jni::sys::{jdouble, jfloatArray, jint, jstring};
 use serde_json::json;
 
@@ -123,6 +123,112 @@ fn mobile_analysis_json(result: &WholeTrackAnalysis) -> String {
         "mixOutCandidates": cues(&result.mix_out_candidates),
     })
     .to_string()
+}
+
+/// The bounded, model-grid-only planner evidence used by orchardv3. This is kept
+/// separate from the whole-track Best Mix summary above: its times are rebased
+/// to the original song, and spectral vocals remain unknown until measured by
+/// an actual vocal model.
+fn planner_window_json(
+    result: &WholeTrackAnalysis,
+    offset: f64,
+    duration: f64,
+    bpm: f64,
+    confidence: f64,
+    beats: &[f64],
+    downbeats: &[f64],
+) -> String {
+    let frames: Vec<_> = result.transition_feature_frames.iter().map(|frame| json!({
+        "time": offset + frame.time,
+        "energy": frame.energy,
+        "low": frame.low,
+        "mid": frame.mid,
+        "high": frame.high,
+        "vocal": null,
+        "novelty": frame.novelty,
+        "transientDensity": frame.transient_density,
+        "stability": frame.stability,
+    })).collect();
+    let boundaries: Vec<_> = result.structural_boundary_candidates.iter().map(|boundary| {
+        let nearest = downbeats.iter().copied().min_by(|a, b|
+            (a - boundary.observed_time).abs().total_cmp(&(b - boundary.observed_time).abs()));
+        let snapped = nearest.filter(|time|
+            (time - boundary.observed_time).abs() <= (60.0 / bpm).max(0.25))
+            .unwrap_or(boundary.observed_time);
+        json!({
+            "time": offset + snapped,
+            "observedTime": offset + boundary.observed_time,
+            "confidence": boundary.confidence,
+            "source": boundary.source,
+            "noveltyPeak": boundary.novelty_peak,
+            "energyDelta": boundary.energy_delta,
+            "lowDelta": boundary.low_delta,
+            "vocalDelta": null,
+            "stabilityBefore": boundary.stability_before,
+            "stabilityAfter": boundary.stability_after,
+            "downbeatDistance": nearest.map(|time| (time - boundary.observed_time).abs()),
+        })
+    }).collect();
+    let content_end = if offset + result.duration + 0.05 < duration {
+        duration
+    } else {
+        offset + result.content_end_time
+    };
+    json!({
+        "duration": duration,
+        "bpm": bpm,
+        "beatInterval": 60.0 / bpm,
+        "beatConfidence": confidence,
+        "downbeatConfidence": confidence,
+        "beatModelChecked": true,
+        "beats": beats.iter().map(|time| offset + time).collect::<Vec<_>>(),
+        "downbeats": downbeats.iter().map(|time| offset + time).collect::<Vec<_>>(),
+        "meter": {"beatsPerBar": 4, "confidence": 0.15, "source": "assumed-4-4"},
+        "key": result.key,
+        "keyConfidence": result.key_confidence,
+        "chroma": result.chroma,
+        "audibleStartTime": offset + result.audible_start_time,
+        "pickupConfidence": result.pickup_confidence,
+        "contentEndTime": content_end,
+        "transitionFeatureFrames": frames,
+        "structuralBoundaryCandidates": boundaries,
+    }).to_string()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_TrackFeatures_nativeAnalyzePlannerWindow(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    samples: JFloatArray<'_>,
+    sample_rate: jdouble,
+    offset: jdouble,
+    duration: jdouble,
+    bpm: jdouble,
+    confidence: jdouble,
+    beats: JDoubleArray<'_>,
+    downbeats: JDoubleArray<'_>,
+) -> jstring {
+    let read_doubles = |env: &mut JNIEnv<'_>, input: &JDoubleArray<'_>| {
+        let mut values = vec![0.0; env.get_array_length(input)? as usize];
+        env.get_double_array_region(input, 0, &mut values)?;
+        Ok::<_, jni::errors::Error>(values)
+    };
+    let values = read_floats(&mut env, &samples).ok();
+    let beats = read_doubles(&mut env, &beats).ok();
+    let downbeats = read_doubles(&mut env, &downbeats).ok();
+    let output = values.zip(beats).zip(downbeats).and_then(|((samples, beats), downbeats)| {
+        if !sample_rate.is_finite() || sample_rate <= 0.0 || !offset.is_finite()
+            || !duration.is_finite() || !bpm.is_finite() || bpm <= 0.0
+            || !confidence.is_finite() || samples.is_empty()
+        {
+            return None;
+        }
+        let local_duration = samples.len() as f64 / sample_rate;
+        with_analyzer(|analyzer| analyzer.analyze(&samples, sample_rate, local_duration))
+            .ok()
+            .map(|result| planner_window_json(&result, offset, duration, bpm, confidence, &beats, &downbeats))
+    }).unwrap_or_else(|| "{}".to_owned());
+    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
 
 #[unsafe(no_mangle)]

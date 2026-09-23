@@ -81,6 +81,9 @@ data class TrackAnalysis(
     val vocalProbability: Double = 0.0,
     /** Native structural, spectral, and meter evidence consumed by the shared desktop planner. */
     val plannerFeaturesJson: String = "{}",
+    /** V3-compatible bounded planner evidence for this track in each queue role. */
+    val plannerHeadJson: String = "",
+    val plannerTailJson: String = "",
 
 ) {
     companion object {

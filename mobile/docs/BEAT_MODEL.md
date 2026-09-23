@@ -1,10 +1,10 @@
 # Beat This! beat/downbeat model
 
-`android/app/src/main/assets/beat_this_int8.onnx` ships the official **final0**
-checkpoint as a fixed 1500-frame, dynamically quantized INT8 graph (21,068,518
-bytes). Production `BeatTracker` explicitly uses CPU with four threads; the
-open-unmix vocal separator also explicitly uses CPU. Stock ONNX Runtime Android 1.29.0 supplies the runtime. QNN dependencies, startup
-probing and NPU device tests have been removed.
+`android/app/src/main/assets/beat_this_fp32.tflite` ships the official **final0**
+checkpoint as a fixed 1500-frame FP32 LiteRT graph. Playback analysis prefers
+LiteRT 2.2.0 GPU with explicit FP32 OpenCL precision. The same app also ships
+`beat_this_int8.onnx` (21,068,518 bytes) as a CPU fallback, run with four
+ONNX Runtime threads. The open-unmix vocal separator uses CPU.
 
 The asset SHA-256 is
 `33920bdfe3342cabe0f17350f0e9b3fe1dca6aedca2831a4ad18b45407a41d0d`.
@@ -13,10 +13,8 @@ exported from the official checkpoint with upstream CPJKU code and prepared
 using `tools/prepare_beat_quant.py`. The versioned extracted filename prevents
 older installed copies of small0 from being reused after an app update.
 
-APK compression is retained. Both trackers stream the asset to an extracted
-file and pass its path to ONNX Runtime; they do not read the complete compressed
-and decompressed models into Java byte arrays. Compression affects package size
-and first-use extraction, not the model's inference working-set requirement.
+The INT8 ONNX asset stays compressed and is extracted to a file on first use.
+The FP32 LiteRT asset is stored uncompressed so the runtime can map it directly.
 
 ## Licensing
 
@@ -48,8 +46,8 @@ see [BEAT_QUANT_BENCHMARK.md](BEAT_QUANT_BENCHMARK.md) and the subsequent
 [100-track accuracy evaluation](BEAT_MODEL_ACCURACY.md). The measurements below
 are the earlier experiment and use a different model/build configuration.
 
-A [direct checkpoint-to-LiteRT FP32 GPU export](BEAT_LITERT_GPU.md) is available
-as an experimental candidate. It is not yet selected by the Android app.
+The [direct checkpoint-to-LiteRT FP32 GPU export](BEAT_LITERT_GPU.md) is selected
+when the device can compile and run it. A failed GPU path falls back to INT8 CPU.
 
 ## Quantization: why int8 and not fp16
 

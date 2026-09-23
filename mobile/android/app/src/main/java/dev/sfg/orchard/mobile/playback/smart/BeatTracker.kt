@@ -59,7 +59,18 @@ class BeatTracker(private val context: Context) {
     )
 
     @Volatile private var session: OrtSession? = null
+    private var gpuRunner: Fp32BeatRunner? = null
+    private var gpuUnavailable = false
     private val lock = Any()
+
+    private fun gpu(): Fp32BeatRunner? = synchronized(lock) {
+        gpuRunner?.let { return@synchronized it }
+        if (gpuUnavailable) return@synchronized null
+        runCatching { Fp32BeatRunner(context) }
+            .onSuccess { gpuRunner = it; Log.i(TAG, "FP32 LiteRT GPU beat model ready") }
+            .onFailure { gpuUnavailable = true; Log.w(TAG, "LiteRT GPU unavailable; using INT8 CPU", it) }
+            .getOrNull()
+    }
 
     /** Parsing a 21 MB graph is far too expensive to repeat per track, so one session is kept. */
     private fun session(): OrtSession? {
@@ -104,16 +115,25 @@ class BeatTracker(private val context: Context) {
         val melStarted = System.currentTimeMillis()
         val spectrogram = MelSpectrogram.compute(pcm) ?: return null
         val melMs = System.currentTimeMillis() - melStarted
-        val active = session() ?: return null
-
         val beatLogits = FloatArray(spectrogram.frames)
         val downbeatLogits = FloatArray(spectrogram.frames)
         val inferStarted = System.currentTimeMillis()
-        if (!infer(active, spectrogram, beatLogits, downbeatLogits)) return null
+        val runner = gpu()
+        var gpuWorked = runner != null && infer(spectrogram, beatLogits, downbeatLogits, runner::infer)
+        if (runner != null && !gpuWorked) synchronized(lock) {
+            runCatching { gpuRunner?.close() }
+            gpuRunner = null
+            gpuUnavailable = true
+        }
+        if (!gpuWorked) {
+            val active = session() ?: return null
+            if (!infer(spectrogram, beatLogits, downbeatLogits) { chunk -> cpuChunk(active, chunk) }) return null
+        }
         Log.d(
             TAG,
             "mel ${melMs}ms (${spectrogram.frames} frames) " +
-                "infer ${System.currentTimeMillis() - inferStarted}ms",
+                "infer ${System.currentTimeMillis() - inferStarted}ms " +
+                if (gpuWorked) "FP32 GPU" else "INT8 CPU",
         )
 
         val fps = MelSpectrogram.frameRate
@@ -155,47 +175,58 @@ class BeatTracker(private val context: Context) {
      * their outer border, since there is no neighbouring chunk to supply it.
      */
     @Suppress("UNCHECKED_CAST")
+    private fun cpuChunk(session: OrtSession, chunk: FloatArray): Pair<FloatArray, FloatArray> {
+        val environment = OrtEnvironment.getEnvironment()
+        val shape = longArrayOf(1, CHUNK_FRAMES.toLong(), 128)
+        OnnxTensor.createTensor(environment, FloatBuffer.wrap(chunk), shape).use { tensor ->
+            session.run(mapOf(session.inputNames.first() to tensor)).use { outputs ->
+                return (outputs.get(0).value as Array<FloatArray>)[0] to
+                    (outputs.get(1).value as Array<FloatArray>)[0]
+            }
+        }
+    }
+
     private fun infer(
-        session: OrtSession,
         spectrogram: MelSpectrogram.Spectrogram,
         beatLogits: FloatArray,
         downbeatLogits: FloatArray,
+        runChunk: (FloatArray) -> Pair<FloatArray, FloatArray>,
     ): Boolean = runCatching {
-        val environment = OrtEnvironment.getEnvironment()
         val mels = spectrogram.mels
-        val name = session.inputNames.first()
         val stride = CHUNK_FRAMES - 2 * BORDER_FRAMES
+        val starts = mutableListOf<Int>()
+        var start = -BORDER_FRAMES
+        while (start < spectrogram.frames - BORDER_FRAMES) {
+            starts += start
+            start += stride
+        }
+        if (starts.isEmpty()) starts += -BORDER_FRAMES
+        if (spectrogram.frames > stride) starts[starts.lastIndex] =
+            spectrogram.frames - (CHUNK_FRAMES - BORDER_FRAMES)
+        while (starts.size > 1 && starts.last() - starts[starts.lastIndex - 1] < 2 * BORDER_FRAMES) {
+            starts.removeAt(starts.lastIndex)
+        }
+        beatLogits.fill(-1000f)
+        downbeatLogits.fill(-1000f)
 
-        var start = 0
-        while (start < spectrogram.frames) {
-            val length = min(CHUNK_FRAMES, spectrogram.frames - start)
-            // A chunk shorter than the border padding carries no usable centre.
-            if (length <= 2 * BORDER_FRAMES && start > 0) break
-
-            // The final0 export has a fixed 1500-frame input. Pad short windows and
-            // the last chunk, then discard padded output using length below.
+        // V3 stitches in reverse so the earliest prediction owns an overlapping frame.
+        for (chunkStart in starts.asReversed()) {
+            val from = max(0, chunkStart)
+            val to = min(spectrogram.frames, max(0, chunkStart + CHUNK_FRAMES))
+            val left = max(0, -chunkStart)
+            val right = min(BORDER_FRAMES, max(0, chunkStart + CHUNK_FRAMES - spectrogram.frames))
+            val frames = to - from + left + right
             val chunk = FloatArray(CHUNK_FRAMES * mels)
-            spectrogram.values.copyInto(chunk, 0, start * mels, (start + length) * mels)
-            val shape = longArrayOf(1, CHUNK_FRAMES.toLong(), mels.toLong())
-
-            OnnxTensor.createTensor(environment, FloatBuffer.wrap(chunk), shape).use { tensor ->
-                session.run(mapOf(name to tensor)).use { outputs ->
-                    val beat = (outputs.get(0).value as Array<FloatArray>)[0]
-                    val downbeat = (outputs.get(1).value as Array<FloatArray>)[0]
-
-                    val keepFrom = if (start == 0) 0 else BORDER_FRAMES
-                    val keepTo = if (start + length >= spectrogram.frames) length else length - BORDER_FRAMES
-                    for (index in keepFrom until keepTo) {
-                        val target = start + index
-                        if (target >= beatLogits.size) break
-                        beatLogits[target] = beat[index]
-                        downbeatLogits[target] = downbeat[index]
-                    }
-                }
+            spectrogram.values.copyInto(chunk, left * mels, from * mels, to * mels)
+            val (beat, downbeat) = runChunk(chunk)
+            val border = if (frames < 2 * BORDER_FRAMES) 0 else BORDER_FRAMES
+            for (index in border until frames - border) {
+                val target = chunkStart + index
+                if (target !in beatLogits.indices) continue
+                beatLogits[target] = beat[index]
+                downbeatLogits[target] = downbeat[index]
             }
 
-            if (start + length >= spectrogram.frames) break
-            start += stride
         }
         true
     }.onFailure { Log.w(TAG, "Beat inference failed", it) }.getOrDefault(false)
@@ -204,6 +235,8 @@ class BeatTracker(private val context: Context) {
         synchronized(lock) {
             runCatching { session?.close() }
             session = null
+            runCatching { gpuRunner?.close() }
+            gpuRunner = null
         }
     }
 
