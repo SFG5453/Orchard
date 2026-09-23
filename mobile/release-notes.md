@@ -1,6 +1,6 @@
-## Orchard Mobile 1.9.1 "Journeyman Anthology"
+## Orchard Mobile 1.9.2 "Buzzkill Manes"
 
-### Fixed
-- **Public Stream Playback**: Fixed public YouTube tracks failing with CDN errors by routing every quality tier through NewPipe while preserving the selected bitrate.
-- **Public Stream Downloads**: Downloads now use the same quality-aware public resolver as playback, while account-only uploads retain the Innertube fallback.
-
+### Fixed — backported from Orchard Mobile 2.0.0 beta
+- **Audio Version Matching**: Reject a search result when its runtime is too different from the selected track, even if the title and artist match.
+- **Search Result Durations**: Read the runtime when a play count follows it in YouTube Music search results.
+- **Playlist Additions**: Save the same album-audio version used for playback when creating a playlist or adding a track to one.

@@ -119,17 +119,22 @@ class UpdateDialogParserTest {
         val notes = dev.sfg.orchard.mobile.MobileChangelog.CURRENT_RELEASE_NOTES
         val sections = parseReleaseNoteSections(notes)
 
+        assertTrue(notes.contains("backported from Orchard Mobile 2.0.0 beta"))
         assertEquals(1, sections.size)
-        assertEquals("Fixed", sections[0].title)
+        assertEquals("Fixed — backported from Orchard Mobile 2.0.0 beta", sections[0].title)
         assertEquals(ReleaseNoteCategory.FIXED, sections[0].category)
-        assertEquals(2, sections[0].items.size)
+        assertEquals(3, sections[0].items.size)
         assertEquals(
-            "**Public Stream Playback**: Fixed public YouTube tracks failing with CDN errors by routing every quality tier through NewPipe while preserving the selected bitrate.",
+            "**Audio Version Matching**: Reject a search result when its runtime is too different from the selected track, even if the title and artist match.",
             sections[0].items[0],
         )
         assertEquals(
-            "**Public Stream Downloads**: Downloads now use the same quality-aware public resolver as playback, while account-only uploads retain the Innertube fallback.",
+            "**Search Result Durations**: Read the runtime when a play count follows it in YouTube Music search results.",
             sections[0].items[1],
+        )
+        assertEquals(
+            "**Playlist Additions**: Save the same album-audio version used for playback when creating a playlist or adding a track to one.",
+            sections[0].items[2],
         )
     }
 
