@@ -48,6 +48,9 @@ see [BEAT_QUANT_BENCHMARK.md](BEAT_QUANT_BENCHMARK.md) and the subsequent
 [100-track accuracy evaluation](BEAT_MODEL_ACCURACY.md). The measurements below
 are the earlier experiment and use a different model/build configuration.
 
+A [direct checkpoint-to-LiteRT FP32 GPU export](BEAT_LITERT_GPU.md) is available
+as an experimental candidate. It is not yet selected by the Android app.
+
 ## Quantization: why int8 and not fp16
 
 fp16 was built and measured rather than assumed, because the usual reasoning —
