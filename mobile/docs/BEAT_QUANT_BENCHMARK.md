@@ -1,6 +1,6 @@
 # Beat This quantization on Motorola razr 2023
 
-> Historical experiment: production now uses stock ONNX Runtime CPU. QNN dependencies and NPU harness code have been removed; the NPU results below describe the earlier experimental build.
+> Historical experiment: production now uses FP16 LiteRT GPU with dynamic INT8 ONNX Runtime CPU fallback. QNN dependencies and NPU harness code have been removed; the NPU results below describe the earlier experimental build.
 
 Measured September 9, 2026 on SM7450. Both official checkpoints were exported through the same pipeline. Exactly one Beat This model ran on the phone at a time. Phone CPU benchmarks were restricted to INT8 and lower weight precision.
 
@@ -38,7 +38,7 @@ Reloading the context took **1,082.0 ms**. Median inference was **1,191.1 ms** o
 
 Accuracy on the same 100-track GTZAN mini set was only **56.59% beat / 32.73% downbeat F1**. This specific 30-second A8W8 artifact is not suitable for production; see the [accuracy follow-up](BEAT_MODEL_ACCURACY.md#thirty-second-final0-npu-follow-up).
 
-[Raw follow-up artifacts and matching desktop SDK setup](../../artifacts/beat-npu30/README.md). This context was compiled on the phone. Matching QAIRT 2.45.0 host tools were downloaded and their native context compiler startup verified; a complete host conversion workflow has not yet been validated.
+This context was compiled on the phone. Matching QAIRT 2.45.0 host tools were downloaded and their native context compiler startup verified; a complete host conversion workflow has not yet been validated.
 
 ## NPU compatibility and preparation limits
 
@@ -61,7 +61,7 @@ Calibration used three excerpts of the upstream bundled music fixture, beginning
 | small0 | 0.3982 | 0.7840 | 4.1318 | 0.0797 |
 | final0 | 0.2633 | 0.4850 | 2.3189 | 0.4683 |
 
-Static A8W8 showed substantial output drift with this small calibration set. These are logit errors, not labeled beat/downbeat accuracy scores. During this timing experiment, device outputs were checked for finiteness. The subsequent [GTZAN mini accuracy evaluation](BEAT_MODEL_ACCURACY.md) scores both six-second checkpoints on the phone against beat/downbeat annotations. The working cached NPU graphs are performance/compatibility artifacts, not validated replacements for the shipping model. Full per-head errors are in [ACCURACY.md](../../artifacts/beat-quant/ACCURACY.md).
+Static A8W8 showed substantial output drift with this small calibration set. These are logit errors, not labeled beat/downbeat accuracy scores. During this timing experiment, device outputs were checked for finiteness. The subsequent [GTZAN mini accuracy evaluation](BEAT_MODEL_ACCURACY.md) scores both six-second checkpoints on the phone against beat/downbeat annotations. The working cached NPU graphs are performance/compatibility results, not validated replacements for the shipping model.
 
 ## Measurement setup
 
@@ -73,7 +73,7 @@ Static A8W8 showed substantial output drift with this small calibration set. The
 - Cooldown gates were added after initial exploratory runs. Several 30-second CPU runs began at thermal status 0 and ended at 3; these are practical sustained phone measurements, not a claim of unthrottled peak speed. The final six-second comparison and cached loads stayed at status 0.
 - The app may perform its tiny startup NPU capability probe; no two Beat This variants ran concurrently. Host preparation and numerical checks could run alongside phone work.
 
-## Sources, tools and artifacts
+## Sources and tools
 
 Sources were followed from [BEAT_MODEL.md](BEAT_MODEL.md) and [the desktop model README](../../models/beat-this/README.md) to [CPJKU/beat_this](https://github.com/CPJKU/beat_this). Both checkpoints came from the official cloud source:
 
@@ -82,9 +82,4 @@ Sources were followed from [BEAT_MODEL.md](BEAT_MODEL.md) and [the desktop model
 
 Preparation code: [prepare_beat_quant.py](../tools/prepare_beat_quant.py). Device harness: [BeatQuantBenchmark.kt](../android/app/src/androidTest/java/dev/sfg/orchard/mobile/playback/smart/BeatQuantBenchmark.kt). It requires explicit variant/backend arguments, rejects CPU precision labels above INT8, and skips ordinary test-suite runs without selectors.
 
-Working precompiled six-second A8W8 contexts, tested on this phone/runtime:
-
-- [small0 QNN context](../../artifacts/beat-quant/small0f300_a8w8_cached.onnx)
-- [final0 QNN context](../../artifacts/beat-quant/final0f300_a8w8_cached.onnx)
-
-The local [experiment directory](../../artifacts/beat-quant/README.md) contains source exports, QDQ variants, commands, raw outcomes, native crash logs, calibration input and numerical checks. provenance.json records source/model hashes and upstream commit; host-versions.json records preparation dependencies; [RESULTS.md](../../artifacts/beat-quant/RESULTS.md) gives per-run ranges and thermal states. Production playback code and shipped model assets were not changed.
+The precompiled six-second small0 and final0 A8W8 contexts were tested on this phone/runtime during the historical experiment. They are not shipped with the app.

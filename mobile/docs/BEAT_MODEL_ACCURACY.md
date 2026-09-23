@@ -1,6 +1,6 @@
 # Beat This accuracy on GTZAN mini
 
-> Historical experiment: playback analysis now prefers FP32 LiteRT GPU and falls back to stock ONNX Runtime INT8 CPU. QNN dependencies and NPU harness code have been removed; the NPU results below describe the earlier experimental build.
+> Historical experiment: playback analysis now prefers FP16 LiteRT GPU and falls back to dynamic INT8 ONNX Runtime CPU. QNN dependencies and NPU harness code have been removed; the NPU results below describe the earlier experimental build.
 
 Measured September 9, 2026 using the same six-second `small0` and `final0` models as the [phone speed benchmark](BEAT_QUANT_BENCHMARK.md). The phone was a Motorola razr 2023 (SM7450). Phone inference was sequential; CPU variants were A8W8 and dynamic INT8 only. FP32 references ran on the host.
 
@@ -29,7 +29,7 @@ However, the original 30-second A8W8 artifact scored only **56.59% beat F1 / 32.
 
 All 200 input windows and all 100 output aggregations were checked against upstream `split_piece` / `aggregate_prediction` and matched exactly; every output was finite. The 30-second and six-second A8W8 graphs were separately calibrated, so this comparison does not isolate context length. The result establishes poor accuracy for this particular quantized NPU artifact, not that longer context inherently reduces accuracy. The earlier host numerical check already showed substantial drift for the full-length A8W8 graph. Further work must separate quantization/calibration error from provider arithmetic; this run did not score the 30-second CPU QDQ or dynamic-INT8 variants on these labels.
 
-[Follow-up setup and raw artifacts](../../artifacts/beat-npu30/README.md), [accuracy summary](../../artifacts/beat-npu30/summary.json), [per-track scores](../../artifacts/beat-npu30/scores.json), and [cached context](../../artifacts/beat-npu30/final0_a8w8_cached.onnx). Matching QAIRT 2.45.0 desktop tools were downloaded and compiler startup verified during this experiment; the measured context was generated on the phone.
+Matching QAIRT 2.45.0 desktop tools were downloaded and compiler startup verified during this experiment; the measured context was generated on the phone.
 
 ## Interpretation
 
@@ -54,8 +54,6 @@ This isolates observed provider differences but does not identify which QNN oper
 - Strict QNN HTP with CPU fallback disabled; cached models are the unchanged embedded contexts from the speed test. CPU sessions use four threads. Every output was finite and each phone result file had the expected 600 × 2 × 300 floats.
 - Measures model/backend quality with upstream host feature extraction and postprocessing. It does not validate Android audio decoding, the production frontend, or its sub-frame peak interpolation. Accuracy inference times are not new speed benchmark results.
 
-## Reproduction and raw results
+## Reproduction
 
-Use [evaluate_beat_accuracy.py](../tools/evaluate_beat_accuracy.py) with `--stage prepare`, `host`, `phone`, then `score`, following its prerequisites and the local [experiment README](../../artifacts/beat-accuracy/README.md). The device harness is [BeatQuantBenchmark.kt](../android/app/src/androidTest/java/dev/sfg/orchard/mobile/playback/smart/BeatQuantBenchmark.kt), selected explicitly with `-e accuracy true`.
-
-Local artifacts: [summary and precision/recall](../../artifacts/beat-accuracy/summary.json), [per-track scores](../../artifacts/beat-accuracy/scores.json), [ordered tracks and audio hashes](../../artifacts/beat-accuracy/manifest.json), and [model/source provenance](../../artifacts/beat-accuracy/provenance.json). Raw device logits, host logits and execution logs are retained in `artifacts/beat-accuracy/` (gitignored). Production model assets and playback code were not changed.
+Use [evaluate_beat_accuracy.py](../tools/evaluate_beat_accuracy.py) with `--stage prepare`, `host`, `phone`, then `score`, following the script's prerequisites. The device harness is [BeatQuantBenchmark.kt](../android/app/src/androidTest/java/dev/sfg/orchard/mobile/playback/smart/BeatQuantBenchmark.kt), selected explicitly with `-e accuracy true`. The historical NPU test did not change production model assets or playback code at the time.

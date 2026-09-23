@@ -1,12 +1,14 @@
 # Beat This! beat/downbeat model
 
-`android/app/src/main/assets/beat_this_fp32.tflite` ships the official **final0**
-checkpoint as a fixed 1500-frame FP32 LiteRT graph. Playback analysis prefers
-LiteRT 2.2.0 GPU with explicit FP32 OpenCL precision. The same app also ships
+`android/app/src/main/assets/beat_this_fp16_gpu.tflite` ships the official
+**final0** checkpoint as a fixed 1500-frame LiteRT graph with FP16 stored
+weights. Its normalization and rotary tables are adjusted to preserve beat
+timing with explicit FP16 OpenCL GPU arithmetic. Input, output, and serialized
+operation boundaries remain FP32. The same app also ships
 `beat_this_int8.onnx` (21,068,518 bytes) as a CPU fallback, run with four
 ONNX Runtime threads. The open-unmix vocal separator uses CPU.
 
-The asset SHA-256 is
+The INT8 ONNX asset SHA-256 is
 `33920bdfe3342cabe0f17350f0e9b3fe1dca6aedca2831a4ad18b45407a41d0d`.
 It is the `final0_int8.onnx` artifact from the September 2026 benchmark,
 exported from the official checkpoint with upstream CPJKU code and prepared
@@ -14,7 +16,7 @@ using `tools/prepare_beat_quant.py`. The versioned extracted filename prevents
 older installed copies of small0 from being reused after an app update.
 
 The INT8 ONNX asset stays compressed and is extracted to a file on first use.
-The FP32 LiteRT asset is stored uncompressed so the runtime can map it directly.
+The LiteRT asset is stored uncompressed so the runtime can map it directly.
 
 ## Licensing
 
@@ -46,10 +48,10 @@ see [BEAT_QUANT_BENCHMARK.md](BEAT_QUANT_BENCHMARK.md) and the subsequent
 [100-track accuracy evaluation](BEAT_MODEL_ACCURACY.md). The measurements below
 are the earlier experiment and use a different model/build configuration.
 
-The [direct checkpoint-to-LiteRT FP32 GPU export](BEAT_LITERT_GPU.md) is selected
+The [checkpoint-to-LiteRT FP16 GPU export](BEAT_LITERT_GPU.md) is selected
 when the device can compile and run it. A failed GPU path falls back to INT8 CPU.
 
-## Quantization: why int8 and not fp16
+## ONNX Runtime CPU: why int8 and not fp16
 
 fp16 was built and measured rather than assumed, because the usual reasoning —
 ARMv8.2 has native fp16, so it should beat dynamically-quantized int8 on a phone
@@ -103,13 +105,11 @@ synthetic percussion (`BeatTrackerTest`):
 
 ## Regenerating
 
-The fp32 source is a build input and is not committed. The mobile asset was
-converted from CPJKU's official `small0.ckpt`; the desktop model remains on its
-separate `final0` build path. Orchard desktop's
-`scripts/fetch-beat-this-model.mjs` downloads it, pinned to commit `07ab790a` of
-`mosynthkey/beat_this_cpp` and verified against sha256
-`c5c1466e08abdb03fdeb50668a06f244b787d564c212490482231a9cfbe9ccbd`. The int8
-file is derived with ONNX Runtime's dynamic quantization:
+The LiteRT asset is exported from CPJKU's official `final0.ckpt`, then packed
+and stabilized with the tracked tools. See [BEAT_LITERT_GPU.md](BEAT_LITERT_GPU.md)
+for pinned source details and commands. The INT8 ONNX fallback is derived from
+the same checkpoint by [prepare_beat_quant.py](../tools/prepare_beat_quant.py),
+using ONNX Runtime's dynamic quantization:
 
 ```python
 from onnxruntime.quantization import quantize_dynamic, QuantType

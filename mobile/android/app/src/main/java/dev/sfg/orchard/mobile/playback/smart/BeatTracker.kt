@@ -59,15 +59,15 @@ class BeatTracker(private val context: Context) {
     )
 
     @Volatile private var session: OrtSession? = null
-    private var gpuRunner: Fp32BeatRunner? = null
+    private var gpuRunner: Fp16BeatRunner? = null
     private var gpuUnavailable = false
     private val lock = Any()
 
-    private fun gpu(): Fp32BeatRunner? = synchronized(lock) {
+    private fun gpu(): Fp16BeatRunner? = synchronized(lock) {
         gpuRunner?.let { return@synchronized it }
         if (gpuUnavailable) return@synchronized null
-        runCatching { Fp32BeatRunner(context) }
-            .onSuccess { gpuRunner = it; Log.i(TAG, "FP32 LiteRT GPU beat model ready") }
+        runCatching { Fp16BeatRunner(context) }
+            .onSuccess { gpuRunner = it; Log.i(TAG, "FP16 LiteRT GPU beat model ready") }
             .onFailure { gpuUnavailable = true; Log.w(TAG, "LiteRT GPU unavailable; using INT8 CPU", it) }
             .getOrNull()
     }
@@ -133,7 +133,7 @@ class BeatTracker(private val context: Context) {
             TAG,
             "mel ${melMs}ms (${spectrogram.frames} frames) " +
                 "infer ${System.currentTimeMillis() - inferStarted}ms " +
-                if (gpuWorked) "FP32 GPU" else "INT8 CPU",
+                if (gpuWorked) "FP16 GPU" else "INT8 CPU",
         )
 
         val fps = MelSpectrogram.frameRate
