@@ -36,6 +36,8 @@ import kotlin.math.abs
 /** Real-song device probe of the same two bounded windows that orchardv3 plans on. */
 @RunWith(AndroidJUnit4::class)
 class V3PlannerInputDeviceTest {
+    private var retainedHeapPressure: ByteArray? = null
+
     private class FileSource(file: File) : MediaDataSource() {
         private val source = RandomAccessFile(file, "r")
         override fun readAt(position: Long, buffer: ByteArray, offset: Int, size: Int): Int {
@@ -52,6 +54,9 @@ class V3PlannerInputDeviceTest {
             InstrumentationRegistry.getArguments().getString("pinkPantheressParity") == "true")
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
+        val pressureMb = InstrumentationRegistry.getArguments().getString("heapPressureMb")
+            ?.toIntOrNull()?.coerceIn(0, 180) ?: 0
+        retainedHeapPressure = ByteArray(pressureMb * 1024 * 1024)
         val tracker = BeatTracker(context)
         val windows = listOf(
             Triple("illegal", 89.661, 149.661),
@@ -70,19 +75,18 @@ class V3PlannerInputDeviceTest {
                 }
                 assertTrue(file.length() > 100_000)
                 val decoded = FileSource(file).use { source ->
-                    AudioDecoder.decodeRegionStereo(source, start, start + 60.0, targetRate = 44_100)
+                    AudioDecoder.decodeRegion(source, start, start + 60.0, targetRate = 44_100)
                 }
                 assertNotNull(decoded)
-                val (stereo, actualStart) = decoded!!
-                val first = ((start - actualStart) * stereo.sampleRate).toInt().coerceAtLeast(0)
-                val length = minOf((60 * stereo.sampleRate).toInt(), stereo.left.size - first)
-                assertTrue(length > 40 * stereo.sampleRate)
-                val mono = FloatArray(length) { index ->
-                    (stereo.left[first + index] + stereo.right[first + index]) * 0.5f
-                }
-                val beatPcm = MelSpectrogram.resample(mono, stereo.sampleRate)!!
+                val (pcm, actualStart) = decoded!!
+                val first = ((start - actualStart) * pcm.sampleRate).toInt().coerceAtLeast(0)
+                val length = minOf((60 * pcm.sampleRate).toInt(), pcm.samples.size - first)
+                assertTrue(length > 40 * pcm.sampleRate)
+                val mono = if (first == 0 && length == pcm.samples.size) pcm.samples
+                    else pcm.samples.copyOfRange(first, first + length)
+                val beatPcm = MelSpectrogram.resample(mono, pcm.sampleRate)!!
                 val grid = tracker.track(beatPcm, start)!!
-                val json = TrackFeatures.plannerWindow(mono, stereo.sampleRate, start, duration, grid)!!
+                val json = TrackFeatures.plannerWindow(mono, pcm.sampleRate, start, duration, grid)!!
                 payloads[name] = JSONObject(json)
             }
             val result = JSONObject()
@@ -91,17 +95,19 @@ class V3PlannerInputDeviceTest {
                 .put("duration", 149.661)
                 .put("nextDuration", 144.801)
             val selected = DesktopTransitionPlanner.invoke("native", result)
-            assertTrue("Expected the seven-second v3 bass swap: $selected",
-                selected.optBoolean("ok") && selected.optString("strategy") == "bass_swap" &&
-                    abs(selected.optDouble("overlapSeconds") - 7.0) < 0.1 &&
-                    abs(selected.optDouble("transitionStart") - 132.701) < 0.25 &&
-                    abs(selected.optDouble("incomingCueTime") - 44.553) < 0.25)
             result.put("selectedPlan", selected)
             val output = File(context.getExternalFilesDir(null), "v3-planner-input-device.json")
             output.writeText(result.toString(2))
             assertTrue(output.length() > 1000)
+            assertTrue("Expected the v3 bass swap; got ${selected.optString("strategy")} " +
+                "start=${selected.optDouble("transitionStart")} cue=${selected.optDouble("incomingCueTime")}",
+                selected.optBoolean("ok") && selected.optString("strategy") == "bass_swap" &&
+                    abs(selected.optDouble("overlapSeconds") - 7.0) < 0.1 &&
+                    abs(selected.optDouble("transitionStart") - 132.701) < 0.25 &&
+                    abs(selected.optDouble("incomingCueTime") - 44.553) < 0.25)
         } finally {
             tracker.release()
+            retainedHeapPressure = null
         }
     }
 }

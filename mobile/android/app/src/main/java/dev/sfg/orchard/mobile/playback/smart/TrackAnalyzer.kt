@@ -389,23 +389,24 @@ class TrackAnalyzer(
         endSeconds: Double,
         trackDurationSeconds: Double,
     ): PlannerRegion? {
+        // Both the beat frontend and the structural analyzer consume mono. Downmix during decode
+        // instead of holding two 44.1 kHz channels and a third full-length mono copy. Keep the
+        // 44.1 kHz decode so Opus uses the same 48 kHz source path as the v3-matched analysis.
         val decoded = openSource()?.use { source ->
-            AudioDecoder.decodeRegionStereo(source, startSeconds, endSeconds, targetRate = 44_100)
+            AudioDecoder.decodeRegion(source, startSeconds, endSeconds, targetRate = 44_100)
         } ?: return null
-        val (stereo, actualStart) = decoded
-        val first = ((startSeconds - actualStart) * stereo.sampleRate).toInt().coerceAtLeast(0)
+        val (pcm, actualStart) = decoded
+        val first = ((startSeconds - actualStart) * pcm.sampleRate).toInt().coerceAtLeast(0)
         val count = minOf(
-            ((endSeconds - startSeconds) * stereo.sampleRate).toInt(),
-            stereo.left.size - first,
-            stereo.right.size - first,
+            ((endSeconds - startSeconds) * pcm.sampleRate).toInt(),
+            pcm.samples.size - first,
         )
-        if (count < stereo.sampleRate.toInt()) return null
-        val mono = FloatArray(count) { index ->
-            (stereo.left[first + index] + stereo.right[first + index]) * 0.5f
-        }
-        val grid = grid(AudioDecoder.Pcm(mono, stereo.sampleRate), startSeconds) ?: return null
+        if (count < pcm.sampleRate.toInt()) return null
+        val mono = if (first == 0 && count == pcm.samples.size) pcm.samples
+            else pcm.samples.copyOfRange(first, first + count)
+        val grid = grid(AudioDecoder.Pcm(mono, pcm.sampleRate), startSeconds) ?: return null
         val payload = TrackFeatures.plannerWindow(
-            mono, stereo.sampleRate, startSeconds, trackDurationSeconds, grid,
+            mono, pcm.sampleRate, startSeconds, trackDurationSeconds, grid,
         ) ?: return null
         return PlannerRegion(grid, payload)
     }
