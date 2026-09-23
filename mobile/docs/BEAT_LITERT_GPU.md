@@ -110,6 +110,14 @@ FP16 saved 92–99 MiB of model-attributable PSS in these paired runs.
 Native heap allocation after inference was about 136 MiB in both modes.
 The measurements cover isolated model inference, not full playback.
 
+Playback now computes both beat grids for a track, closes the compiled GPU
+model, then runs structural feature extraction. In a two-window Android planner
+probe, process PSS fell from 403,411 to 209,698 KiB when the model closed;
+native heap allocation fell from 180,758 to 8,830 KiB. The same test with
+180 MiB of **committed** Java heap pressure passed and fell from 596,289 to
+402,404 KiB PSS at that boundary. The seven-second bass swap was unchanged.
+This reduces residency between stages; the GPU inference peak still occurs.
+
 ## Limits
 
 The model was validated on one phone. Other GPUs may have different LiteRT

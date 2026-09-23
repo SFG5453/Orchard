@@ -20,7 +20,9 @@
 package dev.sfg.orchard.mobile.playback.smart
 
 import android.media.MediaDataSource
+import android.os.Debug
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.json.JSONObject
@@ -56,13 +58,28 @@ class V3PlannerInputDeviceTest {
         val context = instrumentation.targetContext
         val pressureMb = InstrumentationRegistry.getArguments().getString("heapPressureMb")
             ?.toIntOrNull()?.coerceIn(0, 180) ?: 0
-        retainedHeapPressure = ByteArray(pressureMb * 1024 * 1024)
+        val measureMemory = InstrumentationRegistry.getArguments().getString("measureMemory") == "true"
+        fun logMemory(stage: String) {
+            if (!measureMemory) return
+            val memory = Debug.MemoryInfo()
+            Debug.getMemoryInfo(memory)
+            val status = File("/proc/self/status").readLines()
+            val rss = status.firstOrNull { it.startsWith("VmRSS:") }?.substringAfter(':')?.trim()
+            Log.i("V3PlannerInputDeviceTest", "$stage pssKb=${memory.totalPss} " +
+                "nativeHeapKb=${Debug.getNativeHeapAllocatedSize() / 1024} VmRSS=$rss")
+        }
+        retainedHeapPressure = ByteArray(pressureMb * 1024 * 1024).also { bytes ->
+            // Commit every page; an untouched zero-filled array barely registers in process PSS.
+            for (index in bytes.indices step 4096) bytes[index] = 1
+        }
+        logMemory("after committed heap pressure")
         val tracker = BeatTracker(context)
         val windows = listOf(
             Triple("illegal", 89.661, 149.661),
             Triple("girl_like_me", 0.0, 144.801),
         )
         val payloads = mutableMapOf<String, JSONObject>()
+        val beatRegions = mutableMapOf<String, Pair<AudioDecoder.Pcm, BeatTracker.Grid>>()
         try {
             for ((name, start, duration) in windows) {
                 val file = File(context.cacheDir, "$name.webm")
@@ -85,8 +102,19 @@ class V3PlannerInputDeviceTest {
                 val mono = if (first == 0 && length == pcm.samples.size) pcm.samples
                     else pcm.samples.copyOfRange(first, first + length)
                 val beatPcm = MelSpectrogram.resample(mono, pcm.sampleRate)!!
+                logMemory("$name before beat")
                 val grid = tracker.track(beatPcm, start)!!
-                val json = TrackFeatures.plannerWindow(mono, pcm.sampleRate, start, duration, grid)!!
+                logMemory("$name after beat")
+                beatRegions[name] = AudioDecoder.Pcm(mono, pcm.sampleRate) to grid
+            }
+            tracker.release()
+            logMemory("after beat batch model release")
+            for ((name, start, duration) in windows) {
+                val (pcm, grid) = beatRegions.getValue(name)
+                val json = TrackFeatures.plannerWindow(
+                    pcm.samples, pcm.sampleRate, start, duration, grid,
+                )!!
+                logMemory("$name after structural analysis")
                 payloads[name] = JSONObject(json)
             }
             val result = JSONObject()

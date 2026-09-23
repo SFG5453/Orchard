@@ -63,7 +63,7 @@ internal fun analysisDuration(catalogSeconds: Double, containerSeconds: Double?)
  * Two windows per track, not the whole thing. A transition only ever reads the tail of the
  * outgoing track and the head of the incoming one, and a track is both of those at different
  * moments, so both ends are analysed and the middle is never decoded. Each end covers 60 seconds
- * and uses three Beat This chunks. LiteRT runs FP32 on GPU when available, with INT8 ONNX on CPU
+ * and uses three Beat This chunks. LiteRT runs FP16 on GPU when available, with INT8 ONNX on CPU
  * as the fallback.
  *
  * [analysisFor] is called from the crossfade watcher every tick, so it never blocks or computes:
@@ -237,15 +237,8 @@ class TrackAnalyzer(
                     )
                 } finally {
                     running.remove(track.id)
-                    // The session is worth keeping across the two windows of one track and across a
-                    // current/next pair queued together, but not across the minutes of playback
-                    // between transitions: it holds hundreds of megabytes of native heap that a
-                    // backgrounded music player cannot justify. Reloading costs about a second, on
-                    // work that already takes fifteen. Queue-scope work never loads them at all,
-                    // so it is not what this waits on.
-                    if (runningPlayback.isEmpty()) {
-                        tracker.release()
-                    }
+                    // Also covers failures before the beat-window batch can release the model.
+                    tracker.release()
                     runCatching { onAnalysed?.invoke(track) }
                 }
             },
@@ -273,14 +266,26 @@ class TrackAnalyzer(
         // Keep both roles because this track may be either side of a later queue pair.
         val window = PLANNER_WINDOW_SECONDS
         val tailStart = max(0.0, durationSeconds - window)
-        val head = plannerRegion(::openSource, 0.0, minOf(window, durationSeconds), durationSeconds)
-            ?: return empty(track, durationSeconds)
-        val tail = if (tailStart > 0.0) {
-            plannerRegion(::openSource, tailStart, durationSeconds, durationSeconds)
+        // Finish both beat grids while the compiled GPU model is loaded, then release its native
+        // and graphics allocations before the Rust structural analyzer runs. This holds two
+        // bounded mono windows briefly, but avoids both extra GPU compilation and overlapping
+        // the model's hundreds of MiB with feature extraction.
+        val (head, tail) = try {
+            val head = beatRegion(::openSource, 0.0, minOf(window, durationSeconds))
                 ?: return empty(track, durationSeconds)
-        } else head
-        val headPayload = JSONObject(head.plannerJson)
-        val tailPayload = JSONObject(tail.plannerJson)
+            val tail = if (tailStart > 0.0) {
+                beatRegion(::openSource, tailStart, durationSeconds)
+                    ?: return empty(track, durationSeconds)
+            } else head
+            head to tail
+        } finally {
+            tracker.release()
+        }
+        val headJson = plannerPayload(head, durationSeconds) ?: return empty(track, durationSeconds)
+        val tailJson = if (tail === head) headJson else
+            plannerPayload(tail, durationSeconds) ?: return empty(track, durationSeconds)
+        val headPayload = JSONObject(headJson)
+        val tailPayload = JSONObject(tailJson)
 
         Log.d(
             TAG,
@@ -303,9 +308,9 @@ class TrackAnalyzer(
             key = tailPayload.optString("key", ""),
             keyConfidence = tailPayload.optDouble("keyConfidence", 0.0),
             audibleStartTime = headPayload.optDouble("audibleStartTime", 0.0),
-            plannerFeaturesJson = tail.plannerJson,
-            plannerHeadJson = head.plannerJson,
-            plannerTailJson = tail.plannerJson,
+            plannerFeaturesJson = tailJson,
+            plannerHeadJson = headJson,
+            plannerTailJson = tailJson,
         )
     }
 
@@ -381,14 +386,18 @@ class TrackAnalyzer(
         duration = durationSeconds,
     )
 
-    private class PlannerRegion(val grid: BeatTracker.Grid, val plannerJson: String)
+    private class BeatRegion(
+        val samples: FloatArray,
+        val sampleRate: Double,
+        val startSeconds: Double,
+        val grid: BeatTracker.Grid,
+    )
 
-    private fun plannerRegion(
+    private fun beatRegion(
         openSource: () -> MediaDataSource?,
         startSeconds: Double,
         endSeconds: Double,
-        trackDurationSeconds: Double,
-    ): PlannerRegion? {
+    ): BeatRegion? {
         // Both the beat frontend and the structural analyzer consume mono. Downmix during decode
         // instead of holding two 44.1 kHz channels and a third full-length mono copy. Keep the
         // 44.1 kHz decode so Opus uses the same 48 kHz source path as the v3-matched analysis.
@@ -405,11 +414,13 @@ class TrackAnalyzer(
         val mono = if (first == 0 && count == pcm.samples.size) pcm.samples
             else pcm.samples.copyOfRange(first, first + count)
         val grid = grid(AudioDecoder.Pcm(mono, pcm.sampleRate), startSeconds) ?: return null
-        val payload = TrackFeatures.plannerWindow(
-            mono, pcm.sampleRate, startSeconds, trackDurationSeconds, grid,
-        ) ?: return null
-        return PlannerRegion(grid, payload)
+        return BeatRegion(mono, pcm.sampleRate, startSeconds, grid)
     }
+
+    private fun plannerPayload(region: BeatRegion, trackDurationSeconds: Double): String? =
+        TrackFeatures.plannerWindow(
+            region.samples, region.sampleRate, region.startSeconds, trackDurationSeconds, region.grid,
+        )
 
     private fun grid(pcm: AudioDecoder.Pcm, offsetSeconds: Double): BeatTracker.Grid? {
         if (pcm.samples.size < pcm.sampleRate) return null
