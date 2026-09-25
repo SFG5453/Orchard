@@ -70,10 +70,12 @@ class BeatFp16GpuProbeDeviceTest {
         val modelFile = stage("beatModelPath")
         val input = floats(stage("beatInputPath"))
         val expected = floats(stage("beatReferencePath"))
-        assertEquals(BeatTracker.CHUNK_FRAMES * 128, input.size)
+        assertEquals(0, input.size % 128)
+        val frames = input.size / 128
+        assertTrue(frames in 128..BeatTracker.CHUNK_FRAMES)
         val intermediateProbe = args.getString("beatIntermediateProbe") == "true"
         if (!intermediateProbe) {
-            assertEquals(BeatTracker.CHUNK_FRAMES * 2, expected.size)
+            assertEquals(frames * 2, expected.size)
         }
         val precision = CompiledModel.GpuOptions.Precision.valueOf(
             args.getString("beatGpuPrecision") ?: "FP32",
@@ -83,6 +85,16 @@ class BeatFp16GpuProbeDeviceTest {
         val backend = CompiledModel.GpuOptions.Backend.valueOf(
             args.getString("beatGpuBackend") ?: "OPENCL",
         )
+        val bufferStorageType = args.getString("beatGpuBufferStorageType")?.let {
+            CompiledModel.GpuOptions.BufferStorageType.valueOf(it)
+        }
+        val preferTextureWeights = args.getString("beatGpuPreferTextureWeights")?.toBooleanStrictOrNull()
+        val constantTensorSharing = args.getString("beatGpuConstantTensorSharing")?.toBooleanStrictOrNull()
+        val cacheKey = args.getString("beatGpuCacheKey")
+        val serializationDir = cacheKey?.let {
+            require(it.matches(Regex("[A-Za-z0-9_.-]+")))
+            File(context.filesDir, "litert-gpu-program-cache").apply { mkdirs() }.absolutePath
+        }
         val measureMemory = args.getString("beatMeasureMemory") == "true"
         fun logMemory(stage: String) {
             if (!measureMemory) return
@@ -91,7 +103,9 @@ class BeatFp16GpuProbeDeviceTest {
             val status = File("/proc/self/status").readLines()
             fun kilobytes(key: String): String = status.firstOrNull { it.startsWith("$key:") }
                 ?.substringAfter(':')?.trim() ?: "unavailable"
-            Log.i("BeatFp16GpuProbe", "$backend $precision memory $stage " +
+            Log.i("BeatFp16GpuProbe", "$backend $precision storage=$bufferStorageType " +
+                "textureWeights=$preferTextureWeights sharing=$constantTensorSharing " +
+                "cacheKey=$cacheKey memory $stage " +
                 "pssKb=${memory.totalPss} privateDirtyKb=${memory.totalPrivateDirty} " +
                 "nativeHeapKb=${Debug.getNativeHeapAllocatedSize() / 1024} " +
                 "graphicsKb=${memory.getMemoryStat("summary.graphics")} " +
@@ -107,6 +121,12 @@ class BeatFp16GpuProbeDeviceTest {
                     gpuOptions = CompiledModel.GpuOptions(
                         precision = precision,
                         backend = backend,
+                        bufferStorageType = bufferStorageType,
+                        preferTextureWeights = preferTextureWeights,
+                        constantTensorSharing = constantTensorSharing,
+                        serializationDir = serializationDir,
+                        modelCacheKey = cacheKey,
+                        serializeProgramCache = if (cacheKey != null) true else null,
                     )
                 },
                 environment,
@@ -140,12 +160,12 @@ class BeatFp16GpuProbeDeviceTest {
                         return
                     }
                     val actual = actualOutputs.flatMap { it.asIterable() }
-                    val beat = actual.take(BeatTracker.CHUNK_FRAMES)
-                    val downbeat = actual.drop(BeatTracker.CHUNK_FRAMES)
+                    val beat = actual.take(frames)
+                    val downbeat = actual.drop(frames)
                     assertTrue(actual.all(Float::isFinite))
                     for ((name, values, offset) in listOf(
                         Triple("beat", beat, 0),
-                        Triple("downbeat", downbeat, BeatTracker.CHUNK_FRAMES),
+                        Triple("downbeat", downbeat, frames),
                     )) {
                         val mae = values.indices.sumOf { i ->
                             abs(values[i] - expected[offset + i]).toDouble()

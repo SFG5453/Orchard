@@ -1,14 +1,14 @@
 # Beat This checkpoint to FP16 LiteRT GPU
 
 Playback analysis uses the official Beat This **final0** checkpoint as a fixed
-1500-frame LiteRT model. The app ships
+1200-frame LiteRT GPU model. The app ships
 [`beat_this_fp16_gpu.tflite`](../android/app/src/main/assets/beat_this_fp16_gpu.tflite)
 and runs it with LiteRT 2.2.0, OpenCL, explicit FP16 GPU precision, and CPU
 fallback for unsupported operators. If the GPU path cannot compile or infer,
 `BeatTracker` uses the shipped dynamic INT8 ONNX CPU model.
 
-The model file is 41,408,084 bytes (SHA-256
-`ca2250d78fabed6cd87d8067032fea462b3c98ccbfe8d6ee569d3e271acc26f9`).
+The model file is 41,681,480 bytes (SHA-256
+`2de6374233c93a3389477ef76747bdedb631aa09c5feaf618b9f156d7ae09b68`).
 Its input, output, and serialized operation boundaries are FP32; weights are
 stored in FP16. Selected GPU operations compute with FP16 precision.
 
@@ -27,6 +27,9 @@ uv run --no-project --python 3.13 \
   python mobile/tools/export_beat_litert.py \
   --checkpoint /path/to/final0.ckpt \
   --upstream /path/to/beat_this \
+  --frames 1200 \
+  --attention-head-group-size 1 \
+  --attention-batch-group-size 8 \
   --output /tmp/beat_this_fp32.tflite
 
 uv run --no-project --python 3.13 \
@@ -43,10 +46,14 @@ uv run --no-project --python 3.13 \
 
 The [exporter](../tools/export_beat_litert.py) removes an output-head
 autocast-device test, uses four-dimensional rotary attention, and disables a
-mutable rotary cache so the fixed graph can run on the phone GPU. The initial
-FP32 export was 81,477,192 bytes. The
+mutable rotary cache so the fixed graph can run on the phone GPU. It also
+splits long temporal attention across independent head and frequency groups,
+keeping the same attention calculation while limiting its largest score
+tensor to 44 MiB rather than 176 MiB in the serialized FP32 graph. Short
+frequency attention stays intact. The grouped 1200-frame FP32 export was
+81,823,096 bytes. The
 [weight packer](../tools/pack_beat_fp16_weights.py) keeps the large rotary
-phase table in FP32: rounding angles as large as 1499 radians to FP16
+phase table in FP32: rounding large angles to FP16
 corrupted beat predictions.
 
 The [FP16 stabilizer](../tools/stabilize_beat_fp16_gpu.py) addresses two
@@ -58,7 +65,7 @@ OpenCL FP16 returned nearly constant logits on the tested phone.
 
 ## Accuracy and phone measurements
 
-The rebuilt model's LiteRT CPU outputs differed from the packed FP32 source
+The original 1500-frame model's LiteRT CPU outputs differed from the packed FP32 source
 by 0.00000169 beat and 0.00000156 downbeat mean absolute logit error across
 100 GTZAN excerpts. All 5,785 beat peaks and 1,802 downbeat peaks matched
 within four frames. The tracked
@@ -110,13 +117,61 @@ FP16 saved 92–99 MiB of model-attributable PSS in these paired runs.
 Native heap allocation after inference was about 136 MiB in both modes.
 The measurements cover isolated model inference, not full playback.
 
-Playback now computes both beat grids for a track, closes the compiled GPU
+Playback computes both beat grids for a track, closes the compiled GPU
 model, then runs structural feature extraction. In a two-window Android planner
 probe, process PSS fell from 403,411 to 209,698 KiB when the model closed;
 native heap allocation fell from 180,758 to 8,830 KiB. The same test with
 180 MiB of **committed** Java heap pressure passed and fell from 596,289 to
 402,404 KiB PSS at that boundary. The seven-second bass swap was unchanged.
 This reduces residency between stages; the GPU inference peak still occurs.
+
+## 1200-frame GPU model and program cache
+
+The 1200-frame export of the same `final0` checkpoint is the shipped GPU
+asset. The INT8 CPU fallback remains 1500 frames; `BeatTracker` stitches each
+model with its own window length. LiteRT's OpenCL program serialization is
+enabled under the app cache directory with a key tied to the model hash,
+precision, backend, and LiteRT version. The compiled program cache is about
+43 MiB on the tested phone and can be regenerated if Android evicts it.
+
+On the Motorola razr 2023, the original 1200-frame FP16 model peaked at
+286.9 MiB of app-attributed GPU memory, down from 416.8 MiB for the former
+1500-frame model. The grouped 1200-frame export lowered that GPU peak to
+178.2 MiB. In paired isolated probes it raised peak process PSS from 450.1
+to 490.1 MiB; in paired two-song planner probes, from 473.0 to 503.8 MiB.
+The phone's available-memory drop during the paired planner run was 546 MiB
+for the original 1200-frame graph and 369 MiB for the grouped graph. Those
+system-wide figures can move with background activity; GPU attribution and
+PSS are different accounting views and should not be added together.
+
+The grouped graph matched all 581 beat peaks and 236 downbeat peaks on ten
+saved GTZAN excerpts, with about `1.4e-6` logit mean absolute error on the
+host. On the phone, its two-song planner test selected exactly the original
+1200-frame 7.000975-second `bass_swap` at 132.755213 s outgoing and
+41.950349 s incoming. Cold and warm shipped-asset tests both passed with
+178.2 MiB attributed GPU peak; the warm full planner test took 26.4 s.
+That total includes decode and structural analysis as well as GPU work.
+The 43 MiB OpenCL program cache was written and reused. An earlier isolated
+1500-frame program-cache probe reduced model compilation from 11.7 s cold
+to 1.3 s warm.
+
+The 1200-frame plan's incoming cue is 2.627 s earlier than the former
+1500-frame plan. A 25-second [listening preview](../../artifacts/transition-pinkpantheress/illegal_to_girl_like_me_mobile_device_1200_fp16_gpu.wav)
+renders the phone-selected plan with the shared native renderer on the host.
+Across 100 GTZAN excerpts, 1200-frame peak agreement with the 1500-frame
+reference was 99.62% beat recall and 96.88% downbeat recall within four
+frames. This is an agreement measurement, not labeled accuracy or proof that
+every transition is equally good. The 750-frame candidate had worse downbeat
+agreement and was not selected. `constantTensorSharing` reduced isolated PSS,
+but shifted this pair's 1200-frame incoming cue by another 0.88 s; it is
+disabled in the shipped runner.
+
+An initial broad head/batch split also transformed short frequency-attention
+blocks, expanding the graph to 18,888 operations. It crashed in Qualcomm's
+OpenCL driver during compiled-model creation on the test phone. The scoped
+grouped export above has 1,983 operations, compared with 914 in the original
+1200-frame export, and passed the isolated and full planner phone tests. The
+crash is a reason to validate this export on other GPUs before wider rollout.
 
 ## Limits
 

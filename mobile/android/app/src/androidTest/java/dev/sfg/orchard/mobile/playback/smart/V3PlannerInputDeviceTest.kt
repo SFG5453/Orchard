@@ -59,6 +59,12 @@ class V3PlannerInputDeviceTest {
         val pressureMb = InstrumentationRegistry.getArguments().getString("heapPressureMb")
             ?.toIntOrNull()?.coerceIn(0, 180) ?: 0
         val measureMemory = InstrumentationRegistry.getArguments().getString("measureMemory") == "true"
+        val shortModelPath = InstrumentationRegistry.getArguments().getString("beatShortGpuModelPath")
+        val shortFrames = InstrumentationRegistry.getArguments().getString("beatShortFrames")
+            ?.toIntOrNull() ?: BeatTracker.GPU_CHUNK_FRAMES
+        assertTrue("Invalid beat window length: $shortFrames", shortFrames in 128..BeatTracker.CHUNK_FRAMES)
+        val shortModel = shortModelPath?.let(::File)
+        if (shortModel != null) assertTrue("Missing probe model: $shortModel", shortModel.isFile)
         fun logMemory(stage: String) {
             if (!measureMemory) return
             val memory = Debug.MemoryInfo()
@@ -73,7 +79,7 @@ class V3PlannerInputDeviceTest {
             for (index in bytes.indices step 4096) bytes[index] = 1
         }
         logMemory("after committed heap pressure")
-        val tracker = BeatTracker(context)
+        val tracker = BeatTracker(context, shortModel, shortFrames)
         val windows = listOf(
             Triple("illegal", 89.661, 149.661),
             Triple("girl_like_me", 0.0, 144.801),
@@ -124,15 +130,22 @@ class V3PlannerInputDeviceTest {
                 .put("nextDuration", 144.801)
             val selected = DesktopTransitionPlanner.invoke("native", result)
             result.put("selectedPlan", selected)
-            val output = File(context.getExternalFilesDir(null), "v3-planner-input-device.json")
+            result.put("beatModelFrames", shortFrames)
+            val outputName = if (shortModel == null) "v3-planner-input-device.json"
+                else "v3-planner-input-device-$shortFrames.json"
+            val output = File(context.getExternalFilesDir(null), outputName)
             output.writeText(result.toString(2))
             assertTrue(output.length() > 1000)
-            assertTrue("Expected the v3 bass swap; got ${selected.optString("strategy")} " +
-                "start=${selected.optDouble("transitionStart")} cue=${selected.optDouble("incomingCueTime")}",
-                selected.optBoolean("ok") && selected.optString("strategy") == "bass_swap" &&
-                    abs(selected.optDouble("overlapSeconds") - 7.0) < 0.1 &&
-                    abs(selected.optDouble("transitionStart") - 132.701) < 0.25 &&
-                    abs(selected.optDouble("incomingCueTime") - 44.553) < 0.25)
+            val planDetail = "${selected.optString("strategy")} " +
+                "start=${selected.optDouble("transitionStart")} cue=${selected.optDouble("incomingCueTime")}"
+            assertTrue("Planner failed: $planDetail", selected.optBoolean("ok"))
+            if (shortModel == null) {
+                assertTrue("Expected the v3 bass swap; got $planDetail",
+                    selected.optString("strategy") == "bass_swap" &&
+                        abs(selected.optDouble("overlapSeconds") - 7.0) < 0.1 &&
+                    abs(selected.optDouble("transitionStart") - 132.755) < 0.25 &&
+                    abs(selected.optDouble("incomingCueTime") - 41.950) < 0.25)
+            }
         } finally {
             tracker.release()
             retainedHeapPressure = null

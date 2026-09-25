@@ -46,7 +46,11 @@ import kotlin.math.roundToInt
  * peaks, all resolve to null, and the caller keeps whatever it had. A missing beat tracker
  * degrades transitions; a throwing one would break playback.
  */
-class BeatTracker(private val context: Context) {
+class BeatTracker(
+    private val context: Context,
+    private val gpuModelFile: File? = null,
+    private val chunkFrames: Int = GPU_CHUNK_FRAMES,
+) {
 
     /** A tracked grid on the analysed audio's own timeline, in seconds. */
     data class Grid(
@@ -66,7 +70,7 @@ class BeatTracker(private val context: Context) {
     private fun gpu(): Fp16BeatRunner? = synchronized(lock) {
         gpuRunner?.let { return@synchronized it }
         if (gpuUnavailable) return@synchronized null
-        runCatching { Fp16BeatRunner(context) }
+        runCatching { Fp16BeatRunner(context, gpuModelFile, chunkFrames) }
             .onSuccess { gpuRunner = it; Log.i(TAG, "FP16 LiteRT GPU beat model ready") }
             .onFailure { gpuUnavailable = true; Log.w(TAG, "LiteRT GPU unavailable; using INT8 CPU", it) }
             .getOrNull()
@@ -119,15 +123,22 @@ class BeatTracker(private val context: Context) {
         val downbeatLogits = FloatArray(spectrogram.frames)
         val inferStarted = System.currentTimeMillis()
         val runner = gpu()
-        var gpuWorked = runner != null && infer(spectrogram, beatLogits, downbeatLogits, runner::infer)
+        var gpuWorked = runner != null && infer(
+            spectrogram, beatLogits, downbeatLogits, chunkFrames, runner::infer,
+        )
         if (runner != null && !gpuWorked) synchronized(lock) {
             runCatching { gpuRunner?.close() }
             gpuRunner = null
             gpuUnavailable = true
         }
         if (!gpuWorked) {
+            // A probe model may have a different fixed input length. Do not pass that window to
+            // the 1500-frame CPU fallback and mistake its grid for a probe result.
+            if (gpuModelFile != null) return null
             val active = session() ?: return null
-            if (!infer(spectrogram, beatLogits, downbeatLogits) { chunk -> cpuChunk(active, chunk) }) return null
+            if (!infer(spectrogram, beatLogits, downbeatLogits, CHUNK_FRAMES) {
+                    chunk -> cpuChunk(active, chunk)
+                }) return null
         }
         Log.d(
             TAG,
@@ -170,9 +181,9 @@ class BeatTracker(private val context: Context) {
     /**
      * Runs the model over the spectrogram in chunks, writing logits into the output arrays.
      *
-     * The model reads 1500-frame chunks and has no context at their edges, so [BORDER_FRAMES] are
-     * discarded from each side and chunks advance by the difference. The first and last chunk keep
-     * their outer border, since there is no neighbouring chunk to supply it.
+     * The GPU and CPU models have different fixed window lengths. [BORDER_FRAMES] are discarded
+     * from each side and chunks advance by the difference. The first and last chunk keep their
+     * outer border, since there is no neighbouring chunk to supply it.
      */
     @Suppress("UNCHECKED_CAST")
     private fun cpuChunk(session: OrtSession, chunk: FloatArray): Pair<FloatArray, FloatArray> {
@@ -190,10 +201,11 @@ class BeatTracker(private val context: Context) {
         spectrogram: MelSpectrogram.Spectrogram,
         beatLogits: FloatArray,
         downbeatLogits: FloatArray,
+        windowFrames: Int,
         runChunk: (FloatArray) -> Pair<FloatArray, FloatArray>,
     ): Boolean = runCatching {
         val mels = spectrogram.mels
-        val stride = CHUNK_FRAMES - 2 * BORDER_FRAMES
+        val stride = windowFrames - 2 * BORDER_FRAMES
         val starts = mutableListOf<Int>()
         var start = -BORDER_FRAMES
         while (start < spectrogram.frames - BORDER_FRAMES) {
@@ -202,7 +214,7 @@ class BeatTracker(private val context: Context) {
         }
         if (starts.isEmpty()) starts += -BORDER_FRAMES
         if (spectrogram.frames > stride) starts[starts.lastIndex] =
-            spectrogram.frames - (CHUNK_FRAMES - BORDER_FRAMES)
+            spectrogram.frames - (windowFrames - BORDER_FRAMES)
         while (starts.size > 1 && starts.last() - starts[starts.lastIndex - 1] < 2 * BORDER_FRAMES) {
             starts.removeAt(starts.lastIndex)
         }
@@ -212,11 +224,11 @@ class BeatTracker(private val context: Context) {
         // V3 stitches in reverse so the earliest prediction owns an overlapping frame.
         for (chunkStart in starts.asReversed()) {
             val from = max(0, chunkStart)
-            val to = min(spectrogram.frames, max(0, chunkStart + CHUNK_FRAMES))
+            val to = min(spectrogram.frames, max(0, chunkStart + windowFrames))
             val left = max(0, -chunkStart)
-            val right = min(BORDER_FRAMES, max(0, chunkStart + CHUNK_FRAMES - spectrogram.frames))
+            val right = min(BORDER_FRAMES, max(0, chunkStart + windowFrames - spectrogram.frames))
             val frames = to - from + left + right
-            val chunk = FloatArray(CHUNK_FRAMES * mels)
+            val chunk = FloatArray(windowFrames * mels)
             spectrogram.values.copyInto(chunk, left * mels, from * mels, to * mels)
             val (beat, downbeat) = runChunk(chunk)
             val border = if (frames < 2 * BORDER_FRAMES) 0 else BORDER_FRAMES
@@ -246,15 +258,16 @@ class BeatTracker(private val context: Context) {
         private const val MODEL_CACHE = "beat_this_final0_int8_33920bdf.onnx"
         private const val INFERENCE_THREADS = 4
 
-        /** The window the model was trained on, and the margin discarded from each chunk's edges. */
+        /** The original CPU graph and the shorter GPU graph use the same checkpoint. */
         const val CHUNK_FRAMES = 1500
+        const val GPU_CHUNK_FRAMES = 1200
         const val BORDER_FRAMES = 6
 
         /**
          * Window length that costs exactly one inference. A window longer than this splits into
          * two chunks that mostly overlap, paying twice for barely more audio.
          */
-        const val WINDOW_SECONDS = (CHUNK_FRAMES - 2 * BORDER_FRAMES) / 50.0
+        const val WINDOW_SECONDS = (GPU_CHUNK_FRAMES - 2 * BORDER_FRAMES) / 50.0
 
         /** A frame is a beat when it is the maximum of a seven-frame window and its logit positive. */
         private const val PEAK_WINDOW = 7

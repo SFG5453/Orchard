@@ -28,6 +28,7 @@ def main() -> None:
     model = schema.ModelT.InitFromPackedBuf(bytearray(args.source.read_bytes()))
     assert len(model.subgraphs) == 1, "Expected one Beat This subgraph"
     graph = model.subgraphs[0]
+    window_frames = int(graph.tensors[graph.inputs[0]].shape[1])
     produced = {int(index) for op in graph.operators for index in op.outputs}
     inputs = {int(index) for op in graph.operators for index in op.inputs if index >= 0}
 
@@ -62,11 +63,14 @@ def main() -> None:
             continue
         assert len(buffer.data) % 4 == 0
         original = np.frombuffer(buffer.data, dtype="<f4")
-        # The 1500-frame rotary angle table reaches 1499 radians. FP16 has
-        # about one-radian spacing there, enough to corrupt sine/cosine phases
-        # in the back half of the window. Keep that table in FP32.
-        if tensor.shape is not None and len(tensor.shape) > 0 and tensor.shape[0] >= 1024 \
-                and np.max(np.abs(original)) > 1024:
+        # Keep the rotary position table in FP32 even for shorter exports.
+        # FP16 rounds large phases before SIN/COS, shifting beat peaks.
+        is_rotary_position_table = (
+            tensor.shape is not None and list(tensor.shape) == [window_frames, 16, 1]
+            and np.isclose(original.min(), 0.0)
+            and np.isclose(original.max(), window_frames - 1.0)
+        )
+        if is_rotary_position_table:
             preserved_positions.append(name)
             continue
         packed = original.astype("<f2")

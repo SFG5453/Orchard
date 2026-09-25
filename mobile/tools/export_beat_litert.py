@@ -3,7 +3,7 @@
 
 Requires torch==2.11.0, litert-torch==0.9.4, einops, and
 rotary-embedding-torch. The source directory is an upstream Beat This checkout.
-The export fixes the 1500-frame input shape used by mobile BeatTracker.
+The default export fixes the 1500-frame input shape used by mobile BeatTracker.
 """
 
 import argparse
@@ -17,7 +17,10 @@ from ai_edge_litert.interpreter import Interpreter
 import litert_torch
 
 
-def install_export_forwards():
+def install_export_forwards(
+    attention_head_group_size: int | None = None,
+    attention_batch_group_size: int | None = None,
+):
     from beat_this.model.beat_tracker import SumHead, roformer
     import rotary_embedding_torch.rotary_embedding_torch as rotary_impl
 
@@ -36,7 +39,34 @@ def install_export_forwards():
         if self.rotary_embed is not None:
             q = self.rotary_embed.rotate_queries_or_keys(q)
             k = self.rotary_embed.rotate_queries_or_keys(k)
-        out = self.attend(q, k, v)
+        batch_group = (
+            attention_batch_group_size
+            if attention_batch_group_size is not None and length >= 256
+            else batch
+        )
+        head_group = (
+            attention_head_group_size
+            if attention_head_group_size is not None and length >= 256
+            else self.heads
+        )
+        if batch_group >= batch and head_group >= self.heads:
+            out = self.attend(q, k, v)
+        else:
+            # Temporal frontend attention runs each frequency band as an
+            # independent batch entry, often with only one head. Split only
+            # long-sequence attention; short frequency attention has tiny
+            # score tensors and splitting it bloats the exported graph.
+            out = torch.cat([
+                torch.cat([
+                    self.attend(
+                        q[first_batch:first_batch + batch_group, first_head:first_head + head_group],
+                        k[first_batch:first_batch + batch_group, first_head:first_head + head_group],
+                        v[first_batch:first_batch + batch_group, first_head:first_head + head_group],
+                    )
+                    for first_head in range(0, self.heads, head_group)
+                ], dim=1)
+                for first_batch in range(0, batch, batch_group)
+            ], dim=0)
         if self.to_gates is not None:
             out = out * self.to_gates(x).transpose(1, 2).unsqueeze(-1).sigmoid()
         return self.to_out(out.transpose(1, 2).reshape(batch, length, -1))
@@ -60,8 +90,20 @@ def main():
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--upstream", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--frames", type=int, default=1500,
+                        help="Fixed model window in mel frames (default: 1500)")
+    parser.add_argument("--attention-head-group-size", type=int,
+                        help="Export attention a few heads at a time to reduce peak score tensor size")
+    parser.add_argument("--attention-batch-group-size", type=int,
+                        help="Export independent attention batch entries in smaller groups")
     parser.add_argument("--validation-mel", type=Path, help="Real [frames,128] .npy mel for verification")
     args = parser.parse_args()
+    if args.frames < 128:
+        parser.error("--frames must be at least 128")
+    if args.attention_head_group_size is not None and args.attention_head_group_size < 1:
+        parser.error("--attention-head-group-size must be positive")
+    if args.attention_batch_group_size is not None and args.attention_batch_group_size < 1:
+        parser.error("--attention-batch-group-size must be positive")
 
     sys.path.insert(0, str(args.upstream.resolve()))
     from beat_this.model.beat_tracker import BeatThis
@@ -80,17 +122,19 @@ def main():
 
     if args.validation_mel:
         mel = np.load(args.validation_mel).astype(np.float32)
-        if mel.ndim != 2 or mel.shape[1] != 128 or mel.shape[0] < 1500:
-            parser.error("--validation-mel must have at least 1500 frames and 128 bands")
-        sample = torch.from_numpy(mel[:1500][None])
+        if mel.ndim != 2 or mel.shape[1] != 128 or mel.shape[0] < args.frames:
+            parser.error(f"--validation-mel must have at least {args.frames} frames and 128 bands")
+        sample = torch.from_numpy(mel[:args.frames][None])
     else:
         generator = torch.Generator().manual_seed(0)
-        sample = 8 * torch.rand((1, 1500, 128), generator=generator)
+        sample = 8 * torch.rand((1, args.frames, 128), generator=generator)
 
     with torch.inference_mode():
         reference = {name: value.numpy() for name, value in model(sample).items()}
 
-    rotary_class = install_export_forwards()
+    rotary_class = install_export_forwards(
+        args.attention_head_group_size, args.attention_batch_group_size,
+    )
     for module in model.modules():
         if isinstance(module, rotary_class):
             # Exporting the mutable 8192-position cache produces PAD and

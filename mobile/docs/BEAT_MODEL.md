@@ -1,11 +1,13 @@
 # Beat This! beat/downbeat model
 
 `android/app/src/main/assets/beat_this_fp16_gpu.tflite` ships the official
-**final0** checkpoint as a fixed 1500-frame LiteRT graph with FP16 stored
+**final0** checkpoint as a fixed 1200-frame LiteRT graph with FP16 stored
 weights. Its normalization and rotary tables are adjusted to preserve beat
 timing with explicit FP16 OpenCL GPU arithmetic. Input, output, and serialized
-operation boundaries remain FP32. The same app also ships
-`beat_this_int8.onnx` (21,068,518 bytes) as a CPU fallback, run with four
+operation boundaries remain FP32. Long temporal attention is split across
+independent head and frequency groups to reduce peak GPU allocation without
+changing the checkpoint weights. The same app also ships
+`beat_this_int8.onnx` (21,068,518 bytes) as a 1500-frame CPU fallback, run with four
 ONNX Runtime threads. The open-unmix vocal separator uses CPU.
 
 The INT8 ONNX asset SHA-256 is
@@ -34,14 +36,15 @@ that enters on beat three of the bar sounds wrong even when every beat lines up.
 
 ## Contract
 
-- Input `input_spectrogram`: `[1, 1500, 128]` log-mel spectrogram, 22,050 Hz
+- GPU input `input_spectrogram`: `[1, 1200, 128]` log-mel spectrogram, 22,050 Hz
   audio, n_fft 1024, hop 441 (50 fps), Slaney mel 30–11,000 Hz,
   `log1p(1000·mag)` — produced by Earmark's shared Rust model frontend.
-- Outputs `beat`, `downbeat`: `[1, 1500]` logits, peak-picked by
+- GPU outputs `beat`, `downbeat`: `[1, 1200]` logits, peak-picked by
   `BeatTracker.pickPeaks`.
-- Chunked at 1500 frames with a 6-frame border discarded from each edge, which
-  discards unreliable boundary predictions. Short inputs and the final partial
-  chunk are zero-padded to 1500 frames; padded outputs are ignored.
+- The INT8 CPU fallback keeps `[1, 1500, 128]` input and `[1, 1500]` outputs.
+  Each path uses its own window length when stitching chunks. A 6-frame border
+  is discarded from each edge. Short inputs and the final partial chunk are
+  zero-padded to that path's window length; padded outputs are ignored.
 
 For the September 2026 CPU/NPU quantization experiment on both official checkpoints,
 see [BEAT_QUANT_BENCHMARK.md](BEAT_QUANT_BENCHMARK.md) and the subsequent
