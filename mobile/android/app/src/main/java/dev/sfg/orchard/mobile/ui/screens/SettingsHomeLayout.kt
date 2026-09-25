@@ -20,7 +20,7 @@
 package dev.sfg.orchard.mobile.ui.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import dev.sfg.orchard.mobile.ui.scroll.OrchardLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons

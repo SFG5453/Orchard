@@ -19,6 +19,7 @@
 
 package dev.sfg.orchard.mobile.app
 
+import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -70,6 +71,7 @@ import dev.sfg.orchard.mobile.ui.glass.glassWashSource
 import dev.sfg.orchard.mobile.ui.glass.rememberGlassScene
 import dev.sfg.orchard.mobile.ui.glass.rememberGlassStyle
 import dev.sfg.orchard.mobile.ui.navigation.Routes
+import dev.sfg.orchard.mobile.ui.scroll.OrchardScrollPhysics
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import dev.sfg.orchard.mobile.ui.screens.DetailScreen
 import dev.sfg.orchard.mobile.ui.screens.DevicesScreen
@@ -154,6 +156,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
         LocalGlass provides glass,
         LocalGlassScene provides glassScene,
         LocalAccent provides effectiveAccent,
+        LocalOverscrollFactory provides OrchardScrollPhysics.overscrollFactory,
     ) {
         Scaffold(
             // Transparent so the artwork wash below shows through every screen.
