@@ -10,10 +10,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(orchard_resampler SHARED
     analyzer/resampler.cpp
     jni/resampler_jni.cpp
+    planner/pair_scorer.cpp
+    jni/pair_scorer_jni.cpp
 )
 
 target_include_directories(orchard_resampler PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party
 )
 
 target_compile_options(orchard_resampler PRIVATE -O3 -fvisibility=hidden)

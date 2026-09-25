@@ -156,8 +156,8 @@ The 43 MiB OpenCL program cache was written and reused. An earlier isolated
 to 1.3 s warm.
 
 The 1200-frame plan's incoming cue is 2.627 s earlier than the former
-1500-frame plan. A 25-second [listening preview](../../artifacts/transition-pinkpantheress/illegal_to_girl_like_me_mobile_device_1200_fp16_gpu.wav)
-renders the phone-selected plan with the shared native renderer on the host.
+1500-frame plan. A 25-second local listening preview rendered the phone-selected
+plan with the shared native renderer on the host.
 Across 100 GTZAN excerpts, 1200-frame peak agreement with the 1500-frame
 reference was 99.62% beat recall and 96.88% downbeat recall within four
 frames. This is an agreement measurement, not labeled accuracy or proof that

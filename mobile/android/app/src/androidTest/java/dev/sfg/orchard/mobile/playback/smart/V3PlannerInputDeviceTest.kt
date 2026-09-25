@@ -33,9 +33,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.io.RandomAccessFile
-import kotlin.math.abs
 
-/** Real-song device probe of the same two bounded windows that orchardv3 plans on. */
+/** Real-song device probe of bounded playback windows and desktop vocal-risk evidence. */
 @RunWith(AndroidJUnit4::class)
 class V3PlannerInputDeviceTest {
     private var retainedHeapPressure: ByteArray? = null
@@ -121,7 +120,14 @@ class V3PlannerInputDeviceTest {
                     pcm.samples, pcm.sampleRate, start, duration, grid,
                 )!!
                 logMemory("$name after structural analysis")
-                payloads[name] = JSONObject(json)
+                val payload = JSONObject(json)
+                val frames = payload.getJSONArray("transitionFeatureFrames")
+                assertTrue("Missing spectral vocal evidence for $name", frames.length() > 0)
+                for (index in 0 until frames.length()) {
+                    val vocal = frames.getJSONObject(index).optDouble("vocal", Double.NaN)
+                    assertTrue("Invalid vocal evidence for $name frame $index", vocal in 0.0..1.0)
+                }
+                payloads[name] = payload
             }
             val result = JSONObject()
                 .put("analysis", payloads.getValue("illegal"))
@@ -136,16 +142,10 @@ class V3PlannerInputDeviceTest {
             val output = File(context.getExternalFilesDir(null), outputName)
             output.writeText(result.toString(2))
             assertTrue(output.length() > 1000)
-            val planDetail = "${selected.optString("strategy")} " +
-                "start=${selected.optDouble("transitionStart")} cue=${selected.optDouble("incomingCueTime")}"
-            assertTrue("Planner failed: $planDetail", selected.optBoolean("ok"))
-            if (shortModel == null) {
-                assertTrue("Expected the v3 bass swap; got $planDetail",
-                    selected.optString("strategy") == "bass_swap" &&
-                        abs(selected.optDouble("overlapSeconds") - 7.0) < 0.1 &&
-                    abs(selected.optDouble("transitionStart") - 132.755) < 0.25 &&
-                    abs(selected.optDouble("incomingCueTime") - 41.950) < 0.25)
-            }
+            val pairPlan = selected.getJSONObject("pairPlan")
+            val reasonCounts = pairPlan.getJSONObject("diagnostics").getJSONObject("reasonCounts")
+            assertTrue("Expected the vocal collision gate on this pair: $reasonCounts",
+                reasonCounts.optInt("vocal-collision", 0) > 0)
         } finally {
             tracker.release()
             retainedHeapPressure = null

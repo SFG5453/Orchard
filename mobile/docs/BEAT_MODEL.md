@@ -8,7 +8,14 @@ operation boundaries remain FP32. Long temporal attention is split across
 independent head and frequency groups to reduce peak GPU allocation without
 changing the checkpoint weights. The same app also ships
 `beat_this_int8.onnx` (21,068,518 bytes) as a 1500-frame CPU fallback, run with four
-ONNX Runtime threads. The open-unmix vocal separator uses CPU.
+ONNX Runtime threads. For playback planning, the bounded Earmark analysis now
+passes its spectral vocal-risk estimates to the shared desktop planner. This
+does not load the separate open-unmix vocal separator.
+
+Spectral vocal risk is broad: synths can score as vocals. The shared planner
+uses it to rank entry cues and measure overlap, but its vocal-collision gate
+still permits a conservative beatmatch. Supplying this evidence can therefore
+change a cue without guaranteeing a vocal-free transition.
 
 The INT8 ONNX asset SHA-256 is
 `33920bdfe3342cabe0f17350f0e9b3fe1dca6aedca2831a4ad18b45407a41d0d`.

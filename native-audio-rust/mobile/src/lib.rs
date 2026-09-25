@@ -125,10 +125,10 @@ fn mobile_analysis_json(result: &WholeTrackAnalysis) -> String {
     .to_string()
 }
 
-/// The bounded, model-grid-only planner evidence used by orchardv3. This is kept
-/// separate from the whole-track Best Mix summary above: its times are rebased
-/// to the original song, and spectral vocals remain unknown until measured by
-/// an actual vocal model.
+/// Bounded, beat-refined planner evidence for playback. This is kept separate
+/// from the whole-track Best Mix summary above; its times are rebased to the
+/// original song. Keep Earmark's spectral vocal-risk estimates just as desktop
+/// does, so the shared planner can rank cues and measure mapped vocal overlap.
 fn planner_window_json(
     result: &WholeTrackAnalysis,
     offset: f64,
@@ -138,37 +138,50 @@ fn planner_window_json(
     beats: &[f64],
     downbeats: &[f64],
 ) -> String {
-    let frames: Vec<_> = result.transition_feature_frames.iter().map(|frame| json!({
-        "time": offset + frame.time,
-        "energy": frame.energy,
-        "low": frame.low,
-        "mid": frame.mid,
-        "high": frame.high,
-        "vocal": null,
-        "novelty": frame.novelty,
-        "transientDensity": frame.transient_density,
-        "stability": frame.stability,
-    })).collect();
-    let boundaries: Vec<_> = result.structural_boundary_candidates.iter().map(|boundary| {
-        let nearest = downbeats.iter().copied().min_by(|a, b|
-            (a - boundary.observed_time).abs().total_cmp(&(b - boundary.observed_time).abs()));
-        let snapped = nearest.filter(|time|
-            (time - boundary.observed_time).abs() <= (60.0 / bpm).max(0.25))
-            .unwrap_or(boundary.observed_time);
-        json!({
-            "time": offset + snapped,
-            "observedTime": offset + boundary.observed_time,
-            "confidence": boundary.confidence,
-            "source": boundary.source,
-            "noveltyPeak": boundary.novelty_peak,
-            "energyDelta": boundary.energy_delta,
-            "lowDelta": boundary.low_delta,
-            "vocalDelta": null,
-            "stabilityBefore": boundary.stability_before,
-            "stabilityAfter": boundary.stability_after,
-            "downbeatDistance": nearest.map(|time| (time - boundary.observed_time).abs()),
+    let frames: Vec<_> = result
+        .transition_feature_frames
+        .iter()
+        .map(|frame| {
+            json!({
+                "time": offset + frame.time,
+                "energy": frame.energy,
+                "low": frame.low,
+                "mid": frame.mid,
+                "high": frame.high,
+                "vocal": frame.vocal,
+                "novelty": frame.novelty,
+                "transientDensity": frame.transient_density,
+                "stability": frame.stability,
+            })
         })
-    }).collect();
+        .collect();
+    let boundaries: Vec<_> = result
+        .structural_boundary_candidates
+        .iter()
+        .map(|boundary| {
+            let nearest = downbeats.iter().copied().min_by(|a, b| {
+                (a - boundary.observed_time)
+                    .abs()
+                    .total_cmp(&(b - boundary.observed_time).abs())
+            });
+            let snapped = nearest
+                .filter(|time| (time - boundary.observed_time).abs() <= (60.0 / bpm).max(0.25))
+                .unwrap_or(boundary.observed_time);
+            json!({
+                "time": offset + snapped,
+                "observedTime": offset + boundary.observed_time,
+                "confidence": boundary.confidence,
+                "source": boundary.source,
+                "noveltyPeak": boundary.novelty_peak,
+                "energyDelta": boundary.energy_delta,
+                "lowDelta": boundary.low_delta,
+                "vocalDelta": boundary.vocal_delta,
+                "stabilityBefore": boundary.stability_before,
+                "stabilityAfter": boundary.stability_after,
+                "downbeatDistance": nearest.map(|time| (time - boundary.observed_time).abs()),
+            })
+        })
+        .collect();
     let content_end = if offset + result.duration + 0.05 < duration {
         duration
     } else {
@@ -192,7 +205,49 @@ fn planner_window_json(
         "contentEndTime": content_end,
         "transitionFeatureFrames": frames,
         "structuralBoundaryCandidates": boundaries,
-    }).to_string()
+    })
+    .to_string()
+}
+
+#[cfg(test)]
+mod planner_window_tests {
+    use super::planner_window_json;
+    use earmark::analysis::{
+        StructuralBoundaryCandidate, TransitionFeatureFrame, WholeTrackAnalysis,
+    };
+
+    #[test]
+    fn retains_spectral_vocal_evidence_at_rebased_times() {
+        let analysis = WholeTrackAnalysis {
+            duration: 60.0,
+            content_end_time: 60.0,
+            transition_feature_frames: vec![TransitionFeatureFrame {
+                time: 4.0,
+                vocal: 0.82,
+                ..Default::default()
+            }],
+            structural_boundary_candidates: vec![StructuralBoundaryCandidate {
+                time: 4.0,
+                observed_time: 4.0,
+                confidence: 0.9,
+                source: "detected-change".into(),
+                novelty_peak: 0.7,
+                energy_delta: 0.1,
+                low_delta: 0.2,
+                vocal_delta: 0.64,
+                stability_before: 0.8,
+                stability_after: 0.6,
+                downbeat_distance: 0.0,
+            }],
+            ..Default::default()
+        };
+        let payload = planner_window_json(&analysis, 90.0, 150.0, 120.0, 0.9, &[], &[]);
+        let json: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(json["transitionFeatureFrames"][0]["time"], 94.0);
+        assert_eq!(json["transitionFeatureFrames"][0]["vocal"], 0.82);
+        assert_eq!(json["structuralBoundaryCandidates"][0]["time"], 94.0);
+        assert_eq!(json["structuralBoundaryCandidates"][0]["vocalDelta"], 0.64);
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -216,19 +271,33 @@ pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_TrackFeatures_
     let values = read_floats(&mut env, &samples).ok();
     let beats = read_doubles(&mut env, &beats).ok();
     let downbeats = read_doubles(&mut env, &downbeats).ok();
-    let output = values.zip(beats).zip(downbeats).and_then(|((samples, beats), downbeats)| {
-        if !sample_rate.is_finite() || sample_rate <= 0.0 || !offset.is_finite()
-            || !duration.is_finite() || !bpm.is_finite() || bpm <= 0.0
-            || !confidence.is_finite() || samples.is_empty()
-        {
-            return None;
-        }
-        let local_duration = samples.len() as f64 / sample_rate;
-        with_analyzer(|analyzer| analyzer.analyze(&samples, sample_rate, local_duration))
-            .ok()
-            .map(|result| planner_window_json(&result, offset, duration, bpm, confidence, &beats, &downbeats))
-    }).unwrap_or_else(|| "{}".to_owned());
-    env.new_string(output).map_or(std::ptr::null_mut(), |value| value.into_raw())
+    let output = values
+        .zip(beats)
+        .zip(downbeats)
+        .and_then(|((samples, beats), downbeats)| {
+            if !sample_rate.is_finite()
+                || sample_rate <= 0.0
+                || !offset.is_finite()
+                || !duration.is_finite()
+                || !bpm.is_finite()
+                || bpm <= 0.0
+                || !confidence.is_finite()
+                || samples.is_empty()
+            {
+                return None;
+            }
+            let local_duration = samples.len() as f64 / sample_rate;
+            with_analyzer(|analyzer| analyzer.analyze(&samples, sample_rate, local_duration))
+                .ok()
+                .map(|result| {
+                    planner_window_json(
+                        &result, offset, duration, bpm, confidence, &beats, &downbeats,
+                    )
+                })
+        })
+        .unwrap_or_else(|| "{}".to_owned());
+    env.new_string(output)
+        .map_or(std::ptr::null_mut(), |value| value.into_raw())
 }
 
 #[unsafe(no_mangle)]

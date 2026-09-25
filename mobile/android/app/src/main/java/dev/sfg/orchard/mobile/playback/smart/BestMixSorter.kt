@@ -261,6 +261,10 @@ object BestMixSorter {
     ): List<Track> {
         if (tracks.size <= 1) return tracks
 
+        // The native path uses the desktop's exact three-finalist pair search. Keep the coarse
+        // Kotlin scorer as a fallback when the optional C++ module cannot load or parse evidence.
+        NativeBestMixPlanner.sort(tracks, featuresMap, initialFeatures)?.let { return it }
+
         val output = mutableListOf<Track>()
         val segment = mutableListOf<AnalyzedTrack>()
         var previousFeatures = initialFeatures

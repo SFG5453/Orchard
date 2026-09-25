@@ -48,6 +48,9 @@
 -keep class org.mozilla.classfile.ClassFileWriter
 -dontwarn org.mozilla.javascript.tools.**
 
+# The native Best Mix scorer exports a name-based JNI symbol for this Kotlin object.
+-keep class dev.sfg.orchard.mobile.playback.smart.NativeBestMixPlanner { *; }
+
 # Rhino also contains optional JDK scripting/bean integrations. Android does
 # not provide these desktop-only APIs, and Orchard uses Rhino's core engine
 # for cipher evaluation rather than its javax.script or dynalink adapters.
