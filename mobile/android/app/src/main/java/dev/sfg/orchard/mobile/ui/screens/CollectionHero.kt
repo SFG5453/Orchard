@@ -85,6 +85,7 @@ import dev.sfg.orchard.mobile.ui.components.ArtworkTile
 import dev.sfg.orchard.mobile.ui.components.CollectionActionRow
 import dev.sfg.orchard.mobile.ui.components.CollectionTopBar
 import dev.sfg.orchard.mobile.ui.components.ExplicitBadge
+import dev.sfg.orchard.mobile.ui.components.collectionDownloadAction
 import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import dev.sfg.orchard.mobile.ui.theme.legibleOnDarkChrome
@@ -241,6 +242,15 @@ fun CollectionHero(
         context.startActivity(Intent.createChooser(intent, "Share ${detail.title}"))
     }
 
+    val allDownloaded = detail.tracks.isNotEmpty() && detail.tracks.all { downloadedTrackIds.contains(it.id) }
+    val anyDownloading = detail.tracks.isNotEmpty() && detail.tracks.any { downloadingTrackIds.contains(it.id) }
+    val onDownloadAction: (() -> Unit)? = collectionDownloadAction(
+        tracks = detail.tracks,
+        downloadedTrackIds = downloadedTrackIds,
+        onDownloadTracks = onDownloadTracks,
+        onRemoveDownloadTracks = onRemoveDownloadTracks,
+    )
+
     val topBar: @Composable () -> Unit = {
         CollectionTopBar(
             onBack = onBack,
@@ -256,6 +266,8 @@ fun CollectionHero(
             onCloseSearch = onCloseSearch,
             searchPlaceholder = "Find in ${if (detail.kind == CatalogKind.ALBUM) "album" else "playlist"}",
             aboutLabel = "About this ${if (detail.kind == CatalogKind.ALBUM) "album" else "playlist"}",
+            onDownload = onDownloadAction,
+            isDownloaded = allDownloaded,
         )
     }
 
@@ -448,17 +460,6 @@ fun CollectionHero(
 
         // Action buttons row: [ Shuffle ]  [ ▶ Play ]  [ Add / Save ]  [ Download ]
         Spacer(Modifier.height(18.dp))
-        val allDownloaded = detail.tracks.isNotEmpty() && detail.tracks.all { downloadedTrackIds.contains(it.id) }
-        val anyDownloading = detail.tracks.isNotEmpty() && detail.tracks.any { downloadingTrackIds.contains(it.id) }
-        val onDownloadAction: (() -> Unit)? = if (onDownloadTracks != null && onRemoveDownloadTracks != null && detail.tracks.isNotEmpty()) {
-            {
-                if (allDownloaded) {
-                    onRemoveDownloadTracks(detail.tracks)
-                } else {
-                    onDownloadTracks(detail.tracks)
-                }
-            }
-        } else null
 
         CollectionActionRow(
             accent = if (isAlbum) albumAccent else Color.White,

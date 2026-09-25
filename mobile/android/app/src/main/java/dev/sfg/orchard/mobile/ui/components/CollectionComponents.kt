@@ -36,6 +36,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -43,12 +45,14 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import dev.sfg.orchard.mobile.model.Track
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -159,6 +163,63 @@ fun CollectionActionRow(
                 )
             }
         }
+
+        // Download / Offline button (frosted glass circle)
+        if (onDownload != null) {
+            Surface(
+                onClick = onDownload,
+                enabled = downloadEnabled,
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.14f),
+                modifier = Modifier.size(44.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    if (isDownloading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = LocalAccent.current,
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
+                            contentDescription = if (isDownloaded) "Downloaded offline" else "Download collection",
+                            tint =
+                                if (isDownloaded) {
+                                    LocalAccent.current
+                                } else if (downloadEnabled) {
+                                    Color.White
+                                } else {
+                                    Color.White.copy(alpha = 0.35f)
+                                },
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Helper to produce the collection download / delete callback based on current download state.
+ */
+fun collectionDownloadAction(
+    tracks: List<Track>,
+    downloadedTrackIds: Set<String>,
+    onDownloadTracks: ((List<Track>) -> Unit)?,
+    onRemoveDownloadTracks: ((List<Track>) -> Unit)?,
+): (() -> Unit)? {
+    if (onDownloadTracks == null || onRemoveDownloadTracks == null || tracks.isEmpty()) {
+        return null
+    }
+    val allDownloaded = tracks.all { downloadedTrackIds.contains(it.id) }
+    return {
+        if (allDownloaded) {
+            onRemoveDownloadTracks(tracks)
+        } else {
+            onDownloadTracks(tracks)
+        }
     }
 }
 
@@ -214,6 +275,8 @@ fun CollectionTopBar(
     onCloseSearch: (() -> Unit)? = null,
     searchPlaceholder: String = "Find in playlist",
     aboutLabel: String = "About",
+    onDownload: (() -> Unit)? = null,
+    isDownloaded: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     if (isSearching && onSearchQueryChange != null && onCloseSearch != null) {
@@ -320,6 +383,23 @@ fun CollectionTopBar(
                             onClick = {
                                 menuOpen = false
                                 onSearch()
+                            },
+                        )
+                    }
+                    if (onDownload != null) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (isDownloaded) {
+                                        "Remove download"
+                                    } else {
+                                        "Download ${if (aboutLabel.contains("album", true)) "album" else "playlist"}"
+                                    }
+                                )
+                            },
+                            onClick = {
+                                menuOpen = false
+                                onDownload()
                             },
                         )
                     }
