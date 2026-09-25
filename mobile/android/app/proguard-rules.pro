@@ -10,6 +10,12 @@
 -keep class ai.onnxruntime.providers.** { *; }
 -dontwarn ai.onnxruntime.**
 
+# LiteRT's JNI layer also resolves Java exception/API classes by hardcoded name.
+# R8 renaming `LiteRtException` makes nativeCreateFromAsset abort the process at
+# first playback analysis with "Failed to find LiteRtException class".
+-keep class com.google.ai.edge.litert.** { *; }
+-dontwarn com.google.ai.edge.litert.**
+
 # WebRTC's native layer calls back into Java by hardcoded name, the same way ONNX
 # Runtime's does: observers, the enums it reads signalling state from, and the
 # constructors JNI instantiates are all resolved reflectively. Renaming any of them
