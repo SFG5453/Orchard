@@ -94,6 +94,9 @@ android {
             kotlin.srcDirs += earmarkKotlinDir
             resources.srcDir layout.buildDirectory.dir("generated/transitionPlanner").get().asFile
         }
+        canaryX86 {
+            res.srcDir 'src/canary/res'
+        }
     }
 
     androidResources {
@@ -143,10 +146,21 @@ android {
         // APK would neither upgrade it nor install over it.
         canary {
             initWith release
+            if (!orchardReleaseSigningReady) signingConfig = signingConfigs.debug
             applicationIdSuffix = '.canary'
             versionNameSuffix = '-canary'
             resValue 'string', 'app_name', 'Orchard Canary'
             buildConfigField 'boolean', 'UPDATER_ENABLED', 'false'
+        }
+        canaryX86 {
+            initWith canary
+            applicationIdSuffix = '.canaryx86'
+            versionNameSuffix = '-canary-x86'
+            resValue 'string', 'app_name', 'Orchard Canary x86_64'
+            ndk {
+                abiFilters.clear()
+                abiFilters += ['x86_64']
+            }
         }
     }
 
