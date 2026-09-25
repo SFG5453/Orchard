@@ -74,13 +74,15 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon assembleCanary
 
-      - name: Collect the APK
+      - name: Collect the APK and R8 mapping
         id: collect
         working-directory: mobile/android
         run: |
           set -euo pipefail
           source_apk="app/build/outputs/apk/canary/app-canary.apk"
+          source_mapping="app/build/outputs/mapping/canary/mapping.txt"
           test -f "$source_apk"
+          test -s "$source_mapping"
 
           version="$(sed -n "s/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*['\"]\([^'\"]*\)['\"].*/\1/p" app/build.gradle)"
           test -n "$version"
@@ -89,15 +91,17 @@ jobs:
           # handed out one at a time and come back described only as "the APK".
           safe_ref="$(printf '%s' "${GITHUB_REF_NAME}" | tr -c 'A-Za-z0-9._-' '-')"
           apk_name="Orchard-Canary-${version}-${safe_ref}-${short_sha}.apk"
+          mapping_name="${apk_name%.apk}.mapping.txt"
 
           mkdir -p "$RUNNER_TEMP/apk"
           cp "$source_apk" "$RUNNER_TEMP/apk/$apk_name"
-          ( cd "$RUNNER_TEMP/apk" && sha256sum "$apk_name" > "$apk_name.sha256" )
+          cp "$source_mapping" "$RUNNER_TEMP/apk/$mapping_name"
+          ( cd "$RUNNER_TEMP/apk" && sha256sum "$apk_name" "$mapping_name" > "$apk_name.sha256" )
           cat "$RUNNER_TEMP/apk/$apk_name.sha256"
 
       # The artifact name is fixed so the nightly.link URL above stays valid; the
-      # varying detail is in the APK filename inside the zip.
-      - name: Upload the APK
+      # varying detail is in the filenames inside the zip.
+      - name: Upload the APK and R8 mapping
         uses: actions/upload-artifact@v4
         with:
           name: Orchard-Canary-APK
