@@ -39,6 +39,8 @@ data class RestoredPlayback(
     val playWhenReady: Boolean = false,
     /** Queue order from before shuffle was turned on, so the toggle stays reversible across a restart. */
     val unshuffledOrder: List<String> = emptyList(),
+    /** Alternate source for the current item; blank means album audio. */
+    val currentVideoId: String = "",
 )
 
 /** Versioned JSON boundary kept Android-free so restoration rules are unit-testable. */
@@ -56,6 +58,7 @@ internal object PlaybackStateCodec {
             unshuffledOrder = root.optJSONArray("unshuffledOrder")?.let { array ->
                 (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) }
             }.orEmpty(),
+            currentVideoId = root.optString("currentVideoId"),
             // Never resume audible playback solely because Android recreated
             // the process; the user or a media controller explicitly resumes.
             playWhenReady = false,
@@ -71,6 +74,7 @@ internal object PlaybackStateCodec {
         .put("repeatMode", state.repeatMode.name)
         .put("contextTitle", state.contextTitle)
         .put("unshuffledOrder", org.json.JSONArray(state.unshuffledOrder))
+        .put("currentVideoId", state.currentVideoId)
 }
 
 /**

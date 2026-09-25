@@ -21,6 +21,7 @@ import { computed, ref } from 'vue';
 import { readPinnedTracks } from '../browse/pinsPersistence.js';
 import { copyTextToClipboard } from '../platform/clipboardText.js';
 import { readPlaybackState } from '../playback/queuePersistence.js';
+import { welcomeSettingsSnapshot } from './settingsStorageSync.js';
 
 const SETUP_STORAGE_KEY = 'orchard:setup-state';
 const LAST_RUN_VERSION_STORAGE_KEY = 'orchard:last-run-version';
@@ -301,7 +302,7 @@ export function installReadinessActions(ctx) {
       if (typeof window.orchardApp?.finishWelcome !== 'function') {
         throw new Error('The desktop bridge is unavailable.');
       }
-      await window.orchardApp.finishWelcome();
+      await window.orchardApp.finishWelcome(welcomeSettingsSnapshot(ctx));
       return true;
     } catch (error) {
       ctx.errorMessage.value = error?.message || 'Could not open Orchard.';
@@ -455,6 +456,7 @@ export function installReadinessActions(ctx) {
     ctx.crossfadeMode.value = preferences.crossfadeMode;
     ctx.crossfadeSeconds.value = preferences.crossfadeSeconds;
     ctx.customArtistPagesEnabled.value = preferences.customArtistPagesEnabled;
+    ctx.fullscreenLyricsVisible.value = preferences.fullscreenLyricsVisible;
     ctx.playbackStatePersistenceEnabled.value = preferences.playbackStatePersistenceEnabled;
     ctx.queueLayout.value = preferences.queueLayout;
     ctx.youtubeHistoryEnabled.value = preferences.youtubeHistoryEnabled;
@@ -464,7 +466,12 @@ export function installReadinessActions(ctx) {
     ctx.immersiveBackgroundsEnabled.value = preferences.immersiveBackgroundsEnabled;
     ctx.immersiveBackgroundIntensity.value = preferences.immersiveBackgroundIntensity;
     ctx.immersiveBackgroundMotion.value = preferences.immersiveBackgroundMotion;
+    ctx.homeSectionOrder.value = preferences.homeSectionOrder;
+    ctx.hiddenHomeSectionIds.value = preferences.hiddenHomeSectionIds;
+    ctx.sidebarItemOrder.value = preferences.sidebarItemOrder;
+    ctx.hiddenSidebarItemIds.value = preferences.hiddenSidebarItemIds;
     ctx.layoutPreset.value = preferences.layoutPreset;
+    ctx.keepOldVersions.value = preferences.keepOldVersions;
     ctx.uiScale.value = preferences.uiScale;
     ctx.sponsorBlockMode.value = preferences.sponsorBlockMode;
     ctx.volumeNormalizationEnabled.value = preferences.volumeNormalizationEnabled;

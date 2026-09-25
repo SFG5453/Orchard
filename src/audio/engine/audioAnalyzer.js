@@ -17,9 +17,10 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { AudioContext as StandardizedAudioContext } from 'standardized-audio-context';
 import { createCrossfadeMixer } from '../crossfade/crossfadeMixer.js';
-import { downloadAudioFile } from './audioFetch.js';
+import { downloadAudioFile as downloadEncodedAudioFile } from './audioFetch.js';
+
+const PROVIDER_DECODE_CACHE_LIMIT = 2;
 
 function clamp01(value) {
   const number = Number(value);
@@ -47,18 +48,92 @@ export function createAudioAnalyzer(options = {}) {
   };
   const nodes = new WeakMap();
   const contentEndCache = new Map();
+  const providerDecodeCache = new Map();
+  const downloadAudioFile = options.downloadAudioFile || downloadEncodedAudioFile;
   let context = null;
+
+  function cacheableProviderUrl(value) {
+    try {
+      const url = new URL(String(value || ''));
+      return ['127.0.0.1', 'localhost'].includes(url.hostname) &&
+        url.pathname.startsWith('/provider/');
+    } catch {
+      return false;
+    }
+  }
+
+  function touchProviderAudio(url, cached) {
+    providerDecodeCache.delete(url);
+    providerDecodeCache.set(url, cached);
+    return cached;
+  }
+
+  function trimProviderAudioCache() {
+    const readyKeys = [...providerDecodeCache]
+      .filter(([, entry]) => entry.buffer)
+      .map(([url]) => url);
+    while (readyKeys.length > PROVIDER_DECODE_CACHE_LIMIT) {
+      providerDecodeCache.delete(readyKeys.shift());
+    }
+  }
+
+  function providerAudio(url, ctx) {
+    const cached = providerDecodeCache.get(url);
+    if (cached) {
+      touchProviderAudio(url, cached);
+      return cached.buffer ? Promise.resolve(cached.buffer) : cached.promise;
+    }
+
+    const controller = new AbortController();
+    const entry = { buffer: null, controller, promise: null };
+    entry.promise = (async () => {
+      const data = await downloadAudioFile(url, { signal: controller.signal });
+      const buffer = await ctx.decodeAudioData(data);
+      entry.buffer = buffer;
+      entry.controller = null;
+      if (providerDecodeCache.get(url) === entry) {
+        touchProviderAudio(url, entry);
+        trimProviderAudioCache();
+      }
+      return buffer;
+    })().catch((error) => {
+      if (providerDecodeCache.get(url) === entry) providerDecodeCache.delete(url);
+      throw error;
+    });
+    providerDecodeCache.set(url, entry);
+    return entry.promise;
+  }
+
+  function callerAbortError(signal) {
+    if (signal?.reason instanceof Error) return signal.reason;
+    const error = new Error('Audio decoding was cancelled');
+    error.name = 'AbortError';
+    return error;
+  }
+
+  function waitForCaller(promise, signal) {
+    if (!signal) return promise;
+    if (signal.aborted) return Promise.reject(callerAbortError(signal));
+    return new Promise((resolve, reject) => {
+      const aborted = () => {
+        cleanup();
+        reject(callerAbortError(signal));
+      };
+      const cleanup = () => signal.removeEventListener('abort', aborted);
+      signal.addEventListener('abort', aborted, { once: true });
+      promise.then(
+        (value) => { cleanup(); resolve(value); },
+        (error) => { cleanup(); reject(error); }
+      );
+    });
+  }
 
   function audioContext() {
     if (context) return context;
 
-    try {
-      context = new StandardizedAudioContext();
-    } catch {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContextClass) return null;
-      context = new AudioContextClass();
-    }
+    const AudioContextClass = globalThis.window?.AudioContext || globalThis.window?.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    context = new AudioContextClass();
     return context;
   }
 
@@ -74,28 +149,6 @@ export function createAudioAnalyzer(options = {}) {
     return { lowPass, highPass };
   }
 
-  // The mix bands the transition scheduler automates. Two LR4 halves of a
-  // 200 Hz crossover -- a low branch carrying its own gain, and a high branch
-  // -- so the low end can be handed over exclusively rather than fading two
-  // uncorrelated bass lines through each other. This mirrors the native
-  // renderer's split (see native/transition/transition_render.cpp); the live
-  // path had only a full-range low-pass, which meant the outgoing track was
-  // reduced to pure bass exactly as the incoming's bass arrived.
-  //
-  // `midDuck` is one peaking section rather than a second crossover: the
-  // renderer can afford a three-way split offline, but here a single
-  // automatable dip covers the same band without adding two more phase-shifted
-  // branches that would have to sum flat. At 0 dB it is transparent.
-  //
-  // This network is switched *out* of circuit for ordinary playback, because
-  // "transparent" is only true of its magnitude response. An LR4 low/high pair
-  // sums to an allpass: dead flat within 0.03 dB, which is why it never showed
-  // up as a tone-balance problem, but it redistributes phase across the low
-  // mids and that grows transient peaks. Measured against real masters it adds
-  // 0.7-3.4 dB of peak with no change in level, so a track mastered near full
-  // scale -- which is most of them -- was driven past the destination's ceiling
-  // and hard-clipped on every transient, with EQ and every gain at unity. That
-  // was the "distorted even with the audio engine off" report.
   const BASS_CROSSOVER_HZ = 200;
   const MID_DUCK_HZ = 1200;
 
@@ -167,16 +220,8 @@ export function createAudioAnalyzer(options = {}) {
     normalizer.connect(normalizedGain);
     normalizedGain.connect(gain);
     gain.connect(mixGain);
-    // Ordinary playback: mix envelope straight to the output, no filters in
-    // the path at all. `splitInput` sits at zero, so the crossover branches
-    // below are silent and their filter state decays away until armed.
     mixGain.connect(directBand);
     directBand.connect(ctx.destination);
-    // The sweep filter sits on the high branch only. Sweeping a low-pass down
-    // to 200 Hz across a band that starts at 200 Hz is meaningless, and running
-    // it full-range is what made the outgoing track lose its body and its low
-    // end at the same time. The static output pair is common to both branches
-    // and lives after the sum, so the crossover halves stay phase-matched.
     mixGain.connect(splitInput);
     splitInput.connect(bassLow[0]);
     splitInput.connect(bassHigh[0]);
@@ -288,12 +333,31 @@ export function createAudioAnalyzer(options = {}) {
     return true;
   }
 
+  // Read the live normalized mix envelope without touching the element's
+  // master volume. AudioParam.value follows scheduled automation on the audio
+  // context clock, so fullscreen visuals can mirror the gain curves that are
+  // actually audible instead of recreating them from a wall-clock timer.
+  function mixVolume(element) {
+    const node = nodes.get(element);
+    if (!node) return null;
+    return clamp01(node.mixGain.gain.value);
+  }
+
   async function decodeAudio(url, signal) {
     const ctx = audioContext();
     if (!ctx) return null;
 
+    if (cacheableProviderUrl(url)) return waitForCaller(providerAudio(url, ctx), signal);
+    if (signal?.aborted) throw callerAbortError(signal);
+
     const data = await downloadAudioFile(url, { signal });
     return ctx.decodeAudioData(data);
+  }
+
+  function warmDecodedAudio(url) {
+    if (!cacheableProviderUrl(url)) return Promise.resolve(null);
+    const ctx = audioContext();
+    return ctx ? providerAudio(url, ctx) : Promise.resolve(null);
   }
 
   function average(values) {
@@ -679,6 +743,8 @@ export function createAudioAnalyzer(options = {}) {
   }
 
   function destroy() {
+    for (const entry of providerDecodeCache.values()) entry.controller?.abort();
+    providerDecodeCache.clear();
     if (!context) return;
     context.close().catch(() => {});
     context = null;
@@ -699,9 +765,11 @@ export function createAudioAnalyzer(options = {}) {
     samples,
     resetMixElement: mixer.resetElement,
     scheduleCrossfade: mixer.scheduleCrossfade,
+    mixVolume,
     setMixVolume,
     setNormalization,
     setVolume,
-    spectrum
+    spectrum,
+    warmDecodedAudio
   };
 }

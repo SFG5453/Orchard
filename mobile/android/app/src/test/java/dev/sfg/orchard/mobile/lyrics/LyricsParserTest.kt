@@ -82,6 +82,25 @@ class LyricsParserTest {
     }
 
     @Test
+    fun syllablesWithoutWhitespaceUseTheFullLineForWordBoundaries() {
+        val root = JSONObject(
+            """{"lyrics":[
+              {"time":100,"duration":900,"text":"Top Cobain","syllabus":[
+                {"text":"Top","time":100,"duration":200},
+                {"text":"Co","time":300,"duration":250},
+                {"text":"bain","time":550,"duration":450}
+              ]}
+            ]}""",
+        )
+
+        val words = LyricsParser.amPayload(root).single().words
+
+        assertEquals(listOf("Top", "Cobain"), words.map { it.text })
+        assertEquals(listOf(100L, 300L), words.map { it.startMs })
+        assertEquals(listOf(300L, 1_000L), words.map { it.endMs })
+    }
+
+    @Test
     fun appleTtmlLineTimingIsNormalized() {
         val lines = LyricsParser.ttml(
             """<tt xmlns="http://www.w3.org/ns/ttml"><body><div>
@@ -102,5 +121,21 @@ class LyricsParserTest {
             listOf("Instrumental"),
             LyricsParser.lrcLib(JSONObject().put("instrumental", true)).map { it.text },
         )
+    }
+
+    @Test
+    fun duetTtmlAssignsPrimaryAndAlternateAgentLanes() {
+        val lines = LyricsParser.ttml(
+            """<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body><div>
+              <p begin="1.0s" end="3.0s" ttm:agent="v1"><span>Line one from primary</span></p>
+              <p begin="4.0s" end="6.0s" ttm:agent="v2"><span>Line two from secondary</span></p>
+              <p begin="7.0s" end="9.0s" ttm:agent="v1"><span>Line three from primary</span></p>
+            </div></body></tt>""",
+        )
+
+        assertEquals(3, lines.size)
+        assertEquals("primary", lines[0].agentLane)
+        assertEquals("alternate", lines[1].agentLane)
+        assertEquals("primary", lines[2].agentLane)
     }
 }

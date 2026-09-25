@@ -19,7 +19,9 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import android.os.Build
 import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,44 +38,35 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import dev.sfg.orchard.mobile.ui.scroll.orchardVerticalScroll as verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.AllInclusive
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Devices
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Gradient
-import androidx.compose.material.icons.rounded.Image
-import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.SystemUpdate
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import dev.sfg.orchard.connect.BuildConfig
 import dev.sfg.orchard.mobile.MobileChangelog
@@ -82,11 +75,15 @@ import dev.sfg.orchard.mobile.UpdateState
 import dev.sfg.orchard.mobile.auth.AuthState
 import dev.sfg.orchard.mobile.discord.DiscordAuthState
 import dev.sfg.orchard.mobile.discord.GatewayConnectionState
+import dev.sfg.orchard.mobile.lastfm.LastfmState
+import dev.sfg.orchard.mobile.listenbrainz.ListenBrainzState
 import dev.sfg.orchard.mobile.model.AudioQuality
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
 import dev.sfg.orchard.mobile.ui.components.ReleaseNotesDialog
 import dev.sfg.orchard.mobile.ui.components.UpdateDialog
+import dev.sfg.orchard.mobile.ui.glass.GlassStyle
+import dev.sfg.orchard.mobile.ui.glass.LocalGlass
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -96,6 +93,8 @@ fun SettingsScreen(
     auth: AuthState,
     discordAuth: DiscordAuthState = DiscordAuthState.SignedOut,
     discordConnection: GatewayConnectionState = GatewayConnectionState.Disconnected,
+    lastfmState: LastfmState = LastfmState.SignedOut,
+    listenBrainzState: ListenBrainzState = ListenBrainzState.SignedOut,
     updateState: UpdateState = UpdateState.Idle,
     onSettings: (OrchardSettings) -> Unit,
     onSignIn: () -> Unit,
@@ -103,7 +102,17 @@ fun SettingsScreen(
     onSignOut: () -> Unit,
     onConnectDiscord: () -> Unit = {},
     onDisconnectDiscord: () -> Unit = {},
+    onConnectLastfm: () -> Unit = {},
+    onCompleteLastfm: () -> Unit = {},
+    onDisconnectLastfm: () -> Unit = {},
+    onConnectListenBrainz: (String) -> Unit = {},
+    onDisconnectListenBrainz: () -> Unit = {},
     onConnectSpotify: () -> Unit = {},
+    qobuzStatus: dev.sfg.orchard.mobile.qobuz.QobuzStatus = dev.sfg.orchard.mobile.qobuz.QobuzStatus(),
+    onConnectQobuz: () -> Unit = {},
+    onDisconnectQobuz: () -> Unit = {},
+    onQobuzEnabledChange: (Boolean) -> Unit = {},
+    onQobuzQualityChange: (dev.sfg.orchard.mobile.qobuz.QobuzQuality) -> Unit = {},
     onDevices: () -> Unit,
     onWelcome: () -> Unit = {},
     onCheckForUpdates: () -> Unit = {},
@@ -114,213 +123,263 @@ fun SettingsScreen(
      * which only the view model can do.
      */
     onAutoplayEnabled: ((Boolean) -> Unit)? = null,
+    cacheSizeBytes: Long = 0L,
+    isClearingCache: Boolean = false,
+    onClearCache: () -> Unit = {},
+    onRefreshCacheSize: () -> Unit = {},
 ) {
     var showNotesDialog by remember { mutableStateOf(false) }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-    ) {
-        Spacer(Modifier.height(28.dp))
-        Text(
-            "Settings",
-            style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold, fontSize = 32.sp),
-            color = CanopyColors.Text,
-        )
+    LaunchedEffect(Unit) {
+        onRefreshCacheSize()
+    }
 
-        // Account leads: it is the only row whose state the user cannot infer at a glance.
-        Spacer(Modifier.height(20.dp))
-        AccountCard(auth, onSignIn, onSwitchAccount, onSignOut)
+    val plainStyle = remember { GlassStyle(enabled = false) }
+    val settingsAccent = lerp(LocalAccent.current, Color.White, 0.35f)
+    CompositionLocalProvider(LocalGlass provides plainStyle, LocalAccent provides settingsAccent) {
+        Column(Modifier.fillMaxSize().background(Color.Black)) {
+            Text(
+                "Settings",
+                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+                color = CanopyColors.Text,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 20.dp),
+            )
+            Box(Modifier.fillMaxWidth().height(0.5.dp).background(CanopyColors.Rule))
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 4.dp)) {
+                // Account leads: it is the only row whose state the user cannot infer at a glance.
+                Spacer(Modifier.height(20.dp))
+                AccountCard(auth, onSignIn, onSwitchAccount, onSignOut)
 
-        SectionLabel("Audio")
-        SettingsPanel {
-            QualityRow(settings.audioQuality) { onSettings(settings.copy(audioQuality = it)) }
-            PanelDivider()
-            EqualizerRow(settings, onSettings)
-            PanelDivider()
-            ToggleRow(
-                icon = Icons.Rounded.GraphicEq,
-                title = "Show audio bitrate",
-                subtitle = "Display streaming bitrate under player scrubber",
-                checked = settings.showBitrate,
-                onChecked = { onSettings(settings.copy(showBitrate = it)) },
-            )
-            PanelDivider()
-            ToggleRow(
-                icon = Icons.Rounded.GraphicEq,
-                title = "Volume normalization",
-                subtitle = "Even out volume differences between songs",
-                checked = settings.volumeNormalizationEnabled,
-                onChecked = { onSettings(settings.copy(volumeNormalizationEnabled = it)) },
-            )
-            PanelDivider()
-            ToggleRow(
-                icon = Icons.Rounded.AllInclusive,
-                title = "Autoplay",
-                subtitle = "Keep playing related music when the queue runs out",
-                checked = settings.autoplayEnabled,
-                onChecked = { enabled ->
-                    onAutoplayEnabled?.invoke(enabled) ?: onSettings(settings.copy(autoplayEnabled = enabled))
-                },
-            )
-            PanelDivider()
-            CrossfadeRow(settings, onSettings)
-            PanelDivider()
-            CacheSizeRow(settings, onSettings)
-        }
-
-        SectionLabel("Integrations")
-        DiscordSettingsCard(
-            settings = settings,
-            discordAuth = discordAuth,
-            discordConnection = discordConnection,
-            onSettings = onSettings,
-            onConnect = onConnectDiscord,
-            onDisconnect = onDisconnectDiscord,
-        )
-        Spacer(Modifier.height(12.dp))
-        SpotifySettingsCard(
-            settings = settings,
-            onSettings = onSettings,
-            onConnectSpotify = onConnectSpotify,
-        )
-        Spacer(Modifier.height(12.dp))
-        OrchardAccountSettingsCard()
-
-        SectionLabel("Appearance")
-        SettingsPanel {
-            ActionRow(
-                icon = Icons.Rounded.Palette,
-                title = "Home screen layout",
-                subtitle = "Reorder and hide sections on Home",
-                onClick = onHomeLayout,
-            )
-            PanelDivider()
-            ToggleRow(
-                icon = Icons.Rounded.Person,
-                title = "Player gestures",
-                subtitle = "Swipe to skip and tap to like on artwork",
-                checked = settings.playerGesturesEnabled,
-                onChecked = { onSettings(settings.copy(playerGesturesEnabled = it)) },
-            )
-            PanelDivider()
-            ToggleRow(
-                icon = Icons.Rounded.Palette,
-                title = "Use system colours",
-                subtitle = "Match your wallpaper instead of Orchard green",
-                checked = settings.useSystemColors,
-                onChecked = { onSettings(settings.copy(useSystemColors = it)) },
-            )
-            PanelDivider()
-            ToggleRow(
-                icon = Icons.Rounded.Image,
-                title = "Animated artwork",
-                subtitle = "Move artwork while music plays",
-                checked = settings.animatedArtwork,
-                onChecked = { onSettings(settings.copy(animatedArtwork = it)) },
-            )
-            PanelDivider()
-            ToggleRow(
-                icon = Icons.Rounded.Gradient,
-                title = "Animated background",
-                subtitle = "Let the cover's colours drift behind the app",
-                checked = settings.animatedBackground,
-                onChecked = { onSettings(settings.copy(animatedBackground = it)) },
-            )
-        }
-
-        SectionLabel("Devices")
-        SettingsPanel {
-            ActionRow(
-                icon = Icons.Rounded.Devices,
-                title = "Manage devices",
-                subtitle = "Choose where Orchard plays",
-                onClick = onDevices,
-            )
-        }
-
-        SectionLabel("Updates")
-        SettingsPanel {
-            val availableUpdate = (updateState as? UpdateState.Available)?.metadata
-            if (availableUpdate != null) {
-                ActionRow(
-                    icon = Icons.Rounded.SystemUpdate,
-                    title = "Update available (${availableUpdate.version})",
-                    subtitle = if (availableUpdate.codename.isNotBlank()) {
-                        "\"${availableUpdate.codename}\" • Tap to install"
-                    } else {
-                        "Tap to install"
-                    },
-                    onClick = { onInstallUpdate(availableUpdate) },
-                )
-                PanelDivider()
-                ActionRow(
-                    icon = Icons.Rounded.History,
-                    title = "Release notes",
-                    subtitle = "View changes in Orchard ${availableUpdate.version}",
-                    onClick = { showNotesDialog = true },
-                )
-            } else {
-                ActionRow(
-                    icon = Icons.Rounded.History,
-                    title = "Release notes",
-                    subtitle = if (!BuildConfig.UPDATER_ENABLED) {
-                        "Orchard ${BuildConfig.VERSION_NAME} • Updates disabled"
-                    } else if (settings.betaChannelEnabled) {
-                        "Orchard ${BuildConfig.VERSION_NAME} • Beta channel • Up to date"
-                    } else {
-                        "Orchard ${BuildConfig.VERSION_NAME} • Up to date"
-                    },
-                    onClick = { showNotesDialog = true },
-                )
-                if (BuildConfig.UPDATER_ENABLED) {
+                SectionLabel("Audio")
+                SettingsPanel {
+                    QualityRow(settings.audioQuality) { onSettings(settings.copy(audioQuality = it)) }
                     PanelDivider()
-                    ActionRow(
-                        icon = Icons.Rounded.Refresh,
-                        title = "Check for updates",
-                        subtitle = "Check for newer Orchard releases",
-                        onClick = onCheckForUpdates,
+                    EqualizerRow(settings, onSettings)
+                    PanelDivider()
+                    ToggleRow(
+                        title = "Show audio bitrate",
+                        subtitle = "Display streaming bitrate under player scrubber",
+                        checked = settings.showBitrate,
+                        onChecked = { onSettings(settings.copy(showBitrate = it)) },
+                    )
+                    PanelDivider()
+                    ToggleRow(
+                        title = "Volume normalization",
+                        subtitle = "Even out volume differences between songs",
+                        checked = settings.volumeNormalizationEnabled,
+                        onChecked = { onSettings(settings.copy(volumeNormalizationEnabled = it)) },
+                    )
+                    PanelDivider()
+                    ToggleRow(
+                        title = "Autoplay",
+                        subtitle = "Keep playing related music when the queue runs out",
+                        checked = settings.autoplayEnabled,
+                        onChecked = { enabled ->
+                            onAutoplayEnabled?.invoke(enabled) ?: onSettings(settings.copy(autoplayEnabled = enabled))
+                        },
+                    )
+                    PanelDivider()
+                    CrossfadeRow(settings, onSettings)
+                    PanelDivider()
+                    CacheSizeRow(settings, onSettings)
+                    PanelDivider()
+                    ClearCacheRow(
+                        cacheSizeBytes = cacheSizeBytes,
+                        isClearing = isClearingCache,
+                        onClear = onClearCache,
                     )
                 }
-            }
-            if (BuildConfig.UPDATER_ENABLED) {
-                PanelDivider()
-                ToggleRow(
-                    icon = Icons.Rounded.AutoAwesome,
-                    title = "Beta channel",
-                    subtitle = "Get beta builds from GitHub releases instead of the regular channel. Beta builds may be less stable.",
-                    checked = settings.betaChannelEnabled,
-                    onChecked = {
-                        val updated = settings.copy(betaChannelEnabled = it)
-                        onSettings(updated)
-                    },
+
+                SectionLabel("Integrations")
+                DiscordSettingsCard(
+                    settings = settings,
+                    discordAuth = discordAuth,
+                    discordConnection = discordConnection,
+                    onSettings = onSettings,
+                    onConnect = onConnectDiscord,
+                    onDisconnect = onDisconnectDiscord,
                 )
+                PanelDivider()
+                LastfmSettingsCard(
+                    state = lastfmState,
+                    onConnect = onConnectLastfm,
+                    onComplete = onCompleteLastfm,
+                    onDisconnect = onDisconnectLastfm,
+                )
+                PanelDivider()
+                ListenBrainzSettingsCard(
+                    state = listenBrainzState,
+                    onConnect = onConnectListenBrainz,
+                    onDisconnect = onDisconnectListenBrainz,
+                )
+                PanelDivider()
+                SpotifySettingsCard(
+                    settings = settings,
+                    onSettings = onSettings,
+                    onConnectSpotify = onConnectSpotify,
+                )
+                PanelDivider()
+                QobuzSettingsCard(
+                    status = qobuzStatus,
+                    onConnect = onConnectQobuz,
+                    onDisconnect = onDisconnectQobuz,
+                    onEnabledChange = onQobuzEnabledChange,
+                    onQualityChange = onQobuzQualityChange,
+                )
+                PanelDivider()
+                OrchardAccountSettingsCard(
+                    settings = settings,
+                    onSettings = onSettings,
+                )
+
+                SectionLabel("Appearance")
+                SettingsPanel {
+                    ActionRow(
+                        title = "Home screen layout",
+                        subtitle = "Reorder and hide sections on Home",
+                        onClick = onHomeLayout,
+                    )
+                    PanelDivider()
+                    ToggleRow(
+                        title = "Player gestures",
+                        subtitle = "Swipe to skip and tap to like on artwork",
+                        checked = settings.playerGesturesEnabled,
+                        onChecked = { onSettings(settings.copy(playerGesturesEnabled = it)) },
+                    )
+                    PanelDivider()
+                    ToggleRow(
+                        title = "Use system colours",
+                        subtitle = "Match your wallpaper instead of Orchard green",
+                        checked = settings.useSystemColors,
+                        onChecked = { onSettings(settings.copy(useSystemColors = it)) },
+                    )
+                    PanelDivider()
+                    ToggleRow(
+                        title = "Animated artwork",
+                        subtitle = "Move artwork while music plays",
+                        checked = settings.animatedArtwork,
+                        onChecked = { onSettings(settings.copy(animatedArtwork = it)) },
+                    )
+                    PanelDivider()
+                    ToggleRow(
+                        title = "Download animated artwork",
+                        subtitle = "Save motion covers with new downloads for offline playback",
+                        checked = settings.downloadAnimatedArtwork,
+                        onChecked = { onSettings(settings.copy(downloadAnimatedArtwork = it)) },
+                    )
+                    PanelDivider()
+                    ToggleRow(
+                        title = "Animated background",
+                        subtitle = "Let the cover's colours drift behind the app",
+                        checked = settings.animatedBackground,
+                        onChecked = { onSettings(settings.copy(animatedBackground = it)) },
+                    )
+                }
+
+                SectionLabel("Experimental")
+                SettingsPanel {
+                    ToggleRow(
+                        title = "Frosted glass",
+                        subtitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            "Blur the artwork behind panels and bars"
+                        } else {
+                            "Blur the artwork behind panels and bars • No frost texture on Android 12"
+                        },
+                        checked = settings.frostedGlass,
+                        onChecked = { onSettings(settings.copy(frostedGlass = it)) },
+                    )
+                }
+
+                SectionLabel("Devices")
+                SettingsPanel {
+                    ActionRow(
+                        title = "Manage devices",
+                        subtitle = "Choose where Orchard plays",
+                        onClick = onDevices,
+                    )
+                    PanelDivider()
+                    ChromecastSettingsRow()
+                }
+
+                SectionLabel("Updates")
+                SettingsPanel {
+                    val availableUpdate = (updateState as? UpdateState.Available)?.metadata
+                    if (availableUpdate != null) {
+                        ActionRow(
+                            title = "Update available (${availableUpdate.version})",
+                            subtitle = if (availableUpdate.codename.isNotBlank()) {
+                                "\"${availableUpdate.codename}\" • Tap to install"
+                            } else {
+                                "Tap to install"
+                            },
+                            onClick = { onInstallUpdate(availableUpdate) },
+                        )
+                        PanelDivider()
+                        ActionRow(
+                            title = "Release notes",
+                            subtitle = "View changes in Orchard ${availableUpdate.version}",
+                            onClick = { showNotesDialog = true },
+                        )
+                    } else {
+                        ActionRow(
+                            title = "Release notes",
+                            subtitle = if (!BuildConfig.UPDATER_ENABLED) {
+                                "Orchard ${BuildConfig.VERSION_NAME} • Updates disabled"
+                            } else if (settings.betaChannelEnabled) {
+                                "Orchard ${BuildConfig.VERSION_NAME} • Beta channel • Up to date"
+                            } else {
+                                "Orchard ${BuildConfig.VERSION_NAME} • Up to date"
+                            },
+                            onClick = { showNotesDialog = true },
+                        )
+                        if (BuildConfig.UPDATER_ENABLED) {
+                            PanelDivider()
+                            ActionRow(
+                                title = "Check for updates",
+                                subtitle = "Check for newer Orchard releases",
+                                onClick = onCheckForUpdates,
+                            )
+                        }
+                    }
+                    if (BuildConfig.UPDATER_ENABLED) {
+                        PanelDivider()
+                        ToggleRow(
+                            title = "Beta channel",
+                            subtitle = "Get beta builds from GitHub releases instead of the regular channel. Beta builds may be less stable.",
+                            checked = settings.betaChannelEnabled,
+                            onChecked = {
+                                val updated = settings.copy(betaChannelEnabled = it)
+                                onSettings(updated)
+                            },
+                        )
+                    }
+                }
+
+                SectionLabel("Guide")
+                SettingsPanel {
+                    ActionRow(
+                        title = "Welcome & setup walkthrough",
+                        subtitle = "Revisit the initial setup guide",
+                        onClick = onWelcome,
+                    )
+                }
+
+                Spacer(Modifier.height(32.dp))
+                val versionText = if (BuildConfig.CODENAME.isNotBlank()) {
+                    "Orchard Mobile ${BuildConfig.VERSION_NAME} \"${BuildConfig.CODENAME}\""
+                } else {
+                    "Orchard Mobile ${BuildConfig.VERSION_NAME}"
+                }
+                Text(
+                    versionText,
+                    color = CanopyColors.Eyebrow,
+                    style = MaterialTheme.typography.labelMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(OrchardChromeHeight))
             }
         }
-
-        SectionLabel("Guide")
-        SettingsPanel {
-            ActionRow(
-                icon = Icons.Rounded.AutoAwesome,
-                title = "Welcome & setup walkthrough",
-                subtitle = "Revisit the initial setup guide",
-                onClick = onWelcome,
-            )
-        }
-
-        Spacer(Modifier.height(32.dp))
-        val versionText = if (BuildConfig.CODENAME.isNotBlank()) {
-            "Orchard Mobile ${BuildConfig.VERSION_NAME} \"${BuildConfig.CODENAME}\""
-        } else {
-            "Orchard Mobile ${BuildConfig.VERSION_NAME}"
-        }
-        Text(
-            versionText,
-            color = CanopyColors.Eyebrow,
-            style = MaterialTheme.typography.labelMedium,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(OrchardChromeHeight))
     }
 
     if (showNotesDialog) {
@@ -354,8 +413,8 @@ private fun AccountCard(
     onSignOut: () -> Unit,
 ) {
     Surface(
-        color = CanopyColors.Surface,
-        shape = RoundedCornerShape(20.dp),
+        color = Color.Transparent,
+        shape = SettingsPanelShape,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
@@ -436,54 +495,43 @@ private fun AccountText(title: String, subtitle: String, titleColor: Color = Can
 
 @Composable
 private fun AccountButton(label: String, onClick: () -> Unit, primary: Boolean) {
-    Spacer(Modifier.height(10.dp))
-    if (primary) {
-        Button(
-            onClick = onClick,
-            shape = CircleShape,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = LocalAccent.current,
-                contentColor = Color.Black,
-            ),
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-        ) {
-            Text(label, fontWeight = FontWeight.Bold)
-        }
-    } else {
-        OutlinedButton(
-            onClick = onClick,
-            shape = CircleShape,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-        ) {
-            Text(label, color = CanopyColors.Danger, fontWeight = FontWeight.SemiBold)
-        }
+    Surface(
+        onClick = onClick,
+        color = Color.Transparent,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            label,
+            color = if (primary) LocalAccent.current else CanopyColors.Danger,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+        )
     }
 }
 
-/** Small uppercase eyebrow above each group, quieter than the old bold body-sized heading. */
+/** Accent headings separate the flat settings groups. */
 @Composable
 private fun SectionLabel(value: String) {
     Text(
-        value.uppercase(),
-        style = MaterialTheme.typography.labelMedium.copy(
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.2.sp,
-        ),
-        color = CanopyColors.Eyebrow,
-        modifier = Modifier.padding(start = 4.dp, top = 26.dp, bottom = 10.dp),
+        value,
+        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+        color = LocalAccent.current,
+        modifier = Modifier.padding(start = 16.dp, top = 28.dp, bottom = 8.dp),
     )
 }
 
 @Composable
 private fun SettingsPanel(content: @Composable ColumnScope.() -> Unit) {
     Surface(
-        color = CanopyColors.Surface,
-        shape = RoundedCornerShape(20.dp),
+        color = Color.Transparent,
+        shape = SettingsPanelShape,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(content = content)
     }
 }
+
+private val SettingsPanelShape = RoundedCornerShape(20.dp)
 
 /** Hairline between rows in the same panel. */
 @Composable
@@ -491,7 +539,7 @@ internal fun PanelDivider() {
     Box(
         Modifier
             .fillMaxWidth()
-            .padding(start = 68.dp)
+            .padding(horizontal = 16.dp)
             .height(0.5.dp)
             .background(CanopyColors.Rule),
     )
@@ -512,7 +560,6 @@ internal fun RowIcon(icon: ImageVector) {
 
 @Composable
 private fun ToggleRow(
-    icon: ImageVector,
     title: String,
     subtitle: String,
     checked: Boolean,
@@ -522,25 +569,25 @@ private fun ToggleRow(
         Modifier
             .fillMaxWidth()
             // Tapping the row toggles, not just the switch itself.
-            .clickable { onChecked(!checked) }
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onChecked)
             .defaultMinSize(minHeight = 64.dp)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RowIcon(icon)
-        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+
+        Column(Modifier.weight(1f).padding(end = 16.dp)) {
             Text(
                 title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Normal),
                 color = CanopyColors.Text,
             )
             Text(subtitle, color = CanopyColors.Muted, style = MaterialTheme.typography.bodyMedium)
         }
         Switch(
             checked = checked,
-            onCheckedChange = onChecked,
+            onCheckedChange = null,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.Black,
+                checkedThumbColor = Color.White,
                 checkedTrackColor = LocalAccent.current,
                 uncheckedThumbColor = CanopyColors.Muted,
                 uncheckedTrackColor = CanopyColors.Canvas,
@@ -551,7 +598,6 @@ private fun ToggleRow(
 
 @Composable
 private fun ActionRow(
-    icon: ImageVector,
     title: String,
     subtitle: String,
     onClick: () -> Unit,
@@ -564,11 +610,11 @@ private fun ActionRow(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RowIcon(icon)
-        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+
+        Column(Modifier.weight(1f).padding(end = 16.dp)) {
             Text(
                 title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Normal),
                 color = CanopyColors.Text,
             )
             Text(subtitle, color = CanopyColors.Muted, style = MaterialTheme.typography.bodyMedium)
@@ -587,11 +633,11 @@ private fun ActionRow(
 private fun QualityRow(value: AudioQuality, onChange: (AudioQuality) -> Unit) {
     Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            RowIcon(Icons.Rounded.GraphicEq)
-            Column(Modifier.padding(horizontal = 14.dp)) {
+
+            Column(Modifier) {
                 Text(
                     "Audio quality",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Normal),
                     color = CanopyColors.Text,
                 )
                 Text(

@@ -57,7 +57,17 @@ data class Track(
      * the signed-in web player.
      */
     val isUpload: Boolean = false,
+    val playbackSource: String = "youtube",
+    val bitDepth: Int? = null,
+    val sampleRate: Int? = null,
+    val hires: Boolean = false,
+    val artists: List<Artist> = emptyList(),
+    /** Official/user-uploaded video paired with this album-audio queue item, when known. */
+    val musicVideoId: String = "",
 ) {
+    val isQobuz: Boolean
+        get() = playbackSource.equals("qobuz", ignoreCase = true)
+
     /** True for album audio, which is the version a listener expects from an album or search. */
     val isAudioOnly: Boolean
         get() = musicVideoType == MUSIC_VIDEO_TYPE_ATV
@@ -109,6 +119,7 @@ sealed interface CatalogItem {
             is Record -> album.explicit || album.tracks.any { it.explicit }
             is Collection -> playlist.explicit || playlist.tracks.any { it.explicit }
             is Performer -> false
+            is Category -> false
         }
 
     data class Song(val track: Track) : CatalogItem {
@@ -134,6 +145,16 @@ sealed interface CatalogItem {
         override val title = playlist.title
         override val artworkUrl = playlist.artworkUrl
     }
+
+    data class Category(
+        val id: String,
+        override val title: String,
+        val stripeColor: Long? = null,
+        val params: String = "",
+    ) : CatalogItem {
+        override val stableId: String = if (params.isNotBlank()) "$id:$params" else id
+        override val artworkUrl: String = ""
+    }
 }
 
 data class CatalogSection(
@@ -157,6 +178,8 @@ data class BrowseDetail(
     val artist: String = "",
     val year: String = "",
     val explicit: Boolean = false,
+    /** True when YouTube identifies this as a playlist the signed-in listener may edit. */
+    val editable: Boolean = false,
 )
 
 data class SearchResults(
@@ -175,6 +198,7 @@ data class LyricLine(
     val endMs: Long? = null,
     val words: List<LyricWord> = emptyList(),
     val adlibs: List<LyricWord> = emptyList(),
+    val agentLane: String? = null,
 )
 
 data class LyricWord(

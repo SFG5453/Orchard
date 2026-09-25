@@ -150,6 +150,113 @@ test('an agreeing model fixes the downbeat offset and raises confidence', async 
   assert.ok(Math.abs(merged.downbeats[1] - native.beats[6]) < 1e-9);
 });
 
+test('a double-time model grid agrees after folding to the native metrical level', async () => {
+  const native = nativeResult({ bpm: 85 });
+  const nativeInterval = 60 / 85;
+  const model = {
+    bpm: 170,
+    beatConfidence: 0.95,
+    beats: Array.from(
+      { length: 120 },
+      (_, index) => native.beats[0] + index * (nativeInterval / 2)
+    ),
+    downbeats: []
+  };
+  const merged = await refineBeatsWithModel(
+    native,
+    [{ samples: new Float32Array(10), sampleRate: 22050, offsetSeconds: 0 }],
+    stubDeps(model)
+  );
+
+  assert.ok(merged);
+  assert.equal(merged.beatConfidence, 0.95);
+  assert.ok(
+    merged.beatModelAgreement < 0.01,
+    `expected an aligned beat grid, got ${merged.beatModelAgreement}`
+  );
+});
+
+test('double-time grid folding keeps phase across missed model beats', async () => {
+  const native = nativeResult({ bpm: 85 });
+  const nativeInterval = 60 / 85;
+  const model = {
+    bpm: 170,
+    beatConfidence: 0.95,
+    beats: Array.from(
+      { length: 120 },
+      (_, index) => native.beats[0] + index * (nativeInterval / 2)
+    ).filter((_, index) => ![30, 60, 90].includes(index)),
+    downbeats: []
+  };
+  const merged = await refineBeatsWithModel(
+    native,
+    [{ samples: new Float32Array(10), sampleRate: 22050, offsetSeconds: 0 }],
+    stubDeps(model)
+  );
+
+  assert.ok(merged);
+  assert.equal(merged.beatConfidence, 0.95);
+  assert.ok(
+    merged.beatModelAgreement < 0.01,
+    `expected missed peaks to retain phase, got ${merged.beatModelAgreement}`
+  );
+});
+
+test('double-time grid folding keeps phase across extra model peaks', async () => {
+  const native = nativeResult({ bpm: 85 });
+  const nativeInterval = 60 / 85;
+  const modelInterval = nativeInterval / 2;
+  const model = {
+    bpm: 170,
+    beatConfidence: 0.95,
+    beats: Array.from(
+      { length: 120 },
+      (_, index) => native.beats[0] + index * modelInterval
+    ).flatMap((time, index) => (
+      [30, 60, 90].includes(index) ? [time, time + modelInterval / 2] : [time]
+    )),
+    downbeats: []
+  };
+  const merged = await refineBeatsWithModel(
+    native,
+    [{ samples: new Float32Array(10), sampleRate: 22050, offsetSeconds: 0 }],
+    stubDeps(model)
+  );
+
+  assert.ok(merged);
+  assert.equal(merged.beatConfidence, 0.95);
+  assert.ok(
+    merged.beatModelAgreement < 0.01,
+    `expected extra peaks to retain phase, got ${merged.beatModelAgreement}`
+  );
+});
+
+test('a half-time model uses the folded native interval for phase tolerance', async () => {
+  const native = nativeResult({ bpm: 170 });
+  const sharedInterval = 60 / 85;
+  const model = {
+    bpm: 85,
+    beatConfidence: 0.95,
+    beats: Array.from(
+      { length: 60 },
+      (_, index) => native.beats[0] + 0.15 + index * sharedInterval
+    ),
+    downbeats: []
+  };
+  const merged = await refineBeatsWithModel(
+    native,
+    [{ samples: new Float32Array(10), sampleRate: 22050, offsetSeconds: 0 }],
+    stubDeps(model)
+  );
+
+  assert.ok(merged);
+  assert.equal(merged.beatConfidence, 0.95);
+  assert.ok(
+    merged.beatModelAgreement < 0.3,
+    `expected shared-level agreement, got ${merged.beatModelAgreement}`
+  );
+});
+
 test('a metrically ambiguous model reading is no opinion, not a demotion', async () => {
   // 3:2 against the native tempo: two defensible readings of one rhythm. This
   // exact case, read as disagreement, is what sank the aubio experiment.
@@ -240,7 +347,7 @@ test('trackBeats runs the whole chain against a stubbed session', async () => {
   };
   const result = await trackBeats(
     { frames, mels: MELS, framesPerSecond: 50, values: flatSpectrogram(frames) },
-    { modelPath: 'models/beat-this/beat_this_int8.onnx', load: async () => fakeRuntime }
+    { modelPath: 'models/beat-this/beat_this.onnx', load: async () => fakeRuntime }
   );
   assert.ok(result);
   assert.ok(Math.abs(result.bpm - 120) < 0.2, `expected 120, got ${result.bpm}`);

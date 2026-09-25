@@ -25,8 +25,8 @@ const STORAGE_KEYS = {
   AUTH_SESSION: 'orchard_supabase_session'
 };
 
-const DEFAULT_URL = import.meta.env?.VITE_SUPABASE_URL || 'https://hhosnulqxwjbqqjkxuqv.supabase.co';
-const DEFAULT_ANON_KEY = import.meta.env?.VITE_SUPABASE_ANON_KEY || 'sb_publishable_E9OfGgsFZDXZm-AXP2_-1g_Fe48ECNC';
+const DEFAULT_URL = import.meta.env?.VITE_SUPABASE_URL || 'https://tmizpnolbajtaucagqdb.supabase.co';
+const DEFAULT_ANON_KEY = import.meta.env?.VITE_SUPABASE_ANON_KEY || 'sb_publishable_-JUz8zgvND2bFkVhgmca3w_rB974dR7';
 
 class SupabaseClient {
   constructor() {

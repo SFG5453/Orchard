@@ -17,6 +17,12 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import {
+  clampMixProgress,
+  normalizedIncomingWeight,
+  smartCrossfadePhase
+} from '../../audio/crossfade/crossfadeVisualState.js';
+
 const MIN_OVERLAY_MS = 2800;
 const MAX_OVERLAY_MS = 4800;
 
@@ -70,7 +76,9 @@ export function createSmartCrossfadeMixPresentation({
   currentArtwork = '',
   transition = {},
   analysis = {},
-  nextAnalysis = {}
+  nextAnalysis = {},
+  phase = 'mix-start',
+  secondsUntilStart = 0
 } = {}) {
   const playbackRate = Number(transition.incomingPlaybackRate) || 1;
   const tempoShift = Math.round((playbackRate - 1) * 100);
@@ -81,6 +89,18 @@ export function createSmartCrossfadeMixPresentation({
   return {
     id,
     visible: true,
+    phase,
+    progress: 0,
+    preparationProgress: phase === 'preparing'
+      ? clampMixProgress(1 - (Number(secondsUntilStart) || 0) / 8)
+      : 1,
+    secondsUntilStart: Math.max(0, Number(secondsUntilStart) || 0),
+    outgoingGain: 1,
+    incomingGain: 0,
+    incomingWeight: 0,
+    handoffProgress: clampMixProgress(
+      transition?.choreography?.dominancePoint ?? transition?.handoffFraction ?? 0.5
+    ),
     durationMs: smartCrossfadeOverlayDuration(transition.fadeSeconds),
     fadeDurationMs: fadeMs,
     style,
@@ -93,5 +113,35 @@ export function createSmartCrossfadeMixPresentation({
     toKey: keyLabel(nextAnalysis),
     tempoShift,
     transitionBeats: Math.max(0, Math.round(Number(transition.transitionBeats) || 0))
+  };
+}
+
+export function updateSmartCrossfadeMixPresentation(presentation, sample = {}) {
+  const progress = clampMixProgress(sample.progress);
+  const outgoingGain = clampMixProgress(sample.outgoingGain);
+  const incomingGain = clampMixProgress(sample.incomingGain);
+  const handoffProgress = clampMixProgress(sample.handoffProgress ?? presentation.handoffProgress ?? 0.5);
+  const complete = Boolean(sample.complete);
+
+  return {
+    ...presentation,
+    visible: true,
+    phase: smartCrossfadePhase({
+      complete,
+      handoffProgress,
+      progress,
+      started: sample.started !== false
+    }),
+    progress,
+    preparationProgress: sample.started === false ? presentation.preparationProgress : 1,
+    secondsUntilStart: sample.started === false
+      ? Math.max(0, Number(sample.startTime) - Number(sample.contextTime))
+      : 0,
+    outgoingGain,
+    incomingGain,
+    incomingWeight: complete
+      ? 1
+      : normalizedIncomingWeight(outgoingGain, incomingGain, progress),
+    handoffProgress
   };
 }

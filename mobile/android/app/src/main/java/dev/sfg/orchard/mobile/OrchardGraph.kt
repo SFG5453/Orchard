@@ -26,15 +26,19 @@ import dev.sfg.orchard.mobile.auth.NativeYouTubeAuthRepository
 import dev.sfg.orchard.mobile.auth.SecureYouTubeSessionStore
 import dev.sfg.orchard.mobile.catalog.CatalogRepository
 import dev.sfg.orchard.mobile.catalog.AudioVersionResolver
+import dev.sfg.orchard.mobile.catalog.VideoVersionResolver
 import dev.sfg.orchard.mobile.catalog.InnerTubeClient
 import dev.sfg.orchard.mobile.catalog.PlaylistActions
 import dev.sfg.orchard.mobile.connect.ConnectDeviceRepository
 import dev.sfg.orchard.mobile.library.LibraryCache
 import dev.sfg.orchard.mobile.library.LibraryRepository
 import dev.sfg.orchard.mobile.lyrics.LyricsRepository
+import dev.sfg.orchard.mobile.lastfm.LastfmRepository
+import dev.sfg.orchard.mobile.listenbrainz.ListenBrainzRepository
 import dev.sfg.orchard.mobile.settings.SettingsRepository
 import dev.sfg.orchard.mobile.download.DownloadManager
 import dev.sfg.orchard.mobile.playback.YouTubePoTokenMinter
+import dev.sfg.orchard.mobile.playback.smart.BestMixFeatureStore
 import dev.sfg.orchard.mobile.songlinks.SongLinksRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +65,7 @@ class OrchardGraph(context: Context) {
     )
     private val innerTube: InnerTubeClient = InnerTubeClient(http, auth)
     val settings = SettingsRepository(context, applicationScope)
+    val bestMixFeatures = BestMixFeatureStore(context)
     val networkMonitor = dev.sfg.orchard.mobile.network.NetworkMonitor(context)
     /**
      * Shared by playback and downloads: attesting is expensive once and free afterwards, so the
@@ -76,26 +81,30 @@ class OrchardGraph(context: Context) {
     val challengeSolver: dev.sfg.orchard.mobile.playback.YouTubeChallengeSolver by lazy {
         dev.sfg.orchard.mobile.playback.YouTubeChallengeSolver(context, http)
     }
-    val downloads = DownloadManager(
-        context,
-        http,
-        auth,
-        applicationScope,
-        { poTokenMinter },
-        { challengeSolver },
-    ) {
-        settings.settings.value.audioQuality
-    }
     val spotifyCanvas = dev.sfg.orchard.mobile.spotify.SpotifyCanvasRepository(context, http, settings)
     val artwork = ArtworkRepository(http, spotifyCanvas)
+    val downloads = DownloadManager(
+        context = context,
+        http = http,
+        sessionProvider = auth,
+        scope = applicationScope,
+        poTokenMinter = { poTokenMinter },
+        challengeSolver = { challengeSolver },
+        artworkResolver = artwork::artwork,
+        downloadAnimatedArtworkProvider = { settings.settings.value.downloadAnimatedArtwork },
+        qualityProvider = { settings.settings.value.audioQuality },
+    )
     val artistImages = ArtistImageRepository(http)
     val catalog = CatalogRepository(innerTube)
     val playlistActions = PlaylistActions(innerTube)
     val audioVersions = AudioVersionResolver(innerTube)
+    val videoVersions = VideoVersionResolver(innerTube)
     val library = LibraryRepository(LibraryCache(context), catalog, applicationScope)
     val lyrics = LyricsRepository(http, innerTube)
     val connect = ConnectDeviceRepository(context, applicationScope)
     val songLinks = SongLinksRepository(http)
+    val lastfm = LastfmRepository(context, http, applicationScope)
+    val listenBrainz = ListenBrainzRepository(context, http, applicationScope)
 
     /**
      * The transition the playback service has planned, or null when there is none.
@@ -115,11 +124,21 @@ class OrchardGraph(context: Context) {
     var analysisLookup: ((dev.sfg.orchard.mobile.model.Track) ->
         dev.sfg.orchard.mobile.playback.smart.TrackAnalysis)? = null
 
+    /**
+     * Clear hook for the active playback service's [StreamCache].
+     * Null before the playback service starts or after it is destroyed.
+     */
+    @Volatile
+    var onClearStreamCache: (() -> Unit)? = null
+
 
 
     val transitionMarker = kotlinx.coroutines.flow.MutableStateFlow<dev.sfg.orchard.mobile.model.TransitionMarker?>(null)
     val warningEvent = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 16)
     val activeBitrate = kotlinx.coroutines.flow.MutableStateFlow(0)
+    val activeTrackIsQobuz = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val qobuz = dev.sfg.orchard.mobile.qobuz.QobuzRepository(context, applicationScope)
+    val qobuzResolver = dev.sfg.orchard.mobile.qobuz.QobuzResolver(qobuz, http)
     val discordAuth = dev.sfg.orchard.mobile.discord.DiscordOAuthRepository(context, http, applicationScope)
     val discordPresence = dev.sfg.orchard.mobile.discord.DiscordPresenceCoordinator(
         http = http,

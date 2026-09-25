@@ -27,6 +27,9 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -83,6 +86,7 @@ fun TabletPlayerBody(
     animatedArtworkEnabled: Boolean,
     showBitrate: Boolean,
     bitrateKbps: Int,
+    isQobuz: Boolean = false,
     remoteVolume: Float,
     dragHandle: Modifier,
     onRemoteVolumeChange: (Float) -> Unit,
@@ -105,17 +109,31 @@ fun TabletPlayerBody(
     onAddToPlaylist: ((Track) -> Unit)? = null,
     onShare: (() -> Unit)?,
     onOpenCollection: ((String) -> Unit)?,
+    onOpenArtist: (() -> Unit)?,
     onLyricsPanel: () -> Unit,
     onQueuePanel: () -> Unit,
-    sleepTimerActive: Boolean = false,
+    sleepTimerRemainingSeconds: Long = 0L,
+    sleepTimerEndOfTrack: Boolean = false,
     onSleepTimer: () -> Unit = {},
     autoplayEnabled: Boolean = true,
     autoplayLoading: Boolean = false,
     autoplayError: String = "",
     onAutoplayEnabled: ((Boolean) -> Unit)? = null,
+    smartCrossfade: Boolean = false,
+    onBestMixUpcoming: ((onProgress: (String) -> Unit, onComplete: () -> Unit) -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
         PlayerTopHandle(onDismiss = onBack, modifier = dragHandle)
+        val activeProgress = mixProgress ?: dev.sfg.orchard.mobile.ui.components.transitionProgress(playback, transition)
+        val incomingTrack = remember(playback.queue, transition?.incomingTrackId) {
+            val id = transition?.incomingTrackId
+            if (id.isNullOrBlank()) null else playback.queue.firstOrNull { it.id == id }
+        }
+        val outgoingTrack = remember(playback.queue, transition?.trackId, track) {
+            val id = transition?.trackId
+            if (id.isNullOrBlank()) track else playback.queue.firstOrNull { it.id == id } ?: track
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxSize()
@@ -128,28 +146,20 @@ fun TabletPlayerBody(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .aspectRatio(1f)
-                    .onGloballyPositioned { onCoverBounds?.invoke(it.boundsInRoot()) }
-                    .clip(RoundedCornerShape(20.dp)),
+                    .aspectRatio(1f),
+                contentAlignment = Alignment.Center,
             ) {
-                AnimatedContent(
-                    targetState = track,
-                    transitionSpec = {
-                        (fadeIn(tween(500)) + scaleIn(initialScale = 0.94f, animationSpec = tween(500)))
-                            .togetherWith(fadeOut(tween(400)) + scaleOut(targetScale = 1.04f, animationSpec = tween(400)))
-                    },
-                    label = "TabletArtworkTransition",
+                NowPlayingArtworkCard(
+                    track = track,
+                    incomingTrack = incomingTrack,
+                    outgoingTrack = outgoingTrack,
+                    transitionProgress = activeProgress,
+                    transitionStyle = transition?.style.orEmpty(),
+                    animatedArtworkEnabled = animatedArtworkEnabled,
+                    isPlaying = playback.isPlaying,
+                    onArtworkBounds = onCoverBounds,
                     modifier = Modifier.fillMaxSize(),
-                ) { currentTrack ->
-                    val motion = currentTrack.animatedArtworkUrl.ifBlank { currentTrack.animatedArtworkVerticalUrl }
-                    Box(Modifier.fillMaxSize()) {
-                        if (animatedArtworkEnabled && motion.isNotBlank()) {
-                            AnimatedArtworkVideo(motion, playback.isPlaying, Modifier.fillMaxSize())
-                        } else {
-                            RemoteArtwork(currentTrack.artworkUrl, currentTrack.title, Modifier.fillMaxSize())
-                        }
-                    }
-                }
+                )
             }
 
             Spacer(Modifier.width(40.dp))
@@ -158,6 +168,13 @@ fun TabletPlayerBody(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 verticalArrangement = Arrangement.Center,
             ) {
+                dev.sfg.orchard.mobile.ui.components.SmartCrossfadeBadge(
+                    visible = activeProgress in 0.001f..0.999f && transition != null,
+                    style = transition?.style.orEmpty(),
+                    incomingTrack = incomingTrack,
+                    progress = activeProgress,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
                 TrackInfoRow(
                     track = track,
                     liked = liked,
@@ -170,8 +187,7 @@ fun TabletPlayerBody(
                     onAddToPlaylist = onAddToPlaylist?.let { action -> { action(track) } },
                     onOpenAlbum = track.albumId.takeIf { it.isNotBlank() }
                         ?.let { id -> onOpenCollection?.let { open -> { open(id) } } },
-                    onOpenArtist = track.artistId.takeIf { it.isNotBlank() }
-                        ?.let { id -> onOpenCollection?.let { open -> { open(id) } } },
+                    onOpenArtist = onOpenArtist,
                 )
 
                 if (panel != PlayerPanel.NONE) {
@@ -180,21 +196,26 @@ fun TabletPlayerBody(
                         Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            // Same dissolve as the phone panel, so lines fade
-                            // into the column rather than being cut by its edges.
-                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                            .drawWithContent {
-                                drawContent()
-                                drawRect(
-                                    brush = Brush.verticalGradient(
-                                        0f to Color.Transparent,
-                                        0.08f to Color.Black,
-                                        0.9f to Color.Black,
-                                        1f to Color.Transparent,
-                                    ),
-                                    blendMode = BlendMode.DstIn,
-                                )
-                            },
+                            // Same dissolve as the phone panel for queue; for lyrics,
+                            // LyricLines handles its own inner edge fade.
+                            .then(
+                                if (panel == PlayerPanel.QUEUE) {
+                                    Modifier
+                                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                                        .drawWithContent {
+                                            drawContent()
+                                            drawRect(
+                                                brush = Brush.verticalGradient(
+                                                    0f to Color.Transparent,
+                                                    0.08f to Color.Black,
+                                                    0.9f to Color.Black,
+                                                    1f to Color.Transparent,
+                                                ),
+                                                blendMode = BlendMode.DstIn,
+                                            )
+                                        }
+                                } else Modifier
+                            ),
                     ) {
                         if (panel == PlayerPanel.QUEUE) {
                             PlayerQueuePanel(
@@ -209,6 +230,11 @@ fun TabletPlayerBody(
                                 autoplayLoading = autoplayLoading,
                                 autoplayError = autoplayError,
                                 onAutoplayEnabled = onAutoplayEnabled,
+                                smartCrossfade = smartCrossfade,
+                                onBestMixUpcoming = onBestMixUpcoming,
+                                sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
+                                sleepTimerEndOfTrack = sleepTimerEndOfTrack,
+                                onSleepTimer = onSleepTimer,
                             )
                         } else {
                             when (lyrics) {
@@ -221,10 +247,10 @@ fun TabletPlayerBody(
                                     accent = lyricAccent,
                                 )
 
-                                LoadState.Loading -> LyricsNotice("Finding lyrics…")
-                                is LoadState.Empty -> LyricsNotice(lyrics.message)
-                                is LoadState.Error -> LyricsNotice(lyrics.message)
-                                LoadState.Idle -> LyricsNotice("Start a song to see its lyrics.")
+                                LoadState.Loading -> LyricsNotice("Finding lyrics…", isLoading = true)
+                                is LoadState.Empty -> LyricsNotice(lyrics.message, icon = Icons.Rounded.MusicNote)
+                                is LoadState.Error -> LyricsNotice(lyrics.message, icon = Icons.Rounded.Info)
+                                LoadState.Idle -> LyricsNotice("Start a song to see its lyrics.", icon = Icons.Rounded.MusicNote)
                             }
                         }
                     }
@@ -242,6 +268,7 @@ fun TabletPlayerBody(
                     mixProgress = mixProgress,
                     showBitrate = showBitrate,
                     bitrateKbps = bitrateKbps,
+                    isQobuz = isQobuz,
                     remoteVolume = remoteVolume,
                     lyricsActive = panel == PlayerPanel.LYRICS,
                     queueActive = panel == PlayerPanel.QUEUE,
@@ -255,7 +282,7 @@ fun TabletPlayerBody(
                     onLyrics = onLyricsPanel,
                     onDevices = onDevices,
                     onQueue = onQueuePanel,
-                    sleepTimerActive = sleepTimerActive,
+                    sleepTimerActive = sleepTimerRemainingSeconds > 0 || sleepTimerEndOfTrack,
                     onSleepTimer = onSleepTimer,
                 )
             }

@@ -106,6 +106,10 @@ export function installSmartCrossfadeActions(ctx) {
     target.value = emptyAnalysis(track.id);
     const targetName = requestKey === 'crossfadeAnalysisRequest' ? 'current' : 'next';
     ctx.smartCrossfadeAnalyzer.report('track-request', { trackId: track.id, target: targetName });
+    // Provider streams can be much larger than YouTube's compressed audio.
+    // Keep their already-decoded buffers warm for the transition renderer even
+    // when musical analysis itself is satisfied by the persistent cache.
+    void ctx.audioAnalyzer.warmDecodedAudio?.(streamUrl).catch(() => {});
     const metadataState = { settled: false, value: null };
     const bpmMetadataPromise = ctx.bpmMetadata.lookup(track)
       .then((metadata) => {

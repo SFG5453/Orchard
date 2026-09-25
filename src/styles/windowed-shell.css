@@ -233,3 +233,56 @@
     display: none;
   }
 }
+
+/* Keep every compact-nav destination reachable when window height, display
+   scale, or a taskbar leaves less vertical room than a normal laptop. */
+@media (max-height: 700px) {
+  .sidebar-inner {
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-top: 54px;
+    padding-bottom: 118px;
+    scrollbar-width: thin;
+  }
+
+  .app-shell--native-titlebar .sidebar-inner {
+    padding-top: 10px;
+  }
+
+  .sidebar-group--playlists,
+  .sidebar-playlist-scroll {
+    min-height: auto;
+    flex: none;
+    overflow: visible;
+  }
+
+  .sidebar-group--status {
+    margin-top: 0;
+  }
+
+  .sidebar-mini {
+    gap: 2px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-top: 52px;
+    padding-bottom: 106px;
+    scrollbar-width: none;
+  }
+
+  .app-shell--native-titlebar .sidebar-mini {
+    padding-top: 6px;
+  }
+
+  .sidebar-mini::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar-mini__button {
+    height: 32px;
+    min-height: 32px;
+  }
+
+  .sidebar-mini__spacer {
+    min-height: 2px;
+  }
+}

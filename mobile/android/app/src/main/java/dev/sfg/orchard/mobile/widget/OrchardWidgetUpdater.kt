@@ -7,6 +7,14 @@
  * terms of the GNU Affero General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
  * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
 package dev.sfg.orchard.mobile.widget
@@ -34,16 +42,26 @@ object OrchardWidgetUpdater {
             ?.coerceAtLeast(0)
             ?: current?.durationMs
             ?: 0
-        OrchardWidgetStateStore(appContext).save(
-            OrchardWidgetState(
-                currentTrack = current,
-                recentlyPlayed = graph.library.library.value.recentlyPlayed.take(4),
-                isPlaying = player.isPlaying && !forcePaused,
-                positionMs = player.currentPosition.coerceAtLeast(0),
-                durationMs = duration,
-            )
+        val isPlaying = player.isPlaying && !forcePaused
+        val positionMs = player.currentPosition.coerceAtLeast(0)
+        val recentlyPlayed = graph.library.library.value.recentlyPlayed.take(4)
+        val state = OrchardWidgetState(
+            currentTrack = current,
+            recentlyPlayed = recentlyPlayed,
+            isPlaying = isPlaying,
+            positionMs = positionMs,
+            durationMs = duration,
         )
-        requestRender(appContext)
+        graph.applicationScope.launch(Dispatchers.IO) {
+            OrchardWidgetStateStore(appContext).save(state)
+            renderMutex.withLock {
+                OrchardWidgetRenderer.updateAll(
+                    context = appContext,
+                    state = state,
+                    client = graph.http,
+                )
+            }
+        }
     }
 
     fun requestRender(context: Context) {

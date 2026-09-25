@@ -56,10 +56,16 @@ import { VEIL_MIN_ALPHA } from '../appearance/immersiveVeil.js';
 import { SONG_CACHE_DEFAULTS, clampSongCacheMaxSizeMb } from '../playback/songCachePreferences.js';
 import { DEFAULT_QUEUE_LAYOUT, QUEUE_LAYOUT_OPTIONS, normalizeQueueLayout } from '../playback/queueLayout.js';
 import {
+  DEFAULT_STREAM_QUALITY,
+  STREAM_QUALITY_OPTIONS,
+  normalizeStreamQuality
+} from '../../../shared/streamQuality.js';
+import {
   DEFAULT_SPONSOR_BLOCK_MODE,
   SPONSOR_BLOCK_MODE_OPTIONS,
   normalizeSponsorBlockMode
 } from '../playback/sponsorBlockActions.js';
+import { normalizeLayoutIds } from './navigationLayout.js';
 
 export function installState(ctx) {
   ctx.orchardLogoUrl = orchardLogoUrl;
@@ -74,22 +80,32 @@ export function installState(ctx) {
     crossfadeMode: AUTO_CROSSFADE_DEFAULTS.mode,
     crossfadeSeconds: AUTO_CROSSFADE_DEFAULTS.fadeSeconds,
     customArtistPagesEnabled: true,
+    fullscreenLyricsVisible: true,
     playbackStatePersistenceEnabled: true,
     queueLayout: DEFAULT_QUEUE_LAYOUT,
     youtubeHistoryEnabled: true,
     discordRpcEnabled: true,
     immersiveBackgroundsEnabled: true,
+    hiddenHomeSectionIds: [],
+    hiddenSidebarItemIds: [],
+    homeSectionOrder: [],
+    keepOldVersions: false,
     songCacheEnabled: SONG_CACHE_DEFAULTS.enabled,
     songCacheMaxSizeMb: SONG_CACHE_DEFAULTS.maxSizeMb,
     sponsorBlockMode: DEFAULT_SPONSOR_BLOCK_MODE,
+    streamQuality: DEFAULT_STREAM_QUALITY,
+    videoPlaybackEnabled: true,
+    animatedArtworkEnabled: true,
     volumeNormalizationEnabled: false,
     repeatMode: 'off',
     shuffleEnabled: false,
+    sidebarItemOrder: [],
     volume: 0.85
   };
   ctx.accentColorSourceOptions = ACCENT_COLOR_SOURCE_OPTIONS;
   ctx.queueLayoutOptions = QUEUE_LAYOUT_OPTIONS;
   ctx.sponsorBlockModeOptions = SPONSOR_BLOCK_MODE_OPTIONS;
+  ctx.streamQualityOptions = STREAM_QUALITY_OPTIONS;
   ctx.graphicsModeOptions = GRAPHICS_MODE_OPTIONS;
   ctx.immersiveBackgroundIntensityOptions = IMMERSIVE_BACKGROUND_INTENSITY_OPTIONS;
   ctx.immersiveBackgroundMotionOptions = IMMERSIVE_BACKGROUND_MOTION_OPTIONS;
@@ -113,6 +129,9 @@ export function installState(ctx) {
       customArtistPagesEnabled: typeof preferences.customArtistPagesEnabled === 'boolean'
         ? preferences.customArtistPagesEnabled
         : ctx.DEFAULT_USER_PREFERENCES.customArtistPagesEnabled,
+      fullscreenLyricsVisible: typeof preferences.fullscreenLyricsVisible === 'boolean'
+        ? preferences.fullscreenLyricsVisible
+        : ctx.DEFAULT_USER_PREFERENCES.fullscreenLyricsVisible,
       playbackStatePersistenceEnabled: typeof preferences.playbackStatePersistenceEnabled === 'boolean'
         ? preferences.playbackStatePersistenceEnabled
         : ctx.DEFAULT_USER_PREFERENCES.playbackStatePersistenceEnabled,
@@ -128,6 +147,12 @@ export function installState(ctx) {
       immersiveBackgroundsEnabled: typeof preferences.immersiveBackgroundsEnabled === 'boolean'
         ? preferences.immersiveBackgroundsEnabled
         : ctx.DEFAULT_USER_PREFERENCES.immersiveBackgroundsEnabled,
+      hiddenHomeSectionIds: normalizeLayoutIds(preferences.hiddenHomeSectionIds),
+      hiddenSidebarItemIds: normalizeLayoutIds(preferences.hiddenSidebarItemIds),
+      homeSectionOrder: normalizeLayoutIds(preferences.homeSectionOrder),
+      keepOldVersions: typeof preferences.keepOldVersions === 'boolean'
+        ? preferences.keepOldVersions
+        : ctx.DEFAULT_USER_PREFERENCES.keepOldVersions,
       immersiveBackgroundIntensity: normalizeImmersiveBackgroundIntensity(preferences.immersiveBackgroundIntensity),
       immersiveBackgroundMotion: normalizeImmersiveBackgroundMotion(preferences.immersiveBackgroundMotion),
       layoutPreset: normalizeLayoutPreset(preferences.layoutPreset),
@@ -137,6 +162,13 @@ export function installState(ctx) {
         : ctx.DEFAULT_USER_PREFERENCES.songCacheEnabled,
       songCacheMaxSizeMb: clampSongCacheMaxSizeMb(preferences.songCacheMaxSizeMb),
       sponsorBlockMode: normalizeSponsorBlockMode(preferences.sponsorBlockMode ?? preferences.sponsorBlockEnabled),
+      streamQuality: normalizeStreamQuality(preferences.streamQuality),
+      videoPlaybackEnabled: typeof preferences.videoPlaybackEnabled === 'boolean'
+        ? preferences.videoPlaybackEnabled
+        : ctx.DEFAULT_USER_PREFERENCES.videoPlaybackEnabled,
+      animatedArtworkEnabled: typeof preferences.animatedArtworkEnabled === 'boolean'
+        ? preferences.animatedArtworkEnabled
+        : ctx.DEFAULT_USER_PREFERENCES.animatedArtworkEnabled,
       volumeNormalizationEnabled: typeof preferences.volumeNormalizationEnabled === 'boolean'
         ? preferences.volumeNormalizationEnabled
         : ctx.DEFAULT_USER_PREFERENCES.volumeNormalizationEnabled,
@@ -144,6 +176,7 @@ export function installState(ctx) {
       shuffleEnabled: typeof preferences.shuffleEnabled === 'boolean'
         ? preferences.shuffleEnabled
         : ctx.DEFAULT_USER_PREFERENCES.shuffleEnabled,
+      sidebarItemOrder: normalizeLayoutIds(preferences.sidebarItemOrder),
       themePreference: normalizeThemePreference(preferences.themePreference),
       volume: clampVolume(preferences.volume ?? ctx.DEFAULT_USER_PREFERENCES.volume)
     };
@@ -188,7 +221,16 @@ export function installState(ctx) {
   ctx.socket = ref(null);
   ctx.viewportWidth = ref(typeof window === 'undefined' ? 1220 : window.innerWidth);
   ctx.syncViewportSize = function syncViewportSize() {
-    ctx.viewportWidth.value = typeof window === 'undefined' ? 1220 : window.innerWidth;
+    const wasDesktopPanel = ctx.viewportWidth.value >= 1281;
+    const nextWidth = typeof window === 'undefined' ? 1220 : window.innerWidth;
+    ctx.viewportWidth.value = nextWidth;
+
+    // `rightPanelOpen` tracks only the dismissible narrow-screen overlay. The
+    // desktop drawer is derived from viewport width, so Quasar cannot race the
+    // resize handler and leave it permanently closed after a breakpoint jump.
+    if (wasDesktopPanel && nextWidth < 1281 && ctx.rightPanelOpen?.value) {
+      ctx.rightPanelOpen.value = false;
+    }
   };
   ctx.orchardConnect = ref({
     status: 'idle',
@@ -202,6 +244,8 @@ export function installState(ctx) {
     pending: [],
     devices: []
   });
+  ctx.activePlaybackTarget = ref('local');
+  ctx.remoteDeviceStates = ref({});
   ctx.orchardConnectPairingMessage = ref('');
   ctx.audioRef = ref(null);
   ctx.nextAudioRef = ref(null);
@@ -225,6 +269,14 @@ export function installState(ctx) {
   ctx.smartCrossfadeMix = ref({
     id: 0,
     visible: false,
+    phase: 'idle',
+    progress: 0,
+    preparationProgress: 0,
+    secondsUntilStart: 0,
+    outgoingGain: 1,
+    incomingGain: 0,
+    incomingWeight: 0,
+    handoffProgress: 0.5,
     durationMs: 0,
     fadeDurationMs: 0,
     style: 'equal_power',
@@ -242,16 +294,27 @@ export function installState(ctx) {
   ctx.smartCrossfadeMixSequence = 0;
   ctx.compactWindow = ref(false);
   ctx.rightPanelMode = ref('queue');
+  ctx.rightPanelOpen = ref(false);
+  ctx.openRightPanel = function openRightPanel(mode = 'queue') {
+    ctx.rightPanelMode.value = mode;
+    ctx.rightPanelOpen.value = true;
+  };
+  ctx.closeRightPanel = function closeRightPanel() {
+    ctx.rightPanelOpen.value = false;
+  };
   ctx.narrowWindow = computed(() => ctx.viewportWidth.value < 1180 && !ctx.compactWindow.value);
   ctx.sidebarMini = computed(() => ctx.viewportWidth.value < 900 && !ctx.compactWindow.value);
   ctx.sidebarWidth = computed(() => {
     if (ctx.sidebarMini.value) return 68;
     return ctx.viewportWidth.value < 1180 ? 216 : 232;
   });
-  ctx.rightPanelWidth = computed(() => 288);
+  ctx.rightPanelWidth = computed(() => Math.min(288, Math.max(240, ctx.viewportWidth.value - 24)));
   ctx.rightPanelMounted = computed(() => (
     !ctx.compactWindow.value &&
-    !['settings', 'support'].includes(ctx.activeView.value)
+    (
+      !['settings', 'support'].includes(ctx.activeView.value) ||
+      (ctx.viewportWidth.value < 1281 && ctx.rightPanelOpen.value)
+    )
   ));
   ctx.rightPanelVisible = computed(() => (
     ctx.viewportWidth.value >= 1281 &&
@@ -265,18 +328,10 @@ export function installState(ctx) {
   ctx.browseTrackPageLoading = ref(false);
   ctx.browseTrackPageError = ref('');
   ctx.socketState = ref('connecting');
+  ctx.networkOffline = ref(typeof navigator !== 'undefined' && navigator.onLine === false);
   ctx.errorMessage = ref('');
   ctx.artistSubscription = ref({ browseId: '', subscribed: false, status: 'idle', error: '' });
   ctx.warningMessage = ref('');
-  ctx.migrationState = ref({
-    status: 'loading',
-    version: '',
-    notes: '',
-    pubDate: '',
-    platformKey: '',
-    downloadUrl: '',
-    error: ''
-  });
   ctx.updateState = ref({
     status: 'idle',
     message: '',
@@ -394,6 +449,7 @@ export function installState(ctx) {
   ];
   ctx.crossfadeSeconds = ref(ctx.initialUserPreferences.crossfadeSeconds);
   ctx.customArtistPagesEnabled = ref(ctx.initialUserPreferences.customArtistPagesEnabled);
+  ctx.fullscreenLyricsVisible = ref(ctx.initialUserPreferences.fullscreenLyricsVisible);
   ctx.playbackStatePersistenceEnabled = ref(ctx.initialUserPreferences.playbackStatePersistenceEnabled);
   ctx.queueLayout = ref(ctx.initialUserPreferences.queueLayout);
   ctx.youtubeHistoryEnabled = ref(ctx.initialUserPreferences.youtubeHistoryEnabled);
@@ -412,6 +468,7 @@ export function installState(ctx) {
   ctx.immersiveBackgroundIntensity = ref(ctx.initialUserPreferences.immersiveBackgroundIntensity);
   ctx.immersiveBackgroundMotion = ref(ctx.initialUserPreferences.immersiveBackgroundMotion);
   ctx.layoutPreset = ref(ctx.initialUserPreferences.layoutPreset);
+  ctx.keepOldVersions = ref(ctx.initialUserPreferences.keepOldVersions);
   ctx.uiScale = ref(ctx.initialUserPreferences.uiScale);
   ctx.songCacheEnabled = ref(ctx.initialUserPreferences.songCacheEnabled);
   ctx.songCacheMaxSizeMb = ref(ctx.initialUserPreferences.songCacheMaxSizeMb);
@@ -419,13 +476,22 @@ export function installState(ctx) {
     settings: { enabled: ctx.songCacheEnabled.value, maxSizeMb: ctx.songCacheMaxSizeMb.value },
     directory: '',
     totalBytes: 0,
+    cacheBytes: 0,
+    downloadedBytes: 0,
+    downloads: [],
     entries: []
   });
   ctx.songCacheLoading = ref(false);
   ctx.songCachePrefetching = ref(false);
   ctx.songCacheMessage = ref('');
+  ctx.downloadBusyTrackIds = ref([]);
+  ctx.downloadPreparingCollectionId = ref('');
+  ctx.downloadMessage = ref('');
   ctx.themePreference = ref(ctx.initialUserPreferences.themePreference);
   ctx.sponsorBlockMode = ref(ctx.initialUserPreferences.sponsorBlockMode);
+  ctx.streamQuality = ref(ctx.initialUserPreferences.streamQuality);
+  ctx.videoPlaybackEnabled = ref(ctx.initialUserPreferences.videoPlaybackEnabled);
+  ctx.animatedArtworkEnabled = ref(ctx.initialUserPreferences.animatedArtworkEnabled);
   ctx.volumeNormalizationEnabled = ref(ctx.initialUserPreferences.volumeNormalizationEnabled);
   ctx.repeatMode = ref(ctx.initialUserPreferences.repeatMode);
   ctx.shuffleEnabled = ref(ctx.initialUserPreferences.shuffleEnabled);
@@ -438,6 +504,7 @@ export function installState(ctx) {
     ctx.crossfadeMode.value = defaults.crossfadeMode;
     ctx.crossfadeSeconds.value = defaults.crossfadeSeconds;
     ctx.customArtistPagesEnabled.value = defaults.customArtistPagesEnabled;
+    ctx.fullscreenLyricsVisible.value = defaults.fullscreenLyricsVisible;
     ctx.playbackStatePersistenceEnabled.value = defaults.playbackStatePersistenceEnabled;
     ctx.queueLayout.value = defaults.queueLayout;
     ctx.youtubeHistoryEnabled.value = defaults.youtubeHistoryEnabled;
@@ -447,11 +514,19 @@ export function installState(ctx) {
     ctx.immersiveBackgroundsEnabled.value = defaults.immersiveBackgroundsEnabled;
     ctx.immersiveBackgroundIntensity.value = defaults.immersiveBackgroundIntensity;
     ctx.immersiveBackgroundMotion.value = defaults.immersiveBackgroundMotion;
+    ctx.homeSectionOrder.value = defaults.homeSectionOrder;
+    ctx.hiddenHomeSectionIds.value = defaults.hiddenHomeSectionIds;
+    ctx.sidebarItemOrder.value = defaults.sidebarItemOrder;
+    ctx.hiddenSidebarItemIds.value = defaults.hiddenSidebarItemIds;
     ctx.layoutPreset.value = defaults.layoutPreset;
+    ctx.keepOldVersions.value = defaults.keepOldVersions;
     ctx.uiScale.value = defaults.uiScale;
     ctx.songCacheEnabled.value = defaults.songCacheEnabled;
     ctx.songCacheMaxSizeMb.value = defaults.songCacheMaxSizeMb;
     ctx.sponsorBlockMode.value = defaults.sponsorBlockMode;
+    ctx.streamQuality.value = defaults.streamQuality;
+    ctx.videoPlaybackEnabled.value = defaults.videoPlaybackEnabled;
+    ctx.animatedArtworkEnabled.value = defaults.animatedArtworkEnabled;
     ctx.volumeNormalizationEnabled.value = defaults.volumeNormalizationEnabled;
     ctx.repeatMode.value = defaults.repeatMode;
     ctx.shuffleEnabled.value = defaults.shuffleEnabled;

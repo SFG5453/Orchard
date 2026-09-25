@@ -18,7 +18,11 @@
  */
 
 import { supabaseClient } from './supabaseClient.js';
-import { AUDIO_ANALYSIS_VERSION, isValidLocalAnalysis } from '../../shared/audioAnalysis.js';
+import {
+  AUDIO_ANALYSIS_VERSION,
+  isValidLocalAnalysis,
+  localAnalysisWithSource
+} from '../../shared/audioAnalysis.js';
 
 export const CLOUD_SYNC_DISCLAIMER =
   'Audio analysis metadata (BPM, musical key, downbeats, cue points) is shared publicly with the Orchard Cloud cache by Track Video ID. No personal listening history, user playlists, or identifying info is included.';
@@ -58,18 +62,30 @@ export async function fetchBatchCloudAnalysis(videoIds) {
   try {
     const records = await supabaseClient.fetchTrackAnalysis(videoIds);
     for (const row of records) {
-      if (row.video_id && row.bpm) {
-        result.set(row.video_id, {
-          bpm: row.bpm,
-          key: row.musical_key,
-          keyConfidence: row.key_confidence,
-          beatConfidence: row.beat_confidence,
-          duration: row.duration,
-          analysisVersion: row.analysis_version,
-          ...(row.analysis_data || {}),
-          analysisSource: 'cloud-cache'
-        });
-      }
+      const payload = row?.analysis_data;
+      const rowVersion = Number(row?.analysis_version);
+      const payloadVersion = Number(payload?.analysisVersion);
+      if (
+        !row?.video_id ||
+        rowVersion !== AUDIO_ANALYSIS_VERSION ||
+        payloadVersion !== AUDIO_ANALYSIS_VERSION
+      ) continue;
+
+      // The indexed columns are the cloud record's authoritative summary, but
+      // the canonical timing/feature evidence lives in analysis_data. Apply
+      // version last so a stale embedded payload cannot downgrade or masquerade
+      // as the current cache contract, then require the same validator as the
+      // persisted desktop cache before exposing the record to callers.
+      const analysis = localAnalysisWithSource({
+        ...payload,
+        duration: row.duration ?? payload.duration,
+        bpm: row.bpm ?? payload.bpm,
+        key: row.musical_key ?? payload.key,
+        keyConfidence: row.key_confidence ?? payload.keyConfidence,
+        beatConfidence: row.beat_confidence ?? payload.beatConfidence,
+        analysisVersion: rowVersion
+      }, 'cloud-cache');
+      if (analysis) result.set(row.video_id, analysis);
     }
   } catch (err) {
     console.warn('Error querying cloud analysis sync:', err);

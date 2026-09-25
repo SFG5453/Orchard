@@ -19,7 +19,7 @@
 
 /* Sidebar Root Styles */
 .sidebar {
-  border-right: 1px solid rgba(47, 223, 147, 0.06);
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
   background: #050806;
 }
 
@@ -41,15 +41,15 @@
 
 .sidebar-search-input {
   height: 34px;
-  padding: 0 8px;
-  border: 1px solid rgba(47, 223, 147, 0.08);
-  border-radius: 3px;
-  background: #0b0f0c;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .sidebar-search-input:focus-within {
   border-color: rgba(47, 223, 147, 0.28);
-  background: #0d1410;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .sidebar-search-input .q-field__control,
@@ -89,13 +89,13 @@
   justify-content: space-between;
   min-height: 24px;
   padding: 4px 8px;
-  color: #5d6760;
-  font-size: 11px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 10.5px;
   font-weight: 600;
 }
 
 .sidebar-section-heading span:last-child {
-  color: #434c45;
+  color: rgba(255, 255, 255, 0.3);
   font-size: 9px;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
@@ -110,9 +110,9 @@
   gap: 8px;
   padding: 0 10px;
   border: 0;
-  border-radius: 3px;
+  border-radius: 6px;
   background: transparent;
-  color: #8ea093;
+  color: rgba(255, 255, 255, 0.65);
   font-size: 12px;
   font-weight: 550;
   cursor: pointer;
@@ -140,13 +140,13 @@
   width: 18px;
   height: 18px;
   place-items: center;
-  color: #5d6760;
+  color: rgba(255, 255, 255, 0.45);
   font-size: 16px;
 }
 
 .nav-link:hover {
-  background: rgba(255, 255, 255, 0.03);
-  color: #dce5e0;
+  background: rgba(255, 255, 255, 0.035);
+  color: #fff;
 }
 
 .nav-link:hover::before {
@@ -164,7 +164,7 @@
 }
 
 .nav-link--active {
-  background: #101712;
+  background: rgba(47, 223, 147, 0.08);
   color: #ffffff;
 }
 

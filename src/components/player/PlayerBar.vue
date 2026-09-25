@@ -21,7 +21,7 @@
 import { computed, onMounted } from 'vue';
 import CompactSettingsMenu from '../controls/CompactSettingsMenu.vue';
 import { createVolumeWheelHandler } from '../../app/playback/volumeWheel.js';
-import { bitrateLabel } from '../../app/playback/trackQuality.js';
+import { bitrateLabel, playbackQualityLabel } from '../../app/playback/trackQuality.js';
 
 export default {
   name: 'PlayerBar',
@@ -31,11 +31,37 @@ export default {
   props: { app: { type: Object, required: true } },
   setup(props) {
     const currentOutputDeviceLabel = computed(() => {
+      const activeTarget = props.app.activePlaybackTarget?.value;
+      if (activeTarget && activeTarget !== 'local') {
+        const phone = props.app.orchardConnect.value.devices?.find(d => d.id === activeTarget);
+        return phone ? (phone.name || 'Phone') : 'Orchard Phone';
+      }
       if (props.app.audioOutputLoading?.value) return 'Loading...';
       const activeId = props.app.audioEngineConfig.value?.outputDeviceId || 'default';
       const dev = props.app.audioOutputDevices.value?.find(d => d.deviceId === activeId);
       return dev ? dev.label : 'System default';
     });
+
+    const currentOutputDeviceIcon = computed(() => {
+      const activeTarget = props.app.activePlaybackTarget?.value;
+      return (activeTarget && activeTarget !== 'local') ? 'phone_android' : 'headphones';
+    });
+
+    const connectedConnectDevices = computed(() => {
+      return (props.app.orchardConnect.value?.devices || [])
+        .filter(d => d.connected && Number(d.protocolVersion) >= 4);
+    });
+
+    const onSelectOutputDevice = (device) => {
+      props.app.selectPlaybackTarget?.('local');
+      if (props.app.audioEngineConfig.value) {
+        props.app.audioEngineConfig.value.outputDeviceId = device.deviceId;
+      }
+    };
+
+    const onSelectConnectDevice = (device) => {
+      props.app.selectPlaybackTarget?.(device.id);
+    };
 
     const volumeIcon = computed(() => {
       const vol = props.app.volume.value;
@@ -73,7 +99,12 @@ export default {
       ...props.app,
       app: props.app,
       bitrateLabel,
+      playbackQualityLabel,
       currentOutputDeviceLabel,
+      currentOutputDeviceIcon,
+      connectedConnectDevices,
+      onSelectOutputDevice,
+      onSelectConnectDevice,
       volumeIcon,
       onVolumeWheel,
       toggleMute,
@@ -127,6 +158,11 @@ export default {
             {{ activeTrack?.title || 'Nothing playing' }}
           </button>
           <ExplicitBadge :explicit="activeTrack?.explicit" />
+          <DownloadIndicator
+            v-if="activeTrack"
+            :downloaded="isTrackDownloaded(activeTrack)"
+            :downloading="isTrackDownloading(activeTrack)"
+          />
 
           <!-- YouTube Liked Songs Button -->
           <q-btn
@@ -180,6 +216,9 @@ export default {
 
         <!-- Quality Pills Row -->
         <div v-if="activeTrack" class="quality-pills-row">
+          <span v-if="playbackQualityLabel(activeTrack)" class="quality-pill format-pill">
+            {{ playbackQualityLabel(activeTrack) }}
+          </span>
           <span v-if="bitrateLabel(activeTrack)" class="quality-pill format-pill">
             {{ bitrateLabel(activeTrack) }} kbps
           </span>
@@ -288,11 +327,12 @@ export default {
       <div class="right-top-row">
         <!-- Output Device Selection Pill -->
         <q-btn flat dense class="output-device-pill" aria-label="Select output device">
-          <q-icon name="headphones" size="16px" class="q-mr-xs" />
+          <q-icon :name="currentOutputDeviceIcon" size="16px" class="q-mr-xs" />
           <span class="output-device-label">{{ currentOutputDeviceLabel }}</span>
           <q-icon name="expand_more" size="16px" class="q-ml-xs" />
           <q-menu dark anchor="bottom right" self="top right" class="player-popup-menu">
-            <q-list dark style="min-width: 180px">
+            <q-list dark style="min-width: 220px">
+              <q-item-label header class="text-weight-bold text-caption text-grey-5">This Computer</q-item-label>
               <q-item v-if="audioOutputLoading" disable>
                 <q-item-section class="text-grey text-caption">Loading devices...</q-item-section>
               </q-item>
@@ -305,10 +345,37 @@ export default {
                   :key="device.deviceId"
                   clickable
                   v-close-popup
-                  :active="audioEngineConfig.outputDeviceId === device.deviceId"
-                  @click="audioEngineConfig.outputDeviceId = device.deviceId"
+                  :active="activePlaybackTarget === 'local' && audioEngineConfig.outputDeviceId === device.deviceId"
+                  @click="onSelectOutputDevice(device)"
                 >
+                  <q-item-section avatar style="min-width: 28px">
+                    <q-icon name="headphones" size="16px" />
+                  </q-item-section>
                   <q-item-section>{{ device.label }}</q-item-section>
+                </q-item>
+              </template>
+
+              <q-separator dark class="q-my-xs" />
+              <q-item-label header class="text-weight-bold text-caption text-grey-5">Orchard Connect</q-item-label>
+              <q-item v-if="!connectedConnectDevices || connectedConnectDevices.length === 0" disable>
+                <q-item-section class="text-grey text-caption">No phones connected</q-item-section>
+              </q-item>
+              <template v-else>
+                <q-item
+                  v-for="device in connectedConnectDevices"
+                  :key="device.id"
+                  clickable
+                  v-close-popup
+                  :active="activePlaybackTarget === device.id"
+                  @click="onSelectConnectDevice(device)"
+                >
+                  <q-item-section avatar style="min-width: 28px">
+                    <q-icon name="phone_android" size="16px" :color="activePlaybackTarget === device.id ? 'primary' : undefined" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>{{ device.name || 'Phone' }}</q-item-label>
+                    <q-item-label v-if="activePlaybackTarget === device.id" caption class="text-primary">Active target</q-item-label>
+                  </q-item-section>
                 </q-item>
               </template>
             </q-list>
@@ -387,6 +454,29 @@ export default {
           :title="sleepTimerActive ? `Sleep Timer: ${sleepTimerStatus}` : 'Sleep Timer'"
           :aria-label="sleepTimerActive ? `Sleep timer: ${sleepTimerStatus}. Open timer settings` : 'Open sleep timer settings'"
           @click="openSleepTimerSettings"
+        />
+
+        <q-btn
+          flat
+          round
+          dense
+          class="player-control player-control--secondary player-right-panel-button"
+          icon="queue_music"
+          title="Queue"
+          aria-label="Open queue panel"
+          @click="openRightPanel('queue')"
+        />
+
+        <q-btn
+          flat
+          round
+          dense
+          class="player-control player-control--secondary player-right-panel-button"
+          icon="lyrics"
+          title="Lyrics"
+          aria-label="Open lyrics panel"
+          :disable="!activeTrack"
+          @click="openRightPanel('lyrics')"
         />
 
         <!-- Settings Button (opens the NEW compact settings menu) -->

@@ -26,13 +26,40 @@ data class StoredConnectSession(
     val deviceToken: String = ""
 )
 
+/** Persistent record of a paired Orchard Connect device. */
+data class StoredPairedDevice(
+    val id: String,
+    val serverUrl: String,
+    val serverHost: String,
+    val deviceToken: String = "",
+    val defaultName: String = "",
+    val customName: String = "",
+    val pairedAt: Long = System.currentTimeMillis(),
+    val lastSeenAt: Long = System.currentTimeMillis()
+)
+
 /**
  * Credential persistence boundary owned by the application process.
- * Implementations must never log or expose [StoredConnectSession.deviceToken].
+ * Implementations must never log or expose [StoredConnectSession.deviceToken] or [StoredPairedDevice.deviceToken].
  */
 interface ConnectSessionStore {
     @Throws(SessionStoreException::class)
     fun load(): StoredConnectSession
+
+    @Throws(SessionStoreException::class)
+    fun loadDevices(): List<StoredPairedDevice> = emptyList()
+
+    @Throws(SessionStoreException::class)
+    fun saveDevice(device: StoredPairedDevice) {}
+
+    @Throws(SessionStoreException::class)
+    fun removeDevice(idOrServerUrl: String) {}
+
+    @Throws(SessionStoreException::class)
+    fun updateDeviceName(idOrServerUrl: String, customName: String) {}
+
+    @Throws(SessionStoreException::class)
+    fun clearAllDevices() {}
 
     @Throws(SessionStoreException::class)
     fun saveLocation(serverUrl: String, serverHost: String)
@@ -55,4 +82,5 @@ object ConnectStorageKeys {
     const val DEVICE_TOKEN = "orchard-connect:device-token"
     const val SERVER_HOST = "orchard-connect:server-host"
     const val SERVER_URL = "orchard-connect:server-url"
+    const val PAIRED_DEVICES = "orchard-connect:paired-devices"
 }

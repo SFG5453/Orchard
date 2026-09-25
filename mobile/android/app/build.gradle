@@ -7,28 +7,78 @@ def orchardReleaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
 def orchardReleaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
 def orchardReleaseSigningReady = [orchardReleaseKeystore, orchardReleaseStorePassword, orchardReleaseKeyAlias, orchardReleaseKeyPassword].every { it }
 
+// The Rust Earmark analyzer and transition engine, shared verbatim with desktop. Cross-compiled
+// from source so DSP changes cannot reach one platform and not the other.
+def earmarkCrateDir = file('../../../native-audio-rust/mobile')
+def earmarkCoreDir = file('../../../native-audio-rust/core/src')
+def earmarkEngineDir = file('../../../native-audio-rust/vendor/earmark/src')
+// Resolved eagerly: these are source-set roots, and a lazy provider added to `srcDirs` is
+// silently ignored rather than resolved.
+def earmarkJniLibsDir = layout.buildDirectory.dir('earmark/jniLibs').get().asFile
+def earmarkKotlinDir = layout.buildDirectory.dir('earmark/kotlin').get().asFile
+def earmarkTargetDir = layout.buildDirectory.dir('earmark/rust').get().asFile
+
+// Declared here rather than read back off the android extension because two toolchains consume
+// them and AGP no longer exposes the resolved NDK path to build scripts.
+def orchardNdkVersion = '28.2.13676358'
+def orchardMinSdk = 31
+// Production installs are ARM64. x86_64 remains available in debug builds for the Android
+// emulator, without making every distributed APK carry a second copy of each native library.
+def orchardReleaseAbis = ['arm64-v8a']
+def orchardDebugAbis = orchardReleaseAbis + ['x86_64']
+// Both toolchains build every ABI that any build type can package.
+def orchardAbis = orchardDebugAbis
+
+// Where the NDK keeps its C++ runtime, per ABI. Needed because the transition engine links
+// Signalsmith Stretch and cargo-ndk link the *shared* runtime, while AGP only packages
+// libc++_shared.so on behalf of its small CMake resampler module. Without this nothing puts the
+// runtime in the APK,
+// and `System.loadLibrary("orchard_earmark")` fails at the first transition, which is silent: the
+// engine reports itself unavailable and every mix comes out as the plain volume ramp.
+def orchardStlTriples = ['arm64-v8a': 'aarch64-linux-android', 'x86_64': 'x86_64-linux-android']
+
+def orchardNdkDir = {
+    def fromEnvironment = System.getenv('ANDROID_NDK_HOME') ?: System.getenv('ANDROID_NDK_ROOT')
+    if (fromEnvironment) return file(fromEnvironment)
+    def sdk = System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT')
+    def properties = file('../local.properties')
+    if (!sdk && properties.exists()) {
+        def loaded = new Properties()
+        properties.withInputStream { loaded.load(it) }
+        sdk = loaded.getProperty('sdk.dir')
+    }
+    if (!sdk) {
+        throw new GradleException(
+            'Cannot locate the Android NDK: set ANDROID_NDK_HOME, or ANDROID_HOME with ' +
+                "ndk/$orchardNdkVersion installed.")
+    }
+    return new File("$sdk/ndk/$orchardNdkVersion")
+}
+
 android {
     namespace = 'dev.sfg.orchard.connect'
     compileSdk = 37
+    // Pinned because two toolchains agree on it: CMake builds the streaming resampler and
+    // cargo-ndk builds Earmark, and a mismatch between them is a link error a long
+    // way from its cause.
+    ndkVersion = orchardNdkVersion
 
     defaultConfig {
         applicationId = 'dev.sfg.orchard.mobile'
-        minSdk = 31
+        minSdk = orchardMinSdk
         targetSdk = 36
-        versionCode = 10902
-        versionName = '1.9.2'
-        buildConfigField 'String', 'CODENAME', '"Buzzkill Manes"'
+        versionCode = 20006
+        versionName = '2.0.0-beta.7'
+        buildConfigField 'String', 'CODENAME', '"Gliders Dungarees"'
         // Only the build that is actually published may offer updates. Every other
         // build has its own applicationId, so the published APK is neither an
         // upgrade nor installable over it.
         buildConfigField 'boolean', 'UPDATER_ENABLED', 'true'
         testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
-        ndk {
-            // 64-bit only. minSdk 31 predates the 64-bit requirement by years, and a 32-bit
-            // slice would double the native payload for devices that do not exist in the
-            // install base.
-            abiFilters += ['arm64-v8a', 'x86_64']
-        }
+    }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
     }
 
     externalNativeBuild {
@@ -36,6 +86,21 @@ android {
             path = file('src/main/cpp/CMakeLists.txt')
             version = '3.22.1'
         }
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs += earmarkJniLibsDir
+            kotlin.srcDirs += earmarkKotlinDir
+            resources.srcDir layout.buildDirectory.dir("generated/transitionPlanner").get().asFile
+        }
+        canaryX86 {
+            res.srcDir 'src/canary/res'
+        }
+    }
+
+    androidResources {
+        noCompress += ['tflite']
     }
 
     signingConfigs {
@@ -61,12 +126,18 @@ android {
             versionNameSuffix = '-debug'
             resValue 'string', 'app_name', 'Orchard Debug'
             buildConfigField 'boolean', 'UPDATER_ENABLED', 'false'
+            ndk {
+                abiFilters += orchardDebugAbis
+            }
         }
         release {
             if (orchardReleaseSigningReady) signingConfig = signingConfigs.release
             minifyEnabled = true
             shrinkResources = true
             proguardFiles(getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro')
+            ndk {
+                abiFilters += orchardReleaseAbis
+            }
         }
         // Test builds handed out for bug reproduction. Identical to release in
         // everything that affects behaviour — same signing, same minification, so
@@ -75,10 +146,21 @@ android {
         // APK would neither upgrade it nor install over it.
         canary {
             initWith release
+            if (!orchardReleaseSigningReady) signingConfig = signingConfigs.debug
             applicationIdSuffix = '.canary'
             versionNameSuffix = '-canary'
             resValue 'string', 'app_name', 'Orchard Canary'
             buildConfigField 'boolean', 'UPDATER_ENABLED', 'false'
+        }
+        canaryX86 {
+            initWith canary
+            applicationIdSuffix = '.canaryx86'
+            versionNameSuffix = '-canary-x86'
+            resValue 'string', 'app_name', 'Orchard Canary x86_64'
+            ndk {
+                abiFilters.clear()
+                abiFilters += ['x86_64']
+            }
         }
     }
 
@@ -92,10 +174,94 @@ android {
         buildConfig = true
         resValues = true
     }
+
 }
 
 kotlin {
     jvmToolchain(17)
+}
+
+tasks.register('buildEarmarkLibrary', Exec) {
+    group = 'build'
+    description = 'Cross-compiles the Earmark analyzer and transition engine for every packaged ABI.'
+
+    // The whole engine, not just this crate: the bindings crate is a marshalling shell, and a
+    // change to the core or to earmark itself is exactly the change that must reach the device.
+    inputs.files(fileTree(earmarkCrateDir) { exclude 'target/**' })
+    inputs.dir earmarkCoreDir
+    inputs.dir earmarkEngineDir
+    outputs.dir earmarkJniLibsDir
+
+    // cargo-ndk reads `cargo metadata` from the working directory before it looks at any
+    // --manifest-path, so the crate has to *be* the working directory.
+    workingDir = earmarkCrateDir
+    environment 'ANDROID_NDK_HOME', orchardNdkDir().absolutePath
+    // Out of the shared workspace target directory, so `gradle clean` reclaims it.
+    environment 'CARGO_TARGET_DIR', earmarkTargetDir.absolutePath
+    commandLine(['cargo', 'ndk'] +
+        orchardAbis.collectMany { ['-t', it] } +
+        ['-P', orchardMinSdk.toString(),
+         '-o', earmarkJniLibsDir.absolutePath,
+         // Not --release: that profile strips the symbols UniFFI keeps its interface metadata in,
+         // and the bindings are generated by reading them back out of this library.
+         'build', '--profile', 'android'])
+
+    // The engine is linked against the shared C++ runtime, so the runtime has to travel with it.
+    // Copied beside the library rather than depended on from anywhere else: this source set is
+    // already packaged, and a missing runtime is otherwise only discoverable on a device.
+    doLast {
+        // Exactly one host toolchain is installed per NDK, so finding it beats mapping os.name.
+        def prebuilt = new File(orchardNdkDir(), 'toolchains/llvm/prebuilt')
+            .listFiles()?.find { it.isDirectory() }
+        if (prebuilt == null) {
+            throw new GradleException("No host toolchain under ${orchardNdkDir()}/toolchains/llvm/prebuilt")
+        }
+        orchardAbis.each { abi ->
+            def triple = orchardStlTriples[abi]
+            if (triple == null) throw new GradleException("No C++ runtime triple known for ABI $abi")
+            def runtime = new File(prebuilt, "sysroot/usr/lib/$triple/libc++_shared.so")
+            if (!runtime.exists()) throw new GradleException("Missing C++ runtime at $runtime")
+            def target = new File(earmarkJniLibsDir, "$abi/libc++_shared.so")
+            target.parentFile.mkdirs()
+            java.nio.file.Files.copy(
+                runtime.toPath(),
+                target.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+}
+
+tasks.register('generateEarmarkBindings', Exec) {
+    group = 'build'
+    description = 'Generates the Kotlin bindings for the Earmark native library.'
+    dependsOn 'buildEarmarkLibrary'
+
+    inputs.dir earmarkJniLibsDir
+    outputs.dir earmarkKotlinDir
+
+    def abi = orchardAbis.first()
+    workingDir = earmarkCrateDir
+    commandLine 'cargo', 'run', '--quiet', '--features', 'cli', '--bin', 'uniffi-bindgen',
+        '--manifest-path', new File(earmarkCrateDir, 'Cargo.toml').absolutePath,
+        '--', 'generate',
+        // Read from the library that was actually built rather than from its source. Bindings
+        // generated against a different UniFFI version than the scaffolding fail at the FFI
+        // boundary at runtime, and this is what makes that skew impossible.
+        '--library', new File(earmarkJniLibsDir, "$abi/liborchard_earmark.so").absolutePath,
+        // Reading a library gives no crate root, so the package name has to be handed over.
+        '--config', new File(earmarkCrateDir, 'uniffi-bindgen.toml').absolutePath,
+        '--language', 'kotlin',
+        '--out-dir', earmarkKotlinDir.absolutePath,
+        '--no-format'
+}
+
+// The generated Kotlin is a source root and the .so files are packaged, so both halves have to
+// exist before anything reads them.
+tasks.matching { it.name ==~ /^merge.*JniLibFolders$/ }.configureEach {
+    dependsOn 'buildEarmarkLibrary'
+}
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    dependsOn 'generateEarmarkBindings'
 }
 
 gradle.taskGraph.whenReady { graph ->
@@ -124,15 +290,21 @@ dependencies {
 
     implementation 'androidx.navigation:navigation-compose:2.9.8'
     implementation 'androidx.datastore:datastore-preferences:1.2.1'
+    implementation 'androidx.window:window:1.5.1'
 
-    implementation 'androidx.media3:media3-datasource-okhttp:1.11.0'
-    implementation 'androidx.media3:media3-exoplayer:1.11.0'
-    implementation 'androidx.media3:media3-exoplayer-hls:1.11.0'
-    implementation 'androidx.media3:media3-session:1.11.0'
-    implementation 'androidx.media3:media3-ui:1.11.0'
+    implementation 'androidx.media3:media3-datasource-okhttp:1.11.1'
+    implementation 'androidx.media3:media3-exoplayer:1.11.1'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.11.1'
+    implementation 'androidx.media3:media3-session:1.11.1'
+    implementation 'androidx.media3:media3-ui:1.11.1'
+    implementation 'androidx.media3:media3-cast:1.11.1'
 
-    implementation 'io.coil-kt.coil3:coil-compose:3.5.0'
-    implementation 'io.coil-kt.coil3:coil-network-okhttp:3.5.0'
+    implementation 'io.coil-kt.coil3:coil-compose:3.6.3'
+    implementation 'io.coil-kt.coil3:coil-network-okhttp:3.6.3'
+
+    // No release tag exists upstream yet, so keep the working JitPack build reproducible by
+    // pinning the exact Kawarp-AGSL commit rather than following main-SNAPSHOT.
+    implementation 'com.github.meowarex:kawarp-agsl:30715d619a'
 
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0'
     implementation 'com.squareup.okhttp3:okhttp:5.5.0'
@@ -140,30 +312,63 @@ dependencies {
     implementation 'androidx.core:core:1.19.0'
     implementation 'androidx.webkit:webkit:1.16.0'
 
+    // UniFFI's generated Kotlin reaches the transition engine through JNA. The aar classifier is
+    // required: the plain jar carries desktop natives and none for Android.
+    implementation 'net.java.dev.jna:jna:5.19.1@aar'
+
     // Listening parties negotiate a peer-to-peer data channel with the desktop and web
     // clients. The `org.webrtc:google-webrtc` artifact the web client's protocol was
     // written against was abandoned at the JCenter shutdown; this is the maintained
     // rebuild of the same `org.webrtc` package, so the API matches what the JS side
     // negotiates against.
-    implementation 'io.github.webrtc-sdk:android:144.7559.12'
+    implementation 'io.github.webrtc-sdk:android:150.7871.01'
 
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
     implementation 'eu.buney.kopus:kopus:1.6.1.3'
     implementation 'com.github.TeamNewPipe:NewPipeExtractor:v0.26.4'
-    implementation 'org.jetbrains:markdown:0.7.9'
+    implementation 'org.jetbrains:markdown:0.7.14'
 
     debugImplementation 'androidx.compose.ui:ui-tooling'
 
-    // The full package rather than onnxruntime-mobile: mobile only loads .ort
-    // files, which would put an offline conversion step between every model and
-    // the app for a saving that does not matter in a self-distributed APK.
-    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.28.0'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.30.0'
+    implementation 'com.google.ai.edge.litert:litert:2.2.0'
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20260719'
     testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0'
-    testImplementation 'org.mozilla:rhino:1.9.1'
+    implementation 'org.mozilla:rhino:1.9.1'
 
     androidTestImplementation 'androidx.test.ext:junit:1.3.0'
     androidTestImplementation 'androidx.test:runner:1.7.0'
+}
+
+// Rebuild from the desktop sources, so changing its policy cannot leave Android on a stale port.
+tasks.register('bundleTransitionPlanner', Exec) {
+    workingDir rootProject.file('../..')
+    inputs.files(fileTree(rootProject.file('../../src/audio/crossfade')) { include '*.js' })
+    inputs.file rootProject.file('../../shared/trackAnalysis.js')
+    inputs.file rootProject.file('../tools/transition-planner/index.js')
+    inputs.file rootProject.file('../../scripts/build-mobile-transition-planner.mjs')
+    inputs.file rootProject.file('../../package-lock.json')
+    outputs.dir layout.buildDirectory.dir('generated/transitionPlanner')
+    commandLine 'node', 'scripts/build-mobile-transition-planner.mjs',
+        layout.buildDirectory.dir('generated/transitionPlanner').get().asFile.absolutePath
+}
+tasks.matching { it.name ==~ /^process.*JavaRes$/ }.configureEach {
+    dependsOn 'bundleTransitionPlanner'
+}
+
+android.sourceSets.test.resources.srcDir layout.buildDirectory.dir('generated/transitionPlannerTest').get().asFile
+tasks.register('generateTransitionPlannerFixtures', Exec) {
+    workingDir rootProject.file('../..')
+    inputs.files(fileTree(rootProject.file('../../src/audio/crossfade')) { include '*.js' })
+    inputs.file rootProject.file('../../shared/trackAnalysis.js')
+    inputs.file rootProject.file('../../test/fixtures/mobileTransitionPlanner.js')
+    inputs.file rootProject.file('../../scripts/generate-mobile-planner-fixtures.mjs')
+    outputs.dir layout.buildDirectory.dir('generated/transitionPlannerTest')
+    commandLine 'node', 'scripts/generate-mobile-planner-fixtures.mjs',
+        layout.buildDirectory.dir('generated/transitionPlannerTest').get().asFile.absolutePath
+}
+tasks.matching { it.name ==~ /^process.*UnitTestJavaRes$/ }.configureEach {
+    dependsOn 'generateTransitionPlannerFixtures'
 }

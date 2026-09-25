@@ -57,6 +57,17 @@ export default {
             <span v-if="transitionQueueSortBusy">{{ transitionQueueSortAnalyzedCount }} / {{ transitionQueueSortTotalCount }}</span>
             <span v-else>Best mix</span>
           </button>
+          <button
+            v-if="queueTracksForPlaylist().length"
+            type="button"
+            class="queue-view__save-playlist"
+            title="Add queue to playlist"
+            aria-label="Add queue to playlist"
+            @click="openQueuePlaylistDialog"
+          >
+            <q-icon name="playlist_add" />
+            <span>Save as playlist</span>
+          </button>
           <button v-if="queue.length" type="button" class="queue-view__clear" @click="clearQueue">
             Clear
           </button>

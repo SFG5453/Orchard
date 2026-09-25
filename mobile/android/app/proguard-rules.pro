@@ -10,6 +10,12 @@
 -keep class ai.onnxruntime.providers.** { *; }
 -dontwarn ai.onnxruntime.**
 
+# LiteRT's JNI layer also resolves Java exception/API classes by hardcoded name.
+# R8 renaming `LiteRtException` makes nativeCreateFromAsset abort the process at
+# first playback analysis with "Failed to find LiteRtException class".
+-keep class com.google.ai.edge.litert.** { *; }
+-dontwarn com.google.ai.edge.litert.**
+
 # WebRTC's native layer calls back into Java by hardcoded name, the same way ONNX
 # Runtime's does: observers, the enums it reads signalling state from, and the
 # constructors JNI instantiates are all resolved reflectively. Renaming any of them
@@ -26,10 +32,24 @@
 -keep class org.jni_zero.** { *; }
 -dontwarn org.jni_zero.**
 
+# The transition engine's generated bindings reach Rust through JNA, which resolves everything by
+# name at runtime and so cannot survive renaming. `Native.register` binds each `external fun` to
+# the native symbol *called the same thing*, and JNA reads the fields of its Structure subclasses
+# reflectively, so a renamed method or a stripped field is an UnsatisfiedLinkError on the first
+# transition rather than a build failure. JNA also references desktop AWT classes Android does
+# not have, on paths Orchard never reaches.
+-keep class com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.** { public *; }
+-keep class dev.sfg.orchard.earmark.** { *; }
+-dontwarn java.awt.**
+
 # NewPipeExtractor embeds Mozilla Rhino for YouTube cipher evaluation.
 -keep class org.mozilla.javascript.** { *; }
 -keep class org.mozilla.classfile.ClassFileWriter
 -dontwarn org.mozilla.javascript.tools.**
+
+# The native Best Mix scorer exports a name-based JNI symbol for this Kotlin object.
+-keep class dev.sfg.orchard.mobile.playback.smart.NativeBestMixPlanner { *; }
 
 # Rhino also contains optional JDK scripting/bean integrations. Android does
 # not provide these desktop-only APIs, and Orchard uses Rhino's core engine

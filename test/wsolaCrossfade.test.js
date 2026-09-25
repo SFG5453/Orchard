@@ -126,21 +126,64 @@ function fakeElement(currentTime = 0) {
   };
 }
 
-function readyPlan({ transitionStart = 200, overlapSeconds = 7.6 } = {}) {
+function readyPlan({
+  transitionStart = 200,
+  overlapSeconds = 16 * 60 / 126,
+  outgoingTempoRatio = 1,
+  incomingTempoRatio = 1
+} = {}) {
+  const targetBpm = 16 * 60 / overlapSeconds;
+  const incomingCueTime = 20;
   return {
     ok: true,
     transitionStart,
-    transitionEnd: transitionStart + overlapSeconds,
+    transitionEnd: transitionStart + overlapSeconds * outgoingTempoRatio,
     overlapSeconds,
     beats: 16,
     bassSwapFraction: 0.75,
-    outgoingBpm: 126,
-    incomingBpm: 126,
-    stretchRatio: 1,
-    incomingCueTime: 20,
-    incomingResumeTime: 20 + overlapSeconds,
-    outgoingSlice: { start: 198.5, end: 209.1, anchor: 1.5 },
-    incomingSlice: { start: 18.5, end: 29.1, anchor: 1.5 }
+    outgoingBpm: targetBpm,
+    incomingBpm: targetBpm,
+    targetBpm,
+    outgoingTempoRatio,
+    incomingTempoRatio,
+    stretchRatio: outgoingTempoRatio,
+    incomingCueTime,
+    incomingResumeTime: incomingCueTime + overlapSeconds * incomingTempoRatio,
+    strategy: 'beatmatched_crossfade',
+    outgoingSlice: {
+      start: Math.max(0, transitionStart - 1.5),
+      end: transitionStart + overlapSeconds + 1.5,
+      anchor: Math.min(1.5, transitionStart)
+    },
+    incomingSlice: {
+      start: 18.5,
+      end: 20 + overlapSeconds + 1.5,
+      anchor: 1.5
+    }
+  };
+}
+
+function exactRenderResult(outgoing, options, overrides = {}) {
+  const plan = options.plan;
+  return {
+    rendered: true,
+    rejected: '',
+    // The native result uses a human-readable diagnostic label while the
+    // selected-plan input uses the canonical wire spelling.
+    strategy: plan.strategy.replaceAll('_', ' '),
+    summary: '',
+    beats: plan.beats,
+    duration: plan.duration,
+    stretchRatio: Math.fround(plan.outgoingTempoRatio),
+    incomingStretchRatio: Math.fround(plan.incomingTempoRatio),
+    bpm: Math.fround(plan.targetBpm),
+    sampleRate: outgoing.sampleRate,
+    outgoingStart: plan.outgoingStart,
+    incomingStart: plan.incomingStart,
+    outgoingResume: plan.outgoingStart + plan.duration * plan.outgoingTempoRatio,
+    incomingResume: plan.incomingStart + plan.duration * plan.incomingTempoRatio,
+    channels: [new Float32Array(1000), new Float32Array(1000)],
+    ...overrides
   };
 }
 
@@ -151,7 +194,8 @@ function renderFor(plan, sampleRate = 44100) {
       new Float32Array(Math.round(plan.overlapSeconds * sampleRate))
     ],
     sampleRate,
-    stretchRatio: 1.05
+    stretchRatio: plan.outgoingTempoRatio,
+    incomingStretchRatio: plan.incomingTempoRatio
   };
 }
 
@@ -180,30 +224,67 @@ test('only uses raw rendered PCM when per-source processing is flat', () => {
   }), true);
 });
 
-test('prepare slices both tracks and forwards the plan to the native bridge', async () => {
+test('pair planning caches refusals until an authoritative input changes', () => {
+  let calls = 0;
+  const planner = (options) => {
+    calls += 1;
+    return { ok: false, reason: 'confidence-boundary', options };
+  };
+  const engine = createWsolaCrossfade({
+    analyzer: fakeAnalyzer(),
+    bridge: {},
+    planner
+  });
+  const analysis = { analysisVersion: 11, status: 'ready', bpm: 120, frames: [{ time: 0, energy: 0.5 }] };
+  const nextAnalysis = { analysisVersion: 11, status: 'ready', bpm: 122, frames: [{ time: 0, energy: 0.4 }] };
+  const options = {
+    fromTrackId: 'from',
+    toTrackId: 'to',
+    analysis,
+    nextAnalysis,
+    duration: 240,
+    nextDuration: 200,
+    mode: 'smart',
+    settings: { maxStretchDeviation: 0.04 }
+  };
+
+  const first = engine.plan(options);
+  const second = engine.plan(options);
+  assert.strictEqual(second, first);
+  assert.equal(calls, 1, 'a refusal was recomputed during the playback poll');
+
+  analysis.bpm = 121;
+  const enriched = engine.plan(options);
+  assert.notStrictEqual(enriched, first);
+  assert.equal(calls, 2, 'an analysis fingerprint change did not invalidate the plan');
+
+  engine.plan({ ...options, settings: { maxStretchDeviation: 0.03 } });
+  engine.plan({ ...options, toTrackId: 'another-track' });
+  assert.equal(calls, 4, 'settings and pair identity must participate in the cache key');
+});
+
+test('prepare sends the authoritative plan rebased into exact padded slices', async () => {
   const analyzer = fakeAnalyzer();
   const rendered = [];
+  const masked = [];
   const engine = createWsolaCrossfade({
     analyzer,
     bridge: {
+      vocalMask: async (channels, sampleRate) => {
+        masked.push({ channels, sampleRate });
+        return { curve: [0.2, 0.8] };
+      },
       renderTransition: async (outgoing, incoming, options) => {
         rendered.push({ outgoing, incoming, options });
-        return {
-          rendered: true,
-          rejected: '',
-          stretchRatio: 1,
-          bpm: 126,
-          sampleRate: options.sampleRate,
-          channels: [new Float32Array(1000), new Float32Array(1000)]
-        };
+        return exactRenderResult(outgoing, options);
       }
     }
   });
 
   const plan = {
-    ...readyPlan({ transitionStart: 40 }),
-    outgoingSlice: { start: 38.5, end: 49.1, anchor: 1.5 },
-    incomingSlice: { start: 18.5, end: 29.1, anchor: 1.5 }
+    ...readyPlan({ transitionStart: 40, overlapSeconds: 16 * 60 / 126.123456 }),
+    outgoingGrid: { bpm: 120, beats: [39, 40, 44, 48, 49], downbeats: [40, 48] },
+    incomingGrid: { bpm: 120, beats: [19, 20, 24, 28, 29], downbeats: [20, 28] }
   };
   await engine.prepare({ fromTrackId: 'a', toTrackId: 'b', fromUrl: 'u1', toUrl: 'u2', plan });
 
@@ -211,15 +292,67 @@ test('prepare slices both tracks and forwards the plan to the native bridge', as
   assert.equal(engine.preparationStatus('a', 'other'), 'idle');
   assert.ok(engine.preparedTransition('a', 'b')?.render);
   assert.equal(rendered.length, 1);
+
   const call = rendered[0];
   assert.equal(call.outgoing.channels.length, 2);
-  assert.equal(call.outgoing.anchor, plan.outgoingSlice.anchor);
-  assert.equal(call.outgoing.bpm, 126);
-  assert.equal(call.incoming.anchor, plan.incomingSlice.anchor);
-  assert.equal(call.options.beats, 16);
-  assert.equal(call.options.bassSwap, 0.75);
-  const expectedFrames = Math.round((plan.outgoingSlice.end - plan.outgoingSlice.start) * 44100);
+  assert.equal(call.outgoing.sampleRate, 44100);
+  assert.equal(call.outgoing.bpm, plan.outgoingBpm);
+
+  const outgoingSliceStart = plan.transitionStart - 1.5;
+  const expectedFrames = Math.round((plan.overlapSeconds + 3) * 44100);
   assert.ok(Math.abs(call.outgoing.channels[0].length - expectedFrames) <= 1);
+  assert.deepEqual(call.outgoing.downbeats, [1.5, 9.5]);
+  assert.deepEqual(call.incoming.downbeats, [1.5, 9.5]);
+  assert.deepEqual(call.options.plan, {
+    outgoingStart: plan.transitionStart - outgoingSliceStart,
+    incomingStart: 1.5,
+    duration: plan.overlapSeconds,
+    beats: plan.beats,
+    outgoingBpm: plan.outgoingBpm,
+    incomingBpm: plan.incomingBpm,
+    targetBpm: plan.targetBpm,
+    outgoingTempoRatio: plan.outgoingTempoRatio,
+    incomingTempoRatio: plan.incomingTempoRatio,
+    strategy: plan.strategy,
+    bassSwapFraction: plan.bassSwapFraction
+  });
+  assert.equal('outgoing' in call.options, false);
+  assert.equal('incoming' in call.options, false);
+  assert.equal('beatLengths' in call.options, false);
+  assert.deepEqual(call.options.duckCurve, [0.2, 0.8]);
+  assert.equal(masked.length, 1);
+  assert.equal(masked[0].sampleRate, 44100);
+  assert.ok(Math.abs(masked[0].channels[0].length - plan.overlapSeconds * 44100) <= 1);
+  assert.strictEqual(engine.preparedTransition('a', 'b').plan, plan);
+});
+
+test('prepare refuses a returned plan identity mismatch greater than one sample', async () => {
+  const reports = [];
+  const engine = createWsolaCrossfade({
+    analyzer: fakeAnalyzer(),
+    bridge: {
+      renderTransition: async (outgoing, incoming, options) => exactRenderResult(outgoing, options, {
+        outgoingStart: options.plan.outgoingStart + 2 / outgoing.sampleRate
+      })
+    },
+    report: (event, detail) => reports.push({ event, detail })
+  });
+
+  const result = await engine.prepare({
+    fromTrackId: 'a',
+    toTrackId: 'b',
+    fromUrl: 'u1',
+    toUrl: 'u2',
+    plan: readyPlan({ transitionStart: 40, overlapSeconds: 8 })
+  });
+
+  assert.equal(result, null);
+  assert.equal(engine.preparationStatus('a', 'b'), 'failed');
+  assert.equal(engine.preparedTransition('a', 'b'), null);
+  assert.equal(
+    reports.find((entry) => entry.event === 'wsola-prepare-refused')?.detail?.reason,
+    'render-plan-mismatch'
+  );
 });
 
 test('a refused render marks the pairing failed instead of throwing', async () => {
@@ -323,9 +456,12 @@ test('cancel before the swap restores the outgoing element at the stretched posi
   try {
     const analyzer = fakeAnalyzer();
     const engine = createWsolaCrossfade({ analyzer, bridge: {} });
-    const plan = readyPlan({ transitionStart: 200, overlapSeconds: 8 });
+    const plan = readyPlan({
+      transitionStart: 200,
+      overlapSeconds: 8,
+      outgoingTempoRatio: 1.05
+    });
     const render = renderFor(plan);
-    render.stretchRatio = 1.05;
     const fromAudio = fakeElement(199.9);
     const toAudio = fakeElement(0);
 
@@ -351,7 +487,7 @@ test('cancel before the swap restores the outgoing element at the stretched posi
 
     assert.equal(engine.isActive(), false);
     assert.ok(analyzer.calls.buffers[0].handle.stopped);
-    assert.ok(Math.abs(fromAudio.currentTime - (200 + 3 / 1.05)) < 0.02,
+    assert.ok(Math.abs(fromAudio.currentTime - (200 + 3 * 1.05)) < 0.02,
       `expected stretched realign, got ${fromAudio.currentTime}`);
     assert.equal(toAudio.paused, true);
     const restored = analyzer.calls.volumes.filter((entry) => entry.element === fromAudio).pop();
@@ -505,9 +641,13 @@ test('rechecks media time after context resume and maps late input time onto str
   try {
     const analyzer = fakeAnalyzer();
     const engine = createWsolaCrossfade({ analyzer, bridge: {} });
-    const plan = readyPlan({ transitionStart: 200, overlapSeconds: 8 });
+    const plan = readyPlan({
+      transitionStart: 200,
+      overlapSeconds: 8,
+      outgoingTempoRatio: 0.95,
+      incomingTempoRatio: 1.02
+    });
     const render = renderFor(plan);
-    render.stretchRatio = 0.95;
     const fromAudio = fakeElement(199.9);
     const toAudio = fakeElement(0);
     analyzer.resume = async () => {
@@ -526,8 +666,21 @@ test('rechecks media time after context resume and maps late input time onto str
     await Promise.resolve();
 
     const buffer = analyzer.calls.buffers[0];
-    assert.ok(Math.abs(buffer.offset - 0.05 * 0.95) < 1e-9);
-    assert.ok(Math.abs(toAudio.currentTime - (plan.incomingCueTime + buffer.offset)) < 1e-9);
+    const expectedOffset = 0.05 / 0.95;
+    assert.ok(Math.abs(buffer.offset - expectedOffset) < 1e-9);
+    assert.ok(Math.abs(
+      toAudio.currentTime - (plan.incomingCueTime + expectedOffset * 1.02)
+    ) < 1e-9);
+
+    // The first drift correction is 15% into the output interval. Its media
+    // target must advance on the incoming source timeline, not one-for-one
+    // with output time.
+    toAudio.currentTime = 0;
+    analyzer.advance(plan.overlapSeconds * 0.15 - expectedOffset);
+    assert.equal(await clock.runNext(), true);
+    assert.ok(Math.abs(
+      toAudio.currentTime - (plan.incomingCueTime + plan.overlapSeconds * 0.15 * 1.02)
+    ) < 1e-9);
 
     engine.cancel();
     assert.equal(await startPromise, false);

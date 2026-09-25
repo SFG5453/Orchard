@@ -54,6 +54,10 @@ data class ResolvedStream(
     val clientKey: String = "",
     /** NewPipe URLs can safely be fetched as independent bounded ranges. */
     val supportsParallelRanges: Boolean = false,
+    val isQobuz: Boolean = false,
+    val bitDepth: Int? = null,
+    val sampleRate: Int? = null,
+    val hires: Boolean = false,
 ) {
     val requestHeaders: Map<String, String>
         get() = buildMap {
@@ -349,6 +353,22 @@ class YouTubeStreamResolver(
                     "in ${System.currentTimeMillis() - started}ms",
             )
             return resolved
+        }
+    }
+
+    /** Resolves a muxed music-video stream. A failure is handled by the service's audio fallback. */
+    fun resolveVideo(videoId: String): ResolvedStream {
+        require(videoId.isNotBlank()) { "A YouTube video id is required" }
+        val quality = qualityProvider()
+        val cacheKey = "$videoId:VIDEO:${quality.name}"
+        cached(cacheKey)?.let { return it }
+        val lock = locks.computeIfAbsent(cacheKey) { Any() }
+        synchronized(lock) {
+            cached(cacheKey)?.let { return it }
+            val stream = newPipeResolver.resolveVideo(videoId, quality)
+                ?: error("No playable video format was returned")
+            streams[cacheKey] = stream
+            return stream
         }
     }
 

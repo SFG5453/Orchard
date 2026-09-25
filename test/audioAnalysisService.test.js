@@ -54,7 +54,7 @@ test('only the tracks around a transition pay for the Essentia pass', async () =
   // so Best Mix -- which analyses up to fifty tracks at background priority --
   // must never trigger it.
   const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
-  const nativeModulePath = path.resolve('native/build/Release/orchard_audio_analysis.node');
+  const nativeModulePath = path.resolve('native-audio-rust/index.cjs');
   const calls = [];
   const ipc = fakeIpcMain();
   const service = setupAudioAnalysisService({
@@ -101,7 +101,7 @@ test('only the tracks around a transition pay for the Essentia pass', async () =
 
 test('a refusal from Essentia leaves the native confidence untouched', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
-  const nativeModulePath = path.resolve('native/build/Release/orchard_audio_analysis.node');
+  const nativeModulePath = path.resolve('native-audio-rust/index.cjs');
   const ipc = fakeIpcMain();
   const service = setupAudioAnalysisService({
     cachePath: path.join(directory, 'cache.json'),
@@ -132,7 +132,7 @@ test('a refusal from Essentia leaves the native confidence untouched', async () 
 test('audio analysis service caches native results across service restarts', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
   const cachePath = path.join(directory, 'cache.json');
-  const nativeModulePath = path.resolve('native/build/Release/orchard_audio_analysis.node');
+  const nativeModulePath = path.resolve('native-audio-rust/index.cjs');
   const firstIpc = fakeIpcMain();
   const firstService = setupAudioAnalysisService({
     cachePath,
@@ -295,12 +295,21 @@ test('audio analysis service rejects invalid BPM and redacts sensitive diagnosti
       details: {
         cookie: 'SID=private',
         authorization: 'Bearer private',
-        message: 'https://stream.example/audio?signature=secret&token=private'
+        message: 'https://stream.example/audio?signature=secret&token=private',
+        candidates: Array.from({ length: 25 }, (_, index) => ({
+          index,
+          accessToken: `secret-${index}`,
+          nested: { more: { privateUrl: `https://stream.example/${index}?token=private` } }
+        }))
       }
     });
     const serialized = JSON.stringify(logs);
     assert.doesNotMatch(serialized, /SID=private|Bearer private|signature=secret|token=private/);
     assert.match(serialized, /redacted/);
+    const debug = logs.find((entry) => entry.event === 'renderer:decode-failed');
+    assert.equal(debug.details.candidates.length, 20);
+    assert.equal(debug.details.candidates[0].accessToken, '[redacted]');
+    assert.equal(debug.details.candidates[0].nested.more, '[truncated]');
   } finally {
     await service.stop();
     await rm(directory, { recursive: true, force: true });
@@ -314,55 +323,194 @@ test('audio analysis service renders beat-matched transitions over IPC', async (
   const service = setupAudioAnalysisService({
     cachePath,
     ipcMain: ipc,
-    nativeModulePath: path.resolve('native/build/Release/orchard_audio_analysis.node'),
+    nativeModulePath: path.resolve('native-audio-rust/index.cjs'),
+    transitionModulePath: path.resolve('native-audio-rust/index.cjs'),
     logger: () => {}
   });
 
-  function stereoTone(seconds, frequency) {
-    const sampleRate = 44100;
-    const data = new Float32Array(Math.floor(seconds * sampleRate));
+  const SAMPLE_RATE = 44100;
+  const BPM = 126;
+
+  // A kick-like pulse train: the engine measures bands and transients, so a bare
+  // sine gives it nothing to tell one candidate from another.
+  function source(seconds, frequency) {
+    const beatFrames = Math.floor((60 / BPM) * SAMPLE_RATE);
+    const data = new Float32Array(Math.floor(seconds * SAMPLE_RATE));
     for (let index = 0; index < data.length; index += 1) {
-      data[index] = 0.3 * Math.sin((2 * Math.PI * frequency * index) / sampleRate);
+      const time = index / SAMPLE_RATE;
+      const beatPhase = (index % beatFrames) / SAMPLE_RATE;
+      data[index] = 0.6 * Math.exp(-beatPhase * 14) * Math.sin(2 * Math.PI * 55 * time)
+        + 0.2 * Math.sin(2 * Math.PI * frequency * time);
     }
-    return [data, new Float32Array(data)];
+    const interval = 60 / BPM;
+    const beats = [];
+    for (let index = 0; index * interval < seconds; index += 1) beats.push(index * interval);
+    return {
+      channels: [data, new Float32Array(data)],
+      sampleRate: SAMPLE_RATE,
+      bpm: BPM,
+      beats,
+      downbeats: beats.filter((_, index) => index % 4 === 0)
+    };
   }
+
+  // Both anchors sit on a downbeat, because every reachable end does.
+  const bar = 4 * (60 / BPM);
+  const mixOut = Math.round(24 / bar) * bar;
+  const drop = Math.round(12 / bar) * bar;
 
   try {
     const result = await ipc.invoke('audio-analysis:render-transition', {
-      outgoing: { channels: stereoTone(12, 220), anchor: 1, bpm: 126 },
-      incoming: { channels: stereoTone(12, 330), anchor: 1, bpm: 126 },
-      options: { sampleRate: 44100, beats: 8, bassSwap: 0.75 }
+      outgoing: source(30, 220),
+      incoming: source(30, 330),
+      options: {
+        outgoing: { endEarliest: mixOut - 0.05, endLatest: mixOut + 0.05 },
+        incoming: { endEarliest: drop - 0.05, endLatest: drop + 0.05 },
+        beatLengths: [8]
+      }
     });
     assert.equal(result.rendered, true, result.rejected);
     assert.equal(result.channels.length, 2);
-    const expected = 8 * (60 / 126) * 44100;
+    assert.equal(result.beats, 8);
+    const expected = 8 * (60 / BPM) * SAMPLE_RATE;
     assert.ok(Math.abs(result.channels[0].length - expected) < 4);
-    assert.equal(result.bpm, 126);
+    assert.equal(result.bpm, BPM);
+    // Both anchors are honoured, which is the whole point of constraining.
+    assert.ok(Math.abs(result.outgoingResume - mixOut) <= 0.05);
+    assert.ok(Math.abs(result.incomingResume - drop) <= 0.05);
+    assert.ok(result.strategy.length > 0);
 
+    // A window between downbeats is refused rather than approximated, and a
+    // refusal is reported for the caller to fall back on, never thrown.
     const refused = await ipc.invoke('audio-analysis:render-transition', {
-      outgoing: { channels: stereoTone(12, 220), anchor: 1, bpm: 100 },
-      incoming: { channels: stereoTone(12, 330), anchor: 1, bpm: 126 },
-      options: { sampleRate: 44100, beats: 8 }
+      outgoing: source(30, 220),
+      incoming: source(30, 330),
+      options: {
+        incoming: { endEarliest: drop + 0.9, endLatest: drop + 1.0 }
+      }
     });
     assert.equal(refused.rendered, false);
-    assert.match(refused.rejected, /transparent stretch range/);
+    assert.match(refused.rejected, /no viable transition/i);
 
     await assert.rejects(
       ipc.invoke('audio-analysis:render-transition', {
-        outgoing: { channels: [], anchor: 0, bpm: 126 },
-        incoming: { channels: stereoTone(2, 330), anchor: 0, bpm: 126 },
-        options: { sampleRate: 44100 }
+        outgoing: { ...source(4, 220), channels: [] },
+        incoming: source(4, 330),
+        options: {}
       }),
       /Invalid outgoing PCM/
     );
     await assert.rejects(
       ipc.invoke('audio-analysis:render-transition', {
-        outgoing: { channels: stereoTone(2, 220), anchor: 0, bpm: 126 },
-        incoming: { channels: stereoTone(2, 330), anchor: 0, bpm: 126 },
+        outgoing: { ...source(4, 220), sampleRate: 0 },
+        incoming: source(4, 330),
         options: {}
       }),
-      /valid sample rate/
+      /Invalid outgoing PCM/
     );
+  } finally {
+    await service.stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('planned transition payloads use the exact native method without search constraints', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'orchard-selected-transition-'));
+  const ipc = fakeIpcMain();
+  const plannedCalls = [];
+  const legacyCalls = [];
+  const logs = [];
+  const service = setupAudioAnalysisService({
+    cachePath: path.join(directory, 'cache.json'),
+    ipcMain: ipc,
+    nativeModulePath: 'analysis-addon',
+    transitionModulePath: 'transition-addon',
+    loadNativeAddon(modulePath) {
+      if (modulePath === 'analysis-addon') {
+        return { analysisVersion: AUDIO_ANALYSIS_VERSION, analyze: async () => null };
+      }
+      return {
+        renderTransition: async (...args) => {
+          legacyCalls.push(args);
+          throw new Error('free planning must not run');
+        },
+        renderPlannedTransition: async (outgoing, incoming, plan, options) => {
+          plannedCalls.push({ outgoing, incoming, plan, options });
+          return {
+            rendered: true,
+            rejected: '',
+            channels: [new Float32Array(64), new Float32Array(64)],
+            sampleRate: 8000,
+            duration: plan.duration,
+            beats: plan.beats,
+            strategy: plan.strategy,
+            outgoingStart: plan.outgoingStart,
+            incomingStart: plan.incomingStart,
+            outgoingResume: plan.outgoingStart + plan.duration * plan.outgoingTempoRatio,
+            incomingResume: plan.incomingStart + plan.duration * plan.incomingTempoRatio,
+            outgoingTempoRatio: plan.outgoingTempoRatio,
+            incomingTempoRatio: plan.incomingTempoRatio,
+            targetBpm: plan.targetBpm,
+            summary: 'selected'
+          };
+        }
+      };
+    },
+    logger: (event, details) => logs.push({ event, details })
+  });
+  const source = {
+    channels: [new Float32Array(8000 * 12), new Float32Array(8000 * 12)],
+    sampleRate: 8000,
+    bpm: 120,
+    beats: [0, 0.5, 1],
+    downbeats: [0]
+  };
+  const plan = {
+    outgoingStart: 1.5,
+    incomingStart: 1.5,
+    duration: 8,
+    beats: 16,
+    outgoingBpm: 120,
+    incomingBpm: 120,
+    targetBpm: 120,
+    outgoingTempoRatio: 1,
+    incomingTempoRatio: 1,
+    strategy: 'filtered_blend'
+  };
+
+  try {
+    const result = await ipc.invoke('audio-analysis:render-transition', {
+      outgoing: source,
+      incoming: source,
+      options: {
+        plan,
+        duckCurve: [0.1, 0.5, 0.9],
+        // These must never leak into an exact render even if a stale caller
+        // supplied them beside the authoritative plan.
+        outgoing: { endEarliest: 1, endLatest: 2 },
+        incoming: { endEarliest: 3, endLatest: 4 },
+        beatLengths: [4, 8, 16]
+      }
+    });
+
+    assert.equal(legacyCalls.length, 0);
+    assert.equal(plannedCalls.length, 1);
+    assert.deepEqual(plannedCalls[0].plan, plan);
+    assert.deepEqual(plannedCalls[0].options, { duckCurve: [0.1, 0.5, 0.9] });
+    assert.equal(result.outgoingStart, plan.outgoingStart);
+    assert.equal(result.incomingStart, plan.incomingStart);
+    assert.equal(result.outgoingResume, 9.5);
+    assert.equal(result.incomingResume, 9.5);
+    assert.ok(logs.some(({ event, details }) =>
+      event === 'transition-render-ready' && details.requestedOutgoingStart === 1.5
+    ));
+
+    await assert.rejects(ipc.invoke('audio-analysis:render-transition', {
+      outgoing: source,
+      incoming: source,
+      options: { plan: { ...plan, duration: Number.NaN } }
+    }), /Invalid transition plan/i);
+    assert.equal(plannedCalls.length, 1, 'invalid plans must be rejected before native work');
   } finally {
     await service.stop();
     await rm(directory, { recursive: true, force: true });
@@ -371,7 +519,7 @@ test('audio analysis service renders beat-matched transitions over IPC', async (
 
 test('beat-model windows pre-empt Essentia, and its refusal restores it', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
-  const nativeModulePath = path.resolve('native/build/Release/orchard_audio_analysis.node');
+  const nativeModulePath = path.resolve('native-audio-rust/index.cjs');
   const essentiaCalls = [];
   const modelCalls = [];
   const ipc = fakeIpcMain();
@@ -452,12 +600,73 @@ test('beat-model windows pre-empt Essentia, and its refusal restores it', async 
   }
 });
 
+test('analysis service rebuilds rhythmic evidence after the beat model moves downbeats', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-final-grid-'));
+  const ipc = fakeIpcMain();
+  const beats = Array.from({ length: 21 }, (_, index) => index * 0.5);
+  const raw = {
+    analysisVersion: AUDIO_ANALYSIS_VERSION,
+    duration: 10,
+    bpm: 120,
+    beatInterval: 0.5,
+    beatConfidence: 0.7,
+    beats,
+    downbeats: [0, 2, 4, 6, 8, 10],
+    phraseBoundaries: [0, 8],
+    audibleStartTime: 0,
+    contentEndTime: 10,
+    energyCurve: [{ time: 0, energy: 0.2 }, { time: 10, energy: 0.4 }]
+  };
+  const service = setupAudioAnalysisService({
+    cachePath: path.join(directory, 'cache.json'),
+    ipcMain: ipc,
+    nativeModulePath: 'test-native-addon',
+    loadNativeAddon: () => ({
+      analysisVersion: AUDIO_ANALYSIS_VERSION,
+      analyze: async () => raw,
+      beatSpectrogram: async () => ({ values: new Float32Array(1), frames: 1, mels: 1 })
+    }),
+    logger: () => {},
+    refineConfidence: () => null,
+    refineBeats: () => ({
+      beatConfidence: 0.9,
+      beatModelChecked: true,
+      beatModelAgreement: 0.01,
+      downbeats: [1, 3, 5, 7, 9]
+    }),
+    createModelHost: () => ({ track: async () => null, stop: () => {} })
+  });
+
+  try {
+    const audio = tone();
+    const result = await ipc.invoke('audio-analysis:analyze', {
+      trackId: 'final-grid',
+      samples: audio.samples,
+      sampleRate: audio.sampleRate,
+      duration: audio.duration,
+      priority: 1,
+      beatWindows: [{ samples: new Float32Array(22050), sampleRate: 22050, offsetSeconds: 0 }]
+    });
+
+    assert.deepEqual(result.timing.downbeats, [1, 3, 5, 7, 9]);
+    assert.deepEqual(
+      result.boundaries
+        .filter((boundary) => boundary.source === 'rhythmic-fallback')
+        .map((boundary) => boundary.time),
+      [1, 9]
+    );
+  } finally {
+    await service.stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('a declined model still stamps beatModelChecked so the track is not re-analysed forever', async () => {
   // `beatModelChecked` records that the pass ran, not that it produced a
   // verdict -- exactly like `essentiaChecked`. Without the stamp the renderer's
   // cache gate would re-decode and re-analyse the track on every play.
   const directory = await mkdtemp(path.join(tmpdir(), 'orchard-analysis-'));
-  const nativeModulePath = path.resolve('native/build/Release/orchard_audio_analysis.node');
+  const nativeModulePath = path.resolve('native-audio-rust/index.cjs');
   const ipc = fakeIpcMain();
   const service = setupAudioAnalysisService({
     cachePath: path.join(directory, 'cache.json'),

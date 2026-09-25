@@ -22,7 +22,9 @@
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
+import { setupQobuzElectron } from '@orchardmusic/qobuz/electron';
 import { Platform } from 'youtubei.js';
+import { registerArtworkColorSampler } from '../appearance/artworkColorSampler.js';
 import { createAccountSummary } from '../auth/accountSummary.js';
 import { createAuthService } from '../auth/authService.js';
 import { createBrowserMusicApi } from '../auth/browserMusicApi.js';
@@ -65,18 +67,20 @@ import { createSearchUtils } from '../catalog/searchUtils.js';
 import { createSubscribedArtistsService } from '../catalog/subscribedArtists.js';
 import { createYouTubeHistoryService } from '../catalog/youtubeHistory.js';
 import { createYouTubeLikesService } from '../catalog/youtubeLikes.js';
-import { setupMigrationNotice } from '../integrations/migrationNotice.js';
 import { setupOrchardUpdates } from '../integrations/updater.js';
 import { createPreferredAudioTrack, createTrackInfoNormalizer } from '../playback/playbackFormats.js';
 import { createMusicVideoFallback } from '../playback/musicVideoFallback.js';
 import { createPlaybackService } from '../playback/playbackService.js';
+import { createPlaybackProviderCoordinator } from '../providers/playbackProvider.js';
 import { registerAppHandlers } from '../platform/appHandlers.js';
 import { registerClipboardHandlers } from '../platform/clipboard.js';
 import { registerNetworkPreferences } from '../platform/networkPreferences.js';
 import { setupDesktopControls } from '../platform/desktopControls.js';
 import { registerScreenshotCapture } from '../platform/screenshotCapture.js';
 import { setupSystemMediaHandlers } from '../platform/systemMedia.js';
+import { ORCHARD_APP_USER_MODEL_ID, setWindowsAppDetails } from '../platform/windowsAppIdentity.js';
 import { setWelcomeCompleted, welcomeRequiredAtLaunch } from '../platform/welcomeState.js';
+import { welcomeWindowBounds } from '../platform/welcomeWindowBounds.js';
 import { configureWindowOpenHandler, registerDevToolsShortcut, registerWindowControls } from '../platform/windowControls.js';
 import { createGraphicsModeController, GRAPHICS_MODE_FILENAME } from './graphicsMode.js';
 import { createSessionStateStore, SESSION_STATE_FILENAME } from './sessionState.js';
@@ -90,6 +94,7 @@ installInnertubeParserErrorHandler();
 const require = createRequire(import.meta.url);
 const windowStateKeeper = require('electron-window-state');
 const { app, BrowserWindow, Menu, Tray, clipboard, globalShortcut, ipcMain, nativeImage, net, safeStorage, screen, session, shell } = require('electron');
+if (process.platform === 'win32') app.setAppUserModelId(ORCHARD_APP_USER_MODEL_ID);
 const isDev = !app.isPackaged && Boolean(process.env.VITE_DEV_SERVER_URL);
 const isNiriSession = process.platform === 'linux' && (
   Boolean(process.env.NIRI_SOCKET) || /(?:^|:)niri(?:$|:)/i.test(process.env.XDG_CURRENT_DESKTOP || '')
@@ -117,12 +122,13 @@ let audioAnalysis;
 let updates;
 let systemMedia;
 let desktopControls;
+let playbackProviders;
 let welcomeCompleted = false;
 // Distinguishes "user closed the window" (which may mean hide-to-tray) from a
 // real quit, where the close must be allowed through.
 let quitting = false;
 
-const { appIconPath } = runtimePaths;
+const { appIconPath, taskbarIconPath } = runtimePaths;
 const useNativeTitlebar = false;
 const youtubeMusicOrigin = 'https://music.youtube.com';
 const youtubeWebOrigin = 'https://www.youtube.com';
@@ -357,6 +363,7 @@ async function startBridge() {
     normalizeTrackInfo,
     personalizedRadio,
     playback: playbackService,
+    playbackProviders,
     preferredAudioTrack,
     proxyHlsResource,
     proxyStream,
@@ -386,11 +393,13 @@ async function startBridge() {
 
 function rendererUrl(mode = 'main') {
   const url = isDev
-    ? new URL(process.env.VITE_DEV_SERVER_URL)
-    : pathToFileURL(runtimePaths.rendererEntryPath);
+    ? new URL(mode === 'welcome' ? 'welcome.html' : '', process.env.VITE_DEV_SERVER_URL)
+    : pathToFileURL(mode === 'welcome'
+      ? path.join(path.dirname(runtimePaths.rendererEntryPath), 'welcome.html')
+      : runtimePaths.rendererEntryPath);
   url.searchParams.set('socketPort', bridge.port);
+  url.searchParams.set('rendererToken', bridge.rendererToken);
   if (useNativeTitlebar) url.searchParams.set('nativeTitlebar', '1');
-  if (mode === 'welcome') url.searchParams.set('welcome', '1');
   return url.toString();
 }
 
@@ -448,6 +457,7 @@ async function createMainWindow() {
       sandbox: true
     }
   });
+  setWindowsAppDetails(mainWindow, { appIconPath: taskbarIconPath, appPath: app.getAppPath() });
 
   // Niri is authoritative for tiled geometry. electron-window-state restoring or
   // recording bounds fights the compositor and produces visible edge oscillation.
@@ -474,11 +484,9 @@ async function createMainWindow() {
 }
 
 async function createWelcomeWindow() {
+  const bounds = welcomeWindowBounds(screen.getPrimaryDisplay().workAreaSize);
   welcomeWindow = new BrowserWindow({
-    width: 880,
-    height: 720,
-    minWidth: 720,
-    minHeight: 620,
+    ...bounds,
     autoHideMenuBar: true,
     frame: useNativeTitlebar,
     show: false,
@@ -492,6 +500,7 @@ async function createWelcomeWindow() {
       sandbox: true
     }
   });
+  setWindowsAppDetails(welcomeWindow, { appIconPath: taskbarIconPath, appPath: app.getAppPath() });
 
   configureWindowOpenHandler(welcomeWindow, shell);
   if (allowDevTools) registerDevToolsShortcut(welcomeWindow);
@@ -521,6 +530,7 @@ app.whenReady().then(async () => {
   });
   registerWindowControls({ BrowserWindow, ipcMain, screen });
   registerClipboardHandlers({ clipboard, ipcMain });
+  registerArtworkColorSampler({ ipcMain, net });
   // Awaited here so the stored proxy mode is in force before any window requests
   // its first image; applying it later would leave the opening screen's artwork
   // going out through the proxy the listener asked Orchard to ignore.
@@ -552,22 +562,31 @@ app.whenReady().then(async () => {
     resetWelcome: () => setWelcomeCompleted(sessionState, false)
   });
   audioAnalysis = setupAudioAnalysisService({
-    cachePath: path.join(app.getPath('userData'), 'audio-analysis-cache.json'),
+    cachePath: path.join(app.getPath('userData'), 'audio-analysis-cache.sqlite3'),
+    legacyCachePath: path.join(app.getPath('userData'), 'audio-analysis-cache.json'),
     ipcMain,
     nativeModulePath: runtimePaths.nativeModulePath,
+    transitionModulePath: runtimePaths.transitionModulePath,
     beatModelPath: runtimePaths.beatModelPath,
     vocalModelPath: runtimePaths.vocalModelPath
   });
   registerScreenshotCapture({ BrowserWindow, ipcMain });
   systemMedia = setupSystemMediaHandlers({ ipcMain, app, getWindow: () => mainWindow });
-  setupMigrationNotice({
-    ipcMain,
-    shell,
-    fetchImpl: (url, options) => net.fetch(url, options)
-  });
   setupGithubAuth({ app, ipcMain, net, safeStorage, shell });
   setupLastfm({ app, ipcMain, net, safeStorage, shell });
   setupSpotify({ app, ipcMain, net, safeStorage });
+  const qobuz = setupQobuzElectron({
+    app,
+    applicationName: 'Orchard',
+    BrowserWindow,
+    ipcChannels: IPC_CHANNELS.QOBUZ,
+    ipcMain,
+    net,
+    partition: 'persist:orchard-qobuz',
+    safeStorage,
+    session
+  });
+  playbackProviders = createPlaybackProviderCoordinator({ providers: [qobuz] });
   updates = setupOrchardUpdates({ isDev });
   await startBridge();
   await createMainWindow();
@@ -605,5 +624,6 @@ app.on('before-quit', () => {
   resetDiscordRpcClient();
   systemMedia?.stop();
   desktopControls?.stop();
+  void playbackProviders?.close();
   bridge?.close();
 });

@@ -19,6 +19,7 @@
 
 import { nextTick, onBeforeUnmount, onMounted, watch } from 'vue';
 import { io } from 'socket.io-client';
+import { bindSettingsStorageSync } from './settingsStorageSync.js';
 
 export function disableCrossfadePlayback(ctx) {
   ctx.stopCrossfadeClock();
@@ -33,6 +34,18 @@ export function disableCrossfadePlayback(ctx) {
 }
 
 export function installLifecycle(ctx) {
+  const refreshHomeAfterReconnect = () => {
+    ctx.networkOffline.value = false;
+    if (ctx.authState.value.signedIn) void ctx.loadHomeLibrary();
+  };
+  const showOfflineHome = () => {
+    ctx.networkOffline.value = true;
+    if (ctx.activeView.value === 'home') {
+      ctx.errorMessage.value = '';
+      ctx.warningMessage.value = 'Orchard is offline. Showing downloaded music.';
+    }
+  };
+
   watch(ctx.volume, (value) => {
     ctx.autoCrossfade.setTargetVolume(value);
     ctx.wsolaCrossfade?.setTargetVolume?.(value);
@@ -93,6 +106,15 @@ export function installLifecycle(ctx) {
     ctx.loadDetailEnhancedArtwork(ctx.browseDetail.value);
   }, { immediate: true });
 
+  // Cached artwork entries were shaped by whatever the switch said when they
+  // were fetched, so both directions need a re-lookup: turning motion off has to
+  // drop covers already playing, and turning it back on has to go get them.
+  watch(ctx.animatedArtworkEnabled, () => {
+    ctx.artworkCache.clear();
+    ctx.loadEnhancedArtwork(ctx.activeTrack.value);
+    ctx.loadDetailEnhancedArtwork(ctx.browseDetail.value);
+  });
+
   watch(() => ctx.playlistArtworkCollageLookupKey(ctx.browseDetail.value), () => {
     ctx.loadPlaylistArtworkCollage(ctx.browseDetail.value);
   }, { immediate: true });
@@ -138,6 +160,7 @@ export function installLifecycle(ctx) {
     ctx.crossfadeMode,
     ctx.crossfadeSeconds,
     ctx.customArtistPagesEnabled,
+    ctx.fullscreenLyricsVisible,
     ctx.customAccentColor,
     ctx.youtubeHistoryEnabled,
     ctx.discordRpcEnabled,
@@ -145,13 +168,21 @@ export function installLifecycle(ctx) {
     ctx.immersiveBackgroundsEnabled,
     ctx.immersiveBackgroundIntensity,
     ctx.immersiveBackgroundMotion,
+    ctx.homeSectionOrder,
+    ctx.hiddenHomeSectionIds,
+    ctx.sidebarItemOrder,
+    ctx.hiddenSidebarItemIds,
     ctx.layoutPreset,
+    ctx.keepOldVersions,
     ctx.uiScale,
     ctx.playbackStatePersistenceEnabled,
     ctx.queueLayout,
     ctx.songCacheEnabled,
     ctx.songCacheMaxSizeMb,
     ctx.sponsorBlockMode,
+    ctx.streamQuality,
+    ctx.videoPlaybackEnabled,
+    ctx.animatedArtworkEnabled,
     ctx.volumeNormalizationEnabled,
     ctx.repeatMode,
     ctx.shuffleEnabled,
@@ -182,6 +213,7 @@ export function installLifecycle(ctx) {
       crossfadeMode: ctx.crossfadeMode.value,
       crossfadeSeconds: ctx.crossfadeSeconds.value,
       customArtistPagesEnabled: ctx.customArtistPagesEnabled.value,
+      fullscreenLyricsVisible: ctx.fullscreenLyricsVisible.value,
       customAccentColor: ctx.customAccentColor.value,
       youtubeHistoryEnabled: ctx.youtubeHistoryEnabled.value,
       discordRpcEnabled: ctx.discordRpcEnabled.value,
@@ -189,13 +221,21 @@ export function installLifecycle(ctx) {
       immersiveBackgroundsEnabled: ctx.immersiveBackgroundsEnabled.value,
       immersiveBackgroundIntensity: ctx.immersiveBackgroundIntensity.value,
       immersiveBackgroundMotion: ctx.immersiveBackgroundMotion.value,
+      homeSectionOrder: ctx.homeSectionOrder.value,
+      hiddenHomeSectionIds: ctx.hiddenHomeSectionIds.value,
+      sidebarItemOrder: ctx.sidebarItemOrder.value,
+      hiddenSidebarItemIds: ctx.hiddenSidebarItemIds.value,
       layoutPreset: ctx.layoutPreset.value,
+      keepOldVersions: ctx.keepOldVersions.value,
       uiScale: ctx.uiScale.value,
       playbackStatePersistenceEnabled: ctx.playbackStatePersistenceEnabled.value,
       queueLayout: ctx.queueLayout.value,
       songCacheEnabled: ctx.songCacheEnabled.value,
       songCacheMaxSizeMb: ctx.songCacheMaxSizeMb.value,
       sponsorBlockMode: ctx.sponsorBlockMode.value,
+      streamQuality: ctx.streamQuality.value,
+      videoPlaybackEnabled: ctx.videoPlaybackEnabled.value,
+      animatedArtworkEnabled: ctx.animatedArtworkEnabled.value,
       volumeNormalizationEnabled: ctx.volumeNormalizationEnabled.value,
       repeatMode: ctx.repeatMode.value,
       shuffleEnabled: ctx.shuffleEnabled.value,
@@ -407,15 +447,17 @@ export function installLifecycle(ctx) {
 
   onMounted(() => {
     ctx.syncViewportSize();
+    ctx.unbindSettingsStorageSync = bindSettingsStorageSync(ctx, window, window.orchardApp);
     ctx.bindSystemThemePreference();
     window.addEventListener('resize', ctx.syncViewportSize);
+    window.addEventListener('online', refreshHomeAfterReconnect);
+    window.addEventListener('offline', showOfflineHome);
     document.addEventListener('fullscreenchange', ctx.onFullscreenPlayerChange);
     ctx.registerMediaSessionHandlers();
     window.addEventListener('keydown', ctx.onGlobalKeydown);
     ctx.applyMediaSessionMetadata();
     ctx.updateMediaSessionPlaybackState();
     ctx.updateMediaSessionPositionState();
-    void ctx.loadMigrationNotice();
     void ctx.loadProxyMode();
     void ctx.bindUpdateEvents().then((bound) => {
       if (bound && new URLSearchParams(window.location.search).get('welcome') !== '1') {
@@ -432,6 +474,7 @@ export function installLifecycle(ctx) {
     }
 
     ctx.socket.value = io(`http://127.0.0.1:${ctx.socketPort()}`, {
+      auth: { rendererToken: ctx.rendererToken() },
       transports: ['websocket']
     });
 
@@ -499,8 +542,11 @@ export function installLifecycle(ctx) {
     ctx.clearDesktopControls();
     ctx.stopSupportPolling();
     ctx.clearMediaSessionHandlers();
+    ctx.unbindSettingsStorageSync?.();
     window.removeEventListener('keydown', ctx.onGlobalKeydown);
     window.removeEventListener('resize', ctx.syncViewportSize);
+    window.removeEventListener('online', refreshHomeAfterReconnect);
+    window.removeEventListener('offline', showOfflineHome);
     window.removeEventListener('focus', ctx.refreshSupportOnFocus);
     document.removeEventListener('fullscreenchange', ctx.onFullscreenPlayerChange);
     ctx.socket.value?.disconnect();

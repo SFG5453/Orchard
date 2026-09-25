@@ -44,6 +44,8 @@ export default {
             },
             browseDetail?.customLayout ? `detail-page--layout-${browseDetail.customLayout}` : ''
           ]"
+          :style="albumPageStyle"
+          :data-album-palette-source="browseDetail?.kind === 'album' ? albumPaletteSource : null"
         >
           <div v-if="browseLoading && !browseDetail" class="empty-state">Loading collection…</div>
 
@@ -59,6 +61,13 @@ export default {
               }"
               :style="detailHeroBackdrop"
             >
+              <div
+                v-if="browseDetail.kind === 'album' && detailArtworkVideo"
+                ref="albumVideoAmbientHostRef"
+                class="album-hero-video-ambient"
+                aria-hidden="true"
+              />
+
               <div
                 v-if="customArtistAlbumWallTiles.length"
                 class="custom-artist-album-wall"
@@ -110,14 +119,18 @@ export default {
                   ref="detailArtworkVideoRef"
                   :key="detailArtworkVideo"
                   class="detail-art detail-art--video"
+                  :class="{ 'detail-art--album-video': browseDetail.kind === 'album' }"
                   :src="detailArtworkVideo"
-                  :poster="detailArtworkImage"
+                  :poster="browseDetail.kind === 'album' ? albumHeroArtworkImage : detailArtworkImage"
+                  :crossorigin="browseDetail.kind === 'album' ? 'anonymous' : null"
                   autoplay
                   muted
                   loop
                   playsinline
                   preload="auto"
-                  @canplay="playDetailArtworkVideo"
+                  @canplay="onDetailArtworkVideoCanPlay"
+                  @loadeddata="sampleAlbumArtworkVideoFrame($event, true)"
+                  @timeupdate="sampleAlbumArtworkVideoFrame"
                   @pause="keepDetailArtworkVideoPlaying"
                   @ended="restartDetailArtworkVideo"
                   @stalled="keepDetailArtworkVideoPlaying"
@@ -126,7 +139,7 @@ export default {
                 />
                 <q-img
                   v-else-if="detailArtworkImage"
-                  :src="detailArtworkImage"
+                  :src="browseDetail.kind === 'album' ? albumHeroArtworkImage : detailArtworkImage"
                   class="detail-art"
                   :class="{ 'custom-artist-page-art__image': isCustomArtistPage }"
                 />
@@ -137,7 +150,12 @@ export default {
 
               <div class="detail-hero__copy">
                 <div v-if="browseDetail.kind !== 'artist'" class="detail-collection-type">
-                  {{ browseDetail.kind === 'album' ? albumTypeLabel(browseDetail) : browseDetail.kind === 'podcast' ? 'Podcast' : 'Playlist' }}
+                  <template v-if="browseDetail.kind === 'album'">
+                    <span>{{ albumHeroTypeLabel }}</span>
+                    <span v-if="albumHeroYearLabel" class="detail-collection-type__separator">•</span>
+                    <span v-if="albumHeroYearLabel">{{ albumHeroYearLabel }}</span>
+                  </template>
+                  <template v-else>{{ browseDetail.kind === 'podcast' ? 'Podcast' : 'Playlist' }}</template>
                 </div>
                 <div class="detail-title-line">
                   <h2>{{ browseDetail.title }}</h2>
@@ -165,19 +183,14 @@ export default {
                     <template v-else>{{ segment.text }}</template>
                   </template>
                 </div>
-                <div v-if="(browseDetail.kind === 'album' ? (browseDetail.releaseDateText || browseDetail.year) : (browseDetail.itemCount || browseDetail.year || browseDetail.totalDuration || browseDetail.views)) || browseDetail.hasEasterEgg" class="detail-meta">
-                  <template v-if="browseDetail.kind === 'album'">
-                    <span>{{ browseDetail.releaseDateText || browseDetail.year }}</span>
-                  </template>
-                  <template v-else>
-                    <span v-if="browseDetail.itemCount">{{ browseDetail.itemCount }}</span>
-                    <span v-if="browseDetail.year">{{ browseDetail.year }}</span>
-                    <span v-if="browseDetail.totalDuration">{{ browseDetail.totalDuration }}</span>
-                    <span v-if="browseDetail.views">{{ browseDetail.views }}</span>
-                    <span v-if="browseDetail.hasEasterEgg" class="easter-egg-indicator" :title="`Type ${browseDetail.easterEggKeys?.join(' ')}`">
-                      <q-icon name="keyboard" /> Type {{ browseDetail.easterEggKeys?.join(' ') }}
-                    </span>
-                  </template>
+                <div v-if="browseDetail.kind !== 'album' && ((browseDetail.itemCount || browseDetail.year || browseDetail.totalDuration || browseDetail.views) || browseDetail.hasEasterEgg)" class="detail-meta">
+                  <span v-if="browseDetail.itemCount">{{ browseDetail.itemCount }}</span>
+                  <span v-if="browseDetail.year">{{ browseDetail.year }}</span>
+                  <span v-if="browseDetail.totalDuration">{{ browseDetail.totalDuration }}</span>
+                  <span v-if="browseDetail.views">{{ browseDetail.views }}</span>
+                  <span v-if="browseDetail.hasEasterEgg" class="easter-egg-indicator" :title="`Type ${browseDetail.easterEggKeys?.join(' ')}`">
+                    <q-icon name="keyboard" /> Type {{ browseDetail.easterEggKeys?.join(' ') }}
+                  </span>
                 </div>
                 <p
                   v-if="browseDetail.description && browseDetail.kind !== 'artist'"
@@ -192,7 +205,7 @@ export default {
                   v-if="canOpenDescription"
                   type="button"
                   class="detail-description-trigger"
-                  :aria-label="`Read full description for ${browseDetail.title}`"
+                  :aria-label="`${descriptionActionLabel} for ${browseDetail.title}`"
                   @click="openDescriptionDialog"
                 >
                   <q-icon name="open_in_full" />
@@ -200,35 +213,76 @@ export default {
                 </button>
                 <div class="detail-actions">
                   <div class="detail-actions__primary">
-                    <button type="button" class="action-button action-button--primary" @click="playCollection(browseDetail)">
+                    <button
+                      type="button"
+                      class="action-button action-button--primary action-button--play"
+                      :aria-label="`Play ${browseDetail.title}`"
+                      @click="playCollection(browseDetail)"
+                    >
                       <q-icon name="play_arrow" />
                       <span>Play</span>
                     </button>
-                    <button type="button" class="action-button" @click="playCollection(browseDetail, { shuffle: true })">
+                    <button
+                      type="button"
+                      class="action-button action-button--round action-button--shuffle"
+                      :aria-label="`Shuffle ${browseDetail.title}`"
+                      @click="playCollection(browseDetail, { shuffle: true })"
+                    >
                       <q-icon name="shuffle" />
                       <span>Shuffle</span>
                     </button>
                     <button
+                      v-if="['album', 'artist', 'playlist'].includes(browseDetail.kind)"
+                      type="button"
+                      class="action-button action-button--round action-button--download"
+                      :disabled="isCollectionDownloading(browseDetail) || !browseDetail.tracks.length"
+                      :aria-pressed="isCollectionDownloaded(browseDetail)"
+                      :aria-label="`${isCollectionDownloading(browseDetail) ? 'Downloading' : isCollectionDownloaded(browseDetail) ? 'Remove download for' : 'Download'} ${browseDetail.title}`"
+                      @click="toggleCollectionDownload(browseDetail)"
+                    >
+                      <q-icon :name="isCollectionDownloading(browseDetail) ? 'downloading' : isCollectionDownloaded(browseDetail) ? 'download_done' : 'download'" />
+                      <span>{{ isCollectionDownloading(browseDetail) ? 'Downloading…' : isCollectionDownloaded(browseDetail) ? 'Remove Download' : 'Download' }}</span>
+                    </button>
+                    <button
                       v-if="browseDetail.kind === 'playlist' || browseDetail.kind === 'album'"
                       type="button"
-                      class="action-button action-button--sync"
-                      :disabled="isAnalyzingPlaylist"
-                      title="Analyze tracks and sync audio features to Cloud for instant mobile Best Mix"
+                      class="action-button action-button--sync action-button--best-mix"
+                      :class="{ 'action-button--round': browseDetail.kind === 'album' }"
+                      :disabled="isAnalyzingPlaylist || isCollectionDownloading(browseDetail)"
+                      :title="isAnalyzingPlaylist ? `Analyzing: ${Math.round(playlistAnalysisProgress * 100)}%` : browseDetail.kind === 'album' ? 'Best mix' : 'Download the collection and analyze it locally for Best Mix'"
+                      :aria-label="browseDetail.kind === 'album' ? 'Best mix' : 'Prepare Best Mix'"
                       @click="analyzeCurrentCollection(browseDetail)"
                     >
-                      <q-icon :name="isAnalyzingPlaylist ? 'sync' : 'auto_graph'" :class="{ 'spin-animation': isAnalyzingPlaylist }" />
-                      <span>{{ isAnalyzingPlaylist ? `${Math.round(playlistAnalysisProgress * 100)}%` : 'Analyze for Cloud Sync' }}</span>
+                      <q-icon :name="isAnalyzingPlaylist ? 'sync' : 'auto_awesome'" :class="{ 'spin-animation': isAnalyzingPlaylist }" />
+                      <span>{{ isAnalyzingPlaylist ? `${Math.round(playlistAnalysisProgress * 100)}%` : browseDetail.kind === 'album' ? 'Best mix' : 'Prepare Best Mix' }}</span>
                     </button>
-                    <button type="button" class="action-button" @click="shareBrowseDetailLink">
+                    <button
+                      v-if="browseDetail.kind === 'album'"
+                      type="button"
+                      class="action-button action-button--round action-button--share"
+                      :aria-label="`More actions for ${browseDetail.title}`"
+                      @click="openCollectionActionMenu(browseDetail, $event, browseDetail.tracks)"
+                    >
+                      <q-icon name="more_horiz" />
+                      <span>More</span>
+                    </button>
+                    <button
+                      v-else
+                      type="button"
+                      class="action-button action-button--round action-button--share"
+                      :aria-label="`Share ${browseDetail.title}`"
+                      @click="shareBrowseDetailLink"
+                    >
                       <q-icon name="ios_share" />
                       <span>Share</span>
                     </button>
                     <button
-                      v-if="browseDetail.kind === 'artist'"
+                      v-if="browseDetail.kind === 'artist' && !browseDetail.offline"
                       type="button"
                       class="action-button"
                       :disabled="artistSubscription.status === 'loading' || artistSubscription.status === 'saving'"
                       :aria-pressed="artistSubscription.subscribed"
+                      :aria-label="`${artistSubscription.subscribed ? 'Unsubscribe from' : 'Subscribe to'} ${browseDetail.title}`"
                       @click="toggleArtistSubscription(browseDetail)"
                     >
                       <q-icon :name="artistSubscription.subscribed ? 'notifications_off' : 'person_add'" />
@@ -244,8 +298,8 @@ export default {
                       <span>Delete</span>
                     </button>
                   </div>
-                  <div v-if="playlistAnalysisStatus" class="detail-actions__status">
-                    <span class="analysis-status-text">{{ playlistAnalysisStatus }}</span>
+                  <div v-if="playlistAnalysisStatus || isCollectionDownloading(browseDetail)" class="detail-actions__status">
+                    <span class="analysis-status-text">{{ playlistAnalysisStatus || downloadMessage }}</span>
                     <button v-if="isAnalyzingPlaylist" type="button" class="analysis-cancel-button" @click="cancelPlaylistAnalysis">
                       Cancel
                     </button>
@@ -276,6 +330,40 @@ export default {
               </q-card>
             </q-dialog>
 
+            <q-dialog v-model="bestMixPromptOpen" aria-label="Best Mix offline analysis">
+              <q-card class="description-dialog-card best-mix-download-dialog">
+                <div class="description-dialog__header">
+                  <h3><q-icon name="auto_awesome" /> Best Mix Offline Analysis</h3>
+                  <button
+                    type="button"
+                    class="description-dialog__close"
+                    aria-label="Cancel Best Mix analysis"
+                    @click="bestMixPromptOpen = false"
+                  >
+                    <q-icon name="close" />
+                  </button>
+                </div>
+                <div class="description-dialog__body best-mix-download-dialog__body">
+                  <p>Best Mix analyzes harmonic keys, tempo, and cue points locally to arrange your music seamlessly.</p>
+                  <strong>
+                    Downloading {{ bestMixUndownloadedTracks.length }}
+                    {{ bestMixUndownloadedTracks.length === 1 ? 'song' : 'songs' }} could take up to
+                    ~{{ bestMixEstimatedDownloadMb }} MB of storage.
+                  </strong>
+                  <div class="best-mix-download-dialog__actions">
+                    <button type="button" @click="bestMixPromptOpen = false">Cancel</button>
+                    <button
+                      type="button"
+                      class="best-mix-download-dialog__confirm"
+                      @click="runBestMixAnalysis(bestMixPromptDetail)"
+                    >
+                      Download &amp; Analyze
+                    </button>
+                  </div>
+                </div>
+              </q-card>
+            </q-dialog>
+
             <section
               class="table-card"
               :class="{
@@ -291,9 +379,12 @@ export default {
               <div class="table-head" :class="{ 'table-head--with-album': !['album', 'podcast'].includes(browseDetail.kind) }">
                 <span>#</span>
                 <span>Title</span>
-                <span v-if="!['album', 'podcast'].includes(browseDetail.kind)">Artist</span>
+                <span v-if="browseDetail.kind === 'album' || !['album', 'podcast'].includes(browseDetail.kind)">Artist</span>
                 <span v-if="!['album', 'podcast'].includes(browseDetail.kind)">Album</span>
-                <span>Time</span>
+                <span class="table-time-heading">
+                  <q-icon v-if="browseDetail.kind === 'album'" name="schedule" />
+                  <template v-else>Time</template>
+                </span>
                 <span />
               </div>
 
@@ -337,11 +428,12 @@ export default {
                     <span class="explicit-title">
                       <strong @contextmenu="shareTrackSongLink(track, $event, browseDetail)">{{ track.title }}</strong>
                       <ExplicitBadge :explicit="track.explicit" />
+                      <DownloadIndicator :downloaded="isTrackDownloaded(track)" :downloading="isTrackDownloading(track)" />
                     </span>
                     <small>{{ itemMeta(track, browseDetail.artist) }}</small>
                   </span>
                 </span>
-                <span v-if="!['album', 'podcast'].includes(browseDetail.kind)" class="table-artist">
+                <span v-if="browseDetail.kind === 'album' || !['album', 'podcast'].includes(browseDetail.kind)" class="table-artist">
                   <template v-if="trackArtistLinks(track, browseDetail).length">
                     <template
                       v-for="(artist, artistIndex) in trackArtistLinks(track, browseDetail)"

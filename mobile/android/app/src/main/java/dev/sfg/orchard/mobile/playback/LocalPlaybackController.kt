@@ -21,6 +21,7 @@ package dev.sfg.orchard.mobile.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Bundle
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.media3.common.C
@@ -50,6 +51,9 @@ class LocalPlaybackController(
 ) : AutoCloseable {
     private val mutableSnapshot = MutableStateFlow(PlaybackSnapshot(status = PlaybackStatus.LOADING))
     val snapshot: StateFlow<PlaybackSnapshot> = mutableSnapshot.asStateFlow()
+    private val mutablePlayer = MutableStateFlow<Player?>(null)
+    /** The session-backed player a PlayerView can attach to; null until the service connects. */
+    val player: StateFlow<Player?> = mutablePlayer.asStateFlow()
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
     private var progressJob: Job? = null
@@ -104,6 +108,27 @@ class LocalPlaybackController(
         player.replaceMediaItem(index, MediaItemMapper.toMediaItem(track))
     }
 
+    /** Repairs a restored/current version in place without sending the listener back to zero. */
+    fun replaceCurrent(expectedId: String, track: Track) = withController { player ->
+        val index = player.currentMediaItemIndex
+        if (index !in 0 until player.mediaItemCount) return@withController
+        val current = player.getMediaItemAt(index)
+        if (current.mediaId != expectedId) return@withController
+        val position = player.currentPosition.coerceAtLeast(0)
+        val videoId = current.localConfiguration?.uri
+            ?.takeIf(MediaItemMapper::isVideoUri)
+            ?.let(MediaItemMapper::sourceId)
+            .orEmpty()
+        player.replaceMediaItem(
+            index,
+            MediaItemMapper.toMediaItem(
+                track.copy(musicVideoId = track.musicVideoId.ifBlank { videoId }),
+                videoId,
+            ),
+        )
+        player.seekTo(index, position)
+    }
+
     fun playNext(track: Track) = withController { player ->
         val index = (player.currentMediaItemIndex + 1).coerceIn(0, player.mediaItemCount)
         player.addMediaItem(index, MediaItemMapper.toMediaItem(track))
@@ -117,6 +142,10 @@ class LocalPlaybackController(
     fun clearUpcoming() = withController {
         val from = it.currentMediaItemIndex + 1
         if (from in 0 until it.mediaItemCount) it.removeMediaItems(from, it.mediaItemCount)
+    }
+    fun clearQueue() = withController {
+        it.stop()
+        it.clearMediaItems()
     }
     fun playQueueIndex(index: Int) = withController {
         if (index in 0 until it.mediaItemCount) { it.seekToDefaultPosition(index); it.play() }
@@ -136,9 +165,40 @@ class LocalPlaybackController(
     fun previous() = withController {
         if (it.currentPosition > 5_000) it.seekTo(0) else if (it.hasPreviousMediaItem()) it.seekToPreviousMediaItem()
     }
-    fun seek(positionMs: Long) = withController { it.seekTo(positionMs.coerceAtLeast(0)) }
+    fun seek(positionMs: Long) = withController { player ->
+        val item = player.currentMediaItem ?: return@withController
+        // Restore the full source for explicit seeks, including seeks before a clipped intro.
+        if (player.isRenderedMix() || item.clippingConfiguration.startPositionMs > 0) {
+            player.replaceMediaItem(player.currentMediaItemIndex, MediaItemMapper.toMediaItem(MediaItemMapper.toTrack(item)))
+        }
+        player.seekTo(positionMs.coerceAtLeast(0))
+    }
+
+    /** Switches the current item between its audio and video source at the same position. */
+    fun setVideoMode(videoId: String?) = withController { player ->
+        val currentId = player.currentMediaItem?.mediaId ?: return@withController
+        clearError()
+        player.sendCustomCommand(
+            OrchardPlaybackService.COMMAND_SET_VIDEO_MODE,
+            Bundle().apply {
+                putString(OrchardPlaybackService.VIDEO_MODE_TRACK_ID, currentId)
+                putString(OrchardPlaybackService.VIDEO_MODE_VIDEO_ID, videoId.orEmpty())
+            },
+        )
+    }
+    fun setVolume(volume: Float) = withController { it.volume = volume.coerceIn(0.0f, 1.0f) }
     fun setShuffle(enabled: Boolean) = withController { it.shuffleModeEnabled = enabled }
-    fun replaceUpcoming(tracks: List<Track>) = withController { player ->
+    fun setRepeatMode(mode: RepeatMode) = withController {
+        it.repeatMode = when (mode) {
+            RepeatMode.OFF -> Player.REPEAT_MODE_OFF
+            RepeatMode.ALL -> Player.REPEAT_MODE_ALL
+            RepeatMode.ONE -> Player.REPEAT_MODE_ONE
+        }
+    }
+    fun replaceUpcoming(tracks: List<Track>, contextTitle: String? = null) = withController { player ->
+        if (contextTitle != null) {
+            player.setPlaylistMetadata(MediaMetadata.Builder().setTitle(contextTitle).build())
+        }
         val current = player.currentMediaItemIndex
         val total = player.mediaItemCount
         val from = (current + 1).coerceAtLeast(0)
@@ -167,6 +227,16 @@ class LocalPlaybackController(
      * from reinserting whatever became current while it was waiting.
      */
     fun appendUpcoming(tracks: List<Track>, totalLimit: Int) = withController { player ->
+        // Heal any duplicate generated rows already present before adding another refill. This is
+        // deliberately limited to upcoming Autoplay rows: duplicate songs explicitly placed in a
+        // playlist or queue remain literal user choices.
+        val before = (0 until player.mediaItemCount)
+            .map { MediaItemMapper.toTrack(player.getMediaItemAt(it)) }
+        AutoplayRecommendations.duplicateGeneratedIndices(before)
+            .asReversed()
+            .filter { it > player.currentMediaItemIndex }
+            .forEach(player::removeMediaItem)
+
         val existing = (0 until player.mediaItemCount)
             .map { MediaItemMapper.toTrack(player.getMediaItemAt(it)) }
         val upcoming = player.mediaItemCount - player.currentMediaItemIndex - 1
@@ -191,6 +261,7 @@ class LocalPlaybackController(
         controller?.removeListener(listener)
         controller?.release()
         controller = null
+        mutablePlayer.value = null
         controllerFuture?.cancel(true)
         pendingActions.clear()
     }
@@ -205,6 +276,7 @@ class LocalPlaybackController(
                 runCatching { future.get() }.onSuccess { connected ->
                     Log.d(TAG, "connect: MediaController connected successfully")
                     controller = connected
+                    mutablePlayer.value = connected
                     connected.addListener(listener)
                     while (pendingActions.isNotEmpty()) pendingActions.removeFirst()(connected)
                     publish(connected)
@@ -264,9 +336,7 @@ class LocalPlaybackController(
         val error = explicitError.ifBlank { lastError }
         // A restored queue is not prepared until playback starts, so the player reports no
         // duration. The catalog already knows it, which keeps the scrubber honest until then.
-        val duration = player.duration.takeUnless { it == C.TIME_UNSET }?.coerceAtLeast(0)
-            ?: current?.durationMs?.coerceAtLeast(0)
-            ?: 0
+        val duration = player.sourceDurationMs()
         mutableSnapshot.value = PlaybackSnapshot(
             status = when {
                 error.isNotBlank() -> PlaybackStatus.ERROR
@@ -279,10 +349,12 @@ class LocalPlaybackController(
             currentTrack = current,
             queue = queue,
             currentIndex = player.currentMediaItemIndex,
-            positionMs = player.currentPosition.coerceAtLeast(0),
+            positionMs = player.sourcePositionMs(),
+            renderedMixPositionMs = player.currentPosition.takeIf { player.isRenderedMix() },
             durationMs = duration,
-            bufferedPositionMs = player.bufferedPosition.coerceAtLeast(0),
+            bufferedPositionMs = player.sourceClock().sourcePosition(player.bufferedPosition),
             isPlaying = player.isPlaying,
+            volume = player.volume,
             shuffle = player.shuffleModeEnabled,
             repeatMode = when (player.repeatMode) {
                 Player.REPEAT_MODE_ONE -> RepeatMode.ONE
@@ -291,6 +363,7 @@ class LocalPlaybackController(
             },
             contextTitle = player.playlistMetadata.title?.toString().orEmpty(),
             errorMessage = error,
+            playingVideo = MediaItemMapper.isVideoUri(player.currentMediaItem?.localConfiguration?.uri),
         )
         syncProgress(player.isPlaying)
     }

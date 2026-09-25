@@ -19,8 +19,9 @@
 
 // Downloads the Beat This! ONNX beat/downbeat model.
 //
-// The model is 83 MB, so it is fetched rather than committed, and it is
-// optional at runtime: without it the analyzer falls back to its own
+// The desktop model is committed so release builds are self-contained. This
+// downloader remains as a reproducible recovery/update tool for the pinned
+// upstream artifact. Without the model, the analyzer falls back to its own
 // autocorrelation grid, which still tracks tempo and phase but reads downbeats
 // from bass-band onset strength rather than from a trained model.
 //

@@ -25,6 +25,7 @@ import okhttp3.OkHttpClient
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.stream.AudioStream
+import org.schabi.newpipe.extractor.stream.VideoStream
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.util.concurrent.TimeUnit
 
@@ -98,6 +99,44 @@ class NewPipeStreamResolver(
         Log.w(TAG, "NewPipe stream extraction failed for $videoId", it)
     }.getOrNull()
 
+    /** Extracts a progressive/muxed video so Media3 receives synchronized audio and video. */
+    fun resolveVideo(
+        videoId: String,
+        quality: AudioQuality = AudioQuality.HIGH,
+    ): ResolvedStream? = runCatching {
+        val extractor = ServiceList.YouTube.getStreamExtractor("https://www.youtube.com/watch?v=$videoId")
+        extractor.fetchPage()
+        val streams: List<VideoStream> = extractor.videoStreams.orEmpty()
+        val playable = streams.filter { !it.isVideoOnly() && it.content.isNotBlank() }
+        val selectedIndex = selectNewPipeVideoStreamIndex(
+            playable.map { it.height },
+            playable.map { runCatching { it.format?.mimeType }.getOrNull().orEmpty() },
+            quality,
+        ) ?: return null
+        val best = playable[selectedIndex]
+        val format = runCatching { best.format }.getOrNull()
+        val identity = YouTubeStreamRequestIdentity.fromUrl(
+            best.content,
+            YouTubeStreamRequestIdentity.WEB_USER_AGENT,
+        )
+        val contentLength = best.itagItem?.contentLength?.takeIf { it > 0L }
+            ?: best.content.toHttpUrlOrNull()?.queryParameter("clen")?.toLongOrNull()
+            ?: 0L
+        Log.d(TAG, "NewPipe resolved ${best.height}p ${format?.name ?: "video"} for $videoId")
+        ResolvedStream(
+            url = best.content,
+            mimeType = format?.mimeType ?: "video/mp4",
+            expiresAtMs = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(45),
+            userAgent = identity.userAgent,
+            contentLength = contentLength,
+            origin = identity.origin,
+            referer = identity.referer,
+            clientKey = identity.clientKey,
+        )
+    }.onFailure {
+        Log.w(TAG, "NewPipe video extraction failed for $videoId", it)
+    }.getOrNull()
+
     companion object {
         private const val TAG = "NewPipeStreamResolver"
         private val initLock = Any()
@@ -134,3 +173,25 @@ internal fun selectNewPipeStreamIndex(
 
 private const val NORMAL_MAX_KBPS = 140
 private const val HIGH_MAX_KBPS = 160
+
+/** Picks the best broadly compatible muxed format within the selected data tier. */
+internal fun selectNewPipeVideoStreamIndex(
+    heights: List<Int>,
+    mimeTypes: List<String>,
+    quality: AudioQuality,
+): Int? {
+    if (heights.isEmpty()) return null
+    val cap = when (quality) {
+        AudioQuality.DATA_SAVER -> 360
+        AudioQuality.NORMAL -> 480
+        AudioQuality.HIGH -> 720
+        AudioQuality.MAX -> 1080
+    }
+    val indices = heights.indices
+    val withinCap = indices.filter { heights[it] in 1..cap }
+    val candidates = withinCap.ifEmpty { indices.toList() }
+    return candidates.maxWithOrNull(
+        compareBy<Int> { if (mimeTypes.getOrNull(it)?.startsWith("video/mp4") == true) 1 else 0 }
+            .thenBy { heights[it] },
+    )
+}

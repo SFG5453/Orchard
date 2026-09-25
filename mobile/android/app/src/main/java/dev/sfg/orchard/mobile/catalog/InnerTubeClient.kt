@@ -28,6 +28,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import org.json.JSONArray
 
 /**
  * Narrow native boundary for YouTube Music's JSON catalog API.
@@ -55,6 +56,10 @@ class InnerTubeClient(
     fun searchSongs(query: String): JSONObject =
         post("search", JSONObject().put("query", query).put("params", SONGS_FILTER), anonymous = true)
 
+    /** Anonymous video-only search used to find the visual companion of an audio queue item. */
+    fun searchVideos(query: String): JSONObject =
+        post("search", JSONObject().put("query", query).put("params", VIDEOS_FILTER), anonymous = true)
+
     fun browse(browseId: String): JSONObject = post("browse", JSONObject().put("browseId", browseId))
 
     fun browsePayload(browseId: String, params: String = ""): JSONObject {
@@ -77,6 +82,23 @@ class InnerTubeClient(
             .put("playlistId", "RDAMVM$videoId")
             .put("isAudioOnly", true),
     )
+
+    /** Current queue row, whose byline contains every credited artist and browse id. */
+    fun trackInfo(videoId: String): JSONObject =
+        post("next", JSONObject().put("videoId", videoId))
+
+    /** Follows or unfollows an artist channel using the authenticated Music web session. */
+    fun setArtistSubscription(channelId: String, subscribed: Boolean) {
+        require(channelId.isNotBlank()) { "Artist channel ID is required." }
+        val endpoint = if (subscribed) "subscription/subscribe" else "subscription/unsubscribe"
+        val params = if (subscribed) "EgIIAhgA" else "CgIIAhgA"
+        post(
+            endpoint,
+            JSONObject()
+                .put("channelIds", JSONArray().put(channelId))
+                .put("params", params),
+        )
+    }
 
     fun browseContinuation(token: String): JSONObject =
         post("browse", JSONObject().put("continuation", token))
@@ -230,6 +252,8 @@ class InnerTubeClient(
     companion object {
         /** InnerTube search filter that restricts results to songs. */
         private const val SONGS_FILTER = "EgWKAQIIAWoKEAoQAxAEEAkQBQ%3D%3D"
+        /** InnerTube search filter that restricts results to music videos. */
+        private const val VIDEOS_FILTER = "EgWKAQIQAWoKEAoQAxAEEAkQBQ%3D%3D"
         private val JSON = "application/json; charset=utf-8".toMediaType()
         private val API_KEY = Regex("INNERTUBE_API_KEY(?:\\\"|&quot;)?\\s*:\\s*\\\"([^\\\"]+)")
         private val CLIENT_VERSION = Regex("INNERTUBE_CLIENT_VERSION(?:\\\"|&quot;)?\\s*:\\s*\\\"([^\\\"]+)")

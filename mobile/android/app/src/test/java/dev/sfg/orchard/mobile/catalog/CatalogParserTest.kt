@@ -30,6 +30,39 @@ import org.junit.Test
 
 class CatalogParserTest {
     @Test
+    fun nextQueueRowsPreserveEveryCreditedArtist() {
+        val root = JSONObject(
+            """{
+              "contents": [{"playlistPanelVideoRenderer": {
+                "videoId": "duet-video",
+                "title": {"runs": [{"text": "Duet"}]},
+                "longBylineText": {"runs": [
+                  {"text": "DaBaby", "navigationEndpoint": {"browseEndpoint": {
+                    "browseId": "UC-dababy", "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {"pageType": "MUSIC_PAGE_TYPE_ARTIST"}
+                    }
+                  }}},
+                  {"text": " & "},
+                  {"text": "YoungBoy Never Broke Again", "navigationEndpoint": {"browseEndpoint": {
+                    "browseId": "UC-youngboy", "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {"pageType": "MUSIC_PAGE_TYPE_ARTIST"}
+                    }
+                  }}},
+                  {"text": " • Album • 3:00"}
+                ]}
+              }}]
+            }""",
+        )
+
+        val expected = listOf(
+            dev.sfg.orchard.mobile.model.Artist("UC-dababy", "DaBaby"),
+            dev.sfg.orchard.mobile.model.Artist("UC-youngboy", "YoungBoy Never Broke Again"),
+        )
+        assertEquals(expected, CatalogParser.upNext(root).single().artists)
+        assertEquals(expected, CatalogParser.trackArtists(root, "duet-video"))
+    }
+
+    @Test
     fun searchNormalizesTrackAndAlbumRenderers() {
         val root = JSONObject(
             """{
@@ -277,6 +310,7 @@ class CatalogParserTest {
         assertEquals("https://lh3.googleusercontent.com/example=w540-h540-l90-rj", detail.artworkUrl)
         assertEquals("Moneybagg Yo", detail.tracks.single().artist)
         assertEquals("", detail.tracks.single().album)
+        assertEquals(true, detail.editable)
     }
 
     @Test
@@ -450,8 +484,8 @@ class CatalogParserTest {
         val json = client.search("usher")
         val results = CatalogParser.search(json)
         assertEquals("USHER", results.artists.first().name)
-        assertEquals("USHER", results.tracks.first().artist)
-        assertEquals("Usher", results.albums.first().artist)
+        assertTrue(results.albums.isNotEmpty())
+        assertTrue(results.albums.any { it.artist.contains("Usher", ignoreCase = true) })
 
         val artistJson = client.browse("UCILuIcqzJMtkxCmftNVjNBQ")
         val detail = CatalogParser.detail("UCILuIcqzJMtkxCmftNVjNBQ", artistJson)

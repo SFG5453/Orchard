@@ -33,10 +33,15 @@ data class PlaybackSnapshot(
     val durationMs: Long = 0,
     val bufferedPositionMs: Long = 0,
     val isPlaying: Boolean = false,
+    val volume: Float = 1.0f,
     val shuffle: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,
     val contextTitle: String = "",
     val errorMessage: String = "",
+    /** Decoder position in the temporary mix; all other times remain full-song times. */
+    val renderedMixPositionMs: Long? = null,
+    /** The current queue item is using its music-video source rather than album audio. */
+    val playingVideo: Boolean = false,
 ) {
     val history: List<Track>
         get() = if (currentIndex > 0) queue.take(currentIndex) else emptyList()
@@ -70,7 +75,7 @@ data class TransitionMarker(
      * outgoing bass until its separate handoff.
      */
     val audibleHandoffProgress: Float = 0.5f,
-    /** Duration of the rendered mix item, or zero when the transition uses the two live players. */
+    /** Selected transition duration in wall-clock time; zero for ordinary live fallbacks. */
     val renderedDurationMs: Long = 0,
 )
 
@@ -85,7 +90,13 @@ data class PlaybackDevice(
     val availability: DeviceAvailability,
     val isLocal: Boolean = false,
     val isActive: Boolean = false,
-)
+    val customName: String = "",
+    val serverUrl: String = "",
+    val lastSeenAt: Long = 0L,
+) {
+    val displayName: String
+        get() = customName.ifBlank { name }
+}
 
 sealed interface PlaybackTarget {
     data object LocalPhone : PlaybackTarget

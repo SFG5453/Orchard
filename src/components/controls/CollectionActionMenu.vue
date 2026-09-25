@@ -28,7 +28,7 @@ export default {
     const menuStyle = computed(() => {
       const menu = props.app.collectionActionMenu.value;
       const width = 248;
-      const height = 230;
+      const height = 280;
       const gutter = 12;
       return {
         left: `${Math.max(gutter, Math.min(menu.x, window.innerWidth - width - gutter))}px`,
@@ -93,6 +93,9 @@ export default {
           </button>
           <button type="button" role="menuitem" @click="runCollectionAction('shuffle')">
             <q-icon name="shuffle" /><span>Shuffle</span>
+          </button>
+          <button type="button" role="menuitem" @click="runCollectionAction('download')">
+            <q-icon name="download" /><span>Download</span>
           </button>
           <button type="button" role="menuitem" @click="runCollectionAction('share')">
             <q-icon name="ios_share" /><span>Share</span>

@@ -21,7 +21,7 @@
 import { computed } from 'vue';
 import CompactSettingsMenu from '../controls/CompactSettingsMenu.vue';
 import { createVolumeWheelHandler } from '../../app/playback/volumeWheel.js';
-import { bitrateLabel } from '../../app/playback/trackQuality.js';
+import { bitrateLabel, playbackQualityLabel } from '../../app/playback/trackQuality.js';
 
 /*
  * Canopy's titlebar. Unlike Grove, this bar owns the transport and the
@@ -64,6 +64,7 @@ export default {
       ...props.app,
       app: props.app,
       bitrateLabel,
+      playbackQualityLabel,
       handleListeningPartyClick,
       onVolumeWheel,
       outputDeviceLabel,
@@ -194,6 +195,9 @@ export default {
             <span v-if="bitrateLabel(activeTrack)" class="canopy-readout__bitrate">
               {{ bitrateLabel(activeTrack) }} kbps
             </span>
+            <span v-if="playbackQualityLabel(activeTrack)" class="canopy-readout__bitrate">
+              {{ playbackQualityLabel(activeTrack) }}
+            </span>
           </template>
           <span v-else>Choose a song to begin</span>
         </div>
@@ -283,6 +287,29 @@ export default {
         title="Fullscreen player"
         aria-label="Open fullscreen player"
         @click="openFullscreenPlayer"
+      />
+
+      <q-btn
+        flat
+        round
+        dense
+        icon="queue_music"
+        class="canopy-bar__button player-right-panel-button"
+        title="Queue"
+        aria-label="Open queue panel"
+        @click="openRightPanel('queue')"
+      />
+
+      <q-btn
+        flat
+        round
+        dense
+        icon="lyrics"
+        class="canopy-bar__button player-right-panel-button"
+        :disable="!activeTrack"
+        title="Lyrics"
+        aria-label="Open lyrics panel"
+        @click="openRightPanel('lyrics')"
       />
 
       <!-- Everything the bottom bar used to hold that does not earn a permanent slot. -->

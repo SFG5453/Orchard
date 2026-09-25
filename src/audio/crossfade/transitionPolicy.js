@@ -28,10 +28,14 @@
 // Every judgement here is made from stored analysis fields and their
 // confidences; nothing in this module touches PCM.
 
+import { PAIR_TRANSITION_POLICY } from './pairTransitionPlanner.js';
+
+export { PAIR_TRANSITION_POLICY };
+
 // Below this the analyzer's beat grid is treated as a guess, and no renderer
 // may stretch or phase-align against it. Catalog tempo lookups merge in with
 // beatConfidence 0, so a metadata BPM alone can never authorize beat-matching.
-export const MIN_BEATMATCH_CONFIDENCE = 0.55;
+export const MIN_BEATMATCH_CONFIDENCE = PAIR_TRANSITION_POLICY.minBeatmatchConfidence;
 
 // Below this on both tracks, even the DJ-assisted crossfade (beat-quantized
 // anchors, EQ handoff) is off the table and the mix degrades to a plain fade.
@@ -42,13 +46,13 @@ export const MIN_DJ_CONFIDENCE = 0.2;
 export const MIN_BPM = 40;
 export const MAX_BPM = 220;
 
-// Mirrors kMaxTransparentRatioDeviation in native/transition/wsola.h.
-export const MAX_STRETCH_DEVIATION = 0.04;
+// Shared with the Earmark transition policy through the canonical planner contract.
+export const MAX_STRETCH_DEVIATION = PAIR_TRANSITION_POLICY.maxStretchDeviation;
 
 // A vocal-activity mask value at or above this counts as singing. The JS
 // fallback analyzer emits a flat 0.5 mask, so unknown material never trips
 // vocal logic; only the native analyzer's real mask can.
-export const VOCAL_ACTIVE_THRESHOLD = 0.6;
+export const VOCAL_ACTIVE_THRESHOLD = PAIR_TRANSITION_POLICY.vocal.activeThreshold;
 
 export const TRANSITION_TIERS = ['beatmatched', 'dj_assisted', 'plain_crossfade'];
 

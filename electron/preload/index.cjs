@@ -54,7 +54,7 @@ contextBridge.exposeInMainWorld('orchardWindow', {
 contextBridge.exposeInMainWorld('orchardApp', {
   captureScreenshot: () => ipcRenderer.invoke('app:capture-screenshot'),
   diagnostics: () => ipcRenderer.invoke('app:diagnostics'),
-  finishWelcome: () => ipcRenderer.invoke('app:finish-welcome'),
+  finishWelcome: (settings = {}) => ipcRenderer.invoke('app:finish-welcome', settings),
   graphicsMode: (value) => value === undefined
     ? ipcRenderer.invoke('app:graphics-mode')
     : ipcRenderer.invoke('app:graphics-mode', value),
@@ -62,7 +62,41 @@ contextBridge.exposeInMainWorld('orchardApp', {
   showWelcome: (options = {}) => ipcRenderer.invoke('app:show-welcome', {
     resetCompletion: options?.resetCompletion === true
   }),
+  onSettingsSync: (listener) => {
+    if (typeof listener !== 'function') return () => {};
+    const handler = () => listener();
+    ipcRenderer.on('app:sync-settings', handler);
+    return () => ipcRenderer.removeListener('app:sync-settings', handler);
+  },
   viewLicense: () => ipcRenderer.invoke('app:view-license')
+});
+
+contextBridge.exposeInMainWorld('orchardArtwork', {
+  sampleColors: (artworkUrl) => ipcRenderer.invoke('artwork:sample-colors', String(artworkUrl || '').slice(0, 8192)),
+  sampleFrameColors: (frame = {}) => {
+    const width = Number(frame.width);
+    const height = Number(frame.height);
+    const source = frame.data;
+    if (
+      !Number.isInteger(width) ||
+      !Number.isInteger(height) ||
+      width < 1 ||
+      height < 1 ||
+      width > 256 ||
+      height > 256 ||
+      !ArrayBuffer.isView(source) ||
+      source.byteLength !== width * height * 4
+    ) {
+      return Promise.resolve(null);
+    }
+
+    return ipcRenderer.invoke('artwork:sample-frame-colors', {
+      width,
+      height,
+      channels: 4,
+      data: Uint8Array.from(source)
+    });
+  }
 });
 
 contextBridge.exposeInMainWorld('orchardDiscord', {
@@ -93,6 +127,20 @@ contextBridge.exposeInMainWorld('orchardSpotify', {
       artists: Array.isArray(target?.artists) ? target.artists.map((name) => String(name || '')) : [],
       album: String(target?.album || '')
     }
+  })
+});
+
+contextBridge.exposeInMainWorld('orchardQobuz', {
+  status: () => ipcRenderer.invoke('qobuz:status'),
+  connect: () => ipcRenderer.invoke('qobuz:connect'),
+  disconnect: () => ipcRenderer.invoke('qobuz:disconnect'),
+  update: (settings = {}) => ipcRenderer.invoke('qobuz:update', {
+    ...(Object.prototype.hasOwnProperty.call(settings, 'enabled')
+      ? { enabled: settings.enabled === true }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(settings, 'quality')
+      ? { quality: String(settings.quality || '') }
+      : {})
   })
 });
 
@@ -159,12 +207,6 @@ contextBridge.exposeInMainWorld('orchardAudioAnalysis', {
   })
 });
 
-contextBridge.exposeInMainWorld('orchardMigration', {
-  getState: () => ipcRenderer.invoke('migration:get-state'),
-  refresh: () => ipcRenderer.invoke('migration:refresh'),
-  download: () => ipcRenderer.invoke('migration:download')
-});
-
 contextBridge.exposeInMainWorld('orchardGithub', {
   status: () => ipcRenderer.invoke('github-auth:status'),
   connect: () => ipcRenderer.invoke('github-auth:connect'),
@@ -181,7 +223,9 @@ contextBridge.exposeInMainWorld('orchardUpdates', {
   getUserArtistPacks: () => ipcRenderer.invoke('updates:get-user-artist-packs'),
   readArtistPackArchive: (archiveUrl) => ipcRenderer.invoke('updates:read-artist-pack-archive', archiveUrl),
   revealExternal: () => ipcRenderer.invoke('updates:reveal-external'),
-  install: () => ipcRenderer.invoke('updates:install'),
+  install: (options = {}) => ipcRenderer.invoke('updates:install', {
+    keepOldVersions: options?.keepOldVersions === true
+  }),
   setChannel: (channel) => ipcRenderer.invoke('updates:set-channel', channel),
   onState: (callback) => {
     if (typeof callback !== 'function') return () => {};

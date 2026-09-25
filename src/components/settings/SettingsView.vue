@@ -19,18 +19,21 @@
 
 <script>
 import AudioEngineSection from './AudioEngineSection.vue';
+import DataSavingSection from './DataSavingSection.vue';
 import BackupRestoreSection from './BackupRestoreSection.vue';
 import DiagnosticsSection from './DiagnosticsSection.vue';
 import LastfmSection from './LastfmSection.vue';
+import QobuzSection from './QobuzSection.vue';
 import SpotifySection from './SpotifySection.vue';
 import SongCacheSection from './SongCacheSection.vue';
 import ArtistPacksSection from './ArtistPacksSection.vue';
 import OrchardAccountSection from './OrchardAccountSection.vue';
+import NavigationLayoutSection from './NavigationLayoutSection.vue';
 import { computed, ref, watch } from 'vue';
 
 export default {
   name: 'SettingsView',
-  components: { AudioEngineSection, BackupRestoreSection, DiagnosticsSection, LastfmSection, SpotifySection, SongCacheSection, ArtistPacksSection, OrchardAccountSection },
+  components: { AudioEngineSection, DataSavingSection, BackupRestoreSection, DiagnosticsSection, LastfmSection, QobuzSection, SpotifySection, SongCacheSection, ArtistPacksSection, OrchardAccountSection, NavigationLayoutSection },
   props: { app: { type: Object, required: true } },
   setup(props) {
     const layoutPresetDescription = computed(() => {
@@ -65,6 +68,14 @@ export default {
       <a href="#settings-song-cache">
         <q-icon name="offline_pin" />
         <span>Song Cache</span>
+      </a>
+      <a href="#settings-data-saving">
+        <q-icon name="data_saver_on" />
+        <span>Data Saving</span>
+      </a>
+      <a href="#settings-layout">
+        <q-icon name="space_dashboard" />
+        <span>Home &amp; sidebar</span>
       </a>
       <a href="#settings-appearance">
         <q-icon name="palette" />
@@ -181,7 +192,7 @@ export default {
               :class="{ 'settings-option--active': crossfadeMode === option.value }"
               :aria-pressed="crossfadeMode === option.value"
               :disabled="!crossfadeEnabled"
-              @click="crossfadeMode = option.value"
+              @click="setCrossfadeMode(option.value)"
             >
               {{ option.label }}
             </button>
@@ -248,9 +259,12 @@ export default {
       </section>
 
       <SongCacheSection :app="app" />
+      <DataSavingSection :app="app" />
       <ArtistPacksSection :app="app" />
 
       <AudioEngineSection :app="app" />
+
+      <NavigationLayoutSection :app="app" />
 
       <section id="settings-appearance" class="settings-section" aria-labelledby="settings-appearance-title">
         <div class="settings-section__heading">
@@ -446,6 +460,7 @@ export default {
 
         <LastfmSection :app="app" />
         <SpotifySection :app="app" />
+        <QobuzSection />
         <OrchardAccountSection :app="app" />
 
         <div class="settings-row">
@@ -577,6 +592,14 @@ export default {
             <p>Get beta builds from GitHub releases instead of the regular channel. Beta builds may be less stable.</p>
           </div>
           <q-toggle id="settings-beta-channel" v-model="updateChannelBetaToggle" color="primary" aria-label="Beta channel" />
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-row__copy">
+            <label for="settings-keep-old-versions">Keep old versions</label>
+            <p>Retain replaced Orchard application folders after an update. Turn this off to remove older versions when the new one is activated.</p>
+          </div>
+          <q-toggle id="settings-keep-old-versions" v-model="keepOldVersions" color="primary" aria-label="Keep old Orchard versions" />
         </div>
 
         <div class="settings-actions">

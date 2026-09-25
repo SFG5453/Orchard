@@ -20,8 +20,8 @@
 // Vocal-presence masking with open-unmix's "vocals" target (Inria/SigSep,
 // umxhq checkpoint).
 //
-// Why a model here at all: the outgoing track's filter sweep (`filter_sweep`
-// in transition_render.cpp) follows the fade curve, not the music -- it takes
+// Why a model here at all: the outgoing track's Earmark filter sweep follows
+// the fade curve, not the music -- it takes
 // the same spectrum away whether the track is singing or playing an
 // instrumental outro, and to the same depth for a whispered ad-lib as a
 // full-throated hook. A real per-instant vocal-presence signal lets the
@@ -47,7 +47,7 @@ import { loadOnnxModel, loadOnnxRuntime, onnxExecutionProviders } from './onnxRu
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-// Matches native/analyzer/vocal_spectrogram.h and the fixed shape the model
+// Matches Earmark's vocal spectrogram frontend and the fixed shape the model
 // was exported at -- see scripts/convert-umx-vocals-to-onnx.py for why the
 // export is fixed-frame rather than dynamic.
 const BINS = 2049;

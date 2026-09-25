@@ -87,7 +87,13 @@ object BestMixSorter {
     private fun confidence(value: Double, fallback: Double): Double =
         if (value.isFinite() && value > 0) max(0.15, min(1.0, value)) else fallback
 
-    fun transitionCost(left: TrackFeatures.Features, right: TrackFeatures.Features): Double? {
+    private fun hasMusicalEvidence(features: TrackFeatures.Features): Boolean =
+        features.bpm > 0 || harmonicCost(features.key, features.key) != null
+
+    private fun legacyTransitionCost(
+        left: TrackFeatures.Features,
+        right: TrackFeatures.Features,
+    ): Double? {
         var weightedCost = 0.0
         var totalWeight = 0.0
 
@@ -123,6 +129,86 @@ object BestMixSorter {
         return if (totalWeight > 0) weightedCost / totalWeight else null
     }
 
+    private fun vocalActivity(
+        features: TrackFeatures.Features,
+        start: Double,
+        end: Double,
+    ): Double {
+        val curve = features.energyCurve
+        val mask = features.vocalActivityMask
+        if (curve.isEmpty() || curve.size != mask.size || end <= start) {
+            return features.vocalProbability.coerceIn(0.0, 1.0)
+        }
+        var total = 0.0
+        var count = 0
+        for (index in mask.indices) {
+            val time = curve[index].time
+            val value = mask[index]
+            if (time >= start && time <= end && value.isFinite()) {
+                total += value
+                count += 1
+            }
+        }
+        return if (count > 0) total / count else features.vocalProbability.coerceIn(0.0, 1.0)
+    }
+
+    private fun likelyVocalClash(
+        left: TrackFeatures.Features,
+        right: TrackFeatures.Features,
+    ): Boolean {
+        val beatSeconds = listOf(left.beatInterval, right.beatInterval)
+            .filter { it.isFinite() && it > 0.0 }
+            .minOrNull() ?: 0.5
+        val window = (beatSeconds * 16.0).coerceIn(4.0, 16.0)
+        val outgoingEnd = left.mixOutCandidates.maxByOrNull(MixCandidate::score)?.time
+            ?.takeIf { it > 0.0 }
+            ?: left.mixOutTime.takeIf { it > 0.0 }
+            ?: left.contentEndTime.takeIf { it > 0.0 }
+            ?: left.duration
+        val incomingEnd = right.mixInCandidates.maxByOrNull(MixCandidate::score)?.time
+            ?.takeIf { it > 0.0 }
+            ?: right.mixInTime.takeIf { it > 0.0 }
+            ?: (right.audibleStartTime + window)
+        val outgoing = vocalActivity(left, (outgoingEnd - window).coerceAtLeast(0.0), outgoingEnd)
+        val incomingStart = right.audibleStartTime.coerceAtLeast(0.0)
+        val incoming = vocalActivity(right, max(incomingStart, incomingEnd - window), incomingEnd)
+        return outgoing >= VOCAL_ACTIVE_THRESHOLD && incoming >= VOCAL_ACTIVE_THRESHOLD
+    }
+
+    /**
+     * Cheap, allocation-light queue ranking.
+     *
+     * The exact desktop planner canonicalizes two whole analyses, searches cue combinations and
+     * builds diagnostics/choreography. Running that interpreted JavaScript for every edge of the
+     * greedy sort is O(n²) planner work and retained hundreds of megabytes of Rhino objects on a
+     * nine-song queue. Queue ranking only needs the same gates at coarse resolution; playback runs
+     * the authoritative planner once the selected pair is actually adjacent.
+     */
+    fun transitionCost(left: TrackFeatures.Features, right: TrackFeatures.Features): Double? {
+        val legacyCost = legacyTransitionCost(left, right) ?: return null
+        val ratio = normalizedTempoRatio(left.bpm, right.bpm)
+        val beatConfidence = min(
+            left.beatConfidence.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0,
+            right.beatConfidence.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0) ?: 0.0,
+        )
+        val keyCost = harmonicCost(left.key, right.key)
+        val keyConfidence = sqrt(
+            left.keyConfidence.coerceIn(0.0, 1.0) * right.keyConfidence.coerceIn(0.0, 1.0),
+        )
+        val severeHarmonicClash = keyCost != null && keyCost >= 0.9 && keyConfidence >= 0.65
+        val beatmatched = ratio > 0.0 &&
+            abs(ratio - 1.0) <= MAX_STRETCH_DEVIATION &&
+            beatConfidence >= MIN_BEATMATCH_CONFIDENCE &&
+            !severeHarmonicClash
+        val tierCost = when {
+            beatmatched && !likelyVocalClash(left, right) -> 0.0
+            beatmatched || (beatConfidence >= MIN_DJ_CONFIDENCE && !severeHarmonicClash) -> 10.0
+            else -> 20.0
+        }
+        val confidenceCost = (1.0 - beatConfidence) * 2.0
+        return tierCost + confidenceCost + legacyCost * 0.01
+    }
+
     private data class AnalyzedTrack(
         val track: Track,
         val features: TrackFeatures.Features,
@@ -137,7 +223,7 @@ object BestMixSorter {
         val ordered = mutableListOf<Track>()
         var previous = initialFeatures
 
-        if ((previous == null || previous.bpm <= 0) && remaining.isNotEmpty()) {
+        if ((previous == null || !hasMusicalEvidence(previous)) && remaining.isNotEmpty()) {
             val first = remaining.removeAt(0)
             ordered.add(first.track)
             previous = first.features
@@ -168,12 +254,20 @@ object BestMixSorter {
      * Sorts a list of tracks for Best Mix using available audio features.
      * Tracks without analysis are kept in place without halting the process.
      */
-    fun sort(tracks: List<Track>, featuresMap: Map<String, TrackFeatures.Features>): List<Track> {
+    fun sort(
+        tracks: List<Track>,
+        featuresMap: Map<String, TrackFeatures.Features>,
+        initialFeatures: TrackFeatures.Features? = null,
+    ): List<Track> {
         if (tracks.size <= 1) return tracks
+
+        // The native path uses the desktop's exact three-finalist pair search. Keep the coarse
+        // Kotlin scorer as a fallback when the optional C++ module cannot load or parse evidence.
+        NativeBestMixPlanner.sort(tracks, featuresMap, initialFeatures)?.let { return it }
 
         val output = mutableListOf<Track>()
         val segment = mutableListOf<AnalyzedTrack>()
-        var previousFeatures: TrackFeatures.Features? = null
+        var previousFeatures = initialFeatures
 
         fun flush() {
             if (segment.isNotEmpty()) {
@@ -186,7 +280,7 @@ object BestMixSorter {
 
         tracks.forEachIndexed { index, track ->
             val features = featuresMap[track.id]
-            if (features != null && (features.bpm > 0 || features.key.isNotBlank())) {
+            if (features != null && hasMusicalEvidence(features)) {
                 segment.add(AnalyzedTrack(track, features, index))
             } else {
                 flush()
@@ -197,5 +291,26 @@ object BestMixSorter {
 
         flush()
         return output
+    }
+
+    /**
+     * Analyzes an on-disk audio file (e.g. a downloaded Opus/WebM track) for Best Mix.
+     * Decodes the track to mono PCM at the native feature analyzer sample rate and computes
+     * tempo, harmonic key, energy curve, and downbeats.
+     * Persistence is owned by [BestMixFeatureStore], shared with playback analysis.
+     */
+    fun analyzeLocalTrack(track: Track, file: java.io.File): TrackFeatures.Features? {
+        if (!file.exists() || file.length() == 0L) return null
+        val durationSeconds = (track.durationMs / 1000.0).takeIf { it > 0 } ?: (file.length() / 20_000.0)
+        val decodeDuration = minOf(durationSeconds, 180.0)
+        val source = FileMediaDataSource(file)
+        val targetRate = TrackFeatures.sampleRate.toInt()
+        val decoded = source.use { AudioDecoder.decodeRegion(it, 0.0, decodeDuration, targetRate = targetRate) }
+            ?: return null
+        val (pcm, _) = decoded
+        val samples = if (abs(pcm.sampleRate - TrackFeatures.sampleRate) > 1.0) {
+            MelSpectrogram.resample(pcm.samples, pcm.sampleRate, TrackFeatures.sampleRate) ?: pcm.samples
+        } else pcm.samples
+        return TrackFeatures.analyze(samples, durationSeconds)
     }
 }

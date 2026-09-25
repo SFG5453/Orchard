@@ -22,8 +22,8 @@ html[data-theme-resolved='oled'] {
   --panel: #000;
   --panel-alt: #050505;
   --panel-soft: #0b0b0b;
-  --line: #181818;
-  --line-strong: #292929;
+  --line: rgba(255, 255, 255, 0.04);
+  --line-strong: rgba(255, 255, 255, 0.08);
 }
 
 html[data-theme-resolved='oled'] .window-titlebar,
@@ -45,8 +45,8 @@ html[data-theme-resolved='light'] {
   --panel: #fff;
   --panel-alt: #eef1ee;
   --panel-soft: #e4e8e5;
-  --line: #d8ddd9;
-  --line-strong: #bfc7c1;
+  --line: rgba(0, 0, 0, 0.06);
+  --line-strong: rgba(0, 0, 0, 0.12);
   --text: #141714;
   --muted: #687069;
   --muted-strong: #343a35;
@@ -120,6 +120,40 @@ html[data-theme-resolved='light'] .settings-row__copy p {
   color: var(--muted);
 }
 
+html[data-theme-resolved='light'] .layout-editor,
+html[data-theme-resolved='light'] .layout-editor__item {
+  border-color: var(--line);
+}
+
+html[data-theme-resolved='light'] .layout-editor__item {
+  background: rgba(18, 24, 19, 0.018);
+}
+
+html[data-theme-resolved='light'] .layout-editor__item:hover,
+html[data-theme-resolved='light'] .layout-editor__moves button:hover:not(:disabled) {
+  background: var(--panel-alt);
+}
+
+html[data-theme-resolved='light'] .layout-editor__heading h3,
+html[data-theme-resolved='light'] .layout-editor__copy strong,
+html[data-theme-resolved='light'] .home-layout-empty strong {
+  color: var(--text);
+}
+
+html[data-theme-resolved='light'] .layout-editor__heading p,
+html[data-theme-resolved='light'] .layout-editor__group h4,
+html[data-theme-resolved='light'] .layout-editor__copy small,
+html[data-theme-resolved='light'] .layout-editor__icon,
+html[data-theme-resolved='light'] .layout-editor__moves button,
+html[data-theme-resolved='light'] .home-layout-empty span {
+  color: var(--muted);
+}
+
+html[data-theme-resolved='light'] .layout-editor__reset {
+  border-color: var(--line);
+  color: var(--muted-strong);
+}
+
 html[data-theme-resolved='light'] .settings-option,
 html[data-theme-resolved='light'] .settings-button,
 html[data-theme-resolved='light'] .settings-link-button,
@@ -144,17 +178,21 @@ html[data-theme-resolved='light'] .settings-option--active {
   color: #17231a;
 }
 
-html[data-theme-resolved='light'] .settings-cache-menu__action {
+html[data-theme-resolved='light'] .settings-cache-menu__action,
+html[data-theme-resolved='light'] .right-queue-menu__action {
   color: var(--muted-strong);
 }
 
 html[data-theme-resolved='light'] .settings-cache-menu__action:hover,
-html[data-theme-resolved='light'] .settings-cache-menu__action:focus-visible {
+html[data-theme-resolved='light'] .settings-cache-menu__action:focus-visible,
+html[data-theme-resolved='light'] .right-queue-menu__action:hover,
+html[data-theme-resolved='light'] .right-queue-menu__action:focus-visible {
   background: var(--panel-alt);
   color: var(--text);
 }
 
-html[data-theme-resolved='light'] .settings-cache-menu__action--danger {
+html[data-theme-resolved='light'] .settings-cache-menu__action--danger,
+html[data-theme-resolved='light'] .right-queue-menu__action--danger {
   border-top-color: var(--line);
   color: #98483e;
 }

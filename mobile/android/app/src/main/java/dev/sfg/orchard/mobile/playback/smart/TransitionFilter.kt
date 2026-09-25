@@ -40,9 +40,8 @@ import kotlin.math.sin
  * merely get quieter, and because the corner is moving, the ear follows the movement, which is
  * what covers the seam.
  *
- * Separate from [TransitionRenderer], which does the same job offline for beat-matched pairs by
- * rendering a finished buffer. That path only applies when both grids are trusted and the tempi are
- * within a few percent; this one applies to everything else, which is most pairs.
+ * The shared planner supplies portable automation curves for trusted beat-matched pairs; the live
+ * engine applies them through this processor without introducing an intermediate media item.
  *
  * Parameters are read fresh per block rather than per sample. Coefficient updates are cheap at that
  * granularity and inaudible, whereas recomputing per sample would put three transcendentals in the

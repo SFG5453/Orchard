@@ -18,6 +18,7 @@
  */
 
 import { normalizeCrossfadeMode, planTransition } from './transitionPlanner.js';
+import { equalPowerMixWeights } from './crossfadeVisualState.js';
 
 export const AUTO_CROSSFADE_DEFAULTS = {
   fadeSeconds: 6,
@@ -51,6 +52,11 @@ export function alignTransitionToPlayback(transition = {}, playbackTime = 0) {
   const transitionEnd = Number(transition.transitionEnd);
   const currentTime = Math.max(0, Number(playbackTime) || 0);
   if (!Number.isFinite(transitionStart) || !Number.isFinite(transitionEnd)) return transition;
+  if (['silence_trim', 'normal_boundary'].includes(transition.transitionStyle)) {
+    // Boundary handoffs have no overlap to shorten and no incoming timeline to
+    // advance. A late poll executes the same boundary immediately.
+    return transition;
+  }
   if (currentTime >= transitionEnd - 0.05) return null;
 
   const lateBy = Math.max(0, currentTime - transitionStart);
@@ -94,6 +100,7 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
   let promoteTimer = 0;
   let tempoTimer = 0;
   let tempoStartTimer = 0;
+  let mixFrame = 0;
   let completeResolve = null;
   let activeCleanup = null;
   let activeFromAudio = null;
@@ -163,10 +170,12 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
     window.clearTimeout(promoteTimer);
     window.clearTimeout(tempoStartTimer);
     window.clearInterval(tempoTimer);
+    window.cancelAnimationFrame?.(mixFrame);
     completeTimer = 0;
     promoteTimer = 0;
     tempoTimer = 0;
     tempoStartTimer = 0;
+    mixFrame = 0;
     active = false;
     activeCleanup?.();
     activeCleanup = null;
@@ -180,7 +189,7 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
     completeResolve = null;
   }
 
-  async function start({ fromAudio, toAudio, transition = null, volume, onPromote, onComplete, onError }) {
+  async function start({ fromAudio, toAudio, transition = null, volume, onPromote, onComplete, onError, onMixState }) {
     if (active || !fromAudio || !toAudio) {
       return false;
     }
@@ -210,6 +219,11 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       analyzer?.resetMixElement?.(toAudio);
       fromAudio.playbackRate = 1;
       toAudio.playbackRate = 1;
+    };
+    const promote = () => {
+      if (promoted || !active || sequence !== transitionSequence) return;
+      onPromote?.();
+      promoted = true;
     };
 
     try {
@@ -251,6 +265,53 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       }
       await toAudio.play();
       if (!active || sequence !== transitionSequence) return false;
+
+      if (['silence_trim', 'normal_boundary'].includes(transition?.transitionStyle)) {
+        // Preload the incoming element while muted, then make one non-overlap
+        // deck switch at the requested boundary. Rewinding to the authoritative
+        // cue at the switch prevents the muted preparation lead from consuming
+        // any incoming music.
+        await new Promise((resolve) => {
+          completeResolve = resolve;
+          const delayMs = Math.max(
+            0,
+            (Number(transition.transitionEnd) - Number(fromAudio.currentTime)) * 1000
+          );
+          completeTimer = window.setTimeout(() => {
+            completeTimer = 0;
+            completeResolve = null;
+            try {
+              toAudio.currentTime = incomingCueTime;
+              analyzer?.setMixVolume?.(fromAudio, 0);
+              analyzer?.setMixVolume?.(toAudio, 1);
+              fromAudio.pause();
+              promote();
+            } catch (error) {
+              promotionError = error;
+            }
+            resolve();
+          }, delayMs);
+        });
+        if (promotionError) throw promotionError;
+        if (!active || sequence !== transitionSequence) return false;
+
+        toAudio.volume = 1;
+        fromAudio.removeAttribute('src');
+        fromAudio.load();
+        analyzer?.setVolume?.(fromAudio, 0);
+        analyzer?.setVolume?.(toAudio, targetVolume);
+        analyzer?.resetMixElement?.(fromAudio);
+        analyzer?.resetMixElement?.(toAudio);
+        fromAudio.playbackRate = 1;
+        toAudio.playbackRate = 1;
+        active = false;
+        activeCleanup = null;
+        activeFromAudio = null;
+        activeToAudio = null;
+        onComplete?.();
+        return true;
+      }
+
       const timing = analyzer?.scheduleCrossfade?.({
         fromAudio,
         toAudio,
@@ -259,9 +320,49 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
         handoffDuration: transition?.handoffDuration,
         handoffStartSeconds: transition?.handoffStartSeconds,
         bassSwap: transition?.bassSwap,
-        transitionStyle: transition?.transitionStyle
+        transitionStyle: transition?.transitionStyle,
+        choreography: transition?.choreography
       });
       if (!timing) throw new Error('Web Audio crossfade is unavailable');
+
+      const visualDuration = Math.max(0.001, timing.endTime - timing.startTime);
+      const visualHandoffProgress = clamp01(
+        (timing.promotionTime - timing.startTime) / visualDuration
+      );
+      const publishMixState = (complete = false) => {
+        if (typeof onMixState !== 'function') return;
+        const contextTime = analyzer?.currentTime?.() || timing.startTime;
+        const progress = complete
+          ? 1
+          : clamp01((contextTime - timing.startTime) / visualDuration);
+        const fallback = equalPowerMixWeights(progress);
+        const outgoingGain = analyzer?.mixVolume?.(fromAudio);
+        const incomingGain = analyzer?.mixVolume?.(toAudio);
+        try {
+          onMixState({
+            complete,
+            contextTime,
+            endTime: timing.endTime,
+            handoffProgress: visualHandoffProgress,
+            incomingGain: complete ? 1 : Number.isFinite(incomingGain) ? incomingGain : fallback.incomingGain,
+            outgoingGain: complete ? 0 : Number.isFinite(outgoingGain) ? outgoingGain : fallback.outgoingGain,
+            progress,
+            started: complete || contextTime >= timing.startTime,
+            startTime: timing.startTime
+          });
+        } catch {
+          // Visual subscribers cannot be allowed to interrupt audio scheduling.
+        }
+      };
+      const followMixState = () => {
+        mixFrame = 0;
+        if (!active || sequence !== transitionSequence) return;
+        publishMixState(false);
+        if ((analyzer?.currentTime?.() || timing.startTime) >= timing.endTime) return;
+        mixFrame = window.requestAnimationFrame?.(followMixState) || 0;
+      };
+      publishMixState(false);
+      mixFrame = window.requestAnimationFrame?.(followMixState) || 0;
 
       if (incomingRate !== 1) {
         const startTempoRelease = () => {
@@ -294,11 +395,6 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
         }, delayMs);
       }
 
-      const promote = () => {
-        if (promoted || !active || sequence !== transitionSequence) return;
-        onPromote?.();
-        promoted = true;
-      };
       const promotionAt = Math.max(
         timing.startTime,
         Math.min(timing.endTime, Number(timing.promotionTime) || timing.handoffStart)
@@ -337,6 +433,9 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       promote();
 
       if (active) {
+        window.cancelAnimationFrame?.(mixFrame);
+        mixFrame = 0;
+        publishMixState(true);
         toAudio.volume = 1;
         fromAudio.pause();
         fromAudio.removeAttribute('src');
@@ -354,8 +453,10 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       promoteTimer = 0;
       window.clearTimeout(tempoStartTimer);
       window.clearInterval(tempoTimer);
+      window.cancelAnimationFrame?.(mixFrame);
       tempoTimer = 0;
       tempoStartTimer = 0;
+      mixFrame = 0;
       activeCleanup = null;
       activeFromAudio = null;
       activeToAudio = null;
@@ -371,8 +472,10 @@ export function createAutoCrossfade({ analyzer, settings = {} } = {}) {
       promoteTimer = 0;
       window.clearTimeout(tempoStartTimer);
       window.clearInterval(tempoTimer);
+      window.cancelAnimationFrame?.(mixFrame);
       tempoTimer = 0;
       tempoStartTimer = 0;
+      mixFrame = 0;
       completeResolve = null;
       activeCleanup = null;
       activeFromAudio = null;

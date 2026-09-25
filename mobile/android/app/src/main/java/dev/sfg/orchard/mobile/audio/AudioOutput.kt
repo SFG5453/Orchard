@@ -66,8 +66,27 @@ data class AudioOutput(
  */
 fun Context.isTabletForm(): Boolean = resources.configuration.smallestScreenWidthDp >= 600
 
-/** What this device should call itself in output pickers: "This Tablet" or "This Phone". */
-fun Context.selfDeviceLabel(): String = if (isTabletForm()) "This Tablet" else "This Phone"
+/** Returns whether the underlying physical hardware is a book-style foldable device. */
+fun Context.isFoldableHardware(): Boolean {
+    val isFlip = android.os.Build.MODEL.contains("Flip", ignoreCase = true) ||
+        android.os.Build.DEVICE.contains("flip", ignoreCase = true)
+    if (isFlip) return false
+
+    return packageManager.hasSystemFeature("android.hardware.sensor.hinge_angle") ||
+        android.os.Build.MODEL.contains("Fold", ignoreCase = true) ||
+        android.os.Build.DEVICE.contains("fold", ignoreCase = true)
+}
+
+/** What this device should call itself in output pickers: "This Tablet", "This Foldable", or "This Phone". */
+fun Context.selfDeviceLabel(): String = when {
+    isTabletForm() && isFoldableHardware() -> "This Foldable"
+    isTabletForm() -> "This Tablet"
+    else -> "This Phone"
+}
 
 /** The same distinction in lowercase, for use inside a sentence. */
-fun Context.selfDeviceWord(): String = if (isTabletForm()) "tablet" else "phone"
+fun Context.selfDeviceWord(): String = when {
+    isTabletForm() && isFoldableHardware() -> "foldable"
+    isTabletForm() -> "tablet"
+    else -> "phone"
+}

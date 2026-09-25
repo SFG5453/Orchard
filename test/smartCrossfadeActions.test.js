@@ -42,15 +42,20 @@ function localAnalysis() {
 
 function context({ analyze, lookup }) {
   const logs = [];
+  const warmedUrls = [];
   return {
-    audioAnalyzer: { decodeAudio: async () => null },
+    audioAnalyzer: {
+      decodeAudio: async () => null,
+      warmDecodedAudio: async (url) => warmedUrls.push(url)
+    },
     createSmartCrossfadeAnalyzer: () => ({
       analyze,
       destroy() {},
       report: (event, details) => logs.push({ event, details })
     }),
     createBpmMetadataClient: () => ({ lookup }),
-    logs
+    logs,
+    warmedUrls
   };
 }
 
@@ -66,6 +71,7 @@ test('GetSongBPM 404 does not block successful local analysis', async () => {
   assert.equal(ctx.crossfadeAnalysis.value.bpm, 123);
   assert.equal(ctx.crossfadeAnalysis.value.bpmSource, 'local-native');
   assert.equal(ctx.crossfadeAnalysis.value.mixOutTime, 172);
+  assert.deepEqual(ctx.warmedUrls, ['stream']);
 });
 
 test('GetSongBPM timeout remains optional and does not delay local readiness', async () => {

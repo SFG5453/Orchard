@@ -179,4 +179,92 @@ class ConnectJsonCodecTest {
         assertEquals(124.0, results.results[0].bpm, 0.001)
         assertEquals("8B", results.results[0].musicalKey)
     }
+
+    @Test
+    fun decodesIncomingCommandsFromDesktop() {
+        val playPause = ConnectJsonCodec.commandFromPayload(JSONObject().put("type", "play-pause"))
+        assertEquals(ConnectCommand.TogglePlayback, playPause)
+
+        val next = ConnectJsonCodec.commandFromPayload(JSONObject().put("type", "next"))
+        assertEquals(ConnectCommand.Next, next)
+
+        val seek = ConnectJsonCodec.commandFromPayload(JSONObject().put("type", "seek").put("value", 42.5))
+        assertTrue(seek is ConnectCommand.Seek)
+        assertEquals(42.5, (seek as ConnectCommand.Seek).seconds, 0.001)
+
+        val transferPayload = JSONObject()
+            .put("type", "transfer")
+            .put(
+                "value",
+                JSONObject()
+                    .put("track", JSONObject().put("id", "track-abc").put("title", "Remote Song"))
+                    .put("positionSeconds", 15.0)
+                    .put("queue", JSONArray().put(JSONObject().put("id", "track-abc")).put(JSONObject().put("id", "track-def")))
+                    .put("shuffle", true)
+                    .put("repeatMode", "queue")
+                    .put("autoplay", true)
+                    .put("play", false)
+            )
+
+        val transfer = ConnectJsonCodec.commandFromPayload(transferPayload)
+        assertTrue(transfer is ConnectCommand.Transfer)
+        val transferCmd = transfer as ConnectCommand.Transfer
+        assertEquals("track-abc", transferCmd.track?.getString("id"))
+        assertEquals(15.0, transferCmd.positionSeconds, 0.001)
+        assertEquals(2, transferCmd.queue.size)
+        assertTrue(transferCmd.shuffle)
+        assertEquals("queue", transferCmd.repeatMode)
+        assertTrue(transferCmd.autoplay)
+        assertFalse(transferCmd.play)
+
+        val unknown = ConnectJsonCodec.commandFromPayload(JSONObject().put("type", "future-command"))
+        assertTrue(unknown is ConnectCommand.Unknown)
+    }
+
+    @Test
+    fun serializesDeviceStateForDesktopConsumption() {
+        val snapshot = dev.sfg.orchard.mobile.model.PlaybackSnapshot(
+            status = dev.sfg.orchard.mobile.model.PlaybackStatus.PLAYING,
+            currentTrack = dev.sfg.orchard.mobile.model.Track(
+                id = "track-phone",
+                title = "Phone Title",
+                artist = "Phone Artist",
+                album = "Phone Album",
+                artworkUrl = "https://example.com/art.jpg",
+                durationMs = 180000
+            ),
+            positionMs = 30000,
+            durationMs = 180000,
+            volume = 0.65f,
+            shuffle = true,
+            repeatMode = dev.sfg.orchard.mobile.model.RepeatMode.ALL,
+            currentIndex = 0,
+            queue = listOf(
+                dev.sfg.orchard.mobile.model.Track(
+                    id = "track-phone",
+                    title = "Phone Title",
+                    artist = "Phone Artist"
+                ),
+                dev.sfg.orchard.mobile.model.Track(
+                    id = "track-phone-next",
+                    title = "Next Title",
+                    artist = "Next Artist"
+                )
+            )
+        )
+
+        val stateJson = ConnectJsonCodec.deviceState(snapshot, 3, autoplay = true)
+        assertEquals("playing", stateJson.getString("status"))
+        assertEquals(3, stateJson.getInt("protocolVersion"))
+        assertEquals("track-phone", stateJson.getJSONObject("track").getString("id"))
+        assertEquals("Phone Title", stateJson.getJSONObject("track").getString("title"))
+        assertEquals(30.0, stateJson.getJSONObject("playback").getDouble("currentTime"), 0.001)
+        assertTrue(stateJson.getJSONObject("playback").getBoolean("isPlaying"))
+        assertTrue(stateJson.getJSONObject("playback").getBoolean("shuffle"))
+        assertEquals(0.65, stateJson.getJSONObject("playback").getDouble("volume"), 0.001)
+        assertEquals("queue", stateJson.getJSONObject("playback").getString("repeatMode"))
+        assertTrue(stateJson.getJSONObject("playback").getBoolean("autoplay"))
+        assertEquals(1, stateJson.getJSONArray("queue").length())
+        assertEquals("track-phone-next", stateJson.getJSONArray("queue").getJSONObject(0).getString("id"))
+    }
 }

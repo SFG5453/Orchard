@@ -22,7 +22,7 @@ import { Buffer } from 'node:buffer';
 import path from 'node:path';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { zstdDecompressSync } from 'node:zlib';
-import { unzipSync } from 'fflate';
+import { fromBufferPromise as openZipBuffer } from 'yauzl';
 
 const ARTIST_PACK_MAX_BYTES = 50 * 1024 * 1024;
 const ALLOWED_ROOT_FILES = new Set(['artist.json', 'manifest.json', 'style.css']);
@@ -57,7 +57,7 @@ export function createArtistPackService({ app, BrowserWindow, dialog, devOfficia
       throw new Error('Artist pack archive is too large.');
     }
 
-    const entries = readUserPackArchive(bytes);
+    const entries = await readUserPackArchive(bytes);
     const configBytes = entries.get('artist.json');
     if (!configBytes) {
       throw new Error('User artist packs must contain artist.json at the archive root.');
@@ -91,7 +91,7 @@ export function createArtistPackService({ app, BrowserWindow, dialog, devOfficia
       throw new Error('Artist pack archive is too large.');
     }
 
-    const entries = readOfficialPackArchive(bytes);
+    const entries = await readOfficialPackArchive(bytes);
     const targetDir = officialPackDir();
     await rm(targetDir, { recursive: true, force: true });
     await mkdir(targetDir, { recursive: true });
@@ -139,16 +139,19 @@ export function createArtistPackService({ app, BrowserWindow, dialog, devOfficia
   return { importPack, installOfficialPack, hasOfficialPacks, listPacks };
 }
 
-export function readOfficialPackArchive(bytes) {
-  return cleanOfficialZipEntries(unzipSync(archiveZipBytes(bytes)));
+export async function readOfficialPackArchive(bytes) {
+  return cleanOfficialZipEntries(await readZipEntries(archiveZipBytes(bytes)));
 }
 
-function readUserPackArchive(bytes) {
-  return cleanUserZipEntries(unzipSync(archiveZipBytes(bytes)));
+async function readUserPackArchive(bytes) {
+  return cleanUserZipEntries(await readZipEntries(archiveZipBytes(bytes)));
 }
 
 function archiveZipBytes(bytes) {
   const archive = new Uint8Array(bytes);
+  if (archive.byteLength > ARTIST_PACK_MAX_BYTES) {
+    throw new Error('Artist pack archive is too large.');
+  }
   if (!isZstdFrame(archive)) return archive;
 
   if (typeof zstdDecompressSync !== 'function') {
@@ -156,6 +159,41 @@ function archiveZipBytes(bytes) {
   }
 
   return zstdDecompressSync(archive, { maxOutputLength: ARTIST_PACK_MAX_BYTES });
+}
+
+async function readZipEntries(bytes) {
+  const archive = await openZipBuffer(Buffer.from(bytes), {
+    decodeStrings: true,
+    strictFileNames: true,
+    validateEntrySizes: true
+  });
+  const entries = new Map();
+  let totalSize = 0;
+
+  for await (const entry of archive.eachEntry()) {
+    if (entry.fileName.endsWith('/')) continue;
+
+    totalSize += entry.uncompressedSize;
+    if (!Number.isSafeInteger(totalSize) || totalSize > ARTIST_PACK_MAX_BYTES) {
+      throw new Error('Artist pack archive is too large.');
+    }
+
+    const stream = await archive.openReadStreamPromise(entry);
+    const chunks = [];
+    let entrySize = 0;
+    for await (const chunk of stream) {
+      const buffer = Buffer.from(chunk);
+      entrySize += buffer.byteLength;
+      if (entrySize > entry.uncompressedSize || entrySize > ARTIST_PACK_MAX_BYTES) {
+        stream.destroy();
+        throw new Error('Artist pack archive is too large.');
+      }
+      chunks.push(buffer);
+    }
+    entries.set(entry.fileName, new Uint8Array(Buffer.concat(chunks, entrySize)));
+  }
+
+  return entries;
 }
 
 function isZstdFrame(bytes) {
@@ -260,7 +298,7 @@ function cleanUserZipEntries(zipEntries) {
   const entries = new Map();
   let totalSize = 0;
 
-  for (const [rawPath, content] of Object.entries(zipEntries)) {
+  for (const [rawPath, content] of zipEntries) {
     const relativePath = normalizeZipPath(rawPath);
     if (!relativePath) continue;
     if (!isAllowedPackPath(relativePath)) {
@@ -283,7 +321,7 @@ function cleanOfficialZipEntries(zipEntries) {
   const configPaths = [];
   let totalSize = 0;
 
-  for (const [rawPath, content] of Object.entries(zipEntries)) {
+  for (const [rawPath, content] of zipEntries) {
     const relativePath = normalizeZipPath(rawPath);
     if (!relativePath) continue;
     if (!isAllowedOfficialPackPath(relativePath)) {

@@ -57,4 +57,4 @@ Two things about the Windows target are worth knowing before touching the build:
 
 Because napi resolves its symbols from the host process, the same binary loads
 under both `node` and `electron` and does **not** need rebuilding when Electron
-is upgraded, unlike the node-gyp addon in `native/`.
+is upgraded.

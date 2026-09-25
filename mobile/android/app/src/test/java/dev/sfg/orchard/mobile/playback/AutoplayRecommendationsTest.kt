@@ -86,6 +86,24 @@ class AutoplayRecommendationsTest {
     }
 
     @Test
+    fun `generated duplicate rows are identified without removing user playlist duplicates`() {
+        val userFirst = track("user-1", "Same Song", "Artist")
+        val userSecond = track("user-2", "Same Song", "Artist")
+        val generatedDuplicate = track("radio-1", "Same Song (feat. Guest)", "Artist ft. Guest")
+            .copy(autoplayGenerated = true)
+        val generatedUnique = track("radio-2", "Next Song", "Artist")
+            .copy(autoplayGenerated = true)
+        val generatedRepeated = track("radio-3", "Next Song (Official Audio)", "Artist")
+            .copy(autoplayGenerated = true)
+
+        val duplicates = AutoplayRecommendations.duplicateGeneratedIndices(
+            listOf(userFirst, userSecond, generatedDuplicate, generatedUnique, generatedRepeated),
+        )
+
+        assertEquals(listOf(2, 4), duplicates)
+    }
+
+    @Test
     fun `same title from another artist and substantially different versions remain`() {
         val selected = AutoplayRecommendations.select(
             existing = emptyList(),

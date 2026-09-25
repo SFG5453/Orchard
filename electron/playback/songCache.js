@@ -91,6 +91,12 @@ export function createSongCache(options = {}) {
       album: stream?.cacheMetadata?.album || '',
       thumbnail: stream?.cacheMetadata?.thumbnail || '',
       durationSeconds: Number(stream?.cacheMetadata?.durationSeconds || 0),
+      artistId: stream?.cacheMetadata?.artistId || '',
+      artistBrowseIds: stream?.cacheMetadata?.artistBrowseIds || [],
+      albumId: stream?.cacheMetadata?.albumId || '',
+      collections: stream?.cacheMetadata?.collections || [],
+      downloaded: Boolean(stream?.cacheMetadata?.downloadRequested),
+      downloadedAt: stream?.cacheMetadata?.downloadRequested ? new Date().toISOString() : '',
       itag: stream?.format?.itag || '',
       mimeType: stream?.format?.mimeType || '',
       contentLength: Number(stream?.format?.contentLength || 0),
@@ -104,7 +110,7 @@ export function createSongCache(options = {}) {
 
   function cacheable(stream, range) {
     const totalLength = Number(stream?.format?.contentLength || 0);
-    return settings.enabled &&
+    return (settings.enabled || stream?.cacheMetadata?.downloadRequested) &&
       stream?.mediaKind !== 'video' &&
       totalLength > 0 &&
       totalLength <= settings.maxBytes &&
@@ -180,7 +186,9 @@ export function createSongCache(options = {}) {
     try {
       const playbackComplete = await pipeResponseBody(playbackBody, res, (length) => {
         playbackBytes += length;
-        if (playbackBytes - cachedBytes > maxWriteLagBytes) cacheController.abort();
+        if (!stream?.cacheMetadata?.downloadRequested && playbackBytes - cachedBytes > maxWriteLagBytes) {
+          cacheController.abort();
+        }
       });
       if (!playbackComplete) cacheController.abort();
     } catch (error) {
@@ -234,9 +242,17 @@ export function createSongCache(options = {}) {
     if (!settings.enabled) return;
     await ensureDirectory();
     const files = await cacheFiles();
-    let total = files.reduce((sum, file) => sum + file.size, 0);
+    const candidates = [];
+    let total = 0;
 
-    for (const file of files.sort((a, b) => a.mtimeMs - b.mtimeMs)) {
+    for (const file of files) {
+      const metadata = await readMetadata(file);
+      if (metadata.downloaded) continue;
+      total += file.size;
+      candidates.push(file);
+    }
+
+    for (const file of candidates.sort((a, b) => a.mtimeMs - b.mtimeMs)) {
       if (total <= settings.maxBytes) break;
       await fs.promises.unlink(file.filePath).catch(() => {});
       await fs.promises.unlink(metadataPath(file.filePath)).catch(() => {});
@@ -313,12 +329,106 @@ export function createSongCache(options = {}) {
       };
     }));
 
+    const sortedEntries = entries.sort((a, b) => new Date(b.downloadedAt || b.cachedAt) - new Date(a.downloadedAt || a.cachedAt));
+    const downloads = sortedEntries.filter((entry) => entry.downloaded);
+    const cacheEntries = sortedEntries.filter((entry) => !entry.downloaded);
+
     return {
       settings,
       directory,
       totalBytes: entries.reduce((sum, entry) => sum + entry.size, 0),
-      entries: entries.sort((a, b) => new Date(b.cachedAt) - new Date(a.cachedAt))
+      cacheBytes: cacheEntries.reduce((sum, entry) => sum + entry.size, 0),
+      downloadedBytes: downloads.reduce((sum, entry) => sum + entry.size, 0),
+      downloads,
+      entries: sortedEntries
     };
+  }
+
+  async function findDownloaded(videoId) {
+    const requestedId = String(videoId || '').trim();
+    if (!requestedId) return null;
+
+    for (const file of await cacheFiles()) {
+      const metadata = await readMetadata(file);
+      if (!metadata.downloaded) continue;
+      if (metadata.videoId !== requestedId && metadata.sourceVideoId !== requestedId) continue;
+      return { ...metadata, filePath: file.filePath, key: file.name, size: file.size };
+    }
+
+    return null;
+  }
+
+  async function pin(sourceVideoId, metadata = {}) {
+    const sourceId = String(sourceVideoId || '').trim();
+    if (!sourceId) throw new Error('Downloaded song is missing a source ID');
+
+    const candidates = (await cacheFiles()).sort((left, right) => right.mtimeMs - left.mtimeMs);
+    for (const file of candidates) {
+      const current = await readMetadata(file);
+      if (current.videoId !== sourceId && current.sourceVideoId !== sourceId) continue;
+      const downloadedAt = new Date().toISOString();
+      const collections = mergeCollections(current.collections, metadata.collections);
+      await writeMetadataFile(file.filePath, {
+        ...current,
+        ...metadata,
+        collections,
+        videoId: String(metadata.videoId || current.videoId || sourceId).trim(),
+        sourceVideoId: sourceId,
+        downloaded: true,
+        downloadedAt,
+        cachedAt: current.cachedAt || downloadedAt
+      });
+      return findDownloaded(metadata.videoId || current.videoId || sourceId);
+    }
+
+    throw new Error('The downloaded audio file was not stored');
+  }
+
+  async function removeDownload(videoId) {
+    const entry = await findDownloaded(videoId);
+    if (!entry) return list();
+    await fs.promises.unlink(entry.filePath).catch(() => {});
+    await fs.promises.unlink(metadataPath(entry.filePath)).catch(() => {});
+    return list();
+  }
+
+  async function serveDownload(videoId, req, res) {
+    const entry = await findDownloaded(videoId);
+    if (!entry) return false;
+
+    const range = downloadRange(req.headers.range, entry.size);
+    if (!range.ok) {
+      res.writeHead(416, {
+        'Content-Range': `bytes */${entry.size}`,
+        'Access-Control-Allow-Origin': '*'
+      });
+      res.end();
+      return true;
+    }
+
+    await fs.promises.utimes(entry.filePath, new Date(), new Date()).catch(() => {});
+    const responseLength = range.end - range.start + 1;
+    res.writeHead(range.partial ? 206 : 200, {
+      'Content-Type': (entry.mimeType || 'audio/mp4').split(';', 1)[0],
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'no-store',
+      'Access-Control-Allow-Origin': '*',
+      'Content-Length': String(responseLength),
+      ...(range.partial ? { 'Content-Range': `bytes ${range.start}-${range.end}/${entry.size}` } : {})
+    });
+
+    if (req.method === 'HEAD') {
+      res.end();
+      return true;
+    }
+
+    await new Promise((resolve, reject) => {
+      fs.createReadStream(entry.filePath, { start: range.start, end: range.end })
+        .once('error', reject)
+        .once('end', resolve)
+        .pipe(res);
+    });
+    return true;
   }
 
   async function remove(key) {
@@ -333,7 +443,11 @@ export function createSongCache(options = {}) {
 
   async function clear() {
     const files = await cacheFiles();
-    await Promise.all(files.flatMap((file) => [
+    const removable = [];
+    for (const file of files) {
+      if (!(await readMetadata(file)).downloaded) removable.push(file);
+    }
+    await Promise.all(removable.flatMap((file) => [
       fs.promises.unlink(file.filePath).catch(() => {}),
       fs.promises.unlink(metadataPath(file.filePath)).catch(() => {})
     ]));
@@ -346,7 +460,19 @@ export function createSongCache(options = {}) {
     return settings;
   }
 
-  return { clear, hydrateMissingMetadata, list, pipeAndStore, remove, serve, update };
+  return {
+    clear,
+    findDownloaded,
+    hydrateMissingMetadata,
+    list,
+    pin,
+    pipeAndStore,
+    remove,
+    removeDownload,
+    serve,
+    serveDownload,
+    update
+  };
 }
 
 function normalizeMetadata(metadata = {}, file = {}) {
@@ -355,13 +481,68 @@ function normalizeMetadata(metadata = {}, file = {}) {
     title: String(metadata.title || '').trim(),
     artist: String(metadata.artist || '').trim(),
     album: String(metadata.album || '').trim(),
+    albumId: String(metadata.albumId || '').trim(),
     thumbnail: String(metadata.thumbnail || '').trim(),
+    artistId: String(metadata.artistId || '').trim(),
+    artistBrowseIds: Array.isArray(metadata.artistBrowseIds)
+      ? metadata.artistBrowseIds.map((value) => String(value || '').trim()).filter(Boolean)
+      : [],
+    collections: normalizeCollections(metadata.collections),
     durationSeconds: Number(metadata.durationSeconds || 0),
+    sourceVideoId: String(metadata.sourceVideoId || '').trim(),
+    downloaded: Boolean(metadata.downloaded),
+    downloadedAt: String(metadata.downloadedAt || '').trim(),
     itag: metadata.itag || '',
     mimeType: metadata.mimeType || '',
     contentLength: Number(metadata.contentLength || 0),
     cachedAt: metadata.cachedAt || ''
   };
+}
+
+function normalizeCollections(collections) {
+  if (!Array.isArray(collections)) return [];
+  const seen = new Set();
+  return collections.flatMap((collection) => {
+    const browseId = String(collection?.browseId || collection?.id || '').trim();
+    const kind = String(collection?.kind || '').trim();
+    if (!browseId || !kind || seen.has(`${kind}:${browseId}`)) return [];
+    seen.add(`${kind}:${browseId}`);
+    return [{
+      browseId,
+      kind,
+      title: String(collection?.title || '').trim(),
+      artist: String(collection?.artist || '').trim(),
+      thumbnail: String(collection?.thumbnail || '').trim()
+    }];
+  });
+}
+
+function mergeCollections(left, right) {
+  return normalizeCollections([...(left || []), ...(right || [])]);
+}
+
+function downloadRange(header, totalLength) {
+  const value = String(header || '').trim();
+  if (!value) return { ok: true, partial: false, start: 0, end: totalLength - 1 };
+  const match = value.match(/^bytes=(\d*)-(\d*)$/i);
+  if (!match || (!match[1] && !match[2])) return { ok: false };
+
+  let start;
+  let end;
+  if (!match[1]) {
+    const suffix = Number(match[2]);
+    if (!Number.isFinite(suffix) || suffix <= 0) return { ok: false };
+    start = Math.max(0, totalLength - suffix);
+    end = totalLength - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] ? Number(match[2]) : totalLength - 1;
+  }
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start >= totalLength || end < start) {
+    return { ok: false };
+  }
+  return { ok: true, partial: true, start, end: Math.min(end, totalLength - 1) };
 }
 
 function friendlyTitle(metadata = {}) {

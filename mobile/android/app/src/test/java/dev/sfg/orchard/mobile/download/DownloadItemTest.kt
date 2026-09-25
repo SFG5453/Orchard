@@ -36,6 +36,8 @@ class DownloadItemTest {
             albumId = "album_456",
             artistId = "artist_789",
             artworkUrl = "https://example.com/art.jpg",
+            animatedArtworkUrl = "https://example.com/art.m3u8",
+            animatedArtworkVerticalUrl = "https://example.com/art-vertical.mp4",
             durationMs = 180000L,
         )
 
@@ -47,6 +49,9 @@ class DownloadItemTest {
             totalBytes = 5242880L,
             filePath = "/path/to/downloaded/track.opus",
             mimeType = "audio/opus",
+            cachedAnimatedArtworkUrl = "https://example.com/art-1080p.m3u8",
+            cachedAnimatedArtworkVerticalUrl = "https://example.com/art-vertical.mp4",
+            animatedArtworkBytesDownloaded = 7340032L,
             downloadedAtMs = 1700000000000L,
             errorMessage = "",
         )
@@ -59,11 +64,16 @@ class DownloadItemTest {
         assertEquals("Test Artist", restored.track.artist)
         assertEquals("Test Album", restored.track.album)
         assertEquals("https://example.com/art.jpg", restored.track.artworkUrl)
+        assertEquals("https://example.com/art.m3u8", restored.track.animatedArtworkUrl)
+        assertEquals("https://example.com/art-vertical.mp4", restored.track.animatedArtworkVerticalUrl)
         assertEquals(180000L, restored.track.durationMs)
         assertEquals(DownloadStatus.COMPLETED, restored.status)
         assertEquals(5242880L, restored.bytesDownloaded)
         assertEquals("/path/to/downloaded/track.opus", restored.filePath)
         assertEquals("audio/opus", restored.mimeType)
+        assertEquals("https://example.com/art-1080p.m3u8", restored.cachedAnimatedArtworkUrl)
+        assertEquals("https://example.com/art-vertical.mp4", restored.cachedAnimatedArtworkVerticalUrl)
+        assertEquals(7340032L, restored.animatedArtworkBytesDownloaded)
         assertTrue(restored.isFinished)
     }
 

@@ -52,6 +52,7 @@
 @import './styles/sidebar-nav.css';
 @import './styles/sidebar-nav-account.css';
 @import './styles/settings.css';
+@import './styles/settings-layout.css';
 @import './styles/settings-song-cache.css';
 @import './styles/audio-engine.css';
 @import './styles/settings-readiness.css';
@@ -66,6 +67,7 @@
 @import './styles/artist-detail.css';
 @import './styles/artist-detail-responsive.css';
 @import './styles/explicit-badge.css';
+@import './styles/download-indicator.css';
 @import './styles/fullscreen-player.css';
 @import './styles/smart-crossfade-mix.css';
 @import './styles/fullscreen-queue.css';
@@ -75,9 +77,11 @@
 @import './styles/collection-quick-search.css';
 @import './styles/live-shows.css';
 @import './styles/windowed-shell.css';
+@import './styles/album-detail.css';
 @import './styles/listening-party.css';
 @import './styles/orchard-full-bleed.css';
 @import './styles/compact-settings.css';
 @import './styles/player-bar.css';
 @import './styles/immersive-background.css';
+@import './styles/album-shell-accent.css';
 @import './styles/motion.css';

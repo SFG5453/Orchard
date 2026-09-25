@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "orchard-cast-receiver",
+  "compatibility_date": "2026-06-19",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": "."
+  },
+  "workers_dev": true,
+  "preview_urls": true,
+  // Template route configuration: Uncomment and configure your own damn custom domain
+  // "routes": [
+  //   {
+  //     "pattern": "cast.yourdomain.com",
+  //     "custom_domain": true
+  //   }
+  // ],
+  "observability": {
+    "enabled": true
+  }
+}

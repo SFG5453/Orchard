@@ -22,6 +22,7 @@ package dev.sfg.orchard.mobile.ui.components
 import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
 import android.util.Log
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.TextureView
 import androidx.compose.animation.core.RepeatMode
@@ -45,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -63,6 +65,7 @@ import coil3.request.crossfade
 import coil3.size.Size
 import dev.sfg.orchard.connect.R
 import dev.sfg.orchard.mobile.artwork.highResolutionArtworkUrl
+import dev.sfg.orchard.mobile.download.AnimatedArtworkCache
 import dev.sfg.orchard.mobile.ui.theme.OrchardColors
 import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.delay
@@ -73,6 +76,7 @@ fun RemoteArtwork(
     description: String,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
+    alignment: Alignment = Alignment.Center,
 ) {
     val context = LocalContext.current
     val source = remember(url) { highResolutionArtworkUrl(url) }
@@ -83,6 +87,7 @@ fun RemoteArtwork(
                 model = artworkRequest(context, source),
                 contentDescription = description,
                 contentScale = contentScale,
+                alignment = alignment,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -137,6 +142,7 @@ fun AnimatedArtworkVideo(
     active: Boolean,
     modifier: Modifier = Modifier,
     onFrame: ((Bitmap) -> Unit)? = null,
+    alignment: Alignment = Alignment.Center,
 ) {
     if (url.isBlank()) return
     val context = LocalContext.current
@@ -145,13 +151,8 @@ fun AnimatedArtworkVideo(
     if (failed) return
 
     val player = remember(url) {
-        val httpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
-            .setUserAgent("Orchard Android/2.0")
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(10_000)
-            .setReadTimeoutMs(10_000)
         val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context)
-            .setDataSourceFactory(httpDataSourceFactory)
+            .setDataSourceFactory(AnimatedArtworkCache.dataSourceFactory(context))
 
         // Motion covers are short silent loops, so the stock buffering targets (which hold
         // playback until seconds of video are ready) just delay the first frame. Start as soon
@@ -257,6 +258,7 @@ fun AnimatedArtworkVideo(
     AndroidView(
         factory = { targetContext ->
             (LayoutInflater.from(targetContext).inflate(R.layout.animated_artwork_player, null) as PlayerView).apply {
+                setVideoSurfaceAlignment(alignment)
                 this.player = player
                 setShutterBackgroundColor(AndroidColor.TRANSPARENT)
                 // PlayerView/video surfaces may request that the display stay awake while
@@ -268,13 +270,34 @@ fun AnimatedArtworkVideo(
             }
         },
         update = { view ->
+            view.setVideoSurfaceAlignment(alignment)
             view.alpha = animatedAlpha
             // Reassert after player state changes in case Media3 refreshed the surface flags.
             view.keepScreenOn = false
             view.videoSurfaceView?.keepScreenOn = false
         },
-        modifier = modifier.graphicsLayer { alpha = animatedAlpha },
+        modifier = modifier
+            .clipToBounds()
+            .graphicsLayer {
+                alpha = animatedAlpha
+                clip = true
+            },
     )
+}
+
+private fun PlayerView.setVideoSurfaceAlignment(alignment: Alignment) {
+    val surface = videoSurfaceView ?: return
+    val gravity = if (alignment == Alignment.TopCenter) {
+        Gravity.TOP or Gravity.CENTER_HORIZONTAL
+    } else {
+        Gravity.CENTER
+    }
+    val params = surface.layoutParams as? android.widget.FrameLayout.LayoutParams
+        ?: android.widget.FrameLayout.LayoutParams(surface.layoutParams)
+    if (params.gravity != gravity) {
+        params.gravity = gravity
+        surface.layoutParams = params
+    }
 }
 
 private const val FRAME_SAMPLE_WIDTH = 64
@@ -286,10 +309,12 @@ fun ArtworkTile(
     description: String,
     modifier: Modifier = Modifier,
     radius: Int = 14,
+    alignment: Alignment = Alignment.Center,
 ) {
     RemoteArtwork(
         url = url,
         description = description,
         modifier = modifier.clip(RoundedCornerShape(radius.dp)),
+        alignment = alignment,
     )
 }

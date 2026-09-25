@@ -71,6 +71,7 @@ fun NowPlayingOverlay(
 
     val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
     val activeBitrate by viewModel.activeBitrate.collectAsStateWithLifecycle()
+    val activeTrackIsQobuz by viewModel.activeTrackIsQobuz.collectAsStateWithLifecycle()
     val autoplayLoading by viewModel.autoplayLoading.collectAsStateWithLifecycle()
     val autoplayError by viewModel.autoplayError.collectAsStateWithLifecycle()
     val connectProtocolVersion by viewModel.connectProtocolVersion.collectAsStateWithLifecycle()
@@ -78,6 +79,8 @@ fun NowPlayingOverlay(
     val downloadedTrackIds by viewModel.downloadedTrackIds.collectAsStateWithLifecycle()
     val sleepTimerRemainingSeconds by viewModel.sleepTimerRemainingSeconds.collectAsStateWithLifecycle()
     val sleepTimerEndOfTrack by viewModel.sleepTimerEndOfTrack.collectAsStateWithLifecycle()
+    val musicVideo by viewModel.musicVideo.collectAsStateWithLifecycle()
+    val videoPlayer by viewModel.videoPlayer.collectAsStateWithLifecycle()
     var playlistPickerTrack by remember { mutableStateOf<Track?>(null) }
 
     val liked = library.likedTracks.any { it.id == currentTrack.id }
@@ -97,15 +100,22 @@ fun NowPlayingOverlay(
         onStartSleepTimer = viewModel::startSleepTimer,
         onStartSleepTimerAtEndOfTrack = viewModel::startSleepTimerAtEndOfTrack,
         onCancelSleepTimer = viewModel::cancelSleepTimer,
+        smartCrossfade = settings.smartCrossfade,
+        onBestMixUpcoming = viewModel::bestMixUpcoming,
+        musicVideo = musicVideo,
+        videoPlayer = videoPlayer,
+        onToggleMusicVideo = viewModel::toggleMusicVideo,
         playback = playback,
         transition = transition,
         mixProgress = mixProgress,
         targets = targets,
         lyrics = lyrics,
         animatedArtworkEnabled = settings.animatedArtwork,
+        animatedBackgroundEnabled = settings.animatedBackground,
         gesturesEnabled = settings.playerGesturesEnabled,
         showBitrate = settings.showBitrate,
         bitrateKbps = activeBitrate,
+        isQobuz = activeTrackIsQobuz || currentTrack.isQobuz,
         liked = liked,
         protocolVersion = connectProtocolVersion,
         remoteVolume = connectRemoteVolume,

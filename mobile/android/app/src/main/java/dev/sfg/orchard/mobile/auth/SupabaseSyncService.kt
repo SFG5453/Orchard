@@ -277,6 +277,11 @@ class SupabaseSyncService(context: Context) {
                 if (videoId.isBlank()) continue
 
                 val analysisData = row.optJSONObject("analysis_data") ?: row
+                val analysisVersion = row.optInt(
+                    "analysis_version",
+                    analysisData.optInt("analysisVersion", 0),
+                )
+                if (analysisVersion != TrackFeatures.ANALYSIS_VERSION) continue
                 val features = TrackFeatures.parse(analysisData)
                 if (features.bpm > 0.0) {
                     results[videoId] = features

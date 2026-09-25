@@ -53,8 +53,7 @@ export async function openCollectionWithLoading(ctx, kind, item) {
   ctx.activeView.value = 'browse';
   await nextTick();
 
-  try {
-    const data = await ctx.emitWithReply(`music:${kind}`, { ...browsePayload, browseId });
+  function showDetail(data, { offline = false } = {}) {
     const totalTrackCount = collectionItemCount(item, data);
     ctx.pushNavigationEntry(previousEntry);
     ctx.browseOrigin.value = origin;
@@ -66,17 +65,48 @@ export async function openCollectionWithLoading(ctx, kind, item) {
         (item.subtitle && !ctx.isYearText(item.subtitle) ? item.subtitle : '') || '',
       itemCount: totalTrackCount ? `${totalTrackCount.toLocaleString('en-US')} tracks` : (item.itemCount || data.itemCount),
       totalTrackCount,
-      kind: data.kind || kind
+      kind: data.kind || kind,
+      offline: Boolean(offline || data.offline)
     };
 
-    if (ctx.browseDetail.value.kind === 'artist' && ctx.browseDetail.value.title) {
+    if (ctx.browseDetail.value.kind === 'artist' && ctx.browseDetail.value.title && !offline) {
       fetchArtistArtFromAudioDB(ctx, ctx.browseDetail.value.title);
     }
+  }
+
+  try {
+    if (
+      item.offlineDownload ||
+      ctx.networkOffline?.value ||
+      (typeof navigator !== 'undefined' && navigator.onLine === false)
+    ) {
+      const offlineDetail = ctx.offlineBrowseDetail?.(kind, item);
+      if (offlineDetail) {
+        showDetail(offlineDetail, { offline: true });
+        await nextTick();
+        ctx.writeLastPageEntry();
+        return;
+      }
+      if (item.offlineDownload) throw new Error('No downloaded songs were found for this collection.');
+    }
+
+    const data = await ctx.emitWithReply(`music:${kind}`, { ...browsePayload, browseId });
+    showDetail(data);
 
     await nextTick();
     void ctx.prefetchBrowseTrackPages();
     ctx.writeLastPageEntry();
   } catch (error) {
+    const definitelyOffline = ctx.networkOffline?.value ||
+      (typeof navigator !== 'undefined' && navigator.onLine === false);
+    const offlineDetail = definitelyOffline ? ctx.offlineBrowseDetail?.(kind, item) : null;
+    if (offlineDetail) {
+      showDetail(offlineDetail, { offline: true });
+      ctx.warningMessage.value = 'Showing downloaded music while Orchard is offline.';
+      await nextTick();
+      ctx.writeLastPageEntry();
+      return;
+    }
     ctx.activeView.value = previousView;
     ctx.browseDetail.value = previousDetail;
     ctx.sectionMoreDetail.value = previousSectionMore;

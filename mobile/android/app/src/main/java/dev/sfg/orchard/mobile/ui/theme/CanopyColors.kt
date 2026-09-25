@@ -66,6 +66,21 @@ object CanopyColors {
     val Overlay = Color(0x40000000)
     val PlayerBackdrop = Color(0xFF121212)
 
+    /**
+     * Frosted panes. [Glass] is the film laid over a pane's blurred backdrop, and is nearly white
+     * on purpose — the film goes on at a fraction of full opacity, so anything darker just reads
+     * as a grey card sitting on the blur rather than as frost in it. [GlassChrome] is the darker
+     * film under bars, which have a scrolling list passing behind them to stay legible against.
+     */
+    val Glass = Color(0xFFE7ECF8)
+    val GlassSecondary = Color(0xFFDCE4F0)
+    val GlassChrome = Color(0xFF141A24)
+    val GlassOverlay = Color(0xFF10141C)
+
+    /** Subtle architectural glass perimeter borders. */
+    val GlassBorder = Color(0xFFFFFFFF).copy(alpha = 0.10f)
+    val GlassBorderHighlight = Color(0xFFFFFFFF).copy(alpha = 0.22f)
+
     val Warning = Color(0xFFFFC46B)
     val Danger = Color(0xFFFF746D)
 }

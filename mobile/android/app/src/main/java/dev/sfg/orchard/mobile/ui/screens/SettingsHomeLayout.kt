@@ -20,7 +20,7 @@
 package dev.sfg.orchard.mobile.ui.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import dev.sfg.orchard.mobile.ui.scroll.OrchardLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.model.BuiltInHomeSection
 import dev.sfg.orchard.mobile.model.HomeSectionConfig
 import dev.sfg.orchard.mobile.model.OrchardSettings
+import dev.sfg.orchard.mobile.ui.glass.glassFill
+import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import dev.sfg.orchard.mobile.auth.AuthState
@@ -154,10 +156,11 @@ private fun SectionItemRow(
     onMoveDown: () -> Unit,
     onToggle: (Boolean) -> Unit
 ) {
+    val shape = RoundedCornerShape(16.dp)
     Surface(
-        color = CanopyColors.Surface,
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth()
+        color = glassFill(CanopyColors.Surface),
+        shape = shape,
+        modifier = Modifier.fillMaxWidth().glassPane(shape)
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),

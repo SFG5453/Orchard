@@ -26,6 +26,25 @@ import kotlin.math.abs
 /** Selects distinct songs from YouTube Music's radio response for the Autoplay queue. */
 object AutoplayRecommendations {
     /**
+     * Finds duplicate rows that Autoplay itself added. User-authored duplicate playlist rows are
+     * intentionally retained, but an Autoplay row may not repeat either a chosen row or an earlier
+     * Autoplay recommendation. Returning indices lets the live player remove only bad upcoming
+     * rows without rebuilding the queue or interrupting playback.
+     */
+    fun duplicateGeneratedIndices(queue: List<Track>): List<Int> {
+        val kept = mutableListOf<Track>()
+        return buildList {
+            queue.forEachIndexed { index, track ->
+                if (track.autoplayGenerated && kept.any { it.isSameSongAs(track) }) {
+                    add(index)
+                } else {
+                    kept += track
+                }
+            }
+        }
+    }
+
+    /**
      * YouTube can return the album audio, music video and radio edit as separate video ids. Queue
      * identity still uses those ids, but Autoplay should not put each representation of the same
      * recording next to the others. User-authored playlists remain untouched by keeping this rule
@@ -81,6 +100,7 @@ object AutoplayRecommendations {
 
     private fun String.songTitleKey(): String =
         normalizeUnicode()
+            .replace(BRACKETED_COLLABORATOR, " ")
             .replace(BRACKETED_VERSION, " ")
             .replace(TRAILING_VERSION, " ")
             .textKey()
@@ -100,6 +120,10 @@ object AutoplayRecommendations {
 
     private val BRACKETED_VERSION = Regex(
         """\s*[\[(]\s*(?:official\s+)?(?:music\s+)?(?:video|audio|lyrics?(?:\s+video)?|visuali[sz]er|radio\s+edit|single\s+version|album\s+version|remaster(?:ed)?(?:\s+\d{4})?)\s*[\])]\s*""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val BRACKETED_COLLABORATOR = Regex(
+        """\s*[\[(]\s*(?:feat(?:uring)?\.?|ft\.?|with)\s+[^\])]+[\])]\s*""",
         RegexOption.IGNORE_CASE,
     )
     private val TRAILING_VERSION = Regex(

@@ -17,8 +17,6 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { unzipSync } from 'fflate';
-
 const DEFAULT_ARTIST_PACK_INDEX_URL = 'https://artist-packs.sfg545.dev/v1/index.json';
 const ARTIST_INDEX_CACHE_MS = 15 * 60 * 1000;
 const textDecoder = new TextDecoder();
@@ -110,12 +108,11 @@ async function hostedArtistIndex() {
 }
 
 async function fetchArchiveEntries(archiveUrl) {
-  const mainEntries = await window.orchardUpdates?.readArtistPackArchive?.(archiveUrl).catch(() => null);
-  if (mainEntries && typeof mainEntries === 'object') return mainEntries;
-
-  const response = await fetch(archiveUrl, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`Artist pack archive HTTP ${response.status}`);
-  return unzipSync(new Uint8Array(await response.arrayBuffer()));
+  const readArchive = window.orchardUpdates?.readArtistPackArchive;
+  if (typeof readArchive !== 'function') throw new Error('Artist pack archive reader is unavailable.');
+  const entries = await readArchive(archiveUrl);
+  if (!entries || typeof entries !== 'object') throw new Error('Artist pack archive was invalid.');
+  return entries;
 }
 
 function normalizeArchiveIndex(data, zipEntries, sourceUrl) {

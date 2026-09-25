@@ -28,10 +28,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
@@ -41,6 +41,7 @@ import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -51,6 +52,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import dev.sfg.orchard.mobile.model.Track
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,12 +68,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
 /**
- * Collection action buttons row:
- * [ Circular Shuffle ]  [ Wide White Play Pill ]  [ Circular Add/Favorite ]  [ Circular Download ]
+ * Collection action buttons row: [ Circular Shuffle ] [ Wide White Play Pill ]
+ * [ Circular Add/Favorite ] [ Circular Download ]
  */
 @Composable
 fun CollectionActionRow(
@@ -90,9 +91,7 @@ fun CollectionActionRow(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -118,16 +117,15 @@ fun CollectionActionRow(
         Button(
             onClick = onPlay,
             enabled = playEnabled,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = accent,
-                contentColor = Color.Black,
-                disabledContainerColor = accent.copy(alpha = 0.30f),
-                disabledContentColor = Color.Black.copy(alpha = 0.40f),
-            ),
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = accent,
+                    contentColor = Color.Black,
+                    disabledContainerColor = accent.copy(alpha = 0.30f),
+                    disabledContentColor = Color.Black.copy(alpha = 0.40f),
+                ),
             shape = RoundedCornerShape(24.dp),
-            modifier = Modifier
-                .weight(1f)
-                .height(44.dp),
+            modifier = Modifier.weight(1f).height(44.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -186,7 +184,14 @@ fun CollectionActionRow(
                         Icon(
                             if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
                             contentDescription = if (isDownloaded) "Downloaded offline" else "Download collection",
-                            tint = if (isDownloaded) LocalAccent.current else if (downloadEnabled) Color.White else Color.White.copy(alpha = 0.35f),
+                            tint =
+                                if (isDownloaded) {
+                                    LocalAccent.current
+                                } else if (downloadEnabled) {
+                                    Color.White
+                                } else {
+                                    Color.White.copy(alpha = 0.35f)
+                                },
                             modifier = Modifier.size(20.dp),
                         )
                     }
@@ -197,8 +202,28 @@ fun CollectionActionRow(
 }
 
 /**
- * Editorial review / description preview with inline "MORE".
+ * Helper to produce the collection download / delete callback based on current download state.
  */
+fun collectionDownloadAction(
+    tracks: List<Track>,
+    downloadedTrackIds: Set<String>,
+    onDownloadTracks: ((List<Track>) -> Unit)?,
+    onRemoveDownloadTracks: ((List<Track>) -> Unit)?,
+): (() -> Unit)? {
+    if (onDownloadTracks == null || onRemoveDownloadTracks == null || tracks.isEmpty()) {
+        return null
+    }
+    val allDownloaded = tracks.all { downloadedTrackIds.contains(it.id) }
+    return {
+        if (allDownloaded) {
+            onRemoveDownloadTracks(tracks)
+        } else {
+            onDownloadTracks(tracks)
+        }
+    }
+}
+
+/** Editorial review / description preview with inline "MORE". */
 @Composable
 fun AlbumEditorialReview(
     description: String,
@@ -213,29 +238,21 @@ fun AlbumEditorialReview(
     val annotated = buildAnnotatedString {
         append(previewText)
         append(" ")
-        withStyle(
-            SpanStyle(
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-            )
-        ) {
+        withStyle(SpanStyle(color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)) {
             append("MORE")
         }
     }
 
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onOpenAbout)
-            .padding(horizontal = 24.dp, vertical = 6.dp)
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpenAbout)
+                .padding(horizontal = 24.dp, vertical = 6.dp)
     ) {
         Text(
             text = annotated,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                lineHeight = 18.sp,
-                fontSize = 13.sp,
-            ),
+            style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 18.sp, fontSize = 13.sp),
             color = Color.White.copy(alpha = 0.72f),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -251,16 +268,36 @@ fun CollectionTopBar(
     isSaved: Boolean,
     onAbout: (() -> Unit)? = null,
     onBestMix: (() -> Unit)? = null,
+    onSearch: (() -> Unit)? = null,
+    isSearching: Boolean = false,
+    searchQuery: String = "",
+    onSearchQueryChange: ((String) -> Unit)? = null,
+    onCloseSearch: (() -> Unit)? = null,
+    searchPlaceholder: String = "Find in playlist",
     aboutLabel: String = "About",
+    onDownload: (() -> Unit)? = null,
+    isDownloaded: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    if (isSearching && onSearchQueryChange != null && onCloseSearch != null) {
+        CollectionTopSearchBar(
+            query = searchQuery,
+            onQueryChange = onSearchQueryChange,
+            onClose = onCloseSearch,
+            placeholder = searchPlaceholder,
+            modifier = modifier,
+        )
+        return
+    }
+
     var menuOpen by remember { mutableStateOf(false) }
 
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -284,6 +321,24 @@ fun CollectionTopBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (onSearch != null) {
+                Surface(
+                    onClick = onSearch,
+                    shape = CircleShape,
+                    color = Color.White.copy(alpha = 0.16f),
+                    modifier = Modifier.size(38.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Rounded.Search,
+                            contentDescription = "Search in collection",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+            }
+
             Surface(
                 onClick = onShare,
                 shape = CircleShape,
@@ -318,6 +373,36 @@ fun CollectionTopBar(
                 }
 
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    if (onSearch != null) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "Find in ${if (aboutLabel.contains("album", true)) "album" else "playlist"}"
+                                )
+                            },
+                            onClick = {
+                                menuOpen = false
+                                onSearch()
+                            },
+                        )
+                    }
+                    if (onDownload != null) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (isDownloaded) {
+                                        "Remove download"
+                                    } else {
+                                        "Download ${if (aboutLabel.contains("album", true)) "album" else "playlist"}"
+                                    }
+                                )
+                            },
+                            onClick = {
+                                menuOpen = false
+                                onDownload()
+                            },
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text(if (isSaved) "Remove from library" else "Add to library") },
                         onClick = {

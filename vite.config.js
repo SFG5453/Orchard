@@ -25,9 +25,14 @@ export default defineConfig({
     strictPort: false
   },
   build: {
-    target: 'es2022',
+    chunkSizeWarningLimit: 900,
+    target: 'esnext',
     emptyOutDir: true,
     rolldownOptions: {
+      input: {
+        main: 'index.html',
+        welcome: 'welcome.html'
+      },
       output: {
         codeSplitting: {
           groups: [
@@ -55,6 +60,11 @@ export default defineConfig({
               name: 'socket-io',
               test: /node_modules[\\/](?:@socket\.io|socket\.io-client|socket\.io-parser|engine\.io-client|engine\.io-parser)[\\/]/,
               priority: 20
+            },
+            {
+              name: 'audio-analysis',
+              test: /node_modules[\\/](?:@kawarp[\\/]core|fft\.js|idb-keyval|is-any-array|meyda|ml-distance-euclidean|ml-kmeans|ml-matrix|ml-nearest-vector|ml-random|ml-spectra-processing|ml-xsadd|zod)[\\/]/,
+              priority: 19
             },
             {
               name: 'vendor',

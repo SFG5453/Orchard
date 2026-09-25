@@ -79,10 +79,14 @@ export function installMediaHandlers(ctx) {
   };
 
   ctx.syncNowArtworkVideoPlayback = function syncNowArtworkVideoPlayback() {
-    const artworkVideoRefs = [ctx.nowArtworkVideoRef, ctx.rightPanelArtworkVideoRef];
+    const artworkVideoRefs = [
+      ctx.nowArtworkVideoRef,
+      ctx.rightPanelArtworkVideoRef,
+      ctx.fullscreenArtworkVideoRef
+    ];
 
     for (const videoRef of artworkVideoRefs) {
-      const video = videoRef.value;
+      const video = videoRef?.value;
       if (!video) continue;
 
       if (ctx.isPlaying.value) {
@@ -172,6 +176,13 @@ export function installMediaHandlers(ctx) {
     ctx.isPlaying.value = true;
     ctx.startYouTubeHistory?.(ctx.activeTrack.value?.youtubeVideoId || ctx.activeTrack.value?.id);
     ctx.startLastfmTrack?.();
+    if (ctx.activeTrack.value?.providerPlaybackId) {
+      ctx.socket.value?.emit('playback:provider-start', {
+        provider: ctx.activeTrack.value.playbackSource,
+        playbackId: ctx.activeTrack.value.providerPlaybackId,
+        position: Number(event.target?.currentTime || 0)
+      });
+    }
   };
 
   ctx.onAudioCanPlay = function onAudioCanPlay(event) {
@@ -214,6 +225,13 @@ export function installMediaHandlers(ctx) {
     ctx.clearPlaybackStallRecovery();
     ctx.finishYouTubeHistory?.();
     ctx.reportLastfmProgress?.();
+    if (ctx.activeTrack.value?.providerPlaybackId) {
+      ctx.socket.value?.emit('playback:provider-end', {
+        provider: ctx.activeTrack.value.playbackSource,
+        playbackId: ctx.activeTrack.value.providerPlaybackId,
+        position: Number(event.target?.currentTime || ctx.currentTime.value || 0)
+      });
+    }
     if (ctx.activeTrackIsVideo.value) ctx.videoAudioRef.value?.pause();
     if (ctx.completeSleepTimerAfterTrack()) return;
     void ctx.finishAudioTrack();

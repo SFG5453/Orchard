@@ -123,7 +123,7 @@ export function createPlaylistMutations({ ensureSignedIn, refreshBrowserAuth }) 
     return false;
   }
 
-  async function editableTargets({ playlists = [], videoId = '' } = {}) {
+  async function editableTargets({ playlists = [], videoId = '', videoIds = [] } = {}) {
     const yt = await signedInClient();
     const candidates = new Map(playlists
       .filter((item) => playlistId(item?.id))
@@ -131,18 +131,23 @@ export function createPlaylistMutations({ ensureSignedIn, refreshBrowserAuth }) 
       .map((item) => [playlistId(item.id), { ...item, id: playlistId(item.id) }]));
     let options = [];
 
-    if (videoId) {
+    const probeVideoId = videoId || (Array.isArray(videoIds) && videoIds[0] ? String(videoIds[0]).trim() : '');
+
+    if (probeVideoId) {
       try {
-        options = await addToPlaylistOptions(yt, videoId);
+        options = await addToPlaylistOptions(yt, probeVideoId);
       } catch {
         // Older or alternate clients may not expose the picker endpoint.
       }
     }
 
+    const isSingleTrack = Boolean(videoId && (!videoIds || !videoIds.length || videoIds.length === 1));
+
     const results = options.map((option) => ({
       ...candidates.get(option.id),
       ...option,
-      editable: true
+      editable: true,
+      containsTrack: isSingleTrack ? Boolean(option.containsTrack) : false
     }));
     const knownIds = new Set(results.map((item) => item.id));
     const missing = [...candidates.values()].filter((item) => !knownIds.has(item.id));
@@ -152,7 +157,7 @@ export function createPlaylistMutations({ ensureSignedIn, refreshBrowserAuth }) 
       const checks = await Promise.all(group.map(async (item) => ({
         ...item,
         editable: await canEditWithClient(yt, item.id),
-        containsTrack: videoId ? await playlistContainsTrack(yt, item.id, videoId).catch(() => false) : false
+        containsTrack: isSingleTrack && videoId ? await playlistContainsTrack(yt, item.id, videoId).catch(() => false) : false
       })));
       results.push(...checks.filter((item) => item.editable));
     }
@@ -160,15 +165,17 @@ export function createPlaylistMutations({ ensureSignedIn, refreshBrowserAuth }) 
     return results;
   }
 
-  async function create({ title, videoId }) {
+  async function create({ title, videoId = '', videoIds = [] }) {
     const cleanTitle = String(title || '').trim();
-    const cleanVideoId = String(videoId || '').trim();
+    const ids = Array.isArray(videoIds) && videoIds.length
+      ? videoIds.map((id) => String(id || '').trim()).filter(Boolean)
+      : (videoId ? [String(videoId).trim()] : []);
     if (!cleanTitle) throw new Error('Enter a playlist name.');
-    if (!cleanVideoId) throw new Error('This track cannot be added to a playlist.');
+    if (!ids.length) throw new Error('This track cannot be added to a playlist.');
 
     const yt = await signedInClient();
     try {
-      const result = await yt.playlist.create(cleanTitle, [cleanVideoId]);
+      const result = await yt.playlist.create(cleanTitle, ids);
       if (!result.success || !result.playlist_id) throw new Error('YouTube did not create the playlist.');
       return { id: result.playlist_id, title: cleanTitle };
     } catch (error) {
@@ -176,19 +183,31 @@ export function createPlaylistMutations({ ensureSignedIn, refreshBrowserAuth }) 
     }
   }
 
-  async function add({ playlistId: targetId, videoId }) {
+  async function add({ playlistId: targetId, videoId = '', videoIds = [] }) {
     const id = playlistId(targetId);
-    const cleanVideoId = String(videoId || '').trim();
-    if (!id || !cleanVideoId) throw new Error('Playlist or track information is missing.');
+    const ids = Array.isArray(videoIds) && videoIds.length
+      ? videoIds.map((v) => String(v || '').trim()).filter(Boolean)
+      : (videoId ? [String(videoId).trim()] : []);
+    if (!id || !ids.length) throw new Error('Playlist or track information is missing.');
 
     const yt = await signedInClient();
     try {
-      const options = await addToPlaylistOptions(yt, cleanVideoId).catch(() => []);
-      const target = options.find((item) => item.id === id);
-      if (target?.containsTrack) throw new Error('This song is already in that playlist.');
-      if (options.length && !target) throw new Error('This playlist cannot be edited.');
-      if (!options.length && !await canEditWithClient(yt, id)) throw new Error('This playlist cannot be edited.');
-      await yt.playlist.addVideos(id, [cleanVideoId]);
+      if (ids.length === 1) {
+        const cleanVideoId = ids[0];
+        const options = await addToPlaylistOptions(yt, cleanVideoId).catch(() => []);
+        const target = options.find((item) => item.id === id);
+        if (target?.containsTrack) throw new Error('This song is already in that playlist.');
+        if (options.length && !target) throw new Error('This playlist cannot be edited.');
+        if (!options.length && !await canEditWithClient(yt, id)) throw new Error('This playlist cannot be edited.');
+      } else {
+        let editable = await canEditWithClient(yt, id);
+        if (!editable && ids[0]) {
+          const options = await addToPlaylistOptions(yt, ids[0]).catch(() => []);
+          editable = options.some((item) => item.id === id);
+        }
+        if (!editable) throw new Error('This playlist cannot be edited.');
+      }
+      await yt.playlist.addVideos(id, ids);
       return { id };
     } catch (error) {
       throw mutationError(error);

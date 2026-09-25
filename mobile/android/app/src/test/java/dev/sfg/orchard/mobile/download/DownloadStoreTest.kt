@@ -22,6 +22,7 @@ package dev.sfg.orchard.mobile.download
 import dev.sfg.orchard.mobile.model.Track
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -119,5 +120,31 @@ class DownloadStoreTest {
         store.save(DownloadItem(track = Track(id = "t2", title = "T2", artist = "A2"), status = DownloadStatus.COMPLETED, filePath = f2.absolutePath, bytesDownloaded = 2048L))
 
         assertEquals(3072L, store.totalBytesUsed())
+    }
+
+    @Test
+    fun completedDownloadRequiresARealNonEmptyFile() {
+        val track = Track(id = "stale", title = "Stale", artist = "Artist")
+        val missing = File(tempFolder.root, "removed.webm")
+        val empty = tempFolder.newFile("empty.webm")
+        val audio = tempFolder.newFile("audio.webm").apply { writeText("audio") }
+
+        assertNull(
+            DownloadItem(track, DownloadStatus.COMPLETED, filePath = missing.absolutePath)
+                .completedFileOrNull(),
+        )
+        assertNull(
+            DownloadItem(track, DownloadStatus.COMPLETED, filePath = empty.absolutePath)
+                .completedFileOrNull(),
+        )
+        assertNull(
+            DownloadItem(track, DownloadStatus.DOWNLOADING, filePath = audio.absolutePath)
+                .completedFileOrNull(),
+        )
+        assertEquals(
+            audio.absolutePath,
+            DownloadItem(track, DownloadStatus.COMPLETED, filePath = audio.absolutePath)
+                .completedFileOrNull()?.absolutePath,
+        )
     }
 }

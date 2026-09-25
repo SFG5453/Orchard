@@ -32,6 +32,26 @@ const KAWARP_OPTIONS = {
   warpIntensity: 0.92
 };
 
+// This canvas is blurred ambient colour, not detail the user needs to resolve.
+// Rendering it at display density wastes a large full-resolution WebGL FBO (and
+// the canvas backing store). Keep roughly 60% of CSS resolution and cap the
+// total surface at 720p; CSS still stretches it over the entire viewport.
+const RENDER_SCALE = 0.6;
+const MAX_RENDER_PIXELS = 1280 * 720;
+
+export function immersiveBackingSize(width, height) {
+  const cssWidth = Math.max(2, Number(width) || 2);
+  const cssHeight = Math.max(2, Number(height) || 2);
+  const scaledWidth = cssWidth * RENDER_SCALE;
+  const scaledHeight = cssHeight * RENDER_SCALE;
+  const pixelScale = Math.min(1, Math.sqrt(MAX_RENDER_PIXELS / (scaledWidth * scaledHeight)));
+
+  return {
+    width: Math.max(2, Math.round(scaledWidth * pixelScale)),
+    height: Math.max(2, Math.round(scaledHeight * pixelScale))
+  };
+}
+
 // Kawarp performs its expensive blur when artwork changes, then keeps the
 // frame loop to a small domain-warp pass. Static mode renders one warped frame
 // and stops, while animated mode resumes that same renderer when playing.
@@ -87,10 +107,11 @@ export class KawarpArtworkBackground {
 
   resize() {
     if (!this.renderer || this.destroyed) return;
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.25);
     const bounds = this.canvas.getBoundingClientRect();
-    const width = Math.max(2, Math.round((bounds.width || window.innerWidth) * pixelRatio));
-    const height = Math.max(2, Math.round((bounds.height || window.innerHeight) * pixelRatio));
+    const { width, height } = immersiveBackingSize(
+      bounds.width || window.innerWidth,
+      bounds.height || window.innerHeight
+    );
     if (this.canvas.width !== width || this.canvas.height !== height) {
       this.canvas.width = width;
       this.canvas.height = height;

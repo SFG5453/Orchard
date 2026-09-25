@@ -104,6 +104,10 @@ export default {
               <strong class="explicit-title">
                 <span class="explicit-title__text">{{ entry.item.title }}</span>
                 <ExplicitBadge :explicit="entry.item.explicit" />
+                <DownloadIndicator
+                  :downloaded="isTrackDownloaded(entry.item)"
+                  :downloading="isTrackDownloading(entry.item)"
+                />
               </strong>
               <small>{{ entry.item.artist || itemMeta(entry.item) }}</small>
             </span>

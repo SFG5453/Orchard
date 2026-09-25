@@ -52,13 +52,16 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         .map { values ->
             OrchardSettings(
                 animatedArtwork = values[ANIMATED_ARTWORK] ?: true,
+                downloadAnimatedArtwork = values[DOWNLOAD_ANIMATED_ARTWORK] ?: false,
                 audioQuality = runCatching { AudioQuality.valueOf(values[AUDIO_QUALITY].orEmpty()) }
                     .getOrDefault(AudioQuality.HIGH),
                 useSystemColors = values[SYSTEM_COLORS] ?: false,
                 animatedBackground = values[ANIMATED_BACKGROUND] ?: false,
+                frostedGlass = values[FROSTED_GLASS] ?: false,
                 crossfadeEnabled = values[CROSSFADE_ENABLED] ?: false,
                 crossfadeSeconds = values[CROSSFADE_SECONDS] ?: OrchardSettings.DEFAULT_CROSSFADE_SECONDS,
                 smartCrossfade = values[SMART_CROSSFADE] ?: false,
+                bestMixSupabaseSync = values[BEST_MIX_SUPABASE_SYNC] ?: false,
                 cacheSizeMb = values[CACHE_SIZE_MB] ?: OrchardSettings.DEFAULT_CACHE_SIZE_MB,
                 onboardingCompleted = values[ONBOARDING_COMPLETED] ?: false,
                 discordPresenceEnabled = values[DISCORD_PRESENCE_ENABLED] ?: true,
@@ -78,6 +81,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 playerGesturesEnabled = values[PLAYER_GESTURES_ENABLED] ?: true,
                 homeLayoutOnline = decodeHomeLayout(values[HOME_LAYOUT_ONLINE], true),
                 homeLayoutOffline = decodeHomeLayout(values[HOME_LAYOUT_OFFLINE], false),
+                customDeviceName = values[CUSTOM_DEVICE_NAME] ?: "",
                 betaChannelEnabled = values[BETA_CHANNEL_ENABLED] ?: false,
             )
         }
@@ -92,12 +96,15 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         scope.launch {
             store.edit {
                 it[ANIMATED_ARTWORK] = value.animatedArtwork
+                it[DOWNLOAD_ANIMATED_ARTWORK] = value.downloadAnimatedArtwork
                 it[AUDIO_QUALITY] = value.audioQuality.name
                 it[SYSTEM_COLORS] = value.useSystemColors
                 it[ANIMATED_BACKGROUND] = value.animatedBackground
+                it[FROSTED_GLASS] = value.frostedGlass
                 it[CROSSFADE_ENABLED] = value.crossfadeEnabled
                 it[CROSSFADE_SECONDS] = value.crossfadeSeconds
                 it[SMART_CROSSFADE] = value.smartCrossfade
+                it[BEST_MIX_SUPABASE_SYNC] = value.bestMixSupabaseSync
                 it[CACHE_SIZE_MB] = value.cacheSizeMb
                 it[ONBOARDING_COMPLETED] = value.onboardingCompleted
                 it[DISCORD_PRESENCE_ENABLED] = value.discordPresenceEnabled
@@ -115,6 +122,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[PLAYER_GESTURES_ENABLED] = value.playerGesturesEnabled
                 it[HOME_LAYOUT_ONLINE] = encodeHomeLayout(value.homeLayoutOnline)
                 it[HOME_LAYOUT_OFFLINE] = encodeHomeLayout(value.homeLayoutOffline)
+                it[CUSTOM_DEVICE_NAME] = value.customDeviceName
                 it[BETA_CHANNEL_ENABLED] = value.betaChannelEnabled
             }
         }
@@ -137,12 +145,19 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         scope.launch { store.edit { it.remove(SEARCH_HISTORY) } }
     }
 
-    private fun decodeHistory(value: String): List<String> = runCatching {
-        val values = JSONArray(value)
-        buildList {
-            for (index in 0 until values.length()) values.optString(index).takeIf(String::isNotBlank)?.let(::add)
+    fun removeSearchHistoryItem(query: String) {
+        val normalized = query.trim()
+        if (normalized.isEmpty()) return
+        scope.launch {
+            store.edit { values ->
+                val next = decodeSearchHistory(values[SEARCH_HISTORY].orEmpty())
+                    .filterNot { it.equals(normalized, ignoreCase = true) }
+                values[SEARCH_HISTORY] = JSONArray(next).toString()
+            }
         }
-    }.getOrDefault(emptyList())
+    }
+
+    private fun decodeHistory(value: String): List<String> = decodeSearchHistory(value)
 
     private fun decodeFloatList(value: String, expectedSize: Int): List<Float> {
         if (value.isBlank()) return List(expectedSize) { 0f }
@@ -183,12 +198,15 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
 
     private companion object {
         val ANIMATED_ARTWORK = booleanPreferencesKey("animated_artwork")
+        val DOWNLOAD_ANIMATED_ARTWORK = booleanPreferencesKey("download_animated_artwork")
         val AUDIO_QUALITY = stringPreferencesKey("audio_quality")
         val SYSTEM_COLORS = booleanPreferencesKey("system_colors")
         val ANIMATED_BACKGROUND = booleanPreferencesKey("animated_background")
+        val FROSTED_GLASS = booleanPreferencesKey("frosted_glass")
         val CROSSFADE_ENABLED = booleanPreferencesKey("crossfade_enabled")
         val CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
         val SMART_CROSSFADE = booleanPreferencesKey("smart_crossfade")
+        val BEST_MIX_SUPABASE_SYNC = booleanPreferencesKey("best_mix_supabase_sync")
         val CACHE_SIZE_MB = intPreferencesKey("cache_size_mb")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
@@ -207,6 +225,14 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val PLAYER_GESTURES_ENABLED = booleanPreferencesKey("player_gestures_enabled")
         val HOME_LAYOUT_ONLINE = stringPreferencesKey("home_layout_online")
         val HOME_LAYOUT_OFFLINE = stringPreferencesKey("home_layout_offline")
+        val CUSTOM_DEVICE_NAME = stringPreferencesKey("custom_device_name")
         val BETA_CHANNEL_ENABLED = booleanPreferencesKey("beta_channel_enabled")
     }
 }
+
+internal fun decodeSearchHistory(value: String): List<String> = runCatching {
+    val values = JSONArray(value)
+    buildList {
+        for (index in 0 until values.length()) values.optString(index).takeIf(String::isNotBlank)?.let(::add)
+    }
+}.getOrDefault(emptyList())

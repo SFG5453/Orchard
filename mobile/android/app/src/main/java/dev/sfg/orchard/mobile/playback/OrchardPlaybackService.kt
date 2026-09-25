@@ -25,6 +25,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.KeyEvent
+import androidx.core.content.IntentCompat
 import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -59,6 +61,7 @@ import com.google.common.util.concurrent.SettableFuture
 import dev.sfg.orchard.connect.R
 import dev.sfg.orchard.connect.app.MainActivity
 import dev.sfg.orchard.mobile.OrchardGraph
+import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.RepeatMode
 import dev.sfg.orchard.mobile.playback.smart.CrossfadeMode
 import dev.sfg.orchard.mobile.widget.OrchardWidgetUpdater
@@ -90,8 +93,9 @@ class OrchardPlaybackService : MediaLibraryService() {
     private lateinit var stateStore: PlaybackStateStore
     private lateinit var streamResolver: YouTubeStreamResolver
     private lateinit var streamCache: StreamCache
+    private lateinit var chromecastStreamServer: ChromecastStreamServer
+    private lateinit var chromecastPlayback: ChromecastPlayback
     private lateinit var analyzer: dev.sfg.orchard.mobile.playback.smart.TrackAnalyzer
-    private lateinit var preparer: dev.sfg.orchard.mobile.playback.smart.TransitionPreparer
     // One filter per player, inserted in each one's audio pipeline. They follow the players
     // through
     // a handoff rather than the roles, so a filter never ends up automating the wrong track.
@@ -114,14 +118,24 @@ class OrchardPlaybackService : MediaLibraryService() {
     /** The exact client identity behind each stable Orchard URI's most recent media fetch. */
     private val resolvedStreams = ConcurrentHashMap<String, ResolvedStream>()
 
+    /**
+     * Media3 can open the same stable URI from the active player, the spare crossfade player, and
+     * the whole-track prefetcher at the same time. Keep resolution itself single-flight per URI;
+     * otherwise each range request mints another Qobuz session and the last callback can replace
+     * the source metadata for the song that is actually playing.
+     */
+    private val streamResolutionLocks = ConcurrentHashMap<String, Any>()
+
     private val positionSaver =
         object : Runnable {
             override fun run() {
                 persistPlayback()
-                if (::player.isInitialized) {
-                    OrchardWidgetUpdater.onPlayerChanged(this@OrchardPlaybackService, player)
+                val source = authoritativePlayer()
+                if (source != null) {
+                    OrchardWidgetUpdater.onPlayerChanged(this@OrchardPlaybackService, source)
+                    updateScrobbling(source)
                 }
-                if (::player.isInitialized && player.isPlaying)
+                if (source?.isPlaying == true)
                     handler.postDelayed(this, POSITION_SAVE_INTERVAL_MS)
             }
         }
@@ -150,9 +164,13 @@ class OrchardPlaybackService : MediaLibraryService() {
             StreamCache(context = this, maxBytes = graph.settings.settings.value.cacheSizeBytes) {
                 graph.settings.settings.value.audioQuality
             }
-        analyzer = dev.sfg.orchard.mobile.playback.smart.TrackAnalyzer(this, streamCache)
-        preparer = dev.sfg.orchard.mobile.playback.smart.TransitionPreparer(this, streamCache)
+        analyzer = dev.sfg.orchard.mobile.playback.smart.TrackAnalyzer(
+            this,
+            streamCache,
+            graph.bestMixFeatures,
+        )
         graph.analysisLookup = analyzer::analysisFor
+        graph.onClearStreamCache = streamCache::clear
         // Caching finishes seconds after the player events that asked for it, so completion
         // has to
         // re-drive analysis itself. Hopped onto the main thread because prefetchAround
@@ -226,10 +244,8 @@ class OrchardPlaybackService : MediaLibraryService() {
                     )
                 },
                 analysisFor = analyzer::analysisFor,
-                preparedFor = { outgoing, incoming -> preparer.preparedFor(outgoing, incoming) },
                 filters = { playerFilter to spareFilter },
                 onPlan = { plan ->
-                    if (plan != null) prepareTransition(plan)
                     graph.transitionMarker.value = plan?.let {
                         val outgoing = player.currentMediaItem?.let(MediaItemMapper::toTrack)
                         val nextIndex = player.nextMediaItemIndex
@@ -238,37 +254,11 @@ class OrchardPlaybackService : MediaLibraryService() {
                                 .takeIf { index -> index != C.INDEX_UNSET }
                                 ?.let(player::getMediaItemAt)
                                 ?.let(MediaItemMapper::toTrack)
-                        val prepared =
-                            if (outgoing != null && incoming != null) {
-                                preparer.preparedFor(outgoing, incoming)
-                            } else {
-                                null
-                            }
-                        val renderedDuration =
-                            prepared
-                                ?.let { mix -> (mix.endSeconds - mix.startSeconds).coerceAtLeast(0.0) }
-                                ?: 0.0
-                        // A rendered mix plays the incoming audio at 1x and may snap its cue to the
-                        // nearest downbeat. Deriving the start from its resume point keeps the UI's
-                        // incoming progress on the exact samples being heard.
-                        val incomingCue =
-                            prepared
-                                ?.let { mix -> mix.incomingResumeSeconds - renderedDuration }
-                                ?: it.incomingCueTime
-                        dev.sfg.orchard.mobile.model.TransitionMarker(
-                            trackId = player.currentMediaItem?.mediaId.orEmpty(),
-                            startMs = (it.transitionStart * 1000).toLong(),
-                            endMs = (it.transitionEnd * 1000).toLong(),
-                            style = it.transitionStyle.name.lowercase(),
+                        dev.sfg.orchard.mobile.playback.smart.transitionMarkerFor(
+                            it,
+                            trackId = outgoing?.id.orEmpty(),
                             incomingTrackId = incoming?.id.orEmpty(),
-                            incomingCueMs = (incomingCue * 1000).toLong().coerceAtLeast(0),
-                            incomingPlaybackRate = if (prepared != null) 1.0 else it.incomingPlaybackRate,
-                            audibleHandoffProgress =
-                                dev.sfg.orchard.mobile.playback.smart.audibleHandoffProgress(
-                                    it,
-                                    rendered = prepared != null,
-                                ),
-                            renderedDurationMs = (renderedDuration * 1000).toLong(),
+                            usesSelectedPlan = it.nativePlan != null,
                         )
                     }
                 },
@@ -276,6 +266,31 @@ class OrchardPlaybackService : MediaLibraryService() {
             )
         crossfade.start(player, spare)
         player.addListener(playbackListener)
+        chromecastStreamServer = ChromecastStreamServer(this, graph.http, streamResolver)
+        chromecastPlayback =
+            ChromecastPlayback(
+                context = this,
+                converter = ChromecastMediaItemConverter(chromecastStreamServer),
+                localPlayer = { player },
+                onCastStarted = { castPlayer ->
+                    crossfade.abort()
+                    castPlayer.addListener(castPlaybackListener)
+                    mediaSession.player = OrchardSessionPlayer(castPlayer)
+                    persistPlayback()
+                    updateCustomLayout()
+                    OrchardWidgetUpdater.onPlayerChanged(this, castPlayer)
+                },
+                onCastEnded = { localPlayer ->
+                    chromecastPlayback.player.removeListener(castPlaybackListener)
+                    mediaSession.player = OrchardSessionPlayer(localPlayer)
+                    crossfade.start(player, spare)
+                    persistPlayback()
+                    updateCustomLayout()
+                    OrchardWidgetUpdater.onPlayerChanged(this, localPlayer)
+                },
+                onError = graph::postWarning,
+            )
+        chromecastPlayback.start()
         OrchardWidgetUpdater.onPlayerChanged(this, player)
     }
 
@@ -302,37 +317,71 @@ class OrchardPlaybackService : MediaLibraryService() {
         prefetchAround(incoming)
     }
 
+    /** Change the decoder source as one service-side operation, including the crossfade deck. */
+    private fun setVideoMode(expectedTrackId: String, videoId: String) {
+        if (authoritativePlayer() !== player) return
+        val index = player.currentMediaItemIndex
+        if (index !in 0 until player.mediaItemCount) return
+        val current = player.getMediaItemAt(index)
+        if (current.mediaId != expectedTrackId) return
+        val currentUri = current.localConfiguration?.uri
+        val isVideo = MediaItemMapper.isVideoUri(currentUri)
+        if (videoId.isBlank() && !isVideo) return
+        if (isVideo && currentUri != null && MediaItemMapper.sourceId(currentUri) == videoId) return
+
+        val sourcePosition = player.sourcePositionMs().coerceAtLeast(0)
+        val audioDuration = MediaItemMapper.toTrack(current).durationMs
+        val position = if (videoId.isBlank() && audioDuration > 0) {
+            sourcePosition.coerceAtMost(audioDuration - 1)
+        } else {
+            sourcePosition
+        }
+        val resume = player.playWhenReady
+        val updated = if (videoId.isBlank()) MediaItemMapper.asAudio(current)
+        else MediaItemMapper.asVideo(MediaItemMapper.withMusicVideoId(current, videoId), videoId)
+
+        crossfade.abort()
+        // Replacing a current item can keep its old decoder alive until the new timeline is
+        // prepared. Stop it first so audio and video never run side by side after a toggle.
+        player.stop()
+        player.replaceMediaItem(index, updated)
+        player.seekTo(index, position)
+        player.prepare()
+        player.playWhenReady = resume
+    }
+
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession =
         mediaSession
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val result = super.onStartCommand(intent, flags, startId)
+        val target = authoritativePlayer() ?: return result
         when (intent?.action) {
             OrchardPlayerWidgetProvider.ACTION_TOGGLE -> {
-                if (player.isPlaying) player.pause()
+                if (target.playWhenReady) target.pause()
                 else {
-                    if (player.playbackState == Player.STATE_IDLE) player.prepare()
-                    player.play()
+                    if (target.playbackState == Player.STATE_IDLE) target.prepare()
+                    target.play()
                 }
             }
             OrchardPlayerWidgetProvider.ACTION_PREVIOUS -> {
-                if (player.currentPosition > 5_000) player.seekTo(0)
-                else if (player.hasPreviousMediaItem()) player.seekToPreviousMediaItem()
-                if (player.playbackState == Player.STATE_IDLE) player.prepare()
-                player.play()
+                if (target.currentPosition > 5_000) target.seekTo(0)
+                else if (target.hasPreviousMediaItem()) target.seekToPreviousMediaItem()
+                if (target.playbackState == Player.STATE_IDLE) target.prepare()
+                target.play()
             }
             OrchardPlayerWidgetProvider.ACTION_NEXT -> {
-                if (player.hasNextMediaItem()) player.seekToNextMediaItem()
-                if (player.playbackState == Player.STATE_IDLE) player.prepare()
-                player.play()
+                if (target.hasNextMediaItem()) target.seekToNextMediaItem()
+                if (target.playbackState == Player.STATE_IDLE) target.prepare()
+                target.play()
             }
             OrchardPlayerWidgetProvider.ACTION_PLAY_RECENT -> {
                 intent.getStringExtra(OrchardPlayerWidgetProvider.EXTRA_TRACK_JSON)
                     ?.let { json -> runCatching { dev.sfg.orchard.mobile.model.CatalogJson.track(JSONObject(json)) }.getOrNull() }
                     ?.let { track ->
-                        player.setMediaItem(MediaItemMapper.toMediaItem(track))
-                        player.prepare()
-                        player.play()
+                        target.setMediaItem(MediaItemMapper.toMediaItem(track))
+                        target.prepare()
+                        target.play()
                     }
             }
         }
@@ -341,19 +390,27 @@ class OrchardPlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
-        browseScope.cancel()
+        val finalSource = authoritativePlayer()
+        if (finalSource != null) {
+            persistPlayback(sync = true)
+            OrchardWidgetUpdater.onPlayerChanged(this, finalSource, forcePaused = true)
+        }
         if (::crossfade.isInitialized) crossfade.release()
+        if (::chromecastPlayback.isInitialized) chromecastPlayback.close()
+        if (::chromecastStreamServer.isInitialized) chromecastStreamServer.close()
         if (::player.isInitialized) {
-            persistPlayback()
-            OrchardWidgetUpdater.onPlayerChanged(this, player, forcePaused = true)
             player.release()
         }
+        browseScope.cancel()
         if (::spare.isInitialized) spare.release()
         if (::mediaSession.isInitialized) mediaSession.release()
         OrchardGraph.from(this).analysisLookup = null
-        if (::preparer.isInitialized) preparer.release()
+        OrchardGraph.from(this).onClearStreamCache = null
         if (::analyzer.isInitialized) analyzer.release()
         if (::streamCache.isInitialized) streamCache.release()
+        OrchardGraph.from(this).qobuzResolver.release()
+        resolvedStreams.clear()
+        streamResolutionLocks.clear()
         super.onDestroy()
     }
 
@@ -388,27 +445,90 @@ class OrchardPlaybackService : MediaLibraryService() {
                 Log.d(TAG, "resolvingFactory: request uri=${original.uri}")
                 if (!MediaItemMapper.isOrchardUri(original.uri)) return@Factory original
                 val videoId = original.uri.lastPathSegment.orEmpty()
-                Log.d(TAG, "resolvingFactory: resolving videoId=$videoId")
-                val stream =
-                    if (MediaItemMapper.requiresAuthenticatedDirect(original.uri)) {
-                        streamResolver.resolveAuthenticatedDirect(videoId)
-                    } else {
-                        streamResolver.resolve(videoId)
+                val isVideoRequest = MediaItemMapper.isVideoUri(original.uri)
+                val stableUri = original.uri.toString()
+                val lock = streamResolutionLocks.computeIfAbsent(stableUri) { Any() }
+                synchronized(lock) {
+                    // A single track can be opened by both ExoPlayer decks and by several cache
+                    // range workers. Reuse the first valid stream instead of re-running Qobuz
+                    // matching (which creates a new local session on every call).
+                    val cached = cachedResolvedStream(stableUri)
+                    if (cached != null) {
+                        Log.d(TAG, "resolvingFactory: reusing resolved stream for $videoId")
+                        publishResolvedStream(stableUri, cached)
+                        return@synchronized bounded(
+                            original
+                                .withUri(cached.url.toUri())
+                                .withAdditionalHeaders(cached.requestHeaders),
+                            cached,
+                        )
                     }
-                if (stream.bitrateKbps > 0)
-                    OrchardGraph.from(this@OrchardPlaybackService).activeBitrate.value =
-                        stream.bitrateKbps
-                resolvedStreams[original.uri.toString()] = stream
-                Log.d(TAG, "resolvingFactory: resolved $videoId to url=${stream.url.take(60)}...")
-                // The CDN checks the URL against the client it was issued to, so the fetch
-                // has to claim the identity that resolved it rather than the factory's
-                // default. Getting this wrong resolves fine and then 403s on the audio.
-                bounded(
-                    original
-                        .withUri(stream.url.toUri())
-                        .withAdditionalHeaders(stream.requestHeaders),
-                    stream,
-                )
+
+                    Log.d(TAG, "resolvingFactory: resolving videoId=$videoId")
+                    val graph = OrchardGraph.from(this@OrchardPlaybackService)
+                    val isMaxQuality = graph.settings.settings.value.audioQuality == dev.sfg.orchard.mobile.model.AudioQuality.MAX
+                    var qobuzStream: ResolvedStream? = null
+
+                    if (!isVideoRequest && isMaxQuality && !MediaItemMapper.requiresAuthenticatedDirect(original.uri) && !MediaItemMapper.requiresAuthenticatedHls(original.uri)) {
+                        val track = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Main) {
+                            if (::player.isInitialized) {
+                                for (i in 0 until player.mediaItemCount) {
+                                    val item = player.getMediaItemAt(i)
+                                    if (item.mediaId == videoId) return@runBlocking MediaItemMapper.toTrack(item)
+                                }
+                            }
+                            null
+                        }
+                        if (track != null && !track.isUpload) {
+                            val qobuzResult = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                                runCatching {
+                                    graph.qobuzResolver.resolve(
+                                        title = track.title,
+                                        artists = listOf(track.artist),
+                                        album = track.album,
+                                        durationMs = track.durationMs,
+                                        explicit = track.explicit,
+                                    )
+                                }.getOrNull()
+                            }
+                            if (qobuzResult != null) {
+                                Log.i(TAG, "resolvingFactory: resolved $videoId via Qobuz (${qobuzResult.bitrateKbps} kbps)")
+                                qobuzStream = ResolvedStream(
+                                    url = qobuzResult.streamUrl,
+                                    mimeType = "audio/flac",
+                                    expiresAtMs = System.currentTimeMillis() + 4 * 3600_000L,
+                                    bitrateKbps = qobuzResult.bitrateKbps,
+                                    isQobuz = true,
+                                    bitDepth = qobuzResult.bitDepth,
+                                    sampleRate = qobuzResult.sampleRate,
+                                    hires = qobuzResult.hires,
+                                )
+                            }
+                        }
+                    }
+
+                    val stream = qobuzStream ?: run {
+                        if (isVideoRequest) {
+                            streamResolver.resolveVideo(videoId)
+                        } else if (MediaItemMapper.requiresAuthenticatedDirect(original.uri)) {
+                            streamResolver.resolveAuthenticatedDirect(videoId)
+                        } else {
+                            streamResolver.resolve(videoId)
+                        }
+                    }
+                    resolvedStreams[stableUri] = stream
+                    publishResolvedStream(stableUri, stream)
+                    Log.d(TAG, "resolvingFactory: resolved $videoId to url=${stream.url.take(60)}...")
+                    // The CDN checks the URL against the client it was issued to, so the fetch
+                    // has to claim the identity that resolved it rather than the factory's
+                    // default. Getting this wrong resolves fine and then 403s on the audio.
+                    bounded(
+                        original
+                            .withUri(stream.url.toUri())
+                            .withAdditionalHeaders(stream.requestHeaders),
+                        stream,
+                    )
+                }
             }
         // HLS segment requests are created after the orchard manifest URI has been
         // resolved, so they do not inherit that DataSpec's headers. Give the entire
@@ -437,15 +557,20 @@ class OrchardPlaybackService : MediaLibraryService() {
         val cachingFactory = streamCache.dataSourceFactory(resolvingFactory)
         val progressiveMediaSourceFactory =
             DefaultMediaSourceFactory(this).setDataSourceFactory(cachingFactory)
+        // Video is viewed on demand and can be hundreds of megabytes. Do not evict the listener's
+        // audio cache by writing the movie into the whole-track cache behind their back.
+        val videoMediaSourceFactory =
+            DefaultMediaSourceFactory(this).setDataSourceFactory(resolvingFactory)
         val hlsMediaSourceFactory = HlsMediaSource.Factory(hlsResolvingFactory)
         val mediaSourceFactory =
             object : MediaSource.Factory {
                 override fun createMediaSource(mediaItem: MediaItem): MediaSource {
                     val uri = mediaItem.localConfiguration?.uri
-                    return if (uri != null && MediaItemMapper.requiresAuthenticatedHls(uri)) {
-                        hlsMediaSourceFactory.createMediaSource(mediaItem)
-                    } else {
-                        progressiveMediaSourceFactory.createMediaSource(mediaItem)
+                    return when {
+                        uri != null && MediaItemMapper.requiresAuthenticatedHls(uri) ->
+                            hlsMediaSourceFactory.createMediaSource(mediaItem)
+                        MediaItemMapper.isVideoUri(uri) -> videoMediaSourceFactory.createMediaSource(mediaItem)
+                        else -> progressiveMediaSourceFactory.createMediaSource(mediaItem)
                     }
                 }
 
@@ -458,6 +583,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                     drmSessionManagerProvider: DrmSessionManagerProvider,
                 ): MediaSource.Factory = apply {
                     progressiveMediaSourceFactory.setDrmSessionManagerProvider(drmSessionManagerProvider)
+                    videoMediaSourceFactory.setDrmSessionManagerProvider(drmSessionManagerProvider)
                     hlsMediaSourceFactory.setDrmSessionManagerProvider(drmSessionManagerProvider)
                 }
 
@@ -465,6 +591,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                     loadErrorHandlingPolicy: LoadErrorHandlingPolicy,
                 ): MediaSource.Factory = apply {
                     progressiveMediaSourceFactory.setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
+                    videoMediaSourceFactory.setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
                     hlsMediaSourceFactory.setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
                 }
             }
@@ -505,6 +632,8 @@ class OrchardPlaybackService : MediaLibraryService() {
             .setLoadControl(loadControl)
             .build()
             .apply {
+                // Give Media3 room to prepare upcoming periods while the active deck is playing.
+                setPreloadConfiguration(ExoPlayer.PreloadConfiguration(5_000_000L))
                 setAudioAttributes(AUDIO_ATTRIBUTES, handlesAudioFocus)
                 setHandleAudioBecomingNoisy(true)
                 setWakeMode(C.WAKE_MODE_NETWORK)
@@ -525,32 +654,16 @@ class OrchardPlaybackService : MediaLibraryService() {
         target.setShuffleOrder(ShuffleOrder.UnshuffledShuffleOrder(target.mediaItemCount))
     }
 
-    /**
-     * Rebuilds queue items a rendered transition left pointing at a temp mix file or clipped past
-     * its overlap, restoring the canonical stream URI from the track JSON they still carry.
-     *
-     * Only items behind the playhead: the clip is still owed its effect until it plays, and during
-     * a transition that item sits directly ahead of the mix.
-     */
-    private fun clearSpentClipping(target: Player) {
-        for (index in 0 until target.currentMediaItemIndex) {
-            val item = target.getMediaItemAt(index)
-            val uri = item.localConfiguration?.uri
-            val spent =
-                item.clippingConfiguration != MediaItem.ClippingConfiguration.UNSET ||
-                    (uri != null && !MediaItemMapper.isOrchardUri(uri))
-            if (!spent) continue
-            val restored = MediaItemMapper.toMediaItem(MediaItemMapper.toTrack(item))
-            if (restored.mediaId.isBlank()) continue
-            target.replaceMediaItem(index, restored)
-        }
-    }
-
     private fun restorePlayback() {
         val restored = stateStore.load()
         if (restored.queue.isEmpty()) return
         player.setMediaItems(
-            restored.queue.map(MediaItemMapper::toMediaItem),
+            restored.queue.mapIndexed { index, track ->
+                MediaItemMapper.toMediaItem(
+                    track,
+                    restored.currentVideoId.takeIf { index == restored.currentIndex }.orEmpty(),
+                )
+            },
             restored.currentIndex.coerceIn(0, restored.queue.lastIndex),
             restored.positionMs,
         )
@@ -564,25 +677,35 @@ class OrchardPlaybackService : MediaLibraryService() {
         player.playWhenReady = restored.playWhenReady
     }
 
-    private fun persistPlayback() {
-        if (!::player.isInitialized) return
+    private fun persistPlayback(sync: Boolean = false) {
+        val source = authoritativePlayer() ?: return
         val queue = buildList {
-            for (index in 0 until player.mediaItemCount) add(
-                MediaItemMapper.toTrack(player.getMediaItemAt(index))
+            for (index in 0 until source.mediaItemCount) add(
+                MediaItemMapper.toTrack(source.getMediaItemAt(index))
             )
         }
-        stateStore.save(
-            RestoredPlayback(
-                queue = queue,
-                currentIndex = player.currentMediaItemIndex,
-                positionMs = player.currentPosition.coerceAtLeast(0),
-                shuffle = player.shuffleModeEnabled,
-                repeatMode = player.repeatMode.toRepeatMode(),
-                contextTitle = player.playlistMetadata.title?.toString().orEmpty(),
-                playWhenReady = player.playWhenReady,
-                unshuffledOrder = unshuffledOrder,
-            )
+        val restored = RestoredPlayback(
+            queue = queue,
+            currentIndex = source.currentMediaItemIndex,
+            positionMs = source.sourcePositionMs(),
+            shuffle = source.shuffleModeEnabled,
+            repeatMode = source.repeatMode.toRepeatMode(),
+            contextTitle = source.playlistMetadata.title?.toString().orEmpty(),
+            playWhenReady = source.playWhenReady,
+            unshuffledOrder = unshuffledOrder,
+            currentVideoId = source.currentMediaItem
+                ?.localConfiguration?.uri
+                ?.takeIf(MediaItemMapper::isVideoUri)
+                ?.let(MediaItemMapper::sourceId)
+                .orEmpty(),
         )
+        if (sync) {
+            stateStore.save(restored)
+        } else {
+            browseScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                stateStore.save(restored)
+            }
+        }
     }
 
     /**
@@ -601,9 +724,22 @@ class OrchardPlaybackService : MediaLibraryService() {
         val graph = OrchardGraph.from(this)
         if (item == null) {
             graph.activeBitrate.value = 0
+            graph.activeTrackIsQobuz.value = false
             return
         }
         val uri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri
+        val resolved = uri?.let { cachedResolvedStream(it.toString()) }
+        if (MediaItemMapper.isVideoUri(uri)) {
+            graph.activeBitrate.value = 0
+            graph.activeTrackIsQobuz.value = false
+            return
+        }
+        if (resolved != null && resolved.isQobuz) {
+            graph.activeBitrate.value = resolved.bitrateKbps
+            graph.activeTrackIsQobuz.value = true
+            return
+        }
+        graph.activeTrackIsQobuz.value = false
         val duration = player.duration.takeIf { it > 0 } ?: 0L
         val measured = uri?.let { streamCache.cachedBitrateKbps(it, duration) } ?: 0
         graph.activeBitrate.value =
@@ -645,6 +781,62 @@ class OrchardPlaybackService : MediaLibraryService() {
 
     private fun graphHttp(): OkHttpClient = OrchardGraph.from(this).http
 
+    private fun authoritativePlayer(): Player? = when {
+        ::chromecastPlayback.isInitialized && chromecastPlayback.isActive -> chromecastPlayback.player
+        ::player.isInitialized -> player
+        else -> null
+    }
+
+    /**
+     * Scrobbling belongs to the foreground playback service, not the activity: it must continue
+     * when Android removes the UI while a local or Cast queue is still playing.
+     */
+    private fun updateScrobbling(source: Player) {
+        val track = source.currentMediaItem?.let(MediaItemMapper::toTrack)
+        val duration =
+            source.duration.takeUnless { it == C.TIME_UNSET }?.coerceAtLeast(0)
+                ?: track?.durationMs?.coerceAtLeast(0)
+                ?: 0
+        val snapshot =
+            PlaybackSnapshot(
+                currentTrack = track,
+                positionMs = source.currentPosition.coerceAtLeast(0),
+                durationMs = duration,
+                isPlaying = source.isPlaying,
+            )
+        val graph = OrchardGraph.from(this)
+        graph.lastfm.updatePlayback(snapshot)
+        graph.listenBrainz.updatePlayback(snapshot)
+    }
+
+    /** Cast does not use Orchard's local resolver/crossfade recovery, only shared state updates. */
+    private val castPlaybackListener =
+        object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                if (
+                    events.containsAny(
+                        Player.EVENT_TIMELINE_CHANGED,
+                        Player.EVENT_MEDIA_ITEM_TRANSITION,
+                        Player.EVENT_PLAY_WHEN_READY_CHANGED,
+                        Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED,
+                        Player.EVENT_REPEAT_MODE_CHANGED,
+                        Player.EVENT_PLAYLIST_METADATA_CHANGED,
+                    )
+                ) {
+                    persistPlayback()
+                    updateCustomLayout()
+                }
+                OrchardWidgetUpdater.onPlayerChanged(this@OrchardPlaybackService, player)
+                updateScrobbling(player)
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                handler.removeCallbacks(positionSaver)
+                if (isPlaying) handler.postDelayed(positionSaver, POSITION_SAVE_INTERVAL_MS)
+                else persistPlayback()
+            }
+        }
+
     private val playbackListener =
         object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
@@ -666,7 +858,16 @@ class OrchardPlaybackService : MediaLibraryService() {
                         keepQueueOrderUnshuffled(this@OrchardPlaybackService.player)
                     }
                     persistPlayback()
-                    updateCustomLayout()
+                    if (
+                        events.containsAny(
+                            Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED,
+                            Player.EVENT_REPEAT_MODE_CHANGED,
+                            Player.EVENT_TIMELINE_CHANGED,
+                            Player.EVENT_MEDIA_ITEM_TRANSITION,
+                        )
+                    ) {
+                        updateCustomLayout()
+                    }
                 }
                 if (
                     events.containsAny(
@@ -674,7 +875,6 @@ class OrchardPlaybackService : MediaLibraryService() {
                         Player.EVENT_MEDIA_ITEM_TRANSITION,
                     )
                 ) {
-                    clearSpentClipping(player)
                     prefetchAround(player)
                     // A transition alone cannot measure anything: the duration
                     // the measurement
@@ -689,6 +889,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                         this@OrchardPlaybackService.player,
                     )
                 }
+                updateScrobbling(player)
             }
 
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
@@ -754,15 +955,37 @@ class OrchardPlaybackService : MediaLibraryService() {
                     Log.e(TAG, "Playback failed without a recoverable media item", error)
                     return
                 }
+                val sourceId = MediaItemMapper.sourceId(failedUri)
+                if (MediaItemMapper.isVideoUri(failedUri)) {
+                    val index = player.currentMediaItemIndex
+                    val audioDuration = MediaItemMapper.toTrack(failedItem).durationMs
+                    val sourcePosition = player.currentPosition.coerceAtLeast(0)
+                    val position = if (audioDuration > 0) {
+                        sourcePosition.coerceAtMost(audioDuration - 1)
+                    } else {
+                        sourcePosition
+                    }
+                    val resume = player.playWhenReady
+                    streamResolver.resetForRetry(sourceId)
+                    resolvedStreams.remove(failedUri.toString())
+                    Log.w(TAG, "Video playback failed; continuing with album audio", error)
+                    player.replaceMediaItem(index, MediaItemMapper.asAudio(failedItem))
+                    player.seekTo(index, position)
+                    player.prepare()
+                    if (resume) player.play()
+                    OrchardGraph.from(this@OrchardPlaybackService)
+                        .postWarning("Video unavailable. Continuing with audio.")
+                    return
+                }
                 val resolvedStream = resolvedStreams.remove(failedUri.toString())
                 val responseCode = playbackHttpResponseCode(error)
                 val rejectedClient =
                     if (resolvedStream != null && responseCode != null) {
-                        streamResolver.reject(mediaId, resolvedStream, responseCode)
+                        streamResolver.reject(sourceId, resolvedStream, responseCode)
                     } else {
                         false
                     }
-                if (!rejectedClient) streamResolver.resetForRetry(mediaId)
+                if (!rejectedClient) streamResolver.resetForRetry(sourceId)
                 if (
                     MediaItemMapper.requiresAuthenticatedDirect(failedUri)
                 ) {
@@ -850,6 +1073,38 @@ class OrchardPlaybackService : MediaLibraryService() {
         val remaining = stream.contentLength - spec.position
         if (stream.contentLength <= 0 || remaining <= 0) return spec
         return spec.subrange(0, remaining)
+    }
+
+    /** Returns a still-usable stream for a stable URI and drops expired CDN/session URLs. */
+    private fun cachedResolvedStream(stableUri: String): ResolvedStream? {
+        val stream = resolvedStreams[stableUri] ?: return null
+        if (stream.expiresAtMs > System.currentTimeMillis() + RESOLVED_STREAM_EXPIRY_BUFFER_MS) {
+            return stream
+        }
+        resolvedStreams.remove(stableUri, stream)
+        return null
+    }
+
+    /**
+     * Resolution callbacks run on Media3/cache threads, including callbacks for queued items.
+     * Only publish a result when that URI is still the current media item, so prefetch cannot
+     * repaint the badge for another song.
+     */
+    private fun publishResolvedStream(stableUri: String, stream: ResolvedStream) {
+        handler.post {
+            if (!::player.isInitialized) return@post
+            val item = player.currentMediaItem ?: return@post
+            val currentUri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri
+            if (currentUri?.toString() != stableUri) return@post
+            if (!::streamCache.isInitialized) return@post
+            if (stream.isQobuz) {
+                val graph = OrchardGraph.from(this)
+                graph.activeBitrate.value = stream.bitrateKbps
+                graph.activeTrackIsQobuz.value = true
+            } else {
+                publishBitrate()
+            }
+        }
     }
 
     private fun shuffleUpcomingItems(targetPlayer: Player) {
@@ -959,10 +1214,144 @@ class OrchardPlaybackService : MediaLibraryService() {
                     MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
                         .add(COMMAND_TOGGLE_SHUFFLE)
                         .add(COMMAND_TOGGLE_REPEAT)
+                        .add(COMMAND_SET_VIDEO_MODE)
+                        .build()
+                val playerCommands =
+                    session.player.availableCommands.buildUpon()
+                        .add(Player.COMMAND_PLAY_PAUSE)
+                        .add(Player.COMMAND_PREPARE)
+                        .add(Player.COMMAND_STOP)
+                        .add(Player.COMMAND_SEEK_TO_DEFAULT_POSITION)
+                        .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+                        .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                        .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                        .add(Player.COMMAND_SEEK_TO_NEXT)
+                        .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                        .add(Player.COMMAND_SET_SHUFFLE_MODE)
+                        .add(Player.COMMAND_SET_REPEAT_MODE)
                         .build()
                 return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
                     .setAvailableSessionCommands(sessionCommands)
+                    .setAvailablePlayerCommands(playerCommands)
                     .build()
+            }
+
+            override fun onMediaButtonEvent(
+                session: MediaSession,
+                controllerInfo: MediaSession.ControllerInfo,
+                intent: Intent,
+            ): Boolean {
+                val keyEvent =
+                    IntentCompat.getParcelableExtra(intent, Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+                        ?: return super.onMediaButtonEvent(session, controllerInfo, intent)
+
+                val keyCode = keyEvent.keyCode
+                val isHandledKey = when (keyCode) {
+                    KeyEvent.KEYCODE_MEDIA_PLAY,
+                    KeyEvent.KEYCODE_MEDIA_PAUSE,
+                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                    KeyEvent.KEYCODE_HEADSETHOOK,
+                    KeyEvent.KEYCODE_MEDIA_NEXT,
+                    KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+                    KeyEvent.KEYCODE_MEDIA_STOP -> true
+                    else -> false
+                }
+
+                if (!isHandledKey) {
+                    return super.onMediaButtonEvent(session, controllerInfo, intent)
+                }
+
+                // If this is an ACTION_UP event or a repeated ACTION_DOWN event, consume it immediately
+                // without re-triggering or allowing super to run double-tap timeout detection.
+                if (keyEvent.action == KeyEvent.ACTION_UP) {
+                    return true
+                }
+
+                if (keyEvent.action == KeyEvent.ACTION_DOWN) {
+                    if (keyEvent.repeatCount > 0) {
+                        return true
+                    }
+                    val target = authoritativePlayer() ?: return false
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                            if (target.playbackState == Player.STATE_IDLE) target.prepare()
+                            target.play()
+                        }
+                        KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                            target.pause()
+                        }
+                        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                        KeyEvent.KEYCODE_HEADSETHOOK -> {
+                            if (target.playWhenReady) {
+                                target.pause()
+                            } else {
+                                if (target.playbackState == Player.STATE_IDLE) target.prepare()
+                                target.play()
+                            }
+                        }
+                        KeyEvent.KEYCODE_MEDIA_NEXT -> {
+                            if (target.hasNextMediaItem()) {
+                                target.seekToNextMediaItem()
+                            }
+                            if (target.playbackState == Player.STATE_IDLE) target.prepare()
+                            target.play()
+                        }
+                        KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
+                            if (target.currentPosition > 5_000) {
+                                target.seekTo(0)
+                            } else if (target.hasPreviousMediaItem()) {
+                                target.seekToPreviousMediaItem()
+                            } else {
+                                target.seekTo(0)
+                            }
+                            if (target.playbackState == Player.STATE_IDLE) target.prepare()
+                            target.play()
+                        }
+                        KeyEvent.KEYCODE_MEDIA_STOP -> {
+                            target.stop()
+                        }
+                    }
+                    return true
+                }
+                return super.onMediaButtonEvent(session, controllerInfo, intent)
+            }
+
+            override fun onPlaybackResumption(
+                mediaSession: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                isForPlayback: Boolean,
+            ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+                val source = authoritativePlayer() ?: player
+                val queue = buildList {
+                    for (index in 0 until source.mediaItemCount) {
+                        add(source.getMediaItemAt(index))
+                    }
+                }
+                if (queue.isNotEmpty()) {
+                    return Futures.immediateFuture(
+                        MediaSession.MediaItemsWithStartPosition(
+                            queue,
+                            source.currentMediaItemIndex.coerceAtLeast(0),
+                            source.currentPosition.coerceAtLeast(0),
+                        )
+                    )
+                }
+                val restored = stateStore.load()
+                if (restored.queue.isNotEmpty()) {
+                    return Futures.immediateFuture(
+                        MediaSession.MediaItemsWithStartPosition(
+                            restored.queue.mapIndexed { index, track ->
+                                MediaItemMapper.toMediaItem(
+                                    track,
+                                    restored.currentVideoId.takeIf { index == restored.currentIndex }.orEmpty(),
+                                )
+                            },
+                            restored.currentIndex.coerceIn(0, restored.queue.lastIndex),
+                            restored.positionMs,
+                        )
+                    )
+                }
+                return Futures.immediateFailedFuture(UnsupportedOperationException())
             }
 
             override fun onSetMediaItems(
@@ -1101,15 +1490,20 @@ class OrchardPlaybackService : MediaLibraryService() {
                 customCommand: SessionCommand,
                 args: Bundle,
             ): ListenableFuture<SessionResult> {
+                val target = authoritativePlayer() ?: player
                 when (customCommand.customAction) {
-                    ACTION_TOGGLE_SHUFFLE -> player.shuffleModeEnabled = !player.shuffleModeEnabled
+                    ACTION_TOGGLE_SHUFFLE -> target.shuffleModeEnabled = !target.shuffleModeEnabled
                     ACTION_TOGGLE_REPEAT ->
-                        player.repeatMode =
-                            when (player.repeatMode) {
+                        target.repeatMode =
+                            when (target.repeatMode) {
                                 Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
                                 Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
                                 else -> Player.REPEAT_MODE_OFF
                             }
+                    ACTION_SET_VIDEO_MODE -> setVideoMode(
+                        args.getString(VIDEO_MODE_TRACK_ID).orEmpty(),
+                        args.getString(VIDEO_MODE_VIDEO_ID).orEmpty(),
+                    )
                 }
                 updateCustomLayout()
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
@@ -1117,8 +1511,9 @@ class OrchardPlaybackService : MediaLibraryService() {
         }
 
     private fun updateCustomLayout() {
-        if (!::mediaSession.isInitialized || !::player.isInitialized) return
-        val shuffleOn = player.shuffleModeEnabled
+        if (!::mediaSession.isInitialized) return
+        val source = authoritativePlayer() ?: return
+        val shuffleOn = source.shuffleModeEnabled
         val shuffleIcon =
             if (shuffleOn) CommandButton.ICON_SHUFFLE_ON else CommandButton.ICON_SHUFFLE_OFF
         val shuffleRes = if (shuffleOn) R.drawable.ic_shuffle_on else R.drawable.ic_shuffle
@@ -1130,7 +1525,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                 .build()
 
         val (repeatIcon, repeatRes, repeatTitle) =
-            when (player.repeatMode) {
+            when (source.repeatMode) {
                 Player.REPEAT_MODE_ONE ->
                     Triple(CommandButton.ICON_REPEAT_ONE, R.drawable.ic_repeat_one_on, "Repeat one")
                 Player.REPEAT_MODE_ALL ->
@@ -1144,6 +1539,21 @@ class OrchardPlaybackService : MediaLibraryService() {
                 .setSessionCommand(COMMAND_TOGGLE_REPEAT)
                 .build()
 
+        val previousButton =
+            CommandButton.Builder(CommandButton.ICON_PREVIOUS)
+                .setDisplayName("Previous")
+                .setPlayerCommand(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                .build()
+
+        val nextButton =
+            CommandButton.Builder(CommandButton.ICON_NEXT)
+                .setDisplayName("Next")
+                .setPlayerCommand(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                .build()
+
+        mediaSession.setMediaButtonPreferences(
+            listOf(previousButton, shuffleButton, repeatButton, nextButton)
+        )
         mediaSession.setCustomLayout(listOf(shuffleButton, repeatButton))
     }
 
@@ -1157,9 +1567,10 @@ class OrchardPlaybackService : MediaLibraryService() {
             // below, whose DataSource invokes their signed-in resolver. Running the
             // ordinary resolver beside that would issue a competing guest fallback chain.
             if (
-                uri == null ||
+                (uri == null ||
                     (!MediaItemMapper.requiresAuthenticatedHls(uri) &&
-                        !MediaItemMapper.requiresAuthenticatedDirect(uri))
+                        !MediaItemMapper.requiresAuthenticatedDirect(uri))) &&
+                    !MediaItemMapper.isVideoUri(uri)
             ) {
                 streamResolver.prefetch(item.mediaId)
             }
@@ -1169,6 +1580,7 @@ class OrchardPlaybackService : MediaLibraryService() {
             (current..current + 1)
                 .filter { it in 0 until player.mediaItemCount }
                 .mapNotNull { player.getMediaItemAt(it).localConfiguration?.uri }
+                .filterNot(MediaItemMapper::isVideoUri)
         streamCache.retainOnly(wanted)
         wanted.forEach(streamCache::prefetch)
 
@@ -1191,7 +1603,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         // improve. The plain fade is the right answer here, and it costs nothing to reach.
         val remainingSeconds =
             if (player.duration != C.TIME_UNSET) {
-                (player.duration - player.currentPosition) / 1000.0
+                (player.sourceDurationMs() - player.sourcePositionMs()) / 1000.0
             } else {
                 Double.MAX_VALUE
             }
@@ -1207,45 +1619,16 @@ class OrchardPlaybackService : MediaLibraryService() {
             if (index !in 0 until player.mediaItemCount) continue
             val item = player.getMediaItemAt(index)
             val uri = item.localConfiguration?.uri ?: continue
+            if (MediaItemMapper.isVideoUri(uri)) continue
             val track = MediaItemMapper.toTrack(item)
             val duration =
                 if (index == player.currentMediaItemIndex && player.duration != C.TIME_UNSET) {
-                    player.duration / 1000.0
+                    player.sourceDurationMs() / 1000.0
                 } else {
                     track.durationMs / 1000.0
                 }
             analyzer.request(track, uri, duration)
         }
-    }
-
-    /**
-     * Asks for the overlap of the upcoming transition to be rendered, well ahead of the seam.
-     *
-     * Called from the plan callback rather than from the transition itself, because rendering means
-     * decoding two stereo regions and running a phase vocoder over one of them: seconds of work
-     * that has to be finished before the playhead arrives, not started when it does.
-     */
-    private fun prepareTransition(plan: dev.sfg.orchard.mobile.playback.smart.TransitionPlan) {
-        if (!::preparer.isInitialized || !::player.isInitialized) return
-        val current = player.currentMediaItem ?: return
-        val nextIndex = player.nextMediaItemIndex
-        if (nextIndex == C.INDEX_UNSET) return
-        val next = player.getMediaItemAt(nextIndex)
-        val currentUri = current.localConfiguration?.uri ?: return
-        val nextUri = next.localConfiguration?.uri ?: return
-        val outgoing = MediaItemMapper.toTrack(current)
-        val incoming = MediaItemMapper.toTrack(next)
-
-        preparer.retainOnly(setOf(preparer.key(outgoing, incoming)))
-        preparer.prepare(
-            outgoing = outgoing,
-            outgoingUri = currentUri,
-            outgoingAnalysis = analyzer.analysisFor(outgoing),
-            incoming = incoming,
-            incomingUri = nextUri,
-            incomingAnalysis = analyzer.analysisFor(incoming),
-            plan = plan,
-        )
     }
 
     /** Analysis costs battery, so it only runs when the listener has actually asked for it. */
@@ -1306,7 +1689,9 @@ class OrchardPlaybackService : MediaLibraryService() {
         private const val BUFFER_FOR_PLAYBACK_MS = 500
         private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 2_000
         private const val WHOLE_TRACK_BUFFER_MS = 20 * 60 * 1_000
-        private const val TARGET_BUFFER_BYTES = 32 * 1024 * 1024
+        // Two players plus playlist preloading share the app heap with audio analysis.
+        private const val TARGET_BUFFER_BYTES = 8 * 1024 * 1024
+        private const val RESOLVED_STREAM_EXPIRY_BUFFER_MS = 60_000L
         /**
          * How much track has to be left before a model pass is worth starting.
          *
@@ -1317,8 +1702,12 @@ class OrchardPlaybackService : MediaLibraryService() {
 
         private const val ACTION_TOGGLE_SHUFFLE = "dev.sfg.orchard.ACTION_TOGGLE_SHUFFLE"
         private const val ACTION_TOGGLE_REPEAT = "dev.sfg.orchard.ACTION_TOGGLE_REPEAT"
+        private const val ACTION_SET_VIDEO_MODE = "dev.sfg.orchard.ACTION_SET_VIDEO_MODE"
+        internal const val VIDEO_MODE_TRACK_ID = "track_id"
+        internal const val VIDEO_MODE_VIDEO_ID = "video_id"
         private val COMMAND_TOGGLE_SHUFFLE = SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY)
         private val COMMAND_TOGGLE_REPEAT = SessionCommand(ACTION_TOGGLE_REPEAT, Bundle.EMPTY)
+        internal val COMMAND_SET_VIDEO_MODE = SessionCommand(ACTION_SET_VIDEO_MODE, Bundle.EMPTY)
         private val AUDIO_ATTRIBUTES =
             AudioAttributes.Builder()
                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)

@@ -29,7 +29,7 @@ export default {
     const usagePercent = computed(() => {
       const maxBytes = Number(app.songCacheMaxSizeMb.value || 0) * 1024 * 1024;
       if (!maxBytes) return 0;
-      return Math.min(1, Number(app.songCacheInventory.value.totalBytes || 0) / maxBytes);
+      return Math.min(1, Number(app.songCacheInventory.value.cacheBytes || 0) / maxBytes);
     });
     const cacheableQueueCount = computed(() => {
       const seen = new Set();
@@ -49,7 +49,7 @@ export default {
   <section id="settings-song-cache" class="settings-section" aria-labelledby="settings-song-cache-title">
     <div class="settings-section__heading">
       <h2 id="settings-song-cache-title">Song Cache</h2>
-      <p>Keep recently played songs on this computer.</p>
+      <p>Manage replay caching and songs downloaded for offline playback.</p>
     </div>
 
     <div class="settings-row">
@@ -63,7 +63,7 @@ export default {
     <div class="settings-row settings-row--slider" :class="{ 'settings-row--disabled': !songCacheEnabled }">
       <div class="settings-row__copy">
         <label for="settings-song-cache-size">Maximum size</label>
-        <p>Old cached songs are removed first when the cache reaches this limit.</p>
+        <p>Old replay-cache songs are removed first at this limit. Manual downloads stay until you remove them.</p>
       </div>
       <div class="settings-slider settings-slider--wide-output">
         <q-slider

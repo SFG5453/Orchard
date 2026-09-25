@@ -33,9 +33,8 @@ data class TransitionPresentation(
 /**
  * How far into the active overlap playback is.
  *
- * A rendered Smart Crossfade becomes a short mix item whose clock starts at zero, while a live
- * crossfade remains on the outgoing track's original timeline. Supporting both clocks here keeps
- * every transition affordance synchronized to the audio that is actually playing.
+ * Live crossfades remain on the outgoing track's source timeline. The legacy rendered clock is
+ * still understood so playback restored across an app upgrade cannot corrupt presentation.
  */
 fun transitionProgress(playback: PlaybackSnapshot, marker: TransitionMarker?): Float {
     val track = playback.currentTrack ?: return 0f
@@ -51,20 +50,27 @@ fun transitionProgress(playback: PlaybackSnapshot, marker: TransitionMarker?): F
                 val onRenderedTimeline =
                     renderedWindowMs > 0 &&
                         abs(playback.durationMs - renderedWindowMs) <= RENDERED_DURATION_TOLERANCE_MS
-                if (onRenderedTimeline) {
-                    playback.positionMs.toDouble() / renderedWindowMs.toDouble()
+                if (playback.renderedMixPositionMs != null || onRenderedTimeline) {
+                    (playback.renderedMixPositionMs ?: playback.positionMs).toDouble() / renderedWindowMs.coerceAtLeast(1).toDouble()
                 } else {
                     (playback.positionMs - marker.startMs).toDouble() / liveWindowMs.toDouble()
                 }
             }
             marker.incomingTrackId -> {
+                // A rendered overlap has finished by the time transport enters the next item.
+                if (marker.renderedDurationMs > 0) return 0f
                 val rate = marker.incomingPlaybackRate.coerceAtLeast(0.01)
                 val elapsedWallMs = (playback.positionMs - marker.incomingCueMs) / rate
-                elapsedWallMs / liveWindowMs.toDouble()
+                elapsedWallMs / (marker.renderedDurationMs.takeIf { it > 0 } ?: liveWindowMs).toDouble()
             }
             else -> return 0f
         }
 
+    // Decoder timestamps can overshoot the rounded WAV duration by a millisecond. Keep the
+    // incoming identity at the endpoint until transport advances to the remainder item.
+    if (playback.renderedMixPositionMs != null && track.id == marker.trackId) {
+        return raw.coerceIn(0.0, 1.0).toFloat()
+    }
     // A stale marker must not light up a later part of the incoming track indefinitely.
     if (raw < 0.0 || raw > 1.0) return 0f
     return raw.toFloat()
@@ -97,7 +103,8 @@ fun transitionPresentation(
         return TransitionPresentation(playback, progress, incomingDominant = true)
     }
 
-    val transitionWindowMs = (marker.endMs - marker.startMs).coerceAtLeast(1)
+    val transitionWindowMs = (marker.renderedDurationMs.takeIf { it > 0 }
+        ?: (marker.endMs - marker.startMs)).coerceAtLeast(1)
     val incomingPosition =
         (marker.incomingCueMs +
             progress * transitionWindowMs * marker.incomingPlaybackRate)

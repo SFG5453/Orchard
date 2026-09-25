@@ -30,6 +30,8 @@ function playlistName(playlist) {
 export function installPlaylistActions(ctx) {
   ctx.playlistDialogOpen = ref(false);
   ctx.playlistDialogTrack = ref(null);
+  ctx.playlistDialogTracks = ref([]);
+  ctx.playlistDialogMode = ref('track');
   ctx.playlistTargets = ref([]);
   ctx.playlistTargetsLoading = ref(false);
   ctx.playlistMutationPending = ref('');
@@ -54,14 +56,27 @@ export function installPlaylistActions(ctx) {
     return Boolean(track?.id && detail?.kind === 'playlist' && detail?.editable && ctx.currentPlaylistId(detail));
   };
 
+  ctx.queueTracksForPlaylist = function queueTracksForPlaylist() {
+    if (ctx.continuousQueueEnabled?.value && ctx.continuousQueue?.value?.length) {
+      return ctx.continuousQueue.value.map((entry) => entry.track).filter((t) => t?.id);
+    }
+    const active = ctx.activeTrack?.value;
+    const queued = ctx.queue?.value || [];
+    const list = active?.id ? [active, ...queued] : queued;
+    return list.filter((t) => t?.id);
+  };
+
   ctx.loadEditablePlaylistTargets = async function loadEditablePlaylistTargets() {
     if (!ctx.socket.value?.connected) return;
     ctx.playlistTargetsLoading.value = true;
     ctx.playlistMutationError.value = '';
 
     try {
+      const isQueue = ctx.playlistDialogMode.value === 'queue';
+      const firstTrack = ctx.playlistDialogTracks.value?.[0] || ctx.playlistDialogTrack.value;
       ctx.playlistTargets.value = await ctx.emitWithReply('music:playlists:editable', {
-        videoId: ctx.playlistDialogTrack.value?.id || '',
+        videoId: isQueue ? '' : (firstTrack?.id || ''),
+        videoIds: isQueue ? ctx.playlistDialogTracks.value.map((t) => t.id).filter(Boolean) : [],
         playlists: ctx.userPlaylistItems.value.map((item) => ({
           id: ctx.itemBrowseId(item),
           title: item.title,
@@ -82,7 +97,29 @@ export function installPlaylistActions(ctx) {
       ctx.showShareMessage?.('Sign in to edit playlists.', true);
       return;
     }
+    ctx.playlistDialogMode.value = 'track';
     ctx.playlistDialogTrack.value = track;
+    ctx.playlistDialogTracks.value = track ? [track] : [];
+    ctx.playlistTargets.value = [];
+    ctx.playlistMutationError.value = '';
+    ctx.newPlaylistTitle.value = '';
+    ctx.playlistDialogOpen.value = true;
+    void ctx.loadEditablePlaylistTargets();
+  };
+
+  ctx.openQueuePlaylistDialog = function openQueuePlaylistDialog() {
+    if (!ctx.authState.value.signedIn) {
+      ctx.showShareMessage?.('Sign in to edit playlists.', true);
+      return;
+    }
+    const tracks = ctx.queueTracksForPlaylist();
+    if (!tracks.length) {
+      ctx.showShareMessage?.('Queue is empty.', true);
+      return;
+    }
+    ctx.playlistDialogMode.value = 'queue';
+    ctx.playlistDialogTrack.value = tracks[0] || null;
+    ctx.playlistDialogTracks.value = tracks;
     ctx.playlistTargets.value = [];
     ctx.playlistMutationError.value = '';
     ctx.newPlaylistTitle.value = '';
@@ -113,8 +150,34 @@ export function installPlaylistActions(ctx) {
   };
 
   ctx.addTrackToPlaylist = async function addTrackToPlaylist(playlist) {
+    if (ctx.playlistMutationPending.value) return;
+
+    if (ctx.playlistDialogMode.value === 'queue') {
+      const tracks = ctx.playlistDialogTracks.value.filter((t) => t?.id);
+      if (!tracks.length || !playlist?.id) return;
+      const videoIds = tracks.map((t) => t.id);
+
+      ctx.playlistMutationPending.value = playlist.id;
+      ctx.playlistMutationError.value = '';
+      try {
+        await ctx.emitWithReply('music:playlist:add-track', {
+          playlistId: playlist.id,
+          videoIds
+        });
+        ctx.playlistDialogOpen.value = false;
+        const count = tracks.length;
+        ctx.showShareMessage?.(`Added ${count} ${count === 1 ? 'song' : 'songs'} to ${playlistName(playlist)}.`);
+        await ctx.refreshLibraryAfterMutation(playlist.id);
+      } catch (error) {
+        ctx.playlistMutationError.value = error.message;
+      } finally {
+        ctx.playlistMutationPending.value = '';
+      }
+      return;
+    }
+
     const track = ctx.playlistDialogTrack.value;
-    if (!track?.id || !playlist?.id || playlist.containsTrack || ctx.playlistMutationPending.value) return;
+    if (!track?.id || !playlist?.id || playlist.containsTrack) return;
 
     ctx.playlistMutationPending.value = playlist.id;
     ctx.playlistMutationError.value = '';
@@ -134,9 +197,36 @@ export function installPlaylistActions(ctx) {
   };
 
   ctx.createPlaylistWithTrack = async function createPlaylistWithTrack() {
-    const track = ctx.playlistDialogTrack.value;
     const title = ctx.newPlaylistTitle.value.trim();
-    if (!track?.id || !title || ctx.playlistMutationPending.value) return;
+    if (!title || ctx.playlistMutationPending.value) return;
+
+    if (ctx.playlistDialogMode.value === 'queue') {
+      const tracks = ctx.playlistDialogTracks.value.filter((t) => t?.id);
+      if (!tracks.length) return;
+      const videoIds = tracks.map((t) => t.id);
+
+      ctx.playlistMutationPending.value = 'create';
+      ctx.playlistMutationError.value = '';
+      try {
+        const created = await ctx.emitWithReply('music:playlist:create', {
+          title,
+          videoIds
+        });
+        ctx.playlistDialogOpen.value = false;
+        const count = tracks.length;
+        ctx.showShareMessage?.(`Created ${title} with ${count} ${count === 1 ? 'song' : 'songs'}.`);
+        await ctx.refreshLibraryAfterMutation(created.id);
+        ctx.insertCreatedPlaylist({ ...created, track: tracks[0] });
+      } catch (error) {
+        ctx.playlistMutationError.value = error.message;
+      } finally {
+        ctx.playlistMutationPending.value = '';
+      }
+      return;
+    }
+
+    const track = ctx.playlistDialogTrack.value;
+    if (!track?.id) return;
 
     ctx.playlistMutationPending.value = 'create';
     ctx.playlistMutationError.value = '';
@@ -155,6 +245,10 @@ export function installPlaylistActions(ctx) {
 
   ctx.insertCreatedPlaylist = function insertCreatedPlaylist({ id, title, track }) {
     const normalizedId = ctx.currentPlaylistId({ browseId: id });
+    const count = ctx.playlistDialogMode?.value === 'queue' && ctx.playlistDialogTracks?.value?.length
+      ? ctx.playlistDialogTracks.value.length
+      : 1;
+    const countLabel = `${count} ${count === 1 ? 'song' : 'songs'}`;
     const item = {
       id: null,
       browseId: `VL${normalizedId}`,
@@ -166,8 +260,8 @@ export function installPlaylistActions(ctx) {
       },
       type: 'playlist',
       title,
-      subtitle: 'Playlist • 1 song',
-      itemCount: '1 song',
+      subtitle: `Playlist • ${countLabel}`,
+      itemCount: countLabel,
       thumbnail: track?.thumbnail || ''
     };
     const library = ctx.homeData.value.library || { sections: [] };

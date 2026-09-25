@@ -44,14 +44,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -62,14 +64,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.auth.SUPABASE_SYNC_DISCLAIMER
 import dev.sfg.orchard.mobile.auth.SupabaseSyncService
+import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
-import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import kotlinx.coroutines.launch
 
 private val CloudAccent = Color(0xFF7B9FE8)
 
 @Composable
-fun OrchardAccountSettingsCard() {
+fun OrchardAccountSettingsCard(
+    settings: OrchardSettings? = null,
+    onSettings: ((OrchardSettings) -> Unit)? = null,
+) {
     val context = LocalContext.current
     val syncService = remember { SupabaseSyncService(context) }
     val scope = rememberCoroutineScope()
@@ -80,9 +85,10 @@ fun OrchardAccountSettingsCard() {
     var userEmail by remember { mutableStateOf(syncService.userEmail) }
     val isAuthenticated = userEmail.isNotBlank()
 
+    val shape = RoundedCornerShape(20.dp)
     Surface(
-        color = CanopyColors.Surface,
-        shape = RoundedCornerShape(20.dp),
+        color = Color.Transparent,
+        shape = shape,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(16.dp)) {
@@ -143,6 +149,37 @@ fun OrchardAccountSettingsCard() {
                         SUPABASE_SYNC_DISCLAIMER,
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            if (settings != null && onSettings != null) {
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            "Cloud audio analysis",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                            color = CanopyColors.Text,
+                        )
+                        Text(
+                            "Download pre-computed analysis for Best Mix from Supabase",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = settings.bestMixSupabaseSync,
+                        onCheckedChange = { onSettings(settings.copy(bestMixSupabaseSync = it)) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.Black,
+                            checkedTrackColor = CloudAccent,
+                            uncheckedThumbColor = CanopyColors.Muted,
+                            uncheckedTrackColor = CanopyColors.Canvas,
+                        ),
                     )
                 }
             }

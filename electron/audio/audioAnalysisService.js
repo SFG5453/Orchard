@@ -18,7 +18,6 @@
  */
 
 import { createRequire } from 'node:module';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
 import {
@@ -32,9 +31,10 @@ import { DEFAULT_MODEL_PATH, refineBeatsWithModel } from './beatThisTracker.js';
 import { createBeatModelHost } from './beatModelHost.js';
 import { DEFAULT_MODEL_PATH as DEFAULT_VOCAL_MODEL_PATH } from './vocalMaskTracker.js';
 import { createVocalMaskHost } from './vocalMaskHost.js';
+import { createAudioAnalysisCache } from './audioAnalysisCache.js';
 
 // Owns native-addon loading, analysis request de-duplication, and the persisted
-// result cache. `stop()` removes every IPC handler and flushes pending cache data.
+// result cache. `stop()` removes every IPC handler and closes the cache database.
 
 const require = createRequire(import.meta.url);
 const { AUDIO_ANALYSIS } = IPC_CHANNELS;
@@ -83,18 +83,107 @@ function floatSamples(value) {
   return null;
 }
 
+function finiteSeconds(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map(Number).filter((time) => Number.isFinite(time) && time >= 0);
+}
+
+/**
+ * Translates a renderer-side window into the addon's flat shape. Both bounds of
+ * a window must be real numbers or the window is dropped: a half-specified
+ * window would silently constrain one end only.
+ */
+function regionConstraint(value) {
+  if (!value || typeof value !== 'object') return undefined;
+  const bounds = {};
+  [['startEarliest', 'startLatest'], ['endEarliest', 'endLatest']].forEach(([from, to]) => {
+    const earliest = Number(value[from]);
+    const latest = Number(value[to]);
+    if (Number.isFinite(earliest) && Number.isFinite(latest) && latest >= earliest) {
+      bounds[from] = earliest;
+      bounds[to] = latest;
+    }
+  });
+  return Object.keys(bounds).length ? bounds : undefined;
+}
+
+const SELECTED_TRANSITION_STRATEGIES = new Set([
+  'equal_power_crossfade',
+  'beatmatched_crossfade',
+  'bass_swap',
+  'filtered_blend',
+  'short_fade'
+]);
+
+function selectedTransitionPlan(value, outgoing, incoming) {
+  if (!value || typeof value !== 'object') {
+    throw new Error('Invalid transition plan: expected an object.');
+  }
+  const plan = {
+    outgoingStart: Number(value.outgoingStart),
+    incomingStart: Number(value.incomingStart),
+    duration: Number(value.duration),
+    beats: Number(value.beats),
+    outgoingBpm: Number(value.outgoingBpm),
+    incomingBpm: Number(value.incomingBpm),
+    targetBpm: Number(value.targetBpm),
+    outgoingTempoRatio: Number(value.outgoingTempoRatio),
+    incomingTempoRatio: Number(value.incomingTempoRatio),
+    strategy: String(value.strategy || '')
+  };
+  const numeric = Object.entries(plan).filter(([, item]) => typeof item === 'number');
+  if (numeric.some(([, item]) => !Number.isFinite(item)) ||
+      plan.outgoingStart < 0 || plan.incomingStart < 0 || plan.duration <= 0 ||
+      !Number.isInteger(plan.beats) || plan.beats <= 0 ||
+      plan.outgoingBpm <= 0 || plan.incomingBpm <= 0 || plan.targetBpm <= 0 ||
+      plan.outgoingTempoRatio <= 0 || plan.incomingTempoRatio <= 0 ||
+      !SELECTED_TRANSITION_STRATEGIES.has(plan.strategy)) {
+    throw new Error('Invalid transition plan: finite positive timing, tempo, ratios, beats, and a known strategy are required.');
+  }
+  const ratioDeviation = Math.max(
+    Math.abs(plan.outgoingTempoRatio - 1),
+    Math.abs(plan.incomingTempoRatio - 1)
+  );
+  if (ratioDeviation > 0.04 + Number.EPSILON) {
+    throw new Error('Invalid transition plan: tempo ratio exceeds the 4% renderer limit.');
+  }
+  const timingTolerance = 1 / Math.max(outgoing.sampleRate, incoming.sampleRate);
+  const expectedDuration = plan.beats * 60 / plan.targetBpm;
+  if (Math.abs(plan.duration - expectedDuration) > timingTolerance) {
+    throw new Error('Invalid transition plan: duration does not match beats and target BPM.');
+  }
+  const outgoingDuration = outgoing.channels[0].length / outgoing.sampleRate;
+  const incomingDuration = incoming.channels[0].length / incoming.sampleRate;
+  if (plan.outgoingStart + plan.duration * plan.outgoingTempoRatio > outgoingDuration + timingTolerance ||
+      plan.incomingStart + plan.duration * plan.incomingTempoRatio > incomingDuration + timingTolerance) {
+    throw new Error('Invalid transition plan: selected source window exceeds supplied PCM.');
+  }
+  for (const field of ['outgoingPitchSemitones', 'incomingPitchSemitones']) {
+    if (value[field] === undefined) continue;
+    const semitones = Number(value[field]);
+    if (!Number.isFinite(semitones)) {
+      throw new Error(`Invalid transition plan: ${field} must be finite.`);
+    }
+    plan[field] = semitones;
+  }
+  return plan;
+}
+
 /**
  * Registers the privileged native-analysis IPC service and persistent LRU cache.
  * @param {object} options
- * @param {string} options.cachePath Atomic JSON cache destination.
+ * @param {string} options.cachePath SQLite cache destination.
+ * @param {string} [options.legacyCachePath] JSON cache migrated on first use.
  * @param {Electron.IpcMain} options.ipcMain IPC registrar owned by Electron.
  * @param {string} options.nativeModulePath Development or asar-unpacked addon path.
  * @returns {{stop: Function}} Cleanup that removes handlers and flushes cache data.
  */
 export function setupAudioAnalysisService({
   cachePath,
+  legacyCachePath,
   ipcMain,
   nativeModulePath,
+  transitionModulePath,
   beatModelPath = DEFAULT_MODEL_PATH,
   vocalModelPath = DEFAULT_VOCAL_MODEL_PATH,
   loadNativeAddon = require,
@@ -108,12 +197,11 @@ export function setupAudioAnalysisService({
   createModelHost = createBeatModelHost,
   createVocalHost = createVocalMaskHost
 }) {
-  const cache = new Map();
   const inFlight = new Map();
   let nativeAddon = null;
   let nativeLoadAttempts = 0;
-  let saveTimer = null;
-  let savePromise = Promise.resolve();
+  let transitionAddon = null;
+  let transitionLoadAttempts = 0;
 
   function log(event, details = {}) {
     try {
@@ -146,56 +234,57 @@ export function setupAudioAnalysisService({
     return nativeAddon;
   }
 
+  // Transition rendering is exported by the same napi-rs binary as analysis.
+  // It remains a separate lazy handle here so tests and callers can override
+  // the two service paths independently.
+  function transition() {
+    if (transitionAddon) return transitionAddon;
+    if (!transitionModulePath) return null;
+    transitionLoadAttempts += 1;
+    try {
+      const loaded = loadNativeAddon(transitionModulePath);
+      if (
+        typeof loaded?.renderTransition === 'function' ||
+        typeof loaded?.renderPlannedTransition === 'function'
+      ) {
+        transitionAddon = loaded;
+        log('transition-load-ready', {
+          attempt: transitionLoadAttempts,
+          hasRenderTransition: typeof loaded?.renderTransition === 'function',
+          hasRenderPlannedTransition: typeof loaded?.renderPlannedTransition === 'function'
+        });
+      } else {
+        log('transition-load-invalid', {
+          attempt: transitionLoadAttempts,
+          hasRenderTransition: typeof loaded?.renderTransition === 'function',
+          hasRenderPlannedTransition: typeof loaded?.renderPlannedTransition === 'function'
+        });
+      }
+    } catch (error) {
+      transitionAddon = null;
+      log('transition-load-failed', { attempt: transitionLoadAttempts, ...errorDetails(error) });
+    }
+    return transitionAddon;
+  }
+
   // Load before the renderer asks for analysis, while still allowing a later
   // request to recover if startup briefly raced the unpacked native module.
   addon();
+  transition();
 
-  const cacheReady = readFile(cachePath, 'utf8')
-    .then((contents) => JSON.parse(contents))
-    .then((stored) => {
-      if (stored?.version !== CACHE_VERSION || !Array.isArray(stored.items)) return;
-      stored.items.slice(-MAX_CACHE_ITEMS).forEach((item) => {
-        const trackId = cleanTrackId(item?.trackId);
-        if (!trackId || !isValidLocalAnalysis(item?.result)) return;
-        cache.set(trackId, {
-          lastUsed: Number(item.lastUsed) || 0,
-          result: item.result
-        });
-      });
-    })
-    .catch(() => {});
+  const cache = createAudioAnalysisCache({
+    databasePath: cachePath,
+    legacyPath: legacyCachePath,
+    version: CACHE_VERSION,
+    maxItems: MAX_CACHE_ITEMS,
+    cleanTrackId,
+    validate: isValidLocalAnalysis,
+    log
+  });
+  const cacheReady = cache.ready;
 
   function cached(trackId) {
-    const entry = cache.get(trackId);
-    if (!entry) return null;
-    if (!isValidLocalAnalysis(entry.result)) {
-      cache.delete(trackId);
-      return null;
-    }
-    cache.delete(trackId);
-    cache.set(trackId, { ...entry, lastUsed: Date.now() });
-    return entry.result;
-  }
-
-  function persist() {
-    const items = Array.from(cache, ([trackId, entry]) => ({ trackId, ...entry }));
-    const temporaryPath = `${cachePath}.tmp`;
-    savePromise = savePromise
-      .catch(() => {})
-      .then(async () => {
-        await mkdir(path.dirname(cachePath), { recursive: true });
-        await writeFile(temporaryPath, JSON.stringify({ version: CACHE_VERSION, items }), 'utf8');
-        await rename(temporaryPath, cachePath);
-      });
-    return savePromise;
-  }
-
-  function schedulePersist() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      saveTimer = null;
-      void persist();
-    }, 750);
+    return cache.get(trackId);
   }
 
   ipcMain.handle(AUDIO_ANALYSIS.AVAILABLE, async () => {
@@ -270,9 +359,9 @@ export function setupAudioAnalysisService({
   });
 
   ipcMain.handle(AUDIO_ANALYSIS.RENDER_TRANSITION, async (_event, payload = {}) => {
-    const native = addon();
-    if (!native || typeof native.renderTransition !== 'function') {
-      log('transition-render-unavailable', { loadAttempts: nativeLoadAttempts });
+    const engine = transition();
+    if (!engine) {
+      log('transition-render-unavailable', { loadAttempts: transitionLoadAttempts });
       throw new Error('Native transition rendering is unavailable.');
     }
 
@@ -280,54 +369,97 @@ export function setupAudioAnalysisService({
       const channels = Array.isArray(value?.channels)
         ? value.channels.map(floatSamples)
         : [];
-      const anchor = Number(value?.anchor);
+      const sampleRate = Number(value?.sampleRate);
       const bpm = Number(value?.bpm);
       if (!channels.length || channels.some((channel) => !channel?.length) ||
-          !Number.isFinite(anchor) || anchor < 0 || !Number.isFinite(bpm)) {
+          !Number.isFinite(sampleRate) || sampleRate < 1000 || !Number.isFinite(bpm)) {
         throw new Error(`Invalid ${label} PCM for transition rendering.`);
       }
       // Overlap slices are bounded by design; refuse anything whole-track sized.
       const maxSamples = 48000 * 90 * channels.length;
       const total = channels.reduce((sum, channel) => sum + channel.length, 0);
       if (total > maxSamples) throw new Error(`Oversized ${label} PCM for transition rendering.`);
-      return { channels, anchor, bpm };
+      return {
+        channels,
+        sampleRate,
+        bpm,
+        beats: finiteSeconds(value?.beats),
+        downbeats: finiteSeconds(value?.downbeats)
+      };
     }
 
     const outgoing = transitionSource(payload.outgoing, 'outgoing');
     const incoming = transitionSource(payload.incoming, 'incoming');
     const options = payload.options && typeof payload.options === 'object' ? payload.options : {};
-    const sampleRate = Number(options.sampleRate);
-    if (!Number.isFinite(sampleRate) || sampleRate < 1000) {
-      throw new Error('A valid sample rate is required for transition rendering.');
+    const planned = options.plan === undefined
+      ? null
+      : selectedTransitionPlan(options.plan, outgoing, incoming);
+    if (planned && typeof engine.renderPlannedTransition !== 'function') {
+      throw new Error('Native planned transition rendering is unavailable.');
+    }
+    if (!planned && typeof engine.renderTransition !== 'function') {
+      throw new Error('Native transition compatibility rendering is unavailable.');
     }
 
     const startedAt = Date.now();
     log('transition-render-start', {
-      sampleRate,
-      beats: Number(options.beats) || 0,
+      planned: Boolean(planned),
+      sampleRate: outgoing.sampleRate,
       outgoingBpm: outgoing.bpm,
-      incomingBpm: incoming.bpm
+      incomingBpm: incoming.bpm,
+      outgoingDownbeats: outgoing.downbeats.length,
+      incomingDownbeats: incoming.downbeats.length,
+      requestedOutgoingStart: planned?.outgoingStart,
+      requestedIncomingStart: planned?.incomingStart,
+      requestedDuration: planned?.duration,
+      requestedStrategy: planned?.strategy
     });
-    // Only forward keys that are real numbers: the N-API binding treats a
-    // present-but-undefined key as a type error, not an omission.
-    const renderOptions = { sampleRate };
-    ['beats', 'bassSwap', 'handoff', 'bed', 'bassCrossoverHz', 'bassSwapSeconds', 'filterSweep', 'filterSweepStartHz'].forEach((key) => {
-      const value = Number(options[key]);
-      if (Number.isFinite(value)) renderOptions[key] = value;
-    });
-    const result = await native.renderTransition(outgoing, incoming, renderOptions);
+
+    const duckOptions = Array.isArray(options.duckCurve) && options.duckCurve.length
+      ? { duckCurve: options.duckCurve.map(Number) }
+      : {};
+    const result = planned
+      ? await engine.renderPlannedTransition(outgoing, incoming, planned, duckOptions)
+      : await engine.renderTransition(outgoing, incoming, {
+        outgoing: regionConstraint(options.outgoing),
+        incoming: regionConstraint(options.incoming),
+        ...(Array.isArray(options.beatLengths) ? { beatLengths: options.beatLengths.map(Number) } : {}),
+        // Omitted rather than passed empty when the model had no opinion, so the
+        // engine's own "no curve means full depth" default applies.
+        ...duckOptions,
+        diagnostics: Boolean(options.diagnostics)
+      });
+
     log(result.rendered ? 'transition-render-ready' : 'transition-render-refused', {
+      planned: Boolean(planned),
       elapsedMs: Date.now() - startedAt,
       rejected: String(result.rejected || ''),
-      stretchRatio: Number(result.stretchRatio) || 0,
-      overlapSamples: result.channels?.[0]?.length || 0
+      strategy: String(result.strategy || ''),
+      beats: Number(result.beats) || 0,
+      stretchRatio: Number(result.outgoingTempoRatio) || 0,
+      overlapSamples: result.channels?.[0]?.length || 0,
+      requestedOutgoingStart: planned?.outgoingStart,
+      returnedOutgoingStart: Number(result.outgoingStart) || 0,
+      requestedIncomingStart: planned?.incomingStart,
+      returnedIncomingStart: Number(result.incomingStart) || 0,
+      requestedDuration: planned?.duration,
+      returnedDuration: Number(result.duration) || 0
     });
     return {
       rendered: Boolean(result.rendered),
       rejected: String(result.rejected || ''),
-      stretchRatio: Number(result.stretchRatio) || 1,
-      bpm: Number(result.bpm) || 0,
-      sampleRate,
+      strategy: String(result.strategy || ''),
+      summary: String(result.summary || ''),
+      beats: Number(result.beats) || 0,
+      duration: Number(result.duration) || 0,
+      stretchRatio: Number(result.outgoingTempoRatio) || 1,
+      incomingStretchRatio: Number(result.incomingTempoRatio) || 1,
+      bpm: Number(result.targetBpm) || 0,
+      outgoingStart: Number(result.outgoingStart) || 0,
+      incomingStart: Number(result.incomingStart) || 0,
+      outgoingResume: Number(result.outgoingResume) || 0,
+      incomingResume: Number(result.incomingResume) || 0,
+      sampleRate: Number(result.sampleRate) || outgoing.sampleRate,
       channels: result.channels || []
     };
   });
@@ -341,10 +473,7 @@ export function setupAudioAnalysisService({
       log('cache-store-invalid', { trackId, bpm: Number(payload?.result?.bpm) || 0 });
       throw new Error('A complete local audio analysis is required for caching.');
     }
-    cache.delete(trackId);
-    cache.set(trackId, { lastUsed: Date.now(), result });
-    while (cache.size > MAX_CACHE_ITEMS) cache.delete(cache.keys().next().value);
-    schedulePersist();
+    cache.set(trackId, result);
     log('cache-store-ready', { trackId, bpm: result.bpm, analysisSource: result.analysisSource });
     return true;
   });
@@ -534,9 +663,7 @@ export function setupAudioAnalysisService({
           log('native-analysis-invalid', { trackId, bpm: Number(rawResult?.bpm) || 0 });
           throw new Error('Native audio analysis returned an invalid BPM.');
         }
-        cache.set(trackId, { lastUsed: Date.now(), result });
-        while (cache.size > MAX_CACHE_ITEMS) cache.delete(cache.keys().next().value);
-        schedulePersist();
+        cache.set(trackId, result);
         log('native-analysis-ready', {
           trackId,
           elapsedMs: Date.now() - startedAt,
@@ -558,10 +685,8 @@ export function setupAudioAnalysisService({
 
   return {
     async stop() {
-      // Queued native AsyncWorkers cannot be cancelled. Removing ingress and
-      // flushing the current cache is therefore best-effort process teardown.
-      clearTimeout(saveTimer);
-      saveTimer = null;
+      // Queued native AsyncWorkers cannot be cancelled. Removing ingress is
+      // therefore best-effort process teardown.
       ipcMain.removeHandler(AUDIO_ANALYSIS.AVAILABLE);
       ipcMain.removeHandler(AUDIO_ANALYSIS.GET);
       ipcMain.removeHandler(AUDIO_ANALYSIS.DEBUG);
@@ -573,7 +698,8 @@ export function setupAudioAnalysisService({
       modelHost = null;
       vocalMaskHost?.stop();
       vocalMaskHost = null;
-      if (cache.size) await persist().catch(() => {});
+      await cacheReady;
+      cache.close();
     }
   };
 }

@@ -17,10 +17,12 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { watch } from 'vue';
 import { fetchBatchCloudAnalysis } from '../../services/cloudAnalysisSync.js';
 import { copyTextToClipboard } from './clipboardText.js';
 
 const CONNECT_SYNC_INTERVAL_MS = 500;
+const CONNECT_PROTOCOL_VERSION = 4;
 
 function safeTrack(track = {}) {
   return {
@@ -32,7 +34,7 @@ function safeTrack(track = {}) {
   };
 }
 
-function connectTrack(track = {}) {
+export function connectTrack(track = {}) {
   return {
     ...safeTrack(track),
     playbackItem: {
@@ -54,22 +56,45 @@ function playableSearchItems(result = {}) {
 }
 
 function mergeConnectState(ctx, state = {}) {
+  const previousDevices = ctx.orchardConnect.value.devices || [];
+  const nextDevices = state.devices !== undefined ? state.devices : previousDevices;
+  const nextPending = state.pending !== undefined ? state.pending : (ctx.orchardConnect.value.pending || []);
+
   ctx.orchardConnect.value = {
     ...ctx.orchardConnect.value,
     ...state,
-    pending: state.pending || ctx.orchardConnect.value.pending || [],
-    devices: state.devices || ctx.orchardConnect.value.devices || []
+    pending: nextPending,
+    devices: nextDevices
   };
+
+  if (state.devices !== undefined) {
+    const activeId = ctx.activePlaybackTarget?.value;
+    if (activeId && activeId !== 'local') {
+      const activeDevice = nextDevices.find((d) => d.id === activeId);
+      if (!activeDevice || !activeDevice.connected || Number(activeDevice.protocolVersion) < CONNECT_PROTOCOL_VERSION) {
+        ctx.activePlaybackTarget.value = 'local';
+      }
+    }
+  }
 }
 
 export function installConnectActions(ctx) {
   let lastConnectSyncAt = 0;
+  let applyingRemotePlaybackState = false;
+
+  if (ctx.volume) {
+    watch(ctx.volume, (newVol) => {
+      if (!applyingRemotePlaybackState && ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+        ctx.sendConnectTargetCommand?.({ type: 'volume', value: newVol });
+      }
+    }, { flush: 'sync' });
+  }
 
   ctx.connectSnapshot = function connectSnapshot() {
     const track = ctx.activeTrack.value;
     return {
       status: ctx.socketState.value,
-      protocolVersion: 3,
+      protocolVersion: CONNECT_PROTOCOL_VERSION,
       track: track
         ? {
           ...safeTrack(track),
@@ -87,7 +112,8 @@ export function installConnectActions(ctx) {
         duration: ctx.duration.value || track?.durationSeconds || 0,
         volume: ctx.volume.value,
         shuffle: Boolean(ctx.shuffleEnabled?.value),
-        repeatMode: ctx.repeatMode?.value || 'off'
+        repeatMode: ctx.repeatMode?.value || 'off',
+        autoplay: Boolean(ctx.autoplayEnabled?.value)
       },
       lyrics: {
         status: ctx.lyricsState.value.status,
@@ -313,21 +339,162 @@ export function installConnectActions(ctx) {
     });
   };
 
+  ctx.sendConnectTargetCommand = function sendConnectTargetCommand(command) {
+    const targetId = ctx.activePlaybackTarget?.value;
+    if (!targetId || targetId === 'local') return false;
+    if (!ctx.socket.value?.connected) return false;
+    ctx.socket.value.emit('connect:device-command', { deviceId: targetId, command });
+    return true;
+  };
+
+  ctx.sendConnectDeviceCommand = async function sendConnectDeviceCommand(deviceId, command) {
+    if (!deviceId || deviceId === 'local' || !ctx.socket.value?.connected) return false;
+    const result = await ctx.emitWithReply('connect:device-command', { deviceId, command }, { timeoutMs: 5_000 });
+    return Boolean(result?.delivered);
+  };
+
+  ctx.applyRemotePlaybackState = function applyRemotePlaybackState(state = {}) {
+    applyingRemotePlaybackState = true;
+    try {
+      if (state.track !== undefined) {
+        ctx.activeTrack.value = state.track;
+      }
+      if (state.playback) {
+        ctx.isPlaying.value = Boolean(state.playback.isPlaying);
+        ctx.buffering.value = Boolean(state.playback.buffering);
+        if (!ctx.isSeeking?.value) {
+          ctx.currentTime.value = Number(state.playback.currentTime) || 0;
+          ctx.seekPosition.value = ctx.currentTime.value;
+        }
+        ctx.duration.value = Number(state.playback.duration) || (state.track?.durationSeconds || 0);
+        if (typeof state.playback.volume === 'number') {
+          ctx.volume.value = Math.max(0, Math.min(1, state.playback.volume));
+        }
+        if (state.playback.shuffle !== undefined) {
+          ctx.shuffleEnabled.value = Boolean(state.playback.shuffle);
+        }
+        if (state.playback.repeatMode) {
+          ctx.repeatMode.value = state.playback.repeatMode === 'all' ? 'queue' : state.playback.repeatMode;
+        }
+        if (state.playback.autoplay !== undefined && ctx.autoplayEnabled) {
+          ctx.autoplayEnabled.value = Boolean(state.playback.autoplay);
+        }
+      }
+      if (Array.isArray(state.queue)) {
+        ctx.queue.value = state.queue;
+      }
+      if (state.lyrics && ctx.lyricsState) {
+        ctx.lyricsState.value = {
+          ...ctx.lyricsState.value,
+          ...state.lyrics
+        };
+      }
+    } finally {
+      applyingRemotePlaybackState = false;
+    }
+  };
+
+  ctx.selectPlaybackTarget = async function selectPlaybackTarget(targetId = 'local') {
+    const currentTarget = ctx.activePlaybackTarget?.value || 'local';
+    if (currentTarget === targetId) return;
+
+    if (targetId === 'local') {
+      const remoteState = ctx.remoteDeviceStates.value[currentTarget];
+      if (currentTarget && currentTarget !== 'local') {
+        let paused = false;
+        try {
+          paused = await ctx.sendConnectDeviceCommand(currentTarget, { type: 'pause' });
+        } catch {
+          paused = false;
+        }
+        if (!paused) {
+          ctx.orchardConnectPairingMessage.value = 'The phone did not confirm the playback handoff.';
+          return;
+        }
+      }
+      ctx.activePlaybackTarget.value = 'local';
+      if (remoteState?.track?.id) {
+        const track = remoteState.track;
+        const resumeAt = Number(remoteState.playback?.currentTime) || 0;
+        const queueSource = [track, ...(remoteState.queue || []).filter((item) => item?.id !== track.id)];
+        if (remoteState.playback?.shuffle !== undefined) {
+          ctx.shuffleEnabled.value = Boolean(remoteState.playback.shuffle);
+        }
+        if (remoteState.playback?.repeatMode) {
+          ctx.repeatMode.value = remoteState.playback.repeatMode === 'all' ? 'queue' : remoteState.playback.repeatMode;
+        }
+        if (remoteState.playback?.autoplay !== undefined && ctx.autoplayEnabled) {
+          ctx.autoplayEnabled.value = Boolean(remoteState.playback.autoplay);
+        }
+        await ctx.playTrack(track, {
+          queueSource,
+          resumeAt,
+          skipHistory: true,
+          startPaused: !remoteState.playback?.isPlaying,
+          forceLocal: true
+        });
+      }
+      return;
+    }
+
+    const targetDevice = (ctx.orchardConnect.value.devices || []).find((d) =>
+      d.id === targetId && d.connected && Number(d.protocolVersion) >= CONNECT_PROTOCOL_VERSION);
+    if (!targetDevice) return;
+
+    const currentTrack = ctx.activeTrack.value;
+    if (currentTrack?.id) {
+      const delivered = await ctx.sendConnectDeviceCommand(targetId, {
+        type: 'transfer',
+        value: {
+          track: connectTrack(currentTrack),
+          positionSeconds: Number(ctx.currentTime.value) || 0,
+          queue: (ctx.queue.value || []).map(connectTrack),
+          shuffle: Boolean(ctx.shuffleEnabled?.value),
+          repeatMode: ctx.repeatMode?.value || 'off',
+          autoplay: Boolean(ctx.autoplayEnabled?.value),
+          play: Boolean(ctx.isPlaying.value)
+        }
+      });
+      if (!delivered) {
+        ctx.orchardConnectPairingMessage.value = `${targetDevice.name || 'Phone'} could not receive playback.`;
+        return;
+      }
+    }
+
+    ctx.cancelActiveCrossfade?.('target-switch');
+    ctx.currentPlaybackElement?.()?.pause?.();
+    ctx.activePlaybackTarget.value = targetId;
+
+    const remoteState = ctx.remoteDeviceStates.value[targetId];
+    if (!currentTrack?.id && remoteState) ctx.applyRemotePlaybackState(remoteState);
+  };
+
   ctx.bindOrchardConnectEvents = function bindOrchardConnectEvents() {
     if (ctx.orchardConnectEventsBound) return;
     ctx.orchardConnectEventsBound = true;
 
     ctx.socket.value.on('connect:pairing-request', (request) => {
+      const existingPending = ctx.orchardConnect.value?.pending || [];
       mergeConnectState(ctx, {
         pending: [
           request,
-          ...ctx.orchardConnect.value.pending.filter((item) => item.id !== request.id)
+          ...existingPending.filter((item) => item.id !== request.id)
         ]
       });
       ctx.orchardConnectPairingMessage.value = `${request.name || 'Phone'} wants to control Orchard.`;
     });
     ctx.socket.value.on('connect:pairing-state', (state) => mergeConnectState(ctx, state));
     ctx.socket.value.on('connect:remote-command', ctx.handleConnectCommand);
+    ctx.socket.value.on('connect:device-state', ({ deviceId, state } = {}) => {
+      if (!deviceId) return;
+      ctx.remoteDeviceStates.value = {
+        ...ctx.remoteDeviceStates.value,
+        [deviceId]: state
+      };
+      if (ctx.activePlaybackTarget.value === deviceId) {
+        ctx.applyRemotePlaybackState(state);
+      }
+    });
     ctx.socket.value.on('connect:remote-search', (payload) => void ctx.handleConnectSearch(payload));
     ctx.socket.value.on('connect:remote-library', (payload) => void ctx.handleConnectLibrary(payload));
     ctx.socket.value.on('connect:remote-analysis', (payload) => void ctx.handleConnectAnalysis(payload));

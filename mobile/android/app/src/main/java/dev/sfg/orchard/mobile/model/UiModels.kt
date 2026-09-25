@@ -63,11 +63,19 @@ data class LibrarySnapshot(
 
 data class OrchardSettings(
     val animatedArtwork: Boolean = true,
+    /** Save motion covers alongside newly downloaded songs for offline playback. */
+    val downloadAnimatedArtwork: Boolean = false,
     val audioQuality: AudioQuality = AudioQuality.HIGH,
     /** Take the accent from the system's wallpaper palette instead of Orchard's own green. */
     val useSystemColors: Boolean = false,
     /** Let the artwork-tinted background drift instead of holding still between tracks. */
     val animatedBackground: Boolean = false,
+    /**
+     * Experimental: render panels, bars and chips as translucent frosted panes tinted by the
+     * playing cover, instead of flat opaque surfaces. Off by default — it is a large change to
+     * every screen's contrast, and Android 12 only gets an approximation of it.
+     */
+    val frostedGlass: Boolean = false,
     /** Overlap the end of a track with the start of the next one. */
     val crossfadeEnabled: Boolean = false,
     val crossfadeSeconds: Int = DEFAULT_CROSSFADE_SECONDS,
@@ -77,6 +85,8 @@ data class OrchardSettings(
      * back to the plain fade for any track it has no evidence about, so it is never worse.
      */
     val smartCrossfade: Boolean = false,
+    /** Whether Best Mix downloads pre-computed analysis from Supabase instead of analyzing local files. Off by default. */
+    val bestMixSupabaseSync: Boolean = false,
     /** Ceiling on the on-disk stream cache, in megabytes. Whole tracks are kept, so this is the
      * difference between a few albums and a library, and between instant re-listens and refetching.
      */
@@ -123,6 +133,8 @@ data class OrchardSettings(
     ),
     /** Whether to show full-bleed artwork on the Now Playing screen. */
     val fullBleedArtworkEnabled: Boolean = true,
+    /** Custom user-defined name for this local device in Connect and Listening Party. */
+    val customDeviceName: String = "",
     /** Whether to receive beta builds from GitHub releases. */
     val betaChannelEnabled: Boolean = false,
 ) {

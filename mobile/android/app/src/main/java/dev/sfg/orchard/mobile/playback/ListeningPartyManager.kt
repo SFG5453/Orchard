@@ -61,8 +61,11 @@ class ListeningPartyManager(
     private val scope: CoroutineScope,
     private val player: LocalPlaybackController,
     private val serviceUrl: String = DEFAULT_PARTY_SERVICE_URL,
-    private val displayName: String,
+    private var displayName: String,
 ) {
+    fun updateDisplayName(name: String) {
+        if (name.isNotBlank()) displayName = name
+    }
     private val mutableState = MutableStateFlow(PartyState())
     val state: StateFlow<PartyState> = mutableState.asStateFlow()
 

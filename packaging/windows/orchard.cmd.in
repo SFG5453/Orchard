@@ -1,0 +1,7 @@
+@echo off
+set "ORCHARD_INSTALL=%APPDATA%\orchard\versions\@ORCHARD_MAJOR_VERSION@"
+if exist "%ORCHARD_INSTALL%\orchard.cmd" (
+  call "%ORCHARD_INSTALL%\orchard.cmd" %*
+  exit /b %ERRORLEVEL%
+)
+"%~dp0orchard-packages.exe" %*

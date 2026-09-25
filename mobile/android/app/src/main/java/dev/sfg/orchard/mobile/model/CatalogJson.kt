@@ -36,8 +36,15 @@ object CatalogJson {
         .put("animatedArtworkVerticalUrl", value.animatedArtworkVerticalUrl)
         .put("durationMs", value.durationMs)
         .put("explicit", value.explicit)
+        .put("musicVideoType", value.musicVideoType)
         .put("autoplayGenerated", value.autoplayGenerated)
         .put("isUpload", value.isUpload)
+        .put("playbackSource", value.playbackSource)
+        .put("bitDepth", value.bitDepth)
+        .put("sampleRate", value.sampleRate)
+        .put("hires", value.hires)
+        .put("artists", artists(value.artists))
+        .put("musicVideoId", value.musicVideoId)
 
     fun track(value: JSONObject): Track = Track(
         id = value.cleanString("id"),
@@ -51,8 +58,15 @@ object CatalogJson {
         animatedArtworkVerticalUrl = value.cleanString("animatedArtworkVerticalUrl"),
         durationMs = value.optLong("durationMs"),
         explicit = value.optBoolean("explicit"),
+        musicVideoType = value.cleanString("musicVideoType"),
         autoplayGenerated = value.optBoolean("autoplayGenerated"),
         isUpload = value.optBoolean("isUpload"),
+        playbackSource = value.optString("playbackSource").ifBlank { "youtube" },
+        bitDepth = value.optInt("bitDepth", 0).takeIf { it > 0 },
+        sampleRate = value.optInt("sampleRate", 0).takeIf { it > 0 },
+        hires = value.optBoolean("hires", false),
+        artists = artists(value.optJSONArray("artists")),
+        musicVideoId = value.cleanString("musicVideoId"),
     )
 
     fun tracks(values: List<Track>): JSONArray = JSONArray().also { output ->
@@ -64,6 +78,19 @@ object CatalogJson {
         for (index in 0 until values.length()) {
             val value = values.optJSONObject(index) ?: continue
             val decoded = track(value)
+            if (decoded.id.isNotBlank()) add(decoded)
+        }
+    }
+
+    fun artists(values: List<Artist>): JSONArray = JSONArray().also { output ->
+        values.forEach { output.put(artist(it)) }
+    }
+
+    fun artists(values: JSONArray?): List<Artist> = buildList {
+        if (values == null) return@buildList
+        for (index in 0 until values.length()) {
+            val value = values.optJSONObject(index) ?: continue
+            val decoded = artist(value)
             if (decoded.id.isNotBlank()) add(decoded)
         }
     }
@@ -125,4 +152,3 @@ object CatalogJson {
         return if (v.equals("null", ignoreCase = true)) default else v
     }
 }
-

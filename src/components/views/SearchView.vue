@@ -194,6 +194,10 @@ export default {
               <strong class="explicit-title">
                 <span class="explicit-title__text">{{ searchTopResults[0].title }}</span>
                 <ExplicitBadge :explicit="searchTopResults[0].explicit" />
+                <DownloadIndicator
+                  :downloaded="isTrackDownloaded(searchTopResults[0])"
+                  :downloading="isTrackDownloading(searchTopResults[0])"
+                />
               </strong>
               <span>{{ itemMeta(searchTopResults[0]) || itemTypeLabel(searchTopResults[0]) }}</span>
               <span>{{ itemStat(searchTopResults[0]) || itemTypeLabel(searchTopResults[0]) }}</span>
@@ -226,6 +230,10 @@ export default {
                 <strong class="explicit-title">
                   <span class="explicit-title__text">{{ item.title }}</span>
                   <ExplicitBadge :explicit="item.explicit" />
+                  <DownloadIndicator
+                    :downloaded="isTrackDownloaded(item)"
+                    :downloading="isTrackDownloading(item)"
+                  />
                 </strong>
                 <span>{{ itemMeta(item) || itemTypeLabel(item) }}</span>
               </span>
@@ -293,6 +301,11 @@ export default {
             <strong class="explicit-title">
               <span class="explicit-title__text">{{ item.title }}</span>
               <ExplicitBadge :explicit="item.explicit" />
+              <DownloadIndicator
+                v-if="isPlayableTrack(item)"
+                :downloaded="isTrackDownloaded(item)"
+                :downloading="isTrackDownloading(item)"
+              />
             </strong>
             <span>{{ itemMeta(item) }}</span>
           </button>

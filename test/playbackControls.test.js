@@ -61,6 +61,58 @@ test('paused playback leaves buffering so the play control is usable again', () 
   assert.equal(ctx.isPlaying.value, false);
 });
 
+test('seeking resynchronizes fullscreen animated artwork', () => {
+  const media = { currentTime: 105 };
+  let artworkSyncs = 0;
+  const ctx = {
+    activeTrackIsLive: { value: false },
+    applyingListeningPartyState: false,
+    currentPlaybackElement: () => media,
+    currentTime: { value: 105 },
+    duration: { value: 180 },
+    isPlaying: { value: true },
+    listeningParty: { value: { status: 'offline' } },
+    listeningPartyIsHost: { value: true },
+    queueDiscordPresenceSync() {},
+    seekPosition: { value: 105 },
+    syncNowArtworkVideoPlayback() {
+      artworkSyncs += 1;
+    },
+    syncVideoCompanionAudio() {}
+  };
+
+  installPlaybackControls(ctx);
+  ctx.cancelActiveCrossfade = () => {};
+  ctx.seek(60);
+
+  assert.equal(artworkSyncs, 1);
+});
+
+test('animated artwork playback sync includes the fullscreen video', async () => {
+  const fullscreenVideo = {
+    paused: true,
+    playCalls: 0,
+    play() {
+      this.playCalls += 1;
+      return Promise.resolve();
+    },
+    pause() {}
+  };
+  const ctx = {
+    fullscreenArtworkVideoRef: { value: fullscreenVideo },
+    isPlaying: { value: true },
+    nowArtworkVideoFailed: { value: false },
+    nowArtworkVideoRef: { value: null },
+    rightPanelArtworkVideoRef: { value: null }
+  };
+
+  installMediaHandlers(ctx);
+  ctx.syncNowArtworkVideoPlayback();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(fullscreenVideo.playCalls, 1);
+});
+
 test('ended, failed, and source-less media require a fresh stream', () => {
   assert.equal(playbackNeedsFreshStream({ ended: true }), true);
   assert.equal(playbackNeedsFreshStream({ error: { code: 2 } }), true);
@@ -270,7 +322,12 @@ test('playing from history does not enqueue the rest of listening history', () =
 
 // A WSOLA overlap already contains the incoming track, so the legacy engine
 // must never start its own fade on the same standby element underneath it.
-function crossfadeRoutingContext({ wsolaActive, wsolaPlan }) {
+function crossfadeRoutingContext({
+  wsolaActive,
+  wsolaPlan,
+  wsolaPreparationPlan = null,
+  wsolaStatus = 'idle'
+}) {
   const legacyStarts = [];
   const fromAudio = { currentTime: 200, duration: 240, pause() {}, play: async () => {} };
   const toAudio = { currentTime: 0, src: 'http://127.0.0.1/next', pause() {}, play: async () => {} };
@@ -322,8 +379,9 @@ function crossfadeRoutingContext({ wsolaActive, wsolaPlan }) {
     wsolaCrossfade: {
       isActive: () => wsolaActive,
       cancel: () => {},
-      plan: () => wsolaPlan,
-      preparationStatus: () => 'idle',
+      plan: () => typeof wsolaPlan === 'function' ? wsolaPlan() : wsolaPlan,
+      preparationPlan: () => wsolaPreparationPlan,
+      preparationStatus: () => wsolaStatus,
       preparedTransition: () => null,
       prepare: async () => null,
       start: async () => false
@@ -359,6 +417,72 @@ test('a refused WSOLA pairing still falls back to the legacy crossfade', async (
   } finally {
     globalThis.window = originalWindow;
   }
+});
+
+test('a native refusal executes the attached fallback without planning the pair again', async () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { setTimeout: () => 1, clearTimeout: () => {} };
+  try {
+    const fallback = {
+      transitionClass: 'simple_crossfade',
+      outgoingStart: 196,
+      outgoingEnd: 204,
+      incomingCue: 4,
+      durationSeconds: 8,
+      strategy: 'equal_power_crossfade',
+      transitionStyle: 'equal_power',
+      reason: 'native-render-refused'
+    };
+    const pairPlan = {
+      fallback,
+      fallbackReason: 'native-render-refused',
+      incoming: { handoff: 12 },
+      diagnostics: { selected: { gates: ['native-render-refused'] } }
+    };
+    const { ctx, legacyStarts } = crossfadeRoutingContext({
+      wsolaActive: false,
+      wsolaStatus: 'failed',
+      wsolaPreparationPlan: {
+        ok: true,
+        transitionStart: 196,
+        fallback,
+        pairPlan
+      },
+      wsolaPlan: () => {
+        throw new Error('WSOLA pair planning ran again after native refusal');
+      }
+    });
+    ctx.autoCrossfade.transitionPlan = () => {
+      throw new Error('pair planning ran a second time');
+    };
+
+    assert.equal(await ctx.maybeStartAutoCrossfade(), true);
+    assert.equal(legacyStarts.length, 1);
+    assert.strictEqual(legacyStarts[0].transition.fallback, fallback);
+    assert.strictEqual(legacyStarts[0].transition.pairPlan, pairPlan);
+    assert.equal(legacyStarts[0].transition.transitionStart, fallback.outgoingStart);
+    assert.equal(legacyStarts[0].transition.transitionEnd, fallback.outgoingEnd);
+    assert.equal(legacyStarts[0].transition.incomingCueTime, fallback.incomingCue);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('speech and live context guards run before WSOLA pair planning', async () => {
+  const { ctx, legacyStarts } = crossfadeRoutingContext({
+    wsolaActive: false,
+    wsolaPlan: () => {
+      throw new Error('WSOLA planned a content type that must not be mixed');
+    }
+  });
+  ctx.activeTrack.value.title = 'Live concert recording';
+  ctx.autoCrossfade.transitionPlan = () => ({
+    shouldStart: false,
+    reason: 'blocked-speech-or-live'
+  });
+
+  assert.equal(await ctx.maybeStartAutoCrossfade(), false);
+  assert.deepEqual(legacyStarts, []);
 });
 
 test('processed audio falls back to the legacy crossfade', async () => {

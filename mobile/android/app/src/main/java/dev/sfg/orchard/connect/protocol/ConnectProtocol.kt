@@ -22,12 +22,11 @@ package dev.sfg.orchard.connect.protocol
 /**
  * Single source of truth for the Orchard Connect wire contract.
  *
- * These values mirror `electron/connect/orchardConnectServer.js`. Changing one
- * requires a coordinated desktop protocol change; UI code must not repeat the
- * literal event or command names.
+ * These values mirror `electron/connect/orchardConnectServer.js`. Changing one requires a
+ * coordinated desktop protocol change; UI code must not repeat the literal event or command names.
  */
 object ConnectProtocol {
-    const val PROTOCOL_VERSION = 3
+    const val PROTOCOL_VERSION = 4
     const val PREFERRED_PORT = 32145
     const val INFO_PATH = "/connect-info"
     const val PAIRING_SCHEME = "orchard-connect"
@@ -42,6 +41,7 @@ object ConnectProtocol {
         const val ANALYSIS = "connect:analysis"
         const val APPROVED = "connect:approved"
         const val STATE = "connect:state"
+        const val DEVICE_STATE = "connect:device-state"
         const val SEARCH_RESULTS = "connect:search-results"
         const val LIBRARY_RESULTS = "connect:library-results"
         const val ANALYSIS_RESULTS = "connect:analysis-results"
@@ -69,6 +69,8 @@ object ConnectProtocol {
         const val TOGGLE_SHUFFLE = "toggle-shuffle"
         const val CYCLE_REPEAT = "cycle-repeat"
         const val PLAY_TRACK = "play-track"
+        const val TRANSFER = "transfer"
+        const val REPLACE_QUEUE = "replace-queue"
     }
 
     /** JSON field names used on both outbound and inbound protocol messages. */
@@ -90,5 +92,15 @@ object ConnectProtocol {
         const val TRACK_IDS = "trackIds"
         const val REQUEST_ID = "requestId"
         const val RESULTS = "results"
+        const val POSITION_SECONDS = "positionSeconds"
+        const val SHUFFLE = "shuffle"
+        const val REPEAT_MODE = "repeatMode"
+        const val AUTOPLAY = "autoplay"
+        const val QUEUE = "queue"
+        const val TRACK = "track"
+        const val TRACKS = "tracks"
+        const val START_INDEX = "startIndex"
+        const val CONTEXT_TITLE = "contextTitle"
+        const val PLAY = "play"
     }
 }

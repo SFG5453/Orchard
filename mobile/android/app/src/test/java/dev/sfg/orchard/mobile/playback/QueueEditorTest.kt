@@ -72,6 +72,14 @@ class QueueEditorTest {
     }
 
     @Test
+    fun clearProducesEmptyQueueAndSelection() {
+        val result = QueueEditor.clear()
+
+        assertEquals(emptyList<Track>(), result.tracks)
+        assertEquals(-1, result.currentIndex)
+    }
+
+    @Test
     fun replaceDropsDuplicateAndInvalidTracks() {
         val result = QueueEditor.replaceAndPlay(listOf(a, a.copy(title = "Duplicate"), Track("", "Invalid", ""), b), 9)
 

@@ -485,6 +485,20 @@ class StreamCache(
 
     private class SpanEntry(val start: Long, val end: Long, val raf: java.io.RandomAccessFile)
 
+    fun clear() {
+        for ((_, writers) in inFlight) synchronized(writers) { writers.forEach { it.cancel() } }
+        inFlight.clear()
+        synchronized(cache) {
+            for (key in cache.keys.toList()) {
+                try {
+                    cache.removeResource(key)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to remove cache resource $key", e)
+                }
+            }
+        }
+    }
+
     fun release() {
         for ((_, writers) in inFlight) synchronized(writers) { writers.forEach { it.cancel() } }
         inFlight.clear()

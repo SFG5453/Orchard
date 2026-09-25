@@ -21,11 +21,11 @@
 //
 // The stock handler builds its "please report this" warnings from
 // `packageInfo.bugs.url`, read out of youtubei.js's own package.json. When
-// electron-builder packs dependencies into the asar it strips non-essential
-// package.json fields, `bugs` among them, so that read throws
+// Some production package layouts omit non-essential package.json fields,
+// `bugs` among them, so that read throws
 // "Cannot read properties of undefined (reading 'url')" — inside the handler
 // that only exists to log a warning. The parse then fails outright, which is
-// why searches broke in packaged builds but never in a dev run, and only for
+// why searches can break in packaged builds but never in a dev run, and only for
 // queries whose results happened to contain a renderer YouTube.js does not
 // recognize yet.
 import { Parser } from 'youtubei.js';

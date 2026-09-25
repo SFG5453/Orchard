@@ -89,7 +89,7 @@ export default {
         </section>
 
         <q-linear-progress
-          v-if="['downloading', 'available', 'external-downloading'].includes(updateState.status)"
+          v-if="['downloading', 'external-downloading'].includes(updateState.status)"
           :value="updateProgressPercent / 100"
           color="primary"
           track-color="grey-10"
@@ -152,8 +152,8 @@ export default {
           :disabled="!updateCanInstall"
           @click="installUpdate"
         >
-          <q-icon name="restart_alt" />
-          <span>Install</span>
+          <q-icon :name="updateState.status === 'available' ? 'download' : 'restart_alt'" />
+          <span>{{ updateState.status === 'available' ? 'Download update' : 'Restart and install' }}</span>
         </button>
       </footer>
     </q-card>

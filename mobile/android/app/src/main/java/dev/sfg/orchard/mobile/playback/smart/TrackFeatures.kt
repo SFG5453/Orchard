@@ -32,12 +32,18 @@ import org.json.JSONObject
  * it how to mix, and these features tell it *where*; and, through the energy curve, whether an
  * interior mix-out anchor would skip silence or skip a minute of music.
  *
- * Ported unchanged from Orchard desktop's `native/analyzer`, and deliberately so: the mix-out
+ * Ported into Earmark's Rust analyzer without redesign, deliberately so: the mix-out
  * budget, phrase detection and cue scoring were tuned against real material, and reimplementing
  * them from the header would produce different numbers that the policy's thresholds are not
  * calibrated for.
  */
 object TrackFeatures {
+
+    /**
+     * Persisted analysis contract, shared with `shared/audioAnalysis.js` and the desktop native
+     * addon. Bump all three together whenever old whole-track evidence is no longer safe to reuse.
+     */
+    const val ANALYSIS_VERSION = 13
 
     /** True when the native library loaded. Analysis is optional, so this is a fact, not a fault. */
     val available: Boolean get() = MelSpectrogram.available
@@ -65,13 +71,34 @@ object TrackFeatures {
             .getOrNull()
     }
 
+    /** Builds the same bounded planner payload as orchardv3 from one decoded window. */
+    fun plannerWindow(
+        samples: FloatArray,
+        sampleRate: Double,
+        offsetSeconds: Double,
+        trackDurationSeconds: Double,
+        grid: BeatTracker.Grid,
+    ): String? {
+        if (!available || samples.isEmpty()) return null
+        val json = runCatching {
+            nativeAnalyzePlannerWindow(
+                samples, sampleRate, offsetSeconds, trackDurationSeconds,
+                grid.bpm, grid.beatConfidence,
+                grid.beats.map { it - offsetSeconds }.toDoubleArray(),
+                grid.downbeats.map { it - offsetSeconds }.toDoubleArray(),
+            )
+        }.onFailure { Log.w(TAG, "Bounded planner analysis failed", it) }.getOrNull() ?: return null
+        return json.takeIf { it != "{}" }
+    }
+
     /**
      * The subset of the analyzer's output the transition policy reads.
      *
-     * The analyzer also produces chroma, mid/high energy curves, loudness, peak and dynamic range;
-     * none is consumed downstream, so none crosses the JNI boundary.
+     * Typed fields serve mobile's beat/vocal refinement. The full native payload is retained for
+     * desktop's structural, spectral, and harmonic scoring, including fields added in the future.
      */
     data class Features(
+        val plannerFeaturesJson: String = "{}",
         val duration: Double,
         val bpm: Double,
         val beatInterval: Double,
@@ -97,6 +124,7 @@ object TrackFeatures {
     )
 
     fun parse(root: JSONObject): Features = Features(
+        plannerFeaturesJson = root.toString(),
         duration = root.optDouble("duration", 0.0).orZero(),
         bpm = root.optDouble("bpm", 0.0).orZero(),
         beatInterval = root.optDouble("beatInterval", 0.0).orZero(),
@@ -120,6 +148,49 @@ object TrackFeatures {
         mixInCandidates = root.cuePoints("mixInCandidates"),
         mixOutCandidates = root.cuePoints("mixOutCandidates"),
     )
+
+    /**
+     * Restores the typed mobile fields to the full planner payload before it is persisted.
+     *
+     * Cloud results and the native analyzer normally already carry these values in
+     * [Features.plannerFeaturesJson]. Constructed or refined features need not, so writing the raw
+     * payload alone would turn a valid in-memory result into an empty cache entry after restart.
+     */
+    fun toJson(features: Features): JSONObject = runCatching {
+        JSONObject(features.plannerFeaturesJson)
+    }.getOrElse { JSONObject() }.apply {
+        put("analysisVersion", ANALYSIS_VERSION)
+        put("duration", features.duration)
+        put("bpm", features.bpm)
+        put("beatInterval", features.beatInterval)
+        put("firstBeat", features.firstBeat)
+        put("beatConfidence", features.beatConfidence)
+        put("key", features.key)
+        put("keyConfidence", features.keyConfidence)
+        put("audibleStartTime", features.audibleStartTime)
+        put("pickupTime", features.pickupTime)
+        put("introEndTime", features.introEndTime)
+        put("outroStartTime", features.outroStartTime)
+        put("contentEndTime", features.contentEndTime)
+        put("mixInTime", features.mixInTime)
+        put("mixOutTime", features.mixOutTime)
+        put("vocalProbability", features.vocalProbability)
+        put("downbeats", JSONArray(features.downbeats))
+        put("phraseBoundaries", JSONArray(features.phraseBoundaries))
+        put("vocalActivityMask", JSONArray(features.vocalActivityMask))
+        put("energyCurve", JSONArray(features.energyCurve.map { point ->
+            JSONObject().put("t", point.time).put("e", point.energy)
+        }))
+        put("lowEnergyCurve", JSONArray(features.lowEnergyCurve.map { point ->
+            JSONObject().put("t", point.time).put("e", point.energy)
+        }))
+        put("mixInCandidates", JSONArray(features.mixInCandidates.map { candidate ->
+            JSONObject().put("t", candidate.time).put("s", candidate.score).put("y", candidate.type)
+        }))
+        put("mixOutCandidates", JSONArray(features.mixOutCandidates.map { candidate ->
+            JSONObject().put("t", candidate.time).put("s", candidate.score).put("y", candidate.type)
+        }))
+    }
 
     private fun JSONObject.doubles(name: String): List<Double> {
         val array = optJSONArray(name) ?: return emptyList()
@@ -166,6 +237,17 @@ object TrackFeatures {
         samples: FloatArray,
         sampleRate: Double,
         duration: Double,
+    ): String
+
+    @JvmStatic private external fun nativeAnalyzePlannerWindow(
+        samples: FloatArray,
+        sampleRate: Double,
+        offsetSeconds: Double,
+        trackDurationSeconds: Double,
+        bpm: Double,
+        confidence: Double,
+        beats: DoubleArray,
+        downbeats: DoubleArray,
     ): String
 
     @JvmStatic private external fun nativeSampleRate(): Double

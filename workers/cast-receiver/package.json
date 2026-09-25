@@ -1,0 +1,18 @@
+{
+  "name": "orchard-cast-receiver",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Custom Google Cast Web Receiver for Orchard with Animated Artwork Canvas",
+  "scripts": {
+    "build:vendor": "esbuild node_modules/@kawarp/core/dist/index.js --bundle --format=iife --global-name=KawarpCore --minify --outfile=vendor/kawarp.min.js",
+    "deploy": "wrangler deploy --config wrangler-production.jsonc",
+    "deploy:template": "wrangler deploy --config wrangler.jsonc"
+  },
+  "dependencies": {
+    "@kawarp/core": "1.2.2",
+    "hls.js": "1.7.3"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  beatOnnxExecutionProviders,
   configureOnnxWebRuntime,
   isIntelMacOS,
   loadOnnxModel,
@@ -37,6 +38,19 @@ test('other release targets keep the native CPU backend', () => {
   }
 });
 
+test('Beat This prefers WebGPU where the native binding includes it', () => {
+  for (const target of [
+    ['darwin', 'arm64'],
+    ['linux', 'x64'],
+    ['win32', 'x64'],
+    ['win32', 'arm64']
+  ]) {
+    assert.deepEqual(beatOnnxExecutionProviders(...target), ['webgpu', 'cpu']);
+  }
+  assert.deepEqual(beatOnnxExecutionProviders('linux', 'arm64'), ['cpu']);
+  assert.deepEqual(beatOnnxExecutionProviders('darwin', 'x64'), ['wasm']);
+});
+
 test('WASM configuration disables proxy workers and points at the packaged binary', () => {
   const runtime = { env: { wasm: {} } };
   assert.equal(configureOnnxWebRuntime(runtime, '/tmp/onnx-wasm'), runtime);
@@ -46,8 +60,8 @@ test('WASM configuration disables proxy workers and points at the packaged binar
 });
 
 test('WASM model loading reads local model bytes while native loading keeps its path', async () => {
-  const nativeModel = await loadOnnxModel('models/beat-this/beat_this_int8.onnx', 'linux', 'x64');
-  assert.equal(nativeModel, 'models/beat-this/beat_this_int8.onnx');
+  const nativeModel = await loadOnnxModel('models/beat-this/beat_this.onnx', 'linux', 'x64');
+  assert.equal(nativeModel, 'models/beat-this/beat_this.onnx');
 
   const webModel = await loadOnnxModel('package.json', 'darwin', 'x64');
   assert.ok(webModel instanceof Uint8Array);

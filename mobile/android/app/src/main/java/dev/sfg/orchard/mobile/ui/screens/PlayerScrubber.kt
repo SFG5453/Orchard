@@ -68,6 +68,7 @@ import dev.sfg.orchard.mobile.ui.components.durationText
 import dev.sfg.orchard.mobile.ui.components.rememberRainbowBrush
 import dev.sfg.orchard.mobile.ui.components.rememberTransitionGlow
 import dev.sfg.orchard.mobile.ui.components.transitionProgress
+import dev.sfg.orchard.mobile.ui.components.transitionStyleLabel
 
 /**
  * Expressive scrubber progress bar with active dragging state,
@@ -85,6 +86,7 @@ fun PlayerScrubber(
     mixProgress: Float? = null,
     showBitrate: Boolean = false,
     bitrateKbps: Int = 0,
+    isQobuz: Boolean = false,
 ) {
     val marker = transition?.takeIf {
         it.trackId.isNotBlank() && it.trackId == playback.currentTrack?.id && it.startMs > 0 && it.startMs < playback.durationMs
@@ -243,8 +245,10 @@ fun PlayerScrubber(
                 ),
             )
             if (glow > 0.01f) {
+                val styleDesc = transition?.style?.takeIf { it.isNotBlank() }?.let { transitionStyleLabel(it) }
+                val labelText = if (styleDesc != null) "$TRANSITION_LABEL • $styleDesc" else TRANSITION_LABEL
                 Text(
-                    text = TRANSITION_LABEL,
+                    text = labelText,
                     modifier = Modifier.alpha(glow),
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = 11.sp,
@@ -254,30 +258,12 @@ fun PlayerScrubber(
                     ),
                 )
             } else if (showBitrate && bitrateKbps > 0) {
-                // Only ever the rate of the stream actually open. There used to be a table of
-                // per-quality guesses here for when that was unknown, which is most of the time:
-                // the media cache sits above stream resolution, so a cached track never runs the
-                // resolver that would report one. Max guessed 256, a rate YouTube serves only to
-                // premium clients and Orchard therefore never receives. A readout whose whole job
-                // is to say what you are hearing cannot be allowed to invent it.
-                val displayKbps = bitrateKbps
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color.White.copy(alpha = 0.12f))
-                        .padding(horizontal = 7.dp, vertical = 2.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "$displayKbps kbps",
-                        color = Color.White.copy(alpha = 0.85f),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Default,
-                            fontWeight = FontWeight.SemiBold,
-                        ),
-                    )
-                }
+                val qobuzActive = isQobuz || playback.currentTrack?.isQobuz == true
+                dev.sfg.orchard.mobile.ui.components.LosslessBadge(
+                    showBitrate = showBitrate,
+                    bitrateKbps = bitrateKbps,
+                    isQobuz = qobuzActive,
+                )
             }
             val remainingMs = (duration - currentPosition.toLong()).coerceAtLeast(0)
             Text(

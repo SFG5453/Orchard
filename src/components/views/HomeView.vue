@@ -66,7 +66,7 @@ export default {
         });
       }
 
-      return sections;
+      return props.app.applyHomeSectionLayout(sections);
     });
 
     return { ...props.app, homeDisplaySections, homeViewRoot };
@@ -78,7 +78,7 @@ export default {
   <div ref="homeViewRoot" class="home-view">
     <div v-if="homeLoading && !hasHomeContent" class="empty-state">Loading your library…</div>
 
-    <template v-else-if="hasHomeContent">
+    <template v-else-if="hasHomeContent && homeDisplaySections.length">
       <template v-for="section in homeDisplaySections" :key="`home-section-${section.key}`">
         <section v-if="section.isHistory" class="shelf-section home-shelf home-shelf--history">
           <div class="section-header">
@@ -165,6 +165,13 @@ export default {
         </section>
       </template>
     </template>
+
+    <div v-else-if="hasHomeContent" class="empty-state home-layout-empty">
+      <q-icon name="space_dashboard" />
+      <strong>Your Home shelves are hidden.</strong>
+      <span>Choose what appears here in Home &amp; sidebar settings.</span>
+      <button type="button" @click="showLayoutSettings">Customize Home</button>
+    </div>
 
     <div v-else class="empty-state">No library items were returned.</div>
   </div>

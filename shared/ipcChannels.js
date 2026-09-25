@@ -32,7 +32,12 @@ export const IPC_CHANNELS = Object.freeze({
     GRAPHICS_MODE: 'app:graphics-mode',
     RESTART: 'app:restart',
     SHOW_WELCOME: 'app:show-welcome',
+    SYNC_SETTINGS: 'app:sync-settings',
     VIEW_LICENSE: 'app:view-license'
+  }),
+  ARTWORK: Object.freeze({
+    SAMPLE_COLORS: 'artwork:sample-colors',
+    SAMPLE_FRAME_COLORS: 'artwork:sample-frame-colors'
   }),
   AUDIO_ANALYSIS: Object.freeze({
     ANALYZE: 'audio-analysis:analyze',
@@ -70,14 +75,15 @@ export const IPC_CHANNELS = Object.freeze({
     SCROBBLE: 'lastfm:scrobble',
     STATUS: 'lastfm:status'
   }),
-  MIGRATION: Object.freeze({
-    DOWNLOAD: 'migration:download',
-    GET_STATE: 'migration:get-state',
-    REFRESH: 'migration:refresh'
-  }),
   NETWORK: Object.freeze({
     GET_PROXY_MODE: 'network:get-proxy-mode',
     SET_PROXY_MODE: 'network:set-proxy-mode'
+  }),
+  QOBUZ: Object.freeze({
+    CONNECT: 'qobuz:connect',
+    DISCONNECT: 'qobuz:disconnect',
+    STATUS: 'qobuz:status',
+    UPDATE: 'qobuz:update'
   }),
   SESSION_STATE: Object.freeze({
     GET: 'session-state:get',

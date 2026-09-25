@@ -26,8 +26,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.MultipleStop
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -53,8 +51,8 @@ import kotlin.math.roundToInt
 internal fun CrossfadeRow(settings: OrchardSettings, onSettings: (OrchardSettings) -> Unit) {
     Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            RowIcon(Icons.Rounded.MultipleStop)
-            Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+
+            Column(Modifier.weight(1f).padding(end = 14.dp)) {
                 Text(
                     "Crossfade",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -74,7 +72,7 @@ internal fun CrossfadeRow(settings: OrchardSettings, onSettings: (OrchardSetting
                 checked = settings.crossfadeEnabled,
                 onCheckedChange = { onSettings(settings.copy(crossfadeEnabled = it)) },
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.Black,
+                    checkedThumbColor = Color.White,
                     checkedTrackColor = LocalAccent.current,
                     uncheckedThumbColor = CanopyColors.Muted,
                     uncheckedTrackColor = CanopyColors.Canvas,
@@ -135,7 +133,7 @@ internal fun CrossfadeRow(settings: OrchardSettings, onSettings: (OrchardSetting
                         checked = settings.smartCrossfade,
                         onCheckedChange = { onSettings(settings.copy(smartCrossfade = it)) },
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.Black,
+                            checkedThumbColor = Color.White,
                             checkedTrackColor = LocalAccent.current,
                             uncheckedThumbColor = CanopyColors.Muted,
                             uncheckedTrackColor = CanopyColors.Canvas,

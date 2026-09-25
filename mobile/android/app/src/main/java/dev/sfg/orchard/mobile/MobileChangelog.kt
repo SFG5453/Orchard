@@ -28,10 +28,22 @@ object MobileChangelog {
 
     val CURRENT_RELEASE_NOTES =
         """
-        ### Fixed — backported from Orchard Mobile 2.0.0 beta
-        - **Audio Version Matching**: Reject a search result when its runtime is too different from the selected track, even if the title and artist match.
-        - **Search Result Durations**: Read the runtime when a play count follows it in YouTube Music search results.
-        - **Playlist Additions**: Save the same album-audio version used for playback when creating a playlist or adding a track to one.
+        ### Added
+        - **Desktop Transition Parity**: Mobile now runs the shared desktop transition planner with the same cue selection, tempo ratios, choreography, and fallback policy, backed by generated parity fixtures.
+        - **Cache Controls**: Added cache size reporting and a confirmation flow to clear temporary artwork, audio, network, and stream caches without touching downloads or library data.
+        - **Artist Actions**: Added artist credits in playback and follow/unfollow controls from artist and track surfaces.
+
+        ### Changed
+        - **Listening Experience**: Refined Home, Library, detail, queue, now-playing, lyrics, device, integration, and settings screens with consistent responsive surfaces and bundled Inter typography.
+        - **Beat Analysis**: Shipped the official `final0` Beat This dynamic INT8 model with fixed 1500-frame windows, CPU execution, versioned extraction, and bounded audio work.
+        - **Crossfade Engine**: Shared transition planning now preserves selected cues, tempo ratios, choreography, and fallback behavior while rendered playback keeps its full-song source clock.
+
+        ### Fixed
+        - **Rendered Crossfades**: Stabilized transition handoffs, preserved source position and duration, and prevented competing analysis and render jobs from disturbing playback timing.
+
+        ### Maintenance
+        - **Android Runtime**: Updated to stock ONNX Runtime Android 1.29.0, kept production APKs ARM64-only, and removed the experimental QNN/HTP packaging path after benchmark validation.
+        - **Testing & Tooling**: Added transition parity, timeline, work-limiter, cache, and UI tests plus Beat This quantization and accuracy benchmarks.
         """
             .trimIndent()
 }

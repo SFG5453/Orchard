@@ -1,0 +1,51 @@
+{
+  "name": "@orchardmusic/qobuz",
+  "version": "0.2.0",
+  "description": "Host-neutral Qobuz API, catalog matching, reporting, and CMAF-to-FLAC playback for Node.js.",
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    },
+    "./electron": {
+      "types": "./src/electron.d.ts",
+      "import": "./src/electron.js"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "audio",
+    "cmaf",
+    "electron",
+    "flac",
+    "music",
+    "qobuz",
+    "streaming"
+  ],
+  "author": {
+    "name": "SFG545",
+    "email": "sfg@sfg545.dev"
+  },
+  "license": "AGPL-3.0-or-later",
+  "homepage": "https://github.com/sfg5453/orchard/tree/main/packages/qobuz#readme",
+  "bugs": {
+    "url": "https://github.com/sfg5453/orchard/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sfg5453/orchard.git",
+    "directory": "packages/qobuz"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

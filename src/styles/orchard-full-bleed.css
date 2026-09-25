@@ -51,8 +51,8 @@ body,
 }
 
 .page {
-  height: calc(100vh - var(--orchard-titlebar-height)) !important;
-  max-height: calc(100vh - var(--orchard-titlebar-height));
+  height: calc(100dvh - var(--orchard-titlebar-height)) !important;
+  max-height: calc(100dvh - var(--orchard-titlebar-height));
   min-height: 0;
   margin: var(--orchard-titlebar-height) 0 0;
   padding: 26px clamp(22px, 3vw, 46px) calc(var(--orchard-player-height) + 32px);
@@ -79,8 +79,8 @@ body,
 
 /* Native titlebars do not consume Orchard's custom 48px titlebar slot. */
 .app-shell--native-titlebar .page {
-  height: 100vh !important;
-  max-height: 100vh;
+  height: 100dvh !important;
+  max-height: 100dvh;
   margin-top: 0;
 }
 
@@ -89,9 +89,9 @@ body,
 .sidebar,
 .lyrics-sidebar {
   bottom: 0 !important;
-  height: 100vh !important;
-  min-height: 100vh;
-  max-height: 100vh;
+  height: 100dvh !important;
+  min-height: 100dvh;
+  max-height: 100dvh;
 }
 
 .sidebar .q-drawer__content,
@@ -100,7 +100,7 @@ body,
 .lyrics-sidebar__inner {
   height: 100% !important;
   min-height: 0;
-  max-height: 100vh;
+  max-height: 100dvh;
 }
 
 /* Browse heroes can use the full center width, while their copy and artwork

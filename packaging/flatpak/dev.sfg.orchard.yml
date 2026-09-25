@@ -1,0 +1,28 @@
+app-id: dev.sfg.orchard
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+command: orchard
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  - --device=dri
+  - --filesystem=xdg-config/orchard:create
+modules:
+  - name: orchard-packages
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 orchard-packages /app/lib/orchard-packages/orchard-packages
+      - install -Dm644 resources.neu /app/lib/orchard-packages/resources.neu
+      - install -Dm755 extensions/orchard-packages-backend /app/lib/orchard-packages/extensions/orchard-packages-backend
+      - install -Dm755 orchard /app/bin/orchard
+      - install -Dm755 orchard-packages-launcher /app/bin/orchard-packages
+      - install -Dm644 dev.sfg.orchard.desktop /app/share/applications/dev.sfg.orchard.desktop
+      - install -Dm644 dev.sfg.orchard.png /app/share/icons/hicolor/512x512/apps/dev.sfg.orchard.png
+      - install -Dm644 dev.sfg.orchard.metainfo.xml /app/share/metainfo/dev.sfg.orchard.metainfo.xml
+    sources:
+      - type: dir
+        path: bundle

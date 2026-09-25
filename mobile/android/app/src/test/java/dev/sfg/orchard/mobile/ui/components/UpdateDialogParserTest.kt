@@ -119,23 +119,22 @@ class UpdateDialogParserTest {
         val notes = dev.sfg.orchard.mobile.MobileChangelog.CURRENT_RELEASE_NOTES
         val sections = parseReleaseNoteSections(notes)
 
-        assertTrue(notes.contains("backported from Orchard Mobile 2.0.0 beta"))
-        assertEquals(1, sections.size)
-        assertEquals("Fixed — backported from Orchard Mobile 2.0.0 beta", sections[0].title)
-        assertEquals(ReleaseNoteCategory.FIXED, sections[0].category)
+        assertEquals(4, sections.size)
+        assertEquals("Added", sections[0].title)
+        assertEquals(ReleaseNoteCategory.NEW, sections[0].category)
         assertEquals(3, sections[0].items.size)
-        assertEquals(
-            "**Audio Version Matching**: Reject a search result when its runtime is too different from the selected track, even if the title and artist match.",
-            sections[0].items[0],
-        )
-        assertEquals(
-            "**Search Result Durations**: Read the runtime when a play count follows it in YouTube Music search results.",
-            sections[0].items[1],
-        )
-        assertEquals(
-            "**Playlist Additions**: Save the same album-audio version used for playback when creating a playlist or adding a track to one.",
-            sections[0].items[2],
-        )
+
+        assertEquals("Changed", sections[1].title)
+        assertEquals(ReleaseNoteCategory.CHANGED, sections[1].category)
+        assertEquals(3, sections[1].items.size)
+
+        assertEquals("Fixed", sections[2].title)
+        assertEquals(ReleaseNoteCategory.FIXED, sections[2].category)
+        assertEquals(1, sections[2].items.size)
+
+        assertEquals("Maintenance", sections[3].title)
+        assertEquals(ReleaseNoteCategory.CHANGED, sections[3].category)
+        assertEquals(2, sections[3].items.size)
     }
 
     @Test

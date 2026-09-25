@@ -40,6 +40,11 @@ data class DownloadItem(
     val totalBytes: Long = 0L,
     val filePath: String = "",
     val mimeType: String = "audio/webm",
+    /** Cache-backed URI for the downloaded landscape/square motion cover, if available. */
+    val cachedAnimatedArtworkUrl: String = "",
+    /** Cache-backed URI for the downloaded portrait motion cover, if available. */
+    val cachedAnimatedArtworkVerticalUrl: String = "",
+    val animatedArtworkBytesDownloaded: Long = 0L,
     val downloadedAtMs: Long = 0L,
     val errorMessage: String = "",
 ) {
@@ -54,12 +59,17 @@ data class DownloadItem(
         put("album", track.album)
         put("albumId", track.albumId)
         put("artworkUrl", track.artworkUrl)
+        put("animatedArtworkUrl", track.animatedArtworkUrl)
+        put("animatedArtworkVerticalUrl", track.animatedArtworkVerticalUrl)
         put("durationMs", track.durationMs)
         put("status", status.name)
         put("bytesDownloaded", bytesDownloaded)
         put("totalBytes", totalBytes)
         put("filePath", filePath)
         put("mimeType", mimeType)
+        put("cachedAnimatedArtworkUrl", cachedAnimatedArtworkUrl)
+        put("cachedAnimatedArtworkVerticalUrl", cachedAnimatedArtworkVerticalUrl)
+        put("animatedArtworkBytesDownloaded", animatedArtworkBytesDownloaded)
         put("downloadedAtMs", downloadedAtMs)
         put("errorMessage", errorMessage)
     }
@@ -74,6 +84,8 @@ data class DownloadItem(
                 album = json.optString("album"),
                 albumId = json.optString("albumId"),
                 artworkUrl = json.optString("artworkUrl"),
+                animatedArtworkUrl = json.optString("animatedArtworkUrl"),
+                animatedArtworkVerticalUrl = json.optString("animatedArtworkVerticalUrl"),
                 durationMs = json.optLong("durationMs"),
             )
             val statusStr = json.optString("status", DownloadStatus.COMPLETED.name)
@@ -86,6 +98,9 @@ data class DownloadItem(
                 totalBytes = json.optLong("totalBytes"),
                 filePath = json.optString("filePath"),
                 mimeType = json.optString("mimeType", "audio/webm"),
+                cachedAnimatedArtworkUrl = json.optString("cachedAnimatedArtworkUrl"),
+                cachedAnimatedArtworkVerticalUrl = json.optString("cachedAnimatedArtworkVerticalUrl"),
+                animatedArtworkBytesDownloaded = json.optLong("animatedArtworkBytesDownloaded"),
                 downloadedAtMs = json.optLong("downloadedAtMs"),
                 errorMessage = json.optString("errorMessage"),
             )

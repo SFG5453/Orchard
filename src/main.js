@@ -24,9 +24,11 @@ import 'quasar/dist/quasar.css';
 import './styles.css';
 import App from './App.vue';
 import ExplicitBadge from './components/controls/ExplicitBadge.vue';
+import DownloadIndicator from './components/controls/DownloadIndicator.vue';
 
 createApp(App)
   .component('ExplicitBadge', ExplicitBadge)
+  .component('DownloadIndicator', DownloadIndicator)
   .use(Quasar, {
     config: {
       brand: {

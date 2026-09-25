@@ -23,6 +23,7 @@
 import Meyda from 'meyda';
 import MusicTempo from 'music-tempo';
 import { AUDIO_ANALYSIS_VERSION } from '../../../shared/audioAnalysis.js';
+import { finalizeTrackAnalysis } from '../../../shared/trackAnalysis.js';
 
 // Krumhansl-Schmuckler pitch-class profiles; confidence is the top-two score gap.
 const KEY_NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
@@ -414,32 +415,48 @@ self.onmessage = (event) => {
       ...analyzeContentEnd(pcm, analysisSampleRate, duration),
       ...analyzeTempo(pcm, analysisSampleRate, duration)
     };
-    const energyCurve = [];
+    const levels = [];
     const lowEnergyCurve = [];
     const midEnergyCurve = [];
     const highEnergyCurve = [];
     const vocalActivityMask = [];
-    const stride = Math.max(1, Math.floor(pcm.length / 240));
-    for (let index = 0; index < pcm.length; index += stride) {
-      const time = index / analysisSampleRate;
-      energyCurve.push({ time, energy: 0.8 });
-      midEnergyCurve.push({ time, energy: 0.8 });
-      highEnergyCurve.push({ time, energy: 0.56 });
-      vocalActivityMask.push(0.5);
+    const windowSize = Math.max(1, Math.ceil(pcm.length / 240));
+    for (let start = 0; start < pcm.length; start += windowSize) {
+      const end = Math.min(pcm.length, start + windowSize);
+      let squareSum = 0;
+      for (let index = start; index < end; index += 1) {
+        const sample = Number(pcm[index]) || 0;
+        squareSum += sample * sample;
+      }
+      levels.push({
+        time: start / analysisSampleRate,
+        rms: Math.sqrt(squareSum / Math.max(1, end - start))
+      });
     }
-    const result = {
+    const sortedLevels = levels.map((point) => point.rms).sort((left, right) => left - right);
+    const reference = sortedLevels[Math.floor((sortedLevels.length - 1) * 0.85)] || 0;
+    const energyCurve = levels.map((point) => ({
+      time: point.time,
+      energy: reference > 0 ? Math.min(1.5, point.rms / reference) : 0
+    }));
+    const legacyResult = {
       analysisVersion: AUDIO_ANALYSIS_VERSION,
       duration,
       ...baseAnalysis,
       energyCurve,
-      // This DSP-only fallback does not run the native spectral band split. Empty means "no
-      // evidence" and lets the transition planner retain its calibrated bass-swap prior.
+      // This DSP-only fallback measures broadband RMS but does not run the
+      // native FFT split or vocal model. Empty means unknown; invented flat
+      // curves would look like measured spectral/vocal evidence downstream.
       lowEnergyCurve,
       midEnergyCurve,
       highEnergyCurve,
       vocalActivityMask
     };
-    Object.assign(result, buildDjStructure(result, duration));
+    Object.assign(legacyResult, buildDjStructure(legacyResult, duration));
+    const result = finalizeTrackAnalysis({
+      ...legacyResult,
+      meter: { beatsPerBar: 4, confidence: 0.15, source: 'assumed-4-4' }
+    });
     self.postMessage({ id, result });
   } catch (error) {
     self.postMessage({ id, error: error?.message || 'Smart Crossfade analysis failed' });

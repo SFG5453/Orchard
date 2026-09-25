@@ -22,6 +22,16 @@ import { IPC_CHANNELS } from '../../shared/ipcChannels.js';
 
 const { APP, DISCORD, SONG_LINKS } = IPC_CHANNELS;
 
+function validSerializedJson(value) {
+  if (typeof value !== 'string' || value.length > 1_000_000) return null;
+  try {
+    JSON.parse(value);
+    return value;
+  } catch {
+    return null;
+  }
+}
+
 export function registerAppHandlers({
   app,
   clearDiscordPresence,
@@ -63,16 +73,27 @@ export function registerAppHandlers({
   ipcMain.handle(APP.RESTART, () => {
     graphicsMode.restart();
   });
-  ipcMain.handle(APP.FINISH_WELCOME, async () => {
+  ipcMain.handle(APP.FINISH_WELCOME, async (_event, settings = {}) => {
     completeWelcome();
     const target = getMainWindow();
     if (target && !target.isDestroyed()) {
-      await target.webContents.executeJavaScript(`(() => {
+      const synchronizedSettings = JSON.stringify({
+        userPreferences: validSerializedJson(settings?.userPreferences),
+        audioEngine: validSerializedJson(settings?.audioEngine)
+      });
+      await target.webContents.executeJavaScript(`((settings) => {
+        if (settings.userPreferences !== null) {
+          localStorage.setItem('orchard:user-preferences', settings.userPreferences);
+        }
+        if (settings.audioEngine !== null) {
+          localStorage.setItem('orchard:audio-engine', settings.audioEngine);
+        }
         const key = 'orchard:setup-state';
         let state = {};
         try { state = JSON.parse(localStorage.getItem(key) || '{}'); } catch {}
         localStorage.setItem(key, JSON.stringify({ ...state, completed: true, welcomeCompleted: true }));
-      })()`).catch(() => {});
+      })(${synchronizedSettings})`).catch(() => {});
+      target.webContents.send(APP.SYNC_SETTINGS);
     }
     showMainWindow();
   });

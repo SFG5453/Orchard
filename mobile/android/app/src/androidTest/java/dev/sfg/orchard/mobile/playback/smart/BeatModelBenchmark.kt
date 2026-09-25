@@ -22,6 +22,7 @@ package dev.sfg.orchard.mobile.playback.smart
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
@@ -58,6 +59,22 @@ class BeatModelBenchmark {
         testContext.assets.open(asset).use { input ->
             target.outputStream().use { output -> input.copyTo(output) }
         }
+        return target
+    }
+
+    /** Streams a model staged by adb into the test app's private cache. */
+    private fun materializeDeviceModel(): File {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val source = InstrumentationRegistry.getArguments().getString("beatModelPath")
+                ?: "/data/local/tmp/beat_this_fp32.onnx"
+        require(source.matches(Regex("[A-Za-z0-9_./-]+"))) { "Unsafe model path" }
+        val target = File(appContext.cacheDir, "beat_this_fp32.onnx")
+        instrumentation.uiAutomation.executeShellCommand("cat $source").use { descriptor ->
+            ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+            }
+        }
+        require(target.length() > 0) { "No model data read from $source" }
         return target
     }
 
@@ -216,6 +233,34 @@ class BeatModelBenchmark {
                 4,
                 OrtSession.SessionOptions.OptLevel.BASIC_OPT
         )
+    }
+
+    @Test
+    fun benchmarkFp32WebGpu() {
+        val environment = OrtEnvironment.getEnvironment()
+        Log.i(TAG, "available providers ${OrtEnvironment.getAvailableProviders()}")
+        val model = materializeDeviceModel()
+        val options =
+                OrtSession.SessionOptions().apply {
+                    setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                    addConfigEntry("session.disable_cpu_ep_fallback", "1")
+                    addWebGPU(emptyMap())
+                }
+        try {
+            val loadStarted = System.nanoTime()
+            val session = environment.createSession(model.absolutePath, options)
+            measure(
+                    environment,
+                    session,
+                    "beat_this_fp32.onnx/webgpu",
+                    CHUNK_FRAMES,
+                    1,
+                    OrtSession.SessionOptions.OptLevel.ALL_OPT,
+                    loadStarted,
+            )
+        } finally {
+            model.delete()
+        }
     }
 
     private companion object {

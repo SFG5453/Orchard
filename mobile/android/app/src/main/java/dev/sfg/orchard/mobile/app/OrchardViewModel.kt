@@ -31,13 +31,22 @@ import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.auth.AuthState
 import dev.sfg.orchard.mobile.artwork.ArtistImages
 import dev.sfg.orchard.mobile.artwork.TrackArtwork
+import dev.sfg.orchard.mobile.catalog.needsAudioVersionLookup
+import dev.sfg.orchard.mobile.catalog.PlaylistActions
 import dev.sfg.orchard.mobile.model.*
 import dev.sfg.orchard.mobile.connect.PlaybackTargetCoordinator
 import dev.sfg.orchard.mobile.playback.AutoplayRecommendations
 import dev.sfg.orchard.mobile.playback.ListeningPartyManager
 import dev.sfg.orchard.mobile.playback.LocalPlaybackController
 import dev.sfg.orchard.mobile.playback.QueueEditor
+import dev.sfg.orchard.mobile.auth.SupabaseSyncService
+import dev.sfg.orchard.mobile.playback.smart.BestMixSorter
+import dev.sfg.orchard.mobile.playback.smart.TrackFeatures
+import dev.sfg.orchard.mobile.settings.CacheManager
 import dev.sfg.orchard.mobile.social.PartyState
+import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import dev.sfg.orchard.mobile.songlinks.LinkResolution
 import dev.sfg.orchard.mobile.songlinks.SongLinksCoordinator
 import dev.sfg.orchard.mobile.songlinks.SongShareState
@@ -45,11 +54,49 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+
+internal data class DesktopTransferPlan(
+    val tracks: List<Track>,
+    val startIndex: Int,
+    val repeatMode: RepeatMode,
+)
+
+data class MusicVideoState(
+    val trackId: String = "",
+    val videoId: String = "",
+    val checking: Boolean = false,
+    val playing: Boolean = false,
+) {
+    val available: Boolean get() = videoId.isNotBlank()
+}
+
+internal fun desktopTransferPlan(track: Track?, queue: List<Track>, repeatMode: String): DesktopTransferPlan {
+    val tracks = when {
+        track == null -> queue
+        queue.any { it.id == track.id } -> queue
+        else -> listOf(track) + queue
+    }.filter { it.id.isNotBlank() }.distinctBy(Track::id)
+    val startIndex = track
+        ?.let { current -> tracks.indexOfFirst { it.id == current.id } }
+        ?.takeIf { it >= 0 }
+        ?: 0
+    val repeat = when (repeatMode.lowercase()) {
+        "one" -> RepeatMode.ONE
+        "queue", "all" -> RepeatMode.ALL
+        else -> RepeatMode.OFF
+    }
+    return DesktopTransferPlan(tracks, startIndex, repeat)
+}
 
 /** Presentation state holder for the standalone shell and both playback targets. */
 @OptIn(FlowPreview::class)
@@ -58,6 +105,9 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     private val songLinksCoordinator = SongLinksCoordinator(graph.songLinks, viewModelScope)
     val shareState: StateFlow<SongShareState?> = songLinksCoordinator.shareState
     private val local = LocalPlaybackController(application, viewModelScope)
+    val videoPlayer: StateFlow<androidx.media3.common.Player?> = local.player
+    private val mutableMusicVideo = MutableStateFlow(MusicVideoState())
+    val musicVideo: StateFlow<MusicVideoState> = mutableMusicVideo.asStateFlow()
 
     /**
      * Scoped here rather than on the graph, unlike most repositories: it drives
@@ -95,13 +145,25 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PlaybackSnapshot())
     private val mutableArtwork = MutableStateFlow<TrackArtwork?>(null)
-    val playback: StateFlow<PlaybackSnapshot> = combine(targetPlayback, mutableArtwork) { snapshot, artwork ->
+    private val mutableArtistCredits = MutableStateFlow<Pair<String, List<dev.sfg.orchard.mobile.model.Artist>>?>(null)
+    val playback: StateFlow<PlaybackSnapshot> = combine(
+        targetPlayback,
+        mutableArtwork,
+        mutableArtistCredits,
+    ) { snapshot, artwork, artistCredits ->
         val track = snapshot.currentTrack
-        if (track == null || artwork?.trackId != track.id) snapshot else snapshot.copy(
+        if (track == null) return@combine snapshot
+        val matchingArtwork = artwork?.takeIf { it.trackId == track.id }
+        val matchingArtists = artistCredits?.takeIf { it.first == track.id }?.second.orEmpty()
+        snapshot.copy(
             currentTrack = track.copy(
-                artworkUrl = artwork.staticUrl.ifBlank { track.artworkUrl },
-                animatedArtworkUrl = artwork.videoUrl.ifBlank { track.animatedArtworkUrl },
-                animatedArtworkVerticalUrl = artwork.videoUrlVertical.ifBlank { track.animatedArtworkVerticalUrl },
+                artworkUrl = matchingArtwork?.staticUrl?.ifBlank { track.artworkUrl } ?: track.artworkUrl,
+                animatedArtworkUrl = matchingArtwork?.videoUrl?.ifBlank { track.animatedArtworkUrl }
+                    ?: track.animatedArtworkUrl,
+                animatedArtworkVerticalUrl = matchingArtwork?.videoUrlVertical
+                    ?.ifBlank { track.animatedArtworkVerticalUrl }
+                    ?: track.animatedArtworkVerticalUrl,
+                artists = matchingArtists.ifEmpty { track.artists },
             ),
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PlaybackSnapshot())
@@ -114,6 +176,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val search: StateFlow<LoadState<SearchResults>> = mutableSearch.asStateFlow()
     private val mutableDetail = MutableStateFlow<LoadState<BrowseDetail>>(LoadState.Idle)
     val detail: StateFlow<LoadState<BrowseDetail>> = mutableDetail.asStateFlow()
+    private val mutableDetailRefreshing = MutableStateFlow(false)
+    val detailRefreshing: StateFlow<Boolean> = mutableDetailRefreshing.asStateFlow()
     private val mutableDetailArtwork = MutableStateFlow<TrackArtwork?>(null)
     val detailArtwork: StateFlow<TrackArtwork?> = mutableDetailArtwork.asStateFlow()
     private val mutableArtistImages = MutableStateFlow<ArtistImages?>(null)
@@ -132,16 +196,23 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val lyrics: StateFlow<LoadState<List<LyricLine>>> = mutableLyrics.asStateFlow()
     val discordAuth: StateFlow<dev.sfg.orchard.mobile.discord.DiscordAuthState> = graph.discordAuth.authState
     val discordConnection: StateFlow<dev.sfg.orchard.mobile.discord.GatewayConnectionState> = graph.discordPresence.connectionState
+    val qobuzStatus: StateFlow<dev.sfg.orchard.mobile.qobuz.QobuzStatus> = graph.qobuz.status
+    val activeTrackIsQobuz: StateFlow<Boolean> = graph.activeTrackIsQobuz.asStateFlow()
+
+    fun connectQobuz(token: String, userId: Long) = graph.qobuz.connect(token, userId)
+    fun disconnectQobuz() = graph.qobuz.disconnect()
+    fun setQobuzEnabled(enabled: Boolean) = graph.qobuz.setEnabled(enabled)
+    fun setQobuzQuality(quality: dev.sfg.orchard.mobile.qobuz.QobuzQuality) = graph.qobuz.setQuality(quality)
+
+    val lastfmState: StateFlow<dev.sfg.orchard.mobile.lastfm.LastfmState> = graph.lastfm.state
+    val listenBrainzState: StateFlow<dev.sfg.orchard.mobile.listenbrainz.ListenBrainzState> = graph.listenBrainz.state
 
     val activeBitrate: StateFlow<Int> = graph.activeBitrate.asStateFlow()
     val isOnline: StateFlow<Boolean> = graph.networkMonitor.isOnline
     val downloads: StateFlow<Map<String, dev.sfg.orchard.mobile.download.DownloadItem>> = graph.downloads.downloads
     val downloadedTrackIds: StateFlow<Set<String>> = graph.downloads.downloadedTrackIds
     val downloadingTrackIds: StateFlow<Set<String>> = graph.downloads.downloadingTrackIds
-    val totalBytesUsed: StateFlow<Long> = downloads.map { map ->
-        map.values.filter { it.status == dev.sfg.orchard.mobile.download.DownloadStatus.COMPLETED }
-            .sumOf { it.bytesDownloaded }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), graph.downloads.totalBytesUsed())
+    val totalBytesUsed: StateFlow<Long> = graph.downloads.totalBytesUsedFlow
 
     fun downloadTrack(track: Track) = graph.downloads.downloadTrack(track)
     fun downloadTracks(tracks: List<Track>) = graph.downloads.downloadTracks(tracks)
@@ -159,6 +230,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
             .onFailure { graph.postWarning(it.message ?: "Could not create playlist.") }
     }
     fun addTrackToPlaylist(playlistId: String, track: Track) = viewModelScope.launch {
+        val likedMusic = PlaylistActions.isLikedMusicPlaylist(playlistId)
         runCatching {
             withContext(Dispatchers.IO) {
                 // Album and playlist rows can point at an official video even though playback
@@ -166,14 +238,21 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                 // adding a row and playing it cannot select two different recordings.
                 val playbackTrack = graph.audioVersions.audioVersion(track)
                 graph.playlistActions.add(playlistId, playbackTrack.id)
-                graph.catalog.browse(playlistId)
+                graph.catalog.browse(if (likedMusic) PlaylistActions.LIKED_MUSIC_BROWSE_ID else playlistId)
             }
-        }.onSuccess(::applyRefreshedPlaylist)
+        }.onSuccess {
+            if (likedMusic) graph.library.setLiked(track, true)
+            applyRefreshedPlaylist(it)
+        }
             .onFailure { graph.postWarning(it.message ?: "Could not add track to playlist.") }
     }
     fun removeTrackFromPlaylist(playlistId: String, track: Track) = viewModelScope.launch {
+        val likedMusic = PlaylistActions.isLikedMusicPlaylist(playlistId)
         runCatching { withContext(Dispatchers.IO) { graph.playlistActions.remove(playlistId, track.id) } }
-            .onSuccess { applyRemovedPlaylistTrack(playlistId, track.id) }
+            .onSuccess {
+                if (likedMusic) graph.library.setLiked(track, false)
+                applyRemovedPlaylistTrack(playlistId, track.id)
+            }
             .onFailure { graph.postWarning(it.message ?: "Could not remove track from playlist.") }
     }
 
@@ -213,6 +292,24 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         if (id.isNotBlank()) removeTrackFromPlaylist(id, track)
     }
 
+    fun moveTrackInCurrentPlaylist(fromIndex: Int, toIndex: Int) {
+        val active = (detail.value as? LoadState.Content)?.value ?: return
+        if (active.kind != CatalogKind.PLAYLIST || !active.editable) return
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { graph.playlistActions.move(active.id, fromIndex, toIndex) }
+            }.onSuccess {
+                val current = (mutableDetail.value as? LoadState.Content)?.value ?: return@onSuccess
+                if (current.id.removePrefix("VL") != active.id.removePrefix("VL")) return@onSuccess
+                val updated = current.withPlaylistTrackMoved(fromIndex, toIndex)
+                mutableDetail.value = LoadState.Content(updated)
+                graph.library.refreshPlaylist(
+                    Playlist(updated.id, updated.title, updated.subtitle, updated.artworkUrl, updated.description, updated.tracks),
+                )
+            }.onFailure { graph.postWarning(it.message ?: "Could not reorder the playlist.") }
+        }
+    }
+
     /**
      * Autoplay: once the queue is nearly out, ask YouTube Music what would come next after the last
      * queued track and append it. Only the local player is refilled, because a Connect device owns
@@ -247,8 +344,15 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val sleepTimerEndOfTrack: StateFlow<Boolean> = mutableSleepTimerEndOfTrack.asStateFlow()
     private var sleepTimerJob: Job? = null
     private var detailJob: Job? = null
+    private var detailLoadGeneration = 0
 
     val updateState: StateFlow<dev.sfg.orchard.mobile.UpdateState> = graph.updates.state
+
+    private val mutableCacheSizeBytes = MutableStateFlow(0L)
+    val cacheSizeBytes: StateFlow<Long> = mutableCacheSizeBytes.asStateFlow()
+
+    private val mutableIsClearingCache = MutableStateFlow(false)
+    val isClearingCache: StateFlow<Boolean> = mutableIsClearingCache.asStateFlow()
 
     fun checkForUpdates() = graph.updates.checkForUpdates()
 
@@ -259,16 +363,22 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         refreshHome()
+        refreshCacheSize()
         observeNetworkState()
         observeSearch()
         observeRemoteDevice()
+        observeLocalDeviceName()
         observeArtwork()
+        observeArtistCredits()
         observeDetailArtwork()
         observeLyrics()
         observeAuthentication()
         observeDiscordPresence()
         observeWarnings()
+        observeLocalAudioVersion()
+        observeMusicVideo()
         observeAutoplay()
+        observeConnectDeviceSync()
     }
 
     private fun observeNetworkState() {
@@ -277,6 +387,41 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                 if (online && mutableHome.value is LoadState.Error) {
                     refreshHome()
                 }
+            }
+        }
+    }
+
+    private fun observeMusicVideo() {
+        viewModelScope.launch {
+            combine(local.snapshot, targets) { snapshot, targetState ->
+                snapshot.currentTrack.takeIf { targetState.selected is PlaybackTarget.LocalPhone }
+            }
+                .distinctUntilChangedBy { track ->
+                    track?.let { Triple(it.id, it.musicVideoType, it.musicVideoId) }
+                }
+                .collectLatest { track ->
+                    if (track == null || track.isQobuz) {
+                        mutableMusicVideo.value = MusicVideoState()
+                        return@collectLatest
+                    }
+                    mutableMusicVideo.value = MusicVideoState(
+                        trackId = track.id,
+                        checking = true,
+                        playing = local.snapshot.value.playingVideo,
+                    )
+                    val videoId = graph.videoVersions.videoId(track).orEmpty()
+                    mutableMusicVideo.value = MusicVideoState(
+                        trackId = track.id,
+                        videoId = videoId,
+                        playing = local.snapshot.value.playingVideo,
+                    )
+                }
+        }
+        viewModelScope.launch {
+            combine(local.snapshot, targets) { snapshot, targetState ->
+                snapshot.playingVideo && targetState.selected is PlaybackTarget.LocalPhone
+            }.distinctUntilChanged().collect { playing ->
+                mutableMusicVideo.update { it.copy(playing = playing) }
             }
         }
     }
@@ -306,15 +451,29 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun clearSearchHistory() = graph.settings.clearSearchHistory()
+    fun removeSearchHistoryItem(query: String) = graph.settings.removeSearchHistoryItem(query)
     fun selectLibraryFilter(filter: LibraryFilter) { mutableLibraryFilter.value = filter }
 
-    fun openDetail(id: String) {
+    fun openDetail(id: String) = loadDetail(id, preserveContent = false)
+
+    fun refreshDetail() {
+        val id = (mutableDetail.value as? LoadState.Content)?.value?.id.orEmpty()
+        if (id.isNotBlank()) loadDetail(id, preserveContent = true)
+    }
+
+    private fun loadDetail(id: String, preserveContent: Boolean) {
         val seed = findCatalogItem(id, home.value, search.value, library.value, detail.value)
         // A collection now publishes several times as its pages land, so a load left running after
         // the listener moved on would keep writing its pages over the collection they opened next.
         detailJob?.cancel()
+        val generation = ++detailLoadGeneration
         detailJob = viewModelScope.launch {
-            mutableDetail.value = LoadState.Loading
+            if (preserveContent) {
+                mutableDetailRefreshing.value = true
+            } else {
+                mutableDetailRefreshing.value = false
+                mutableDetail.value = LoadState.Loading
+            }
 
             // When offline or if network is down, immediately synthesize from downloaded tracks
             if (!graph.networkMonitor.checkIsOnline()) {
@@ -326,6 +485,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                 )
                 if (offlineDetail != null) {
                     mutableDetail.value = LoadState.Content(offlineDetail)
+                    mutableDetailRefreshing.value = false
                     return@launch
                 }
             }
@@ -335,7 +495,9 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
             // endless mix exhausts its continuation budget.
             try {
                 graph.catalog.browsePages(id).collect { page ->
-                    mutableDetail.value = LoadState.Content(page.withSeed(seed))
+                    val resolved = page.withSeed(seed)
+                    mutableDetail.value = LoadState.Content(resolved)
+                    graph.library.cacheDetail(resolved)
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -350,6 +512,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                 )
                 mutableDetail.value = offline?.let { LoadState.Content(it) }
                     ?: LoadState.Error(error.message ?: "This collection could not be loaded.")
+            } finally {
+                if (detailLoadGeneration == generation) mutableDetailRefreshing.value = false
             }
         }
     }
@@ -408,11 +572,13 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** Replaces queued music videos with their album audio as each lookup completes. */
+    /** Verifies queued versions in playback order without bursting one search per explicit row. */
     private fun CoroutineScope.resolveRemainingAudioVersions(queue: List<Track>, startIndex: Int) {
-        queue.forEachIndexed { index, track ->
-            if (index == startIndex || !track.isVideoUpload) return@forEachIndexed
-            launch {
+        val lookupOrder = (startIndex + 1 until queue.size) + (0 until startIndex)
+        launch {
+            lookupOrder.forEach { index ->
+                val track = queue[index]
+                if (!track.needsAudioVersionLookup()) return@forEach
                 val audio = graph.audioVersions.audioVersion(track)
                 if (audio.id != track.id) local.replaceQueued(index, track.id, audio)
             }
@@ -457,6 +623,298 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
+    private fun analyzeBestMixTrack(track: Track, file: File): TrackFeatures.Features? = try {
+        BestMixSorter.analyzeLocalTrack(track, file)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        // Native decoders can reject an individual container with LinkageError or another Error,
+        // not only Exception. One unanalysable song should remain in its original relative order;
+        // it must not cancel the other workers or prevent the collection from playing.
+        Log.w(TAG, "Best Mix analysis failed for ${track.id}", error)
+        null
+    }
+
+    private suspend fun loadBestMixFeatures(tracks: Collection<Track>): Map<String, TrackFeatures.Features> =
+        withContext(Dispatchers.IO) {
+            graph.bestMixFeatures.load(tracks.map(Track::id))
+        }
+
+    private suspend fun persistBestMixFeatures(features: Map<String, TrackFeatures.Features>) {
+        if (features.isEmpty()) return
+        withContext(Dispatchers.IO) {
+            graph.bestMixFeatures.putAll(features)
+        }
+    }
+
+    /**
+     * Orders [tracks] via Best Mix algorithm and starts playback.
+     * If cloud sync is enabled, attempts to fetch features from Supabase first.
+     * Otherwise, ensures undownloaded tracks are downloaded, then extracts audio features
+     * locally via native AudioDecoder & TrackFeatures before sorting.
+     */
+    fun playBestMix(
+        tracks: List<Track>,
+        title: String,
+        onProgress: (String) -> Unit = {},
+        onComplete: () -> Unit = {},
+    ) = viewModelScope.launch {
+        val playable = tracks.filter { it.id.isNotBlank() }.distinctBy(Track::id)
+        val bestMixTitle = title.takeIf { it.isNotBlank() }?.let { "$it • Best Mix" } ?: "Best Mix"
+        try {
+            if (playable.isEmpty()) return@launch
+
+            val currentSettings = settings.value
+            val syncService = SupabaseSyncService(getApplication())
+            val featuresMap = mutableMapOf<String, TrackFeatures.Features>()
+
+            // 1. Reuse process-memory or versioned SQLite analysis first.
+            featuresMap.putAll(loadBestMixFeatures(playable))
+            Log.d(TAG, "Best Mix reused ${featuresMap.size}/${playable.size} persisted analyses")
+
+            // 2. Fetch from Supabase if enabled and tracks are missing
+            if (currentSettings.bestMixSupabaseSync && featuresMap.size < playable.size) {
+                val neededIds = playable.map { it.id }.filter { it !in featuresMap }
+                onProgress("Checking cloud analysis...")
+                val cloudFeatures = withContext(Dispatchers.IO) {
+                    syncService.fetchTrackFeatures(neededIds)
+                }
+                cloudFeatures.forEach { (id, features) ->
+                    featuresMap[id] = features
+                }
+                persistBestMixFeatures(cloudFeatures)
+            }
+
+            // 3. For remaining tracks missing features, analyze downloaded files in parallel
+            val missingTracks = playable.filter { it.id !in featuresMap }
+            if (missingTracks.isNotEmpty()) {
+                val undownloaded = missingTracks.filter { graph.downloads.getDownloadedFile(it.id) == null }
+
+                if (undownloaded.isNotEmpty()) {
+                    onProgress("Downloading tracks (0/${undownloaded.size})...")
+                    graph.downloads.downloadTracks(undownloaded)
+                    val targetIds = undownloaded.mapTo(mutableSetOf(), Track::id)
+                    // Wait for downloads to complete or fail, but do not hold playback forever.
+                    val startTime = System.currentTimeMillis()
+                    while (System.currentTimeMillis() - startTime < 90_000L) {
+                        val currentDownloads = graph.downloads.downloads.value
+                        val finishedCount = targetIds.count { id ->
+                            graph.downloads.getDownloadedFile(id) != null ||
+                                currentDownloads[id]?.status == dev.sfg.orchard.mobile.download.DownloadStatus.FAILED
+                        }
+                        onProgress("Downloading tracks ($finishedCount/${targetIds.size})...")
+                        if (finishedCount >= targetIds.size) break
+                        delay(500)
+                    }
+                }
+
+                // Count only real files. Failed or timed-out downloads used to be reported as
+                // analyzed even though the worker skipped them, which made the progress numbers
+                // look like an unrelated second batch.
+                val filesToAnalyze = missingTracks.mapNotNull { track ->
+                    graph.downloads.getDownloadedFile(track.id)?.let { track to it }
+                }
+                val totalToAnalyze = filesToAnalyze.size
+                if (totalToAnalyze > 0) {
+                    val completedCount = AtomicInteger(0)
+                    val parallelism = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
+                    val semaphore = Semaphore(parallelism)
+                    val analyzedFeatures = ConcurrentHashMap<String, TrackFeatures.Features>()
+
+                    onProgress("Analyzing audio (0/$totalToAnalyze)...")
+                    coroutineScope {
+                        filesToAnalyze.map { (track, file) ->
+                            async(Dispatchers.Default) {
+                                semaphore.withPermit {
+                                    analyzeBestMixTrack(track, file)?.let { localFeatures ->
+                                        analyzedFeatures[track.id] = localFeatures
+                                    }
+                                    val done = completedCount.incrementAndGet()
+                                    onProgress("Analyzing audio ($done/$totalToAnalyze)...")
+                                }
+                            }
+                        }.awaitAll()
+                    }
+                    featuresMap.putAll(analyzedFeatures)
+                    persistBestMixFeatures(analyzedFeatures)
+                }
+            }
+
+            onProgress("Sorting Best Mix...")
+            val sortStarted = System.currentTimeMillis()
+            val sorted = withContext(Dispatchers.Default) {
+                BestMixSorter.sort(playable, featuresMap)
+            }
+            Log.d(
+                TAG,
+                "Best Mix sorted ${playable.size} tracks with ${featuresMap.size} analyses " +
+                    "in ${System.currentTimeMillis() - sortStarted}ms",
+            )
+            playAll(sorted, contextTitle = bestMixTitle)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            // Best Mix is an enhancement to playback, not a prerequisite. A bad codec/native
+            // analysis result must never turn the collection's play button into a no-op.
+            Log.w(TAG, "Best Mix preparation failed; playing the original order", error)
+            if (playable.isNotEmpty()) {
+                playAll(playable, contextTitle = bestMixTitle)
+                showWarning("Best Mix could not finish analyzing every song. Playing the original order.")
+            }
+        } finally {
+            onComplete()
+        }
+    }
+
+    /**
+     * Orders only the upcoming tracks by their Smart Crossfade transition quality without
+     * interrupting current playback.
+     */
+    fun bestMixUpcoming(
+        onProgress: (String) -> Unit = {},
+        onComplete: () -> Unit = {},
+    ) = viewModelScope.launch {
+        try {
+            val currentSnapshot = playback.value
+            val upcoming = currentSnapshot.upcoming
+            if (upcoming.size <= 1) return@launch
+            val queueRequest = BestMixQueueRequest.capture(currentSnapshot)
+            val currentSettings = settings.value
+            val syncService = SupabaseSyncService(getApplication())
+            val featuresMap = mutableMapOf<String, TrackFeatures.Features>()
+            val currentTrack = currentSnapshot.currentTrack
+            val analysisTracks = (listOfNotNull(currentTrack) + upcoming).distinctBy(Track::id)
+
+            // 1. Reuse process-memory or versioned SQLite analysis.
+            featuresMap.putAll(loadBestMixFeatures(analysisTracks))
+            Log.d(TAG, "Queue Best Mix reused ${featuresMap.size}/${analysisTracks.size} persisted analyses")
+
+            // 2. Fetch from Supabase if enabled
+            if (currentSettings.bestMixSupabaseSync && featuresMap.size < analysisTracks.size) {
+                val neededIds = analysisTracks.map { it.id }.filter { it !in featuresMap }
+                onProgress("Checking cloud analysis...")
+                val cloudFeatures = withContext(Dispatchers.IO) { syncService.fetchTrackFeatures(neededIds) }
+                cloudFeatures.forEach { (id, features) ->
+                    featuresMap[id] = features
+                }
+                persistBestMixFeatures(cloudFeatures)
+            }
+
+            // 3. Make missing tracks locally analyzable. Previously this action only inspected
+            // files that happened to be downloaded already, then silently returned the original
+            // queue when there was no evidence to sort on.
+            val missing = analysisTracks.filter { it.id !in featuresMap }
+            val undownloaded = missing.filter { graph.downloads.getDownloadedFile(it.id) == null }
+            if (undownloaded.isNotEmpty()) {
+                onProgress("Downloading tracks (0/${undownloaded.size})...")
+                graph.downloads.downloadTracks(undownloaded)
+                val targetIds = undownloaded.mapTo(mutableSetOf(), Track::id)
+                val startTime = System.currentTimeMillis()
+                while (System.currentTimeMillis() - startTime < BEST_MIX_DOWNLOAD_TIMEOUT_MS) {
+                    val currentDownloads = graph.downloads.downloads.value
+                    val finished = targetIds.count { id ->
+                        graph.downloads.getDownloadedFile(id) != null ||
+                            currentDownloads[id]?.status == dev.sfg.orchard.mobile.download.DownloadStatus.FAILED
+                    }
+                    onProgress("Downloading tracks ($finished/${targetIds.size})...")
+                    if (finished >= targetIds.size) break
+                    delay(500)
+                }
+            }
+
+            val filesToAnalyze = missing.mapNotNull { track ->
+                graph.downloads.getDownloadedFile(track.id)?.let { track to it }
+            }
+            if (filesToAnalyze.isNotEmpty()) {
+                val totalToAnalyze = filesToAnalyze.size
+                val completedCount = AtomicInteger(0)
+                val parallelism = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
+                val semaphore = Semaphore(parallelism)
+                val analyzedFeatures = ConcurrentHashMap<String, TrackFeatures.Features>()
+
+                onProgress("Analyzing audio (0/$totalToAnalyze)...")
+                coroutineScope {
+                    filesToAnalyze.map { (track, file) ->
+                        async(Dispatchers.Default) {
+                            semaphore.withPermit {
+                                analyzeBestMixTrack(track, file)?.let { localFeatures ->
+                                    analyzedFeatures[track.id] = localFeatures
+                                }
+                                val done = completedCount.incrementAndGet()
+                                onProgress("Analyzing audio ($done/$totalToAnalyze)...")
+                            }
+                        }
+                    }.awaitAll()
+                }
+                featuresMap.putAll(analyzedFeatures)
+                persistBestMixFeatures(analyzedFeatures)
+            }
+
+            onProgress("Sorting queue...")
+            val sortStarted = System.currentTimeMillis()
+            val sortedUpcoming = withContext(Dispatchers.Default) {
+                BestMixSorter.sort(
+                    tracks = upcoming,
+                    featuresMap = featuresMap,
+                    initialFeatures = currentTrack?.id?.let(featuresMap::get),
+                )
+            }
+            Log.d(
+                TAG,
+                "Queue Best Mix sorted ${upcoming.size} tracks with ${featuresMap.size} analyses " +
+                    "in ${System.currentTimeMillis() - sortStarted}ms",
+            )
+            val reconciled = queueRequest.reconcile(playback.value, sortedUpcoming) ?: return@launch
+            val baseTitle = currentSnapshot.contextTitle.ifBlank { currentTrack?.album.orEmpty() }
+            val newTitle = if (baseTitle.isNotBlank() && !baseTitle.endsWith("• Best Mix", ignoreCase = true)) {
+                "$baseTitle • Best Mix"
+            } else if (baseTitle.isNotBlank()) {
+                baseTitle
+            } else {
+                "Best Mix"
+            }
+            local.replaceUpcoming(reconciled, contextTitle = newTitle)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            Log.w(TAG, "Could not prepare Best Mix for the upcoming queue", error)
+            showWarning("Best Mix could not finish preparing the queue.")
+        } finally {
+            onComplete()
+        }
+    }
+
+    /**
+     * Plays all tracks from a collection (playlist, album, artist, or mix) given its id.
+     */
+    fun playCollection(id: String, contextTitle: String = "", shuffle: Boolean = false) {
+        Log.d(TAG, "playCollection: id='$id', contextTitle='$contextTitle', shuffle=$shuffle")
+        viewModelScope.launch {
+            val detail = runCatching { graph.catalog.browse(id) }.getOrNull()
+            val tracks = detail?.tracks.orEmpty().filter { it.id.isNotBlank() }
+            if (tracks.isNotEmpty()) {
+                playAll(
+                    tracks = tracks,
+                    startIndex = if (shuffle) kotlin.random.Random.Default.nextInt(tracks.size) else 0,
+                    contextTitle = contextTitle.ifBlank { detail?.title.orEmpty() },
+                    shuffle = shuffle,
+                )
+            } else {
+                showWarning("No playable tracks found")
+            }
+        }
+    }
+
+    fun playItem(item: CatalogItem, shuffle: Boolean = false) {
+        when (item) {
+            is CatalogItem.Song -> play(item.track, contextTitle = item.track.title)
+            is CatalogItem.Collection -> playCollection(item.playlist.id, contextTitle = item.title, shuffle = shuffle)
+            is CatalogItem.Record -> playCollection(item.album.id, contextTitle = item.title, shuffle = shuffle)
+            is CatalogItem.Performer -> playCollection(item.artist.id, contextTitle = item.title, shuffle = shuffle)
+            is CatalogItem.Category -> openDetail(item.stableId)
+        }
+    }
+
     fun saveDetail(detail: BrowseDetail) {
         when (detail.kind) {
             // `subtitle` is the whole browse line — "Album • 2017" — so putting it in the
@@ -472,9 +930,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
                     explicit = detail.explicit,
                 ),
             )
-            CatalogKind.ARTIST -> graph.library.saveArtist(
-                Artist(detail.id, detail.title, detail.artworkUrl, detail.subtitle),
-            )
+            CatalogKind.ARTIST -> setArtistSubscription(detail)
             CatalogKind.PLAYLIST -> graph.library.savePlaylist(
                 Playlist(detail.id, detail.title, detail.subtitle, detail.artworkUrl, detail.description, detail.tracks),
             )
@@ -482,21 +938,62 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun playNext(track: Track) = remoteOrLocal(
-        { if (connectProtocolVersion.value >= 2) graph.connect.playNext(track) },
-        { local.playNext(track) },
-    )
+    private fun setArtistSubscription(detail: BrowseDetail) {
+        if (auth.value !is AuthState.SignedIn) {
+            showWarning("Sign in to YouTube Music to follow artists.")
+            return
+        }
+        val artist = Artist(detail.id, detail.title, detail.artworkUrl, detail.subtitle)
+        val wasSubscribed = library.value.savedArtists.any { it.id == artist.id }
+        val subscribe = !wasSubscribed
+        graph.library.setArtistSaved(artist, subscribe)
+        viewModelScope.launch {
+            runCatching { graph.catalog.setArtistSubscription(artist.id, subscribe) }
+                .onFailure { error ->
+                    graph.library.setArtistSaved(artist, wasSubscribed)
+                    showWarning(
+                        error.message ?: if (subscribe) "Could not follow this artist."
+                        else "Could not unfollow this artist.",
+                    )
+                }
+        }
+    }
 
-    fun addToQueue(track: Track) = remoteOrLocal(
-        { if (connectProtocolVersion.value >= 2) graph.connect.addToQueue(track) },
-        { local.addToQueue(track) },
-    )
+    fun playNext(track: Track) {
+        remoteOrLocal(
+            { if (connectProtocolVersion.value >= 2) graph.connect.playNext(track) },
+            { viewModelScope.launch { local.playNext(graph.audioVersions.audioVersion(track)) } },
+        )
+    }
+
+    fun addToQueue(track: Track) {
+        remoteOrLocal(
+            { if (connectProtocolVersion.value >= 2) graph.connect.addToQueue(track) },
+            { viewModelScope.launch { local.addToQueue(graph.audioVersions.audioVersion(track)) } },
+        )
+    }
 
     fun togglePlayback() = partyOrLocal(
         if (playback.value.isPlaying) "pause" else "play",
         { graph.connect.send(ConnectCommand.TogglePlayback) },
         local::toggle,
     )
+
+    fun toggleMusicVideo() {
+        if (targets.value.selected !is PlaybackTarget.LocalPhone) {
+            showWarning("Music videos play on this device only.")
+            return
+        }
+        val state = musicVideo.value
+        val currentId = local.snapshot.value.currentTrack?.id
+        if (state.trackId != currentId) return
+        when {
+            state.playing -> local.setVideoMode(null)
+            state.videoId.isNotBlank() -> local.setVideoMode(state.videoId)
+            state.checking -> Unit
+            else -> showWarning("No music video is available for this track.")
+        }
+    }
     fun startSleepTimer(minutes: Int) {
         if (minutes <= 0) return
         cancelSleepTimer()
@@ -581,6 +1078,11 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         { if (connectProtocolVersion.value >= 2) graph.connect.clearUpcoming() },
         local::clearUpcoming,
     )
+    fun clearQueue() = partyOrLocal(
+        "clear-queue",
+        { if (connectProtocolVersion.value >= 2) graph.connect.clearUpcoming() },
+        local::clearQueue,
+    )
 
     fun setAutoplayEnabled(enabled: Boolean) {
         autoplayGate.value = enabled
@@ -628,6 +1130,104 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private fun observeConnectDeviceSync() {
+        viewModelScope.launch {
+            combine(
+                local.snapshot,
+                graph.connect.status,
+                settings.map { it.autoplayEnabled }.distinctUntilChanged(),
+            ) { snapshot, status, autoplay -> Triple(snapshot, status, autoplay) }
+                .collect { (snapshot, status, autoplay) ->
+                    if (status == dev.sfg.orchard.connect.protocol.ConnectClientStatus.APPROVED) {
+                        graph.connect.sendDeviceState(snapshot, autoplay)
+                    }
+                }
+        }
+        viewModelScope.launch {
+            graph.connect.remoteCommands.collect { command ->
+                handleRemoteCommand(command)
+            }
+        }
+    }
+
+    private fun handleRemoteCommand(command: ConnectCommand) {
+        if (targets.value.selected !is PlaybackTarget.LocalPhone) {
+            targetCoordinator.completeTransfer(PlaybackTarget.LocalPhone)
+            mutableTargets.value = targetCoordinator.state
+        }
+        fun upcomingIndex(index: Int): Int = local.snapshot.value.currentIndex.coerceAtLeast(-1) + 1 + index
+        when (command) {
+            ConnectCommand.TogglePlayback -> local.toggle()
+            ConnectCommand.Play -> local.play()
+            ConnectCommand.Pause -> local.pause()
+            ConnectCommand.Next -> local.next()
+            ConnectCommand.Previous -> local.previous()
+            is ConnectCommand.Seek -> local.seek((command.seconds * 1000).toLong())
+            is ConnectCommand.Volume -> local.setVolume(command.value.toFloat())
+            ConnectCommand.ToggleShuffle -> local.setShuffle(!local.snapshot.value.shuffle)
+            ConnectCommand.CycleRepeat -> local.cycleRepeat()
+            is ConnectCommand.PlayQueueIndex -> local.playQueueIndex(upcomingIndex(command.index))
+            is ConnectCommand.RemoveQueueIndex -> local.remove(upcomingIndex(command.index))
+            is ConnectCommand.MoveQueueIndex -> local.move(upcomingIndex(command.from), upcomingIndex(command.to))
+            ConnectCommand.ClearUpcoming -> local.clearUpcoming()
+            is ConnectCommand.PlayNext -> {
+                val track = jsonPayloadToTrack(command.track)
+                if (track.id.isNotBlank()) viewModelScope.launch { local.playNext(graph.audioVersions.audioVersion(track)) }
+            }
+            is ConnectCommand.AddToQueue -> {
+                val track = jsonPayloadToTrack(command.track)
+                if (track.id.isNotBlank()) viewModelScope.launch { local.addToQueue(graph.audioVersions.audioVersion(track)) }
+            }
+            is ConnectCommand.PlayTrack -> {
+                val track = jsonPayloadToTrack(command.item.playbackPayload)
+                if (track.id.isNotBlank()) viewModelScope.launch {
+                    local.replaceQueue(listOf(graph.audioVersions.audioVersion(track)), play = true, contextTitle = "Desktop")
+                }
+            }
+            is ConnectCommand.PlayTrackPayload -> {
+                val track = jsonPayloadToTrack(command.payload)
+                if (track.id.isNotBlank()) viewModelScope.launch {
+                    local.replaceQueue(listOf(graph.audioVersions.audioVersion(track)), play = true, contextTitle = "Desktop")
+                }
+            }
+            is ConnectCommand.Transfer -> {
+                val track = command.track?.let(::jsonPayloadToTrack)
+                val queue = command.queue.map(::jsonPayloadToTrack).filter { it.id.isNotBlank() }
+                val plan = desktopTransferPlan(track, queue, command.repeatMode)
+                if (plan.tracks.isNotEmpty()) {
+                    val posMs = (command.positionSeconds * 1000).toLong()
+                    local.replaceQueue(plan.tracks, plan.startIndex, posMs, play = command.play, contextTitle = "Desktop transfer")
+                    local.setShuffle(command.shuffle)
+                    local.setRepeatMode(plan.repeatMode)
+                    setAutoplayEnabled(command.autoplay)
+                }
+            }
+            is ConnectCommand.ReplaceQueue -> {
+                val tracks = command.tracks.map(::jsonPayloadToTrack).filter { it.id.isNotBlank() }
+                if (tracks.isNotEmpty()) {
+                    val posMs = (command.positionSeconds * 1000).toLong()
+                    local.replaceQueue(tracks, command.startIndex, posMs, play = command.play, contextTitle = command.contextTitle.ifBlank { "Desktop queue" })
+                }
+            }
+            is ConnectCommand.Unknown -> Unit
+            else -> Unit
+        }
+    }
+
+    private fun jsonPayloadToTrack(json: org.json.JSONObject): Track {
+        val playbackItem = json.optJSONObject("playbackItem") ?: json
+        return Track(
+            id = playbackItem.optString("id").ifBlank { json.optString("id") },
+            title = playbackItem.optString("title").ifBlank { json.optString("title") },
+            artist = playbackItem.optString("artist", playbackItem.optString("subtitle")).ifBlank { json.optString("artist", json.optString("subtitle")) },
+            album = playbackItem.optString("album").ifBlank { json.optString("album") },
+            artworkUrl = playbackItem.optString("artwork", playbackItem.optString("thumbnail")).ifBlank { json.optString("artwork", json.optString("thumbnail")) },
+            animatedArtworkUrl = playbackItem.optString("animatedArtwork").ifBlank { json.optString("animatedArtwork") },
+            animatedArtworkVerticalUrl = playbackItem.optString("animatedArtworkVertical").ifBlank { json.optString("animatedArtworkVertical") },
+            durationMs = (playbackItem.optDouble("durationSeconds", playbackItem.optDouble("duration", json.optDouble("durationSeconds", json.optDouble("duration", 0.0)))) * 1000).toLong()
+        )
+    }
+
     private fun refillAutoplay(trigger: AutoplayTrigger) {
         if (!trigger.enabled || !trigger.isLocal) return
         if (trigger.remaining > AUTOPLAY_REFILL_THRESHOLD) return
@@ -671,6 +1271,9 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun toggleManualEq(enabled: Boolean) = graph.connect.toggleManualEq(enabled)
 
     fun selectTarget(target: PlaybackTarget) {
+        if (target is PlaybackTarget.Remote) {
+            graph.connect.connectTo(target.deviceId)
+        }
         if (target == targets.value.selected || !targetCoordinator.beginTransfer(target)) {
             mutableTargets.value = targetCoordinator.state
             return
@@ -685,9 +1288,65 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun pairDevice(input: String) = graph.connect.pair(input)
-    fun disconnectDevice() = graph.connect.disconnect()
-    fun toggleLiked(track: Track) = graph.library.toggleLiked(track)
+    fun disconnectDevice(deviceId: String? = null) {
+        if (deviceId != null) {
+            graph.connect.removeDevice(deviceId)
+        } else {
+            graph.connect.disconnect()
+        }
+    }
+
+    fun renameDevice(device: PlaybackDevice, newName: String) {
+        if (device.isLocal) {
+            val trimmed = newName.trim()
+            val updated = settings.value.copy(customDeviceName = trimmed)
+            graph.settings.updateSettings(updated)
+            val base = Build.MODEL.takeIf(String::isNotBlank) ?: getApplication<Application>().selfDeviceLabel()
+            val effective = trimmed.ifBlank { base }
+            targetCoordinator.updateLocalDeviceName(name = effective, customName = trimmed)
+            mutableTargets.value = targetCoordinator.state
+            party.updateDisplayName(effective)
+        } else {
+            graph.connect.renameDevice(device.id, newName.trim())
+        }
+    }
+
+    fun removeDevice(deviceId: String) = graph.connect.removeDevice(deviceId)
+    fun toggleLiked(track: Track) {
+        val liked = graph.library.library.value.likedTracks.none { it.id == track.id }
+        graph.library.setLiked(track, liked)
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { graph.playlistActions.setLiked(track.id, liked) } }
+                .onFailure {
+                    graph.library.setLiked(track, !liked)
+                    graph.postWarning(it.message ?: "Could not update liked music.")
+                }
+        }
+    }
     fun updateSettings(value: OrchardSettings) = graph.settings.updateSettings(value)
+
+    fun refreshCacheSize() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val size = CacheManager.calculateCacheSizeBytes(getApplication())
+            mutableCacheSizeBytes.value = size
+        }
+    }
+
+    fun clearCache(onComplete: ((Long) -> Unit)? = null) {
+        if (mutableIsClearingCache.value) return
+        viewModelScope.launch {
+            mutableIsClearingCache.value = true
+            val bytesCleared = withContext(Dispatchers.IO) {
+                CacheManager.clearAllCache(getApplication(), graph)
+            }
+            mutableCacheSizeBytes.value = withContext(Dispatchers.IO) {
+                CacheManager.calculateCacheSizeBytes(getApplication())
+            }
+            mutableIsClearingCache.value = false
+            onComplete?.invoke(bytesCleared)
+        }
+    }
+
     fun beginSignIn() = graph.auth.beginSignIn()
     fun completeSignIn(cookie: String, visitorData: String, dataSyncId: String) = graph.auth.completeSignIn(cookie, visitorData, dataSyncId)
     fun cancelSignIn() = graph.auth.cancelSignIn()
@@ -775,9 +1434,21 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     private fun observeRemoteDevice() {
         viewModelScope.launch {
-            graph.connect.device.collect { remote ->
-                targetCoordinator.updateRemoteDevices(listOfNotNull(remote))
+            graph.connect.devices.collect { remotes ->
+                targetCoordinator.updateRemoteDevices(remotes)
                 mutableTargets.value = targetCoordinator.state
+            }
+        }
+    }
+
+    private fun observeLocalDeviceName() {
+        viewModelScope.launch {
+            settings.map { it.customDeviceName }.distinctUntilChanged().collect { custom ->
+                val base = Build.MODEL.takeIf(String::isNotBlank) ?: getApplication<Application>().selfDeviceLabel()
+                val effective = custom.ifBlank { base }
+                targetCoordinator.updateLocalDeviceName(name = effective, customName = custom)
+                mutableTargets.value = targetCoordinator.state
+                party.updateDisplayName(effective)
             }
         }
     }
@@ -805,14 +1476,52 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     private fun observeArtwork() {
         viewModelScope.launch {
-            targetPlayback.map { it.currentTrack }.distinctUntilChanged { old, new -> old?.id == new?.id }
-                .collectLatest { track ->
+            combine(
+                targetPlayback.map { it.currentTrack },
+                graph.downloads.downloads,
+            ) { track, downloaded -> track to track?.id?.let(downloaded::get) }
+                .distinctUntilChanged { old, new ->
+                    old.first?.id == new.first?.id &&
+                        old.second?.cachedAnimatedArtworkUrl == new.second?.cachedAnimatedArtworkUrl &&
+                        old.second?.cachedAnimatedArtworkVerticalUrl == new.second?.cachedAnimatedArtworkVerticalUrl
+                }
+                .collectLatest { (track, downloaded) ->
                     mutableArtwork.value = when {
                         track == null -> null
+                        downloaded != null && (
+                            downloaded.cachedAnimatedArtworkUrl.isNotBlank() ||
+                                downloaded.cachedAnimatedArtworkVerticalUrl.isNotBlank()
+                        ) -> TrackArtwork(
+                            track.id,
+                            track.artworkUrl,
+                            downloaded.cachedAnimatedArtworkUrl,
+                            downloaded.cachedAnimatedArtworkVerticalUrl,
+                        )
                         track.animatedArtworkVerticalUrl.isNotBlank() || track.animatedArtworkUrl.isNotBlank() ->
                             TrackArtwork(track.id, track.artworkUrl, track.animatedArtworkUrl, track.animatedArtworkVerticalUrl)
                         else -> graph.artwork.artwork(track)
                     }
+                }
+        }
+    }
+
+    private fun observeArtistCredits() {
+        viewModelScope.launch {
+            targetPlayback.map { it.currentTrack }.distinctUntilChanged { old, new -> old?.id == new?.id }
+                .collectLatest { track ->
+                    if (track == null) {
+                        mutableArtistCredits.value = null
+                        return@collectLatest
+                    }
+                    val existing = track.artists
+                        .filter { it.id.isNotBlank() }
+                        .distinctBy { it.id }
+                    mutableArtistCredits.value = track.id to existing
+                    if (!track.playbackSource.equals("youtube", ignoreCase = true) || existing.size > 1) {
+                        return@collectLatest
+                    }
+                    val resolved = runCatching { graph.catalog.trackArtists(track.id) }.getOrDefault(emptyList())
+                    if (resolved.isNotEmpty()) mutableArtistCredits.value = track.id to resolved
                 }
         }
     }
@@ -871,6 +1580,21 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { party.messages.collect { showWarning(it) } }
     }
 
+    /** Repairs an explicit id restored from an older queue before it can keep playing clean audio. */
+    private fun observeLocalAudioVersion() {
+        viewModelScope.launch {
+            local.snapshot
+                .map { it.currentTrack }
+                .filterNotNull()
+                .distinctUntilChangedBy { Triple(it.id, it.explicit, it.musicVideoType) }
+                .collectLatest { track ->
+                    if (!track.needsAudioVersionLookup()) return@collectLatest
+                    val audio = graph.audioVersions.audioVersion(track)
+                    if (audio.id != track.id) local.replaceCurrent(track.id, audio)
+                }
+        }
+    }
+
     fun connectDiscord(context: android.content.Context) {
         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(graph.discordAuth.buildAuthorizationUrl()))
             .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -880,6 +1604,29 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun disconnectDiscord() = viewModelScope.launch { graph.discordAuth.signOut() }
     fun handleDiscordAuthCallback(code: String, state: String?) =
         viewModelScope.launch { graph.discordAuth.handleAuthorizationCode(code, state) }
+
+    fun connectLastfm(context: android.content.Context) = viewModelScope.launch {
+        runCatching { graph.lastfm.connect() }
+            .onSuccess { url ->
+                context.startActivity(
+                    android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+            .onFailure { showWarning(it.message ?: "Could not start Last.fm connection.") }
+    }
+
+    fun completeLastfmConnection() = viewModelScope.launch {
+        if (!graph.lastfm.complete()) showWarning("Approve Orchard on Last.fm, then try again.")
+    }
+
+    fun disconnectLastfm() = graph.lastfm.disconnect()
+
+    fun connectListenBrainz(token: String) = viewModelScope.launch {
+        if (!graph.listenBrainz.connect(token)) showWarning("ListenBrainz did not accept that token.")
+    }
+
+    fun disconnectListenBrainz() = graph.listenBrainz.disconnect()
 
     private suspend fun transferToRemote(target: PlaybackTarget.Remote) {
         performTransferToRemote(target, local, graph, targetCoordinator)
@@ -930,6 +1677,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         const val AUTOPLAY_REFILL_THRESHOLD = 3
         const val AUTOPLAY_QUEUE_LIMIT = 20
         const val AUTOPLAY_TOTAL_LIMIT = 100
+        const val BEST_MIX_DOWNLOAD_TIMEOUT_MS = 90_000L
     }
 }
 
@@ -938,4 +1686,10 @@ internal fun BrowseDetail.withPlaylistTrackRemoved(videoId: String): BrowseDetai
     val index = tracks.indexOfFirst { it.id == videoId }
     if (index < 0) return this
     return copy(tracks = tracks.toMutableList().apply { removeAt(index) })
+}
+
+/** Returns the same instance for invalid/no-op moves; otherwise relocates exactly one row. */
+internal fun BrowseDetail.withPlaylistTrackMoved(fromIndex: Int, toIndex: Int): BrowseDetail {
+    if (fromIndex !in tracks.indices || toIndex !in tracks.indices || fromIndex == toIndex) return this
+    return copy(tracks = tracks.toMutableList().apply { add(toIndex, removeAt(fromIndex)) })
 }

@@ -21,11 +21,34 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numeric>
 
 namespace orchard {
 namespace {
 
 constexpr double kPi = 3.14159265358979323846;
+
+// The exact rational relationship between the two rates: `output` samples come
+// out for every `input` samples in, with no rounding anywhere. Zero when either
+// rate is not a positive whole number, which is the only case the block API
+// cannot serve.
+struct Period {
+  size_t input;
+  size_t output;
+};
+
+Period ExactPeriod(double input_rate, double output_rate) {
+  if (!(input_rate > 0.0) || !(output_rate > 0.0)) return {0, 0};
+  const long long in = std::llround(input_rate);
+  const long long out = std::llround(output_rate);
+  if (in <= 0 || out <= 0) return {0, 0};
+  if (std::abs(input_rate - static_cast<double>(in)) > 1e-9 ||
+      std::abs(output_rate - static_cast<double>(out)) > 1e-9) {
+    return {0, 0};
+  }
+  const long long divisor = std::gcd(in, out);
+  return {static_cast<size_t>(in / divisor), static_cast<size_t>(out / divisor)};
+}
 
 // Kernel table entries per unit of input-sample offset. At 512 the spacing
 // between entries is ~0.002 of a sample, and linear interpolation across that
@@ -118,6 +141,46 @@ std::vector<float> Resample(
   }
 
   return output;
+}
+
+size_t ResamplePeriod(double input_rate, double output_rate) {
+  return ExactPeriod(input_rate, output_rate).input;
+}
+
+size_t ResampleContext(double input_rate, double output_rate) {
+  if (!(input_rate > 0.0) || !(output_rate > 0.0)) return 0;
+  const double ratio = output_rate / input_rate;
+  const double cutoff = 0.5 * std::min(1.0, ratio);
+  return static_cast<size_t>(
+    std::ceil(static_cast<double>(kResamplerZeroCrossings) / (2.0 * cutoff)));
+}
+
+std::vector<float> ResampleInterior(
+  const std::vector<float>& window,
+  double input_rate,
+  double output_rate,
+  size_t leading_context,
+  size_t trailing_context
+) {
+  const Period period = ExactPeriod(input_rate, output_rate);
+  if (period.input == 0) return {};
+  if (leading_context % period.input != 0) return {};
+  if (leading_context + trailing_context > window.size()) return {};
+
+  // Resampling the padded window and discarding the padding, rather than
+  // resampling the block alone: an output whose filter window is clamped at a
+  // block edge comes out different from the same output computed with its real
+  // neighbours, and the padding is what supplies them.
+  const std::vector<float> full = Resample(window, input_rate, output_rate);
+  const size_t first = leading_context / period.input * period.output;
+  if (first >= full.size()) return {};
+
+  size_t count = full.size() - first;
+  if (trailing_context > 0) {
+    const size_t interior = window.size() - leading_context - trailing_context;
+    count = std::min(count, interior / period.input * period.output);
+  }
+  return std::vector<float>(full.begin() + first, full.begin() + first + count);
 }
 
 }  // namespace orchard

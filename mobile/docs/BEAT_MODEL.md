@@ -1,19 +1,39 @@
 # Beat This! beat/downbeat model
 
-`android/app/src/main/assets/beat_this_int8.onnx` is the committed, shipping
-model: the published **Beat This!** weights (Foscarin, Schlüter & Widmer, ISMIR
-2024 — the `small0` checkpoint) converted to ONNX and dynamically quantized to
-int8. The resulting mobile graph is about 4.4 MB, versus roughly 23 MB for
-the previous quantized `final0` graph.
+`android/app/src/main/assets/beat_this_fp16_gpu.tflite` ships the official
+**final0** checkpoint as a fixed 1200-frame LiteRT graph with FP16 stored
+weights. Its normalization and rotary tables are adjusted to preserve beat
+timing with explicit FP16 OpenCL GPU arithmetic. Input, output, and serialized
+operation boundaries remain FP32. Long temporal attention is split across
+independent head and frequency groups to reduce peak GPU allocation without
+changing the checkpoint weights. The same app also ships
+`beat_this_int8.onnx` (21,068,518 bytes) as a 1500-frame CPU fallback, run with four
+ONNX Runtime threads. For playback planning, the bounded Earmark analysis now
+passes its spectral vocal-risk estimates to the shared desktop planner. This
+does not load the separate open-unmix vocal separator.
+
+Spectral vocal risk is broad: synths can score as vocals. The shared planner
+uses it to rank entry cues and measure overlap, but its vocal-collision gate
+still permits a conservative beatmatch. Supplying this evidence can therefore
+change a cue without guaranteeing a vocal-free transition.
+
+The INT8 ONNX asset SHA-256 is
+`33920bdfe3342cabe0f17350f0e9b3fe1dca6aedca2831a4ad18b45407a41d0d`.
+It is the `final0_int8.onnx` artifact from the September 2026 benchmark,
+exported from the official checkpoint with upstream CPJKU code and prepared
+using `tools/prepare_beat_quant.py`. The versioned extracted filename prevents
+older installed copies of small0 from being reused after an app update.
+
+The INT8 ONNX asset stays compressed and is extracted to a file on first use.
+The LiteRT asset is stored uncompressed so the runtime can map it directly.
 
 ## Licensing
 
 Both the Beat This! **code and trained weights are MIT-licensed**
 (<https://github.com/CPJKU/beat_this>), which is the reason this model was
 chosen: most published MIR model weights (including Essentia's) are
-CC BY-NC-SA and cannot ship in a distributed application. The ONNX conversion
-comes from the MIT-licensed C++ port
-(<https://github.com/mosynthkey/beat_this_cpp>).
+CC BY-NC-SA and cannot ship in a distributed application. This export uses the official CPJKU implementation; earlier mobile exports
+used the MIT-licensed C++ port (<https://github.com/mosynthkey/beat_this_cpp>).
 
 ## Why a model at all
 
@@ -23,15 +43,25 @@ that enters on beat three of the bar sounds wrong even when every beat lines up.
 
 ## Contract
 
-- Input `input_spectrogram`: `[1, frames, 128]` log-mel spectrogram, 22,050 Hz
+- GPU input `input_spectrogram`: `[1, 1200, 128]` log-mel spectrogram, 22,050 Hz
   audio, n_fft 1024, hop 441 (50 fps), Slaney mel 30–11,000 Hz,
-  `log1p(1000·mag)` — produced by `src/main/cpp/analyzer/mel_spectrogram.cpp`.
-- Outputs `beat`, `downbeat`: `[1, frames]` logits, peak-picked by
+  `log1p(1000·mag)` — produced by Earmark's shared Rust model frontend.
+- GPU outputs `beat`, `downbeat`: `[1, 1200]` logits, peak-picked by
   `BeatTracker.pickPeaks`.
-- Chunked at 1500 frames with a 6-frame border discarded from each edge, which
-  is what upstream's inference does and is part of reproducing its predictions.
+- The INT8 CPU fallback keeps `[1, 1500, 128]` input and `[1, 1500]` outputs.
+  Each path uses its own window length when stitching chunks. A 6-frame border
+  is discarded from each edge. Short inputs and the final partial chunk are
+  zero-padded to that path's window length; padded outputs are ignored.
 
-## Quantization: why int8 and not fp16
+For the September 2026 CPU/NPU quantization experiment on both official checkpoints,
+see [BEAT_QUANT_BENCHMARK.md](BEAT_QUANT_BENCHMARK.md) and the subsequent
+[100-track accuracy evaluation](BEAT_MODEL_ACCURACY.md). The measurements below
+are the earlier experiment and use a different model/build configuration.
+
+The [checkpoint-to-LiteRT FP16 GPU export](BEAT_LITERT_GPU.md) is selected
+when the device can compile and run it. A failed GPU path falls back to INT8 CPU.
+
+## ONNX Runtime CPU: why int8 and not fp16
 
 fp16 was built and measured rather than assumed, because the usual reasoning —
 ARMv8.2 has native fp16, so it should beat dynamically-quantized int8 on a phone
@@ -85,13 +115,11 @@ synthetic percussion (`BeatTrackerTest`):
 
 ## Regenerating
 
-The fp32 source is a build input and is not committed. The mobile asset was
-converted from CPJKU's official `small0.ckpt`; the desktop model remains on its
-separate `final0` build path. Orchard desktop's
-`scripts/fetch-beat-this-model.mjs` downloads it, pinned to commit `07ab790a` of
-`mosynthkey/beat_this_cpp` and verified against sha256
-`c5c1466e08abdb03fdeb50668a06f244b787d564c212490482231a9cfbe9ccbd`. The int8
-file is derived with ONNX Runtime's dynamic quantization:
+The LiteRT asset is exported from CPJKU's official `final0.ckpt`, then packed
+and stabilized with the tracked tools. See [BEAT_LITERT_GPU.md](BEAT_LITERT_GPU.md)
+for pinned source details and commands. The INT8 ONNX fallback is derived from
+the same checkpoint by [prepare_beat_quant.py](../tools/prepare_beat_quant.py),
+using ONNX Runtime's dynamic quantization:
 
 ```python
 from onnxruntime.quantization import quantize_dynamic, QuantType

@@ -28,10 +28,11 @@ Orchard Mobile is the phone half of [Orchard](../) — a standalone native Andro
 ## Screenshots
 
 <div align="center">
-  <img src="docs/screenshots/home.png" width="24%" alt="Home">
-  <img src="docs/screenshots/now-playing.png" width="24%" alt="Now Playing">
-  <img src="docs/screenshots/lyrics.png" width="24%" alt="Synced lyrics">
-  <img src="docs/screenshots/queue.png" width="24%" alt="Queue">
+  <img src="docs/screenshots/home.png" width="19%" alt="Home">
+  <img src="docs/screenshots/now-playing.png" width="19%" alt="Now Playing">
+  <img src="docs/screenshots/lyrics.png" width="19%" alt="Synced lyrics">
+  <img src="docs/screenshots/queue.png" width="19%" alt="Queue">
+  <img src="docs/screenshots/album.png" width="19%" alt="Album">
 </div>
 
 ## Features
@@ -48,7 +49,7 @@ Orchard Mobile is the phone half of [Orchard](../) — a standalone native Andro
 
 ### On-device analysis
 
-Orchard listens to the audio rather than trusting a catalog. Beat and downbeat tracking runs a quantized [Beat This!](https://github.com/CPJKU/beat_this) model, vocal presence comes from open-unmix, and tempo, key, and energy come from a native C++ analyzer. Everything feeds the transition planner, which decides where a mix belongs and how ambitious it can afford to be.
+Orchard listens to the audio rather than trusting a catalog. Beat and downbeat tracking runs a quantized [Beat This!](https://github.com/CPJKU/beat_this) model, vocal presence comes from open-unmix, and tempo, key, and energy come from the shared Rust/Earmark analyzer. Everything feeds the same transition planner used by desktop. Gradle bundles the desktop JavaScript sources into the APK, and an isolated Rhino interpreter runs them off the playback thread. Mobile preserves the selected cues, tempo ratios, choreography, and fallback; there is no separate mobile timing policy. Unit tests compare the Android runtime and Kotlin adapters against fixtures generated directly by desktop. Different audio or analysis can still produce different plans.
 
 ### Library and browsing
 
@@ -60,6 +61,8 @@ Orchard listens to the audio rather than trusting a catalog. Beat and downbeat t
 ### Connected listening
 
 * **Orchard Connect** - hand playback to a paired Orchard desktop and take it back, over the local network
+* **Chromecast** - move the active queue to Cast speakers and displays, then bring it back without losing position
+* **Last.fm and ListenBrainz** - encrypted account credentials, now-playing updates, and seek-resistant scrobbling
 * Discord Rich Presence, with animated artwork where available
 * Shareable Orchard Song Links
 
@@ -67,8 +70,11 @@ Orchard listens to the audio rather than trusting a catalog. Beat and downbeat t
 
 - Download the latest apk at https://sfg545.dev/orchard
 
+From the repository root, install the JavaScript build dependencies first (Node.js 24.11+):
+
 ```bash
-cd android
+npm ci
+cd mobile/android
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -114,6 +120,8 @@ android/app/src/main/java/dev/sfg/orchard/
   mobile/auth/        Cookie-session auth and Keystore storage
   mobile/lyrics/      Lyrics resolver chain
   mobile/connect/     Orchard Connect target selection and transfer
+  mobile/lastfm/      Last.fm authorization and scrobbling
+  mobile/listenbrainz/ Direct ListenBrainz submission
   mobile/ui/          Compose theme, navigation, screens
   connect/            Typed Socket.IO protocol and pairing client
 android/app/src/main/cpp/
@@ -131,7 +139,7 @@ Orchard Mobile is free software under the [GNU Affero General Public License v3.
 
 Copyright © 2026 SFG545.
 
-AGPL rather than GPL so code can move freely between here and Orchard desktop, which is also AGPL-3.0; the native analysis front end is already shared source, and more of it is expected to be. It is also what lets the Rubber Band time-stretch library (GPL-2-or-later) be linked into the transition renderer.
+AGPL rather than GPL so code can move freely between here and Orchard desktop, which is also AGPL-3.0. The native analysis front end and the transition engine are both shared source, and more is expected to be.
 
 ### Third-party components
 
@@ -140,4 +148,4 @@ Smart Crossfade ships trained models. Both were chosen because their **weights**
 * **[Beat This!](https://github.com/CPJKU/beat_this)** (Foscarin, Schlüter & Widmer, ISMIR 2024) — beat and downbeat tracking. Code and weights both MIT. Mobile ships the official `small0` checkpoint converted to ONNX and quantized to int8 to reduce model size and inference cost. See [docs/BEAT_MODEL.md](docs/BEAT_MODEL.md).
 * **open-unmix** (Stöter & Liutkus, Inria/SigSep) — used only to measure how much vocal content is present at a given instant. Code and the umxhq weights both MIT, confirmed on the weights' own [Zenodo deposit](https://zenodo.org/record/3370489). Only the `vocals` target ships. Meta's htdemucs separates better but releases its weights under CC-BY-NC-4.0, which a distributed app cannot ship.
 * **ONNX Runtime** (Microsoft) — MIT.
-* **Rubber Band** (Particular Programs Ltd) — time-stretching for beat-matched transitions, vendored at `android/app/src/main/cpp/vendor/rubberband`. **GPL-2-or-later**, and the reason this repository is copyleft rather than MIT.
+* **earmark** — the beat-aware crossfade engine that plans and renders every transition, shared with Orchard desktop and vendored at `native-audio-rust/vendor/earmark`. MIT OR Apache-2.0. It reaches Kotlin through [UniFFI](https://github.com/mozilla/uniffi-rs) (MPL-2.0) and [JNA](https://github.com/java-native-access/jna) (Apache-2.0 or LGPL-2.1-or-later), and time-stretches with [Signalsmith Stretch](https://github.com/Signalsmith-Audio/signalsmith-stretch) (MIT).

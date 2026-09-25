@@ -42,7 +42,7 @@
 import path from 'node:path';
 import { stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { loadOnnxModel, loadOnnxRuntime, onnxExecutionProviders } from './onnxRuntime.js';
+import { beatOnnxExecutionProviders, loadOnnxModel, loadOnnxRuntime } from './onnxRuntime.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -63,14 +63,12 @@ const MIN_BPM = 40;
 const MAX_BPM = 220;
 
 /**
- * The committed model: the published fp32 weights dynamically quantized to
- * int8 (models/beat-this/README.md records the derivation). Measured against
- * the fp32 original on the synthetic harness the predictions are identical to
- * within peak-picking noise, at half the inference time and 23 MB instead
- * of 83.
+ * The committed fp32 model runs through WebGPU on supported desktop targets.
+ * Keeping this graph in floating point avoids the CPU-heavy fallback produced
+ * by its dynamically quantized int8 variant.
  */
 export const DEFAULT_MODEL_PATH =
-  path.join(here, '..', '..', 'models', 'beat-this', 'beat_this_int8.onnx');
+  path.join(here, '..', '..', 'models', 'beat-this', 'beat_this.onnx');
 
 /**
  * Window length that costs exactly one model inference. The model reads
@@ -103,7 +101,7 @@ async function session(modelPath, load) {
       const Tensor = runtime?.Tensor || runtime?.default?.Tensor;
       if (!InferenceSession || !Tensor) throw new Error('ONNX Runtime exports were unusable');
       const created = await InferenceSession.create(model, {
-        executionProviders: onnxExecutionProviders(),
+        executionProviders: beatOnnxExecutionProviders(),
         graphOptimizationLevel: 'all',
         // Analysis runs while audio is playing. Leaving this at the default
         // takes every core and has been the cause of glitching in other
@@ -347,6 +345,31 @@ export async function refineBeatsWithModel(rawResult, windows, {
     return Math.abs(nativeBeats[low] - time) <= Math.abs(nativeBeats[high] - time) ? low : high;
   };
 
+  const nearestDistance = (grid, time) => {
+    if (!grid.length) return Infinity;
+    if (grid.length === 1) return Math.abs(grid[0] - time);
+    let low = 0;
+    let high = grid.length - 1;
+    while (high - low > 1) {
+      const mid = (low + high) >> 1;
+      if (grid[mid] < time) low = mid;
+      else high = mid;
+    }
+    return Math.min(Math.abs(grid[low] - time), Math.abs(grid[high] - time));
+  };
+
+  const metricalPhases = (grid, expectedInterval, count) => {
+    const phases = Array.from({ length: count }, () => []);
+    const origin = grid[0] ?? 0;
+    for (const time of grid) {
+      // Deriving the position from time, rather than observed array index,
+      // keeps both missed and extra peaks from flipping every later phase.
+      const position = Math.max(0, Math.round((time - origin) / expectedInterval));
+      phases[position % count].push(time);
+    }
+    return phases;
+  };
+
   const offsetVotes = [0, 0, 0, 0];
   const agreements = [];
   let modelConfidence = 0;
@@ -381,14 +404,32 @@ export async function refineBeatsWithModel(rawResult, windows, {
       continue;
     }
 
-    // How well the two grids agree where they overlap, as a fraction of a beat.
-    const distances = found.beats
-      .map((time) => time + offsetSeconds)
-      .map((time) => Math.abs(nativeBeats[nearestIndex(time)] - time))
-      .sort((left, right) => left - right);
-    const agreement = distances.length
-      ? distances[Math.floor(distances.length / 2)] / interval
-      : 1;
+    // Compare phase at the same metrical level. Tempo octave alignment alone
+    // is insufficient: when the model reports 170 against an 85 BPM native
+    // grid, every other model beat is intentionally a native offbeat. Fold the
+    // faster grid and choose its best phase before deciding the trackers
+    // disagree. A genuine same-level offbeat disagreement remains untouched.
+    const shiftedModelBeats = found.beats.map((time) => time + offsetSeconds);
+    const fold = 2 ** Math.abs(octaves);
+    let phaseDistances;
+    if (octaves > 0 && fold > 1) {
+      phaseDistances = metricalPhases(shiftedModelBeats, 60 / found.bpm, fold)
+        .map((phase) => phase
+          .map((time) => Math.abs(nativeBeats[nearestIndex(time)] - time)));
+    } else if (octaves < 0 && fold > 1) {
+      phaseDistances = metricalPhases(nativeBeats, interval, fold)
+        .map((foldedNativeBeats) => shiftedModelBeats
+          .map((time) => nearestDistance(foldedNativeBeats, time)));
+    } else {
+      phaseDistances = [shiftedModelBeats.map(
+        (time) => Math.abs(nativeBeats[nearestIndex(time)] - time)
+      )];
+    }
+    const distances = phaseDistances.reduce((best, candidate) => (
+      !best || median(candidate) < median(best) ? candidate : best
+    ), null) || [];
+    const sharedInterval = octaves < 0 ? interval * fold : interval;
+    const agreement = distances.length ? median(distances) / sharedInterval : 1;
     agreements.push(agreement);
     modelConfidence = Math.max(modelConfidence, Number(found.beatConfidence) || 0);
     modelBpm = modelBpm || found.bpm;

@@ -21,14 +21,113 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { nextTick, ref } from 'vue';
 
+import { AUDIO_ANALYSIS_VERSION } from '../shared/audioAnalysis.js';
+import { finalizeTrackAnalysis } from '../shared/trackAnalysis.js';
 import {
   bestTransitionOrder,
   installQueueTransitionSort,
   transitionCost
 } from '../src/app/playback/queueTransitionSort.js';
+import { supabaseClient } from '../src/services/supabaseClient.js';
 
 function ids(tracks) {
   return tracks.map((track) => track.id);
+}
+
+function canonicalCloudAnalysis(bpm, key = 'C major') {
+  const duration = 20;
+  const beatInterval = 60 / bpm;
+  const beats = [];
+  const downbeats = [];
+  for (let time = 0, index = 0; time <= duration; time += beatInterval, index += 1) {
+    beats.push(time);
+    if (index % 4 === 0) downbeats.push(time);
+  }
+  return finalizeTrackAnalysis({
+    analysisVersion: AUDIO_ANALYSIS_VERSION,
+    duration,
+    bpm,
+    beatInterval,
+    beatConfidence: 0.9,
+    downbeatConfidence: 0.9,
+    beats,
+    downbeats,
+    audibleStartTime: 0,
+    contentEndTime: duration,
+    key,
+    keyConfidence: 0.8,
+    transitionFeatureFrames: [
+      { time: 0, energy: 0.4, vocal: 0.1 },
+      { time: duration, energy: 0.4, vocal: 0.1 }
+    ],
+    structuralBoundaryCandidates: [],
+    meter: { beatsPerBar: 4, confidence: 0.15, source: 'assumed-4-4' }
+  });
+}
+
+function plannerAnalysis({
+  role,
+  bpm = 120,
+  key = 'C major',
+  vocalProbability = 0.05,
+  vocalAt = () => vocalProbability
+}) {
+  const duration = 120;
+  const beatInterval = 60 / bpm;
+  const beats = [];
+  const downbeats = [];
+  for (let time = 0, index = 0; time <= duration; time += beatInterval, index += 1) {
+    beats.push(Number(time.toFixed(6)));
+    if (index % 4 === 0) downbeats.push(Number(time.toFixed(6)));
+  }
+  const transitionFeatureFrames = [];
+  for (let time = 0; time <= duration; time += 0.5) {
+    const energy = role === 'outgoing'
+      ? time < 96 ? 0.78 : Math.max(0.28, 0.78 - (time - 96) * 0.025)
+      : time < 16 ? 0.3 + time * 0.025 : 0.72;
+    transitionFeatureFrames.push({
+      time,
+      energy,
+      low: 0.45,
+      mid: 0.58,
+      high: 0.42,
+      vocal: vocalAt(time),
+      novelty: 0.55,
+      transientDensity: 0.18,
+      stability: 0.88
+    });
+  }
+  const boundaryTimes = role === 'outgoing' ? [104, 112] : [16, 32];
+  return finalizeTrackAnalysis({
+    analysisVersion: AUDIO_ANALYSIS_VERSION,
+    duration,
+    bpm,
+    beatInterval,
+    beatConfidence: 0.92,
+    downbeatConfidence: 0.92,
+    beats,
+    downbeats,
+    audibleStartTime: 0,
+    pickupTime: 0,
+    contentEndTime: duration,
+    key,
+    keyConfidence: 0.9,
+    vocalProbability,
+    transitionFeatureFrames,
+    structuralBoundaryCandidates: boundaryTimes.map((time) => ({
+      time,
+      confidence: 0.9,
+      source: 'detected-change',
+      noveltyPeak: 0.55,
+      energyDelta: 0.6,
+      lowDelta: 0.3,
+      vocalDelta: 0.2,
+      stabilityBefore: 0.88,
+      stabilityAfter: 0.88,
+      downbeatDistance: 0
+    })),
+    meter: { beatsPerBar: 4, confidence: 0.85, source: 'detected' }
+  });
 }
 
 test('transition scoring ignores artist and album identity', () => {
@@ -80,6 +179,31 @@ test('BPM and harmonic compatibility determine the route', () => {
   assert.notDeepEqual(ids(result.ordered), ids(queue));
 });
 
+test('Smart Crossfade safety outranks a BPM and key perfect vocal collision', () => {
+  const active = plannerAnalysis({
+    role: 'outgoing',
+    vocalProbability: 0.92,
+    vocalAt: (time) => time >= 70 ? 0.92 : 0.05
+  });
+  const unsafe = plannerAnalysis({
+    role: 'incoming',
+    vocalProbability: 0.9,
+    vocalAt: (time) => time <= 60 ? 0.9 : 0.05
+  });
+  const safe = plannerAnalysis({
+    role: 'incoming',
+    bpm: 122,
+    key: 'G major'
+  });
+  const result = bestTransitionOrder(
+    [{ id: 'unsafe' }, { id: 'safe' }],
+    new Map([['unsafe', unsafe], ['safe', safe]]),
+    active
+  );
+
+  assert.equal(result.ordered[0].id, 'safe');
+});
+
 test('unanalyzed tracks keep their positions and split sortable segments', () => {
   const queue = [{ id: 'known-a' }, { id: 'unknown' }, { id: 'known-b' }, { id: 'known-c' }];
   const analyses = new Map([
@@ -90,6 +214,23 @@ test('unanalyzed tracks keep their positions and split sortable segments', () =>
   const result = bestTransitionOrder(queue, analyses, { bpm: 128, key: 'D major' });
   assert.equal(result.ordered[1].id, 'unknown');
   assert.deepEqual(ids(result.ordered), ['known-a', 'unknown', 'known-b', 'known-c']);
+});
+
+test('Best Mix bounds expensive pair planning at the 50-track limit', () => {
+  const queue = Array.from({ length: 50 }, (_, index) => ({ id: `track-${index}` }));
+  const analyses = new Map(queue.map((track, index) => [
+    track.id,
+    { bpm: 118 + (index % 9), beatConfidence: 0.8, key: 'C major', keyConfidence: 0.8 }
+  ]));
+  const result = bestTransitionOrder(queue, analyses, {
+    bpm: 120,
+    beatConfidence: 0.8,
+    key: 'C major',
+    keyConfidence: 0.8
+  });
+
+  assert.ok(Number.isInteger(result.plannerEvaluations));
+  assert.ok(result.plannerEvaluations <= 150, `planned ${result.plannerEvaluations} pairs`);
 });
 
 test('Best mix loads BPM service metadata before sorting an unanalyzed queue', async () => {
@@ -163,7 +304,12 @@ test('Best mix locally analyzes cache misses through the authenticated resolver 
     crossfadeAnalysisByTrack: new Map(),
     smartCrossfadeAnalyzer: {
       async analyze(trackId, streamSource, options) {
-        requests.push({ trackId, priority: options.priority, streamSourceType: typeof streamSource });
+        requests.push({
+          trackId,
+          priority: options.priority,
+          forPlayback: options.forPlayback,
+          streamSourceType: typeof streamSource
+        });
         if (typeof streamSource === 'function') await streamSource();
         return local.get(trackId);
       },
@@ -196,9 +342,60 @@ test('Best mix locally analyzes cache misses through the authenticated resolver 
     ['followup', 2]
   ]);
   assert.equal(requests[0].streamSourceType, 'string');
+  assert.ok(requests.every(({ forPlayback }) => forPlayback !== true));
   assert.deepEqual(resolved.map((entry) => entry.trackId), ['rough', 'smooth', 'followup']);
-  assert.ok(resolved.every((entry) => entry.options.preload && entry.options.mediaKind === 'audio'));
+  assert.ok(resolved.every((entry) =>
+    entry.options.preload &&
+    entry.options.mediaKind === 'audio' &&
+    entry.options.streamQuality === 'saver' &&
+    entry.options.usePlaybackProvider === false
+  ));
   assert.equal(ctx.queue.value[0].id, 'smooth');
+});
+
+test('Best Mix carries queue analysis evidence into Smart Crossfade scoring', async (t) => {
+  const originalFetch = supabaseClient.fetchTrackAnalysis;
+  t.after(() => { supabaseClient.fetchTrackAnalysis = originalFetch; });
+  supabaseClient.fetchTrackAnalysis = async () => [];
+
+  const local = new Map([
+    ['active', plannerAnalysis({
+      role: 'outgoing',
+      vocalProbability: 0.92,
+      vocalAt: (time) => time >= 70 ? 0.92 : 0.05
+    })],
+    ['unsafe', plannerAnalysis({
+      role: 'incoming',
+      vocalProbability: 0.9,
+      vocalAt: (time) => time <= 60 ? 0.9 : 0.05
+    })],
+    ['safe', plannerAnalysis({ role: 'incoming', bpm: 122, key: 'G major' })]
+  ]);
+  const ctx = {
+    activeTrack: ref({ id: 'active', streamUrl: 'local-active', durationSeconds: 120 }),
+    queue: ref([
+      { id: 'unsafe', durationSeconds: 120 },
+      { id: 'safe', durationSeconds: 120 }
+    ]),
+    shuffleEnabled: ref(false),
+    shuffleSourceQueue: ref([]),
+    crossfadeAnalysis: ref({}),
+    crossfadeAnalysisByTrack: new Map(),
+    smartCrossfadeAnalyzer: {
+      async analyze(trackId) { return local.get(trackId); },
+      report() {}
+    },
+    resolvePlayableTrack: async (track) => ({ streamUrl: `local-${track.id}` }),
+    bpmMetadata: { lookupMany: async () => new Map() },
+    clearNextPreload() {},
+    preloadNextTrack: async () => {},
+    showShareMessage() {}
+  };
+
+  installQueueTransitionSort(ctx);
+  await ctx.toggleTransitionQueueSort();
+
+  assert.equal(ctx.queue.value[0].id, 'safe');
 });
 
 test('Best mix does not wait for optional catalog metadata when local analysis is sufficient', async () => {
@@ -236,6 +433,59 @@ test('Best mix does not wait for optional catalog metadata when local analysis i
     new Promise((_, reject) => setTimeout(() => reject(new Error('Best mix waited for catalog metadata')), 100))
   ]);
 
+  assert.equal(ctx.queue.value[0].id, 'smooth');
+});
+
+test('Best mix absorbs a rejected local write of valid cloud analysis', async (t) => {
+  const previousBridge = globalThis.orchardAudioAnalysis;
+  const originalFetch = supabaseClient.fetchTrackAnalysis;
+  t.after(() => {
+    supabaseClient.fetchTrackAnalysis = originalFetch;
+    if (previousBridge === undefined) delete globalThis.orchardAudioAnalysis;
+    else globalThis.orchardAudioAnalysis = previousBridge;
+  });
+
+  const analyses = new Map([
+    ['active', canonicalCloudAnalysis(100, 'C major')],
+    ['rough', canonicalCloudAnalysis(145, 'F♯ major')],
+    ['smooth', canonicalCloudAnalysis(102, 'G major')]
+  ]);
+  supabaseClient.fetchTrackAnalysis = async (trackIds) => trackIds.map((id) => {
+    const value = analyses.get(id);
+    return {
+      video_id: id,
+      duration: value.duration,
+      bpm: value.bpm,
+      musical_key: value.key,
+      key_confidence: value.keyConfidence,
+      beat_confidence: value.beatConfidence,
+      analysis_version: value.analysisVersion,
+      analysis_data: value
+    };
+  });
+  globalThis.orchardAudioAnalysis = {
+    get: async () => null,
+    store: async () => { throw new Error('cache write refused'); }
+  };
+
+  const ctx = {
+    activeTrack: ref({ id: 'active' }),
+    queue: ref([{ id: 'rough' }, { id: 'smooth' }]),
+    shuffleEnabled: ref(false),
+    shuffleSourceQueue: ref([]),
+    crossfadeAnalysis: ref({}),
+    crossfadeAnalysisByTrack: new Map(),
+    bpmMetadata: { lookupMany: async () => new Map() },
+    clearNextPreload() {},
+    preloadNextTrack: async () => {},
+    showShareMessage() {}
+  };
+
+  installQueueTransitionSort(ctx);
+  await ctx.toggleTransitionQueueSort();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(ctx.transitionQueueSorted.value, true);
   assert.equal(ctx.queue.value[0].id, 'smooth');
 });
 
@@ -362,4 +612,27 @@ test('Best mix only looks up and reorders the next 50 queued songs', async () =>
     queue.slice(0, 50).map((track) => track.id)
   );
   assert.deepEqual(ctx.queue.value.slice(50).map((track) => track.id), originalTail);
+});
+
+test('Best Mix ranks pairs by executable choreography quality and confidence', () => {
+  const outgoing = plannerAnalysis({ role: 'outgoing', bpm: 120, key: 'C major' });
+  const beatmatched = plannerAnalysis({ role: 'incoming', bpm: 120, key: 'C major' });
+  const distant = plannerAnalysis({ role: 'incoming', bpm: 155, key: 'F# major' });
+
+  const costBeatmatched = transitionCost(outgoing, beatmatched);
+  const costDistant = transitionCost(outgoing, distant);
+
+  assert.ok(costBeatmatched < costDistant, 'Beatmatched staged blend must have lower cost than distant clash');
+
+  const queue = [
+    { id: 'distant', title: 'Distant' },
+    { id: 'beatmatched', title: 'Beatmatched' }
+  ];
+  const analysisByTrack = new Map([
+    ['distant', distant],
+    ['beatmatched', beatmatched]
+  ]);
+
+  const result = bestTransitionOrder(queue, analysisByTrack, outgoing);
+  assert.deepEqual(result.ordered.map((t) => t.id), ['beatmatched', 'distant']);
 });

@@ -64,8 +64,135 @@ object ConnectJsonCodec {
             ConnectCommand.ToggleShuffle -> ConnectProtocol.CommandType.TOGGLE_SHUFFLE to JSONObject.NULL
             ConnectCommand.CycleRepeat -> ConnectProtocol.CommandType.CYCLE_REPEAT to JSONObject.NULL
             is ConnectCommand.PlayTrack -> ConnectProtocol.CommandType.PLAY_TRACK to copy(command.item.playbackPayload)
+            is ConnectCommand.PlayTrackPayload -> ConnectProtocol.CommandType.PLAY_TRACK to copy(command.payload)
+            is ConnectCommand.Transfer -> ConnectProtocol.CommandType.TRANSFER to JSONObject()
+                .put(ConnectProtocol.Field.TRACK, command.track?.let(::copy) ?: JSONObject.NULL)
+                .put(ConnectProtocol.Field.POSITION_SECONDS, command.positionSeconds)
+                .put(ConnectProtocol.Field.QUEUE, JSONArray(command.queue.map(::copy)))
+                .put(ConnectProtocol.Field.SHUFFLE, command.shuffle)
+                .put(ConnectProtocol.Field.REPEAT_MODE, command.repeatMode)
+                .put(ConnectProtocol.Field.AUTOPLAY, command.autoplay)
+                .put(ConnectProtocol.Field.PLAY, command.play)
+            is ConnectCommand.ReplaceQueue -> ConnectProtocol.CommandType.REPLACE_QUEUE to JSONObject()
+                .put(ConnectProtocol.Field.TRACKS, JSONArray(command.tracks.map(::copy)))
+                .put(ConnectProtocol.Field.START_INDEX, command.startIndex)
+                .put(ConnectProtocol.Field.POSITION_SECONDS, command.positionSeconds)
+                .put(ConnectProtocol.Field.PLAY, command.play)
+                .put(ConnectProtocol.Field.CONTEXT_TITLE, command.contextTitle)
+            is ConnectCommand.Unknown -> command.type to JSONObject.NULL
         }
         return JSONObject().put(ConnectProtocol.Field.TYPE, type).put(ConnectProtocol.Field.VALUE, value)
+    }
+
+    fun commandFromPayload(payload: JSONObject): ConnectCommand {
+        val type = payload.optString(ConnectProtocol.Field.TYPE)
+        val value = payload.opt(ConnectProtocol.Field.VALUE)
+        return when (type) {
+            ConnectProtocol.CommandType.PLAY_PAUSE -> ConnectCommand.TogglePlayback
+            ConnectProtocol.CommandType.PLAY -> ConnectCommand.Play
+            ConnectProtocol.CommandType.PAUSE -> ConnectCommand.Pause
+            ConnectProtocol.CommandType.NEXT -> ConnectCommand.Next
+            ConnectProtocol.CommandType.PREVIOUS -> ConnectCommand.Previous
+            ConnectProtocol.CommandType.VOLUME -> ConnectCommand.Volume(seconds(value).coerceIn(0.0, 1.0))
+            ConnectProtocol.CommandType.SEEK -> ConnectCommand.Seek(seconds(value))
+            ConnectProtocol.CommandType.AUDIO_ENGINE_PRESET -> ConnectCommand.AudioEnginePreset(value?.toString().orEmpty())
+            ConnectProtocol.CommandType.AUDIO_ENGINE_AUTO_EQ -> ConnectCommand.AutoEq(value == true || value == "true")
+            ConnectProtocol.CommandType.AUDIO_ENGINE_MANUAL_EQ -> ConnectCommand.ManualEq(value == true || value == "true")
+            ConnectProtocol.CommandType.PLAY_QUEUE_INDEX -> ConnectCommand.PlayQueueIndex((value as? Number)?.toInt() ?: value?.toString()?.toIntOrNull() ?: 0)
+            ConnectProtocol.CommandType.REMOVE_QUEUE_INDEX -> ConnectCommand.RemoveQueueIndex((value as? Number)?.toInt() ?: value?.toString()?.toIntOrNull() ?: 0)
+            ConnectProtocol.CommandType.MOVE_QUEUE_INDEX -> {
+                val obj = value as? JSONObject ?: JSONObject()
+                ConnectCommand.MoveQueueIndex(obj.optInt(ConnectProtocol.Field.FROM), obj.optInt(ConnectProtocol.Field.TO))
+            }
+            ConnectProtocol.CommandType.CLEAR_UPCOMING -> ConnectCommand.ClearUpcoming
+            ConnectProtocol.CommandType.PLAY_NEXT -> ConnectCommand.PlayNext(value as? JSONObject ?: JSONObject())
+            ConnectProtocol.CommandType.ADD_TO_QUEUE -> ConnectCommand.AddToQueue(value as? JSONObject ?: JSONObject())
+            ConnectProtocol.CommandType.TOGGLE_SHUFFLE -> ConnectCommand.ToggleShuffle
+            ConnectProtocol.CommandType.CYCLE_REPEAT -> ConnectCommand.CycleRepeat
+            ConnectProtocol.CommandType.PLAY_TRACK -> ConnectCommand.PlayTrackPayload(value as? JSONObject ?: JSONObject())
+            ConnectProtocol.CommandType.TRANSFER -> {
+                val obj = value as? JSONObject ?: JSONObject()
+                val trackObj = obj.optJSONObject(ConnectProtocol.Field.TRACK)
+                val queueArray = obj.optJSONArray(ConnectProtocol.Field.QUEUE)
+                val queue = objects(queueArray)
+                ConnectCommand.Transfer(
+                    track = trackObj,
+                    positionSeconds = seconds(obj.opt(ConnectProtocol.Field.POSITION_SECONDS)),
+                    queue = queue,
+                    shuffle = obj.optBoolean(ConnectProtocol.Field.SHUFFLE, false),
+                    repeatMode = obj.optString(ConnectProtocol.Field.REPEAT_MODE, "off"),
+                    autoplay = obj.optBoolean(ConnectProtocol.Field.AUTOPLAY, false),
+                    play = obj.optBoolean(ConnectProtocol.Field.PLAY, true)
+                )
+            }
+            ConnectProtocol.CommandType.REPLACE_QUEUE -> {
+                val obj = value as? JSONObject ?: JSONObject()
+                val tracksArray = obj.optJSONArray(ConnectProtocol.Field.TRACKS)
+                ConnectCommand.ReplaceQueue(
+                    tracks = objects(tracksArray),
+                    startIndex = obj.optInt(ConnectProtocol.Field.START_INDEX, 0),
+                    positionSeconds = seconds(obj.opt(ConnectProtocol.Field.POSITION_SECONDS)),
+                    play = obj.optBoolean(ConnectProtocol.Field.PLAY, true),
+                    contextTitle = obj.optString(ConnectProtocol.Field.CONTEXT_TITLE, "")
+                )
+            }
+            else -> ConnectCommand.Unknown(type)
+        }
+    }
+
+    fun deviceState(
+        snapshot: dev.sfg.orchard.mobile.model.PlaybackSnapshot,
+        protocolVersion: Int = ConnectProtocol.PROTOCOL_VERSION,
+        autoplay: Boolean = false,
+    ): JSONObject {
+        val trackJson = snapshot.currentTrack?.let { track ->
+            JSONObject()
+                .put("id", track.id)
+                .put("title", track.title)
+                .put("artist", track.artist)
+                .put("album", track.album)
+                .put("thumbnail", track.artworkUrl)
+                .put("artwork", track.artworkUrl)
+                .put("animatedArtwork", track.animatedArtworkUrl)
+                .put("animatedArtworkVertical", track.animatedArtworkVerticalUrl)
+                .put("durationSeconds", track.durationMs / 1000.0)
+        }
+        val isPlaying = snapshot.isPlaying || snapshot.status == dev.sfg.orchard.mobile.model.PlaybackStatus.PLAYING
+        val playbackJson = JSONObject()
+            .put("isPlaying", isPlaying)
+            .put("buffering", snapshot.status == dev.sfg.orchard.mobile.model.PlaybackStatus.BUFFERING)
+            .put("currentTime", snapshot.positionMs / 1000.0)
+            .put("duration", snapshot.durationMs / 1000.0)
+            .put("volume", snapshot.volume.toDouble())
+            .put("shuffle", snapshot.shuffle)
+            .put("autoplay", autoplay)
+            .put("repeatMode", when (snapshot.repeatMode) {
+                dev.sfg.orchard.mobile.model.RepeatMode.ONE -> "one"
+                dev.sfg.orchard.mobile.model.RepeatMode.ALL -> "queue"
+                else -> "off"
+            })
+        val queueArray = JSONArray()
+        for (track in snapshot.upcoming.take(50)) {
+            queueArray.put(
+                JSONObject()
+                    .put("id", track.id)
+                    .put("title", track.title)
+                    .put("artist", track.artist)
+                    .put("album", track.album)
+                    .put("thumbnail", track.artworkUrl)
+                    .put("artwork", track.artworkUrl)
+                    .put("animatedArtwork", track.animatedArtworkUrl)
+                    .put("animatedArtworkVertical", track.animatedArtworkVerticalUrl)
+                    .put("durationSeconds", track.durationMs / 1000.0)
+            )
+        }
+        return JSONObject()
+            .put("status", if (isPlaying) "playing" else if (snapshot.currentTrack != null) "paused" else "idle")
+            .put("protocolVersion", protocolVersion)
+            .put("track", trackJson ?: JSONObject.NULL)
+            .put("playback", playbackJson)
+            .put("queue", queueArray)
+            .put("lyrics", JSONObject().put("status", "idle").put("mode", "").put("lines", JSONArray()))
     }
 
     fun search(query: String, requestId: String): JSONObject = JSONObject()
@@ -129,7 +256,8 @@ object ConnectJsonCodec {
                 duration = seconds(playbackJson.opt("duration")),
                 volume = playbackJson.optDouble("volume", 0.0).coerceIn(0.0, 1.0),
                 shuffle = playbackJson.optBoolean("shuffle", false),
-                repeatMode = playbackJson.optString("repeatMode", "off")
+                repeatMode = playbackJson.optString("repeatMode", "off"),
+                autoplay = playbackJson.optBoolean("autoplay", false)
             ),
             lyrics = ConnectLyrics(
                 status = lyricsJson.optString("status", "idle"),

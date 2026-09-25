@@ -15,4 +15,6 @@
   <string name="widget_play_track">Play %1$s by %2$s</string>
   <string name="widget_player_description">Artwork-tinted playback controls that resize from compact to expanded.</string>
   <string name="widget_recent_description">Quickly play your four most recent tracks.</string>
+  <!-- Google Cast Application ID registered at cast.google.com/publish pointing to https://cast.sfg545.dev -->
+  <string name="cast_app_id" translatable="false">DEC44B9D</string>
 </resources>

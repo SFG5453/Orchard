@@ -22,8 +22,14 @@ import { createRequire } from 'node:module';
 import test from 'node:test';
 
 const require = createRequire(import.meta.url);
-const native = require('../native/build/Release/orchard_audio_analysis.node');
+const native = require('../native-audio-rust/index.cjs');
 const { AUDIO_ANALYSIS_VERSION } = await import('../shared/audioAnalysis.js');
+
+test('Rust native addon exposes analysis and transition rendering together', () => {
+  assert.equal(typeof native.analyze, 'function');
+  assert.equal(typeof native.renderTransition, 'function');
+  assert.equal(typeof native.renderPlannedTransition, 'function');
+});
 
 function syntheticTrack({ bpm = 120, duration = 48, sampleRate = 11025 } = {}) {
   const samples = new Float32Array(Math.floor(duration * sampleRate));
@@ -80,6 +86,30 @@ test('native analyzer returns transition-ready musical features', async () => {
   assert.ok(result.mixOutCandidates.length > 0);
   assert.ok(result.vocalProbability >= 0 && result.vocalProbability <= 1);
   assert.ok(Math.abs(result.vocalProbability + result.instrumentalProbability - 1) < 0.001);
+  assert.deepEqual(result.meter, {
+    beatsPerBar: 4,
+    confidence: 0.15,
+    source: 'assumed-4-4'
+  });
+  assert.ok(result.transitionFeatureFrames.length > 20);
+  assert.ok(result.transitionFeatureFrames.length <= 240);
+  assert.ok(result.transitionFeatureFrames.every((frame) =>
+    Number.isFinite(frame.time) &&
+    Number.isFinite(frame.energy) &&
+    Number.isFinite(frame.novelty) &&
+    Number.isFinite(frame.stability)
+  ));
+  assert.ok(
+    result.structuralBoundaryCandidates.length >= 1,
+    'the synthetic section changes should produce measured boundary evidence'
+  );
+  assert.ok(result.structuralBoundaryCandidates.every((boundary) =>
+    boundary.source === 'detected-change' &&
+    !('type' in boundary) &&
+    Number.isFinite(boundary.observedTime) &&
+    Number.isFinite(boundary.noveltyPeak) &&
+    Number.isFinite(boundary.energyDelta)
+  ));
 });
 
 test('native analyzer recognizes a voice-like harmonic signal as vocal', async () => {
@@ -108,7 +138,7 @@ test('native analyzer recognizes a voice-like harmonic signal as vocal', async (
   );
 });
 
-test('low-energy curve measures bass rather than copying broadband loudness', async () => {
+test('spectral curves measure independent bands rather than copying broadband loudness', async () => {
   const duration = 12;
   const sampleRate = 11025;
   const samples = new Float32Array(duration * sampleRate);
@@ -130,6 +160,8 @@ test('low-energy curve measures bass rather than copying broadband loudness', as
   const broadbandAfter = averageBetween(result.energyCurve, 7, 10);
   const bassBefore = averageBetween(result.lowEnergyCurve, 2, 5);
   const bassAfter = averageBetween(result.lowEnergyCurve, 7, 10);
+  const midBefore = averageBetween(result.midEnergyCurve, 2, 5);
+  const midAfter = averageBetween(result.midEnergyCurve, 7, 10);
 
   assert.ok(
     Math.abs(broadbandAfter - broadbandBefore) < 0.15,
@@ -139,6 +171,46 @@ test('low-energy curve measures bass rather than copying broadband loudness', as
     bassAfter > bassBefore + 0.7,
     `bass curve did not detect the spectral handoff: ${bassBefore} -> ${bassAfter}`
   );
+  assert.ok(
+    midBefore > midAfter + 0.7,
+    `mid curve did not detect the spectral handoff: ${midBefore} -> ${midAfter}`
+  );
+
+  const nearChange = result.transitionFeatureFrames
+    .filter((frame) => frame.time >= 5.2 && frame.time <= 6.8)
+    .reduce((maximum, frame) => Math.max(maximum, frame.transientDensity), 0);
+  const steady = result.transitionFeatureFrames
+    .filter((frame) => frame.time >= 2 && frame.time <= 4)
+    .reduce((maximum, frame) => Math.max(maximum, frame.transientDensity), 0);
+  assert.ok(
+    nearChange > steady + 0.15,
+    `spectral flux did not mark the timbre onset: steady=${steady}, change=${nearChange}`
+  );
+});
+
+test('high-energy curve responds to measured treble content', async () => {
+  const duration = 12;
+  const sampleRate = 11025;
+  const samples = new Float32Array(duration * sampleRate);
+  for (let index = 0; index < samples.length; index += 1) {
+    const time = index / sampleRate;
+    if (time < 1 || time >= duration - 1) continue;
+    const frequency = time < 6 ? 1000 : 4500;
+    samples[index] = Math.sin(2 * Math.PI * frequency * time) * 0.2;
+  }
+
+  const result = await native.analyze(samples, sampleRate, duration);
+  const averageBetween = (curve, from, to) => {
+    const points = curve.filter((point) => point.time >= from && point.time < to);
+    return points.reduce((sum, point) => sum + point.energy, 0) / points.length;
+  };
+  const highBefore = averageBetween(result.highEnergyCurve, 2, 5);
+  const highAfter = averageBetween(result.highEnergyCurve, 7, 10);
+  const midBefore = averageBetween(result.midEnergyCurve, 2, 5);
+  const midAfter = averageBetween(result.midEnergyCurve, 7, 10);
+
+  assert.ok(highAfter > highBefore + 0.7, `treble curve stayed flat: ${highBefore} -> ${highAfter}`);
+  assert.ok(midBefore > midAfter + 0.7, `mid curve stayed flat: ${midBefore} -> ${midAfter}`);
 });
 
 test('native analyzer detects short trailing silence', async () => {

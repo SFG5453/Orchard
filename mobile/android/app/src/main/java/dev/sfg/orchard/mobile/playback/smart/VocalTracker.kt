@@ -25,9 +25,13 @@ import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.util.Log
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.max
+import kotlin.math.min
 
 /** The linear-frequency STFT front end open-unmix was trained on. */
 object VocalSpectrogram {
@@ -41,12 +45,23 @@ object VocalSpectrogram {
     /**
      * Computes the magnitude STFT for planar stereo at [sampleRate].
      *
+     * [offset] and [length] select a window of the channels rather than requiring the caller to
+     * copy one out; the model's fixed width is shorter than the region callers decode, so a window
+     * is the ordinary case rather than an exception.
+     *
      * Returns null when the library is missing, the rate is wrong, or the input is shorter than one
      * padded frame, all of which mean "no mask available" rather than an error.
      */
-    fun compute(left: FloatArray, right: FloatArray, rate: Double = sampleRate): Spectrogram? {
-        if (!available || left.isEmpty() || left.size != right.size) return null
-        val values = nativeCompute(left, right, rate)
+    fun compute(
+        left: FloatArray,
+        right: FloatArray,
+        rate: Double = sampleRate,
+        offset: Int = 0,
+        length: Int = left.size,
+    ): Spectrogram? {
+        if (!available || left.size != right.size) return null
+        if (offset < 0 || length <= 0 || offset + length > left.size) return null
+        val values = nativeCompute(left, right, offset, length, rate)
         if (values.isEmpty()) return null
         return Spectrogram(values, frames = values.size / (CHANNELS * bins), bins = bins)
     }
@@ -64,9 +79,47 @@ object VocalSpectrogram {
         override fun hashCode(): Int = 31 * (31 * values.contentHashCode() + frames) + bins
     }
 
+    /**
+     * Computes the STFT straight into [destination], a direct buffer the caller owns, writing each
+     * bin's frames [frameStride] apart and leaving whatever the transform did not fill at zero.
+     * Returns the frames written, or 0 when nothing usable came back.
+     *
+     * Exists so the window the model reads is never a Java array. It is 15 MB, the runtime copies a
+     * non-direct buffer into a direct one before inference, and both copies then sit on the same
+     * heap as playback's own buffers.
+     */
+    fun computeInto(
+        left: FloatArray,
+        right: FloatArray,
+        destination: ByteBuffer,
+        frameStride: Int,
+        rate: Double = sampleRate,
+        offset: Int = 0,
+        length: Int = left.size,
+    ): Int {
+        if (!available || left.size != right.size || !destination.isDirect) return 0
+        if (offset < 0 || length <= 0 || offset + length > left.size) return 0
+        return nativeComputeInto(left, right, offset, length, rate, destination, frameStride)
+    }
+
     const val CHANNELS = 2
 
-    @JvmStatic private external fun nativeCompute(left: FloatArray, right: FloatArray, rate: Double): FloatArray
+    @JvmStatic private external fun nativeComputeInto(
+        left: FloatArray,
+        right: FloatArray,
+        offset: Int,
+        length: Int,
+        rate: Double,
+        destination: ByteBuffer,
+        frameStride: Int,
+    ): Int
+    @JvmStatic private external fun nativeCompute(
+        left: FloatArray,
+        right: FloatArray,
+        offset: Int,
+        length: Int,
+        rate: Double,
+    ): FloatArray
     @JvmStatic private external fun nativeBins(): Int
     @JvmStatic private external fun nativeSampleRate(): Double
     @JvmStatic private external fun nativeHop(): Int
@@ -92,6 +145,10 @@ class VocalTracker(private val context: Context) {
     @Volatile private var session: OrtSession? = null
     private val lock = Any()
 
+    /** Guards [tensors] and the inference that reads and writes them. */
+    private val inference = Any()
+    private var tensors: Tensors? = null
+
     private fun session(): OrtSession? {
         session?.let { return it }
         synchronized(lock) {
@@ -104,6 +161,8 @@ class VocalTracker(private val context: Context) {
                     }
                 }
                 val options = OrtSession.SessionOptions().apply {
+                    // Keep the shipping dynamic-INT8 separator on the CPU provider.
+                    addCPU(false)
                     setIntraOpNumThreads(INFERENCE_THREADS)
                     setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
                     // Same reasoning as BeatTracker: the arena retains every block it allocates for
@@ -118,65 +177,134 @@ class VocalTracker(private val context: Context) {
         }
     }
 
+    /** Which end of an input too long for the model is the one worth measuring. */
+    enum class Keep { LEADING, TRAILING }
+
     /**
-     * Returns one vocal-presence value per STFT frame in [0, 1], or null when unavailable.
-     *
-     * The model's input width is fixed at [FIXED_FRAMES] (~22.8 s), which was chosen upstream to
-     * cover a transition overlap plus padding. Shorter input is zero-padded; longer is refused
-     * rather than chunked, because a transition never needs more than one window.
+     * One vocal-presence value per STFT frame in [0, 1], and where in the input the measured
+     * window begins. The caller needs the offset to map its own timeline onto [values]; without it
+     * a cropped window would silently describe the wrong seconds.
      */
-    @Suppress("UNCHECKED_CAST")
-    fun track(left: FloatArray, right: FloatArray, rate: Double): FloatArray? {
+    class Presence(val values: FloatArray, val startSeconds: Double)
+
+    /**
+     * Measures vocal presence over one window of [left]/[right], or null when unavailable.
+     *
+     * The model's input width is fixed at [FIXED_FRAMES] (~22.3 s), chosen upstream to cover a
+     * transition overlap plus padding, and it is shorter than the region the analyzer decodes for
+     * the beat model. Input longer than the width is therefore cropped to the end named by [keep]
+     * rather than refused: refusing meant every track over ~22 s got no mask at all, which left the
+     * vocal duck and the vocal-clash check running on neutral values. The crop is not silent -- the
+     * window it settled on comes back on [Presence.startSeconds].
+     *
+     * Which end to keep is a property of what the caller's region is for: a mix-out sits at the end
+     * of a track's tail region, a mix-in near the start of its head region.
+     *
+     * Shorter input is zero-padded, and only the real frames are reduced.
+     */
+    fun track(left: FloatArray, right: FloatArray, rate: Double, keep: Keep = Keep.LEADING): Presence? {
         if (!VocalSpectrogram.available) return null
         val resampledLeft = MelSpectrogram.resample(left, rate, VocalSpectrogram.sampleRate) ?: return null
         val resampledRight = MelSpectrogram.resample(right, rate, VocalSpectrogram.sampleRate) ?: return null
+        if (resampledLeft.size != resampledRight.size) return null
 
-        val started = System.currentTimeMillis()
-        val spectrogram = VocalSpectrogram.compute(resampledLeft, resampledRight) ?: return null
-        if (spectrogram.frames > FIXED_FRAMES) {
-            Log.d(TAG, "Window of ${spectrogram.frames} frames exceeds the model's ${FIXED_FRAMES}")
-            return null
-        }
+        // One frame per hop plus the one at zero, so a full window transforms to exactly
+        // [FIXED_FRAMES] and needs no padding at all.
+        val width = (FIXED_FRAMES - 1) * VocalSpectrogram.hop
+        val offset = if (keep == Keep.TRAILING) max(0, resampledLeft.size - width) else 0
+        val length = min(width, resampledLeft.size - offset)
+        val startSeconds = offset / VocalSpectrogram.sampleRate
+
         val active = session() ?: return null
 
-        return runCatching {
-            val bins = spectrogram.bins
-            val padded = padToFixedFrames(spectrogram.values, bins, spectrogram.frames)
-            val environment = OrtEnvironment.getEnvironment()
-            val shape = longArrayOf(1, VocalSpectrogram.CHANNELS.toLong(), bins.toLong(), FIXED_FRAMES.toLong())
+        // One inference at a time, because there is one set of tensors. Serialising the model is
+        // not a concession here: at 15 MB per tensor a second concurrent inference is most of what
+        // is left of the heap, and it was two of these overlapping that killed playback.
+        return synchronized(inference) {
+            runCatching {
+                val tensors = tensors() ?: return@runCatching null
+                val started = System.currentTimeMillis()
+                val frames = VocalSpectrogram.computeInto(
+                    resampledLeft,
+                    resampledRight,
+                    destination = tensors.inputBytes,
+                    frameStride = FIXED_FRAMES,
+                    offset = offset,
+                    length = length,
+                )
+                if (frames <= 0) return@runCatching null
 
-            OnnxTensor.createTensor(environment, FloatBuffer.wrap(padded), shape).use { tensor ->
-                active.run(mapOf(active.inputNames.first() to tensor)).use { outputs ->
-                    val target = (outputs.get(0).value as Array<Array<Array<FloatArray>>>)[0]
-                    val curve = reduceToBandCurve(padded, target, bins, spectrogram.frames)
+                active.run(
+                    mapOf(active.inputNames.first() to tensors.input),
+                    // Pinned, so the runtime writes into a buffer that already exists instead of
+                    // one it allocates and we then copy out of. Every public accessor on a result
+                    // tensor -- `value`, `floatBuffer` -- copies the whole 15 MB onto the heap, and
+                    // the band reduction below reads about a sixth of it.
+                    mapOf(active.outputNames.first() to tensors.output),
+                ).use {
+                    val curve = reduceToBandCurve(tensors.inputFloats, tensors.outputFloats, frames)
                     Log.d(
                         TAG,
-                        "vocal mask ${spectrogram.frames} frames in " +
-                            "${System.currentTimeMillis() - started}ms",
+                        "vocal mask $frames frames from ${startSeconds}s " +
+                            "in ${System.currentTimeMillis() - started}ms",
                     )
-                    curve
+                    Presence(curve, startSeconds)
                 }
-            }
-        }.onFailure { Log.w(TAG, "Vocal inference failed", it) }.getOrNull()
+            }.onFailure { Log.w(TAG, "Vocal inference failed", it) }.getOrNull()
+        }
     }
 
     /**
-     * Zero-pads to the model's fixed width.
+     * The model's two tensors and the direct buffers behind them, built once and reused.
      *
-     * The stride changes as well as the length: the source is stored at `frames` per bin and the
-     * model wants [FIXED_FRAMES], so this is a re-stride rather than an append.
+     * Each is `[1, 2, bins, FIXED_FRAMES]` floats, so 15 MB, and on ART a direct buffer is a
+     * non-movable allocation on the same heap everything else competes for. Allocating a set per
+     * inference is what ran the heap out mid-playback; holding one set and refilling it costs the
+     * same 30 MB whether one region is being analysed or twenty.
+     *
+     * Tied to the session because they are useless without it, and [release] drops both together
+     * when analysis goes idle.
      */
-    private fun padToFixedFrames(values: FloatArray, bins: Int, frames: Int): FloatArray {
-        if (frames == FIXED_FRAMES) return values
-        val padded = FloatArray(VocalSpectrogram.CHANNELS * bins * FIXED_FRAMES)
-        for (channel in 0 until VocalSpectrogram.CHANNELS) {
-            for (bin in 0 until bins) {
-                val from = (channel * bins + bin) * frames
-                val to = (channel * bins + bin) * FIXED_FRAMES
-                values.copyInto(padded, to, from, from + frames)
-            }
+    private class Tensors : AutoCloseable {
+        val inputBytes: ByteBuffer = direct()
+        val inputFloats: FloatBuffer = inputBytes.asFloatBuffer()
+        val outputFloats: FloatBuffer = direct().asFloatBuffer()
+        val input: OnnxTensor
+        val output: OnnxTensor
+
+        init {
+            val environment = OrtEnvironment.getEnvironment()
+            input = OnnxTensor.createTensor(environment, inputFloats, SHAPE)
+            output = OnnxTensor.createTensor(environment, outputFloats, SHAPE)
         }
-        return padded
+
+        override fun close() {
+            runCatching { input.close() }
+            runCatching { output.close() }
+        }
+
+        private companion object {
+            val SHAPE = longArrayOf(
+                1,
+                VocalSpectrogram.CHANNELS.toLong(),
+                VocalSpectrogram.bins.toLong(),
+                FIXED_FRAMES.toLong(),
+            )
+
+            /** Direct, so the runtime reads and writes it in place rather than copying it. */
+            fun direct(): ByteBuffer = ByteBuffer
+                .allocateDirect(VocalSpectrogram.CHANNELS * VocalSpectrogram.bins * FIXED_FRAMES * Float.SIZE_BYTES)
+                .order(ByteOrder.nativeOrder())
+        }
+    }
+
+    /** Called only under [inference], which is what makes the single set safe to share. */
+    private fun tensors(): Tensors? {
+        tensors?.let { return it }
+        return runCatching { Tensors() }
+            .onFailure { Log.w(TAG, "Could not allocate the vocal model's tensors", it) }
+            .getOrNull()
+            ?.also { tensors = it }
     }
 
     /**
@@ -188,11 +316,11 @@ class VocalTracker(private val context: Context) {
      * folding it in would drag every short window toward silence.
      */
     private fun reduceToBandCurve(
-        mix: FloatArray,
-        target: Array<Array<FloatArray>>,
-        bins: Int,
+        mix: FloatBuffer,
+        target: FloatBuffer,
         usableFrames: Int,
     ): FloatArray {
+        val bins = VocalSpectrogram.bins
         val lowBin = floor(LOW_HZ * VocalSpectrogram.fftSize / VocalSpectrogram.sampleRate)
             .toInt().coerceAtLeast(0)
         val highBin = ceil(HIGH_HZ * VocalSpectrogram.fftSize / VocalSpectrogram.sampleRate)
@@ -205,9 +333,10 @@ class VocalTracker(private val context: Context) {
             var count = 0
             for (channel in 0 until VocalSpectrogram.CHANNELS) {
                 for (bin in lowBin..highBin) {
-                    val mixValue = mix[(channel * bins + bin) * FIXED_FRAMES + frame]
+                    val index = (channel * bins + bin) * FIXED_FRAMES + frame
+                    val mixValue = mix.get(index)
                     if (mixValue <= 1e-6f) continue
-                    val ratio = target[channel][bin][frame] / mixValue
+                    val ratio = target.get(index) / mixValue
                     sum += ratio.coerceIn(0f, 1f)
                     count += 1
                 }
@@ -218,6 +347,12 @@ class VocalTracker(private val context: Context) {
     }
 
     fun release() {
+        // The tensors first: 30 MB of them, and they are what this is mostly for. Under [inference]
+        // so a running pass keeps its buffers until it is finished with them.
+        synchronized(inference) {
+            tensors?.close()
+            tensors = null
+        }
         synchronized(lock) {
             runCatching { session?.close() }
             session = null

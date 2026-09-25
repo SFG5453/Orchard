@@ -19,12 +19,13 @@
 
 .compact-settings-menu {
   width: 320px;
-  background: #0d110e;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  background: rgba(13, 17, 14, 0.96);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
   color: #d9ddda;
   padding: 12px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
 }
 
 .compact-settings-header {

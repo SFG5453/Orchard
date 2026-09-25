@@ -65,7 +65,12 @@ fun rememberArtworkPalette(
     renderedFrame: Bitmap? = null,
 ): ArtworkPalette {
     val context = LocalContext.current
-    var sampled by remember(artworkUrl) { mutableStateOf(ArtworkPalette()) }
+    // Seeded from the cache so the second caller for a cover — the backdrop, the pill, the glass
+    // tint and the player all ask for the same one — paints it immediately instead of decoding
+    // and rescanning the bitmap and then fading in from black.
+    var sampled by remember(artworkUrl) {
+        mutableStateOf(cachedPalette(artworkUrl, visibleAspect) ?: ArtworkPalette())
+    }
 
     // Sample either the live video frame or the static artwork image.
     LaunchedEffect(artworkUrl, visibleAspect, renderedFrame) {
@@ -77,6 +82,7 @@ fun rememberArtworkPalette(
         }
 
         if (artworkUrl.isBlank()) return@LaunchedEffect
+        if (cachedPalette(artworkUrl, visibleAspect) != null) return@LaunchedEffect
         val formattedUrl = highResolutionArtworkUrl(artworkUrl, 128)
         val request = ImageRequest.Builder(context)
             .data(formattedUrl)
@@ -95,7 +101,10 @@ fun rememberArtworkPalette(
         val image = imageResult ?: return@LaunchedEffect
         withContext(Dispatchers.Default) {
             runCatching { palette(image.toBitmap(), visibleAspect) }.getOrNull()
-        }?.let { sampled = it }
+        }?.let {
+            cachePalette(artworkUrl, visibleAspect, it)
+            sampled = it
+        }
     }
 
     val top by animateColorAsState(sampled.top, tween(700), label = "ArtworkTintTop")
@@ -103,6 +112,25 @@ fun rememberArtworkPalette(
     val accent by animateColorAsState(sampled.accent, tween(700), label = "ArtworkTintAccent")
     val deep by animateColorAsState(sampled.deep, tween(700), label = "ArtworkTintDeep")
     return ArtworkPalette(top, bottom, accent, deep)
+}
+
+/**
+ * A cover's palette costs a decode plus two full passes over the bitmap, and several parts of the
+ * app want the same answer for the same cover at once. Access-ordered and small: covers go out of
+ * scope as fast as the queue moves, and holding four colours each makes this a few kilobytes.
+ * Video frames are deliberately not cached, since every frame is a different image.
+ */
+private val paletteCache = object : LinkedHashMap<String, ArtworkPalette>(16, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ArtworkPalette>) = size > 32
+}
+
+@Synchronized
+private fun cachedPalette(artworkUrl: String, visibleAspect: Float): ArtworkPalette? =
+    if (artworkUrl.isBlank()) null else paletteCache["$artworkUrl@$visibleAspect"]
+
+@Synchronized
+private fun cachePalette(artworkUrl: String, visibleAspect: Float, value: ArtworkPalette) {
+    if (artworkUrl.isNotBlank()) paletteCache["$artworkUrl@$visibleAspect"] = value
 }
 
 private fun palette(bitmap: Bitmap, visibleAspect: Float): ArtworkPalette {

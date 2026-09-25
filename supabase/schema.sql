@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS public.track_analysis (
     musical_key TEXT DEFAULT '',
     key_confidence DOUBLE PRECISION DEFAULT 0.0,
     beat_confidence DOUBLE PRECISION DEFAULT 0.0,
-    analysis_version INTEGER NOT NULL DEFAULT 10,
+    analysis_version INTEGER NOT NULL DEFAULT 12,
     analysis_data JSONB NOT NULL DEFAULT '{}'::jsonb,
     analyzed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT TIMEZONE('utc'::text, NOW()),

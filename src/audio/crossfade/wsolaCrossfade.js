@@ -27,6 +27,7 @@
 // elements keep playing silently underneath so a cancel at any point can
 // restore ordinary playback without re-buffering.
 import { planWsolaTransition } from './wsolaPlanner.js';
+import { clampMixProgress, renderedMixWeights } from './crossfadeVisualState.js';
 
 // How far ahead of the transition preparation may begin. Decoding two tracks
 // and rendering the overlap takes a few seconds; starting ~30s out leaves
@@ -87,6 +88,144 @@ function pairKey(fromTrackId, toTrackId) {
   return `${String(fromTrackId || '')}>${String(toTrackId || '')}`;
 }
 
+function planningFingerprint(value) {
+  try {
+    return JSON.stringify(value, (_key, item) => {
+      if (typeof item === 'number' && !Number.isFinite(item)) return null;
+      if (ArrayBuffer.isView(item)) return Array.from(item);
+      return item;
+    });
+  } catch {
+    // Analysis objects are expected to be plain serializable evidence. An
+    // invalid/cyclic object must never alias a previous cache entry.
+    return null;
+  }
+}
+
+function pairPlanningCacheKey(options = {}) {
+  const outgoing = planningFingerprint(options.analysis);
+  const incoming = planningFingerprint(options.nextAnalysis);
+  const settings = planningFingerprint(options.settings || {});
+  if (outgoing === null || incoming === null || settings === null) return null;
+  return JSON.stringify([
+    String(options.fromTrackId || options.analysis?.trackId || ''),
+    String(options.toTrackId || options.nextAnalysis?.trackId || ''),
+    Number(options.duration) || 0,
+    Number(options.nextDuration) || 0,
+    String(options.mode || 'smart'),
+    settings,
+    outgoing,
+    incoming
+  ]);
+}
+
+// Decoder and filter safety on either side of the exact selected source
+// windows. The renderer is still given one fixed plan inside these slices; the
+// padding is not a search region and cannot change any cue.
+const SLICE_PADDING_SECONDS = 1.5;
+
+function decodedDuration(buffer) {
+  const declared = Number(buffer?.duration);
+  if (Number.isFinite(declared) && declared > 0) return declared;
+  const sampleRate = Number(buffer?.sampleRate);
+  const length = Number(buffer?.length);
+  return sampleRate > 0 && length >= 0 ? length / sampleRate : 0;
+}
+
+function selectedSlice(startSeconds, endSeconds, buffer) {
+  const sampleRate = Number(buffer?.sampleRate);
+  const duration = decodedDuration(buffer);
+  const selectedStart = Math.max(0, Number(startSeconds) || 0);
+  const selectedEnd = Math.max(selectedStart, Number(endSeconds) || 0);
+  const start = Math.max(0, selectedStart - SLICE_PADDING_SECONDS);
+  const end = Math.min(duration || Infinity, selectedEnd + SLICE_PADDING_SECONDS);
+  if (!(sampleRate > 0)) return { start, end };
+  return {
+    start: Math.floor(start * sampleRate) / sampleRate,
+    end: Math.ceil(end * sampleRate) / sampleRate
+  };
+}
+
+// Beat grids are absolute; the engine sees only the slice, so both arrays are
+// rebased onto it and anything outside is dropped.
+function localGrid(grid, slice) {
+  const rebase = (times) => (Array.isArray(times) ? times : [])
+    .filter((time) => time >= slice.start && time <= slice.end)
+    .map((time) => time - slice.start);
+  return { beats: rebase(grid?.beats), downbeats: rebase(grid?.downbeats) };
+}
+
+function selectedLocalPlan(transitionPlan, outgoingSlice, incomingSlice) {
+  const plan = {
+    outgoingStart: Number(transitionPlan.transitionStart) - outgoingSlice.start,
+    incomingStart: Number(transitionPlan.incomingCueTime) - incomingSlice.start,
+    duration: Number(transitionPlan.overlapSeconds),
+    beats: Number(transitionPlan.beats),
+    outgoingBpm: Number(transitionPlan.outgoingBpm),
+    incomingBpm: Number(transitionPlan.incomingBpm),
+    targetBpm: Number(transitionPlan.targetBpm),
+    outgoingTempoRatio: Number(transitionPlan.outgoingTempoRatio),
+    incomingTempoRatio: Number(transitionPlan.incomingTempoRatio),
+    strategy: String(transitionPlan.strategy || '')
+  };
+  if (Number.isFinite(Number(transitionPlan.handoffFraction))) {
+    plan.handoffFraction = Number(transitionPlan.handoffFraction);
+  }
+  if (Number.isFinite(Number(transitionPlan.bedPosition))) {
+    plan.bedPosition = Number(transitionPlan.bedPosition);
+  }
+  if (Number.isFinite(Number(transitionPlan.bassSwapFraction))) {
+    plan.bassSwapFraction = Number(transitionPlan.bassSwapFraction);
+  }
+  if (Number.isFinite(Number(transitionPlan.filterSweep))) {
+    plan.filterSweep = Number(transitionPlan.filterSweep);
+  }
+  if (transitionPlan.choreography) {
+    plan.choreography = transitionPlan.choreography;
+  }
+  return plan;
+}
+
+function strategyIdentity(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function renderMatchesSelectedPlan(result, selectedPlan) {
+  const sampleRate = Number(result?.sampleRate);
+  if (!(sampleRate > 0)) return false;
+  const tolerance = 1 / sampleRate;
+  const expected = {
+    outgoingStart: selectedPlan.outgoingStart,
+    incomingStart: selectedPlan.incomingStart,
+    duration: selectedPlan.duration,
+    outgoingResume: selectedPlan.outgoingStart +
+      selectedPlan.duration * selectedPlan.outgoingTempoRatio,
+    incomingResume: selectedPlan.incomingStart +
+      selectedPlan.duration * selectedPlan.incomingTempoRatio
+  };
+  if (Object.entries(expected).some(([field, value]) => {
+    const actual = Number(result?.[field]);
+    return !Number.isFinite(actual) || Math.abs(actual - value) > tolerance + Number.EPSILON;
+  })) return false;
+  if (Number(result?.beats) !== selectedPlan.beats ||
+      strategyIdentity(result?.strategy) !== strategyIdentity(selectedPlan.strategy)) return false;
+  // Earmark stores tempo values as f32, so allow only the representational
+  // round-trip error while keeping timing identity at the stricter one-sample
+  // boundary above.
+  const representedNumbers = [
+    [result?.bpm, selectedPlan.targetBpm, 1e-4],
+    [result?.stretchRatio, selectedPlan.outgoingTempoRatio, 1e-6],
+    [result?.incomingStretchRatio, selectedPlan.incomingTempoRatio, 1e-6]
+  ];
+  return representedNumbers.every(([actual, expectedValue, maximumError]) =>
+    Number.isFinite(Number(actual)) && Math.abs(Number(actual) - expectedValue) <= maximumError
+  );
+}
+
 function sliceChannels(buffer, startSeconds, endSeconds) {
   const sampleRate = buffer.sampleRate;
   const start = Math.max(0, Math.floor(startSeconds * sampleRate));
@@ -105,6 +244,7 @@ function sliceChannels(buffer, startSeconds, endSeconds) {
 export function createWsolaCrossfade({
   analyzer,
   bridge = globalThis.orchardAudioAnalysis,
+  planner = planWsolaTransition,
   report = () => {}
 } = {}) {
   // One preparation at a time: transitions are strictly sequential, so a new
@@ -113,9 +253,14 @@ export function createWsolaCrossfade({
   let session = null;
   let sequence = 0;
   let targetVolume = 1;
+  let planningCache = null;
 
-  function plan(options) {
-    return planWsolaTransition(options);
+  function plan(options = {}) {
+    const key = pairPlanningCacheKey(options);
+    if (key !== null && planningCache?.key === key) return planningCache.result;
+    const result = planner(options);
+    planningCache = key === null ? null : { key, result };
+    return result;
   }
 
   function preparationStatus(fromTrackId, toTrackId) {
@@ -132,11 +277,24 @@ export function createWsolaCrossfade({
     return { plan: preparation.plan, render: preparation.render };
   }
 
+  // A refused or late render must retain the fallback attached to the plan
+  // that entered preparation, even if analysis metadata changes afterward.
+  function preparationPlan(fromTrackId, toTrackId) {
+    if (!preparation || preparation.key !== pairKey(fromTrackId, toTrackId)) return null;
+    return preparation.plan || null;
+  }
+
   function prepare({ fromTrackId, toTrackId, fromUrl, toUrl, plan: transitionPlan }) {
     const key = pairKey(fromTrackId, toTrackId);
     if (preparation?.key === key && preparation.status !== 'failed') return preparation.promise;
     if (!transitionPlan?.ok || !fromUrl || !toUrl || typeof bridge?.renderTransition !== 'function') {
-      preparation = { key, status: 'failed', reason: 'unavailable', promise: Promise.resolve(null) };
+      preparation = {
+        key,
+        status: 'failed',
+        plan: transitionPlan,
+        reason: 'unavailable',
+        promise: Promise.resolve(null)
+      };
       return preparation.promise;
     }
 
@@ -154,37 +312,47 @@ export function createWsolaCrossfade({
       ]);
       if (!fromBuffer || !toBuffer) throw new Error('Transition PCM decoding returned no audio');
       const sampleRate = fromBuffer.sampleRate;
+      const outgoingSlice = selectedSlice(
+        transitionPlan.transitionStart,
+        transitionPlan.transitionEnd,
+        fromBuffer
+      );
+      const incomingSlice = selectedSlice(
+        transitionPlan.incomingCueTime,
+        transitionPlan.incomingResumeTime,
+        toBuffer
+      );
+      const localPlan = selectedLocalPlan(transitionPlan, outgoingSlice, incomingSlice);
       const outgoing = {
-        channels: sliceChannels(fromBuffer, transitionPlan.outgoingSlice.start, transitionPlan.outgoingSlice.end),
-        anchor: transitionPlan.outgoingSlice.anchor,
-        bpm: transitionPlan.outgoingBpm
+        channels: sliceChannels(fromBuffer, outgoingSlice.start, outgoingSlice.end),
+        sampleRate,
+        bpm: transitionPlan.outgoingBpm,
+        ...localGrid(transitionPlan.outgoingGrid, outgoingSlice)
       };
       const incoming = {
-        channels: sliceChannels(toBuffer, transitionPlan.incomingSlice.start, transitionPlan.incomingSlice.end),
-        anchor: transitionPlan.incomingSlice.anchor,
-        bpm: transitionPlan.incomingBpm
+        channels: sliceChannels(toBuffer, incomingSlice.start, incomingSlice.end),
+        sampleRate: toBuffer.sampleRate,
+        bpm: transitionPlan.incomingBpm,
+        ...localGrid(transitionPlan.incomingGrid, incomingSlice)
       };
-      // The filter sweep follows the fade curve, not the music. Asking the
-      // vocal model how much the outgoing track is actually singing across the
-      // overlap lets the renderer spend that sweep only where there is a vocal
-      // to get out of the way.
+      // The filter ride follows the fade curve, not the music. Asking the vocal
+      // model how much the outgoing track is actually singing lets the engine
+      // spend that ride only where there is a vocal to get out of the way.
       //
-      // Sliced to exactly [transitionStart, transitionEnd] -- the overlap on
-      // the outgoing track's own timeline -- so the returned curve spans the
-      // overlap by construction and needs no cropping or offsetting to line
-      // up with the renderer's own 0..1 progress. The stretch between the two
-      // timelines is uniform, so fractional position is preserved through it.
-      let vocalDuckCurve;
+      // This curve belongs to the already-selected overlap. Padding exists only
+      // for renderer safety and must not influence the vocal evidence supplied
+      // to the fixed plan.
+      let duckCurve;
       if (typeof bridge?.vocalMask === 'function') {
-        const overlapChannels = sliceChannels(
+        const selectedOutgoing = sliceChannels(
           fromBuffer,
           transitionPlan.transitionStart,
           transitionPlan.transitionEnd
         );
-        const mask = overlapChannels.length
-          ? await bridge.vocalMask(overlapChannels, sampleRate).catch(() => null)
+        const mask = selectedOutgoing.length
+          ? await bridge.vocalMask(selectedOutgoing, sampleRate).catch(() => null)
           : null;
-        if (mask?.curve?.length) vocalDuckCurve = mask.curve;
+        if (mask?.curve?.length) duckCurve = mask.curve;
         report('wsola-vocal-mask', {
           trackId: String(toTrackId),
           points: mask?.curve?.length || 0
@@ -192,15 +360,10 @@ export function createWsolaCrossfade({
       }
 
       const result = await bridge.renderTransition(outgoing, incoming, {
-        sampleRate,
-        beats: transitionPlan.beats,
-        bassSwap: transitionPlan.bassSwapFraction,
-        handoff: transitionPlan.handoffFraction,
-        bed: transitionPlan.bedPosition,
-        filterSweep: transitionPlan.filterSweep,
+        plan: localPlan,
         // Omitted rather than passed empty when the model had no opinion, so
-        // the renderer's own "no curve means flat duck" default applies.
-        ...(vocalDuckCurve ? { vocalDuckCurve } : {})
+        // the engine's own "no curve means full depth" default applies.
+        ...(duckCurve ? { duckCurve } : {})
       });
       if (!result?.rendered) {
         entry.status = 'failed';
@@ -208,17 +371,27 @@ export function createWsolaCrossfade({
         report('wsola-prepare-refused', { trackId: String(toTrackId), reason: entry.reason });
         return null;
       }
+      if (!renderMatchesSelectedPlan(result, localPlan)) {
+        entry.status = 'failed';
+        entry.reason = 'render-plan-mismatch';
+        report('wsola-prepare-refused', { trackId: String(toTrackId), reason: entry.reason });
+        return null;
+      }
       entry.render = {
         channels: result.channels,
         sampleRate: result.sampleRate,
-        stretchRatio: result.stretchRatio
+        stretchRatio: result.stretchRatio,
+        incomingStretchRatio: result.incomingStretchRatio
       };
       entry.status = 'ready';
       report('wsola-prepare-ready', {
         trackId: String(toTrackId),
         elapsedMs: Date.now() - startedAt,
+        strategy: transitionPlan.strategy,
         stretchRatio: result.stretchRatio,
-        overlapSeconds: result.channels?.[0]?.length / result.sampleRate || 0
+        beats: transitionPlan.beats,
+        transitionStart: transitionPlan.transitionStart,
+        overlapSeconds: transitionPlan.overlapSeconds
       });
       return entry.render;
     })().catch((error) => {
@@ -249,6 +422,8 @@ export function createWsolaCrossfade({
   function clearTimers(state) {
     state.timers.forEach((timer) => window.clearTimeout(timer));
     state.timers.length = 0;
+    window.cancelAnimationFrame?.(state.mixFrame);
+    state.mixFrame = 0;
   }
 
   // `reason` names the caller, so a session that ends early can be told apart
@@ -271,6 +446,17 @@ export function createWsolaCrossfade({
     if (state.promoted) {
       // The incoming element is already the active deck; it has been playing
       // muted in position, so restoring volume is the whole recovery.
+      const incomingRatio = Math.max(
+        0.0001,
+        Number(state.plan.incomingTempoRatio) || Number(state.render.incomingStretchRatio) || 1
+      );
+      const expected = state.plan.incomingCueTime + elapsed * incomingRatio;
+      if (Math.abs(state.toAudio.currentTime - expected) > DRIFT_TOLERANCE_SECONDS) {
+        try {
+          state.toAudio.currentTime = expected;
+        } catch {}
+      }
+      state.toAudio.playbackRate = 1;
       analyzer.setVolume(state.toAudio, targetVolume);
       state.fromAudio.pause();
       analyzer.setVolume(state.fromAudio, 0);
@@ -278,8 +464,11 @@ export function createWsolaCrossfade({
       // Pre-promote the outgoing element is still authoritative. The buffer
       // consumed its media at the stretch ratio while the element ran at unit
       // rate, so realign before unmuting.
-      const ratio = Math.max(0.0001, Number(state.render.stretchRatio) || 1);
-      const expected = state.plan.transitionStart + elapsed / ratio;
+      const ratio = Math.max(
+        0.0001,
+        Number(state.plan.outgoingTempoRatio) || Number(state.render.stretchRatio) || 1
+      );
+      const expected = state.plan.transitionStart + elapsed * ratio;
       if (Math.abs(state.fromAudio.currentTime - expected) > DRIFT_TOLERANCE_SECONDS) {
         try {
           state.fromAudio.currentTime = expected;
@@ -287,6 +476,7 @@ export function createWsolaCrossfade({
       }
       analyzer.setVolume(state.fromAudio, targetVolume);
       state.toAudio.pause();
+      state.toAudio.playbackRate = 1;
       analyzer.setVolume(state.toAudio, 0);
     }
     report('wsola-cancelled', {
@@ -299,7 +489,7 @@ export function createWsolaCrossfade({
     });
   }
 
-  async function start({ fromAudio, toAudio, plan: transitionPlan, render, volume, onPromote, onComplete, onError }) {
+  async function start({ fromAudio, toAudio, plan: transitionPlan, render, volume, onPromote, onComplete, onError, onMixState }) {
     if (session || !fromAudio || !toAudio || !transitionPlan?.ok || !render?.channels?.length) {
       return false;
     }
@@ -325,10 +515,17 @@ export function createWsolaCrossfade({
       }
 
       const now = analyzer.currentTime();
-      const stretchRatio = Math.max(0.0001, Number(render.stretchRatio) || 1);
+      const stretchRatio = Math.max(
+        0.0001,
+        Number(transitionPlan.outgoingTempoRatio) || Number(render.stretchRatio) || 1
+      );
+      const incomingStretchRatio = Math.max(
+        0.0001,
+        Number(transitionPlan.incomingTempoRatio) || Number(render.incomingStretchRatio) || 1
+      );
       // `untilStart` is measured on the outgoing media timeline, while the
       // buffer offset is measured on its stretched output timeline.
-      const offset = Math.max(0, -untilStart) * stretchRatio;
+      const offset = Math.max(0, -untilStart) / stretchRatio;
       const when = now + Math.max(0, untilStart);
       const handle = analyzer.playPcmBuffer({
         channels: render.channels,
@@ -349,9 +546,47 @@ export function createWsolaCrossfade({
         // every mapping between the overlap and the media timelines.
         overlapStartTime: when - offset,
         promoted: false,
+        mixFrame: 0,
         timers: []
       };
       session = state;
+
+      const visualHandoffProgress = clampMixProgress(transitionPlan.bassSwapFraction ?? 0.5);
+      const publishMixState = (complete = false) => {
+        if (typeof onMixState !== 'function') return;
+        const contextTime = analyzer.currentTime();
+        const progress = complete
+          ? 1
+          : clampMixProgress(
+            (contextTime - state.overlapStartTime) / Math.max(0.001, transitionPlan.overlapSeconds)
+          );
+        const weights = complete
+          ? { outgoingGain: 0, incomingGain: 1 }
+          : renderedMixWeights(progress, transitionPlan.choreography);
+        try {
+          onMixState({
+            complete,
+            contextTime,
+            endTime: handle.endTime,
+            handoffProgress: visualHandoffProgress,
+            ...weights,
+            progress,
+            started: complete || contextTime >= state.overlapStartTime,
+            startTime: state.overlapStartTime
+          });
+        } catch {
+          // The audio handoff remains authoritative if presentation code fails.
+        }
+      };
+      const followMixState = () => {
+        state.mixFrame = 0;
+        if (session !== state || mySequence !== sequence) return;
+        publishMixState(false);
+        if (analyzer.currentTime() >= handle.endTime) return;
+        state.mixFrame = window.requestAnimationFrame?.(followMixState) || 0;
+      };
+      publishMixState(false);
+      state.mixFrame = window.requestAnimationFrame?.(followMixState) || 0;
 
       // Hand over from the outgoing element to the buffer with complementary
       // fades over the same instant, so the two never both carry the outgoing
@@ -369,7 +604,8 @@ export function createWsolaCrossfade({
       if (!analyzer.setMixVolume?.(toAudio, 0)) {
         throw new Error('Transition elements are outside the audio graph');
       }
-      toAudio.currentTime = transitionPlan.incomingCueTime + offset;
+      toAudio.currentTime = transitionPlan.incomingCueTime + offset * incomingStretchRatio;
+      toAudio.playbackRate = incomingStretchRatio;
       await toAudio.play();
       if (mySequence !== sequence) return false;
 
@@ -382,7 +618,7 @@ export function createWsolaCrossfade({
       };
       const correctDrift = () => {
         const expected = transitionPlan.incomingCueTime +
-          (analyzer.currentTime() - state.overlapStartTime);
+          (analyzer.currentTime() - state.overlapStartTime) * incomingStretchRatio;
         if (Math.abs(toAudio.currentTime - expected) > DRIFT_TOLERANCE_SECONDS) {
           try {
             toAudio.currentTime = expected;
@@ -419,12 +655,16 @@ export function createWsolaCrossfade({
       });
       if (mySequence !== sequence) return false;
 
+      window.cancelAnimationFrame?.(state.mixFrame);
+      state.mixFrame = 0;
+      publishMixState(true);
       session = null;
       clearTimers(state);
       analyzer.resetMixElement?.(toAudio);
       analyzer.resetMixElement?.(fromAudio);
       analyzer.setVolume(toAudio, targetVolume);
       analyzer.setVolume(fromAudio, 0);
+      toAudio.playbackRate = 1;
       fromAudio.pause();
       report('wsola-complete', { stretchRatio: render.stretchRatio });
       onComplete?.();
@@ -441,6 +681,7 @@ export function createWsolaCrossfade({
       analyzer.resetMixElement?.(toAudio);
       analyzer.setVolume(fromAudio, targetVolume);
       toAudio.pause();
+      toAudio.playbackRate = 1;
       analyzer.setVolume(toAudio, 0);
       report('wsola-start-failed', { errorMessage: String(error?.message || error) });
       onError?.(error);
@@ -453,6 +694,7 @@ export function createWsolaCrossfade({
     isActive,
     plan,
     prepare,
+    preparationPlan,
     preparationStatus,
     preparedTransition,
     setTargetVolume,

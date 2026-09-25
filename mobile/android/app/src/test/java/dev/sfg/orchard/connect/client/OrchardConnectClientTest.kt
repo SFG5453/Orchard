@@ -58,7 +58,7 @@ class OrchardConnectClientTest {
         val helloPayload = hello.payload as JSONObject
         assertEquals(ConnectProtocol.Event.HELLO, hello.event)
         assertEquals("pair-token", helloPayload.getString(ConnectProtocol.Field.TOKEN))
-        assertEquals(3, helloPayload.getInt(ConnectProtocol.Field.PROTOCOL_VERSION))
+        assertEquals(ConnectProtocol.PROTOCOL_VERSION, helloPayload.getInt(ConnectProtocol.Field.PROTOCOL_VERSION))
 
         hello.ack?.invoke(Result.success(JSONObject().put("ok", true).put("data", JSONObject()
             .put("status", "approved")
@@ -172,6 +172,33 @@ class OrchardConnectClientTest {
         assertEquals(2, payload.getJSONArray(ConnectProtocol.Field.TRACK_IDS).length())
     }
 
+    @Test
+    fun negotiatedVersionIsNotDowngradedByPlaybackSnapshotsAndCommandsArePublished() {
+        val factory = FakeTransportFactory()
+        val events = RecordingListener()
+        val client = OrchardConnectClient(
+            factory, FakeSessionStore(), SecureDeviceTokenGenerator(), "Phone", Runnable::run, events
+        )
+        client.connect("http://desktop:32145", "pair")
+        factory.transport.listener.onOpened()
+        factory.transport.emissions.single().ack?.invoke(Result.success(JSONObject().put("ok", true).put("data", JSONObject()
+            .put("status", "approved")
+            .put("protocolVersion", ConnectProtocol.PROTOCOL_VERSION))))
+
+        factory.transport.listener.onEvent(
+            ConnectProtocol.Event.STATE,
+            JSONObject().put("status", "connected").put("protocolVersion", 3)
+        )
+        factory.transport.listener.onEvent(
+            ConnectProtocol.Event.COMMAND,
+            JSONObject().put("type", ConnectProtocol.CommandType.NEXT)
+        )
+
+        assertEquals(ConnectProtocol.PROTOCOL_VERSION, client.protocolVersion())
+        assertEquals(ConnectProtocol.PROTOCOL_VERSION, events.snapshots.last().protocolVersion)
+        assertEquals(listOf(ConnectCommand.Next), events.commands)
+    }
+
     private data class Emission(
         val event: String,
         val payload: Any?,
@@ -205,10 +232,12 @@ class OrchardConnectClientTest {
     private class RecordingListener : OrchardConnectClient.Listener {
         val statuses = mutableListOf<ConnectClientStatus>()
         val snapshots = mutableListOf<ConnectSnapshot>()
+        val commands = mutableListOf<ConnectCommand>()
         override fun onStatusChanged(status: ConnectClientStatus) { statuses += status }
         override fun onSnapshot(snapshot: ConnectSnapshot) { snapshots += snapshot }
         override fun onSearchResults(results: ConnectResults) = Unit
         override fun onLibraryResults(results: ConnectResults) = Unit
+        override fun onCommandReceived(command: ConnectCommand) { commands += command }
         override fun onError(error: ConnectClientError) { throw AssertionError(error) }
     }
 }

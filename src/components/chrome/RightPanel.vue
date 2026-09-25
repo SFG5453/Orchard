@@ -18,22 +18,43 @@
 -->
 
 <script>
+import FullscreenLyricStack from '../player/FullscreenLyricStack.vue';
 import VirtualQueueList from './VirtualQueueList.vue';
 
 export default {
   name: 'RightPanel',
-  components: { VirtualQueueList },
+  components: { FullscreenLyricStack, VirtualQueueList },
   props: { app: { type: Object, required: true } },
   setup(props) {
     // The queue list takes the whole app rather than the spread, because it
     // windows the list itself and needs the live refs, not their snapshots.
-    return { ...props.app, app: props.app };
+    function onDrawerVisibilityChange(open) {
+      // Above the breakpoint the drawer is part of the layout and must remain
+      // visible. Only persist dismissals while it is acting as an overlay.
+      if (props.app.viewportWidth.value < 1281) {
+        props.app.rightPanelOpen.value = open;
+      }
+    }
+
+    return { ...props.app, app: props.app, onDrawerVisibilityChange };
   }
 };
 </script>
 
 <template>
-    <q-drawer side="right" show-if-above :width="rightPanelWidth" :breakpoint="1280" class="lyrics-sidebar" :style="playerBarStyle">
+    <q-drawer
+      :key="viewportWidth >= 1281 ? 'right-panel-desktop' : 'right-panel-overlay'"
+      :model-value="viewportWidth >= 1281 ? true : rightPanelOpen"
+      side="right"
+      :behavior="viewportWidth >= 1281 ? 'desktop' : 'mobile'"
+      :show-if-above="viewportWidth >= 1281"
+      :overlay="viewportWidth < 1281"
+      :width="rightPanelWidth"
+      :breakpoint="1280"
+      class="lyrics-sidebar"
+      :style="playerBarStyle"
+      @update:model-value="onDrawerVisibilityChange"
+    >
       <div class="lyrics-sidebar__inner">
         <div class="right-panel-toolbar" aria-label="Right panel controls">
           <strong class="right-panel-toolbar__title">
@@ -64,9 +85,18 @@ export default {
               type="button"
               aria-label="Open settings"
               title="Settings"
-              @click="selectView('settings')"
+              @click="closeRightPanel(); selectView('settings')"
             >
               <q-icon name="more_horiz" />
+            </button>
+            <button
+              v-if="viewportWidth < 1281"
+              type="button"
+              aria-label="Close now playing panel"
+              title="Close"
+              @click="closeRightPanel"
+            >
+              <q-icon name="close" />
             </button>
           </div>
         </div>
@@ -147,15 +177,35 @@ export default {
                   <span v-else>Best mix</span>
                 </button>
                 <button
-                  v-if="queue.length"
+                  v-if="queueTracksForPlaylist().length || queue.length"
                   type="button"
-                  class="right-queue-clear"
-                  title="Remove everything from the queue"
-                  aria-label="Remove everything from the queue"
-                  @click="clearQueue"
+                  class="right-queue-more"
+                  title="Queue options"
+                  aria-label="Queue options"
                 >
-                  <q-icon name="delete_sweep" />
-                  <span>Clear all</span>
+                  <q-icon name="more_horiz" />
+                  <q-menu anchor="bottom right" self="top right" class="right-queue-menu">
+                    <button
+                      v-if="queueTracksForPlaylist().length"
+                      v-close-popup
+                      type="button"
+                      class="right-queue-menu__action"
+                      @click="openQueuePlaylistDialog"
+                    >
+                      <q-icon name="playlist_add" />
+                      <span>Add to playlist</span>
+                    </button>
+                    <button
+                      v-if="queue.length"
+                      v-close-popup
+                      type="button"
+                      class="right-queue-menu__action right-queue-menu__action--danger"
+                      @click="clearQueue"
+                    >
+                      <q-icon name="delete_sweep" />
+                      <span>Clear queue</span>
+                    </button>
+                  </q-menu>
                 </button>
               </div>
             </div>
@@ -193,109 +243,14 @@ export default {
           <span class="lyrics-sidebar__status">{{ lyricsStatusText }}</span>
         </div>
 
-        <div v-if="lyricsState.status === 'loading'" class="lyrics-provider-list" aria-live="polite">
-          <div
-            v-for="provider in lyricsState.providers"
-            :key="provider.id"
-            class="lyrics-provider"
-            :class="`lyrics-provider--${provider.status}`"
-          >
-            <span class="lyrics-provider__status" aria-hidden="true">
-              {{ provider.status === 'failed' ? 'x' : provider.status === 'ready' ? '✓' : '/' }}
-            </span>
-            <span>{{ provider.label }}</span>
-          </div>
-        </div>
-
-        <div
-          v-else-if="lyricsState.status === 'ready'"
-          class="lyrics-list"
-          :class="{ 'lyrics-list--synced': lyricsState.mode === 'synced' }"
-          @scroll.passive="onLyricsUserScroll"
-          @wheel.passive="onLyricsUserScrollStart"
-          @touchstart.passive="onLyricsUserScrollStart"
-          @pointerdown="onLyricsPointerdown"
-        >
-          <template v-for="item in lyricDisplayItems" :key="item.key">
-            <button
-              v-if="item.type === 'line' && item.canSeek"
-              type="button"
-              class="lyrics-item lyrics-line lyrics-line--button"
-              :class="{
-                'lyrics-line--active': item.active,
-                'lyrics-line--word-synced': item.words?.length || item.adlibs?.length,
-                'lyrics-line--alternate-agent': item.agentLane === 'alternate'
-              }"
-              @click="seekToLyric(item)"
-            >
-              <span v-if="item.words?.length" class="lyrics-line__words">
-                <span
-                  v-for="word in item.words"
-                  :key="word.key"
-                  class="lyrics-word"
-                  :class="`lyrics-word--${word.state}`"
-                  :style="{ '--word-progress': word.progress }"
-                >{{ word.text }}</span>
-              </span>
-              <span v-else>{{ item.text }}</span>
-              <span v-if="item.adlibs?.length" class="lyrics-line__adlibs">
-                <span
-                  v-for="word in item.adlibs"
-                  :key="word.key"
-                  class="lyrics-word"
-                  :class="`lyrics-word--${word.state}`"
-                  :style="{ '--word-progress': word.progress }"
-                >{{ word.text }}</span>
-              </span>
-            </button>
-
-            <div
-              v-else
-              class="lyrics-item"
-              :class="{
-                'lyrics-line': item.type === 'line',
-                'lyrics-line--static': item.type === 'line',
-                'lyrics-line--active': item.type === 'line' && item.active,
-                'lyrics-line--word-synced': item.type === 'line' && (item.words?.length || item.adlibs?.length),
-                'lyrics-line--alternate-agent': item.type === 'line' && item.agentLane === 'alternate',
-                'lyrics-pause': item.type === 'pause',
-                'lyrics-pause--active': item.type === 'pause' && item.active
-              }"
-            >
-              <template v-if="item.type === 'line'">
-                <span v-if="item.words?.length" class="lyrics-line__words">
-                  <span
-                    v-for="word in item.words"
-                    :key="word.key"
-                    class="lyrics-word"
-                    :class="`lyrics-word--${word.state}`"
-                    :style="{ '--word-progress': word.progress }"
-                  >{{ word.text }}</span>
-                </span>
-                <span v-else>{{ item.text }}</span>
-                <span v-if="item.adlibs?.length" class="lyrics-line__adlibs">
-                  <span
-                    v-for="word in item.adlibs"
-                    :key="word.key"
-                    class="lyrics-word"
-                    :class="`lyrics-word--${word.state}`"
-                    :style="{ '--word-progress': word.progress }"
-                  >{{ word.text }}</span>
-                </span>
-              </template>
-              <span v-else class="lyrics-ellipsis" aria-label="Pause">
-                <i />
-                <i />
-                <i />
-              </span>
-            </div>
-          </template>
-        </div>
-
-        <div v-else class="lyrics-message">
-          <q-icon :name="activeTrack ? 'speaker_notes_off' : 'music_note'" />
-          <span>{{ activeTrack ? 'No Lyrics :/' : lyricsStatusText }}</span>
-        </div>
+        <section class="fullscreen-player__lyrics lyrics-sidebar__fullscreen" aria-label="Lyrics">
+          <FullscreenLyricStack
+            :app="app"
+            :items="lyricDisplayItems"
+            :mode="lyricsState.mode"
+            :status="lyricsState.status"
+          />
+        </section>
         </template>
 
         <template v-else-if="rightPanelMode === 'party' && listeningParty.status === 'connected'">

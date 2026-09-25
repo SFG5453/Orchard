@@ -85,5 +85,6 @@ export function installCollectionActions(ctx) {
     if (action === 'open' || ctx.activeView.value !== 'browse') return;
     if (action === 'play') ctx.playCollection(ctx.browseDetail.value);
     if (action === 'shuffle') ctx.playCollection(ctx.browseDetail.value, { shuffle: true });
+    if (action === 'download') void ctx.downloadCollection(ctx.browseDetail.value);
   };
 }

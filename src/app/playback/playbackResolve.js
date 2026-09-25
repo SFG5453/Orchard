@@ -21,6 +21,8 @@ import { nextTick } from 'vue';
 import { installPlaybackCollectionQueue, playlistPlayedTrackIds } from './playbackCollectionQueue.js';
 import { resumeMediaAt } from './playbackDuration.js';
 import { isHlsPlaybackMime, loadPlaybackSource } from './hlsPlayback.js';
+import { normalizeStreamQuality } from '../../../shared/streamQuality.js';
+import { connectTrack } from '../platform/connectActions.js';
 
 function trackDurationSeconds(item = {}) {
   const direct = Number(item.durationSeconds || 0);
@@ -33,6 +35,10 @@ function trackDurationSeconds(item = {}) {
 function isUnavailableTrackError(error) {
   return /\b(?:unavailable|not available|no playable (?:audio |video )?format|video unavailable|private video|removed by uploader)\b/i
     .test(String(error?.message || error || ''));
+}
+
+export function playbackPreloadMode(resolved = {}) {
+  return resolved.preloadMode === 'metadata' ? 'metadata' : 'auto';
 }
 
 /**
@@ -49,6 +55,25 @@ function isUnavailableTrackError(error) {
  */
 export function seedsPlaylistContext({ isPlayFromQueue = false, queueAlreadyShuffled = false } = {}) {
   return !isPlayFromQueue || Boolean(queueAlreadyShuffled);
+}
+
+/**
+ * Tracks that must stay behind the playback cursor when a playlist context is
+ * created. A listener selecting a specific row establishes that row as the
+ * start of playback even when shuffle is already enabled, so earlier rows are
+ * skipped. The explicit Shuffle collection action is different: it supplies a
+ * pre-shuffled source, making its first track an arbitrary draw from the whole
+ * playlist rather than a cursor into the ordered list.
+ */
+export function playlistPlayedTrackIdsForStart(
+  allTracks = [],
+  activeTrackId = '',
+  { shuffleEnabled = false, queueAlreadyShuffled = false } = {}
+) {
+  if (shuffleEnabled && queueAlreadyShuffled) {
+    return [activeTrackId].filter(Boolean);
+  }
+  return playlistPlayedTrackIds(allTracks, activeTrackId);
 }
 
 export function playbackQueueSourceMatches(source, queue = [], activeTrack = null) {
@@ -73,6 +98,12 @@ export function installPlaybackResolve(ctx) {
   let preloadTrackId = '';
 
   ctx.shouldPlayAsVideo = function shouldPlayAsVideo(item, options = {}) {
+    // Refusing video outright rather than only when it is guessed at: a video
+    // stream is several times the bytes of the same song's audio, and the
+    // audio-only resolve that follows also prefers the album version. The
+    // exception is the music-video fallback the main process picks for an
+    // age-gated song, which is the only way that song plays at all.
+    if (ctx.videoPlaybackEnabled?.value === false && !item?.musicVideoAudioFallback) return false;
     if (options.mediaKind === 'video' || item?.mediaKind === 'video') return true;
     if (options.mediaKind === 'audio' || item?.mediaKind === 'audio') return false;
     if (item?.isAudioOnly) return false;
@@ -98,7 +129,13 @@ export function installPlaybackResolve(ctx) {
       title: item.title,
       artist: item.artist || item.artists?.[0] || '',
       artists: item.artists || [],
+      artistId: item.artistId || item.artistBrowseId || item.artistBrowseIds?.[0] || '',
+      artistBrowseId: item.artistBrowseId || item.artistBrowseIds?.[0] || '',
+      artistBrowseIds: item.artistBrowseIds || [],
       album: item.album || '',
+      albumId: item.albumId || '',
+      isrc: item.isrc || '',
+      downloadCollections: item.downloadCollections || [],
       thumbnail: item.thumbnail || '',
       durationSeconds: trackDurationSeconds(item),
       explicit: Boolean(item.explicit),
@@ -114,6 +151,8 @@ export function installPlaybackResolve(ctx) {
       avoidItags: options.avoidItags || [],
       avoidMimeTypes: options.avoidMimeTypes || [],
       preferAudioOnly: mediaKind === 'audio' ? (options.preferAudioOnly ?? true) : false,
+      streamQuality: normalizeStreamQuality(options.streamQuality ?? ctx.streamQuality?.value),
+      usePlaybackProvider: options.usePlaybackProvider !== false,
       supportedMimes: ctx.supportedAudioMimes(),
       supportedVideoMimes: ctx.supportedVideoMimes()
     };
@@ -144,6 +183,14 @@ export function installPlaybackResolve(ctx) {
       playbackSource: resolved.playbackSource || 'youtube',
       authenticatedPlayback: Boolean(resolved.authenticatedPlayback),
       externalSource: resolved.externalSource || '',
+      providerPlaybackId: resolved.providerPlaybackId || '',
+      qobuzTrackId: resolved.qobuzTrackId || null,
+      matchMethod: resolved.matchMethod || '',
+      matchConfidence: Number(resolved.matchConfidence || 0),
+      hires: Boolean(resolved.hires),
+      bitDepth: Number(resolved.bitDepth || 0),
+      sampleRate: Number(resolved.sampleRate || 0),
+      channels: Number(resolved.channels || 0),
       musicVideoAudioFallback: Boolean(resolved.musicVideoAudioFallback),
       musicVideoFallbackId: resolved.musicVideoFallbackId || '',
       thumbnail: item.thumbnail || resolved.thumbnail,
@@ -237,6 +284,7 @@ export function installPlaybackResolve(ctx) {
         ctx.audioAnalyzer.connectElement(audio);
         ctx.setAudioNormalization(audio);
         ctx.audioAnalyzer.setVolume(audio, 0);
+        audio.preload = playbackPreloadMode(resolved);
         await loadPlaybackSource(audio, resolved.streamUrl, resolved.mimeType);
         if (ctx.crossfadeMode.value === 'smart' && !isHlsPlaybackMime(resolved.mimeType)) {
           void ctx.analyzeNextCrossfadeTrack(next, resolved.streamUrl, trackDurationSeconds(next));
@@ -265,6 +313,45 @@ export function installPlaybackResolve(ctx) {
 
   ctx.playTrack = async function playTrack(item, options = {}) {
     if (!ctx.isPlayableTrack(item)) return;
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local' && !options.forceLocal) {
+      const queueSource = options.queueSource || [item];
+      const selectedIndex = queueSource.findIndex((track) => track?.id === item.id);
+      const upcoming = (selectedIndex >= 0 ? queueSource.slice(selectedIndex + 1) : queueSource)
+        .filter((track) => track?.id && track.id !== item.id);
+      const trackPayload = connectTrack(item);
+      const queuePayload = [item, ...upcoming].map(connectTrack);
+
+      let delivered = false;
+      try {
+        delivered = await ctx.sendConnectDeviceCommand?.(ctx.activePlaybackTarget.value, {
+          type: 'transfer',
+          value: {
+            track: trackPayload,
+            positionSeconds: options.resumeAt || 0,
+            queue: queuePayload,
+            shuffle: Boolean(ctx.shuffleEnabled?.value),
+            repeatMode: ctx.repeatMode?.value || 'off',
+            autoplay: Boolean(ctx.autoplayEnabled?.value),
+            play: true
+          }
+        });
+      } catch {
+        delivered = false;
+      }
+      if (!delivered) {
+        ctx.buffering.value = false;
+        if (ctx.playbackError) ctx.playbackError.value = 'The selected phone could not receive playback.';
+        return;
+      }
+
+      ctx.activeTrack.value = item;
+      ctx.queue.value = upcoming;
+      ctx.isPlaying.value = true;
+      ctx.buffering.value = true;
+      ctx.currentTime.value = options.resumeAt || 0;
+      ctx.seekPosition.value = ctx.currentTime.value;
+      return;
+    }
     if (!options.listeningPartySync && ctx.requestListeningPartyHostControl?.({
       action: 'play-track',
       track: item,
@@ -310,6 +397,16 @@ export function installPlaybackResolve(ctx) {
       const usedPreload = !options.refreshStream && ctx.preloadedTrackMatches(trackItem);
       const resolved = options.resolved || (usedPreload ? ctx.nextTrackPreload.value?.resolved : null) || await ctx.resolvePlayableTrack(trackItem, options);
       if (stalePlayRequest()) return;
+      const previousProviderTrack = ctx.activeTrack.value?.providerPlaybackId
+        ? {
+            provider: ctx.activeTrack.value.playbackSource,
+            playbackId: ctx.activeTrack.value.providerPlaybackId,
+            position: Number(ctx.currentTime.value || 0)
+          }
+        : null;
+      if (previousProviderTrack && previousProviderTrack.playbackId !== resolved.providerPlaybackId) {
+        ctx.socket.value?.emit('playback:provider-end', previousProviderTrack);
+      }
       ctx.activeMediaKind.value = resolved.mediaKind || (wantsVideo ? 'video' : 'audio');
       ctx.activeTrack.value = ctx.activeTrackFromResolved(trackItem, resolved);
       ctx.videoPlayerMinimized.value = Boolean(resolved.musicVideoAudioFallback);
@@ -366,13 +463,10 @@ export function installPlaybackResolve(ctx) {
             continuation: detail.continuation || '',
             hasMoreTracks: Boolean(detail.hasMoreTracks),
             shuffled: ctx.shuffleEnabled.value,
-            // Starting part way down a playlist means the tracks above were
-            // skipped past. Under shuffle it means nothing of the sort -- the
-            // starting track is simply the one that came up first, and treating
-            // its predecessors as played would bar them from ever being drawn.
-            playedTrackIds: ctx.shuffleEnabled.value
-              ? [trackItem.id].filter(Boolean)
-              : playlistPlayedTrackIds(allTracks, trackItem.id),
+            playedTrackIds: playlistPlayedTrackIdsForStart(allTracks, trackItem.id, {
+              shuffleEnabled: ctx.shuffleEnabled.value,
+              queueAlreadyShuffled: Boolean(options.queueAlreadyShuffled)
+            }),
             allTracks
           };
           return true;
@@ -454,7 +548,11 @@ export function installPlaybackResolve(ctx) {
       await ctx.audioAnalyzer.resume();
       if (stalePlayRequest()) return;
       await resumeMediaAt(media, options.resumeAt);
-      if (ctx.activeTrackIsVideo.value && resolved.audioStreamUrl && videoAudio) {
+      if (options.startPaused) {
+        media.pause();
+        videoAudio?.pause?.();
+        ctx.isPlaying.value = false;
+      } else if (ctx.activeTrackIsVideo.value && resolved.audioStreamUrl && videoAudio) {
         videoAudio.currentTime = media.currentTime || 0;
         await Promise.all([media.play(), videoAudio.play()]);
       } else {
@@ -462,7 +560,17 @@ export function installPlaybackResolve(ctx) {
       }
       if (stalePlayRequest()) return;
 
-      ctx.startYouTubeHistory?.(ctx.activeTrack.value?.youtubeVideoId || resolved.youtubeVideoId || ctx.activeTrack.value?.id);
+      if (!options.startPaused && ctx.activeTrack.value?.providerPlaybackId) {
+        ctx.socket.value?.emit('playback:provider-start', {
+          provider: ctx.activeTrack.value.playbackSource,
+          playbackId: ctx.activeTrack.value.providerPlaybackId,
+          position: Number(media.currentTime || 0)
+        });
+      }
+
+      if (!options.startPaused) {
+        ctx.startYouTubeHistory?.(ctx.activeTrack.value?.youtubeVideoId || resolved.youtubeVideoId || ctx.activeTrack.value?.id);
+      }
 
       ctx.recordSessionEvent?.(options.sessionAction || 'manual', ctx.activeTrack.value, {
         queue: ctx.queue.value,

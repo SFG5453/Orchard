@@ -30,13 +30,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
+import dev.sfg.orchard.mobile.ui.scroll.OrchardLazyRow as LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -67,6 +68,9 @@ import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.model.Album
 import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.ui.glass.GlassTone
+import dev.sfg.orchard.mobile.ui.glass.glassFill
+import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -100,9 +104,9 @@ fun OrchardSectionHeader(
         if (action != null && onAction != null) {
             Surface(
                 onClick = onAction,
-                color = CanopyColors.Surface,
+                color = glassFill(CanopyColors.Surface),
                 shape = CircleShape,
-                modifier = Modifier.height(32.dp),
+                modifier = Modifier.height(32.dp).glassPane(CircleShape, GlassTone.CONTROL),
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
                     Text(
@@ -119,6 +123,10 @@ fun OrchardSectionHeader(
 /** Expressive rail card with soft rounded artwork (14dp or circular for artists) and clear typography. */
 @Composable
 fun CatalogCard(item: CatalogItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    if (item is CatalogItem.Category) {
+        CategoryCard(item = item, onClick = onClick, modifier = modifier)
+        return
+    }
     val isArtist = item is CatalogItem.Performer
     val cornerRadius = if (isArtist) 999.dp else 14.dp
     val artworkRadius = if (isArtist) 999 else 14
@@ -165,6 +173,50 @@ fun CatalogCard(item: CatalogItem, onClick: () -> Unit, modifier: Modifier = Mod
             textAlign = if (isArtist) TextAlign.Center else TextAlign.Start,
             modifier = Modifier.fillMaxWidth(),
         )
+    }
+}
+
+/** Expressive category / genre / mood card with left colored accent stripe. */
+@Composable
+fun CategoryCard(
+    item: CatalogItem.Category,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(12.dp)
+    val stripeColor = item.stripeColor?.let { Color(it.toInt()) } ?: LocalAccent.current
+
+    Surface(
+        modifier = modifier
+            .height(52.dp)
+            .glassPane(shape, GlassTone.CONTROL)
+            .clip(shape)
+            .clickable(onClick = onClick),
+        color = glassFill(CanopyColors.Surface),
+        shape = shape,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(6.dp)
+                    .fillMaxHeight()
+                    .background(stripeColor),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = CanopyColors.Text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 
@@ -260,6 +312,8 @@ fun TrackRow(
     onAddToQueue: (() -> Unit)? = null,
     onAddToPlaylist: (() -> Unit)? = null,
     onRemoveFromPlaylist: (() -> Unit)? = null,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
     onDownload: (() -> Unit)? = null,
     onRemoveDownload: (() -> Unit)? = null,
@@ -269,12 +323,19 @@ fun TrackRow(
     onViewArtist: (() -> Unit)? = null,
     trailingText: String = durationText(track.durationMs),
     highlighted: Boolean = false,
+    compact: Boolean = false,
 ) {
     var popupOpen by remember { mutableStateOf(false) }
     val bgColor by animateColorAsState(
         if (highlighted) LocalAccent.current.copy(alpha = 0.15f) else Color.Transparent,
         label = "TrackRowBg"
     )
+    val artworkSize = if (compact) 40.dp else 46.dp
+    val verticalPad = if (compact) 6.dp else 10.dp
+    val titleStyle = if (compact) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        else MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+    val subtitleStyle = if (compact) MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp)
+        else MaterialTheme.typography.bodySmall
 
     if (popupOpen) {
         TrackActionsPopup(
@@ -285,6 +346,8 @@ fun TrackRow(
             onAddToQueue = onAddToQueue,
             onAddToPlaylist = onAddToPlaylist,
             onRemoveFromPlaylist = onRemoveFromPlaylist,
+            onMoveUp = onMoveUp,
+            onMoveDown = onMoveDown,
             onDownload = if (!isDownloaded) onDownload else null,
             onRemoveDownload = if (isDownloaded) onRemoveDownload else null,
             onShare = onShare,
@@ -297,23 +360,23 @@ fun TrackRow(
         Surface(
             onClick = onPlay,
             color = bgColor,
-            shape = RoundedCornerShape(10.dp),
+            shape = RoundedCornerShape(if (compact) 8.dp else 10.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 1.dp)
         ) {
             Row(
-                Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                Modifier.padding(horizontal = 8.dp, vertical = verticalPad),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (showArtwork && trackNumber == null) {
                     Box(contentAlignment = Alignment.Center) {
-                        ArtworkTile(track.artworkUrl, "Artwork for ${track.title}", Modifier.size(46.dp), 10)
+                        ArtworkTile(track.artworkUrl, "Artwork for ${track.title}", Modifier.size(artworkSize), if (compact) 8 else 10)
                         if (highlighted) {
                             Box(
                                 Modifier
-                                    .size(46.dp)
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .size(artworkSize)
+                                    .clip(RoundedCornerShape(if (compact) 8.dp else 10.dp))
                                     .background(Color.Black.copy(alpha = 0.45f)),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -360,10 +423,7 @@ fun TrackRow(
                         Text(
                             track.title,
                             color = if (highlighted) LocalAccent.current else Color.White,
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp,
-                            ),
+                            style = titleStyle,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
@@ -384,7 +444,7 @@ fun TrackRow(
                         Text(
                             subtitle,
                             color = Color.White.copy(alpha = 0.60f),
-                            style = MaterialTheme.typography.bodySmall,
+                            style = subtitleStyle,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -408,7 +468,7 @@ fun TrackRow(
                     Text(
                         trailingText,
                         color = Color.White.copy(alpha = 0.45f),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = subtitleStyle,
                         modifier = Modifier.padding(horizontal = 6.dp)
                     )
                 }
@@ -453,7 +513,7 @@ fun <T> OrchardFilterChips(
             val option = options[index]
             val isSelected = option == selected
             val containerColor by animateColorAsState(
-                if (isSelected) LocalAccent.current else CanopyColors.Surface,
+                if (isSelected) LocalAccent.current else glassFill(CanopyColors.Surface),
                 label = "ChipBg"
             )
             val textColor by animateColorAsState(
@@ -465,7 +525,13 @@ fun <T> OrchardFilterChips(
                 onClick = { onSelect(option) },
                 shape = CircleShape,
                 color = containerColor,
-                modifier = Modifier.height(34.dp)
+                // The selected chip is a solid accent fill, which is what makes it selected.
+                modifier = Modifier
+                    .height(34.dp)
+                    .then(
+                        if (isSelected) Modifier
+                        else Modifier.glassPane(CircleShape, GlassTone.CONTROL),
+                    ),
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 16.dp)) {
                     Text(
@@ -481,12 +547,14 @@ fun <T> OrchardFilterChips(
 
 @Composable
 fun MessagePanel(title: String, message: String, actionLabel: String? = null, onAction: (() -> Unit)? = null) {
+    val shape = RoundedCornerShape(16.dp)
     Surface(
-        color = CanopyColors.Surface,
-        shape = RoundedCornerShape(16.dp),
+        color = glassFill(CanopyColors.Surface),
+        shape = shape,
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp)
+            .glassPane(shape)
     ) {
         Column(Modifier.padding(20.dp)) {
             Text(title, style = MaterialTheme.typography.titleLarge, color = CanopyColors.Text)
@@ -522,6 +590,7 @@ private fun catalogSubtitle(item: CatalogItem): String = when (item) {
     is CatalogItem.Record -> albumSubtitle(item.album)
     is CatalogItem.Performer -> item.artist.subtitle.ifBlank { "Artist" }
     is CatalogItem.Collection -> item.playlist.author
+    is CatalogItem.Category -> ""
 }
 
 /**
@@ -548,4 +617,5 @@ private fun catalogKind(item: CatalogItem): String = when (item) {
     is CatalogItem.Record -> "Album"
     is CatalogItem.Performer -> "Artist"
     is CatalogItem.Collection -> "Playlist"
+    is CatalogItem.Category -> "Category"
 }

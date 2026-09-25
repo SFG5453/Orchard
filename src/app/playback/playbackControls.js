@@ -21,12 +21,19 @@ import { nextTick } from 'vue';
 import { playlistPreviousState } from './playbackCollectionQueue.js';
 import { advanceToQueueEntry, rewindToHistoryEntry } from './queueLayout.js';
 import { reliablePlaybackDuration } from './playbackDuration.js';
-import { createSmartCrossfadeMixPresentation } from './smartCrossfadeMixPresentation.js';
+import {
+  createSmartCrossfadeMixPresentation,
+  updateSmartCrossfadeMixPresentation
+} from './smartCrossfadeMixPresentation.js';
 import {
   WSOLA_PREPARE_LEAD_SECONDS,
   WSOLA_START_LEAD_SECONDS,
   wsolaProcessingCompatible
 } from '../../audio/crossfade/wsolaCrossfade.js';
+import {
+  smartPairPlanningBlockReason,
+  transitionFromPairFallback
+} from '../../audio/crossfade/transitionPlanner.js';
 
 const LYRIC_AUTO_SCROLL_RESUME_DELAY_MS = 1800;
 
@@ -80,28 +87,110 @@ export function installPlaybackControls(ctx) {
   let crossfadeClockTimer = 0;
   let fullscreenPlayerDomActive = false;
 
+  function reportProviderPromotion(previousTrack, nextTrack, fromAudio, toAudio) {
+    if (previousTrack?.providerPlaybackId) {
+      ctx.socket?.value?.emit('playback:provider-end', {
+        provider: previousTrack.playbackSource,
+        playbackId: previousTrack.providerPlaybackId,
+        position: Number(fromAudio?.currentTime || ctx.currentTime.value || 0)
+      });
+    }
+    if (nextTrack?.providerPlaybackId) {
+      ctx.socket?.value?.emit('playback:provider-start', {
+        provider: nextTrack.playbackSource,
+        playbackId: nextTrack.providerPlaybackId,
+        position: Number(toAudio?.currentTime || 0)
+      });
+    }
+  }
+
   ctx.dismissSmartCrossfadeMix = function dismissSmartCrossfadeMix() {
     window.clearTimeout(ctx.smartCrossfadeMixTimer);
     ctx.smartCrossfadeMixTimer = 0;
     if (!ctx.smartCrossfadeMix.value.visible) return;
-    ctx.smartCrossfadeMix.value = { ...ctx.smartCrossfadeMix.value, visible: false };
+    ctx.smartCrossfadeMix.value = {
+      ...ctx.smartCrossfadeMix.value,
+      visible: false,
+      phase: 'idle',
+      progress: 0,
+      preparationProgress: 0,
+      secondsUntilStart: 0,
+      outgoingGain: 1,
+      incomingGain: 0,
+      incomingWeight: 0
+    };
+  };
+
+  ctx.prepareSmartCrossfadeMix = function prepareSmartCrossfadeMix(details, secondsUntilStart) {
+    const current = ctx.smartCrossfadeMix.value;
+    const fromId = String(details.fromTrack?.id || '');
+    const toId = String(details.toTrack?.id || '');
+    const samePair = current.visible && current.from?.id === fromId && current.to?.id === toId;
+    if (samePair && current.phase !== 'preparing') return;
+
+    const presentation = samePair
+      ? current
+      : createSmartCrossfadeMixPresentation({
+        id: ++ctx.smartCrossfadeMixSequence,
+        currentArtwork: ctx.nowArtworkImage.value,
+        ...details,
+        phase: 'preparing',
+        secondsUntilStart
+      });
+    ctx.smartCrossfadeMix.value = {
+      ...presentation,
+      phase: 'preparing',
+      progress: 0,
+      preparationProgress: Math.max(0, Math.min(1, 1 - (Number(secondsUntilStart) || 0) / 8)),
+      secondsUntilStart: Math.max(0, Number(secondsUntilStart) || 0),
+      outgoingGain: 1,
+      incomingGain: 0,
+      incomingWeight: 0
+    };
+  };
+
+  ctx.clearPreparingSmartCrossfadeMix = function clearPreparingSmartCrossfadeMix() {
+    if (ctx.smartCrossfadeMix.value.phase === 'preparing') ctx.dismissSmartCrossfadeMix();
   };
 
   ctx.showSmartCrossfadeMix = function showSmartCrossfadeMix(details) {
     window.clearTimeout(ctx.smartCrossfadeMixTimer);
+    ctx.smartCrossfadeMixTimer = 0;
+    const current = ctx.smartCrossfadeMix.value;
+    const samePair = current.visible &&
+      current.from?.id === String(details.fromTrack?.id || '') &&
+      current.to?.id === String(details.toTrack?.id || '');
     const presentation = createSmartCrossfadeMixPresentation({
-      id: ++ctx.smartCrossfadeMixSequence,
+      id: samePair ? current.id : ++ctx.smartCrossfadeMixSequence,
       currentArtwork: ctx.nowArtworkImage.value,
       ...details
     });
     ctx.smartCrossfadeMix.value = presentation;
-    const timerMs = ctx.fullscreenPlayerOpen.value
-      ? presentation.durationMs
-      : presentation.fadeDurationMs;
-    ctx.smartCrossfadeMixTimer = window.setTimeout(
-      ctx.dismissSmartCrossfadeMix,
-      timerMs
+  };
+
+  ctx.updateSmartCrossfadeMix = function updateSmartCrossfadeMix(sample) {
+    if (!ctx.smartCrossfadeMix.value.visible) return;
+    ctx.smartCrossfadeMix.value = updateSmartCrossfadeMixPresentation(
+      ctx.smartCrossfadeMix.value,
+      sample
     );
+  };
+
+  ctx.completeSmartCrossfadeMix = function completeSmartCrossfadeMix() {
+    if (!ctx.smartCrossfadeMix.value.visible) return;
+    ctx.updateSmartCrossfadeMix({
+      complete: true,
+      handoffProgress: ctx.smartCrossfadeMix.value.handoffProgress,
+      incomingGain: 1,
+      outgoingGain: 0,
+      progress: 1,
+      started: true
+    });
+    // The mix itself is already complete. This short hold only lets the incoming
+    // artwork settle onto the normal resting geometry before its duplicate is
+    // removed, making the handoff mathematically seamless.
+    window.clearTimeout(ctx.smartCrossfadeMixTimer);
+    ctx.smartCrossfadeMixTimer = window.setTimeout(ctx.dismissSmartCrossfadeMix, 420);
   };
 
   ctx.cancelActiveCrossfade = function cancelActiveCrossfade(reason = 'unspecified') {
@@ -227,6 +316,10 @@ export function installPlaybackControls(ctx) {
   };
 
   ctx.togglePlayback = function togglePlayback() {
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      ctx.sendConnectTargetCommand?.({ type: 'play-pause' });
+      return;
+    }
     if (ctx.listeningParty.value?.status === 'connected' && !ctx.listeningPartyIsHost.value) {
       ctx.sendListeningPartyRequest({ action: ctx.isPlaying.value ? 'pause' : 'play' });
       return;
@@ -280,6 +373,15 @@ export function installPlaybackControls(ctx) {
 
   ctx.playContinuousQueueEntry = function playContinuousQueueEntry(entry, options = {}) {
     if (!entry?.track?.id) return;
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      const index = ctx.queue.value.findIndex((t) => t.id === entry.track.id);
+      if (index >= 0) {
+        ctx.sendConnectTargetCommand?.({ type: 'play-queue-index', value: index });
+      } else {
+        ctx.sendConnectTargetCommand?.({ type: 'play-track', value: entry.track });
+      }
+      return;
+    }
     if (entry.section === 'current') {
       ctx.seek(0);
       return;
@@ -344,6 +446,10 @@ export function installPlaybackControls(ctx) {
   };
 
   ctx.playNext = async function playNext(options = {}) {
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      ctx.sendConnectTargetCommand?.({ type: 'next' });
+      return;
+    }
     if (!options.fromListeningPartyRequest && ctx.listeningParty?.value?.status === 'connected' && !ctx.listeningPartyIsHost?.value) {
       ctx.requestListeningPartyHostControl?.({ action: 'next' });
       return;
@@ -439,19 +545,45 @@ export function installPlaybackControls(ctx) {
   }
 
   // Routes a smart-mode transition to the beat-matched WSOLA engine when the
-  // pairing qualifies. Returns 'started' when the engine took over, 'hold'
-  // while a viable plan is waiting on its render (the legacy engine must not
-  // fire its own, earlier overlap in the meantime), and 'fallback' when the
-  // pairing is refused or preparation failed.
+  // pairing qualifies. The structured fallback is adapted from the same pair
+  // plan, so a native refusal never launches a second musical planning pass.
   async function maybeRunWsolaTransition({ next, fromAudio, toAudio, playbackTime, mediaDuration }) {
     const engine = ctx.wsolaCrossfade;
-    if (!engine) return 'fallback';
+    if (!engine) return { status: 'fallback', fallback: null };
     const fromVideo = ctx.activeTrackIsVideo.value ? ctx.videoRef.value : null;
     // An overlap already playing must hold, never fall back: the rendered
     // buffer already contains the incoming track, so letting the legacy engine
     // start its own fade on the same standby element plays it a second time.
-    if (engine.isActive()) return 'hold';
+    if (engine.isActive()) return { status: 'hold', fallback: null };
     const fromTrackId = ctx.activeTrack.value?.id;
+    const preparationStatus = engine.preparationStatus(fromTrackId, next.id);
+    const capturedPlan = engine.preparationPlan?.(fromTrackId, next.id) || null;
+    const plan = capturedPlan || engine.plan({
+      fromTrackId,
+      toTrackId: next.id,
+      analysis: ctx.crossfadeAnalysis.value,
+      nextAnalysis: ctx.nextCrossfadeAnalysis.value,
+      duration: mediaDuration,
+      nextDuration: Number(next.durationSeconds) || 0,
+      mode: ctx.crossfadeMode.value
+    });
+    const attachedFallback = (sourcePlan = plan) => {
+      if (!sourcePlan?.pairPlan?.fallback) return null;
+      return transitionFromPairFallback(
+        sourcePlan.pairPlan,
+        ctx.crossfadeAnalysis.value,
+        ctx.nextCrossfadeAnalysis.value,
+        mediaDuration,
+        playbackTime,
+        1,
+        ctx.crossfadeSeconds.value
+      );
+    };
+    const fallback = (sourcePlan = plan) => ({
+      status: 'fallback',
+      fallback: attachedFallback(sourcePlan)
+    });
+    if (preparationStatus === 'failed') return fallback();
     const trackGains = ctx.audioEngineTrackGains?.value || {};
     if (!wsolaProcessingCompatible({
       normalizationEnabled: ctx.volumeNormalizationEnabled?.value,
@@ -459,21 +591,42 @@ export function installPlaybackControls(ctx) {
       outgoingGainDb: trackGains[fromTrackId],
       incomingGainDb: trackGains[next.id]
     })) {
-      return 'fallback';
+      return fallback();
     }
-    const plan = engine.plan({
-      analysis: ctx.crossfadeAnalysis.value,
-      nextAnalysis: ctx.nextCrossfadeAnalysis.value,
-      duration: mediaDuration,
-      nextDuration: Number(next.durationSeconds) || 0
-    });
-    if (!plan.ok) return 'fallback';
-    if (engine.preparationStatus(fromTrackId, next.id) === 'failed') return 'fallback';
+    if (!plan.ok) return fallback();
 
-    const untilStart = plan.transitionStart - playbackTime;
+    // Once preparation captures a plan, timing remains pinned to that same
+    // object even if analysis metadata is enriched while rendering finishes.
+    const prepared = preparationStatus === 'ready'
+      ? engine.preparedTransition(fromTrackId, next.id)
+      : null;
+    const untilStart = (prepared?.plan?.transitionStart ?? plan.transitionStart) - playbackTime;
+    const visualPlan = prepared?.plan || plan;
+    const visualTransition = {
+      transitionStart: visualPlan.transitionStart,
+      transitionEnd: visualPlan.transitionEnd,
+      fadeSeconds: visualPlan.overlapSeconds,
+      transitionStyle: 'wsola_blend',
+      transitionBeats: visualPlan.beats,
+      incomingCueTime: visualPlan.incomingCueTime,
+      incomingPlaybackRate: 1,
+      choreography: visualPlan.choreography,
+      handoffFraction: visualPlan.bassSwapFraction
+    };
+    if (untilStart > 0 && untilStart <= 8) {
+      ctx.prepareSmartCrossfadeMix({
+        fromTrack: ctx.activeTrack.value,
+        toTrack: next,
+        transition: visualTransition,
+        analysis: ctx.crossfadeAnalysis.value,
+        nextAnalysis: ctx.nextCrossfadeAnalysis.value
+      }, untilStart);
+    } else if (untilStart > 8) {
+      ctx.clearPreparingSmartCrossfadeMix();
+    }
     if (untilStart > WSOLA_START_LEAD_SECONDS) {
       if (untilStart <= WSOLA_PREPARE_LEAD_SECONDS &&
-          engine.preparationStatus(fromTrackId, next.id) === 'idle') {
+          preparationStatus === 'idle') {
         const fromUrl = fromAudio.currentSrc || fromAudio.src || '';
         const toUrl = ctx.nextTrackPreload.value?.resolved?.streamUrl || '';
         if (fromUrl && toUrl) {
@@ -482,18 +635,19 @@ export function installPlaybackControls(ctx) {
           void ctx.preloadNextTrack();
         }
       }
-      return 'hold';
+      return { status: 'hold', fallback: null };
     }
-    if (engine.preparationStatus(fromTrackId, next.id) !== 'ready') {
-      return untilStart > -0.2 ? 'hold' : 'fallback';
+    if (preparationStatus !== 'ready') {
+      return untilStart > -0.2
+        ? { status: 'hold', fallback: null }
+        : fallback();
     }
 
     const resolved = await confirmNextPreload(next, toAudio);
-    if (!resolved) return 'fallback';
+    if (!resolved) return fallback(prepared?.plan);
     // Start against the plan the buffer was rendered with; a fresher plan may
     // have shifted after metadata enrichment and would misplace the downbeats.
-    const prepared = engine.preparedTransition(fromTrackId, next.id);
-    if (!prepared) return 'fallback';
+    if (!prepared) return fallback();
     const previousTrack = ctx.activeTrack.value;
     const nextTrack = ctx.activeTrackFromResolved(next, resolved);
     const nextDeck = ctx.activeAudioDeck.value === 'main' ? 'next' : 'main';
@@ -502,8 +656,11 @@ export function installPlaybackControls(ctx) {
       transitionEnd: prepared.plan.transitionEnd,
       fadeSeconds: prepared.plan.overlapSeconds,
       transitionStyle: 'wsola_blend',
+      transitionBeats: prepared.plan.beats,
       incomingCueTime: prepared.plan.incomingCueTime,
       incomingPlaybackRate: 1,
+      choreography: prepared.plan.choreography,
+      handoffFraction: prepared.plan.bassSwapFraction,
       reason: 'wsola-beat-match'
     };
     ctx.showSmartCrossfadeMix({
@@ -522,6 +679,7 @@ export function installPlaybackControls(ctx) {
       volume: ctx.volume.value,
       onPromote: () => {
         const nextQueue = queueAfterTransitionPromotion(ctx.queue.value, next.id);
+        reportProviderPromotion(previousTrack, nextTrack, fromAudio, toAudio);
         ctx.finishYouTubeHistory?.();
         ctx.markPlaylistTrackPlayed?.(previousTrack);
         if (previousTrack?.id) {
@@ -559,6 +717,7 @@ export function installPlaybackControls(ctx) {
         });
       },
       onComplete: () => {
+        ctx.completeSmartCrossfadeMix();
         ctx.clearAudioElement(fromAudio);
         // The companion audio stream is what fromAudio refers to for a music
         // video; the picture is a second element and has to be released too.
@@ -568,13 +727,14 @@ export function installPlaybackControls(ctx) {
       onError: (error) => {
         ctx.dismissSmartCrossfadeMix();
         ctx.playbackError.value = error.message;
-      }
+      },
+      onMixState: ctx.updateSmartCrossfadeMix
     });
     if (!didStart) {
       ctx.dismissSmartCrossfadeMix();
-      return 'fallback';
+      return fallback(prepared.plan);
     }
-    return 'started';
+    return { status: 'started', fallback: null };
   }
 
   ctx.maybeStartAutoCrossfade = async function maybeStartAutoCrossfade(options = {}) {
@@ -599,6 +759,7 @@ export function installPlaybackControls(ctx) {
     const toAudio = ctx.standbyAudio();
 
     if (!next?.id || !fromAudio || !toAudio) {
+      ctx.clearPreparingSmartCrossfadeMix();
       return false;
     }
     const mediaCurrentTime = Number(fromAudio.currentTime);
@@ -613,7 +774,16 @@ export function installPlaybackControls(ctx) {
     // A beat-matched blend is still a mix. An album playthrough asks for the
     // record's own spacing, so the WSOLA route is skipped and the planner is
     // left to hand off gaplessly.
-    if (!albumSequential && !options.force && ctx.crossfadeMode.value === 'smart' &&
+    let routedFallback = null;
+    const smartPairBlockReason = smartPairPlanningBlockReason({
+      albumSequential,
+      analysis: ctx.crossfadeAnalysis.value,
+      currentTrack: ctx.activeTrack.value,
+      duration: mediaDuration,
+      nextAnalysis: ctx.nextCrossfadeAnalysis.value,
+      nextTrack: next
+    });
+    if (!smartPairBlockReason && !options.force && ctx.crossfadeMode.value === 'smart' &&
         ctx.isPlaying.value && !ctx.isSeeking.value && !ctx.autoCrossfade.isActive()) {
       const routed = await maybeRunWsolaTransition({
         next,
@@ -622,8 +792,9 @@ export function installPlaybackControls(ctx) {
         playbackTime: Number.isFinite(mediaCurrentTime) ? mediaCurrentTime : ctx.currentTime.value,
         mediaDuration
       });
-      if (routed === 'started') return true;
-      if (routed === 'hold') return false;
+      if (routed.status === 'started') return true;
+      if (routed.status === 'hold') return false;
+      routedFallback = routed.fallback;
     }
 
     const forceFadeSeconds = options.reason === 'ended-handoff'
@@ -631,7 +802,7 @@ export function installPlaybackControls(ctx) {
       : Math.min(1, ctx.crossfadeSeconds.value || 1);
     const transition = options.force
       ? { shouldStart: true, fadeSeconds: forceFadeSeconds, reason: options.reason || 'forced-handoff' }
-      : ctx.autoCrossfade.transitionPlan({
+      : routedFallback || ctx.autoCrossfade.transitionPlan({
         albumSequential,
         currentAudio: fromAudio,
         currentTime: Number.isFinite(mediaCurrentTime) ? mediaCurrentTime : ctx.currentTime.value,
@@ -641,6 +812,23 @@ export function installPlaybackControls(ctx) {
         analysis: ctx.crossfadeAnalysis.value,
         nextAnalysis: ctx.nextCrossfadeAnalysis.value
       });
+    const showSmartMix = ctx.crossfadeMode.value === 'smart' &&
+      !options.force &&
+      transition.transitionStyle !== 'gapless' &&
+      !['normal_boundary', 'silence_trim'].includes(transition.transitionStyle);
+    const secondsUntilStart = Number(transition.transitionStart) -
+      (Number.isFinite(mediaCurrentTime) ? mediaCurrentTime : ctx.currentTime.value);
+    if (!transition.shouldStart && showSmartMix && secondsUntilStart > 0 && secondsUntilStart <= 8) {
+      ctx.prepareSmartCrossfadeMix({
+        fromTrack: ctx.activeTrack.value,
+        toTrack: next,
+        transition,
+        analysis: ctx.crossfadeAnalysis.value,
+        nextAnalysis: ctx.nextCrossfadeAnalysis.value
+      }, secondsUntilStart);
+    } else if (!transition.shouldStart && (secondsUntilStart > 8 || !showSmartMix)) {
+      ctx.clearPreparingSmartCrossfadeMix();
+    }
     if (!transition.shouldStart || (!options.force && !ctx.isPlaying.value) || ctx.isSeeking.value || ctx.autoCrossfade.isActive()) {
       return false;
     }
@@ -660,10 +848,6 @@ export function installPlaybackControls(ctx) {
     const previousTrack = ctx.activeTrack.value;
     const nextTrack = ctx.activeTrackFromResolved(next, resolved);
     const nextDeck = ctx.activeAudioDeck.value === 'main' ? 'next' : 'main';
-    const showSmartMix = ctx.crossfadeMode.value === 'smart' &&
-      !options.force &&
-      transition.transitionStyle !== 'gapless';
-
     if (showSmartMix) {
       ctx.showSmartCrossfadeMix({
         fromTrack: previousTrack,
@@ -681,6 +865,7 @@ export function installPlaybackControls(ctx) {
       volume: ctx.volume.value,
       onPromote: () => {
         const nextQueue = queueAfterTransitionPromotion(ctx.queue.value, next.id);
+        reportProviderPromotion(previousTrack, nextTrack, fromAudio, toAudio);
         ctx.finishYouTubeHistory?.();
         ctx.markPlaylistTrackPlayed?.(previousTrack);
         if (previousTrack?.id) {
@@ -719,6 +904,7 @@ export function installPlaybackControls(ctx) {
         });
       },
       onComplete: () => {
+        if (showSmartMix) ctx.completeSmartCrossfadeMix();
         ctx.clearAudioElement(fromAudio);
         // The companion audio stream is what fromAudio refers to for a music
         // video; the picture is a second element and has to be released too.
@@ -728,7 +914,8 @@ export function installPlaybackControls(ctx) {
       onError: (error) => {
         if (showSmartMix) ctx.dismissSmartCrossfadeMix();
         ctx.playbackError.value = error.message;
-      }
+      },
+      onMixState: showSmartMix ? ctx.updateSmartCrossfadeMix : undefined
     });
 
     if (!didCrossfade && showSmartMix) ctx.dismissSmartCrossfadeMix();
@@ -746,6 +933,10 @@ export function installPlaybackControls(ctx) {
   };
 
   ctx.playPrevious = function playPrevious(options = {}) {
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      ctx.sendConnectTargetCommand?.({ type: 'previous' });
+      return;
+    }
     if (!options.fromListeningPartyRequest && ctx.requestListeningPartyHostControl?.({ action: 'previous' })) return;
     ctx.cancelActiveCrossfade('play-previous');
     const playlistContext = ctx.playbackPlaylistContext.value;
@@ -778,6 +969,10 @@ export function installPlaybackControls(ctx) {
   };
 
   ctx.toggleShuffle = function toggleShuffle(options = {}) {
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      ctx.sendConnectTargetCommand?.({ type: 'toggle-shuffle' });
+      return;
+    }
     if (!options.fromListeningPartyRequest && ctx.requestListeningPartyHostControl?.({ action: 'toggle-shuffle' })) return;
     const playlistContext = ctx.playbackPlaylistContext.value;
     if (ctx.shuffleEnabled.value) {
@@ -804,6 +999,10 @@ export function installPlaybackControls(ctx) {
   };
 
   ctx.cycleRepeatMode = function cycleRepeatMode(options = {}) {
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      ctx.sendConnectTargetCommand?.({ type: 'cycle-repeat' });
+      return;
+    }
     if (!options.fromListeningPartyRequest && ctx.requestListeningPartyHostControl?.({ action: 'cycle-repeat' })) return;
     const order = ['off', 'queue', 'one'];
     const nextIndex = (order.indexOf(ctx.repeatMode.value) + 1) % order.length;
@@ -817,6 +1016,13 @@ export function installPlaybackControls(ctx) {
   };
 
   ctx.seek = function seek(value) {
+    if (ctx.activePlaybackTarget?.value && ctx.activePlaybackTarget.value !== 'local') {
+      const target = Math.max(0, Math.min(Number(value) || 0, ctx.duration.value || 0));
+      ctx.currentTime.value = target;
+      ctx.seekPosition.value = target;
+      ctx.sendConnectTargetCommand?.({ type: 'seek', value: target });
+      return;
+    }
     if (ctx.listeningParty.value?.status === 'connected' && !ctx.listeningPartyIsHost.value && !ctx.applyingListeningPartyState) {
       ctx.sendListeningPartyRequest({ action: 'seek', currentTime: Number(value) || 0 });
       return;
@@ -831,6 +1037,7 @@ export function installPlaybackControls(ctx) {
     if (typeof media.fastSeek === 'function') media.fastSeek(target);
     else media.currentTime = target;
     ctx.syncVideoCompanionAudio(target);
+    ctx.syncNowArtworkVideoPlayback?.();
 
     ctx.queueDiscordPresenceSync();
   };
@@ -880,6 +1087,7 @@ export function installPlaybackControls(ctx) {
     if (phase === 'end') {
       ctx.seek(ctx.seekPosition.value);
       ctx.isSeeking.value = false;
+      ctx.syncNowArtworkVideoPlayback?.();
     }
   };
 
@@ -889,8 +1097,8 @@ export function installPlaybackControls(ctx) {
 
     await nextTick();
     const lyricRoot = ctx.fullscreenPlayerOpen.value
-      ? document.querySelector('.fullscreen-player__lyrics-scroll')
-      : document;
+      ? ctx.fullscreenPlayerRef.value?.querySelector('.fullscreen-player__lyrics-scroll')
+      : document.querySelector('.lyrics-sidebar .fullscreen-player__lyrics-scroll');
     const activeLine = lyricRoot?.querySelector('.lyrics-pause--active, .lyrics-line--active');
     activeLine?.scrollIntoView?.({
       block: 'center',

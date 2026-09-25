@@ -1,63 +1,25 @@
-# Native analysis front end for Smart Crossfade.
-#
-# Only the DSP that has to match a trained model's input contract exactly lives
-# here. The mel front end is a straight port of Orchard desktop's
-# native/analyzer, and deliberately unchanged: the Beat This! model was trained
-# on these exact window, hop, mel and log conventions, so a front end that
-# differs even slightly feeds the network something it has never seen.
-#
-# The shared DSP sources are compiled directly from Orchard's root native tree.
-# Keep Android-specific JNI and resampling code in this directory, but do not
-# maintain a second copy of the analyzer/transition implementation here.
+# Android's streaming resampler. Analysis, model frontends, and transitions are
+# all provided by the shared Rust/Earmark library built by Gradle.
 
 cmake_minimum_required(VERSION 3.22.1)
-project(orchard_analysis LANGUAGES CXX)
-
-get_filename_component(ORCHARD_NATIVE_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../native"
-    ABSOLUTE)
+project(orchard_resampler LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_library(orchard_analysis SHARED
-    ${ORCHARD_NATIVE_DIR}/analyzer/mel_spectrogram.cpp
+add_library(orchard_resampler SHARED
     analyzer/resampler.cpp
-    ${ORCHARD_NATIVE_DIR}/analyzer/audio_analysis.cpp
-    ${ORCHARD_NATIVE_DIR}/analyzer/tempo_analysis.cpp
-    ${ORCHARD_NATIVE_DIR}/analyzer/vocal_spectrogram.cpp
-    ${ORCHARD_NATIVE_DIR}/transition/transition_render.cpp
-    ${ORCHARD_NATIVE_DIR}/transition/rubberband_stretch.cpp
-    # Rubber Band's own single-file build unit (vendored from breakfastquay/rubberband,
-    # GPL-2-or-later -- which is why this repository is AGPL). It #includes the rest of the
-    # library's sources itself via paths relative to its own directory, so only this one file
-    # is listed here.
-    ${ORCHARD_NATIVE_DIR}/vendor/rubberband/single/RubberBandSingle.cpp
-    jni/transition_jni.cpp
-    jni/mel_jni.cpp
-    jni/analysis_jni.cpp
-    jni/vocal_jni.cpp
+    jni/resampler_jni.cpp
+    planner/pair_scorer.cpp
+    jni/pair_scorer_jni.cpp
 )
 
-target_include_directories(orchard_analysis PRIVATE
+target_include_directories(orchard_resampler PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${ORCHARD_NATIVE_DIR}
-    ${ORCHARD_NATIVE_DIR}/analyzer
-    ${ORCHARD_NATIVE_DIR}/vendor/rubberband
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party
 )
 
-# Rubber Band selects an FFT and resampler at compile time. Android has neither vDSP nor IPP, so
-# it falls back to its own built-in implementations, which is what these select explicitly rather
-# than leaving to autodetection.
-target_compile_definitions(orchard_analysis PRIVATE
-    USE_BUILTIN_FFT
-    NO_THREADING
-)
-
-# The spectrogram is O(n log n) over a whole analysis window and runs off the
-# main thread, so it is worth optimizing hard; -ffast-math is deliberately NOT
-# enabled, because the model contract depends on the exact log/mel arithmetic.
-target_compile_options(orchard_analysis PRIVATE -O3 -fvisibility=hidden)
+target_compile_options(orchard_resampler PRIVATE -O3 -fvisibility=hidden)
 
 find_library(log-lib log)
-target_link_libraries(orchard_analysis ${log-lib})
+target_link_libraries(orchard_resampler ${log-lib})

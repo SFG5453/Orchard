@@ -32,6 +32,11 @@ import androidx.media3.common.Player
 class OrchardSessionPlayer(player: Player) : ForwardingPlayer(player) {
     override fun getAvailableCommands(): Player.Commands {
         return super.getAvailableCommands().buildUpon()
+            .add(Player.COMMAND_PLAY_PAUSE)
+            .add(Player.COMMAND_PREPARE)
+            .add(Player.COMMAND_STOP)
+            .add(Player.COMMAND_SEEK_TO_DEFAULT_POSITION)
+            .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
             .add(Player.COMMAND_SET_SHUFFLE_MODE)
             .add(Player.COMMAND_SET_REPEAT_MODE)
             .add(Player.COMMAND_SEEK_TO_PREVIOUS)
@@ -43,6 +48,11 @@ class OrchardSessionPlayer(player: Player) : ForwardingPlayer(player) {
 
     override fun isCommandAvailable(command: Int): Boolean {
         return when (command) {
+            Player.COMMAND_PLAY_PAUSE,
+            Player.COMMAND_PREPARE,
+            Player.COMMAND_STOP,
+            Player.COMMAND_SEEK_TO_DEFAULT_POSITION,
+            Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
             Player.COMMAND_SET_SHUFFLE_MODE,
             Player.COMMAND_SET_REPEAT_MODE,
             Player.COMMAND_SEEK_TO_PREVIOUS,
@@ -53,19 +63,66 @@ class OrchardSessionPlayer(player: Player) : ForwardingPlayer(player) {
         }
     }
 
+    override fun play() {
+        if (playbackState == Player.STATE_IDLE) {
+            prepare()
+        }
+        super.play()
+    }
+
     override fun seekToPrevious() {
-        if (hasPreviousMediaItem()) {
+        if (playbackState == Player.STATE_IDLE) {
+            prepare()
+        }
+        if (currentPosition > 5_000) {
+            seekTo(0)
+        } else if (hasPreviousMediaItem()) {
             super.seekToPrevious()
         } else {
             seekTo(0)
         }
+        if (playWhenReady) {
+            play()
+        }
     }
 
     override fun seekToPreviousMediaItem() {
-        if (hasPreviousMediaItem()) {
+        if (playbackState == Player.STATE_IDLE) {
+            prepare()
+        }
+        if (currentPosition > 5_000) {
+            seekTo(0)
+        } else if (hasPreviousMediaItem()) {
             super.seekToPreviousMediaItem()
         } else {
             seekTo(0)
+        }
+        if (playWhenReady) {
+            play()
+        }
+    }
+
+    override fun seekToNext() {
+        if (playbackState == Player.STATE_IDLE) {
+            prepare()
+        }
+        if (hasNextMediaItem()) {
+            super.seekToNext()
+        }
+        if (playWhenReady) {
+            play()
+        }
+    }
+
+    override fun seekToNextMediaItem() {
+        if (playbackState == Player.STATE_IDLE) {
+            prepare()
+        }
+        if (hasNextMediaItem()) {
+            super.seekToNextMediaItem()
+        }
+        if (playWhenReady) {
+            play()
         }
     }
 }

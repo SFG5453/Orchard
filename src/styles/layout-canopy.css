@@ -23,20 +23,20 @@
  */
 
 html[data-layout-preset="canopy"] {
-  --canopy-radius: 6px;
-  --canopy-radius-sm: 4px;
-  --canopy-rule: rgba(255, 255, 255, 0.07);
-  --canopy-rule-strong: rgba(255, 255, 255, 0.13);
+  --canopy-radius: 8px;
+  --canopy-radius-sm: 6px;
+  --canopy-rule: rgba(255, 255, 255, 0.04);
+  --canopy-rule-strong: rgba(255, 255, 255, 0.08);
   --canopy-surface: rgba(255, 255, 255, 0.022);
   --canopy-surface-hover: rgba(255, 255, 255, 0.05);
-  --canopy-eyebrow: rgba(255, 255, 255, 0.42);
+  --canopy-eyebrow: rgba(255, 255, 255, 0.45);
   --canopy-bar-height: 68px;
 
   /* Chrome is the frame the canvas floats on; both carry a slight green cast so
    * the shell reads as tinted rather than the flat #000 Grove uses. */
-  --canopy-chrome: #0a0d0b;
-  --canopy-canvas: #0f1310;
-  --canopy-readout-bg: rgba(255, 255, 255, 0.035);
+  --canopy-chrome: #070908;
+  --canopy-canvas: #0a0e0b;
+  --canopy-readout-bg: rgba(255, 255, 255, 0.03);
 }
 
 html[data-layout-preset="canopy"] .app-shell {
@@ -416,7 +416,7 @@ html[data-layout-preset="canopy"] .page:has(.detail-page--artist) {
 }
 
 html[data-layout-preset="canopy"] .page {
-  min-height: calc(100vh - var(--canopy-bar-height));
+  min-height: calc(100dvh - var(--canopy-bar-height));
   padding: 0 0 84px;
   border: none;
   border-radius: 0;
@@ -455,8 +455,9 @@ html[data-layout-preset="canopy"] .viewport-toolbar {
 }
 
 html[data-layout-preset="canopy"] .back-button {
-  border: 1px solid var(--canopy-rule) !important;
-  border-radius: var(--canopy-radius-sm) !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.04) !important;
 }
 
 html[data-layout-preset="canopy"] .topbar-copy h1 {
@@ -480,7 +481,7 @@ html[data-layout-preset="canopy"] .sidebar .q-drawer__content {
 }
 
 html[data-layout-preset="canopy"] .sidebar-inner {
-  gap: 16px;
+  gap: 10px;
   padding: calc(var(--canopy-bar-height) + 16px) 12px 16px;
 }
 
@@ -501,15 +502,34 @@ html[data-layout-preset="canopy"] .sidebar-section-heading {
 html[data-layout-preset="canopy"] .nav-link,
 html[data-layout-preset="canopy"] .library-link {
   position: relative;
-  min-height: 38px;
   padding: 0 14px;
   gap: 12px;
   border-radius: var(--canopy-radius-sm);
   font-size: 12.5px;
 }
 
+html[data-layout-preset="canopy"] .nav-link {
+  min-height: 32px;
+}
+
 html[data-layout-preset="canopy"] .library-link {
+  min-height: 38px;
   grid-template-columns: 30px minmax(0, 1fr);
+}
+
+/* The navigation groups above this region have intrinsic heights. Without a
+   floor, flexbox gives all remaining negative space to the playlist region and
+   leaves only its heading visible. Keep a useful viewport and scroll the rows
+   inside it instead. */
+html[data-layout-preset="canopy"] .sidebar-group--playlists {
+  min-height: clamp(96px, 12dvh, 160px);
+  overflow: hidden;
+}
+
+html[data-layout-preset="canopy"] .sidebar-playlist-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 html[data-layout-preset="canopy"] .library-link__cover,
@@ -533,7 +553,7 @@ html[data-layout-preset="canopy"] .library-link--active::before {
 html[data-layout-preset="canopy"] .sidebar-search-input,
 html[data-layout-preset="canopy"] .search-input {
   border: 1px solid var(--canopy-rule);
-  border-radius: var(--canopy-radius-sm);
+  border-radius: 999px;
   background: rgba(255, 255, 255, 0.03);
 }
 
@@ -595,8 +615,8 @@ html[data-layout-preset="canopy"] .section-header {
   align-items: baseline;
   justify-content: space-between;
   margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--canopy-rule);
+  padding-bottom: 4px;
+  border-bottom: 0;
   gap: 14px;
 }
 
@@ -886,19 +906,23 @@ html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary 
 }
 
 html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary .action-button {
-  width: 44px;
+  width: auto;
+  min-width: 0;
   height: 44px;
-  border-radius: 50%;
-  padding: 0;
+  border-radius: 999px;
+  padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(7, 9, 8, 0.66);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+  color: #fff;
+  backdrop-filter: blur(10px);
 }
 
 html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary .action-button span {
-  display: none;
+  display: inline;
 }
 
 html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary .action-button .q-icon {
@@ -907,8 +931,9 @@ html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary 
 }
 
 html[data-layout-preset="canopy"] .detail-hero--artist .detail-actions__primary .action-button--primary {
-  width: 56px;
-  height: 56px;
+  width: auto;
+  height: 48px;
+  padding: 0 19px;
   background: var(--canopy-accent);
   color: #000;
 }
@@ -1189,5 +1214,73 @@ html[data-layout-preset="canopy"] .settings-index a {
 
   html[data-layout-preset="canopy"] .detail-hero__art {
     max-width: 148px;
+  }
+}
+
+/* Preserve the readout and window controls first as the titlebar gets tight.
+   Secondary transport and utility controls remain available in their menus. */
+@media (max-width: 900px) {
+  html[data-layout-preset="canopy"] .canopy-bar {
+    gap: 8px;
+    padding-left: 10px;
+  }
+
+  html[data-layout-preset="canopy"] .canopy-bar__transport .canopy-bar__button:first-child,
+  html[data-layout-preset="canopy"] .canopy-bar__transport .canopy-bar__button:last-child,
+  html[data-layout-preset="canopy"] .canopy-bar__volume {
+    display: none;
+  }
+
+  html[data-layout-preset="canopy"] .canopy-readout {
+    gap: 7px;
+  }
+
+  html[data-layout-preset="canopy"] .canopy-bar__controls button {
+    width: 38px;
+  }
+}
+
+@media (max-width: 620px) {
+  html[data-layout-preset="canopy"] .canopy-bar__brand,
+  html[data-layout-preset="canopy"] .canopy-readout__actions,
+  html[data-layout-preset="canopy"] .canopy-bar__utility > .canopy-bar__button:not(.player-right-panel-button):not(:last-child) {
+    display: none;
+  }
+
+  html[data-layout-preset="canopy"] .canopy-readout {
+    grid-template-columns: 38px minmax(0, 1fr);
+    height: 48px;
+  }
+
+  html[data-layout-preset="canopy"] .canopy-readout__art {
+    width: 38px;
+    height: 38px;
+  }
+
+  html[data-layout-preset="canopy"] .canopy-readout__meta {
+    display: none;
+  }
+
+  html[data-layout-preset="canopy"] .canopy-readout__progress {
+    left: 48px;
+  }
+
+  html[data-layout-preset="canopy"] .canopy-bar__controls button {
+    width: 34px;
+  }
+}
+
+@media (max-height: 700px) {
+  html[data-layout-preset="canopy"] .sidebar-group--playlists {
+    min-height: 96px;
+    max-height: 180px;
+    flex: 0 0 auto;
+    overflow: hidden;
+  }
+
+  html[data-layout-preset="canopy"] .sidebar-playlist-scroll {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
   }
 }
