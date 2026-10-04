@@ -171,6 +171,7 @@ html[data-layout-preset="canopy"] .canopy-readout__image--empty {
 html[data-layout-preset="canopy"] .canopy-readout__copy {
   display: grid;
   min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1px;
   text-align: center;
 }
@@ -223,6 +224,7 @@ html[data-layout-preset="canopy"] .canopy-readout__title {
 html[data-layout-preset="canopy"] .canopy-readout__meta {
   display: flex;
   min-width: 0;
+  overflow: hidden;
   align-items: baseline;
   justify-content: center;
   gap: 5px;
@@ -232,13 +234,16 @@ html[data-layout-preset="canopy"] .canopy-readout__meta {
 
 /* Bitrate marker */
 html[data-layout-preset="canopy"] .canopy-readout__bitrate {
-  flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
+  flex: 0 1 auto;
   padding: 0 5px;
   border: 1px solid var(--canopy-rule);
   border-radius: 999px;
   background: var(--canopy-surface-hover);
   font-size: 10px;
   line-height: 14px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -443,7 +448,7 @@ html[data-layout-preset="canopy"] .topbar {
   display: grid;
   padding: 12px 26px 10px;
   margin-bottom: 18px;
-  background: transparent;
+  background: var(--canopy-chrome);
   gap: 8px;
 }
 
