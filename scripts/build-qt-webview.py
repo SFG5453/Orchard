@@ -21,6 +21,7 @@ def main() -> None:
     parser.add_argument("--qt-root", type=Path, required=True)
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--install-prefix", type=Path)
+    parser.add_argument("--toolchain-file", type=Path)
     args = parser.parse_args()
 
     qt = args.qt_root.resolve()
@@ -29,6 +30,10 @@ def main() -> None:
     if not (qt / "lib/cmake/Qt6/Qt6Config.cmake").is_file():
         raise SystemExit(f"Qt SDK not found: {qt}")
     compiler_args = []
+    if args.toolchain_file:
+        compiler_args.append(
+            f"-DCMAKE_TOOLCHAIN_FILE={args.toolchain_file.resolve()}"
+        )
     if sys.platform == "win32":
         # Match the MSVC SDK even when GCC is also present on PATH.
         compiler = shutil.which("cl.exe")
@@ -55,7 +60,7 @@ def main() -> None:
         "-DCMAKE_BUILD_TYPE=Release", "-DQT_BUILD_TESTS=OFF", "-DQT_BUILD_EXAMPLES=OFF",
         "-DFEATURE_webview_webengine_plugin=ON", "-DFEATURE_webview_webview2_plugin=OFF",
     ] + compiler_args, check=True)
-    subprocess.run(["cmake", "--build", str(build), "--parallel", "2"], check=True)
+    subprocess.run(["cmake", "--build", str(build)], check=True)
     subprocess.run(["cmake", "--install", str(build)], check=True)
 
     cache = (build / "CMakeCache.txt").read_text()

@@ -95,6 +95,10 @@ jobs:
           npm ci --prefix providers/youtube
           meson setup build/desktop --native-file scripts/release/linux-clang-mold.ini --buildtype release -Dtests=false -Dhost_rcc="$QT_RCC" -Dhost_qsb="$QT_QSB"
           meson compile -C build/desktop
+      - name: Check Linux QML startup
+        run: |
+          meson compile -C build/desktop orchard_qml_startup_test
+          QT_QPA_PLATFORM=offscreen ./build/desktop/orchard_qml_startup_test
       - name: Build and test bootstrapper
         run: |
           meson setup build/bootstrapper bootstrapper --native-file scripts/release/linux-clang-mold.ini --buildtype release
@@ -221,6 +225,13 @@ jobs:
           meson setup build/desktop --native-file scripts/release/windows-msvc-ccache.ini --buildtype release -Dtests=false "-Dhost_rcc=$env:QT_RCC" "-Dhost_qsb=$env:QT_QSB"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           meson compile -C build/desktop
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check Windows QML startup
+        shell: pwsh
+        run: |
+          meson compile -C build/desktop orchard_qml_startup_test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import subprocess; subprocess.run(['build/desktop/orchard_qml_startup_test.exe', '-platform', 'offscreen'], check=True, timeout=60)"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build bootstrapper
         shell: pwsh

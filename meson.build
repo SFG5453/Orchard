@@ -305,6 +305,7 @@ qml_type_headers = [
 # Meson's Qt helper puts every source at the module root. Thin wrappers keep
 # each real QML file beside the relative imports it expects.
 qml_wrappers = []
+qml_declarations = []
 foreach qml_source : qml_sources
   qml_file = qml_source.split('/')[-1]
   # Designer forms (Foo.ui.qml) are exported as the plain type Foo.
@@ -314,10 +315,26 @@ foreach qml_source : qml_sources
   qml_conf.set('QML_TYPE', qml_name.split('.')[0])
   qml_wrappers += configure_file(input: 'meson/qml-wrapper.qml.in',
     output: qml_name, configuration: qml_conf)
+  qml_declarations += qml_name.split('.')[0] + ' 1.0 ' + qml_name
 endforeach
+foreach singleton : qml_singletons
+  qml_name = singleton.split('/')[-1]
+  qml_declarations += 'singleton ' + qml_name.split('.')[0] + ' 1.0 ' + qml_name
+endforeach
+# Resource URLs need forward slashes even when Meson runs on Windows.
+qmldir_conf = configuration_data()
+qmldir_conf.set('QML_DECLARATIONS', '\n'.join(qml_declarations))
+qmldir_file = configure_file(input: 'meson/qmldir.in',
+  output: 'qmldir', configuration: qmldir_conf)
+qmldir_resources = custom_target('Orchard module manifest', input: qmldir_file,
+  output: 'qrc_orchard_manifest.cpp',
+  command: [python, files('scripts/meson-rcc.py'), '--rcc', rcc,
+    '--name', 'orchard_manifest', '--prefix', '/qt/qml/Orchard',
+    '--output', '@OUTPUT@', '@INPUT@'])
 qml_module = qt6.qml_module('Orchard', version: '1.0',
   qml_sources: qml_wrappers,
   qml_singletons: qml_singletons,
+  generate_qmldir: false,
   rcc_extra_arguments: rcc_args,
   moc_headers: qml_type_headers,
   resources_prefix: 'qt/qml',
@@ -353,7 +370,7 @@ adaptive_stage = custom_target('adaptive mix stage',
   build_by_default: true)
 
 orchard = executable('orchard', files(app_executable_sources) + exe_moc +
-  qml_module + qml_files_qrc + assets_qrc + licenses_qrc + docs_qrc + release_notes_qrc +
+  qml_module + [qmldir_resources] + qml_files_qrc + assets_qrc + licenses_qrc + docs_qrc + release_notes_qrc +
   [provider_resources, shaders_cpp],
   include_directories: app_inc,
   dependencies: [app_dep, qt_dep, qt_gui_private, qt_entry_dep],
@@ -376,7 +393,20 @@ auth_helper = executable('orchard-auth-helper', files(helper_sources) + helper_m
   dependencies: auth_dependencies + [qt_entry_dep], cpp_args: auth_args,
   win_subsystem: 'windows', install: true)
 
+qml_startup_test = executable('orchard_qml_startup_test',
+  files('tests/qml_startup_test.cpp'),
+  objects: [orchard.extract_objects(qml_module, qmldir_resources, qml_files_qrc, exe_moc,
+    files('app/src/appearance/artwork_palette.cpp',
+      'app/src/appearance/kawarp_background.cpp',
+      'app/src/appearance/liquid_glass.cpp')), app_lib.extract_objects(
+    files('app/src/appearance/artwork_sampler.cpp',
+      'app/src/appearance/kawarp_artwork.cpp'))],
+  include_directories: app_inc,
+  dependencies: [qt_dep, qt_gui_private], build_by_default: false)
+
 if get_option('tests')
+  test('orchard_qml_startup', qml_startup_test, timeout: 60,
+    env: ['QT_QPA_PLATFORM=offscreen'])
   qt_test_dep = dependency('qt6', modules: ['Test'])
   instance_test_moc = qt6.compile_moc(sources: ['tests/instance_coordinator_test.cpp'],
     include_directories: app_inc, dependencies: [qt_test_dep, qt_dep])

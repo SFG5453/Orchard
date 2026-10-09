@@ -1,0 +1,4 @@
+module Orchard
+prefer :/qt/qml/Orchard/
+@QML_DECLARATIONS@
+typeinfo Orchard.qmltypes
