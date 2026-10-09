@@ -70,6 +70,10 @@ To try desktop canary builds, turn on **Canary builds** under **Settings → Gen
 
 Desktop Adaptive mix requires a GPU with WebGPU support and FFmpeg. Turn the Audio Engine off to enable it, and choose a streaming quality other than MAX. See [Crossfade and gapless playback](docs/app/crossfade.md) and [Manage the queue](docs/app/queue.md) for setup and requirements.
 
+https://github.com/user-attachments/assets/983fb4b1-e0ff-4f90-9ff5-b92702664a3d
+
+
+
 ### Tune your sound
 
 - **10-band equalizer:** use a preset or adjust each band yourself.
