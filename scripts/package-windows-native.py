@@ -7,6 +7,8 @@ from pathlib import Path
 import shutil
 import subprocess
 
+from windows_icu_runtime import ICU_DLLS, copy_icu_runtime
+
 
 def require(path: Path) -> Path:
     if not path.exists():
@@ -56,6 +58,7 @@ def main() -> None:
                  stage / "DiscordSocialSdk-Notices.txt")
     # The updater launches app-local CRT DLLs without running a system installer.
     copy_msvc_runtime(stage)
+    copy_icu_runtime(stage)
 
     deploy = require(qt / "bin" / "windeployqt.exe")
     require(qt / "plugins" / "webview" / "qtwebview_webengine.dll")
@@ -79,6 +82,8 @@ def main() -> None:
                 "models/docs-search/model_quantized.onnx", "models/docs-search/vocab.txt",
                 "models/slop/fakeprint_lr.f32")
     for name in required:
+        require(stage / name)
+    for name in ICU_DLLS:
         require(stage / name)
 
     package.parent.mkdir(parents=True, exist_ok=True)

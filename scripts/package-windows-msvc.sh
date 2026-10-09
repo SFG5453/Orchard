@@ -55,8 +55,10 @@ if [[ -n "${ORCHARD_WINE_SYSTEM32:-}" ]]; then
 else
     wine_system32="$wine_prefix/drive_c/windows/system32"
 fi
-# Qt's deployment tools import ICU, which Wine does not ship. Point this at a Windows System32 directory.
-[[ -f "$wine_system32/icuuc.dll" ]] || die "icuuc.dll not found in $wine_system32; set ORCHARD_WINE_SYSTEM32 to a Windows System32 directory"
+# Qt and its deployment tools import the Windows ICU runtime.
+for icu_name in icu.dll icuuc.dll icuin.dll; do
+    [[ -f "$wine_system32/$icu_name" ]] || die "$icu_name not found in $wine_system32; set ORCHARD_WINE_SYSTEM32 to a Windows System32 directory"
+done
 
 # Prefer the CRT already used by the previous package. This keeps the script
 # usable even when the Visual Studio installation is only available through
@@ -148,9 +150,13 @@ cp -p "$qt_root/plugins/sqldrivers/qsqlite.dll" "$deployment_dir/sqldrivers/qsql
 for runtime_name in "${runtime_names[@]}"; do
     cp -p "$runtime_source_dir/$runtime_name" "$deployment_dir/$runtime_name"
 done
+python3 "$script_dir/windows_icu_runtime.py" --system32 "$wine_system32" --stage "$deployment_dir"
 
 required_files=(
     orchard.exe
+    icu.dll
+    icuuc.dll
+    icuin.dll
     orchard-auth-helper.exe
     orchard-adaptive-mix.exe
     webgpu_dawn.dll

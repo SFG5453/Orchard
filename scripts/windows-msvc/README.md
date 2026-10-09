@@ -24,5 +24,7 @@ Set any of these to reuse an existing install: `ORCHARD_WIN_TOOLS`, `ORCHARD_MSV
 `ORCHARD_MSVC_VERSION`, `ORCHARD_WINSDK_VERSION`, `ORCHARD_MSVC_QT_ROOT`, `WINEPREFIX`,
 `ORCHARD_HOST_QJSC`, `ORCHARD_BUILD_JOBS`.
 
-Packaging also needs `icuuc.dll` for Qt's deployment tools. Set `ORCHARD_WINE_SYSTEM32` to a
-Windows System32 directory if the Wine prefix lacks it.
+Packaging needs the matching x64 `icu.dll`, `icuuc.dll`, and `icuin.dll` files for Qt
+and its deployment tools. Set `ORCHARD_WINE_SYSTEM32` to a Windows System32 directory
+if the Wine prefix lacks them. All three DLLs are included in the portable archive;
+Wine builtin DLLs cannot be used as portable Windows runtime files.

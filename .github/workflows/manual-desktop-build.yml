@@ -162,6 +162,9 @@ jobs:
           rustup update stable
           if (!(Get-Command ccache.exe -ErrorAction SilentlyContinue)) { choco install ccache --yes --no-progress }
           if (!(Get-Command makensis.exe -ErrorAction SilentlyContinue)) { choco install nsis --yes --no-progress }
+      - name: Test Windows packaging
+        shell: pwsh
+        run: python -m unittest discover -s scripts -p test_windows_icu_runtime.py -v
       - name: Prepare Windows compiler cache
         id: ccache-setup
         shell: pwsh

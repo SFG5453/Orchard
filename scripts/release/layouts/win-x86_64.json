@@ -17,9 +17,9 @@
     "msvc-runtime": {"version": "14.51.36231-1", "map": [
       {"from": "concrt140.dll"}, {"from": "msvcp140*.dll"}, {"from": "vccorlib140.dll"}, {"from": "vcruntime140*.dll"}
     ]},
-    "qt": {"version": "6.12.0-1", "map": [
+    "qt": {"version": "6.12.0-2", "map": [
       {"from": "Qt6*.dll"}, {"from": "d3dcompiler_47.dll"}, {"from": "D3Dcompiler_47.dll"},
-      {"from": "icuuc.dll"}, {"from": "opengl32sw.dll"},
+      {"from": "icu.dll"}, {"from": "icuuc.dll"}, {"from": "icuin.dll"}, {"from": "opengl32sw.dll"},
       {"from": "dxcompiler.dll"}, {"from": "dxil.dll"}, {"from": "QtWebEngineProcess.exe"},
       {"from": "qml", "to": "qml"}, {"from": "resources", "to": "resources"}, {"from": "translations", "to": "translations"},
       {"from": "platforms", "to": "plugins/platforms"}, {"from": "imageformats", "to": "plugins/imageformats"},
