@@ -45,7 +45,7 @@ class SlopVerdicts(context: Context) : SQLiteOpenHelper(context.applicationConte
         if (loaded) return
         loaded = true
         mutableProbabilities.value = runCatching {
-            readableDatabase.rawQuery("SELECT id,probability FROM verdicts ORDER BY scored_at DESC LIMIT 5000", null).use { rows ->
+            readableDatabase.rawQuery("SELECT id,probability FROM verdicts ORDER BY scored_at ASC LIMIT 5000", null).use { rows ->
                 buildMap { while (rows.moveToNext()) put(rows.getString(0), rows.getFloat(1)) }
             }
         }.getOrDefault(emptyMap())

@@ -101,7 +101,7 @@ android {
 
     sourceSets {
         main {
-            assets.srcDir layout.buildDirectory.dir('generated/slopAssets')
+            assets.srcDir layout.buildDirectory.dir('generated/slopAssets').get().asFile
             jniLibs.srcDirs += earmarkJniLibsDir
             // Reduced-op ORT for arm64; see native/onnxruntime/build.sh.
             jniLibs.srcDirs += 'native/onnxruntime'
