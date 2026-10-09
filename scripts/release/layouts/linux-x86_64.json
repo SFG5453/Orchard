@@ -15,7 +15,7 @@
     "models": {"version": "2", "map": [
       {"from": "usr/bin/models", "to": ""}
     ]},
-    "qt": {"version": "6.12.0-2", "map": [
+    "qt": {"version": "6.12.0-3", "map": [
       {"from": "usr/bin/QtWebEngineProcess", "to": "libexec/QtWebEngineProcess"},
       {"from": "usr/libexec/qt.conf", "to": "libexec/qt.conf"},
       {"from": "usr/lib", "to": "lib"},
