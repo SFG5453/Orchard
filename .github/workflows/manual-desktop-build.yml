@@ -158,7 +158,8 @@ jobs:
       - name: Install build tools
         shell: pwsh
         run: |
-          python -m pip install 'meson>=1.12,<2' ninja 'git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7'
+          python -m pip install 'meson>=1.12,<2' ninja 'cryptography>=45,<51' 'git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           rustup update stable
           if (!(Get-Command ccache.exe -ErrorAction SilentlyContinue)) { choco install ccache --yes --no-progress }
           if (!(Get-Command makensis.exe -ErrorAction SilentlyContinue)) { choco install nsis --yes --no-progress }
