@@ -20,7 +20,6 @@
 package dev.sfg.orchard.mobile.ui.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,20 +39,11 @@ import androidx.compose.foundation.layout.width
 import dev.sfg.orchard.mobile.ui.scroll.OrchardLazyRow as LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.DownloadDone
-import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,9 +57,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.model.Album
 import dev.sfg.orchard.mobile.model.CatalogItem
-import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.glass.GlassTone
-import dev.sfg.orchard.mobile.ui.glass.glassFill
+import dev.sfg.orchard.mobile.ui.motion.bounceClickable
+import dev.sfg.orchard.mobile.ui.motion.pressScale
+import dev.sfg.orchard.mobile.ui.motion.riseIn
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.remember
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.draw.scale
 import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
@@ -102,11 +98,13 @@ fun OrchardSectionHeader(
             color = CanopyColors.Text,
         )
         if (action != null && onAction != null) {
+            val source = remember { MutableInteractionSource() }
             Surface(
                 onClick = onAction,
-                color = glassFill(CanopyColors.Surface),
+                color = Color.Transparent,
                 shape = CircleShape,
-                modifier = Modifier.height(32.dp).glassPane(CircleShape, GlassTone.CONTROL),
+                interactionSource = source,
+                modifier = Modifier.height(32.dp).pressScale(source, 0.9f).glassPane(CircleShape, GlassTone.CONTROL),
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
                     Text(
@@ -133,8 +131,7 @@ fun CatalogCard(item: CatalogItem, onClick: () -> Unit, modifier: Modifier = Mod
     Column(
         modifier = modifier
             .width(140.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick),
+            .bounceClickable(RoundedCornerShape(14.dp), pressedScale = 0.93f, onClick = onClick),
         horizontalAlignment = if (isArtist) Alignment.CenterHorizontally else Alignment.Start,
     ) {
         Box(
@@ -190,9 +187,8 @@ fun CategoryCard(
         modifier = modifier
             .height(52.dp)
             .glassPane(shape, GlassTone.CONTROL)
-            .clip(shape)
-            .clickable(onClick = onClick),
-        color = glassFill(CanopyColors.Surface),
+            .bounceClickable(shape, pressedScale = 0.94f, onClick = onClick),
+        color = Color.Transparent,
         shape = shape,
     ) {
         Row(
@@ -227,8 +223,7 @@ fun TopPickCard(item: CatalogItem, onClick: () -> Unit, modifier: Modifier = Mod
         modifier
             .width(200.dp)
             .aspectRatio(0.85f)
-            .clip(RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick),
+            .bounceClickable(RoundedCornerShape(18.dp), pressedScale = 0.95f, onClick = onClick),
     ) {
         ArtworkTile(item.artworkUrl, item.title, Modifier.fillMaxSize(), 0)
         Box(
@@ -277,224 +272,6 @@ fun TopPickCard(item: CatalogItem, onClick: () -> Unit, modifier: Modifier = Mod
     }
 }
 
-/** Badge for explicit songs. */
-@Composable
-fun ExplicitBadge(modifier: Modifier = Modifier) {
-    Surface(
-        color = Color.White.copy(alpha = 0.16f),
-        shape = RoundedCornerShape(3.dp),
-        modifier = modifier,
-    ) {
-        Text(
-            text = "E",
-            color = Color.White.copy(alpha = 0.85f),
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.sp,
-            ),
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-        )
-    }
-}
-
-/** Expressive track list row with rounded art or track numbers, active row highlight, and popup actions. */
-@Composable
-fun TrackRow(
-    track: Track,
-    onPlay: () -> Unit,
-    modifier: Modifier = Modifier,
-    trackNumber: Int? = null,
-    showArtwork: Boolean = true,
-    parentArtist: String = "",
-    showDivider: Boolean = false,
-    onPlayNext: (() -> Unit)? = null,
-    onAddToQueue: (() -> Unit)? = null,
-    onAddToPlaylist: (() -> Unit)? = null,
-    onRemoveFromPlaylist: (() -> Unit)? = null,
-    onMoveUp: (() -> Unit)? = null,
-    onMoveDown: (() -> Unit)? = null,
-    onShare: (() -> Unit)? = null,
-    onDownload: (() -> Unit)? = null,
-    onRemoveDownload: (() -> Unit)? = null,
-    isDownloaded: Boolean = false,
-    isDownloading: Boolean = false,
-    onViewAlbum: (() -> Unit)? = null,
-    onViewArtist: (() -> Unit)? = null,
-    trailingText: String = durationText(track.durationMs),
-    highlighted: Boolean = false,
-    compact: Boolean = false,
-) {
-    var popupOpen by remember { mutableStateOf(false) }
-    val bgColor by animateColorAsState(
-        if (highlighted) LocalAccent.current.copy(alpha = 0.15f) else Color.Transparent,
-        label = "TrackRowBg"
-    )
-    val artworkSize = if (compact) 40.dp else 46.dp
-    val verticalPad = if (compact) 6.dp else 10.dp
-    val titleStyle = if (compact) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-        else MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-    val subtitleStyle = if (compact) MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp)
-        else MaterialTheme.typography.bodySmall
-
-    if (popupOpen) {
-        TrackActionsPopup(
-            track = track,
-            onDismiss = { popupOpen = false },
-            onPlay = onPlay,
-            onPlayNext = onPlayNext,
-            onAddToQueue = onAddToQueue,
-            onAddToPlaylist = onAddToPlaylist,
-            onRemoveFromPlaylist = onRemoveFromPlaylist,
-            onMoveUp = onMoveUp,
-            onMoveDown = onMoveDown,
-            onDownload = if (!isDownloaded) onDownload else null,
-            onRemoveDownload = if (isDownloaded) onRemoveDownload else null,
-            onShare = onShare,
-            onViewAlbum = onViewAlbum,
-            onViewArtist = onViewArtist,
-        )
-    }
-
-    Column(modifier = modifier.fillMaxWidth()) {
-        Surface(
-            onClick = onPlay,
-            color = bgColor,
-            shape = RoundedCornerShape(if (compact) 8.dp else 10.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 1.dp)
-        ) {
-            Row(
-                Modifier.padding(horizontal = 8.dp, vertical = verticalPad),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (showArtwork && trackNumber == null) {
-                    Box(contentAlignment = Alignment.Center) {
-                        ArtworkTile(track.artworkUrl, "Artwork for ${track.title}", Modifier.size(artworkSize), if (compact) 8 else 10)
-                        if (highlighted) {
-                            Box(
-                                Modifier
-                                    .size(artworkSize)
-                                    .clip(RoundedCornerShape(if (compact) 8.dp else 10.dp))
-                                    .background(Color.Black.copy(alpha = 0.45f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Rounded.PlayArrow,
-                                    contentDescription = "Playing",
-                                    tint = LocalAccent.current,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                } else {
-                    Box(
-                        modifier = Modifier.width(32.dp),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        if (highlighted) {
-                            Icon(
-                                Icons.Rounded.PlayArrow,
-                                contentDescription = "Playing",
-                                tint = LocalAccent.current,
-                                modifier = Modifier.size(16.dp),
-                            )
-                        } else {
-                            Text(
-                                text = (trackNumber ?: 1).toString(),
-                                color = Color.White.copy(alpha = 0.45f),
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 15.sp,
-                                ),
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(8.dp))
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Text(
-                            track.title,
-                            color = if (highlighted) LocalAccent.current else Color.White,
-                            style = titleStyle,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                        if (track.explicit) {
-                            ExplicitBadge()
-                        }
-                    }
-
-                    val displayArtist = track.artist.takeIf {
-                        it != "Unknown artist" && it.isNotBlank() && (parentArtist.isBlank() || !it.equals(parentArtist, ignoreCase = true))
-                    }
-                    val displayAlbum = track.album.takeIf { it.isNotBlank() && trackNumber == null }
-                    val subtitle = listOfNotNull(displayArtist, displayAlbum).distinct().joinToString(" • ")
-
-                    if (subtitle.isNotBlank()) {
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            subtitle,
-                            color = Color.White.copy(alpha = 0.60f),
-                            style = subtitleStyle,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-                if (isDownloading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(14.dp),
-                        color = LocalAccent.current,
-                        strokeWidth = 2.dp,
-                    )
-                } else if (isDownloaded) {
-                    Icon(
-                        Icons.Rounded.DownloadDone,
-                        contentDescription = "Downloaded offline",
-                        tint = LocalAccent.current.copy(alpha = 0.85f),
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
-                if (trailingText.isNotBlank()) {
-                    Text(
-                        trailingText,
-                        color = Color.White.copy(alpha = 0.45f),
-                        style = subtitleStyle,
-                        modifier = Modifier.padding(horizontal = 6.dp)
-                    )
-                }
-                IconButton(onClick = { popupOpen = true }, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        Icons.Rounded.MoreHoriz,
-                        contentDescription = "Actions for ${track.title}",
-                        tint = Color.White.copy(alpha = 0.55f),
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-        }
-        if (showDivider) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = if (showArtwork && trackNumber == null) 72.dp else 48.dp, end = 16.dp)
-                    .height(0.5.dp)
-                    .background(Color.White.copy(alpha = 0.08f))
-            )
-        }
-    }
-}
-
-
 /** Filter pill chip group inspired by SimpMusic ChipGroup. */
 @Composable
 fun <T> OrchardFilterChips(
@@ -513,20 +290,31 @@ fun <T> OrchardFilterChips(
             val option = options[index]
             val isSelected = option == selected
             val containerColor by animateColorAsState(
-                if (isSelected) LocalAccent.current else glassFill(CanopyColors.Surface),
+                if (isSelected) LocalAccent.current else Color.Transparent,
                 label = "ChipBg"
             )
             val textColor by animateColorAsState(
                 if (isSelected) Color.Black else CanopyColors.Text,
                 label = "ChipText"
             )
+            // Selected chip swells a touch so the choice lands with some weight.
+            val chipScale by animateFloatAsState(
+                if (isSelected) 1.06f else 1f,
+                spring(dampingRatio = 0.45f, stiffness = 500f),
+                label = "ChipScale",
+            )
+            val source = remember { MutableInteractionSource() }
 
             Surface(
                 onClick = { onSelect(option) },
                 shape = CircleShape,
                 color = containerColor,
+                interactionSource = source,
                 // The selected chip is a solid accent fill, which is what makes it selected.
                 modifier = Modifier
+                    .riseIn(index + 1, fromScale = 0.8f, cascadeOnScroll = true)
+                    .scale(chipScale)
+                    .pressScale(source, 0.9f)
                     .height(34.dp)
                     .then(
                         if (isSelected) Modifier
@@ -549,11 +337,12 @@ fun <T> OrchardFilterChips(
 fun MessagePanel(title: String, message: String, actionLabel: String? = null, onAction: (() -> Unit)? = null) {
     val shape = RoundedCornerShape(16.dp)
     Surface(
-        color = glassFill(CanopyColors.Surface),
+        color = Color.Transparent,
         shape = shape,
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp)
+            .riseIn()
             .glassPane(shape)
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -575,12 +364,6 @@ fun MessagePanel(title: String, message: String, actionLabel: String? = null, on
             }
         }
     }
-}
-
-fun durationText(durationMs: Long): String {
-    if (durationMs <= 0) return ""
-    val seconds = durationMs / 1_000
-    return "%d:%02d".format(seconds / 60, seconds % 60)
 }
 
 private fun catalogSubtitle(item: CatalogItem): String = when (item) {

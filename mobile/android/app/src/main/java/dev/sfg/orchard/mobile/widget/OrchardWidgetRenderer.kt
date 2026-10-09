@@ -36,6 +36,9 @@ import android.graphics.Shader
 import android.view.View
 import android.widget.RemoteViews
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.get
+import androidx.core.graphics.scale
 import dev.sfg.orchard.connect.R
 import dev.sfg.orchard.connect.app.MainActivity
 import kotlinx.coroutines.async
@@ -247,7 +250,7 @@ internal object OrchardWidgetRenderer {
 
     /** Orchard's signature artwork wash: album color blooms into the dark canopy on a diagonal. */
     private fun widgetBackground(accent: Int, width: Int, height: Int): Bitmap {
-        val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val output = createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
         val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
         val radius = height.coerceAtMost(width) * 0.12f
@@ -281,8 +284,8 @@ internal object OrchardWidgetRenderer {
         val left = (source.width - edge) / 2
         val top = (source.height - edge) / 2
         val square = Bitmap.createBitmap(source, left, top, edge, edge)
-        val scaled = Bitmap.createScaledBitmap(square, size, size, true)
-        val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val scaled = square.scale(size, size, true)
+        val output = createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = BitmapShader(scaled, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
         }
@@ -297,13 +300,13 @@ internal object OrchardWidgetRenderer {
 
     /** Selects a vivid mid-tone from the cover instead of averaging it into muddy gray. */
     private fun dominantAccent(source: Bitmap): Int {
-        val sample = Bitmap.createScaledBitmap(source, 24, 24, true)
+        val sample = source.scale(24, 24, true)
         val hsl = FloatArray(3)
         var selected = ORCHARD_MINT
         var bestScore = 0f
         for (x in 0 until sample.width) {
             for (y in 0 until sample.height) {
-                val color = sample.getPixel(x, y)
+                val color = sample[x, y]
                 ColorUtils.colorToHSL(color, hsl)
                 val saturation = hsl[1]
                 val lightness = hsl[2]

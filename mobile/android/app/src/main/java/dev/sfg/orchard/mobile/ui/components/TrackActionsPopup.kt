@@ -35,6 +35,9 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Lyrics
+import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Person
@@ -50,6 +53,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -58,6 +62,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.model.Track
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.remember
+import dev.sfg.orchard.mobile.ui.motion.pressScale
+import dev.sfg.orchard.mobile.ui.motion.riseIn
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -124,58 +132,79 @@ internal fun TrackActionsPopup(
             Box(Modifier.fillMaxWidth().height(0.5.dp).background(CanopyColors.Rule))
             Spacer(Modifier.height(6.dp))
 
-            // Action items
+            // Action items cascade in as the sheet rises; slot counts only the rows shown.
+            var slot = 0
             onPlay?.let { action ->
-                PopupActionRow(Icons.Rounded.PlayArrow, "Play Now") { onDismiss(); action() }
+                PopupActionRow(Icons.Rounded.PlayArrow, "Play Now", slot++) { onDismiss(); action() }
             }
             onPlayNext?.let { action ->
-                PopupActionRow(Icons.Rounded.SkipNext, "Play Next") { onDismiss(); action() }
+                PopupActionRow(Icons.Rounded.SkipNext, "Play Next", slot++) { onDismiss(); action() }
             }
             onAddToQueue?.let { action ->
-                PopupActionRow(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to Queue") { onDismiss(); action() }
+                PopupActionRow(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to Queue", slot++) { onDismiss(); action() }
             }
             onAddToPlaylist?.let { action ->
-                PopupActionRow(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to Playlist") { onDismiss(); action() }
+                PopupActionRow(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to Playlist", slot++) { onDismiss(); action() }
             }
             onRemoveFromPlaylist?.let { action ->
-                PopupActionRow(Icons.Rounded.Delete, "Remove from Playlist") { onDismiss(); action() }
+                PopupActionRow(Icons.Rounded.Delete, "Remove from Playlist", slot++) { onDismiss(); action() }
             }
             onMoveUp?.let { action ->
-                PopupActionRow(Icons.Rounded.KeyboardArrowUp, "Move Up") { onDismiss(); action() }
+                PopupActionRow(Icons.Rounded.KeyboardArrowUp, "Move Up", slot++) { onDismiss(); action() }
             }
             onMoveDown?.let { action ->
-                PopupActionRow(Icons.Rounded.KeyboardArrowDown, "Move Down") { onDismiss(); action() }
+                PopupActionRow(Icons.Rounded.KeyboardArrowDown, "Move Down", slot++) { onDismiss(); action() }
             }
             onViewQueue?.let { action ->
-                PopupActionRow(Icons.AutoMirrored.Rounded.List, "View Queue") { onDismiss(); action() }
+                PopupActionRow(Icons.AutoMirrored.Rounded.List, "View Queue", slot++) { onDismiss(); action() }
             }
-            onDownload?.let { action ->
-                PopupActionRow(Icons.Rounded.Download, "Download Offline") { onDismiss(); action() }
+            onDownload?.takeUnless { track.isLocal }?.let { action ->
+                PopupActionRow(Icons.Rounded.Download, "Download Offline", slot++) { onDismiss(); action() }
             }
             onRemoveDownload?.let { action ->
-                PopupActionRow(Icons.Rounded.Delete, "Remove Download") { onDismiss(); action() }
+                PopupActionRow(Icons.Rounded.Delete, "Remove Download", slot++) { onDismiss(); action() }
             }
             onViewAlbum?.let { action ->
                 if (track.albumId.isNotBlank()) {
-                    PopupActionRow(Icons.Rounded.Album, "View Album") { onDismiss(); action() }
+                    PopupActionRow(Icons.Rounded.Album, "View Album", slot++) { onDismiss(); action() }
                 }
             }
             onViewArtist?.let { action ->
-                PopupActionRow(Icons.Rounded.Person, "View Artist") { onDismiss(); action() }
+                PopupActionRow(Icons.Rounded.Person, "View Artist", slot++) { onDismiss(); action() }
             }
-            onShare?.let { action ->
-                PopupActionRow(Icons.Rounded.Share, "Share Song") { onDismiss(); action() }
+            onShare?.takeUnless { track.isLocal }?.let { action ->
+                PopupActionRow(Icons.Rounded.Share, "Share Song", slot++) { onDismiss(); action() }
+            }
+            LocalLibraryUiLocal.current?.takeIf { track.isLocal }?.let { ui ->
+                val song = ui.repository.library.collectAsState().value.songsById[track.id]
+                PopupActionRow(Icons.Rounded.Image, "Set Cover", slot++) { onDismiss(); ui.pickCover(track.id) }
+                if (song?.customCover == true) {
+                    PopupActionRow(Icons.Rounded.Restore, "Use the File's Own Cover", slot++) {
+                        onDismiss(); ui.repository.clearSongCover(track.id)
+                    }
+                }
+                PopupActionRow(Icons.Rounded.Lyrics, "Set Lyrics", slot++) { onDismiss(); ui.pickLyrics(track.id) }
+                if (song?.lyricsPath?.isNotBlank() == true) {
+                    PopupActionRow(Icons.Rounded.Delete, "Remove Custom Lyrics", slot++) {
+                        onDismiss(); ui.repository.clearSongLyrics(track.id)
+                    }
+                }
+                PopupActionRow(Icons.Rounded.Delete, "Remove from Library", slot++) {
+                    onDismiss(); ui.repository.removeSong(track.id)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun PopupActionRow(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun PopupActionRow(icon: ImageVector, label: String, index: Int, onClick: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
     Surface(
         onClick = onClick,
         color = Color.Transparent,
-        modifier = Modifier.fillMaxWidth(),
+        interactionSource = source,
+        modifier = Modifier.fillMaxWidth().riseIn(index + 1, distance = 18f, cascadeOnScroll = true).pressScale(source, 0.97f),
     ) {
         Row(
             modifier = Modifier.padding(vertical = 13.dp),

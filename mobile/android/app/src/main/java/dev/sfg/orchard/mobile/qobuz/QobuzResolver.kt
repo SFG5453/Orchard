@@ -20,40 +20,87 @@
 package dev.sfg.orchard.mobile.qobuz
 
 import android.util.Log
+import dev.sfg.orchard.mobile.model.BrowseDetail
+import dev.sfg.orchard.mobile.model.QobuzAlbumQuality
+import dev.sfg.orchard.mobile.provider.ProviderBundle
+import dev.sfg.orchard.mobile.provider.ProviderHost
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.util.UUID
-import kotlin.math.max
+import org.json.JSONArray
+import org.json.JSONObject
 
 private const val TAG = "QobuzResolver"
 
 data class ResolvedQobuzTrack(
-    val playbackId: String,
-    val qobuzTrackId: Long,
     val streamUrl: String,
     val bitrateKbps: Int,
     val bitDepth: Int,
     val sampleRate: Int,
     val hires: Boolean,
-    val durationSeconds: Int,
 )
 
+/** Matches tracks and resolves FLAC streams through the desktop provider (`providers/qobuz`). */
 class QobuzResolver(
     private val repository: QobuzRepository,
-    private val httpClient: OkHttpClient = OkHttpClient(),
-    val bootstrapLoader: QobuzBootstrapLoader = QobuzBootstrapLoader(httpClient),
-    val client: QobuzClient = QobuzClient(bootstrapLoader, { repository.getCredentials() }, httpClient),
-    val matcher: QobuzMatcher = QobuzMatcher(client),
-    val streamServer: QobuzStreamServer = QobuzStreamServer(httpClient),
+    http: OkHttpClient,
+    bundle: (String) -> ByteArray?,
 ) {
-    suspend fun isAvailable(): Boolean {
-        val status = repository.status.value
-        return status.enabled && repository.getCredentials() != null
+    private val provider = ProviderHost(http, ProviderBundle.Qobuz, bundle)
+    private val streamServer = QobuzStreamServer(provider)
+    private val sessionLock = Mutex()
+    private var syncedSession: QobuzSession? = null
+
+    /** Set by Orchard Connect; used when another device holds the only Qobuz session. */
+    @Volatile var remote: RemoteQobuz? = null
+
+    // A linked local account's off switch also disables borrowed sessions on this phone.
+    fun isAvailable(): Boolean = if (hasSession()) localAvailable() else remote?.available() == true
+
+    private fun localAvailable(): Boolean = repository.status.value.enabled && repository.getCredentials() != null
+
+    /** A subscription is linked here or on a Connect peer. */
+    fun isLinked(): Boolean = hasSession() || remote?.available() == true
+
+    private val albumQualities = object : LinkedHashMap<String, QobuzAlbumQuality?>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, QobuzAlbumQuality?>?) = size > 200
     }
 
+    /** Hi-Res or Lossless for the album Qobuz matches, or null when unmatched or unavailable. */
+    suspend fun albumQuality(detail: BrowseDetail): QobuzAlbumQuality? = withContext(Dispatchers.IO) {
+        if (!localAvailable() || detail.title.isBlank() || detail.artist.isBlank()) return@withContext null
+        val key = "${detail.title.lowercase()}\n${detail.artist.lowercase()}"
+        synchronized(albumQualities) { if (albumQualities.containsKey(key)) return@withContext albumQualities[key] }
+        try {
+            syncSession()
+            val result = provider.invokeValue(
+                "album.quality",
+                JSONObject()
+                    .put("title", detail.title)
+                    .put("artist", detail.artist)
+                    .put("year", detail.year.take(4).toIntOrNull() ?: 0)
+                    .put("trackCount", detail.tracks.size)
+                    .put("quality", repository.status.value.quality.id),
+            ) as? JSONObject
+            val quality = result?.optString("tier")?.takeIf { it.isNotBlank() }?.let {
+                QobuzAlbumQuality(it == "hires", result.optInt("bitDepth"), result.optInt("sampleRate"))
+            }
+            synchronized(albumQualities) { albumQualities[key] = quality }
+            quality
+        } catch (e: Exception) {
+            Log.w(TAG, "Qobuz album quality lookup failed: ${e.message}")
+            null
+        }
+    }
+
+    /** Signed in here, so this phone can serve a Connect peer whatever its own toggle says. */
+    fun hasSession(): Boolean = repository.getCredentials() != null
+
+    /** Null when Qobuz is off, has no confident match, or fails; the caller falls back. */
     suspend fun resolve(
+        id: String = "",
         title: String,
         artists: List<String>,
         album: String = "",
@@ -63,98 +110,27 @@ class QobuzResolver(
     ): ResolvedQobuzTrack? = withContext(Dispatchers.IO) {
         if (!isAvailable()) return@withContext null
         try {
-            val match = matcher.match(
-                title = title,
-                artists = artists,
-                album = album,
-                durationMs = durationMs,
-                isrc = isrc,
-                explicit = explicit,
-            ) ?: return@withContext null
-
-            Log.i(TAG, "Matched track '$title' -> Qobuz track ID ${match.qobuzTrackId}")
-            val quality = repository.status.value.quality
-            val streamingInfo = client.streamingInfo(match.qobuzTrackId, quality)
-
-            val initUrl = streamingInfo.urlTemplate.replace("\$SEGMENT\$", "0")
-            val initRequest = Request.Builder()
-                .url(initUrl)
-                .header("User-Agent", QOBUZ_USER_AGENT)
-                .header("Accept", "*/*")
-                .build()
-            val initBytes = httpClient.newCall(initRequest).execute().use { response ->
-                if (!response.isSuccessful) throw IllegalStateException("Failed to load init segment (${response.code})")
-                response.body.bytes()
-            }
-
-            val parsedInit = parseQobuzInitSegment(initBytes)
-
-            val contentKey = if (streamingInfo.key.isNotBlank()) {
-                val sessionKey = deriveQobuzSessionKey(streamingInfo.session.infos, streamingInfo.rngInit)
-                unwrapQobuzContentKey(sessionKey, streamingInfo.key)
-            } else null
-
-            val playbackId = UUID.randomUUID().toString()
-            val durationSec = if (streamingInfo.durationSeconds > 0) streamingInfo.durationSeconds else match.durationSeconds
-            val totalBytes = parsedInit.totalLength
-
-            val bitrateKbps = if (durationSec > 0 && totalBytes > 0) {
-                ((totalBytes * 8L) / (durationSec.toLong() * 1000L)).toInt()
+            val track = JSONObject()
+                .put("id", id)
+                .put("title", title)
+                .put("artist", artists.firstOrNull().orEmpty())
+                .put("artists", JSONArray(artists))
+                .put("album", album)
+                .put("durationSeconds", durationMs / 1000.0)
+                .put("explicit", explicit)
+                .put("isrc", isrc)
+            val borrowed = if (localAvailable()) null else remote
+            val result = if (borrowed != null) {
+                borrowed.resolve(track) ?: return@withContext null
             } else {
-                (parsedInit.sampleRate * parsedInit.bitDepth * parsedInit.channels) / 1000
+                resolveSource(track)
             }
-
-            val source = QobuzStreamSource(
-                playbackId = playbackId,
-                trackId = match.qobuzTrackId,
-                quality = quality,
-                formatId = streamingInfo.formatId,
-                durationSeconds = durationSec,
-                blob = streamingInfo.blob,
-                trackContextUuid = UUID.randomUUID().toString(),
-                urlTemplate = streamingInfo.urlTemplate,
-                contentKey = contentKey,
-                expiresAtMs = System.currentTimeMillis() + 4 * 3600_000L,
-                bitDepth = parsedInit.bitDepth,
-                sampleRate = parsedInit.sampleRate,
-                channels = parsedInit.channels,
-                hires = match.hires || parsedInit.bitDepth > 16 || parsedInit.sampleRate > 48000,
-                bitrateKbps = bitrateKbps,
-                totalBytes = totalBytes,
-            )
-
-            val session = QobuzPlaybackSession(
-                playbackId = playbackId,
-                source = source,
-                init = parsedInit,
-                httpClient = httpClient,
-                contentKey = contentKey,
-            )
-
-            streamServer.registerSession(session)
-            val streamUrl = streamServer.urlFor(playbackId)
-
-            // Report start
-            val creds = repository.getCredentials()
-            if (creds != null) {
-                client.reportStreamingStart(
-                    trackId = match.qobuzTrackId,
-                    startedAtUnix = System.currentTimeMillis() / 1000L,
-                    formatId = streamingInfo.formatId,
-                    userId = creds.userId,
-                )
+            val source = result.optJSONObject("source")
+            if (source == null) {
+                Log.i(TAG, "No Qobuz match for '$title': ${result.optJSONObject("miss")}")
+                return@withContext null
             }
-
-            ResolvedQobuzTrack(
-                playbackId = playbackId,
-                qobuzTrackId = match.qobuzTrackId,
-                streamUrl = streamUrl,
-                bitrateKbps = bitrateKbps,
-                bitDepth = parsedInit.bitDepth,
-                sampleRate = parsedInit.sampleRate,
-                hires = source.hires,
-                durationSeconds = durationSec,
-            )
+            toResolved(source, result.getJSONObject("match"), borrowed)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to resolve Qobuz track: ${e.message}", e)
             repository.setLastError(e.message ?: "Failed to resolve Qobuz stream")
@@ -162,9 +138,65 @@ class QobuzResolver(
         }
     }
 
+    private fun toResolved(source: JSONObject, match: JSONObject, remote: RemoteQobuz?): ResolvedQobuzTrack {
+        val totalBytes = source.getLong("totalBytes")
+        val seconds = source.optDouble("durationSeconds", 0.0)
+        val bitDepth = source.optInt("bitDepth")
+        val sampleRate = source.optInt("sampleRate")
+        val playbackId = source.getString("playbackId")
+        return ResolvedQobuzTrack(
+            streamUrl = streamServer.register(playbackId, totalBytes, remote),
+            bitrateKbps = if (seconds > 0) (totalBytes * 8 / seconds / 1000).toInt() else 0,
+            bitDepth = bitDepth,
+            sampleRate = sampleRate,
+            hires = match.optBoolean("hires") || bitDepth > 16 || sampleRate > 48000,
+        )
+    }
+
+    /** The provider's raw match for a catalog track; also what a Connect peer receives. */
+    suspend fun resolveSource(track: JSONObject): JSONObject = withContext(Dispatchers.IO) {
+        syncSession()
+        provider.invoke(
+            "playback.resolve",
+            JSONObject().put("track", track).put("quality", repository.status.value.quality.id),
+        )
+    }
+
+    /** Decrypted bytes of a stream this phone resolved, for a Connect peer. */
+    suspend fun readRange(playbackId: String, start: Long, end: Long): ByteArray =
+        provider.invokeBytes("playback.read", JSONObject().put("playbackId", playbackId).put("start", start).put("end", end))
+
+    suspend fun report(playbackId: String, started: Boolean, position: Double) {
+        provider.invokeRaw(
+            if (started) "playback.started" else "playback.ended",
+            JSONObject().put("playbackId", playbackId).put("position", position),
+        )
+    }
+
+    // The provider holds the token; re-send it only when the stored session changes.
+    private suspend fun syncSession() {
+        sessionLock.withLock {
+            val session = repository.getCredentials()
+            if (session == syncedSession) return
+            provider.invoke(
+                "session.set",
+                JSONObject().put("token", session?.token.orEmpty()).put("userId", session?.userId ?: 0L),
+            )
+            syncedSession = session
+        }
+    }
+
+    /** The Qobuz sign-in page that redirects to [redirectUrl] with an authorization code. */
+    suspend fun authorizationUrl(redirectUrl: String): String =
+        provider.invoke("oauth.start", JSONObject().put("redirectUrl", redirectUrl)).getString("url")
+
+    suspend fun exchangeCode(code: String): QobuzSession {
+        val account = provider.invoke("oauth.finish", JSONObject().put("code", code))
+        return QobuzSession(account.getString("token"), account.getLong("userId"))
+    }
+
     fun release() {
         streamServer.stop()
-        matcher.clear()
-        client.reset()
+        provider.cancelAll()
     }
 }

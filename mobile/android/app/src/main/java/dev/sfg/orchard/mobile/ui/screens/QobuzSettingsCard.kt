@@ -33,8 +33,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -68,14 +66,14 @@ fun QobuzSettingsCard(
         shape = shape,
         modifier = modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f).padding(end = 16.dp)) {
                     Text(
-                        text = "Qobuz",
+                        text = "Qobuz streaming",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = CanopyColors.Text,
@@ -88,15 +86,9 @@ fun QobuzSettingsCard(
                 }
 
                 if (isConnected) {
-                    Switch(
+                    SettingsSwitch(
                         checked = status.enabled,
                         onCheckedChange = onEnabledChange,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = LocalAccent.current,
-                            uncheckedThumbColor = CanopyColors.Muted,
-                            uncheckedTrackColor = CanopyColors.SurfaceHover,
-                        ),
                     )
                 }
             }
@@ -133,39 +125,11 @@ fun QobuzSettingsCard(
                 )
                 Spacer(Modifier.height(8.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    QobuzQuality.entries.forEach { quality ->
-                        val isSelected = quality == status.quality
-                        val chipShape = RoundedCornerShape(10.dp)
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(chipShape)
-                                .background(
-                                    if (isSelected) LocalAccent.current.copy(alpha = 0.20f)
-                                    else CanopyColors.SurfaceHover
-                                )
-                                .border(
-                                    1.dp,
-                                    if (isSelected) LocalAccent.current else Color.Transparent,
-                                    chipShape
-                                )
-                                .clickable { onQualityChange(quality) }
-                                .padding(vertical = 10.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = quality.label,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) LocalAccent.current else CanopyColors.Text,
-                            )
-                        }
-                    }
-                }
+                SettingsSegmented(
+                    options = QobuzQuality.entries.map { it to it.label },
+                    selected = status.quality,
+                    onSelect = onQualityChange,
+                )
 
                 Spacer(Modifier.height(12.dp))
 

@@ -33,35 +33,32 @@ class YouTubeSessionAuthTest {
     }
 
     @Test
-    fun authorizationSignsTimestampCookieAndOrigin() {
-        val authorization = YouTubeSessionAuth.authorization(
-            cookieHeader = "SID=ignored; SAPISID=cookie-value",
-            epochSeconds = 1_700_000_000,
-        )
-
-        assertEquals(
-            "SAPISIDHASH 1700000000_a512ef68af31da56e69b30f14e2d4a443b11b755",
-            authorization,
-        )
-    }
-
-    @Test
-    fun authorizationIncludesSecureCookieSchemes() {
-        val authorization = YouTubeSessionAuth.authorization(
-            cookieHeader = "__Secure-1PAPISID=one; __Secure-3PAPISID=three",
-            epochSeconds = 1_700_000_000,
-        ).orEmpty()
-
-        assertEquals(3, authorization.split(' ').count { it.endsWith("HASH") })
-        assert(authorization.startsWith("SAPISIDHASH "))
-        assert(authorization.contains(" SAPISID1PHASH "))
-        assert(authorization.contains(" SAPISID3PHASH "))
-    }
-
-    @Test
     fun dataSyncIdNormalizesDelegationAndPercentEscapes() {
-        assertEquals("channel-id", YouTubeSessionAuth.normalizeDataSyncId("account-id%7C%7Cchannel-id"))
-        assertEquals("account-id", YouTubeSessionAuth.normalizeDataSyncId("account-id||"))
+        assertEquals("brand-id", YouTubeSessionAuth.normalizeDataSyncId("brand-id%7C%7Cuser-id"))
+        assertEquals("", YouTubeSessionAuth.normalizeDataSyncId("user-id||"))
+        assertEquals("", YouTubeSessionAuth.normalizeDataSyncId("user-id"))
         assertEquals("", YouTubeSessionAuth.normalizeDataSyncId("null"))
+        assertEquals("brand-id", YouTubeSessionAuth.delegatedId("owner-id||", "brand-id"))
+        assertEquals("brand-id", YouTubeSessionAuth.delegatedId("brand-id||owner-id", ""))
+    }
+
+    @Test
+    fun accountIdentityIncludesChannelIndexAndLogin() {
+        val current = YouTubeSession("SAPISID=owner", dataSyncId = "brand-one")
+        assertEquals(true, YouTubeSessionAuth.sameAccount(current, current.copy(avatarUrl = "new")))
+        assertEquals(false, YouTubeSessionAuth.sameAccount(current, current.copy(dataSyncId = "brand-two")))
+        assertEquals(false, YouTubeSessionAuth.sameAccount(current, current.copy(accountIndex = 1)))
+        assertEquals(false, YouTubeSessionAuth.sameAccount(current, current.copy(cookie = "SAPISID=other")))
+    }
+
+    @Test
+    fun chooserIgnoresCurrentAccountAfterPageIdentityChanges() {
+        val current = YouTubeSession("SAPISID=owner", dataSyncId = "brand-one")
+        val chooser = current.copy(accountIndex = 1)
+        assertEquals(false, YouTubeSessionAuth.selectedDifferentAccount(current, chooser, current))
+        assertEquals(false, YouTubeSessionAuth.selectedDifferentAccount(current, null, chooser))
+        assertEquals(true, YouTubeSessionAuth.selectedDifferentAccount(
+            current, chooser, current.copy(dataSyncId = "brand-two"),
+        ))
     }
 }

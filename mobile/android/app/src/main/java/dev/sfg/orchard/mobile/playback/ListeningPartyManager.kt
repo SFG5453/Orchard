@@ -103,7 +103,7 @@ class ListeningPartyManager(
 
     private suspend fun runClient(start: suspend (ListeningPartyClient) -> PartyState) {
         leaveParty(closeRoom = true)
-        val created = ListeningPartyClient(context, http, serviceUrl, displayName)
+        val created = ListeningPartyClient(http, serviceUrl, displayName)
         client = created
         // Set before binding: creating or joining a room is an HTTP round trip, and the client
         // stays idle for its whole duration. Without this the panel would show its join form again

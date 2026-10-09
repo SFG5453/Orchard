@@ -14,7 +14,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri('https://jitpack.io') }
+        // Kawarp-AGSL is only published through JitPack. One repo, one tenant, no exceptions.
+        maven {
+            url = uri('https://jitpack.io')
+            content { includeGroup 'com.github.meowarex' }
+        }
     }
 }
 

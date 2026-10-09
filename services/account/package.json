@@ -1,0 +1,22 @@
+{
+  "name": "@orchard/account-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.js",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --config wrangler.production.jsonc",
+    "migrate:local": "wrangler d1 migrations apply DB --local",
+    "migrate:remote": "wrangler d1 migrations apply DB --remote --config wrangler.production.jsonc",
+    "generate-key": "node scripts/generate-signing-key.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "4.142.0"
+  },
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {
+    "aws4fetch": "^1.0.20"
+  }
+}

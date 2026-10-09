@@ -33,6 +33,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.remember
+import dev.sfg.orchard.mobile.ui.motion.pressScale
+import dev.sfg.orchard.mobile.ui.motion.riseIn
 import dev.sfg.orchard.mobile.ui.scroll.orchardVerticalScroll as verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -86,35 +90,44 @@ fun WelcomeScreen(
 
             Spacer(Modifier.height(28.dp))
 
-            WelcomeAuthSection(
-                auth = auth,
-                onSignIn = onSignIn,
-                onSignOut = onSignOut,
-            )
+            Box(Modifier.riseIn(3)) {
+                WelcomeAuthSection(
+                    auth = auth,
+                    onSignIn = onSignIn,
+                    onSignOut = onSignOut,
+                )
+            }
 
             Spacer(Modifier.height(22.dp))
 
-            WelcomeVisualsSection(
-                settings = settings,
-                onUpdateSettings = onUpdateSettings,
-            )
+            Box(Modifier.riseIn(4)) {
+                WelcomeVisualsSection(
+                    settings = settings,
+                    onUpdateSettings = onUpdateSettings,
+                )
+            }
 
             Spacer(Modifier.height(22.dp))
 
-            WelcomeCrossfadeSection(
-                settings = settings,
-                onUpdateSettings = onUpdateSettings,
-            )
+            Box(Modifier.riseIn(5)) {
+                WelcomeCrossfadeSection(
+                    settings = settings,
+                    onUpdateSettings = onUpdateSettings,
+                )
+            }
 
             Spacer(Modifier.height(22.dp))
 
-            WelcomeQualityAndStorageSection(
-                settings = settings,
-                onUpdateSettings = onUpdateSettings,
-            )
+            Box(Modifier.riseIn(6)) {
+                WelcomeQualityAndStorageSection(
+                    settings = settings,
+                    onUpdateSettings = onUpdateSettings,
+                )
+            }
 
             Spacer(Modifier.height(32.dp))
 
+            val finishSource = remember { MutableInteractionSource() }
             Button(
                 onClick = onFinish,
                 shape = CircleShape,
@@ -122,7 +135,10 @@ fun WelcomeScreen(
                     containerColor = LocalAccent.current,
                     contentColor = Color.Black,
                 ),
+                interactionSource = finishSource,
                 modifier = Modifier
+                    .riseIn(7, fromScale = 0.85f)
+                    .pressScale(finishSource, 0.94f)
                     .fillMaxWidth()
                     .height(56.dp),
             ) {

@@ -1,0 +1,1 @@
+option('tests', type: 'boolean', value: true, description: 'Build the test bootstrapper and end-to-end test')

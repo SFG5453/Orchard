@@ -1,0 +1,6 @@
+option('tests', type: 'boolean', value: true, description: 'Build Orchard tests')
+option('orchard_rust_target', type: 'string', value: '', description: 'Cargo target triple (empty uses the host)')
+option('host_qjsc', type: 'string', value: '', description: 'Host qjsc built from the bundled QuickJS source for cross builds')
+option('host_rcc', type: 'string', value: '', description: 'Absolute path to the host Qt resource compiler')
+option('host_qsb', type: 'string', value: '', description: 'Absolute path to the host Qt shader baker')
+option('adaptive_platform', type: 'string', value: '', description: 'Adaptive mix staging platform override')

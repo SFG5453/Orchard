@@ -22,8 +22,6 @@ package dev.sfg.orchard.mobile.download
 import android.content.Context
 import android.util.Log
 import dev.sfg.orchard.mobile.artwork.TrackArtwork
-import dev.sfg.orchard.mobile.auth.YouTubeSessionProvider
-import dev.sfg.orchard.mobile.model.AudioQuality
 import dev.sfg.orchard.mobile.model.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
@@ -52,26 +50,16 @@ internal fun DownloadItem.completedFileOrNull(): File? {
 class DownloadManager(
     context: Context,
     private val http: OkHttpClient,
-    sessionProvider: YouTubeSessionProvider? = null,
     private val scope: CoroutineScope,
-    /**
-     * Supplied lazily so constructing the graph does not build a WebView. Downloads share the
-     * minter with playback; attesting twice would cost twice and prove the same thing.
-     */
-    poTokenMinter: () -> dev.sfg.orchard.mobile.playback.YouTubePoTokenMinter? = { null },
-    /**
-     * Also lazy, and for the same reason. The attesting client returns ciphered formats, so a
-     * downloader without a solver would resolve through it and then be unable to read the URL.
-     */
-    challengeSolver: () -> dev.sfg.orchard.mobile.playback.YouTubeChallengeSolver? = { null },
+    /** Supplied lazily: the resolver also reads finished downloads back from this manager. */
+    streams: () -> dev.sfg.orchard.mobile.playback.YouTubeStreamResolver,
     private val artworkResolver: suspend (Track) -> TrackArtwork? = { null },
     private val downloadAnimatedArtworkProvider: () -> Boolean = { false },
-    qualityProvider: () -> AudioQuality = { AudioQuality.HIGH },
 ) {
     private val context = context.applicationContext
     val store: DownloadStore = DownloadStore(context)
     private val downloader: TrackDownloader =
-        TrackDownloader(http, sessionProvider, store, poTokenMinter, challengeSolver, qualityProvider)
+        TrackDownloader(http, store, streams)
 
     private val mutableDownloads = MutableStateFlow<Map<String, DownloadItem>>(emptyMap())
     val downloads: StateFlow<Map<String, DownloadItem>> = mutableDownloads.asStateFlow()
@@ -117,7 +105,8 @@ class DownloadManager(
 
     /** Enqueue a track for downloading. */
     fun downloadTrack(track: Track) {
-        if (track.id.isBlank()) return
+        // Already on the phone.
+        if (track.id.isBlank() || track.isLocal) return
         val current = mutableDownloads.value[track.id]
         if (current?.status == DownloadStatus.COMPLETED && current.completedFileOrNull() != null) {
             Log.d(TAG, "Track ${track.id} already downloaded or queued")
@@ -360,8 +349,7 @@ class DownloadManager(
 
     companion object {
         private const val TAG = "DownloadManager"
-        // NewPipe-resolved tracks may use four bounded range requests each. Three tracks keeps enough
-        // parallelism to beat per-connection throttling without creating a request storm.
+        // Enough parallelism to beat per-connection throttling without a request storm.
         private const val MAX_CONCURRENT_DOWNLOADS = 3
         private const val MAX_DOWNLOAD_ATTEMPTS = 6
         private const val RETRY_BASE_DELAY_MS = 750L

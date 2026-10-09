@@ -23,23 +23,18 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,13 +44,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.settings.CacheManager
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
-import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import kotlin.math.roundToInt
 
 /** Renders a megabyte count the way a listener thinks about storage. */
@@ -81,60 +75,48 @@ internal fun CacheSizeRow(settings: OrchardSettings, onSettings: (OrchardSetting
     // size and the control has somewhere obvious to land.
     val index = steps.indexOfFirst { it >= settings.cacheSizeMb }.takeIf { it >= 0 } ?: steps.lastIndex
 
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-
-            Column(Modifier.weight(1f).padding(end = 14.dp)) {
-                Text(
-                    "Cached audio",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = CanopyColors.Text,
-                )
-                Text(
-                    "Keep up to ${formatCacheSize(steps[index])} of played tracks for instant replay",
-                    color = CanopyColors.Muted,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            RowIcon(Icons.Rounded.Inventory2)
+            Column(Modifier.weight(1f)) {
+                RowTitle("Cached audio")
+                RowSubtitle("Keep up to ${formatCacheSize(steps[index])} of played tracks for instant replay")
             }
             Text(
                 formatCacheSize(steps[index]),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = LocalAccent.current,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+                color = SettingsStyle.SageSoft,
             )
         }
-        Spacer(Modifier.height(6.dp))
-        Slider(
-            value = index.toFloat(),
-            onValueChange = { onSettings(settings.copy(cacheSizeMb = steps[it.roundToInt()])) },
-            valueRange = 0f..steps.lastIndex.toFloat(),
-            steps = steps.size - 2,
-            colors = SliderDefaults.colors(
-                thumbColor = LocalAccent.current,
-                activeTrackColor = LocalAccent.current,
-                inactiveTrackColor = CanopyColors.Canvas,
-                activeTickColor = Color.Transparent,
-                inactiveTickColor = Color.Transparent,
-            ),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(Modifier.fillMaxWidth()) {
-            Text(
-                formatCacheSize(steps.first()),
-                color = CanopyColors.Eyebrow,
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.weight(1f),
+        Column(Modifier.padding(start = 52.dp)) {
+            Slider(
+                value = index.toFloat(),
+                onValueChange = { onSettings(settings.copy(cacheSizeMb = steps[it.roundToInt()])) },
+                valueRange = 0f..steps.lastIndex.toFloat(),
+                steps = steps.size - 2,
+                colors = settingsSliderColors(),
+                modifier = Modifier.fillMaxWidth(),
             )
+            Row(Modifier.fillMaxWidth()) {
+                Text(
+                    formatCacheSize(steps.first()),
+                    color = SettingsStyle.Caption,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    formatCacheSize(steps.last()),
+                    color = SettingsStyle.Caption,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
             Text(
-                formatCacheSize(steps.last()),
-                color = CanopyColors.Eyebrow,
+                "A new limit applies next time playback starts",
+                color = SettingsStyle.Caption,
                 style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
-        Text(
-            "A new limit applies next time playback starts",
-            color = CanopyColors.Eyebrow,
-            style = MaterialTheme.typography.labelMedium,
-        )
     }
 }
 
@@ -151,60 +133,21 @@ internal fun ClearCacheRow(
     var showConfirmDialog by remember { mutableStateOf(false) }
     val formattedSize = remember(cacheSizeBytes) { CacheManager.formatStorageSize(cacheSizeBytes) }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = !isClearing) { showConfirmDialog = true }
-            .defaultMinSize(minHeight = 64.dp)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    SettingsRow(
+        title = "Clear cache",
+        subtitle = "Downloads and your library stay intact ($formattedSize in cache)",
+        icon = Icons.Rounded.Delete,
+        titleColor = CanopyColors.Danger,
+        iconTint = CanopyColors.Danger,
+        enabled = !isClearing,
+        modifier = Modifier.clickable(enabled = !isClearing) { showConfirmDialog = true },
     ) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(end = 16.dp),
-        ) {
-            Text(
-                "Clear cache",
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Normal),
-                color = CanopyColors.Text,
-            )
-            Text(
-                "Temporary audio, artwork, and network cache ($formattedSize)",
-                color = CanopyColors.Muted,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-
         if (isClearing) {
             CircularProgressIndicator(
                 modifier = Modifier.size(20.dp),
                 strokeWidth = 2.dp,
-                color = LocalAccent.current,
+                color = SettingsStyle.Sage,
             )
-        } else {
-            Surface(
-                onClick = { showConfirmDialog = true },
-                shape = RoundedCornerShape(16.dp),
-                color = if (cacheSizeBytes > 0) CanopyColors.Danger.copy(alpha = 0.14f) else CanopyColors.Canvas,
-                contentColor = if (cacheSizeBytes > 0) CanopyColors.Danger else CanopyColors.Muted,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                ) {
-                    Icon(
-                        Icons.Rounded.Delete,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "Clear",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                    )
-                }
-            }
         }
     }
 

@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "replace-with-release-cleaner-worker-name",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-07",
+  "workers_dev": false,
+  "routes": [{ "pattern": "admin.example.com", "custom_domain": true }],
+  "r2_buckets": [
+    {
+      "binding": "RELEASE_BUCKET",
+      "bucket_name": "replace-with-release-bucket",
+      "jurisdiction": "us"
+    }
+  ],
+  "vars": {
+    "ACCESS_TEAM_DOMAIN": "REPLACE_WITH_TEAM.cloudflareaccess.com",
+    "ACCESS_AUD": "REPLACE_WITH_ACCESS_APPLICATION_AUD",
+    "MIN_OBJECT_AGE_DAYS": "7"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+  }
+}

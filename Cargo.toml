@@ -1,0 +1,25 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/earmark",
+    "crates/orchard-adaptive-mix",
+    "crates/orchard-youtube-extractor",
+    "crates/orchard-core-ffi",
+    "crates/orchard-system-media",
+    "crates/orchard-transition-core",
+    "crates/orchard-transition-planner",
+    "crates/orchard-transition-mobile"
+]
+
+[workspace.package]
+edition = "2024"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[profile.release]
+lto = "thin"
+strip = true
+
+# Android's library; AGP strips it again when packaging the APK.
+[profile.android]
+inherits = "release"

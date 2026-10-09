@@ -47,15 +47,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.model.LyricLine
-import dev.sfg.orchard.mobile.model.LyricWord
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -65,7 +60,6 @@ import kotlin.math.abs
 @Composable
 internal fun LyricLines(
     lines: List<LyricLine>,
-    positionMs: Long,
     playing: Boolean,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
@@ -75,10 +69,15 @@ internal fun LyricLines(
     // Playback snapshots arrive twice a second. Keep one frame-clock coroutine alive between
     // them and fold small clock corrections in gently; restarting the animation at every
     // snapshot makes the highlight visibly hop backwards on some devices.
-    val latestPosition by rememberUpdatedState(positionMs)
+    // Read through the clock inside the coroutine so ticks never recompose the list.
+    val clock = dev.sfg.orchard.mobile.ui.components.LocalPlayerClock.current
+    val latestPosition by remember(clock) { derivedStateOf { clock.reported().positionMs } }
     val latestPlaying by rememberUpdatedState(playing)
     val synced = remember(lines) { lines.any { it.startMs != null } }
-    val smoothPosition = produceState(positionMs.toFloat(), lines) {
+    val initialPosition = remember(lines) {
+        androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { latestPosition.toFloat() }
+    }
+    val smoothPosition = produceState(initialPosition, lines) {
         var observedPosition = latestPosition
         var wasPlaying = latestPlaying
         var anchorPosition = observedPosition.toFloat()
@@ -120,6 +119,9 @@ internal fun LyricLines(
             }
         }
     }
+
+    val translation = rememberLyricTranslation(lines)
+    val translations = remember(translation, lines) { translation.translationsFor(lines) }
 
     val displayItems = remember(lines, synced) {
         if (!synced) {
@@ -244,17 +246,12 @@ internal fun LyricLines(
                             label = "Lyric emphasis",
                         )
 
-                        // Graduated depth-of-field focus: active line gleams at 1.0f, immediate
-                        // neighbors fade gently, and distant lines softly recede. In browsing mode,
-                        // all lines elevate to readable brightness.
-                        val distance = if (activeDisplayIndex >= 0) abs(displayIndex - activeDisplayIndex) else 0
+                        // One flat rest level like desktop, so upcoming lines stay readable.
                         val targetAlpha = when {
-                            !synced -> 0.85f
-                            browsing -> 0.70f
+                            !synced -> UNSYNCED_ALPHA
                             active -> 1.0f
-                            distance == 1 -> 0.44f
-                            distance == 2 -> 0.26f
-                            else -> 0.16f
+                            browsing -> BROWSING_ALPHA
+                            else -> INACTIVE_ALPHA
                         }
                         val animatedAlpha by animateFloatAsState(
                             targetValue = targetAlpha,
@@ -279,7 +276,18 @@ internal fun LyricLines(
                                 .padding(vertical = LINE_SPACING),
                             horizontalAlignment = if (isAlternate) Alignment.End else Alignment.Start,
                         ) {
-                            if (line.words.isNotEmpty()) {
+                            val translated = translations?.getOrNull(item.originalIndex)
+                            if (translated != null) {
+                                TranslatedLyricLine(
+                                    line = line,
+                                    translation = translated,
+                                    synced = synced,
+                                    active = active,
+                                    isAlternate = isAlternate,
+                                    accent = accent,
+                                    positionMs = smoothPosition,
+                                )
+                            } else if (line.words.isNotEmpty()) {
                                 TimedWords(
                                     words = line.words,
                                     positionMs = smoothPosition,
@@ -290,11 +298,12 @@ internal fun LyricLines(
                             } else {
                                 Text(
                                     text = line.text,
-                                    color = if (active) Color.White else Color.White.copy(alpha = if (synced) 0.85f else 0.78f),
+                                    color = Color.White,
                                     textAlign = if (isAlternate) TextAlign.End else TextAlign.Start,
                                     modifier = Modifier.fillMaxWidth(),
-                                    style = lyricTextStyle().copy(
-                                        shadow = if (active) Shadow(accent.copy(alpha = 0.45f), blurRadius = 24f) else null,
+                                    // Unsynced lyrics read as prose, matching desktop's smaller medium weight.
+                                    style = (if (synced) lyricTextStyle() else unsyncedLyricStyle()).copy(
+                                        shadow = if (active) Shadow(accent.copy(alpha = 0.4f), blurRadius = 24f) else null,
                                     ),
                                 )
                             }
@@ -313,6 +322,11 @@ internal fun LyricLines(
                 }
             }
         }
+
+        LyricTranslateChip(
+            state = translation,
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 16.dp),
+        )
 
         // Center-aligned, glassmorphic "Resume lyrics" pill button when browsing away from live position.
         if (browsing && synced) {
@@ -439,166 +453,17 @@ private fun Modifier.verticalEdgeFade(): Modifier = this
         )
     }
 
-@Composable
-private fun lyricTextStyle(adlib: Boolean = false) =
-    MaterialTheme.typography.headlineMedium.copy(
-        fontSize = if (adlib) 21.sp else 32.sp,
-        lineHeight = if (adlib) 26.sp else 41.sp,
-        letterSpacing = if (adlib) (-0.2).sp else (-0.64).sp,
-        fontWeight = if (adlib) FontWeight.Medium else FontWeight.Bold,
-        lineBreak = LineBreak.Heading,
-    )
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun TimedWords(
-    words: List<LyricWord>,
-    positionMs: State<Float>,
-    lineActive: Boolean,
-    adlib: Boolean = false,
-    isAlternate: Boolean = false,
-    accent: Color,
-) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(top = if (adlib) 4.dp else 0.dp),
-        horizontalArrangement = if (isAlternate) Arrangement.spacedBy(if (adlib) 5.dp else 8.dp, Alignment.End)
-                                else Arrangement.spacedBy(if (adlib) 5.dp else 8.dp, Alignment.Start),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        words.forEach { word -> SmoothTimedWord(word, positionMs, lineActive, adlib, accent) }
-    }
-}
-
-@Composable
-private fun SmoothTimedWord(
-    word: LyricWord,
-    positionMs: State<Float>,
-    lineActive: Boolean,
-    adlib: Boolean,
-    accent: Color,
-) {
-    // Text owns layout, font loading and accessibility. Its cached layout is painted once;
-    // the moving gradient never changes composition, text measurement or FlowRow placement.
-    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
-    val sung = if (adlib) accent.copy(alpha = 0.76f) else Color.White
-    val unsung = Color.White.copy(alpha = if (lineActive) UNSUNG_ALPHA else INACTIVE_ALPHA)
-    val fill = if (adlib) sung else lerp(Color.White, accent, 0.4f)
-    Text(
-        text = word.text.trim(),
-        style = lyricTextStyle(adlib),
-        color = unsung,
-        onTextLayout = { layout = it },
-        modifier = Modifier.drawWithCache {
-            val measured = layout
-            val glow = Shadow(fill.copy(alpha = 0.45f), blurRadius = 10.dp.toPx())
-            val sungGlow = Shadow(Color.White.copy(alpha = 0.25f), blurRadius = 4.dp.toPx())
-            onDrawWithContent {
-                if (measured == null || !lineActive) {
-                    drawContent()
-                } else {
-                    val progress = lyricWordProgress(word, positionMs.value + LYRIC_WORD_LEAD_MS)
-                    when {
-                        progress <= 0f -> drawText(measured, color = unsung)
-                        progress >= 1f -> drawText(measured, color = sung, shadow = if (adlib) null else sungGlow)
-                        else -> drawText(
-                            measured,
-                            brush = Brush.horizontalGradient(
-                                0f to fill,
-                                progress to fill,
-                                (progress + HIGHLIGHT_FEATHER).coerceAtMost(1f) to unsung,
-                                1f to unsung,
-                                endX = size.width,
-                            ),
-                            shadow = glow,
-                        )
-                    }
-                }
-            }
-        },
-    )
-}
-
-internal fun lyricWordProgress(word: LyricWord, positionMs: Float): Float {
-    val start = word.startMs.toFloat()
-    val end = word.endMs?.toFloat() ?: start
-    return if (end > start) ((positionMs - start) / (end - start)).coerceIn(0f, 1f)
-    else if (positionMs >= start) 1f else 0f
-}
-
-internal sealed interface LyricDisplayItem {
-    val key: String
-
-    data class Line(
-        val line: LyricLine,
-        val originalIndex: Int,
-    ) : LyricDisplayItem {
-        override val key: String get() = "line-$originalIndex"
-    }
-
-    data class Pause(
-        val afterLineIndex: Int,
-        val startMs: Long,
-        val endMs: Long,
-    ) : LyricDisplayItem {
-        override val key: String get() = "pause-$afterLineIndex"
-    }
-}
-
-private const val LYRIC_PAUSE_MIN_MS = 7_000L
-private const val LYRIC_PAUSE_LINE_TAIL_ACCURATE_MS = 400L
-private const val LYRIC_PAUSE_LINE_TAIL_FALLBACK_MS = 2_400L
-
-internal fun lyricPauseWindow(line: LyricLine, nextLine: LyricLine): Pair<Long, Long>? {
-    val lineStart = line.startMs ?: return null
-    val nextStart = nextLine.startMs ?: return null
-
-    val gapLength = nextStart - lineStart
-    if (gapLength < LYRIC_PAUSE_MIN_MS) return null
-
-    val (lineEnd, hasAccurateEnd) = when {
-        line.endMs != null && line.endMs > lineStart -> line.endMs to true
-        line.words.isNotEmpty() -> {
-            val lastWord = line.words.last()
-            if (lastWord.endMs != null && lastWord.endMs > lineStart) {
-                lastWord.endMs to true
-            } else if (lastWord.startMs > lineStart) {
-                (lastWord.startMs + 400L) to true
-            } else {
-                lineStart to false
-            }
-        }
-        else -> lineStart to false
-    }
-
-    val tail = if (hasAccurateEnd) LYRIC_PAUSE_LINE_TAIL_ACCURATE_MS else LYRIC_PAUSE_LINE_TAIL_FALLBACK_MS
-    val pauseStart = lineEnd + tail
-    val pauseEnd = nextStart
-    if (pauseStart >= pauseEnd) return null
-
-    return pauseStart to pauseEnd
-}
-
-internal fun buildLyricDisplayItems(lines: List<LyricLine>): List<LyricDisplayItem> = buildList {
-    lines.forEachIndexed { index, line ->
-        add(LyricDisplayItem.Line(line, index))
-        val nextLine = lines.getOrNull(index + 1)
-        if (nextLine != null) {
-            val pause = lyricPauseWindow(line, nextLine)
-            if (pause != null) {
-                add(LyricDisplayItem.Pause(index, pause.first, pause.second))
-            }
-        }
-    }
-}
-
 private const val NANOS_PER_MILLISECOND = 1_000_000f
 private const val SEEK_SNAP_THRESHOLD_MS = 250f
 private const val CLOCK_CORRECTION_FACTOR = 0.35f
-private const val LYRIC_LINE_LEAD_MS = 250f
-private const val LYRIC_WORD_LEAD_MS = 80f
-private const val HIGHLIGHT_FEATHER = 0.075f
+internal const val LYRIC_LINE_LEAD_MS = 250f
+internal const val LYRIC_WORD_LEAD_MS = 80f
+internal const val HIGHLIGHT_FEATHER = 0.075f
 
 /** Colour ramp mirrored from the desktop `.lyrics-line` rules. */
-private const val INACTIVE_ALPHA = 0.24f
-private const val UNSUNG_ALPHA = 0.28f
-private val LINE_SPACING = 14.dp
+internal const val INACTIVE_ALPHA = 0.24f
+internal const val UNSUNG_ALPHA = 0.28f
+internal const val ADLIB_UNSUNG_ALPHA = 0.48f
+private const val BROWSING_ALPHA = 0.68f
+private const val UNSYNCED_ALPHA = 0.72f
+private val LINE_SPACING = 11.dp

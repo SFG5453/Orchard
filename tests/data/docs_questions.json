@@ -1,0 +1,661 @@
+{
+ "questions": [
+  {
+   "question": "how do I open the queue",
+   "accept": [
+    {
+     "page": "queue",
+     "section": "Open the queue panel"
+    }
+   ]
+  },
+  {
+   "question": "how to add a song to the queue",
+   "accept": [
+    {
+     "page": "queue",
+     "section": "Add a song to the queue"
+    }
+   ]
+  },
+  {
+   "question": "how do i play a song next",
+   "accept": [
+    {
+     "page": "queue",
+     "section": "Add a song to the queue"
+    }
+   ]
+  },
+  {
+   "question": "how do I clear the queue",
+   "accept": [
+    {
+     "page": "queue",
+     "section": "Clear the queue"
+    }
+   ]
+  },
+  {
+   "question": "how to reorder songs in the queue",
+   "accept": [
+    {
+     "page": "queue",
+     "section": "Reorder the queue"
+    }
+   ]
+  },
+  {
+   "question": "how to remove a song from the queue",
+   "accept": [
+    {
+     "page": "queue",
+     "section": "Remove one song from the queue"
+    }
+   ]
+  },
+  {
+   "question": "how do I sort my queue so songs blend well",
+   "accept": [
+    {
+     "page": "queue",
+     "section": "Sort the queue with Best Mix"
+    }
+   ]
+  },
+  {
+   "question": "how do I undo best mix",
+   "accept": [
+    {
+     "page": "queue",
+     "section": "Restore the original order"
+    }
+   ]
+  },
+  {
+   "question": "how to cancel best mix",
+   "accept": [
+    {
+     "page": "queue",
+     "section": "Cancel Best Mix"
+    }
+   ]
+  },
+  {
+   "question": "how do I turn on autoplay",
+   "accept": [
+    {
+     "page": "queue",
+     "section": "Turn Autoplay"
+    },
+    {
+     "page": "playback",
+     "section": "Keep music playing"
+    }
+   ]
+  },
+  {
+   "question": "how do I turn on shuffle",
+   "accept": [
+    {
+     "page": "playback",
+     "section": "Turn shuffle"
+    }
+   ]
+  },
+  {
+   "question": "how to repeat a song",
+   "accept": [
+    {
+     "page": "playback",
+     "section": "Change the repeat mode"
+    }
+   ]
+  },
+  {
+   "question": "how do I change the volume",
+   "accept": [
+    {
+     "page": "playback",
+     "section": "Change the volume"
+    }
+   ]
+  },
+  {
+   "question": "how to skip to the next song",
+   "accept": [
+    {
+     "page": "playback",
+     "section": "Skip to the next"
+    },
+    {
+     "page": "shortcuts",
+     "section": "Skip songs"
+    }
+   ]
+  },
+  {
+   "question": "how do i go fullscreen",
+   "accept": [
+    {
+     "page": "playback",
+     "section": "Open the fullscreen player"
+    },
+    {
+     "page": "shortcuts",
+     "section": "Open the fullscreen player"
+    }
+   ]
+  },
+  {
+   "question": "how to exit the fullscreen player",
+   "accept": [
+    {
+     "page": "playback",
+     "section": "Close the fullscreen player"
+    }
+   ]
+  },
+  {
+   "question": "how do I like a song",
+   "accept": [
+    {
+     "page": "playback",
+     "section": "Like a song"
+    },
+    {
+     "page": "library-and-playlists",
+     "section": "Like a song"
+    }
+   ]
+  },
+  {
+   "question": "how do I jump to a part of the song",
+   "accept": [
+    {
+     "page": "playback",
+     "section": "Jump to a point"
+    },
+    {
+     "page": "shortcuts",
+     "section": "Seek with"
+    }
+   ]
+  },
+  {
+   "question": "how to open the album of the song that is playing",
+   "accept": [
+    {
+     "page": "playback",
+     "section": "Open a song's album"
+    },
+    {
+     "page": "library-and-playlists",
+     "section": "Open an album or artist"
+    }
+   ]
+  },
+  {
+   "question": "how do I open settings",
+   "accept": [
+    {
+     "page": "getting-started",
+     "section": "Open Settings"
+    }
+   ]
+  },
+  {
+   "question": "how do I open the docs",
+   "accept": [
+    {
+     "page": "getting-started",
+     "section": "Open the docs"
+    },
+    {
+     "page": "using-the-docs",
+     "section": "Open the docs"
+    }
+   ]
+  },
+  {
+   "question": "how to sign in",
+   "accept": [
+    {
+     "page": "getting-started",
+     "section": "Sign in to Orchard"
+    }
+   ]
+  },
+  {
+   "question": "how do I sign out of youtube music",
+   "accept": [
+    {
+     "page": "accounts",
+     "section": "Sign out of YouTube Music"
+    }
+   ]
+  },
+  {
+   "question": "how to log out",
+   "accept": [
+    {
+     "page": "accounts",
+     "section": "Sign out"
+    }
+   ]
+  },
+  {
+   "question": "how do I open my library",
+   "accept": [
+    {
+     "page": "library-and-playlists",
+     "section": "Open your library"
+    }
+   ]
+  },
+  {
+   "question": "how to add a song to a playlist",
+   "accept": [
+    {
+     "page": "library-and-playlists",
+     "section": "Add a song to a playlist"
+    }
+   ]
+  },
+  {
+   "question": "how do I make a new playlist",
+   "accept": [
+    {
+     "page": "library-and-playlists",
+     "section": "Create a new playlist"
+    }
+   ]
+  },
+  {
+   "question": "how to remove a song from a playlist",
+   "accept": [
+    {
+     "page": "library-and-playlists",
+     "section": "Remove a song from a playlist"
+    }
+   ]
+  },
+  {
+   "question": "how can I share a song",
+   "accept": [
+    {
+     "page": "library-and-playlists",
+     "section": "Copy a share link"
+    }
+   ]
+  },
+  {
+   "question": "how do I search for a song",
+   "accept": [
+    {
+     "page": "search",
+     "section": "Search for a song"
+    }
+   ]
+  },
+  {
+   "question": "how do I use spotlight",
+   "accept": [
+    {
+     "page": "search",
+     "section": "Open Spotlight"
+    },
+    {
+     "page": "search",
+     "section": "Use Spotlight"
+    },
+    {
+     "page": "shortcuts",
+     "section": "Open Spotlight"
+    }
+   ]
+  },
+  {
+   "question": "how to find a song inside a playlist",
+   "accept": [
+    {
+     "page": "search",
+     "section": "Find a song inside a playlist"
+    },
+    {
+     "page": "shortcuts",
+     "section": "Search inside a playlist"
+    }
+   ]
+  },
+  {
+   "question": "what keyboard shortcuts are there",
+   "accept": [
+    {
+     "page": "shortcuts",
+     "section": "Shortcut list"
+    }
+   ]
+  },
+  {
+   "question": "how to maximize the window",
+   "accept": [
+    {
+     "page": "shortcuts",
+     "section": "Maximize or restore"
+    }
+   ]
+  },
+  {
+   "question": "how do I turn on crossfade",
+   "accept": [
+    {
+     "page": "crossfade",
+     "section": "Turn crossfade on or off"
+    }
+   ]
+  },
+  {
+   "question": "how to change the crossfade length",
+   "accept": [
+    {
+     "page": "crossfade",
+     "section": "Change the Standard crossfade length"
+    }
+   ]
+  },
+  {
+   "question": "how do I turn on adaptive mix",
+   "accept": [
+    {
+     "page": "crossfade",
+     "section": "Turn on Adaptive mix"
+    }
+   ]
+  },
+  {
+   "question": "why is adaptive mix greyed out",
+   "accept": [
+    {
+     "page": "crossfade",
+     "section": "Why the Adaptive mix button"
+    },
+    {
+     "page": "troubleshooting",
+     "section": "The Adaptive mix button"
+    }
+   ]
+  },
+  {
+   "question": "how do I enable gapless playback",
+   "accept": [
+    {
+     "page": "crossfade",
+     "section": "Turn on gapless"
+    }
+   ]
+  },
+  {
+   "question": "how to use the equalizer",
+   "accept": [
+    {
+     "page": "audio-engine",
+     "section": "Use an equalizer preset"
+    },
+    {
+     "page": "audio-engine",
+     "section": "Shape the equalizer"
+    }
+   ]
+  },
+  {
+   "question": "how do I change the audio output device",
+   "accept": [
+    {
+     "page": "audio-engine",
+     "section": "Choose the audio output device"
+    }
+   ]
+  },
+  {
+   "question": "how to stop sudden volume jumps",
+   "accept": [
+    {
+     "page": "audio-engine",
+     "section": "Reduce sudden volume jumps"
+    }
+   ]
+  },
+  {
+   "question": "how do I make the bass louder",
+   "accept": [
+    {
+     "page": "audio-engine",
+     "section": "Shape the equalizer"
+    },
+    {
+     "page": "audio-engine",
+     "section": "Use an equalizer preset"
+    }
+   ]
+  },
+  {
+   "question": "how do I change the streaming quality",
+   "accept": [
+    {
+     "page": "streaming-quality",
+     "section": "Change the streaming quality"
+    }
+   ]
+  },
+  {
+   "question": "how to save data on a slow connection",
+   "accept": [
+    {
+     "page": "streaming-quality",
+     "section": "Save data"
+    }
+   ]
+  },
+  {
+   "question": "how do I show the bitrate",
+   "accept": [
+    {
+     "page": "appearance",
+     "section": "Show the audio bitrate"
+    },
+    {
+     "page": "streaming-quality",
+     "section": "Show the audio bitrate"
+    }
+   ]
+  },
+  {
+   "question": "how to turn off animated artwork",
+   "accept": [
+    {
+     "page": "appearance",
+     "section": "Turn animated artwork"
+    }
+   ]
+  },
+  {
+   "question": "how do I turn on the immersive background",
+   "accept": [
+    {
+     "page": "appearance",
+     "section": "Turn on the immersive background"
+    }
+   ]
+  },
+  {
+   "question": "how do I show lyrics",
+   "accept": [
+    {
+     "page": "lyrics",
+     "section": "Show lyrics in the queue panel"
+    },
+    {
+     "page": "lyrics",
+     "section": "Show lyrics in the fullscreen"
+    }
+   ]
+  },
+  {
+   "question": "lyrics unavailable",
+   "accept": [
+    {
+     "page": "lyrics",
+     "section": "Fix"
+    },
+    {
+     "page": "troubleshooting",
+     "section": "Lyrics show"
+    }
+   ]
+  },
+  {
+   "question": "how to connect discord",
+   "accept": [
+    {
+     "page": "integrations",
+     "section": "Turn on Discord Rich Presence"
+    }
+   ]
+  },
+  {
+   "question": "discord isn't showing my song",
+   "accept": [
+    {
+     "page": "troubleshooting",
+     "section": "Discord does not show my song"
+    }
+   ]
+  },
+  {
+   "question": "how do i connect last.fm",
+   "accept": [
+    {
+     "page": "integrations",
+     "section": "Connect Last.fm"
+    }
+   ]
+  },
+  {
+   "question": "how to make orchard stay in the tray",
+   "accept": [
+    {
+     "page": "accounts",
+     "section": "Keep Orchard playing in the system tray"
+    }
+   ]
+  },
+  {
+   "question": "how to make orchard remember the window size",
+   "accept": [
+    {
+     "page": "accounts",
+     "section": "Remember the window size"
+    }
+   ]
+  },
+  {
+   "question": "orchard doesn't close when I close the window",
+   "accept": [
+    {
+     "page": "troubleshooting",
+     "section": "Closing the window leaves Orchard running"
+    },
+    {
+     "page": "accounts",
+     "section": "Keep Orchard playing"
+    }
+   ]
+  },
+  {
+   "question": "how do I stop it from skipping AI songs",
+   "accept": [
+    {
+     "page": "ai-music",
+     "section": "Stop skipping"
+    },
+    {
+     "page": "ai-music",
+     "section": "Choose what happens"
+    }
+   ]
+  },
+  {
+   "question": "how do I pick up where I left off after restarting",
+   "accept": [
+    {
+     "page": "accounts",
+     "section": "Restore the queue"
+    }
+   ]
+  },
+  {
+   "question": "my home page is empty",
+   "accept": [
+    {
+     "page": "troubleshooting",
+     "section": "The Home page or Your library is empty"
+    }
+   ]
+  },
+  {
+   "question": "how can I copy the docs for chatgpt",
+   "accept": [
+    {
+     "page": "using-the-docs",
+     "section": "Copy a page for an AI assistant"
+    },
+    {
+     "page": "using-the-docs",
+     "section": "Copy every page"
+    }
+   ]
+  },
+  {
+   "question": "how do i find a page in the docs",
+   "accept": [
+    {
+     "page": "using-the-docs",
+     "section": "Find a page in the docs"
+    }
+   ]
+  },
+  {
+   "question": "how do I see my devices",
+   "accept": [
+    {
+     "page": "accounts",
+     "section": "See and remove devices"
+    }
+   ]
+  },
+  {
+   "question": "how to add played songs to my youtube music history",
+   "accept": [
+    {
+     "page": "accounts",
+     "section": "Add played songs"
+    }
+   ]
+  }
+ ],
+ "unrelated": [
+  "what's the weather today",
+  "how do I bake bread",
+  "who won the world cup",
+  "how to install linux",
+  "tell me a joke",
+  "best pizza near me",
+  "how do i tie a tie",
+  "book a flight to paris",
+  "what is the capital of france",
+  "meaning of life",
+  "how to make coffee",
+  "asdfghjkl"
+ ]
+}

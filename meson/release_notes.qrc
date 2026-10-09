@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/release-notes">
+    <file alias="releases.json">../app/release-notes/releases.json</file>
+  </qresource>
+</RCC>

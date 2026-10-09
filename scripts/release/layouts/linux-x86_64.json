@@ -1,0 +1,51 @@
+{
+  "_comment": "Input: the packaged AppDir. Component versions identify immutable file sets. The excluded libexec helper duplicates the mapped bin copy.",
+  "exclude": ["AppRun", "*.desktop", ".DirIcon", "usr/bin/qt.conf", "usr/libexec/QtWebEngineProcess", "usr/share/applications/*", "usr/share/icons/*"],
+  "components": {
+    "ffmpeg": {"version": "8.0-2", "map": [
+      {"from": "usr/bin/ffmpeg", "to": "ffmpeg"},
+      {"from": "usr/bin/ffprobe", "to": "ffprobe"},
+      {"from": "usr/lib/libav*", "to": "lib"},
+      {"from": "usr/lib/libsw*", "to": "lib"},
+      {"from": "usr/lib/libpostproc*", "to": "lib"}
+    ]},
+    "onnxruntime": {"version": "1.23.0-1", "map": [
+      {"from": "usr/bin/libwebgpu_dawn.so", "to": "libwebgpu_dawn.so"}
+    ]},
+    "models": {"version": "2", "map": [
+      {"from": "usr/bin/models", "to": ""}
+    ]},
+    "qt": {"version": "6.12.0-2", "map": [
+      {"from": "usr/bin/QtWebEngineProcess", "to": "libexec/QtWebEngineProcess"},
+      {"from": "usr/libexec/qt.conf", "to": "libexec/qt.conf"},
+      {"from": "usr/lib", "to": "lib"},
+      {"from": "usr/plugins", "to": "plugins"},
+      {"from": "usr/qml", "to": "qml"},
+      {"from": "usr/resources", "to": "resources"},
+      {"from": "usr/translations", "to": "translations"}
+    ]}
+  },
+  "app": {"map": [
+    {"from": "orchard.png", "to": "orchard.png"},
+    {"from": "usr/bin", "to": ""},
+    {"from": "usr/share/doc", "to": "share/doc"},
+    {"from": "usr/share/orchard", "to": "share"}
+  ]},
+  "icon": "orchard.png",
+  "launch": {
+    "executable": "orchard",
+    "env": {
+      "QT_PLUGIN_PATH": "{component:qt}/plugins",
+      "QML_IMPORT_PATH": "{component:qt}/qml",
+      "QTWEBENGINEPROCESS_PATH": "{component:qt}/libexec/QtWebEngineProcess",
+      "QTWEBENGINE_RESOURCES_PATH": "{component:qt}/resources",
+      "QTWEBENGINE_LOCALES_PATH": "{component:qt}/translations/qtwebengine_locales",
+      "ORCHARD_MODELS_DIR": "{component:models}",
+      "ORCHARD_FFMPEG": "{component:ffmpeg}/ffmpeg"
+    },
+    "prependPaths": {
+      "LD_LIBRARY_PATH": ["{component:qt}/lib", "{component:ffmpeg}/lib", "{component:onnxruntime}"],
+      "PATH": ["{component:ffmpeg}"]
+    }
+  }
+}

@@ -19,7 +19,6 @@
 
 package dev.sfg.orchard.mobile.lyrics
 
-import dev.sfg.orchard.mobile.catalog.InnerTubeClient
 import dev.sfg.orchard.mobile.model.LyricLine
 import dev.sfg.orchard.mobile.model.LyricWord
 import dev.sfg.orchard.mobile.model.Track
@@ -42,7 +41,8 @@ import javax.xml.parsers.DocumentBuilderFactory
 /** Native port of Orchard desktop's am-lyrics → LRCLIB → YouTube resolver chain. */
 class LyricsRepository(
     http: OkHttpClient,
-    private val innerTube: InnerTubeClient,
+    /** Plain lyrics from YouTube Music's Lyrics tab, via the provider's `lyrics.youtube`. */
+    private val youtubeLyrics: suspend (videoId: String) -> String,
 ) {
     private data class Metadata(
         val title: String,
@@ -72,7 +72,7 @@ class LyricsRepository(
                 lrcLib.isSynchronized() -> lrcLib
                 amLyrics.isNotEmpty() -> amLyrics
                 lrcLib.isNotEmpty() -> lrcLib
-                else -> runCatching { LyricsParser.plain(innerTube.lyrics(metadata.videoId)) }.getOrDefault(emptyList())
+                else -> runCatching { LyricsParser.plain(youtubeLyrics(metadata.videoId)) }.getOrDefault(emptyList())
             }
         }
 

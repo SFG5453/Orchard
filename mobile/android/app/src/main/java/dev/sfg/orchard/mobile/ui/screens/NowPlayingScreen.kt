@@ -22,69 +22,34 @@ package dev.sfg.orchard.mobile.ui.screens
 import android.graphics.Bitmap
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.util.lerp
 import androidx.media3.common.Player
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
-import dev.sfg.orchard.mobile.audio.isTabletForm
 import dev.sfg.orchard.mobile.app.MusicVideoState
 import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.model.LyricLine
@@ -93,19 +58,12 @@ import dev.sfg.orchard.mobile.model.PlaybackTarget
 import dev.sfg.orchard.mobile.model.PlaybackTargetState
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.model.TransitionMarker
-import dev.sfg.orchard.mobile.ui.components.MessagePanel
-import dev.sfg.orchard.mobile.ui.components.RemoteArtwork
-import dev.sfg.orchard.mobile.ui.components.SmartCrossfadeBadge
 import dev.sfg.orchard.mobile.ui.foldable.FoldableNowPlayingBody
 import dev.sfg.orchard.mobile.ui.foldable.isFoldableActive
+import dev.sfg.orchard.mobile.audio.isFoldableHardware
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
-import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
-/**
- * State-of-the-art Now Playing experience featuring a full-bleed artwork backdrop, marquee typography, interactive scrubber,
- * direct-access transport controls, and output routing.
- */
+/** Full player: backdrop, then the phone, tablet or foldable body, plus the collapse flight. */
 @Composable
 fun NowPlayingScreen(
     playback: PlaybackSnapshot,
@@ -113,9 +71,9 @@ fun NowPlayingScreen(
     lyrics: LoadState<List<LyricLine>>,
     animatedArtworkEnabled: Boolean,
     animatedBackgroundEnabled: Boolean,
+    modifier: Modifier = Modifier,
     gesturesEnabled: Boolean = false,
     liked: Boolean,
-    modifier: Modifier = Modifier,
     /** The pill's bounds in root coordinates; the player collapses into it. */
     collapseBounds: Rect? = null,
     /** The pill's artwork thumbnail, which the player's cover flies into. */
@@ -127,7 +85,6 @@ fun NowPlayingScreen(
      */
     restingCoverBounds: Rect? = null,
     onRestingCoverBounds: (Rect) -> Unit = {},
-    protocolVersion: Int = 1,
     transition: dev.sfg.orchard.mobile.model.TransitionMarker? = null,
     /** Raw overlap progress, including the part after visible identity moves to the incoming song. */
     mixProgress: Float? = null,
@@ -169,45 +126,32 @@ fun NowPlayingScreen(
     musicVideo: MusicVideoState = MusicVideoState(),
     videoPlayer: Player? = null,
     onToggleMusicVideo: () -> Unit = {},
+    onVideoQuality: (Int) -> Unit = {},
 ) {
     // Lyrics and the queue are modes of the player, not destinations, so their state lives here.
     // Only one can hold the panel at a time.
     var panel by remember { mutableStateOf(PlayerPanel.NONE) }
     var sleepTimerDialogOpen by remember { mutableStateOf(false) }
-    var videoFullscreen by remember(playback.currentTrack?.id) { mutableStateOf(false) }
     val lyricsOpen = panel == PlayerPanel.LYRICS
     val queueOpen = panel == PlayerPanel.QUEUE
     val onQueue = { panel = if (queueOpen) PlayerPanel.NONE else PlayerPanel.QUEUE }
     
     val context = LocalContext.current
-    val windowInfoTracker = remember { WindowInfoTracker.getOrCreate(context) }
-    val layoutInfo by windowInfoTracker.windowLayoutInfo(context as android.app.Activity).collectAsState(initial = null)
-    
-    val foldingFeature = layoutInfo?.displayFeatures
-        ?.filterIsInstance<FoldingFeature>()
-        ?.firstOrNull()
-        
-    LaunchedEffect(foldingFeature?.state) {
-        if (foldingFeature?.state == FoldingFeature.State.HALF_OPENED && panel == PlayerPanel.NONE) {
-            panel = PlayerPanel.QUEUE
+    // Hinge posture only exists on foldables; elsewhere the subscription is pure open-time cost.
+    if (remember { context.isFoldableHardware() }) {
+        val windowInfoTracker = remember { WindowInfoTracker.getOrCreate(context) }
+        val layoutInfo by windowInfoTracker.windowLayoutInfo(context as android.app.Activity).collectAsState(initial = null)
+        val hinge = layoutInfo?.displayFeatures?.filterIsInstance<FoldingFeature>()?.firstOrNull()?.state
+        LaunchedEffect(hinge) {
+            if (hinge == FoldingFeature.State.HALF_OPENED && panel == PlayerPanel.NONE) panel = PlayerPanel.QUEUE
         }
     }
 
-    // The queue used to be its own page, so back must still close it rather than the player.
+    // Back closes an open panel before it closes the player.
     BackHandler(enabled = panel != PlayerPanel.NONE) { panel = PlayerPanel.NONE }
     val track = playback.currentTrack
     if (track == null) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(CanopyColors.Chrome)
-                .padding(16.dp),
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Rounded.ExpandMore, "Close player", tint = Color.White)
-            }
-            MessagePanel("Nothing playing", "Choose a song from Home, Search, or Library.")
-        }
+        NothingPlaying(onBack)
         return
     }
 
@@ -231,9 +175,10 @@ fun NowPlayingScreen(
     }
 
     val localControls = targets.selected is PlaybackTarget.LocalPhone
-    val canControl = localControls || protocolVersion >= 2
+    // A Connect target accepts every transport and queue command.
+    val canControl = true
     val activeMixProgress =
-        mixProgress ?: dev.sfg.orchard.mobile.ui.components.transitionProgress(playback, transition)
+        mixProgress ?: 0f
     val incomingTrack = remember(playback.queue, transition?.incomingTrackId) {
         val id = transition?.incomingTrackId
         if (id.isNullOrBlank()) null else playback.queue.firstOrNull { it.id == id }
@@ -248,65 +193,19 @@ fun NowPlayingScreen(
     // Below this a tablet in portrait, or a large phone in landscape, is better
     // served by the stacked layout it already has.
     val isFoldable = isFoldableActive()
-    val wideLayout = LocalConfiguration.current.screenWidthDp >= 840
-
-    // Swipe-down-to-dismiss. The collapse runs 0 (filling the screen) to 1 (sitting exactly on
-    // the pill), so the drag, the opening animation and the committed dismiss are all the same
-    // motion — the player grows out of the pill and shrinks back into it.
-    //
-    // The finger writes a plain float and only the settle is animated. Driving the drag through
-    // the Animatable instead meant launching a coroutine per delta, and a late one would take
-    // the animation mutex back off the spring and leave the player frozen half-collapsed.
-    val scope = rememberCoroutineScope()
-    val settle = remember { Animatable(1f) }
-    var dragProgress by remember { mutableFloatStateOf(0f) }
-    var dragging by remember { mutableStateOf(false) }
-    val progress = if (dragging) dragProgress else settle.value
-
-    val density = LocalDensity.current
-    // How far the finger travels to complete the collapse. Longer than the commit threshold so
-    // the shrink reads as gradual rather than snapping shut halfway down.
-    val collapseSpan = with(density) { 320.dp.toPx() }
-    val dismissVelocity = with(density) { 800.dp.toPx() }
-    var playerSize by remember { mutableStateOf(IntSize.Zero) }
-
-    LaunchedEffect(Unit) { settle.animateTo(0f, tween(360)) }
-
-    val dismiss: () -> Unit = {
-        scope.launch {
-            settle.snapTo(progress)
-            dragging = false
-            settle.animateTo(1f, tween(280))
-            onBack()
-        }
+    val wideLayout = with(LocalDensity.current) {
+        LocalWindowInfo.current.containerSize.width.toDp() >= 840.dp
     }
-    // Back mirrors the drag rather than cutting straight to the previous screen.
-    BackHandler(enabled = panel == PlayerPanel.NONE) { dismiss() }
 
-    val dragHandle = Modifier.draggable(
-        orientation = Orientation.Vertical,
-        state = rememberDraggableState { delta ->
-            dragProgress = (dragProgress + delta / collapseSpan).coerceIn(0f, 1f)
-        },
-        // Picks up wherever the settle had got to, so grabbing it mid-animation is seamless.
-        onDragStarted = {
-            dragProgress = settle.value
-            dragging = true
-        },
-        onDragStopped = { velocity ->
-            val committed = dragProgress > COMMIT_FRACTION || velocity > dismissVelocity
-            // Hand the value back to the Animatable before releasing the drag, so the two
-            // never disagree about where the player is for even a frame.
-            settle.snapTo(dragProgress)
-            dragging = false
-            if (committed) {
-                settle.animateTo(1f, tween(220))
-                onBack()
-            } else {
-                settle.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
-            }
-        },
-    )
+    val collapse = rememberPlayerCollapse(onBack)
+    // Collapse progress is read only in layers and callbacks; reading it here would recompose
+    // the whole player on every frame of the open and dismiss animations.
+    val settledOpen = { collapse.progress == 0f }
+    val dragHandle = Modifier.playerDragHandle(collapse)
+    val swipe = rememberArtworkSwipe(track.id)
+    // Back mirrors the drag rather than cutting straight to the previous screen.
+    BackHandler(enabled = panel == PlayerPanel.NONE) { collapse.dismiss() }
+    var playerSize by remember { mutableStateOf(IntSize.Zero) }
 
     // The cover is a shared element: the body fades out early and this outer box keeps
     // the flying artwork clear of that fade, so the cover itself carries the motion all
@@ -314,12 +213,16 @@ fun NowPlayingScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .onSizeChanged { playerSize = it },
+            .onSizeChanged { playerSize = it }
+            // Being hit-testable is what blocks the page below; events are observed, never
+            // consumed, so the player's own drags and taps behave as before.
+            .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
+                    val progress = collapse.progress
                     if (progress <= 0f) return@graphicsLayer
                     if (playerSize.width == 0) {
                         // Not measured yet — stay hidden rather than flashing at full size.
@@ -343,76 +246,34 @@ fun NowPlayingScreen(
                 }
                 .background(CanopyColors.PlayerBackdrop),
         ) {
-            // Full-bleed artwork background. Lyrics push it out of focus rather than
-            // replacing it, so the song's colour still carries the screen.
-            // The phone puts its controls over the foot of the cover, where the
-            // gradient already protects them, and only blurs when a panel opens.
-            // Tablets use a pre-blurred 128px Kawarp source instead of applying a large live
-            // RenderEffect over decoded video. Phones still blur only when lyrics need it.
-            val panelObscuresArtwork = panel != PlayerPanel.NONE && !wideLayout && !isFoldable
-            val backdropBlur by animateDpAsState(
-                targetValue = when {
-                    isFoldable -> 0.dp
-                    !wideLayout && panel == PlayerPanel.LYRICS -> 44.dp
-                    else -> 0.dp
-                },
-                animationSpec = tween(420),
-                label = "LyricsBackdropBlur",
-            )
-            val artworkAlpha by animateFloatAsState(
-                targetValue = when {
-                    isFoldable -> 1f
-                    !panelObscuresArtwork -> 1f
-                    panel == PlayerPanel.LYRICS -> 0.35f
-                    else -> 0f
-                },
-                animationSpec = tween(420),
-                label = "ArtworkAlpha",
-            )
-
             // One sample feeds the backdrop and the lyrics, so sung words carry the same
             // colour the artwork bleeds into rather than a second, squarer sample of the cover.
             val verticalVideo = track.animatedArtworkVerticalUrl.ifBlank { track.animatedArtworkUrl }
             val hasRichArtwork = animatedArtworkEnabled && verticalVideo.isNotBlank()
             var videoFrame by remember(verticalVideo) { mutableStateOf<Bitmap?>(null) }
             val palette = rememberFullBleedPalette(track, videoFrame)
-            val lyricAccent = palette.accent
+            val lyricAccent = palette.accent.lyricAccent()
 
-            val isSplitModeFoldable = isFoldable && panel != PlayerPanel.NONE
-            FullBleedPlayerBackdrop(
+            PlayerBackdropLayer(
                 track = track,
-                isPlaying = playback.isPlaying && (panel == PlayerPanel.LYRICS || !panelObscuresArtwork),
-                // A tablet's real motion cover belongs only in the framed square. Its full-screen
-                // layer is either the tiny Kawarp source or the static palette fallback.
-                animatedArtworkEnabled = animatedArtworkEnabled && !wideLayout,
-                warpedArtworkEnabled = wideLayout && animatedBackgroundEnabled,
-                ambientGlowEnabled = !wideLayout,
-                gesturesEnabled = gesturesEnabled || (isFoldable && hasRichArtwork),
+                isPlaying = playback.isPlaying,
+                panel = panel,
+                wideLayout = wideLayout,
+                isFoldable = isFoldable,
+                hasRichArtwork = hasRichArtwork,
+                palette = palette,
+                incomingPalette = incomingPalette,
+                animatedArtworkEnabled = animatedArtworkEnabled,
+                animatedBackgroundEnabled = animatedBackgroundEnabled,
+                gesturesEnabled = gesturesEnabled,
+                transitionProgress = activeMixProgress,
                 onNext = onNext,
                 onPrevious = onPrevious,
                 onLiked = onLiked,
-                palette = palette,
                 onVideoFrame = { videoFrame = it },
-                incomingPalette = incomingPalette,
-                onArtworkBounds = { if ((!wideLayout || isFoldable) && hasRichArtwork && progress == 0f) onRestingCoverBounds(it) },
-                transitionProgress = activeMixProgress,
-                artworkAlpha = artworkAlpha,
-                modifier = Modifier
-                    .blur(backdropBlur)
-                    .then(if (isSplitModeFoldable) Modifier.fillMaxWidth(0.512f) else Modifier.fillMaxWidth()),
+                onArtworkBounds = { if ((!wideLayout || isFoldable) && hasRichArtwork && settledOpen()) onRestingCoverBounds(it) },
+                swipe = swipe.takeIf { !wideLayout && !isFoldable },
             )
-            // Blur is a no-op below API 31, so darken as well to keep lyrics legible everywhere.
-            if (wideLayout || isFoldable || panel != PlayerPanel.NONE) {
-                val scrimAlpha = when {
-                    isFoldable && panel == PlayerPanel.NONE && hasRichArtwork -> 0.05f
-                    isFoldable && panel == PlayerPanel.NONE -> 0.15f
-                    isFoldable -> 0.18f
-                    panel == PlayerPanel.LYRICS -> 0.38f
-                    wideLayout -> 0.25f
-                    else -> 0.15f
-                }
-                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = scrimAlpha)))
-            }
 
             if (isFoldable) {
                 FoldableNowPlayingBody(
@@ -421,7 +282,7 @@ fun NowPlayingScreen(
                     targets = targets,
                     lyrics = lyrics,
                     lyricAccent = lyricAccent,
-                    onCoverBounds = { if (progress == 0f) onRestingCoverBounds(it) },
+                    onCoverBounds = { if (settledOpen()) onRestingCoverBounds(it) },
                     animatedArtworkEnabled = animatedArtworkEnabled,
                     liked = liked,
                     panel = panel,
@@ -433,7 +294,7 @@ fun NowPlayingScreen(
                     bitrateKbps = bitrateKbps,
                     isQobuz = isQobuz,
                     remoteVolume = remoteVolume,
-                    dragHandle = dragHandle,
+                    modifier = dragHandle,
                     onRemoteVolumeChange = onRemoteVolumeChange,
                     onBack = onBack,
                     onSeek = onSeek,
@@ -480,7 +341,7 @@ fun NowPlayingScreen(
                     targets = targets,
                     lyrics = lyrics,
                     lyricAccent = lyricAccent,
-                    onCoverBounds = { if (progress == 0f) onRestingCoverBounds(it) },
+                    onCoverBounds = { if (settledOpen()) onRestingCoverBounds(it) },
                     animatedArtworkEnabled = animatedArtworkEnabled,
                     liked = liked,
                     panel = panel,
@@ -492,7 +353,7 @@ fun NowPlayingScreen(
                     bitrateKbps = bitrateKbps,
                     isQobuz = isQobuz,
                     remoteVolume = remoteVolume,
-                    dragHandle = dragHandle,
+                    modifier = dragHandle,
                     onRemoteVolumeChange = onRemoteVolumeChange,
                     onBack = onBack,
                     onSeek = onSeek,
@@ -529,322 +390,100 @@ fun NowPlayingScreen(
                 return@Box
             }
 
-            // Main Player Content overlaid on the artwork
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .systemBarsPadding()
-                    .padding(bottom = 12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                // Top drag handle
-                PlayerTopHandle(onDismiss = onBack, modifier = dragHandle)
-
-                if (panel != PlayerPanel.NONE) {
-                    // Compact header stands in for the big title row, which the panel displaces.
-                    PanelTrackHeader(
-                        track = track,
-                        liked = liked,
-                        onLiked = onLiked,
-                        onMore = onQueue,
-                        onShare = onShare,
-                        isDownloaded = downloadedTrackIds.contains(track.id),
-                        onDownload = onDownloadTrack?.let { action -> { action(track) } },
-                        onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
-                        onAddToPlaylist = onAddToPlaylist?.let { action -> { action(track) } },
-                    )
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            // When the queue is open, dissolve at both ends. For lyrics,
-                            // LyricLines manages its own inner list edge fade.
-                            .then(
-                                if (queueOpen) {
-                                    Modifier
-                                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                                        .drawWithContent {
-                                            drawContent()
-                                            drawRect(
-                                                brush = Brush.verticalGradient(
-                                                    0f to Color.Transparent,
-                                                    0.08f to Color.Black,
-                                                    0.88f to Color.Black,
-                                                    1f to Color.Transparent,
-                                                ),
-                                                blendMode = BlendMode.DstIn,
-                                            )
-                                        }
-                                } else Modifier
-                            ),
-                    ) {
-                        if (queueOpen) {
-                            PlayerQueuePanel(
-                                playback = playback,
-                                editable = canControl,
-                                onPlayIndex = onPlayQueueIndex,
-                                onRemove = onRemoveQueueIndex,
-                                onMove = onMoveQueueItem,
-                                onClearUpcoming = onClearUpcoming,
-                                onShuffleUpcoming = onShuffle,
-                                onShuffle = onShuffle,
-                                onRepeat = onRepeat,
-                                autoplayEnabled = autoplayEnabled,
-                                autoplayLoading = autoplayLoading,
-                                autoplayError = autoplayError,
-                                onAutoplayEnabled = onAutoplayEnabled,
-                                smartCrossfade = smartCrossfade,
-                                onBestMixUpcoming = onBestMixUpcoming,
-                                sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
-                                sleepTimerEndOfTrack = sleepTimerEndOfTrack,
-                                onSleepTimer = { sleepTimerDialogOpen = true },
-                            )
-                            return@Box
-                        }
-                        when (lyrics) {
-                            is LoadState.Content -> LyricLines(
-                                lines = lyrics.value,
-                                positionMs = playback.positionMs,
-                                playing = playback.isPlaying,
-                                onSeek = onSeek,
-                                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 24.dp),
-                                accent = lyricAccent,
-                            )
-
-                            LoadState.Loading -> LyricsNotice("Finding lyrics…", isLoading = true)
-                            is LoadState.Empty -> LyricsNotice(lyrics.message, icon = Icons.Rounded.MusicNote)
-                            is LoadState.Error -> LyricsNotice(lyrics.message, icon = Icons.Rounded.Info)
-                            LoadState.Idle -> LyricsNotice("Start a song to see its lyrics.", icon = Icons.Rounded.MusicNote)
-                        }
-                    }
-                } else if (!hasRichArtwork) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 12.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        NowPlayingArtworkCard(
-                            track = track,
-                            incomingTrack = incomingTrack,
-                            outgoingTrack = outgoingTrack,
-                            transitionProgress = activeMixProgress,
-                            transitionStyle = transition?.style.orEmpty(),
-                            onArtworkBounds = { if (!wideLayout && progress == 0f) onRestingCoverBounds(it) },
-                        )
-                    }
-                } else {
-                    Spacer(Modifier.weight(1f))
-                }
-
-                // Lower Controls Section with consistent horizontal padding
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-
-                    // Track Title, Artist, Explicit Badge, Star & More Buttons. The lyrics header
-                    // carries this information while lyrics are open.
-                    if (panel == PlayerPanel.NONE) {
-                        SmartCrossfadeBadge(
-                            visible = activeMixProgress in 0.001f..0.999f && transition != null,
-                            style = transition?.style.orEmpty(),
-                            incomingTrack = incomingTrack,
-                            progress = activeMixProgress,
-                            modifier = Modifier.padding(bottom = 14.dp),
-                        )
-                        TrackInfoRow(
-                            track = track,
-                            liked = liked,
-                            onLiked = onLiked,
-                            onMore = onQueue,
-                            onShare = onShare,
-                            isDownloaded = downloadedTrackIds.contains(track.id),
-                            onDownload = onDownloadTrack?.let { action -> { action(track) } },
-                            onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
-                            onAddToPlaylist = onAddToPlaylist?.let { action -> { action(track) } },
-                            onOpenAlbum = track.albumId.takeIf { it.isNotBlank() }
-                                ?.let { id -> onOpenCollection?.let { open -> { open(id) } } },
-                            onOpenArtist = onOpenArtist,
-                        )
-                        Spacer(Modifier.height(18.dp))
-                    }
-
-                    PlayerControlStack(
-                        playback = playback,
-                        targets = targets,
-                        canControl = canControl,
-                        localControls = localControls,
-                        transition = transition,
-                        mixProgress = activeMixProgress,
-                        showBitrate = showBitrate,
-                        bitrateKbps = bitrateKbps,
-                        isQobuz = isQobuz,
-                        remoteVolume = remoteVolume,
-                        lyricsActive = lyricsOpen,
-                        queueActive = queueOpen,
-                        onRemoteVolumeChange = onRemoteVolumeChange,
-                        onSeek = onSeek,
-                        onToggle = onToggle,
-                        onPrevious = onPrevious,
-                        onNext = onNext,
-                        onShuffle = onShuffle,
-                        onRepeat = onRepeat,
-                        onLyrics = { panel = if (lyricsOpen) PlayerPanel.NONE else PlayerPanel.LYRICS },
-                        onDevices = onDevices,
-                        onQueue = onQueue,
-                        sleepTimerActive = sleepTimerRemainingSeconds > 0 || sleepTimerEndOfTrack,
-                        onSleepTimer = { sleepTimerDialogOpen = true },
-                    )
-                }
-            }
+            PhonePlayerBody(
+                track = track,
+                playback = playback,
+                targets = targets,
+                lyrics = lyrics,
+                lyricAccent = lyricAccent,
+                hasRichArtwork = hasRichArtwork,
+                incomingTrack = incomingTrack,
+                outgoingTrack = outgoingTrack,
+                onCoverBounds = { if (settledOpen()) onRestingCoverBounds(it) },
+                transition = transition,
+                mixProgress = activeMixProgress,
+                canControl = canControl,
+                localControls = localControls,
+                liked = liked,
+                panel = panel,
+                swipe = swipe,
+                gesturesEnabled = gesturesEnabled,
+                showBitrate = showBitrate,
+                bitrateKbps = bitrateKbps,
+                isQobuz = isQobuz,
+                remoteVolume = remoteVolume,
+                modifier = dragHandle,
+                onRemoteVolumeChange = onRemoteVolumeChange,
+                onBack = onBack,
+                onSeek = onSeek,
+                onToggle = onToggle,
+                onPrevious = onPrevious,
+                onNext = onNext,
+                onShuffle = onShuffle,
+                onRepeat = onRepeat,
+                onLiked = onLiked,
+                onDevices = onDevices,
+                onPlayQueueIndex = onPlayQueueIndex,
+                onRemoveQueueIndex = onRemoveQueueIndex,
+                onMoveQueueItem = onMoveQueueItem,
+                onClearUpcoming = onClearUpcoming,
+                downloadedTrackIds = downloadedTrackIds,
+                onDownloadTrack = onDownloadTrack,
+                onRemoveDownloadTrack = onRemoveDownloadTrack,
+                onAddToPlaylist = onAddToPlaylist,
+                onShare = onShare,
+                onOpenCollection = onOpenCollection,
+                onOpenArtist = onOpenArtist,
+                onLyricsPanel = { panel = if (lyricsOpen) PlayerPanel.NONE else PlayerPanel.LYRICS },
+                onQueuePanel = onQueue,
+                sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
+                sleepTimerEndOfTrack = sleepTimerEndOfTrack,
+                onSleepTimer = { sleepTimerDialogOpen = true },
+                autoplayEnabled = autoplayEnabled,
+                autoplayLoading = autoplayLoading,
+                autoplayError = autoplayError,
+                onAutoplayEnabled = onAutoplayEnabled,
+                smartCrossfade = smartCrossfade,
+                onBestMixUpcoming = onBestMixUpcoming,
+            )
         }
 
         SharedCoverFlight(
             url = track.artworkUrl,
             description = track.title,
-            progress = progress,
+            progress = { collapse.progress },
             source = restingCoverBounds,
             destination = collapseArtworkBounds,
         )
 
-        if (musicVideo.playing) {
-            MusicVideoPlayer(
-                player = videoPlayer,
-                fullscreen = videoFullscreen,
-                onFullscreenChange = { videoFullscreen = it },
-                onAudio = onToggleMusicVideo,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else if (musicVideo.available || musicVideo.checking) {
-            MusicVideoToggle(
-                state = musicVideo,
-                onClick = onToggleMusicVideo,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .systemBarsPadding()
-                    .padding(top = 52.dp, end = 16.dp),
-            )
-        }
+        MusicVideoLayer(
+            musicVideo = musicVideo,
+            player = videoPlayer,
+            track = track,
+            playback = playback,
+            liked = liked,
+            localControls = localControls,
+            actions = MusicVideoActions(
+                onBack, onToggleMusicVideo, onToggle, onPrevious, onNext,
+                onSeek, onShuffle, onRepeat, onLiked, onDevices, onVideoQuality,
+            ),
+        )
     }
 
     if (sleepTimerDialogOpen) {
-        AlertDialog(
-            onDismissRequest = { sleepTimerDialogOpen = false },
-            title = { Text("Sleep timer") },
-            text = {
-                Column {
-                    val status = when {
-                        sleepTimerEndOfTrack -> "Playback will pause at the end of this track."
-                        sleepTimerRemainingSeconds > 0 -> "Playback will pause in ${sleepTimerRemainingSeconds / 60}:${(sleepTimerRemainingSeconds % 60).toString().padStart(2, '0')}."
-                        else -> "Choose when playback should pause."
-                    }
-                    Text(status)
-                    listOf(15, 30, 45, 60, 90).forEach { minutes ->
-                        TextButton(onClick = { onStartSleepTimer(minutes); sleepTimerDialogOpen = false }) {
-                            Text("$minutes minutes")
-                        }
-                    }
-                    TextButton(onClick = { onStartSleepTimerAtEndOfTrack(); sleepTimerDialogOpen = false }) {
-                        Text("End of current track")
-                    }
-                }
-            },
-            confirmButton = {
-                if (sleepTimerRemainingSeconds > 0 || sleepTimerEndOfTrack) {
-                    TextButton(onClick = { onCancelSleepTimer(); sleepTimerDialogOpen = false }) { Text("Cancel timer") }
-                } else {
-                    TextButton(onClick = { sleepTimerDialogOpen = false }) { Text("Close") }
-                }
-            },
+        SleepTimerDialog(
+            remainingSeconds = sleepTimerRemainingSeconds,
+            endOfTrack = sleepTimerEndOfTrack,
+            onStart = onStartSleepTimer,
+            onStartAtEndOfTrack = onStartSleepTimerAtEndOfTrack,
+            onCancel = onCancelSleepTimer,
+            onDismiss = { sleepTimerDialogOpen = false },
         )
     }
 }
-
-internal fun selectableTrackArtists(track: Track) = track.artists
-    .filter { it.id.isNotBlank() }
-    .distinctBy { it.id }
-
-internal fun artistOpenAction(
-    track: Track,
-    onOpenCollection: ((String) -> Unit)?,
-    onMultipleArtists: () -> Unit,
-): (() -> Unit)? {
-    val artists = selectableTrackArtists(track)
-    val openCollection = onOpenCollection ?: return null
-    return when {
-        artists.size > 1 -> onMultipleArtists
-        artists.size == 1 -> ({ openCollection(artists.single().id) })
-        track.artistId.isNotBlank() -> ({ openCollection(track.artistId) })
-        else -> null
-    }
-}
-
-/** How far down the collapse must have travelled on release for the dismiss to commit. */
-private const val COMMIT_FRACTION = 0.5f
 
 /** Fraction of the collapse over which the player body fades out entirely. */
 private const val BODY_FADE_COMPLETE = 0.55f
 
 /** How far the body draws back as it goes, so it recedes rather than merely fading. */
 private const val BODY_SHRINK = 0.90f
-
-/**
- * The cover, flying between the player and the pill's thumbnail.
- *
- * Drawn outside the body's fade so it stays fully opaque the whole way down: the cover is
- * the one thing both ends of the transition have in common, so it is what carries the eye.
- * It is laid out at [source] and transformed towards [destination] rather than being
- * re-measured, which keeps the flight off the layout pass.
- */
-@Composable
-private fun SharedCoverFlight(
-    url: String,
-    description: String,
-    progress: Float,
-    source: Rect?,
-    destination: Rect?,
-) {
-    if (progress <= 0f || source == null || destination == null || source.width <= 0f) return
-    val density = LocalDensity.current
-    // The player's cover is a tall crop and the thumbnail is square, so the flight scales by
-    // width and lets the clip take up the difference in height.
-    val scale = destination.width / source.width
-    val height = source.height * scale
-    // Aim at the middle of the thumbnail: the crop keeps the subject centred, and the two
-    // shapes only agree on their centre, not their edges.
-    val centreY = destination.center.y - height / 2f
-    Box(
-        Modifier
-            .offset {
-                IntOffset(
-                    lerp(source.left, destination.left, progress).roundToInt(),
-                    lerp(source.top, centreY, progress).roundToInt(),
-                )
-            }
-            .graphicsLayer {
-                transformOrigin = TransformOrigin(0f, 0f)
-                scaleX = lerp(1f, scale, progress)
-                scaleY = lerp(1f, scale, progress)
-            }
-            .size(
-                width = with(density) { source.width.toDp() },
-                height = with(density) { source.height.toDp() },
-            )
-            .graphicsLayer {
-                // Squares off into the thumbnail's own rounding as it lands.
-                shape = RoundedCornerShape((lerp(0f, 10f, progress) / scale.coerceAtLeast(0.01f)).dp)
-                clip = true
-                // Only the last moment, handing over to the real thumbnail underneath.
-                alpha = ((1f - progress) / (1f - COVER_HANDOFF)).coerceIn(0f, 1f)
-            },
-    ) {
-        RemoteArtwork(url = url, description = description, modifier = Modifier.fillMaxSize())
-    }
-}
-
-/** Where the flying cover starts giving way to the pill's real thumbnail. */
-private const val COVER_HANDOFF = 0.88f

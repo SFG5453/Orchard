@@ -25,7 +25,7 @@ import java.io.RandomAccessFile
 
 /**
  * High-performance, thread-safe [MediaDataSource] wrapper around an on-disk audio [File].
- * Allows [android.media.MediaExtractor] and [AudioDecoder] to decode downloaded files
+ * Allows [android.media.MediaExtractor] and [SongDecoder] to decode downloaded files
  * directly from local storage with minimal overhead.
  */
 class FileMediaDataSource(private val file: File) : MediaDataSource() {

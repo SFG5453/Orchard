@@ -1,7 +1,16 @@
 /*
  * Copyright (C) 2026 SFG545
+ * Copyright (C) 2026 Convx Project contributors
  *
  * This file is part of Orchard.
+ *
+ * Layout adapted from the album header in AlbumScreen
+ * (app/src/main/kotlin/com/convx/music/ui/screens/AlbumScreen.kt) and the playlist
+ * header in OnlinePlaylistScreen
+ * (app/src/main/kotlin/com/convx/music/ui/screens/playlist/OnlinePlaylistScreen.kt) in
+ * Convx v1.5.2, https://github.com/cosmictaserdev-creator/Convx, licensed under the
+ * GNU General Public License version 3. It is combined with Orchard under section 13
+ * of the GNU GPL v3 and GNU AGPL v3.
  *
  * Orchard is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Affero General Public License as published by the Free
@@ -19,18 +28,12 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
-import android.content.Intent
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,580 +41,287 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.sfg.orchard.mobile.ui.theme.CanopyColors
-import kotlin.math.roundToInt
-import dev.sfg.orchard.mobile.auth.SupabaseSyncService
+import dev.sfg.orchard.mobile.model.LocalQobuzAlbumQuality
+import dev.sfg.orchard.mobile.model.QobuzAlbumQuality
+import dev.sfg.orchard.mobile.ui.components.QobuzAlbumQualityChip
 import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.Track
-import dev.sfg.orchard.mobile.playback.smart.BestMixSorter
-import kotlinx.coroutines.launch
-import dev.sfg.orchard.mobile.ui.components.AlbumEditorialReview
 import dev.sfg.orchard.mobile.ui.components.AnimatedArtworkVideo
 import dev.sfg.orchard.mobile.ui.components.ArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.ArtworkTile
-import dev.sfg.orchard.mobile.ui.components.CollectionActionRow
 import dev.sfg.orchard.mobile.ui.components.CollectionTopBar
+import dev.sfg.orchard.mobile.ui.components.DetailHeroFrame
 import dev.sfg.orchard.mobile.ui.components.ExplicitBadge
+import dev.sfg.orchard.mobile.ui.components.HeroAbout
+import dev.sfg.orchard.mobile.ui.components.HeroCircleButton
+import dev.sfg.orchard.mobile.ui.components.HeroGutter
+import dev.sfg.orchard.mobile.ui.components.HeroPlayRow
 import dev.sfg.orchard.mobile.ui.components.collectionDownloadAction
+import dev.sfg.orchard.mobile.ui.components.heroInfoLine
 import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
+import dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout
+import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import dev.sfg.orchard.mobile.ui.theme.legibleOnDarkChrome
 
+private fun BrowseDetail.supportsBestMix(enabled: Boolean) =
+    enabled && (kind == CatalogKind.PLAYLIST || kind == CatalogKind.ALBUM) && tracks.size > 1
+
 /**
- * Collection hero:
- * Top frosted navigation bar, centered rounded artwork card with motion/video support,
- * bold centered typography, action row (Shuffle circle, White Play pill, Add circle),
- * and editorial review summary.
+ * Album and playlist hero: faded full-bleed cover on phones (a shadowed card on wide
+ * layouts), centred title, artist chip, info line, then shuffle / play / save.
  */
 @Composable
-fun CollectionHero(
+internal fun CollectionHero(
     detail: BrowseDetail,
     palette: ArtworkPalette,
     shuffleAvailable: Boolean,
-    onBack: () -> Unit,
     onPlayAll: (List<Track>, String) -> Unit,
     onShuffle: (List<Track>, String) -> Unit,
     onSave: (BrowseDetail) -> Unit,
-    onAbout: () -> Unit,
+    bestMix: BestMixLauncher,
     isSaved: Boolean = false,
-    downloadedTrackIds: Set<String> = emptySet(),
-    downloadingTrackIds: Set<String> = emptySet(),
-    onDownloadTracks: ((List<Track>) -> Unit)? = null,
-    onRemoveDownloadTracks: ((List<Track>) -> Unit)? = null,
     animatedArtworkUrl: String = "",
     artistPortraitUrl: String = "",
-    onShare: ((BrowseDetail) -> Unit)? = null,
+    onOpenArtist: (() -> Unit)? = null,
     smartCrossfadeEnabled: Boolean = false,
-    bestMixSupabaseSync: Boolean = false,
-    onPlayBestMix: ((List<Track>, String, (String) -> Unit, () -> Unit) -> Unit)? = null,
-    onSearch: (() -> Unit)? = null,
-    isSearching: Boolean = false,
-    searchQuery: String = "",
-    onSearchQueryChange: ((String) -> Unit)? = null,
-    onCloseSearch: (() -> Unit)? = null,
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val syncService = remember { SupabaseSyncService(context) }
-
-    var isSorting by remember { mutableStateOf(false) }
-    var sortStatusText by remember { mutableStateOf("") }
-    var showDownloadPrompt by remember { mutableStateOf(false) }
-
-    val undownloadedTracks = remember(detail.tracks, downloadedTrackIds) {
-        detail.tracks.filter { it.id !in downloadedTrackIds }
-    }
-    val undownloadedDurationMs = remember(undownloadedTracks) {
-        undownloadedTracks.sumOf { if (it.durationMs > 0) it.durationMs else 210_000L }
-    }
-    val estimatedMb = remember(undownloadedDurationMs) {
-        (undownloadedDurationMs / 1000.0 * 20.0 / 1024.0).roundToInt().coerceAtLeast(1)
-    }
-
-    fun startBestMixExecution() {
-        if (isSorting) return
-        isSorting = true
-        sortStatusText = "Preparing Best Mix..."
-        if (onPlayBestMix != null) {
-            onPlayBestMix(
-                detail.tracks,
-                detail.title,
-                { status -> sortStatusText = status },
-                {
-                    isSorting = false
-                    sortStatusText = ""
-                },
-            )
-        } else {
-            scope.launch {
-                try {
-                    sortStatusText = "Sorting Best Mix..."
-                    val features = syncService.fetchTrackFeatures(detail.tracks.map { it.id })
-                    val sorted = BestMixSorter.sort(detail.tracks, features)
-                    onPlayAll(sorted, detail.title)
-                } finally {
-                    isSorting = false
-                    sortStatusText = ""
-                }
-            }
-        }
-    }
-
-    fun triggerBestMix() {
-        if (isSorting) return
-        if (!bestMixSupabaseSync && undownloadedTracks.isNotEmpty()) {
-            showDownloadPrompt = true
-        } else {
-            startBestMixExecution()
-        }
-    }
-
     val isAlbum = detail.kind == CatalogKind.ALBUM
     val albumAccent = remember(palette.accent) { palette.accent.legibleOnDarkChrome() }
-    // The artist's name takes a colour from their own photograph, so it reads as theirs rather
-    // than the record's. Falls back to the cover's accent when no portrait resolved.
+    // The artist's name takes a colour from their own photograph, so it reads as theirs.
     val artistPalette = rememberArtworkPalette(artistPortraitUrl)
     val artistAccent = remember(artistPalette.accent, artistPortraitUrl, albumAccent) {
         if (artistPortraitUrl.isBlank()) albumAccent else artistPalette.accent.legibleOnDarkChrome()
     }
-
-    val artistName = remember(detail) {
-        if (detail.kind == CatalogKind.PLAYLIST) {
-            detail.artist.takeIf { it.isNotBlank() && !it.equals("YouTube Music", ignoreCase = true) }
-                ?: detail.tracks.map { it.artist }.filter { it.isNotBlank() && !it.equals("Unknown artist", true) }
-                    .groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
-                ?: detail.artist.ifBlank { "YouTube Music" }
-        } else {
-            detail.artist.ifBlank {
-                detail.tracks.firstOrNull { it.artist.isNotBlank() }?.artist.orEmpty()
-            }
-        }
+    val artistName = remember(detail) { collectionArtistName(detail) }
+    val infoLine = remember(detail) {
+        val kind = collectionKindLabel(detail)
+        // Some release types already carry the year ("Single • 2021").
+        val year = if (kind.contains(detail.year)) "" else detail.year
+        heroInfoLine(kind, year, detail.tracks.size, detail.tracks.sumOf { it.durationMs })
     }
 
-    val subtitleText = remember(detail) {
-        val parts = mutableListOf<String>()
-        if (detail.kind == CatalogKind.PLAYLIST) {
-            parts.add("PLAYLIST")
-            val songCount = detail.tracks.size
-            if (songCount > 0) {
-                parts.add("$songCount ${if (songCount == 1) "SONG" else "SONGS"}")
-            }
-        } else {
-            val cleanSubtitle = detail.subtitle.trim()
-            val isVisibilityOnly = cleanSubtitle.equals("unlisted", true) ||
-                cleanSubtitle.equals("public", true) ||
-                cleanSubtitle.equals("private", true)
-
-            if (cleanSubtitle.isNotBlank() && !isVisibilityOnly) {
-                parts.add(cleanSubtitle.uppercase())
-            } else if (detail.kind == CatalogKind.ALBUM) {
-                parts.add("ALBUM")
-            } else {
-                parts.add("PLAYLIST")
-            }
-            if (detail.year.isNotBlank() && parts.none { it.contains(detail.year) }) {
-                parts.add(detail.year)
+    val body: @Composable ColumnScope.() -> Unit = {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = HeroGutter),
+        ) {
+            Text(
+                text = detail.title,
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 30.sp,
+                    lineHeight = 34.sp,
+                    letterSpacing = (-0.5).sp,
+                ),
+                color = CanopyColors.Text,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (detail.tracks.any { it.explicit }) {
+                Spacer(Modifier.width(8.dp))
+                ExplicitBadge()
             }
         }
-        parts.joinToString(" • ")
-    }
-
-    fun shareAlbum() {
-        if (onShare != null) {
-            onShare(detail)
-            return
-        }
-        val shareTarget = if (artistName.isNotBlank()) "${detail.title} by $artistName" else detail.title
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            putExtra(Intent.EXTRA_TEXT, "Listen to $shareTarget on Orchard")
-            type = "text/plain"
-        }
-        context.startActivity(Intent.createChooser(intent, "Share ${detail.title}"))
-    }
-
-    val allDownloaded = detail.tracks.isNotEmpty() && detail.tracks.all { downloadedTrackIds.contains(it.id) }
-    val anyDownloading = detail.tracks.isNotEmpty() && detail.tracks.any { downloadingTrackIds.contains(it.id) }
-    val onDownloadAction: (() -> Unit)? = collectionDownloadAction(
-        tracks = detail.tracks,
-        downloadedTrackIds = downloadedTrackIds,
-        onDownloadTracks = onDownloadTracks,
-        onRemoveDownloadTracks = onRemoveDownloadTracks,
-    )
-
-    val topBar: @Composable () -> Unit = {
-        CollectionTopBar(
-            onBack = onBack,
-            onShare = { shareAlbum() },
-            onSave = { onSave(detail) },
-            isSaved = isSaved,
-            onAbout = if (detail.description.isNotBlank()) onAbout else null,
-            onBestMix = if (smartCrossfadeEnabled && (detail.kind == CatalogKind.PLAYLIST || detail.kind == CatalogKind.ALBUM) && detail.tracks.size > 1) (::triggerBestMix) else null,
-            onSearch = onSearch,
-            isSearching = isSearching,
-            searchQuery = searchQuery,
-            onSearchQueryChange = onSearchQueryChange,
-            onCloseSearch = onCloseSearch,
-            searchPlaceholder = "Find in ${if (detail.kind == CatalogKind.ALBUM) "album" else "playlist"}",
-            aboutLabel = "About this ${if (detail.kind == CatalogKind.ALBUM) "album" else "playlist"}",
-            onDownload = onDownloadAction,
-            isDownloaded = allDownloaded,
-        )
-    }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-
-
-        val isWideLayout = dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
-
-        // Phones get a full-bleed album cover with the titles laid over it. Foldables and
-        // tablets use the centred square cover treatment so the larger canvas has room for
-        // the collection metadata below it.
-        if (detail.kind == CatalogKind.ALBUM && !isWideLayout) {
-            Box(
-                modifier = Modifier.fillMaxWidth().aspectRatio(0.75f).clipToBounds(),
-            ) {
-                ArtworkTile(
-                    url = detail.artworkUrl,
-                    description = "Artwork for ${detail.title}",
-                    modifier = Modifier.fillMaxSize(),
-                    radius = 0,
-                    alignment = Alignment.Center,
-                )
-
-                if (animatedArtworkUrl.isNotBlank()) {
-                    AnimatedArtworkVideo(
-                        url = animatedArtworkUrl,
-                        active = true,
-                        modifier = Modifier.fillMaxSize(),
-                        alignment = Alignment.Center,
-                    )
-                }
-
-                // The cover dissolves into the page's own artwork tint, so the colour carries
-                // straight through instead of hitting a dark band under the image.
-                Box(
-                    Modifier.fillMaxSize().background(
-                        Brush.verticalGradient(
-                            0.70f to Color.Transparent,
-                            0.90f to palette.deep.copy(alpha = 0.72f),
-                            1.00f to palette.deep,
-                        ),
-                    ),
-                )
-
-                Box(modifier = Modifier.align(Alignment.TopCenter)) { topBar() }
-
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .padding(bottom = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        Text(
-                            text = detail.title,
-                            style = MaterialTheme.typography.headlineLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = (-0.6).sp,
-                            ),
-                            color = albumAccent,
-                            textAlign = TextAlign.Center,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                        if (detail.tracks.any { it.explicit }) {
-                            Spacer(Modifier.width(8.dp))
-                            ExplicitBadge()
-                        }
-                    }
-                    if (artistName.isNotBlank()) {
-                        Text(
-                            text = artistName.uppercase(),
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp),
-                            color = artistAccent,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Text(
-                        text = subtitleText,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontWeight = FontWeight.Medium,
-                            letterSpacing = 0.4.sp,
-                        ),
-                        color = Color.White.copy(alpha = 0.60f),
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-        } else {
-            topBar()
+        if (artistName.isNotBlank()) {
             Spacer(Modifier.height(8.dp))
-            // Prominent Centered Artwork Card with motion cover support & soft drop shadow
+            ArtistChip(artistName, artistPortraitUrl, artistAccent, onOpenArtist)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = infoLine,
+            style = MaterialTheme.typography.bodyMedium,
+            color = CanopyColors.Text.copy(alpha = 0.7f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = HeroGutter),
+        )
+        // Only while MAX is on, as on desktop; the lookup is cached per album.
+        val loadAlbumQuality = LocalQobuzAlbumQuality.current
+        val albumQuality by produceState<QobuzAlbumQuality?>(null, detail.id, detail.tracks.size, loadAlbumQuality) {
+            value = if (isAlbum && detail.tracks.isNotEmpty()) loadAlbumQuality?.invoke(detail) else null
+        }
+        albumQuality?.let {
+            Spacer(Modifier.height(8.dp))
+            QobuzAlbumQualityChip(it)
+        }
+
+        Spacer(Modifier.height(24.dp))
+        HeroPlayRow(
+            onPlay = { onPlayAll(detail.tracks, detail.title) },
+            playEnabled = detail.tracks.isNotEmpty(),
+            // Albums keep their cover's colour on the disc; playlists stay neutral.
+            playFill = if (isAlbum) albumAccent else Color.White,
+            playIconTint = palette.deep,
+            leading = {
+                HeroCircleButton(
+                    onClick = { onShuffle(detail.tracks, detail.title) },
+                    icon = Icons.Rounded.Shuffle,
+                    contentDescription = "Shuffle",
+                    enabled = detail.tracks.isNotEmpty() && shuffleAvailable,
+                )
+            },
+            trailing = {
+                // A playlist on this phone is already in the library; there is nothing to add.
+                if (!dev.sfg.orchard.mobile.local.isLocalPlaylistId(detail.id)) {
+                    HeroCircleButton(
+                        onClick = { onSave(detail) },
+                        icon = if (isSaved) Icons.Rounded.Check else Icons.Rounded.Add,
+                        contentDescription = if (isSaved) "Saved to library" else "Add to library",
+                        tint = if (isSaved) LocalAccent.current else CanopyColors.Text,
+                    )
+                }
+            },
+        )
+
+        if (detail.supportsBestMix(smartCrossfadeEnabled)) {
+            Spacer(Modifier.height(12.dp))
+            BestMixButton(isSorting = bestMix.isSorting, statusText = bestMix.statusText, onClick = bestMix::trigger)
+        }
+
+        if (detail.description.isNotBlank()) {
+            Spacer(Modifier.height(20.dp))
+            HeroAbout(
+                title = if (isAlbum) "About this album" else "About this playlist",
+                text = detail.description,
+            )
+        }
+    }
+
+    if (isFoldableOrWideLayout()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(top = 72.dp, bottom = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // A full-bleed square would fill the whole fold, so wide layouts get a card.
             Box(
                 modifier = Modifier
-                    .size(if (isWideLayout && isAlbum) 450.dp else 260.dp)
-                    .shadow(
-                        elevation = 28.dp,
-                        shape = RoundedCornerShape(16.dp),
-                        spotColor = Color.Black.copy(alpha = 0.70f),
-                        ambientColor = Color.Black.copy(alpha = 0.40f),
-                    )
+                    .size(if (isAlbum) 450.dp else 300.dp)
+                    .shadow(28.dp, RoundedCornerShape(16.dp), spotColor = Color.Black.copy(alpha = 0.7f))
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color(0xFF1E1E1E)),
-                contentAlignment = Alignment.Center,
             ) {
-                ArtworkTile(
-                    url = detail.artworkUrl,
-                    description = "Artwork for ${detail.title}",
-                    modifier = Modifier.fillMaxSize(),
-                    radius = 16,
-                )
-
+                ArtworkTile(detail.artworkUrl, "Artwork for ${detail.title}", Modifier.fillMaxSize(), radius = 16)
                 if (animatedArtworkUrl.isNotBlank()) {
-                    AnimatedArtworkVideo(
-                        url = animatedArtworkUrl,
-                        active = true,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    AnimatedArtworkVideo(url = animatedArtworkUrl, active = true, modifier = Modifier.fillMaxSize())
                 }
             }
-
-            Spacer(Modifier.height(20.dp))
-
-            // Centered Album Title
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(horizontal = 24.dp),
-            ) {
-                Text(
-                    text = detail.title,
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.4).sp,
-                    ),
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (detail.tracks.any { it.explicit }) {
-                    Spacer(Modifier.width(8.dp))
-                    ExplicitBadge()
-                }
-            }
-
-            // Centered Artist Name
-            if (artistName.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = artistName,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                    color = LocalAccent.current,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 24.dp),
-                )
-            }
-
-            // Centered Metadata Subtitle (e.g. R&B/SOUL • 2022)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = subtitleText,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 0.4.sp,
-                ),
-                color = Color.White.copy(alpha = 0.60f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 24.dp),
-            )
-
+            Spacer(Modifier.height(24.dp))
+            body()
         }
-
-        // Action buttons row: [ Shuffle ]  [ ▶ Play ]  [ Add / Save ]  [ Download ]
-        Spacer(Modifier.height(18.dp))
-
-        CollectionActionRow(
-            accent = if (isAlbum) albumAccent else Color.White,
-            onPlay = { onPlayAll(detail.tracks, detail.title) },
-            onShuffle = { onShuffle(detail.tracks, detail.title) },
-            onSave = { onSave(detail) },
-            isSaved = isSaved,
-            playEnabled = detail.tracks.isNotEmpty(),
-            shuffleEnabled = detail.tracks.isNotEmpty() && shuffleAvailable,
-            onDownload = onDownloadAction,
-            isDownloaded = allDownloaded,
-            isDownloading = anyDownloading,
-            downloadEnabled = detail.tracks.isNotEmpty(),
+    } else {
+        DetailHeroFrame(
+            artworkUrl = detail.artworkUrl,
+            description = "Artwork for ${detail.title}",
+            animatedArtworkUrl = animatedArtworkUrl,
+            content = body,
         )
-
-        // Best mix button at top of playlists and albums (gated by smart crossfade)
-        if (smartCrossfadeEnabled && (detail.kind == CatalogKind.PLAYLIST || detail.kind == CatalogKind.ALBUM) && detail.tracks.size > 1) {
-            val transition = rememberInfiniteTransition(label = "BestMixGlow")
-            val borderGlow by transition.animateFloat(
-                initialValue = 0.25f,
-                targetValue = 0.85f,
-                animationSpec = infiniteRepeatable(tween(2200), RepeatMode.Reverse),
-                label = "BestMixBorderGlow",
-            )
-            val sparkleScale by transition.animateFloat(
-                initialValue = 0.88f,
-                targetValue = 1.18f,
-                animationSpec = infiniteRepeatable(tween(1600), RepeatMode.Reverse),
-                label = "BestMixSparkleScale",
-            )
-
-            Spacer(Modifier.height(10.dp))
-            Button(
-                onClick = ::triggerBestMix,
-                enabled = !isSorting,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White.copy(alpha = 0.10f),
-                    contentColor = Color.White,
-                    disabledContainerColor = Color.White.copy(alpha = 0.16f),
-                    disabledContentColor = Color.White,
-                ),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .height(42.dp)
-                    .border(
-                        width = 1.dp,
-                        brush = Brush.horizontalGradient(
-                            listOf(
-                                LocalAccent.current.copy(alpha = borderGlow * 0.8f),
-                                Color.White.copy(alpha = 0.40f),
-                                LocalAccent.current.copy(alpha = borderGlow),
-                            ),
-                        ),
-                        shape = RoundedCornerShape(20.dp),
-                    ),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    if (isSorting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = LocalAccent.current,
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Icon(
-                            Icons.Rounded.AutoAwesome,
-                            contentDescription = "Best mix",
-                            tint = LocalAccent.current,
-                            modifier = Modifier
-                                .size(18.dp)
-                                .graphicsLayer {
-                                    scaleX = sparkleScale
-                                    scaleY = sparkleScale
-                                },
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = if (isSorting) sortStatusText.ifBlank { "Sorting Best Mix..." } else "Best mix",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp,
-                        color = Color.White,
-                    )
-                }
-            }
-        }
-
-        if (showDownloadPrompt) {
-            AlertDialog(
-                onDismissRequest = { showDownloadPrompt = false },
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Rounded.AutoAwesome,
-                            contentDescription = null,
-                            tint = LocalAccent.current,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text("Best Mix Offline Analysis", fontWeight = FontWeight.Bold)
-                    }
-                },
-                text = {
-                    Column {
-                        Text(
-                            "Best Mix analyzes harmonic keys, tempo, and cue points locally to arrange your music seamlessly.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.85f),
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            "Downloading ${undownloadedTracks.size} song${if (undownloadedTracks.size == 1) "" else "s"} could take up to ~$estimatedMb MB of storage.",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = LocalAccent.current,
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            showDownloadPrompt = false
-                            startBestMixExecution()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = LocalAccent.current),
-                    ) {
-                        Text("Download & Sort", color = Color.Black, fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDownloadPrompt = false }) {
-                        Text("Cancel", color = Color.White.copy(alpha = 0.7f))
-                    }
-                },
-                shape = RoundedCornerShape(20.dp),
-                containerColor = CanopyColors.Surface,
-            )
-        }
-
-        // Editorial review snippet with expandable "MORE"
-        if (detail.description.isNotBlank()) {
-            Spacer(Modifier.height(14.dp))
-            AlbumEditorialReview(
-                description = detail.description,
-                onOpenAbout = onAbout,
-            )
-        }
-
-        Spacer(Modifier.height(8.dp))
     }
+
+    if (bestMix.showPrompt) {
+        BestMixDownloadPrompt(
+            trackCount = bestMix.undownloadedCount,
+            estimatedMb = bestMix.estimatedMb,
+            onConfirm = {
+                bestMix.showPrompt = false
+                bestMix.run()
+            },
+            onDismiss = { bestMix.showPrompt = false },
+        )
+    }
+}
+
+/** Avatar plus name; opens the artist when the album names one. */
+@Composable
+private fun ArtistChip(name: String, portraitUrl: String, accent: Color, onClick: (() -> Unit)?) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(CircleShape)
+            .clickable(enabled = onClick != null) { onClick?.invoke() }
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        if (portraitUrl.isNotBlank()) {
+            ArtworkTile(portraitUrl, name, Modifier.size(28.dp).clip(CircleShape), radius = 14)
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            text = name,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = accent,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** Floating chrome for album and playlist pages, drawn over the list. */
+@Composable
+internal fun CollectionChrome(
+    detail: BrowseDetail,
+    scrimProgress: State<Float>,
+    onBack: () -> Unit,
+    onSave: (BrowseDetail) -> Unit,
+    isSaved: Boolean,
+    bestMix: BestMixLauncher,
+    smartCrossfadeEnabled: Boolean,
+    downloadedTrackIds: Set<String>,
+    onDownloadTracks: ((List<Track>) -> Unit)?,
+    onRemoveDownloadTracks: ((List<Track>) -> Unit)?,
+    onShare: ((BrowseDetail) -> Unit)?,
+    isSearching: Boolean,
+    searchQuery: String,
+    onSearch: () -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onCloseSearch: () -> Unit,
+) {
+    val context = LocalContext.current
+    val noun = if (detail.kind == CatalogKind.ALBUM) "album" else "playlist"
+    CollectionTopBar(
+        onBack = onBack,
+        onShare = { shareCollection(context, detail, onShare) },
+        onSave = { onSave(detail) },
+        isSaved = isSaved,
+        scrimProgress = scrimProgress,
+        // Inline About covers the description, so the menu entry is not repeated.
+        onBestMix = if (detail.supportsBestMix(smartCrossfadeEnabled)) bestMix::trigger else null,
+        onSearch = onSearch,
+        isSearching = isSearching,
+        searchQuery = searchQuery,
+        onSearchQueryChange = onSearchQueryChange,
+        onCloseSearch = onCloseSearch,
+        searchPlaceholder = "Find in $noun",
+        aboutLabel = "About this $noun",
+        onDownload = collectionDownloadAction(detail.tracks, downloadedTrackIds, onDownloadTracks, onRemoveDownloadTracks),
+        isDownloaded = detail.tracks.isNotEmpty() && detail.tracks.all { it.id in downloadedTrackIds },
+    )
 }

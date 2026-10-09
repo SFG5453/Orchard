@@ -45,6 +45,9 @@ object CatalogJson {
         .put("hires", value.hires)
         .put("artists", artists(value.artists))
         .put("musicVideoId", value.musicVideoId)
+        .put("localUri", value.localUri)
+        .put("localBitrateKbps", value.localBitrateKbps)
+        .put("codec", value.codec)
 
     fun track(value: JSONObject): Track = Track(
         id = value.cleanString("id"),
@@ -67,6 +70,9 @@ object CatalogJson {
         hires = value.optBoolean("hires", false),
         artists = artists(value.optJSONArray("artists")),
         musicVideoId = value.cleanString("musicVideoId"),
+        localUri = value.cleanString("localUri"),
+        localBitrateKbps = value.optInt("localBitrateKbps", 0),
+        codec = value.cleanString("codec"),
     )
 
     fun tracks(values: List<Track>): JSONArray = JSONArray().also { output ->

@@ -26,7 +26,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsContext
 import androidx.compose.ui.graphics.Outline
@@ -34,18 +33,14 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
-import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.node.DrawModifierNode
@@ -56,7 +51,6 @@ import androidx.compose.ui.node.requireLayoutCoordinates
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
-import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import kotlin.math.ceil
 
 /**
@@ -66,14 +60,10 @@ import kotlin.math.ceil
  * a crop with one texture lookup per low-resolution pixel on Android 13 and later.
  * A full-resolution finish supplies tint and a crisp rim without blurring the foreground.
  * Android 12 uses the shared softened backdrop and a gradient finish.
- *
- * The receiver is returned untouched when the setting is off, so users who never turn it on pay
- * nothing at all — not even a branch during draw.
  */
 @Composable
 fun Modifier.glassPane(shape: Shape, tone: GlassTone = GlassTone.PANEL): Modifier {
     val style = LocalGlass.current
-    if (!style.enabled) return this
     return this then GlassPaneElement(shape, tone, style, LocalGlassScene.current)
 }
 
@@ -185,7 +175,12 @@ private class GlassPaneNode(
                 ?: run {
                     val context = requireGraphicsContext()
                     graphics = context
-                    context.createGraphicsLayer().also { blur = it }
+                    context.createGraphicsLayer().also {
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                            it.renderEffect = SaturatedBackdropEffect
+                        }
+                        blur = it
+                    }
                 }
         val width = ceil(size.width / downscale).toInt().coerceAtLeast(1)
         val height = ceil(size.height / downscale).toInt().coerceAtLeast(1)
@@ -257,60 +252,6 @@ private class GlassPaneNode(
     }
 }
 
-/** A single texture lookup per low-resolution fragment; no blur loop or bitmap readback. */
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
-private class LiquidLens {
-    private val shader = RuntimeShader(LIQUID_LENS_SHADER)
-    private var lastSize = Size.Unspecified
-    private var lastDensity = Float.NaN
-    private var lastDownscale = Float.NaN
-    private val lastCorners = FloatArray(4) { Float.NaN }
-    private var cached: androidx.compose.ui.graphics.RenderEffect? = null
-
-    fun effect(size: Size, corners: FloatArray, density: Float, downscale: Float): androidx.compose.ui.graphics.RenderEffect {
-        if (size != lastSize || density != lastDensity || downscale != lastDownscale || !corners.contentEquals(lastCorners)) {
-            shader.setFloatUniform("extent", size.width / downscale, size.height / downscale)
-            shader.setFloatUniform("radii", corners[0] / downscale, corners[1] / downscale,
-                corners[2] / downscale, corners[3] / downscale)
-            shader.setFloatUniform("bevel", (10f * density / downscale).coerceAtLeast(1f))
-            // RenderEffect snapshots uniforms: replace only when geometry changes.
-            cached = android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "backdrop")
-                .asComposeRenderEffect()
-            lastSize = size
-            lastDensity = density
-            lastDownscale = downscale
-            corners.copyInto(lastCorners)
-        }
-        return checkNotNull(cached)
-    }
-}
-
-private const val LIQUID_LENS_SHADER = """
-uniform shader backdrop;
-uniform float2 extent;
-uniform float4 radii;
-uniform float bevel;
-half4 main(float2 coord) {
-    float2 p = coord - float2(4.0) - extent * 0.5;
-    float r = p.x > 0.0 ? (p.y > 0.0 ? radii.z : radii.y)
-                         : (p.y > 0.0 ? radii.w : radii.x);
-    float2 q = abs(p) - extent * 0.5 + r;
-    float2 outer = max(q, float2(0.0));
-    float len = length(outer);
-    float distance = min(max(q.x, q.y), 0.0) + len - r;
-    float2 normal = len > 0.001 ? outer / max(len, 0.001)
-        : (q.x > q.y ? float2(1.0, 0.0) : float2(0.0, 1.0));
-    normal *= sign(p);
-    float edge = clamp(1.0 + distance / bevel, 0.0, 1.0);
-    // Curved edge bends the transmitted image inward, leaving the body undistorted.
-    float2 sampleAt = coord - normal * (edge * edge * min(bevel * 0.65, 3.0));
-    half4 color = backdrop.eval(sampleAt);
-    half luminance = dot(color.rgb, half3(0.2126, 0.7152, 0.0722));
-    color.rgb = clamp(mix(half3(luminance), color.rgb, 1.15), 0.0, color.a);
-    return color;
-}
-"""
-
 /** The frost over the blurred backdrop: tint, light film, grain, rim and the rounded mask. */
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 private class GlassFrostShader(seed: Float) {
@@ -372,240 +313,3 @@ private class GlassFrostShader(seed: Float) {
         scope.drawRect(brush)
     }
 }
-
-/**
- * Android 12's finish. It still gets the blur — [android.graphics.RenderEffect] goes back to
- * Android 12 — but no grain and no rim that follows the corners, so a pane there is a blur under a
- * tinted film rather than under frost.
- */
-private class GlassFrostGradient(private val spec: GlassSpec) {
-    private var undercoatBrush: Brush? = null
-    private var film: Brush? = null
-    private var filmTint = Color.Unspecified
-    private var filmBlurred: Boolean? = null
-
-    private val edge =
-        Brush.verticalGradient(
-            0f to Color.White.copy(alpha = 0.22f),
-            0.35f to Color.White.copy(alpha = 0.09f),
-            0.85f to Color.White.copy(alpha = 0.04f),
-            1f to Color.Black.copy(alpha = 0.12f),
-        )
-
-    fun draw(scope: DrawScope, outline: Outline, tint: Color, blurred: Boolean) {
-        if (tint != filmTint || blurred != filmBlurred) {
-            val undercoatWeight = if (blurred) spec.contrastUndercoat else spec.solidUndercoat
-            if (undercoatWeight > 0.001f) {
-                undercoatBrush =
-                    Brush.verticalGradient(
-                        0f to CanopyColors.Chrome.copy(alpha = undercoatWeight * 0.85f),
-                        1f to CanopyColors.Chrome.copy(alpha = undercoatWeight * 1.15f),
-                    )
-            } else {
-                undercoatBrush = null
-            }
-
-            val weight = if (blurred) spec.film else spec.solidFilm
-            val mixed =
-                lerp(
-                    if (blurred) spec.base else spec.solidBase,
-                    tint,
-                    if (blurred) spec.tintMix else spec.solidTintMix,
-                )
-            film =
-                Brush.verticalGradient(
-                    0f to mixed.copy(alpha = (weight * 1.12f).coerceAtMost(1f)),
-                    0.35f to mixed.copy(alpha = weight),
-                    1f to mixed.copy(alpha = weight * 0.88f),
-                )
-            filmTint = tint
-            filmBlurred = blurred
-        }
-        undercoatBrush?.let { scope.drawOutline(outline, brush = it) }
-        scope.drawOutline(outline, brush = film ?: return)
-        scope.drawOutline(outline, brush = edge, style = Stroke(width = 1f))
-    }
-}
-
-/**
- * Per-tone constants. The `solid` variants are the ones used when no backdrop was captured, where
- * the frost has to carry the whole pane on its own.
- */
-private class GlassSpec(
-    val base: Color,
-    val film: Float,
-    val tintMix: Float,
-    val contrastUndercoat: Float,
-    val solidBase: Color,
-    val solidFilm: Float,
-    val solidTintMix: Float,
-    val solidUndercoat: Float,
-)
-
-private val PanelSpec =
-    GlassSpec(
-        base = CanopyColors.Glass,
-        film = 0.14f,
-        tintMix = 0.06f,
-        contrastUndercoat = 0.12f,
-        solidBase = CanopyColors.Surface,
-        solidFilm = 0.94f,
-        solidTintMix = 0.03f,
-        solidUndercoat = 0.0f,
-    )
-
-private val SecondarySpec =
-    GlassSpec(
-        base = CanopyColors.Glass,
-        film = 0.18f,
-        tintMix = 0.05f,
-        contrastUndercoat = 0.18f,
-        solidBase = CanopyColors.SurfaceHover,
-        solidFilm = 0.95f,
-        solidTintMix = 0.02f,
-        solidUndercoat = 0.0f,
-    )
-
-private val ChromeSpec =
-    GlassSpec(
-        base = CanopyColors.GlassChrome,
-        film = 0.18f,
-        tintMix = 0.07f,
-        contrastUndercoat = 0.18f,
-        solidBase = CanopyColors.Chrome,
-        solidFilm = 0.98f,
-        solidTintMix = 0.04f,
-        solidUndercoat = 0.0f,
-    )
-
-private val OverlaySpec =
-    GlassSpec(
-        base = CanopyColors.GlassChrome,
-        film = 0.74f,
-        tintMix = 0.05f,
-        contrastUndercoat = 0.58f,
-        solidBase = CanopyColors.Chrome,
-        solidFilm = 0.98f,
-        solidTintMix = 0.03f,
-        solidUndercoat = 0.0f,
-    )
-
-private val ControlSpec =
-    GlassSpec(
-        base = CanopyColors.Glass,
-        film = 0.16f,
-        tintMix = 0.05f,
-        contrastUndercoat = 0.14f,
-        solidBase = CanopyColors.Surface,
-        solidFilm = 0.92f,
-        solidTintMix = 0.03f,
-        solidUndercoat = 0.0f,
-    )
-
-private fun GlassTone.spec(): GlassSpec =
-    when (this) {
-        GlassTone.PANEL -> PanelSpec
-        GlassTone.SECONDARY -> SecondarySpec
-        GlassTone.CHROME -> ChromeSpec
-        GlassTone.OVERLAY -> OverlaySpec
-        GlassTone.CONTROL -> ControlSpec
-    }
-
-private val SEEDS = floatArrayOf(0f, 137.5f, 311.7f, 523.9f, 719.3f, 941.1f)
-
-/**
- * One pass: rounded mask, contrast undercoat, tinted film, velvety satin micro-frost,
- * restrained etched rim scattering, and dimensional grounding, all laid over the blurred
- * backdrop the pane has already drawn.
- *
- * Returns premultiplied alpha, which is what Skia expects back from a runtime shader.
- */
-private const val GLASS_SHADER = """
-uniform float2 uSize;
-// Top-left, top-right, bottom-right, bottom-left radii in pixels. A bar flush with the bottom of
-// the screen needs its lower corners left square, so one radius for the whole pane will not do.
-uniform float4 uRadius;
-uniform float uSeed;
-uniform float uFilm;
-uniform float uTintMix;
-uniform float uUndercoat;
-layout(color) uniform half4 uBase;
-layout(color) uniform half4 uTint;
-
-float roundedBox(float2 p, float2 halfExtent, float4 radii) {
-    float2 pair = (p.x > 0.0) ? float2(radii.y, radii.z) : float2(radii.x, radii.w);
-    float r = (p.y > 0.0) ? pair.y : pair.x;
-    float2 q = abs(p) - halfExtent + r;
-    return min(max(q.x, q.y), 0.0) + length(max(q, float2(0.0))) - r;
-}
-
-float hash(float2 p) {
-    return fract(52.9829189 * fract(dot(p, float2(0.06711056, 0.00583715))));
-}
-
-// Silky satin micro-frost noise (authentic etched glass finish, eliminates banding)
-float satinFrost(float2 p) {
-    float n1 = hash(p) - 0.5;
-    float n2 = hash(p * 2.13 + 17.37) - 0.5;
-    return n1 * 0.65 + n2 * 0.35;
-}
-
-half4 main(float2 coord) {
-    float2 halfExtent = uSize * 0.5;
-    float d = roundedBox(coord - halfExtent, halfExtent, uRadius);
-    // Sub-pixel antialiased boundary mask
-    float mask = clamp(0.5 - d, 0.0, 1.0);
-    if (mask <= 0.0) {
-        return half4(0.0);
-    }
-
-    float2 uv = coord / max(uSize, float2(1.0));
-
-    // Studio ambient lighting: soft top-down architectural light diffusion
-    float ambientTop = clamp(1.0 - uv.y * 1.30, 0.0, 1.0);
-    float ambientLeft = clamp(1.0 - uv.x * 1.20, 0.0, 1.0);
-    float lightField = clamp(ambientTop * 0.72 + ambientLeft * 0.28, 0.0, 1.0);
-
-    // 1. Contrast floor undercoat: calm dark base protecting text legibility over bright art
-    float3 undercoatColor = float3(0.043, 0.055, 0.071);
-    float undercoatAlpha = uUndercoat;
-
-    // 2. Frosted body tinting with subtle luminance transmission
-    float3 baseColor = float3(uBase.rgb);
-    float3 tintColor = float3(uTint.rgb);
-    float3 frostColor = mix(baseColor, tintColor, uTintMix * (0.35 + 0.65 * lightField));
-    // Soft diffuse top sheen (diffuse architectural reflection, not mirror/gloss)
-    frostColor = frostColor + lightField * 0.048;
-    float frostAlpha = uFilm * (0.88 + 0.18 * lightField);
-
-    // Composite undercoat with frost body
-    float3 body = mix(undercoatColor, frostColor, frostAlpha / max(undercoatAlpha + frostAlpha, 0.001));
-    float alpha = clamp(undercoatAlpha + frostAlpha * (1.0 - undercoatAlpha * 0.40), 0.0, 1.0);
-
-    // 3. Tactile satin micro-frost (breaks up gradient banding, adds velvety etched texture)
-    body = body + (hash(coord + uSeed) - 0.5) * 0.004;
-
-    // 4. Architectural etched edge treatment:
-    // Crisp 1.0px inner perimeter hairline (strictly inside shape: d in [-1.2, 0.0])
-    float innerHairline = smoothstep(-1.2, -0.1, d) * mask;
-    float topGlint = clamp(1.0 - uv.y * 1.9, 0.0, 1.0) * (0.58 + 0.42 * clamp(1.0 - uv.x * 1.3, 0.0, 1.0));
-    float rimHighlight = innerHairline * (0.22 + 0.65 * topGlint);
-
-    // Soft subsurface perimeter light scattering (0 to 5px inside edge)
-    float innerScatter = smoothstep(-8.0, 0.0, d) * (ambientTop * 0.10 + ambientLeft * 0.05);
-
-    float totalEdge = rimHighlight + innerScatter;
-    body = body + totalEdge;
-    alpha = min(alpha + totalEdge * 0.48, 1.0);
-
-    // 5. Dimensional grounding: subtle underside bevel contact occlusion
-    float bottomOcclusion = innerHairline * clamp((uv.y - 0.72) / 0.28, 0.0, 1.0);
-    float rightOcclusion = innerHairline * clamp((uv.x - 0.82) / 0.18, 0.0, 1.0);
-    float underside = (bottomOcclusion * 0.72 + rightOcclusion * 0.28);
-    body = body - underside * 0.070;
-    alpha = min(alpha + underside * 0.06, 1.0);
-
-    alpha = clamp(alpha * mask, 0.0, 1.0);
-    return half4(half3(clamp(body, 0.0, 1.0) * alpha), half(alpha));
-}
-"""

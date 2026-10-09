@@ -46,6 +46,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,78 +55,33 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import dev.sfg.orchard.mobile.qobuz.QOBUZ_BASE_URL
-import dev.sfg.orchard.mobile.qobuz.QOBUZ_USER_AGENT
-import dev.sfg.orchard.mobile.qobuz.QobuzBootstrap
-import dev.sfg.orchard.mobile.qobuz.QobuzBootstrapLoader
+import dev.sfg.orchard.mobile.qobuz.QobuzResolver
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONObject
 
 private const val QOBUZ_CALLBACK_URL = "https://localhost/qobuz-callback"
-
-suspend fun exchangeQobuzCode(
-    code: String,
-    bootstrap: QobuzBootstrap,
-    httpClient: OkHttpClient = OkHttpClient(),
-): Pair<String, Long> = withContext(Dispatchers.IO) {
-    val url = "$QOBUZ_BASE_URL/oauth/callback".toHttpUrl().newBuilder()
-        .addQueryParameter("code", code)
-        .addQueryParameter("private_key", bootstrap.oauthPrivateKey)
-        .build()
-
-    val request = Request.Builder()
-        .url(url)
-        .header("Accept", "application/json")
-        .header("User-Agent", QOBUZ_USER_AGENT)
-        .header("X-App-Id", bootstrap.appId)
-        .get()
-        .build()
-
-    val response = httpClient.newCall(request).execute()
-    val body = response.body.string()
-    if (!response.isSuccessful) {
-        throw IllegalStateException("Qobuz OAuth exchange failed (${response.code}): ${body.take(200)}")
-    }
-
-    val json = JSONObject(body)
-    val token = json.optString("token").ifBlank { json.optString("user_auth_token") }
-    val userId = json.optLong("user_id", -1L).takeIf { it > 0 }
-        ?: json.optJSONObject("user")?.optLong("id", -1L) ?: -1L
-
-    if (token.isBlank() || userId <= 0) {
-        throw IllegalStateException("Qobuz OAuth returned incomplete credentials")
-    }
-
-    token to userId
-}
 
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QobuzLoginScreen(
-    bootstrapLoader: QobuzBootstrapLoader,
+    qobuz: QobuzResolver,
     onSuccess: (token: String, userId: Long) -> Unit,
     onCancel: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var webView by remember { mutableStateOf<WebView?>(null) }
-    var bootstrap by remember { mutableStateOf<QobuzBootstrap?>(null) }
+    var oauthUrl by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf("") }
     var exchanging by remember { mutableStateOf(false) }
-    var reloadTrigger by remember { mutableStateOf(0) }
+    var reloadTrigger by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(reloadTrigger) {
         loading = true
         errorMessage = ""
         try {
-            bootstrap = bootstrapLoader.get(refresh = reloadTrigger > 0)
+            oauthUrl = qobuz.authorizationUrl(QOBUZ_CALLBACK_URL)
             loading = false
         } catch (e: Exception) {
             android.util.Log.e("QobuzLoginScreen", "Failed to initialize Qobuz login", e)
@@ -195,10 +151,8 @@ fun QobuzLoginScreen(
                     }
                 }
             }
-            bootstrap != null -> {
-                val bs = bootstrap!!
-                val oauthUrl = "https://www.qobuz.com/signin/oauth?ext_app_id=${bs.appId}&redirect_url=${Uri.encode(QOBUZ_CALLBACK_URL)}"
-
+            oauthUrl != null -> {
+                val startUrl = oauthUrl!!
                 var popupWebView by remember { mutableStateOf<WebView?>(null) }
 
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -225,9 +179,9 @@ fun QobuzLoginScreen(
                                             exchanging = true
                                             scope.launch {
                                                 try {
-                                                    val (token, userId) = exchangeQobuzCode(code, bs)
+                                                    val account = qobuz.exchangeCode(code)
                                                     popupWebView = null
-                                                    onSuccess(token, userId)
+                                                    onSuccess(account.token, account.userId)
                                                 } catch (e: Exception) {
                                                     errorMessage = e.message ?: "Authentication exchange failed"
                                                     exchanging = false
@@ -250,11 +204,6 @@ fun QobuzLoginScreen(
                                         return urlHandler(url)
                                     }
 
-                                    @Deprecated("Deprecated in Java")
-                                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                                        if (url == null) return false
-                                        return urlHandler(Uri.parse(url))
-                                    }
                                 }
 
                                 webChromeClient = object : android.webkit.WebChromeClient() {
@@ -275,11 +224,6 @@ fun QobuzLoginScreen(
                                                     val url = request?.url ?: return false
                                                     return urlHandler(url)
                                                 }
-                                                @Deprecated("Deprecated in Java")
-                                                override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                                                    if (url == null) return false
-                                                    return urlHandler(Uri.parse(url))
-                                                }
                                             }
                                             webChromeClient = object : android.webkit.WebChromeClient() {
                                                 override fun onCloseWindow(window: WebView?) {
@@ -298,7 +242,7 @@ fun QobuzLoginScreen(
                         },
                         update = { view ->
                             if (view.url == null) {
-                                view.loadUrl(oauthUrl)
+                                view.loadUrl(startUrl)
                             }
                         }
                     )

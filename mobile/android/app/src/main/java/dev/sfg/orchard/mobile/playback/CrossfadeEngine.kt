@@ -19,72 +19,30 @@
 
 package dev.sfg.orchard.mobile.playback
 
+import android.media.MediaDataSource
+import android.net.Uri
 import android.os.Handler
 import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.C
-import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import dev.sfg.orchard.mobile.model.TransitionMarker
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.playback.smart.CrossfadeMode
-import dev.sfg.orchard.mobile.playback.smart.TrackAnalysis
-import dev.sfg.orchard.mobile.playback.smart.TransitionChoreography
-import dev.sfg.orchard.mobile.playback.smart.TransitionPlan
-import dev.sfg.orchard.mobile.playback.smart.TransitionFilter
-import dev.sfg.orchard.mobile.playback.smart.TransitionStyle
-import dev.sfg.orchard.mobile.playback.smart.WsolaPlanResult
-import dev.sfg.orchard.mobile.playback.smart.evaluateAutomationCurve
-import dev.sfg.orchard.mobile.playback.smart.forLivePlayback
-import dev.sfg.orchard.mobile.playback.smart.planTransition
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.min
-import kotlin.math.pow
-import kotlin.math.sin
-
-/** The independent upper- and low-band gains for one instant of a live DJ blend. */
-internal data class DjMixGains(
-    val outgoingUpper: Double,
-    val incomingUpper: Double,
-    val outgoingBass: Double,
-    val incomingBass: Double,
-)
+import dev.sfg.orchard.mobile.playback.smart.MixSplicer
+import dev.sfg.orchard.mobile.playback.smart.PreparedMix
+import kotlin.math.max
 
 /**
- * Shapes the live two-player blend with bass fading smoothly alongside volume at equal power.
+ * Track transitions across a pair of ExoPlayers, as desktop's `PlaybackController` runs them.
  *
- * Both the upper bands and the bass use complementary equal-power curves across the overlap.
- * Keeping this pure makes the audible invariants testable without constructing two ExoPlayers.
- */
-internal fun djMixGains(progress: Double, fadeSeconds: Double = 0.0): DjMixGains {
-    val position = progress.coerceIn(0.0, 1.0)
-    val outgoing = cos(position * PI / 2.0)
-    val incoming = sin(position * PI / 2.0)
-
-    return DjMixGains(
-        outgoingUpper = outgoing,
-        incomingUpper = incoming,
-        outgoingBass = outgoing,
-        incomingBass = incoming,
-    )
-}
-
-/**
- * True overlapping crossfade across a pair of ExoPlayers.
- *
- * ExoPlayer decodes one item at a time, so real overlap needs a second player. Near the end of a
- * track the standby player is loaded with the same queue positioned on the next item and started
- * silently; the two volumes then ramp against each other. At the end of the ramp the standby is
- * already playing the next track at the right position, so the handoff is a role swap rather than
- * a seek; nothing has to be re-buffered at the seam.
- *
- * *Where* and *how long* the overlap runs is not decided here: every tick asks
- * [planTransition] for a [TransitionPlan], and this class only executes it. In standard mode that
- * plan is the same trailing ramp it always was. In smart mode the plan is placed against stored
- * analysis: on a downbeat, past the incoming track's lead-in silence, ending where the music
- * actually does, and degrades back to the trailing ramp for any track it has no evidence about.
+ * Standard mode is a trailing equal-power fade. Adaptive mode asks [AdaptiveMixer] (the desktop
+ * worker, in process) for a rendered overlap and splices it in with [MixSplicer]; when the shared
+ * planner keeps the natural boundary the song simply ends, and when preparation fails the
+ * standard fade stands in, exactly the three outcomes desktop has.
  *
  * The caller owns both players and is told, via [onHandoff], to move the media session onto the
  * incoming one.
@@ -93,273 +51,358 @@ internal fun djMixGains(progress: Double, fadeSeconds: Double = 0.0): DjMixGains
 class CrossfadeEngine(
     private val handler: Handler,
     private val config: () -> Config,
-    /**
-     * Stored analysis for a track, or an empty [TrackAnalysis] when there is none. This is the seam
-     * on-device analysis plugs into; until then every track comes back empty, which the policy
-     * ladder reads as "no evidence" and answers with a plain fade.
-     */
-    private val analysisFor: (Track) -> TrackAnalysis = { TrackAnalysis() },
-    /**
-     * Reports the plan for the current track, or null when there is none to draw. Called on every
-     * tick so the marker follows a re-plan; analysis finishing mid-track moves the transition.
-     */
-    private val onPlan: (TransitionPlan?) -> Unit = {},
-    /**
-     * The filters in each player's audio pipeline, outgoing first. Automating gain alone only makes
-     * a track quieter; the filter ride is what makes a blend read as a mix rather than as two
-     * records playing at once, and it has to happen inside the sink.
-     */
-    private val filters: () -> Pair<TransitionFilter, TransitionFilter>? = { null },
+    private val mixer: AdaptiveMixer,
+    /** A fully cached source for a queue item, or null while it is still downloading. */
+    private val sourceFor: (Uri) -> (() -> MediaDataSource?)?,
+    private val splicerFor: (ExoPlayer) -> MixSplicer?,
+    private val onMarker: (TransitionMarker?) -> Unit = {},
     private val onHandoff: (outgoing: ExoPlayer, incoming: ExoPlayer) -> Unit,
 ) {
     /** What the listener asked for, read fresh on every tick so a settings change lands at once. */
-    data class Config(
-        val enabled: Boolean,
-        val fadeSeconds: Double,
-        val mode: CrossfadeMode,
-    )
-
-    // Pair scoring belongs off the playback/UI thread. The shared planner caches musical choices;
-    // subsequent ticks only schedule the cached result. Never queue work faster than it completes.
-    private val planningExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
-        Thread(task, "orchard-transition-plan").apply { isDaemon = true }
-    }
-    private var planning = false
-    private var planningGeneration = 0L
+    data class Config(val enabled: Boolean, val fadeSeconds: Double, val mode: CrossfadeMode)
 
     private var active: ExoPlayer? = null
     private var standby: ExoPlayer? = null
+
+    // Standard fade. The gains run in each player's MixSplicer; this side only stages and hands off.
+    private var staged = false
+    private var stagedQueue: List<String> = emptyList()
     private var fading = false
-    private var fadeStartedAt = 0L
-    private var fadeWindowMs = 0L
-    private var fadeStyle = TransitionStyle.EQUAL_POWER
-    private var fadeInitialProgress = 0.0
-    private var fadeChoreography: TransitionChoreography? = null
-    private data class StagedLiveTransition(
-        val selectedPlan: WsolaPlanResult.Planned,
-        val queueIds: List<String>,
-        val nextIndex: Int,
-        var primed: Boolean = false,
+    private var fadeEndMs = 0L
+    private var fadeSlackMs = 0L
+    private var outgoingEnded = false
+    private var armedThisTick = false
+
+    // Adaptive splice in flight.
+    private var splice: Splice? = null
+
+    private class Splice(
+        val mix: PreparedMix.Ready,
+        val outgoing: ExoPlayer,
+        val incoming: ExoPlayer,
+        val outgoingSplicer: MixSplicer,
+        val incomingSplicer: MixSplicer,
+        val incomingStart: Double,
+        var playing: Boolean = false,
+        var correctedAt: Long = 0L,
+        val startedAt: Long = SystemClock.elapsedRealtime(),
     )
-    private var stagedLiveTransition: StagedLiveTransition? = null
 
     /** Begins watching [active] for the end of each track. Safe to call again to re-seat the pair. */
     fun start(active: ExoPlayer, standby: ExoPlayer) {
-        planningGeneration++
         this.active = active
         this.standby = standby
+        staged = false
         fading = false
-        fadeInitialProgress = 0.0
-        fadeChoreography = null
-        stagedLiveTransition = null
+        splice = null
         handler.removeCallbacks(watcher)
-        handler.removeCallbacks(ramp)
+        cancelTicks()
         active.volume = 1f
         active.pauseAtEndOfMediaItems = false
         handler.post(watcher)
     }
 
     /**
-     * Drops an in-flight fade and leaves the active player untouched. Anything that invalidates the
-     * snapshot the standby was loaded with (a manual skip, a seek, a queue edit) must call this.
+     * Drops an in-flight transition and leaves the active player untouched. Anything that
+     * invalidates the snapshot the standby was loaded with (a skip, a seek, a queue edit) must call this.
+     * A prepared mix stays: it is keyed by pair, and a seek back before its start replays it, as on desktop.
      */
     fun abort() {
-        planningGeneration++
-        val hadStagedTransition = stagedLiveTransition != null
-        stagedLiveTransition = null
-        if (!fading && !hadStagedTransition) return
+        onMarker(null)
+        val wasBusy = staged || fading || splice != null
+        active?.removeListener(endWatcher)
+        staged = false
         fading = false
-        fadeInitialProgress = 0.0
-        fadeChoreography = null
-        handler.removeCallbacks(ramp)
-        filters()?.let { (outgoingFilter, incomingFilter) ->
-            outgoingFilter.clearAutomation()
-            incomingFilter.clearAutomation()
-        }
+        splice = null
+        cancelTicks()
+        active?.let { splicerFor(it)?.disarm() }
+        standby?.let { splicerFor(it)?.disarm() }
+        if (!wasBusy) return
         active?.let {
             it.volume = 1f
             it.pauseAtEndOfMediaItems = false
-            it.setPlaybackParameters(PlaybackParameters.DEFAULT)
         }
         standby?.let {
             it.stop()
             it.clearMediaItems()
             it.volume = 1f
-            it.setPlaybackParameters(PlaybackParameters.DEFAULT)
         }
     }
 
     fun release() {
-        planningGeneration++
-        planningExecutor.shutdownNow()
+        mixer.release()
+        active?.removeListener(endWatcher)
         handler.removeCallbacks(watcher)
-        handler.removeCallbacks(ramp)
+        cancelTicks()
+        staged = false
         fading = false
-        stagedLiveTransition = null
+        splice = null
         active = null
         standby = null
     }
 
+    private fun cancelTicks() {
+        handler.removeCallbacks(fadeStart)
+        handler.removeCallbacks(fadeTick)
+        handler.removeCallbacks(spliceTick)
+    }
+
+    /** Frees the mixer's model memory; the next adaptive pair reloads it. */
+    fun trimMemory() = mixer.trimMemory()
+
     private val watcher = object : Runnable {
         override fun run() {
             handler.postDelayed(this, WATCH_INTERVAL_MS)
-            if (fading) return
-            val player = active ?: return
-            val settings = config()
-            if (!settings.enabled || !player.isPlaying) {
-                discardStagedLiveTransition()
-                if (!settings.enabled) onPlan(null)
-                return
-            }
-            // Either side of a video transition needs the session's visible surface. Keep both
-            // sources on the session player instead of starting the audio-only standby deck.
-            val nextIndex = player.nextMediaItemIndex
-            if (MediaItemMapper.isVideoUri(player.currentMediaItem?.localConfiguration?.uri) ||
-                (nextIndex != C.INDEX_UNSET &&
-                    MediaItemMapper.isVideoUri(player.getMediaItemAt(nextIndex).localConfiguration?.uri))
-            ) {
-                discardStagedLiveTransition()
-                onPlan(null)
-                return
-            }
-            // Repeating one track would fade it into itself.
-            if (player.repeatMode == Player.REPEAT_MODE_ONE) {
-                discardStagedLiveTransition()
-                return
-            }
-            val duration = player.sourceDurationMs()
-            if (duration == C.TIME_UNSET || player.nextMediaItemIndex == C.INDEX_UNSET) {
-                discardStagedLiveTransition()
-                return
-            }
-
-            requestPlan(player, settings, duration)
+            tick()
         }
     }
 
-    private fun executePlan(player: ExoPlayer, plan: TransitionPlan, duration: Long) {
-        // The shared planner still owns the selected cues, rates, duration, curves, and fallback.
-        // Mobile executes that selection directly through its two live players instead of turning
-        // it into a temporary WAV and crossing two decoder boundaries around it.
-        val execution = plan.forLivePlayback(player.sourcePositionMs() / 1000.0)
-        onPlan(execution.takeIf { it.markerVisible && !it.blocked })
+    // Starts a staged fade on time when it falls between two watcher ticks.
+    private val fadeStart = Runnable { tick() }
 
-        if (execution.blocked) {
-            discardStagedLiveTransition()
-            return
-        }
-        // Gapless playback across sequential album tracks is handled natively and seamlessly
-        // by ExoPlayer within the active player. Beginning a multi-player handoff for gapless
-        // would cause buffer stalls and stutter.
-        if (execution.transitionStyle == TransitionStyle.GAPLESS) {
-            discardStagedLiveTransition()
-            return
-        }
-        // A smart plan can end before the file does, at an analyzed mix-out anchor. The ramp
-        // has to close there, not at the end of the track.
-        val endMs = (execution.transitionEnd * 1000).toLong().coerceAtMost(duration)
-        if (!execution.shouldStart) {
-            if (execution.nativePlan != null) {
-                stageLiveTransition(execution)
-                primeLiveTransition(execution, player.sourcePositionMs() / 1000.0)
-            } else {
-                discardStagedLiveTransition()
-            }
-            return
-        }
-        if (execution.nativePlan == null) discardStagedLiveTransition()
-        // Zero-duration desktop refusals must never become a minimum-length volume ramp.
-        // Wait for the selected boundary, then advance with the exact incoming cue.
-        if (execution.fadeSeconds <= 0) {
-            if (player.sourcePositionMs() < endMs) return
-            val next = player.nextMediaItemIndex
-            if (next != C.INDEX_UNSET) player.seekTo(next, (execution.incomingCueTime * 1000).toLong())
-            return
-        }
-
-        Log.d(
-            TAG,
-            "Transition: live shared plan, style=${execution.transitionStyle} " +
-                "fadeMs=${execution.fadeMs} rates=${execution.outgoingPlaybackRate}/" +
-                "${execution.incomingPlaybackRate} " +
-                "out=${execution.transitionStart}..${execution.transitionEnd} " +
-                "in=${execution.incomingCueTime}->${execution.incomingHandoffTime} " +
-                "reason=${execution.reason}",
-        )
-        beginFade(execution, remainingMs = endMs - player.sourcePositionMs())
+    private fun tick() {
+        if (fading || splice != null) return
+        val player = active ?: return
+        armedThisTick = false
+        check(player)
+        // Staged on an earlier tick but no longer wanted: the setting went off, or the pair changed.
+        if (staged && !armedThisTick) abort()
     }
 
-    /**
-     * Buffers the selected incoming source before its first audible sample is needed.
-     *
-     * This is deliberately still the original media item, not an intermediate mix file. Preparing
-     * it early keeps network, extractor, and decoder startup out of the transition window.
-     */
-    private fun stageLiveTransition(plan: TransitionPlan): Boolean {
-        val selected = plan.nativePlan ?: return false
-        val outgoing = active ?: return false
+    private fun check(player: ExoPlayer) {
+        val settings = config()
+        if (!settings.enabled) {
+            onMarker(null)
+            return
+        }
+        // Paused or buffering: keep the staged deck so resuming does not reload it.
+        if (!player.isPlaying) {
+            armedThisTick = staged
+            return
+        }
+        val nextIndex = player.nextMediaItemIndex
+        // Video needs the session's surface, and repeating one track would fade it into itself.
+        if (nextIndex == C.INDEX_UNSET || player.repeatMode == Player.REPEAT_MODE_ONE ||
+            MediaItemMapper.isVideoUri(player.currentMediaItem?.localConfiguration?.uri) ||
+            MediaItemMapper.isVideoUri(player.getMediaItemAt(nextIndex).localConfiguration?.uri)
+        ) {
+            onMarker(null)
+            return
+        }
+        val durationMs = player.sourceDurationMs()
+        if (durationMs <= 0) return
+        if (settings.mode == CrossfadeMode.SMART) adaptive(player, nextIndex, settings, durationMs)
+        else standard(player, settings, durationMs)
+    }
+
+    private fun standard(player: ExoPlayer, settings: Config, durationMs: Long) {
+        val fadeMs = (settings.fadeSeconds * 1000).toLong()
+        if (durationMs <= fadeMs) return
+        val startMs = durationMs - fadeMs
+        currentPair(player)?.let { (outgoing, incoming) ->
+            onMarker(TransitionMarker(outgoing.id, startMs, durationMs, "equal_power", incoming.id,
+                renderedDurationMs = fadeMs))
+        }
+        val position = player.sourcePositionMs()
+        if (position + STAGE_LEAD_SECONDS * 1000 < startMs) return
+        // The standby copied the queue when staged; an edit since then would play the old one.
+        if (staged && player.queueMediaIds() != stagedQueue) {
+            abort()
+            return
+        }
+        val splicer = splicerFor(player) ?: return
+        val fade = splicer.fade ?: outgoingFade(startMs, durationMs, position)
+        if (!staged && !stage(player, fade)) return
+        // Armed seconds early, so the outgoing sink's first faded frames are already shaped.
+        splicer.fade = fade
+        armedThisTick = true
+        val wait = fade.startUs / 1000 - position
+        handler.removeCallbacks(fadeStart)
+        if (wait <= START_SLACK_MS) beginFade(player, fade)
+        else if (wait < WATCH_INTERVAL_MS) handler.postDelayed(fadeStart, wait)
+    }
+
+    private fun outgoingFade(startMs: Long, durationMs: Long, position: Long): MixSplicer.Fade {
+        // Seeked into the fade window: fade over what is left.
+        val from = max(startMs, position)
+        val window = (durationMs - from).coerceAtLeast(MIN_RAMP_MS)
+        return MixSplicer.Fade(from * 1000, window * 1000, fadeIn = false)
+    }
+
+    /** Loads the next song paused on the standby, with its fade-in armed, so it starts on cue. */
+    private fun stage(outgoing: ExoPlayer, fade: MixSplicer.Fade): Boolean {
         val incoming = standby ?: return false
+        val incomingSplicer = splicerFor(incoming) ?: return false
         val nextIndex = outgoing.nextMediaItemIndex
         if (nextIndex == C.INDEX_UNSET) return false
-        val queue = buildList {
-            for (index in 0 until outgoing.mediaItemCount) add(outgoing.getMediaItemAt(index))
-        }
-        val queueIds = queue.map { it.mediaId }
-        val staged = stagedLiveTransition
-        if (staged?.selectedPlan == selected && staged.queueIds == queueIds &&
-            staged.nextIndex == nextIndex && incoming.playerError == null) {
-            incoming.repeatMode = outgoing.repeatMode
-            incoming.shuffleModeEnabled = outgoing.shuffleModeEnabled
-            incoming.setPlaylistMetadata(outgoing.playlistMetadata)
-            return true
-        }
-
+        val queue: List<MediaItem> = (0 until outgoing.mediaItemCount).map(outgoing::getMediaItemAt)
+        // The incoming player owns what plays next, so the outgoing one must not advance on its own.
+        outgoing.pauseAtEndOfMediaItems = true
+        incomingSplicer.fade = MixSplicer.Fade(0, fade.durationUs, fadeIn = true)
         incoming.pause()
-        incoming.volume = 0f
+        incoming.volume = 1f
         incoming.repeatMode = outgoing.repeatMode
         incoming.shuffleModeEnabled = outgoing.shuffleModeEnabled
         incoming.setPlaylistMetadata(outgoing.playlistMetadata)
-        incoming.setMediaItems(queue, nextIndex, (selected.incomingCueTime * 1000).toLong())
-        incoming.setPlaybackParameters(
-            PlaybackParameters(selected.incomingTempoRatio.coerceAtLeast(MIN_PLAYBACK_RATE).toFloat()),
-        )
+        incoming.setMediaItems(queue, nextIndex, 0)
         incoming.prepare()
-        stagedLiveTransition = StagedLiveTransition(selected, queueIds, nextIndex)
+        stagedQueue = queue.map(MediaItem::mediaId)
+        staged = true
         return true
     }
 
-    /** Starts the buffered incoming player muted so its AudioTrack is hot at the mix boundary. */
-    private fun primeLiveTransition(plan: TransitionPlan, currentTime: Double) {
-        val selected = plan.nativePlan ?: return
-        val incoming = standby ?: return
-        val staged = stagedLiveTransition ?: return
-        if (staged.selectedPlan != selected || staged.primed ||
-            incoming.playerError != null || incoming.playbackState != Player.STATE_READY) return
-
-        val incomingRate = selected.incomingTempoRatio.coerceAtLeast(MIN_PLAYBACK_RATE)
-        val availablePreroll = selected.incomingCueTime.coerceAtLeast(0.0) / incomingRate
-        val preroll = min(LIVE_PREROLL_SECONDS, availablePreroll)
-        val remaining = selected.transitionStart - currentTime
-        if (remaining > preroll) return
-
-        val startPosition =
-            (selected.incomingCueTime - remaining.coerceAtLeast(0.0) * incomingRate)
-                .coerceAtLeast(0.0)
-        incoming.seekTo((startPosition * 1000).toLong())
-        incoming.volume = 0f
-        incoming.play()
-        staged.primed = true
+    private fun adaptive(player: ExoPlayer, nextIndex: Int, settings: Config, durationMs: Long) {
+        val (current, next) = currentPair(player) ?: return
+        val duration = durationMs / 1000.0
+        // Speech, live material and short tracks keep their natural boundaries, as on desktop.
+        val context = "${current.title} ${next.title}"
+        if (duration < 45 || AdaptiveMixer.EXCLUDED.containsMatchIn(context)) {
+            onMarker(null)
+            return
+        }
+        val position = player.sourcePositionMs() / 1000.0
+        val key = "${current.id}\n${next.id}"
+        val result = mixer.resultFor(key)
+        if (result == null) {
+            onMarker(null)
+            if (mixer.isPreparing(key) || duration - position > PREPARE_LEAD_SECONDS) return
+            val outgoing = player.currentMediaItem?.localConfiguration?.uri?.let(sourceFor) ?: return
+            val incoming = player.getMediaItemAt(nextIndex).localConfiguration?.uri?.let(sourceFor) ?: return
+            mixer.prepare(key, outgoing, incoming, AdaptiveMixer.request(
+                current, next, duration, position, settings.fadeSeconds,
+                albumSequential = isAlbumPlaythrough(player, current),
+            ))
+            return
+        }
+        when (result) {
+            is PreparedMix.NoMix -> onMarker(null)
+            is PreparedMix.Failed -> standard(player, settings, durationMs)
+            is PreparedMix.Ready -> scheduleSplice(player, nextIndex, result, current, next, position)
+        }
     }
 
-    private fun discardStagedLiveTransition() {
-        if (stagedLiveTransition == null) return
-        stagedLiveTransition = null
-        standby?.let {
-            it.stop()
-            it.clearMediaItems()
-            it.volume = 1f
-            it.setPlaybackParameters(PlaybackParameters.DEFAULT)
+    private fun scheduleSplice(
+        player: ExoPlayer, nextIndex: Int, mix: PreparedMix.Ready, current: Track, next: Track, position: Double,
+    ) {
+        onMarker(TransitionMarker(
+            trackId = current.id,
+            startMs = (mix.outgoingStart * 1000).toLong(),
+            endMs = ((mix.outgoingStart + mix.duration) * 1000).toLong(),
+            style = when (mix.strategy) {
+                "filtered blend" -> "dj_filter"
+                "beatmatched crossfade", "bass swap" -> "dj_blend"
+                else -> "equal_power"
+            },
+            incomingTrackId = next.id,
+            incomingCueMs = (mix.incomingCue * 1000).toLong(),
+            renderedDurationMs = (mix.duration * 1000).toLong(),
+            // Past its start the mix will not play, so stop promising it.
+            prepared = position - mix.outgoingStart <= STALE_SECONDS,
+        ))
+        // A result made stale by a seek is not permission to jump into the middle of a mix.
+        if (position - mix.outgoingStart > STALE_SECONDS) return
+        val outgoingSplicer = splicerFor(player) ?: return
+        val incoming = standby ?: return
+        val incomingSplicer = splicerFor(incoming) ?: return
+        if (outgoingSplicer.outgoing == null) {
+            outgoingSplicer.outgoing = MixSplicer.Outgoing(mix.pcm, (mix.outgoingStart * mix.rate).toLong(), mix.rate)
         }
+        // The incoming player starts muted a little before the render, so its startup is inaudible.
+        val incomingStart = (mix.incomingCue - INCOMING_LEAD_SECONDS).coerceAtLeast(0.0)
+        if (mix.outgoingStart - position > STAGE_LEAD_SECONDS) return
+        val queue = (0 until player.mediaItemCount).map(player::getMediaItemAt)
+        incoming.pause()
+        incoming.volume = 1f
+        incoming.repeatMode = player.repeatMode
+        incoming.shuffleModeEnabled = player.shuffleModeEnabled
+        incoming.setPlaylistMetadata(player.playlistMetadata)
+        incomingSplicer.incoming = MixSplicer.Incoming((mix.incomingResume * mix.incomingRate).toLong(), mix.incomingRate)
+        incoming.setMediaItems(queue, nextIndex, (incomingStart * 1000).toLong())
+        incoming.prepare()
+        // The render owns the end of this song; the player must not advance on its own.
+        player.pauseAtEndOfMediaItems = true
+        splice = Splice(mix, player, incoming, outgoingSplicer, incomingSplicer, incomingStart)
+        Log.i(TAG, "AdaptiveMix: plan ${current.title} -> ${next.title} | ${mix.log}")
+        handler.post(spliceTick)
+    }
+
+    private val spliceTick = object : Runnable {
+        override fun run() {
+            val s = splice ?: return
+            if (s.incoming.playerError != null || s.outgoing.playerError != null) {
+                abort()
+                return
+            }
+            val outgoingSeconds = s.outgoing.sourcePositionMs() / 1000.0
+            val mix = s.mix
+            // Start the incoming clock so its cue plays under render frame zero.
+            if (!s.playing && outgoingSeconds >= mix.outgoingStart - (mix.incomingCue - s.incomingStart)) {
+                s.incoming.play()
+                s.playing = true
+            }
+            if (s.playing) {
+                // Pause and resume follow the session player, so the two clocks stay together.
+                s.incoming.playWhenReady = s.outgoing.playWhenReady
+                align(s, outgoingSeconds)
+            }
+            val renderEnd = mix.outgoingStart + mix.duration
+            val drained = outgoingSeconds >= renderEnd + DRAIN_SECONDS ||
+                s.outgoing.playbackState == Player.STATE_ENDED
+            val overdue = SystemClock.elapsedRealtime() - s.startedAt >
+                ((mix.outgoingStart - outgoingSeconds).coerceAtLeast(0.0) + mix.duration + OVERDUE_SECONDS) * 1000
+            if ((s.incomingSplicer.unmuted && drained) || (overdue && s.incomingSplicer.unmuted)) {
+                finishSplice(s)
+                return
+            }
+            if (overdue && !s.incomingSplicer.unmuted && s.outgoingSplicer.cutFrame < 0) {
+                // The render never took over (armed too late); the song plays out naturally.
+                Log.w(TAG, "AdaptiveMix: missed the splice; keeping the natural boundary")
+                abort()
+                return
+            }
+            handler.postDelayed(this, SPLICE_TICK_MS)
+        }
+    }
+
+    /**
+     * Keeps the muted incoming player on the render's clock: its media time should read the cue
+     * plus how far the render has played. Corrections retime its muted stream, so they wait out
+     * one sink buffer before measuring again.
+     */
+    private fun align(s: Splice, outgoingSeconds: Double) {
+        if (s.incomingSplicer.unmuted || !s.incoming.isPlaying || !s.outgoing.isPlaying) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - s.correctedAt < CORRECTION_INTERVAL_MS) return
+        val mix = s.mix
+        val cut = s.outgoingSplicer.cutFrame
+        val renderSeconds = if (cut >= 0) {
+            (outgoingSeconds * mix.rate - cut + s.outgoingSplicer.cutRenderFrame) / mix.rate
+        } else outgoingSeconds - mix.outgoingStart
+        val delta = s.incoming.currentPosition / 1000.0 - (mix.incomingCue + renderSeconds)
+        if (kotlin.math.abs(delta) < ALIGN_TOLERANCE_SECONDS) return
+        s.incomingSplicer.shift(Math.round(-delta * mix.incomingRate))
+        s.correctedAt = now
+    }
+
+    private fun finishSplice(s: Splice) {
+        handler.removeCallbacks(spliceTick)
+        splice = null
+        s.outgoingSplicer.disarm()
+        s.incomingSplicer.disarm()
+        s.incoming.pauseAtEndOfMediaItems = false
+        handOff(s.outgoing, s.incoming)
+    }
+
+    /** Swaps the decks' roles, moves the session, and empties the outgoing deck. */
+    private fun handOff(outgoing: ExoPlayer, incoming: ExoPlayer) {
+        active = incoming
+        standby = outgoing
+        onMarker(null)
+        mixer.forget()
+        onHandoff(outgoing, incoming)
+        outgoing.stop()
+        outgoing.clearMediaItems()
+        outgoing.pauseAtEndOfMediaItems = false
     }
 
     /** The outgoing and incoming tracks of the transition about to happen. */
@@ -370,110 +413,26 @@ class CrossfadeEngine(
         return outgoing to MediaItemMapper.toTrack(player.getMediaItemAt(nextIndex))
     }
 
-    private fun requestPlan(player: ExoPlayer, settings: Config, durationMs: Long) {
-        if (planning) return
-        val currentTrack = player.currentMediaItem?.let(MediaItemMapper::toTrack) ?: return
-        val nextTrack = player.getMediaItemAt(player.nextMediaItemIndex).let(MediaItemMapper::toTrack)
-        val analysis = analysisFor(currentTrack)
-        val nextAnalysis = analysisFor(nextTrack)
-        val position = player.sourcePositionMs()
-        val albumSequential = isAlbumPlaythrough(player, currentTrack)
-        val generation = planningGeneration
-        planning = true
-        planningExecutor.execute {
-            val result = runCatching {
-                planTransition(analysis, nextAnalysis, currentTrack, nextTrack,
-                    currentTime = position / 1000.0, duration = durationMs / 1000.0,
-                    fadeSeconds = settings.fadeSeconds, mode = settings.mode, albumSequential = albumSequential)
-            }
-            handler.post {
-                planning = false
-                if (generation != planningGeneration || active !== player || fading || !player.isPlaying ||
-                    config() != settings || currentPair(player) != (currentTrack to nextTrack) ||
-                    analysisFor(currentTrack) != analysis || analysisFor(nextTrack) != nextAnalysis ||
-                    isAlbumPlaythrough(player, currentTrack) != albumSequential ||
-                    kotlin.math.abs(player.sourcePositionMs() - position) > WATCH_INTERVAL_MS * 2) return@post
-                result.onSuccess { executePlan(player, it, durationMs) }
-                    .onFailure { Log.w(TAG, "Desktop transition planning failed", it) }
-            }
-        }
-    }
-
-    /**
-     * Whether this queue is an album genuinely being played through in order; the only case that
-     * earns a gapless handoff instead of a mix.
-     *
-     * Shuffle and any non-adjacent next item rule it out. Beyond that the queue's own context title
-     * has to name the album: two album siblings that happen to land next to each other inside a
-     * playlist are still a mix, and mixing them is what the listener asked for.
-     *
-     * This is a proxy, not proof. `OrchardViewModel.playAll` falls back to the starting track's own
-     * album when a caller supplies no context, so a queue that was never an album can still carry an
-     * album's name. What survives that is narrow (an unshuffled queue, adjacent items, a shared
-     * album, and a context naming it), and joining those two gaplessly is the likely intent anyway.
-     * A real queue-origin field on the track would settle it properly.
-     */
-    internal fun isAlbumPlaythrough(player: ExoPlayer, currentTrack: Track?): Boolean {
-        if (player.shuffleModeEnabled) return false
-        if (player.nextMediaItemIndex != player.currentMediaItemIndex + 1) return false
-        val album = currentTrack?.album?.takeIf { it.isNotBlank() } ?: return false
-        val context = player.playlistMetadata.title?.toString().orEmpty()
-        if (context.endsWith("• Best Mix", ignoreCase = true) || context.equals("Best Mix", ignoreCase = true)) return false
-        return context.equals(album, ignoreCase = true)
-    }
-
-    private fun beginFade(plan: TransitionPlan, remainingMs: Long) {
-        val outgoing = active ?: return
+    private fun beginFade(outgoing: ExoPlayer, fade: MixSplicer.Fade) {
         val incoming = standby ?: return
-        val nextIndex = outgoing.nextMediaItemIndex
-        if (nextIndex == C.INDEX_UNSET) return
-        val queue = buildList {
-            for (index in 0 until outgoing.mediaItemCount) add(outgoing.getMediaItemAt(index))
-        }
-        // A fade aborted mid-window, or a plan placed against a slightly stale duration, can leave
-        // less track than the plan asked for. Ramping over what is actually left keeps the two
-        // halves aligned rather than cutting the outgoing track off part-way down.
-        val outgoingRate = plan.outgoingPlaybackRate.coerceAtLeast(MIN_PLAYBACK_RATE)
-        val remainingWallMs = (remainingMs.coerceAtLeast(0) / outgoingRate).toLong()
-        fadeWindowMs = min(plan.fadeMs, remainingWallMs).coerceAtLeast(MIN_RAMP_MS)
         fading = true
-        fadeStartedAt = SystemClock.elapsedRealtime()
-        fadeStyle = plan.transitionStyle
-        fadeInitialProgress = plan.initialProgress.coerceIn(0.0, 1.0)
-        fadeChoreography = plan.choreography?.takeIf { it.validate().isValid }
-        // The incoming player owns what plays next, so the outgoing one must not advance on its own.
-        outgoing.pauseAtEndOfMediaItems = true
-        outgoing.setPlaybackParameters(PlaybackParameters(outgoingRate.toFloat()))
-        val staged = stagedLiveTransition
-        val reusesStagedPlayer = staged != null && staged.selectedPlan == plan.nativePlan &&
-            staged.queueIds == queue.map { it.mediaId } && staged.nextIndex == nextIndex &&
-            incoming.playerError == null
-        stagedLiveTransition = null
-        incoming.volume = 0f
-        if (!reusesStagedPlayer) {
-            incoming.repeatMode = outgoing.repeatMode
-            incoming.shuffleModeEnabled = outgoing.shuffleModeEnabled
-            incoming.setPlaylistMetadata(outgoing.playlistMetadata)
-            // Smart plans cue past the incoming track's lead-in silence, or back from its drop so
-            // the arrangement lands where the outgoing track ends. Standard plans cue at zero.
-            incoming.setMediaItems(queue, nextIndex, (plan.incomingCueTime * 1000).toLong())
-            incoming.prepare()
-        } else {
-            val desiredPositionMs = (plan.incomingCueTime * 1000).toLong()
-            if (kotlin.math.abs(incoming.currentPosition - desiredPositionMs) > MAX_PREROLL_DRIFT_MS) {
-                // Still inaudible here. Repair a late planner tick before applying its first gain.
-                incoming.seekTo(desiredPositionMs)
-            }
-        }
-        // Media3 time-stretches without shifting pitch, so a tempo nudge inside the transparent
-        // window is a beat-match rather than a detune. Plans that earned no nudge return 1.0.
-        incoming.setPlaybackParameters(PlaybackParameters(plan.incomingPlaybackRate.toFloat()))
-        applyMixState(outgoing, incoming, fadeInitialProgress.toFloat())
-        incoming.play()
-        handler.post(ramp)
+        outgoingEnded = false
+        fadeEndMs = (fade.startUs + fade.durationUs) / 1000
+        fadeSlackMs = (fade.durationUs / 1000 / 20).coerceAtMost(DONE_SLACK_MS)
+        outgoing.addListener(endWatcher)
+        incoming.playWhenReady = outgoing.playWhenReady
+        handler.post(fadeTick)
     }
 
-    private val ramp = object : Runnable {
+    /** Pause and resume follow the session player; its pause at the end of the song is the cue to hand off. */
+    private val endWatcher = object : Player.Listener {
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) outgoingEnded = true
+            else if (fading) standby?.playWhenReady = playWhenReady
+        }
+    }
+
+    private val fadeTick = object : Runnable {
         override fun run() {
             val outgoing = active ?: return
             val incoming = standby ?: return
@@ -482,163 +441,59 @@ class CrossfadeEngine(
                 abort()
                 return
             }
-            val elapsedProgress =
-                ((SystemClock.elapsedRealtime() - fadeStartedAt).toDouble() / fadeWindowMs)
-                    .coerceIn(0.0, 1.0)
-            val progress =
-                (fadeInitialProgress + (1.0 - fadeInitialProgress) * elapsedProgress).toFloat()
-            applyMixState(outgoing, incoming, progress)
-            if (elapsedProgress < 1.0) {
-                handler.postDelayed(this, RAMP_INTERVAL_MS)
+            val done = outgoingEnded || outgoing.playbackState == Player.STATE_ENDED ||
+                outgoing.sourcePositionMs() >= fadeEndMs - fadeSlackMs
+            if (!done) {
+                handler.postDelayed(this, FADE_TICK_MS)
                 return
             }
-            finish(outgoing, incoming)
+            outgoing.removeListener(endWatcher)
+            staged = false
+            fading = false
+            handOff(outgoing, incoming)
+            // After stop(): nothing is left in the outgoing sink for a cleared fade to touch.
+            splicerFor(outgoing)?.disarm()
         }
-    }
-
-    /** Applies the portable curves selected by the shared planner to the two live players. */
-    private fun applyMixState(outgoing: ExoPlayer, incoming: ExoPlayer, progress: Float) {
-        val choreography = fadeChoreography
-        if (choreography != null) {
-            outgoing.volume = evaluateAutomationCurve(choreography.curves.outgoingGain, progress.toDouble())
-                .toFloat().coerceIn(0f, 1f)
-            incoming.volume = evaluateAutomationCurve(choreography.curves.incomingGain, progress.toDouble())
-                .toFloat().coerceIn(0f, 1f)
-            automateChoreography(choreography, progress)
-            return
-        }
-        if (fadeStyle == TransitionStyle.GAPLESS) {
-            automateFilters(progress)
-            outgoing.volume = 1f - progress
-            incoming.volume = 1f
-        } else if (fadeStyle == TransitionStyle.DJ_BLEND || fadeStyle == TransitionStyle.DJ_FILTER) {
-            val gains = djMixGains(progress.toDouble(), fadeWindowMs / 1000.0)
-            automateFilters(progress, gains)
-            outgoing.volume = gains.outgoingUpper.toFloat()
-            incoming.volume = gains.incomingUpper.toFloat()
-        } else {
-            automateFilters(progress)
-            // Equal power: ramping both volumes linearly dips the perceived loudness mid-fade.
-            outgoing.volume = cos(progress * PI.toFloat() / 2f)
-            incoming.volume = sin(progress * PI.toFloat() / 2f)
-        }
-    }
-
-    private fun automateChoreography(choreography: TransitionChoreography, progress: Float) {
-        val (outgoingFilter, incomingFilter) = filters() ?: return
-        val curves = choreography.curves
-        outgoingFilter.lowPassHz = curves.outgoingLowPass
-            .takeIf { it.isNotEmpty() }
-            ?.let { evaluateAutomationCurve(it, progress.toDouble()) }
-            ?: TransitionFilter.OPEN
-        outgoingFilter.bassGain = curves.outgoingBass
-            .takeIf { it.isNotEmpty() }
-            ?.let { evaluateAutomationCurve(it, progress.toDouble()) }
-            ?: 1.0
-        outgoingFilter.gain = 1.0
-        incomingFilter.lowPassHz = TransitionFilter.OPEN
-        incomingFilter.bassGain = curves.incomingBass
-            .takeIf { it.isNotEmpty() }
-            ?.let { evaluateAutomationCurve(it, progress.toDouble()) }
-            ?: 1.0
-        incomingFilter.gain = 1.0
-    }
-
-    /**
-     * Rides the filters across the overlap, which is what the `dj_assisted` tier buys.
-     *
-     * Three moves, all on the outgoing channel except the bass handover.
-     *
-     * The low-pass sweeps down from above hearing, so the first part of the ride is inaudible and
-     * the transition does not announce itself. It takes the top away first and the mids last, so
-     * the outgoing track thins out and recedes instead of merely getting quieter, and because the
-     * corner is moving, the ear follows the movement, which is what covers the seam.
-     *
-     * The outgoing channel receives mid-frequency ducking (up to -6 dB) scaled by the incoming track's
-     * power to prevent spectral collision where both tracks are loudest.
-     *
-     * The low end changes hands in a short equal-power ramp near the end. Its target gains are
-     * independent of the upper fade, so the outgoing kick keeps full weight through the runway and
-     * the incoming kick does not arrive as a step.
-     *
-     * A plain fade gets none of this: a transition the policy would not trust to beat-match is
-     * still a transition, but filtering one of two arbitrary tracks is a colour, not a mix.
-     */
-    private fun automateFilters(progress: Float, gains: DjMixGains? = null) {
-        val (outgoingFilter, incomingFilter) = filters() ?: return
-        if (fadeStyle == TransitionStyle.EQUAL_POWER || fadeStyle == TransitionStyle.GAPLESS) {
-            outgoingFilter.clearAutomation()
-            incomingFilter.clearAutomation()
-            return
-        }
-
-        // Exponential in frequency, because pitch is logarithmic: a linear sweep spends most of its
-        // travel in the top octave where there is nothing to hear.
-        val span = TransitionFilter.SWEEP_START_HZ / TransitionFilter.BASS_CROSSOVER_HZ
-        val depth = SWEEP_DEPTH * progress
-        outgoingFilter.lowPassHz =
-            TransitionFilter.SWEEP_START_HZ / span.pow(depth.toDouble())
-
-        // Mid-ducking on the outgoing channel: duck by up to -6 dB as incoming arrives to prevent
-        // mid-band collision and spectral summing.
-        val fadeIn = sin(progress * (PI.toFloat() / 2f))
-        val midDuckDb = -6.0 * (fadeIn * fadeIn)
-        outgoingFilter.gain = 10.0.pow(midDuckDb / 20.0)
-
-        val mixGains = gains ?: djMixGains(progress.toDouble(), fadeWindowMs / 1000.0)
-        outgoingFilter.bassGain = mixGains.outgoingBass
-        incomingFilter.bassGain = mixGains.incomingBass
-        incomingFilter.lowPassHz = TransitionFilter.OPEN
-        incomingFilter.gain = 1.0
-    }
-
-    private fun finish(outgoing: ExoPlayer, incoming: ExoPlayer) {
-        incoming.volume = 1f
-        incoming.pauseAtEndOfMediaItems = false
-        // The nudge only ever existed to align the two grids through the overlap.
-        incoming.setPlaybackParameters(PlaybackParameters.DEFAULT)
-        // Cleared before the roles swap, so neither filter is left holding a sweep from a
-        // transition that has ended.
-        filters()?.let { (outgoingFilter, incomingFilter) ->
-            outgoingFilter.clearAutomation()
-            incomingFilter.clearAutomation()
-        }
-        fadeInitialProgress = 0.0
-        fadeChoreography = null
-        stagedLiveTransition = null
-        active = incoming
-        standby = outgoing
-        fading = false
-        onHandoff(outgoing, incoming)
-        outgoing.stop()
-        outgoing.clearMediaItems()
-        outgoing.volume = 1f
-        outgoing.pauseAtEndOfMediaItems = false
     }
 
     companion object {
         private const val TAG = "OrchardCrossfade"
 
         private const val WATCH_INTERVAL_MS = 200L
-        private const val RAMP_INTERVAL_MS = 20L
+        private const val SPLICE_TICK_MS = 20L
 
-        /** One ramp tick. Below this a fade is a cut, not a ramp. */
+        /** Handoff polling only; the audible ramp runs on the audio thread. */
+        private const val FADE_TICK_MS = 50L
+
+        /** Watcher lateness tolerated before a staged fade starts. */
+        private const val START_SLACK_MS = 25L
+
+        /** Outgoing tail left when the handoff fires; inaudible at the bottom of a cosine. */
+        private const val DONE_SLACK_MS = 100L
+
+        /** Below this a fade is a cut, not a ramp. */
         private const val MIN_RAMP_MS = 40L
 
-        private const val MIN_PLAYBACK_RATE = 0.01
+        /** Desktop resolves and prepares the next song within two minutes of the end. */
+        private const val PREPARE_LEAD_SECONDS = 120.0
 
-        /** Enough muted playback to open the decoder and audio sink without wasting the intro. */
-        private const val LIVE_PREROLL_SECONDS = 1.0
+        /** Matches desktop's "position - fadeStart > 0.25" staleness guard. */
+        private const val STALE_SECONDS = 0.25
 
-        /** A larger skew would put the shared planner's beat grid outside one ramp tick. */
-        private const val MAX_PREROLL_DRIFT_MS = 40L
+        /** How early the incoming player is loaded and buffered before it is due. */
+        private const val STAGE_LEAD_SECONDS = 5.0
 
-        /**
-         * How far the low-pass travels toward the bass crossover by the end of the overlap. Short of
-         * 1.0 on purpose: closing all the way onto the bass band leaves the outgoing track as a
-         * rumble, which reads as a fault rather than as a mix.
-         */
-        private const val SWEEP_DEPTH = 0.85f
+        /** Muted incoming playback before the render, enough to open its decoder and sink. */
+        private const val INCOMING_LEAD_SECONDS = 1.0
 
+        /** Outgoing playback past the render's end before its sink is surely empty. */
+        private const val DRAIN_SECONDS = 0.3
+
+        /** Past the render's end with no handoff: something stalled. */
+        private const val OVERDUE_SECONDS = 5.0
+
+        /** A sink buffer; retiming sooner would measure the previous correction half-applied. */
+        private const val CORRECTION_INTERVAL_MS = 300L
+        private const val ALIGN_TOLERANCE_SECONDS = 0.002
     }
 }

@@ -19,6 +19,9 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import android.os.SystemClock
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.TransitionMarker
 import kotlin.math.abs
@@ -40,38 +43,29 @@ fun transitionProgress(playback: PlaybackSnapshot, marker: TransitionMarker?): F
     val track = playback.currentTrack ?: return 0f
     if (marker == null || marker.trackId.isBlank()) return 0f
 
+    // During a live overlap the transport still reports the outgoing deck. Once it reports the
+    // incoming track, either the fade is over or the listener skipped there without one.
+    if (track.id != marker.trackId) return 0f
+
     val liveWindowMs = marker.endMs - marker.startMs
     if (liveWindowMs <= 0) return 0f
 
-    val raw =
-        when (track.id) {
-            marker.trackId -> {
-                val renderedWindowMs = marker.renderedDurationMs
-                val onRenderedTimeline =
-                    renderedWindowMs > 0 &&
-                        abs(playback.durationMs - renderedWindowMs) <= RENDERED_DURATION_TOLERANCE_MS
-                if (playback.renderedMixPositionMs != null || onRenderedTimeline) {
-                    (playback.renderedMixPositionMs ?: playback.positionMs).toDouble() / renderedWindowMs.coerceAtLeast(1).toDouble()
-                } else {
-                    (playback.positionMs - marker.startMs).toDouble() / liveWindowMs.toDouble()
-                }
-            }
-            marker.incomingTrackId -> {
-                // A rendered overlap has finished by the time transport enters the next item.
-                if (marker.renderedDurationMs > 0) return 0f
-                val rate = marker.incomingPlaybackRate.coerceAtLeast(0.01)
-                val elapsedWallMs = (playback.positionMs - marker.incomingCueMs) / rate
-                elapsedWallMs / (marker.renderedDurationMs.takeIf { it > 0 } ?: liveWindowMs).toDouble()
-            }
-            else -> return 0f
-        }
+    val renderedWindowMs = marker.renderedDurationMs
+    val onRenderedTimeline =
+        renderedWindowMs > 0 &&
+            abs(playback.durationMs - renderedWindowMs) <= RENDERED_DURATION_TOLERANCE_MS
+    val raw = if (playback.renderedMixPositionMs != null || onRenderedTimeline) {
+        (playback.renderedMixPositionMs ?: playback.positionMs).toDouble() / renderedWindowMs.coerceAtLeast(1).toDouble()
+    } else {
+        (playback.positionMs - marker.startMs).toDouble() / liveWindowMs.toDouble()
+    }
 
     // Decoder timestamps can overshoot the rounded WAV duration by a millisecond. Keep the
     // incoming identity at the endpoint until transport advances to the remainder item.
-    if (playback.renderedMixPositionMs != null && track.id == marker.trackId) {
+    if (playback.renderedMixPositionMs != null) {
         return raw.coerceIn(0.0, 1.0).toFloat()
     }
-    // A stale marker must not light up a later part of the incoming track indefinitely.
+    // A stale marker must not light up a later part of the outgoing track indefinitely.
     if (raw < 0.0 || raw > 1.0) return 0f
     return raw.toFloat()
 }
@@ -128,4 +122,40 @@ fun transitionPresentation(
     )
 }
 
+/**
+ * The service clears its marker at handoff in process, while the session's player swap reaches
+ * this controller a beat later. Holding the cleared marker while the snapshot still names the
+ * outgoing track keeps the incoming song on screen through that gap.
+ */
+@Composable
+fun rememberHandoffMarker(marker: TransitionMarker?, currentTrackId: String?): TransitionMarker? {
+    val hold = remember { HandoffHold() }
+    return hold.resolve(marker, currentTrackId, SystemClock.elapsedRealtime())
+}
+
+/** Plain fields: a cache read and written by composition, never a source of recomposition. */
+private class HandoffHold {
+    private var last: TransitionMarker? = null
+    private var clearedAt = 0L
+
+    fun resolve(marker: TransitionMarker?, currentTrackId: String?, nowMs: Long): TransitionMarker? {
+        if (marker != null) {
+            last = marker
+            clearedAt = 0L
+            return marker
+        }
+        val previous = last ?: return null
+        if (clearedAt == 0L) clearedAt = nowMs
+        // A new track, or long enough that this was an abort and no swap is coming.
+        if (previous.trackId != currentTrackId || nowMs - clearedAt > HANDOFF_HOLD_MS) {
+            last = null
+            return null
+        }
+        return previous
+    }
+}
+
 private const val RENDERED_DURATION_TOLERANCE_MS = 250L
+
+/** Far longer than a controller round trip; short enough that an aborted mix does not linger. */
+private const val HANDOFF_HOLD_MS = 2_000L

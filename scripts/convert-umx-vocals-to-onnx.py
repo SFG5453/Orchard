@@ -15,80 +15,66 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with Orchard. If not, see <https://www.gnu.org/licenses/>.
 
-# Converts the umxhq "vocals" checkpoint (MIT-licensed weights, Inria/SigSep,
-# trained on MUSDB18-HQ) to ONNX at a fixed frame count. Not run automatically
-# by any build step -- the derived int8 model is committed at
-# models/vocal-separation/vocals_umxhq_int8.onnx, so ordinary builds and CI
-# never need PyTorch. This script exists so the conversion is reproducible
-# rather than a one-off artifact, and to document exactly how the shipped
-# model was produced.
-#
-# Usage (from a venv with torch, torchaudio, onnx, onnxruntime installed, and
-# PYTHONPATH pointed at a checkout of github.com/sigsep/open-unmix-pytorch):
-#
-#   curl -sL -o vocals-umxhq.pth \
-#     https://zenodo.org/records/3370489/files/vocals-b62c91ce.pth
-#   # sha256: b62c91cedbc7a066f1778ead5b5cecb377aa3a46a31af1cce7c5c8769339d083
-#   PYTHONPATH=./open-unmix-pytorch python convert-umx-vocals-to-onnx.py \
-#     vocals-umxhq.pth vocals_umxhq.onnx
-#   python -c "from onnxruntime.quantization import quantize_dynamic, QuantType; \
-#     quantize_dynamic('vocals_umxhq.onnx', 'vocals_umxhq_int8.onnx', weight_type=QuantType.QInt8)"
-#
-# Dynamic frame axes do not survive TorchScript tracing here: OpenUnmix's
-# forward() unpacks `nb_frames, nb_samples, ... = x.data.shape` as plain Python
-# ints and reshapes against them directly, so tracing bakes in the dummy
-# input's frame count as a graph constant regardless of what `dynamic_axes`
-# claims -- attempting it produces a model that only runs at exactly the traced
-# frame count anyway, just without that being explicit. A fixed shape sidesteps
-# the bug outright, and Orchard's use is always a short, bounded overlap slice
-# (<=16 beats plus padding), so a fixed budget -- like Beat This's fixed
-# 1500-frame chunks -- is a natural fit rather than a workaround.
-import sys
+"""Export the original UMX-HQ vocals checkpoint without INT8 quantization.
+
+Build-time dependencies: torch==2.14.0, torchaudio==2.11.0, openunmix==1.3.0,
+onnx==1.23.0, onnxsim==0.7.3. Desktop playback does not depend on Python.
+The checkpoint is pinned below; --fp16 also emits an experimental half model
+with float32 inputs/outputs, which must pass model_probe before being shipped.
+"""
+import argparse
+import hashlib
+from pathlib import Path
+import onnx
+import onnxsim
 import torch
 from openunmix.model import OpenUnmix
 
-# Covers MAX_OVERLAP_SECONDS (16, in wsolaPlanner.js) plus slice padding and
-# margin, at the model's native hop of 1024 samples / 44100 Hz (~43 fps).
-FIXED_FRAMES = 960
+FRAMES = 960
+CHECKPOINT_SHA256 = "b62c91cedbc7a066f1778ead5b5cecb377aa3a46a31af1cce7c5c8769339d083"
 
-ckpt_path, out_path = sys.argv[1], sys.argv[2]
-state = torch.load(ckpt_path, map_location='cpu', weights_only=False)
+def load_model(checkpoint):
+    if hashlib.sha256(checkpoint.read_bytes()).hexdigest() != CHECKPOINT_SHA256:
+        raise ValueError("Unexpected UMX-HQ checkpoint checksum")
+    state = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    model = OpenUnmix(nb_bins=state["output_scale"].shape[0], nb_channels=2,
+                      hidden_size=512, nb_layers=3, max_bin=state["input_mean"].shape[0])
+    missing, unexpected = model.load_state_dict(state, strict=False)
+    if missing:
+        raise ValueError(f"Missing checkpoint weights: {missing}")
+    # The full Separator also stores STFT windows; this core takes magnitudes.
+    if any(key not in {"sample_rate", "stft.window", "transform.0.window"} for key in unexpected):
+        raise ValueError(f"Unexpected checkpoint weights: {unexpected}")
+    return model.eval()
 
-# The checkpoint's own tensors carry the bandwidth restriction the model was
-# trained with; reading it from the state dict rather than hard-coding it
-# keeps this script correct if a different checkpoint is ever substituted.
-max_bin = state['input_mean'].shape[0]
-nb_output_bins = state['output_scale'].shape[0]
-model = OpenUnmix(
-    nb_bins=nb_output_bins,
-    nb_channels=2,
-    hidden_size=512,
-    nb_layers=3,
-    max_bin=max_bin,
-)
-# The checkpoint also carries a couple of buffers (stft/transform windows)
-# that belong to the full Separator wrapper, not this module; strict=False
-# skips them without missing anything OpenUnmix itself needs.
-missing, unexpected = model.load_state_dict(state, strict=False)
-if missing:
-    raise RuntimeError(f'checkpoint is missing required parameters: {missing}')
-print('unexpected (expected, belong to the Separator wrapper):', unexpected)
-model.eval()
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("checkpoint", type=Path)
+    parser.add_argument("output", type=Path)
+    parser.add_argument("--fp16", action="store_true")
+    args = parser.parse_args()
+    torch.set_num_threads(2)
+    torch.manual_seed(0)
+    model = load_model(args.checkpoint)
+    # Keep the original 960-frame recurrent context. The singer deserves the
+    # whole phrase, not a goldfish-sized attention span.
+    dummy = torch.rand(1, 2, 2049, FRAMES)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    torch.onnx.export(model, dummy, str(args.output), input_names=["mix_magnitude"],
+                      output_names=["target_magnitude"], opset_version=17, dynamo=False)
+    graph, valid = onnxsim.simplify(onnx.load(args.output), check_n=0)
+    if not valid:
+        raise RuntimeError("Vocal graph simplification failed")
+    onnx.checker.check_model(graph)
+    onnx.save(graph, args.output)
+    if args.fp16:
+        from onnxruntime.transformers.float16 import convert_float_to_float16
+        half = convert_float_to_float16(graph, keep_io_types=True)
+        from onnxruntime.transformers.onnx_model import OnnxModel
+        OnnxModel(half).topological_sort()
+        onnx.checker.check_model(half)
+        onnx.save(half, args.output.with_name(args.output.stem + "_fp16.onnx"))
+    print(f"Exported {args.output}: {len(graph.graph.node)} nodes, FP32")
 
-dummy = torch.randn(1, 2, nb_output_bins, FIXED_FRAMES).abs()
-with torch.no_grad():
-    out = model(dummy)
-print('output shape:', tuple(out.shape))
-
-torch.onnx.export(
-    model, dummy, out_path,
-    input_names=['mix_magnitude'],
-    output_names=['target_magnitude'],
-    opset_version=17,
-    # The new torch.export-based exporter (torch.onnx.export's default as of
-    # PyTorch 2.9) failed on this model's rearrange/reshape pattern the same
-    # way it did on Beat This's small checkpoint; the legacy TorchScript
-    # tracer handles it correctly and is what parity was measured against.
-    dynamo=False,
-)
-print('exported', out_path, 'at fixed frames =', FIXED_FRAMES)
+if __name__ == "__main__":
+    main()

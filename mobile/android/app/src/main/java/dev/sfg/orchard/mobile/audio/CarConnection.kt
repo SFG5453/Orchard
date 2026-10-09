@@ -23,6 +23,7 @@ import android.content.Context
 import android.database.ContentObserver
 import android.net.Uri
 import android.os.Handler
+import androidx.core.net.toUri
 
 /**
  * Whether the phone is driving a car head unit.
@@ -41,7 +42,7 @@ internal object CarConnection {
     /** Projecting to a head unit over Android Auto. */
     const val PROJECTION = 2
 
-    val URI: Uri = Uri.parse("content://androidx.car.app.connection/carconnection")
+    val URI: Uri = "content://androidx.car.app.connection/carconnection".toUri()
     private const val STATE_COLUMN = "CarConnectionState"
 
     /** [NOT_CONNECTED] whenever Android Auto is absent or the provider refuses the read. */

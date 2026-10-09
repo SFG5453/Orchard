@@ -88,7 +88,7 @@ fun TabletPlayerBody(
     bitrateKbps: Int,
     isQobuz: Boolean = false,
     remoteVolume: Float,
-    dragHandle: Modifier,
+    modifier: Modifier,
     onRemoteVolumeChange: (Float) -> Unit,
     onBack: () -> Unit,
     onSeek: (Long) -> Unit,
@@ -123,8 +123,8 @@ fun TabletPlayerBody(
     onBestMixUpcoming: ((onProgress: (String) -> Unit, onComplete: () -> Unit) -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
-        PlayerTopHandle(onDismiss = onBack, modifier = dragHandle)
-        val activeProgress = mixProgress ?: dev.sfg.orchard.mobile.ui.components.transitionProgress(playback, transition)
+        PlayerTopHandle(onDismiss = onBack, modifier = modifier)
+        val activeProgress = mixProgress ?: 0f
         val incomingTrack = remember(playback.queue, transition?.incomingTrackId) {
             val id = transition?.incomingTrackId
             if (id.isNullOrBlank()) null else playback.queue.firstOrNull { it.id == id }
@@ -240,7 +240,6 @@ fun TabletPlayerBody(
                             when (lyrics) {
                                 is LoadState.Content -> LyricLines(
                                     lines = lyrics.value,
-                                    positionMs = playback.positionMs,
                                     playing = playback.isPlaying,
                                     onSeek = onSeek,
                                     contentPadding = PaddingValues(vertical = 24.dp),

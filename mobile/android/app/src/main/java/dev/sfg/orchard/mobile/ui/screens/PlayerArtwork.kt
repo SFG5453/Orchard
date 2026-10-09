@@ -19,6 +19,7 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import kotlin.math.abs
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterExitState
@@ -31,17 +32,14 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -52,37 +50,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.platform.LocalDensity
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.AnimatedArtworkVideo
 import dev.sfg.orchard.mobile.ui.components.KawarpArtworkBackdrop
 import dev.sfg.orchard.mobile.ui.components.RemoteArtwork
 import dev.sfg.orchard.mobile.ui.components.ArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
+import dev.sfg.orchard.mobile.ui.components.smoothScrimBrush
 
 /**
- * Full-bleed player backdrop: the vertical animated artwork (or
- * the still cover) fills the top of the screen edge-to-edge and dissolves seamlessly into
- * colours sampled from the artwork itself, with a slow ambient glow drawn from the
- * cover's most saturated tone, so the controls sit inside the image's own palette.
+ * Full-bleed player backdrop. Motion art sits at the top in a frame of its own shape (a
+ * 9:16 canvas fills the screen), and a smoothstep scrim settles the lower part
+ * into the cover's own deep tone so controls sit on the image without a visible seam
+ * (after SimpMusic's canvas player). Without motion art, a palette wash with a slow
+ * ambient glow carries the screen.
  */
 @Composable
 fun FullBleedPlayerBackdrop(
@@ -92,6 +84,7 @@ fun FullBleedPlayerBackdrop(
     /** Hoisted so anything drawn over the backdrop tints from the same sample. */
     palette: ArtworkPalette,
     onVideoFrame: (Bitmap?) -> Unit,
+    modifier: Modifier = Modifier,
     /** Use a tiny static cover and AGSL motion instead of decoding full-screen video. */
     warpedArtworkEnabled: Boolean = false,
     /** Tablets let Kawarp own the ambient motion; this avoids a second full-rate redraw loop. */
@@ -99,7 +92,6 @@ fun FullBleedPlayerBackdrop(
     incomingPalette: ArtworkPalette? = null,
     /** Where the cover actually sits, so a dismissal can fly it into the pill. */
     onArtworkBounds: ((Rect) -> Unit)? = null,
-    modifier: Modifier = Modifier,
     /** 0f outside a transition, rising to 1f at the handoff. Drives the cover handoff. */
     transitionProgress: Float = 0f,
     gesturesEnabled: Boolean = false,
@@ -107,6 +99,7 @@ fun FullBleedPlayerBackdrop(
     onNext: () -> Unit = {},
     onPrevious: () -> Unit = {},
     onLiked: () -> Unit = {},
+    swipe: ArtworkSwipe? = null,
 ) {
     val progress = transitionProgress.coerceIn(0f, 1f)
     val targetBottom = if (incomingPalette != null && progress in 0.001f..0.999f) {
@@ -141,11 +134,15 @@ fun FullBleedPlayerBackdrop(
         label = "PaletteAccent",
     )
 
+    val currentVideo = track.animatedArtworkVerticalUrl.ifBlank { track.animatedArtworkUrl }
+    val currentRich = !warpedArtworkEnabled && animatedArtworkEnabled && currentVideo.isNotBlank()
+
     Box(
         modifier
             .fillMaxSize()
             .then(
-                if (gesturesEnabled) {
+                // With a swipe supplied, the body above takes both gestures and this layer only follows.
+                if (gesturesEnabled && swipe == null) {
                     Modifier
                         .pointerInput(Unit) {
                             detectTapGestures(onDoubleTap = { onLiked() })
@@ -165,15 +162,23 @@ fun FullBleedPlayerBackdrop(
                         }
                 } else Modifier
             )
-            .background(
-                Brush.verticalGradient(
-                    0.0f to animatedBottom,
-                    0.45f to animatedBottom,
-                    1.0f to animatedDeep,
-                ),
+            // Motion art scrims into flat deep, so the frame's lower edge meets the same colour.
+            .then(
+                if (currentRich) {
+                    Modifier.background(animatedDeep)
+                } else {
+                    Modifier.background(
+                        smoothScrimBrush(
+                            from = animatedBottom,
+                            to = animatedDeep,
+                            startFraction = WASH_START,
+                        ),
+                    )
+                },
             ),
     ) {
-        if (ambientGlowEnabled) {
+        // Edge-to-edge motion art covers the glow entirely, so skip its redraw loop.
+        if (ambientGlowEnabled && !currentRich) {
             val transition = rememberInfiniteTransition(label = "PlayerAmbience")
             val glow by transition.animateFloat(
                 initialValue = 0.28f,
@@ -197,9 +202,6 @@ fun FullBleedPlayerBackdrop(
             )
         }
 
-        val currentVideo = track.animatedArtworkVerticalUrl.ifBlank { track.animatedArtworkUrl }
-        val currentRich = !warpedArtworkEnabled && animatedArtworkEnabled && currentVideo.isNotBlank()
-
         if (warpedArtworkEnabled) {
             KawarpArtworkBackdrop(
                 artworkUrl = track.artworkUrl,
@@ -209,26 +211,35 @@ fun FullBleedPlayerBackdrop(
                     .graphicsLayer { alpha = artworkAlpha },
             )
         } else if (currentRich) {
-            // Artwork container with an alpha gradient mask (BlendMode.DstIn) so the artwork
-            // dissolves completely and seamlessly into the sampled backdrop with zero visual seam or gap.
+            // The frame takes the video's own shape, so nothing is cropped unless the video
+            // is taller than the screen (9:16 canvas), which then fills it edge to edge.
+            val screenAspect = screenAspect()
+            var videoAspect by remember(currentVideo) { mutableStateOf<Float?>(null) }
+            val targetFrame = maxOf(videoAspect ?: guessedVideoAspect(track), screenAspect)
+            val frameAspect by animateFloatAsState(targetFrame, tween(420), label = "ArtworkFrameAspect")
+            val fillsScreen = targetFrame <= screenAspect + FULL_SCREEN_SLACK
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(ARTWORK_HEIGHT_FRACTION)
+                    .aspectRatio(frameAspect)
                     .align(Alignment.TopCenter)
-                    .graphicsLayer { alpha = artworkAlpha }
+                    .graphicsLayer {
+                        val shift = swipe?.offset ?: 0f
+                        translationX = shift
+                        // Edge-to-edge art has no neighbour to reveal, so it thins out as it leaves.
+                        alpha = artworkAlpha * (1f - abs(shift) / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                    }
                     .onGloballyPositioned { onArtworkBounds?.invoke(it.boundsInRoot()) }
-                    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
                     .drawWithContent {
                         drawContent()
                         drawRect(
-                            brush = Brush.verticalGradient(
-                                0.0f to Color.Black,
-                                0.38f to Color.Black,
-                                0.88f to Color.Transparent,
-                                1.0f to Color.Transparent,
+                            smoothScrimBrush(
+                                from = animatedDeep.copy(alpha = 0f),
+                                to = animatedDeep,
+                                // Scrim ends opaque before the gesture bar or the frame's edge.
+                                startFraction = if (fillsScreen) SCRIM_START else FRAME_SCRIM_START,
+                                endFraction = if (fillsScreen) SCRIM_END else 1f,
                             ),
-                            blendMode = BlendMode.DstIn,
                         )
                     },
             ) {
@@ -284,6 +295,9 @@ fun FullBleedPlayerBackdrop(
                                 active = isPlaying,
                                 modifier = Modifier.fillMaxSize(),
                                 onFrame = onVideoFrame,
+                                onVideoAspect = if (currentTrack.id == track.id) {
+                                    { videoAspect = it }
+                                } else null,
                             )
                         }
                     }
@@ -294,216 +308,6 @@ fun FullBleedPlayerBackdrop(
 }
 
 /**
- * Centered square artwork card supporting intelligent dual-deck Smart Crossfade
- * mixing, constant-power energy dissolves, subtle 3D spatial docking, micro beat pulses,
- * soft drop shadow, refined corner radius, and reporting bounds for the collapse flight.
- */
-@Composable
-fun NowPlayingArtworkCard(
-    track: Track,
-    incomingTrack: Track? = null,
-    outgoingTrack: Track? = null,
-    transitionProgress: Float = 0f,
-    transitionStyle: String = "",
-    animatedArtworkEnabled: Boolean = false,
-    isPlaying: Boolean = false,
-    onArtworkBounds: ((Rect) -> Unit)? = null,
-    modifier: Modifier = Modifier,
-) {
-    val density = LocalDensity.current
-    val progress = transitionProgress.coerceIn(0f, 1f)
-    val outTrack = outgoingTrack ?: track
-    val inTrack = incomingTrack
-    val isDualDeckActive = inTrack != null && outTrack.id != inTrack.id && progress in 0.001f..0.999f
-
-    if (isDualDeckActive) {
-        // Dual-deck Smart Crossfade visual mix stage
-        val motionProgress = FastOutSlowInEasing.transform(progress)
-
-        // Constant-power energy curves matching acoustic DJ crossfade
-        val outgoingGain = cos(progress * (PI.toFloat() / 2f))
-        val incomingGain = sin(progress * (PI.toFloat() / 2f))
-
-        // Subtle rhythmic micro-pulse (0.7%) conveying live beat-matching
-        val beatPulseTransition = rememberInfiniteTransition(label = "CrossfadeBeatPulse")
-        val beatPulse by beatPulseTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(520, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "CrossfadeBeatPulsePhase",
-        )
-        val beatScale = 1f + 0.007f * beatPulse
-
-        // Outgoing deck parameters (receding into the background to the left)
-        val outgoingScale = (1f - 0.12f * motionProgress) * beatScale
-        val outgoingOffsetX = with(density) { (-22.dp * motionProgress).toPx() }
-        val outgoingAlpha = (outgoingGain * outgoingGain).coerceIn(0f, 1f)
-        val outgoingScrim = 0.28f * motionProgress
-
-        // Incoming deck parameters (docking in from the right to the foreground)
-        val incomingScale = (0.90f + 0.10f * motionProgress) * beatScale
-        val incomingOffsetX = with(density) { (26.dp * (1f - motionProgress)).toPx() }
-        val incomingAlpha = (incomingGain * incomingGain).coerceIn(0f, 1f)
-        val incomingElevation = (18 + 10 * motionProgress).dp
-
-        Box(
-            modifier = modifier
-                .fillMaxHeight()
-                .aspectRatio(1f),
-            contentAlignment = Alignment.Center,
-        ) {
-            // Outgoing Deck (receding to left in depth)
-            if (outgoingAlpha > 0.005f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .onGloballyPositioned {
-                            // Dominant before handoff (0.5)
-                            if (progress < 0.5f) {
-                                onArtworkBounds?.invoke(it.boundsInRoot())
-                            }
-                        }
-                        .graphicsLayer {
-                            scaleX = outgoingScale
-                            scaleY = outgoingScale
-                            translationX = outgoingOffsetX
-                            alpha = outgoingAlpha
-                        }
-                        .shadow(
-                            elevation = 18.dp,
-                            shape = RoundedCornerShape(22.dp),
-                            spotColor = Color.Black.copy(alpha = 0.60f),
-                            ambientColor = Color.Black.copy(alpha = 0.30f),
-                        )
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(Color(0xFF181A1B)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    RemoteArtwork(
-                        url = outTrack.artworkUrl,
-                        description = "Artwork for ${outTrack.title}",
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    SquareAnimatedArtwork(
-                        track = outTrack,
-                        enabled = animatedArtworkEnabled && track.id == outTrack.id,
-                        isPlaying = isPlaying,
-                    )
-                    // Depth scrim as it departs
-                    if (outgoingScrim > 0.01f) {
-                        Box(
-                            Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = outgoingScrim)),
-                        )
-                    }
-                }
-            }
-
-            // Incoming Deck (docking in from right)
-            if (incomingAlpha > 0.005f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .onGloballyPositioned {
-                            // Dominant at and after handoff (0.5)
-                            if (progress >= 0.5f) {
-                                onArtworkBounds?.invoke(it.boundsInRoot())
-                            }
-                        }
-                        .graphicsLayer {
-                            scaleX = incomingScale
-                            scaleY = incomingScale
-                            translationX = incomingOffsetX
-                            alpha = incomingAlpha
-                        }
-                        .shadow(
-                            elevation = incomingElevation,
-                            shape = RoundedCornerShape(22.dp),
-                            spotColor = Color.Black.copy(alpha = 0.70f),
-                            ambientColor = Color.Black.copy(alpha = 0.35f),
-                        )
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(Color(0xFF181A1B)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    RemoteArtwork(
-                        url = inTrack.artworkUrl,
-                        description = "Artwork for ${inTrack.title}",
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    SquareAnimatedArtwork(
-                        track = inTrack,
-                        enabled = animatedArtworkEnabled && track.id == inTrack.id,
-                        isPlaying = isPlaying,
-                    )
-                }
-            }
-        }
-    } else {
-        // Standard single-deck state (outside of transition, or during manual skip)
-        AnimatedContent(
-            targetState = track,
-            transitionSpec = {
-                (fadeIn(tween(500)) + scaleIn(initialScale = 0.92f, animationSpec = tween(500)))
-                    .togetherWith(fadeOut(tween(400)) + scaleOut(targetScale = 1.05f, animationSpec = tween(400)))
-            },
-            label = "NowPlayingArtworkCardTransition",
-            modifier = modifier,
-        ) { currentTrack ->
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .aspectRatio(1f)
-                    .onGloballyPositioned { onArtworkBounds?.invoke(it.boundsInRoot()) }
-                    .shadow(
-                        elevation = 24.dp,
-                        shape = RoundedCornerShape(22.dp),
-                        spotColor = Color.Black.copy(alpha = 0.65f),
-                        ambientColor = Color.Black.copy(alpha = 0.35f),
-                    )
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(Color(0xFF181A1B)),
-                contentAlignment = Alignment.Center,
-            ) {
-                RemoteArtwork(
-                    url = currentTrack.artworkUrl,
-                    description = "Artwork for ${currentTrack.title}",
-                    modifier = Modifier.fillMaxSize(),
-                )
-                SquareAnimatedArtwork(
-                    track = currentTrack,
-                    // AnimatedContent keeps the departing item composed during its fade. Only
-                    // the current identity may own a decoder, so that fade uses its still cover.
-                    enabled = animatedArtworkEnabled && currentTrack.id == track.id,
-                    isPlaying = isPlaying,
-                )
-            }
-        }
-    }
-}
-
-/** Exactly one square motion-cover decoder is alive, including during a dual-deck handoff. */
-@Composable
-private fun SquareAnimatedArtwork(
-    track: Track,
-    enabled: Boolean,
-    isPlaying: Boolean,
-) {
-    if (!enabled) return
-    val url = track.animatedArtworkUrl.ifBlank { track.animatedArtworkVerticalUrl }
-    if (url.isBlank()) return
-    AnimatedArtworkVideo(
-        url = url,
-        active = isPlaying,
-        modifier = Modifier.fillMaxSize(),
-    )
-}
-
-/**
  * The full-bleed backdrop's palette. Sampling depends on which strip of the cover the
  * tall crop actually leaves on screen, so anything that wants to match the backdrop's
  * colour has to sample through here rather than calling [rememberArtworkPalette] itself
@@ -511,13 +315,33 @@ private fun SquareAnimatedArtwork(
  */
 @Composable
 fun rememberFullBleedPalette(track: Track, videoFrame: Bitmap? = null): ArtworkPalette {
-    val configuration = LocalConfiguration.current
-    val visibleAspect = configuration.screenWidthDp /
-        (configuration.screenHeightDp * ARTWORK_HEIGHT_FRACTION).coerceAtLeast(1f)
+    val visibleAspect = maxOf(guessedVideoAspect(track), screenAspect())
     return rememberArtworkPalette(track.artworkUrl, visibleAspect, videoFrame)
 }
 
-private const val ARTWORK_HEIGHT_FRACTION = 0.78f
+@Composable
+private fun screenAspect(): Float {
+    val container = LocalWindowInfo.current.containerSize
+    return container.width / container.height.toFloat().coerceAtLeast(1f)
+}
+
+/** Shape to lay out before the video reports its size. Apple's tall motion art is 3:4. */
+private fun guessedVideoAspect(track: Track): Float =
+    if (track.animatedArtworkVerticalUrl.isNotBlank()) TALL_ART_ASPECT else 1f
+
+/** Where the palette wash starts ramping from the cover tone to the deep tone. */
+private const val WASH_START = 0.45f
+
+/** Art scrim ramp, as fractions of screen height. Opaque before the gesture bar. */
+private const val SCRIM_START = 0.38f
+private const val SCRIM_END = 0.94f
+
+/** Scrim start within a frame shorter than the screen; it ends opaque at the frame's edge. */
+private const val FRAME_SCRIM_START = 0.5f
+private const val TALL_ART_ASPECT = 0.75f
+
+/** Within this of the screen's shape, a frame counts as full screen. */
+private const val FULL_SCREEN_SLACK = 0.01f
 private const val AMBIENCE_RADIUS = 1400f
 
 /** How far the cover has drawn back by the moment the two tracks hand over. */

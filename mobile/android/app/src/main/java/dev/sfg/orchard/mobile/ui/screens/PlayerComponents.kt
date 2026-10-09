@@ -147,58 +147,38 @@ fun AnimatedFavoriteButton(liked: Boolean, onLiked: () -> Unit, modifier: Modifi
 }
 
 /** Favourite star and overflow button, shared by the full title row and the lyrics header. */
+/** Heart and overflow beside the title. The overflow always opens the menu; it never doubles as queue. */
 @Composable
 fun TrackActionButtons(
     liked: Boolean,
     onLiked: () -> Unit,
-    onMore: (() -> Unit)?,
-    onShare: (() -> Unit)?,
-    onOpenMenu: () -> Unit,
+    onOpenMenu: (() -> Unit)?,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Surface(
-            onClick = onLiked,
-            shape = CircleShape,
-            color = Color.White.copy(alpha = 0.12f),
-            modifier = Modifier.size(36.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = if (liked) Icons.Filled.Star else Icons.Filled.StarOutline,
-                    contentDescription = if (liked) "Favorited" else "Favorite",
-                    tint = if (liked) Color.White else Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        AnimatedFavoriteButton(liked = liked, onLiked = onLiked)
+        if (onOpenMenu != null) OverflowButton(onClick = onOpenMenu)
+    }
+}
 
-        Surface(
-            onClick = { if (onShare != null) onOpenMenu() else onMore?.invoke() },
-            shape = CircleShape,
-            color = Color.White.copy(alpha = 0.12f),
-            modifier = Modifier.size(36.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Filled.MoreHoriz,
-                    contentDescription = "More options",
-                    tint = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(20.dp),
-                )
-            }
+@Composable
+fun OverflowButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = Color.White.copy(alpha = 0.12f),
+        modifier = modifier.size(36.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = Icons.Filled.MoreHoriz,
+                contentDescription = "More options",
+                tint = Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }
 
-/**
- * Top pill drag handle.
- *
- * The caller supplies the drag gesture through [modifier]; the tap remains as a fallback so the
- * handle still works for anyone who cannot complete a drag.
- */
 @Composable
 fun PlayerTopHandle(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     Box(
@@ -227,6 +207,7 @@ fun TrackInfoRow(
     track: dev.sfg.orchard.mobile.model.Track,
     liked: Boolean,
     onLiked: () -> Unit,
+    modifier: Modifier = Modifier,
     onMore: (() -> Unit)? = null,
     onAddToPlaylist: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
@@ -236,7 +217,8 @@ fun TrackInfoRow(
     isDownloaded: Boolean = false,
     onDownload: (() -> Unit)? = null,
     onRemoveDownload: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
+    /** Off where the player header already carries the overflow menu. */
+    showMenu: Boolean = true,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
 
@@ -295,7 +277,7 @@ fun TrackInfoRow(
                         style =
                             MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp,
+                                fontSize = 22.sp,
                             ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -343,9 +325,7 @@ fun TrackInfoRow(
         TrackActionButtons(
             liked = liked,
             onLiked = onLiked,
-            onMore = onMore,
-            onShare = onShare,
-            onOpenMenu = { menuOpen = true },
+            onOpenMenu = if (showMenu) ({ menuOpen = true }) else null,
         )
     }
 }
@@ -356,17 +336,22 @@ fun PlayerBottomDestinations(
     targets: PlaybackTargetState,
     upcomingCount: Int,
     onLyrics: () -> Unit,
+    modifier: Modifier = Modifier,
     lyricsActive: Boolean = false,
     onDevices: () -> Unit,
     onQueue: () -> Unit,
     queueActive: Boolean = false,
-    modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Output Route Device Pill (Headphones / AirPods / Phone / Cast)
+        // Not filling, so a short device name leaves the gap to SpaceBetween; a long one ellipsizes.
+        OutputRoutePill(targets = targets, onClick = onDevices, modifier = Modifier.weight(1f, fill = false))
+        Spacer(Modifier.width(8.dp))
+
         // Lyrics Action Button
         IconButton(onClick = onLyrics, modifier = Modifier.size(44.dp)) {
             Icon(
@@ -376,9 +361,6 @@ fun PlayerBottomDestinations(
                 modifier = Modifier.size(24.dp),
             )
         }
-
-        // Output Route Device Pill (Headphones / AirPods / Phone / Cast)
-        OutputRoutePill(targets = targets, onClick = onDevices)
 
         // Queue Action Button with upcoming badge
         IconButton(onClick = onQueue, modifier = Modifier.size(44.dp)) {
@@ -410,7 +392,7 @@ fun PlayerBottomDestinations(
 }
 
 @Composable
-private fun OutputRoutePill(targets: PlaybackTargetState, onClick: () -> Unit) {
+private fun OutputRoutePill(targets: PlaybackTargetState, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val isLocal = targets.selected is PlaybackTarget.LocalPhone
     val output by rememberAudioOutput()
 
@@ -435,7 +417,7 @@ private fun OutputRoutePill(targets: PlaybackTargetState, onClick: () -> Unit) {
 
     Row(
         modifier =
-            Modifier.clip(CircleShape)
+            modifier.clip(CircleShape)
                 .clickable {
                     if (needsNameAccess) {
                         nameAccess.launch(Manifest.permission.BLUETOOTH_CONNECT)

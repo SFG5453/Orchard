@@ -19,7 +19,16 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 
@@ -35,6 +44,43 @@ fun CanopyReadout(
     mixProgress: Float? = null,
     onArtworkBounds: ((androidx.compose.ui.geometry.Rect) -> Unit)? = null,
     onClear: () -> Unit = {},
+) {
+    // Keeps the last track on screen while the pill animates out after the queue clears.
+    val shown = remember { arrayOfNulls<PlaybackSnapshot>(1) }
+    if (playback.currentTrack != null) shown[0] = playback
+    AnimatedVisibility(
+        visible = playback.currentTrack != null,
+        enter = slideInVertically(spring(dampingRatio = 0.62f, stiffness = 380f)) { it } +
+            fadeIn() + scaleIn(initialScale = 0.85f),
+        exit = slideOutVertically { it / 2 } + fadeOut() + scaleOut(targetScale = 0.9f),
+    ) {
+        ReadoutBody(
+            playback = shown[0] ?: playback,
+            onOpen = onOpen,
+            onToggle = onToggle,
+            onNext = onNext,
+            modifier = modifier,
+            onPrevious = onPrevious,
+            transition = transition,
+            mixProgress = mixProgress,
+            onArtworkBounds = onArtworkBounds,
+            onClear = onClear,
+        )
+    }
+}
+
+@Composable
+private fun ReadoutBody(
+    playback: PlaybackSnapshot,
+    onOpen: () -> Unit,
+    onToggle: () -> Unit,
+    onNext: () -> Unit,
+    modifier: Modifier,
+    onPrevious: () -> Unit,
+    transition: dev.sfg.orchard.mobile.model.TransitionMarker?,
+    mixProgress: Float?,
+    onArtworkBounds: ((androidx.compose.ui.geometry.Rect) -> Unit)?,
+    onClear: () -> Unit,
 ) {
     MiniPlayer(
         playback = playback,

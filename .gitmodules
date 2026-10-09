@@ -1,0 +1,15 @@
+[submodule "third_party/quickjs"]
+	path = third_party/quickjs
+	url = https://github.com/quickjs-ng/quickjs.git
+[submodule "third_party/qtkeychain"]
+	path = third_party/qtkeychain
+	url = https://github.com/frankosterfeld/qtkeychain.git
+[submodule "third_party/libdatachannel"]
+	path = third_party/libdatachannel
+	url = https://github.com/paullouisageneau/libdatachannel.git
+[submodule "third_party/mbedtls"]
+	path = third_party/mbedtls
+	url = https://github.com/Mbed-TLS/mbedtls.git
+[submodule "third_party/json"]
+	path = third_party/json
+	url = https://github.com/nlohmann/json.git

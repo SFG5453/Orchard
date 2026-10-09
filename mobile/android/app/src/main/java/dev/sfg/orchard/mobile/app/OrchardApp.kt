@@ -23,7 +23,6 @@ import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -32,7 +31,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,12 +45,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
-import dev.sfg.orchard.mobile.OrchardGraph
-import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.model.LibraryFilter
 import dev.sfg.orchard.mobile.model.PlaybackTarget
@@ -60,10 +54,11 @@ import androidx.compose.ui.graphics.Color
 import dev.sfg.orchard.mobile.ui.components.ArtworkBackdrop
 import dev.sfg.orchard.mobile.ui.components.CanopyReadout
 import dev.sfg.orchard.mobile.ui.components.OrchardBottomBar
-import dev.sfg.orchard.mobile.ui.components.PlaylistPickerSheet
 import dev.sfg.orchard.mobile.ui.components.SongShareBottomSheet
 import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
-import dev.sfg.orchard.mobile.ui.components.transitionPresentation
+import dev.sfg.orchard.mobile.ui.components.LocalPlayerClock
+import dev.sfg.orchard.mobile.ui.components.rememberHandoffMarker
+import dev.sfg.orchard.mobile.ui.components.rememberPlayerPresentation
 import dev.sfg.orchard.mobile.ui.glass.LocalGlass
 import dev.sfg.orchard.mobile.ui.glass.LocalGlassScene
 import dev.sfg.orchard.mobile.ui.glass.glassSceneSource
@@ -73,23 +68,15 @@ import dev.sfg.orchard.mobile.ui.glass.rememberGlassStyle
 import dev.sfg.orchard.mobile.ui.navigation.Routes
 import dev.sfg.orchard.mobile.ui.scroll.OrchardScrollPhysics
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
-import dev.sfg.orchard.mobile.ui.screens.DetailScreen
-import dev.sfg.orchard.mobile.ui.screens.DevicesScreen
-import dev.sfg.orchard.mobile.ui.screens.HomeScreen
-import dev.sfg.orchard.mobile.ui.screens.LibraryScreen
-import dev.sfg.orchard.mobile.ui.screens.NativeLoginScreen
-import dev.sfg.orchard.mobile.ui.screens.SearchScreen
-import dev.sfg.orchard.mobile.ui.screens.SettingsScreen
-import dev.sfg.orchard.mobile.ui.screens.SettingsHomeLayout
-import dev.sfg.orchard.mobile.ui.screens.WelcomeScreen
-import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
 @Composable
 fun OrchardApp(viewModel: OrchardViewModel) {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
-    val playback by viewModel.playback.collectAsStateWithLifecycle()
+    // Structural playback only; the clock is handed to the few readers that draw time.
+    val playback by viewModel.playbackState.collectAsStateWithLifecycle()
+    val playbackClock = viewModel.playbackClock.collectAsStateWithLifecycle()
     val targets by viewModel.targets.collectAsStateWithLifecycle()
     val library by viewModel.library.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -97,11 +84,21 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val warning by viewModel.warning.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val transitionMarker by viewModel.transitionMarker.collectAsStateWithLifecycle()
+    val nonMusicSegment = viewModel.nonMusicSegment.collectAsStateWithLifecycle()
+    val nonMusicSkip = remember(viewModel) {
+        dev.sfg.orchard.mobile.ui.components.NonMusicSkip(nonMusicSegment, viewModel::skipNonMusic)
+    }
     val qobuzStatus by viewModel.qobuzStatus.collectAsStateWithLifecycle()
+    val bestMixJob by viewModel.bestMixJob.collectAsStateWithLifecycle()
+    val maxActive by viewModel.maxActive.collectAsStateWithLifecycle()
+    val albumQualityLoader: (suspend (dev.sfg.orchard.mobile.model.BrowseDetail) -> dev.sfg.orchard.mobile.model.QobuzAlbumQuality?)? =
+        if (maxActive) viewModel::qobuzAlbumQuality else null
     // Transition plans belong to the phone's two-player engine, never a selected Connect target.
-    val localTransitionMarker =
-        transitionMarker.takeIf { targets.selected is PlaybackTarget.LocalPhone }
-    val playerPresentation = transitionPresentation(playback, localTransitionMarker)
+    val localTransitionMarker = rememberHandoffMarker(
+        transitionMarker.takeIf { targets.selected is PlaybackTarget.LocalPhone },
+        playback.currentTrack?.id,
+    )
+    val playerPresentation = rememberPlayerPresentation(playback, playbackClock, localTransitionMarker)
     val playerPlayback = playerPresentation.playback
     // Once the incoming song owns the mix, its scrubber is a normal full-track scrubber. The raw
     // overlap progress still drives the transition glow and artwork motion separately.
@@ -111,6 +108,12 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     // screen underneath out of the tree, so dragging the player down uncovered nothing but
     // black — and the pill it collapses into did not exist to animate towards.
     var playerOpen by rememberSaveable { mutableStateOf(false) }
+    // Search is an overlay, not a route; the nav bar's Search tab only raises it.
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    val chromeRoute = if (searchOpen) Routes.SEARCH else route
+    val selectTopLevel: (String) -> Unit = { target ->
+        if (target == Routes.SEARCH) searchOpen = true else navController.openTopLevel(target)
+    }
     // Where the pill sits on screen, so the player can shrink into it rather than slide off.
     var readoutBounds by remember { mutableStateOf<Rect?>(null) }
     // And its thumbnail specifically, which the player's cover flies into.
@@ -118,11 +121,13 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     // Outlives the player so the cover can fly on the way in as well as on the way out.
     var playerCoverBounds by remember { mutableStateOf<Rect?>(null) }
 
-    val chromeHidden = (route == Routes.DEVICES && !settings.frostedGlass) || route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME || route == Routes.QOBUZ_LOGIN
+    val chromeHidden = route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME || route == Routes.QOBUZ_LOGIN
     // Collection artwork runs under the status bar, so these screens take no top inset and
     // apply it themselves where the content actually needs it.
     val isDetail = route == Routes.DETAIL || route?.startsWith("detail") == true
-    val artworkUnderStatusBar = isDetail
+    // Phone Home pads its own header for the status bar so rails scroll under it.
+    val isPhoneHome = route == Routes.HOME && !dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
+    val artworkUnderStatusBar = isDetail || isPhoneHome
 
     // When in an album / collection, sample the album cover's palette so the frosted glass
     // and bottom navigation dynamically reflect the album being viewed.
@@ -145,18 +150,26 @@ fun OrchardApp(viewModel: OrchardViewModel) {
         animationSpec = tween(900),
         label = "GlassTint",
     )
-    val glass = rememberGlassStyle(settings.frostedGlass, glassTint)
-    // Only exists while the treatment is on: with it off there is nothing to record, and the two
-    // layers should not be allocated at all.
-    val glassScene = if (settings.frostedGlass) rememberGlassScene() else null
-    val currentAccent = LocalAccent.current
-    val effectiveAccent = if (settings.frostedGlass) glassTint.value else currentAccent
+    val glass = rememberGlassStyle(glassTint)
+    val glassScene = rememberGlassScene()
+    val effectiveAccent = glassTint.value
+    val localLibraryUi = dev.sfg.orchard.mobile.ui.components.rememberLocalLibraryUi(viewModel.localLibrary)
+    // Bug reports float above navigation so a capture can wander off and come back.
+    val supportUi = dev.sfg.orchard.mobile.ui.support.rememberSupportUi()
 
     CompositionLocalProvider(
+        dev.sfg.orchard.mobile.ui.components.LocalLibraryUiLocal provides localLibraryUi,
+        dev.sfg.orchard.mobile.ui.support.LocalSupportUi provides supportUi,
         LocalGlass provides glass,
         LocalGlassScene provides glassScene,
         LocalAccent provides effectiveAccent,
         LocalOverscrollFactory provides OrchardScrollPhysics.overscrollFactory,
+        LocalPlayerClock provides playerPresentation.clock,
+        dev.sfg.orchard.mobile.ui.components.LocalNonMusicSkip provides nonMusicSkip,
+        dev.sfg.orchard.mobile.model.LocalBestMixJob provides bestMixJob,
+        dev.sfg.orchard.mobile.model.LocalQobuzLinked provides qobuzStatus.isConnected,
+        dev.sfg.orchard.mobile.model.LocalMaxActive provides maxActive,
+        dev.sfg.orchard.mobile.model.LocalQobuzAlbumQuality provides albumQualityLoader,
     ) {
         Scaffold(
             // Transparent so the artwork wash below shows through every screen.
@@ -173,12 +186,18 @@ fun OrchardApp(viewModel: OrchardViewModel) {
             // blur a recording it is itself part of, which is why the pill and the bar were
             // lifted out of this box and into the overlay below.
             Box(Modifier.fillMaxSize().glassSceneSource(glassScene)) {
-                ArtworkBackdrop(
-                    palette = backdropPalette,
-                    animated = settings.animatedBackground,
-                    rich = settings.frostedGlass,
-                    modifier = Modifier.glassWashSource(glassScene),
-                )
+                Box(Modifier.fillMaxSize().glassWashSource(glassScene)) {
+                    ArtworkBackdrop(
+                        palette = backdropPalette,
+                        animated = settings.animatedBackground,
+                    )
+                    // Home, Settings and Library wear the current song; the shader idles once playback pauses.
+                    dev.sfg.orchard.mobile.ui.components.HomeBackdrop(
+                        visible = route == Routes.HOME || route == Routes.SETTINGS || route == Routes.LIBRARY,
+                        artworkUrl = playerPlayback.currentTrack?.artworkUrl.orEmpty(),
+                        isPlaying = playerPlayback.isPlaying && settings.animatedBackground,
+                    )
+                }
 
                 val isFoldable = dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
                 val contentModifier = if (isFoldable && !chromeHidden) {
@@ -191,7 +210,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                 }
 
                 Box(contentModifier) {
-                    OrchardNavigation(navController, viewModel, playback, targets, library, settings)
+                    OrchardNavigation(navController, viewModel, playback, targets, library, settings, onOpenSearch = { searchOpen = true })
                 }
             }
 
@@ -200,8 +219,8 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                 if (!chromeHidden) {
                     if (isFoldable) {
                         dev.sfg.orchard.mobile.ui.foldable.OrchardNavigationRail(
-                            currentRoute = route,
-                            onSelect = { navController.openTopLevel(it) },
+                            currentRoute = chromeRoute,
+                            onSelect = selectTopLevel,
                             modifier = Modifier.align(Alignment.CenterStart),
                         )
 
@@ -215,7 +234,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                             CanopyReadout(
                                 playback = playerPlayback,
                                 transition = playerMarker,
-                                mixProgress = playerPresentation.progress,
+                                mixProgress = playerPresentation.mixProgress,
                                 modifier = Modifier
                                     .padding(horizontal = 24.dp, vertical = 12.dp)
                                     .onGloballyPositioned { readoutBounds = it.boundsInRoot() },
@@ -236,7 +255,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                                 CanopyReadout(
                                     playback = playerPlayback,
                                     transition = playerMarker,
-                                    mixProgress = playerPresentation.progress,
+                                    mixProgress = playerPresentation.mixProgress,
                                     modifier = Modifier.onGloballyPositioned { readoutBounds = it.boundsInRoot() },
                                     onArtworkBounds = { readoutArtworkBounds = it },
                                     onOpen = { playerOpen = true },
@@ -248,11 +267,27 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                                         viewModel.clearQueue()
                                     },
                                 )
-                                OrchardBottomBar(route) { navController.openTopLevel(it) }
+                                OrchardBottomBar(chromeRoute, selectTopLevel)
                             }
                         }
                     }
                 }
+
+                // Above the chrome so its scrim dims the bar too, below the player so a played
+                // result can still open the full-screen view.
+                SearchOverlayHost(
+                    open = searchOpen,
+                    onClose = { searchOpen = false },
+                    nav = navController,
+                    viewModel = viewModel,
+                    library = library,
+                    backdropArtworkUrl = playerPlayback.currentTrack?.artworkUrl.orEmpty(),
+                    backdropPlaying = playerPlayback.isPlaying && settings.animatedBackground,
+                    // These routes already draw this backdrop underneath.
+                    showBackdrop = route != Routes.HOME && route != Routes.SETTINGS && route != Routes.LIBRARY,
+                    onOpenPlayer = { playerOpen = true },
+                    modifier = Modifier.zIndex(40f),
+                )
 
                 // Sibling of the padded content rather than a child of it: the player is
                 // edge-to-edge and draws its own insets, and it has to paint over the pill
@@ -268,11 +303,18 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                     viewModel = viewModel,
                     playback = playerPlayback,
                     transition = localTransitionMarker,
-                    mixProgress = playerPresentation.progress,
+                    mixProgress = playerPresentation.mixProgress,
                     targets = targets,
                     library = library,
                     settings = settings,
                     modifier = Modifier.zIndex(50f),
+                )
+
+                // Over the player too: a bug in the full player is still a bug worth a screenshot.
+                dev.sfg.orchard.mobile.ui.support.SupportHost(
+                    ui = supportUi,
+                    page = if (playerOpen) "now-playing" else route.orEmpty(),
+                    modifier = Modifier.zIndex(60f),
                 )
 
                 dev.sfg.orchard.mobile.ui.components.WarningBanner(
@@ -300,354 +342,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     }
 }
 
-@Composable
-private fun OrchardNavigation(
-    nav: NavHostController,
-    viewModel: OrchardViewModel,
-    playback: dev.sfg.orchard.mobile.model.PlaybackSnapshot,
-    targets: dev.sfg.orchard.mobile.model.PlaybackTargetState,
-    library: dev.sfg.orchard.mobile.model.LibrarySnapshot,
-    settings: dev.sfg.orchard.mobile.model.OrchardSettings,
-) {
-    val home by viewModel.home.collectAsStateWithLifecycle()
-    val query by viewModel.query.collectAsStateWithLifecycle()
-    val search by viewModel.search.collectAsStateWithLifecycle()
-    val history by viewModel.searchHistory.collectAsStateWithLifecycle()
-    val detail by viewModel.detail.collectAsStateWithLifecycle()
-    val detailRefreshing by viewModel.detailRefreshing.collectAsStateWithLifecycle()
-    val detailArtwork by viewModel.detailArtwork.collectAsStateWithLifecycle()
-    val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
-    val artistImages by viewModel.artistImages.collectAsStateWithLifecycle()
-    val auth by viewModel.auth.collectAsStateWithLifecycle()
-    val discordAuth by viewModel.discordAuth.collectAsStateWithLifecycle()
-    val discordConnection by viewModel.discordConnection.collectAsStateWithLifecycle()
-    val lastfmState by viewModel.lastfmState.collectAsStateWithLifecycle()
-    val listenBrainzState by viewModel.listenBrainzState.collectAsStateWithLifecycle()
-    val libraryFilter by viewModel.libraryFilter.collectAsStateWithLifecycle()
-    val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
-    val downloads by viewModel.downloads.collectAsStateWithLifecycle()
-    val downloadsList = androidx.compose.runtime.remember(downloads) { downloads.values.toList() }
-    val downloadedTrackIds by viewModel.downloadedTrackIds.collectAsStateWithLifecycle()
-    val downloadingTrackIds by viewModel.downloadingTrackIds.collectAsStateWithLifecycle()
-    val totalBytesUsed by viewModel.totalBytesUsed.collectAsStateWithLifecycle()
-    val cacheSizeBytes by viewModel.cacheSizeBytes.collectAsStateWithLifecycle()
-    val isClearingCache by viewModel.isClearingCache.collectAsStateWithLifecycle()
-    val qobuzStatus by viewModel.qobuzStatus.collectAsStateWithLifecycle()
-    val updateState by viewModel.updateState.collectAsStateWithLifecycle()
-    val connectMessage by viewModel.connectMessage.collectAsStateWithLifecycle()
-    val connectProtocolVersion by viewModel.connectProtocolVersion.collectAsStateWithLifecycle()
-    val connectAudioEngine by viewModel.connectAudioEngine.collectAsStateWithLifecycle()
-    val connectRemoteVolume by viewModel.connectRemoteVolume.collectAsStateWithLifecycle()
-    val listeningParty by viewModel.listeningParty.collectAsStateWithLifecycle()
-    val localTargetSelected = targets.selected is PlaybackTarget.LocalPhone
-    val canControlQueue = localTargetSelected || connectProtocolVersion >= 2
-    val canShuffle = localTargetSelected || connectProtocolVersion >= 2
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val startDestination = if (settings.onboardingCompleted) Routes.HOME else Routes.WELCOME
-    var playlistPickerTrack by remember { mutableStateOf<dev.sfg.orchard.mobile.model.Track?>(null) }
-
-    // Without this a track the resolver refuses shows up only as the spinner stopping,
-    // which is indistinguishable from the play button having died. Keyed on the message
-    // so a repeated attempt on the same track says so again rather than staying silent.
-    LaunchedEffect(playback.errorMessage) {
-        if (playback.errorMessage.isNotBlank()) {
-            android.widget.Toast
-                .makeText(context, playback.errorMessage, android.widget.Toast.LENGTH_LONG)
-                .show()
-        }
-    }
-
-    NavHost(navController = nav, startDestination = startDestination) {
-        composable(Routes.WELCOME) {
-            WelcomeScreen(
-                settings = settings,
-                auth = auth,
-                onUpdateSettings = viewModel::updateSettings,
-                onSignIn = { nav.navigate(Routes.LOGIN) },
-                onSignOut = viewModel::signOut,
-                onFinish = {
-                    viewModel.updateSettings(settings.copy(onboardingCompleted = true))
-                    nav.navigate(Routes.HOME) {
-                        popUpTo(Routes.WELCOME) { inclusive = true }
-                    }
-                },
-            )
-        }
-        composable(Routes.HOME) {
-            HomeScreen(
-                settings = settings,
-                state = home,
-                library = library,
-                auth = auth,
-                downloads = downloadsList,
-                downloadedTrackIds = downloadedTrackIds,
-                isOffline = !isOnline,
-                onRefresh = viewModel::refreshHome,
-                onSearch = { nav.openTopLevel(Routes.SEARCH) },
-                onLibrary = { filter ->
-                    viewModel.selectLibraryFilter(filter)
-                    nav.openTopLevel(Routes.LIBRARY)
-                },
-                onDevices = { nav.navigate(Routes.DEVICES) },
-                onPlay = { viewModel.play(it, "Home") },
-                onOpenDetail = { id -> viewModel.openDetail(id); nav.navigate(Routes.detail(id)) },
-                onEditLayout = { nav.navigate(Routes.SETTINGS_HOME_LAYOUT) },
-                onToggleLike = viewModel::toggleLiked,
-                onPlayNext = if (canControlQueue) viewModel::playNext else null,
-                onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
-                onAddToPlaylist = { playlistPickerTrack = it },
-                onShare = viewModel::shareTrack,
-                onOpenProfile = { nav.openTopLevel(Routes.SETTINGS) },
-                onFetchSectionItems = viewModel::fetchSectionItems,
-                onPlayItem = viewModel::playItem,
-                onPlayCollection = { id, title -> viewModel.playCollection(id, title) },
-            )
-        }
-        composable(Routes.SEARCH) {
-            SearchScreen(
-                query = query,
-                state = search,
-                history = history,
-                onQueryChange = viewModel::updateQuery,
-                onSubmit = viewModel::runSearch,
-                onClearHistory = viewModel::clearSearchHistory,
-                onRemoveHistoryItem = viewModel::removeSearchHistoryItem,
-                downloadedTrackIds = downloadedTrackIds,
-                downloadingTrackIds = downloadingTrackIds,
-                onPlay = { viewModel.play(it, "Search") },
-                onPlayNext = if (canControlQueue) viewModel::playNext else null,
-                onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
-                onAddToPlaylist = { playlistPickerTrack = it },
-                onDownloadTrack = viewModel::downloadTrack,
-                onRemoveDownloadTrack = viewModel::removeDownload,
-                onOpenDetail = { id -> viewModel.openDetail(id); nav.navigate(Routes.detail(id)) },
-                onShare = viewModel::shareTrack,
-            )
-        }
-        composable(Routes.LIBRARY) {
-            LibraryScreen(
-                library = library,
-                filter = libraryFilter,
-                onFilterChange = viewModel::selectLibraryFilter,
-                downloads = downloadsList,
-                downloadedTrackIds = downloadedTrackIds,
-                downloadingTrackIds = downloadingTrackIds,
-                totalBytesUsed = totalBytesUsed,
-                onPlay = { viewModel.play(it, libraryFilter.sourceTitle()) },
-                onPlayNext = if (canControlQueue) viewModel::playNext else null,
-                onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
-                onOpenDetail = { id -> viewModel.openDetail(id); nav.navigate(Routes.detail(id)) },
-                onDownloadTrack = viewModel::downloadTrack,
-                onRemoveDownloadTrack = viewModel::removeDownload,
-                onShare = viewModel::shareTrack,
-            )
-        }
-        composable(Routes.DOWNLOADS) {
-            dev.sfg.orchard.mobile.ui.screens.DownloadsScreen(
-                downloads = downloadsList,
-                totalBytesUsed = totalBytesUsed,
-                onPlay = { viewModel.play(it, "Downloads") },
-                onRemoveDownload = viewModel::removeDownload,
-            )
-        }
-        composable(Routes.SETTINGS) {
-            SettingsScreen(
-                settings = settings,
-                auth = auth,
-                discordAuth = discordAuth,
-                discordConnection = discordConnection,
-                lastfmState = lastfmState,
-                listenBrainzState = listenBrainzState,
-                updateState = updateState,
-                cacheSizeBytes = cacheSizeBytes,
-                isClearingCache = isClearingCache,
-                onClearCache = {
-                    viewModel.clearCache { bytesCleared ->
-                        val formatted = dev.sfg.orchard.mobile.settings.CacheManager.formatStorageSize(bytesCleared)
-                        android.widget.Toast.makeText(context, "Cache cleared ($formatted freed)", android.widget.Toast.LENGTH_SHORT).show()
-                    }
-                },
-                onRefreshCacheSize = viewModel::refreshCacheSize,
-                onSettings = viewModel::updateSettings,
-                onAutoplayEnabled = viewModel::setAutoplayEnabled,
-                onSignIn = { nav.navigate(Routes.LOGIN) },
-                onSwitchAccount = { nav.navigate(Routes.ACCOUNT_SWITCH) },
-                onSignOut = viewModel::signOut,
-                onConnectDiscord = { viewModel.connectDiscord(context) },
-                onDisconnectDiscord = viewModel::disconnectDiscord,
-                onConnectLastfm = { viewModel.connectLastfm(context) },
-                onCompleteLastfm = viewModel::completeLastfmConnection,
-                onDisconnectLastfm = viewModel::disconnectLastfm,
-                onConnectListenBrainz = viewModel::connectListenBrainz,
-                onDisconnectListenBrainz = viewModel::disconnectListenBrainz,
-                onConnectSpotify = { nav.navigate(Routes.SPOTIFY_LOGIN) },
-                qobuzStatus = qobuzStatus,
-                onConnectQobuz = { nav.navigate(Routes.QOBUZ_LOGIN) },
-                onDisconnectQobuz = viewModel::disconnectQobuz,
-                onQobuzEnabledChange = viewModel::setQobuzEnabled,
-                onQobuzQualityChange = viewModel::setQobuzQuality,
-                onDevices = { nav.navigate(Routes.DEVICES) },
-                onWelcome = { nav.navigate(Routes.WELCOME) },
-                onCheckForUpdates = viewModel::checkForUpdates,
-                onInstallUpdate = viewModel::installUpdate,
-                onHomeLayout = { nav.navigate(Routes.SETTINGS_HOME_LAYOUT) },
-            )
-        }
-        composable(Routes.SETTINGS_HOME_LAYOUT) {
-            SettingsHomeLayout(
-                settings = settings,
-                auth = auth,
-                onSettings = viewModel::updateSettings,
-                onBack = { nav.popBackStack() },
-            )
-        }
-        composable(Routes.LOGIN) {
-            NativeLoginScreen(
-                auth = auth,
-                onBegin = viewModel::beginSignIn,
-                onSession = viewModel::completeSignIn,
-                onCancel = viewModel::cancelSignIn,
-                // Scoped to this entry so a repeated call cannot pop whatever
-                // sent the user here. From Welcome that would be the whole back
-                // stack, leaving an empty NavHost and a black screen.
-                onComplete = { nav.popBackStack(Routes.LOGIN, inclusive = true) },
-            )
-        }
-        composable(Routes.ACCOUNT_SWITCH) {
-            NativeLoginScreen(
-                auth = auth,
-                onBegin = viewModel::beginSignIn,
-                onSession = viewModel::completeSignIn,
-                onCancel = viewModel::cancelSignIn,
-                onComplete = { nav.popBackStack(Routes.ACCOUNT_SWITCH, inclusive = true) },
-                switchingAccount = true,
-            )
-        }
-        composable(Routes.SPOTIFY_LOGIN) {
-            dev.sfg.orchard.mobile.ui.screens.SpotifyLoginScreen(
-                onSpdcCaptured = { spdc ->
-                    viewModel.updateSettings(settings.copy(spotifySpdc = spdc))
-                    nav.popBackStack()
-                },
-                onCancel = { nav.popBackStack() },
-            )
-        }
-        composable(Routes.QOBUZ_LOGIN) {
-            val graph = OrchardGraph.from(context)
-            dev.sfg.orchard.mobile.ui.screens.QobuzLoginScreen(
-                bootstrapLoader = graph.qobuzResolver.bootstrapLoader,
-                onSuccess = { token, userId ->
-                    viewModel.connectQobuz(token, userId)
-                    nav.popBackStack()
-                },
-                onCancel = { nav.popBackStack() },
-            )
-        }
-        composable(
-            route = Routes.DETAIL,
-            arguments = listOf(navArgument("id") { type = androidx.navigation.NavType.StringType }),
-        ) { entry ->
-            val id = entry.arguments?.getString("id").orEmpty()
-            // A restored navigation stack may recreate this screen after the
-            // process state holder has been lost; reload its actual route id.
-            androidx.compose.runtime.LaunchedEffect(id) {
-                val current = (detail as? LoadState.Content)?.value?.id
-                if (id.isNotBlank() && current != id) viewModel.openDetail(id)
-            }
-            val isSaved = (detail as? LoadState.Content)?.value?.let { detailVal ->
-                when (detailVal.kind) {
-                    CatalogKind.ALBUM -> library.savedAlbums.any { it.id == detailVal.id }
-                    CatalogKind.PLAYLIST -> library.savedPlaylists.any { it.id == detailVal.id }
-                    CatalogKind.ARTIST -> library.savedArtists.any { it.id == detailVal.id }
-                    CatalogKind.TRACK -> false
-                }
-            } ?: false
-
-            // The hero is square, so the wide asset crops far better than the 9:16 one the
-            // full player wants; vertical is only a fallback when there is nothing else.
-            val animatedArtworkUrl = if (settings.animatedArtwork) {
-                detailArtwork?.let { it.videoUrl.ifBlank { it.videoUrlVertical } }.orEmpty()
-            } else ""
-
-            // Only artist pages swap in TheAudioDB's photograph; albums keep their cover, which
-            // also drives the page palette.
-            val portrait = artistImages?.portraitUrl.orEmpty()
-            val shownDetail = (detail as? LoadState.Content)
-                ?.takeIf { portrait.isNotBlank() && it.value.kind == CatalogKind.ARTIST }
-                ?.let { LoadState.Content(it.value.copy(artworkUrl = portrait)) }
-                ?: detail
-
-            DetailScreen(
-                state = shownDetail,
-                onBack = nav::popBackStack,
-                onPlayAll = { tracks, source -> viewModel.playAll(tracks, contextTitle = source) },
-                onShuffle = { tracks, source -> viewModel.shuffleAll(tracks, source) },
-                shuffleAvailable = canShuffle,
-                onPlay = { track, source -> viewModel.play(track, source) },
-                onPlayTrack = { tracks, index, source -> viewModel.playAll(tracks, startIndex = index, contextTitle = source) },
-                onPlayNext = if (canControlQueue) viewModel::playNext else null,
-                onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
-                onAddToPlaylist = { playlistPickerTrack = it },
-                onRemoveFromPlaylist = viewModel::removeTrackFromCurrentPlaylist,
-                onMovePlaylistTrack = viewModel::moveTrackInCurrentPlaylist,
-                onSave = viewModel::saveDetail,
-                onOpenDetail = { next -> viewModel.openDetail(next); nav.navigate(Routes.detail(next)) },
-                isSaved = isSaved,
-                downloadedTrackIds = downloadedTrackIds,
-                downloadingTrackIds = downloadingTrackIds,
-                onDownloadTrack = viewModel::downloadTrack,
-                onDownloadTracks = viewModel::downloadTracks,
-                onRemoveDownloadTrack = viewModel::removeDownload,
-                onRemoveDownloadTracks = viewModel::removeDownloads,
-                animatedArtworkUrl = animatedArtworkUrl,
-                artistPortraitUrl = artistImages?.portraitUrl.orEmpty(),
-                onShareTrack = viewModel::shareTrack,
-                onShareCollection = viewModel::shareCollection,
-                onFetchSectionItems = viewModel::fetchSectionItems,
-                smartCrossfadeEnabled = settings.smartCrossfade,
-                bestMixSupabaseSync = settings.bestMixSupabaseSync,
-                onPlayBestMix = viewModel::playBestMix,
-                isRefreshing = detailRefreshing,
-                onRefresh = viewModel::refreshDetail,
-            )
-        }
-        composable(Routes.DEVICES) {
-            DevicesScreen(
-                targets = targets,
-                connectMessage = connectMessage,
-                protocolVersion = connectProtocolVersion,
-                audioEngine = connectAudioEngine,
-                party = listeningParty,
-                onBack = nav::popBackStack,
-                onSelect = viewModel::selectTarget,
-                onPair = viewModel::pairDevice,
-                onDisconnect = viewModel::disconnectDevice,
-                onPresetSelect = viewModel::setAudioEnginePreset,
-                onToggleAutoEq = viewModel::toggleAutoEq,
-                onToggleManualEq = viewModel::toggleManualEq,
-                onCreateParty = { viewModel.createListeningParty() },
-                onJoinParty = { viewModel.joinListeningParty(it) },
-                onLeaveParty = viewModel::leaveListeningParty,
-                onRenameDevice = viewModel::renameDevice,
-                onRemoveDevice = viewModel::removeDevice,
-            )
-        }
-    }
-
-    playlistPickerTrack?.let { track ->
-        PlaylistPickerSheet(
-            track = track,
-            playlists = library.savedPlaylists,
-            onDismiss = { playlistPickerTrack = null },
-            onSelect = { playlist ->
-                playlistPickerTrack = null
-                viewModel.addTrackToPlaylist(playlist.id, track)
-            },
-        )
-    }
-}
-
-private fun NavHostController.openTopLevel(route: String) {
+internal fun NavHostController.openTopLevel(route: String) {
     val startId = graph.findStartDestination().id
     popBackStack(startId, false)
     navigate(route) {
@@ -657,11 +352,12 @@ private fun NavHostController.openTopLevel(route: String) {
     }
 }
 
-private fun LibraryFilter.sourceTitle(): String = when (this) {
+internal fun LibraryFilter.sourceTitle(): String = when (this) {
     LibraryFilter.PLAYLISTS -> "Your playlists"
     LibraryFilter.ARTISTS -> "Your artists"
     LibraryFilter.ALBUMS -> "Your albums"
     LibraryFilter.SONGS -> "Liked songs"
     LibraryFilter.RECENT -> "Recently played"
     LibraryFilter.DOWNLOADS -> "Downloads"
+    LibraryFilter.LOCAL -> "Local files"
 }

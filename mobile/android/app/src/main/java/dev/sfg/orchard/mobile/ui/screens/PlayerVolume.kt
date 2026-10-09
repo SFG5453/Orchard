@@ -61,10 +61,10 @@ private val TRACK_HEIGHT = 5.dp
 @Composable
 fun DeviceVolumeSlider(
     enabled: Boolean,
+    modifier: Modifier = Modifier,
     isRemote: Boolean = false,
     remoteVolume: Float = 1f,
     onRemoteVolumeChange: (Float) -> Unit = {},
-    modifier: Modifier = Modifier,
 ) {
     val systemVolume = rememberSystemVolume()
     var draggingVolume by remember { mutableStateOf<Float?>(null) }

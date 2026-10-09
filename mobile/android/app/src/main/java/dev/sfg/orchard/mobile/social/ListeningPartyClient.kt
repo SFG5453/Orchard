@@ -19,7 +19,6 @@
 
 package dev.sfg.orchard.mobile.social
 
-import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -45,17 +44,6 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
-import org.webrtc.DataChannel
-import org.webrtc.IceCandidate
-import org.webrtc.MediaConstraints
-import org.webrtc.MediaStream
-import org.webrtc.PeerConnection
-import org.webrtc.PeerConnectionFactory
-import org.webrtc.RtpReceiver
-import org.webrtc.SdpObserver
-import org.webrtc.SessionDescription
-import java.nio.ByteBuffer
-import java.nio.charset.StandardCharsets
 
 /**
  * The Kotlin counterpart of `src/app/social/listeningPartyClient.js`.
@@ -68,18 +56,14 @@ import java.nio.charset.StandardCharsets
  * forward-compatibility surface, not the sync path.
  *
  * Everything that mutates [peers] or the socket runs on [scope], which is serialised to one thread.
- * WebRTC delivers its callbacks on its own signalling thread, and disposing a `PeerConnection` from
- * inside one of those callbacks deadlocks, so every callback hands off to [scope] instead of acting
- * in place.
+ * Native peer callbacks arrive on their own threads and destroying a peer joins that thread, so every
+ * callback hands off to [scope] instead of acting in place.
  */
 class ListeningPartyClient(
-    context: Context,
     private val http: OkHttpClient,
     private val serviceUrl: String = DEFAULT_SERVICE_URL,
     private val displayName: String = "Listener",
 ) {
-    private val appContext = context.applicationContext
-
     /**
      * Serialises everything that touches [peers] or [socket].
      *
@@ -98,34 +82,51 @@ class ListeningPartyClient(
     private val baseUrl = serviceUrl.trimEnd('/')
     private var socket: WebSocket? = null
     private val peers = LinkedHashMap<String, PeerLink>()
-    private var iceServers: List<PeerConnection.IceServer> = emptyList()
+    private var iceServers = "[]"
 
-    /** A peer and the connection this device holds to it. */
-    private class PeerLink(
+    /** A peer and the data channel this device holds to it. */
+    private inner class PeerLink(
         val id: String,
         var name: String = "",
         var role: PartyRole = PartyRole.GUEST,
-        val connection: PeerConnection,
-    ) {
-        var channel: DataChannel? = null
+        offerer: Boolean,
+    ) : PartyPeerNative.Listener {
+        private val handle = PartyPeerNative.create(this, iceServers, offerer)
         var open: Boolean = false
-        var connectionState: String = "new"
-        var hasRemoteDescription: Boolean = false
+        var connectionState: String = "connecting"
 
-        /**
-         * Candidates that arrived before the remote description did.
-         *
-         * `addIceCandidate` before `setRemoteDescription` is rejected, and the worker relays
-         * signals in whatever order they reach it, so an early candidate has to be held rather
-         * than dropped — dropping it can cost the only route that would have connected.
-         */
-        val pendingIce = ArrayDeque<IceCandidate>()
+        fun start() = PartyPeerNative.start(handle)
+        fun applySignal(json: String) = PartyPeerNative.signal(handle, json)
+        fun send(text: String): Boolean = PartyPeerNative.sendText(handle, text)
 
-        fun dispose() {
-            runCatching { channel?.close() }
-            runCatching { channel?.dispose() }
-            runCatching { connection.close() }
-            runCatching { connection.dispose() }
+        /** Joins the native loop thread, so it must not run from a callback. */
+        fun dispose() = PartyPeerNative.destroy(handle)
+
+        // Native callbacks arrive on the peer's loop thread; each hops to [scope].
+        override fun onSignal(json: String) {
+            scope.launch { relaySignal(this@PeerLink, JSONObject(json)) }
+        }
+
+        override fun onOpen() {
+            scope.launch {
+                if (peers[id] !== this@PeerLink) return@launch
+                open = true
+                connectionState = "connected"
+                publishPeers()
+            }
+        }
+
+        override fun onText(text: String) {
+            scope.launch { handleChannelMessage(this@PeerLink, text) }
+        }
+
+        override fun onClosed(reason: String) {
+            scope.launch {
+                if (peers[id] !== this@PeerLink) return@launch
+                connectionState = "closed"
+                closePeer(id)
+                publishPeers()
+            }
         }
     }
 
@@ -303,8 +304,7 @@ class ListeningPartyClient(
                 .toString()
             peers.values.forEach { peer ->
                 if (peer.open) {
-                    runCatching { peer.channel?.send(message.toDataBuffer()) }
-                        .onFailure { Log.w(TAG, "Failed to send to peer ${peer.id}", it) }
+                    if (!peer.send(message)) Log.w(TAG, "Failed to send to peer ${peer.id}")
                 }
             }
         }
@@ -392,7 +392,7 @@ class ListeningPartyClient(
     }
 
     private suspend fun handleWelcome(message: JSONObject) {
-        iceServers = parseIceServers(message.optJSONArray("iceServers"))
+        iceServers = message.optJSONArray("iceServers")?.toString() ?: "[]"
 
         val roomJson = message.optJSONObject("room")
         patch { current ->
@@ -476,170 +476,65 @@ class ListeningPartyClient(
             return existing
         }
 
-        val configuration = PeerConnection.RTCConfiguration(iceServers).apply {
-            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
-            continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
-            bundlePolicy = PeerConnection.BundlePolicy.MAXBUNDLE
-            rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE
-        }
-
-        lateinit var link: PeerLink
-        val observer = object : PeerConnection.Observer {
-            override fun onIceCandidate(candidate: IceCandidate) {
-                scope.launch { sendSignal(peerId, "ice", candidate.toJson()) }
-            }
-
-            override fun onDataChannel(channel: DataChannel) {
-                scope.launch {
-                    attachChannel(link, channel)
-                    publishPeers()
-                }
-            }
-
-            override fun onConnectionChange(newState: PeerConnection.PeerConnectionState) {
-                scope.launch {
-                    link.connectionState = newState.name.lowercase()
-                    if (newState == PeerConnection.PeerConnectionState.CLOSED ||
-                        newState == PeerConnection.PeerConnectionState.FAILED ||
-                        newState == PeerConnection.PeerConnectionState.DISCONNECTED
-                    ) {
-                        closePeer(peerId)
-                    }
-                    publishPeers()
-                }
-            }
-
-            override fun onSignalingChange(state: PeerConnection.SignalingState) = Unit
-            override fun onIceConnectionChange(state: PeerConnection.IceConnectionState) = Unit
-            override fun onIceConnectionReceivingChange(receiving: Boolean) = Unit
-            override fun onIceGatheringChange(state: PeerConnection.IceGatheringState) = Unit
-            override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>?) = Unit
-            override fun onAddStream(stream: MediaStream?) = Unit
-            override fun onRemoveStream(stream: MediaStream?) = Unit
-            override fun onRenegotiationNeeded() = Unit
-            override fun onAddTrack(receiver: RtpReceiver?, streams: Array<out MediaStream>?) = Unit
-        }
-
-        val connection = WebRtcRuntime.factory(appContext).createPeerConnection(configuration, observer)
-            ?: return null
-
-        link = PeerLink(
+        val link = PeerLink(
             id = peerId,
             name = info?.optString("name").orEmpty(),
             role = PartyRole.of(info?.optString("role")),
-            connection = connection,
+            offerer = initiate,
         )
         peers[peerId] = link
-
-        if (initiate) {
-            val init = DataChannel.Init().apply { ordered = true }
-            connection.createDataChannel(CHANNEL_LABEL, init)?.let { attachChannel(link, it) }
-            createOffer(link)
-        }
+        // The offerer opens the channel, which starts negotiation and the first local signal.
+        link.start()
         return link
     }
 
-    private fun createOffer(peer: PeerLink) {
-        peer.connection.createOffer(
-            sdpObserver(
-                onCreate = { description ->
-                    peer.connection.setLocalDescription(
-                        sdpObserver(onSet = { scope.launch { sendSignal(peer.id, "offer", description.toJson()) } }),
-                        description,
-                    )
-                },
-            ),
-            MediaConstraints(),
-        )
+    /** Maps the native transport's signal shape onto the party wire format shared with the web client. */
+    private fun relaySignal(peer: PeerLink, signal: JSONObject) {
+        if (peers[peer.id] !== peer) return
+        when (signal.optString("kind")) {
+            "description" -> {
+                val type = signal.optString("type")
+                sendSignal(peer.id, type, JSONObject().put("type", type).put("sdp", signal.optString("sdp")))
+            }
+
+            "candidate" -> sendSignal(
+                peer.id,
+                "ice",
+                JSONObject()
+                    .put("candidate", signal.optString("candidate"))
+                    .put("sdpMid", signal.optString("mid"))
+                    .put("sdpMLineIndex", 0),
+            )
+        }
     }
 
     private suspend fun handleSignal(message: JSONObject) {
         val from = message.optString("from")
         val peer = ensurePeer(from, initiate = false, info = null) ?: return
-        val data = message.optJSONObject("data")
+        val data = message.optJSONObject("data") ?: return
 
-        when (message.optString("kind")) {
-            "offer" -> {
-                val description = data?.toSessionDescription() ?: return
-                peer.connection.setRemoteDescription(
-                    sdpObserver(
-                        onSet = {
-                            scope.launch {
-                                peer.hasRemoteDescription = true
-                                flushPendingIce(peer)
-                                answer(peer)
-                            }
-                        },
-                    ),
-                    description,
-                )
-            }
-
-            "answer" -> {
-                val description = data?.toSessionDescription() ?: return
-                peer.connection.setRemoteDescription(
-                    sdpObserver(
-                        onSet = {
-                            scope.launch {
-                                peer.hasRemoteDescription = true
-                                flushPendingIce(peer)
-                            }
-                        },
-                    ),
-                    description,
+        when (val kind = message.optString("kind")) {
+            "offer", "answer" -> {
+                val sdp = data.optString("sdp")
+                if (sdp.isBlank()) return
+                peer.applySignal(
+                    JSONObject().put("kind", "description").put("type", kind).put("sdp", sdp).toString(),
                 )
             }
 
             "ice" -> {
-                val candidate = data?.toIceCandidate() ?: return
-                if (peer.hasRemoteDescription) peer.connection.addIceCandidate(candidate)
-                else peer.pendingIce.addLast(candidate)
+                val candidate = data.optString("candidate")
+                if (candidate.isBlank()) return
+                // The native side holds candidates that arrive before the remote description.
+                peer.applySignal(
+                    JSONObject()
+                        .put("kind", "candidate")
+                        .put("candidate", candidate)
+                        .put("mid", data.optString("sdpMid"))
+                        .toString(),
+                )
             }
         }
-    }
-
-    private fun answer(peer: PeerLink) {
-        peer.connection.createAnswer(
-            sdpObserver(
-                onCreate = { description ->
-                    peer.connection.setLocalDescription(
-                        sdpObserver(onSet = { scope.launch { sendSignal(peer.id, "answer", description.toJson()) } }),
-                        description,
-                    )
-                },
-            ),
-            MediaConstraints(),
-        )
-    }
-
-    private fun flushPendingIce(peer: PeerLink) {
-        while (peer.pendingIce.isNotEmpty()) {
-            peer.connection.addIceCandidate(peer.pendingIce.removeFirst())
-        }
-    }
-
-    private fun attachChannel(peer: PeerLink, channel: DataChannel) {
-        peer.channel = channel
-        // An inbound channel can already be open by the time it is handed over, and `onStateChange`
-        // only reports transitions from here on, so the current state has to be read once directly.
-        peer.open = runCatching { channel.state() == DataChannel.State.OPEN }.getOrDefault(false)
-        channel.registerObserver(object : DataChannel.Observer {
-            override fun onStateChange() {
-                scope.launch {
-                    peer.open = runCatching { channel.state() == DataChannel.State.OPEN }.getOrDefault(false)
-                    publishPeers()
-                }
-            }
-
-            override fun onMessage(buffer: DataChannel.Buffer) {
-                if (buffer.binary) return
-                // The buffer is reused once this returns, so it must be copied before the hop.
-                val text = StandardCharsets.UTF_8.decode(buffer.data).toString()
-                scope.launch { handleChannelMessage(peer, text) }
-            }
-
-            override fun onBufferedAmountChange(previousAmount: Long) = Unit
-        })
     }
 
     private suspend fun handleChannelMessage(peer: PeerLink, raw: String) {
@@ -703,31 +598,9 @@ class ListeningPartyClient(
         }
     }
 
-    private fun parseIceServers(value: JSONArray?): List<PeerConnection.IceServer> = buildList {
-        for (index in 0 until (value?.length() ?: 0)) {
-            val entry = value?.optJSONObject(index) ?: continue
-            // `urls` is a string or an array of them in the WebRTC configuration dictionary, and
-            // the worker currently sends the string form.
-            val raw: Any? = entry.opt("urls")
-            val urls = when {
-                raw is JSONArray -> (0 until raw.length()).mapNotNull { raw.optString(it).takeIf(String::isNotBlank) }
-                raw is String -> listOf(raw)
-                else -> emptyList()
-            }
-            if (urls.isEmpty()) continue
-            add(
-                PeerConnection.IceServer.builder(urls)
-                    .setUsername(entry.optString("username"))
-                    .setPassword(entry.optString("credential"))
-                    .createIceServer(),
-            )
-        }
-    }
-
     private companion object {
         const val TAG = "ListeningParty"
         const val DEFAULT_SERVICE_URL = "https://party.sfg545.dev"
-        const val CHANNEL_LABEL = "orchard-party"
         const val PARTY_STATE = "party:state"
         const val CONNECTION_TIMEOUT_MS = 10_000L
         val JSON_MEDIA_TYPE = "application/json".toMediaType()
@@ -744,70 +617,3 @@ const val DEFAULT_PARTY_SERVICE_URL = "https://party.sfg545.dev"
  * `message` directly instead of guessing whether it holds a stack-trace fragment.
  */
 class PartyException(message: String) : Exception(message)
-
-/**
- * Process-wide WebRTC initialisation.
- *
- * `PeerConnectionFactory.initialize` loads the native library and may only run once per process,
- * so it lives here rather than on the client, which is created and thrown away with each party.
- */
-private object WebRtcRuntime {
-    @Volatile
-    private var factory: PeerConnectionFactory? = null
-
-    fun factory(context: Context): PeerConnectionFactory = factory ?: synchronized(this) {
-        factory ?: build(context).also { factory = it }
-    }
-
-    private fun build(context: Context): PeerConnectionFactory {
-        PeerConnectionFactory.initialize(
-            PeerConnectionFactory.InitializationOptions.builder(context.applicationContext)
-                .createInitializationOptions(),
-        )
-        // No audio or video module is configured: a listening party synchronises playback state
-        // over a data channel and never opens a media track, so the factory has no codecs to set
-        // up and the app needs no microphone permission.
-        return PeerConnectionFactory.builder().createPeerConnectionFactory()
-    }
-}
-
-private fun String.toDataBuffer(): DataChannel.Buffer =
-    DataChannel.Buffer(ByteBuffer.wrap(toByteArray(StandardCharsets.UTF_8)), false)
-
-private fun IceCandidate.toJson(): JSONObject = JSONObject()
-    .put("candidate", sdp)
-    .put("sdpMid", sdpMid)
-    .put("sdpMLineIndex", sdpMLineIndex)
-
-private fun JSONObject.toIceCandidate(): IceCandidate? {
-    val candidate = optString("candidate")
-    if (candidate.isBlank()) return null
-    return IceCandidate(optString("sdpMid"), optInt("sdpMLineIndex"), candidate)
-}
-
-private fun SessionDescription.toJson(): JSONObject = JSONObject()
-    .put("type", type.canonicalForm())
-    .put("sdp", description)
-
-private fun JSONObject.toSessionDescription(): SessionDescription? {
-    val sdp = optString("sdp")
-    val type = optString("type")
-    if (sdp.isBlank() || type.isBlank()) return null
-    return SessionDescription(SessionDescription.Type.fromCanonicalForm(type), sdp)
-}
-
-/** WebRTC's observer wants four callbacks where a caller only ever needs one or two. */
-private fun sdpObserver(
-    onCreate: (SessionDescription) -> Unit = {},
-    onSet: () -> Unit = {},
-): SdpObserver = object : SdpObserver {
-    override fun onCreateSuccess(description: SessionDescription) = onCreate(description)
-    override fun onSetSuccess() = onSet()
-    override fun onCreateFailure(error: String?) {
-        Log.w("ListeningParty", "Failed to create session description: $error")
-    }
-
-    override fun onSetFailure(error: String?) {
-        Log.w("ListeningParty", "Failed to set session description: $error")
-    }
-}

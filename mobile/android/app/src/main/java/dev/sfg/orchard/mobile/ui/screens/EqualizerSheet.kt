@@ -1,5 +1,7 @@
 package dev.sfg.orchard.mobile.ui.screens
 
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -16,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.model.EQ_BANDS
 import dev.sfg.orchard.mobile.model.EQ_PRESETS
 import dev.sfg.orchard.mobile.model.EqualizerConfig
+import dev.sfg.orchard.mobile.model.LocalMaxActive
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
@@ -25,44 +28,27 @@ import kotlin.math.roundToInt
 @Composable
 internal fun EqualizerRow(settings: OrchardSettings, onSettings: (OrchardSettings) -> Unit) {
     var showSheet by remember { mutableStateOf(false) }
+    val maxActive = LocalMaxActive.current
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { showSheet = true }
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+    SettingsRow(
+        title = "Audio Equalizer",
+        enabled = !maxActive,
+        subtitle = if (maxActive) {
+            "Unavailable while audio quality is Max"
+        } else if (settings.equalizerConfig.enabled) {
+            "Enabled (${EQ_PRESETS.find { it.id == settings.equalizerConfig.presetId }?.label ?: "Custom"})"
+        } else {
+            "Disabled"
+        },
+        icon = Icons.Rounded.Tune,
+        modifier = Modifier.clickable(enabled = !maxActive) { showSheet = true },
     ) {
-
-        Column(Modifier.weight(1f).padding(end = 14.dp)) {
-            Text(
-                "Audio Equalizer",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = CanopyColors.Text,
-            )
-            Text(
-                if (settings.equalizerConfig.enabled) {
-                    "Enabled (${EQ_PRESETS.find { it.id == settings.equalizerConfig.presetId }?.label ?: "Custom"})"
-                } else {
-                    "Disabled"
-                },
-                color = CanopyColors.Muted,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        Switch(
-            checked = settings.equalizerConfig.enabled,
-            onCheckedChange = { 
-                onSettings(settings.copy(
-                    equalizerConfig = settings.equalizerConfig.copy(enabled = it)
-                )) 
+        SettingsSwitch(
+            checked = settings.equalizerConfig.enabled && !maxActive,
+            enabled = !maxActive,
+            onCheckedChange = {
+                onSettings(settings.copy(equalizerConfig = settings.equalizerConfig.copy(enabled = it)))
             },
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = LocalAccent.current,
-                uncheckedThumbColor = CanopyColors.Muted,
-                uncheckedTrackColor = CanopyColors.Canvas,
-            ),
         )
     }
 

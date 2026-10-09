@@ -1,0 +1,304 @@
+/*
+ * Copyright (C) 2026 SFG545
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { planPairTransition } from './pairTransitionPlanner.js';
+
+export const CROSSFADE_MODES = ['standard', 'smart'];
+const BOUNDARY_PREPARE_LEAD_SECONDS = 0.25;
+
+export function normalizeCrossfadeMode(value) {
+  return CROSSFADE_MODES.includes(value) ? value : 'standard';
+}
+
+function clamp(value, minimum, maximum) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(minimum, Math.min(maximum, number)) : minimum;
+}
+
+function trackDurationSeconds(item = {}) {
+  const direct = Number(item.durationSeconds) || 0;
+  if (direct > 0) return direct;
+  const parts = String(item.duration || '').trim().split(':').map(Number);
+  if (!parts.length || parts.some((part) => !Number.isFinite(part))) return 0;
+  return parts.reduce((total, part) => total * 60 + part, 0);
+}
+
+function itemText(item = {}) {
+  return [item.type, item.title, item.subtitle, item.queueOrigin?.kind]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
+function blocked(reason, detail = {}) {
+  return { shouldStart: false, markerVisible: false, reason, ...detail };
+}
+
+function standardTransition(length, playbackTime, fadeSeconds, minFadeSeconds, reason = 'standard') {
+  const fade = clamp(fadeSeconds, minFadeSeconds, 12);
+  const transitionStart = Math.max(0, length - fade);
+  return {
+    shouldStart: playbackTime >= transitionStart,
+    markerVisible: true,
+    transitionStart,
+    transitionEnd: length,
+    fadeSeconds: fade,
+    transitionStyle: 'equal_power',
+    incomingCueTime: 0,
+    incomingPlaybackRate: 1,
+    reason: playbackTime >= transitionStart ? reason : `before-${reason}-window`
+  };
+}
+
+function analysisReadyForTrack(analysis = {}, track = null) {
+  const status = String(analysis.status || '');
+  if (!status) return true;
+  if (status !== 'ready') return false;
+  return !analysis.trackId || !track?.id || analysis.trackId === track.id;
+}
+
+function sameAlbum(left = {}, right = {}) {
+  if (left.albumId && right.albumId && left.albumId === right.albumId) return true;
+  if (left.queueOrigin?.kind === 'album' && right.queueOrigin?.kind === 'album') {
+    return Boolean(left.queueOrigin.title && left.queueOrigin.title === right.queueOrigin.title);
+  }
+  return Boolean(left.album && right.album && left.album === right.album && left.artist === right.artist);
+}
+
+// Queue/content eligibility is playback context, not pair scoring. Both the
+// live and native adapters consult this one guard before invoking the
+// authoritative pair planner so speech, album continuity, short tracks, and
+// incomplete analysis cannot slip through only one route.
+export function smartPairPlanningBlockReason({
+  albumSequential = false,
+  analysis = {},
+  currentTrack = null,
+  duration = 0,
+  nextAnalysis = {},
+  nextTrack = null
+} = {}) {
+  const length = Math.max(Number(duration) || 0, trackDurationSeconds(currentTrack));
+  if (length <= 0) return 'no-duration';
+  if (length < 45) return 'short-duration-guard';
+  if (albumSequential && sameAlbum(currentTrack, nextTrack)) return 'same-album-gapless';
+  const text = `${itemText(currentTrack)} ${itemText(nextTrack)}`;
+  if (/\b(podcast|episode|audiobook|live|concert|performance)\b/.test(text)) {
+    return 'blocked-speech-or-live';
+  }
+  if (
+    !analysisReadyForTrack(analysis, currentTrack) ||
+    !analysisReadyForTrack(nextAnalysis, nextTrack)
+  ) return 'smart-analysis-fallback';
+  return '';
+}
+
+function audibleEnd(analysis = {}, fallback = 0) {
+  const candidates = [
+    analysis.audibleRange?.end,
+    analysis.contentEndTime,
+    analysis.duration,
+    fallback
+  ].map(Number).filter((value) => Number.isFinite(value) && value > 0);
+  return candidates.length ? Math.min(fallback || Infinity, candidates[0]) : fallback;
+}
+
+function audibleStart(analysis = {}) {
+  const candidates = [
+    analysis.audibleRange?.start,
+    analysis.audibleStartTime,
+    analysis.pickupTime,
+    analysis.firstBeat
+  ].map(Number).filter((value) => Number.isFinite(value) && value >= 0);
+  return candidates.length ? Math.min(...candidates) : 0;
+}
+
+export function transitionFromPairFallback(
+  pairPlan,
+  analysis,
+  nextAnalysis,
+  length,
+  playbackTime,
+  minFadeSeconds = 1,
+  configuredFadeSeconds = 6
+) {
+  const fallback = pairPlan.fallback;
+  // A normal boundary is no mix: the outgoing plays out and the player advances as usual.
+  if (fallback.transitionClass === 'normal_boundary') {
+    return blocked(pairPlan.fallbackReason || 'normal-boundary', {
+      transitionStart: length, transitionEnd: length, fadeSeconds: 0,
+      transitionStyle: 'normal_boundary',
+      fallbackReason: pairPlan.fallbackReason, fallback, pairPlan
+    });
+  }
+  // Short blends play the overlap the planner measured: the outgoing reaches its anchor
+  // and the incoming its arrival as the fade ends, so the vocal checks hold for what plays.
+  if (pairPlan.renderMode === 'live' && pairPlan.transitionClass === 'simple_crossfade') {
+    const transitionEnd = clamp(pairPlan.outgoing.end, 0, length);
+    const arrival = Math.max(0, Number(pairPlan.incoming.handoff) || 0);
+    const fadeSeconds = Math.min(
+      clamp(configuredFadeSeconds, minFadeSeconds, 12),
+      Math.max(minFadeSeconds, Number(pairPlan.durationSeconds) || 0),
+      transitionEnd, arrival
+    );
+    const transitionStart = Math.max(0, transitionEnd - fadeSeconds);
+    const incomingCueTime = Math.max(0, arrival - fadeSeconds);
+    const shouldStart = playbackTime >= transitionStart;
+    return {
+      shouldStart, markerVisible: true, transitionStart,
+      transitionEnd,
+      fadeSeconds, handoffDuration: fadeSeconds, handoffStartSeconds: 0,
+      incomingCueTime, incomingHandoffTime: arrival,
+      incomingPlaybackRate: 1, pickupSeconds: audibleStart(nextAnalysis),
+      transitionBeats: 0, bassSwap: false, transitionStyle: 'equal_power',
+      choreography: null,
+      policyReasons: pairPlan.diagnostics?.selected?.gates || [],
+      fallbackReason: pairPlan.fallbackReason, fallback, pairPlan,
+      reason: shouldStart ? 'smart-pair-fallback' : 'before-smart-pair-fallback-window'
+    };
+  }
+  const finalEnd = audibleEnd(analysis, length) || length;
+  let transitionEnd = clamp(fallback.outgoingEnd, 0, length);
+  let fadeSeconds = Math.max(0, Number(fallback.durationSeconds) || 0);
+  let incomingCueTime = Math.max(0, Number(fallback.incomingCue) || 0);
+  let late = false;
+  const boundaryOnly = fallback.transitionClass === 'silence_trim';
+
+  // Playback time is a scheduling concern, not another musical choice. If the
+  // selected exit has already passed, keep the attached fallback shape but
+  // move it to the final usable boundary rather than running another planner.
+  if (!boundaryOnly && playbackTime >= transitionEnd - 0.05 && transitionEnd < finalEnd - 0.05) {
+    transitionEnd = finalEnd;
+    incomingCueTime = audibleStart(nextAnalysis);
+    late = true;
+  }
+  if (!boundaryOnly && fadeSeconds <= 0 && transitionEnd > 0) fadeSeconds = minFadeSeconds;
+  fadeSeconds = Math.min(fadeSeconds, transitionEnd);
+  const transitionStart = Math.max(0, transitionEnd - fadeSeconds);
+  const shouldStart = boundaryOnly
+    ? playbackTime >= Math.max(0, transitionEnd - BOUNDARY_PREPARE_LEAD_SECONDS)
+    : playbackTime >= transitionStart;
+  const reasonBase = late ? 'smart-pair-late-fallback' : 'smart-pair-fallback';
+  return {
+    shouldStart,
+    markerVisible: transitionEnd > 0,
+    transitionStart,
+    transitionEnd,
+    fadeSeconds,
+    handoffDuration: fadeSeconds,
+    handoffStartSeconds: 0,
+    incomingCueTime,
+    incomingHandoffTime: incomingCueTime + fadeSeconds,
+    incomingPlaybackRate: 1,
+    pickupSeconds: audibleStart(nextAnalysis),
+    transitionBeats: 0,
+    bassSwap: false,
+    transitionStyle: fallback.transitionStyle,
+    choreography: fallback.choreography || pairPlan.choreography,
+    policyReasons: pairPlan.diagnostics?.selected?.gates || [],
+    fallbackReason: pairPlan.fallbackReason,
+    fallback,
+    pairPlan,
+    reason: shouldStart ? reasonBase : `before-${reasonBase}-window`
+  };
+}
+
+export function planTransition({
+  albumSequential = false,
+  analysis = {},
+  currentTime = 0,
+  currentTrack = null,
+  duration = 0,
+  fadeSeconds = 6,
+  minFadeSeconds = 1,
+  mode = 'standard',
+  nextAnalysis = {},
+  nextTrack = null,
+  tempoRamp = false,
+  outgoingWindowStart = null,
+  incomingWindowEnd = null
+} = {}) {
+  const length = Math.max(Number(duration) || 0, trackDurationSeconds(currentTrack));
+  const playbackTime = Math.max(0, Number(currentTime) || 0);
+  if (length <= 0) return blocked('no-duration');
+
+  const standardFade = clamp(fadeSeconds, minFadeSeconds, 12);
+  if (normalizeCrossfadeMode(mode) !== 'smart') {
+    return standardTransition(length, playbackTime, standardFade, minFadeSeconds);
+  }
+  const contextReason = smartPairPlanningBlockReason({
+    albumSequential,
+    analysis,
+    currentTrack,
+    duration: length,
+    nextAnalysis,
+    nextTrack
+  });
+  if (contextReason === 'short-duration-guard') {
+    return blocked('short-duration-guard', { transitionStart: length, transitionEnd: length });
+  }
+
+  // Album playthroughs preserve the record's own spacing. Queue context owns
+  // this exception, so no automatic pair search is allowed to override it.
+  if (contextReason === 'same-album-gapless') {
+    const transitionStart = Math.max(0, length - 0.45);
+    return {
+      shouldStart: playbackTime >= transitionStart,
+      markerVisible: true,
+      transitionStart,
+      transitionEnd: length,
+      fadeSeconds: 0.12,
+      transitionStyle: 'gapless',
+      incomingCueTime: 0,
+      incomingPlaybackRate: 1,
+      reason: playbackTime >= transitionStart ? 'same-album-gapless' : 'before-gapless-window'
+    };
+  }
+
+  if (contextReason === 'blocked-speech-or-live') {
+    return blocked('blocked-speech-or-live');
+  }
+  if (contextReason === 'smart-analysis-fallback') {
+    return standardTransition(
+      length,
+      playbackTime,
+      standardFade,
+      minFadeSeconds,
+      'smart-analysis-fallback'
+    );
+  }
+
+  const pairPlan = planPairTransition({
+    analysis,
+    nextAnalysis,
+    duration: length,
+    nextDuration: trackDurationSeconds(nextTrack),
+    tempoRamp,
+    outgoingWindowStart,
+    incomingWindowEnd
+  });
+  return transitionFromPairFallback(
+    pairPlan,
+    analysis,
+    nextAnalysis,
+    length,
+    playbackTime,
+    minFadeSeconds,
+    standardFade
+  );
+}

@@ -48,7 +48,8 @@ object MediaItemMapper {
             .setIsPlayable(true)
             .setExtras(extras)
             .build()
-        val uri = Uri.Builder()
+        // A song from this phone plays from its own document; there is nothing for a resolver to do.
+        val uri = if (track.isLocal && track.localUri.isNotBlank()) Uri.parse(track.localUri) else Uri.Builder()
             .scheme(SCHEME)
             .authority(if (videoId.isBlank()) AUDIO_AUTHORITY else VIDEO_AUTHORITY)
             .appendPath(videoId.ifBlank { track.id })
@@ -88,10 +89,23 @@ object MediaItemMapper {
 
     fun sourceId(uri: Uri): String = uri.lastPathSegment.orEmpty()
 
+    /** Lines of picture asked for, 0 for the best available; null leaves it to the setting. */
+    fun videoHeight(uri: Uri): Int? = uri.getQueryParameter(VIDEO_HEIGHT)?.toIntOrNull()
+
+    /** The soundtrack half of a video item; the picture half keeps the item's own URI. */
+    fun videoSound(item: MediaItem): MediaItem {
+        val uri = item.localConfiguration?.uri ?: return item
+        return item.buildUpon().setUri(uri.buildUpon().appendQueryParameter(VIDEO_PART, SOUND).build()).build()
+    }
+
+    fun isVideoSound(uri: Uri): Boolean = uri.getQueryParameter(VIDEO_PART) == SOUND
+
     /** Replaces only the source; media id, metadata, and queue position remain unchanged. */
-    fun asVideo(item: MediaItem, videoId: String): MediaItem {
+    fun asVideo(item: MediaItem, videoId: String, maxHeight: Int? = null): MediaItem {
         require(videoId.isNotBlank()) { "A music video id is required" }
-        val uri = Uri.Builder().scheme(SCHEME).authority(VIDEO_AUTHORITY).appendPath(videoId).build()
+        val uri = Uri.Builder().scheme(SCHEME).authority(VIDEO_AUTHORITY).appendPath(videoId)
+            .apply { if (maxHeight != null) appendQueryParameter(VIDEO_HEIGHT, maxHeight.toString()) }
+            .build()
         return item.buildUpon()
             .setUri(uri)
             .setMimeType(null)
@@ -155,6 +169,9 @@ object MediaItemMapper {
             .build()
     }
 
+    private const val VIDEO_HEIGHT = "h"
+    private const val VIDEO_PART = "part"
+    private const val SOUND = "sound"
     private const val AUTHENTICATED_DIRECT = "authenticated_direct"
     private const val AUTHENTICATED_HLS = "authenticated_hls"
 }

@@ -1,0 +1,53 @@
+{
+  "_comment": "Input: the staged Orchard folder from scripts/package-windows-native.py or package-windows-msvc.sh. Unmapped files fail the build so new Qt plugin folders get a deliberate home. DLLs do not file their own travel papers.",
+  "exclude": [],
+  "components": {
+    "ffmpeg": {"version": "9.0.2-2", "map": [
+      {"from": "ffmpeg.exe", "to": "ffmpeg.exe"},
+      {"from": "ffmpeg-LICENSE.txt", "to": "LICENSE.txt"},
+      {"from": "avcodec-*.dll"}, {"from": "avformat-*.dll"},
+      {"from": "avutil-*.dll"}, {"from": "swresample-*.dll"}, {"from": "swscale-*.dll"}
+    ]},
+    "onnxruntime": {"version": "1.23.0-1", "map": [
+      {"from": "webgpu_dawn.dll", "to": "webgpu_dawn.dll"}
+    ]},
+    "models": {"version": "2", "map": [
+      {"from": "models", "to": ""}
+    ]},
+    "msvc-runtime": {"version": "14.51.36231-1", "map": [
+      {"from": "concrt140.dll"}, {"from": "msvcp140*.dll"}, {"from": "vccorlib140.dll"}, {"from": "vcruntime140*.dll"}
+    ]},
+    "qt": {"version": "6.12.0-1", "map": [
+      {"from": "Qt6*.dll"}, {"from": "d3dcompiler_47.dll"}, {"from": "D3Dcompiler_47.dll"},
+      {"from": "icuuc.dll"}, {"from": "opengl32sw.dll"},
+      {"from": "dxcompiler.dll"}, {"from": "dxil.dll"}, {"from": "QtWebEngineProcess.exe"},
+      {"from": "qml", "to": "qml"}, {"from": "resources", "to": "resources"}, {"from": "translations", "to": "translations"},
+      {"from": "platforms", "to": "plugins/platforms"}, {"from": "imageformats", "to": "plugins/imageformats"},
+      {"from": "iconengines", "to": "plugins/iconengines"}, {"from": "sqldrivers", "to": "plugins/sqldrivers"},
+      {"from": "styles", "to": "plugins/styles"}, {"from": "tls", "to": "plugins/tls"},
+      {"from": "multimedia", "to": "plugins/multimedia"}, {"from": "networkinformation", "to": "plugins/networkinformation"},
+      {"from": "generic", "to": "plugins/generic"}, {"from": "webview", "to": "plugins/webview"},
+      {"from": "position", "to": "plugins/position"}, {"from": "qmltooling", "to": "plugins/qmltooling"}
+    ]}
+  },
+  "app": {"map": [
+    {"from": "orchard.exe"}, {"from": "orchard-auth-helper.exe"}, {"from": "orchard-adaptive-mix.exe"},
+    {"from": "discord_partner_sdk.dll"}, {"from": "libLiteRt.dll"},
+    {"from": "LICENSE"}, {"from": "THIRD_PARTY_NOTICES.md"}, {"from": "DiscordSocialSdk-Notices.txt"}
+  ]},
+  "launch": {
+    "executable": "orchard.exe",
+    "env": {
+      "QT_PLUGIN_PATH": "{component:qt}/plugins",
+      "QML_IMPORT_PATH": "{component:qt}/qml",
+      "QTWEBENGINEPROCESS_PATH": "{component:qt}/QtWebEngineProcess.exe",
+      "QTWEBENGINE_RESOURCES_PATH": "{component:qt}/resources",
+      "QTWEBENGINE_LOCALES_PATH": "{component:qt}/translations/qtwebengine_locales",
+      "ORCHARD_MODELS_DIR": "{component:models}",
+      "ORCHARD_FFMPEG": "{component:ffmpeg}/ffmpeg.exe"
+    },
+    "prependPaths": {
+      "PATH": ["{component:qt}", "{component:msvc-runtime}", "{component:onnxruntime}"]
+    }
+  }
+}

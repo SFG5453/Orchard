@@ -19,187 +19,24 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import dev.sfg.orchard.mobile.model.Track
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import dev.sfg.orchard.mobile.ui.theme.LocalAccent
-
-/**
- * Collection action buttons row: [ Circular Shuffle ] [ Wide White Play Pill ]
- * [ Circular Add/Favorite ] [ Circular Download ]
- */
-@Composable
-fun CollectionActionRow(
-    // Defaults to white so playlists keep the neutral pill; albums pass their cover's colour.
-    accent: Color = Color.White,
-    onPlay: () -> Unit,
-    onShuffle: () -> Unit,
-    onSave: () -> Unit,
-    isSaved: Boolean,
-    playEnabled: Boolean = true,
-    shuffleEnabled: Boolean = true,
-    onDownload: (() -> Unit)? = null,
-    isDownloaded: Boolean = false,
-    isDownloading: Boolean = false,
-    downloadEnabled: Boolean = true,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Shuffle button (frosted glass circle)
-        Surface(
-            onClick = onShuffle,
-            enabled = shuffleEnabled,
-            shape = CircleShape,
-            color = Color.White.copy(alpha = 0.14f),
-            modifier = Modifier.size(44.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Rounded.Shuffle,
-                    contentDescription = "Shuffle",
-                    tint = if (shuffleEnabled) Color.White else Color.White.copy(alpha = 0.35f),
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-
-        // Center prominent Play pill button
-        Button(
-            onClick = onPlay,
-            enabled = playEnabled,
-            colors =
-                ButtonDefaults.buttonColors(
-                    containerColor = accent,
-                    contentColor = Color.Black,
-                    disabledContainerColor = accent.copy(alpha = 0.30f),
-                    disabledContentColor = Color.Black.copy(alpha = 0.40f),
-                ),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier.weight(1f).height(44.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                Icon(
-                    Icons.Rounded.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.Black,
-                    modifier = Modifier.size(22.dp),
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "Play",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = Color.Black,
-                )
-            }
-        }
-
-        // Add / Save button (frosted glass circle)
-        Surface(
-            onClick = onSave,
-            shape = CircleShape,
-            color = Color.White.copy(alpha = 0.14f),
-            modifier = Modifier.size(44.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    if (isSaved) Icons.Rounded.Check else Icons.Rounded.Add,
-                    contentDescription = if (isSaved) "Saved to library" else "Add to library",
-                    tint = if (isSaved) LocalAccent.current else Color.White,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-        }
-
-        // Download / Offline button (frosted glass circle)
-        if (onDownload != null) {
-            Surface(
-                onClick = onDownload,
-                enabled = downloadEnabled,
-                shape = CircleShape,
-                color = Color.White.copy(alpha = 0.14f),
-                modifier = Modifier.size(44.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    if (isDownloading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = LocalAccent.current,
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Icon(
-                            if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
-                            contentDescription = if (isDownloaded) "Downloaded offline" else "Download collection",
-                            tint =
-                                if (isDownloaded) {
-                                    LocalAccent.current
-                                } else if (downloadEnabled) {
-                                    Color.White
-                                } else {
-                                    Color.White.copy(alpha = 0.35f)
-                                },
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
+import dev.sfg.orchard.mobile.model.Track
 
 /**
  * Helper to produce the collection download / delete callback based on current download state.
@@ -223,49 +60,15 @@ fun collectionDownloadAction(
     }
 }
 
-/** Editorial review / description preview with inline "MORE". */
-@Composable
-fun AlbumEditorialReview(
-    description: String,
-    onOpenAbout: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    if (description.isBlank()) return
-
-    val cleanText = description.replace(Regex("\\s+"), " ").trim()
-    val previewText = if (cleanText.length > 140) cleanText.take(140).trimEnd() + "…" else cleanText
-
-    val annotated = buildAnnotatedString {
-        append(previewText)
-        append(" ")
-        withStyle(SpanStyle(color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)) {
-            append("MORE")
-        }
-    }
-
-    Box(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .clickable(onClick = onOpenAbout)
-                .padding(horizontal = 24.dp, vertical = 6.dp)
-    ) {
-        Text(
-            text = annotated,
-            style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 18.sp, fontSize = 13.sp),
-            color = Color.White.copy(alpha = 0.72f),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
+/** Floating album/playlist chrome: back circle plus a search, share and overflow pill. */
 @Composable
 fun CollectionTopBar(
     onBack: () -> Unit,
     onShare: () -> Unit,
     onSave: () -> Unit,
     isSaved: Boolean,
+    scrimProgress: State<Float>,
+    modifier: Modifier = Modifier,
     onAbout: (() -> Unit)? = null,
     onBestMix: (() -> Unit)? = null,
     onSearch: (() -> Unit)? = null,
@@ -277,164 +80,63 @@ fun CollectionTopBar(
     aboutLabel: String = "About",
     onDownload: (() -> Unit)? = null,
     isDownloaded: Boolean = false,
-    modifier: Modifier = Modifier,
 ) {
     if (isSearching && onSearchQueryChange != null && onCloseSearch != null) {
+        // Opaque enough that the field never sits on raw artwork.
         CollectionTopSearchBar(
             query = searchQuery,
             onQueryChange = onSearchQueryChange,
             onClose = onCloseSearch,
             placeholder = searchPlaceholder,
-            modifier = modifier,
+            modifier = modifier.background(Color.Black.copy(alpha = 0.55f)),
         )
         return
     }
 
     var menuOpen by remember { mutableStateOf(false) }
+    val noun = if (aboutLabel.contains("album", true)) "album" else "playlist"
 
-    Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Surface(
-            onClick = onBack,
-            shape = CircleShape,
-            color = Color.White.copy(alpha = 0.16f),
-            modifier = Modifier.size(38.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
+    DetailFloatingChrome(onBack = onBack, scrimProgress = scrimProgress, modifier = modifier) {
+        if (onSearch != null) {
+            ChromeAction(Icons.Rounded.Search, "Search in collection", onSearch)
         }
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (onSearch != null) {
-                Surface(
-                    onClick = onSearch,
-                    shape = CircleShape,
-                    color = Color.White.copy(alpha = 0.16f),
-                    modifier = Modifier.size(38.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Rounded.Search,
-                            contentDescription = "Search in collection",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
-            }
-
-            Surface(
-                onClick = onShare,
-                shape = CircleShape,
-                color = Color.White.copy(alpha = 0.16f),
-                modifier = Modifier.size(38.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Rounded.IosShare,
-                        contentDescription = "Share",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-
-            Box {
-                Surface(
-                    onClick = { menuOpen = true },
-                    shape = CircleShape,
-                    color = Color.White.copy(alpha = 0.16f),
-                    modifier = Modifier.size(38.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Rounded.MoreHoriz,
-                            contentDescription = "More options",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    if (onSearch != null) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    "Find in ${if (aboutLabel.contains("album", true)) "album" else "playlist"}"
-                                )
-                            },
-                            onClick = {
-                                menuOpen = false
-                                onSearch()
-                            },
-                        )
-                    }
-                    if (onDownload != null) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    if (isDownloaded) {
-                                        "Remove download"
-                                    } else {
-                                        "Download ${if (aboutLabel.contains("album", true)) "album" else "playlist"}"
-                                    }
-                                )
-                            },
-                            onClick = {
-                                menuOpen = false
-                                onDownload()
-                            },
-                        )
-                    }
+        ChromeAction(Icons.Rounded.IosShare, "Share", onShare)
+        Box {
+            ChromeAction(Icons.Rounded.MoreHoriz, "More options", { menuOpen = true })
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                if (onDownload != null) {
                     DropdownMenuItem(
-                        text = { Text(if (isSaved) "Remove from library" else "Add to library") },
+                        text = { Text(if (isDownloaded) "Remove download" else "Download $noun") },
                         onClick = {
                             menuOpen = false
-                            onSave()
+                            onDownload()
                         },
                     )
+                }
+                DropdownMenuItem(
+                    text = { Text(if (isSaved) "Remove from library" else "Add to library") },
+                    onClick = {
+                        menuOpen = false
+                        onSave()
+                    },
+                )
+                if (onAbout != null) {
                     DropdownMenuItem(
-                        text = { Text("Share") },
+                        text = { Text(aboutLabel) },
                         onClick = {
                             menuOpen = false
-                            onShare()
+                            onAbout()
                         },
                     )
-                    if (onAbout != null) {
-                        DropdownMenuItem(
-                            text = { Text(aboutLabel) },
-                            onClick = {
-                                menuOpen = false
-                                onAbout()
-                            },
-                        )
-                    }
-                    if (onBestMix != null) {
-                        DropdownMenuItem(
-                            text = { Text("Play with Best Mix") },
-                            onClick = {
-                                menuOpen = false
-                                onBestMix()
-                            },
-                        )
-                    }
+                }
+                if (onBestMix != null) {
+                    DropdownMenuItem(
+                        text = { Text("Play with Best Mix") },
+                        onClick = {
+                            menuOpen = false
+                            onBestMix()
+                        },
+                    )
                 }
             }
         }

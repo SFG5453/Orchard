@@ -53,8 +53,6 @@ import dev.sfg.orchard.mobile.listenbrainz.ListenBrainzState
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
-private val ListenBrainzOrange = Color(0xFFEB743B)
-
 @Composable
 fun ListenBrainzSettingsCard(
     state: ListenBrainzState,
@@ -64,35 +62,12 @@ fun ListenBrainzSettingsCard(
     var showTokenDialog by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(20.dp)
     Surface(color = Color.Transparent, shape = shape, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(44.dp)
-                        .background(ListenBrainzOrange.copy(alpha = 0.16f), CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "B",
-                        color = ListenBrainzOrange,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "ListenBrainz",
-                        style =
-                            MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = CanopyColors.Text,
-                    )
-                    Text(
-                        listenBrainzSubtitle(state),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (state is ListenBrainzState.Error) CanopyColors.Danger else CanopyColors.Muted,
-                    )
-                }
-            }
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Text(
+                listenBrainzSubtitle(state),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (state is ListenBrainzState.Error) CanopyColors.Danger else CanopyColors.Muted,
+            )
 
             Spacer(Modifier.height(12.dp))
             when (state) {

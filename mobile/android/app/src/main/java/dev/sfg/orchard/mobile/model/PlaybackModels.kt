@@ -51,7 +51,7 @@ data class PlaybackSnapshot(
 }
 
 /**
- * The transition Smart Crossfade has planned out of the current track, for the scrubber to draw.
+ * The transition Adaptive mix has planned out of the current track, for the scrubber to draw.
  *
  * Published while the plan is still in the future as well as during it, because the point of the
  * marker is to show *where* the mix will happen: that the analysis put it on a downbeat, and that
@@ -77,6 +77,8 @@ data class TransitionMarker(
     val audibleHandoffProgress: Float = 0.5f,
     /** Selected transition duration in wall-clock time; zero for ordinary live fallbacks. */
     val renderedDurationMs: Long = 0,
+    /** An adaptive mix is rendered and waiting; the player's end time sparkles. */
+    val prepared: Boolean = false,
 )
 
 enum class DeviceAvailability { ONLINE, OFFLINE, UNAVAILABLE }

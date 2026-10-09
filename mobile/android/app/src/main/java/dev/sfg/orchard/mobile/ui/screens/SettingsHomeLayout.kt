@@ -38,7 +38,6 @@ import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.model.BuiltInHomeSection
 import dev.sfg.orchard.mobile.model.HomeSectionConfig
 import dev.sfg.orchard.mobile.model.OrchardSettings
-import dev.sfg.orchard.mobile.ui.glass.glassFill
 import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
@@ -158,7 +157,7 @@ private fun SectionItemRow(
 ) {
     val shape = RoundedCornerShape(16.dp)
     Surface(
-        color = glassFill(CanopyColors.Surface),
+        color = Color.Transparent,
         shape = shape,
         modifier = Modifier.fillMaxWidth().glassPane(shape)
     ) {
@@ -180,15 +179,9 @@ private fun SectionItemRow(
             IconButton(onClick = onMoveDown, enabled = !isLast) {
                 Icon(Icons.Rounded.ArrowDownward, contentDescription = "Move Down", tint = if (isLast) CanopyColors.Muted else CanopyColors.Text)
             }
-            Switch(
+            SettingsSwitch(
                 checked = config.enabled,
                 onCheckedChange = onToggle,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.Black,
-                    checkedTrackColor = LocalAccent.current,
-                    uncheckedThumbColor = CanopyColors.Muted,
-                    uncheckedTrackColor = CanopyColors.Canvas,
-                ),
             )
         }
     }

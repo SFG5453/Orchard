@@ -1,0 +1,10 @@
+# Bridge Meson's bundled Mbed TLS archives into libdatachannel's CMake configure.
+# CMake will link these outputs only after Meson has built them.
+if(NOT TARGET MbedTLS::MbedTLS)
+    add_library(MbedTLS::MbedTLS STATIC IMPORTED)
+    set_target_properties(MbedTLS::MbedTLS PROPERTIES
+        IMPORTED_LOCATION "@MBEDTLS_ARCHIVE@"
+        INTERFACE_INCLUDE_DIRECTORIES "@MBEDTLS_INCLUDE@"
+        INTERFACE_COMPILE_DEFINITIONS "MBEDTLS_USER_CONFIG_FILE=\"@MBEDTLS_USER_CONFIG@\""
+        INTERFACE_LINK_LIBRARIES "@MBEDX509_ARCHIVE@;@MBEDCRYPTO_ARCHIVE@")
+endif()

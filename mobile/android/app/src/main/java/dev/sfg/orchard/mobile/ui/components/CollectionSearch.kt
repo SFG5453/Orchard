@@ -136,8 +136,8 @@ fun CollectionTopSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     onClose: () -> Unit,
-    placeholder: String = "Find in playlist",
     modifier: Modifier = Modifier,
+    placeholder: String = "Find in playlist",
 ) {
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current

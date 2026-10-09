@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile.ui.components
 
 import android.graphics.Bitmap
+import androidx.core.graphics.get
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
@@ -176,7 +177,7 @@ private fun edgeAverage(bitmap: Bitmap, firstRow: Int, lastRow: Int, firstColumn
     for (y in firstRow.coerceAtLeast(0) until lastRow.coerceAtMost(bitmap.height)) {
         var x = firstColumn
         while (x < lastColumn) {
-            val pixel = bitmap.getPixel(x, y)
+            val pixel = bitmap[x, y]
             val alpha = (pixel shr 24) and 0xFF
             if (alpha < 32) {
                 x += step
@@ -214,7 +215,7 @@ private fun dominantAccent(bitmap: Bitmap): Color {
     while (y < bitmap.height) {
         var x = 0
         while (x < bitmap.width) {
-            val pixel = bitmap.getPixel(x, y)
+            val pixel = bitmap[x, y]
             if (((pixel shr 24) and 0xFF) < 32) {
                 x += step
                 continue
@@ -254,4 +255,3 @@ private fun Color.toneForBackdrop(): Color {
         this
     }
 }
-

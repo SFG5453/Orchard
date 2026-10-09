@@ -1,0 +1,25 @@
+<RCC>
+  <qresource prefix="/docs">
+    <file alias="accounts.md">../docs/app/accounts.md</file>
+    <file alias="ai-music.md">../docs/app/ai-music.md</file>
+    <file alias="appearance.md">../docs/app/appearance.md</file>
+    <file alias="audio-engine.md">../docs/app/audio-engine.md</file>
+    <file alias="connect.md">../docs/app/connect.md</file>
+    <file alias="crossfade.md">../docs/app/crossfade.md</file>
+    <file alias="getting-started.md">../docs/app/getting-started.md</file>
+    <file alias="integrations.md">../docs/app/integrations.md</file>
+    <file alias="library-and-playlists.md">../docs/app/library-and-playlists.md</file>
+    <file alias="local-files.md">../docs/app/local-files.md</file>
+    <file alias="offline-mode.md">../docs/app/offline-mode.md</file>
+    <file alias="lyrics.md">../docs/app/lyrics.md</file>
+    <file alias="playback.md">../docs/app/playback.md</file>
+    <file alias="report-a-bug.md">../docs/app/report-a-bug.md</file>
+    <file alias="queue.md">../docs/app/queue.md</file>
+    <file alias="search.md">../docs/app/search.md</file>
+    <file alias="shortcuts.md">../docs/app/shortcuts.md</file>
+    <file alias="streaming-quality.md">../docs/app/streaming-quality.md</file>
+    <file alias="troubleshooting.md">../docs/app/troubleshooting.md</file>
+    <file alias="updates.md">../docs/app/updates.md</file>
+    <file alias="using-the-docs.md">../docs/app/using-the-docs.md</file>
+  </qresource>
+</RCC>

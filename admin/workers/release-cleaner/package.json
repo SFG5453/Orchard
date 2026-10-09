@@ -1,0 +1,22 @@
+{
+  "name": "orchard-release-cleaner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --config wrangler.production.jsonc",
+    "types": "wrangler types",
+    "check": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  },
+  "dependencies": {
+    "jose": "^6.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "wrangler": "^4.124.0"
+  },
+  "overrides": {
+    "sharp": "^0.35.5"
+  }
+}

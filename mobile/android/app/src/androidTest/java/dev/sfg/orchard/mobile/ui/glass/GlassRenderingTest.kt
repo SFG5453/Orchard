@@ -15,11 +15,11 @@ import org.junit.runner.RunWith
 class GlassRenderingTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
 
-    private fun launch(glass: Boolean, animate: Boolean): ActivityScenario<android.app.Activity> {
+    private fun launch(animate: Boolean): ActivityScenario<android.app.Activity> {
         val context = instrumentation.targetContext
         return ActivityScenario.launch(Intent().setClassName(context.packageName,
             "dev.sfg.orchard.mobile.ui.glass.GlassBenchmarkActivity")
-            .putExtra("glass", glass).putExtra("animate", animate))
+            .putExtra("animate", animate))
     }
 
     private fun screenshot(): Bitmap {
@@ -39,7 +39,7 @@ class GlassRenderingTest {
     }
 
     @Test fun animatedBackdropUpdatesBothCardsAndChrome() {
-        launch(true, true).use {
+        launch(true).use {
             val first = screenshot()
             val second = screenshot()
             assertTrue("Card backdrop stayed frozen", difference(first, second) > 100)
@@ -47,14 +47,5 @@ class GlassRenderingTest {
             first.recycle()
             second.recycle()
         }
-    }
-
-    @Test fun disablingGlassChangesRenderedPanes() {
-        val enabled = launch(true, false).use { screenshot() }
-        val disabled = launch(false, false).use { screenshot() }
-        assertTrue("Glass did not render", difference(enabled, disabled) > 100)
-        assertTrue("Chrome did not render", difference(enabled, disabled, true) > 100)
-        enabled.recycle()
-        disabled.recycle()
     }
 }

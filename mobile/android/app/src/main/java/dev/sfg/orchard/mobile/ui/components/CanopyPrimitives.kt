@@ -46,8 +46,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.ui.glass.GlassTone
-import dev.sfg.orchard.mobile.ui.glass.glassFill
 import dev.sfg.orchard.mobile.ui.glass.glassPane
+import dev.sfg.orchard.mobile.ui.motion.pressScale
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -97,7 +97,7 @@ fun CanopyPanel(
 ) {
     Surface(
         modifier = modifier.glassPane(CanopyRadius),
-        color = glassFill(CanopyColors.Surface),
+        color = Color.Transparent,
         shape = CanopyRadius,
     ) {
         Column(modifier = Modifier.padding(contentPadding), content = content)
@@ -129,7 +129,7 @@ fun CanopyButton(
     primary: Boolean = false,
 ) {
     val containerColor by animateColorAsState(
-        if (primary) LocalAccent.current else glassFill(CanopyColors.Surface),
+        if (primary) LocalAccent.current else Color.Transparent,
         label = "BtnBg"
     )
     val contentColor by animateColorAsState(
@@ -137,12 +137,15 @@ fun CanopyButton(
         label = "BtnText"
     )
 
+    val source = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Surface(
         onClick = onClick,
         color = containerColor,
         shape = CircleShape,
+        interactionSource = source,
         // The accent fill is the affordance on a primary button; only the quiet one is glass.
         modifier = modifier
+            .pressScale(source, 0.92f)
             .heightIn(min = 36.dp)
             .then(if (primary) Modifier else Modifier.glassPane(CircleShape, GlassTone.CONTROL)),
     ) {

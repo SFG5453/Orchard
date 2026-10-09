@@ -60,7 +60,7 @@ import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
 /**
- * Returns a human-friendly description for the Smart Crossfade transition style.
+ * Returns a human-friendly description for the Adaptive mix transition style.
  */
 fun transitionStyleLabel(style: String): String {
     return when (style.lowercase().trim()) {
@@ -70,13 +70,13 @@ fun transitionStyleLabel(style: String): String {
         "gapless" -> "Seamless Handoff"
         "tempo_matched" -> "Tempo Matched"
         "bass_first" -> "Bass Swap"
-        "smart" -> "Smart Mix"
+        "smart" -> "Adaptive Mix"
         else -> if (style.isNotBlank()) {
             style.replace('_', ' ')
                 .split(' ')
                 .joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
         } else {
-            "Smart Mix"
+            "Adaptive Mix"
         }
     }
 }
@@ -86,8 +86,8 @@ fun transitionStyleLabel(style: String): String {
  */
 @Composable
 fun SmartCrossfadeWaveform(
-    color: Color = Color.White,
     modifier: Modifier = Modifier,
+    color: Color = Color.White,
 ) {
     val transition = rememberInfiniteTransition(label = "SmartCrossfadeWaveform")
     val phase1 by transition.animateFloat(
@@ -148,16 +148,16 @@ fun SmartCrossfadeWaveform(
 }
 
 /**
- * Premium frosted-glass indicator chip showing that Smart Crossfade is actively blending
+ * Premium frosted-glass indicator chip showing that Adaptive mix is actively blending
  * into the upcoming song, complete with live animated waveforms, style chips, and track preview.
  */
 @Composable
 fun SmartCrossfadeBadge(
     visible: Boolean,
     style: String,
+    modifier: Modifier = Modifier,
     incomingTrack: Track? = null,
     progress: Float = 0f,
-    modifier: Modifier = Modifier,
 ) {
     AnimatedVisibility(
         visible = visible,

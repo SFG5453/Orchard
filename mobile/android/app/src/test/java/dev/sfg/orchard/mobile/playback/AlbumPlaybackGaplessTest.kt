@@ -19,14 +19,10 @@
 
 package dev.sfg.orchard.mobile.playback
 
-import android.os.Handler
-import android.os.Looper
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import dev.sfg.orchard.mobile.model.Track
-import dev.sfg.orchard.mobile.playback.smart.CrossfadeMode
-import dev.sfg.orchard.mobile.playback.smart.TrackAnalysis
 import java.lang.reflect.Proxy
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -56,26 +52,8 @@ class AlbumPlaybackGaplessTest {
         } as ExoPlayer
     }
 
-    private fun createEngine(): CrossfadeEngine {
-        return CrossfadeEngine(
-            handler = Handler(Looper.getMainLooper()),
-            config = {
-                CrossfadeEngine.Config(
-                    enabled = true,
-                    fadeSeconds = 6.0,
-                    mode = CrossfadeMode.SMART,
-                )
-            },
-            analysisFor = { TrackAnalysis() },
-            onPlan = {},
-            filters = { null },
-            onHandoff = { _, _ -> },
-        )
-    }
-
     @Test
     fun `sequential album playthrough without shuffle is recognized as album playthrough`() {
-        val engine = createEngine()
         val player = createMockPlayer(
             shuffle = false,
             currentIndex = 0,
@@ -84,12 +62,11 @@ class AlbumPlaybackGaplessTest {
         )
         val track = Track(id = "1", title = "Come Together", artist = "The Beatles", album = "Abbey Road")
 
-        assertTrue(engine.isAlbumPlaythrough(player, track))
+        assertTrue(isAlbumPlaythrough(player, track))
     }
 
     @Test
     fun `album with Best Mix context title is not treated as gapless album playthrough`() {
-        val engine = createEngine()
         val player = createMockPlayer(
             shuffle = false,
             currentIndex = 0,
@@ -98,12 +75,11 @@ class AlbumPlaybackGaplessTest {
         )
         val track = Track(id = "1", title = "Come Together", artist = "The Beatles", album = "Abbey Road")
 
-        assertFalse(engine.isAlbumPlaythrough(player, track))
+        assertFalse(isAlbumPlaythrough(player, track))
     }
 
     @Test
     fun `generic Best Mix context title is not treated as gapless album playthrough`() {
-        val engine = createEngine()
         val player = createMockPlayer(
             shuffle = false,
             currentIndex = 0,
@@ -112,12 +88,11 @@ class AlbumPlaybackGaplessTest {
         )
         val track = Track(id = "1", title = "Come Together", artist = "The Beatles", album = "Abbey Road")
 
-        assertFalse(engine.isAlbumPlaythrough(player, track))
+        assertFalse(isAlbumPlaythrough(player, track))
     }
 
     @Test
     fun `shuffled album is not treated as gapless album playthrough`() {
-        val engine = createEngine()
         val player = createMockPlayer(
             shuffle = true,
             currentIndex = 0,
@@ -126,12 +101,11 @@ class AlbumPlaybackGaplessTest {
         )
         val track = Track(id = "1", title = "Come Together", artist = "The Beatles", album = "Abbey Road")
 
-        assertFalse(engine.isAlbumPlaythrough(player, track))
+        assertFalse(isAlbumPlaythrough(player, track))
     }
 
     @Test
     fun `non-adjacent next item in album is not treated as gapless album playthrough`() {
-        val engine = createEngine()
         val player = createMockPlayer(
             shuffle = false,
             currentIndex = 0,
@@ -140,6 +114,6 @@ class AlbumPlaybackGaplessTest {
         )
         val track = Track(id = "1", title = "Come Together", artist = "The Beatles", album = "Abbey Road")
 
-        assertFalse(engine.isAlbumPlaythrough(player, track))
+        assertFalse(isAlbumPlaythrough(player, track))
     }
 }

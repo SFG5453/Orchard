@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile.widget
 
 import android.content.Context
+import androidx.core.content.edit
 import dev.sfg.orchard.mobile.library.LibraryCache
 import dev.sfg.orchard.mobile.model.CatalogJson
 import dev.sfg.orchard.mobile.model.Track
@@ -65,7 +66,7 @@ internal class OrchardWidgetStateStore(private val context: Context) {
     }
 
     fun save(state: OrchardWidgetState) {
-        preferences.edit().putString(SNAPSHOT, OrchardWidgetStateCodec.encode(state).toString()).apply()
+        preferences.edit { putString(SNAPSHOT, OrchardWidgetStateCodec.encode(state).toString()) }
     }
 
     /** Uses the existing durable playback and library stores the first time a widget is added. */

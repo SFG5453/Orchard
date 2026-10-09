@@ -19,59 +19,69 @@
 
 package dev.sfg.orchard.mobile.songlinks
 
-import okhttp3.OkHttpClient
+import dev.sfg.orchard.mobile.model.BrowseDetail
+import dev.sfg.orchard.mobile.model.CatalogKind
+import dev.sfg.orchard.mobile.model.Track
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SongLinksRepositoryTest {
-    private val repo = SongLinksRepository(OkHttpClient())
+    private val repo = SongLinksRepository()
 
     @Test
-    fun parsesSongLinksUrls() {
-        val songTarget = repo.parseLink("https://songlinks.sfg545.dev/s/xyz123")
-        assertTrue(songTarget is SongLinkTarget.Song)
-        assertEquals("xyz123", (songTarget as SongLinkTarget.Song).id)
-
-        val collectionTarget = repo.parseLink("https://songlinks.sfg545.dev/c/col456")
-        assertTrue(collectionTarget is SongLinkTarget.Collection)
-        assertEquals("col456", (collectionTarget as SongLinkTarget.Collection).id)
+    fun buildsDesktopCompatibleLinksWithoutResolver() {
+        assertEquals("https://song.link/y/dQw4w9WgXcQ",
+            repo.trackUrl(Track(id = "dQw4w9WgXcQ", title = "Song", artist = "Artist")))
+        assertEquals("https://album.link/y/OLAK5uy_sample",
+            repo.collectionUrl(BrowseDetail(id = "MPREb_internal", kind = CatalogKind.ALBUM,
+                title = "Album", audioPlaylistId = "OLAK5uy_sample")))
+        assertEquals("https://album.link/y/PL123456789",
+            repo.collectionUrl(BrowseDetail(id = "VLPL123456789", kind = CatalogKind.PLAYLIST,
+                title = "Playlist")))
+        assertEquals("https://music.youtube.com/channel/UC123456789",
+            repo.collectionUrl(BrowseDetail(id = "UC123456789", kind = CatalogKind.ARTIST,
+                title = "Artist")))
     }
 
     @Test
-    fun parsesOrchardCustomScheme() {
-        val song = repo.parseLink("orchard:s/track123")
-        assertTrue(song is SongLinkTarget.Song)
-        assertEquals("track123", (song as SongLinkTarget.Song).id)
+    fun doesNotShareInternalOrLocalIdentities() {
+        assertNull(repo.trackUrl(Track(id = "local_track", title = "Song", artist = "Artist",
+            playbackSource = "local")))
+        assertNull(repo.collectionUrl(BrowseDetail(id = "MPREb_internal", kind = CatalogKind.ALBUM,
+            title = "Album")))
+        assertNull(repo.collectionUrl(BrowseDetail(id = "offline_downloads", kind = CatalogKind.PLAYLIST,
+            title = "Downloads")))
+    }
 
-        val col = repo.parseLink("orchard:c/playlist999")
-        assertTrue(col is SongLinkTarget.Collection)
-        assertEquals("playlist999", (col as SongLinkTarget.Collection).id)
+    @Test
+    fun parsesPublicLinksAndYouTubeLinks() {
+        val song = repo.parseLink("https://song.link/y/dQw4w9WgXcQ")
+        assertTrue(song is SongLinkTarget.Video)
+        assertEquals("dQw4w9WgXcQ", (song as SongLinkTarget.Video).videoId)
 
-        val album = repo.parseLink("orchard:album/MPRE12345")
+        val album = repo.parseLink("album.link/y/OLAK5uy_sample")
         assertTrue(album is SongLinkTarget.Browse)
-        assertEquals("album", (album as SongLinkTarget.Browse).kind)
-        assertEquals("MPRE12345", album.browseId)
+        assertEquals("OLAK5uy_sample", (album as SongLinkTarget.Browse).browseId)
+        assertEquals("album", album.kind)
+
+        val playlist = repo.parseLink("https://album.link/y/PL123456789")
+        assertTrue(playlist is SongLinkTarget.Browse)
+        assertEquals("PL123456789", (playlist as SongLinkTarget.Browse).browseId)
+
+        assertEquals("dQw4w9WgXcQ",
+            (repo.parseLink("https://youtu.be/dQw4w9WgXcQ") as SongLinkTarget.Video).videoId)
+        assertEquals("PL123456789",
+            (repo.parseLink("https://music.youtube.com/playlist?list=VLPL123456789") as SongLinkTarget.Browse).browseId)
+        assertEquals("dQw4w9WgXcQ",
+            (repo.parseLink("Song - Artist\nhttps://song.link/y/dQw4w9WgXcQ") as SongLinkTarget.Video).videoId)
     }
 
     @Test
-    fun parsesYouTubeLinks() {
-        val shortLink = repo.parseLink("https://youtu.be/dQw4w9WgXcQ")
-        assertTrue(shortLink is SongLinkTarget.Video)
-        assertEquals("dQw4w9WgXcQ", (shortLink as SongLinkTarget.Video).videoId)
-
-        val watchLink = repo.parseLink("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-        assertTrue(watchLink is SongLinkTarget.Video)
-        assertEquals("dQw4w9WgXcQ", (watchLink as SongLinkTarget.Video).videoId)
-
-        val musicLink = repo.parseLink("https://music.youtube.com/watch?v=dQw4w9WgXcQ")
-        assertTrue(musicLink is SongLinkTarget.Video)
-        assertEquals("dQw4w9WgXcQ", (musicLink as SongLinkTarget.Video).videoId)
-
-        val playlistLink = repo.parseLink("https://www.youtube.com/playlist?list=PL123456789")
-        assertTrue(playlistLink is SongLinkTarget.Browse)
-        assertEquals("playlist", (playlistLink as SongLinkTarget.Browse).kind)
-        assertEquals("PL123456789", playlistLink.browseId)
+    fun ignoresUnsupportedResolverAndForeignLinks() {
+        assertNull(repo.parseLink("https://songlinks.sfg545.dev/s/legacy-id"))
+        assertNull(repo.parseLink("https://example.com/y/dQw4w9WgXcQ"))
+        assertNull(repo.parseLink("https://song.link/y/not-a-video-id"))
     }
 }

@@ -42,7 +42,9 @@ class SecureYouTubeSessionStore(context: Context) {
         return YouTubeSession(
             cookie = root.getString("cookie"),
             visitorData = root.optString("visitorData"),
-            dataSyncId = YouTubeSessionAuth.normalizeDataSyncId(root.optString("dataSyncId")),
+            // Earlier builds stored the account's own id here, which YouTube rejects as a page id.
+            dataSyncId = if (root.optInt("dataSyncIdFormat") >= DATA_SYNC_ID_FORMAT) root.optString("dataSyncId") else "",
+            accountIndex = root.optInt("accountIndex").coerceAtLeast(0),
             displayName = root.optString("displayName", "YouTube Music").ifBlank { "YouTube Music" },
             avatarUrl = root.optString("avatarUrl"),
         ).takeIf { YouTubeSessionAuth.loginCookieValue(it.cookie) != null }
@@ -54,7 +56,9 @@ class SecureYouTubeSessionStore(context: Context) {
         val root = JSONObject()
             .put("cookie", value.cookie)
             .put("visitorData", value.visitorData)
-            .put("dataSyncId", YouTubeSessionAuth.normalizeDataSyncId(value.dataSyncId))
+            .put("dataSyncId", value.dataSyncId)
+            .put("accountIndex", value.accountIndex)
+            .put("dataSyncIdFormat", DATA_SYNC_ID_FORMAT)
             .put("displayName", value.displayName)
             .put("avatarUrl", value.avatarUrl)
         check(preferences.edit().putString(SESSION, cipher.encrypt(root.toString())).commit()) {
@@ -71,5 +75,7 @@ class SecureYouTubeSessionStore(context: Context) {
         const val FILE = "orchard_secure_oauth"
         const val SESSION = "youtube_credentials"
         const val KEY_ALIAS = "orchard_youtube_oauth_v1"
+        /** Delegated ids only, normalized as [YouTubeSessionAuth.normalizeDataSyncId] does. */
+        const val DATA_SYNC_ID_FORMAT = 2
     }
 }

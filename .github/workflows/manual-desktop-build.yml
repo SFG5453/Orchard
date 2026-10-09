@@ -1,0 +1,307 @@
+name: Build and publish desktop release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Signed update channel to publish
+        required: true
+        default: canary
+        type: choice
+        options: [canary, stable]
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux x86_64 app and bootstrapper
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      CC: clang
+      CXX: clang++
+      CCACHE_DIR: ${{ github.workspace }}/build-cache/linux-ccache
+      CCACHE_MAXSIZE: 2G
+      CCACHE_COMPRESS: 'true'
+      CCACHE_COMPILERCHECK: content
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      LDFLAGS: -fuse-ld=mold
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Restore Linux compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: orchard-linux-clang-mold-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            orchard-linux-clang-mold-qt6120-v1-
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build pkg-config clang mold ccache libclang-dev \
+            libsecret-1-dev libfuse2t64 libgl1-mesa-dev libvulkan-dev libnss3 ffmpeg \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-shm0 \
+            libxcb-sync1 libxcb-util1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 \
+            libxkbcommon-dev libxkbcommon-x11-dev libxkbcommon-x11-0
+          python -m pip install 'meson>=1.12,<2' cryptography 'git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7'
+          rustup update stable
+      - name: Prepare Linux compiler cache
+        id: ccache-setup
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          ccache --zero-stats
+          clang --version | head -1
+          mold --version
+          ccache --version | head -1
+      - name: Install Qt 6.12.0
+        shell: bash
+        run: |
+          python -m aqt install-qt linux desktop 6.12.0 linux_gcc_64 -m qtmultimedia qtshadertools qtwebengine qtwebview qtwebchannel qtpositioning qtwebsockets -O "$RUNNER_TEMP/Qt"
+          qt_config="$(find "$RUNNER_TEMP/Qt/6.12.0" -path '*/lib/cmake/Qt6/Qt6Config.cmake' -type f -print -quit)"
+          test -n "$qt_config"
+          qt_root="${qt_config%/lib/cmake/Qt6/Qt6Config.cmake}"
+          # qml caches have an rcc directory; only an executable gets the job.
+          rcc="$(find "$qt_root" -type f -name rcc -perm /111 -print -quit)"
+          qsb="$(find "$qt_root" -type f -name qsb -perm /111 -print -quit)"
+          test -x "$rcc" && test -x "$qsb"
+          echo "QT_ROOT=$qt_root" >> "$GITHUB_ENV"
+          echo "QT_RCC=$rcc" >> "$GITHUB_ENV"
+          echo "QT_QSB=$qsb" >> "$GITHUB_ENV"
+          echo "$qt_root/bin" >> "$GITHUB_PATH"
+          echo "$(dirname "$rcc")" >> "$GITHUB_PATH"
+          echo "$(dirname "$qsb")" >> "$GITHUB_PATH"
+          echo "PKG_CONFIG_PATH=$qt_root/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=$qt_root" >> "$GITHUB_ENV"
+          dependencies="$(LD_LIBRARY_PATH="$qt_root/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ldd "$qt_root/plugins/platforms/libqxcb.so")"
+          echo "$dependencies"
+          if grep -q 'not found' <<< "$dependencies"; then exit 1; fi
+      - name: Build QtWebView WebEngine backend
+        run: python scripts/build-qt-webview.py --qt-root "$QT_ROOT" --build-dir build/qt-webview
+      - name: Build Orchard
+        run: |
+          npm ci --prefix providers/youtube
+          meson setup build/desktop --native-file scripts/release/linux-clang-mold.ini --buildtype release -Dtests=false -Dhost_rcc="$QT_RCC" -Dhost_qsb="$QT_QSB"
+          meson compile -C build/desktop
+      - name: Build and test bootstrapper
+        run: |
+          meson setup build/bootstrapper bootstrapper --native-file scripts/release/linux-clang-mold.ini --buildtype release
+          meson compile -C build/bootstrapper
+          meson test -C build/bootstrapper --print-errorlogs
+      - name: Package Linux release
+        run: |
+          bash scripts/package-linux-appimage.sh build/desktop "$QT_ROOT" "$RUNNER_TEMP/orchard-linux"
+          cp build/bootstrapper/orchard-bootstrapper "$RUNNER_TEMP/orchard-linux/orchard-bootstrapper"
+          tar -C "$RUNNER_TEMP/orchard-linux" -cf "$RUNNER_TEMP/orchard-linux-publish.tar" AppDir Orchard-Linux-x86_64.AppImage orchard-bootstrapper
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orchard-linux-publish
+          path: ${{ runner.temp }}/orchard-linux-publish.tar
+          if-no-files-found: error
+          retention-days: 14
+      - name: Linux compiler cache stats
+        if: always() && steps.ccache-setup.outcome == 'success'
+        run: ccache --show-stats
+      - name: Save Linux compiler cache
+        if: always() && steps.ccache-setup.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: orchard-linux-clang-mold-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
+
+  windows:
+    name: Windows x86_64 app and bootstrapper
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 360
+    env:
+      CC: cl
+      CXX: cl
+      CCACHE_DIR: ${{ github.workspace }}/build-cache/windows-msvc-ccache
+      CCACHE_MAXSIZE: 2G
+      CCACHE_COMPRESS: 'true'
+      CCACHE_COMPILERCHECK: content
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+      - name: Restore Windows compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: orchard-windows-msvc-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            orchard-windows-msvc-qt6120-v1-
+      - name: Install build tools
+        shell: pwsh
+        run: |
+          python -m pip install 'meson>=1.12,<2' ninja 'git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7'
+          rustup update stable
+          if (!(Get-Command ccache.exe -ErrorAction SilentlyContinue)) { choco install ccache --yes --no-progress }
+          if (!(Get-Command makensis.exe -ErrorAction SilentlyContinue)) { choco install nsis --yes --no-progress }
+      - name: Prepare Windows compiler cache
+        id: ccache-setup
+        shell: pwsh
+        run: |
+          $ccache = (Get-Command ccache.exe -ErrorAction SilentlyContinue).Source
+          if (!$ccache) { $ccache = 'C:\ProgramData\chocolatey\bin\ccache.exe' }
+          if (!(Test-Path $ccache)) { throw 'ccache.exe is missing after installation' }
+          (Split-Path $ccache) | Out-File -FilePath $env:GITHUB_PATH -Append
+          New-Item -ItemType Directory -Force $env:CCACHE_DIR | Out-Null
+          & $ccache --zero-stats
+          & $ccache --version
+      - name: Install Qt 6.12.0
+        shell: pwsh
+        run: |
+          python -m aqt install-qt windows desktop 6.12.0 win64_msvc2022_64 -m qtmultimedia qtshadertools qtwebengine qtwebview qtwebchannel qtpositioning qtwebsockets -O "$env:RUNNER_TEMP\Qt"
+          $qt = "$env:RUNNER_TEMP\Qt\6.12.0\msvc2022_64"
+          if (!(Test-Path "$qt\lib\cmake\Qt6\Qt6Config.cmake")) { throw "Qt installation missing at $qt" }
+          $rcc = Get-ChildItem $qt -Filter rcc.exe -File -Recurse | Select-Object -First 1
+          $qsb = Get-ChildItem $qt -Filter qsb.exe -File -Recurse | Select-Object -First 1
+          if (!$rcc -or !$qsb) { throw 'Qt rcc or qsb tool is missing' }
+          "QT_ROOT=$qt" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "QT_RCC=$($rcc.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "QT_QSB=$($qsb.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "CMAKE_PREFIX_PATH=$qt" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "$qt\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          $rcc.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Append
+          $qsb.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: Build QtWebView WebEngine backend
+        shell: pwsh
+        run: python scripts/build-qt-webview.py --qt-root "$env:QT_ROOT" --build-dir build/qt-webview
+      - name: Build Orchard
+        shell: pwsh
+        run: |
+          npm ci --prefix providers/youtube
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          meson setup build/desktop --native-file scripts/release/windows-msvc-ccache.ini --buildtype release -Dtests=false "-Dhost_rcc=$env:QT_RCC" "-Dhost_qsb=$env:QT_QSB"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          meson compile -C build/desktop
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build bootstrapper
+        shell: pwsh
+        run: |
+          meson setup build/bootstrapper bootstrapper --native-file scripts/release/windows-msvc-ccache.ini --buildtype release -Dtests=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          meson compile -C build/bootstrapper
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Package Windows release
+        shell: pwsh
+        run: |
+          $output = "$env:RUNNER_TEMP\orchard-windows"
+          New-Item -ItemType Directory -Force $output | Out-Null
+          python scripts/package-windows-native.py --build-dir build/desktop --qt-root "$env:QT_ROOT" --output "$output\Orchard-Windows-x86_64.7z"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build/bootstrapper/orchard-bootstrapper.exe "$output\orchard-bootstrapper.exe"
+      - name: Build Windows setup with makensis
+        shell: pwsh
+        env:
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+        run: |
+          $output = "$env:RUNNER_TEMP\orchard-windows"
+          $appVersion = (meson introspect --projectinfo build/desktop | ConvertFrom-Json).version
+          $versionParts = [regex]::Match($appVersion, '^(\d+)\.(\d+)\.(\d+)(?:-canary\.(\d+))?$')
+          if (!$versionParts.Success) { throw "Unsupported setup version: $appVersion" }
+          $revision = if ($versionParts.Groups[4].Success) { $versionParts.Groups[4].Value } else { '0' }
+          $fileVersion = '{0}.{1}.{2}.{3}' -f $versionParts.Groups[1].Value, $versionParts.Groups[2].Value, $versionParts.Groups[3].Value, $revision
+          $nsis = (Get-Command makensis.exe -ErrorAction SilentlyContinue).Source
+          if (!$nsis) { $nsis = 'C:\Program Files (x86)\NSIS\makensis.exe' }
+          if (!(Test-Path $nsis)) { throw 'makensis.exe is missing after installation' }
+          & $nsis "-DBOOTSTRAPPER_EXE=$output\orchard-bootstrapper.exe" "-DOUTPUT_FILE=$output\OrchardSetup.exe" "-DORCHARD_VERSION=$appVersion" "-DORCHARD_FILE_VERSION=$fileVersion" "-DDEFAULT_CHANNEL=$env:RELEASE_CHANNEL" bootstrapper/OrchardSetup.nsi
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (!(Test-Path "$output\OrchardSetup.exe")) { throw 'NSIS setup was not created' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orchard-windows-publish
+          path: |
+            ${{ runner.temp }}/orchard-windows/Orchard-Windows-x86_64.7z
+            ${{ runner.temp }}/orchard-windows/orchard-bootstrapper.exe
+            ${{ runner.temp }}/orchard-windows/OrchardSetup.exe
+          if-no-files-found: error
+          retention-days: 14
+      - name: Windows compiler cache stats
+        if: always() && steps.ccache-setup.outcome == 'success'
+        shell: pwsh
+        run: ccache --show-stats
+      - name: Save Windows compiler cache
+        if: always() && steps.ccache-setup.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: orchard-windows-msvc-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
+
+  publish:
+    name: Publish signed release to R2
+    needs: [linux, windows]
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    concurrency:
+      group: orchard-r2-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v4
+        with:
+          name: orchard-linux-publish
+          path: dist/linux
+      - uses: actions/download-artifact@v4
+        with:
+          name: orchard-windows-publish
+          path: dist/windows
+      - name: Unpack both platform trees
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full
+          tar -C dist/linux -xf dist/linux/orchard-linux-publish.tar
+          mkdir -p dist/windows/staged
+          7z x -y dist/windows/Orchard-Windows-x86_64.7z -odist/windows/staged
+          test -x dist/linux/orchard-bootstrapper
+          test -f dist/windows/orchard-bootstrapper.exe
+          test -f dist/windows/OrchardSetup.exe
+          test -f dist/windows/staged/Orchard/orchard.exe
+      - name: Publish objects, manifests, installers, then channel
+        env:
+          ORCHARD_RELEASE_PRIVATE_KEY: ${{ secrets.ORCHARD_RELEASE_PRIVATE_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+        run: |
+          python -m pip install 'cryptography>=45,<51' 'boto3>=1.40,<2'
+          python scripts/release/publish_r2.py \
+            --channel "$RELEASE_CHANNEL" \
+            --linux-tree dist/linux/AppDir \
+            --windows-tree dist/windows/staged/Orchard \
+            --linux-appimage dist/linux/Orchard-Linux-x86_64.AppImage \
+            --windows-archive dist/windows/Orchard-Windows-x86_64.7z \
+            --linux-bootstrapper dist/linux/orchard-bootstrapper \
+            --windows-bootstrapper dist/windows/orchard-bootstrapper.exe \
+            --windows-setup dist/windows/OrchardSetup.exe

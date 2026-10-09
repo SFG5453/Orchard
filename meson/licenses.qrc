@@ -1,0 +1,23 @@
+<RCC>
+  <qresource prefix="/licenses">
+    <file alias="orchard.txt">../LICENSE</file>
+    <file alias="lucide.txt">../app/qml/assets/lucide/LICENSE.txt</file>
+    <file alias="quickjs.txt">../third_party/quickjs/LICENSE</file>
+    <file alias="qtkeychain.txt">../third_party/qtkeychain/COPYING</file>
+    <file alias="kawarp.txt">../third_party/kawarp/LICENSE</file>
+    <file alias="liquidglass.txt">../third_party/liquidglass/LICENSE</file>
+    <file alias="oxc.txt">../crates/orchard-youtube-extractor/OXC_LICENSE</file>
+    <file alias="youtubejs.txt">../crates/orchard-youtube-extractor/YOUTUBEJS_LICENSE</file>
+    <file alias="ai-music-detector.txt">../app/src/playback/slop_model/LICENSE</file>
+    <file alias="inter.txt">../app/qml/assets/fonts/Inter-LICENSE.txt</file>
+    <file alias="libdatachannel.txt">../third_party/libdatachannel/LICENSE</file>
+    <file alias="discord-social-sdk.txt">../vendor/discord_social_sdk/License-Notices.txt</file>
+    <file alias="libjuice.txt">../third_party/libdatachannel/deps/libjuice/LICENSE</file>
+    <file alias="usrsctp.txt">../third_party/libdatachannel/deps/usrsctp/LICENSE.md</file>
+    <file alias="plog.txt">../third_party/libdatachannel/deps/plog/LICENSE</file>
+    <file alias="mbedtls.txt">../third_party/mbedtls/LICENSE</file>
+    <file alias="nlohmann-json.txt">../third_party/json/LICENSE.MIT</file>
+    <file alias="kawarp/LICENSE">../third_party/kawarp/LICENSE</file>
+    <file alias="liquidglass/LICENSE">../third_party/liquidglass/LICENSE</file>
+  </qresource>
+</RCC>

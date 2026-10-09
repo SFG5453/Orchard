@@ -24,6 +24,7 @@ data class YouTubeSession(
     val cookie: String,
     val visitorData: String = "",
     val dataSyncId: String = "",
+    val accountIndex: Int = 0,
     val displayName: String = "YouTube Music",
     val avatarUrl: String = "",
 )

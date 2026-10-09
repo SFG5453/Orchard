@@ -54,6 +54,13 @@ import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.download.DownloadItem
 import dev.sfg.orchard.mobile.download.DownloadStatus
 import dev.sfg.orchard.mobile.model.Track
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import dev.sfg.orchard.mobile.ui.motion.pressScale
+import dev.sfg.orchard.mobile.ui.motion.riseIn
 import dev.sfg.orchard.mobile.ui.components.ArtworkTile
 import dev.sfg.orchard.mobile.ui.components.ExplicitBadge
 import dev.sfg.orchard.mobile.ui.components.MessagePanel
@@ -102,7 +109,7 @@ fun DownloadsScreen(
                 )
             }
             items(active, key = { "active_${it.track.id}" }) { item ->
-                DownloadingRow(item = item, onCancel = { onRemoveDownload(item.track.id) })
+                DownloadingRow(item = item, onCancel = { onRemoveDownload(item.track.id) }, modifier = Modifier.animateItem())
             }
         }
 
@@ -118,6 +125,7 @@ fun DownloadsScreen(
             }
             items(completed, key = { "completed_${it.track.id}" }) { item ->
                 DownloadedTrackRow(
+                    modifier = Modifier.animateItem().riseIn(cascadeOnScroll = true),
                     item = item,
                     onPlay = { onPlay(item.track) },
                     onDelete = { onRemoveDownload(item.track.id) },
@@ -143,7 +151,7 @@ fun DownloadsScreen(
                 )
             }
             items(failed, key = { "failed_${it.track.id}" }) { item ->
-                DownloadingRow(item = item, onCancel = { onRemoveDownload(item.track.id) })
+                DownloadingRow(item = item, onCancel = { onRemoveDownload(item.track.id) }, modifier = Modifier.animateItem())
             }
         }
     }
@@ -154,11 +162,14 @@ internal fun DownloadedTrackRow(
     item: DownloadItem,
     onPlay: () -> Unit,
     onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
+    val source = remember { MutableInteractionSource() }
     Surface(
         onClick = onPlay,
         color = androidx.compose.ui.graphics.Color.Transparent,
-        modifier = Modifier.fillMaxWidth(),
+        interactionSource = source,
+        modifier = modifier.fillMaxWidth().pressScale(source, 0.97f),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -203,9 +214,12 @@ internal fun DownloadedTrackRow(
 internal fun DownloadingRow(
     item: DownloadItem,
     onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
+    // Progress arrives in coarse chunks; glide between them.
+    val progress by animateFloatAsState(item.progress, tween(450), label = "DownloadProgress")
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -230,7 +244,7 @@ internal fun DownloadingRow(
             Spacer(Modifier.height(4.dp))
             if (item.status == DownloadStatus.DOWNLOADING) {
                 LinearProgressIndicator(
-                    progress = { item.progress },
+                    progress = { progress },
                     modifier = Modifier.fillMaxWidth().height(4.dp),
                     color = LocalAccent.current,
                     trackColor = CanopyColors.Rule,
@@ -261,8 +275,8 @@ internal fun formatStorageSize(bytes: Long): String {
     if (bytes <= 0) return "0 MB"
     val mb = bytes.toDouble() / (1024 * 1024)
     return if (mb >= 1000) {
-        String.format("%.1f GB", mb / 1024)
+        String.format(java.util.Locale.getDefault(), "%.1f GB", mb / 1024)
     } else {
-        String.format("%.1f MB", mb)
+        String.format(java.util.Locale.getDefault(), "%.1f MB", mb)
     }
 }

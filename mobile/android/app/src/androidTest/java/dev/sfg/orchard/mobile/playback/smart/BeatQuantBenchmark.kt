@@ -62,7 +62,7 @@ class BeatQuantBenchmark {
             report.put("bytes", model.length())
             val env = OrtEnvironment.getEnvironment()
             OrtSession.SessionOptions().use { opts ->
-                opts.setIntraOpNumThreads(4)
+                opts.setIntraOpNumThreads(args.getString("threads")?.toInt() ?: 2)
                 opts.setCPUArenaAllocator(false)
                 opts.setMemoryPatternOptimization(false)
                 opts.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)

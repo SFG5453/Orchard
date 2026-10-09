@@ -44,8 +44,6 @@ import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.lastfm.LastfmState
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
-private val LastfmRed = Color(0xFFD51007)
-
 @Composable
 fun LastfmSettingsCard(
     state: LastfmState,
@@ -55,29 +53,12 @@ fun LastfmSettingsCard(
 ) {
     val shape = RoundedCornerShape(20.dp)
     Surface(color = Color.Transparent, shape = shape, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(44.dp).background(LastfmRed.copy(alpha = 0.16f), CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("L", color = LastfmRed, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "Last.fm",
-                        style =
-                            MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = CanopyColors.Text,
-                    )
-                    Text(
-                        lastfmSubtitle(state),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (state is LastfmState.Error) CanopyColors.Danger else CanopyColors.Muted,
-                    )
-                }
-            }
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Text(
+                lastfmSubtitle(state),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (state is LastfmState.Error) CanopyColors.Danger else CanopyColors.Muted,
+            )
 
             Spacer(Modifier.height(12.dp))
             when (state) {

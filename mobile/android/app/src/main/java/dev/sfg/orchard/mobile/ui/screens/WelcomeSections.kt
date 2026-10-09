@@ -20,6 +20,14 @@
 package dev.sfg.orchard.mobile.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
+import dev.sfg.orchard.mobile.ui.motion.riseIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,6 +45,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Gradient
@@ -56,6 +65,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,6 +79,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import dev.sfg.orchard.mobile.auth.AuthState
 import dev.sfg.orchard.mobile.model.AudioQuality
+import dev.sfg.orchard.mobile.model.LocalQobuzLinked
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
@@ -76,9 +87,21 @@ import kotlin.math.roundToInt
 
 @Composable
 internal fun WelcomeHeroHeader() {
+    // The badge breathes while the walkthrough is open; first impressions deserve a pulse.
+    val breath = rememberInfiniteTransition(label = "WelcomeBreath").animateFloat(
+        initialValue = 1f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "BadgeScale",
+    )
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier
+                .riseIn(fromScale = 0.4f)
+                .graphicsLayer {
+                    scaleX = breath.value
+                    scaleY = breath.value
+                }
                 .size(72.dp)
                 .clip(CircleShape)
                 .background(
@@ -110,6 +133,7 @@ internal fun WelcomeHeroHeader() {
             ),
             color = CanopyColors.Text,
             textAlign = TextAlign.Center,
+            modifier = Modifier.riseIn(1),
         )
 
         Spacer(Modifier.height(6.dp))
@@ -119,7 +143,7 @@ internal fun WelcomeHeroHeader() {
             style = MaterialTheme.typography.bodyLarge,
             color = CanopyColors.Muted,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = 16.dp).riseIn(2),
         )
     }
 }
@@ -312,7 +336,7 @@ internal fun WelcomeCrossfadeSection(
                 ) {
                     val smart = settings.smartCrossfade
                     WelcomeOptionChip(
-                        title = "Smart Fade",
+                        title = "Adaptive mix",
                         subtitle = "Beat-matched overlap",
                         icon = Icons.Rounded.AutoAwesome,
                         selected = smart,
@@ -342,6 +366,14 @@ internal fun WelcomeQualityAndStorageSection(
         title = "Audio Quality & Cache",
         subtitle = "Streaming fidelity and offline cache limit",
     ) {
+        WelcomeToggleRow(
+            icon = Icons.AutoMirrored.Rounded.VolumeUp,
+            title = "Exponential volume",
+            subtitle = "Finer control at low volumes with the media-volume buttons",
+            checked = settings.exponentialVolumeEnabled,
+            onChecked = { onUpdateSettings(settings.copy(exponentialVolumeEnabled = it)) },
+        )
+        WelcomeDivider()
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RowIcon(Icons.Rounded.GraphicEq)
@@ -369,8 +401,10 @@ internal fun WelcomeQualityAndStorageSection(
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
+                val linked = LocalQobuzLinked.current
                 AudioQuality.entries.forEach { quality ->
-                    val isSelected = quality == settings.audioQuality
+                    val choosable = quality != AudioQuality.MAX || linked
+                    val isSelected = quality == settings.audioQuality && choosable
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -379,7 +413,8 @@ internal fun WelcomeQualityAndStorageSection(
                                 if (isSelected) LocalAccent.current else Color.Transparent,
                                 CircleShape,
                             )
-                            .clickable { onUpdateSettings(settings.copy(audioQuality = quality)) },
+                            .clickable(enabled = choosable) { onUpdateSettings(settings.copy(audioQuality = quality)) }
+                            .alpha(if (choosable) 1f else 0.4f),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(

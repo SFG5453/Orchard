@@ -29,7 +29,11 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.sfg.orchard.mobile.model.AudioQuality
+import dev.sfg.orchard.mobile.model.ArtworkSource
 import dev.sfg.orchard.mobile.model.EqualizerConfig
+import dev.sfg.orchard.mobile.model.LyricTranslationQuality
+import dev.sfg.orchard.mobile.model.LyricTranslationProvider
+import dev.sfg.orchard.mobile.model.NonMusicSkipMode
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.model.BuiltInHomeSection
 import dev.sfg.orchard.mobile.model.HomeSectionConfig
@@ -52,16 +56,16 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         .map { values ->
             OrchardSettings(
                 animatedArtwork = values[ANIMATED_ARTWORK] ?: true,
+                artworkSourceOrder = decodeArtworkOrder(values[ARTWORK_SOURCE_ORDER]),
+                sendYouTubeHistory = values[SEND_YOUTUBE_HISTORY] ?: true,
                 downloadAnimatedArtwork = values[DOWNLOAD_ANIMATED_ARTWORK] ?: false,
                 audioQuality = runCatching { AudioQuality.valueOf(values[AUDIO_QUALITY].orEmpty()) }
                     .getOrDefault(AudioQuality.HIGH),
                 useSystemColors = values[SYSTEM_COLORS] ?: false,
                 animatedBackground = values[ANIMATED_BACKGROUND] ?: false,
-                frostedGlass = values[FROSTED_GLASS] ?: false,
                 crossfadeEnabled = values[CROSSFADE_ENABLED] ?: false,
                 crossfadeSeconds = values[CROSSFADE_SECONDS] ?: OrchardSettings.DEFAULT_CROSSFADE_SECONDS,
                 smartCrossfade = values[SMART_CROSSFADE] ?: false,
-                bestMixSupabaseSync = values[BEST_MIX_SUPABASE_SYNC] ?: false,
                 cacheSizeMb = values[CACHE_SIZE_MB] ?: OrchardSettings.DEFAULT_CACHE_SIZE_MB,
                 onboardingCompleted = values[ONBOARDING_COMPLETED] ?: false,
                 discordPresenceEnabled = values[DISCORD_PRESENCE_ENABLED] ?: true,
@@ -70,7 +74,10 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 spotifySpdc = values[SPOTIFY_SPDC] ?: "",
                 spotifyCanvasEnabled = values[SPOTIFY_CANVAS_ENABLED] ?: true,
                 volumeNormalizationEnabled = values[VOLUME_NORMALIZATION_ENABLED] ?: false,
+                exponentialVolumeEnabled = values[EXPONENTIAL_VOLUME_ENABLED] ?: false,
                 autoplayEnabled = values[AUTOPLAY_ENABLED] ?: true,
+                nonMusicSkip = runCatching { NonMusicSkipMode.valueOf(values[NON_MUSIC_SKIP].orEmpty()) }
+                    .getOrDefault(NonMusicSkipMode.BUTTON),
                 equalizerConfig = EqualizerConfig(
                     enabled = values[EQUALIZER_ENABLED] ?: false,
                     presetId = values[EQUALIZER_PRESET] ?: "flat",
@@ -83,6 +90,17 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 homeLayoutOffline = decodeHomeLayout(values[HOME_LAYOUT_OFFLINE], false),
                 customDeviceName = values[CUSTOM_DEVICE_NAME] ?: "",
                 betaChannelEnabled = values[BETA_CHANNEL_ENABLED] ?: false,
+                videoMaxHeight = values[VIDEO_MAX_HEIGHT] ?: OrchardSettings.DEFAULT_VIDEO_MAX_HEIGHT,
+                translateLyrics = values[TRANSLATE_LYRICS] ?: false,
+                lyricTranslationQuality = LyricTranslationQuality.entries
+                    .firstOrNull { it.key == values[LYRIC_TRANSLATION_QUALITY] } ?: LyricTranslationQuality.STANDARD,
+                lyricTranslationProvider = LyricTranslationProvider.entries
+                    .firstOrNull { it.key == values[LYRIC_TRANSLATION_PROVIDER] } ?: LyricTranslationProvider.LOCAL,
+                lyricTranslationModels = runCatching {
+                    val json = org.json.JSONObject(values[LYRIC_TRANSLATION_MODELS].orEmpty())
+                    json.keys().asSequence().associateWith { json.optString(it) }
+                }.getOrDefault(emptyMap()),
+                lyricTranslationEndpoint = values[LYRIC_TRANSLATION_ENDPOINT] ?: "",
             )
         }
         .stateIn(scope, SharingStarted.Eagerly, OrchardSettings())
@@ -96,15 +114,15 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         scope.launch {
             store.edit {
                 it[ANIMATED_ARTWORK] = value.animatedArtwork
+                it[ARTWORK_SOURCE_ORDER] = value.artworkSourceOrder.joinToString(",") { source -> source.name }
+                it[SEND_YOUTUBE_HISTORY] = value.sendYouTubeHistory
                 it[DOWNLOAD_ANIMATED_ARTWORK] = value.downloadAnimatedArtwork
                 it[AUDIO_QUALITY] = value.audioQuality.name
                 it[SYSTEM_COLORS] = value.useSystemColors
                 it[ANIMATED_BACKGROUND] = value.animatedBackground
-                it[FROSTED_GLASS] = value.frostedGlass
                 it[CROSSFADE_ENABLED] = value.crossfadeEnabled
                 it[CROSSFADE_SECONDS] = value.crossfadeSeconds
                 it[SMART_CROSSFADE] = value.smartCrossfade
-                it[BEST_MIX_SUPABASE_SYNC] = value.bestMixSupabaseSync
                 it[CACHE_SIZE_MB] = value.cacheSizeMb
                 it[ONBOARDING_COMPLETED] = value.onboardingCompleted
                 it[DISCORD_PRESENCE_ENABLED] = value.discordPresenceEnabled
@@ -113,7 +131,9 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[SPOTIFY_SPDC] = value.spotifySpdc
                 it[SPOTIFY_CANVAS_ENABLED] = value.spotifyCanvasEnabled
                 it[VOLUME_NORMALIZATION_ENABLED] = value.volumeNormalizationEnabled
+                it[EXPONENTIAL_VOLUME_ENABLED] = value.exponentialVolumeEnabled
                 it[AUTOPLAY_ENABLED] = value.autoplayEnabled
+                it[NON_MUSIC_SKIP] = value.nonMusicSkip.name
                 it[EQUALIZER_ENABLED] = value.equalizerConfig.enabled
                 it[EQUALIZER_PRESET] = value.equalizerConfig.presetId
                 it[EQUALIZER_GAINS] = value.equalizerConfig.gains.joinToString(",")
@@ -124,6 +144,12 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[HOME_LAYOUT_OFFLINE] = encodeHomeLayout(value.homeLayoutOffline)
                 it[CUSTOM_DEVICE_NAME] = value.customDeviceName
                 it[BETA_CHANNEL_ENABLED] = value.betaChannelEnabled
+                it[VIDEO_MAX_HEIGHT] = value.videoMaxHeight
+                it[TRANSLATE_LYRICS] = value.translateLyrics
+                it[LYRIC_TRANSLATION_QUALITY] = value.lyricTranslationQuality.key
+                it[LYRIC_TRANSLATION_PROVIDER] = value.lyricTranslationProvider.key
+                it[LYRIC_TRANSLATION_MODELS] = org.json.JSONObject(value.lyricTranslationModels).toString()
+                it[LYRIC_TRANSLATION_ENDPOINT] = value.lyricTranslationEndpoint
             }
         }
     }
@@ -158,6 +184,11 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
     }
 
     private fun decodeHistory(value: String): List<String> = decodeSearchHistory(value)
+
+    private fun decodeArtworkOrder(value: String?): List<ArtworkSource> =
+        value.orEmpty().split(',').mapNotNull { name ->
+            ArtworkSource.entries.firstOrNull { it.name == name }
+        }.distinct().let { saved -> saved + ArtworkSource.entries.filterNot(saved::contains) }
 
     private fun decodeFloatList(value: String, expectedSize: Int): List<Float> {
         if (value.isBlank()) return List(expectedSize) { 0f }
@@ -198,15 +229,21 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
 
     private companion object {
         val ANIMATED_ARTWORK = booleanPreferencesKey("animated_artwork")
+        val ARTWORK_SOURCE_ORDER = stringPreferencesKey("artwork_source_order")
+        val SEND_YOUTUBE_HISTORY = booleanPreferencesKey("send_youtube_history")
         val DOWNLOAD_ANIMATED_ARTWORK = booleanPreferencesKey("download_animated_artwork")
         val AUDIO_QUALITY = stringPreferencesKey("audio_quality")
+        val VIDEO_MAX_HEIGHT = intPreferencesKey("video_max_height")
+        val TRANSLATE_LYRICS = booleanPreferencesKey("translate_lyrics")
+        val LYRIC_TRANSLATION_QUALITY = stringPreferencesKey("lyric_translation_quality")
+        val LYRIC_TRANSLATION_PROVIDER = stringPreferencesKey("lyric_translation_provider")
+        val LYRIC_TRANSLATION_MODELS = stringPreferencesKey("lyric_translation_models")
+        val LYRIC_TRANSLATION_ENDPOINT = stringPreferencesKey("lyric_translation_endpoint")
         val SYSTEM_COLORS = booleanPreferencesKey("system_colors")
         val ANIMATED_BACKGROUND = booleanPreferencesKey("animated_background")
-        val FROSTED_GLASS = booleanPreferencesKey("frosted_glass")
         val CROSSFADE_ENABLED = booleanPreferencesKey("crossfade_enabled")
         val CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
         val SMART_CROSSFADE = booleanPreferencesKey("smart_crossfade")
-        val BEST_MIX_SUPABASE_SYNC = booleanPreferencesKey("best_mix_supabase_sync")
         val CACHE_SIZE_MB = intPreferencesKey("cache_size_mb")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
@@ -215,7 +252,9 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val SPOTIFY_SPDC = stringPreferencesKey("spotify_spdc")
         val SPOTIFY_CANVAS_ENABLED = booleanPreferencesKey("spotify_canvas_enabled")
         val VOLUME_NORMALIZATION_ENABLED = booleanPreferencesKey("volume_normalization_enabled")
+        val EXPONENTIAL_VOLUME_ENABLED = booleanPreferencesKey("exponential_volume_enabled")
         val AUTOPLAY_ENABLED = booleanPreferencesKey("autoplay_enabled")
+        val NON_MUSIC_SKIP = stringPreferencesKey("non_music_skip")
         val SEARCH_HISTORY = stringPreferencesKey("search_history")
         val EQUALIZER_ENABLED = booleanPreferencesKey("equalizer_enabled")
         val EQUALIZER_PRESET = stringPreferencesKey("equalizer_preset")

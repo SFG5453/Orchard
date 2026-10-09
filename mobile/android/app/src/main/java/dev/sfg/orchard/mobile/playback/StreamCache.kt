@@ -33,7 +33,6 @@ import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import kotlin.math.roundToInt
-import dev.sfg.orchard.mobile.model.AudioQuality
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -55,7 +54,7 @@ import java.util.concurrent.Executors
 class StreamCache(
     context: Context,
     maxBytes: Long,
-    private val quality: () -> AudioQuality,
+    private val variant: () -> String,
 ) {
     private val cache: SimpleCache = SimpleCache(
         File(context.filesDir, CACHE_DIRECTORY),
@@ -106,8 +105,9 @@ class StreamCache(
     /**
      * Wraps [upstream] so reads are served from disk when possible and written to it when not.
      *
-     * Quality is folded into the cache key: the same track at DATA_SAVER and HIGH are different
-     * bytes, and keying both as the track alone would serve whichever was fetched first.
+     * The variant (quality and audio source) is folded into the cache key: the same track at
+     * DATA_SAVER and HIGH, or from YouTube and Qobuz, is different bytes, and keying both as the
+     * track alone would serve whichever was fetched first.
      */
     fun dataSourceFactory(upstream: DataSource.Factory): DataSource.Factory {
         upstreamFactory = upstream
@@ -126,7 +126,7 @@ class StreamCache(
         return readFactory
     }
 
-    private fun cacheKey(uri: Uri): String = "${uri}|${quality().name}"
+    private fun cacheKey(uri: Uri): String = "${uri}|${variant()}"
 
     /** True when the whole track is already on disk, so nothing needs fetching. */
     fun isFullyCached(uri: Uri): Boolean {
@@ -173,6 +173,8 @@ class StreamCache(
         // manifest as a progressive track marks a few KB as a fully cached song and
         // later hands playlist text to the audio analyzer.
         if (MediaItemMapper.requiresAuthenticatedHls(uri)) return
+        // Local files are read straight from storage; copying them into the cache would only waste space.
+        if (!MediaItemMapper.isOrchardUri(uri)) return
         val key = cacheKey(uri)
         if (inFlight.containsKey(key) || isFullyCached(uri)) return
         val writers = java.util.Collections.synchronizedList(mutableListOf<CacheWriter>())
@@ -424,66 +426,12 @@ class StreamCache(
         }
 
         if (isFullyCached) {
-            val files = spans.map { span ->
-                SpanEntry(span.position, span.position + span.length, java.io.RandomAccessFile(span.file!!, "r"))
-            }
-            return object : MediaDataSource() {
-                override fun readAt(at: Long, buffer: ByteArray, offset: Int, size: Int): Int {
-                    if (size == 0) return 0
-                    val entry = files.firstOrNull { it.start <= at && at < it.end } ?: return -1
-                    val toRead = minOf(size.toLong(), entry.end - at).toInt()
-                    synchronized(entry.raf) {
-                        entry.raf.seek(at - entry.start)
-                        return entry.raf.read(buffer, offset, toRead)
-                    }
-                }
-
-                override fun getSize(): Long = totalLength
-
-                override fun close() {
-                    files.forEach { runCatching { it.raf.close() } }
-                }
-            }
+            return SpanMediaDataSource(spans.map { span ->
+                SpanMediaDataSource.Span(span.position, span.position + span.length, java.io.RandomAccessFile(span.file!!, "r"))
+            }, totalLength)
         }
-
-        return object : MediaDataSource() {
-            private var source: CacheDataSource? = null
-            private var position = -1L
-
-            private fun openAt(at: Long): CacheDataSource {
-                close()
-                val spec = DataSpec.Builder()
-                    .setUri(uri)
-                    .setKey(key)
-                    .setPosition(at)
-                    .setLength(C.LENGTH_UNSET.toLong())
-                    .build()
-                val opened = readFactory.createDataSource()
-                opened.open(spec)
-                source = opened
-                position = at
-                return opened
-            }
-
-            override fun readAt(at: Long, buffer: ByteArray, offset: Int, size: Int): Int {
-                if (size == 0) return 0
-                val active = if (source != null && position == at) source!! else openAt(at)
-                val read = active.read(buffer, offset, size)
-                if (read > 0) position += read
-                return read
-            }
-
-            override fun getSize(): Long = totalLength
-
-            override fun close() {
-                runCatching { source?.close() }
-                source = null
-                position = -1L
-            }
-        }
+        return CacheReadMediaDataSource(readFactory, uri, key, totalLength)
     }
-
-    private class SpanEntry(val start: Long, val end: Long, val raf: java.io.RandomAccessFile)
 
     fun clear() {
         for ((_, writers) in inFlight) synchronized(writers) { writers.forEach { it.cancel() } }

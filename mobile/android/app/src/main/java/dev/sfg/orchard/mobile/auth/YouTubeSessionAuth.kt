@@ -19,12 +19,8 @@
 
 package dev.sfg.orchard.mobile.auth
 
-import java.security.MessageDigest
-
-/** Builds the signed web-session authorization used by native InnerTube requests. */
+/** Validates and normalizes captured web-session cookies. The provider signs requests. */
 object YouTubeSessionAuth {
-    const val MUSIC_ORIGIN = "https://music.youtube.com"
-
     fun loginCookieValue(cookieHeader: String?): String? {
         if (cookieHeader.isNullOrBlank()) return null
         val cookies = cookieHeader.split(';').mapNotNull { part ->
@@ -37,40 +33,33 @@ object YouTubeSessionAuth {
         }
     }
 
-    fun authorization(
-        cookieHeader: String,
-        origin: String = MUSIC_ORIGIN,
-        epochSeconds: Long = System.currentTimeMillis() / 1_000,
-    ): String? {
-        val cookies = parseCookies(cookieHeader)
-        val sapisid = cookies["SAPISID"] ?: cookies["__Secure-3PAPISID"] ?: cookies["APISID"]
-        val signedCookies = listOfNotNull(
-            sapisid?.let { "SAPISIDHASH" to it },
-            cookies["__Secure-1PAPISID"]?.let { "SAPISID1PHASH" to it },
-            cookies["__Secure-3PAPISID"]?.let { "SAPISID3PHASH" to it },
-        )
-        if (signedCookies.isEmpty()) return null
-        return signedCookies.joinToString(" ") { (scheme, value) ->
-            val source = "$epochSeconds $value $origin"
-            val digest = MessageDigest.getInstance("SHA-1").digest(source.toByteArray(Charsets.UTF_8))
-            val hash = digest.joinToString(separator = "") { byte -> "%02x".format(byte.toInt() and 0xff) }
-            "$scheme ${epochSeconds}_$hash"
-        }
-    }
-
-    private fun parseCookies(cookieHeader: String): Map<String, String> =
-        cookieHeader.split(';').mapNotNull { part ->
-            val separator = part.indexOf('=')
-            if (separator <= 0) return@mapNotNull null
-            part.substring(0, separator).trim() to part.substring(separator + 1).trim()
-        }.toMap()
-
+    /**
+     * The delegated (brand account) id from a page's `DATASYNC_ID`, which reads
+     * `delegatedId||userId`. A personal account reads `userId||` and has no delegation, so it
+     * maps to blank. Same rule as desktop's AuthManager::delegatedSessionIdFromPageAuth.
+     */
     fun normalizeDataSyncId(value: String?): String {
         val decoded = value.orEmpty().trim().decodePercentEscapes()
-        if (decoded.isBlank() || decoded.equals("null", ignoreCase = true)) return ""
-        if (!decoded.contains("||")) return decoded
-        return if (decoded.endsWith("||")) decoded.substringBefore("||") else decoded.substringAfter("||")
+        val separator = decoded.indexOf("||")
+        if (separator <= 0 || decoded.substring(separator + 2).isBlank()) return ""
+        return decoded.substring(0, separator)
     }
+
+    fun delegatedId(dataSyncId: String?, delegatedSessionId: String?): String =
+        delegatedSessionId.orEmpty().trim().takeIf(String::isNotEmpty)
+            ?: normalizeDataSyncId(dataSyncId)
+
+    fun sameAccount(first: YouTubeSession, second: YouTubeSession): Boolean =
+        first.dataSyncId == second.dataSyncId &&
+            first.accountIndex == second.accountIndex &&
+            loginCookieValue(first.cookie) == loginCookieValue(second.cookie)
+
+    fun selectedDifferentAccount(
+        initial: YouTubeSession?,
+        baseline: YouTubeSession?,
+        candidate: YouTubeSession,
+    ): Boolean = baseline != null && !sameAccount(baseline, candidate) &&
+        (initial == null || !sameAccount(initial, candidate))
 
     private fun String.decodePercentEscapes(): String {
         if ('%' !in this) return this

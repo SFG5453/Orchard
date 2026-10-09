@@ -1,0 +1,4 @@
+.dev.vars*
+.env*
+worker-configuration.d.ts
+.wrangler/

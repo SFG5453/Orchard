@@ -1,0 +1,4 @@
+// Keep QML module names while loading the original file from its own folder.
+import "qrc:/qt/qml/Orchard/@QML_DIRECTORY@" as Original
+
+Original.@QML_TYPE@ {}

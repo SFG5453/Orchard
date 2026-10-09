@@ -45,7 +45,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Person
@@ -86,7 +85,6 @@ private val foldableDestinations = listOf(
     RailDestination(Routes.HOME, "Home", Icons.Rounded.Home),
     RailDestination(Routes.SEARCH, "Search", Icons.Rounded.Search),
     RailDestination(Routes.LIBRARY, "Library", Icons.Rounded.LibraryMusic),
-    RailDestination(Routes.DEVICES, "Connect", Icons.Rounded.Groups),
     RailDestination(Routes.SETTINGS, "Settings", Icons.Rounded.Person),
 )
 
@@ -103,7 +101,6 @@ fun OrchardNavigationRail(
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val glass = LocalGlass.current.enabled
     val glassTint = LocalGlass.current.tint
     val tintColor = if (glassTint != Color.Unspecified && glassTint.alpha > 0f) glassTint else LocalAccent.current
 
@@ -190,7 +187,7 @@ fun OrchardNavigationRail(
                         label = "RailItemSelect_${destination.route}",
                     )
 
-                    val unselectedColor = if (glass) Color.White.copy(alpha = 0.65f) else CanopyColors.Muted
+                    val unselectedColor = Color.White.copy(alpha = 0.65f)
                     val itemColor by animateColorAsState(
                         targetValue = if (isSelected) Color.White else unselectedColor,
                         animationSpec = tween(180),

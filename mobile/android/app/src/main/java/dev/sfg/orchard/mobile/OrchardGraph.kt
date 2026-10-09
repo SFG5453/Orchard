@@ -20,16 +20,16 @@
 package dev.sfg.orchard.mobile
 
 import android.content.Context
+import dev.sfg.orchard.mobile.model.AudioQuality
+import kotlinx.coroutines.flow.stateIn
 import dev.sfg.orchard.mobile.artwork.ArtistImageRepository
 import dev.sfg.orchard.mobile.artwork.ArtworkRepository
 import dev.sfg.orchard.mobile.auth.NativeYouTubeAuthRepository
 import dev.sfg.orchard.mobile.auth.SecureYouTubeSessionStore
 import dev.sfg.orchard.mobile.catalog.CatalogRepository
-import dev.sfg.orchard.mobile.catalog.AudioVersionResolver
 import dev.sfg.orchard.mobile.catalog.VideoVersionResolver
-import dev.sfg.orchard.mobile.catalog.InnerTubeClient
 import dev.sfg.orchard.mobile.catalog.PlaylistActions
-import dev.sfg.orchard.mobile.connect.ConnectDeviceRepository
+import dev.sfg.orchard.mobile.connect.ConnectRepository
 import dev.sfg.orchard.mobile.library.LibraryCache
 import dev.sfg.orchard.mobile.library.LibraryRepository
 import dev.sfg.orchard.mobile.lyrics.LyricsRepository
@@ -37,9 +37,13 @@ import dev.sfg.orchard.mobile.lastfm.LastfmRepository
 import dev.sfg.orchard.mobile.listenbrainz.ListenBrainzRepository
 import dev.sfg.orchard.mobile.settings.SettingsRepository
 import dev.sfg.orchard.mobile.download.DownloadManager
-import dev.sfg.orchard.mobile.playback.YouTubePoTokenMinter
+import dev.sfg.orchard.mobile.playback.YouTubeStreamResolver
 import dev.sfg.orchard.mobile.playback.smart.BestMixFeatureStore
 import dev.sfg.orchard.mobile.songlinks.SongLinksRepository
+import dev.sfg.orchard.mobile.youtube.YouTubeProvider
+import dev.sfg.orchard.mobile.youtube.providerJson
+import dev.sfg.orchard.mobile.youtube.text
+import org.json.JSONObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -57,52 +61,55 @@ class OrchardGraph(context: Context) {
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS)
         .build()
-    // The loader is deferred so auth and innerTube can depend on each other without a cycle.
+    private val providerAsset = { name: String ->
+        runCatching { context.assets.open("providers/$name").use { it.readBytes() } }.getOrNull()
+    }
+    /** The desktop YouTube provider in QuickJS: catalog, library, lyrics and stream URLs. */
+    val youtube = YouTubeProvider(http, context.cacheDir, providerAsset)
     val auth = NativeYouTubeAuthRepository(
         store = SecureYouTubeSessionStore(context),
         scope = applicationScope,
-        profileLoader = { innerTube.accountInfo() },
+        profileLoader = { session ->
+            val profile = youtube.invoke("account.profile", JSONObject().put("session", session.providerJson()))
+            profile.text("name") to profile.text("avatarUrl")
+        },
+        switchValidator = { session ->
+            youtube.invokeArray("catalog.playlists", JSONObject().put("session", session.providerJson()))
+        },
     )
-    private val innerTube: InnerTubeClient = InnerTubeClient(http, auth)
     val settings = SettingsRepository(context, applicationScope)
     val bestMixFeatures = BestMixFeatureStore(context)
     val networkMonitor = dev.sfg.orchard.mobile.network.NetworkMonitor(context)
-    /**
-     * Shared by playback and downloads: attesting is expensive once and free afterwards, so the
-     * two paths must not each stand up their own BotGuard WebView. Created lazily because a
-     * WebView is not free and a session that only browses never needs one.
-     */
-    val poTokenMinter: YouTubePoTokenMinter by lazy { YouTubePoTokenMinter(context) }
-
-    /**
-     * Also shared, and also deferred: the attesting client hands back ciphered URLs, so downloads
-     * need the same solver playback uses rather than a second WebView fetching the same player.
-     */
-    val challengeSolver: dev.sfg.orchard.mobile.playback.YouTubeChallengeSolver by lazy {
-        dev.sfg.orchard.mobile.playback.YouTubeChallengeSolver(context, http)
-    }
     val spotifyCanvas = dev.sfg.orchard.mobile.spotify.SpotifyCanvasRepository(context, http, settings)
-    val artwork = ArtworkRepository(http, spotifyCanvas)
+    val artwork = ArtworkRepository(http, spotifyCanvas) { settings.settings.value.artworkSourceOrder }
     val downloads = DownloadManager(
         context = context,
         http = http,
-        sessionProvider = auth,
         scope = applicationScope,
-        poTokenMinter = { poTokenMinter },
-        challengeSolver = { challengeSolver },
+        streams = { streams },
         artworkResolver = artwork::artwork,
         downloadAnimatedArtworkProvider = { settings.settings.value.downloadAnimatedArtwork },
-        qualityProvider = { settings.settings.value.audioQuality },
     )
     val artistImages = ArtistImageRepository(http)
-    val catalog = CatalogRepository(innerTube)
-    val playlistActions = PlaylistActions(innerTube)
-    val audioVersions = AudioVersionResolver(innerTube)
-    val videoVersions = VideoVersionResolver(innerTube)
+    /** Shared by playback and downloads, so both reuse one URL cache and one player. */
+    val streams: YouTubeStreamResolver by lazy {
+        YouTubeStreamResolver(youtube, auth, { settings.settings.value.audioQuality }, { downloads })
+    }
+    val catalog = CatalogRepository(youtube, auth)
+    val playlistActions = PlaylistActions(youtube, auth)
+    val videoVersions = VideoVersionResolver(catalog)
     val library = LibraryRepository(LibraryCache(context), catalog, applicationScope)
-    val lyrics = LyricsRepository(http, innerTube)
-    val connect = ConnectDeviceRepository(context, applicationScope)
-    val songLinks = SongLinksRepository(http)
+    val lyrics = LyricsRepository(http) { videoId ->
+        youtube.invoke("lyrics.youtube", JSONObject().put("session", auth.session().providerJson()).put("videoId", videoId))
+            .text("text")
+    }
+    /** Lyrics in English, courtesy of a 20 MB model that has never heard a song in its life. */
+    val lyricTranslation = dev.sfg.orchard.mobile.lyrics.translation.LyricTranslator(
+        context, http, settings.settings, applicationScope,
+    )
+    /** Songs and playlists kept on this phone; no account or network needed. */
+    val localLibrary = dev.sfg.orchard.mobile.local.LocalLibraryRepository(context, applicationScope, notify = { postWarning(it) })
+    val songLinks = SongLinksRepository()
     val lastfm = LastfmRepository(context, http, applicationScope)
     val listenBrainz = ListenBrainzRepository(context, http, applicationScope)
 
@@ -114,16 +121,6 @@ class OrchardGraph(context: Context) {
      * transition is not that. A Connect target simply leaves this null, which is correct; the
      * marker describes local playback.
      */
-    /**
-     * Stored analysis for a track, set by the playback service once it is running.
-     *
-     * The transition planner uses this to plan crossfades. Both live in this process, so the lookup
-     * is shared directly rather than copied through the media session. Null before playback starts.
-     */
-    @Volatile
-    var analysisLookup: ((dev.sfg.orchard.mobile.model.Track) ->
-        dev.sfg.orchard.mobile.playback.smart.TrackAnalysis)? = null
-
     /**
      * Clear hook for the active playback service's [StreamCache].
      * Null before the playback service starts or after it is destroyed.
@@ -137,13 +134,36 @@ class OrchardGraph(context: Context) {
     val warningEvent = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 16)
     val activeBitrate = kotlinx.coroutines.flow.MutableStateFlow(0)
     val activeTrackIsQobuz = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val activeStreamDetail = kotlinx.coroutines.flow.MutableStateFlow(dev.sfg.orchard.mobile.model.StreamDetail())
+    val qobuzTiers = dev.sfg.orchard.mobile.qobuz.QobuzTierMemory(context)
     val qobuz = dev.sfg.orchard.mobile.qobuz.QobuzRepository(context, applicationScope)
-    val qobuzResolver = dev.sfg.orchard.mobile.qobuz.QobuzResolver(qobuz, http)
+    val qobuzResolver = dev.sfg.orchard.mobile.qobuz.QobuzResolver(qobuz, http, providerAsset)
+
+    /** Active Qobuz playback leaves adaptive mix and the equalizer off. */
+    val maxActive: kotlinx.coroutines.flow.StateFlow<Boolean> by lazy {
+        kotlinx.coroutines.flow.combine(settings.settings, qobuz.status, connect.state) { s, _, _ ->
+            s.audioQuality == AudioQuality.MAX && qobuzResolver.isAvailable()
+        }.stateIn(
+            applicationScope,
+            kotlinx.coroutines.flow.SharingStarted.Eagerly,
+            settings.settings.value.audioQuality == AudioQuality.MAX && qobuzResolver.isAvailable(),
+        )
+    }
+
+    /** Names where MAX audio comes from; cached streams and bytes from another source must not be reused. */
+    fun streamVariant(): String {
+        val quality = settings.settings.value.audioQuality
+        val qobuzEnabled = quality == AudioQuality.MAX && qobuzResolver.isAvailable()
+        return audioCacheVariant(quality, qobuzEnabled, qobuz.status.value.quality.id)
+    }
+
     val discordAuth = dev.sfg.orchard.mobile.discord.DiscordOAuthRepository(context, http, applicationScope)
     val discordPresence = dev.sfg.orchard.mobile.discord.DiscordPresenceCoordinator(
         http = http,
         auth = discordAuth,
         songLinks = songLinks,
+        artistImages = artistImages,
+        catalog = catalog,
         scope = applicationScope,
     )
 
@@ -152,6 +172,9 @@ class OrchardGraph(context: Context) {
     }
 
     val updates = UpdateManager(context) { settings.settings.value.betaChannelEnabled }
+
+    /** Orchard Connect; declared last because it reads the player, providers and settings above. */
+    val connect = ConnectRepository(context, applicationScope, this)
 
     init {
         applicationScope.launch { auth.restore() }

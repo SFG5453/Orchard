@@ -21,7 +21,6 @@ import androidx.compose.ui.unit.sp
 class GlassBenchmarkActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val enabled = intent.getBooleanExtra("glass", true)
         val animate = intent.getBooleanExtra("animate", true)
         setContent {
             val scene = rememberGlassScene()
@@ -32,7 +31,7 @@ class GlassBenchmarkActivity : ComponentActivity() {
                     while (true) withFrameNanos { phase.floatValue = (it - start) / 1e9f }
                 }
             }
-            CompositionLocalProvider(LocalGlass provides rememberGlassStyle(enabled, remember { mutableStateOf(Color(0xFF89ADC9)) }), LocalGlassScene provides scene) {
+            CompositionLocalProvider(LocalGlass provides rememberGlassStyle(remember { mutableStateOf(Color(0xFF89ADC9)) }), LocalGlassScene provides scene) {
                 Box(Modifier.fillMaxSize().background(Color(0xFF18212B))) {
                     Box(Modifier.fillMaxSize().glassSceneSource(scene)) {
                         Canvas(Modifier.fillMaxSize().glassWashSource(scene)) {

@@ -64,7 +64,17 @@ data class Track(
     val artists: List<Artist> = emptyList(),
     /** Official/user-uploaded video paired with this album-audio queue item, when known. */
     val musicVideoId: String = "",
+    /** Where a song from this phone lives (a content:// or file:// URI); blank for everything online. */
+    val localUri: String = "",
+    /** Bitrate probed from the file itself, in kbps, so the badge has an answer before playback starts. */
+    val localBitrateKbps: Int = 0,
+    /** Codec or container name for a local file, e.g. "flac" or "mp3". */
+    val codec: String = "",
 ) {
+    /** True for a file on this phone: it needs no account, resolver or network to play. */
+    val isLocal: Boolean
+        get() = playbackSource.equals(LOCAL_SOURCE, ignoreCase = true)
+
     val isQobuz: Boolean
         get() = playbackSource.equals("qobuz", ignoreCase = true)
 
@@ -76,6 +86,9 @@ data class Track(
     val isVideoUpload: Boolean
         get() = musicVideoType == MUSIC_VIDEO_TYPE_OMV || musicVideoType == MUSIC_VIDEO_TYPE_UGC
 }
+
+/** [Track.playbackSource] of songs imported from the phone's own storage. */
+const val LOCAL_SOURCE = "local"
 
 const val MUSIC_VIDEO_TYPE_ATV = "MUSIC_VIDEO_TYPE_ATV"
 const val MUSIC_VIDEO_TYPE_OMV = "MUSIC_VIDEO_TYPE_OMV"
@@ -169,6 +182,8 @@ data class BrowseDetail(
     val id: String,
     val kind: CatalogKind,
     val title: String,
+    /** Public playlist identity for album.link; album browse IDs such as MPREb_ are internal. */
+    val audioPlaylistId: String = "",
     val subtitle: String = "",
     val description: String = "",
     val artworkUrl: String = "",
@@ -184,13 +199,20 @@ data class BrowseDetail(
 
 data class SearchResults(
     val tracks: List<Track> = emptyList(),
+    val videos: List<Track> = emptyList(),
     val albums: List<Album> = emptyList(),
     val artists: List<Artist> = emptyList(),
     val playlists: List<Playlist> = emptyList(),
 ) {
     val isEmpty: Boolean
-        get() = tracks.isEmpty() && albums.isEmpty() && artists.isEmpty() && playlists.isEmpty()
+        get() = tracks.isEmpty() && videos.isEmpty() && albums.isEmpty() && artists.isEmpty() && playlists.isEmpty()
 }
+
+/** Home shelves plus the artists the listener follows, as desktop shows them. */
+data class HomeFeed(
+    val sections: List<CatalogSection> = emptyList(),
+    val artists: List<Artist> = emptyList(),
+)
 
 data class LyricLine(
     val text: String,

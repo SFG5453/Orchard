@@ -78,3 +78,16 @@ internal fun BrowseDetail.withSeed(seed: CatalogItem?): BrowseDetail {
 internal fun String.isMeaningfulPlaybackSource(): Boolean = isNotBlank() && !contains(
     Regex("\\b(?:plays?|views?|listeners?|subscribers?)\\b", RegexOption.IGNORE_CASE),
 )
+
+/** Returns the same instance when [videoId] is absent; otherwise removes one playlist row. */
+internal fun BrowseDetail.withPlaylistTrackRemoved(videoId: String): BrowseDetail {
+    val index = tracks.indexOfFirst { it.id == videoId }
+    if (index < 0) return this
+    return copy(tracks = tracks.toMutableList().apply { removeAt(index) })
+}
+
+/** Returns the same instance for invalid/no-op moves; otherwise relocates exactly one row. */
+internal fun BrowseDetail.withPlaylistTrackMoved(fromIndex: Int, toIndex: Int): BrowseDetail {
+    if (fromIndex !in tracks.indices || toIndex !in tracks.indices || fromIndex == toIndex) return this
+    return copy(tracks = tracks.toMutableList().apply { add(toIndex, removeAt(fromIndex)) })
+}

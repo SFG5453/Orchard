@@ -151,13 +151,14 @@ private fun AudioDeviceInfo.routePriority(): Int = when (type) {
 
     AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> 10
     AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> 5
-    else -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && isLeAudio()) 100 else 0
+    else -> if (isLeAudio()) 100 else 0
 }
 
 private fun AudioDeviceInfo.isLeAudio(): Boolean =
     type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
         type == AudioDeviceInfo.TYPE_BLE_SPEAKER ||
-        type == AudioDeviceInfo.TYPE_BLE_BROADCAST
+        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            type == AudioDeviceInfo.TYPE_BLE_BROADCAST)
 
 private fun AudioDeviceInfo.outputType(context: Context): AudioOutputType = when {
     type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> AudioOutputType.PHONE_SPEAKER
@@ -171,12 +172,12 @@ private fun AudioDeviceInfo.outputType(context: Context): AudioOutputType = when
 
     type == AudioDeviceInfo.TYPE_HDMI || type == AudioDeviceInfo.TYPE_HDMI_ARC -> AudioOutputType.HDMI
     type == AudioDeviceInfo.TYPE_HEARING_AID -> AudioOutputType.HEARING_AID
-    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && type == AudioDeviceInfo.TYPE_BLE_SPEAKER ->
+    type == AudioDeviceInfo.TYPE_BLE_SPEAKER ->
         AudioOutputType.BLUETOOTH_SPEAKER
 
     type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
         type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
-        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && isLeAudio()) ->
+        isLeAudio() ->
         context.bluetoothTypeFor(rawName()) ?: AudioOutputType.BLUETOOTH_HEADPHONES
 
     else -> AudioOutputType.UNKNOWN
@@ -187,7 +188,10 @@ private fun AudioDeviceInfo.outputType(context: Context): AudioOutputType = when
  * Needs `BLUETOOTH_CONNECT`; returns null without it so the caller falls back to a generic type.
  */
 private fun Context.bluetoothTypeFor(deviceName: String): AudioOutputType? {
-    if (!hasBluetoothConnect()) return null
+    // Android can revoke this between route detection and class lookup. Apparently even
+    // headphones need a backstage pass; a missing one must not interrupt playback.
+    if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) !=
+        PackageManager.PERMISSION_GRANTED) return null
     val adapter = (getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
         ?: return null
 
@@ -260,6 +264,5 @@ private fun AudioDeviceInfo.rawName(): String = runCatching { productName?.toStr
     .trim()
 
 private fun Context.hasBluetoothConnect(): Boolean =
-    Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-        ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) ==
+    ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) ==
         PackageManager.PERMISSION_GRANTED

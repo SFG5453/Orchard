@@ -66,7 +66,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.model.Track
-import dev.sfg.orchard.mobile.ui.glass.glassFill
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
@@ -187,8 +186,8 @@ fun ArtistSectionBottomSheet(
                     singleLine = true,
                     shape = RoundedCornerShape(14.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = glassFill(CanopyColors.Surface),
-                        unfocusedContainerColor = glassFill(CanopyColors.Surface),
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
                         focusedBorderColor = LocalAccent.current.copy(alpha = 0.6f),
                         unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
                         focusedTextColor = CanopyColors.Text,

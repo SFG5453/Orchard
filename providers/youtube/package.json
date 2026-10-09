@@ -1,0 +1,28 @@
+{
+  "name": "@orchard/core-youtube",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "build:runtime": "esbuild src/runtime/index.js --bundle --platform=browser --format=iife --target=es2023 --legal-comments=none",
+    "test": "node --test test/*.test.js",
+    "build:po-minter": "node scripts/buildPoMinter.mjs"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "0.9.12",
+    "abort-controller": "3.0.0",
+    "bgutils-js": "4.0.3",
+    "fast-text-encoding": "1.0.6",
+    "jsdom": "26.1.0",
+    "youtubei.js": "18.1.0"
+  },
+  "devDependencies": {
+    "@jspm/core": "2.1.0",
+    "esbuild": "0.28.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}

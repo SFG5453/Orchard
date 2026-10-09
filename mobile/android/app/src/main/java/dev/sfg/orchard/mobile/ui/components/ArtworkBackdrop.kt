@@ -48,10 +48,8 @@ import dev.sfg.orchard.mobile.ui.theme.CanopyColors
  * a warmth in the background rather than a coloured screen. When [animated] it drifts slowly, which
  * is the same idea as the player's own glow but far more restrained.
  *
- * [rich] turns the restraint off, because frosted glass has nothing to be translucent over on a
- * near-black screen: the panes come out as grey cards. With it the wash becomes the screen — a
- * full vertical gradient of the cover's own tones with the pools laid over it — and the panes
- * finally read as glass sitting on top of something.
+ * The wash is the screen: a full vertical gradient of the cover's own tones with the pools laid
+ * over it, so frosted panes have something to be translucent over.
  *
  * Every animating value here is held as [State] and read inside the draw lambda rather than at
  * composition. This covers the whole window, and reading the drift during composition put a
@@ -62,15 +60,14 @@ fun ArtworkBackdrop(
     palette: ArtworkPalette,
     animated: Boolean,
     modifier: Modifier = Modifier,
-    rich: Boolean = false,
 ) {
     val tint = animateColorAsState(
-        if (rich) palette.accent.wash(0.12f, 0.32f, 0.18f) else palette.accent,
+        palette.accent.wash(0.12f, 0.32f, 0.18f),
         tween(900),
         label = "BackdropTint",
     )
     val base = animateColorAsState(
-        if (rich) palette.bottom.wash(0.06f, 0.18f, 0.04f) else palette.bottom,
+        palette.bottom.wash(0.06f, 0.18f, 0.04f),
         tween(900),
         label = "BackdropBase",
     )
@@ -104,7 +101,7 @@ fun ArtworkBackdrop(
             .drawBehind {
                 val phase = drift.value
                 val accent = tint.value
-                val glow = if (rich) RICH_GLOW_ALPHA else GLOW_ALPHA
+                val glow = GLOW_ALPHA
 
                 // Base is always AMOLED deep dark chrome
                 drawRect(CanopyColors.Chrome)
@@ -150,9 +147,4 @@ private fun Color.wash(minSaturation: Float, maxSaturation: Float, lightness: Fl
 }
 
 /** Low enough that body text keeps its contrast over the wash. */
-private const val GLOW_ALPHA = 0.12f
-
-/**
- * Behind glass the wash provides depth while staying deep, dark, and sleek.
- */
-private const val RICH_GLOW_ALPHA = 0.14f
+private const val GLOW_ALPHA = 0.14f

@@ -30,8 +30,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
@@ -64,7 +62,7 @@ fun SpotifySettingsCard(
         shape = shape,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
             SpotifyToggleRow(
                 title = "Spotify Canvas",
                 subtitle = "Animated artwork from Spotify",
@@ -147,15 +145,9 @@ private fun SpotifyToggleRow(
                 color = CanopyColors.Muted,
             )
         }
-        Switch(
+        SettingsSwitch(
             checked = checked,
             onCheckedChange = onChecked,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = LocalAccent.current,
-                uncheckedThumbColor = CanopyColors.Muted,
-                uncheckedTrackColor = CanopyColors.Canvas,
-            ),
         )
     }
 }

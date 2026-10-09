@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/auth">
+    <file alias="AuthWebView.qml">../app/qml/views/login/AuthWebView.qml</file>
+    <file alias="SpotifyLoginView.qml">../app/qml/views/login/SpotifyLoginView.qml</file>
+  </qresource>
+</RCC>

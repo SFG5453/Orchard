@@ -64,7 +64,7 @@ class ArtistImageRepository(http: OkHttpClient) {
     }
 
     private fun fetch(artistName: String): ArtistImages? {
-        val url = "https://www.theaudiodb.com/api/v1/json/2/search.php".toHttpUrl()
+        val url = "https://www.theaudiodb.com/api/v1/json/123/search.php".toHttpUrl()
             .newBuilder()
             .addQueryParameter("s", artistName)
             .build()

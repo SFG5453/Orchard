@@ -20,8 +20,6 @@
 package dev.sfg.orchard.mobile.download
 
 import android.util.Log
-import dev.sfg.orchard.mobile.auth.YouTubeSessionProvider
-import dev.sfg.orchard.mobile.model.AudioQuality
 import dev.sfg.orchard.mobile.playback.ResolvedStream
 import dev.sfg.orchard.mobile.playback.YouTubeStreamResolver
 import kotlinx.coroutines.Dispatchers
@@ -40,29 +38,13 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.coroutineContext
 
-/**
- * Downloads audio tracks through the same client-profile resolver used for playback.
- *
- * Public tracks use NewPipe through [YouTubeStreamResolver], with Innertube retained for
- * extraction failures and account-only uploads. The selected [AudioQuality] is preserved.
- */
+/** Downloads audio tracks through the same provider resolver playback uses, at its quality. */
 class TrackDownloader(
     private val http: OkHttpClient,
-    sessionProvider: YouTubeSessionProvider? = null,
     private val store: DownloadStore,
-    poTokenMinter: () -> dev.sfg.orchard.mobile.playback.YouTubePoTokenMinter? = { null },
-    challengeSolver: () -> dev.sfg.orchard.mobile.playback.YouTubeChallengeSolver? = { null },
-    qualityProvider: () -> AudioQuality = { AudioQuality.HIGH },
+    streams: () -> YouTubeStreamResolver,
 ) {
-    private val streamResolver by lazy {
-        YouTubeStreamResolver(
-            client = http,
-            sessionProvider = sessionProvider,
-            qualityProvider = qualityProvider,
-            poTokenMinter = poTokenMinter(),
-            challengeSolver = challengeSolver(),
-        )
-    }
+    private val streamResolver by lazy(streams)
     private data class ResumeIdentity(
         val mimeType: String,
         val contentLength: Long,
@@ -92,12 +74,7 @@ class TrackDownloader(
 
         Log.d(TAG, "Resolving stream for track: ${item.track.title} ($videoId)")
 
-        // Uploads live only in the listener's own library, so the guest client catalog cannot see
-        // them. Saying so before resolving is what separates "sign in to reach this" from the
-        // "video unavailable" a deleted track earns.
-        if (item.track.isUpload) streamResolver.markAccountOnly(videoId)
-
-        val resolved: ResolvedStream = runCatching { streamResolver.resolve(videoId) }
+        val resolved: ResolvedStream = runCatching { streamResolver.resolve(item.track) }
             .onFailure { Log.w(TAG, "Stream resolution failed for $videoId", it) }
             .getOrNull()
             ?: run {
@@ -139,7 +116,7 @@ class TrackDownloader(
         try {
             if (useParallelRanges) {
                 // A range download writes chunks out of order, so an old sequential partial cannot
-                // be reused safely. This mode is restricted to NewPipe URLs with an exact length.
+                // be reused safely. Only streams that declare parallel ranges and an exact length.
                 tempFile.delete()
                 downloadByRanges(
                     stream = resolved,

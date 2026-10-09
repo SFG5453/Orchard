@@ -31,12 +31,14 @@ class SettingsModelsTest {
         val settings = OrchardSettings()
         assertFalse(settings.onboardingCompleted)
         assertTrue(settings.animatedArtwork)
+        assertTrue(settings.sendYouTubeHistory)
+        assertEquals(listOf(ArtworkSource.M8TEC, ArtworkSource.BOIDU, ArtworkSource.SPOTIFY), settings.artworkSourceOrder)
         assertFalse(settings.downloadAnimatedArtwork)
         assertFalse(settings.animatedBackground)
         assertFalse(settings.crossfadeEnabled)
         assertFalse(settings.smartCrossfade)
-        assertFalse(settings.bestMixSupabaseSync)
         assertFalse(settings.volumeNormalizationEnabled)
+        assertFalse(settings.exponentialVolumeEnabled)
         assertEquals(AudioQuality.HIGH, settings.audioQuality)
         assertEquals(OrchardSettings.DEFAULT_CACHE_SIZE_MB, settings.cacheSizeMb)
         assertEquals(0L, settings.crossfadeMs)
@@ -72,6 +74,7 @@ class SettingsModelsTest {
             crossfadeSeconds = 5,
             smartCrossfade = true,
             audioQuality = AudioQuality.HIGH,
+            exponentialVolumeEnabled = true,
             cacheSizeMb = 2048,
         )
 
@@ -79,6 +82,7 @@ class SettingsModelsTest {
         assertTrue(configured.animatedBackground)
         assertTrue(configured.crossfadeEnabled)
         assertTrue(configured.smartCrossfade)
+        assertTrue(configured.exponentialVolumeEnabled)
         assertEquals(5000L, configured.crossfadeMs)
         assertEquals(2048 * 1024L * 1024L, configured.cacheSizeBytes)
     }

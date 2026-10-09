@@ -41,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +58,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
@@ -143,8 +145,16 @@ fun AnimatedArtworkVideo(
     modifier: Modifier = Modifier,
     onFrame: ((Bitmap) -> Unit)? = null,
     alignment: Alignment = Alignment.Center,
+    /** Display width over height, reported once the stream's size is known. */
+    onVideoAspect: ((Float) -> Unit)? = null,
 ) {
     if (url.isBlank()) return
+    // GIF covers chosen by the user are not video; the platform decoder animates them.
+    if (isGifArtwork(url)) {
+        AnimatedGifArtwork(url, active, modifier)
+        return
+    }
+    val currentOnVideoAspect by rememberUpdatedState(onVideoAspect)
     val context = LocalContext.current
     var failed by remember(url) { mutableStateOf(false) }
     var firstFrameReady by remember(url) { mutableStateOf(false) }
@@ -219,6 +229,12 @@ fun AnimatedArtworkVideo(
                 }
             }
 
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    currentOnVideoAspect?.invoke(videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height)
+                }
+            }
+
             override fun onPlayerError(error: PlaybackException) {
                 Log.w("AnimatedArtwork", "Animated artwork failed; retaining the still image: ${error.message}", error)
                 failed = true
@@ -257,7 +273,8 @@ fun AnimatedArtworkVideo(
 
     AndroidView(
         factory = { targetContext ->
-            (LayoutInflater.from(targetContext).inflate(R.layout.animated_artwork_player, null) as PlayerView).apply {
+            val layoutParent = android.widget.FrameLayout(targetContext)
+            (LayoutInflater.from(targetContext).inflate(R.layout.animated_artwork_player, layoutParent, false) as PlayerView).apply {
                 setVideoSurfaceAlignment(alignment)
                 this.player = player
                 setShutterBackgroundColor(AndroidColor.TRANSPARENT)
@@ -301,7 +318,8 @@ private fun PlayerView.setVideoSurfaceAlignment(alignment: Alignment) {
 }
 
 private const val FRAME_SAMPLE_WIDTH = 64
-private const val FRAME_SAMPLE_INTERVAL_MS = 1_500L
+// Each sample retints the whole backdrop over 500 ms; motion covers rarely change palette faster than this.
+private const val FRAME_SAMPLE_INTERVAL_MS = 4_000L
 
 @Composable
 fun ArtworkTile(

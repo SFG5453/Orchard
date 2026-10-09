@@ -31,14 +31,11 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
 
 /** Owns the encrypted cookie session captured by Orchard's native Android login screen. */
-/**
- * [profileLoader] returns the account's name and avatar URL. It is a lambda rather than a client
- * reference because the InnerTube client needs this repository as its session provider.
- */
 class NativeYouTubeAuthRepository(
     private val store: SecureYouTubeSessionStore,
     private val scope: CoroutineScope,
-    private val profileLoader: () -> Pair<String, String> = { "" to "" },
+    private val profileLoader: suspend (YouTubeSession) -> Pair<String, String> = { "" to "" },
+    private val switchValidator: suspend (YouTubeSession) -> Unit = {},
 ) : YouTubeSessionProvider {
     private val mutableState = MutableStateFlow<AuthState>(AuthState.Restoring)
     val state: StateFlow<AuthState> = mutableState.asStateFlow()
@@ -76,7 +73,14 @@ class NativeYouTubeAuthRepository(
         mutableState.value = AuthState.Authorizing
     }
 
-    fun completeSignIn(cookie: String, visitorData: String, dataSyncId: String) {
+    fun completeSignIn(
+        cookie: String,
+        visitorData: String,
+        dataSyncId: String,
+        accountIndex: Int = 0,
+        switchingAccount: Boolean = false,
+        pageAvatarUrl: String = "",
+    ) {
         val signInGeneration = generation.get()
         mutableState.value = AuthState.Authorizing
         scope.launch {
@@ -84,10 +88,19 @@ class NativeYouTubeAuthRepository(
                 val normalized = YouTubeSession(
                     cookie = cookie.trim(),
                     visitorData = visitorData.trim(),
-                    dataSyncId = YouTubeSessionAuth.normalizeDataSyncId(dataSyncId),
+                    dataSyncId = dataSyncId.trim(),
+                    accountIndex = accountIndex.coerceAtLeast(0),
+                    avatarUrl = pageAvatarUrl.trim(),
                 )
                 require(YouTubeSessionAuth.loginCookieValue(normalized.cookie) != null) {
                     "YouTube did not return a signed-in session."
+                }
+                if (switchingAccount) {
+                    val previous = activeSession ?: error("No YouTube account is signed in.")
+                    require(!YouTubeSessionAuth.sameAccount(previous, normalized)) {
+                        "Choose a different YouTube account or channel."
+                    }
+                    switchValidator(normalized)
                 }
                 val committed = withContext(Dispatchers.IO) { commitSession(normalized, signInGeneration) }
                 if (!committed) return@launch
@@ -96,7 +109,12 @@ class NativeYouTubeAuthRepository(
                 Log.w(TAG, "Native YouTube sign-in could not be completed", error)
                 synchronized(sessionGuard) {
                     if (generation.get() == signInGeneration) {
-                        mutableState.value = AuthState.Error(error.message ?: "Sign-in could not be completed.")
+                        val message = if (switchingAccount && error !is IllegalArgumentException) {
+                            "Could not verify the selected YouTube account. Please try again."
+                        } else {
+                            error.message ?: "Sign-in could not be completed."
+                        }
+                        mutableState.value = AuthState.Error(message)
                     }
                 }
             }
@@ -114,8 +132,8 @@ class NativeYouTubeAuthRepository(
      * Best-effort: the session stays usable with its fallback name if the call fails.
      */
     private suspend fun refreshProfile(expectedGeneration: Long) {
-        val profile = withContext(Dispatchers.IO) { runCatching { profileLoader() }.getOrNull() }
-            ?: return
+        val session = activeSession ?: return
+        val profile = runCatching { profileLoader(session) }.getOrNull() ?: return
         val (name, avatar) = profile
         if (name.isBlank() && avatar.isBlank()) return
 

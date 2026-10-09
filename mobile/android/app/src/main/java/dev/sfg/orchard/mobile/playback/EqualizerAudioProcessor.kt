@@ -55,7 +55,7 @@ class EqualizerAudioProcessor : BaseAudioProcessor() {
         return inputAudioFormat
     }
 
-    override fun isActive(): Boolean = sampleRate != 0
+    override fun isActive(): Boolean = super.isActive() && sampleRate != 0
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         val frames = inputBuffer.remaining() / (2 * channelCount)

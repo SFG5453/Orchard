@@ -1,68 +1,53 @@
-# Vocal-separation model (open-unmix, "umxhq" vocals target)
+# UMX-HQ vocals, FP32
 
-`vocals_umxhq_int8.onnx` is the committed, shipping model: the "vocals"
-target of **open-unmix's umxhq** checkpoint (Stöter & Liutkus, Inria/SigSep),
-converted to ONNX at a fixed frame count and dynamically quantized to int8.
+`vocals_umxhq_fp32.onnx` is the original Open-Unmix UMX-HQ vocals checkpoint,
+exported without quantization and specialized to 960 frames. Adaptive mix uses
+it to measure vocal presence for Earmark’s outgoing filter sweep.
 
-Used to duck the *outgoing* track's vocal specifically through an Earmark
-transition, instead of applying the same filter depth to every passage — see
-`electron/audio/vocalMaskTracker.js` and the Earmark renderer under
-`native-audio-rust/vendor/earmark/src/render`.
+## Source and license
 
-## Licensing
+- Code: <https://github.com/sigsep/open-unmix-pytorch> (`openunmix==1.3.0`).
+- Original FP32 weights: <https://zenodo.org/records/3370489/files/vocals-b62c91ce.pth>.
+- Checkpoint SHA-256: `b62c91cedbc7a066f1778ead5b5cecb377aa3a46a31af1cce7c5c8769339d083`.
+- UMX-HQ code and weights are MIT licensed; the full code license is in `LICENSE`.
+  This is the UMX-HQ vocals target, not the separately licensed UMXL checkpoint.
 
-Both the open-unmix **code and the umxhq/umx pretrained weights are
-MIT-licensed** — confirmed directly on the weights' own Zenodo deposit
-page (<https://zenodo.org/record/3370489>, "License: MIT License"), not just
-inferred from the code repository. This is the reason umxhq was picked over
-Meta's htdemucs: htdemucs's code is MIT but its *pretrained weights* are
-Meta's own CC-BY-NC-4.0 release — the same non-commercial trap Essentia's
-models hit — and htdemucs's ONNX export additionally has real unresolved
-blockers (complex-valued STFT ops, a custom multi-head-attention op) that
-every serious attempt so far has had to hand-patch around. umxhq's simpler
-BiLSTM-on-magnitude-spectrogram architecture exports cleanly with the
-standard TorchScript-based exporter and needs no patching.
+## Reproduce
 
-Only the **vocals** target is used. open-unmix trains vocals/drums/bass/other
-as four independent checkpoints; Orchard only needs to know how much of the
-outgoing track's *vocal* content is present at a given instant, not full
-4-stem reconstruction, so the other three targets were never downloaded.
+Run `scripts/convert-umx-vocals-to-onnx.py CHECKPOINT OUTPUT.onnx` in an environment
+with the versions documented in that script. It checks the source hash, loads
+weights safely, exports the core spectrogram model, and folds constant shape
+arithmetic. Python and PyTorch are build-time tools only.
 
-## Provenance
+V2 used a dynamically quantized INT8 export. This FP32 export keeps the original
+three-layer bidirectional LSTM and its full context; no retraining or architecture change.
 
-1. Downloaded directly from the weights' own Zenodo record:
-   `https://zenodo.org/records/3370489/files/vocals-b62c91ce.pth`, sha256
-   `b62c91cedbc7a066f1778ead5b5cecb377aa3a46a31af1cce7c5c8769339d083`. That
-   file (35.6 MB, fp32 PyTorch checkpoint) is a build input and is not
-   committed.
-2. Converted with `scripts/convert-umx-vocals-to-onnx.py` (fixed 960-frame
-   input, opset 17, legacy TorchScript exporter — see that script for why).
-   Verified against the original PyTorch checkpoint on the same input:
-   max absolute difference 2.7e-6 on an output range of [0, 1.2] — the ONNX
-   graph reproduces the checkpoint exactly, no export-induced drift.
-3. Dynamically quantized to int8 with ONNX Runtime
-   (`quantize_dynamic(..., weight_type=QuantType.QInt8)`; 9.05 MB, a quarter
-   of the fp32 size). Measured against fp32 on a synthetic spectrogram shaped
-   like real program material (spectral tilt, ramping harmonics, per-channel
-   noise floor) rather than uniform noise: mean absolute difference in the
-   vocal-band (200 Hz-4 kHz) duck curve derived from the mask was 0.018 on a
-   0-1 scale, well under anything audible as a gain change. sha256
-   `a2be987b55a29bc149d3a6ae99b08175d81f85ee292a8ea21f96c3a473bc94cb`.
+Playback runs it on ONNX Runtime's CPU provider with two non-spinning threads,
+about 0.15 s per 960-frame slice. The LSTM steps serially, so WebGPU spends
+13+ s on tiny dispatches and starves the compositor for the whole run.
 
-## Contract
+## Validation
 
-- Input `mix_magnitude`: `[1, 2, 2049, 960]` float32 — linear-frequency STFT
-  magnitude (not mel), n_fft 4096, hop 1024, Hann window, `center=True`,
-  44,100 Hz audio, stereo. Produced by
-  `earmark::analysis::WholeTrackAnalyzer::vocal_spectrogram`. The 2049 bins are the model's
-  full output range; internally it only reads the first 1487 (16 kHz
-  bandwidth) via a checkpoint-supplied `max_bin`, exactly as trained --
-  everything above that passes through unmodeled, which is fine since
-  vocals do not live there.
-- Output `target_magnitude`: `[1, 2, 2049, 960]` -- the model's estimate of
-  the vocal magnitude spectrogram, not a normalized mask. A per-bin mask is
-  `target_magnitude / (mix_magnitude + eps)`, clamped to `[0, 1]`.
-- Frame count is fixed at 960 (~22.8 s at this hop/rate), chosen to cover
-  `MAX_OVERLAP_SECONDS` (16, in `wsolaPlanner.js`) plus slice padding and
-  margin. Shorter input is zero-padded by the caller; there is no chunking
-  logic here because a transition overlap never needs more than one window.
+The FP32 WebGPU output was compared with the original PyTorch checkpoint on
+stereo music from the supplied transition reference:
+
+- Maximum magnitude error: `4.941225e-5` (output maximum `70.9773`).
+- Relative RMS error: `7.899375e-7`.
+- Vocal-band curve mean/max absolute error: `1.768956e-7` / `9.456151e-7`.
+
+The CPU provider output passes the same check on real music: relative RMS error
+`2.44e-7`, vocal-band curve max error `8.6e-7`.
+
+The `model_probe` Rust example uses the same CPU session settings as playback.
+`scripts/validate-vocal-model.py` reproduces parity checks on silence, a
+spectral stress signal, and optional real audio against the original checkpoint.
+
+## Tensor contract
+
+- Input `mix_magnitude`: float32 `[1, 2, 2049, 960]`, magnitude STFT,
+  44,100 Hz stereo, FFT 4096, hop 1024, periodic Hann, reflect-centered.
+- Output `target_magnitude`: float32 with the same shape.
+- Vocal presence: mean of clamped `target / mix` across channels and bins
+  covering 200 Hz–4 kHz, excluding effectively silent input bins.
+- Short windows are zero-padded. Search windows longer than 960 frames are
+  processed in bounded chunks.

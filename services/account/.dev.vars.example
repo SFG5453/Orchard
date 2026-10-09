@@ -1,0 +1,17 @@
+# Copy to .dev.vars for `npm run dev`. Point the app at it with
+# ORCHARD_ACCOUNT_URL=http://127.0.0.1:8787 and add
+# http://127.0.0.1:8787/auth/google/callback to the OAuth client.
+PUBLIC_URL=http://127.0.0.1:8787
+ARTWORK_PUBLIC_URL=http://127.0.0.1:8787
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+SIGNING_KEY=
+# Backblaze B2 bucket for Discord artwork (S3-compatible endpoint).
+B2_REGION=us-west-004
+B2_BUCKET=orchard-art
+B2_KEY_ID=
+B2_APPLICATION_KEY=
+# Bug reports. Leave empty to test everything but GitHub.
+GITHUB_CLIENT_SECRET=
+GITHUB_TOKEN=
+GITHUB_WEBHOOK_SECRET=

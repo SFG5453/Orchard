@@ -1,0 +1,22 @@
+// Qt Design Studio project for the Orchard QML. Open this file in Design Studio.
+// The Orchard C++ module is replaced by designstudio/imports/Orchard; backends are not available, so
+// edit the *Form.ui.qml and *.ui.qml files, which carry sample data.
+import QmlProject 1.1
+
+Project {
+    mainFile: "../app/qml/components/player/FullscreenPlayerForm.ui.qml"
+    qt6Project: true
+    importPaths: [ "imports", "../app/qml" ]
+
+    QmlFiles {
+        directory: "../app/qml"
+    }
+
+    ImageFiles {
+        directory: "../app/qml/assets"
+    }
+
+    FontFiles {
+        directory: "../app/qml/assets/fonts"
+    }
+}

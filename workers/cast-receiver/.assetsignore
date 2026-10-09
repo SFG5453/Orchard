@@ -1,7 +1,0 @@
-.wrangler/**
-node_modules/**
-package.json
-package-lock.json
-*.test.mjs
-wrangler*.jsonc
-.assetsignore

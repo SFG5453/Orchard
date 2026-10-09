@@ -1,25 +1,11 @@
-# Android's streaming resampler. Analysis, model frontends, and transitions are
-# all provided by the shared Rust/Earmark library built by Gradle.
+# The desktop QuickJS provider host in js/, the Orchard Connect core in connect/, and the
+# lyric translator in translation/.
+# Analysis, Best Mix, the transition planner and rendering come from the Rust
+# library (crates/orchard-transition-mobile).
 
 cmake_minimum_required(VERSION 3.22.1)
-project(orchard_resampler LANGUAGES CXX)
+project(orchard_native LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-add_library(orchard_resampler SHARED
-    analyzer/resampler.cpp
-    jni/resampler_jni.cpp
-    planner/pair_scorer.cpp
-    jni/pair_scorer_jni.cpp
-)
-
-target_include_directories(orchard_resampler PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party
-)
-
-target_compile_options(orchard_resampler PRIVATE -O3 -fvisibility=hidden)
-
-find_library(log-lib log)
-target_link_libraries(orchard_resampler ${log-lib})
+add_subdirectory(js)
+add_subdirectory(connect)
+add_subdirectory(translation)

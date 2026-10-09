@@ -82,7 +82,6 @@ enum class GlassTone {
  */
 @Stable
 class GlassStyle(
-    val enabled: Boolean = false,
     private val tintState: State<Color> = mutableStateOf(CanopyColors.Accent),
 ) {
     val tint: Color get() = tintState.value
@@ -189,23 +188,11 @@ private fun Modifier.recordInto(scene: GlassScene, wash: Boolean) = this
     }
 
 /**
- * The caller's own fill, unless a frosted pane is about to be painted underneath it instead.
- * Pair with [glassPane][dev.sfg.orchard.mobile.ui.glass.glassPane] on the same surface.
- *
- * [whenGlass] is for surfaces whose fill carried meaning — a selected row, an active device —
- * where clearing it outright would lose the distinction. Give those a translucent wash that
- * still lets the pane through instead.
- */
-@Composable
-fun glassFill(color: Color, whenGlass: Color = Color.Transparent): Color =
-    if (LocalGlass.current.enabled) whenGlass else color
-
-/**
  * Builds the style to provide, without handing the tree a new instance on every recomposition —
  * a static local compares by identity, and a fresh object would rebuild the whole app each time.
  */
 @Composable
-fun rememberGlassStyle(enabled: Boolean, tint: State<Color>): GlassStyle =
-    remember(enabled, tint) { GlassStyle(enabled, tint) }
+fun rememberGlassStyle(tint: State<Color>): GlassStyle =
+    remember(tint) { GlassStyle(tint) }
 
 internal const val GLASS_DOWNSCALE = 4f

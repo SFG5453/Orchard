@@ -36,6 +36,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.sfg.orchard.mobile.app.OrchardApp
 import dev.sfg.orchard.mobile.app.OrchardViewModel
+import dev.sfg.orchard.mobile.auth.OrchardAccountService
 import dev.sfg.orchard.mobile.ui.theme.OrchardTheme
 
 /** Thin Android entry point; app behavior lives in repositories and state holders. */
@@ -94,6 +95,10 @@ class MainActivity : FragmentActivity() {
         val uri = intent.data
         val dataString = uri?.toString().orEmpty()
         if (dataString.isBlank()) return
+        if (uri?.scheme == packageName && uri.host == "account" && uri.path == "/callback") {
+            OrchardAccountService.get(this).handleAuthCallback(uri)
+            return
+        }
         val isDiscordCallback = (uri?.scheme == "orchard" && uri.host == "discord") ||
             (uri?.scheme?.startsWith("discord-") == true)
         if (isDiscordCallback) {
@@ -104,11 +109,7 @@ class MainActivity : FragmentActivity() {
             }
             return
         }
-        if (uri?.scheme == "orchard-connect") {
-            viewModel.pairDevice(dataString)
-        } else {
-            viewModel.handleIncomingLink(dataString)
-        }
+        viewModel.handleIncomingLink(dataString)
     }
 
     private fun requestNotificationPermission() {

@@ -20,6 +20,8 @@
 package dev.sfg.orchard.mobile.discord
 
 import android.util.Log
+import dev.sfg.orchard.mobile.artwork.ArtistImageRepository
+import dev.sfg.orchard.mobile.catalog.CatalogRepository
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.PlaybackStatus
 import dev.sfg.orchard.mobile.model.Track
@@ -27,7 +29,6 @@ import dev.sfg.orchard.mobile.songlinks.SongLinksRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -38,12 +39,14 @@ import java.util.concurrent.atomic.AtomicLong
 
 /**
  * High-level coordinator connecting playback events, Discord authentication,
- * asset registration, SongLinks resolution, and Gateway presence updates.
+ * asset registration, public song links, and Gateway presence updates.
  */
 class DiscordPresenceCoordinator(
     http: OkHttpClient,
     private val auth: DiscordOAuthRepository,
     private val songLinks: SongLinksRepository,
+    private val artistImages: ArtistImageRepository,
+    private val catalog: CatalogRepository,
     private val scope: CoroutineScope,
 ) {
     private val gateway = DiscordGatewayClient(http, scope, refreshToken = { auth.forceRefresh() })
@@ -63,6 +66,11 @@ class DiscordPresenceCoordinator(
      * a round trip. Keyed by the artwork the activity was built from.
      */
     private val resolvedArtworkKeys: MutableMap<String, String> = Collections.synchronizedMap(
+        object : LinkedHashMap<String, String>(32, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > 100
+        }
+    )
+    private val resolvedArtistKeys: MutableMap<String, String> = Collections.synchronizedMap(
         object : LinkedHashMap<String, String>(32, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > 100
         }
@@ -147,11 +155,12 @@ class DiscordPresenceCoordinator(
             positionMs = positionMs,
             durationMs = durationMs,
             artworkKey = resolvedArtworkKeys[artworkCacheKey(track, animatedUrl)],
-            songLinkUrl = null,
+            artistKey = resolvedArtistKeys[artistCacheKey(track)],
+            songLinkUrl = songLinks.trackUrl(track),
         )
         gateway.updateActivity(immediateActivity)
 
-        // 2. Concurrently enhance with animated artwork & SongLinks
+        // 2. Enhance artwork; the song.link URL is already available locally.
         enhanceJob?.cancel()
         enhanceJob = scope.launch(Dispatchers.IO) {
             enhancePresence(
@@ -176,26 +185,19 @@ class DiscordPresenceCoordinator(
         val session = auth.getValidSession() ?: return@withContext
         if (requestId != currentRequestId.get()) return@withContext
 
-        val artworkDeferred = async {
-            assetRegistrar.resolveArtworkAsset(
-                accessToken = session.accessToken,
-                staticArtworkUrl = track.artworkUrl,
-                animatedArtworkUrl = animatedArtworkUrl,
-            )
-        }
-
-        val songLinkDeferred = async {
-            runCatching {
-                songLinks.resolveTrack(track).shareUrl
-            }.getOrNull()
-        }
-
-        val resolvedArtworkKey = artworkDeferred.await()
-        val resolvedSongLinkUrl = songLinkDeferred.await()
+        val resolvedArtworkKey = assetRegistrar.resolveArtworkAsset(
+            accessToken = session.accessToken,
+            staticArtworkUrl = track.artworkUrl,
+            animatedArtworkUrl = animatedArtworkUrl,
+        )
         if (!resolvedArtworkKey.isNullOrBlank()) {
             resolvedArtworkKeys[artworkCacheKey(track, animatedArtworkUrl)] = resolvedArtworkKey
         }
 
+        if (requestId != currentRequestId.get()) return@withContext
+
+        val artistKey = resolveArtistAsset(session.accessToken, track)
+        if (!artistKey.isNullOrBlank()) resolvedArtistKeys[artistCacheKey(track)] = artistKey
         if (requestId != currentRequestId.get()) return@withContext
 
         val enhancedActivity = buildActivity(
@@ -204,7 +206,8 @@ class DiscordPresenceCoordinator(
             positionMs = positionMs,
             durationMs = durationMs,
             artworkKey = resolvedArtworkKey,
-            songLinkUrl = resolvedSongLinkUrl,
+            artistKey = artistKey,
+            songLinkUrl = songLinks.trackUrl(track),
         )
 
         gateway.updateActivity(enhancedActivity)
@@ -213,12 +216,38 @@ class DiscordPresenceCoordinator(
     private fun artworkCacheKey(track: Track, animatedArtworkUrl: String?): String =
         "${animatedArtworkUrl.orEmpty()}|${track.artworkUrl.orEmpty()}"
 
+    private fun artistCacheKey(track: Track): String =
+        "${track.artists.firstOrNull()?.name?.ifBlank { track.artist } ?: track.artist}|${track.artistId}"
+
+    private suspend fun resolveArtistAsset(accessToken: String, track: Track): String? {
+        resolvedArtistKeys[artistCacheKey(track)]?.let { return it }
+        val name = track.artists.firstOrNull()?.name?.ifBlank { track.artist }
+            ?: track.artist.substringBefore(", ")
+        if (name.isBlank()) return null
+
+        val portrait = artistImages.images(name)?.portraitUrl.orEmpty()
+        if (portrait.isNotBlank()) {
+            assetRegistrar.registerExternalAsset(accessToken, portrait)?.let { return it }
+        }
+
+        // A channel avatar can still take the stage when TheAudioDB has no portrait.
+        val artistId = track.artists.firstOrNull()?.id?.ifBlank { track.artistId }
+            ?: track.artistId
+        val resolvedId = artistId.ifBlank {
+            runCatching { catalog.trackArtists(track.id).firstOrNull()?.id.orEmpty() }.getOrDefault("")
+        }
+        if (resolvedId.isBlank()) return null
+        val youtubePortrait = runCatching { catalog.browse(resolvedId).artworkUrl }.getOrDefault("")
+        return assetRegistrar.registerExternalAsset(accessToken, youtubePortrait)
+    }
+
     private fun buildActivity(
         track: Track,
         isPlaying: Boolean,
         positionMs: Long,
         durationMs: Long,
         artworkKey: String?,
+        artistKey: String?,
         songLinkUrl: String?,
     ): DiscordPresenceActivity {
         val title = trimDiscordText(track.title, fallback = "Music")
@@ -237,8 +266,8 @@ class DiscordPresenceCoordinator(
         val assets = DiscordPresenceAssets(
             largeImage = artworkKey?.takeIf(String::isNotBlank),
             largeText = album.ifBlank { title },
-            smallImage = null,
-            smallText = if (isPlaying) "Playing" else "Paused",
+            smallImage = artistKey?.takeIf(String::isNotBlank),
+            smallText = artist,
         )
 
         val buttons = buildList {

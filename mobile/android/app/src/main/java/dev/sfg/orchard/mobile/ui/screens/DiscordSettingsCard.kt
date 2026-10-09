@@ -38,8 +38,6 @@ import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -74,7 +72,7 @@ fun DiscordSettingsCard(
         shape = shape,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
             when (discordAuth) {
                 is DiscordAuthState.SignedIn -> {
                     val account = discordAuth.session.account
@@ -176,12 +174,6 @@ fun DiscordSettingsCard(
 
                 is DiscordAuthState.SignedOut, is DiscordAuthState.Error -> {
                     Text(
-                        "Discord",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = CanopyColors.Text,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
                         "Share what you’re listening to on Discord.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = CanopyColors.Muted,
@@ -241,16 +233,10 @@ private fun DiscordToggleRow(
                 color = CanopyColors.Muted,
             )
         }
-        Switch(
+        SettingsSwitch(
             checked = checked && enabled,
             enabled = enabled,
             onCheckedChange = onChecked,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = LocalAccent.current,
-                uncheckedThumbColor = CanopyColors.Muted,
-                uncheckedTrackColor = CanopyColors.Canvas,
-            ),
         )
     }
 }

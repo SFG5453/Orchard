@@ -20,34 +20,13 @@
 package dev.sfg.orchard.mobile.songlinks
 
 import dev.sfg.orchard.mobile.model.Track
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.test.runTest
-import okhttp3.OkHttpClient
-import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Test
 
 class SongLinksCoordinatorTest {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-    private val repository = SongLinksRepository(OkHttpClient())
-    private lateinit var coordinator: SongLinksCoordinator
-
-    @Before
-    fun setUp() {
-        coordinator = SongLinksCoordinator(repository, scope)
-    }
-
-    @After
-    fun tearDown() {
-        scope.cancel()
-    }
+    private val coordinator = SongLinksCoordinator(SongLinksRepository())
 
     @Test
     fun initialStateIsNull() {
@@ -57,7 +36,7 @@ class SongLinksCoordinatorTest {
     @Test
     fun dismissClearsState() {
         val track = Track(
-            id = "test-id",
+            id = "dQw4w9WgXcQ",
             title = "Test Song",
             artist = "Test Artist",
             album = "Test Album",
@@ -65,28 +44,29 @@ class SongLinksCoordinatorTest {
             artworkUrl = "https://example.com/art.jpg",
         )
         coordinator.shareTrack(track)
-        assertNotNull(coordinator.shareState.value)
+        val ready = coordinator.shareState.value as SongShareState.Ready
+        assertEquals("https://song.link/y/dQw4w9WgXcQ", ready.shareUrl)
 
         coordinator.dismissShare()
         assertNull(coordinator.shareState.value)
     }
 
     @Test
-    fun parsesDirectVideoLinks() = runTest {
-        val resolution = coordinator.resolveLink("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    fun parsesDirectVideoLinks() {
+        val resolution = coordinator.resolveLink("https://song.link/y/dQw4w9WgXcQ")
         assertTrue(resolution is LinkResolution.PlayTrack)
         assertEquals("dQw4w9WgXcQ", (resolution as LinkResolution.PlayTrack).track.id)
     }
 
     @Test
-    fun parsesBrowsePlaylistLinks() = runTest {
-        val resolution = coordinator.resolveLink("https://www.youtube.com/playlist?list=PL123456789")
+    fun parsesBrowsePlaylistLinks() {
+        val resolution = coordinator.resolveLink("https://album.link/y/PL123456789")
         assertTrue(resolution is LinkResolution.OpenCollection)
         assertEquals("PL123456789", (resolution as LinkResolution.OpenCollection).browseId)
     }
 
     @Test
-    fun nonLinksReturnNull() = runTest {
+    fun nonLinksReturnNull() {
         val resolution = coordinator.resolveLink("random search text")
         assertNull(resolution)
     }

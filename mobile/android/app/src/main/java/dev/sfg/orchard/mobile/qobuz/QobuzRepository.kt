@@ -21,6 +21,7 @@ package dev.sfg.orchard.mobile.qobuz
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,11 +65,11 @@ class QobuzRepository(
     }
 
     fun connect(token: String, userId: Long) {
-        prefs.edit()
-            .putString(KEY_TOKEN, token)
-            .putLong(KEY_USER_ID, userId)
-            .putBoolean(KEY_ENABLED, true)
-            .apply()
+        prefs.edit {
+            putString(KEY_TOKEN, token)
+            putLong(KEY_USER_ID, userId)
+            putBoolean(KEY_ENABLED, true)
+        }
 
         _status.value = _status.value.copy(
             status = "connected",
@@ -78,11 +79,11 @@ class QobuzRepository(
     }
 
     fun disconnect() {
-        prefs.edit()
-            .remove(KEY_TOKEN)
-            .remove(KEY_USER_ID)
-            .putBoolean(KEY_ENABLED, false)
-            .apply()
+        prefs.edit {
+            remove(KEY_TOKEN)
+            remove(KEY_USER_ID)
+            putBoolean(KEY_ENABLED, false)
+        }
 
         _status.value = _status.value.copy(
             status = "disconnected",
@@ -94,12 +95,12 @@ class QobuzRepository(
     fun setEnabled(enabled: Boolean) {
         val hasToken = prefs.getString(KEY_TOKEN, "").orEmpty().isNotBlank()
         val effective = enabled && hasToken
-        prefs.edit().putBoolean(KEY_ENABLED, effective).apply()
+        prefs.edit { putBoolean(KEY_ENABLED, effective) }
         _status.value = _status.value.copy(enabled = effective)
     }
 
     fun setQuality(quality: QobuzQuality) {
-        prefs.edit().putString(KEY_QUALITY, quality.id).apply()
+        prefs.edit { putString(KEY_QUALITY, quality.id) }
         _status.value = _status.value.copy(quality = quality)
     }
 

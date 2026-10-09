@@ -10,50 +10,35 @@
 -keep class ai.onnxruntime.providers.** { *; }
 -dontwarn ai.onnxruntime.**
 
-# LiteRT's JNI layer also resolves Java exception/API classes by hardcoded name.
-# R8 renaming `LiteRtException` makes nativeCreateFromAsset abort the process at
-# first playback analysis with "Failed to find LiteRtException class".
--keep class com.google.ai.edge.litert.** { *; }
--dontwarn com.google.ai.edge.litert.**
+# Listening Party peers bind these natives by name and are called back from C++.
+-keep class dev.sfg.orchard.mobile.social.PartyPeerNative { native <methods>; }
+-keep interface dev.sfg.orchard.mobile.social.PartyPeerNative$Listener { *; }
+-keep class * implements dev.sfg.orchard.mobile.social.PartyPeerNative$Listener {
+    void onSignal(java.lang.String);
+    void onOpen();
+    void onText(java.lang.String);
+    void onClosed(java.lang.String);
+}
 
-# WebRTC's native layer calls back into Java by hardcoded name, the same way ONNX
-# Runtime's does: observers, the enums it reads signalling state from, and the
-# constructors JNI instantiates are all resolved reflectively. Renaming any of them
-# fails at the first setRemoteDescription rather than at build time.
--keep class org.webrtc.** { *; }
--dontwarn org.webrtc.**
+# The shared adaptive-mix library binds these natives by name and calls `pair` back from Rust.
+-keep class dev.sfg.orchard.mobile.playback.smart.MixNative { native <methods>; }
+-keep interface dev.sfg.orchard.mobile.playback.smart.MixNative$BestMixPairs { *; }
+-keep class * implements dev.sfg.orchard.mobile.playback.smart.MixNative$BestMixPairs { *; }
+# Orchard Connect's native core binds these by name and calls the listener back from C++.
+-keep class dev.sfg.orchard.mobile.connect.ConnectNative { native <methods>; }
+-keep interface dev.sfg.orchard.mobile.connect.ConnectNative$Listener { *; }
+-keep class * implements dev.sfg.orchard.mobile.connect.ConnectNative$Listener {
+    void onHubSend(java.lang.String);
+    void onEvent(java.lang.String);
+    void onData(java.lang.String, java.lang.String, byte[]);
+}
+# The QuickJS provider host calls these callbacks by name from native code.
+-keep class dev.sfg.orchard.mobile.provider.ProviderHost { *; }
+-keep class * extends dev.sfg.orchard.mobile.provider.ProviderHost { *; }
+-keep class dev.sfg.orchard.mobile.provider.ProviderNative { native <methods>; }
 
-# WebRTC reaches Java through Chromium's jni_zero layer, whose C++ half looks up
-# org.jni_zero.JniInit by name from JNI_OnLoad, before any Java code has run. Nothing
-# on the Java side names that class, so shrinking drops it, and the native loader then
-# aborts the process outright: a bare SIGTRAP with no Java frames, raised by
-# System.loadLibrary at the first PeerConnectionFactory.initialize rather than anywhere
-# near the party code that asked for it.
--keep class org.jni_zero.** { *; }
--dontwarn org.jni_zero.**
-
-# The transition engine's generated bindings reach Rust through JNA, which resolves everything by
-# name at runtime and so cannot survive renaming. `Native.register` binds each `external fun` to
-# the native symbol *called the same thing*, and JNA reads the fields of its Structure subclasses
-# reflectively, so a renamed method or a stripped field is an UnsatisfiedLinkError on the first
-# transition rather than a build failure. JNA also references desktop AWT classes Android does
-# not have, on paths Orchard never reaches.
--keep class com.sun.jna.** { *; }
--keepclassmembers class * extends com.sun.jna.** { public *; }
--keep class dev.sfg.orchard.earmark.** { *; }
--dontwarn java.awt.**
-
-# NewPipeExtractor embeds Mozilla Rhino for YouTube cipher evaluation.
--keep class org.mozilla.javascript.** { *; }
--keep class org.mozilla.classfile.ClassFileWriter
--dontwarn org.mozilla.javascript.tools.**
-
-# The native Best Mix scorer exports a name-based JNI symbol for this Kotlin object.
--keep class dev.sfg.orchard.mobile.playback.smart.NativeBestMixPlanner { *; }
-
-# Rhino also contains optional JDK scripting/bean integrations. Android does
-# not provide these desktop-only APIs, and Orchard uses Rhino's core engine
-# for cipher evaluation rather than its javax.script or dynalink adapters.
--dontwarn java.beans.**
--dontwarn javax.script.**
--dontwarn jdk.dynalink.**
+# Strip verbose/debug logging from release; several sit on playback and UI hot paths.
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+}

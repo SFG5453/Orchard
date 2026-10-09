@@ -19,11 +19,6 @@
 
 package dev.sfg.orchard.mobile.qobuz
 
-const val QOBUZ_BASE_URL = "https://www.qobuz.com/api.json/0.2"
-const val QOBUZ_PLAY_URL = "https://play.qobuz.com"
-const val QOBUZ_USER_AGENT =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
-
 enum class QobuzQuality(val id: String, val label: String, val formatId: Int) {
     AUTO("auto", "Best available", 27),
     LOSSLESS("lossless", "CD lossless", 6),
@@ -39,55 +34,6 @@ data class QobuzSession(
     val token: String,
     val userId: Long,
 )
-
-data class QobuzBootstrap(
-    val appId: String,
-    val oauthPrivateKey: String,
-    val rngInit: String,
-    val bundlePath: String = "",
-)
-
-data class QobuzMatch(
-    val qobuzTrackId: Long,
-    val title: String,
-    val artist: String,
-    val album: String,
-    val durationSeconds: Int,
-    val isrc: String = "",
-    val explicit: Boolean = false,
-    val hires: Boolean = false,
-    val bitDepth: Int? = null,
-    val sampleRate: Int? = null,
-    val method: String = "search",
-    val confidence: Double = 1.0,
-)
-
-data class QobuzStreamSource(
-    val playbackId: String,
-    val trackId: Long,
-    val quality: QobuzQuality,
-    val formatId: Int,
-    val durationSeconds: Int,
-    val blob: String,
-    val trackContextUuid: String,
-    val urlTemplate: String,
-    val contentKey: ByteArray?,
-    val expiresAtMs: Long,
-    val bitDepth: Int?,
-    val sampleRate: Int?,
-    val channels: Int,
-    val hires: Boolean,
-    val bitrateKbps: Int,
-    val totalBytes: Long,
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is QobuzStreamSource) return false
-        return playbackId == other.playbackId
-    }
-
-    override fun hashCode(): Int = playbackId.hashCode()
-}
 
 data class QobuzStatus(
     val status: String = "disconnected",

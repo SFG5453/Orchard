@@ -21,13 +21,10 @@ package dev.sfg.orchard.mobile.artwork
 
 import android.util.Log
 import dev.sfg.orchard.mobile.model.BrowseDetail
+import dev.sfg.orchard.mobile.model.ArtworkSource
 import dev.sfg.orchard.mobile.model.Track
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
-import kotlinx.coroutines.joinAll
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -35,6 +32,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Locale
 
 data class TrackArtwork(
     val trackId: String,
@@ -55,6 +53,7 @@ data class TrackArtwork(
 class ArtworkRepository(
     http: OkHttpClient,
     private val spotifyCanvas: dev.sfg.orchard.mobile.spotify.SpotifyCanvasRepository? = null,
+    private val sourceOrder: () -> List<ArtworkSource> = { ArtworkSource.entries },
 ) {
     private val client: OkHttpClient = http.newBuilder()
         // The lookup only upgrades artwork after the fact, so it can afford to wait
@@ -72,49 +71,37 @@ class ArtworkRepository(
     }
 
     suspend fun artwork(track: Track): TrackArtwork? = withContext(Dispatchers.IO) {
-        val key = "${normalize(track.title)}::${normalize(track.artist)}::${normalize(track.album)}"
+        val order = sourceOrder().distinct().let { saved -> saved + ArtworkSource.entries.filterNot(saved::contains) }
+        val key = "${normalize(track.title)}::${normalize(track.artist)}::${normalize(track.album)}::${order.joinToString()}"
         if (key.startsWith("::") || track.title.isBlank() || track.artist.isBlank()) return@withContext null
         synchronized(cache) { if (cache.containsKey(key)) return@withContext cache[key] }
-        val resolved = coroutineScope {
-            // Canvas is asked in parallel so demoting it costs no latency, but it is only
-            // consulted once the artwork providers come back without motion: a Canvas is a fixed
-            // ~720p mp4 with no higher rendition, so letting it win on speed alone downgraded
-            // covers that a provider would have served at a higher resolution.
-            val canvas = spotifyCanvas?.let { canvasRepo ->
-                async { runCatching { canvasRepo.getCanvas(track.title, track.artist) }.getOrNull() }
-            }
-            val fromProviders = raceProviders(track)
-            if (fromProviders.hasMotion()) {
-                canvas?.cancel()
-                fromProviders
-            } else {
-                // The canvas repo stamps Spotify's own track id; consumers match artwork to the
-                // playing track by *our* id, so re-stamp it or the result is silently discarded.
-                canvas?.await()?.copy(trackId = track.id) ?: fromProviders
-            }
-        }
+        val resolved = orderedArtwork(track, order)
         synchronized(cache) { cache[key] = resolved }
         resolved
     }
 
-    /**
-     * First provider to answer wins, rather than strict priority order: they return equivalent
-     * data, and waiting for a preferred provider that has stalled costs the whole read timeout
-     * even when another already replied.
-     */
-    private suspend fun raceProviders(track: Track): TrackArtwork? = coroutineScope {
-        val first = CompletableDeferred<TrackArtwork?>()
-        val attempts = providers.map { provider ->
-            launch { fetch(provider, track)?.let(first::complete) }
+    private suspend fun orderedArtwork(track: Track, order: List<ArtworkSource>): TrackArtwork? = coroutineScope {
+        val attempts = order.associateWith { source ->
+            async {
+                if (source == ArtworkSource.SPOTIFY) {
+                    // Canvas carries Spotify's id; consumers match the playing YouTube id.
+                    runCatching { spotifyCanvas?.getCanvas(track.title, track.artist) }.getOrNull()
+                        ?.copy(trackId = track.id)
+                } else {
+                    providers.getValue(source).let { fetch(it, track) }
+                }
+            }
         }
-        val watchdog = launch {
-            attempts.joinAll()
-            first.complete(null)
+        var still: TrackArtwork? = null
+        for (source in order) {
+            val candidate = attempts.getValue(source).await()
+            if (candidate.hasMotion()) {
+                attempts.values.forEach { it.cancel() }
+                return@coroutineScope candidate
+            }
+            if (still == null) still = candidate
         }
-        first.await().also {
-            attempts.forEach(Job::cancel)
-            watchdog.cancel()
-        }
+        still
     }
 
     suspend fun artwork(detail: BrowseDetail): TrackArtwork? = withContext(Dispatchers.IO) {
@@ -165,9 +152,30 @@ class ArtworkRepository(
                 val values = JSONArray(text)
                 values.optJSONObject(0) ?: return null
             }
-            normalizeResponse(provider.id, root, track)
+            val artwork = normalizeResponse(provider.id, root, track) ?: return null
+            if (provider.id == "boidu" && !verifyBoiduAlbum(root.cleanString("albumId"), track.album)) {
+                return null
+            }
+            artwork
         }
     }.onFailure { Log.w(TAG, "Artwork provider ${provider.id} failed", it) }.getOrNull()
+
+    /** Boidu searches by song; Apple identifies the album behind its numeric albumId. */
+    private fun verifyBoiduAlbum(albumId: String, expectedAlbum: String): Boolean {
+        if (albumId.isBlank() || expectedAlbum.isBlank()) return true
+        val url = "https://itunes.apple.com/lookup".toHttpUrl().newBuilder()
+            .addQueryParameter("id", albumId)
+            .build()
+        return runCatching {
+            client.newCall(Request.Builder().url(url).header("User-Agent", USER_AGENT).build()).execute().use { response ->
+                if (!response.isSuccessful) return@use true
+                val collection = JSONObject(response.body.string())
+                    .optJSONArray("results")?.optJSONObject(0)?.cleanString("collectionName").orEmpty()
+                // An unavailable lookup cannot prove a mismatch; keep the song-keyed result.
+                collection.isBlank() || editionlessMatch(collection, expectedAlbum)
+            }
+        }.getOrDefault(true)
+    }
 
     private fun providerUrl(provider: Provider, track: Track): okhttp3.HttpUrl? {
         val base = provider.baseUrl.toHttpUrl().newBuilder()
@@ -185,14 +193,6 @@ class ArtworkRepository(
             else -> base
                 .addQueryParameter("s", track.title)
                 .addQueryParameter("a", track.artist)
-                .apply {
-                    if (provider.id == "orchard" && track.album.isNotBlank()) {
-                        addQueryParameter("albumName", track.album)
-                    }
-                    if (provider.id == "orchard" && track.durationMs > 0) {
-                        addQueryParameter("duration", (track.durationMs / 1_000).toString())
-                    }
-                }
                 .build()
         }
     }
@@ -200,9 +200,12 @@ class ArtworkRepository(
     internal fun normalizeResponse(providerId: String, root: JSONObject, track: Track): TrackArtwork? {
         if (root.has("error")) return null
         val accepted = if (providerId == "m8tec") {
-            looseMatch(root.cleanString("artist"), track.artist) && looseMatch(root.cleanString("album"), track.album)
+            looseMatch(root.cleanString("artist"), track.artist) &&
+                editionlessMatch(root.cleanString("album"), track.album)
         } else {
-            (exactMatch(root.cleanString("name"), track.title) || (track.album.isNotBlank() && exactMatch(root.cleanString("name"), track.album))) && looseMatch(root.cleanString("artist"), track.artist)
+            (editionlessMatch(root.cleanString("name"), track.title) ||
+                (track.album.isNotBlank() && editionlessMatch(root.cleanString("name"), track.album))) &&
+                looseMatch(root.cleanString("artist"), track.artist)
         }
         if (!accepted) return null
         val staticUrl = root.cleanString("static")
@@ -226,29 +229,41 @@ class ArtworkRepository(
         return if (value.equals("null", ignoreCase = true)) "" else value
     }
 
-    private fun exactMatch(left: String, right: String): Boolean =
-        normalize(left).isNotBlank() && normalize(left) == normalize(right)
+    private fun editionlessMatch(left: String, right: String): Boolean {
+        fun stripEdition(value: String): String {
+            val stripped = normalize(value.replace(BRACKETED, "").replace(EDITION_SUFFIX, ""))
+            // A bracket-only title still needs a name to compare. (Untitled) is trying its best.
+            return stripped.ifBlank { normalize(value) }
+        }
+        val normalized = stripEdition(left)
+        return normalized.isNotBlank() && normalized == stripEdition(right)
+    }
 
     private fun looseMatch(left: String, right: String): Boolean {
         val first = normalize(left)
         val second = normalize(right)
-        return first.isBlank() || second.isBlank() || first == second || first.contains(second) || second.contains(first)
+        return first.isNotBlank() && second.isNotBlank() &&
+            (first == second || first.contains(second) || second.contains(first))
     }
 
-    private fun normalize(value: String): String = value.lowercase()
+    private fun normalize(value: String): String = value.lowercase(Locale.ROOT)
         .replace("&", " and ")
         .replace(NON_ALPHANUMERIC, " ")
         .trim()
         .replace(MULTIPLE_SPACES, " ")
 
     private companion object {
-        val providers = listOf(
-            Provider("m8tec", "https://artwork.m8tec.top/"),
-            Provider("boidu", "https://artwork.boidu.dev/"),
-            Provider("orchard", "https://artwork.sfg545.dev/"),
+        val providers = mapOf(
+            ArtworkSource.M8TEC to Provider("m8tec", "https://artwork.m8tec.top/"),
+            ArtworkSource.BOIDU to Provider("boidu", "https://artwork.boidu.dev/"),
         )
-        val NON_ALPHANUMERIC = Regex("[^a-z0-9]+")
+        val NON_ALPHANUMERIC = Regex("[^\\p{L}\\p{N}\\s]+")
         val MULTIPLE_SPACES = Regex("\\s+")
+        val BRACKETED = Regex("\\s*[\\(\\[][^\\)\\]]*[\\)\\]]")
+        val EDITION_SUFFIX = Regex(
+            "\\s+-\\s+[^-]*\\b(single|ep|deluxe|edition|version|remaster(ed)?|expanded|anniversary|bonus)\\b.*$",
+            RegexOption.IGNORE_CASE,
+        )
         const val USER_AGENT = "Orchard Android/2.0"
         const val TAG = "ArtworkRepository"
     }

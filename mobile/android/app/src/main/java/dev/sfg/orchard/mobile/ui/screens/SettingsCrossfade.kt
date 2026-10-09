@@ -22,25 +22,19 @@ package dev.sfg.orchard.mobile.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import dev.sfg.orchard.mobile.model.LocalMaxActive
 import dev.sfg.orchard.mobile.model.OrchardSettings
-import dev.sfg.orchard.mobile.ui.theme.CanopyColors
-import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import kotlin.math.roundToInt
 
 /**
@@ -49,97 +43,60 @@ import kotlin.math.roundToInt
  */
 @Composable
 internal fun CrossfadeRow(settings: OrchardSettings, onSettings: (OrchardSettings) -> Unit) {
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-
-            Column(Modifier.weight(1f).padding(end = 14.dp)) {
-                Text(
-                    "Crossfade",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = CanopyColors.Text,
-                )
-                Text(
-                    if (settings.crossfadeEnabled) {
-                        "Tracks overlap for ${settings.crossfadeSeconds}s"
-                    } else {
-                        "Blend the end of a track into the next"
-                    },
-                    color = CanopyColors.Muted,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-            Switch(
-                checked = settings.crossfadeEnabled,
-                onCheckedChange = { onSettings(settings.copy(crossfadeEnabled = it)) },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = LocalAccent.current,
-                    uncheckedThumbColor = CanopyColors.Muted,
-                    uncheckedTrackColor = CanopyColors.Canvas,
-                ),
-            )
-        }
+    val maxActive = LocalMaxActive.current
+    Column {
+        ToggleRow(
+            title = "Crossfade",
+            subtitle = if (settings.crossfadeEnabled) {
+                "Tracks overlap for ${settings.crossfadeSeconds}s"
+            } else {
+                "Blend the end of a track into the next"
+            },
+            icon = Icons.Rounded.Waves,
+            checked = settings.crossfadeEnabled,
+            onChecked = { onSettings(settings.copy(crossfadeEnabled = it)) },
+        )
         AnimatedVisibility(visible = settings.crossfadeEnabled) {
             Column {
-                Spacer(Modifier.height(6.dp))
-                Slider(
-                    value = settings.crossfadeSeconds.toFloat(),
-                    onValueChange = {
-                        onSettings(settings.copy(crossfadeSeconds = it.roundToInt()))
-                    },
-                    valueRange = OrchardSettings.MIN_CROSSFADE_SECONDS.toFloat()..
-                        OrchardSettings.MAX_CROSSFADE_SECONDS.toFloat(),
-                    // One stop per whole second between the ends.
-                    steps = OrchardSettings.MAX_CROSSFADE_SECONDS - OrchardSettings.MIN_CROSSFADE_SECONDS - 1,
-                    colors = SliderDefaults.colors(
-                        thumbColor = LocalAccent.current,
-                        activeTrackColor = LocalAccent.current,
-                        inactiveTrackColor = CanopyColors.Canvas,
-                        activeTickColor = Color.Transparent,
-                        inactiveTickColor = Color.Transparent,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Row(Modifier.fillMaxWidth()) {
-                    Text(
-                        "${OrchardSettings.MIN_CROSSFADE_SECONDS}s",
-                        color = CanopyColors.Eyebrow,
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.weight(1f),
+                // Indented to sit under the title, past the icon tile.
+                Column(Modifier.padding(start = 72.dp, end = 20.dp, bottom = 12.dp)) {
+                    Slider(
+                        value = settings.crossfadeSeconds.toFloat(),
+                        onValueChange = { onSettings(settings.copy(crossfadeSeconds = it.roundToInt())) },
+                        valueRange = OrchardSettings.MIN_CROSSFADE_SECONDS.toFloat()..
+                            OrchardSettings.MAX_CROSSFADE_SECONDS.toFloat(),
+                        // One stop per whole second between the ends.
+                        steps = OrchardSettings.MAX_CROSSFADE_SECONDS - OrchardSettings.MIN_CROSSFADE_SECONDS - 1,
+                        colors = settingsSliderColors(),
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                    Text(
-                        "${OrchardSettings.MAX_CROSSFADE_SECONDS}s",
-                        color = CanopyColors.Eyebrow,
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                }
-                Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f).padding(end = 14.dp)) {
+                    Row(Modifier.fillMaxWidth()) {
                         Text(
-                            "Smart crossfade",
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontWeight = FontWeight.Medium,
-                            ),
-                            color = CanopyColors.Text,
+                            "${OrchardSettings.MIN_CROSSFADE_SECONDS}s",
+                            color = SettingsStyle.Caption,
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.weight(1f),
                         )
                         Text(
-                            "Place the overlap on the beat and end it where the music does",
-                            color = CanopyColors.Muted,
-                            style = MaterialTheme.typography.bodySmall,
+                            "${OrchardSettings.MAX_CROSSFADE_SECONDS}s",
+                            color = SettingsStyle.Caption,
+                            style = MaterialTheme.typography.labelMedium,
                         )
                     }
-                    Switch(
-                        checked = settings.smartCrossfade,
-                        onCheckedChange = { onSettings(settings.copy(smartCrossfade = it)) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = LocalAccent.current,
-                            uncheckedThumbColor = CanopyColors.Muted,
-                            uncheckedTrackColor = CanopyColors.Canvas,
-                        ),
-                    )
                 }
+                PanelDivider()
+                ToggleRow(
+                    title = "Adaptive mix",
+                    subtitle = if (maxActive) {
+                        "Unavailable while audio quality is Max"
+                    } else {
+                        "Place the overlap on the beat and end it where the music does"
+                    },
+                    icon = Icons.Rounded.AutoAwesome,
+                    checked = settings.smartCrossfade && !maxActive,
+                    onChecked = { onSettings(settings.copy(smartCrossfade = it)) },
+                    enabled = !maxActive,
+                )
             }
         }
     }

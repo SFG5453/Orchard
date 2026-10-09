@@ -20,7 +20,8 @@
 package dev.sfg.orchard.mobile.ui.foldable
 
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -36,8 +37,8 @@ val FoldableChromeHeight: Dp = 84.dp
 /** Returns whether the current device viewport qualifies as foldable unfolded or tablet. */
 @Composable
 fun isFoldableOrWideLayout(): Boolean {
-    val config = LocalConfiguration.current
-    return config.screenWidthDp >= FOLDABLE_MIN_WIDTH_DP
+    val width = LocalWindowInfo.current.containerSize.width
+    return with(LocalDensity.current) { width.toDp() >= FOLDABLE_MIN_WIDTH_DP.dp }
 }
 
 /** Returns whether the underlying physical hardware is a book-style foldable device (excludes clamshell/flip phones). */
@@ -62,9 +63,9 @@ fun isFoldableDevice(): Boolean {
  */
 @Composable
 fun isFoldableActive(): Boolean {
-    val config = LocalConfiguration.current
-    val minDim = minOf(config.screenWidthDp, config.screenHeightDp)
-    val maxDim = maxOf(config.screenWidthDp, config.screenHeightDp)
+    val container = LocalWindowInfo.current.containerSize
+    val minDim = with(LocalDensity.current) { minOf(container.width, container.height).toDp().value }
+    val maxDim = maxOf(container.width, container.height)
 
     // A book foldable inner screen must have both dimensions large (at least 580dp)
     // and an aspect ratio near square (typically 1.0 to 1.25, <= 1.28).
@@ -72,12 +73,11 @@ fun isFoldableActive(): Boolean {
     // Tablets have aspect ratios >= 1.33 (4:3) or 1.60 (16:10), so they are excluded.
     if (minDim < 580) return false
 
-    val aspectRatio = maxDim.toFloat() / minDim.toFloat()
+    val aspectRatio = maxDim.toFloat() / minOf(container.width, container.height).coerceAtLeast(1)
     val isSquareFoldableAspect = aspectRatio <= 1.28f
 
     val hasFoldableHardware = isFoldableDevice()
-    val isWideEnough = config.screenWidthDp >= FOLDABLE_MIN_WIDTH_DP
+    val isWideEnough = with(LocalDensity.current) { container.width.toDp() >= FOLDABLE_MIN_WIDTH_DP.dp }
 
     return (hasFoldableHardware && isWideEnough && aspectRatio <= 1.30f) || isSquareFoldableAspect
 }
-

@@ -22,6 +22,7 @@ package dev.sfg.orchard.mobile.widget
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.core.graphics.scale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -67,11 +68,10 @@ internal class WidgetArtworkLoader(
     private fun Bitmap.fitInside(maxEdge: Int): Bitmap {
         val largest = maxOf(width, height)
         if (largest <= maxEdge) return this
-        val scale = maxEdge.toFloat() / largest
-        return Bitmap.createScaledBitmap(
-            this,
-            (width * scale).toInt().coerceAtLeast(1),
-            (height * scale).toInt().coerceAtLeast(1),
+        val factor = maxEdge.toFloat() / largest
+        return scale(
+            (width * factor).toInt().coerceAtLeast(1),
+            (height * factor).toInt().coerceAtLeast(1),
             true,
         )
     }

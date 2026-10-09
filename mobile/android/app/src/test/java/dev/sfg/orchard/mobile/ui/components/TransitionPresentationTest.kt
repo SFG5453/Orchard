@@ -121,6 +121,20 @@ class TransitionPresentationTest {
     }
 
     @Test
+    fun `skipping into the planned next song does not show a mix`() {
+        val playback = PlaybackSnapshot(
+            currentTrack = incoming,
+            queue = listOf(outgoing, incoming),
+            currentIndex = 1,
+            positionMs = 12_500,
+            durationMs = incoming.durationMs,
+        )
+
+        assertEquals(0f, transitionProgress(playback, marker()), 0f)
+        assertFalse(transitionPresentation(playback, marker()).incomingDominant)
+    }
+
+    @Test
     fun `stretched render projects incoming time using rendered duration`() {
         val playback = PlaybackSnapshot(
             currentTrack = outgoing, queue = listOf(outgoing, incoming), currentIndex = 0,

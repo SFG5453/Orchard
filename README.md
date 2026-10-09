@@ -1,264 +1,184 @@
 <div align="center">
-  <img src="public/orchard-logo.png" alt="Orchard logo" width="120" height="120">
+  <img src="app/qml/assets/orchard-logo.png" alt="Orchard logo" width="120" height="120">
 
-  # Orchard
+# Orchard
 
-  ### A Power-User Desktop Client for YouTube Music
+**Your YouTube Music library, with more control over how you listen.**
 
-  **Beat-Matched Smart Crossfade • Best Mix Queueing • 10-Band Audiophile EQ • Orchard Connect • Local Replay • Listening Parties**
+Adaptive mixes · Best Mix queues · Synced lyrics · Lossless audio · Orchard Connect
 
-  <p align="center">
-    <a href="https://sfg545.dev/orchard"><img src="https://img.shields.io/github/v/release/SFG5453/Orchard?style=flat-square&color=8A2BE2&label=Latest%20Release" alt="Latest release"></a>
-    <a href="https://github.com/SFG5453/Orchard/releases"><img src="https://img.shields.io/github/v/release/SFG5453/Orchard?include_prereleases&sort=semver&style=flat-square&color=orange&label=Latest%20Beta" alt="Latest Beta"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg?style=flat-square" alt="License"></a>
-    <a href="https://sfg545.dev/orchard"><img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-informational?style=flat-square" alt="Platforms"></a>
-    <a href="https://ko-fi.com/sfg545"><img src="https://img.shields.io/badge/Support-Ko--fi-ff5e5b.svg?style=flat-square&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
+  <p>
+    <a href="https://sfg545.dev/orchard"><img src="https://img.shields.io/badge/Download-Orchard-8A2BE2?style=flat-square" alt="Download Orchard"></a>
+    <a href="#download"><img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20Android-informational?style=flat-square" alt="Windows, Linux, and Android"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0--or--later-blue?style=flat-square" alt="AGPL-3.0-or-later license"></a>
+    <a href="https://ko-fi.com/sfg545"><img src="https://img.shields.io/badge/Support-Ko--fi-ff5e5b?style=flat-square&logo=ko-fi&logoColor=white" alt="Support on Ko-fi"></a>
   </p>
 
-  <p align="center">
-    <a href="#download"><b>Download</b></a> •
-    <a href="#features"><b>Features</b></a> •
-    <a href="#smart-crossfade-in-action"><b>Smart Crossfade</b></a> •
-    <a href="#orchard-mobile-for-android"><b>Android App</b></a> •
-    <a href="#building-from-source"><b>Build</b></a> •
-    <a href="https://github.com/SFG5453/Orchard/issues"><b>Issues</b></a>
+  <p>
+    <a href="#download"><b>Download</b></a> ·
+    <a href="#features"><b>Features</b></a> ·
+    <a href="#orchard-mobile-for-android"><b>Android app</b></a> ·
+    <a href="#getting-started"><b>Getting started</b></a> ·
+    <a href="#building-from-source"><b>Build</b></a>
   </p>
 </div>
 
----
+Orchard is an open-source music player for Windows, Linux, and Android. Browse your YouTube Music recommendations, library, and playlists, shape the sound, and move playback between your computer and phone. The desktop app uses a native Qt interface and Rust audio core.
 
-## Overview
+Orchard is an independent project and is not affiliated with or endorsed by Google, YouTube, or Qobuz.
 
-**Orchard** is an open-source, high-performance YouTube Music desktop client built for listeners who demand more control over playback dynamics, sound quality, queue intelligence, and connected devices than the web player provides.
+## Screenshots
 
-By pairing an embedded browser session with a native Rust audio engine and machine-learning analysis, Orchard delivers audiophile-grade processing, seamless DJ-style transitions, LAN multi-device sync, and deep desktop integration—all while honoring your existing library and playlists.
+<div align="center">
+  <img src="docs/screenshots/home.png" width="100%" alt="Orchard desktop Home with recommendations, playlists, and the player bar">
+</div>
 
-> [!NOTE]
-> Orchard connects directly to YouTube Music via browser-backed InnerTube requests. It is an independent open-source project and is not affiliated with or endorsed by Google or YouTube.
-
----
-
-## Highlights
-
-| **Smart AutoMix Crossfade** | **Best Mix Queue Intelligence** | **Audiophile Audio Engine** |
-| :--- | :--- | :--- |
-| Beat-matched, phrase-aligned transitions with quantized downbeat sync, bass swaps, and filter sweeps. | Sort queues harmonically using Camelot musical keys and BPM for seamless flow between tracks. | 10-band manual EQ, Auto-EQ profiles, dynamic loudness leveling, and live real-time spectrum analysis. |
-
-| **Orchard Connect Ecosystem** | **Local Replay & Discovery** | **First-Class Desktop Native** |
-| :--- | :--- | :--- |
-| Seamlessly hand off playback and control desktop sessions from Android or LAN web controllers. | Year-round offline listening stats, Release Radar, synced lyrics, and nearby live-show discovery. | Discord Rich Presence (with animated art), Last.fm scrobbling, local disk caching, and media keys. |
-
----
-
-## Smart Crossfade in Action
-
-Orchard reproduces beat-matched, phrase-aligned AutoMix transitions inspired by [Apple Music's AutoMix](https://support.apple.com/en-us/105067), utilizing 3-phase volume curves, progressive filter sweeps, downbeat quantization, and seamless bass frequency swaps.
-
-https://github.com/user-attachments/assets/d846542c-b65a-44f3-809f-6a65527322a9
-
----
-
-## Features
-
-### Playback and Queues
-* **Real Shuffle & Autoplay:** Eliminate YouTube's repetitive shuffle bias with true randomized or weighted queues.
-* **Best Mix Queue Sorting:** Reorder any queue or playlist harmonically using BPM and musical key metadata.
-* **Smart & Fixed Crossfade:** Seamless transitions with automatic tempo/beat alignment or configurable 1–12s fixed fades.
-* **Song Caching & Prefetching:** Prefetches upcoming queue tracks to local disk for instantaneous, gapless playback.
-* **State Persistence:** Automatically restores your exact queue, position, and playback context across restarts.
-* **Desktop Controls:** Global media keys, customizable system tray menu, sleep timer, and fullscreen visualizer mode.
-
-### Orchard Audio Engine
-* **10-Band Graphic Equalizer:** Precision tuning with customizable frequency bands and profile import/export.
-* **Auto-EQ Integration:** Apply tailored equalization profiles for hundreds of headphone and speaker models.
-* **Dynamic Leveling & Gain Memory:** Automatic loudness normalization with persistent per-track gain calibration.
-* **Live Spectrum Visualizer:** Real-time audio frequency visualizer rendered at 60+ FPS.
-* **Output Device Routing:** Route music to dedicated DACs or audio outputs independently of OS system defaults.
-* **Native C++ / N-API Analyzer:** Fast, low-latency DSP processing built directly in native code.
-
-### Library, Lyrics, and Discovery
-* **Full YouTube Music Integration:** Seamless browsing of Home, Search, Library, Playlists, Albums, Artists, and Podcasts.
-* **Synced & Static Lyrics:** Real-time synchronized lyrics with multiple fallback resolvers.
-* **Local Replay:** Private, on-device listening statistics for top tracks, artists, albums, and total listening time.
-* **Release Radar & Radio:** Discover new drops from followed artists and personalized infinite radio stations.
-* **Live Concert Discovery:** Find upcoming tour dates and live shows near you powered by Ticketmaster.
-
-### Social and Connected Listening
-* **Orchard Connect:** Secure, local-network remote control and playback handoff with Android devices and web companions.
-* **P2P Listening Parties:** Listen together in real-time with friends over synchronized peer-to-peer audio sessions.
-* **Discord Rich Presence:** Dynamic Discord status displaying current track, artist, album, and animated cover art.
-* **Last.fm Scrobbling:** Real-time now-playing notifications and accurate play scrobbling.
-* **Universal Song Links:** Generate shareable Orchard Song Links that bridge across music platforms.
-
-### Appearance and Personalization
-* **Adaptive Artwork UI:** Interface background dynamically shifts palette to match current album artwork.
-* **OLED Dark Mode & System Themes:** Pitch-black OLED theme or automatic OS theme following.
-* **Artist Packs:** Community-created custom skins, artwork variants, custom layouts, and ambient page effects.
-* **Account Switching:** Fast multi-account switcher with cached sign-in credentials.
-
----
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/artist.png" alt="Artist page with popular songs and the latest release"></td>
+    <td width="50%"><img src="docs/screenshots/lyrics.png" alt="Fullscreen player with album artwork and synced lyrics"></td>
+  </tr>
+  <tr>
+    <td align="center">Explore artists and their music</td>
+    <td align="center">Follow along with synced lyrics</td>
+  </tr>
+</table>
 
 ## Download
 
-| **Stable Release** | **Latest Beta (Pre-Release)** | **Canary (Nightly / Automated)** |
-| :--- | :--- | :--- |
-| Recommended for general use. Thoroughly tested and verified. | Preview upcoming features, fixes, and experimental changes. | Automated, bleeding-edge builds straight from active development. |
-| **[Download Stable](https://sfg545.dev/orchard)** | **[View Pre-Releases](https://github.com/SFG5453/Orchard/releases)** | **[Download Android Canary ZIP](https://nightly.link/SFG5453/Orchard/workflows/android-canary-build/canary/Orchard-Canary-APK.zip)** |
+**[Download Orchard](https://sfg545.dev/orchard)** for your device.
 
-### Available Packages
+| Platform | Available packages |
+| :--- | :--- |
+| **Windows** | Setup installer (`.exe`) or portable archive (`.7z`), x64 |
+| **Linux** | AppImage (`.AppImage`) or native Orchard launcher, x64 |
+| **Android** | Standalone app (`.apk`), Android 12 or later |
 
-| Platform | Package Formats | Architecture |
-| :--- | :--- | :--- |
-| **Windows** | NSIS Installer (`.exe`), manager ZIP (`.zip`) | x64, arm64 |
-| **Linux** | Debian (`.deb`), RPM (`.rpm`), Flatpak (`.flatpak`), Arch Linux (`.pkg.tar.zst`), manager archive (`.tar.zst`) | x64, arm64 |
-| **macOS** | ZIP Packages (`.zip`) | Apple Silicon, Intel |
-| **Android** | Standalone APK (`.apk`), Canary ZIP (`.zip`) | arm64-v8a |
+The desktop installer downloads the app and its required components on first install. Managed desktop installs check for updates automatically and download the files that changed. See [Updates](docs/app/updates.md) for update settings and repair options.
 
-Release files and `SHA256SUMS.txt` are also published at [downloads.sfg545.dev/orchard](https://downloads.sfg545.dev/orchard/).
+To try desktop canary builds, turn on **Canary builds** under **Settings → General → Updates**. Canary builds follow active development and can have bugs. Turn the switch off to return to stable.
 
-> [!NOTE]
-> Desktop installers install Orchard Packages. On first launch, Orchard Packages downloads the matching Orchard application and Electron runtime; later updates replace that managed version without requiring another system installer. Current Windows and macOS builds are unsigned. If your operating system displays a security prompt during the first launch, select **"More info" → "Run anyway"** (Windows) or allow it under **System Settings → Privacy & Security** (macOS).
+## Features
 
----
+### Make the next song fit
+
+- **Adaptive mix:** blends songs using beat and phrase alignment, bass swaps, and vocal-aware transitions. Analysis runs on your device.
+- **Best Mix:** sorts upcoming songs by tempo, key, energy, and production style to make the queue flow.
+- **Standard crossfade:** choose a fixed blend from 1 to 12 seconds.
+- **Gapless playback and autoplay:** minimize pauses between tracks and keep listening when the queue ends.
+- **Editable queue:** add, remove, and drag songs into the order you want.
+
+Desktop Adaptive mix requires a GPU with WebGPU support and FFmpeg. Turn the Audio Engine off to enable it, and choose a streaming quality other than MAX. See [Crossfade and gapless playback](docs/app/crossfade.md) and [Manage the queue](docs/app/queue.md) for setup and requirements.
+
+### Tune your sound
+
+- **10-band equalizer:** use a preset or adjust each band yourself.
+- **Automatic EQ and dynamic leveling:** balance the sound and reduce sudden volume jumps.
+- **Per-song gain:** Orchard remembers your volume adjustment for each track.
+- **Output device selection:** send Orchard to your speakers, headphones, or DAC.
+- **Qobuz lossless and Hi-Res:** connect your own Qobuz subscription and select MAX quality. Matched songs play from Qobuz, with YouTube Music supplying your library and playlists.
+
+See [Audio Engine and equalizer](docs/app/audio-engine.md) and [Streaming quality](docs/app/streaming-quality.md).
+
+### Keep your music close
+
+- **YouTube Music library:** browse Home, search, albums, artists, liked songs, and playlists.
+- **Offline downloads:** save songs, albums, and playlists for listening without a connection.
+- **Local files:** add music from your computer, make local playlists, and choose custom covers and lyrics.
+- **Synced lyrics:** follow the song in the fullscreen player, with optional English translation.
+- **Music videos:** switch from the song to its video and back at the same position.
+- **Animated artwork:** moving covers and backgrounds that take their colors from the music.
+- **AI-generated music detection:** choose to mark, skip, or remove songs that Orchard flags as likely AI-generated.
+
+See [Offline mode and downloads](docs/app/offline-mode.md), [Local files](docs/app/local-files.md), [Lyrics](docs/app/lyrics.md), and [AI-generated music](docs/app/ai-music.md).
+
+### Listen across devices
+
+- **Orchard Connect:** control playback on your computer from your phone, or on your phone from your computer, on the same network or over the internet.
+- **Desktop help for mobile mixes:** a connected computer can prepare Adaptive mixes while the phone keeps playing.
+- **Discord Rich Presence:** show your current song and artwork on your profile.
+- **Last.fm:** send your listening history to your Last.fm account.
+- **Desktop controls:** keyboard shortcuts, media keys, and system tray support.
+
+See [Orchard Connect](docs/app/connect.md), [Integrations](docs/app/integrations.md), and [Keyboard shortcuts](docs/app/shortcuts.md).
 
 ## Orchard Mobile for Android
 
-Orchard Mobile is Orchard's standalone companion app for Android—featuring on-device machine-learning track analysis, offline playback, Smart Crossfade, Android Auto, and seamless Orchard Connect handoff.
+Orchard Mobile plays music directly on your phone. It includes on-device Smart Crossfade, synced lyrics, animated artwork, Android Auto, Chromecast, and Orchard Connect.
 
 <div align="center">
-  <img src="mobile/docs/screenshots/home.png" width="19%" alt="Home" style="border-radius: 8px; margin: 2px;">
-  <img src="mobile/docs/screenshots/now-playing.png" width="19%" alt="Now Playing" style="border-radius: 8px; margin: 2px;">
-  <img src="mobile/docs/screenshots/lyrics.png" width="19%" alt="Synced lyrics" style="border-radius: 8px; margin: 2px;">
-  <img src="mobile/docs/screenshots/queue.png" width="19%" alt="Queue & Best Mix" style="border-radius: 8px; margin: 2px;">
-  <img src="mobile/docs/screenshots/album.png" width="19%" alt="Album view" style="border-radius: 8px; margin: 2px;">
+  <img src="mobile/docs/screenshots/home.png" width="19%" alt="Android Home with recommendations and playlists">
+  <img src="mobile/docs/screenshots/now-playing.png" width="19%" alt="Android Now Playing with artwork and Hi-Res audio information">
+  <img src="mobile/docs/screenshots/lyrics.png" width="19%" alt="Android synced lyrics">
+  <img src="mobile/docs/screenshots/queue.png" width="19%" alt="Android queue with sleep timer, autoplay, and song controls">
+  <img src="mobile/docs/screenshots/album.png" width="19%" alt="Android album page with Qobuz Hi-Res quality">
 </div>
 
 <p align="center">
-  <b>Explore the <a href="mobile/">Mobile Documentation & Source Code</a></b> • <b><a href="https://nightly.link/SFG5453/Orchard/workflows/android-canary-build/canary/Orchard-Canary-APK.zip">Download Canary ZIP</a></b>
+  <a href="https://sfg545.dev/orchard"><b>Download for Android</b></a> ·
+  <a href="mobile/README.md"><b>Mobile features and build instructions</b></a>
 </p>
 
-### Pairing with Orchard Desktop
-The mobile app can act as a standalone player or connect to your desktop session via **Orchard Connect**:
-1. Open Orchard Desktop and navigate to the **Orchard Connect** pairing view.
-2. On your phone, go to **Profile → Connected devices** (or the Now Playing device picker) and scan the QR code or paste the pairing link.
-3. Approve the connection on the desktop client.
-4. Seamlessly transfer playback between your phone and desktop over your local network.
+To connect your phone and computer:
 
----
+1. Open Orchard on both devices.
+2. Sign in to the same **Orchard account** on both devices in Settings.
+3. On desktop, select the cast button in the player bar. On Android, open the device picker in the full player.
+4. Select the device you want to control.
 
-## Building from Source
+Your Orchard account connects the devices. Your YouTube Music and Qobuz sign-ins stay on their own device. See [Orchard Connect](docs/app/connect.md) for playback handoff and troubleshooting.
 
-### Requirements
-* **Node.js**: v24.x LTS and **npm**
-* **Rust**: stable toolchain with Cargo
-* **C/C++ Toolchain**: required by the system-media addon and Rust audio dependencies
+## Getting started
 
-### Quick Start
+1. Install and open Orchard.
+2. Select **Continue with Google** and finish signing in to YouTube Music.
+3. Pick a song from **Home**, or search for an artist, album, or playlist.
+4. Open **Settings** from your account button to choose playback quality, sound settings, and appearance.
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/SFG5453/Orchard.git
-   cd Orchard
-   ```
+On desktop, click the cover art in the player bar, or press **F**, to open the fullscreen player. Press **Space** to play or pause, and **Esc** to close it.
 
-2. **Install dependencies:**
-   ```bash
-   npm ci
-   ```
+Select the **book icon** in the top bar to open the searchable in-app docs. You can also read the guides here:
 
-3. **Start in development mode:**
-   ```bash
-   npm run dev
-   ```
-   *This builds the native audio analyzer, starts Vite on `127.0.0.1:5173`, and launches Electron against the dev server.*
-
-4. **Build the complete application:**
-   ```bash
-   npm run build
-   ```
-
-5. **Run tests:**
-   ```bash
-   npm test
-   ```
-
-### Useful Commands
-
-| Command | Purpose |
+| I want to… | Guide |
 | :--- | :--- |
-| `npm run dev` | Launch Vite + Electron in development mode |
-| `npm run build` | Full build (Rust Earmark DSP + Vue frontend + Electron main) |
-| `npm run build:frontend` | Build only the Vue renderer bundle |
-| `npm run build:native` | Compile the shared Rust audio-analysis/transition addon and system-media addon |
-| `npm test` | Run complete Node test suite |
-| `npm run test:native` | Run audio, transition planner, and native DSP tests |
-| `npm run package:orchard` | Build package-service application archives |
-| `npm run package:orchard-packages:linux -- linux-x64` | Build Debian and RPM Orchard Packages installers |
-| `npm run package:orchard-packages:windows -- -Architecture x64` | Build the Windows Orchard Packages NSIS installer |
+| Find my way around | [Getting started](docs/app/getting-started.md) |
+| Find songs or open Settings quickly | [Search and Spotlight](docs/app/search.md) |
+| Manage my library and playlists | [Library and playlists](docs/app/library-and-playlists.md) |
+| Change the sound or transitions | [Audio Engine](docs/app/audio-engine.md) · [Crossfade](docs/app/crossfade.md) |
+| Fix a playback or sign-in problem | [Troubleshooting](docs/app/troubleshooting.md) |
+| Report a bug | [Report a bug](docs/app/report-a-bug.md) |
 
----
+## Building from source
 
-## Project Structure
+Desktop builds require Meson 1.12+, CMake 3.24+, Ninja, Qt 6.8+, a C++20 toolchain, Node.js/npm, and Rust 1.96+. Qt must include the Quick, QML, Network, Multimedia, WebView, and WebEngine modules. Platform dependencies and sign-in backend setup are in the [development guide](docs/DEVELOPMENT.md).
 
-```text
-orchard/
-├── src/                         Vue renderer and application state
-│   └── audio/                   Web Audio DSP engine and Smart Crossfade pipeline
-├── electron/                    Electron main process
-│   ├── main/                    Electron composition root
-│   ├── preload/                 Sandboxed renderer IPC bridge
-│   ├── audio/                   Native analysis and audio service bindings
-│   ├── auth/                    Browser-backed YouTube authentication
-│   ├── connect/                 Orchard Connect encrypted LAN WebSocket service
-│   └── playback/                Stream resolution, caching, and proxying
-├── native-audio-rust/           Rust/Earmark analyzer, transition engine, and platform bindings
-├── orchard-packages/             Cross-platform installer and version manager
-├── mobile/                      Native Android / Kotlin client (Jetpack Compose)
-├── workers/                     Cloudflare Workers and Durable Objects for P2P sync
-├── services/artwork-converter/  Animated-artwork conversion service
-├── packaging/                   Linux packaging and runner assets
-├── scripts/                     Build, launch, and release utilities
-└── test/                        Node and native test suites
+```sh
+git clone --recurse-submodules https://github.com/SFG5453/orchard-v4.git
+cd orchard-v4
+npm ci --prefix providers/youtube
+meson setup build/dev --buildtype debug
+meson compile -C build/dev
+./build/dev/orchard
 ```
 
-> **Security Note:** The renderer reaches privileged desktop functionality only through the sandboxed preload bridge. Catalog and playback requests use a loopback Socket.IO bridge, and Orchard Connect operates strictly over authenticated local network pairing.
+Run the desktop tests with:
 
----
+```sh
+meson test -C build/dev --print-errorlogs
+```
 
-## Contributing
+For cross compilation, provider checks, release publishing, and in-app documentation rules, see [Development](docs/DEVELOPMENT.md). Android build instructions are in the [mobile README](mobile/README.md).
 
-Contributions, bug reports, and feature requests are welcome!
+## Contributing and support
 
-1. Fork the repository and create a feature branch (`git checkout -b feature/my-feature`).
-2. Keep changes focused and clean.
-3. Verify that tests pass (`npm test`).
-4. Run `npm run build:frontend` for UI changes, or `npm run build` if native code is modified.
-5. Submit a Pull Request with a clear description of your changes.
+Bug reports, feature requests, and contributions are welcome. Use the in-app bug-report button or [GitHub Issues](https://github.com/SFG5453/orchard-v4/issues), and include your Orchard version, operating system, and steps to reproduce the problem.
 
-Use the [GitHub Issues](https://github.com/SFG5453/Orchard/issues) tracker for public bug reports and feature requests. Private reports with optional diagnostics can also be submitted through Orchard's in-app Support System.
+For code changes, follow [Contributing](contributing.md) and [AGENTS.md](AGENTS.md), and run the checks relevant to your changes.
 
----
+If you would like to support development, [buy me a coffee on Ko-fi](https://ko-fi.com/sfg545).
 
-## Support
+## License and acknowledgments
 
-If you enjoy using Orchard and would like to support its development, consider [buying me a coffee on Ko-fi](https://ko-fi.com/sfg545).
+Orchard is free software under the [GNU Affero General Public License v3.0 or later](LICENSE).
 
-<p align="center">
-  <a href="https://ko-fi.com/sfg545">
-    <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support on Ko-fi">
-  </a>
-</p>
-
----
-
-## License and Acknowledgments
-
-* **License:** Orchard is licensed under the [GNU Affero General Public License v3.0 or later](LICENSE). *(Releases up to and including 3.x were published under the MIT License and remain under those terms).*
-* **BPM & Key Metadata:** Provided by [GetSongBPM](https://getsongbpm.com).
-* **Beat Tracking:** Beat and downbeat tracking models inspired by and adapted from [Beat This!](https://github.com/CPJKU/beat_this).
-
----
-
-<div align="center">
-  <sub>Built by SFG545 and the Orchard Community.</sub>
-</div>
+Orchard uses open-source libraries and models for playback, analysis, artwork, and connected listening. See [Third-party notices](THIRD_PARTY_NOTICES.md), [Adaptive mix](crates/orchard-adaptive-mix/README.md), and the [mobile credits](mobile/README.md#third-party-components) for licenses and model provenance.

@@ -1,0 +1,58 @@
+# Stunt double config: the real Worker keeps its ID badge in ignored JSONC.
+name = "replace-with-account-worker-name"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+routes = [{ pattern = "account.example.com", custom_domain = true }]
+
+[vars]
+PUBLIC_URL = "https://account.example.com"
+ARTWORK_PUBLIC_URL = "https://artwork.example.com"
+B2_REGION = "replace-with-b2-region"
+# B2 bucket names are case insensitive; S3-compatible requests use lowercase.
+B2_BUCKET = "replace-with-b2-bucket"
+# Google Cloud OAuth "Web application" client. The secret goes in via
+# `wrangler secret put GOOGLE_CLIENT_SECRET`, the signing key via
+# `npm run generate-key | wrangler secret put SIGNING_KEY`.
+GOOGLE_CLIENT_ID = "replace-with-google-oauth-client-id"
+# Bug reports become issues here. Secrets: GITHUB_TOKEN (Issues read/write on
+# this repo), GITHUB_CLIENT_SECRET, and optionally GITHUB_WEBHOOK_SECRET.
+GITHUB_REPOSITORY = "your-org/your-repo"
+# GitHub OAuth app used only to link accounts. Callback:
+# https://account.example.com/auth/github/callback
+GITHUB_CLIENT_ID = "replace-with-github-oauth-client-id"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "replace-with-account-database"
+database_id = "00000000-0000-4000-8000-000000000000"
+migrations_dir = "migrations"
+
+# Discord artwork lives at the root of B2. Set B2_KEY_ID and
+# B2_APPLICATION_KEY as Worker secrets.
+
+# Bug report screenshots, embedded publicly in their GitHub issues.
+[[r2_buckets]]
+binding = "SUPPORT_FILES"
+bucket_name = "replace-with-support-bucket"
+
+# Per-IP limit on sign-in and token requests.
+[[ratelimits]]
+name = "AUTH_LIMITER"
+namespace_id = "9999"
+simple = { limit = 30, period = 60 }
+
+# Orchard Connect presence and signaling: one hub per account.
+[[durable_objects.bindings]]
+name = "CONNECT_HUB"
+class_name = "ConnectHub"
+
+[[migrations]]
+tag = "connect-hub-v1"
+new_sqlite_classes = ["ConnectHub"]
+
+# Optional TURN relay for Connect (Cloudflare Realtime). Without these, Connect
+# uses STUN only. `wrangler secret put TURN_KEY_ID` and `TURN_KEY_API_TOKEN`.
+
+[triggers]
+# Hourly purge, and the support sweep that pulls GitHub issue activity.
+crons = ["17 * * * *", "*/10 * * * *"]

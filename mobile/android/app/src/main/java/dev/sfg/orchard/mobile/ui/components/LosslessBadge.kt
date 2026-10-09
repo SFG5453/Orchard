@@ -36,6 +36,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import dev.sfg.orchard.mobile.model.LocalStreamDetail
+import dev.sfg.orchard.mobile.model.StreamDetail
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,12 +53,26 @@ import androidx.compose.ui.unit.sp
 
 val LosslessGold = Color(0xFFDFB15B)
 
+private fun kHz(rate: Int): String {
+    val khz = rate / 1000.0
+    return if (khz % 1.0 == 0.0) "${khz.toInt()} kHz" else "%.1f kHz".format(khz)
+}
+
+/** "Hi-Res · 24-bit / 44.1 kHz · FLAC", leaving out what the stream has not reported. */
+private fun qobuzLabel(detail: StreamDetail): String {
+    val format = listOfNotNull(
+        if (detail.bitDepth > 0) "${detail.bitDepth}-bit" else null,
+        if (detail.sampleRate > 0) kHz(detail.sampleRate) else null,
+    ).joinToString(" / ")
+    return listOf(if (detail.hiRes) "Hi-Res" else "Lossless", format, detail.codec).filter { it.isNotBlank() }.joinToString(" · ")
+}
+
 /**
  * Bitrate readout badge under the player scrubber.
  *
- * For standard streams, renders "$bitrate kbps".
- * For Qobuz streams, renders "Lossless" in gold; clicking it smoothly animates
- * between the word "Lossless" and the numeric bitrate readout.
+ * For standard streams, renders "$bitrate kbps · codec".
+ * For Qobuz streams, renders the tier, format and codec in gold; clicking it smoothly animates
+ * between that and the numeric bitrate readout.
  */
 @Composable
 fun LosslessBadge(
@@ -78,7 +94,7 @@ fun LosslessBadge(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "$bitrateKbps kbps",
+                text = listOf("$bitrateKbps kbps", LocalStreamDetail.current.codec).filter { it.isNotBlank() }.joinToString(" · "),
                 color = Color.White.copy(alpha = 0.85f),
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontSize = 10.sp,
@@ -89,6 +105,7 @@ fun LosslessBadge(
         }
     } else {
         var showNumeric by remember { mutableStateOf(false) }
+        val tierLabel = qobuzLabel(LocalStreamDetail.current)
 
         Box(
             modifier = modifier
@@ -114,7 +131,7 @@ fun LosslessBadge(
                 label = "LosslessBitrateTransition",
             ) { numeric ->
                 Text(
-                    text = if (numeric) "$bitrateKbps kbps" else "Lossless",
+                    text = if (numeric) "$bitrateKbps kbps" else tierLabel,
                     color = LosslessGold,
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = 10.sp,

@@ -1,0 +1,21 @@
+[package]
+name = "orchard-transition-mobile"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[lib]
+# The name Android loads: `System.loadLibrary("orchard_earmark")`.
+name = "orchard_earmark"
+crate-type = ["cdylib"]
+
+[dependencies]
+earmark = { path = "../earmark" }
+jni = "=0.21.1"
+# The desktop adaptive-mix worker's code, minus FFmpeg and WebGPU.
+orchard-adaptive-mix = { path = "../orchard-adaptive-mix", default-features = false, features = ["android"] }
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "api-24", "load-dynamic"] }
+# Player extraction for the QuickJS provider host, exported under its C names.
+orchard-youtube-extractor = { path = "../orchard-youtube-extractor" }
+serde_json = "1.0.145"

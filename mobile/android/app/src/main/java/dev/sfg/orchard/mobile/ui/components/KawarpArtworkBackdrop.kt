@@ -29,7 +29,12 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.roundToInt
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.withFrameNanos
 import coil3.SingletonImageLoader
@@ -43,17 +48,19 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 
 /**
- * Low-bandwidth full-screen artwork motion for the tablet player.
+ * Low-bandwidth full-screen artwork motion for the tablet player and the Home backdrop.
  *
  * Kawarp preprocesses a cover at 128x128 once, then draws one AGSL pass. We deliberately drive
- * that pass at 30 fps rather than display refresh rate: this is ambient motion behind a scrim,
- * and doubling or quadrupling its fill rate buys no useful detail on high-refresh tablets.
+ * that pass at 30 fps by default: ambient motion behind a scrim gains nothing from more fill rate.
+ * [fullFrameRate] draws every vsync, for backdrops under scrolling content where 30 fps judders.
  */
 @Composable
 fun KawarpArtworkBackdrop(
     artworkUrl: String,
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
+    renderScale: Float = 1f,
+    fullFrameRate: Boolean = false,
 ) {
     val context = LocalContext.current
     val engine = remember {
@@ -85,7 +92,7 @@ fun KawarpArtworkBackdrop(
     }
 
     var frame by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(engine, coverRevision, isPlaying) {
+    LaunchedEffect(engine, coverRevision, isPlaying, fullFrameRate) {
         engine.setPlaying(isPlaying)
         // Keep a short grace period for the background-thread blur and the cover crossfade. Once
         // paused and settled, isAnimating becomes false and the shader consumes no more frames.
@@ -96,7 +103,7 @@ fun KawarpArtworkBackdrop(
                 (isPlaying || SystemClock.uptimeMillis() < forceFramesUntil || engine.isAnimating)
         ) {
             withFrameNanos { now ->
-                if (lastDrawNanos == 0L || now - lastDrawNanos >= FRAME_INTERVAL_NANOS) {
+                if (fullFrameRate || lastDrawNanos == 0L || now - lastDrawNanos >= FRAME_INTERVAL_NANOS) {
                     lastDrawNanos = now
                     frame++
                 }
@@ -104,9 +111,36 @@ fun KawarpArtworkBackdrop(
         }
     }
 
-    Canvas(modifier) {
+    Canvas(modifier.downscaled(renderScale)) {
         frame // Reading the clock invalidates only this draw layer, not the player hierarchy.
         engine.draw(drawContext.canvas.nativeCanvas, size.width, size.height)
+    }
+}
+
+/**
+ * Shades a [scale]-sized offscreen layer and stretches it to fill the slot. AGSL needs a GPU
+ * canvas, so this is the only cheap downscale: fill rate drops by scale squared and the
+ * bilinear upscale is invisible on an already-blurred warp.
+ */
+private fun Modifier.downscaled(scale: Float): Modifier {
+    if (scale >= 1f) return this
+    return this.layout { measurable, constraints ->
+        val width = constraints.maxWidth
+        val height = constraints.maxHeight
+        val inner = measurable.measure(
+            Constraints.fixed(
+                (width * scale).roundToInt().coerceAtLeast(1),
+                (height * scale).roundToInt().coerceAtLeast(1),
+            )
+        )
+        layout(width, height) {
+            inner.placeWithLayer(0, 0) {
+                compositingStrategy = CompositingStrategy.Offscreen
+                transformOrigin = TransformOrigin(0f, 0f)
+                scaleX = width / inner.width.toFloat()
+                scaleY = height / inner.height.toFloat()
+            }
+        }
     }
 }
 

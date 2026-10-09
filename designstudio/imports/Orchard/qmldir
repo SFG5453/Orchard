@@ -1,0 +1,5 @@
+module Orchard
+singleton Motion 1.0 ../../../app/qml/motion/Motion.qml
+KawarpBackground 1.0 KawarpBackground.qml
+ArtworkPalette 1.0 ArtworkPalette.qml
+LiquidGlass 1.0 LiquidGlass.qml

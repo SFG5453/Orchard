@@ -58,13 +58,14 @@ import dev.sfg.orchard.mobile.model.PlaybackTargetState
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.model.TransitionMarker
 import dev.sfg.orchard.mobile.ui.components.ArtworkTile
+import dev.sfg.orchard.mobile.ui.components.NonMusicSkipPill
 import dev.sfg.orchard.mobile.ui.components.TrackActionsPopup
 
 /** Which mode, if any, has taken over the middle of the player. */
 enum class PlayerPanel { NONE, LYRICS, QUEUE }
 
 /**
- * Everything below the track title: scrubber, transport, volume, destinations.
+ * Everything below the track title: scrubber, transport, remote volume, destinations.
  *
  * Shared by both layouts. The phone stacks it under the artwork; the tablet puts
  * it in the right column beside the cover, and neither should drift from the
@@ -97,6 +98,9 @@ fun PlayerControlStack(
     sleepTimerActive: Boolean = false,
     onSleepTimer: () -> Unit = {},
 ) {
+    // Only takes space while a non-music span is under the playhead, so the stack doesn't jump
+    // for the ordinary song. Centered above the scrubber where a thumb can reach it.
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { NonMusicSkipPill() }
     PlayerScrubber(
         playback = playback,
         onSeek = onSeek,
@@ -106,7 +110,7 @@ fun PlayerControlStack(
         bitrateKbps = bitrateKbps,
         isQobuz = isQobuz,
     )
-    Spacer(Modifier.height(14.dp))
+    Spacer(Modifier.height(20.dp))
     PlayerTransportControls(
         isPlaying = playback.isPlaying,
         status = playback.status,
@@ -119,14 +123,17 @@ fun PlayerControlStack(
         onShuffle = onShuffle,
         onRepeat = onRepeat,
     )
-    Spacer(Modifier.height(18.dp))
-    DeviceVolumeSlider(
-        enabled = canControl,
-        isRemote = !localControls,
-        remoteVolume = remoteVolume,
-        onRemoteVolumeChange = onRemoteVolumeChange,
-    )
-    Spacer(Modifier.height(16.dp))
+    Spacer(Modifier.height(24.dp))
+    // The phone has volume keys; a slider only earns its row when they cannot reach the speaker.
+    if (!localControls) {
+        DeviceVolumeSlider(
+            enabled = canControl,
+            isRemote = true,
+            remoteVolume = remoteVolume,
+            onRemoteVolumeChange = onRemoteVolumeChange,
+        )
+        Spacer(Modifier.height(12.dp))
+    }
     PlayerBottomDestinations(
         targets = targets,
         upcomingCount = playback.upcoming.size,
@@ -136,79 +143,6 @@ fun PlayerControlStack(
         onQueue = onQueue,
         queueActive = queueActive,
     )
-}
-
-/** Compact track identity shown above an open panel, replacing the large title row. */
-@Composable
-fun PanelTrackHeader(
-    track: Track,
-    liked: Boolean,
-    onLiked: () -> Unit,
-    onMore: () -> Unit,
-    onAddToPlaylist: (() -> Unit)? = null,
-    onShare: (() -> Unit)?,
-    isDownloaded: Boolean = false,
-    onDownload: (() -> Unit)? = null,
-    onRemoveDownload: (() -> Unit)? = null,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        AnimatedContent(
-            targetState = track,
-            transitionSpec = {
-                (fadeIn(tween(350)) + slideInVertically(tween(350)) { it / 4 })
-                    .togetherWith(fadeOut(tween(200)) + slideOutVertically(tween(200)) { -it / 4 })
-            },
-            label = "PanelTrackHeaderContent",
-            modifier = Modifier.weight(1f),
-        ) { currentTrack ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                ArtworkTile(currentTrack.artworkUrl, "Artwork for ${currentTrack.title}", Modifier.size(44.dp), 8)
-                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                    Text(
-                        currentTrack.title,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        currentTrack.artist,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.65f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
-        var menuOpen by remember { mutableStateOf(false) }
-        if (menuOpen) {
-            TrackActionsPopup(
-                track = track,
-                onDismiss = { menuOpen = false },
-                onViewQueue = onMore,
-                onAddToPlaylist = onAddToPlaylist,
-                onDownload = if (!isDownloaded) onDownload else null,
-                onRemoveDownload = if (isDownloaded) onRemoveDownload else null,
-                onShare = onShare,
-            )
-        }
-        TrackActionButtons(
-            liked = liked,
-            onLiked = onLiked,
-            onMore = onMore,
-            onShare = onShare,
-            onOpenMenu = { menuOpen = true },
-        )
-    }
 }
 
 /** Centred status text and indicator for the states where lyrics are loading or unavailable. */

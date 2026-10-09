@@ -1,6 +1,6 @@
 # Beat This quantization on Motorola razr 2023
 
-> Historical experiment: production now uses FP16 LiteRT GPU with dynamic INT8 ONNX Runtime CPU fallback. QNN dependencies and NPU harness code have been removed; the NPU results below describe the earlier experimental build.
+> Historical experiment: production now uses dynamic INT8 ONNX Runtime on CPU. QNN dependencies and NPU harness code have been removed; the NPU results below describe the earlier experimental build.
 
 Measured September 9, 2026 on SM7450. Both official checkpoints were exported through the same pipeline. Exactly one Beat This model ran on the phone at a time. Phone CPU benchmarks were restricted to INT8 and lower weight precision.
 

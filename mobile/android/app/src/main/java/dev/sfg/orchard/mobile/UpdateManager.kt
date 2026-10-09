@@ -9,7 +9,9 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Environment
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import dev.sfg.orchard.connect.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -265,7 +267,7 @@ class UpdateManager(
 
         mutableState.value = UpdateState.Downloading(version)
 
-        val request = DownloadManager.Request(Uri.parse(apkUrl))
+        val request = DownloadManager.Request(apkUrl.toUri())
             .setTitle("Orchard Update")
             .setDescription("Downloading version $version")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
@@ -310,7 +312,10 @@ class UpdateManager(
             }
         }
 
-        context.registerReceiver(onComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_EXPORTED)
+        ContextCompat.registerReceiver(
+            context, onComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+            ContextCompat.RECEIVER_EXPORTED,
+        )
     }
 
     private fun Cursor.statusOf(): Int =

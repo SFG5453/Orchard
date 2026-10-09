@@ -37,6 +37,7 @@ import dev.sfg.orchard.mobile.model.PlaybackStatus
 import dev.sfg.orchard.mobile.model.RepeatMode
 import dev.sfg.orchard.mobile.model.Track
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -70,6 +71,10 @@ class LocalPlaybackController(
      */
     private var lastError: String = ""
     private var lastErrorItemId: String? = null
+
+    // Parsed queue, reused across progress ticks; each item costs a JSON parse.
+    // Parsing 300 songs twice a second to learn the playhead moved 500 ms. Bold strategy.
+    private var queueCache: List<Track>? = null
 
     init {
         connect()
@@ -175,14 +180,15 @@ class LocalPlaybackController(
     }
 
     /** Switches the current item between its audio and video source at the same position. */
-    fun setVideoMode(videoId: String?) = withController { player ->
+    fun setVideoMode(videoId: String?, maxHeight: Int? = null) = withController { player ->
         val currentId = player.currentMediaItem?.mediaId ?: return@withController
         clearError()
         player.sendCustomCommand(
-            OrchardPlaybackService.COMMAND_SET_VIDEO_MODE,
+            OrchardSessionCallback.COMMAND_SET_VIDEO_MODE,
             Bundle().apply {
-                putString(OrchardPlaybackService.VIDEO_MODE_TRACK_ID, currentId)
-                putString(OrchardPlaybackService.VIDEO_MODE_VIDEO_ID, videoId.orEmpty())
+                putString(OrchardSessionCallback.VIDEO_MODE_TRACK_ID, currentId)
+                putString(OrchardSessionCallback.VIDEO_MODE_VIDEO_ID, videoId.orEmpty())
+                maxHeight?.let { putInt(OrchardSessionCallback.VIDEO_MODE_MAX_HEIGHT, it) }
             },
         )
     }
@@ -258,6 +264,7 @@ class LocalPlaybackController(
 
     override fun close() {
         progressJob?.cancel()
+        queueCache = null
         controller?.removeListener(listener)
         controller?.release()
         controller = null
@@ -277,6 +284,7 @@ class LocalPlaybackController(
                     Log.d(TAG, "connect: MediaController connected successfully")
                     controller = connected
                     mutablePlayer.value = connected
+                    queueCache = null
                     connected.addListener(listener)
                     while (pendingActions.isNotEmpty()) pendingActions.removeFirst()(connected)
                     publish(connected)
@@ -304,7 +312,14 @@ class LocalPlaybackController(
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
-            Log.d(TAG, "listener.onEvents: isPlaying=${player.isPlaying}, state=${player.playbackState}, currentItem=${player.currentMediaItem?.mediaId}")
+            if (events.containsAny(
+                    Player.EVENT_TIMELINE_CHANGED,
+                    Player.EVENT_MEDIA_ITEM_TRANSITION,
+                    Player.EVENT_MEDIA_METADATA_CHANGED,
+                )
+            ) {
+                queueCache = null
+            }
             publish(player)
         }
         override fun onPlayerError(error: PlaybackException) {
@@ -322,10 +337,13 @@ class LocalPlaybackController(
 
     private fun publish(player: Player?, explicitError: String = "") {
         if (player == null) return
-        val queue = buildList {
+        val queue = queueCache ?: buildList {
             for (index in 0 until player.mediaItemCount) add(MediaItemMapper.toTrack(player.getMediaItemAt(index)))
-        }
-        val current = player.currentMediaItem?.let(MediaItemMapper::toTrack)
+        }.also { queueCache = it }
+        // Reuse the queue entry so ticks skip the parse; fall back if the cache lags the player.
+        val currentItem = player.currentMediaItem
+        val current = queue.getOrNull(player.currentMediaItemIndex)?.takeIf { it.id == currentItem?.mediaId }
+            ?: currentItem?.let(MediaItemMapper::toTrack)
         // A held failure belongs to the item it happened on. Moving to another track, or
         // this one becoming playable, means it no longer describes anything.
         if (lastError.isNotBlank() &&
@@ -375,7 +393,9 @@ class LocalPlaybackController(
             return
         }
         if (progressJob?.isActive == true) return
-        progressJob = scope.launch {
+        // Media3 only answers on the main thread; callers may hand over a Default-dispatched scope.
+        // Ask from a worker and it rage-quits the whole app. Very on brand for a media player.
+        progressJob = scope.launch(Dispatchers.Main.immediate) {
             while (true) {
                 delay(500)
                 controller?.let(::publish)

@@ -1,0 +1,69 @@
+[
+  {
+    "version": "1.0.0-canary.1",
+    "date": "2026-10-08",
+    "title": "Orchard v3",
+    "sections": [
+      {
+        "title": "Mixing and sound",
+        "items": [
+          "Adaptive mix takes Smart Crossfade further. It measures beats, kicks, bass, vocals, and production style on your device to choose the timing and shape of each transition.",
+          "Adaptive mix can skip a beatless intro, keep a fading outro beat alive with a short loop, line up kicks, glide tempo, and hand off the bassline. When a pair clashes, it lets the songs play through cleanly.",
+          "Best Mix uses full-song analysis and production style as well as tempo, key, and energy to find a better order for the next songs. You can cancel a sort or restore the original order.",
+          "Choose whether likely AI-generated songs are marked, skipped, removed from the queue, or left alone. Mark is the default.",
+          "The native Audio Engine includes the equalizer, Automatic EQ, dynamic leveling, track gain, stereo balance, and output-device selection. Standard crossfade and gapless playback remain available.",
+          "Desktop Adaptive mix needs WebGPU and FFmpeg. It is unavailable while the Audio Engine or Qobuz MAX quality is active."
+        ]
+      },
+      {
+        "title": "Music, lyrics, and library",
+        "items": [
+          "Play music files from your computer and build local playlists with custom covers, lyrics, and drag-and-drop ordering.",
+          "Offline mode brings downloaded and local songs together in Home, Search, Your library, and playlists, with clear reconnect and retry controls.",
+          "Watch music videos in a dedicated theater with quality controls, the video's own soundtrack, and SponsorBlock markers or non-music skipping.",
+          "Translate synced lyrics into English on your device, or choose an API provider. The original lyrics and timing stay visible.",
+          "Your library has category counts, filters, song sorting, and clearer empty states. Home has Top Picks, and album and playlist pages keep their artwork and actions in view while you scroll.",
+          "With an active Qobuz subscription, MAX can play matched lossless or Hi-Res recordings. The player and album pages show the available quality, and unmatched songs continue from YouTube Music."
+        ]
+      },
+      {
+        "title": "Devices and sharing",
+        "items": [
+          "Orchard Connect works on the same network or across the internet through your Orchard account. Move playback between desktop and Android, or control the other device with one shared queue.",
+          "When Android is playing through Connect, the desktop can prepare its Adaptive mixes and artwork. A connected phone can also provide its Qobuz stream without sharing sign-in credentials.",
+          "Discord Rich Presence can show an active mix, synced lyrics, artist artwork, and animated cover art, with more control over what your status says."
+        ]
+      },
+      {
+        "title": "A new desktop experience",
+        "items": [
+          "The desktop app runs on native Qt Quick with a Rust playback core, replacing the Electron interface.",
+          "Choose the floating Glade player or the compact Canopy layout. Home, Your library, Settings, the queue, and the fullscreen player have new artwork-led layouts and smoother navigation.",
+          "Animated artwork can play on artist album cards and, if you opt in, inside a playlist's four-cover collage. The player bar and fullscreen view show the handoff during a mix.",
+          "A guided first-run flow helps you set up playback, appearance, your library, and connected services."
+        ]
+      },
+      {
+        "title": "Help and updates",
+        "items": [
+          "Search the new in-app Docs with a plain-language question. Answers are found on your device, and you can copy a page or all docs for an AI assistant.",
+          "Send bugs, ideas, and feedback as public GitHub issues from Orchard with a linked GitHub account. Attach an optional screenshot and follow replies, commits, and fixes in the app.",
+          "The native installer checks signed releases and downloads changed files for updates. It can repair missing files and roll back a build that fails to start."
+        ]
+      },
+      {
+        "title": "Android companion",
+        "items": [
+          "Android has a redesigned Home, library, search, Now Playing, queue, settings, and detail pages, plus local files and playlists.",
+          "Android runs the shared Adaptive mix and Best Mix planning with on-device analysis, and joins the new Orchard Connect experience. Music video controls and lyric translation are available there too."
+        ]
+      },
+      {
+        "title": "Coming soon",
+        "items": [
+          "Listening parties are still on the way."
+        ]
+      }
+    ]
+  }
+]

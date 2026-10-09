@@ -20,14 +20,7 @@
 package dev.sfg.orchard.mobile.qobuz
 
 import android.util.Log
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import okhttp3.OkHttpClient
-import okhttp3.Request
+import dev.sfg.orchard.mobile.provider.ProviderHost
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetAddress
@@ -36,254 +29,154 @@ import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import kotlin.math.max
-import kotlin.math.min
+import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 
 private const val TAG = "QobuzStreamServer"
+private const val READ_CHUNK = 512 * 1024L
+private const val MAX_SESSIONS = 16
 
-class QobuzPlaybackSession(
-    val playbackId: String,
-    val source: QobuzStreamSource,
-    val init: ParsedInitSegment,
-    private val httpClient: OkHttpClient,
-    val contentKey: ByteArray?,
-) {
-    // All sessions share one byte budget. Keeping six lossless segments per resolution
-    // retained audio from every previous track (and every parallel cache range).
-    private companion object {
-        val segmentCache = QobuzSegmentCache(8 * 1024 * 1024)
+/**
+ * Loopback HTTP server that gives Media3 a seekable URL for a Qobuz FLAC stream.
+ * Bytes come from the provider's `playback.read`, which owns segments and decryption.
+ */
+class QobuzStreamServer(private val provider: ProviderHost) {
+    private class Session(val totalBytes: Long, val remote: RemoteQobuz?) {
+        @Volatile var reported = false
     }
 
-    fun fetchSegment(number: Int): ByteArray = segmentCache.getOrLoad(playbackId, number) {
-        val url = source.urlTemplate.replace("\$SEGMENT\$", number.toString())
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", QOBUZ_USER_AGENT)
-            .header("Accept", "*/*")
-            .build()
-        val rawBytes = httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IllegalStateException("Qobuz segment $number failed (${response.code})")
-            }
-            response.body.bytes()
-        }
-
-        decryptQobuzAudioSegment(rawBytes, contentKey)
+    private val sessions = object : LinkedHashMap<String, Session>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Session>) = size > MAX_SESSIONS
     }
-
-    fun streamRange(rangeStart: Long, rangeEnd: Long, output: OutputStream) {
-        var currentOffset = rangeStart
-        val headerLength = init.flacHeader.size.toLong()
-
-        // 1. Stream from flacHeader if within header range
-        if (currentOffset < headerLength) {
-            val headerSliceEnd = min(rangeEnd, headerLength - 1)
-            val count = (headerSliceEnd - currentOffset + 1).toInt()
-            output.write(init.flacHeader, currentOffset.toInt(), count)
-            currentOffset += count
-        }
-
-        if (currentOffset > rangeEnd) return
-
-        // 2. Stream audio segments
-        val audioOffset = currentOffset - headerLength
-        val audioTargetEnd = rangeEnd - headerLength
-
-        // Find which segments cover audioOffset..audioTargetEnd
-        for (index in init.segmentTable.indices) {
-            val entry = init.segmentTable[index]
-            val segmentStart = entry.byteOffset.toLong()
-            val segmentEnd = segmentStart + entry.byteLength - 1
-
-            if (segmentEnd < audioOffset) continue
-            if (segmentStart > audioTargetEnd) break
-
-            val segmentNumber = index + 1
-            val segmentData = fetchSegment(segmentNumber)
-
-            val inSegStart = max(0L, audioOffset - segmentStart).toInt()
-            val inSegEnd = min(segmentData.size.toLong() - 1, audioTargetEnd - segmentStart).toInt()
-            val lengthToWrite = inSegEnd - inSegStart + 1
-            if (lengthToWrite > 0 && inSegStart < segmentData.size) {
-                output.write(segmentData, inSegStart, lengthToWrite)
-                currentOffset += lengthToWrite
-            }
-        }
-    }
-}
-
-class QobuzStreamServer(
-    private val httpClient: OkHttpClient = OkHttpClient(),
-) {
+    private val workers = Executors.newCachedThreadPool { Thread(it, "QobuzStream").apply { isDaemon = true } }
     private var serverSocket: ServerSocket? = null
-    private var serverJob: Job? = null
-    private val sessions = ConcurrentHashMap<String, QobuzPlaybackSession>()
-    private val serverDispatcher = Executors.newCachedThreadPool().asCoroutineDispatcher()
-    private val scope = CoroutineScope(Dispatchers.IO + Job())
 
-    val port: Int
-        get() = serverSocket?.localPort ?: 0
-
-    fun start() {
-        if (serverSocket != null) return
-        val socket = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
-        serverSocket = socket
-        Log.i(TAG, "QobuzStreamServer started on port ${socket.localPort}")
-
-        serverJob = scope.launch(serverDispatcher) {
-            while (isActive && !socket.isClosed) {
-                try {
-                    val client = socket.accept()
-                    launch(serverDispatcher) {
-                        try {
-                            handleClient(client)
-                        } catch (e: Exception) {
-                            Log.d(TAG, "Client socket error (likely disconnected): ${e.message}")
-                        } finally {
-                            runCatching { client.close() }
-                        }
-                    }
-                } catch (e: Exception) {
-                    if (socket.isClosed) break
-                    Log.w(TAG, "Server socket accept error: ${e.message}")
-                }
-            }
+    @Synchronized
+    fun register(playbackId: String, totalBytes: Long, remote: RemoteQobuz? = null): String {
+        val socket = serverSocket ?: ServerSocket(0, 50, InetAddress.getByName("127.0.0.1")).also {
+            serverSocket = it
+            workers.execute { acceptLoop(it) }
         }
+        synchronized(sessions) { sessions[playbackId] = Session(totalBytes, remote) }
+        return "http://127.0.0.1:${socket.localPort}/qobuz/$playbackId"
     }
 
-    fun registerSession(session: QobuzPlaybackSession) {
-        sessions[session.playbackId] = session
-    }
-
-    fun unregisterSession(playbackId: String) {
-        sessions.remove(playbackId)
-    }
-
-    fun getSession(playbackId: String): QobuzPlaybackSession? = sessions[playbackId]
-
-    fun urlFor(playbackId: String): String {
-        start()
-        return "http://127.0.0.1:$port/qobuz/$playbackId"
-    }
-
-    private fun handleClient(client: Socket) {
-        client.use { socket ->
-            socket.soTimeout = 15_000
-            val input = socket.getInputStream()
-            val output = socket.getOutputStream()
-
-            val requestLine = readLine(input) ?: return
-            val parts = requestLine.split(" ")
-            if (parts.size < 2) return
-
-            val method = parts[0].uppercase()
-            val path = parts[1]
-
-            val headers = mutableMapOf<String, String>()
-            while (true) {
-                val line = readLine(input) ?: break
-                if (line.isBlank()) break
-                val colon = line.indexOf(':')
-                if (colon > 0) {
-                    val key = line.substring(0, colon).trim().lowercase()
-                    val value = line.substring(colon + 1).trim()
-                    headers[key] = value
-                }
-            }
-
-            if (method == "OPTIONS") {
-                val response = "HTTP/1.1 204 No Content\r\n" +
-                    "Access-Control-Allow-Origin: *\r\n" +
-                    "Access-Control-Allow-Methods: GET, HEAD, OPTIONS\r\n" +
-                    "Access-Control-Allow-Headers: Range, Content-Type\r\n" +
-                    "Access-Control-Expose-Headers: Accept-Ranges, Content-Length, Content-Range\r\n" +
-                    "\r\n"
-                output.write(response.toByteArray(Charsets.US_ASCII))
-                output.flush()
-                return
-            }
-
-            val playbackId = path.removePrefix("/qobuz/").substringBefore('?')
-            val session = sessions[playbackId]
-            if (session == null) {
-                val notFound = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
-                output.write(notFound.toByteArray(Charsets.US_ASCII))
-                output.flush()
-                return
-            }
-
-            val totalLength = session.init.totalLength
-            val rangeHeader = headers["range"]
-
-            var start = 0L
-            var end = totalLength - 1
-            var isPartial = false
-
-            if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
-                val rangeSpec = rangeHeader.removePrefix("bytes=").trim()
-                val dash = rangeSpec.indexOf('-')
-                if (dash >= 0) {
-                    val first = rangeSpec.substring(0, dash).trim()
-                    val second = rangeSpec.substring(dash + 1).trim()
-                    if (first.isNotBlank()) {
-                        start = first.toLongOrNull() ?: 0L
-                        if (second.isNotBlank()) {
-                            end = second.toLongOrNull() ?: (totalLength - 1)
-                        }
-                    } else if (second.isNotBlank()) {
-                        val suffix = second.toLongOrNull() ?: 0L
-                        start = max(0L, totalLength - suffix)
-                    }
-                    isPartial = true
-                }
-            }
-
-            start = start.coerceIn(0L, totalLength - 1)
-            end = end.coerceIn(start, totalLength - 1)
-            val contentLength = end - start + 1
-
-            val statusLine = if (isPartial) "HTTP/1.1 206 Partial Content" else "HTTP/1.1 200 OK"
-            val headersList = mutableListOf(
-                statusLine,
-                "Content-Type: audio/flac",
-                "Accept-Ranges: bytes",
-                "Content-Length: $contentLength",
-                "Access-Control-Allow-Origin: *",
-            )
-            if (isPartial) {
-                headersList.add("Content-Range: bytes $start-$end/$totalLength")
-            }
-            headersList.add("\r\n")
-
-            val headerData = headersList.joinToString("\r\n").toByteArray(Charsets.US_ASCII)
-            output.write(headerData)
-            output.flush()
-
-            if (method == "GET") {
-                session.streamRange(start, end, output)
-                output.flush()
-            }
-        }
-    }
-
-    private fun readLine(input: InputStream): String? {
-        val bytes = mutableListOf<Byte>()
-        while (true) {
-            val b = input.read()
-            if (b == -1) {
-                if (bytes.isEmpty()) return null
-                break
-            }
-            if (b == '\n'.code) break
-            if (b != '\r'.code) bytes.add(b.toByte())
-        }
-        return String(bytes.toByteArray(), Charsets.US_ASCII)
-    }
-
+    @Synchronized
     fun stop() {
         runCatching { serverSocket?.close() }
         serverSocket = null
-        serverJob?.cancel()
-        serverJob = null
-        sessions.clear()
+        synchronized(sessions) { sessions.clear() }
+    }
+
+    private fun acceptLoop(socket: ServerSocket) {
+        while (!socket.isClosed) {
+            try {
+                val client = socket.accept()
+                workers.execute {
+                    try {
+                        client.use(::handle)
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Client closed: ${e.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                if (!socket.isClosed) Log.w(TAG, "Accept failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun handle(socket: Socket) {
+        socket.soTimeout = 15_000
+        val input = socket.getInputStream()
+        val output = socket.getOutputStream()
+        val request = (readLine(input) ?: return).split(" ")
+        if (request.size < 2) return
+        val headers = HashMap<String, String>()
+        while (true) {
+            val line = readLine(input)?.takeIf { it.isNotBlank() } ?: break
+            val colon = line.indexOf(':')
+            if (colon > 0) headers[line.substring(0, colon).trim().lowercase()] = line.substring(colon + 1).trim()
+        }
+        val playbackId = request[1].removePrefix("/qobuz/").substringBefore('?')
+        val session = synchronized(sessions) { sessions[playbackId] }
+        if (session == null) {
+            output.write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n".toByteArray())
+            return
+        }
+        val total = session.totalBytes
+        val range = parseRange(headers["range"], total)
+        if (range == null) {
+            output.write("HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */$total\r\nContent-Length: 0\r\n\r\n".toByteArray())
+            return
+        }
+        val (start, end) = range
+        val partial = headers["range"] != null
+        val head = buildString {
+            append(if (partial) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n")
+            append("Content-Type: audio/flac\r\nAccept-Ranges: bytes\r\nContent-Length: ${end - start + 1}\r\n")
+            if (partial) append("Content-Range: bytes $start-$end/$total\r\n")
+            append("\r\n")
+        }
+        output.write(head.toByteArray())
+        if (request[0].uppercase() != "GET") return
+        reportStarted(playbackId, session)
+        stream(playbackId, session, start, end, output)
+    }
+
+    // Pull in chunks so a long seek never holds a whole track in memory.
+    private fun stream(playbackId: String, session: Session, start: Long, end: Long, output: OutputStream) {
+        var position = start
+        while (position <= end) {
+            val last = minOf(end, position + READ_CHUNK - 1)
+            val bytes = runBlocking {
+                session.remote?.read(playbackId, position, last) ?: provider.invokeBytes(
+                    "playback.read",
+                    JSONObject().put("playbackId", playbackId).put("start", position).put("end", last),
+                )
+            }
+            if (bytes.isEmpty()) return
+            output.write(bytes)
+            position += bytes.size
+        }
+        output.flush()
+    }
+
+    // Qobuz counts a play when audio is first requested.
+    private fun reportStarted(playbackId: String, session: Session) {
+        if (session.reported) return
+        session.reported = true
+        session.remote?.let {
+            it.report(playbackId, true, 0.0)
+            return
+        }
+        runCatching {
+            runBlocking {
+                provider.invokeRaw("playback.started", JSONObject().put("playbackId", playbackId).put("position", 0))
+            }
+        }
+    }
+
+    /** Inclusive byte range for a Range header, or null when it lies outside the stream. */
+    private fun parseRange(header: String?, total: Long): Pair<Long, Long>? {
+        val spec = header?.takeIf { it.startsWith("bytes=") }?.removePrefix("bytes=")?.trim()
+            ?: return 0L to total - 1
+        val dash = spec.indexOf('-')
+        if (dash < 0) return 0L to total - 1
+        val first = spec.substring(0, dash).trim()
+        val second = spec.substring(dash + 1).trim()
+        val start = if (first.isEmpty()) max(0L, total - (second.toLongOrNull() ?: 0L)) else first.toLongOrNull() ?: 0L
+        val end = if (first.isEmpty() || second.isEmpty()) total - 1 else second.toLongOrNull() ?: (total - 1)
+        if (start >= total) return null
+        return start to end.coerceIn(start, total - 1)
+    }
+
+    private fun readLine(input: InputStream): String? {
+        val bytes = java.io.ByteArrayOutputStream()
+        while (true) {
+            val b = input.read()
+            if (b == -1) return if (bytes.size() == 0) null else bytes.toString(Charsets.US_ASCII)
+            if (b == '\n'.code) return bytes.toString(Charsets.US_ASCII)
+            if (b != '\r'.code) bytes.write(b)
+        }
     }
 }

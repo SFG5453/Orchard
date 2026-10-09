@@ -1,0 +1,42 @@
+[package]
+name = "orchard-adaptive-mix"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = ["desktop"]
+# FFmpeg decoding, WebGPU Beat This, docs search and the worker binary.
+desktop = ["ort/webgpu", "ort/download-binaries", "ort/tls-rustls", "ort/copy-dylibs"]
+# Android loads the ONNX Runtime its app package ships.
+android = ["ort/load-dynamic"]
+
+[[bin]]
+name = "orchard-adaptive-mix"
+path = "src/main.rs"
+required-features = ["desktop"]
+
+[[example]]
+name = "legacy_pair_probe"
+required-features = ["desktop"]
+
+[[example]]
+name = "model_probe"
+required-features = ["desktop"]
+
+[[test]]
+name = "models"
+required-features = ["desktop"]
+
+[[test]]
+name = "docs_embed"
+required-features = ["desktop"]
+
+[dependencies]
+orchard-transition-planner = { path = "../orchard-transition-planner" }
+earmark = { path = "../earmark" }
+orchard-transition-core = { path = "../orchard-transition-core" }
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "api-24"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

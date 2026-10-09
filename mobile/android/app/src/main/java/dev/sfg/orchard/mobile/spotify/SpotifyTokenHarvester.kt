@@ -84,7 +84,7 @@ class SpotifyTokenHarvester(private val context: Context) {
                 // onPageStarted injection is the best-effort fallback without it.
                 val documentStartSupported =
                     WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
-                if (documentStartSupported) {
+                if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
                     runCatching {
                         WebViewCompat.addDocumentStartJavaScript(
                             this,

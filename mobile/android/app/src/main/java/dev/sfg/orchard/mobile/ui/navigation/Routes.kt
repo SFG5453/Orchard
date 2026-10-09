@@ -22,12 +22,12 @@ package dev.sfg.orchard.mobile.ui.navigation
 object Routes {
     const val WELCOME = "welcome"
     const val HOME = "home"
+    // Nav tab marker only; search is an overlay with no destination in the graph.
     const val SEARCH = "search"
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
     const val SETTINGS_HOME_LAYOUT = "settings-home-layout"
     const val NOW_PLAYING = "now-playing"
-    const val DEVICES = "devices"
     const val LOGIN = "login"
     const val ACCOUNT_SWITCH = "account-switch"
     const val SPOTIFY_LOGIN = "spotify-login"

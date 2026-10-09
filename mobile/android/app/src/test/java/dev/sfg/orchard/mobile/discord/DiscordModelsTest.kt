@@ -82,7 +82,7 @@ class DiscordModelsTest {
                 smallText = "Playing",
             ),
             buttons = listOf(
-                DiscordPresenceButton("Listen on Your Platform", "https://songlinks.sfg545.dev/s/123"),
+                DiscordPresenceButton("Listen on Your Platform", "https://song.link/y/dQw4w9WgXcQ"),
                 DiscordPresenceButton("View the Orchard Project", "https://sfg545.dev/orchard"),
             ),
             applicationId = DISCORD_APPLICATION_ID,
@@ -113,7 +113,7 @@ class DiscordModelsTest {
         val metadata = json.getJSONObject("metadata")
         val metadataUrls = metadata.getJSONArray("button_urls")
         assertEquals(2, metadataUrls.length())
-        assertEquals("https://songlinks.sfg545.dev/s/123", metadataUrls.getString(0))
+        assertEquals("https://song.link/y/dQw4w9WgXcQ", metadataUrls.getString(0))
         assertEquals("https://sfg545.dev/orchard", metadataUrls.getString(1))
     }
 

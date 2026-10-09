@@ -28,7 +28,7 @@ sealed interface LoadState<out T> {
     data class Error(val message: String, val cachedValueAvailable: Boolean = false) : LoadState<Nothing>
 }
 
-enum class LibraryFilter { PLAYLISTS, ARTISTS, ALBUMS, SONGS, RECENT, DOWNLOADS }
+enum class LibraryFilter { PLAYLISTS, ARTISTS, ALBUMS, SONGS, RECENT, DOWNLOADS, LOCAL }
 
 enum class BuiltInHomeSection {
     YOUR_PLAYLISTS, SUBSCRIBED_ARTISTS, TOP_SONGS, RECOMMENDATIONS,
@@ -63,6 +63,8 @@ data class LibrarySnapshot(
 
 data class OrchardSettings(
     val animatedArtwork: Boolean = true,
+    val artworkSourceOrder: List<ArtworkSource> = ArtworkSource.entries,
+    val sendYouTubeHistory: Boolean = true,
     /** Save motion covers alongside newly downloaded songs for offline playback. */
     val downloadAnimatedArtwork: Boolean = false,
     val audioQuality: AudioQuality = AudioQuality.HIGH,
@@ -70,12 +72,6 @@ data class OrchardSettings(
     val useSystemColors: Boolean = false,
     /** Let the artwork-tinted background drift instead of holding still between tracks. */
     val animatedBackground: Boolean = false,
-    /**
-     * Experimental: render panels, bars and chips as translucent frosted panes tinted by the
-     * playing cover, instead of flat opaque surfaces. Off by default — it is a large change to
-     * every screen's contrast, and Android 12 only gets an approximation of it.
-     */
-    val frostedGlass: Boolean = false,
     /** Overlap the end of a track with the start of the next one. */
     val crossfadeEnabled: Boolean = false,
     val crossfadeSeconds: Int = DEFAULT_CROSSFADE_SECONDS,
@@ -85,8 +81,6 @@ data class OrchardSettings(
      * back to the plain fade for any track it has no evidence about, so it is never worse.
      */
     val smartCrossfade: Boolean = false,
-    /** Whether Best Mix downloads pre-computed analysis from Supabase instead of analyzing local files. Off by default. */
-    val bestMixSupabaseSync: Boolean = false,
     /** Ceiling on the on-disk stream cache, in megabytes. Whole tracks are kept, so this is the
      * difference between a few albums and a library, and between instant re-listens and refetching.
      */
@@ -105,8 +99,11 @@ data class OrchardSettings(
     val spotifyCanvasEnabled: Boolean = true,
     /** Whether to even out volume levels across played tracks. */
     val volumeNormalizationEnabled: Boolean = false,
+    val exponentialVolumeEnabled: Boolean = false,
     /** Keep playing related music once the queue runs out, matching desktop's default of on. */
     val autoplayEnabled: Boolean = true,
+    /** What to do about talking intros, skits and applause that SponsorBlock volunteers marked. */
+    val nonMusicSkip: NonMusicSkipMode = NonMusicSkipMode.BUTTON,
     /** Configuration for the 10-band audio equalizer and audio effects. */
     val equalizerConfig: EqualizerConfig = EqualizerConfig(),
     /** Enable swipe and tap gestures on the player artwork. */
@@ -137,6 +134,14 @@ data class OrchardSettings(
     val customDeviceName: String = "",
     /** Whether to receive beta builds from GitHub releases. */
     val betaChannelEnabled: Boolean = false,
+    /** Tallest music video picture to fetch, in lines; 0 takes the best available. */
+    val videoMaxHeight: Int = DEFAULT_VIDEO_MAX_HEIGHT,
+    /** Translate lyrics to English using a local model or an explicitly selected API. */
+    val translateLyrics: Boolean = false,
+    val lyricTranslationQuality: LyricTranslationQuality = LyricTranslationQuality.STANDARD,
+    val lyricTranslationProvider: LyricTranslationProvider = LyricTranslationProvider.LOCAL,
+    val lyricTranslationModels: Map<String, String> = emptyMap(),
+    val lyricTranslationEndpoint: String = "",
 ) {
     /** Clamped, because a persisted value from an older build must not size the cache absurdly. */
     val cacheSizeBytes: Long
@@ -154,9 +159,28 @@ data class OrchardSettings(
         const val MIN_CACHE_SIZE_MB = 256
         const val MAX_CACHE_SIZE_MB = 8192
         const val DEFAULT_CACHE_SIZE_MB = 1024
+        const val DEFAULT_VIDEO_MAX_HEIGHT = 1080
         /** Slider stops, so the control offers round sizes rather than arbitrary megabytes. */
         val CACHE_SIZE_STEPS_MB = listOf(256, 512, 1024, 2048, 4096, 8192)
     }
 }
 
 enum class AudioQuality { DATA_SAVER, NORMAL, HIGH, MAX }
+
+enum class ArtworkSource(val label: String) {
+    M8TEC("m8tec"), BOIDU("boidu"), SPOTIFY("Spotify Canvas")
+}
+
+/** Translation model size; [key] matches the quality column of the shared pack table. */
+enum class LyricTranslationQuality(val key: String) { STANDARD("standard"), HIGH("high") }
+
+enum class LyricTranslationProvider(val key: String, val label: String) {
+    LOCAL("local", "Local"), OPENAI("openai", "OpenAI"), CLAUDE("claude", "Claude"),
+    GEMINI("gemini", "Gemini"), CUSTOM("custom", "Custom API");
+}
+
+/** How playback treats non-music sections; the same three choices as desktop. */
+enum class NonMusicSkipMode { OFF, BUTTON, AUTO }
+
+/** A span of the playing track that is not music, in full-song milliseconds. */
+data class NonMusicSegment(val id: String, val startMs: Long, val endMs: Long)
