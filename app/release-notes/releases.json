@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.0.0-canary.3",
+    "date": "2026-10-09",
+    "title": "Windows startup fix",
+    "sections": [
+      {
+        "title": "Fixes",
+        "items": [
+          "Fixed a QML loading error that prevented Orchard from starting on Windows."
+        ]
+      }
+    ]
+  },
+  {
     "version": "1.0.0-canary.2",
     "date": "2026-10-09",
     "title": "Windows runtime fix",
