@@ -162,7 +162,24 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           rustup update stable
           if (!(Get-Command ccache.exe -ErrorAction SilentlyContinue)) { choco install ccache --yes --no-progress }
-          if (!(Get-Command makensis.exe -ErrorAction SilentlyContinue)) { choco install nsis --yes --no-progress }
+          if (!(Get-Command makensis.exe -ErrorAction SilentlyContinue)) {
+            choco install nsis --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Prepare Windows installer compiler
+        shell: pwsh
+        run: |
+          $nsisCandidates = @(
+            (Get-Command makensis.exe -ErrorAction SilentlyContinue).Source
+            "$env:ProgramFiles\NSIS\makensis.exe"
+            "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          )
+          $nsis = $nsisCandidates | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1
+          if (!$nsis) { throw "makensis.exe is missing after installation; searched: $($nsisCandidates -join ', ')" }
+          Write-Host "Using NSIS compiler: $nsis"
+          & $nsis /VERSION
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "NSIS_EXE=$nsis" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Test Windows packaging
         shell: pwsh
         run: python -m unittest discover -s scripts -p test_windows_icu_runtime.py -v
@@ -231,10 +248,7 @@ jobs:
           if (!$versionParts.Success) { throw "Unsupported setup version: $appVersion" }
           $revision = if ($versionParts.Groups[4].Success) { $versionParts.Groups[4].Value } else { '0' }
           $fileVersion = '{0}.{1}.{2}.{3}' -f $versionParts.Groups[1].Value, $versionParts.Groups[2].Value, $versionParts.Groups[3].Value, $revision
-          $nsis = (Get-Command makensis.exe -ErrorAction SilentlyContinue).Source
-          if (!$nsis) { $nsis = 'C:\Program Files (x86)\NSIS\makensis.exe' }
-          if (!(Test-Path $nsis)) { throw 'makensis.exe is missing after installation' }
-          & $nsis "-DBOOTSTRAPPER_EXE=$output\orchard-bootstrapper.exe" "-DOUTPUT_FILE=$output\OrchardSetup.exe" "-DORCHARD_VERSION=$appVersion" "-DORCHARD_FILE_VERSION=$fileVersion" "-DDEFAULT_CHANNEL=$env:RELEASE_CHANNEL" bootstrapper/OrchardSetup.nsi
+          & $env:NSIS_EXE "-DBOOTSTRAPPER_EXE=$output\orchard-bootstrapper.exe" "-DOUTPUT_FILE=$output\OrchardSetup.exe" "-DORCHARD_VERSION=$appVersion" "-DORCHARD_FILE_VERSION=$fileVersion" "-DDEFAULT_CHANNEL=$env:RELEASE_CHANNEL" bootstrapper/OrchardSetup.nsi
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (!(Test-Path "$output\OrchardSetup.exe")) { throw 'NSIS setup was not created' }
       - uses: actions/upload-artifact@v4
