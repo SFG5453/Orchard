@@ -190,6 +190,7 @@ required_files=(
 for required_file in "${required_files[@]}"; do
     require_file "$deployment_dir/$required_file"
 done
+python3 "$script_dir/windows_qt_runtime.py" --stage "$deployment_dir"
 
 # Keep the previous staging directory recoverable, then install the freshly
 # deployed one under the stable path used by the archive and by developers.

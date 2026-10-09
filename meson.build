@@ -1,4 +1,4 @@
-project('Orchard', ['c', 'cpp'], version: '1.0.0-canary.3', meson_version: '>=1.12.0',
+project('Orchard', ['c', 'cpp'], version: '1.0.0-canary.4', meson_version: '>=1.12.0',
   subproject_dir: 'third_party', default_options: ['cpp_std=c++20', 'b_lto=false'])
 
 cmake = import('cmake')

@@ -156,9 +156,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: orchard-windows-msvc-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          key: orchard-windows-msvc-qt6112-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            orchard-windows-msvc-qt6120-v1-
+            orchard-windows-msvc-qt6112-v1-
       - name: Install build tools
         shell: pwsh
         run: |
@@ -186,7 +186,7 @@ jobs:
           "NSIS_EXE=$nsis" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Test Windows packaging
         shell: pwsh
-        run: python -m unittest discover -s scripts -p test_windows_icu_runtime.py -v
+        run: python -m unittest discover -s scripts -p 'test_windows_*.py' -v
       - name: Prepare Windows compiler cache
         id: ccache-setup
         shell: pwsh
@@ -198,12 +198,14 @@ jobs:
           New-Item -ItemType Directory -Force $env:CCACHE_DIR | Out-Null
           & $ccache --zero-stats
           & $ccache --version
-      - name: Install Qt 6.12.0
+      - name: Install Qt 6.11.2
         shell: pwsh
         run: |
-          python -m aqt install-qt windows desktop 6.12.0 win64_msvc2022_64 -m qtmultimedia qtshadertools qtwebengine qtwebview qtwebchannel qtpositioning qtwebsockets -O "$env:RUNNER_TEMP\Qt"
-          $qt = "$env:RUNNER_TEMP\Qt\6.12.0\msvc2022_64"
+          python -m aqt install-qt windows desktop 6.11.2 win64_msvc2022_64 -m qtmultimedia qtshadertools qtwebengine qtwebview qtwebchannel qtpositioning qtserialport qtwebsockets -O "$env:RUNNER_TEMP\Qt"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $qt = "$env:RUNNER_TEMP\Qt\6.11.2\msvc2022_64"
           if (!(Test-Path "$qt\lib\cmake\Qt6\Qt6Config.cmake")) { throw "Qt installation missing at $qt" }
+          if (!(Test-Path "$qt\plugins\webview\qtwebview_webengine.dll")) { throw 'QtWebView WebEngine plugin is missing' }
           $rcc = Get-ChildItem $qt -Filter rcc.exe -File -Recurse | Select-Object -First 1
           $qsb = Get-ChildItem $qt -Filter qsb.exe -File -Recurse | Select-Object -First 1
           if (!$rcc -or !$qsb) { throw 'Qt rcc or qsb tool is missing' }
@@ -214,9 +216,6 @@ jobs:
           "$qt\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
           $rcc.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Append
           $qsb.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Append
-      - name: Build QtWebView WebEngine backend
-        shell: pwsh
-        run: python scripts/build-qt-webview.py --qt-root "$env:QT_ROOT" --build-dir build/qt-webview
       - name: Build Orchard
         shell: pwsh
         run: |
@@ -280,7 +279,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: orchard-windows-msvc-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          key: orchard-windows-msvc-qt6112-v1-${{ github.run_id }}-${{ github.run_attempt }}
 
   publish:
     name: Publish signed release to R2

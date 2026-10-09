@@ -8,6 +8,7 @@ import shutil
 import subprocess
 
 from windows_icu_runtime import ICU_DLLS, copy_icu_runtime
+from windows_qt_runtime import validate_qt_runtime
 
 
 def require(path: Path) -> Path:
@@ -85,6 +86,7 @@ def main() -> None:
         require(stage / name)
     for name in ICU_DLLS:
         require(stage / name)
+    validate_qt_runtime(stage)
 
     package.parent.mkdir(parents=True, exist_ok=True)
     if package.exists():

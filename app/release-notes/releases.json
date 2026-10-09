@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.0.0-canary.4",
+    "date": "2026-10-09",
+    "title": "Windows sign-in fix",
+    "sections": [
+      {
+        "title": "Fixes",
+        "items": [
+          "Fixed a missing entry point error that prevented the sign-in window from opening on Windows."
+        ]
+      }
+    ]
+  },
+  {
     "version": "1.0.0-canary.3",
     "date": "2026-10-09",
     "title": "Windows startup fix",

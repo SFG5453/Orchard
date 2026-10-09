@@ -8,7 +8,7 @@ Requirements:
 
 - Meson 1.12+, CMake 3.24+ for the vendored CMake submodules, and Ninja.
 - A C++20 toolchain and Rust 1.96+ (required by the native YouTube player parser).
-- Qt 6.8+ with QML, Quick, Network, Multimedia, WebView, and WebEngine. The release workflow uses Qt 6.12.0.
+- Qt 6.8+ with QML, Quick, Network, Multimedia, WebView, and WebEngine. The release workflow uses Qt 6.12.0 on Linux and Qt 6.11.2 on Windows.
 - Node.js/npm for build-time provider bundling.
 - On Linux, Qt DBus and libsecret development packages for the keychain backend.
 
@@ -36,7 +36,7 @@ On Linux, QtWebView's WebEngine cookie store supplies the native session. The re
 python scripts/build-qt-webview.py --qt-root /path/to/Qt/6.12.0/gcc_64 --build-dir build/qt-webview
 ```
 
-On Windows, use the `msvc2022_64` SDK from an MSVC developer shell. A complete native YouTube cookie session completes sign-in on both platforms. Account name/avatar probing is best effort and cannot reject a session with an `accounts_list` error.
+On Windows, use the Qt 6.11.2 `msvc2022_64` SDK from an MSVC developer shell, including its bundled QtWebView WebEngine plugin. Windows packaging checks that all imported Qt symbols exist in the staged DLLs. A complete native YouTube cookie session completes sign-in on both platforms. Account name/avatar probing is best effort and cannot reject a session with an `accounts_list` error.
 
 ### Cross compilation
 

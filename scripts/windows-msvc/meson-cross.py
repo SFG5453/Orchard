@@ -9,11 +9,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--script-dir", type=Path, required=True)
     parser.add_argument("--qt-root", type=Path, required=True)
+    parser.add_argument("--host-qt-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
     wrap = args.script_dir.resolve()
     qt = args.qt_root.resolve()
+    host_qt = args.host_qt_root.resolve()
     entries = [
         "[binaries]",
         "c = " + repr(str(wrap / "msvc-cl")),
@@ -38,6 +40,7 @@ def main() -> None:
         "",
         "[built-in options]",
         "cmake_prefix_path = [" + repr(str(qt)) + "]",
+        "pkg_config_path = [" + repr(str(host_qt / 'lib/pkgconfig')) + "]",
     ]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text("\n".join(entries) + "\n")

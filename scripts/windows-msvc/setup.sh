@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fetch and prepare everything the Windows/MSVC cross build needs, without touching system state.
-# Usage: setup.sh [--accept-msvc-license] [wine] [msvc] [qt] [qjsc]   (default: all steps)
+# Usage: setup.sh [--accept-msvc-license] [wine] [msvc] [qt] [host-qt] [qjsc]
 set -euo pipefail
 orchard_script=setup
 source "$(dirname -- "${BASH_SOURCE[0]}")/env.sh"
@@ -9,7 +9,7 @@ steps=()
 for arg in "$@"; do
   case "$arg" in
     --accept-msvc-license) ORCHARD_ACCEPT_MSVC_LICENSE=1 ;;
-    wine|msvc|qt|qjsc) steps+=("$arg") ;;
+    wine|msvc|qt|host-qt|qjsc) steps+=("$arg") ;;
     *) orchard_die "unknown argument: $arg" ;;
   esac
 done
@@ -58,21 +58,17 @@ setup_msvc() {
 
 setup_qt() {
   if [[ -f "$ORCHARD_MSVC_QT_ROOT/lib/cmake/Qt6/Qt6Config.cmake" ]]; then
+    [[ -f "$ORCHARD_MSVC_QT_ROOT/bin/Qt6SerialPort.dll" ]] ||
+      orchard_die "Qt Serial Port missing; install qtserialport into $ORCHARD_MSVC_QT_ROOT"
+    [[ -f "$ORCHARD_MSVC_QT_ROOT/plugins/webview/qtwebview_webengine.dll" ]] ||
+      orchard_die "QtWebView WebEngine plugin missing from $ORCHARD_MSVC_QT_ROOT"
     echo "Qt already present: $ORCHARD_MSVC_QT_ROOT"
     return
-  fi
-  local aqt
-  if command -v uvx >/dev/null 2>&1; then
-    aqt=(uvx --from "$ORCHARD_AQT_SPEC" aqt)
-  elif command -v pipx >/dev/null 2>&1; then
-    aqt=(pipx run --spec "$ORCHARD_AQT_SPEC" aqt)
-  else
-    orchard_die "uv or pipx is required to run aqtinstall"
   fi
   # aqt writes <out>/<version>/msvc2022_64.
   # shellcheck disable=SC2086
   # aqt writes aqtinstall.log into the working directory.
-  (cd "$ORCHARD_WIN_TOOLS" && "${aqt[@]}" install-qt windows desktop "$ORCHARD_QT_VERSION" "$ORCHARD_QT_ARCH" \
+  (cd "$ORCHARD_WIN_TOOLS" && orchard_aqt install-qt windows desktop "$ORCHARD_QT_VERSION" "$ORCHARD_QT_ARCH" \
     -m $ORCHARD_QT_MODULES -O "$ORCHARD_WIN_TOOLS/qt")
 }
 
@@ -85,5 +81,12 @@ setup_qjsc() {
   [[ -x "$ORCHARD_HOST_QJSC" ]] || orchard_die "qjsc was not produced at $ORCHARD_HOST_QJSC"
 }
 
-for step in "${steps[@]}"; do "setup_$step"; done
+for step in "${steps[@]}"; do
+  if [[ "$step" == host-qt ]]; then
+    orchard_ensure_host_qt
+  else
+    "setup_$step"
+    [[ "$step" != qt ]] || orchard_ensure_host_qt
+  fi
+done
 echo "Windows toolchain ready under $ORCHARD_WIN_TOOLS"
