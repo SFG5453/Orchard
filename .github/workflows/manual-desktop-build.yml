@@ -260,7 +260,7 @@ jobs:
   publish:
     name: Publish signed release to R2
     needs: [linux, windows]
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     concurrency:
