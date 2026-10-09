@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.0.0-canary.2",
+    "date": "2026-10-09",
+    "title": "Windows runtime fix",
+    "sections": [
+      {
+        "title": "Fixes",
+        "items": [
+          "Windows packages include the ICU runtime required to start Orchard."
+        ]
+      }
+    ]
+  },
+  {
     "version": "1.0.0-canary.1",
     "date": "2026-10-08",
     "title": "Orchard v3",
