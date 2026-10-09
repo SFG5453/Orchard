@@ -293,6 +293,7 @@ fun TrackInfoRow(
                                 )
                                 .basicMarquee(initialDelayMillis = 4000, repeatDelayMillis = 3000),
                     )
+                    dev.sfg.orchard.mobile.ui.components.SlopBadge(currentTrack.id)
                     if (currentTrack.explicit) {
                         Spacer(Modifier.width(6.dp))
                         ExplicitBadge()

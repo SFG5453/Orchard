@@ -19,34 +19,4 @@
 
 #pragma once
 
-#include <cstddef>
-#include <memory>
-#include <optional>
-
-struct SlopVerdict {
-  float probability = 0;
-  float logit = 0;
-  float seconds = 0;
-};
-
-// Streaming decoder-fakeprint detector. Feed interleaved float PCM in playback order.
-class SlopFingerprintDetector final {
-public:
-  static constexpr float kDefaultThreshold = 0.9f;
-  static std::unique_ptr<SlopFingerprintDetector> create(int sampleRate, int channels);
-
-  ~SlopFingerprintDetector();
-  SlopFingerprintDetector(const SlopFingerprintDetector &) = delete;
-  SlopFingerprintDetector &operator=(const SlopFingerprintDetector &) = delete;
-
-  void push(const float *samples, size_t frames);
-  [[nodiscard]] float seconds() const;
-  [[nodiscard]] bool isFull() const;
-  [[nodiscard]] std::optional<SlopVerdict> verdict() const;
-  void reset();
-
-private:
-  struct Impl;
-  explicit SlopFingerprintDetector(std::unique_ptr<Impl> impl);
-  std::unique_ptr<Impl> m_impl;
-};
+#include "slop/slop_fingerprint.h"

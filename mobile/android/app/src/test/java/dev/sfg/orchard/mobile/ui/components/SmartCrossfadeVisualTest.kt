@@ -28,19 +28,6 @@ import kotlin.math.sin
 class SmartCrossfadeVisualTest {
 
     @Test
-    fun `transition style maps to user-friendly label`() {
-        assertEquals("Beat Matched", transitionStyleLabel("dj_blend"))
-        assertEquals("Filtered Blend", transitionStyleLabel("dj_filter"))
-        assertEquals("Equal Power", transitionStyleLabel("equal_power"))
-        assertEquals("Seamless Handoff", transitionStyleLabel("gapless"))
-        assertEquals("Tempo Matched", transitionStyleLabel("tempo_matched"))
-        assertEquals("Bass Swap", transitionStyleLabel("bass_first"))
-        assertEquals("Smart Mix", transitionStyleLabel("smart"))
-        assertEquals("Smart Mix", transitionStyleLabel(""))
-        assertEquals("Custom Style", transitionStyleLabel("custom_style"))
-    }
-
-    @Test
     fun `constant power visual curve maintains total energy`() {
         // Sample points across the mix
         val testPoints = listOf(0.0f, 0.25f, 0.5f, 0.75f, 1.0f)

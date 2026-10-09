@@ -121,11 +121,14 @@ internal fun AudioPage(
         NonMusicSkipRow(settings.nonMusicSkip) { onSettings(settings.copy(nonMusicSkip = it)) }
     }
 
-    SectionLabel("Devices", 8)
-    SettingsPanel(index = 9) { ChromecastSettingsRow() }
+    SectionLabel("AI-generated music", 8)
+    SettingsPanel(index = 9) { SlopSettingsRow(settings, onSettings) }
 
-    SectionLabel("Listening history", 10)
-    SettingsPanel(index = 11) {
+    SectionLabel("Devices", 10)
+    SettingsPanel(index = 11) { ChromecastSettingsRow() }
+
+    SectionLabel("Listening history", 12)
+    SettingsPanel(index = 13) {
         ToggleRow(
             title = "Save plays to YouTube Music history",
             subtitle = "Add songs you play in Orchard to your YouTube Music history",

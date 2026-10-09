@@ -80,6 +80,7 @@ class OrchardPlaybackService : MediaLibraryService() {
     private lateinit var playerFilter: TransitionFilter
     private lateinit var spareFilter: TransitionFilter
     private lateinit var playbackVolume: PlaybackVolumeMonitor
+    private lateinit var slop: dev.sfg.orchard.mobile.playback.slop.SlopPlayback
     // Adaptive mixes and standard fades run at the head of each pipeline; a splicer stays with its player.
     private val splicers = java.util.IdentityHashMap<ExoPlayer, MixSplicer>()
     /** Queue order as it was when shuffle went on, so turning it off can put the queue back. */
@@ -183,6 +184,7 @@ class OrchardPlaybackService : MediaLibraryService() {
             splicerFor = splicers::get,
             onMarker = { graph.transitionMarker.value = it },
             onHandoff = ::adoptPlayer,
+            canCrossfadeTo = { dev.sfg.orchard.mobile.playback.slop.SlopPlayback.allowsTransition(graph, it) },
         )
         crossfade.start(player, spare)
         loadedAudioVariant = graph.streamVariant()
@@ -196,6 +198,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                 crossfade.abort()
                 castPlayer.addListener(castPlaybackListener)
                 mediaSession.player = OrchardSessionPlayer(castPlayer)
+                if (::slop.isInitialized) slop.refresh()
                 persistPlayback()
                 updateCustomLayout()
                 OrchardWidgetUpdater.onPlayerChanged(this, castPlayer)
@@ -203,6 +206,7 @@ class OrchardPlaybackService : MediaLibraryService() {
             onCastEnded = { localPlayer ->
                 chromecastPlayback.player.removeListener(castPlaybackListener)
                 mediaSession.player = OrchardSessionPlayer(localPlayer)
+                if (::slop.isInitialized) slop.refresh()
                 crossfade.start(player, spare)
                 refreshAudioVariant()
                 persistPlayback()
@@ -212,6 +216,7 @@ class OrchardPlaybackService : MediaLibraryService() {
             onError = graph::postWarning,
         )
         chromecastPlayback.start()
+        slop = dev.sfg.orchard.mobile.playback.slop.SlopPlayback(this, graph, ioScope, ::authoritativePlayer, crossfade::abort)
         observeAudioVariants(graph, ioScope, ::refreshAudioVariant)
         OrchardWidgetUpdater.onPlayerChanged(this, player)
     }
@@ -221,7 +226,6 @@ class OrchardPlaybackService : MediaLibraryService() {
         loadedAudioVariant = next
         reloadAudioForVariant(player, crossfade, streamCache, streams, ::prefetchAround)
     }
-
     private fun buildPlayer(filter: TransitionFilter, eq: EqualizerAudioProcessor, handlesAudioFocus: Boolean): ExoPlayer {
         val splicer = MixSplicer()
         return buildOrchardPlayer(this, streams.mediaSourceFactory(), splicer, filter, eq, playbackVolume.state, handlesAudioFocus)
@@ -249,6 +253,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         OrchardWidgetUpdater.onPlayerChanged(this, incoming)
         updateCustomLayout()
         prefetchAround(incoming)
+        if (::slop.isInitialized) slop.refresh()
     }
 
     /** Change the decoder source as one service-side operation, including the crossfade deck. */
@@ -288,6 +293,7 @@ class OrchardPlaybackService : MediaLibraryService() {
             persistPlayback(sync = true)
             OrchardWidgetUpdater.onPlayerChanged(this, finalSource, forcePaused = true)
         }
+        if (::slop.isInitialized) slop.close()
         if (::crossfade.isInitialized) crossfade.release()
         if (::chromecastPlayback.isInitialized) chromecastPlayback.close()
         if (::chromecastStreamServer.isInitialized) chromecastStreamServer.close()
@@ -356,11 +362,13 @@ class OrchardPlaybackService : MediaLibraryService() {
             val item = source.getMediaItemAt(index)
             item.mediaId to MediaItemMapper.toTrack(item)
         }
+        if (::slop.isInitialized) slop.refresh()
     }
 
     /** Cast does not use Orchard's local resolver/crossfade recovery, only shared state updates. */
     private val castPlaybackListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
+            if (::slop.isInitialized) slop.refresh()
             if (events.containsAny(*STATE_EVENTS)) {
                 persistPlayback()
                 updateCustomLayout()

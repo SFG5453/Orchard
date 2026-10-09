@@ -225,6 +225,7 @@ fun TrackRow(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
                         )
+                        SlopBadge(track.id)
                         if (track.explicit) {
                             ExplicitBadge()
                         }

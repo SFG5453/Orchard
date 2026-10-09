@@ -57,10 +57,10 @@ class CrossfadeEngine(
     private val splicerFor: (ExoPlayer) -> MixSplicer?,
     private val onMarker: (TransitionMarker?) -> Unit = {},
     private val onHandoff: (outgoing: ExoPlayer, incoming: ExoPlayer) -> Unit,
+    private val canCrossfadeTo: (String) -> Boolean = { true },
 ) {
     /** What the listener asked for, read fresh on every tick so a settings change lands at once. */
     data class Config(val enabled: Boolean, val fadeSeconds: Double, val mode: CrossfadeMode)
-
     private var active: ExoPlayer? = null
     private var standby: ExoPlayer? = null
 
@@ -75,7 +75,6 @@ class CrossfadeEngine(
 
     // Adaptive splice in flight.
     private var splice: Splice? = null
-
     private class Splice(
         val mix: PreparedMix.Ready,
         val outgoing: ExoPlayer,
@@ -183,6 +182,7 @@ class CrossfadeEngine(
         val nextIndex = player.nextMediaItemIndex
         // Video needs the session's surface, and repeating one track would fade it into itself.
         if (nextIndex == C.INDEX_UNSET || player.repeatMode == Player.REPEAT_MODE_ONE ||
+            !canCrossfadeTo(player.getMediaItemAt(nextIndex).mediaId) ||
             MediaItemMapper.isVideoUri(player.currentMediaItem?.localConfiguration?.uri) ||
             MediaItemMapper.isVideoUri(player.getMediaItemAt(nextIndex).localConfiguration?.uri)
         ) {

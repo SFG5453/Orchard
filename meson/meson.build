@@ -121,6 +121,7 @@ app_sources = [
   'app/src/playback/best_mix_controller.h',
   'app/src/playback/slop_detector.cpp',
   'app/src/playback/slop_detector.h',
+  'core/native/slop/slop_fingerprint.cpp',
   'app/src/playback/slop_fingerprint.cpp',
   'app/src/playback/slop_fingerprint.h',
   'app/src/playback/slop_scan_worker.cpp',

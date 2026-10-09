@@ -79,6 +79,7 @@ class OrchardGraph(context: Context) {
     )
     val settings = SettingsRepository(context, applicationScope)
     val bestMixFeatures = BestMixFeatureStore(context)
+    val slopVerdicts by lazy { dev.sfg.orchard.mobile.playback.slop.SlopVerdicts(context) }
     val networkMonitor = dev.sfg.orchard.mobile.network.NetworkMonitor(context)
     val spotifyCanvas = dev.sfg.orchard.mobile.spotify.SpotifyCanvasRepository(context, http, settings)
     val artwork = ArtworkRepository(http, spotifyCanvas) { settings.settings.value.artworkSourceOrder }

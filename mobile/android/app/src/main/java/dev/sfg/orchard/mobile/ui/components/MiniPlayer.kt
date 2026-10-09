@@ -254,6 +254,7 @@ fun MiniPlayer(
                         )
                     }
                 }
+                SlopBadge(track.id)
                 Spacer(Modifier.width(6.dp))
                 val buttonColor = lerp(palette.accent, Color.White, 0.62f)
                 val toggleSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }

@@ -129,6 +129,14 @@ class YouTubeStreamResolver(
      */
     fun resolveSaver(track: Track): ResolvedStream = audio(track, "saver")
 
+    /** HE-AAC synthesizes its upper band and is unsuitable for generation-artifact detection. */
+    suspend fun resolveForSlop(track: Track): ResolvedStream = withTimeout(RESOLVE_TIMEOUT_MS) {
+        provider.invoke("playback.resolve", payload(track.id, track, "saver").put("audioMimeTypes",
+            org.json.JSONArray(listOf("audio/webm; codecs=\"opus\"", "audio/mp4; codecs=\"mp4a.40.2\""))))
+            .stream("audio/mp4")
+    }
+
+
     private fun audio(track: Track, quality: String): ResolvedStream =
         cached(track.id, "playback.resolve", track, quality) { json ->
             val contentLength = json.optLong("contentLength")
