@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.0.0-canary.7",
+    "date": "2026-10-10",
+    "title": "Windows playback fix",
+    "sections": [
+      {
+        "title": "Fixes",
+        "items": [
+          "Fixed songs failing with \"Unable to play\" in the installed Windows app."
+        ]
+      }
+    ]
+  },
+  {
     "version": "1.0.0-canary.6",
     "date": "2026-10-09",
     "title": "Linux sign-in fix",

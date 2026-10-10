@@ -47,7 +47,7 @@
       "ORCHARD_FFMPEG": "{component:ffmpeg}/ffmpeg.exe"
     },
     "prependPaths": {
-      "PATH": ["{component:qt}", "{component:msvc-runtime}", "{component:onnxruntime}"]
+      "PATH": ["{component:qt}", "{component:ffmpeg}", "{component:msvc-runtime}", "{component:onnxruntime}"]
     }
   }
 }
