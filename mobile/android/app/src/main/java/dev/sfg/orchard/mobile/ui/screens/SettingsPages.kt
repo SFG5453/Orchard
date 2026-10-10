@@ -286,6 +286,8 @@ internal fun StoragePage(
 
     SectionLabel("Downloads", 2)
     SettingsPanel(index = 3) {
+        SdCardDownloadsRow(settings, onSettings)
+        PanelDivider()
         DeleteDownloadsRow(downloadedBytes = downloadedBytes, onDelete = onDeleteAllDownloads)
     }
 

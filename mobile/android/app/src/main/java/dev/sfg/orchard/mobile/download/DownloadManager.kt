@@ -55,9 +55,10 @@ class DownloadManager(
     streams: () -> dev.sfg.orchard.mobile.playback.YouTubeStreamResolver,
     private val artworkResolver: suspend (Track) -> TrackArtwork? = { null },
     private val downloadAnimatedArtworkProvider: () -> Boolean = { false },
+    useSdCardProvider: () -> Boolean = { false },
 ) {
     private val context = context.applicationContext
-    val store: DownloadStore = DownloadStore(context)
+    val store: DownloadStore = DownloadStore(context, useSdCard = useSdCardProvider)
     private val downloader: TrackDownloader =
         TrackDownloader(http, store, streams)
 

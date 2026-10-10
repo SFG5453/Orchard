@@ -67,6 +67,8 @@ data class OrchardSettings(
     val sendYouTubeHistory: Boolean = true,
     /** Save motion covers alongside newly downloaded songs for offline playback. */
     val downloadAnimatedArtwork: Boolean = false,
+    /** Store new offline songs on removable storage when a card is mounted. */
+    val downloadToSdCard: Boolean = false,
     val audioQuality: AudioQuality = AudioQuality.HIGH,
     /** Take the accent from the system's wallpaper palette instead of Orchard's own green. */
     val useSystemColors: Boolean = false,

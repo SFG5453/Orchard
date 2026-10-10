@@ -59,6 +59,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 artworkSourceOrder = decodeArtworkOrder(values[ARTWORK_SOURCE_ORDER]),
                 sendYouTubeHistory = values[SEND_YOUTUBE_HISTORY] ?: true,
                 downloadAnimatedArtwork = values[DOWNLOAD_ANIMATED_ARTWORK] ?: false,
+                downloadToSdCard = values[DOWNLOAD_TO_SD_CARD] ?: false,
                 audioQuality = runCatching { AudioQuality.valueOf(values[AUDIO_QUALITY].orEmpty()) }
                     .getOrDefault(AudioQuality.HIGH),
                 useSystemColors = values[SYSTEM_COLORS] ?: false,
@@ -118,6 +119,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[ARTWORK_SOURCE_ORDER] = value.artworkSourceOrder.joinToString(",") { source -> source.name }
                 it[SEND_YOUTUBE_HISTORY] = value.sendYouTubeHistory
                 it[DOWNLOAD_ANIMATED_ARTWORK] = value.downloadAnimatedArtwork
+                it[DOWNLOAD_TO_SD_CARD] = value.downloadToSdCard
                 it[AUDIO_QUALITY] = value.audioQuality.name
                 it[SYSTEM_COLORS] = value.useSystemColors
                 it[ANIMATED_BACKGROUND] = value.animatedBackground
@@ -233,6 +235,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val ARTWORK_SOURCE_ORDER = stringPreferencesKey("artwork_source_order")
         val SEND_YOUTUBE_HISTORY = booleanPreferencesKey("send_youtube_history")
         val DOWNLOAD_ANIMATED_ARTWORK = booleanPreferencesKey("download_animated_artwork")
+        val DOWNLOAD_TO_SD_CARD = booleanPreferencesKey("download_to_sd_card")
         val AUDIO_QUALITY = stringPreferencesKey("audio_quality")
         val VIDEO_MAX_HEIGHT = intPreferencesKey("video_max_height")
         val TRANSLATE_LYRICS = booleanPreferencesKey("translate_lyrics")

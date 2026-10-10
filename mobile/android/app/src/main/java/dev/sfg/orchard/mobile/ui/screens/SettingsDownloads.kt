@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteForever
+import androidx.compose.material.icons.rounded.SdCard
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -35,10 +36,32 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import dev.sfg.orchard.mobile.download.DownloadStore
+import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.settings.CacheManager
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
+
+/** Toggle for placing new downloads on the SD card; disabled while no card is mounted. */
+@Composable
+internal fun SdCardDownloadsRow(settings: OrchardSettings, onSettings: (OrchardSettings) -> Unit) {
+    val context = LocalContext.current
+    val available = remember { DownloadStore.sdCardDownloadDir(context) != null }
+    ToggleRow(
+        title = "Download to SD card",
+        subtitle = if (available) {
+            "Save new downloads to removable storage. Existing downloads stay where they are"
+        } else {
+            "No SD card detected"
+        },
+        icon = Icons.Rounded.SdCard,
+        checked = settings.downloadToSdCard && available,
+        onChecked = { onSettings(settings.copy(downloadToSdCard = it)) },
+        enabled = available,
+    )
+}
 
 /** Deletes every offline track and its saved motion cover after a confirmation. */
 @Composable

@@ -90,6 +90,7 @@ class OrchardGraph(context: Context) {
         streams = { streams },
         artworkResolver = artwork::artwork,
         downloadAnimatedArtworkProvider = { settings.settings.value.downloadAnimatedArtwork },
+        useSdCardProvider = { settings.settings.value.downloadToSdCard },
     )
     val artistImages = ArtistImageRepository(http)
     /** Shared by playback and downloads, so both reuse one URL cache and one player. */

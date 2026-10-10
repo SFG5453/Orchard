@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile.download
 
 import android.content.Context
+import android.os.Environment
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
@@ -31,12 +32,17 @@ import java.io.File
 class DownloadStore(
     context: Context? = null,
     baseDir: File? = null,
+    /** Return true to place new downloads on removable storage when it is mounted. */
+    private val useSdCard: () -> Boolean = { false },
 ) {
+    private val appContext = context?.applicationContext
+
     val downloadDir: File = baseDir ?: context?.let(::defaultDownloadDir) ?: File(
         File(System.getProperty("java.io.tmpdir"), "orchard-downloads"),
         DOWNLOADS_FOLDER,
     ).apply { if (!exists()) mkdirs() }
 
+    /** Index stays on primary storage so it survives a removed or swapped SD card. */
     private val indexFile: File = File(downloadDir, INDEX_FILE_NAME)
     private val lock = Any()
 
@@ -104,13 +110,13 @@ class DownloadStore(
     /** Gets target file path for a track. */
     fun getTargetFile(videoId: String, extension: String): File {
         val safeName = videoId.replace(Regex("[^a-zA-Z0-9_-]"), "_")
-        return File(downloadDir, "$safeName.$extension")
+        return File(trackDir(), "$safeName.$extension")
     }
 
     /** Gets temp download file path for a track. */
     fun getTempFile(videoId: String): File {
         val safeName = videoId.replace(Regex("[^a-zA-Z0-9_-]"), "_")
-        return File(downloadDir, "$safeName.tmp")
+        return File(trackDir(), "$safeName.tmp")
     }
 
     /** Calculate total bytes used by downloaded tracks. */
@@ -118,6 +124,11 @@ class DownloadStore(
         loadAll().values
             .filter { it.status == DownloadStatus.COMPLETED }
             .sumOf { it.bytesDownloaded.coerceAtLeast(0L) }
+    }
+
+    private fun trackDir(): File {
+        if (useSdCard()) appContext?.let(::sdCardDownloadDir)?.let { return it }
+        return downloadDir
     }
 
     private fun writeIndex(items: List<DownloadItem>) {
@@ -138,6 +149,17 @@ class DownloadStore(
         private const val TAG = "DownloadStore"
         private const val DOWNLOADS_FOLDER = "offline_downloads"
         private const val INDEX_FILE_NAME = "downloads.json"
+
+        /** App-specific directory on mounted removable storage, or null when none exists. */
+        fun sdCardDownloadDir(context: Context): File? = context.getExternalFilesDirs(null)
+            .firstOrNull { dir ->
+                dir != null &&
+                    Environment.isExternalStorageRemovable(dir) &&
+                    Environment.getExternalStorageState(dir) == Environment.MEDIA_MOUNTED
+            }
+            ?.let { File(it, DOWNLOADS_FOLDER) }
+            ?.apply { if (!exists()) mkdirs() }
+            ?.takeIf { it.isDirectory }
 
         fun defaultDownloadDir(context: Context): File = File(
             context.getExternalFilesDir(null) ?: context.filesDir,
