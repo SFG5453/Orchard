@@ -8,8 +8,9 @@
       {"from": "avcodec-*.dll"}, {"from": "avformat-*.dll"},
       {"from": "avutil-*.dll"}, {"from": "swresample-*.dll"}, {"from": "swscale-*.dll"}
     ]},
-    "onnxruntime": {"version": "1.23.0-1", "map": [
-      {"from": "webgpu_dawn.dll", "to": "webgpu_dawn.dll"}
+    "onnxruntime": {"version": "1.23.0-2", "map": [
+      {"from": "webgpu_dawn.dll", "to": "webgpu_dawn.dll"},
+      {"from": "dxil.dll"}, {"from": "dxcompiler.dll"}
     ]},
     "models": {"version": "2", "map": [
       {"from": "models", "to": ""}
@@ -20,7 +21,7 @@
     "qt": {"version": "6.11.2-5", "map": [
       {"from": "Qt6*.dll"}, {"from": "d3dcompiler_47.dll"}, {"from": "D3Dcompiler_47.dll"},
       {"from": "icu.dll"}, {"from": "icuuc.dll"}, {"from": "icuin.dll"}, {"from": "opengl32sw.dll"},
-      {"from": "dxcompiler.dll"}, {"from": "dxil.dll"}, {"from": "QtWebEngineProcess.exe"},
+      {"from": "QtWebEngineProcess.exe"},
       {"from": "qml", "to": "qml"}, {"from": "resources", "to": "resources"}, {"from": "translations", "to": "translations"},
       {"from": "platforms", "to": "plugins/platforms"}, {"from": "imageformats", "to": "plugins/imageformats"},
       {"from": "iconengines", "to": "plugins/iconengines"}, {"from": "sqldrivers", "to": "plugins/sqldrivers"},

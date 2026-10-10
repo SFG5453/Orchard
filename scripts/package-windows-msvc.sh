@@ -16,7 +16,7 @@ archive="$build_dir/Orchard-Windows-x86_64-MSVC-Qt${ORCHARD_QT_VERSION}.7z"
 executable="$build_dir/orchard.exe"
 auth_helper_executable="$build_dir/orchard-auth-helper.exe"
 # Adaptive crossfade and Best Mix worker, staged by Meson.
-adaptive_files=(orchard-adaptive-mix.exe webgpu_dawn.dll discord_partner_sdk.dll libLiteRt.dll ffmpeg.exe ffmpeg-LICENSE.txt)
+adaptive_files=(orchard-adaptive-mix.exe webgpu_dawn.dll dxil.dll dxcompiler.dll discord_partner_sdk.dll libLiteRt.dll ffmpeg.exe ffmpeg-LICENSE.txt)
 wine_prefix="$WINEPREFIX"
 
 die() {
@@ -160,6 +160,8 @@ required_files=(
     orchard-auth-helper.exe
     orchard-adaptive-mix.exe
     webgpu_dawn.dll
+    dxil.dll
+    dxcompiler.dll
     ffmpeg.exe
     models/beat-this/beat_this_webgpu.onnx
     models/vocal-separation/vocals_umxhq_fp32.onnx
