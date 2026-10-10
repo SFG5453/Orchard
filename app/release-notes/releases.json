@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.0.0-canary.5",
+    "date": "2026-10-09",
+    "title": "Windows Shader fix",
+    "sections": [
+      {
+        "title": "Fixes",
+        "items": [
+          "Fixed an issue where windows shader variants were not being compiled."
+        ]
+      }
+    ]
+  },
+  {
     "version": "1.0.0-canary.4",
     "date": "2026-10-09",
     "title": "Windows sign-in fix",
