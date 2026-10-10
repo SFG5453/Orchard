@@ -130,7 +130,7 @@ Rectangle {
 
                         Label {
                             Layout.fillWidth: true
-                            text: row.modelData.artist || ""
+                            text: (row.modelData.artists || []).join(", ") || row.modelData.artist || ""
                             color: "#8d928a"
                             font.pixelSize: 13
                             elide: Text.ElideRight

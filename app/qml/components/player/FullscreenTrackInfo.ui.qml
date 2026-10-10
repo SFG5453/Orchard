@@ -33,7 +33,7 @@ ColumnLayout {
         album: "Hurry Up, We're Dreaming"
     })
     // Artist line; the logic layer joins the artists list when there is no single artist.
-    property string artistText: track.artist || ""
+    property string artistText: (track.artists || []).join(", ") || track.artist || ""
     // Set for the playing song only; the links open its menu targets.
     property bool interactive: false
     property bool compact: false

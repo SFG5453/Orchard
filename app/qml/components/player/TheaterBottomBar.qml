@@ -177,7 +177,7 @@ Item {
 
             Label {
                 Layout.fillWidth: true
-                text: root.track.artist || ""
+                text: (root.track.artists || []).join(", ") || root.track.artist || ""
                 color: "#c3c6bf"
                 font.pixelSize: 15
                 elide: Text.ElideRight

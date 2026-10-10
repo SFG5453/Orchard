@@ -55,7 +55,7 @@ RowLayout {
 
         Label {
             Layout.fillWidth: true
-            text: (OrchardPlayback.track || {}).artist || ""
+            text: ((OrchardPlayback.track || {}).artists || []).join(", ") || (OrchardPlayback.track || {}).artist || ""
             color: "#c3c6bf"
             font.pixelSize: 14
             font.weight: Font.Medium

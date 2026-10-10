@@ -46,8 +46,8 @@ ItemDelegate {
     // The revision read makes the icon follow downloads finishing or being removed.
     readonly property bool downloaded: OrchardDownloads.revision >= 0 && OrchardDownloads.isDownloaded(track.id || "")
     readonly property real albumWidth: showAlbum ? Math.round(width * 0.26) : 0
-    readonly property string artistLabel: track.artist
-                                          || (track.artists && track.artists.length ? track.artists.join(", ") : "")
+    readonly property string artistLabel: (track.artists && track.artists.length ? track.artists.join(", ") : "")
+                                          || track.artist
                                           || fallbackArtist
                                           || qsTr("Unknown artist")
 

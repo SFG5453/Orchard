@@ -241,7 +241,7 @@ Item {
 
         Text {
             width: parent.width
-            text: root.caption || root.media.artist || (root.media.artists || []).join(", ") || root.media.subtitle || root.media.type || ""
+            text: root.caption || (root.media.artists || []).join(", ") || root.media.artist || root.media.subtitle || root.media.type || ""
             color: "#a4a9ad"
             font.family: "Inter"
             font.pixelSize: root.plain ? 12 : 11

@@ -243,7 +243,7 @@ Item {
 
                     Text {
                         Layout.fillWidth: true
-                        text: rowItem.modelData.artist || (rowItem.modelData.artists || []).join(", ")
+                        text: (rowItem.modelData.artists || []).join(", ") || rowItem.modelData.artist
                         color: panel.mutedText
                         font.family: "Inter"
                         font.pixelSize: 11

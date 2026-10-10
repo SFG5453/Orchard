@@ -47,7 +47,7 @@ Item {
     signal albumRequested(var album)
     signal artistRequested(var artist)
     signal playlistRequested(var playlist)
-    function credit(m) { return m.artist || (m.artists || []).join(", ") || m.subtitle || ""; }
+    function credit(m) { return (m.artists || []).join(", ") || m.artist || m.subtitle || ""; }
     function activate(m, category) {
         if (category === "videos" || m.type === "video") unsupportedRequested(m);
         else if (m.type === "album") albumRequested(m);

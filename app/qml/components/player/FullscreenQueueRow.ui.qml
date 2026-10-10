@@ -30,7 +30,7 @@ ItemDelegate {
     property var track: ({ title: "Midnight City", artist: "M83", duration: "4:03" })
     property int rowIndex: 0
     // Artist line; the logic layer joins the artists list when there is no single artist.
-    property string artistText: track.artist || ""
+    property string artistText: (track.artists || []).join(", ") || track.artist || ""
     property real paneSwap: 1
     property color accentColor: "#f0eee7"
     property color primaryText: "#f7f5f0"

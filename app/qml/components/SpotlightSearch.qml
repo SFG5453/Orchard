@@ -270,7 +270,7 @@ Popup {
             for (let i = 0; i < items.length; ++i) {
                 const item = items[i];
                 const sectionTitle = section.title || "";
-                const credit = item.artist || (item.artists || []).join(", ") || item.subtitle || "";
+                const credit = (item.artists || []).join(", ") || item.artist || item.subtitle || "";
                 const subtitleParts = [];
                 if (credit)
                     subtitleParts.push(credit);

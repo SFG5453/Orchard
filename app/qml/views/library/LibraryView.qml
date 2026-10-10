@@ -99,7 +99,7 @@ Item {
 
     function sortValue(item) {
         if (sortKey === "artist")
-            return item.artist || (item.artists || []).join(", ");
+            return (item.artists || []).join(", ") || item.artist;
         if (sortKey === "duration")
             return Number(item.durationSeconds) || 0;
         return item[sortKey] || "";

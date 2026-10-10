@@ -61,7 +61,7 @@ Item {
     }
 
     function subtitleFor(media) {
-        return media.artist || (media.artists || []).join(", ") || media.subtitle || "";
+        return (media.artists || []).join(", ") || media.artist || media.subtitle || "";
     }
 
     // Untyped on purpose: qmlcachegen 6.11 segfaults on `(map || {}).seam` in a compiled binding.

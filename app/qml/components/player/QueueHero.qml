@@ -125,7 +125,7 @@ Rectangle {
 
             Text {
                 Layout.fillWidth: true
-                text: OrchardPlayback.track.artist || (OrchardPlayback.track.artists || []).join(", ") || ""
+                text: (OrchardPlayback.track.artists || []).join(", ") || OrchardPlayback.track.artist || ""
                 visible: text.length > 0
                 color: panel.secondaryText
                 font.family: "Inter"

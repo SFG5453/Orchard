@@ -143,11 +143,13 @@ Popup {
     }
 
     function trackArtist(track) {
+        if (track.artists && track.artists.length) {
+            const joined = track.artists.map(a => (a && a.name) ? a.name : a).filter(Boolean).join(", ");
+            if (joined)
+                return joined;
+        }
         if (track.artist)
             return track.artist;
-        if (track.artists && track.artists.length) {
-            return track.artists.map(a => (a && a.name) ? a.name : a).filter(Boolean).join(", ");
-        }
         return root.detail.author || root.detail.subtitle || "";
     }
 

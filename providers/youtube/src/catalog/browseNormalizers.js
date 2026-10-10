@@ -47,7 +47,7 @@ export function createBrowseNormalizers({
     return browseId.startsWith('UC') ? browseId : '';
   }
   function artistRunText(runs = []) {
-    return runs.find(artistRunBrowseId)?.text || '';
+    return runs.filter(artistRunBrowseId).map((run) => run.text).filter(Boolean).join(', ');
   }
   // Album rows carry no artist runs; the header link is the only artist id.
   function browseHeaderArtistId(header) {

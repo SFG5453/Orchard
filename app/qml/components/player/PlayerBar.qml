@@ -350,10 +350,8 @@ Item {
                     id: trackStatus
 
                     function artistOf(track) {
-                        if (track.artist)
-                            return track.artist;
-
-                        return (track.artists || []).join(", ");
+                        const joined = (track.artists || []).join(", ");
+                        return joined || track.artist || "";
                     }
 
                     MouseArea {
