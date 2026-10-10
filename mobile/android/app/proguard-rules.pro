@@ -42,3 +42,5 @@
     public static int v(...);
     public static int d(...);
 }
+
+-keep class dev.sfg.orchard.mobile.playback.slop.SlopNative { native <methods>; }

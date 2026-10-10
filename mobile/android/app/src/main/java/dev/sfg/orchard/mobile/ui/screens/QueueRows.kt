@@ -187,6 +187,7 @@ internal fun QueueTrackRow(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
+                    dev.sfg.orchard.mobile.ui.components.SlopBadge(track.id)
                     if (track.explicit) {
                         Spacer(Modifier.width(6.dp))
                         ExplicitBadge()

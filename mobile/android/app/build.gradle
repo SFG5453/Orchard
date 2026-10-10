@@ -101,6 +101,7 @@ android {
 
     sourceSets {
         main {
+            assets.srcDir layout.buildDirectory.dir('generated/slopAssets').get().asFile
             jniLibs.srcDirs += earmarkJniLibsDir
             // Reduced-op ORT for arm64; see native/onnxruntime/build.sh.
             jniLibs.srcDirs += 'native/onnxruntime'
@@ -449,3 +450,11 @@ tasks.register('generateTransitionPlannerFixtures', Exec) {
 tasks.matching { it.name ==~ /^process.*UnitTestJavaRes$/ }.configureEach {
     dependsOn 'generateTransitionPlannerFixtures'
 }
+
+
+tasks.register('copySlopAssets', Copy) {
+    from('../../../models/slop') { include 'fakeprint_lr.f32' }
+    from('../../../app/src/playback/slop_model') { include 'LICENSE' }
+    into layout.buildDirectory.dir('generated/slopAssets/slop')
+}
+tasks.named('preBuild').configure { dependsOn 'copySlopAssets' }
