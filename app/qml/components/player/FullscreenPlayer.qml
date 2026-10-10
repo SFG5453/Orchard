@@ -78,7 +78,7 @@ FullscreenPlayerForm {
     }
 
     function artistLabel(track) {
-        return (track.artists || []).join(", ") || track.artist;
+        return (track.artists || []).join(", ") || track.artist || "";
     }
 
     function timeLabel(seconds) {
