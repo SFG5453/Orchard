@@ -48,6 +48,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        dev.sfg.orchard.mobile.discord.DiscordNative.attach(this)
         enableEdgeToEdge()
         runCatching {
             com.google.android.gms.cast.framework.CastContext.getSharedInstance(this)
@@ -97,16 +98,6 @@ class MainActivity : FragmentActivity() {
         if (dataString.isBlank()) return
         if (uri?.scheme == packageName && uri.host == "account" && uri.path == "/callback") {
             OrchardAccountService.get(this).handleAuthCallback(uri)
-            return
-        }
-        val isDiscordCallback = (uri?.scheme == "orchard" && uri.host == "discord") ||
-            (uri?.scheme?.startsWith("discord-") == true)
-        if (isDiscordCallback) {
-            val code = uri.getQueryParameter("code")
-            val state = uri.getQueryParameter("state")
-            if (!code.isNullOrBlank()) {
-                viewModel.handleDiscordAuthCallback(code, state)
-            }
             return
         }
         viewModel.handleIncomingLink(dataString)

@@ -19,6 +19,8 @@ dependencyResolutionManagement {
             url = uri('https://jitpack.io')
             content { includeGroup 'com.github.meowarex' }
         }
+        // Discord Social SDK AAR (Java glue + prebuilt native + prefab headers).
+        flatDir { dirs file('../../vendor/discord_social_sdk/lib/android') }
     }
 }
 

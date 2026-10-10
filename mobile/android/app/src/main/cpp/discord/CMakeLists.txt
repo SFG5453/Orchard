@@ -1,0 +1,6 @@
+find_package(discord_partner_sdk REQUIRED CONFIG)
+
+add_library(orchard_discord_jni SHARED discord_jni.cpp)
+set_target_properties(orchard_discord_jni PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+target_compile_options(orchard_discord_jni PRIVATE -fvisibility=hidden)
+target_link_libraries(orchard_discord_jni PRIVATE discord_partner_sdk::discord_partner_sdk log)

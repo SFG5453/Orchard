@@ -63,8 +63,7 @@ internal fun OrchardNavigation(
     val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
     val artistImages by viewModel.artistImages.collectAsStateWithLifecycle()
     val auth by viewModel.auth.collectAsStateWithLifecycle()
-    val discordAuth by viewModel.discordAuth.collectAsStateWithLifecycle()
-    val discordConnection by viewModel.discordConnection.collectAsStateWithLifecycle()
+    val discordStatus by viewModel.discordStatus.collectAsStateWithLifecycle()
     val lastfmState by viewModel.lastfmState.collectAsStateWithLifecycle()
     val listenBrainzState by viewModel.listenBrainzState.collectAsStateWithLifecycle()
     val libraryFilter by viewModel.libraryFilter.collectAsStateWithLifecycle()
@@ -186,8 +185,7 @@ internal fun OrchardNavigation(
             SettingsScreen(
                 settings = settings,
                 auth = auth,
-                discordAuth = discordAuth,
-                discordConnection = discordConnection,
+                discordStatus = discordStatus,
                 lastfmState = lastfmState,
                 listenBrainzState = listenBrainzState,
                 updateState = updateState,
@@ -205,8 +203,6 @@ internal fun OrchardNavigation(
                 onSignIn = { nav.navigate(Routes.LOGIN) },
                 onSwitchAccount = { nav.navigate(Routes.ACCOUNT_SWITCH) },
                 onSignOut = viewModel::signOut,
-                onConnectDiscord = { viewModel.connectDiscord(context) },
-                onDisconnectDiscord = viewModel::disconnectDiscord,
                 onConnectLastfm = { viewModel.connectLastfm(context) },
                 onCompleteLastfm = viewModel::completeLastfmConnection,
                 onDisconnectLastfm = viewModel::disconnectLastfm,

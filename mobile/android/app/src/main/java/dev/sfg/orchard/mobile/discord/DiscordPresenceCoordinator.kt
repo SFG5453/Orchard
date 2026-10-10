@@ -19,7 +19,8 @@
 
 package dev.sfg.orchard.mobile.discord
 
-import android.util.Log
+import android.content.Context
+import android.content.pm.PackageManager
 import dev.sfg.orchard.mobile.artwork.ArtistImageRepository
 import dev.sfg.orchard.mobile.catalog.CatalogRepository
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
@@ -30,86 +31,68 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicLong
 
-/**
- * High-level coordinator connecting playback events, Discord authentication,
- * asset registration, public song links, and Gateway presence updates.
- */
+private const val DISCORD_PACKAGE = "com.discord"
+
+/** Builds Rich Presence from playback and hands it to the Social SDK. */
 class DiscordPresenceCoordinator(
-    http: OkHttpClient,
-    private val auth: DiscordOAuthRepository,
+    private val context: Context,
     private val songLinks: SongLinksRepository,
     private val artistImages: ArtistImageRepository,
     private val catalog: CatalogRepository,
     private val scope: CoroutineScope,
 ) {
-    private val gateway = DiscordGatewayClient(http, scope, refreshToken = { auth.forceRefresh() })
-    private val assetRegistrar = DiscordAssetRegistrar(http)
     private val currentRequestId = AtomicLong(0)
     private var enhanceJob: Job? = null
-    private var isEnabled = true
+    private var isEnabled = false
+    private var started = false
     private var lastTrackId: String? = null
     private var lastStatus: PlaybackStatus? = null
-    private var lastPositionMs: Long = 0L
-    private var lastUpdateEpochMs: Long = 0L
-    private var lastAnimatedUrl: String? = null
+    private var lastPositionMs = 0L
+    private var lastUpdateEpochMs = 0L
 
-    /**
-     * Image keys already registered with Discord, so a track that has been played
-     * before can carry its artwork on the very first update instead of waiting for
-     * a round trip. Keyed by the artwork the activity was built from.
-     */
-    private val resolvedArtworkKeys: MutableMap<String, String> = Collections.synchronizedMap(
-        object : LinkedHashMap<String, String>(32, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > 100
-        }
-    )
-    private val resolvedArtistKeys: MutableMap<String, String> = Collections.synchronizedMap(
-        object : LinkedHashMap<String, String>(32, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > 100
+    private val artistPortraits = lruCache<String>()
+
+    val status: StateFlow<DiscordPresenceStatus> = DiscordNative.status
+
+    private fun <V> lruCache(): MutableMap<String, V> = Collections.synchronizedMap(
+        object : LinkedHashMap<String, V>(32, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, V>?) = size > 100
         }
     )
 
-    val connectionState: StateFlow<GatewayConnectionState> = gateway.connectionState
-    val authState: StateFlow<DiscordAuthState> = auth.authState
+    private fun discordInstalled(): Boolean = runCatching {
+        context.packageManager.getPackageInfo(DISCORD_PACKAGE, 0)
+    }.isSuccess
 
-    init {
-        scope.launch {
-            auth.authState.collectLatest { state ->
-                when (state) {
-                    is DiscordAuthState.SignedIn -> {
-                        if (isEnabled) gateway.connect(state.session.accessToken)
-                    }
-                    is DiscordAuthState.SignedOut, is DiscordAuthState.Error -> {
-                        gateway.disconnect()
-                    }
-                    is DiscordAuthState.Authorizing -> Unit
-                }
-            }
-        }
-    }
-
+    @Synchronized
     fun setEnabled(enabled: Boolean) {
         isEnabled = enabled
         if (!enabled) {
-            gateway.updateActivity(null)
-            gateway.disconnect()
-        } else {
-            val session = (auth.authState.value as? DiscordAuthState.SignedIn)?.session
-            if (session != null) {
-                gateway.connect(session.accessToken)
-            }
+            if (started) DiscordNative.stop()
+            started = false
+            resetTracking()
+            return
         }
+        if (started) return
+        if (!discordInstalled()) {
+            DiscordNative.report(DiscordPresenceStatus.Unavailable)
+            return
+        }
+        if (!DiscordNative.isLoaded) {
+            DiscordNative.report(DiscordPresenceStatus.Error("Discord SDK failed to load"))
+            return
+        }
+        DiscordNative.report(DiscordPresenceStatus.Ready)
+        DiscordNative.start(DISCORD_APPLICATION_ID)
+        started = true
     }
 
-    fun updatePlayback(snapshot: PlaybackSnapshot, animatedArtworkUrlOverride: String? = null) {
-        if (!isEnabled) return
+    fun updatePlayback(snapshot: PlaybackSnapshot) {
+        if (!isEnabled || !started) return
         val track = snapshot.currentTrack
         if (track == null || snapshot.status == PlaybackStatus.IDLE) {
             clearPresence()
@@ -119,195 +102,103 @@ class DiscordPresenceCoordinator(
         val isPlaying = snapshot.status == PlaybackStatus.PLAYING
         val positionMs = snapshot.positionMs.coerceAtLeast(0)
         val durationMs = snapshot.durationMs.takeIf { it > 0 } ?: track.durationMs
-        val animatedUrl = animatedArtworkUrlOverride?.takeIf(String::isNotBlank)
-            ?: track.animatedArtworkVerticalUrl.takeIf(String::isNotBlank)
-            ?: track.animatedArtworkUrl.takeIf(String::isNotBlank)
-
         val now = System.currentTimeMillis()
-        val isSameTrack = (track.id == lastTrackId)
-        val isSameStatus = (snapshot.status == lastStatus)
-        val isSameAnimatedUrl = (animatedUrl == lastAnimatedUrl)
         val expectedPositionMs = if (isPlaying && lastUpdateEpochMs > 0) {
             lastPositionMs + (now - lastUpdateEpochMs)
         } else {
             lastPositionMs
         }
         val isSeek = Math.abs(positionMs - expectedPositionMs) > 3000L
-
-        if (isSameTrack && isSameStatus && isSameAnimatedUrl && !isSeek) {
-            return
-        }
+        if (track.id == lastTrackId && snapshot.status == lastStatus && !isSeek) return
 
         lastTrackId = track.id
         lastStatus = snapshot.status
         lastPositionMs = positionMs
         lastUpdateEpochMs = now
-        lastAnimatedUrl = animatedUrl
 
         val requestId = currentRequestId.incrementAndGet()
+        send(track, isPlaying, positionMs, durationMs, normalizeDiscordImageUrl(track.artworkUrl), artistPortraits[artistKey(track)])
 
-        // 1. Send immediate base activity. Only a key Discord has already accepted is
-        // usable here; a raw URL would be rejected and blank the artwork that is
-        // currently showing, which is exactly what rapid play/pause used to do.
-        val immediateActivity = buildActivity(
-            track = track,
-            isPlaying = isPlaying,
-            positionMs = positionMs,
-            durationMs = durationMs,
-            artworkKey = resolvedArtworkKeys[artworkCacheKey(track, animatedUrl)],
-            artistKey = resolvedArtistKeys[artistCacheKey(track)],
-            songLinkUrl = songLinks.trackUrl(track),
-        )
-        gateway.updateActivity(immediateActivity)
-
-        // 2. Enhance artwork; the song.link URL is already available locally.
         enhanceJob?.cancel()
         enhanceJob = scope.launch(Dispatchers.IO) {
-            enhancePresence(
-                requestId = requestId,
-                track = track,
-                isPlaying = isPlaying,
-                positionMs = positionMs,
-                durationMs = durationMs,
-                animatedArtworkUrl = animatedUrl,
-            )
+            val portrait = resolveArtistPortrait(track)
+            if (requestId != currentRequestId.get() || portrait.isNullOrBlank()) return@launch
+            send(track, isPlaying, positionMs, durationMs, normalizeDiscordImageUrl(track.artworkUrl), portrait)
         }
     }
 
-    private suspend fun enhancePresence(
-        requestId: Long,
+    private fun send(
         track: Track,
         isPlaying: Boolean,
         positionMs: Long,
         durationMs: Long,
-        animatedArtworkUrl: String?,
-    ) = withContext(Dispatchers.IO) {
-        val session = auth.getValidSession() ?: return@withContext
-        if (requestId != currentRequestId.get()) return@withContext
-
-        val resolvedArtworkKey = assetRegistrar.resolveArtworkAsset(
-            accessToken = session.accessToken,
-            staticArtworkUrl = track.artworkUrl,
-            animatedArtworkUrl = animatedArtworkUrl,
-        )
-        if (!resolvedArtworkKey.isNullOrBlank()) {
-            resolvedArtworkKeys[artworkCacheKey(track, animatedArtworkUrl)] = resolvedArtworkKey
-        }
-
-        if (requestId != currentRequestId.get()) return@withContext
-
-        val artistKey = resolveArtistAsset(session.accessToken, track)
-        if (!artistKey.isNullOrBlank()) resolvedArtistKeys[artistCacheKey(track)] = artistKey
-        if (requestId != currentRequestId.get()) return@withContext
-
-        val enhancedActivity = buildActivity(
-            track = track,
-            isPlaying = isPlaying,
-            positionMs = positionMs,
-            durationMs = durationMs,
-            artworkKey = resolvedArtworkKey,
-            artistKey = artistKey,
-            songLinkUrl = songLinks.trackUrl(track),
-        )
-
-        gateway.updateActivity(enhancedActivity)
-    }
-
-    private fun artworkCacheKey(track: Track, animatedArtworkUrl: String?): String =
-        "${animatedArtworkUrl.orEmpty()}|${track.artworkUrl.orEmpty()}"
-
-    private fun artistCacheKey(track: Track): String =
-        "${track.artists.firstOrNull()?.name?.ifBlank { track.artist } ?: track.artist}|${track.artistId}"
-
-    private suspend fun resolveArtistAsset(accessToken: String, track: Track): String? {
-        resolvedArtistKeys[artistCacheKey(track)]?.let { return it }
-        val name = track.artists.firstOrNull()?.name?.ifBlank { track.artist }
-            ?: track.artist.substringBefore(", ")
-        if (name.isBlank()) return null
-
-        val portrait = artistImages.images(name)?.portraitUrl.orEmpty()
-        if (portrait.isNotBlank()) {
-            assetRegistrar.registerExternalAsset(accessToken, portrait)?.let { return it }
-        }
-
-        // A channel avatar can still take the stage when TheAudioDB has no portrait.
-        val artistId = track.artists.firstOrNull()?.id?.ifBlank { track.artistId }
-            ?: track.artistId
-        val resolvedId = artistId.ifBlank {
-            runCatching { catalog.trackArtists(track.id).firstOrNull()?.id.orEmpty() }.getOrDefault("")
-        }
-        if (resolvedId.isBlank()) return null
-        val youtubePortrait = runCatching { catalog.browse(resolvedId).artworkUrl }.getOrDefault("")
-        return assetRegistrar.registerExternalAsset(accessToken, youtubePortrait)
-    }
-
-    private fun buildActivity(
-        track: Track,
-        isPlaying: Boolean,
-        positionMs: Long,
-        durationMs: Long,
-        artworkKey: String?,
-        artistKey: String?,
-        songLinkUrl: String?,
-    ): DiscordPresenceActivity {
+        artworkUrl: String,
+        artistImageUrl: String?,
+    ) {
         val title = trimDiscordText(track.title, fallback = "Music")
         val artist = trimDiscordText(track.artist, fallback = "Orchard")
         val album = trimDiscordText(track.album)
 
-        val now = System.currentTimeMillis()
-        val timestamps = if (isPlaying) {
-            val start = (now - positionMs).coerceAtLeast(0)
-            val end = if (durationMs > positionMs) start + durationMs else null
-            DiscordPresenceTimestamps(start = start, end = end)
-        } else {
-            null
-        }
-
-        val assets = DiscordPresenceAssets(
-            largeImage = artworkKey?.takeIf(String::isNotBlank),
-            largeText = album.ifBlank { title },
-            smallImage = artistKey?.takeIf(String::isNotBlank),
-            smallText = artist,
-        )
+        // Timestamps follow the wall clock at send time so the enhanced update stays aligned.
+        val start = if (isPlaying) (System.currentTimeMillis() - positionMs).coerceAtLeast(0) else 0L
+        val end = if (isPlaying && durationMs > positionMs) start + durationMs else 0L
 
         val buttons = buildList {
-            if (!songLinkUrl.isNullOrBlank()) {
-                add(DiscordPresenceButton(label = "Listen on Your Platform", url = songLinkUrl))
-            }
-            add(DiscordPresenceButton(label = "View the Orchard Project", url = DISCORD_ORCHARD_PROJECT_URL))
+            songLinks.trackUrl(track)?.takeIf(String::isNotBlank)?.let { add("Listen on Your Platform" to it) }
+            add("View the Orchard Project" to DISCORD_ORCHARD_PROJECT_URL)
         }
 
-        return DiscordPresenceActivity(
-            name = artist.ifBlank { "Orchard" },
-            type = 2, // LISTENING
+        DiscordNative.setPresence(
+            type = DISCORD_LISTENING,
+            name = artist,
             details = if (isPlaying) title else "Paused - $title",
             state = artist,
-            timestamps = timestamps,
-            assets = assets,
-            buttons = buttons,
-            applicationId = DISCORD_APPLICATION_ID,
-            platform = "android",
+            startMs = start,
+            endMs = end,
+            largeImage = artworkUrl,
+            largeText = album.ifBlank { title },
+            smallImage = artistImageUrl.orEmpty(),
+            smallText = artist,
+            buttonLabels = buttons.map { it.first }.toTypedArray(),
+            buttonUrls = buttons.map { it.second }.toTypedArray(),
         )
     }
 
-    fun clearPresence() {
+    private fun artistKey(track: Track): String =
+        "${track.artists.firstOrNull()?.name?.ifBlank { track.artist } ?: track.artist}|${track.artistId}"
+
+    private suspend fun resolveArtistPortrait(track: Track): String? {
+        artistPortraits[artistKey(track)]?.let { return it }
+        val name = track.artists.firstOrNull()?.name?.ifBlank { track.artist }
+            ?: track.artist.substringBefore(", ")
+        if (name.isBlank()) return null
+
+        var url = normalizeDiscordImageUrl(artistImages.images(name)?.portraitUrl)
+        if (url.isBlank()) {
+            // A channel avatar covers artists TheAudioDB has no portrait for.
+            val artistId = track.artists.firstOrNull()?.id?.ifBlank { track.artistId } ?: track.artistId
+            val resolvedId = artistId.ifBlank {
+                runCatching { catalog.trackArtists(track.id).firstOrNull()?.id.orEmpty() }.getOrDefault("")
+            }
+            if (resolvedId.isNotBlank()) {
+                url = normalizeDiscordImageUrl(runCatching { catalog.browse(resolvedId).artworkUrl }.getOrDefault(""))
+            }
+        }
+        return url.takeIf(String::isNotBlank)?.also { artistPortraits[artistKey(track)] = it }
+    }
+
+    private fun resetTracking() {
         lastTrackId = null
         lastStatus = null
         lastPositionMs = 0L
         lastUpdateEpochMs = 0L
-        lastAnimatedUrl = null
         currentRequestId.incrementAndGet()
         enhanceJob?.cancel()
         enhanceJob = null
-        gateway.updateActivity(null)
     }
 
-    fun disconnect() {
-        clearPresence()
-        gateway.disconnect()
-    }
-
-    companion object {
-        private const val TAG = "DiscordPresence"
+    fun clearPresence() {
+        resetTracking()
+        if (started) DiscordNative.clearPresence()
     }
 }

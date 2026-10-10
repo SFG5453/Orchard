@@ -29,12 +29,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Animation
 import androidx.compose.material.icons.rounded.Podcasts
-import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -42,29 +39,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
-import dev.sfg.orchard.mobile.discord.DiscordAuthState
-import dev.sfg.orchard.mobile.discord.GatewayConnectionState
+import dev.sfg.orchard.mobile.discord.DiscordPresenceStatus
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
-private val DiscordBlurple = Color(0xFF5865F2)
 
 @Composable
 fun DiscordSettingsCard(
     settings: OrchardSettings,
-    discordAuth: DiscordAuthState,
-    discordConnection: GatewayConnectionState,
+    discordStatus: DiscordPresenceStatus,
     onSettings: (OrchardSettings) -> Unit,
-    onConnect: () -> Unit,
-    onDisconnect: () -> Unit,
 ) {
     val shape = RoundedCornerShape(20.dp)
     Surface(
@@ -73,123 +61,41 @@ fun DiscordSettingsCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-            when (discordAuth) {
-                is DiscordAuthState.SignedIn -> {
-                    val account = discordAuth.session.account
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (!account?.avatarUrl.isNullOrBlank()) {
-                            AsyncImage(
-                                model = account.avatarUrl,
-                                contentDescription = account.displayName,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(48.dp).clip(CircleShape),
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(DiscordBlurple, CircleShape),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    (account?.displayName?.take(1) ?: "D").uppercase(),
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 20.sp,
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                account?.displayName ?: "Discord User",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = CanopyColors.Text,
-                            )
-                            val subtitle = if (account?.username != null && account.globalName != null) {
-                                "@${account.username}"
-                            } else {
-                                "Discord"
-                            }
-                            Text(
-                                subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = CanopyColors.Muted,
-                            )
-                        }
-
-                    }
-
-                    Spacer(Modifier.height(14.dp))
-                    IntegrationAction("Sign out of Discord", destructive = true, onClick = onDisconnect)
-
-                    Spacer(Modifier.height(16.dp))
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(CanopyColors.Rule)
-                    )
-                    Spacer(Modifier.height(12.dp))
-
-                    DiscordToggleRow(
-                        icon = Icons.Rounded.Podcasts,
-                        title = "Share presence",
-                        subtitle = "Display currently playing track on Discord",
-                        checked = settings.discordPresenceEnabled,
-                        onChecked = { onSettings(settings.copy(discordPresenceEnabled = it)) },
-                    )
-
-                    Spacer(Modifier.height(10.dp))
-                    DiscordToggleRow(
-                        icon = Icons.Rounded.Animation,
-                        title = "Animated artwork",
-                        subtitle = "Convert motion covers to animated GIFs",
-                        checked = settings.discordAnimatedArtwork,
-                        enabled = settings.discordPresenceEnabled,
-                        onChecked = { onSettings(settings.copy(discordAnimatedArtwork = it)) },
-                    )
-                }
-
-                DiscordAuthState.Authorizing -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Rounded.Sync,
-                            contentDescription = null,
-                            tint = LocalAccent.current,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            "Authorizing with Discord…",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = CanopyColors.Text,
-                        )
-                    }
-                }
-
-                is DiscordAuthState.SignedOut, is DiscordAuthState.Error -> {
-                    Text(
-                        "Share what you’re listening to on Discord.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = CanopyColors.Muted,
-                    )
-                    if (discordAuth is DiscordAuthState.Error) {
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            discordAuth.message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = CanopyColors.Danger,
-                        )
-                    }
-                    Spacer(Modifier.height(14.dp))
-                    IntegrationAction("Sign in to Discord", onClick = onConnect)
-                }
+            when (discordStatus) {
+                DiscordPresenceStatus.Unavailable -> Text(
+                    "Install and sign in to the Discord app to share what you’re listening to.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = CanopyColors.Muted,
+                )
+                is DiscordPresenceStatus.Error -> Text(
+                    discordStatus.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = CanopyColors.Danger,
+                )
+                else -> Text(
+                    "Uses the Discord app on this device.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = CanopyColors.Muted,
+                )
             }
+
+            Spacer(Modifier.height(16.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(CanopyColors.Rule)
+            )
+            Spacer(Modifier.height(12.dp))
+
+            DiscordToggleRow(
+                icon = Icons.Rounded.Podcasts,
+                title = "Share presence",
+                subtitle = "Display currently playing track on Discord",
+                checked = settings.discordPresenceEnabled,
+                onChecked = { onSettings(settings.copy(discordPresenceEnabled = it)) },
+            )
+
         }
     }
 }

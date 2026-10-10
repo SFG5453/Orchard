@@ -10,6 +10,12 @@
   <uses-permission android:name="android.permission.WAKE_LOCK" />
   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
   
+  <!-- Social SDK AAR declares voice and sign-in components that presence does not use. -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove" />
+  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" tools:node="remove" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" tools:node="remove" />
+  <uses-permission android:name="android.permission.BLUETOOTH" tools:node="remove" />
+
   <!-- Updater Permissions -->
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
@@ -21,6 +27,8 @@
     </intent>
     <!-- Android Auto's connection state provider; unreachable without this on API 30+. -->
     <provider android:authorities="androidx.car.app.connection" />
+    <!-- Presence goes through the installed Discord app. -->
+    <package android:name="com.discord" />
   </queries>
 
   <application
@@ -73,12 +81,6 @@
         <data android:scheme="https" />
         <data android:host="song.link" />
         <data android:host="album.link" />
-      </intent-filter>
-      <intent-filter>
-        <action android:name="android.intent.action.VIEW" />
-        <category android:name="android.intent.category.DEFAULT" />
-        <category android:name="android.intent.category.BROWSABLE" />
-        <data android:scheme="discord-1531666622312353803" />
       </intent-filter>
       <intent-filter>
         <action android:name="android.intent.action.SEND" />
@@ -152,5 +154,7 @@
             android:resource="@xml/file_paths" />
     </provider>
 
+    <service android:name="com.discord.socialsdk.ForegroundService" tools:node="remove" />
+    <activity android:name="com.discord.socialsdk.AuthenticationActivity" tools:node="remove" />
   </application>
 </manifest>

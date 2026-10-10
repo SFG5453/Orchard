@@ -26,19 +26,12 @@ import dev.sfg.orchard.mobile.OrchardGraph
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-/** Sign-in flows for the scrobbling and presence services linked from Settings. */
+/** Sign-in flows for the scrobbling services linked from Settings. */
 internal class AccountLinks(
     private val graph: OrchardGraph,
     private val scope: CoroutineScope,
     private val showWarning: (String) -> Unit,
 ) {
-    fun connectDiscord(context: Context) = context.openUrl(graph.discordAuth.buildAuthorizationUrl())
-
-    fun disconnectDiscord() = scope.launch { graph.discordAuth.signOut() }
-
-    fun handleDiscordAuthCallback(code: String, state: String?) =
-        scope.launch { graph.discordAuth.handleAuthorizationCode(code, state) }
-
     fun connectLastfm(context: Context) = scope.launch {
         runCatching { graph.lastfm.connect() }
             .onSuccess { url -> context.openUrl(url) }

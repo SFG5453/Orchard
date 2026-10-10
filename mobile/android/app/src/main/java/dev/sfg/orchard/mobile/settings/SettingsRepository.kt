@@ -69,7 +69,6 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 cacheSizeMb = values[CACHE_SIZE_MB] ?: OrchardSettings.DEFAULT_CACHE_SIZE_MB,
                 onboardingCompleted = values[ONBOARDING_COMPLETED] ?: false,
                 discordPresenceEnabled = values[DISCORD_PRESENCE_ENABLED] ?: true,
-                discordAnimatedArtwork = values[DISCORD_ANIMATED_ARTWORK] ?: true,
                 showBitrate = values[SHOW_BITRATE] ?: false,
                 spotifySpdc = values[SPOTIFY_SPDC] ?: "",
                 spotifyCanvasEnabled = values[SPOTIFY_CANVAS_ENABLED] ?: true,
@@ -128,7 +127,6 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[CACHE_SIZE_MB] = value.cacheSizeMb
                 it[ONBOARDING_COMPLETED] = value.onboardingCompleted
                 it[DISCORD_PRESENCE_ENABLED] = value.discordPresenceEnabled
-                it[DISCORD_ANIMATED_ARTWORK] = value.discordAnimatedArtwork
                 it[SHOW_BITRATE] = value.showBitrate
                 it[SPOTIFY_SPDC] = value.spotifySpdc
                 it[SPOTIFY_CANVAS_ENABLED] = value.spotifyCanvasEnabled
@@ -250,7 +248,6 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val CACHE_SIZE_MB = intPreferencesKey("cache_size_mb")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
-        val DISCORD_ANIMATED_ARTWORK = booleanPreferencesKey("discord_animated_artwork")
         val SHOW_BITRATE = booleanPreferencesKey("show_bitrate")
         val SPOTIFY_SPDC = stringPreferencesKey("spotify_spdc")
         val SPOTIFY_CANVAS_ENABLED = booleanPreferencesKey("spotify_canvas_enabled")

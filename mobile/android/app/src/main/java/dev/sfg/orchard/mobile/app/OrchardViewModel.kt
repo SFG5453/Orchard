@@ -31,8 +31,7 @@ import dev.sfg.orchard.mobile.artwork.TrackArtwork
 import dev.sfg.orchard.mobile.audio.selfDeviceLabel
 import dev.sfg.orchard.mobile.auth.AuthState
 import dev.sfg.orchard.mobile.connect.ConnectState
-import dev.sfg.orchard.mobile.discord.DiscordAuthState
-import dev.sfg.orchard.mobile.discord.GatewayConnectionState
+import dev.sfg.orchard.mobile.discord.DiscordPresenceStatus
 import dev.sfg.orchard.mobile.download.DownloadItem
 import dev.sfg.orchard.mobile.download.DownloadStatus
 import dev.sfg.orchard.mobile.lastfm.LastfmState
@@ -148,8 +147,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val connectRemoteVolume: StateFlow<Float> = graph.connect.remote.map { it.volume }
         .stateIn(viewModelScope, SharingStarted.Eagerly, 1f)
     val lyrics: StateFlow<LoadState<List<LyricLine>>> = nowPlaying.lyrics
-    val discordAuth: StateFlow<DiscordAuthState> = graph.discordAuth.authState
-    val discordConnection: StateFlow<GatewayConnectionState> = graph.discordPresence.connectionState
+    val discordStatus: StateFlow<DiscordPresenceStatus> = graph.discordPresence.status
     val qobuzStatus: StateFlow<QobuzStatus> = graph.qobuz.status
     val activeTrackIsQobuz: StateFlow<Boolean> = graph.activeTrackIsQobuz.asStateFlow()
     val activeStreamDetail: StateFlow<dev.sfg.orchard.mobile.model.StreamDetail> = graph.activeStreamDetail.asStateFlow()
@@ -457,8 +455,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
             combine(playback, settings) { snap, set -> snap to set }.collectLatest { (snap, set) ->
                 graph.discordPresence.setEnabled(set.discordPresenceEnabled)
                 if (set.discordPresenceEnabled) {
-                    val override = if (set.discordAnimatedArtwork) null else ""
-                    graph.discordPresence.updatePlayback(snap, animatedArtworkUrlOverride = override)
+                    graph.discordPresence.updatePlayback(snap)
                 }
             }
         }
@@ -469,9 +466,6 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { party.messages.collect { showWarning(it) } }
     }
 
-    fun connectDiscord(context: android.content.Context) = accountLinks.connectDiscord(context)
-    fun disconnectDiscord() = accountLinks.disconnectDiscord()
-    fun handleDiscordAuthCallback(code: String, state: String?) = accountLinks.handleDiscordAuthCallback(code, state)
     fun connectLastfm(context: android.content.Context) = accountLinks.connectLastfm(context)
     fun completeLastfmConnection() = accountLinks.completeLastfmConnection()
     fun disconnectLastfm() = graph.lastfm.disconnect()

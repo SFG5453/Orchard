@@ -66,8 +66,7 @@ import dev.sfg.orchard.mobile.UpdateState
 import dev.sfg.orchard.mobile.auth.AuthState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.sfg.orchard.mobile.auth.OrchardAccountService
-import dev.sfg.orchard.mobile.discord.DiscordAuthState
-import dev.sfg.orchard.mobile.discord.GatewayConnectionState
+import dev.sfg.orchard.mobile.discord.DiscordPresenceStatus
 import dev.sfg.orchard.mobile.lastfm.LastfmState
 import dev.sfg.orchard.mobile.listenbrainz.ListenBrainzState
 import dev.sfg.orchard.mobile.model.OrchardSettings
@@ -82,8 +81,7 @@ import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 fun SettingsScreen(
     settings: OrchardSettings,
     auth: AuthState,
-    discordAuth: DiscordAuthState = DiscordAuthState.SignedOut,
-    discordConnection: GatewayConnectionState = GatewayConnectionState.Disconnected,
+    discordStatus: DiscordPresenceStatus = DiscordPresenceStatus.Ready,
     lastfmState: LastfmState = LastfmState.SignedOut,
     listenBrainzState: ListenBrainzState = ListenBrainzState.SignedOut,
     updateState: UpdateState = UpdateState.Idle,
@@ -91,8 +89,6 @@ fun SettingsScreen(
     onSignIn: () -> Unit,
     onSwitchAccount: () -> Unit,
     onSignOut: () -> Unit,
-    onConnectDiscord: () -> Unit = {},
-    onDisconnectDiscord: () -> Unit = {},
     onConnectLastfm: () -> Unit = {},
     onCompleteLastfm: () -> Unit = {},
     onDisconnectLastfm: () -> Unit = {},
@@ -136,7 +132,7 @@ fun SettingsScreen(
     val account = remember { OrchardAccountService.get(context) }
     val accountState by account.state.collectAsStateWithLifecycle()
     val statuses = connectionStatuses(
-        settings, discordAuth, lastfmState, listenBrainzState, qobuzStatus, accountState.email,
+        settings, discordStatus, lastfmState, listenBrainzState, qobuzStatus, accountState.email,
     )
     val summaries = SettingsSummaries(
         connectedCount = statuses.values.count { it.connected },
@@ -193,14 +189,11 @@ fun SettingsScreen(
                             ConnectionDetail(
                                 service = detail,
                                 settings = settings,
-                                discordAuth = discordAuth,
-                                discordConnection = discordConnection,
+                                discordStatus = discordStatus,
                                 lastfmState = lastfmState,
                                 listenBrainzState = listenBrainzState,
                                 qobuzStatus = qobuzStatus,
                                 onSettings = onSettings,
-                                onConnectDiscord = onConnectDiscord,
-                                onDisconnectDiscord = onDisconnectDiscord,
                                 onConnectLastfm = onConnectLastfm,
                                 onCompleteLastfm = onCompleteLastfm,
                                 onDisconnectLastfm = onDisconnectLastfm,

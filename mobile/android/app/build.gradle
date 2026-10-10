@@ -184,6 +184,7 @@ android {
         compose = true
         buildConfig = true
         resValues = true
+        prefab = true
     }
 
 }
@@ -308,6 +309,7 @@ dependencies {
     implementation 'eu.buney.kopus:kopus:1.6.1.3'
 
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.30.0'
+    implementation(name: 'discord_partner_sdk', ext: 'aar')
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20260719'

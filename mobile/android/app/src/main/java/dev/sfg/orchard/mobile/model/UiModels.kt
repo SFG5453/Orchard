@@ -90,7 +90,6 @@ data class OrchardSettings(
     /** Whether to broadcast now playing status to Discord via Rich Presence. */
     val discordPresenceEnabled: Boolean = true,
     /** Whether to display animated artwork in Discord Rich Presence. */
-    val discordAnimatedArtwork: Boolean = true,
     /** Whether to show stream bitrate under the player scrubber. */
     val showBitrate: Boolean = false,
     /** Spotify sp_dc session cookie value for Spotify Canvas fetching. */

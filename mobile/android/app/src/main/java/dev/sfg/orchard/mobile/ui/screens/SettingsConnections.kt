@@ -37,8 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.sfg.orchard.mobile.discord.DiscordAuthState
-import dev.sfg.orchard.mobile.discord.GatewayConnectionState
+import dev.sfg.orchard.mobile.discord.DiscordPresenceStatus
 import dev.sfg.orchard.mobile.lastfm.LastfmState
 import dev.sfg.orchard.mobile.listenbrainz.ListenBrainzState
 import dev.sfg.orchard.mobile.model.OrchardSettings
@@ -60,18 +59,18 @@ internal data class ConnectionStatus(val connected: Boolean, val summary: String
 
 internal fun connectionStatuses(
     settings: OrchardSettings,
-    discordAuth: DiscordAuthState,
+    discordStatus: DiscordPresenceStatus,
     lastfmState: LastfmState,
     listenBrainzState: ListenBrainzState,
     qobuzStatus: QobuzStatus,
     orchardEmail: String,
 ): Map<ConnectionService, ConnectionStatus> = mapOf(
-    ConnectionService.Discord to when (discordAuth) {
-        is DiscordAuthState.SignedIn ->
-            ConnectionStatus(true, if (settings.discordPresenceEnabled) "Sharing presence" else "Presence off")
-        DiscordAuthState.Authorizing -> ConnectionStatus(false, "Authorizing…")
-        is DiscordAuthState.Error -> ConnectionStatus(false, discordAuth.message)
-        else -> ConnectionStatus(false, ConnectionService.Discord.blurb)
+    ConnectionService.Discord to when {
+        !settings.discordPresenceEnabled -> ConnectionStatus(false, "Presence off")
+        discordStatus is DiscordPresenceStatus.Sharing -> ConnectionStatus(true, "Sharing presence")
+        discordStatus is DiscordPresenceStatus.Ready -> ConnectionStatus(true, "Ready")
+        discordStatus is DiscordPresenceStatus.Error -> ConnectionStatus(false, discordStatus.message)
+        else -> ConnectionStatus(false, "Discord app not installed")
     },
     ConnectionService.Lastfm to when (lastfmState) {
         is LastfmState.Connected -> ConnectionStatus(true, "Scrobbling on")
@@ -190,14 +189,11 @@ internal fun ConnectionChip(status: ConnectionStatus, modifier: Modifier = Modif
 internal fun ConnectionDetail(
     service: ConnectionService,
     settings: OrchardSettings,
-    discordAuth: DiscordAuthState,
-    discordConnection: GatewayConnectionState,
+    discordStatus: DiscordPresenceStatus,
     lastfmState: LastfmState,
     listenBrainzState: ListenBrainzState,
     qobuzStatus: QobuzStatus,
     onSettings: (OrchardSettings) -> Unit,
-    onConnectDiscord: () -> Unit,
-    onDisconnectDiscord: () -> Unit,
     onConnectLastfm: () -> Unit,
     onCompleteLastfm: () -> Unit,
     onDisconnectLastfm: () -> Unit,
@@ -214,11 +210,8 @@ internal fun ConnectionDetail(
             when (service) {
                 ConnectionService.Discord -> DiscordSettingsCard(
                     settings = settings,
-                    discordAuth = discordAuth,
-                    discordConnection = discordConnection,
+                    discordStatus = discordStatus,
                     onSettings = onSettings,
-                    onConnect = onConnectDiscord,
-                    onDisconnect = onDisconnectDiscord,
                 )
                 ConnectionService.Lastfm -> LastfmSettingsCard(
                     state = lastfmState,

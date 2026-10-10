@@ -158,10 +158,8 @@ class OrchardGraph(context: Context) {
         return audioCacheVariant(quality, qobuzEnabled, qobuz.status.value.quality.id)
     }
 
-    val discordAuth = dev.sfg.orchard.mobile.discord.DiscordOAuthRepository(context, http, applicationScope)
     val discordPresence = dev.sfg.orchard.mobile.discord.DiscordPresenceCoordinator(
-        http = http,
-        auth = discordAuth,
+        context = context,
         songLinks = songLinks,
         artistImages = artistImages,
         catalog = catalog,
