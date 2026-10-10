@@ -83,13 +83,16 @@ export APPIMAGE_EXTRACT_AND_RUN=1
 cd "$output_dir"
 
 # linuxdeploy scans both Orchard executables and the WebEngine child process.
-./linuxdeploy-x86_64.AppImage --appdir "$appdir" \
+# Chromium dlopens the host libsoftokn3, which must match the NSS core libraries.
+nss_excludes=(--exclude-library 'libnss3.so*' --exclude-library 'libnssutil3.so*' --exclude-library 'libsmime3.so*')
+
+./linuxdeploy-x86_64.AppImage --appdir "$appdir" "${nss_excludes[@]}" \
   -e "$qt_root/libexec/QtWebEngineProcess" \
   -e "$(command -v ffmpeg)" -e "$(command -v ffprobe)" \
   -i "$output_dir/orchard.png" \
   -d "$output_dir/orchard.desktop" --plugin qt
 
-# Chromium dlopens the host libsoftokn3, which must match the NSS core libraries.
+# Bundled NSS must not survive the final linuxdeploy rescan.
 rm -f "$appdir"/usr/lib/libnss3.so "$appdir"/usr/lib/libnssutil3.so "$appdir"/usr/lib/libsmime3.so
 
 mkdir -p "$appdir/usr/resources" "$appdir/usr/translations/qtwebengine_locales"
@@ -104,7 +107,8 @@ test -f "$appdir/usr/plugins/webview/libqtwebview_webengine.so"
 test -f "$appdir/usr/plugins/sqldrivers/libqsqlite.so"
 test -f "$appdir/usr/qml/QtWebEngine/libqtwebenginequickplugin.so"
 
-./linuxdeploy-x86_64.AppImage --appdir "$appdir" --output appimage
+./linuxdeploy-x86_64.AppImage --appdir "$appdir" "${nss_excludes[@]}" --output appimage
+[[ -z "$(find "$appdir/usr/lib" -name 'libnss3.so*' -o -name 'libnssutil3.so*' -o -name 'libsmime3.so*')" ]] || { echo "Bundled NSS found in AppDir" >&2; exit 1; }
 mapfile -t images < <(find "$output_dir" -maxdepth 1 -name '*.AppImage' ! -name 'linuxdeploy*' -print)
 [[ ${#images[@]} -eq 1 ]] || { echo "Expected one AppImage, found ${#images[@]}" >&2; exit 1; }
 mv "${images[0]}" "$output_dir/Orchard-Linux-x86_64.AppImage"

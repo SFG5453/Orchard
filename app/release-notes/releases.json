@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.0.0-canary.8",
+    "date": "2026-10-10",
+    "title": "Linux sign-in fix",
+    "sections": [
+      {
+        "title": "Fixes",
+        "items": [
+          "Fixed the sign-in window still crashing right after opening in the Linux AppImage."
+        ]
+      }
+    ]
+  },
+  {
     "version": "1.0.0-canary.7",
     "date": "2026-10-10",
     "title": "Windows playback fix",
