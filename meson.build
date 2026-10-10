@@ -1,4 +1,4 @@
-project('Orchard', ['c', 'cpp'], version: '1.0.0-canary.4', meson_version: '>=1.12.0',
+project('Orchard', ['c', 'cpp'], version: '1.0.0-canary.5', meson_version: '>=1.12.0',
   subproject_dir: 'third_party', default_options: ['cpp_std=c++20', 'b_lto=false'])
 
 cmake = import('cmake')
@@ -263,7 +263,7 @@ foreach shader : shader_sources
   name = shader.split('/')[-1]
   shader_resources += custom_target('shader ' + name,
     input: files(shader), output: name + '.qsb',
-    command: [qsb, '@INPUT@', '-o', '@OUTPUT@'])
+    command: [qsb, '--glsl', '100 es,120,150', '--hlsl', '50', '--msl', '12', '-o', '@OUTPUT@', '@INPUT@'])
 endforeach
 shaders_cpp = custom_target('shader resources', input: shader_resources,
   output: 'qrc_shader_resources.cpp',
