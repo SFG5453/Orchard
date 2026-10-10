@@ -197,6 +197,11 @@ internal fun OrchardNavigation(
                         android.widget.Toast.makeText(context, "Cache cleared ($formatted freed)", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 },
+                downloadedBytes = totalBytesUsed,
+                onDeleteAllDownloads = {
+                    viewModel.removeAllDownloads()
+                    android.widget.Toast.makeText(context, "Downloads deleted", android.widget.Toast.LENGTH_SHORT).show()
+                },
                 onRefreshCacheSize = viewModel::refreshCacheSize,
                 onSettings = viewModel::updateSettings,
                 onAutoplayEnabled = viewModel::setAutoplayEnabled,

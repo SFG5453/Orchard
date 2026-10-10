@@ -178,6 +178,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun downloadTrack(track: Track) = graph.downloads.downloadTrack(track)
     fun downloadTracks(tracks: List<Track>) = graph.downloads.downloadTracks(tracks)
     fun removeDownload(videoId: String) = graph.downloads.removeDownload(videoId)
+    fun removeAllDownloads() = graph.downloads.removeAllDownloads()
     fun removeDownloads(tracks: List<Track>) = graph.downloads.removeDownloads(tracks.map { it.id })
 
     /** Playlists a song may join: local songs go to local playlists, online songs to saved ones. */

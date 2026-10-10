@@ -84,6 +84,12 @@ object AnimatedArtworkCache {
 
     fun bytesUsed(context: Context): Long = cache(context).cacheSpace
 
+    /** Drops every cached resource, including entries no download item references. */
+    suspend fun clear(context: Context) = withContext(Dispatchers.IO) {
+        val cache = cache(context)
+        cache.keys.toList().forEach(cache::removeResource)
+    }
+
     suspend fun download(context: Context, http: OkHttpClient, sourceUrl: String): CachedAnimatedArtwork =
         withContext(Dispatchers.IO) {
             val playbackUrl = resolvePlayableUrl(http, sourceUrl)

@@ -112,6 +112,8 @@ fun SettingsScreen(
     cacheSizeBytes: Long = 0L,
     isClearingCache: Boolean = false,
     onClearCache: () -> Unit = {},
+    downloadedBytes: Long = 0L,
+    onDeleteAllDownloads: () -> Unit = {},
     onRefreshCacheSize: () -> Unit = {},
 ) {
     var page by rememberSaveable { mutableStateOf(SettingsPage.Home) }
@@ -213,6 +215,8 @@ fun SettingsScreen(
                             isClearingCache = isClearingCache,
                             onSettings = onSettings,
                             onClearCache = onClearCache,
+                            downloadedBytes = downloadedBytes,
+                            onDeleteAllDownloads = onDeleteAllDownloads,
                             onCheckForUpdates = onCheckForUpdates,
                             onInstallUpdate = onInstallUpdate,
                             onShowNotes = { showNotesDialog = true },

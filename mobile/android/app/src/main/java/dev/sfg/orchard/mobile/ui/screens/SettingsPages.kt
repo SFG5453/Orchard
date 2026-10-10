@@ -262,6 +262,8 @@ internal fun StoragePage(
     isClearingCache: Boolean,
     onSettings: (OrchardSettings) -> Unit,
     onClearCache: () -> Unit,
+    downloadedBytes: Long,
+    onDeleteAllDownloads: () -> Unit,
     onCheckForUpdates: () -> Unit,
     onInstallUpdate: (MobileUpdateMetadata) -> Unit,
     onShowNotes: () -> Unit,
@@ -282,8 +284,13 @@ internal fun StoragePage(
         ClearCacheRow(cacheSizeBytes = cacheSizeBytes, isClearing = isClearingCache, onClear = onClearCache)
     }
 
-    SectionLabel("Updates", 2)
+    SectionLabel("Downloads", 2)
     SettingsPanel(index = 3) {
+        DeleteDownloadsRow(downloadedBytes = downloadedBytes, onDelete = onDeleteAllDownloads)
+    }
+
+    SectionLabel("Updates", 4)
+    SettingsPanel(index = 5) {
         val available = (updateState as? UpdateState.Available)?.metadata
         if (available != null) {
             ActionRow(

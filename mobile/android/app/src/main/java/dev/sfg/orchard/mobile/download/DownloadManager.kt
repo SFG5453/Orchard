@@ -174,6 +174,25 @@ class DownloadManager(
         refreshTotalBytesUsed()
     }
 
+    /** Cancel everything in flight and delete all downloaded files and cached motion covers. */
+    fun removeAllDownloads() {
+        val ids = mutableDownloads.value.keys.toList()
+        for (videoId in ids) {
+            activeJobs.remove(videoId)?.cancel()
+            store.remove(videoId)
+        }
+        synchronized(stateLock) {
+            mutableDownloads.value = emptyMap()
+            updateDerivedStates(emptyMap())
+        }
+        refreshTotalBytesUsed()
+        scope.launch(Dispatchers.IO) {
+            runCatching { AnimatedArtworkCache.clear(context) }
+                .onFailure { Log.w(TAG, "Could not clear animated artwork cache", it) }
+            refreshTotalBytesUsed()
+        }
+    }
+
     /** Remove a collection of downloaded tracks (e.g. removing an album or playlist). */
     fun removeDownloads(videoIds: List<String>) {
         val updated = mutableDownloads.value.toMutableMap()
