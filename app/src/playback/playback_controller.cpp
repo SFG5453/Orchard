@@ -70,6 +70,8 @@ PlaybackController::PlaybackController(YouTubeProvider *provider,
   m_youtubeHistoryEnabled =
       QSettings().value("playback/youtubeHistoryEnabled", true).toBool();
   loadNonMusicSkipMode();
+  m_queueLayout = QSettings().value(QStringLiteral("playback/queueLayout")).toString() == QLatin1String("continuous")
+                      ? QStringLiteral("continuous") : QStringLiteral("upNext");
   m_repeatMode =
       QSettings()
           .value(QStringLiteral("playback/repeatMode"), QStringLiteral("off"))
@@ -236,6 +238,7 @@ PlaybackController::PlaybackController(YouTubeProvider *provider,
             } else {
               clearQueue();
               m_history.clear();
+              emit historyChanged();
               stop();
             }
           });

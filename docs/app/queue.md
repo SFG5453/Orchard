@@ -1,6 +1,6 @@
 ---
 title: Manage the queue
-summary: Open the queue, add songs, reorder, remove, clear, turn Autoplay on or off, and sort with Best Mix.
+summary: Open the queue, add songs, reorder, remove, clear, show played songs, turn Autoplay on or off, and sort with Best Mix.
 group: Basics
 icon: list-music
 keywords:
@@ -12,6 +12,9 @@ keywords:
   - clear queue
   - best mix
   - autoplay
+  - continuous
+  - queue style
+  - history
 platforms:
   - desktop
 order: 30
@@ -26,6 +29,14 @@ The queue is the list of songs that play after the current song. The queue panel
 Select the **Queue** button in the player bar. Select it again to close the panel. In the fullscreen player, the queue button shows or hides the **Up next** list.
 
 The panel header shows the number of songs and their total length, for example "12 songs · 45 min". The current song sits at the top and is labeled NOW PLAYING, PAUSED, or MIXING. The songs after it sit under **UP NEXT**.
+
+## Show played songs in the queue
+
+Open Settings, Playback, Queue style and choose **Continuous**. The queue panel then lists the songs that already played under **PLAYED**, the current song under **NOW PLAYING**, and the upcoming songs under **UP NEXT**, in one list. The panel opens scrolled to the current song, and the player card at the top is hidden.
+
+Click a played song to go back to it. The songs between it and the current song return to the front of the queue. Played songs cannot be dragged or removed. Orchard keeps the last 50 played songs.
+
+**Up next** is the default. It lists only the upcoming songs. The fullscreen player's queue list always uses Up next.
 
 ## Add a song to the queue
 

@@ -59,12 +59,35 @@ Item {
     readonly property color mutedText: "#858a82"
     readonly property real radius: 22
     readonly property var queue: OrchardPlayback.queue || []
+    // Continuous lists played songs, the current song and the queue as one list.
+    readonly property bool continuous: OrchardPlayback.queueLayout === "continuous"
+    readonly property string trackId: OrchardPlayback.track.id || ""
+    // Snapshot so list rows rebuild on song changes, not on every playback tick.
+    property var currentTrack: ({})
+    readonly property var history: continuous ? (OrchardPlayback.history || []) : []
+    readonly property bool hasCurrent: continuous && trackId !== ""
+    readonly property int leading: history.length + (hasCurrent ? 1 : 0)
+    readonly property var rows: continuous
+        ? history.concat(hasCurrent ? [currentTrack] : [], queue) : queue
     readonly property real queueSeconds: {
         let total = 0;
         for (let i = 0; i < root.queue.length; ++i)
             total += root.seconds(root.queue[i]);
         return total;
     }
+
+    function showCurrent() {
+        if (continuous && hasCurrent)
+            Qt.callLater(() => queueList.positionViewAtIndex(history.length, ListView.Beginning));
+    }
+
+    onTrackIdChanged: {
+        currentTrack = OrchardPlayback.track;
+        showCurrent();
+    }
+    onContinuousChanged: showCurrent()
+    onOpenChanged: showCurrent()
+    Component.onCompleted: currentTrack = OrchardPlayback.track
 
     function tint(color, alpha) {
         return Qt.rgba(color.r, color.g, color.b, alpha);
@@ -104,8 +127,8 @@ Item {
 
     // If someone drags a song past the event horizon, clamp it instead of summoning a black hole.
     function updateDrop() {
-        const index = queueList.indexAt(1, dragY + queueList.contentY);
-        dropIndex = index >= 0 ? index : (dragY < 0 ? 0 : queueList.count - 1);
+        const index = queueList.indexAt(1, dragY + queueList.contentY) - leading;
+        dropIndex = index >= 0 ? index : (dragY < 0 ? 0 : queue.length - 1);
     }
 
     visible: reveal > 0.001
@@ -221,10 +244,10 @@ Item {
                           ? (OrchardLyrics.status === "ready"
                              ? (OrchardLyrics.mode === "synced" ? qsTr("Synced to the music") : qsTr("Not time-synced"))
                              : OrchardLyrics.status === "loading" ? qsTr("Looking around…") : qsTr("Nothing to sing along to"))
-                          : queueList.count === 0 ? qsTr("Nothing lined up")
+                          : root.queue.length === 0 ? qsTr("Nothing lined up")
                           : root.queueSeconds > 0
-                          ? qsTr("%n song(s) · %1", "", queueList.count).arg(root.lengthLabel(root.queueSeconds))
-                          : qsTr("%n song(s)", "", queueList.count)
+                          ? qsTr("%n song(s) · %1", "", root.queue.length).arg(root.lengthLabel(root.queueSeconds))
+                          : qsTr("%n song(s)", "", root.queue.length)
                     color: root.mutedText
                     font.family: "Inter"
                     font.pixelSize: 11
@@ -252,7 +275,7 @@ Item {
             }
         }
 
-        QueueHero { panel: root }
+        QueueHero { panel: root; visible: !root.continuous }
 
         // Queue and lyrics share this slot and cross-fade on the header toggle.
         Item {
@@ -274,6 +297,7 @@ Item {
                     spacing: 6
 
                     Text {
+                        visible: !root.continuous
                         text: qsTr("UP NEXT")
                         color: root.mutedText
                         font.family: "Inter"
@@ -284,13 +308,13 @@ Item {
 
                     Item { Layout.fillWidth: true }
 
-                    QueueBestMixButton { panel: root; count: queueList.count }
+                    QueueBestMixButton { panel: root; count: root.queue.length }
 
                     Button {
                         id: clearBtn
                         objectName: "clearQueue"
                         text: qsTr("Clear")
-                        enabled: queueList.count > 0
+                        enabled: root.queue.length > 0
                         implicitHeight: 28
                         leftPadding: 10
                         rightPadding: 10
@@ -334,7 +358,7 @@ Item {
                     cacheBuffer: root.dragIndex >= 0 ? contentHeight : 320
                     interactive: root.dragIndex < 0
                     spacing: 2
-                    model: root.queue
+                    model: root.rows
                     boundsBehavior: Flickable.StopAtBounds
 
                     ScrollBar.vertical: ScrollBar {
@@ -350,7 +374,7 @@ Item {
 
                     delegate: QueueRow { panel: root; list: queueList }
 
-                    QueueEmptyState { panel: root; visible: queueList.count === 0 }
+                    QueueEmptyState { panel: root; visible: root.rows.length === 0 }
                 }
             }
 

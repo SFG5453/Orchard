@@ -87,6 +87,7 @@ void PlaybackController::playCollection(const QVariantList &tracks,
     preceding.clear();
   m_cyclePlayed = preceding;
   m_history = preceding.mid(qMax<qsizetype>(0, preceding.size() - 50));
+  emit historyChanged();
   m_orderedQueue = valid;
   m_orderedQueue.removeOne(ordered.first());
   m_queue.clear();
@@ -273,9 +274,7 @@ void PlaybackController::playQueueIndex(int index) {
   passed.append(m_queue.mid(0, index));
   m_cyclePlayed.append(passed);
   for (const auto &track : std::as_const(passed)) {
-    m_history.append(track);
-    if (m_history.size() > 50)
-      m_history.removeFirst();
+    pushHistory(track.toMap());
   }
   for (int i = 0; i <= index; ++i)
     m_orderedQueue.removeOne(m_queue.at(i));

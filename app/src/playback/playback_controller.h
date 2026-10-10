@@ -54,6 +54,8 @@ class PlaybackController final : public QObject {
   Q_PROPERTY(QVariantMap track READ shownTrack NOTIFY stateChanged)
   Q_PROPERTY(QString queueError READ queueError NOTIFY queueChanged)
   Q_PROPERTY(QVariantList queue READ shownQueue NOTIFY queueChanged)
+  Q_PROPERTY(QVariantList history READ shownHistory NOTIFY historyChanged)
+  Q_PROPERTY(QString queueLayout READ queueLayout WRITE setQueueLayout NOTIFY queueLayoutChanged)
   Q_PROPERTY(BestMixController *bestMix READ bestMix CONSTANT)
   Q_PROPERTY(bool bestMixSorted READ bestMixSorted NOTIFY bestMixStateChanged)
   Q_PROPERTY(bool gaplessEnabled READ gaplessEnabled WRITE setGaplessEnabled
@@ -244,6 +246,8 @@ public:
   Q_INVOKABLE void toggleBestMix();
   Q_INVOKABLE void moveQueueItem(int from, int to);
   Q_INVOKABLE void playQueueIndex(int index);
+  // Rewinds to an already played song; the songs in between return to the front of the queue.
+  Q_INVOKABLE void playHistoryIndex(int index);
   Q_INVOKABLE void play();
   Q_INVOKABLE void pause();
   Q_INVOKABLE void toggle();
@@ -274,6 +278,9 @@ public:
   void remoteChanged();
   QVariantMap shownTrack() const;
   QVariantList shownQueue() const;
+  QVariantList shownHistory() const;
+  QString queueLayout() const { return m_queueLayout; }
+  void setQueueLayout(const QString &layout);
   bool shownPlaying() const;
   bool shownLoading() const;
   double shownPosition() const;
@@ -289,6 +296,8 @@ public:
   void playFrom(const QVariantList &tracks, int index, double position, bool play);
 signals:
   void queueChanged();
+  void historyChanged();
+  void queueLayoutChanged();
   void bestMixStateChanged();
   void stateChanged();
   // The music video stream feeding the audio engine failed; album audio takes over.
@@ -417,6 +426,7 @@ private:
   QString m_failedPreparedPair;
   QVariantMap m_track;
   QVariantList m_history;
+  QString m_queueLayout{QStringLiteral("upNext")};
   QVariantList m_queue;
   QVariantList m_bestMixOriginal;
   QVariantList m_bestMixSortedQueue;
@@ -446,6 +456,7 @@ private:
   QTimer m_persistTimer;
   bool m_youtubeHistoryEnabled{true};
   void loadNonMusicSkipMode();
+  void pushHistory(const QVariantMap &track);
   void requestNonMusicSegments(const QString &trackId, const QString &videoId,
                                double durationSeconds);
   bool receiveNonMusicSegments(quint64 id, const QJsonValue &result);

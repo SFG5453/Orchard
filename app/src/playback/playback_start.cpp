@@ -59,15 +59,13 @@ void PlaybackController::startTrack(const QVariantMap &track, bool replaceQueue,
     m_orderedQueue.clear();
     m_cyclePlayed.clear();
     m_history.clear();
+    emit historyChanged();
     emit queueChanged();
   }
 
   if (!replaceQueue && !m_suppressHistory && !m_track.isEmpty() &&
       m_track.value("id") != selected.value("id")) {
-    m_history.append(m_track);
-    if (m_history.size() > 50) {
-      m_history.removeFirst();
-    }
+    pushHistory(m_track);
   }
 
   // Paused preloads may still report BufferingMedia. Preserve their decoder

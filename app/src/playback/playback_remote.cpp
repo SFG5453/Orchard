@@ -98,6 +98,7 @@ void PlaybackController::playFrom(const QVariantList &tracks, int index, double 
   // Earlier songs stay reachable through Previous, as with a collection.
   m_cyclePlayed = tracks.mid(0, index);
   m_history = m_cyclePlayed.mid(std::max<qsizetype>(0, m_cyclePlayed.size() - 50));
+  emit historyChanged();
   m_queue = tracks.mid(index + 1);
   m_orderedQueue = m_queue;
   emit queueChanged();

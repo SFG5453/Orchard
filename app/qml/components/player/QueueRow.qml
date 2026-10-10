@@ -31,20 +31,44 @@ Item {
 
     required property var modelData
     required property int index
+    // Continuous layout rows before the queue are played songs, then the current song.
+    readonly property bool previous: index < panel.history.length
+    readonly property bool current: !previous && index < panel.leading
+    readonly property int queueIndex: index - panel.leading
+    readonly property string sectionLabel: !panel.continuous ? ""
+        : index === 0 && previous ? qsTr("PLAYED")
+        : current ? qsTr("NOW PLAYING")
+        : queueIndex === 0 ? qsTr("UP NEXT") : ""
+    readonly property int headerHeight: sectionLabel ? 26 : 0
     readonly property bool hot: song.hovered || song.activeFocus || handleArea.containsMouse || removeBtn.hovered
-    readonly property bool mixingIn: OrchardPlayback.crossfadeActive && index === 0
+    readonly property bool mixingIn: OrchardPlayback.crossfadeActive && queueIndex === 0
                                      && modelData.id === OrchardPlayback.transitionTrack.id
     // Rows cascade in behind the panel slide; later rows wait their turn.
     readonly property real enter: Math.max(0, Math.min(1, panel.reveal * 2.2 - Math.min(index, 10) * 0.12))
 
     width: list.width
-    height: 56
-    opacity: (panel.dragIndex === index ? 0.35 : 1.0) * enter
+    height: 56 + headerHeight
+    opacity: (panel.dragIndex === queueIndex ? 0.35 : 1.0) * enter * (previous ? 0.6 : 1.0)
     transform: Translate { y: (1 - rowItem.enter) * 14 }
+
+    Text {
+        visible: rowItem.sectionLabel !== ""
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.leftMargin: 8
+        anchors.topMargin: 8
+        text: rowItem.sectionLabel
+        color: panel.mutedText
+        font.family: "Inter"
+        font.pixelSize: 10
+        font.bold: true
+        font.letterSpacing: 0.9
+    }
 
     // Drop target indicator line
     Rectangle {
         anchors.top: parent.top
+        anchors.topMargin: rowItem.headerHeight
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.leftMargin: 8
@@ -52,20 +76,22 @@ Item {
         height: 2
         color: panel.accentColor
         radius: 1
-        visible: panel.dragIndex >= 0 && panel.dropIndex === rowItem.index
+        visible: panel.dragIndex >= 0 && panel.dropIndex === rowItem.queueIndex
         z: 5
     }
 
     Rectangle {
         anchors.fill: parent
+        anchors.topMargin: rowItem.headerHeight
         radius: 12
-        color: rowItem.hot ? "#14ffffff" : rowItem.index === 0 ? panel.tint(panel.accentColor, 0.07) : "transparent"
+        color: rowItem.hot ? "#14ffffff" : rowItem.current || rowItem.queueIndex === 0 ? panel.tint(panel.accentColor, 0.07) : "transparent"
         border.color: song.activeFocus ? panel.accentColor : "transparent"
         Behavior on color { ColorAnimation { duration: 120 } }
     }
 
     RowLayout {
         anchors.fill: parent
+        anchors.topMargin: rowItem.headerHeight
         anchors.leftMargin: 2
         anchors.rightMargin: 8
         spacing: 2
@@ -82,7 +108,7 @@ Item {
                 anchors.centerIn: parent
                 columns: 2
                 spacing: 3
-                opacity: handleArea.pressed ? 1 : rowItem.hot ? 0.7 : 0
+                opacity: handleArea.pressed ? 1 : rowItem.hot && rowItem.queueIndex >= 0 ? 0.7 : 0
                 Behavior on opacity { NumberAnimation { duration: 140 } }
 
                 Repeater {
@@ -99,12 +125,13 @@ Item {
             MouseArea {
                 id: handleArea
                 anchors.fill: parent
+                enabled: rowItem.queueIndex >= 0
                 hoverEnabled: true
                 cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
                 preventStealing: true
 
                 onPressed: function(mouse) {
-                    panel.dragIndex = rowItem.index;
+                    panel.dragIndex = rowItem.queueIndex;
                     panel.dragY = mapToItem(list, mouse.x, mouse.y).y;
                     panel.updateDrop();
                 }
@@ -132,8 +159,9 @@ Item {
             objectName: "queuedSong"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            enabled: !OrchardPlayback.loading
-            onClicked: OrchardPlayback.playQueueIndex(rowItem.index)
+            enabled: !OrchardPlayback.loading && !rowItem.current
+            onClicked: rowItem.previous ? OrchardPlayback.playHistoryIndex(rowItem.index)
+                                        : OrchardPlayback.playQueueIndex(rowItem.queueIndex)
             Accessible.name: qsTr("Play %1").arg(rowItem.modelData.title)
             background: Item {}
 
@@ -179,7 +207,7 @@ Item {
                         spacing: 6
 
                         Rectangle {
-                            visible: rowItem.index === 0
+                            visible: !panel.continuous && rowItem.queueIndex === 0
                             implicitWidth: nextLabel.implicitWidth + 10
                             implicitHeight: 15
                             radius: 4
@@ -253,7 +281,7 @@ Item {
                 font.family: "Inter"
                 font.pixelSize: 11
                 font.features: { "tnum": 1 }
-                opacity: rowItem.hot ? 0 : 1
+                opacity: rowItem.hot && rowItem.queueIndex >= 0 ? 0 : 1
                 Behavior on opacity { NumberAnimation { duration: 120 } }
             }
 
@@ -261,10 +289,11 @@ Item {
                 id: removeBtn
                 objectName: "removeQueuedSong"
                 anchors.centerIn: parent
+                visible: rowItem.queueIndex >= 0
                 implicitWidth: 28
                 implicitHeight: 28
                 Accessible.name: qsTr("Remove %1 from queue").arg(rowItem.modelData.title)
-                onClicked: OrchardPlayback.removeFromQueue(rowItem.index)
+                onClicked: OrchardPlayback.removeFromQueue(rowItem.queueIndex)
                 opacity: rowItem.hot || removeBtn.activeFocus ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 120 } }
 

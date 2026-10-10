@@ -363,9 +363,7 @@ void PlaybackController::finishCrossfade() {
   if (!m_suppressHistory && !outgoingTrack.isEmpty() &&
       outgoingTrack.value(QStringLiteral("id")) !=
           m_crossfadeTrack.value(QStringLiteral("id"))) {
-    m_history.append(outgoingTrack);
-    if (m_history.size() > 50)
-      m_history.removeFirst();
+    pushHistory(outgoingTrack);
   }
   if (!m_queue.isEmpty() &&
       m_queue.first().toMap().value(QStringLiteral("id")) ==

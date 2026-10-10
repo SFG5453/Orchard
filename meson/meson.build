@@ -149,6 +149,7 @@ app_sources = [
   'app/src/playback/playback_start.cpp',
   'app/src/playback/playback_video_source.cpp',
   'app/src/playback/playback_helpers.h',
+  'app/src/playback/playback_history.cpp',
   'app/src/playback/playback_media.cpp',
   'app/src/playback/playback_queue.cpp',
   'app/src/playback/playback_skip.cpp',

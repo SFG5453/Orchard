@@ -33,10 +33,12 @@ PlaybackSectionForm {
     autoplayEnabled: OrchardPlayback.autoplayEnabled
     slopAction: OrchardPlayback.slop.action
     nonMusicSkipMode: OrchardPlayback.nonMusicSkipMode
+    queueLayout: OrchardPlayback.queueLayout
 
     streamQualityPicker.onPicked: value => OrchardPlayback.streamQuality = value
     slopPicker.onPicked: value => OrchardPlayback.slop.action = value
     nonMusicPicker.onPicked: value => OrchardPlayback.nonMusicSkipMode = value
+    queueLayoutPicker.onPicked: value => OrchardPlayback.queueLayout = value
 
     crossfadeSwitch.onToggled: {
         // A remembered adaptive mode can't wake up next to a running engine.

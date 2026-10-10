@@ -161,6 +161,7 @@ void PlaybackController::restorePlayback() {
   }
   if (!savedHistory.isEmpty() && m_history.isEmpty()) {
     m_history = sanitizeTrackList(savedHistory, 50);
+    emit historyChanged();
   }
   if (!savedShuffleSource.isEmpty() && m_orderedQueue.isEmpty()) {
     m_orderedQueue = sanitizeTrackList(savedShuffleSource, 2500);

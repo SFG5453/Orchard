@@ -34,6 +34,7 @@ ColumnLayout {
     property bool autoplayEnabled: true
     property string slopAction: "mark"
     property string nonMusicSkipMode: "button"
+    property string queueLayout: "upNext"
     property alias streamQualityPicker: streamQualityPicker
     property alias crossfadeSwitch: crossfadeSwitch
     property alias crossfadeLength: crossfadeLength
@@ -42,6 +43,7 @@ ColumnLayout {
     property alias autoplaySwitch: autoplaySwitch
     property alias slopPicker: slopPicker
     property alias nonMusicPicker: nonMusicPicker
+    property alias queueLayoutPicker: queueLayoutPicker
 
     spacing: 28
     Layout.fillWidth: true
@@ -171,6 +173,21 @@ ColumnLayout {
                 objectName: "settingsAutoplay"
                 checked: root.autoplayEnabled
                 Accessible.name: qsTr("Autoplay")
+            }
+        }
+
+        SettingsRow {
+            iconName: "list-music"
+            title: qsTr("Queue style")
+            description: qsTr("Up next lists only what is still queued. Continuous also shows what already played, with the current song in place.")
+
+            SettingsSegmented {
+                id: queueLayoutPicker
+                currentValue: root.queueLayout
+                model: [
+                    { value: "upNext", label: qsTr("Up next"), name: qsTr("Queue style: %1").arg(qsTr("Up next")) },
+                    { value: "continuous", label: qsTr("Continuous"), name: qsTr("Queue style: %1").arg(qsTr("Continuous")) }
+                ]
             }
         }
 

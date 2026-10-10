@@ -142,6 +142,7 @@ void PlaybackController::previous() {
     seek(0.0);
   } else {
     const QVariantMap prev = m_history.takeLast().toMap();
+    emit historyChanged();
     m_queue.prepend(m_track);
     m_orderedQueue.prepend(m_track);
     if (!m_cyclePlayed.isEmpty())
