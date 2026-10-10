@@ -29,21 +29,40 @@ object MobileChangelog {
     val CURRENT_RELEASE_NOTES =
         """
         ### Added
-        - **Desktop Transition Parity**: Mobile now runs the shared desktop transition planner with the same cue selection, tempo ratios, choreography, and fallback policy, backed by generated parity fixtures.
-        - **Cache Controls**: Added cache size reporting and a confirmation flow to clear temporary artwork, audio, network, and stream caches without touching downloads or library data.
-        - **Artist Actions**: Added artist credits in playback and follow/unfollow controls from artist and track surfaces.
+        - **Local Library**: Play songs and folders from the phone without an account, build local playlists with automatic or custom covers, edit playlist order, and attach .lrc, .srt, or .txt lyrics.
+        - **Orchard Connect v2**: Shared C++ core for pairing, remote control, and listening parties across desktop and Android, opened from a Now Playing popup, with desktop-rendered mixes for a phone target.
+        - **Music Videos**: New video player with Orchard controls, a Song/Video switch, video search, a quality picker, landscape fullscreen with bar trimming and pinch-to-fill, and SponsorBlock skipping.
+        - **AI Song Detection**: Detect fully generated music in the playing song and the next three, with options to mark, skip, or remove flagged songs.
+        - **Lyric Translation**: Translate lyrics on device with downloadable packs or through an optional API, with a lyrics chip and Appearance settings.
+        - **Qobuz MAX**: Stream Qobuz at MAX quality with Hi-Res and Lossless labels, album quality on detail pages, and format and codec in the Now Playing badge. MAX requires a linked account.
+        - **Motion Artwork**: Spotify Canvas loops after a Spotify login, and offline downloads save motion covers for playback without a connection.
+        - **Integrations**: Added Chromecast, Last.fm and ListenBrainz scrobbling, and Discord presence through the Social SDK with artist avatars.
+        - **Accounts**: Switch between linked accounts without signing out, with Orchard account sign-in through an app callback.
+        - **Bug Reports**: Report sheet with a draggable screenshot bubble, photo picker attachments, and an update banner for new issue activity.
+        - **Playback Options**: Exponential volume, YouTube history reporting, and artwork source ordering.
+        - **Storage**: A "Delete all downloads" action in Storage & updates that also clears orphaned motion covers.
+        - **Layouts**: Foldable and wide-screen layouts with a navigation rail, and iOS-style scroll physics.
 
         ### Changed
-        - **Listening Experience**: Refined Home, Library, detail, queue, now-playing, lyrics, device, integration, and settings screens with consistent responsive surfaces and bundled Inter typography.
-        - **Beat Analysis**: Shipped the official `final0` Beat This dynamic INT8 model with fixed 1500-frame windows, CPU execution, versioned extraction, and bounded audio work.
-        - **Crossfade Engine**: Shared transition planning now preserves selected cues, tempo ratios, choreography, and fallback behavior while rendered playback keeps its full-song source clock.
+        - **Interface**: Rebuilt Home, Library, Search, Settings, artist, album, playlist, and Now Playing screens around frosted glass, a warped artwork backdrop, motion, and a search overlay. Settings is a hub with Audio & playback, Appearance, Connections, and Storage & updates pages.
+        - **Adaptive Mix**: Renamed from Smart Crossfade. Mobile runs the desktop mix and Best Mix in process, plans blends from measured bass, vocal, and beat evidence, and keeps the natural boundary for clashing production styles.
+        - **Beat Tracking**: Replaced the beat tracker with a pure-DSP implementation shared with desktop and shipped a reduced-op ONNX Runtime, cutting the native library from 33 MB to 12 MB.
+        - **Shared Providers**: YouTube and Qobuz run the desktop JavaScript providers through one QuickJS host, including matching, signing, and OAuth.
+        - **Best Mix**: Analyzes saver streams like desktop, keeps run state across screens, and allows one run at a time.
 
         ### Fixed
-        - **Rendered Crossfades**: Stabilized transition handoffs, preserved source position and duration, and prevented competing analysis and render jobs from disturbing playback timing.
+        - **Cold Start**: The restored song resolves from its saved track so the wrong recording is no longer cached after opening the app.
+        - **Opus Decoding**: Honor discard padding and decode in process, fixing garbled song tails and cutting analysis from tens of seconds to about two.
+        - **Mixes**: Prepared mixes survive seeks, the transition marker no longer flashes the outgoing song, and the mix indicator hides after manual skips.
+        - **Playback Sources**: Reject mismatched audio versions and animated artwork, and isolate cached audio by source so signing in to Qobuz applies without a restart.
+        - **Downloads and Playlists**: Restored the collection and playlist download option and fixed playlist additions that used the wrong track version.
+        - **YouTube Accounts**: Fixed account switching and profile loading.
+        - **Touch Handling**: Taps no longer fall through the full player.
 
         ### Maintenance
-        - **Android Runtime**: Updated to stock ONNX Runtime Android 1.29.0, kept production APKs ARM64-only, and removed the experimental QNN/HTP packaging path after benchmark validation.
-        - **Testing & Tooling**: Added transition parity, timeline, work-limiter, cache, and UI tests plus Beat This quantization and accuracy benchmarks.
+        - **Runtime**: Replaced the Google WebRTC library with libdatachannel, updated Media3 to 1.11.1, and added LiteRT for Beat This and translation.
+        - **Builds**: Added an installable x86 canary variant, ProGuard rules for LiteRT, and lint fixes.
+        - **Testing & Tooling**: Added on-device Best Mix parity and adaptive mix benchmarks, Discord, Connect, translation, and artwork tests.
         """
             .trimIndent()
 }
