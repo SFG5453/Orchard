@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.0.0-canary.6",
+    "date": "2026-10-09",
+    "title": "Linux sign-in fix",
+    "sections": [
+      {
+        "title": "Fixes",
+        "items": [
+          "Fixed the sign-in window crashing right after opening in the Linux AppImage."
+        ]
+      }
+    ]
+  },
+  {
     "version": "1.0.0-canary.5",
     "date": "2026-10-09",
     "title": "Windows Shader fix",

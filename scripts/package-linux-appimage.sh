@@ -89,6 +89,9 @@ cd "$output_dir"
   -i "$output_dir/orchard.png" \
   -d "$output_dir/orchard.desktop" --plugin qt
 
+# Chromium dlopens the host libsoftokn3, which must match the NSS core libraries.
+rm -f "$appdir"/usr/lib/libnss3.so "$appdir"/usr/lib/libnssutil3.so "$appdir"/usr/lib/libsmime3.so
+
 mkdir -p "$appdir/usr/resources" "$appdir/usr/translations/qtwebengine_locales"
 cp -a "$qt_root/resources/." "$appdir/usr/resources/"
 cp -a "$qt_root/translations/qtwebengine_locales/." "$appdir/usr/translations/qtwebengine_locales/"
