@@ -36,7 +36,7 @@ void PlaybackController::receiveStream(quint64 id, const QJsonValue &result) {
     m_nextRequest = 0;
     const auto stream = result.toObject();
     const QUrl url(stream.value("url").toString());
-    if (url.scheme() != "https" || !url.host().endsWith(".googlevideo.com") ||
+    if (url.scheme() != "https" || !(url.host().endsWith(".googlevideo.com") || url.host().endsWith(".c.youtube.com")) ||
         stream.value("contentLength").toDouble() <= 0)
       return;
     openPreparedStream(stream);
@@ -120,7 +120,7 @@ void PlaybackController::receiveStream(quint64 id, const QJsonValue &result) {
   const QUrl url(stream.value("url").toString());
   const qint64 length =
       static_cast<qint64>(stream.value("contentLength").toDouble());
-  if (url.scheme() != "https" || !url.host().endsWith(".googlevideo.com") ||
+  if (url.scheme() != "https" || !(url.host().endsWith(".googlevideo.com") || url.host().endsWith(".c.youtube.com")) ||
       length <= 0) {
     fail(tr("YouTube returned an invalid audio stream."));
     return;

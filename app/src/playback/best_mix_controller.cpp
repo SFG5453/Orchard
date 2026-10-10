@@ -344,7 +344,7 @@ void BestMixController::failed(quint64 request) {
 void BestMixController::download(Job *job, const QJsonObject &stream) {
   const QUrl url(stream.value("url").toString());
   const double size = stream.value("contentLength").toDouble();
-  if (url.scheme() != "https" || !url.host().endsWith(".googlevideo.com") ||
+  if (url.scheme() != "https" || !(url.host().endsWith(".googlevideo.com") || url.host().endsWith(".c.youtube.com")) ||
       size < 1 || size > 24 * 1024 * 1024 || size != qFloor(size)) {
     complete(job, {}); return;
   }

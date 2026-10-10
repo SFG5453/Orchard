@@ -38,7 +38,7 @@ StreamDownload::~StreamDownload() {
 void StreamDownload::start() {
   const QUrl url(m_stream.value("url").toString());
   const double size = m_stream.value("contentLength").toDouble();
-  if (url.scheme() != "https" || !url.host().endsWith(".googlevideo.com") || size < 1 ||
+  if (url.scheme() != "https" || !(url.host().endsWith(".googlevideo.com") || url.host().endsWith(".c.youtube.com")) || size < 1 ||
       size > m_maxBytes || size != qFloor(size)) {
     fail();
     return;

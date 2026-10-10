@@ -99,7 +99,7 @@ internal class BestMixPreparer(private val graph: OrchardGraph, cacheRoot: File)
     private suspend fun save(stream: ResolvedStream, file: File): Boolean {
         val size = stream.contentLength
         val host = runCatching { java.net.URI(stream.url) }.getOrNull()
-        if (host?.scheme != "https" || host.host?.endsWith(".googlevideo.com") != true || size !in 1..MAX_BYTES) {
+        if (host?.scheme != "https" || host.host?.let { it.endsWith(".googlevideo.com") || it.endsWith(".c.youtube.com") } != true || size !in 1..MAX_BYTES) {
             return false
         }
         audioDir.mkdirs()

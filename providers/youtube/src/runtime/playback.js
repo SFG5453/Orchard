@@ -146,7 +146,7 @@ export async function resolvePlayback(payload = {}, fetchImpl = globalThis.fetch
       throw new Error('The matching music video differs from the song by more than five seconds.');
     }
   }
-  if (!/^https:\/\/[^/?#]+\.googlevideo\.com\//i.test(stream.url)) {
+  if (!/^https:\/\/[^/?#]+\.(?:googlevideo|c\.youtube)\.com\//i.test(stream.url)) {
     throw new Error('YouTube returned an invalid audio stream URL.');
   }
   const probeStart = Date.now();
@@ -183,7 +183,7 @@ export async function resolveVideoPlayback(payload = {}, fetchImpl = globalThis.
       poToken, maxHeight: Number(payload.maxHeight) || 0, streamQuality: payload.streamQuality || 'high'
     });
     const part = async (stream, kind) => {
-      if (!/^https:\/\/[^/?#]+\.googlevideo\.com\//i.test(stream.url)) {
+      if (!/^https:\/\/[^/?#]+\.(?:googlevideo|c\.youtube)\.com\//i.test(stream.url)) {
         throw new Error(`YouTube returned an invalid ${kind} stream URL.`);
       }
       const knownLength = Number(stream.format.contentLength || 0);
@@ -207,7 +207,7 @@ export async function resolveVideoPlayback(payload = {}, fetchImpl = globalThis.
   const stream = await playback.resolveDirect(videoId, {
     streamQuality: payload.streamQuality || 'high', poToken, mediaKind: 'video'
   });
-  if (!/^https:\/\/[^/?#]+\.googlevideo\.com\//i.test(stream.url)) {
+  if (!/^https:\/\/[^/?#]+\.(?:googlevideo|c\.youtube)\.com\//i.test(stream.url)) {
     throw new Error('YouTube returned an invalid video stream URL.');
   }
   // Desktop serves the video through a ranged loopback proxy that needs the exact length.

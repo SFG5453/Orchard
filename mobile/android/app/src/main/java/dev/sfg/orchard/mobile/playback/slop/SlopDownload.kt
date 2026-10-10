@@ -37,7 +37,7 @@ internal class SlopDownload(private val http: OkHttpClient) {
     suspend fun save(stream: ResolvedStream, file: File) {
         val size = stream.contentLength
         val uri = java.net.URI(stream.url)
-        require(uri.scheme == "https" && uri.host?.endsWith(".googlevideo.com") == true && size in 1..MAX_BYTES)
+        require(uri.scheme == "https" && uri.host?.let { it.endsWith(".googlevideo.com") || it.endsWith(".c.youtube.com") } == true && size in 1..MAX_BYTES)
         file.parentFile?.mkdirs()
         try {
             file.outputStream().use { out ->
