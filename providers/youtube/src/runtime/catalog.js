@@ -191,7 +191,9 @@ export async function loadSearch(payload = {}) {
     ? requestedFilter
     : 'all';
   const collection = {
-    search: createMusicSearch(sessionFrom(payload), {
+    // Guest lookups keep internal searches out of the account's search history.
+    search: createMusicSearch(payload.guest ? {} : sessionFrom(payload), {
+      guest: payload.guest === true,
       // Search is useful with a valid signed-in session even though the response
       // itself is not personalized in every YouTube account configuration.
       allowGuestResponse: true

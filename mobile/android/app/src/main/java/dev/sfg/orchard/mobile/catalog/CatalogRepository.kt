@@ -60,10 +60,12 @@ class CatalogRepository(
     }
 
     /** [filter] is one of all, songs, videos, albums, artists or playlists. */
-    suspend fun search(query: String, filter: String = "all"): SearchResults {
+    suspend fun search(query: String, filter: String = "all", guest: Boolean = false): SearchResults {
         if (query.isBlank()) return SearchResults()
-        return provider.invoke("catalog.search", payload().put("query", query.trim()).put("filter", filter))
-            .providerSearch()
+        val request = payload().put("query", query.trim()).put("filter", filter)
+        // Guest searches stay out of the account's YouTube search history.
+        if (guest) request.put("guest", true)
+        return provider.invoke("catalog.search", request).providerSearch()
     }
 
     suspend fun browse(id: String): BrowseDetail = browsePages(id).last()

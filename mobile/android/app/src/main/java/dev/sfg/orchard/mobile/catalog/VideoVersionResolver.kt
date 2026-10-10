@@ -38,7 +38,7 @@ class VideoVersionResolver(private val catalog: CatalogRepository) {
             if (resolved.containsKey(key)) return@withContext resolved[key]
         }
         val result = runCatching {
-            bestVideoMatch(track, catalog.search("${track.title} ${track.artist}".trim(), "videos").videos)?.id
+            bestVideoMatch(track, catalog.search("${track.title} ${track.artist}".trim(), "videos", guest = true).videos)?.id
         }
         result.exceptionOrNull()?.let {
             // Do not cache network failures; opening the player later should get another chance.

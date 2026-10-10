@@ -202,7 +202,7 @@ void MusicVideoController::lookup() {
   }
   setStatus(QStringLiteral("checking"));
   m_searchRequest = m_provider->invoke(QStringLiteral("catalog.search"), QJsonObject{
-      {QStringLiteral("session"), m_auth->sessionObject()},
+      {QStringLiteral("guest"), true},
       {QStringLiteral("query"), musicvideo::searchQuery(m_track)},
       {QStringLiteral("filter"), QStringLiteral("videos")}});
 }
