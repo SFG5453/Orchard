@@ -32,6 +32,7 @@ Item {
 
     property bool open: true
     property color accentColor: "#f0eee7"
+    property color mixAccentColor: "#f0eee7"
     property color inkColor: "#0b0d0a"
     // Player pill artwork in this item's coordinates; the flight starts and ends here.
     property rect originRect: Qt.rect(width / 2 - 22, height - 60, 44, 44)
@@ -336,6 +337,7 @@ Item {
         timeSwap: root.timeSwap
         mixGlow: root.mixGlow
         mixing: root.mixing
+        mixAccentColor: root.mixAccentColor
         currentTrack: root.currentTrack
         incomingTrack: root.transitionTrack
         pane: root.pane

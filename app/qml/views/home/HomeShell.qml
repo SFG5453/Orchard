@@ -456,6 +456,7 @@ Item {
         sourceComponent: Component {
             FullscreenPlayer {
                 accentColor: player.accentColor
+                mixAccentColor: player.mixAccentColor
                 inkColor: player.inkColor
                 originRect: root.fullscreenOrigin
                 onCloseRequested: root.setFullscreen(false)

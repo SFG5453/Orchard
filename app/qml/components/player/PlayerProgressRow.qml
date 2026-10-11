@@ -36,6 +36,9 @@ Item {
     Layout.alignment: Qt.AlignVCenter
     implicitHeight: stacked ? 34 : 24
 
+    property real mixAmount: OrchardPlayback.crossfadeActive ? 1 : 0
+    Behavior on mixAmount { NumberAnimation { duration: 700; easing.type: Easing.OutCubic } }
+
     // Measure time labels independently of the width assigned by the layout.
     TextMetrics { id: elapsedMetrics; font: elapsed.font; text: elapsed.text }
     TextMetrics { id: totalMetrics; font: total.font; text: total.text }
@@ -82,7 +85,7 @@ Item {
             Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 width: parent.width
-                height: OrchardPlayback.crossfadeActive || progress.hovered || progress.pressed ? 5 : 3
+                height: OrchardPlayback.crossfadeActive ? 6 : progress.hovered || progress.pressed ? 5 : 3
                 radius: height / 2
                 color: bar.trackColor
 
@@ -90,38 +93,14 @@ Item {
                     NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
                 }
 
-                Rectangle {
-                    width: progress.visualPosition * parent.width
-                    height: parent.height
-                    radius: parent.radius
-                    color: OrchardPlayback.crossfadeActive ? Qt.lighter(bar.accentColor, 1.25) : bar.accentColor
-                }
-
-                // Highlight sweeps along the track for the length of the mix.
-                Item {
+                MixDotFill {
                     anchors.fill: parent
-                    clip: true
-                    visible: OrchardPlayback.crossfadeActive
-
-                    Rectangle {
-                        id: sweep
-                        width: parent.width * 0.3
-                        height: parent.height
-                        radius: height / 2
-                        gradient: Gradient {
-                            orientation: Gradient.Horizontal
-                            GradientStop { position: 0; color: "transparent" }
-                            GradientStop { position: 0.5; color: "#80ffffff" }
-                            GradientStop { position: 1; color: "transparent" }
-                        }
-                        NumberAnimation on x {
-                            running: OrchardPlayback.crossfadeActive
-                            loops: Animation.Infinite
-                            from: -sweep.width
-                            to: sweep.parent.width
-                            duration: 1100
-                        }
-                    }
+                    fraction: progress.visualPosition
+                    baseColor: bar.accentColor
+                    dotColor: bar.mixAccentColor
+                    amount: row.mixAmount
+                    maxBand: 160
+                    rows: 2
                 }
             }
         }
@@ -134,7 +113,7 @@ Item {
             radius: width / 2
             scale: OrchardPlayback.crossfadeActive ? 1 : progress.pressed ? 1.15 : progress.hovered ? 1 : 0
             opacity: scale > 0 ? 1 : 0
-            color: OrchardPlayback.crossfadeActive ? Qt.lighter(bar.accentColor, 1.35) : bar.accentColor
+            color: OrchardPlayback.crossfadeActive ? "#ffffff" : bar.accentColor
 
             Behavior on width {
                 NumberAnimation { duration: 120; easing.type: Easing.OutCubic }

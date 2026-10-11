@@ -68,6 +68,7 @@
     <file alias="app/qml/components/local/ReorderableRow.qml">../app/qml/components/local/ReorderableRow.qml</file>
     <file alias="app/qml/components/player/PlayerTransportControls.qml">../app/qml/components/player/PlayerTransportControls.qml</file>
     <file alias="app/qml/components/player/PlayerProgressRow.qml">../app/qml/components/player/PlayerProgressRow.qml</file>
+    <file alias="app/qml/components/player/MixDotFill.qml">../app/qml/components/player/MixDotFill.qml</file>
     <file alias="app/qml/components/player/SkipNonMusicButton.qml">../app/qml/components/player/SkipNonMusicButton.qml</file>
     <file alias="app/qml/components/player/PlayerSideControls.qml">../app/qml/components/player/PlayerSideControls.qml</file>
     <file alias="app/qml/components/player/MusicVideoTheater.qml">../app/qml/components/player/MusicVideoTheater.qml</file>

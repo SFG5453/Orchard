@@ -29,6 +29,7 @@ ColumnLayout {
     id: controls
 
     property color accentColor: "#f0eee7"
+    property color mixAccentColor: "#f0eee7"
     property color primaryText: "#f7f5f0"
     property color secondaryText: "#c3c6bf"
     property color mutedText: "#8d928a"
@@ -177,23 +178,25 @@ ColumnLayout {
                 color: Qt.rgba(controls.primaryText.r, controls.primaryText.g, controls.primaryText.b, 0.18 + 0.1 * controls.mixGlow)
                 Behavior on height { NumberAnimation { duration: 420; easing.type: Easing.OutBack; easing.overshoot: 2.4 } }
 
-                Rectangle {
-                    width: Math.max(parent.height, Math.min(1, progress.pressed ? progress.shown / progress.to : controls.shownFraction) * parent.width)
-                    height: parent.height
-                    radius: parent.radius
-                    color: controls.mixing || progress.hovered || progress.pressed ? "#ffffff"
+                MixDotFill {
+                    anchors.fill: parent
+                    fraction: Math.min(1, progress.pressed ? progress.shown / progress.to : controls.shownFraction)
+                    baseColor: controls.mixing || progress.hovered || progress.pressed ? "#ffffff"
                          : Qt.rgba(controls.primaryText.r, controls.primaryText.g, controls.primaryText.b, 0.82)
-                    Behavior on color { ColorAnimation { duration: 400 } }
+                    colorFade: 400
+                    dotColor: controls.mixAccentColor
+                    amount: controls.mixGlow
+                    maxBand: 280
+                    rows: 3
                     layer.enabled: controls.mixGlow > 0.01
                     layer.effect: MultiEffect {
                         autoPaddingEnabled: true
                         shadowEnabled: true
-                        shadowColor: "white"
+                        shadowColor: controls.mixAccentColor
                         shadowBlur: 0.7
-                        shadowOpacity: 0.85 * controls.mixGlow
+                        shadowOpacity: 0.6 * controls.mixGlow
                         shadowHorizontalOffset: 0
                         shadowVerticalOffset: 0
-                        brightness: 0.1 * controls.mixGlow
                     }
                 }
             }

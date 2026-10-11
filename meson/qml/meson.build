@@ -67,6 +67,7 @@ qml_sources = [
   'app/qml/components/local/ReorderableRow.qml',
   'app/qml/components/player/PlayerTransportControls.qml',
   'app/qml/components/player/PlayerProgressRow.qml',
+  'app/qml/components/player/MixDotFill.qml',
   'app/qml/components/player/SkipNonMusicButton.qml',
   'app/qml/components/player/PlayerSideControls.qml',
   'app/qml/components/player/MusicVideoTheater.qml',
@@ -276,4 +277,5 @@ shader_sources = [
   'app/qml/shaders/liquid_glass_box.frag',
   'app/qml/shaders/liquid_glass_blur.frag',
   'app/qml/shaders/artwork_dissolve.frag',
+  'app/qml/shaders/mix_dots.frag',
 ]

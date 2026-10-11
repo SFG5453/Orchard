@@ -50,6 +50,16 @@ Item {
     readonly property color accentColor: theme.accent
     readonly property color onAccentColor: theme.onAccent
     readonly property color inkColor: theme.ink
+    // The next song's accent, lifted so dots read on the dark track.
+    readonly property color mixAccentColor: {
+        const value = (incomingPalette.palette || {})["accent"];
+        const c = value && value.length >= 3
+            ? Qt.rgba(Number(value[0]) / 255, Number(value[1]) / 255, Number(value[2]) / 255, 1)
+            : root.accentColor;
+        // Achromatic covers report hue -1; keep them grey.
+        const sat = c.hslHue < 0 || c.hslSaturation < 0.08 ? 0 : Math.max(c.hslSaturation, 0.45);
+        return Qt.hsla(Math.max(0, c.hslHue), sat, Math.max(c.hslLightness, 0.72), 1);
+    }
 
     readonly property color primaryText: "#f5f3ee"
     readonly property color secondaryText: "#b4b8b1"
@@ -141,6 +151,11 @@ Item {
         source: OrchardPlayback.crossfadeActive && OrchardPlayback.crossfadeProgress >= 0.5
                 ? (OrchardPlayback.transitionTrack.thumbnail || "")
                 : (OrchardPlayback.track.thumbnail || "")
+    }
+
+    ArtworkPalette {
+        id: incomingPalette
+        source: OrchardPlayback.crossfadeActive ? (OrchardPlayback.transitionTrack.thumbnail || "") : ""
     }
 
     // Explicit fade: a Behavior on these custom color properties crashes QQmlData::deferData (Qt 6).
