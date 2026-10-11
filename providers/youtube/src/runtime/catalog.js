@@ -457,9 +457,9 @@ export async function loadPlaylistPage(payload = {}) {
   // A failed prefetch falls through to a fresh request.
   const data = await takePrefetchedPage(session, continuation)
     || await fetchBrowse({ continuation });
-  const page = normalizers.normalizePlaylistPage(data, startIndex);
-  prefetchPlaylistPage(session, page.continuation);
-  return page;
+  // Request the next page before normalizing this one.
+  prefetchPlaylistPage(session, normalizers.playlistContinuationTokenFromData(data));
+  return normalizers.normalizePlaylistPage(data, startIndex);
 }
 
 // Keep desktop artist filtering, release ordering and metadata hydration in step

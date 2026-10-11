@@ -55,8 +55,19 @@ Item {
             revealWindow.restart();
         hadTracks = tracks.length > 0;
     }
-    onTracksChanged: noteTracks()
-    Component.onCompleted: noteTracks()
+    // Assigning a new array resets the list to the top, so appended pages restore the scroll position.
+    property var shownTracks: []
+    function showTracks() {
+        const previous = shownTracks;
+        const appended = previous.length > 0 && tracks.length > previous.length
+            && tracks[0].id === previous[0].id && !scroll.pinnedToTop;
+        const y = scroll.contentY;
+        shownTracks = tracks;
+        if (appended)
+            scroll.contentY = y;
+    }
+    onTracksChanged: { showTracks(); noteTracks(); }
+    Component.onCompleted: { showTracks(); noteTracks(); }
 
     Timer {
         id: revealWindow
@@ -262,7 +273,7 @@ Item {
         topMargin: 14
         bottomMargin: 14 + playerInset
 
-        model: root.tracks
+        model: root.shownTracks
         // Read by ReorderableRow while a song is being dragged.
         property int dragFrom: -1
         property int dropIndex: -1

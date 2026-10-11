@@ -153,6 +153,8 @@ void PlaylistController::openPlaylist(const QVariantMap &item) {
   m_sourceTracks.clear();
   m_continuation.clear();
   m_loadedContinuations.clear();
+  m_pagesUnpublished = false;
+  m_publishTimer.invalidate();
   const QString browseId = browseIdFromItem(item);
   if (browseId.isEmpty()) {
     m_pendingItem = item;
@@ -216,6 +218,8 @@ void PlaylistController::clear() {
   m_sourceTracks.clear();
   m_continuation.clear();
   m_loadedContinuations.clear();
+  m_pagesUnpublished = false;
+  m_publishTimer.invalidate();
   m_palette = defaultPalette();
   m_errorMessage.clear();
   m_loading = false;
@@ -364,17 +368,28 @@ void PlaylistController::receivePlaylistPage(quint64 requestId,
   }
 
   m_sourceTracks.append(newTracks);
+  m_detail.insert(QStringLiteral("continuation"), m_continuation);
+  m_detail.insert(QStringLiteral("hasMoreTracks"), !m_continuation.isEmpty());
+  m_pagesUnpublished = true;
+  // Request the next page before the UI work.
+  fetchNextPage();
+  publishPages(m_continuation.isEmpty());
+}
+
+// Every publish makes QML re-read the whole track list, so streaming pages
+// are published at most once a second.
+void PlaylistController::publishPages(bool force) {
+  if (!m_pagesUnpublished)
+    return;
+  if (!force && m_publishTimer.isValid() && m_publishTimer.elapsed() < 1000)
+    return;
+  m_pagesUnpublished = false;
+  m_publishTimer.restart();
   applySort();
   m_detail.insert(
       QStringLiteral("totalTrackCount"),
       qMax(m_detail.value(QStringLiteral("totalTrackCount")).toInt(),
            static_cast<int>(m_sourceTracks.size())));
-
-  m_detail.insert(QStringLiteral("continuation"), m_continuation);
-  m_detail.insert(QStringLiteral("hasMoreTracks"), !m_continuation.isEmpty());
-  // Keep turning pages, and turn the next one before QML reads this one. The
-  // playlist is not a book with a fifty-song cliffhanger.
-  fetchNextPage();
   emit stateChanged();
   emit detailChanged();
 }
@@ -388,6 +403,7 @@ void PlaylistController::receiveFailure(quint64 requestId,
   if (m_loadingPage) {
     m_loadingPage = false;
     m_errorMessage = message;
+    publishPages(true);
   } else {
     m_loading = false;
     m_errorMessage = message;

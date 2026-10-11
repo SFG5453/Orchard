@@ -23,6 +23,7 @@
 #include <QCache>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
+#include <QElapsedTimer>
 #include <QObject>
 #include <QSet>
 #include <QVariantList>
@@ -104,6 +105,7 @@ private:
   void setCollageAlbums(QVariantList albums);
   void resetSort();
   void applySort();
+  void publishPages(bool force);
   static QVariantMap defaultPalette();
 
   YouTubeCatalog *m_catalog;
@@ -123,6 +125,8 @@ private:
   QString m_sortKey;
   QString m_errorMessage;
   QString m_continuation;
+  QElapsedTimer m_publishTimer;
+  bool m_pagesUnpublished{false};
   QSet<QString> m_loadedContinuations;
   quint64 m_requestId{0};
   quint64 m_artworkGeneration{0};
