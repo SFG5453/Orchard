@@ -24,7 +24,7 @@ import {
   MAX_ROLE_CANDIDATES,
   MEASURED_CHANGES
 } from './pairTransitionEvidence.js';
-import { STYLE_CLASH_CONTRAST, STYLE_RISK_CONTRAST } from './transitionFlow.js';
+import { STYLE_CLASH_CONTRAST, STYLE_RISK_CONTRAST, halfBars } from './transitionFlow.js';
 
 export const CLASS_RANK = Object.freeze({
   normal_boundary: 0,
@@ -123,8 +123,11 @@ function phaseEvidence(pair, outgoing, incoming) {
     outgoing.timing?.downbeats,
     pair.outgoingEnd
   );
+  // A measured drop may sit half a bar off a double-time reading's bar lines.
   const incomingDistance = nearestDistance(
-    incoming.timing?.downbeats,
+    pair.incomingCandidate?.source === 'beat-entry'
+      ? halfBars(incoming.timing?.downbeats, incomingInterval)
+      : incoming.timing?.downbeats,
     pair.incomingEnd
   );
   const usable = Number.isFinite(outgoingDistance) && Number.isFinite(incomingDistance);
@@ -156,7 +159,7 @@ export function needsFilter(harmonic, spectral, collision) {
 }
 
 export function candidateGates({
-  pair, fit, outgoing, incoming, harmonic, collision, vocal, spectral = 1, contrast = null
+  pair, fit, outgoing, incoming, harmonic, collision, vocal, spectral = 1, contrast = null, voice = {}
 }) {
   const gates = [];
   let maximumClass = 'full_beatmatched';
@@ -189,6 +192,14 @@ export function candidateGates({
   if (sustainedCollision) {
     lower('vocal-collision', 'conservative_beatmatched', 'demotion');
   }
+  // Measured vocals only: a sustained two-voice overlap, or one that enters and leaves
+  // mid-line, swaps one singer for another, so the songs play out instead.
+  const measuredVoice = Number.isFinite(voice.incoming) && Number.isFinite(voice.outgoing);
+  if (measuredVoice && (sustainedCollision || Math.min(voice.incoming, voice.outgoing) >= 0.5)) {
+    lower('voice-over-voice', 'normal_boundary', 'veto');
+  }
+  // Fading the outgoing singer out mid-line sounds forced even over a clean incoming.
+  if (measuredVoice && voice.outgoing >= 0.3) lower('voice-cut', 'normal_boundary', 'veto');
 
   const left = pair.outgoingCandidate;
   const right = pair.incomingCandidate;

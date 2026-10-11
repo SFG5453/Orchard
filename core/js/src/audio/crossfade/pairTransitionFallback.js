@@ -17,7 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Choreography curves and the boundary or short-fade plans a refusal falls back to.
+// Choreography curves and the boundary plans a refusal falls back to.
 import {
   CHOREOGRAPHY_STRATEGY,
   CURVE_INTERPOLATION,
@@ -30,11 +30,6 @@ function finite(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
-}
-
-function clamp(value, minimum = 0, maximum = 1) {
-  const number = finite(value);
-  return number === null ? minimum : Math.max(minimum, Math.min(maximum, number));
 }
 
 function rounded(value, places = 6) {
@@ -182,91 +177,32 @@ export function buildChoreographyForPlan(pair, evaluation, strategy, native, out
 export function fallbackFor(outgoing, incoming, evaluation = null, reason = '') {
   const outgoingRange = outgoing.audibleRange || { start: 0, end: outgoing.duration || 0 };
   const incomingRange = incoming.audibleRange || { start: 0, end: incoming.duration || 0 };
-  const selectedClass = evaluation?.transitionClass;
-
-  // These classes explicitly refuse overlap. A silence trim advances at the
-  // measured end of audible content; a normal boundary lets the media reach
-  // its ordinary end. Keeping them as zero-duration handoffs prevents the
-  // live adapter from turning a low-confidence refusal into a crossfade.
-  if (selectedClass === 'silence_trim' || selectedClass === 'normal_boundary') {
-    const ordinaryEnd = Math.max(outgoingRange.end, finite(outgoing.duration) ?? 0);
-    const outgoingEnd = selectedClass === 'silence_trim'
-      ? outgoingRange.end
-      : ordinaryEnd;
-    const pair = {
-      outgoingStart: rounded(outgoingEnd),
-      outgoingEnd: rounded(outgoingEnd),
-      incomingStart: rounded(incomingRange.start),
-      incomingEnd: rounded(incomingRange.start),
-      durationSeconds: 0,
-      outgoingRatio: 1,
-      incomingRatio: 1
-    };
-    const choreo = buildChoreographyForPlan(pair, evaluation, 'boundary_handoff', false, outgoing, incoming);
-    return {
-      transitionClass: selectedClass,
-      outgoingStart: rounded(outgoingEnd),
-      outgoingEnd: rounded(outgoingEnd),
-      incomingCue: rounded(incomingRange.start),
-      durationSeconds: 0,
-      strategy: 'boundary_handoff',
-      transitionStyle: selectedClass,
-      choreography: choreo,
-      reason
-    };
-  }
-
-  const outgoingEnd = evaluation?.pair.outgoingEnd ?? outgoingRange.end;
-  const availableOutgoing = Math.max(0, outgoingEnd - outgoingRange.start);
-  const availableIncoming = evaluation
-    ? Math.max(0, (evaluation.pair.incomingEnd ?? incomingRange.start) - incomingRange.start)
-    : Math.max(0, incomingRange.end - incomingRange.start);
-
-  const native = ['full_beatmatched', 'conservative_beatmatched'].includes(selectedClass);
-  const evaluatedDuration = evaluation?.pair.durationSeconds ?? 4.0;
-  let durationSeconds = native
-    ? rounded(Math.min(4.0, Math.max(2.0, evaluatedDuration * 0.35)))
-    : rounded(Math.min(4.0, evaluatedDuration));
-
-  durationSeconds = rounded(Math.min(durationSeconds, availableOutgoing, availableIncoming));
-  const usable = durationSeconds >= 1.0;
-  if (!usable) durationSeconds = 0;
-
-  const incomingArrival = evaluation?.pair.incomingEnd ?? rounded(incomingRange.start + durationSeconds);
-  const outgoingStart = rounded(outgoingEnd - durationSeconds);
-  const incomingCue = rounded(incomingArrival - durationSeconds);
-  const filtered = selectedClass === 'conservative_beatmatched' ||
-    evaluation?.gates?.some((g) => ['vocal-collision', 'harmonic-clash', 'spectral-risk'].includes(g.code)) ||
-    (evaluation?.collision?.simultaneousMean ?? 0) > 0.25;
-  const strategy = usable ? (filtered ? 'filtered_blend' : 'equal_power_crossfade') : 'short_fade';
-  const transitionStyle = usable ? (filtered ? 'dj_filter' : 'equal_power') : 'normal';
-
+  // Fallbacks never overlap: a silence trim advances at the measured end of audible
+  // content, and anything else lets the media reach its ordinary end.
+  const selectedClass = evaluation?.transitionClass === 'silence_trim' ? 'silence_trim' : 'normal_boundary';
+  const outgoingEnd = selectedClass === 'silence_trim'
+    ? outgoingRange.end
+    : Math.max(outgoingRange.end, finite(outgoing.duration) ?? 0);
   const pair = {
-    outgoingStart,
-    outgoingEnd,
-    incomingStart: incomingCue,
-    incomingEnd: incomingArrival,
-    durationSeconds,
+    outgoingStart: rounded(outgoingEnd),
+    outgoingEnd: rounded(outgoingEnd),
+    incomingStart: rounded(incomingRange.start),
+    incomingEnd: rounded(incomingRange.start),
+    durationSeconds: 0,
     outgoingRatio: 1,
     incomingRatio: 1
   };
   const choreo = buildChoreographyForPlan(
-    pair,
-    { ...evaluation, transitionClass: usable ? 'simple_crossfade' : 'normal_boundary' },
-    strategy,
-    false,
-    outgoing,
-    incoming
+    pair, { ...evaluation, transitionClass: selectedClass }, 'boundary_handoff', false, outgoing, incoming
   );
-
   return {
-    transitionClass: usable ? 'simple_crossfade' : 'normal_boundary',
-    outgoingStart,
-    outgoingEnd,
-    incomingCue,
-    durationSeconds,
-    strategy,
-    transitionStyle,
+    transitionClass: selectedClass,
+    outgoingStart: rounded(outgoingEnd),
+    outgoingEnd: rounded(outgoingEnd),
+    incomingCue: rounded(incomingRange.start),
+    durationSeconds: 0,
+    strategy: 'boundary_handoff',
+    transitionStyle: selectedClass,
     choreography: choreo,
     reason
   };

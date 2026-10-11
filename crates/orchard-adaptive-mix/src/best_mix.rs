@@ -310,7 +310,6 @@ fn pair_cost(plan: Result<Value, String>, prefilter: f64) -> f64 {
     {
         "full_beatmatched" => 0.0,
         "conservative_beatmatched" => 1.0,
-        "simple_crossfade" => 2.0,
         "silence_trim" => 3.0,
         _ => 4.0,
     };

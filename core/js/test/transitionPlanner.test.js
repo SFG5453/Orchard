@@ -118,40 +118,6 @@ test('standard mode retains the configured equal-power crossfade', () => {
   assert.equal('pairPlan' in plan, false);
 });
 
-test('smart live playback executes the authoritative attached fallback', () => {
-  const plan = planTransition(smartOptions());
-
-  assert.equal(plan.pairPlan.renderMode, 'native');
-  assert.deepEqual(plan.fallback, plan.pairPlan.fallback);
-  assert.equal(plan.transitionStart, plan.fallback.outgoingStart);
-  assert.equal(plan.transitionEnd, plan.fallback.outgoingEnd);
-  assert.equal(plan.incomingCueTime, plan.fallback.incomingCue);
-  assert.equal(plan.transitionStyle, 'equal_power');
-  assert.equal(plan.shouldStart, false);
-});
-
-test('playback time only determines whether the fixed fallback should start', () => {
-  const early = planTransition(smartOptions({ currentTime: 0 }));
-  const due = planTransition(smartOptions({ currentTime: 119 }));
-
-  assert.deepEqual(due.pairPlan, early.pairPlan);
-  assert.equal(early.shouldStart, false);
-  assert.equal(due.shouldStart, true);
-});
-
-test('a missed cue moves the same fallback to the final usable boundary', () => {
-  const early = planTransition(smartOptions({ currentTime: 0 }));
-  const beforeLate = planTransition(smartOptions({ currentTime: early.transitionEnd + 0.1 }));
-  const late = planTransition(smartOptions({ currentTime: 119.5 }));
-
-  assert.deepEqual(late.pairPlan, early.pairPlan);
-  assert.ok(early.transitionEnd < 120);
-  assert.equal(late.transitionEnd, 120);
-  assert.equal(late.transitionStart, 120 - early.fadeSeconds);
-  assert.equal(beforeLate.reason, 'before-smart-pair-late-fallback-window');
-  assert.equal(late.reason, 'smart-pair-late-fallback');
-});
-
 test('legacy semantic fields cannot influence the live adapter pair decision', () => {
   const analysis = track('outgoing');
   const nextAnalysis = track('incoming');
@@ -176,12 +142,41 @@ test('legacy semantic fields cannot influence the live adapter pair decision', (
   assert.equal(decorated.incomingCueTime, plain.incomingCueTime);
 });
 
+test('a native plan falls back to playing out, never to a short fade', () => {
+  const early = planTransition(smartOptions({ currentTime: 0 }));
+  const due = planTransition(smartOptions({ currentTime: 119.5 }));
+
+  assert.equal(early.pairPlan.renderMode, 'native');
+  assert.deepEqual(due.pairPlan, early.pairPlan);
+  assert.equal(early.fallback.transitionClass, 'normal_boundary');
+  for (const plan of [early, due]) {
+    assert.equal(plan.transitionStyle, 'normal_boundary');
+    assert.equal(plan.fadeSeconds, 0);
+    assert.equal(plan.shouldStart, false);
+  }
+});
+
+test('a pair that cannot be beatmatched plays out', () => {
+  const fixture = fixtureData.blinding_lights_to_dont_start_now;
+  const plan = planTransition(smartOptions({
+    analysis: normalizeTrackAnalysis(fixture.outgoing),
+    nextAnalysis: normalizeTrackAnalysis(fixture.incoming),
+    duration: fixture.outgoing.duration,
+    currentTrack: { id: fixture.outgoing.trackId, durationSeconds: fixture.outgoing.duration },
+    nextTrack: { id: fixture.incoming.trackId, durationSeconds: fixture.incoming.duration }
+  }));
+
+  assert.equal(plan.pairPlan.transitionClass, 'normal_boundary');
+  assert.equal(plan.transitionStyle, 'normal_boundary');
+  assert.equal(plan.fadeSeconds, 0);
+});
+
 test('missing tempo remains an explicit authoritative fallback reason', () => {
   const plan = planTransition(smartOptions({ analysis: track('outgoing', { bpm: 0 }) }));
 
   assert.equal(plan.pairPlan.status, 'fallback');
   assert.equal(plan.fallbackReason, 'outgoing-tempo');
-  assert.equal(plan.transitionStyle, 'equal_power');
+  assert.equal(plan.transitionStyle, 'normal_boundary');
 });
 
 function boundaryFallback(transitionClass, outgoingEnd) {
@@ -276,46 +271,3 @@ const fixtureData = JSON.parse(
   fs.readFileSync(new URL('./fixtures/transitionChoreography.json', import.meta.url), 'utf8')
 );
 
-test('non-beatmatched mix fades over the measured overlap into the incoming arrival', () => {
-  const fixture = fixtureData.blinding_lights_to_dont_start_now;
-  const plan = planTransition(smartOptions({
-    analysis: normalizeTrackAnalysis(fixture.outgoing),
-    nextAnalysis: normalizeTrackAnalysis(fixture.incoming),
-    duration: fixture.outgoing.duration,
-    currentTrack: { id: fixture.outgoing.trackId, durationSeconds: fixture.outgoing.duration },
-    nextTrack: { id: fixture.incoming.trackId, durationSeconds: fixture.incoming.duration }
-  }));
-
-  assert.equal(plan.fadeSeconds, plan.pairPlan.durationSeconds);
-  assert.equal(plan.transitionStyle, 'equal_power');
-  assert.equal(plan.transitionEnd, plan.pairPlan.outgoing.end);
-  assert.equal(plan.transitionStart, plan.transitionEnd - plan.fadeSeconds);
-  assert.equal(plan.incomingHandoffTime, plan.pairPlan.incoming.handoff);
-  assert.equal(plan.incomingCueTime, plan.incomingHandoffTime - plan.fadeSeconds);
-  assert.equal(plan.choreography, null);
-  // A longer listener fade never stretches past the overlap the vocal checks measured.
-  const longer = transitionFromPairFallback(plan.pairPlan, fixture.outgoing, fixture.incoming,
-    fixture.outgoing.duration, 0, 1, 10);
-  assert.equal(longer.fadeSeconds, plan.fadeSeconds);
-  assert.equal(longer.incomingCueTime, plan.incomingCueTime);
-});
-
-
-test('a shorter listener fade still ends on both measured anchors', () => {
-  const pairPlan = {
-    renderMode: 'live', transitionClass: 'simple_crossfade', durationSeconds: 2,
-    outgoing: { start: 97, end: 99 }, incoming: { start: 17, handoff: 19 }, fallback: {}
-  };
-  const measured = transitionFromPairFallback(pairPlan, {}, { duration: 20 }, 100, 98, 1, 6);
-  assert.equal(measured.fadeSeconds, 2);
-  assert.equal(measured.transitionStart, 97);
-  assert.equal(measured.incomingCueTime, 17);
-  assert.equal(measured.shouldStart, true);
-  const plan = transitionFromPairFallback(pairPlan, {}, { duration: 20 }, 100, 98, 1, 1);
-  assert.equal(plan.fadeSeconds, 1);
-  assert.equal(plan.transitionStart, 98);
-  assert.equal(plan.transitionEnd, 99);
-  assert.equal(plan.incomingCueTime, 18);
-  assert.equal(plan.incomingHandoffTime, 19);
-  assert.equal(plan.shouldStart, true);
-});

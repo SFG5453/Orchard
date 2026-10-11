@@ -138,8 +138,8 @@ function reasonCount(plan, reason) {
   return Number(plan.diagnostics?.reasonCounts?.[reason]) || 0;
 }
 
-test('a glide-capable renderer beatmatches an 8% tempo gap', () => {
-  const pair = cleanPair({ incoming: { bpm: 130 } });
+test('a glide-capable renderer beatmatches a 6% tempo gap', () => {
+  const pair = cleanPair({ incoming: { bpm: 127 } });
   assert.notEqual(planPairTransition(pair).renderMode, 'native');
 
   const plan = planPairTransition({ ...pair, tempoRamp: true });
@@ -150,9 +150,11 @@ test('a glide-capable renderer beatmatches an 8% tempo gap', () => {
   // Each side consumes its own beats; output time follows the log-mean tempo.
   const beats = plan.beats;
   assert.ok(Math.abs(plan.outgoing.end - plan.outgoing.start - beats * 60 / 120) < 1e-4);
-  assert.ok(Math.abs(plan.incoming.handoff - plan.incoming.start - beats * 60 / 130) < 1e-4);
+  assert.ok(Math.abs(plan.incoming.handoff - plan.incoming.start - beats * 60 / 127) < 1e-4);
   assert.ok(Math.abs(plan.durationSeconds - beats * 60 / plan.targetBpm) < 1e-5);
   assert.ok(plan.incoming.handoff - plan.durationSeconds >= 0);
+  // An 11.8% glide sounded forced in listening tests, so it plays out.
+  assert.equal(planPairTransition({ ...cleanPair({ incoming: { bpm: 134 } }), tempoRamp: true }).renderMode, 'boundary');
 });
 
 test('chooses a full beatmatched transition for a clean compatible pair', () => {
@@ -165,7 +167,7 @@ test('chooses a full beatmatched transition for a clean compatible pair', () => 
   assert.ok(plan.outgoing.end > plan.outgoing.start);
   assert.equal(plan.incoming.resume, plan.incoming.handoff);
   assert.ok(['beatmatched_crossfade', 'bass_swap'].includes(plan.strategy));
-  assert.equal(plan.fallback.transitionClass, 'simple_crossfade');
+  assert.equal(plan.fallback.transitionClass, 'normal_boundary');
 
   const selected = plan.diagnostics.selected;
   assert.equal(selected.outgoingEnd, plan.outgoing.end);
@@ -233,17 +235,16 @@ test('falls back when tempo distance exceeds transparent stretching', () => {
   assert.ok(reasonCount(plan, 'tempo-distance') > 0);
 });
 
-test('keeps the captured 135-to-85.5 BPM stress pair on a bounded simple fallback', () => {
+test('plays out the captured 135-to-85.5 BPM stress pair instead of fading', () => {
   const plan = planPairTransition(cleanPair({
     outgoing: { bpm: 135 },
     incoming: { bpm: 85.5 }
   }));
 
-  assert.equal(plan.transitionClass, 'simple_crossfade');
-  assert.equal(plan.renderMode, 'live');
+  assert.equal(plan.transitionClass, 'normal_boundary');
+  assert.equal(plan.renderMode, 'boundary');
   assert.equal(plan.fallbackReason, 'tempo-distance');
-  assert.ok(plan.fallback.durationSeconds > 0);
-  assert.ok(plan.fallback.durationSeconds <= 8);
+  assert.equal(plan.fallback.durationSeconds, 0);
 });
 
 test('does not authorize beatmatching from a low-confidence grid', () => {
@@ -253,12 +254,12 @@ test('does not authorize beatmatching from a low-confidence grid', () => {
   assert.ok(reasonCount(plan, 'beat-confidence') > 0);
 });
 
-test('uses a simple fallback when the incoming track has no usable intro runway', () => {
+test('plays out when the incoming track has no usable intro runway', () => {
   const plan = planPairTransition(cleanPair({
     incoming: { boundaryTimes: [0], downbeats: [] }
   }));
 
-  assert.ok(['simple_crossfade', 'silence_trim', 'normal_boundary'].includes(plan.transitionClass));
+  assert.ok(['silence_trim', 'normal_boundary'].includes(plan.transitionClass));
   assert.notEqual(plan.renderMode, 'native');
   assert.match(plan.fallbackReason, /incoming|candidate|runway/);
 });

@@ -122,5 +122,5 @@ test('fixture weak evidence pair receives fallback choreography without crashing
   });
 
   assert.ok(plan.choreography, 'Choreography must be attached');
-  assert.ok(plan.choreography.duration > 0.0);
+  assert.equal(plan.choreography.duration > 0, plan.renderMode === 'native');
 });

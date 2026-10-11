@@ -53,8 +53,10 @@ Adaptive mix measures where each song's beat and vocals are, then picks the blen
 - **Beat first.** If the next song starts with a beatless intro, Adaptive mix skips ahead so the new beat comes in during the blend. The new beat usually lands halfway through the blend, at the bass swap. If the current song's beat stops near its end, the blend starts while that beat is still playing.
 - **Beat loops.** If the current song's beat stops before the song ends, Adaptive mix can repeat the last one or two bars of that beat under the blend until the next song's beat takes over. It loops only bars without vocals, and only when the loop keeps the beat going better than the song itself does.
 - **Locked kicks.** Adaptive mix lines up the two songs' kick drums by listening to the audio, so the two beats hit together.
-- **One bassline at a time.** Halfway through the blend, the old song's bass drops out and the new song's bass comes in.
-- **Vocals.** Adaptive mix avoids two vocals at once and avoids starting the next song in the middle of a vocal line.
+- **One bassline at a time.** Halfway through the blend, the old song's bass drops out and the new song's bass comes in. If the next song opens with kicks but no bassline, the swap lands where its full bass comes in.
+- **Vocals.** Adaptive mix avoids two vocals at once and avoids starting the next song in the middle of a vocal line. When every possible blend would sing over a vocal, would swap one vocal line for another mid-line, or would fade the current singer out mid-line, the current song plays to its end and the next song starts from its beginning. This is common with R&B, where singing runs through most of the song.
+- **Skipping.** Adaptive mix skips a beatless intro, but it avoids starting the next song far past its first beat.
+- **Beatmatched or nothing.** Adaptive mix only blends songs whose beats it can line up, with tempos at most about 8% apart. Otherwise it does not crossfade: the current song plays to its end, and the next song starts from its beginning.
 - **Different styles.** When two songs have very different production, for example 90s boom-bap and modern trap, Adaptive mix does not blend them. The current song plays to its end, and the next song starts from its beginning. Songs with somewhat different production blend only when the blend needs no filter. If the blend would put two vocals on top of each other, those songs also play without a blend.
 - **Where blends happen.** Blends use the last minute of the current song and the first minute of the next song.
 

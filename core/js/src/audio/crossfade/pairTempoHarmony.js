@@ -21,7 +21,8 @@
 export const MAX_STRETCH_DEVIATION = 0.04;
 // Peak per-track deviation of a tempo glide. Each side is furthest from native
 // where its gain is lowest, so the glide tolerates more than a constant stretch.
-export const MAX_RAMP_DEVIATION = 0.12;
+// Listening tests: a 6% glide blended cleanly, an 11.8% glide sounded forced.
+export const MAX_RAMP_DEVIATION = 0.08;
 
 const ROOTS = new Map([
   ['C', 0], ['B#', 0],

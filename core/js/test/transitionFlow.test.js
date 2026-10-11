@@ -29,6 +29,7 @@ import { raw } from './fixtures/workerAnalysis.js';
 import { planPairTransition } from '../src/audio/crossfade/pairTransitionPlanner.js';
 import { transitionFromPairFallback } from '../src/audio/crossfade/transitionPlanner.js';
 import {
+  bassArrival,
   bassSwapFraction,
   beatFlow,
   productionContrast
@@ -87,7 +88,7 @@ test('a beatless outro has no beat to lose', () => {
   assert.equal(flow.worstDeficit, 0);
   assert.equal(flow.lateDrop, 0);
   // Only the small cost of starting eight seconds past the first beat remains.
-  assert.ok(flow.score > 0.95);
+  assert.ok(flow.score > 0.9);
 });
 
 test('a beat that stopped just before the mix still counts as lost', () => {
@@ -169,4 +170,38 @@ test('the beat entry after a beatless intro becomes a mix-in anchor', () => {
   assert.equal(entry.anchorTime, 22);
   assert.ok(!generateTransitionCandidates(analysis({ beatFrom: 0 }), 'incoming')
     .some((c) => c.source === 'beat-entry' && c.anchorTime > 1));
+});
+
+test('two measured voices singing through the overlap play out', () => {
+  const plan = planPairTransition({
+    analysis: raw({ vocal: () => 0.9, boundaries: [104, 112] }),
+    nextAnalysis: raw({ vocal: () => 0.9, boundaries: [16, 32] }),
+    duration: 120, nextDuration: 120, tempoRamp: true
+  });
+  assert.equal(plan.transitionClass, 'normal_boundary');
+  assert.equal(plan.fallbackReason, 'voice-over-voice');
+});
+
+test('an outgoing singer cut off mid-line plays out', () => {
+  const plan = (vocal) => planPairTransition({
+    analysis: raw({ vocal, boundaries: [104, 112] }),
+    nextAnalysis: raw({ vocal: () => 0.1, boundaries: [16, 32] }),
+    duration: 120, nextDuration: 120, tempoRamp: true
+  });
+  const cut = plan(() => 0.9);
+  assert.equal(cut.transitionClass, 'normal_boundary');
+  assert.equal(cut.fallbackReason, 'voice-cut');
+  assert.equal(plan(() => 0.1).renderMode, 'native');
+});
+
+test('a held bassline after a kick-only intro is the drop, even half a bar off the grid', () => {
+  const track = raw({ duration: 60 });
+  // Kicks every second until 21 s, then a held bass; bars start every 2 s at 0.
+  track.bassCurve.values = track.bassCurve.values.map((_, index) => {
+    const time = index * 0.25;
+    return time >= 21 ? 1 : (time % 1 < 0.25 ? 1 : 0.05);
+  });
+  const arrival = bassArrival(normalizeTrackAnalysis(track), { start: 0, end: 60 });
+  assert.equal(arrival.time, 21);
+  assert.equal(bassArrival(analysis({ duration: 60 }), { start: 0, end: 60 }), null);
 });

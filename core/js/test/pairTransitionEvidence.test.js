@@ -100,26 +100,26 @@ test('folds half-time tempos without demanding a two-times stretch', () => {
 });
 
 test('a tempo glide matches pairs a constant stretch cannot', () => {
-  assert.equal(tempoFit(120, 130).beatmatched, false);
-  const fit = tempoFit(120, 130, { tempoRamp: true });
-  const logMean = 10 / Math.log(130 / 120);
+  assert.equal(tempoFit(120, 127).beatmatched, false);
+  const fit = tempoFit(120, 127, { tempoRamp: true });
+  const logMean = 7 / Math.log(127 / 120);
   assert.equal(fit.beatmatched, true);
   assert.equal(fit.tempoRamp, true);
   assert.ok(Math.abs(fit.targetBpm - logMean) < 1e-5);
   assert.ok(Math.abs(fit.outgoingRatio * 120 - logMean) < 1e-4);
-  assert.ok(Math.abs(fit.incomingRatio * 130 - logMean) < 1e-4);
-  assert.ok(Math.abs(fit.deviation - 10 / 120) < 1e-6);
+  assert.ok(Math.abs(fit.incomingRatio * 127 - logMean) < 1e-4);
+  assert.ok(Math.abs(fit.deviation - 7 / 120) < 1e-6);
   // Slowing down is measured by the larger of the two per-side deviations.
-  assert.ok(Math.abs(tempoFit(130, 120, { tempoRamp: true }).deviation - 10 / 120) < 1e-6);
+  assert.ok(Math.abs(tempoFit(127, 120, { tempoRamp: true }).deviation - 7 / 120) < 1e-6);
   assert.equal(tempoFit(120, 140, { tempoRamp: true }).beatmatched, false);
 });
 
 test('glide offsets consume each side exactly at the overlap end', () => {
-  const fit = tempoFit(120, 130, { tempoRamp: true });
+  const fit = tempoFit(120, 127, { tempoRamp: true });
   const duration = 16 * 60 / fit.targetBpm;
   const end = glideOffsets(duration, duration, fit.outgoingRatio, fit.incomingRatio);
   assert.ok(Math.abs(end.outgoing - 8) < 1e-4);
-  assert.ok(Math.abs(end.incoming - 16 * 60 / 130) < 1e-4);
+  assert.ok(Math.abs(end.incoming - 16 * 60 / 127) < 1e-4);
   const start = glideOffsets(0, duration, fit.outgoingRatio, fit.incomingRatio);
   assert.deepEqual(start, { outgoing: 0, incoming: 0 });
   // The outgoing side starts native, so it trails a constant average stretch mid-glide.
@@ -129,7 +129,7 @@ test('glide offsets consume each side exactly at the overlap end', () => {
 });
 
 test('glides only use incoming cues the host can replay from', () => {
-  const fit = tempoFit(120, 130, { tempoRamp: true });
+  const fit = tempoFit(120, 127, { tempoRamp: true });
   const range = { audibleRange: { start: 0, end: 120 } };
   const candidate = (role, anchorTime) => ({
     id: `${role}:${anchorTime}`,
@@ -146,13 +146,13 @@ test('glides only use incoming cues the host can replay from', () => {
     { outgoingAnalysis: range, incomingAnalysis: range }
   ).finalists.filter((pair) => pair.beats === 16);
   const ending = (anchor) => pairs(anchor).filter((pair) => pair.alignment === 'end');
-  // Sixteen beats start 7.385 s before the anchor but last 7.684 s.
-  assert.equal(ending(7.5).length, 0);
-  const [accepted] = ending(7.7);
+  // Sixteen beats start 7.559 s before the anchor but last 7.775 s.
+  assert.equal(ending(7.6).length, 0);
+  const [accepted] = ending(7.8);
   assert.equal(accepted.tempoRamp, true);
   assert.ok(accepted.incomingEnd - accepted.durationSeconds >= 0);
   // Dropping the same anchor on the swap leaves half the overlap after it to replay from.
-  const [dropped] = pairs(7.5).filter((pair) => pair.alignment === 'mid');
+  const [dropped] = pairs(7.6).filter((pair) => pair.alignment === 'mid');
   assert.ok(dropped.incomingEnd - dropped.durationSeconds >= 0);
 });
 

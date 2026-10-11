@@ -186,20 +186,18 @@ export function planPairTransition({
   const winnerMargin = rounded(Math.max(0, winner.confidence - (runnerUp?.confidence ?? 0)));
   winner.confidence = rounded(clamp(winner.confidence + Math.min(0.02, winnerMargin * 0.15)));
   winner.transitionClass = classFor(winner.confidence, winner.maximumClass);
+  // Songs that cannot be beatmatched play out; a short unmatched fade only sounds like a skip.
+  const unmatched = winner.transitionClass === 'simple_crossfade';
+  if (unmatched) winner.transitionClass = 'normal_boundary';
   const strategy = strategyFor(winner);
-  const fallbackReason = winner.transitionClass === 'simple_crossfade'
+  const fallbackReason = unmatched
     ? winner.gates[0]?.code || 'confidence-simple'
     : winner.transitionClass === 'silence_trim'
       ? 'confidence-trim'
       : winner.transitionClass === 'normal_boundary'
         ? winner.gates.find((gate) => gate.maximumClass === 'normal_boundary')?.code || 'confidence-boundary'
         : '';
-  // Live fallbacks play real audio, so a looped winner falls back to the best plain blend.
-  const fallback = fallbackFor(
-    outgoing, incoming,
-    winner.pair.loop ? evaluations.find((evaluation) => !evaluation.pair.loop) ?? null : winner,
-    fallbackReason
-  );
+  const fallback = fallbackFor(outgoing, incoming, winner, fallbackReason);
   const native = ['full_beatmatched', 'conservative_beatmatched'].includes(winner.transitionClass);
   const pair = winner.pair;
 

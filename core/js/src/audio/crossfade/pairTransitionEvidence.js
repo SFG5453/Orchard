@@ -35,7 +35,7 @@ export {
   tempoFit
 } from './pairTempoHarmony.js';
 import { glideOffsets } from './pairTempoHarmony.js';
-import { beatEntry, beatFlow, incomingVoiceRisk } from './transitionFlow.js';
+import { bassArrival, beatEntry, beatFlow, incomingVoiceRisk } from './transitionFlow.js';
 
 export const MAX_ROLE_CANDIDATES = 12;
 export const MAX_DETAILED_CANDIDATES = 64;
@@ -296,6 +296,8 @@ export function generateTransitionCandidates(analysis = {}, role = 'incoming', l
   const candidates = boundaries.map((boundary) => candidateFrom(analysis, role, boundary));
   const entry = role === 'incoming' ? beatEntry(analysis, window) : null;
   if (entry) candidates.push(candidateFrom(analysis, role, entry));
+  const arrival = role === 'incoming' ? bassArrival(analysis, window) : null;
+  if (arrival) candidates.push(candidateFrom(analysis, role, arrival));
 
   for (const downbeat of analysis.timing?.downbeats || []) {
     if (downbeat < window.start || downbeat > window.end) continue;

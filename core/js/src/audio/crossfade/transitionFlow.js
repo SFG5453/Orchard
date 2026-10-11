@@ -88,6 +88,56 @@ export function beatEntry(analysis, window) {
   };
 }
 
+/** Downbeats plus the lines half a bar later; double-time readings cannot tell them apart. */
+export function halfBars(downbeats = [], interval = 0) {
+  return interval > 0 ? downbeats.flatMap((time) => [time, time + interval * 2]) : downbeats;
+}
+
+// Floor rise (curve levels) from kick-only gaps to a held bassline: the drop a DJ cues.
+const ARRIVAL_RISE = 0.4;
+
+// Quietest half second over `from..to`: near zero between kicks, high under a held bass.
+function bassFloor(analysis, from, to) {
+  let floor = null;
+  for (let time = from; time + 0.5 <= to + 1e-6; time += 0.5) {
+    const level = curveMean(analysis, 'bass', time, time + 0.5);
+    if (level === null) return null;
+    floor = floor === null ? level : Math.min(floor, level);
+  }
+  return floor;
+}
+
+/**
+ * First beat where a held bassline replaces a kick-only or filtered intro. Bar lines from a
+ * double-time reading can sit half a bar off, so the curve picks the beat.
+ */
+export function bassArrival(analysis, window) {
+  const interval = analysis.timing?.beatInterval;
+  if (!analysis.curves?.bass || !(interval > 0)) return null;
+  const span = interval * 4;
+  // Beatless intros belong to `beatEntry`; this rule needs a bar of kicks before the drop.
+  const kicks = firstBeat(analysis);
+  if (kicks === null) return null;
+  for (const time of analysis.timing?.beats || []) {
+    if (time < Math.max(window.start, kicks) + span || time > window.end) continue;
+    const before = bassFloor(analysis, time - span, time);
+    const after = bassFloor(analysis, time, time + span);
+    if (before === null || after === null || after - before < ARRIVAL_RISE) continue;
+    // Fills raise the floor a bar early; the drop is the sharpest step on a half-bar line.
+    let drop = null;
+    let sharpest = -Infinity;
+    for (const beat of halfBars(analysis.timing.downbeats, interval)) {
+      if (beat < time - 1e-6 || beat > time + span - 1e-6) continue;
+      const step = (curveMean(analysis, 'bass', beat, beat + 0.5) ?? 0) -
+        (curveMean(analysis, 'bass', beat - 0.5, beat) ?? 0);
+      if (step > sharpest) [drop, sharpest] = [beat, step];
+    }
+    if (drop === null || sharpest < ARRIVAL_RISE) continue;
+    return { time: drop, confidence: 0.75, source: 'beat-entry', evidence: { bassRise: rounded(after - before) } };
+  }
+  return null;
+}
+
 // The beat the listener last heard: one that dropped out a bar or two before the mix
 // is still missed, so mixing over the gap that follows is a loss too.
 function recentBeat(analysis, time) {
@@ -158,7 +208,7 @@ export function beatFlow(pair, outgoing, incoming) {
   const skip = start === null ? 0 : clamp((pair.incomingAnchor ?? pair.incomingEnd) - start, 0, MAX_SKIP_SECONDS) / MAX_SKIP_SECONDS;
   return {
     score: rounded(clamp(1 - meanDeficit * 0.5 - worst * 0.5 - lateDrop * 0.3 -
-      clamp(waitSeconds / MAX_WAIT_SECONDS) * 0.6 - skip * 0.15)),
+      clamp(waitSeconds / MAX_WAIT_SECONDS) * 0.6 - skip * 0.4)),
     lateDrop: rounded(lateDrop),
     meanDeficit: rounded(meanDeficit),
     worstDeficit: rounded(worst),

@@ -188,7 +188,8 @@ export function evaluatePair(pair, context) {
     collision,
     vocal,
     spectral: spectral.score,
-    contrast: context.contrast ?? null
+    contrast: context.contrast ?? null,
+    voice
   });
   const energy = energyScore(pair, outgoing, incoming, outgoingSummary, incomingSummary);
   const beatConfidence = Math.sqrt(
