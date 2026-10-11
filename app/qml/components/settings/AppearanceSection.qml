@@ -23,6 +23,8 @@ import QtQuick
 AppearanceSectionForm {
     layoutStyle: OrchardAppearance.layoutStyle
     showBitrate: OrchardAppearance.showBitrate
+    fullscreenAutoHide: OrchardAppearance.fullscreenAutoHide
+    fullscreenPulse: OrchardAppearance.fullscreenPulse
     animatedArtworkEnabled: OrchardAppearance.animatedArtworkEnabled
     animatedCollageEnabled: OrchardAppearance.animatedCollageEnabled
     artworkSource: OrchardAppearance.artworkSource
@@ -35,6 +37,8 @@ AppearanceSectionForm {
 
     layoutPicker.onPicked: value => OrchardAppearance.layoutStyle = value
     bitrateSwitch.onToggled: OrchardAppearance.showBitrate = bitrateSwitch.checked
+    autoHideSwitch.onToggled: OrchardAppearance.fullscreenAutoHide = autoHideSwitch.checked
+    pulseSwitch.onToggled: OrchardAppearance.fullscreenPulse = pulseSwitch.checked
     animatedArtworkSwitch.onToggled: OrchardAppearance.animatedArtworkEnabled = animatedArtworkSwitch.checked
     collageSwitch.onToggled: OrchardAppearance.animatedCollageEnabled = collageSwitch.checked
     sourcePicker.onPicked: value => OrchardAppearance.artworkSource = value

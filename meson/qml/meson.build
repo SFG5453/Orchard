@@ -156,6 +156,8 @@ qml_sources = [
   'app/qml/components/player/FullscreenQueueRow.ui.qml',
   'app/qml/components/player/FullscreenTrackInfo.ui.qml',
   'app/qml/components/player/FullscreenTransportButton.ui.qml',
+  'app/qml/components/player/FullscreenUpNext.ui.qml',
+  'app/qml/components/player/BassPulse.qml',
   'app/qml/views/home/AppTopBar.qml',
   'app/qml/views/home/HomeShell.qml',
   'app/qml/views/home/HomeScene.qml',

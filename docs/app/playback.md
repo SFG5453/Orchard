@@ -14,6 +14,8 @@ keywords:
   - like
   - fullscreen
   - now playing
+  - up next
+  - screensaver
   - player bar
 platforms:
   - desktop
@@ -64,6 +66,22 @@ Inside the fullscreen player:
 - Right-click the cover art, or select **More**, for the song menu.
 - Select the lyrics button to show or hide lyrics. See [Lyrics](lyrics.md).
 - Select the queue button to show or hide the **Up next** list. See [Manage the queue](queue.md).
+
+While the fullscreen player is open and music is playing, Orchard asks the system to keep the screen from dimming or locking.
+
+## Hide the fullscreen controls
+
+While music plays, the fullscreen player hides its controls and the cursor after 3 seconds without mouse movement. The title, artist, and a faint progress bar stay. With lyrics and the queue hidden, the cover grows into the space. With lyrics open beside the cover, the cover shrinks and the lyrics get wider and larger.
+
+Move the mouse, or press Space, Left, or Right, to bring the controls back. The controls stay on screen while playback is paused, while the queue is open, or while the pointer rests on them. To keep them on screen all the time, turn off **Hide controls when idle** in Settings, Appearance. See [Appearance](appearance.md).
+
+## See the next song in the fullscreen player
+
+About 15 seconds before the current song ends or starts mixing into the next one, a small **UP NEXT** card with the next song's cover, title, and artist appears in the top-left corner. Select the card to skip to that song. The card does not appear when repeat one is on or the queue is empty.
+
+## Make the fullscreen player pulse with the music
+
+The glow behind the cover and the background brighten on each bass hit. To turn this off, turn off **Pulse with the music** in Settings, Appearance. When the setting is off, or when Orchard cannot read the audio (for example while playing on another device), the glow breathes slowly instead.
 
 ## Close the fullscreen player
 

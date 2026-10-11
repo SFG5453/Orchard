@@ -47,6 +47,7 @@
 #include "providers/qobuz/qobuz_service.h"
 #include "providers/youtube/catalog/youtube_catalog.h"
 #include "providers/youtube/youtube_provider.h"
+#include "screen_wake_lock.h"
 #include "search/search_controller.h"
 #include "support/support_center.h"
 #include "system_media_bridge.h"
@@ -289,6 +290,7 @@ int main(int argc, char *argv[]) {
   connectService.setArtwork(&animatedArtwork);
   SystemTray tray(playback.get(), &authManager);
   WindowState windowState;
+  ScreenWakeLock screenWake;
   // Talks to the bootstrapper that launched us; inert in development builds.
   BootstrapperClient updates;
 
@@ -340,6 +342,7 @@ int main(int argc, char *argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardOffline"), &offlineLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardTray"), &tray);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardWindowState"), &windowState);
+  engine.rootContext()->setContextProperty(QStringLiteral("OrchardScreenWake"), &screenWake);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardUpdates"), &updates);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardReleaseNotes"),
                                            bundledReleaseNotes());

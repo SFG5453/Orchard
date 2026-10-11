@@ -24,12 +24,13 @@ test('fullscreen artwork, controls and panes fit extreme desktop resolutions', (
             for (const controlsHeight of [224, 250, 320]) {
                 for (const pane of ['', 'lyrics', 'queue']) {
                     for (const shape of [0, 0.5, 1, 1.12]) {
-                        for (const aspect of [0.5, 9 / 16, 1]) {
+                        for (const [aspect, idle] of [[0.5, 0], [9 / 16, 0], [1, 0], [0.5, 1], [9 / 16, 0.5], [1, 1]]) {
                             const split = width >= 980 && pane ? 1 : 0;
-                            const column = layout.columns(width, split);
+                            const focus = pane === 'lyrics' ? idle : 0;
+                            const column = layout.columns(width, split, focus);
                             const result = layout.measure(width, height, controlsHeight,
-                                split, pane, shape, aspect);
-                            const label = `${width}x${height}, ${controlsHeight}, ${pane}, ${shape}, ${aspect}`;
+                                split, pane, shape, aspect, focus, idle);
+                            const label = `${width}x${height}, ${controlsHeight}, ${pane}, ${shape}, ${aspect}, ${idle}`;
                             inside({ x: column.x + (column.width - result.artWidth) / 2,
                                 y: result.columnY, width: result.artWidth,
                                 height: result.artHeight }, width, height, `art: ${label}`);
@@ -69,6 +70,17 @@ test('short fullscreen displays reserve the measured control height', () => {
         assert.ok(result.artHeight < 160);
         assert.ok(result.controlsY + 320 <= 480);
     }
+});
+
+test('idle grows the solo cover and hands the lyrics pane more room', () => {
+    const awake = layout.measure(1920, 1080, 120, 0, '', 0, 1, 0, 0);
+    const idle = layout.measure(1920, 1080, 120, 0, '', 0, 1, 0, 1);
+    assert.ok(idle.artSize > awake.artSize + 60);
+    const split = layout.measure(1920, 1080, 120, 1, 'lyrics', 0, 1, 0, 0);
+    const focused = layout.measure(1920, 1080, 120, 1, 'lyrics', 0, 1, 1, 1);
+    assert.ok(focused.paneX < split.paneX - 100);
+    assert.ok(focused.paneWidth > split.paneWidth + 100);
+    assert.ok(focused.artSize < split.artSize - 100);
 });
 
 test('transport buttons fit narrow columns and keep usable targets', () => {

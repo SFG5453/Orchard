@@ -127,10 +127,13 @@ endif
 qt_gui_private = dependency('Qt6GuiPrivate', method: 'cmake', modules: ['Qt6::GuiPrivate'])
 thread_dep = dependency('threads')
 platform_deps = [thread_dep]
+# DBus (Linux) and IOKit (macOS) back the screen wake lock.
 if host_machine.system() == 'linux'
-  platform_deps += [cpp.find_library('dl'), cpp.find_library('m')]
+  platform_deps += [cpp.find_library('dl'), cpp.find_library('m'), dependency('qt6', modules: ['DBus'])]
 elif host_machine.system() == 'windows'
   platform_deps += [cpp.find_library('dbghelp'), cpp.find_library('shell32')]
+elif host_machine.system() == 'darwin'
+  platform_deps += [dependency('appleframeworks', modules: ['IOKit', 'CoreFoundation'])]
 endif
 
 python = find_program('python3')

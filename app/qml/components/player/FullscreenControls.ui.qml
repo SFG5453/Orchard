@@ -41,6 +41,8 @@ ColumnLayout {
     property real handoff: 0
     property real timeSwap: 1
     property real mixGlow: 0
+    // 1 awake, 0 idle. Idle keeps the title and a faint timeline and folds the rest away.
+    property real chrome: 1
     property bool mixing: false
     property var currentTrack: ({})
     property var incomingTrack: ({})
@@ -85,8 +87,11 @@ ColumnLayout {
     property alias volumeWheel: volumeWheel
     property alias lyricsButton: lyricsButton
     property alias queueButton: queueButton
+    property alias hover: hover
 
     spacing: 0
+
+    HoverHandler { id: hover }
 
     // Track info slides in after the cover lands and again on every skip.
     RowLayout {
@@ -127,6 +132,8 @@ ColumnLayout {
         LikeButton {
             id: likeButton
             Layout.alignment: Qt.AlignVCenter
+            opacity: controls.chrome
+            visible: controls.chrome > 0.01
             implicitWidth: 36
             implicitHeight: 36
             iconSize: 19
@@ -137,6 +144,8 @@ ColumnLayout {
         FullscreenIconButton {
             id: moreButton
             Layout.alignment: Qt.AlignVCenter
+            opacity: controls.chrome
+            visible: controls.chrome > 0.01
             accentColor: controls.accentColor
             primaryText: controls.primaryText
             secondaryText: controls.secondaryText
@@ -151,7 +160,7 @@ ColumnLayout {
         Layout.minimumWidth: 0
         Layout.topMargin: 18
         Layout.preferredHeight: 22
-        opacity: controls.stage40
+        opacity: controls.stage40 * (0.45 + 0.55 * controls.chrome)
         transform: Translate { y: 20 * (1 - controls.stage40) }
         from: 0
         readonly property real shown: pressed ? Math.min(value, controls.seekLimit) : value
@@ -206,9 +215,13 @@ ColumnLayout {
     }
 
     RowLayout {
+        id: timeRow
         Layout.fillWidth: true
-        Layout.topMargin: 4
-        opacity: controls.stage40
+        Layout.topMargin: 4 * controls.chrome
+        Layout.preferredHeight: implicitHeight * controls.chrome
+        clip: true
+        visible: controls.chrome > 0.01
+        opacity: controls.stage40 * controls.chrome
 
         Text {
             text: controls.positionText
@@ -313,7 +326,10 @@ ColumnLayout {
     // Transport. Each button pops in on its own beat, left to right.
     RowLayout {
         Layout.alignment: Qt.AlignHCenter
-        Layout.topMargin: 14
+        Layout.topMargin: 14 * controls.chrome
+        Layout.preferredHeight: implicitHeight * controls.chrome
+        visible: controls.chrome > 0.01
+        opacity: controls.chrome
         spacing: controls.transport.spacing
 
         FullscreenTransportButton {
@@ -373,9 +389,11 @@ ColumnLayout {
     // Volume and the pane toggles.
     RowLayout {
         Layout.fillWidth: true
-        Layout.topMargin: 18
+        Layout.topMargin: 18 * controls.chrome
+        Layout.preferredHeight: implicitHeight * controls.chrome
+        visible: controls.chrome > 0.01
         spacing: 10
-        opacity: controls.stage60
+        opacity: controls.stage60 * controls.chrome
         transform: Translate { y: 16 * (1 - controls.stage60) }
 
         LucideIcon {

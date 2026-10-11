@@ -31,6 +31,8 @@ class AppearanceSettings final : public QObject {
     Q_PROPERTY(double intensity READ intensity WRITE setIntensity NOTIFY changed)
     Q_PROPERTY(double saturation READ saturation WRITE setSaturation NOTIFY changed)
     Q_PROPERTY(double brightness READ brightness WRITE setBrightness NOTIFY changed)
+    Q_PROPERTY(bool fullscreenAutoHide READ fullscreenAutoHide WRITE setFullscreenAutoHide NOTIFY changed)
+    Q_PROPERTY(bool fullscreenPulse READ fullscreenPulse WRITE setFullscreenPulse NOTIFY changed)
     Q_PROPERTY(bool animatedArtworkEnabled READ animatedArtworkEnabled WRITE setAnimatedArtworkEnabled NOTIFY changed)
     Q_PROPERTY(bool animatedCollageEnabled READ animatedCollageEnabled WRITE setAnimatedCollageEnabled NOTIFY changed)
     Q_PROPERTY(QString artworkSource READ artworkSource WRITE setArtworkSource NOTIFY changed)
@@ -47,6 +49,8 @@ public:
     double intensity() const { return m_intensity; }
     double saturation() const { return m_saturation; }
     double brightness() const { return m_brightness; }
+    bool fullscreenAutoHide() const { return m_fullscreenAutoHide; }
+    bool fullscreenPulse() const { return m_fullscreenPulse; }
     bool animatedArtworkEnabled() const { return m_animatedArtwork; }
     bool animatedCollageEnabled() const { return m_animatedCollage; }
     QString artworkSource() const { return m_artworkSource; }
@@ -62,6 +66,8 @@ public:
     void setIntensity(double value);
     void setSaturation(double value);
     void setBrightness(double value);
+    void setFullscreenAutoHide(bool value);
+    void setFullscreenPulse(bool value);
     void setAnimatedArtworkEnabled(bool value);
     void setAnimatedCollageEnabled(bool value);
     void setArtworkSource(const QString &value);
@@ -73,6 +79,7 @@ public:
 signals:
     void changed();
 private:
+    void setFlag(const QString &key, bool value, bool &field);
     void setNumber(const QString &key, double value, double &field, double low, double high);
     QStringList sanitizeMirrorOrder(const QStringList &order) const;
 
@@ -89,6 +96,8 @@ private:
     double m_saturation{1.24};
     // Sunglasses optional: 0 is a power outage, 2 is staring directly into the album art.
     double m_brightness{1.0};
+    bool m_fullscreenAutoHide{true};
+    bool m_fullscreenPulse{true};
     // Moving album art: when a still image simply isn't consuming enough of your monthly data plan.
     bool m_animatedArtwork{true};
     // Four videos at once: off by default, because your GPU didn't sign up for a lava lamp.

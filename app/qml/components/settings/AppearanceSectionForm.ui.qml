@@ -26,6 +26,8 @@ ColumnLayout {
 
     property string layoutStyle: "glade"
     property bool showBitrate: false
+    property bool fullscreenAutoHide: true
+    property bool fullscreenPulse: true
     property bool animatedArtworkEnabled: true
     property bool animatedCollageEnabled: false
     property string artworkSource: "apple_music"
@@ -38,6 +40,8 @@ ColumnLayout {
     property string speedText: "1.00×"
     property alias layoutPicker: layoutPicker
     property alias bitrateSwitch: bitrateSwitch
+    property alias autoHideSwitch: autoHideSwitch
+    property alias pulseSwitch: pulseSwitch
     property alias animatedArtworkSwitch: animatedArtworkSwitch
     property alias collageSwitch: collageSwitch
     property alias sourcePicker: sourcePicker
@@ -93,6 +97,39 @@ ColumnLayout {
                 objectName: "bitrateToggle"
                 checked: root.showBitrate
                 Accessible.name: qsTr("Show audio bitrate")
+            }
+        }
+    }
+
+    SettingsSection {
+        Layout.fillWidth: true
+        title: qsTr("Fullscreen player")
+        rowSpacing: 0
+        verticalPadding: 0
+
+        SettingsRow {
+            iconName: "maximize"
+            title: qsTr("Hide controls when idle")
+            description: qsTr("Fade the controls and cursor after a few seconds without mouse movement while music plays. Move the mouse or press a key to bring them back.")
+
+            SettingsSwitch {
+                id: autoHideSwitch
+                objectName: "fullscreenAutoHideToggle"
+                checked: root.fullscreenAutoHide
+                Accessible.name: qsTr("Hide controls when idle")
+            }
+        }
+
+        SettingsRow {
+            iconName: "sparkles"
+            title: qsTr("Pulse with the music")
+            description: qsTr("The glow behind the cover and the background brighten on each bass hit.")
+
+            SettingsSwitch {
+                id: pulseSwitch
+                objectName: "fullscreenPulseToggle"
+                checked: root.fullscreenPulse
+                Accessible.name: qsTr("Pulse with the music")
             }
         }
     }

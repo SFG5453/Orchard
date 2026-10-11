@@ -8,22 +8,25 @@ function transport(width) {
     return { sizes: sizes, spacing: Math.min(compact ? 10 : 18, Math.max(0, (width - total) / 4)) };
 }
 
-function columns(width, split) {
+// focus (0..1) narrows the player column so an idle lyrics pane can take the room.
+function columns(width, split, focus) {
     var wide = width >= 980;
     var fraction = wide ? Math.max(0, Math.min(1, split)) : 0;
+    var lean = 0.12 * Math.max(0, Math.min(1, focus || 0));
     var margin = wide ? Math.max(40, width * 0.05) : Math.max(16, Math.min(40, width * 0.05));
     var solo = Math.max(0, width - margin * 2);
-    var left = Math.max(0, width * 0.46 - margin);
+    var left = Math.max(0, width * (0.46 - lean) - margin);
     var column = Math.min(560, solo + (left - solo) * fraction);
     var center = (width - column) / 2;
     return {
-        wide: wide, margin: margin, width: column,
+        wide: wide, margin: margin, width: column, paneX: width * (0.5 - lean),
         x: center + (margin + (left - column) / 2 - center) * fraction
     };
 }
 
-function measure(width, height, controlsHeight, split, pane, canvasShape, canvasAspect) {
-    var column = columns(width, split);
+// idle (0..1) lets the cover grow into the room the hidden controls leave.
+function measure(width, height, controlsHeight, split, pane, canvasShape, canvasAspect, focus, idle) {
+    var column = columns(width, split, focus);
     var top = Math.min(64, height * 0.16);
     var bottom = Math.min(40, height * 0.06);
     var available = Math.max(0, height - top - bottom);
@@ -35,9 +38,15 @@ function measure(width, height, controlsHeight, split, pane, canvasShape, canvas
     var controlHeight = controlsHeight * scale;
     var gap = Math.min(28, Math.max(0, playerHeight - controlHeight));
     var artBudget = Math.max(0, playerHeight - controlHeight - gap);
-    var art = Math.min(column.wide ? 520 : 560, column.width, artBudget);
+    var grow = 120 * Math.max(0, Math.min(1, idle || 0));
+    // Only the solo layout lets the cover outgrow its column; a split keeps it clear of the pane.
+    var solo = column.wide ? 1 - Math.max(0, Math.min(1, split)) : 1;
+    var room = Math.min(column.width + grow * solo, Math.max(column.width, width - column.margin * 2));
+    // An idle lyrics pane also shrinks the cover so the words lead.
+    var lean = 140 * Math.max(0, Math.min(1, focus || 0)) * (1 - solo);
+    var art = Math.min((column.wide ? 520 : 560) + grow * solo - lean, room, artBudget);
     var aspect = Math.max(0.5, Math.min(1, canvasAspect));
-    var portrait = Math.min(760, artBudget, column.width / aspect);
+    var portrait = Math.min(760 + grow * solo - lean, artBudget, room / aspect);
     // Canvas animations stay within the measured artwork budget.
     var shape = Math.max(0, Math.min(1, canvasShape));
     var artHeight = art + (portrait - art) * shape;
@@ -51,9 +60,9 @@ function measure(width, height, controlsHeight, split, pane, canvasShape, canvas
         artHeight: artHeight, artWidth: artWidth, columnY: y,
         controlsScale: scale, controlsY: controlsY,
         controlsX: column.x + column.width * (1 - scale) / 2,
-        paneX: stacked ? column.margin : width / 2,
+        paneX: stacked ? column.margin : column.paneX,
         paneY: paneY,
-        paneWidth: stacked ? width - column.margin * 2 : Math.max(0, width / 2 - column.margin),
+        paneWidth: stacked ? width - column.margin * 2 : Math.max(0, width - column.paneX - column.margin),
         paneHeight: Math.max(0, available - (paneY - top)), stacked: stacked
     };
 }

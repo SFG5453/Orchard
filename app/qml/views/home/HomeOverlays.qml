@@ -203,7 +203,10 @@ Item {
         sequence: "Space"
         autoRepeat: false
         enabled: overlays.shell.visible && !overlays.welcomeOpen && !overlays.overlayOpen(spotlightLoader) && !overlays.overlayOpen(settingsLoader) && !overlays.overlayOpen(docsLoader) && !supportHost.popupOpen && !overlays.shell.isEditableFocused()
-        onActivated: OrchardPlayback.toggle()
+        onActivated: {
+            OrchardPlayback.toggle();
+            overlays.shell.wakeFullscreen();
+        }
     }
 
     // F for fullscreen. Also what you pay respects to when the bridge hits.
@@ -223,12 +226,18 @@ Item {
     Shortcut {
         sequence: "Left"
         enabled: overlays.shell.visible && !overlays.welcomeOpen && !overlays.overlayOpen(spotlightLoader) && !overlays.overlayOpen(settingsLoader) && !overlays.overlayOpen(docsLoader) && !supportHost.popupOpen && !overlays.shell.isEditableFocused()
-        onActivated: OrchardPlayback.seekBy(-5)
+        onActivated: {
+            OrchardPlayback.seekBy(-5);
+            overlays.shell.wakeFullscreen();
+        }
     }
 
     Shortcut {
         sequence: "Right"
         enabled: overlays.shell.visible && !overlays.welcomeOpen && !overlays.overlayOpen(spotlightLoader) && !overlays.overlayOpen(settingsLoader) && !overlays.overlayOpen(docsLoader) && !supportHost.popupOpen && !overlays.shell.isEditableFocused()
-        onActivated: OrchardPlayback.seekBy(5)
+        onActivated: {
+            OrchardPlayback.seekBy(5);
+            overlays.shell.wakeFullscreen();
+        }
     }
 }

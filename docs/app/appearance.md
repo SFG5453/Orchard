@@ -1,6 +1,6 @@
 ---
 title: Appearance
-summary: Show the bitrate, turn animated artwork on or off, set the artwork source order, and tune the immersive background.
+summary: Show the bitrate, set how the fullscreen player behaves, turn animated artwork on or off, set the artwork source order, and tune the immersive background.
 group: Customize
 icon: palette
 keywords:
@@ -10,6 +10,9 @@ keywords:
   - immersive background
   - artwork background
   - bitrate indicator
+  - fullscreen player
+  - hide controls
+  - pulse
   - layout
   - glade
   - canopy
@@ -24,7 +27,7 @@ order: 110
 
 # Appearance
 
-Appearance settings control the player layout, the player bar bitrate indicator, animated artwork, and the immersive background. They are in Settings, Appearance.
+Appearance settings control the player layout, the player bar bitrate indicator, the fullscreen player, animated artwork, and the immersive background. They are in Settings, Appearance.
 
 ## Choose a layout
 
@@ -38,6 +41,14 @@ Glade is the default.
 ## Show the audio bitrate
 
 Turn on **Show audio bitrate** in the **Player bar** group. Orchard then shows the streaming bitrate in kbps in the player bar. The setting is off by default. See [Streaming quality](streaming-quality.md).
+
+## Stop the fullscreen controls from hiding
+
+Turn off **Hide controls when idle** in the **Fullscreen player** group. The fullscreen player then keeps its controls and cursor on screen. The setting is on by default. See [Play music](playback.md).
+
+## Stop the fullscreen player from pulsing with the music
+
+Turn off **Pulse with the music** in the **Fullscreen player** group. The glow behind the cover then breathes slowly instead of brightening on each bass hit, and the background stays steady. The setting is on by default.
 
 ## Turn animated artwork on or off
 
@@ -93,4 +104,4 @@ Four sliders in the **Immersive background** group shape the effect. They are di
 
 ## Reset the immersive background controls
 
-Select **Reset controls**. The button restores Speed, Intensity, Saturation, and Brightness to their defaults. It also turns **Enable animated artwork** back on, sets the artwork source to Apple Music, and restores the default mirror order. It leaves **Use artwork background** and **Show audio bitrate** as they are.
+Select **Reset controls**. The button restores Speed, Intensity, Saturation, and Brightness to their defaults. It also turns **Hide controls when idle**, **Pulse with the music**, and **Enable animated artwork** back on, sets the artwork source to Apple Music, and restores the default mirror order. It leaves **Use artwork background** and **Show audio bitrate** as they are.

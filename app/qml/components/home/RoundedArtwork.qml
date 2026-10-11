@@ -29,7 +29,9 @@ Item {
     property real radius: 10
     // Square bottom corners let a card footer sit flush under the cover.
     property real bottomRadius: radius
-    readonly property int artworkPixels: Math.max(128, Math.ceil(Math.max(width, height) * Screen.devicePixelRatio * 1.15))
+    // Stepped so a resizing cover refetches a few times instead of every frame.
+    readonly property int artworkPixels: Math.max(128, Math.ceil(Math.max(width, height) * Screen.devicePixelRatio * 1.15 / 128) * 128)
+    property url shownSource: ""
 
     function sizedSource(value) {
         const url = value.toString();
@@ -58,15 +60,24 @@ Item {
         asynchronous: true
         fillMode: Image.PreserveAspectCrop
         sourceSize.width: root.artworkPixels
-        // Fade over the placeholder on load.
+        // A resize reload keeps the old pixels up; only a new cover fades over the placeholder.
+        retainWhileLoading: true
         opacity: 0
         onStatusChanged: {
-            if (status === Image.Ready)
-                fadeIn.restart();
-            else
+            if (status === Image.Ready) {
+                if (opacity < 1 && !fadeIn.running)
+                    fadeIn.restart();
+                root.shownSource = root.source;
+            } else if (root.source.toString() !== root.shownSource.toString()) {
                 opacity = 0;
+            }
         }
-        Component.onCompleted: if (status === Image.Ready) opacity = 1
+        Component.onCompleted: {
+            if (status === Image.Ready) {
+                opacity = 1;
+                root.shownSource = root.source;
+            }
+        }
         layer.enabled: true
 
         layer.effect: MultiEffect {

@@ -39,7 +39,21 @@ FullscreenPlayerForm {
     readonly property string trackId: OrchardPlayback.track.id || ""
     readonly property bool fading: OrchardPlayback.crossfadeActive
     property double fadeEndedAt: 0
+    property point lastPointer: Qt.point(-1, -1)
+    // Controls stay up while paused, while in use, or with the queue open.
+    readonly property bool chromeHeld: !OrchardAppearance.fullscreenAutoHide || !OrchardPlayback.playing
+        || pane === "queue" || controls.hover.hovered || closeButton.hovered || upNext.area.containsMouse
+        || mediaMenu.visible || controls.progress.pressed
+    // Seconds left before the next song starts mixing in, or the song ends.
+    readonly property real handoffIn: (mixStart >= 0 ? mixStart : OrchardPlayback.duration) - OrchardPlayback.position
+    readonly property var nextTrack: upcoming(OrchardPlayback.queue, OrchardPlayback.repeatMode)
 
+    upNextTrack: nextTrack
+    upNextArtist: artistLabel(nextTrack)
+    upNextOpen: Boolean(nextTrack.id) && OrchardPlayback.playing && !mixing && OrchardPlayback.duration > 0
+        && handoffIn > 0 && handoffIn <= 15
+    pulse: bassPulse.level
+    reactive: bassPulse.live
     currentTrack: OrchardPlayback.track
     transitionTrack: OrchardPlayback.transitionTrack
     position: OrchardPlayback.position
@@ -77,6 +91,13 @@ FullscreenPlayerForm {
         return track && track.streamCodec ? kbps + " kbps · " + track.streamCodec : kbps + " kbps";
     }
 
+    // Untyped so qmlcachegen leaves the QVariantList lookup interpreted.
+    function upcoming(queue, repeatMode) {
+        if (repeatMode === "one" || !queue || !queue.length)
+            return {};
+        return queue[0] || {};
+    }
+
     function artistLabel(track) {
         return (track.artists || []).join(", ") || track.artist || "";
     }
@@ -92,7 +113,20 @@ FullscreenPlayerForm {
         pane = pane === name ? "" : name;
     }
 
-    onOpenChanged: if (open) forceActiveFocus()
+    // Shows the controls and restarts the idle countdown.
+    function wake() {
+        chromeShown = true;
+        idleTimer.restart();
+    }
+
+    onOpenChanged: {
+        if (!open)
+            return;
+        forceActiveFocus();
+        wake();
+    }
+    onChromeHeldChanged: wake()
+    Keys.onPressed: wake()
 
     // Swaps lyrics and queue without collapsing the split.
     onPaneChanged: {
@@ -115,6 +149,25 @@ FullscreenPlayerForm {
         bumpAnimation.restart();
     }
 
+    Timer {
+        id: idleTimer
+        interval: 3000
+        onTriggered: if (!root.chromeHeld && root.open) root.chromeShown = false
+    }
+
+    BassPulse {
+        id: bassPulse
+        engine: OrchardPlayback.audioEngine
+        running: OrchardAppearance.fullscreenPulse && root.visible && OrchardPlayback.playing
+    }
+
+    // Keep the display awake while the fullscreen player is playing.
+    Binding {
+        target: OrchardScreenWake
+        property: "active"
+        value: root.open && OrchardPlayback.playing
+    }
+
     MediaMenu {
         id: mediaMenu
         media: OrchardPlayback.track
@@ -134,6 +187,17 @@ FullscreenPlayerForm {
 
     blocker.onWheel: function(wheel) { wheel.accepted = true; }
 
+    // Animated items resend hover under a still cursor; only real movement counts.
+    pointer.onPointChanged: {
+        const pos = pointer.point.scenePosition;
+        if (Math.abs(pos.x - lastPointer.x) < 1 && Math.abs(pos.y - lastPointer.y) < 1)
+            return;
+        lastPointer = pos;
+        wake();
+    }
+
+    upNext.area.onClicked: OrchardPlayback.next()
+
     dragHandler.enabled: root.Window.window !== null && root.Window.window.visibility !== Window.FullScreen
     dragHandler.onActiveChanged: if (dragHandler.active) root.Window.window.startSystemMove()
 
@@ -141,7 +205,7 @@ FullscreenPlayerForm {
     backdrop.warpSpeed: OrchardAppearance.speed
     backdrop.warpIntensity: OrchardAppearance.intensity
     backdrop.warpSaturation: OrchardAppearance.saturation
-    backdrop.warpBrightness: OrchardAppearance.brightness
+    backdrop.warpBrightness: OrchardAppearance.brightness * (1 + 0.12 * root.pulse)
 
     closeButton.onClicked: root.closeRequested()
 

@@ -163,6 +163,12 @@ Item {
         root.fullscreenOrigin = Qt.rect(origin.x, origin.y, art.width, art.height);
     }
 
+    // Keyboard shortcuts bring the idle fullscreen controls back.
+    function wakeFullscreen() {
+        if (fullscreenOpen && fullscreenLoader.item)
+            fullscreenLoader.item.wake();
+    }
+
     // The window follows the player into fullscreen, and only leaves it if the player put it there.
     function setFullscreen(open) {
         const win = root.Window.window;

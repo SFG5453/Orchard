@@ -63,6 +63,19 @@ Item {
     property real canvasAspect: 9 / 16
     property real bump: 1
     property real infoShift: 0
+    // Controls fade out after the pointer rests; the logic layer drives this.
+    property bool chromeShown: true
+    property real chrome: chromeShown ? 1 : 0
+    Behavior on chrome { NumberAnimation { duration: root.chromeShown ? 260 : 900; easing.type: Easing.InOutCubic } }
+    // An idle lyrics pane widens and the cover steps back.
+    readonly property real lyricsFocus: (1 - chrome) * (pane === "lyrics" && shownPane === "lyrics" ? 1 : 0)
+    // Bass onset level from the audio engine; reactive is false when there is no spectrum.
+    property real pulse: 0
+    Behavior on pulse { NumberAnimation { duration: 60 } }
+    property bool reactive: false
+    property var upNextTrack: ({})
+    property string upNextArtist: ""
+    property bool upNextOpen: false
 
     property alias backdrop: backdrop
     property alias blocker: blocker
@@ -73,6 +86,8 @@ Item {
     property alias controls: controls
     property alias queuePane: queuePane
     property alias bumpAnimation: trackBump
+    property alias pointer: pointer
+    property alias upNext: upNext
     // Logic layer parks non-visual children (menus, timers) here.
     default property alias extras: extrasHost.data
 
@@ -94,9 +109,9 @@ Item {
     }
 
     // Column width is independent of control height to keep measurement acyclic.
-    readonly property var columns: FullscreenLayout.columns(width, split)
+    readonly property var columns: FullscreenLayout.columns(width, split, lyricsFocus)
     readonly property var layout: FullscreenLayout.measure(width, height, controls.implicitHeight,
-        split, pane, canvasShape, canvasAspect)
+        split, pane, canvasShape, canvasAspect, lyricsFocus, 1 - chrome)
     readonly property real columnWidth: columns.width
     readonly property real columnX: columns.x
     readonly property real columnY: layout.columnY
@@ -162,6 +177,9 @@ Item {
         acceptedButtons: Qt.AllButtons
     }
 
+    // Passive, so it sees pointer motion over every child.
+    HoverHandler { id: pointer }
+
     FullscreenBackdrop {
         id: backdrop
         anchors.fill: parent
@@ -198,7 +216,8 @@ Item {
         glyph: "chevron-left"
         glyphSize: 20
         ToolTip.text: qsTr("Close (Esc)")
-        opacity: root.stage25
+        visible: root.chrome > 0.01
+        opacity: root.stage25 * root.chrome
         transform: Translate { x: -16 * (1 - root.stage25) }
     }
 
@@ -216,20 +235,51 @@ Item {
         font.pixelSize: 10
         font.weight: Font.DemiBold
         font.letterSpacing: 1.6
-        opacity: root.stage35
+        opacity: root.stage35 * root.chrome
     }
 
-    // Accent glow that breathes with playback, parked behind the landing spot of the cover.
-    Rectangle {
+    FullscreenUpNext {
+        id: upNext
+        x: 22 + (closeButton.width + 12) * root.chrome
+        y: closeButton.y + (closeButton.height - height) / 2
+        z: 3
+        width: Math.min(implicitWidth, Math.max(0, root.width / 2 - x))
+        shown: root.upNextOpen ? root.stage35 : 0
+        Behavior on shown { NumberAnimation { duration: 520; easing.type: Easing.OutCubic } }
+        track: root.upNextTrack
+        artistText: root.upNextArtist
+        inkColor: root.inkColor
+        primaryText: root.primaryText
+        mutedText: root.mutedText
+    }
+
+    // Light cast by the cover, parked behind its landing spot. It breathes, or pulses with the bass.
+    Item {
         id: glowShape
         x: root.columnX + (root.columnWidth - root.artWidth) / 2
         y: root.columnY + 18
         width: root.artWidth
         height: root.artHeight
-        radius: 24
-        color: root.accentColor
         visible: false
         layer.enabled: true
+
+        Rectangle {
+            anchors.fill: parent
+            radius: 24
+            color: root.accentColor
+        }
+
+        Image {
+            id: glowCover
+            anchors.fill: parent
+            source: root.shownTrack.thumbnail || ""
+            sourceSize.width: 64
+            sourceSize.height: 64
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            opacity: status === Image.Ready ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 400 } }
+        }
     }
 
     MultiEffect {
@@ -241,11 +291,13 @@ Item {
         blurEnabled: true
         blur: 1
         blurMax: 64
-        opacity: root.stage30 * (root.playing ? 0.34 + 0.16 * breath : 0.14) * artHolder.idleScale
-        Behavior on opacity { NumberAnimation { duration: 500 } }
+        saturation: 0.35
+        scale: 1 + 0.06 * root.pulse
+        opacity: root.stage30 * (!root.playing ? 0.14 : root.reactive ? 0.3 + 0.32 * root.pulse : 0.34 + 0.16 * breath) * artHolder.idleScale
+        Behavior on opacity { enabled: !root.reactive; NumberAnimation { duration: 500 } }
 
         SequentialAnimation on breath {
-            running: root.visible && root.playing
+            running: root.visible && root.playing && !root.reactive
             loops: Animation.Infinite
             NumberAnimation { to: 1; duration: 2600; easing.type: Easing.InOutSine }
             NumberAnimation { to: 0; duration: 2600; easing.type: Easing.InOutSine }
@@ -267,7 +319,7 @@ Item {
         height: root.originRect.height + (root.artHeight - root.originRect.height) * root.reveal
         z: 2
         opacity: Math.min(1, root.reveal * 5)
-        scale: 1 + (idleScale * root.bump - 1) * root.reveal
+        scale: (1 + (idleScale * root.bump - 1) * root.reveal) * (1 + 0.012 * root.pulse)
 
         // Soft drop shadow. Covers float, they don't sit.
         Rectangle {
@@ -336,6 +388,7 @@ Item {
         handoff: root.handoff
         timeSwap: root.timeSwap
         mixGlow: root.mixGlow
+        chrome: root.chrome
         mixing: root.mixing
         mixAccentColor: root.mixAccentColor
         currentTrack: root.currentTrack
@@ -369,7 +422,7 @@ Item {
             // Read the source conditions; the view's own effective visibility loops back through the parent.
             incoming: root.swapped
             running: root.shownPane === "lyrics" && sidePane.visible
-            pixelSize: Math.round(Math.max(24, Math.min(40, root.width * 0.022)))
+            pixelSize: Math.round(Math.max(24, Math.min(40, root.width * 0.022)) * (1 + 0.2 * root.lyricsFocus))
             accentColor: root.accentColor
             primaryText: root.primaryText
             mutedText: root.mutedText
@@ -386,5 +439,15 @@ Item {
             secondaryText: root.secondaryText
             mutedText: root.mutedText
         }
+    }
+
+    // Hides the cursor while idle. Takes no buttons, so clicks still reach what is underneath.
+    MouseArea {
+        anchors.fill: parent
+        z: 10
+        visible: !root.chromeShown
+        hoverEnabled: true
+        acceptedButtons: Qt.NoButton
+        cursorShape: Qt.BlankCursor
     }
 }

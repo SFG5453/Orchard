@@ -39,6 +39,8 @@ AppearanceSettings::AppearanceSettings(QObject *parent) : QObject(parent) {
     m_intensity = readNumber(m_settings, QStringLiteral("intensity"), 0.92, 0.0, 1.0);
     m_saturation = readNumber(m_settings, QStringLiteral("saturation"), 1.24, 0.0, 3.0);
     m_brightness = readNumber(m_settings, QStringLiteral("brightness"), 1.0, 0.0, 2.0);
+    m_fullscreenAutoHide = m_settings.value(QStringLiteral("fullscreenAutoHide"), true).toBool();
+    m_fullscreenPulse = m_settings.value(QStringLiteral("fullscreenPulse"), true).toBool();
     m_animatedArtwork = m_settings.value(QStringLiteral("animatedArtworkEnabled"), true).toBool();
     m_animatedCollage = m_settings.value(QStringLiteral("animatedCollageEnabled"), false).toBool();
     m_artworkSource = m_settings.value(QStringLiteral("artworkSource"), QStringLiteral("apple_music")).toString();
@@ -81,6 +83,15 @@ void AppearanceSettings::setSpeed(double value) { setNumber(QStringLiteral("spee
 void AppearanceSettings::setIntensity(double value) { setNumber(QStringLiteral("intensity"), value, m_intensity, 0.0, 1.0); }
 void AppearanceSettings::setSaturation(double value) { setNumber(QStringLiteral("saturation"), value, m_saturation, 0.0, 3.0); }
 void AppearanceSettings::setBrightness(double value) { setNumber(QStringLiteral("brightness"), value, m_brightness, 0.0, 2.0); }
+
+void AppearanceSettings::setFlag(const QString &key, bool value, bool &field) {
+    if (value == field) return;
+    field = value;
+    m_settings.setValue(key, value);
+    emit changed();
+}
+void AppearanceSettings::setFullscreenAutoHide(bool value) { setFlag(QStringLiteral("fullscreenAutoHide"), value, m_fullscreenAutoHide); }
+void AppearanceSettings::setFullscreenPulse(bool value) { setFlag(QStringLiteral("fullscreenPulse"), value, m_fullscreenPulse); }
 
 void AppearanceSettings::setAnimatedArtworkEnabled(bool value) {
     if (value == m_animatedArtwork) return;
@@ -193,6 +204,8 @@ void AppearanceSettings::reset() {
     setIntensity(0.92);
     setSaturation(1.24);
     setBrightness(1.0);
+    setFullscreenAutoHide(true);
+    setFullscreenPulse(true);
     setAnimatedArtworkEnabled(true);
     setAnimatedCollageEnabled(false);
     setArtworkSource(QStringLiteral("apple_music"));
