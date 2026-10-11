@@ -118,6 +118,20 @@ class AutoplayRecommendationsTest {
         assertEquals(listOf("one", "cover", "extended"), selected.map(Track::id))
     }
 
+    @Test
+    fun `music video without an artist credit matches the playing song`() {
+        val selected = AutoplayRecommendations.select(
+            existing = listOf(track("song", "As It Was", "Harry Styles")),
+            candidates = listOf(
+                track("video", "As It Was (Official Video)", "", MUSIC_VIDEO_TYPE_OMV),
+                track("next", "Orange County", "Bizarrap"),
+            ),
+            limit = 20,
+        )
+
+        assertEquals(listOf("next"), selected.map(Track::id))
+    }
+
     private fun track(
         id: String,
         title: String,

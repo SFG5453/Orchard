@@ -84,6 +84,8 @@ object AutoplayRecommendations {
     }
 
     private fun Track.hasSamePrimaryArtist(other: Track): Boolean {
+        // Radio rows for music videos can arrive without a credit; an unknown artist is not a mismatch.
+        if (artist.isBlank() || other.artist.isBlank()) return true
         if (artistId.isNotBlank() && other.artistId.isNotBlank() && artistId == other.artistId) return true
         val artistKey = artist.textKey()
         val otherArtistKey = other.artist.textKey()
