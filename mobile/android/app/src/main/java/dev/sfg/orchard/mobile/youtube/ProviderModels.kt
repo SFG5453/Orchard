@@ -78,6 +78,11 @@ private fun JSONObject.browseTarget(): Pair<String, String> {
     return browseId to payload?.text("params").orEmpty()
 }
 
+private fun JSONObject.isBrowseTarget(browseId: String): Boolean =
+    browseId.isNotEmpty() && (text("type") in browseTypes || browseId.startsWith("MPRE") || browseId.startsWith("UC"))
+
+private val browseTypes = setOf("album", "artist", "playlist", "library_artist")
+
 /** A playable row, or null for albums, artists and playlists. */
 fun JSONObject.providerTrack(): Track? {
     val id = text("id")
@@ -102,8 +107,9 @@ fun JSONObject.providerTrack(): Track? {
 }
 
 fun JSONObject.providerItem(): CatalogItem? {
-    providerTrack()?.let { return CatalogItem.Song(it) }
     val (browseId, params) = browseTarget()
+    // Album cards can carry the first track's video id; the browse target wins.
+    if (!isBrowseTarget(browseId)) providerTrack()?.let { return CatalogItem.Song(it) }
     if (browseId.isEmpty()) return null
     val title = text("title")
     val subtitle = text("subtitle")
