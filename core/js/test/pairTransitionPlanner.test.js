@@ -191,7 +191,7 @@ test('chooses a full beatmatched transition for a clean compatible pair', () => 
   assert.equal(plan.fallbackReason, '');
 });
 
-test('uses a conservative filtered beatmatch for sustained spectral vocal risk', () => {
+test('sustained spectral vocal risk that needs the filter plays out', () => {
   const plan = planPairTransition(cleanPair({
     // Cover the complete outgoing/incoming candidate windows so there is no
     // clean alternate downbeat that can legitimately avoid the collision.
@@ -199,10 +199,10 @@ test('uses a conservative filtered beatmatch for sustained spectral vocal risk',
     incoming: { vocal: (time) => time <= 60 ? 0.9 : 0.05 }
   }));
 
-  assert.equal(plan.transitionClass, 'conservative_beatmatched');
+  assert.equal(plan.transitionClass, 'normal_boundary');
   assert.ok(reasonCount(plan, 'vocal-collision') > 0);
-  assert.equal(plan.renderMode, 'native');
-  assert.equal(plan.strategy, 'filtered_blend');
+  assert.equal(plan.renderMode, 'boundary');
+  assert.equal(plan.fallbackReason, 'needs-filter');
 });
 
 test('one-sided vocals over an instrumental bed remain beatmatch eligible', () => {
@@ -474,13 +474,13 @@ test('untrusted key evidence does not force a filtered beatmatch', () => {
   );
 });
 
-test('a trusted distant key still selects the filtered blend', () => {
+test('a trusted distant key plays out', () => {
   const plan = planPairTransition(cleanPair({
     incoming: { key: 'C♯ major', keyConfidence: 0.95 }
   }));
 
-  assert.equal(plan.renderMode, 'native');
-  assert.equal(plan.strategy, 'filtered_blend');
+  assert.equal(plan.renderMode, 'boundary');
+  assert.equal(plan.fallbackReason, 'needs-filter');
 });
 
 test('keeps selection deterministic and diagnostics bounded', () => {

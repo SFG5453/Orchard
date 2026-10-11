@@ -39,8 +39,6 @@ const VOICE_SPAN = 0.4;
 // 808 weight contrast where two productions stop blending (boom-bap or R&B against trap).
 // Blending those sounds like two DJs fighting over one booth, so the songs just play out.
 export const STYLE_CLASH_CONTRAST = 0.9;
-// Above this, productions only blend cleanly; one that needs a filter plays out too.
-export const STYLE_RISK_CONTRAST = 0.6;
 const firstBeats = new WeakMap();
 
 function clamp(value, minimum = 0, maximum = 1) {

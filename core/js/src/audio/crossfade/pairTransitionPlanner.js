@@ -191,7 +191,7 @@ export function planPairTransition({
   if (unmatched) winner.transitionClass = 'normal_boundary';
   const strategy = strategyFor(winner);
   const fallbackReason = unmatched
-    ? winner.gates[0]?.code || 'confidence-simple'
+    ? (winner.gates.find((gate) => gate.severity === 'veto') || winner.gates[0])?.code || 'confidence-simple'
     : winner.transitionClass === 'silence_trim'
       ? 'confidence-trim'
       : winner.transitionClass === 'normal_boundary'

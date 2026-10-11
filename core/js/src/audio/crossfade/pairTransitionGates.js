@@ -24,7 +24,7 @@ import {
   MAX_ROLE_CANDIDATES,
   MEASURED_CHANGES
 } from './pairTransitionEvidence.js';
-import { STYLE_CLASH_CONTRAST, STYLE_RISK_CONTRAST, halfBars } from './transitionFlow.js';
+import { STYLE_CLASH_CONTRAST, halfBars } from './transitionFlow.js';
 
 export const CLASS_RANK = Object.freeze({
   normal_boundary: 0,
@@ -173,10 +173,7 @@ export function candidateGates({
     clamp(incoming.timing?.beatConfidence)
   );
   // Clashing productions keep the natural boundary: the old song ends, the new one starts.
-  if (contrast !== null && (contrast >= STYLE_CLASH_CONTRAST ||
-    (contrast >= STYLE_RISK_CONTRAST && needsFilter(harmonic, spectral, collision)))) {
-    lower('style-contrast', 'normal_boundary', 'veto');
-  }
+  if (contrast !== null && contrast >= STYLE_CLASH_CONTRAST) lower('style-contrast', 'normal_boundary', 'veto');
   if (!fit.beatmatched) lower('tempo-distance', 'simple_crossfade', 'veto');
   if (beatConfidence < PAIR_TRANSITION_POLICY.minBeatmatchConfidence) {
     lower('beat-confidence', 'simple_crossfade', 'veto');
@@ -187,8 +184,7 @@ export function candidateGates({
     collision.activeFraction >= PAIR_TRANSITION_POLICY.vocal.activeFraction &&
     collision.longestRunBeats >= PAIR_TRANSITION_POLICY.vocal.sustainedBeats;
   // Analysis "vocal" values are broad spectral-risk estimates, so synth-heavy
-  // passages can look vocal. Keep a safe beatmatch eligible and let this risk
-  // cap confidence and select the filtered native blend instead of vetoing it.
+  // passages can look vocal; a sustained run only caps confidence.
   if (sustainedCollision) {
     lower('vocal-collision', 'conservative_beatmatched', 'demotion');
   }
@@ -200,6 +196,8 @@ export function candidateGates({
   }
   // Fading the outgoing singer out mid-line sounds forced even over a clean incoming.
   if (measuredVoice && voice.outgoing >= 0.3) lower('voice-cut', 'normal_boundary', 'veto');
+  // Blends that only work behind a filter sound forced; they play out.
+  if (needsFilter(harmonic, spectral, collision)) lower('needs-filter', 'simple_crossfade', 'veto');
 
   const left = pair.outgoingCandidate;
   const right = pair.incomingCandidate;

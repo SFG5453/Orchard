@@ -135,19 +135,14 @@ test('clashing productions keep the natural boundary', () => {
   assert.equal(matched.renderMode, 'native');
 });
 
-test('a moderate style contrast blends only when the blend is clean', () => {
-  const plan = (vocal) => planPairTransition({
-    analysis: raw({ sub: -0.35, vocal, boundaries: [104, 112] }),
-    nextAnalysis: raw({ sub: 0.35, vocal, boundaries: [16, 32] }),
+test('a moderate style contrast blends when the blend is clean', () => {
+  const plan = planPairTransition({
+    analysis: raw({ sub: -0.35, vocal: () => 0.1, boundaries: [104, 112] }),
+    nextAnalysis: raw({ sub: 0.35, vocal: () => 0.1, boundaries: [16, 32] }),
     duration: 120, nextDuration: 120, tempoRamp: true
   });
-  const clean = plan(() => 0.1);
-  assert.equal(clean.productionContrast, 0.7);
-  assert.equal(clean.renderMode, 'native');
-  // Two voices at once would need the filter on top of the style gap.
-  const crowded = plan(() => 0.9);
-  assert.equal(crowded.transitionClass, 'normal_boundary');
-  assert.equal(crowded.fallbackReason, 'style-contrast');
+  assert.equal(plan.productionContrast, 0.7);
+  assert.equal(plan.renderMode, 'native');
 });
 
 test('plans stay inside the decoded render windows', () => {
