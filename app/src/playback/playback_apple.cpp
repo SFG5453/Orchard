@@ -60,6 +60,12 @@ void PlaybackController::setAppleMusic(AppleMusic *account, CatalogSource *sourc
     emit stateChanged();
     updateSystemMedia();
   });
+  connect(m_apple, &AppleMusicPlayer::fadeStarted, this, [this] {
+    if (!appleActive())
+      return;
+    emit stateChanged();
+    updateIntegrations();
+  });
   connect(m_apple, &AppleMusicPlayer::ended, this, [this] { appleFinished({}); });
   connect(m_apple, &AppleMusicPlayer::advanced, this, &PlaybackController::appleFinished);
   connect(m_apple, &AppleMusicPlayer::failed, this, [this](const QString &message) {
@@ -176,4 +182,23 @@ void PlaybackController::prepareAppleNext() {
   // repeats and short songs start gaplessly. Adaptive mix has no Apple Music render yet.
   const bool fade = hasCrossfadeTarget() && duration() > m_crossfadeDuration;
   m_apple->prepare(id, fade ? m_crossfadeDuration : 0.0);
+}
+
+// The queue's next song while the page blends it in.
+QVariantMap PlaybackController::appleFadeTrack() const {
+  const QString id = m_apple ? m_apple->fadingId() : QString();
+  if (id.isEmpty() || m_queue.isEmpty())
+    return {};
+  const QVariantMap next = m_queue.first().toMap();
+  return appleSongId(next) == id ? next : QVariantMap();
+}
+
+// Where the page's Standard crossfade begins, or -1 when the song ends without one.
+double PlaybackController::appleMixStart() const {
+  if (crossfadeActive())
+    return m_apple->fadeFrom();
+  if (!hasCrossfadeTarget() || !isAppleTrack(m_queue.first().toMap()))
+    return -1.0;
+  const double actual = duration();
+  return actual > m_crossfadeDuration ? actual - m_crossfadeDuration : -1.0;
 }

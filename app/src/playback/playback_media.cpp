@@ -61,8 +61,8 @@ void PlaybackController::updateIntegrations() {
       m_animatedArtworkTrackId == m_track.value(QStringLiteral("id")).toString())
     track.insert(QStringLiteral("animatedArtworkUrl"), m_animatedArtworkUrl);
   m_integrations->updatePlayback(track, playing(), position(), duration(),
-                                 m_crossfadeActive,
-                                 m_crossfadeTrack.value(QStringLiteral("title")).toString());
+                                 crossfadeActive(),
+                                 transitionTrack().value(QStringLiteral("title")).toString());
 }
 
 // Look ma, no hands! And by hands, we mean static album art from the Bronze

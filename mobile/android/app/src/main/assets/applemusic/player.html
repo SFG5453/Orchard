@@ -257,6 +257,7 @@ function startFade(remaining) {
   const incoming = decks[spare].api;
   incoming.play(seconds).catch((e) => report(e, incoming.id));
   decks[current].api.fade(0, seconds);
+  post({ type: 'fading', id: incoming.id, seconds, duration: incoming.state().duration });
 }
 
 // The incoming deck becomes current; the app hears about it as a gapless advance.
