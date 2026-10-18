@@ -61,6 +61,11 @@ public:
   Q_INVOKABLE void cancelConnection();
   Q_INVOKABLE void disconnectAccount();
 
+  // Developer token for the MusicKit player; empty with an error when it cannot be had.
+  void playbackToken(std::function<void(const QString &token, const QString &error)> done) {
+    withDeveloperToken(std::move(done));
+  }
+
   static bool isAppleMusicId(const QString &browseId) { return browseId.startsWith(QStringLiteral("am.")); }
 
   // apple_music_catalog.cpp

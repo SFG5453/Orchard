@@ -120,7 +120,7 @@ ColumnLayout {
         SettingsRow {
             iconName: "music-2"
             title: qsTr("Music source")
-            description: qsTr("Home, search, artists, albums and playlists all come from this service. Apple needs Apple Music connected.")
+            description: qsTr("Home, search, artists, albums and playlists all come from this service. Apple needs Apple Music connected, and its songs play in Apple's web player, which uses up to about 400 MB more memory.")
 
             SettingsSegmented {
                 id: homeSourcePicker

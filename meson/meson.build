@@ -195,6 +195,9 @@ app_sources = [
   'app/src/playback/playback_controller.h',
   'app/src/playback/playback_remote.cpp',
   'app/src/playback/playback_remote.h',
+  'app/src/playback/playback_apple.cpp',
+  'app/src/playback/apple_music_player.cpp',
+  'app/src/playback/apple_music_player.h',
   'app/src/search/search_controller.cpp',
   'app/src/search/search_controller.h',
   'app/src/support/support_capture.cpp',
@@ -284,6 +287,7 @@ helper_sources = [
 helper_webengine_sources = [
   'app/src/auth/spotify_helper.cpp',
   'app/src/auth/apple_music_helper.cpp',
+  'app/src/auth/apple_music_player_host.cpp',
 ]
 
 helper_webview2_sources = [
@@ -601,6 +605,7 @@ app_moc_headers = [
   'app/src/playback/adaptive_mix/adaptive_mix_controller.h',
   'app/src/playback/adaptive_mix/adaptive_mix_worker.h',
   'app/src/playback/playback_controller.h',
+  'app/src/playback/apple_music_player.h',
   'app/src/search/search_controller.h',
   'app/src/support/support_center.h',
   'app/src/providers/runtime/provider_runtime.h',

@@ -24,8 +24,8 @@
 
 #include <functional>
 
-// Apple Music modes of orchard-auth-helper. Both return the process exit code and
-// send their result to the parent over the private auth socket.
+// Apple Music modes of orchard-auth-helper. Login and logout return the process exit
+// code and send their result to the parent over the private auth socket.
 
 // Reads {developerToken} from stdin, runs MusicKit JS sign-in and returns {token}
 // (the Music User Token) or {error}. Apple's cookies stay in the AppleMusic profile.
@@ -34,12 +34,19 @@ int runAppleMusicLogin(const QString &socketName);
 // Clears the AppleMusic profile's cookies and MusicKit storage, then returns {ok}.
 int runAppleMusicLogout(const QString &socketName);
 
-// Receives the sign-in page's messages from AppleMusicLoginView.qml.
-class AppleMusicLoginBridge final : public QObject {
+// Sets Chromium flags for the player; call before Qt WebEngine starts.
+void prepareAppleMusicPlayer();
+
+// Hosts applemusic/player.html for the app: JSON commands on stdin, JSON events on
+// stdout, one object per line. Exits when stdin closes.
+int runAppleMusicPlayer();
+
+// Receives the Apple Music pages' messages (sign-in view and player).
+class AppleMusicPageBridge final : public QObject {
   Q_OBJECT
 
 public:
-  explicit AppleMusicLoginBridge(std::function<void(const QString &)> receive, QObject *parent = nullptr)
+  explicit AppleMusicPageBridge(std::function<void(const QString &)> receive, QObject *parent = nullptr)
       : QObject(parent), m_receive(std::move(receive)) {}
 
   Q_INVOKABLE void receive(const QString &message) { m_receive(message); }
