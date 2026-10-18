@@ -33,6 +33,8 @@
 #include <QQuickStyle>
 #include <QQuickView>
 #include <QTimer>
+#include <algorithm>
+#include <cstring>
 #ifdef ORCHARD_WEBVIEW2_AUTH
 #include "webview2_item.h"
 #include <QQmlEngine>
@@ -41,6 +43,13 @@
 #endif
 
 int main(int argc, char *argv[]) {
+  const bool applePlayer = std::any_of(argv + 1, argv + argc, [](const char *argument) {
+    return std::strcmp(argument, "--apple-music-player") == 0;
+  });
+#ifndef ORCHARD_WEBVIEW2_AUTH
+  if (applePlayer)
+    prepareAppleMusicPlayer();
+#endif
 #ifdef ORCHARD_WEBVIEW2_AUTH
   qmlRegisterType<WebView2Item>("Orchard.Auth", 1, 0, "WebView2Item");
 #else
@@ -54,6 +63,10 @@ int main(int argc, char *argv[]) {
   QGuiApplication application(argc, argv);
   QQuickStyle::setStyle(QStringLiteral("Basic"));
 
+#ifndef ORCHARD_WEBVIEW2_AUTH
+  if (applePlayer)
+    return runAppleMusicPlayer();
+#endif
   const QStringList arguments = application.arguments();
   const int socketArgument = arguments.indexOf(QStringLiteral("--auth-socket"));
   if (socketArgument < 0 || socketArgument + 1 >= arguments.size())

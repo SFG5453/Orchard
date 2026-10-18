@@ -281,6 +281,7 @@ int main(int argc, char *argv[]) {
   QObject::connect(&application, &QCoreApplication::aboutToQuit,
                    playback.get(), &PlaybackController::savePlaybackState);
   playback->setOfflineSources(&downloads, &connectivity);
+  playback->setAppleMusic(&appleMusic, &catalogSource);
   auto lyrics = std::make_unique<LyricsController>(&youtubeProvider, &authManager, playback.get());
   auto *discord = integrations->discord();
   // One lyric clock for the karaoke window and Discord; no second tiny conductor.

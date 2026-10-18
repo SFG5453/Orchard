@@ -5,5 +5,6 @@
     <file alias="SpotifyLoginView.qml">../app/qml-auth/SpotifyLoginView.qml</file>
     <file alias="AppleMusicLoginView.qml">../app/qml-auth/webengine/AppleMusicLoginView.qml</file>
     <file alias="applemusic-signin.html">../mobile/android/app/src/main/assets/applemusic/signin.html</file>
+    <file alias="applemusic-player.html">../mobile/android/app/src/main/assets/applemusic/player.html</file>
   </qresource>
 </RCC>

@@ -172,7 +172,7 @@ void PlaybackController::resolveQobuz(const QVariantMap &track,
 
 void PlaybackController::requestStream(bool refreshStream, bool tryQobuz) {
   if (isAppleTrack(m_track)) {
-    fail(tr("Apple Music playback is not available yet."));
+    startAppleTrack();
     return;
   }
   if (!refreshStream && tryQobuz && qobuzEligible(m_track)) {

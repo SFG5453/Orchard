@@ -29,11 +29,6 @@ void PlaybackController::playCollection(const QVariantList &tracks,
                                         int startIndex, bool shuffle,
                                         const QString &playlistId,
                                         const QString &continuation) {
-  if (!tracks.isEmpty() && isAppleTrack(tracks.at(qBound(0, startIndex, int(tracks.size()) - 1)).toMap())) {
-    m_error = tr("Apple Music playback is not available yet.");
-    emit stateChanged();
-    return;
-  }
   if (remoteActive()) {
     // The target owns the queue; it gets this page, without continuation loading.
     if (shuffle)
@@ -42,7 +37,9 @@ void PlaybackController::playCollection(const QVariantList &tracks,
                   {{QStringLiteral("tracks"), tracks}, {QStringLiteral("index"), shuffle ? 0 : startIndex}});
     return;
   }
-  if (!m_auth->isSignedIn() || tracks.isEmpty())
+  // Apple Music songs need no YouTube Music session.
+  if (tracks.isEmpty() ||
+      (!m_auth->isSignedIn() && !isAppleTrack(tracks.at(qBound(0, startIndex, int(tracks.size()) - 1)).toMap())))
     return;
 
   const auto playable = [](const QVariantMap &track) {
@@ -268,8 +265,8 @@ void PlaybackController::purgeFlaggedFromQueue() {
 void PlaybackController::playQueueIndex(int index) {
   if (index >= 0 && forwardRemote(QStringLiteral("play_queue_index"), {{QStringLiteral("index"), index}}))
     return;
-  if (m_loading || !m_auth->isSignedIn() || index < 0 ||
-      index >= m_queue.size())
+  if (m_loading || index < 0 || index >= m_queue.size() ||
+      (!m_auth->isSignedIn() && !isAppleTrack(m_queue.at(index).toMap())))
     return;
   const QVariantMap selected = m_queue.at(index).toMap();
   // Jumped-over tracks queue up behind the current one so Previous walks back through them.
@@ -331,7 +328,7 @@ void PlaybackController::resolveTrackAlbum() {
   const QString type = m_track.value(QStringLiteral("type")).toString();
   if (id.isEmpty() || !m_track.value(QStringLiteral("albumId")).toString().isEmpty() ||
       (type != QStringLiteral("song") && type != QStringLiteral("track")) ||
-      !m_auth->isSignedIn() || local::isLocalTrackId(id))
+      !m_auth->isSignedIn() || local::isLocalTrackId(id) || isAppleTrack(m_track))
     return;
   m_albumRequest = m_provider->invoke(
       "catalog.track",
@@ -375,7 +372,8 @@ void PlaybackController::retryAutoplay() {
 void PlaybackController::ensureAutoplay() {
   // Local songs have no "up next" on YouTube; the playlist ends when it ends.
   if (!m_autoplayEnabled || m_autoplayRequest || m_track.isEmpty() ||
-      !m_auth->isSignedIn() || local::isLocalTrack(m_track) || offlineMode() || m_repeatMode != "off" ||
+      !m_auth->isSignedIn() || local::isLocalTrack(m_track) || isAppleTrack(m_track) || offlineMode() ||
+      m_repeatMode != "off" ||
       m_queue.size() > 3 ||
       m_queueRequest || !m_queueContinuation.isEmpty() ||
       m_autoplaySuppressed == m_track.value("id").toString())

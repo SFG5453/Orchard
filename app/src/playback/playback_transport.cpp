@@ -17,6 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "apple_music_player.h"
 #include "playback_controller.h"
 #include "playback_helpers.h"
 #include <QSettings>
@@ -34,8 +35,13 @@ void PlaybackController::play() {
     startTrack(track, false, resumePosition, false);
     return;
   }
-  if (!m_error.isEmpty()) {
+  if (!m_error.isEmpty() || appleNeedsLoad()) {
     startTrack(m_track);
+    return;
+  }
+  if (appleActive()) {
+    m_apple->play();
+    updateSystemMedia();
     return;
   }
   if (!playing()) {
@@ -53,6 +59,11 @@ void PlaybackController::pause() {
   if (forwardRemote(QStringLiteral("pause")))
     return;
   m_waitingForAutoplay = false;
+  if (appleActive()) {
+    m_apple->pause();
+    updateSystemMedia();
+    return;
+  }
   if (playing()) {
     m_player->pause();
     if (m_crossfadeActive && m_nextPlayer)
@@ -79,12 +90,14 @@ void PlaybackController::toggle() {
     startTrack(track, false, resumePosition, false);
     return;
   }
-  if (!m_error.isEmpty()) {
+  if (!m_error.isEmpty() || appleNeedsLoad()) {
     startTrack(m_track);
     return;
   }
   if (playing())
     pause();
+  else if (appleActive())
+    m_apple->play();
   else {
     m_proxy->setSuspended(false);
     if (m_crossfadeActive && m_nextProxy)
@@ -105,7 +118,13 @@ void PlaybackController::seek(double seconds) {
       cancelCrossfadeTransition();
       clearPreparedTrack();
     }
-    if (m_player && m_player->isSeekable()) {
+    if (appleActive() && !m_apple->currentId().isEmpty()) {
+      const double target = duration() > 0.0 ? qBound(0.0, seconds, duration()) : std::max(0.0, seconds);
+      m_resumePosition = 0.0;
+      m_apple->seek(target);
+      m_lastPublishedPosition = target;
+      updateSystemMedia();
+    } else if (m_player && m_player->isSeekable()) {
       const double target = qBound(0.0, seconds, duration());
       m_playerTimelines[m_player].position = target;
       m_resumePosition = 0.0;

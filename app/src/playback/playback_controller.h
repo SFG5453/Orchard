@@ -48,6 +48,9 @@ class AnimatedArtworkService;
 class ConnectivityMonitor;
 class DownloadManager;
 class QobuzService;
+class AppleMusic;
+class AppleMusicPlayer;
+class CatalogSource;
 
 class PlaybackController final : public QObject {
   Q_OBJECT
@@ -130,41 +133,18 @@ public:
   SlopDetector *slop() { return &m_slop; }
   // Bitrate in kbps. If this reads 0, we are either loading or communicating
   // via smoke signals.
-  int bitrate() const {
-    if (remoteActive())
-      return 0;
-    const int b = m_track.value(QStringLiteral("bitrate")).toInt();
-    if (b <= 0)
-      return 0;
-    return b >= 1000 ? (b + 500) / 1000 : b;
-  }
+  int bitrate() const;
   QString queueError() const { return m_queueError; }
   QVariantList queue() const { return m_queue; }
   BestMixController *bestMix() { return &m_bestMix; }
   bool bestMixSorted() const { return m_bestMixSorted; }
-  bool playing() const {
-    return (m_player && m_player->playbackState() == QMediaPlayer::PlayingState) ||
-           (m_crossfadeActive && m_nextPlayer &&
-            m_nextPlayer->playbackState() == QMediaPlayer::PlayingState);
-  }
+  bool playing() const;
   bool loading() const { return m_loading; }
   QString errorMessage() const { return m_error; }
-  double position() const {
-    if (m_resumePosition > 0.0)
-      return m_resumePosition;
-    return m_player ? m_player->position() / 1000.0 : 0.0;
-  }
+  double position() const;
   // What the speakers play now; lyrics sync to this, the seek bar to position().
-  double audiblePosition() const {
-    const double audible = m_resumePosition > 0.0 || m_crossfadeActive
-                               ? -1.0
-                               : m_audioEngineOutput.audiblePosition();
-    return audible >= 0.0 ? audible : position();
-  }
-  double duration() const {
-    const double playerDuration = m_player ? m_player->duration() / 1000.0 : 0.0;
-    return playerDuration > 0.0 ? playerDuration : m_restoredDuration;
-  }
+  double audiblePosition() const;
+  double duration() const;
   bool gaplessEnabled() const { return m_gaplessEnabled; }
   void setGaplessEnabled(bool enabled);
   bool exponentialVolumeEnabled() const { return m_exponentialVolumeEnabled; }
@@ -220,19 +200,11 @@ public:
   // Drops transient stream keys so a saved track never carries an expired url.
   static QVariantMap sanitizeTrack(const QVariantMap &track);
   static QVariantList sanitizeTrackList(const QVariantList &tracks, int maxItems = 2500);
-  bool canGoNext() const {
-    return !m_queue.isEmpty() ||
-           // Local songs get no recommendations, so autoplay is never a "next" for them.
-           (m_autoplayEnabled && !m_track.isEmpty() && !local::isLocalTrack(m_track) && !offlineMode() &&
-            m_autoplaySuppressed != m_track.value("id").toString()) ||
-           (m_repeatMode == "all" && !m_track.isEmpty());
-  }
+  bool canGoNext() const;
   void setShuffleEnabled(bool enabled);
   void setRepeatMode(const QString &mode);
   Q_INVOKABLE void cycleRepeatMode();
-  bool canGoPrevious() const {
-    return !m_track.isEmpty() && (position() > 3.0 || !m_history.isEmpty());
-  }
+  bool canGoPrevious() const;
 
   Q_INVOKABLE void playSong(const QVariantMap &track);
   Q_INVOKABLE void playCollection(const QVariantList &tracks,
@@ -269,6 +241,8 @@ public:
   void setRemoteProvider(RemoteProvider *provider);
   // playback_offline.cpp: downloaded songs play from disk; offline mode limits the queue to them.
   void setOfflineSources(DownloadManager *downloads, ConnectivityMonitor *connectivity);
+  // playback_apple.cpp: Apple Music songs play in MusicKit while Apple is the music source.
+  void setAppleMusic(AppleMusic *account, CatalogSource *source);
   bool offlineMode() const;
   // Connect roles moved, so a peer's provider session may have come or gone.
   void remoteProviderChanged();
@@ -367,6 +341,18 @@ private:
   bool qobuzAvailable() const;
   void resolveQobuz(const QVariantMap &track, std::function<void(const QJsonValue &, const QString &)> done);
   RemoteProvider *m_remoteProvider{nullptr};
+  // playback_apple.cpp
+  bool appleActive() const;
+  bool appleNeedsLoad() const;
+  void startAppleTrack();
+  void appleChanged();
+  void appleFinished(const QString &advancedId);
+  void prepareAppleNext();
+  AppleMusicPlayer *m_apple{nullptr};
+  AppleMusic *m_appleAccount{nullptr};
+  CatalogSource *m_catalogSource{nullptr};
+  // Song the page already started gaplessly; startTrack adopts it instead of loading.
+  QString m_appleHandoff;
   // playback_offline.cpp
   QString downloadedFileFor(const QVariantMap &track) const;
   void startDownloadedFile(const QString &path);

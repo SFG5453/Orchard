@@ -107,7 +107,7 @@ void PlaybackController::clearPreparedTrack() {
 
 void PlaybackController::prepareNextTrack() {
   if ((!m_gaplessEnabled && !m_crossfadeEnabled) || m_crossfadeActive ||
-      m_switchingTrack || m_loading || m_track.isEmpty())
+      m_switchingTrack || m_loading || m_track.isEmpty() || appleActive())
     return;
   if (!m_player || !m_nextPlayer)
     return;
