@@ -407,7 +407,7 @@ else
   auth_dependencies += [dependency('qt6', version: '>=6.8', modules: ['WebView', 'WebViewQuick'])]
   if host_machine.system() == 'linux'
     auth_dependencies += [dependency('qt6', version: '>=6.8',
-      modules: ['WebEngineCore', 'WebEngineQuick'])]
+      modules: ['WebEngineCore', 'WebEngineQuick', 'WebChannel'])]
     auth_args += ['-DORCHARD_WEBENGINE_COOKIE_ADAPTER', '-DORCHARD_NATIVE_COOKIE_AUTH']
   endif
 endif

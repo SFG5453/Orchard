@@ -17,6 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "apple_music_player.h"
 #include "auth/auth_manager.h"
 #include "playback_controller.h"
 #include "playback_helpers.h"
@@ -320,4 +321,61 @@ void PlaybackController::setPlaybackPersistenceEnabled(bool enabled) {
     settings.remove(QLatin1String(kPageKey));
   }
   emit stateChanged();
+}
+
+int PlaybackController::bitrate() const {
+  if (remoteActive())
+    return 0;
+  const int b = m_track.value(QStringLiteral("bitrate")).toInt();
+  if (b <= 0)
+    return 0;
+  return b >= 1000 ? (b + 500) / 1000 : b;
+}
+
+bool PlaybackController::playing() const {
+  if (appleActive())
+    return m_apple->playing();
+  return (m_player && m_player->playbackState() == QMediaPlayer::PlayingState) ||
+         (m_crossfadeActive && m_nextPlayer &&
+          m_nextPlayer->playbackState() == QMediaPlayer::PlayingState);
+}
+
+double PlaybackController::position() const {
+  if (m_resumePosition > 0.0)
+    return m_resumePosition;
+  if (appleActive())
+    return m_apple->position();
+  return m_player ? m_player->position() / 1000.0 : 0.0;
+}
+
+double PlaybackController::audiblePosition() const {
+  if (appleActive())
+    return position();
+  const double audible = m_resumePosition > 0.0 || m_crossfadeActive
+                             ? -1.0
+                             : m_audioEngineOutput.audiblePosition();
+  return audible >= 0.0 ? audible : position();
+}
+
+double PlaybackController::duration() const {
+  if (appleActive()) {
+    if (m_apple->duration() > 0.0)
+      return m_apple->duration();
+    const double listed = m_track.value(QStringLiteral("durationSeconds")).toDouble();
+    return listed > 0.0 ? listed : m_restoredDuration;
+  }
+  const double playerDuration = m_player ? m_player->duration() / 1000.0 : 0.0;
+  return playerDuration > 0.0 ? playerDuration : m_restoredDuration;
+}
+
+bool PlaybackController::canGoNext() const {
+  return !m_queue.isEmpty() ||
+         // Local and Apple Music songs get no YouTube recommendations, so autoplay is never a "next" for them.
+         (m_autoplayEnabled && !m_track.isEmpty() && !local::isLocalTrack(m_track) && !isAppleTrack(m_track) &&
+          !offlineMode() && m_autoplaySuppressed != m_track.value("id").toString()) ||
+         (m_repeatMode == "all" && !m_track.isEmpty());
+}
+
+bool PlaybackController::canGoPrevious() const {
+  return !m_track.isEmpty() && (position() > 3.0 || !m_history.isEmpty());
 }

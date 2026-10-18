@@ -1,6 +1,6 @@
 ---
 title: Integrations
-summary: Show what you play in Discord, send your listens to Last.fm, add Spotify Canvas loops, connect Qobuz for MAX quality, and connect Apple Music for browsing and Home.
+summary: Show what you play in Discord, send your listens to Last.fm, add Spotify Canvas loops, connect Qobuz for MAX quality, and connect Apple Music for browsing, Home and playback.
 group: Customize
 icon: plug
 keywords:
@@ -21,6 +21,8 @@ keywords:
   - musickit
   - home source
   - recommendations
+  - widevine
+  - memory
 platforms:
   - desktop
 order: 130
@@ -146,7 +148,7 @@ Select **Disconnect** in the **Qobuz** card. Orchard removes the Qobuz sign-in f
 
 ## Connect Apple Music
 
-Connect Apple Music to browse Apple Music artist pages and use personal recommendations on Home. An Apple Music subscription and an Orchard account are required.
+Connect Apple Music to browse Apple Music artist pages, use personal recommendations on Home, and play Apple Music songs. An Apple Music subscription and an Orchard account are required.
 
 1. Sign in to your Orchard account under **Settings**, **General**.
 2. Open **Settings**, then **Integrations**.
@@ -163,7 +165,19 @@ On desktop, open **Settings**, **General** and set **Music source** to **Apple**
 
 The music source decides Home, search, artist, album and playlist pages on both platforms. Orchard never mixes the two services and never falls back to the other one. With **Apple** selected, Home shows Apple Music recommendations or charts, the sidebar search uses Apple Music, and an artist named on a YouTube Music song opens its Apple Music page. A YouTube Music album or playlist shows a message asking you to switch to YouTube Music; an Apple Music page shows the matching message under **Normal**. If Apple Music is disconnected or fails, the page shows an error instead of YouTube Music. Changing the source returns to Home on desktop. Your library and the sidebar playlists still come from YouTube Music.
 
-Apple Music playback is not available yet. Apple Music songs keep their Apple Music identity and are not matched to YouTube Music for playback. Your YouTube Music session is required to play YouTube Music songs.
+## Play Apple Music songs
+
+Apple Music songs play from Apple Music when **Music source** is **Apple**. They are not matched to YouTube Music. Under **Normal**, an Apple Music song shows "Choose Apple as the music source under Settings, General to play Apple Music songs." Your YouTube Music session is still required to play YouTube Music songs.
+
+Apple Music playback runs Apple's web player (MusicKit) in a separate Orchard process. That process uses about 250 MB of memory, and up to about 400 MB while the next song is buffered for gapless playback. It starts with the first Apple Music song and quits when you switch **Music source** to **Normal** or disconnect Apple Music.
+
+- Platforms: Linux only for now. On Windows, an Apple Music song shows "Apple Music playback is not available on this system yet." On Android, it shows "Apple Music playback is not available yet."
+- Widevine: Apple Music audio is protected, so Linux needs the Widevine module from an installed Google Chrome, Chromium with Widevine, Brave, or Firefox. If none is found, the song shows "Apple Music playback needs Widevine." Set `ORCHARD_WIDEVINE_PATH` to a `libwidevinecdm.so` file to use another copy.
+- Quality: Apple Music plays 256 kbps AAC. The **Streaming quality** setting does not apply.
+- Transitions: when **Gapless playback** or **Crossfade** is on, the next Apple Music song is buffered 20 seconds before the end. With **Crossfade** on, the two songs blend over the crossfade length, using **Standard** even when **Adaptive mix** is chosen. Otherwise the next song starts as soon as the current one ends. Repeat One and songs shorter than the crossfade length start gaplessly. The player bar switches to the next song when the blend finishes.
+- Autoplay, the Audio Engine, and AI-music scans do not apply to Apple Music songs.
+- Volume, play, pause, seek, next and previous work as usual, including from media keys and the system media controls.
+- Errors: "Apple Music is signed out" means the saved sign-in expired; connect Apple Music again. "Playing Apple Music songs needs an active Apple Music subscription" means the account has no subscription.
 
 ## Disconnect Apple Music
 

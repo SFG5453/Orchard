@@ -103,7 +103,7 @@ int runAppleMusicLogin(const QString &socketName) {
   view.resize(520, 720);
   view.setTitle(QObject::tr("Sign in to Apple Music"));
   bool sent = false;
-  AppleMusicLoginBridge bridge([&sent, &view, socketName](const QString &raw) {
+  AppleMusicPageBridge bridge([&sent, &view, socketName](const QString &raw) {
     const QJsonObject message = result(raw);
     if (sent || message.isEmpty())
       return;

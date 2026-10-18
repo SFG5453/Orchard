@@ -31,14 +31,15 @@ namespace apple_music_page {
 // The developer token's origin claim names this origin; Android serves the same page from it.
 inline constexpr auto kOrigin = "https://appassets.androidplatform.net";
 inline constexpr auto kUrl = "https://appassets.androidplatform.net/assets/applemusic/signin.html";
+inline constexpr auto kPlayerUrl = "https://appassets.androidplatform.net/assets/applemusic/player.html";
 inline constexpr auto kProfileName = "AppleMusic";
 
 inline QString jsString(const QString &value) {
   return QString::fromUtf8(QJsonDocument(QJsonArray{value}).toJson(QJsonDocument::Compact)).mid(1).chopped(1);
 }
 
-inline QString html() {
-  QFile page(QStringLiteral(":/auth/applemusic-signin.html"));
+inline QString html(const QString &resource = QStringLiteral(":/auth/applemusic-signin.html")) {
+  QFile page(resource);
   return page.open(QIODevice::ReadOnly) ? QString::fromUtf8(page.readAll()) : QString();
 }
 

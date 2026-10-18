@@ -113,6 +113,8 @@ On Android, the remaining time under the player's progress bar sparkles in rainb
 
 Use the **Gapless playback** switch in the **Transitions** group. Its description reads "Preload the next song to minimize pauses between tracks." Gapless playback is off by default.
 
+Apple Music songs crossfade with **Standard** at the set length, even when **Adaptive mix** is chosen. With only **Gapless playback** on, the next Apple Music song starts gaplessly. See [Integrations](integrations.md).
+
 ## Tell when a crossfade is happening
 
 The queue panel labels the current song MIXING during a blend. The fullscreen player shows "Mixing" with the blend length. See [Play music](playback.md) and [Manage the queue](queue.md).
