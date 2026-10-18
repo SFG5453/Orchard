@@ -25,6 +25,7 @@
 #include <QList>
 #include <QObject>
 #include <QString>
+#include <QTimer>
 
 class AppleMusic;
 class QProcess;
@@ -63,12 +64,21 @@ public:
   // Projected from the last report with the local clock.
   double position() const;
   double duration() const { return m_duration; }
+  // During a crossfade: the incoming song, its clock, length and blend progress (0 to 1).
+  QString fadingId() const { return m_fadeId; }
+  // Playing song's position when the blend began.
+  double fadeFrom() const { return m_fadeFrom; }
+  double fadePosition() const;
+  double fadeDuration() const { return m_fadeDuration; }
+  double fadeProgress() const;
 
 signals:
   void changed();
   void playingChanged();
   // The song finished and nothing was prepared.
   void ended();
+  // The prepared song started blending in; changed() repeats until it takes over.
+  void fadeStarted();
   // The prepared song took over (gapless start or end of a crossfade).
   void advanced(const QString &appleId);
   void failed(const QString &message);
@@ -80,6 +90,7 @@ private:
   void readEvents();
   void receive(const QJsonObject &event);
   void processEnded();
+  void clearFade();
   QString errorText(const QString &code) const;
 
   AppleMusic *m_account;
@@ -99,4 +110,10 @@ private:
   double m_duration{0.0};
   double m_volume{1.0};
   QElapsedTimer m_reportedAt;
+  QString m_fadeId;
+  double m_fadeSeconds{0.0};
+  double m_fadeFrom{0.0};
+  double m_fadeDuration{0.0};
+  QElapsedTimer m_fadeClock;
+  QTimer *m_fadeTicker;
 };

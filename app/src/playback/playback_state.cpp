@@ -368,6 +368,36 @@ double PlaybackController::duration() const {
   return playerDuration > 0.0 ? playerDuration : m_restoredDuration;
 }
 
+QVariantMap PlaybackController::transitionTrack() const {
+  return appleActive() ? appleFadeTrack() : m_crossfadeTrack;
+}
+
+double PlaybackController::transitionPosition() const {
+  if (appleActive())
+    return crossfadeActive() ? m_apple->fadePosition() : 0.0;
+  return m_crossfadeActive && m_nextPlayer ? std::max(0.0, m_nextPlayer->position() / 1000.0) : 0.0;
+}
+
+double PlaybackController::transitionDuration() const {
+  if (!appleActive())
+    return m_crossfadeActive ? m_crossfadeIncomingDuration : 0.0;
+  if (!crossfadeActive())
+    return 0.0;
+  if (m_apple->fadeDuration() > 0.0)
+    return m_apple->fadeDuration();
+  return appleFadeTrack().value(QStringLiteral("durationSeconds")).toDouble();
+}
+
+bool PlaybackController::crossfadeActive() const {
+  return appleActive() ? !appleFadeTrack().isEmpty() : m_crossfadeActive;
+}
+
+double PlaybackController::crossfadeProgress() const {
+  if (appleActive())
+    return crossfadeActive() ? m_apple->fadeProgress() : 0.0;
+  return m_crossfadeProgress;
+}
+
 bool PlaybackController::canGoNext() const {
   return !m_queue.isEmpty() ||
          // Local and Apple Music songs get no YouTube recommendations, so autoplay is never a "next" for them.

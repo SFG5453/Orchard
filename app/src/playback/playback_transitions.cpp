@@ -176,13 +176,14 @@ bool PlaybackController::hasCrossfadeTarget() const {
 
 double PlaybackController::displayDuration() const {
   const double actual = duration();
-  if (m_crossfadeActive) {
-    const double incoming = m_crossfadeIncomingDuration > 0.0
-                                ? m_crossfadeIncomingDuration
-                                : m_crossfadeOutgoingDisplayDuration;
-    return std::max(1.0, m_crossfadeOutgoingDisplayDuration +
-                             (incoming - m_crossfadeOutgoingDisplayDuration) *
-                                 m_crossfadeProgress);
+  if (crossfadeActive()) {
+    const double from = mixStart();
+    const double incoming = transitionDuration() > 0.0 ? transitionDuration() : from;
+    return std::max(1.0, from + (incoming - from) * crossfadeProgress());
+  }
+  if (appleActive()) {
+    const double start = appleMixStart();
+    return start >= 0.0 ? std::max(1.0, start) : actual;
   }
   if (hasCrossfadeTarget() && m_adaptiveMix.enabled() &&
       !m_adaptiveMix.standardFallback())
@@ -193,18 +194,16 @@ double PlaybackController::displayDuration() const {
 }
 
 double PlaybackController::displayPosition() const {
-  if (m_crossfadeActive) {
-    const double incomingPosition =
-        m_nextPlayer ? std::max(0.0, m_nextPlayer->position() / 1000.0) : 0.0;
-    return std::max(
-        0.0, m_crossfadeOutgoingDisplayDuration +
-                 (incomingPosition - m_crossfadeOutgoingDisplayDuration) *
-                     m_crossfadeProgress);
+  if (crossfadeActive()) {
+    const double from = mixStart();
+    return std::max(0.0, from + (transitionPosition() - from) * crossfadeProgress());
   }
   return std::min(position(), std::max(0.0, displayDuration()));
 }
 
 double PlaybackController::mixStart() const {
+  if (appleActive())
+    return appleMixStart();
   if (m_crossfadeActive)
     return m_crossfadeOutgoingDisplayDuration;
   if (!hasCrossfadeTarget())
@@ -219,10 +218,8 @@ double PlaybackController::mixDuration() const {
   const double start = mixStart();
   if (start < 0.0)
     return 0.0;
-  const bool adaptive = m_crossfadeActive
-                            ? m_audioEngineOutput.adaptiveMixActive()
-                            : m_adaptiveMix.enabled() &&
-                                  !m_adaptiveMix.standardFallback();
+  const bool adaptive = !appleActive() && (m_crossfadeActive ? m_audioEngineOutput.adaptiveMixActive()
+                                                             : m_adaptiveMix.enabled() && !m_adaptiveMix.standardFallback());
   if (adaptive)
     return m_adaptiveMix.duration();
   return std::max(0.0, std::min<double>(m_crossfadeDuration, duration() - start));

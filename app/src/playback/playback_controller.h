@@ -154,14 +154,12 @@ public:
   int crossfadeDuration() const { return m_crossfadeDuration; }
   void setCrossfadeDuration(int seconds);
   AdaptiveMixController *adaptiveMix() { return &m_adaptiveMix; }
-  QVariantMap transitionTrack() const { return m_crossfadeTrack; }
+  QVariantMap transitionTrack() const;
   // The incoming song's own clock during a crossfade; 0 otherwise.
-  double transitionPosition() const {
-    return m_crossfadeActive && m_nextPlayer ? std::max(0.0, m_nextPlayer->position() / 1000.0) : 0.0;
-  }
-  double transitionDuration() const { return m_crossfadeActive ? m_crossfadeIncomingDuration : 0.0; }
-  bool crossfadeActive() const { return m_crossfadeActive; }
-  double crossfadeProgress() const { return m_crossfadeProgress; }
+  double transitionPosition() const;
+  double transitionDuration() const;
+  bool crossfadeActive() const;
+  double crossfadeProgress() const;
   double displayPosition() const;
   double displayDuration() const;
   // Outgoing position where the next mix begins, or -1 when none is planned.
@@ -348,6 +346,8 @@ private:
   void appleChanged();
   void appleFinished(const QString &advancedId);
   void prepareAppleNext();
+  QVariantMap appleFadeTrack() const;
+  double appleMixStart() const;
   AppleMusicPlayer *m_apple{nullptr};
   AppleMusic *m_appleAccount{nullptr};
   CatalogSource *m_catalogSource{nullptr};

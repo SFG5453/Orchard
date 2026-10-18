@@ -40,7 +40,11 @@ QString helperPath() {
 } // namespace
 
 AppleMusicPlayer::AppleMusicPlayer(AppleMusic *account, QObject *parent)
-    : QObject(parent), m_account(account) {}
+    : QObject(parent), m_account(account), m_fadeTicker(new QTimer(this)) {
+  // Drives the blend animation; the page reports twice a second.
+  m_fadeTicker->setInterval(50);
+  connect(m_fadeTicker, &QTimer::timeout, this, &AppleMusicPlayer::changed);
+}
 
 AppleMusicPlayer::~AppleMusicPlayer() {
   if (!m_process)
@@ -119,6 +123,7 @@ void AppleMusicPlayer::load(const QString &appleId, double position, bool play) 
         {QStringLiteral("position"), std::max(0.0, position)}, {QStringLiteral("play"), play}});
   // An explicit load outranks a handoff the page may report on its way here.
   m_prepared.clear();
+  clearFade();
   m_id = appleId;
   m_position = std::max(0.0, position);
   m_duration = 0.0;
@@ -158,6 +163,7 @@ void AppleMusicPlayer::stop() {
     send({{QStringLiteral("type"), QStringLiteral("stop")}});
   m_id.clear();
   m_prepared.clear();
+  clearFade();
   m_position = 0.0;
   m_duration = 0.0;
   m_loading = false;
@@ -198,6 +204,7 @@ void AppleMusicPlayer::shutdown() {
   }
   m_id.clear();
   m_prepared.clear();
+  clearFade();
   m_loading = false;
   if (std::exchange(m_playing, false))
     emit playingChanged();
@@ -208,6 +215,27 @@ double AppleMusicPlayer::position() const {
   if (m_playing && !m_loading && m_reportedAt.isValid())
     position += m_reportedAt.elapsed() / 1000.0;
   return m_duration > 0.0 ? std::min(position, m_duration) : position;
+}
+
+double AppleMusicPlayer::fadePosition() const {
+  if (m_fadeId.isEmpty())
+    return 0.0;
+  const double position = m_fadeClock.elapsed() / 1000.0;
+  return m_fadeDuration > 0.0 ? std::min(position, m_fadeDuration) : position;
+}
+
+double AppleMusicPlayer::fadeProgress() const {
+  if (m_fadeId.isEmpty())
+    return 0.0;
+  return std::clamp(m_fadeClock.elapsed() / 1000.0 / m_fadeSeconds, 0.0, 1.0);
+}
+
+void AppleMusicPlayer::clearFade() {
+  m_fadeTicker->stop();
+  m_fadeId.clear();
+  m_fadeSeconds = 0.0;
+  m_fadeFrom = 0.0;
+  m_fadeDuration = 0.0;
 }
 
 void AppleMusicPlayer::readEvents() {
@@ -255,11 +283,22 @@ void AppleMusicPlayer::receive(const QJsonObject &event) {
     m_position = m_duration;
     emit playingChanged();
     emit ended();
+  } else if (type == QStringLiteral("fading")) {
+    if (id.isEmpty() || id != m_prepared)
+      return;
+    m_fadeId = id;
+    m_fadeFrom = position();
+    m_fadeSeconds = std::max(0.05, event.value(QStringLiteral("seconds")).toDouble());
+    m_fadeDuration = std::max(0.0, event.value(QStringLiteral("duration")).toDouble());
+    m_fadeClock.restart();
+    m_fadeTicker->start();
+    emit fadeStarted();
   } else if (type == QStringLiteral("advanced")) {
     if (id.isEmpty() || id != m_prepared)
       return;
     m_id = id;
     m_prepared.clear();
+    clearFade();
     m_position = 0.0;
     m_duration = 0.0;
     m_playing = true;
@@ -268,8 +307,10 @@ void AppleMusicPlayer::receive(const QJsonObject &event) {
   } else if (type == QStringLiteral("error")) {
     // A failed preload only costs the gapless start.
     if (!id.isEmpty() && id != m_id) {
-      if (id == m_prepared)
+      if (id == m_prepared) {
         m_prepared.clear();
+        clearFade();
+      }
       return;
     }
     m_loading = false;
@@ -291,6 +332,7 @@ void AppleMusicPlayer::processEnded() {
   m_configured = false;
   m_id.clear();
   m_prepared.clear();
+  clearFade();
   m_loading = false;
   if (std::exchange(m_playing, false))
     emit playingChanged();
