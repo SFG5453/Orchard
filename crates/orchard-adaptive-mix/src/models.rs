@@ -1,13 +1,18 @@
 /* Copyright (C) 2026 SFG545. Licensed under the PolyForm Shield License 1.0.0, see LICENSE-POLYFORM-SHIELD. */
 
-//! Beat This and UMX vocals. Desktop runs Beat This on ORT's WebGPU provider; Android runs
-//! the INT8 exports on CPU. Pre- and post-processing are shared, so only the weights differ.
+//! Beat and UMX vocal models. Desktop runs Nirovi's fp16 graph on ORT's WebGPU provider, or
+//! its int8 graph on CPU; Android passes its int8 exports to `from_memory`. Pre- and
+//! post-processing are shared, so only the weights differ.
 use crate::{
     beats::{self, Grid},
     downmix,
 };
 use earmark::{AudioBuffer, WholeTrackAnalyzer};
 use ort::{session::{Session, builder::SessionBuilder}, value::Tensor};
+
+/// Nirovi exports; both take Beat This's `[1, 1500, 128]` spectrogram and return its logits.
+pub const GPU_BEAT: &str = "nirovi/nirovi_fp16.onnx";
+pub const CPU_BEAT: &str = "nirovi/nirovi_int8.onnx";
 
 pub struct Models {
     beat: Session,
@@ -55,7 +60,9 @@ fn cpu_session(path: &std::path::Path) -> Result<Session, String> {
 impl Models {
     #[cfg(feature = "desktop")]
     pub fn new(directory: &std::path::Path) -> Result<Self, String> {
-        let beat = session(&directory.join("beat-this/beat_this_webgpu.onnx"))?;
+        // int8 on two CPU threads costs about 0.17 s a window where WebGPU is unavailable.
+        let beat = session(&directory.join(GPU_BEAT))
+            .or_else(|gpu| cpu_session(&directory.join(CPU_BEAT)).map_err(|cpu| format!("{gpu}; {cpu}")))?;
         let vocal_result = cpu_session(&directory.join("vocal-separation/vocals_umxhq_fp32.onnx"));
         let (vocal, vocal_error) = match vocal_result {
             Ok(s) => (Some(s), None),
@@ -124,7 +131,7 @@ impl Models {
                 || d.len() != beats::CHUNK
                 || b.iter().chain(d).any(|v| !v.is_finite())
             {
-                return Err("Invalid Beat This output".into());
+                return Err("Invalid beat model output".into());
             }
             let border = if frames < 12 { 0 } else { beats::BORDER };
             for i in border..frames - border {

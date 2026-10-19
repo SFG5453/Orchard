@@ -1,6 +1,6 @@
 # Adaptive mix
 
-Local desktop smart-crossfade preparation, ported from OrchardV2’s Beat This
+Local desktop smart-crossfade preparation, ported from OrchardV2’s beat
 tracker and shared Earmark transition engine. The Qt host exposes it as the
 **Adaptive mix** crossfade mode and keeps ordinary crossfade available.
 
@@ -12,7 +12,8 @@ and discards up to its start, so the windows share the analysis timeline and
 match playback sample for sample; an input seek lands tens of milliseconds off
 on Opus/WebM. Stereo fold-down and anti-aliased 44.1 → 22.05 kHz conversion
 run on the CPU. `ort` 2.0.0-rc.13 with the `webgpu`
-feature runs the FP32 Beat This graph; the FP32 UMX-HQ vocal graph runs on
+feature runs Nirovi's fp16 beat graph (`models/nirovi`), or its int8 graph on
+two CPU threads without a WebGPU device; the FP32 UMX-HQ vocal graph runs on
 ORT's CPU provider with two non-spinning threads. The shared planner
 selects beat/bar-aligned overlap positions and a pitch-preserving tempo glide
 for pairs up to 12% apart: one shared tempo moves geometrically from the
@@ -73,7 +74,7 @@ whole path (nearest neighbour, then moves of one to three songs until none
 helps), plans every adjacent pair with the shared planner, replaces predictions
 with planned costs and re-optimizes until every neighbour pair is planned or
 three plans per song are spent. Pairs are planned the way playback plans them: with
-the tempo glide on and each grid treated as Beat This-confirmed (confidence
+the tempo glide on and each grid treated as beat-model-confirmed (confidence
 0.95). Earmark's own calibrated confidence clears the planner's 0.55 beatmatch
 floor for about 80-90% of songs on labelled sets; the assumption keeps the rest
 from reading as plain crossfades when playback would confirm them. Three
@@ -91,8 +92,9 @@ original order can be restored while the sorted tracks remain in sequence.
 `ort`’s upstream WebGPU provider uses **Dawn**, the only GPU runtime the
 worker loads.
 
-The Beat This session requires WebGPU registration and sets
-`session.disable_cpu_ep_fallback=1`; it has no CPU fallback. The UMX-HQ LSTM
+The fp16 Nirovi session requires WebGPU registration and sets
+`session.disable_cpu_ep_fallback=1`. If it fails, the worker loads
+`nirovi_int8.onnx` on two non-spinning CPU threads (about 0.17 s a window). The UMX-HQ LSTM
 steps serially, so on WebGPU it issues thousands of tiny dispatches and starves
 the compositor; its CPU session finishes a 960-frame slice in about 0.15 s.
 There is no Supabase/cloud analysis. Resampling, decoding, spectrogram
@@ -125,14 +127,14 @@ not runtime-tested.
 
 Overrides: `ORCHARD_MODELS_DIR` (Qt model directory) and `ORCHARD_FFMPEG`
 (decoder path). No model downloads
-occur during playback. GPU sessions are retained in the isolated worker.
+occur during playback. Model sessions are retained in the isolated worker.
 
 ## Validation
 
 - `cargo test -p orchard-adaptive-mix`
 - `cargo test -p orchard-adaptive-mix --test docs_embed` (CPU only)
 - `cargo clippy -p orchard-adaptive-mix --all-targets -- -D warnings`
-- Hardware test: `cargo test -p orchard-adaptive-mix --test models -- --ignored`.
+- Model test: `cargo test -p orchard-adaptive-mix --test models -- --ignored`.
 - `scripts/validate-vocal-model.py` compares vocal inference with the original
   PyTorch checkpoint.
 - `ctest --test-dir build -R 'orchard_audio_proxy|orchard_playback_persistence|orchard_adaptive_mix_span' --output-on-failure`

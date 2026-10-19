@@ -54,11 +54,21 @@ public:
   // Buffers the next song on the spare player. It crossfades in over `fadeSeconds`
   // before this one ends, or starts the moment it ends when 0. An empty id drops it.
   void prepare(const QString &appleId, double fadeSeconds);
+  // Hands the page an adaptive mix into `appleId` (see AppleMusicMix::plan). If the page
+  // cannot place it, it falls back to prepare(appleId, fallbackFade).
+  void mix(const QString &appleId, QJsonObject plan, double fallbackFade);
+  bool mixPrepared() const { return m_preparedMix; }
+  // Where the armed mix starts in the current song and how long it runs; -1 and 0 until armed.
+  double mixStart() const { return m_mixStart; }
+  double mixDuration() const { return m_mixDuration; }
+  // The page could not place a mix from the current song into `appleId`.
+  bool mixRefused(const QString &appleId) const { return m_refusedMix == m_id + QLatin1Char('\n') + appleId; }
   // Ends the helper process; the next load starts a new one.
   void shutdown();
 
   QString currentId() const { return m_id; }
   QString preparedId() const { return m_prepared; }
+  double preparedFade() const { return m_preparedFade; }
   bool playing() const { return m_playing; }
   bool loading() const { return m_loading; }
   // Projected from the last report with the local clock.
@@ -81,6 +91,8 @@ signals:
   void fadeStarted();
   // The prepared song took over (gapless start or end of a crossfade).
   void advanced(const QString &appleId);
+  // The page armed a mix (empty reason) or gave one up.
+  void mixSettled(const QString &reason);
   void failed(const QString &message);
 
 private:
@@ -91,6 +103,8 @@ private:
   void receive(const QJsonObject &event);
   void processEnded();
   void clearFade();
+  double fadeElapsed() const;
+  void dropPrepared();
   QString errorText(const QString &code) const;
 
   AppleMusic *m_account;
@@ -104,6 +118,10 @@ private:
   QString m_id;
   QString m_prepared;
   double m_preparedFade{0.0};
+  bool m_preparedMix{false};
+  double m_mixStart{-1.0};
+  double m_mixDuration{0.0};
+  QString m_refusedMix;
   bool m_playing{false};
   bool m_loading{false};
   double m_position{0.0};
@@ -113,7 +131,11 @@ private:
   QString m_fadeId;
   double m_fadeSeconds{0.0};
   double m_fadeFrom{0.0};
+  // Incoming song time where the blend begins: 0 for a crossfade, the cue for a mix.
+  double m_fadeAt{0.0};
   double m_fadeDuration{0.0};
+  // Blend seconds banked before the last pause; the clock runs only while playing.
+  double m_fadeBanked{0.0};
   QElapsedTimer m_fadeClock;
   QTimer *m_fadeTicker;
 };

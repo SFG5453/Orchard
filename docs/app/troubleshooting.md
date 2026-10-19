@@ -54,7 +54,7 @@ Check these in order:
 
 1. **Crossfade** is on in Settings, Playback.
 2. In Standard mode, the **Crossfade length** slider is set to a length you can hear. The default is 6 seconds.
-3. In Adaptive mix mode, the status line under the mode buttons says Adaptive mix is ready. Adaptive mix needs a WebGPU-capable GPU and FFmpeg. Without them, songs change at their natural boundary. See [Crossfade and gapless playback](crossfade.md).
+3. In Adaptive mix mode, the status line under the mode buttons says Adaptive mix is ready. Adaptive mix needs FFmpeg. Without it, songs change at their natural boundary. See [Crossfade and gapless playback](crossfade.md).
 
 ## Lyrics show "Lyrics unavailable"
 

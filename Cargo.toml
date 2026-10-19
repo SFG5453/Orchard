@@ -10,6 +10,8 @@ members = [
     "crates/orchard-transition-planner",
     "crates/orchard-transition-mobile"
 ]
+# wasm32-wasip1 only; scripts/build-mix-wasm.py builds it.
+exclude = ["crates/orchard-adaptive-mix-web"]
 
 [workspace.package]
 edition = "2024"

@@ -22,6 +22,7 @@
 #include "integrations/apple_music.h"
 
 #include <QCoreApplication>
+#include <QDebug>
 #include <QDir>
 #include <QJsonDocument>
 #include <QProcess>
@@ -122,8 +123,7 @@ void AppleMusicPlayer::load(const QString &appleId, double position, bool play) 
   send({{QStringLiteral("type"), QStringLiteral("load")}, {QStringLiteral("id"), appleId},
         {QStringLiteral("position"), std::max(0.0, position)}, {QStringLiteral("play"), play}});
   // An explicit load outranks a handoff the page may report on its way here.
-  m_prepared.clear();
-  clearFade();
+  dropPrepared();
   m_id = appleId;
   m_position = std::max(0.0, position);
   m_duration = 0.0;
@@ -162,8 +162,7 @@ void AppleMusicPlayer::stop() {
   if (m_process)
     send({{QStringLiteral("type"), QStringLiteral("stop")}});
   m_id.clear();
-  m_prepared.clear();
-  clearFade();
+  dropPrepared();
   m_position = 0.0;
   m_duration = 0.0;
   m_loading = false;
@@ -181,14 +180,41 @@ void AppleMusicPlayer::setVolume(double gain) {
 void AppleMusicPlayer::prepare(const QString &appleId, double fadeSeconds) {
   if (appleId.isEmpty())
     fadeSeconds = 0.0;
-  if ((appleId == m_prepared && fadeSeconds == m_preparedFade) || (appleId.isEmpty() && !m_process))
+  if ((appleId == m_prepared && fadeSeconds == m_preparedFade && !m_preparedMix) ||
+      (appleId.isEmpty() && !m_process))
     return;
   m_prepared = appleId;
   m_preparedFade = fadeSeconds;
+  m_preparedMix = false;
+  m_mixStart = -1.0;
+  m_mixDuration = 0.0;
   if (!appleId.isEmpty())
     start();
   send({{QStringLiteral("type"), QStringLiteral("prepare")}, {QStringLiteral("id"), appleId},
         {QStringLiteral("fade"), fadeSeconds}});
+}
+
+void AppleMusicPlayer::mix(const QString &appleId, QJsonObject plan, double fallbackFade) {
+  if (appleId.isEmpty() || plan.isEmpty() || (appleId == m_prepared && m_preparedMix) || mixRefused(appleId))
+    return;
+  m_prepared = appleId;
+  m_preparedFade = fallbackFade;
+  m_preparedMix = true;
+  m_mixStart = -1.0;
+  m_mixDuration = 0.0;
+  start();
+  plan.insert(QStringLiteral("type"), QStringLiteral("mix"));
+  plan.insert(QStringLiteral("id"), appleId);
+  plan.insert(QStringLiteral("fade"), fallbackFade);
+  send(plan);
+}
+
+void AppleMusicPlayer::dropPrepared() {
+  m_prepared.clear();
+  m_preparedMix = false;
+  m_mixStart = -1.0;
+  m_mixDuration = 0.0;
+  clearFade();
 }
 
 void AppleMusicPlayer::shutdown() {
@@ -203,8 +229,7 @@ void AppleMusicPlayer::shutdown() {
     process->closeWriteChannel();
   }
   m_id.clear();
-  m_prepared.clear();
-  clearFade();
+  dropPrepared();
   m_loading = false;
   if (std::exchange(m_playing, false))
     emit playingChanged();
@@ -217,17 +242,21 @@ double AppleMusicPlayer::position() const {
   return m_duration > 0.0 ? std::min(position, m_duration) : position;
 }
 
+double AppleMusicPlayer::fadeElapsed() const {
+  return m_fadeBanked + (m_playing ? m_fadeClock.elapsed() / 1000.0 : 0.0);
+}
+
 double AppleMusicPlayer::fadePosition() const {
   if (m_fadeId.isEmpty())
     return 0.0;
-  const double position = m_fadeClock.elapsed() / 1000.0;
+  const double position = m_fadeAt + fadeElapsed();
   return m_fadeDuration > 0.0 ? std::min(position, m_fadeDuration) : position;
 }
 
 double AppleMusicPlayer::fadeProgress() const {
   if (m_fadeId.isEmpty())
     return 0.0;
-  return std::clamp(m_fadeClock.elapsed() / 1000.0 / m_fadeSeconds, 0.0, 1.0);
+  return std::clamp(fadeElapsed() / m_fadeSeconds, 0.0, 1.0);
 }
 
 void AppleMusicPlayer::clearFade() {
@@ -235,6 +264,8 @@ void AppleMusicPlayer::clearFade() {
   m_fadeId.clear();
   m_fadeSeconds = 0.0;
   m_fadeFrom = 0.0;
+  m_fadeAt = 0.0;
+  m_fadeBanked = 0.0;
   m_fadeDuration = 0.0;
 }
 
@@ -271,6 +302,13 @@ void AppleMusicPlayer::receive(const QJsonObject &event) {
     m_position = std::max(0.0, event.value(QStringLiteral("position")).toDouble());
     m_duration = std::max(0.0, event.value(QStringLiteral("duration")).toDouble());
     m_reportedAt.restart();
+    // A paused blend holds its place in the page, so its progress holds here too.
+    if (!m_fadeId.isEmpty() && playing != m_playing) {
+      if (!playing)
+        m_fadeBanked += m_fadeClock.elapsed() / 1000.0;
+      else
+        m_fadeClock.restart();
+    }
     const bool playingChanged = std::exchange(m_playing, playing) != playing;
     emit changed();
     if (playingChanged)
@@ -283,23 +321,45 @@ void AppleMusicPlayer::receive(const QJsonObject &event) {
     m_position = m_duration;
     emit playingChanged();
     emit ended();
-  } else if (type == QStringLiteral("fading")) {
+  } else if (type == QStringLiteral("fading") || type == QStringLiteral("mixing")) {
     if (id.isEmpty() || id != m_prepared)
       return;
     m_fadeId = id;
-    m_fadeFrom = position();
+    m_fadeFrom = event.value(QStringLiteral("from")).toDouble(position());
+    m_fadeAt = std::max(0.0, event.value(QStringLiteral("at")).toDouble());
     m_fadeSeconds = std::max(0.05, event.value(QStringLiteral("seconds")).toDouble());
     m_fadeDuration = std::max(0.0, event.value(QStringLiteral("duration")).toDouble());
+    m_fadeBanked = 0.0;
     m_fadeClock.restart();
     m_fadeTicker->start();
     emit fadeStarted();
+  } else if (type == QStringLiteral("log")) {
+    qInfo().noquote() << "AppleMusic: page |" << event.value(QStringLiteral("text")).toString();
+  } else if (type == QStringLiteral("mixArmed")) {
+    if (id == m_prepared && m_preparedMix) {
+      m_mixStart = event.value(QStringLiteral("outgoingStart")).toDouble(-1.0);
+      m_mixDuration = std::max(0.0, event.value(QStringLiteral("duration")).toDouble());
+      emit changed();
+      emit mixSettled({});
+    }
+  } else if (type == QStringLiteral("mixFailed")) {
+    // The page fell back to the crossfade or gapless start on its own.
+    if (id == m_prepared && m_preparedMix) {
+      m_preparedMix = false;
+      m_mixStart = -1.0;
+      m_mixDuration = 0.0;
+      m_refusedMix = m_id + QLatin1Char('\n') + id;
+      const QString reason = event.value(QStringLiteral("reason")).toString();
+      qInfo().noquote() << "AdaptiveMix: Apple Music mix not placed |" << reason;
+      emit mixSettled(reason.isEmpty() ? tr("the songs could not be lined up") : reason);
+    }
   } else if (type == QStringLiteral("advanced")) {
     if (id.isEmpty() || id != m_prepared)
       return;
     m_id = id;
-    m_prepared.clear();
-    clearFade();
-    m_position = 0.0;
+    dropPrepared();
+    // A mix hands over past the incoming song's start.
+    m_position = std::max(0.0, event.value(QStringLiteral("position")).toDouble());
     m_duration = 0.0;
     m_playing = true;
     m_reportedAt.restart();
@@ -307,10 +367,8 @@ void AppleMusicPlayer::receive(const QJsonObject &event) {
   } else if (type == QStringLiteral("error")) {
     // A failed preload only costs the gapless start.
     if (!id.isEmpty() && id != m_id) {
-      if (id == m_prepared) {
-        m_prepared.clear();
-        clearFade();
-      }
+      if (id == m_prepared)
+        dropPrepared();
       return;
     }
     m_loading = false;
@@ -331,8 +389,7 @@ void AppleMusicPlayer::processEnded() {
   m_pending.clear();
   m_configured = false;
   m_id.clear();
-  m_prepared.clear();
-  clearFade();
+  dropPrepared();
   m_loading = false;
   if (std::exchange(m_playing, false))
     emit playingChanged();

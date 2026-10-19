@@ -74,10 +74,15 @@ fn run() {
                 return Ok(serde_json::json!({"ready":true}));
             }
             let request: Request = serde_json::from_str(&line).map_err(|e| e.to_string())?;
-            let (prepared, samples) = prepare(models.as_mut().unwrap(), request)?;
+            let (prepared, samples, references) = prepare(models.as_mut().unwrap(), request)?;
             let mut value = serde_json::to_value(prepared).map_err(|e| e.to_string())?;
             pcm = samples.iter().flat_map(|sample| sample.to_le_bytes()).collect();
             value["bytes"] = pcm.len().into();
+            // Reference clips follow the render; "referenceBytes" gives their length.
+            if !references.is_empty() {
+                value["referenceBytes"] = (references.len() * 4).into();
+                pcm.extend(references.iter().flat_map(|sample| sample.to_le_bytes()));
+            }
             Ok(value)
         })();
         let response = match result {

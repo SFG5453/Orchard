@@ -379,6 +379,26 @@ adaptive_stage = custom_target('adaptive mix stage',
     '--output', meson.current_build_dir() / 'adaptive-mix.stamp'],
   build_by_default: true)
 
+# The Apple Music player page's scan fallback, beside the Linux player helper.
+apple_music_scan = []
+wasi_sysroot = get_option('wasi_sysroot')
+if host_machine.system() == 'linux' and not get_option('apple_music_scan').disabled()
+  scan_ready = import('fs').is_dir(wasi_sysroot / 'lib' / 'wasm32-wasip1')
+  if not scan_ready and get_option('apple_music_scan').enabled()
+    error('apple_music_scan needs a WASI sysroot with libc++ at ' + wasi_sysroot)
+  endif
+  if scan_ready
+    apple_music_scan = custom_target('Apple Music scan fallback',
+      input: files(rust_sources + rust_web_sources + ['scripts/stage-apple-music-scan.py',
+        'providers/youtube/package-lock.json']),
+      output: 'apple-music-scan.stamp',
+      command: [python, files('scripts/stage-apple-music-scan.py'),
+        '--source-root', source_root, '--target-dir', meson.current_build_dir() / 'cargo-wasm',
+        '--sysroot', wasi_sysroot, '--destination', meson.current_build_dir(), '--output', '@OUTPUT@'],
+      build_by_default: true)
+  endif
+endif
+
 orchard = executable('orchard', files(app_executable_sources) + exe_moc +
   qml_module + [qmldir_resources] + qml_files_qrc + assets_qrc + licenses_qrc + docs_qrc + release_notes_qrc +
   [provider_resources, shaders_cpp],
@@ -520,6 +540,7 @@ if get_option('tests')
     ['adaptive_mix_output', 'tests/adaptive_mix_output_test.cpp'],
     ['autoplay_select', 'tests/autoplay_select_test.cpp'],
     ['music_video_match', 'tests/music_video_match_test.cpp'],
+    ['apple_youtube_match', 'tests/apple_youtube_match_test.cpp'],
     ['letterbox', 'tests/letterbox_test.cpp'],
     ['video_ambient', 'tests/video_ambient_test.cpp'],
     ['artist_artwork', 'tests/artist_artwork_test.cpp'],
