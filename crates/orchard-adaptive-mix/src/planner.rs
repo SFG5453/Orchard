@@ -100,7 +100,7 @@ pub fn plan(engine: &mut SmartCrossfadeEngine, outgoing: &AudioBuffer, incoming:
         (plan, looped)
     } else {
         // Mobile's live adapter selects ordinary fades or an explicit refusal.
-        // Neither is a CPU-inference fallback; both use the same measured GPU grid.
+        // Both use the same measured beat grid.
         if live["markerVisible"] != true {
             return Err(format!("{NATURAL_BOUNDARY} ({})", refusal(&live)));
         }

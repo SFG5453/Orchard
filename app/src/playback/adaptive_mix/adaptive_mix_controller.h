@@ -2,6 +2,7 @@
 
 #pragma once
 #include "adaptive_mix_worker.h"
+#include <QJsonObject>
 #include <QObject>
 #include <QUrl>
 #include <QVariantMap>
@@ -16,6 +17,10 @@ class AdaptiveMixController final : public QObject {
   Q_PROPERTY(bool ready READ ready NOTIFY changed)
   Q_PROPERTY(QString mixStyle READ mixStyle NOTIFY changed)
   Q_PROPERTY(double mixBpm READ mixBpm NOTIFY changed)
+  // Apple Music pairs without a YouTube Music upload: "standard" crossfades, "scan" analyses
+  // them in Apple's player (see AppleMusicMix).
+  Q_PROPERTY(QString appleFallback READ appleFallback WRITE setAppleFallback NOTIFY appleFallbackChanged)
+  Q_PROPERTY(bool appleScanAvailable READ appleScanAvailable CONSTANT)
 public:
   explicit AdaptiveMixController(QObject *parent = nullptr);
   ~AdaptiveMixController() override;
@@ -25,6 +30,11 @@ public:
   // Qobuz streams aren't analysed, so playback turns adaptive mix off while it's on.
   void setAvailable(bool available);
   bool enabled() const { return mode() == QStringLiteral("adaptive"); }
+  QString appleFallback() const { return m_appleFallback; }
+  void setAppleFallback(const QString &fallback);
+  // This build staged the page's scan engine beside the player helper.
+  static bool appleScanAvailable();
+  bool appleScans() const { return appleScanAvailable() && m_appleFallback == QStringLiteral("scan"); }
   QString status() const { return m_status; }
   bool ready() const { return !m_pcm.isEmpty(); }
   // Listener-facing name of the rendered strategy; empty until a render is ready.
@@ -35,20 +45,33 @@ public:
   double incomingCue() const { return m_incomingCue; }
   double duration() const { return m_duration; }
   const QByteArray &pcm() const { return m_pcm; }
+  // Mono f32 clips around both splice points, when prepare() asked for them; the worker's
+  // "references" header says where each starts.
+  const QByteArray &references() const { return m_references; }
+  QJsonObject referenceInfo() const { return m_referenceInfo; }
+  bool preparing() const { return m_preparing; }
   bool standardFallback() const { return m_failed && !m_keepBoundary; }
+  bool keepsBoundary() const { return m_failed && m_keepBoundary; }
+  QString pair() const { return m_pair; }
   void prepare(const QString &pair, const QUrl &outgoing, const QUrl &incoming,
                double duration, double position, const QVariantMap &currentTrack,
                const QVariantMap &nextTrack, int fadeSeconds,
-               bool albumSequential);
+               bool albumSequential, bool references = false);
+  // Records a pair that failed before reaching the worker, e.g. without a source to analyse.
+  void failPair(const QString &pair, const QString &message);
+  // Status for work done elsewhere, such as the Apple Music player's own scan.
+  void showStatus(const QString &status);
   void clear();
 signals:
   void changed();
   void modeChanged();
+  void appleFallbackChanged();
 
 private:
   void fail(const QString &message);
   void receive(const QJsonObject &header, const QByteArray &pcm);
   QString m_mode;
+  QString m_appleFallback;
   QString m_status;
   QString m_pair;
   QString m_label; // "Outgoing -> Incoming" titles for logs.
@@ -56,6 +79,8 @@ private:
   QString m_technique;
   double m_bpm{0};
   QByteArray m_pcm;
+  QByteArray m_references;
+  QJsonObject m_referenceInfo;
   AdaptiveMixWorker m_worker;
   bool m_available{true};
   bool m_preparing{false};

@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 SFG545. Licensed under the PolyForm Shield License 1.0.0, see LICENSE-POLYFORM-SHIELD. */
 
-//! V2's playback analysis: whole-track Earmark evidence, then Beat This picks bar phase.
+//! V2's playback analysis: whole-track Earmark evidence, then the beat model picks bar phase.
 use crate::{beats::Grid, evidence, song::{ANALYSIS_RATE, Track}};
 use earmark::{WholeTrackAnalysis, WholeTrackAnalyzer};
 use serde_json::{Value, json};

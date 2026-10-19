@@ -77,12 +77,12 @@ impl Drop for PlannerPool {
     }
 }
 
-/// Beat This confidence on a grid it agrees with (beats::grid caps it here). Playback
-/// lifts Earmark's grid to this whenever Beat This agrees with it.
+/// Beat model confidence on a grid it agrees with (beats::grid caps it here). Playback
+/// lifts Earmark's grid to this whenever the beat model agrees with it.
 const CONFIRMED_BEAT_CONFIDENCE: f64 = 0.95;
 
 /// Plans each pair the way playback will: tempo glide on, beats confirmed. Sorting cannot
-/// run Beat This, so it assumes the confirmation playback gets for most songs.
+/// run the beat model, so it assumes the confirmation playback gets for most songs.
 pub(crate) fn plan_input(left: &Value, right: &Value) -> Value {
     let confirmed = |edge: &Value| {
         let mut edge = edge.clone();
@@ -302,7 +302,7 @@ mod tests {
     }
 
     #[test]
-    fn finalists_plan_like_playback_after_beat_this() {
+    fn finalists_plan_like_playback_after_beat_model() {
         let input = plan_input(&json!({"duration": 200.0, "beatConfidence": 0.38}),
                                &json!({"duration": 180.0, "beatConfidence": 0.97}));
         assert_eq!(input["analysis"]["beatConfidence"], json!(CONFIRMED_BEAT_CONFIDENCE));

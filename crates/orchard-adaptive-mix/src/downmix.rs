@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 SFG545. Licensed under the PolyForm Shield License 1.0.0, see LICENSE-POLYFORM-SHIELD. */
 
-//! Anti-aliased 44.1 → 22.05 kHz decimation for Beat This. `song` folds stereo down first.
+//! Anti-aliased 44.1 → 22.05 kHz decimation for the beat model. `song` folds stereo down first.
 
 const TAPS: usize = 63;
 const HALF: isize = (TAPS / 2) as isize;

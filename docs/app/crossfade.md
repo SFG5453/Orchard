@@ -87,15 +87,15 @@ If Adaptive mix was selected earlier and the Audio Engine is on, turning Crossfa
 
 ## Adaptive mix requirements
 
-Adaptive mix needs a GPU with WebGPU support and FFmpeg.
+Adaptive mix needs FFmpeg. A GPU with WebGPU support is optional.
 
-- Beat detection runs on the GPU and has no CPU fallback. Without a WebGPU device, songs change at their natural boundary without a mix.
+- Beat detection runs on the GPU when the computer has a WebGPU device. Without one, it runs on two CPU threads instead, which takes a fraction of a second per song.
 - FFmpeg decodes the audio for analysis. Windows builds include FFmpeg. On Linux, install FFmpeg so it is on the PATH, or set the `ORCHARD_FFMPEG` environment variable to the FFmpeg executable.
 - Adaptive mix was runtime-tested on Linux. Other desktop systems were not tested.
 
 ## Adaptive mix on Android
 
-The Android app runs the same analysis, planner, and render code as the desktop app. The same two songs get the same mix on both. Android runs beat detection on the phone's CPU with smaller model weights, so a bar line can rarely land differently.
+The Android app runs the same analysis, planner, and render code as the desktop app. Android detects beats with a different model on the phone's CPU, so the same two songs can get a slightly different mix, for example a bar line in a different place.
 
 A failed Adaptive mix preparation never stops playback.
 
@@ -113,7 +113,7 @@ On Android, the remaining time under the player's progress bar sparkles in rainb
 
 Use the **Gapless playback** switch in the **Transitions** group. Its description reads "Preload the next song to minimize pauses between tracks." Gapless playback is off by default.
 
-Apple Music songs crossfade with **Standard** at the set length, even when **Adaptive mix** is chosen. With only **Gapless playback** on, the next Apple Music song starts gaplessly. See [Integrations](integrations.md).
+Apple Music songs also crossfade, play gaplessly and use Adaptive mix. Adaptive mix plans them from their YouTube Music uploads; songs without one use the **Apple Music songs without a match** setting. See [Mix Apple Music songs](integrations.md#mix-apple-music-songs).
 
 ## Tell when a crossfade is happening
 

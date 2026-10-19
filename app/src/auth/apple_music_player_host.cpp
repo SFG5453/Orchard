@@ -18,6 +18,7 @@
  */
 
 #include "apple_music_helper.h"
+#include "apple_music_assets.h"
 #include "apple_music_page.h"
 
 #include <QCoreApplication>
@@ -35,6 +36,9 @@
 #include <QWebEngineScript>
 #include <QWebEngineScriptCollection>
 #include <QWebEngineSettings>
+#include <QWebEngineUrlRequestJob>
+#include <QWebEngineUrlScheme>
+#include <QWebEngineUrlSchemeHandler>
 
 #include <algorithm>
 #include <cstdio>
@@ -120,9 +124,28 @@ void emitEvent(const QJsonObject &event) {
   std::fflush(stdout);
 }
 
+// Serves the scan fallback's allow-listed files to the page's origin.
+class AssetHandler final : public QWebEngineUrlSchemeHandler {
+public:
+  void requestStarted(QWebEngineUrlRequestJob *job) override {
+    const QString name = job->requestUrl().path().mid(1);
+    auto *file = new QFile(apple_music_assets::path(name), job);
+    if (job->requestUrl().host() != QStringLiteral("assets") || !file->open(QIODevice::ReadOnly)) {
+      job->fail(QWebEngineUrlRequestJob::UrlNotFound);
+      return;
+    }
+    job->setAdditionalResponseHeaders({{"Access-Control-Allow-Origin", kOrigin}});
+    const QByteArray type = name.endsWith(QStringLiteral(".mjs"))    ? "text/javascript"
+                            : name.endsWith(QStringLiteral(".wasm")) ? "application/wasm"
+                                                                     : "application/octet-stream";
+    job->reply(type, file);
+  }
+};
+
 QWebEngineScript bridgeScript() {
   QFile channel(QStringLiteral(":/qtwebchannel/qwebchannel.js"));
-  channel.open(QIODevice::ReadOnly);
+  if (!channel.open(QIODevice::ReadOnly))
+    qWarning("Apple Music player: qwebchannel.js is missing");
   QWebEngineScript script;
   script.setName(QStringLiteral("orchard-apple-player-bridge"));
   script.setSourceCode(QString::fromLatin1(kBridge).arg(jsString(QString::fromLatin1(kOrigin)),
@@ -147,19 +170,29 @@ void prepareAppleMusicPlayer() {
   if (!g_widevine.isEmpty() && !g_widevine.contains(QLatin1Char(' ')))
     flags += " --widevine-path=" + QFile::encodeName(g_widevine);
   qputenv("QTWEBENGINE_CHROMIUM_FLAGS", flags.trimmed());
+  // Schemes register before the application exists.
+  QWebEngineUrlScheme scheme(apple_music_assets::kScheme);
+  scheme.setSyntax(QWebEngineUrlScheme::Syntax::Host);
+  scheme.setFlags(QWebEngineUrlScheme::SecureScheme | QWebEngineUrlScheme::CorsEnabled |
+                  QWebEngineUrlScheme::FetchApiAllowed);
+  QWebEngineUrlScheme::registerScheme(scheme);
 #endif
 }
 
 int runAppleMusicPlayer() {
 #ifdef ORCHARD_WEBENGINE_COOKIE_ADAPTER
-  const QString pageHtml = html(QStringLiteral(":/auth/applemusic-player.html"));
+  const QString pageHtml = playerHtml();
   if (pageHtml.isEmpty())
     return 1;
-  emitEvent({{QStringLiteral("type"), QStringLiteral("host")}, {QStringLiteral("widevine"), !g_widevine.isEmpty()}});
+  emitEvent({{QStringLiteral("type"), QStringLiteral("host")},
+             {QStringLiteral("widevine"), !g_widevine.isEmpty()},
+             {QStringLiteral("scan"), apple_music_assets::available()}});
 
   QWebEngineProfile profile(QString::fromLatin1(kProfileName));
   profile.setPersistentCookiesPolicy(QWebEngineProfile::ForcePersistentCookies);
   profile.scripts()->insert(bridgeScript());
+  AssetHandler assets;
+  profile.installUrlSchemeHandler(apple_music_assets::kScheme, &assets);
   QWebEnginePage page(&profile);
   page.settings()->setAttribute(QWebEngineSettings::PlaybackRequiresUserGesture, false);
   page.setVisible(true);
@@ -194,9 +227,11 @@ int runAppleMusicPlayer() {
 
   // Commands are re-serialized from parsed JSON so stdin can only ever pass an object literal.
   QByteArray input;
+  // Bytes of `input` already searched for a newline; a mix plan arrives as one multi-megabyte line.
+  qsizetype scanned = 0;
   QSocketNotifier notifier(STDIN_FILENO, QSocketNotifier::Read);
   QObject::connect(&notifier, &QSocketNotifier::activated, qApp, [&] {
-    char chunk[16384];
+    char chunk[65536];
     const ssize_t read = ::read(STDIN_FILENO, chunk, sizeof chunk);
     if (read <= 0) {
       notifier.setEnabled(false);
@@ -204,11 +239,12 @@ int runAppleMusicPlayer() {
       return;
     }
     input.append(chunk, read);
-    if (input.size() > 1024 * 1024) {
+    if (input.size() > 32 * 1024 * 1024) {
       QCoreApplication::exit(1);
       return;
     }
-    for (qsizetype end = input.indexOf('\n'); end >= 0; end = input.indexOf('\n')) {
+    for (qsizetype end = input.indexOf('\n', scanned); end >= 0; end = input.indexOf('\n')) {
+      scanned = 0;
       const QJsonDocument command = QJsonDocument::fromJson(input.left(end));
       input.remove(0, end + 1);
       if (!command.isObject())
@@ -219,6 +255,7 @@ int runAppleMusicPlayer() {
       else
         pending.append(text);
     }
+    scanned = input.size();
   });
 
   page.setHtml(pageHtml, QUrl(QString::fromLatin1(kPlayerUrl)));

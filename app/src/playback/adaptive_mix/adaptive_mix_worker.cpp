@@ -63,11 +63,11 @@ void AdaptiveMixWorker::start(const QJsonObject &request) {
     m_process->setStandardErrorFile(QProcess::nullDevice());
     connect(m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError) {
       if (m_busy)
-        fail(tr("The GPU analysis worker could not run."));
+        fail(tr("The analysis worker could not run."));
     });
     connect(m_process, &QProcess::finished, this, [this](int, QProcess::ExitStatus) {
       if (m_busy)
-        fail(tr("The GPU analysis worker stopped."));
+        fail(tr("The analysis worker stopped."));
       else
         cancel(); // Idle crash: the next job starts a fresh worker.
     });
@@ -104,11 +104,13 @@ void AdaptiveMixWorker::receive() {
       return;
     }
     const qint64 bytes = m_header.value("bytes").toInteger(-1);
-    if (bytes < 0 || bytes % 8 != 0 || bytes > kMaxPcmBytes) {
+    const qint64 references = m_header.value("referenceBytes").toInteger(0);
+    if (bytes < 0 || bytes % 8 != 0 || bytes > kMaxPcmBytes || references < 0 ||
+        references % 4 != 0 || references > kMaxPcmBytes) {
       fail(tr("Invalid rendered overlap."));
       return;
     }
-    m_pcmBytes = bytes;
+    m_pcmBytes = bytes + references;
     m_stdout.reserve(m_pcmBytes);
   }
   if (m_stdout.size() < m_pcmBytes)

@@ -38,6 +38,9 @@ pub struct Request {
     /// Render at the outgoing song's decoded rate, for a Connect target splicing into its own player.
     #[serde(default)]
     pub source_rate: bool,
+    /// Also return unprocessed clips around both splice points (see [`References`]).
+    #[serde(default)]
+    pub references: bool,
     #[serde(flatten)]
     pub mix: MixRequest,
 }
@@ -67,20 +70,74 @@ pub struct Prepared {
     pub rate: u32,
     /// The incoming song's decoded rate, which `incoming_resume` frames are counted in.
     pub incoming_rate: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub references: Option<References>,
 }
 
-/// Decodes both loopback streams, then mixes them. Returns stereo f32 at 48 kHz.
+/// Mono clips of the analysed audio at `song::RENDER_RATE`, outgoing first, for a host that
+/// plays another copy of each song and finds the splice points in it by correlation.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct References {
+    /// Song time of each clip's first sample.
+    pub outgoing_start: f64,
+    pub outgoing_frames: usize,
+    pub incoming_start: f64,
+    pub incoming_frames: usize,
+}
+
+/// Seconds of outgoing audio kept around the mix start, and incoming audio from before its cue
+/// to past the handoff.
 #[cfg(feature = "desktop")]
-pub fn prepare(models: &mut Models, request: Request) -> Result<(Prepared, Vec<f32>), String> {
+const REFERENCE_LEAD: f64 = 6.0;
+#[cfg(feature = "desktop")]
+const REFERENCE_TAIL: f64 = 1.0;
+#[cfg(feature = "desktop")]
+const INCOMING_LEAD: f64 = 5.0;
+#[cfg(feature = "desktop")]
+const INCOMING_TAIL: f64 = 2.0;
+
+#[cfg(feature = "desktop")]
+fn mono_span(window: &AudioBuffer, offset: f64, from: f64, to: f64) -> (f64, Vec<f32>) {
+    let rate = f64::from(song::RENDER_RATE);
+    let start = (((from - offset) * rate).max(0.0) as usize).min(window.frames());
+    let end = (((to - offset) * rate).max(0.0) as usize).clamp(start, window.frames());
+    let channels = window.channel_count();
+    let samples = (start..end)
+        .map(|i| (0..channels).map(|c| window.channel(c)[i]).sum::<f32>() / channels as f32)
+        .collect();
+    (offset + start as f64 / rate, samples)
+}
+
+#[cfg(feature = "desktop")]
+fn references(prepared: &mut Prepared, outgoing: &Song, incoming: &Song) -> Vec<f32> {
+    let start = prepared.outgoing_start;
+    let (outgoing_start, mut samples) =
+        mono_span(&outgoing.tail, outgoing.tail_offset, start - REFERENCE_LEAD, start + REFERENCE_TAIL);
+    let cue = prepared.incoming_cue;
+    let (incoming_start, clip) =
+        mono_span(&incoming.head, 0.0, cue - INCOMING_LEAD, prepared.incoming_resume + INCOMING_TAIL);
+    prepared.references = Some(References {
+        outgoing_start, outgoing_frames: samples.len(), incoming_start, incoming_frames: clip.len(),
+    });
+    samples.extend(clip);
+    samples
+}
+
+/// Decodes both loopback streams, then mixes them. Returns stereo f32 at 48 kHz, then the
+/// reference clips when the request asks for them.
+#[cfg(feature = "desktop")]
+pub fn prepare(models: &mut Models, request: Request) -> Result<(Prepared, Vec<f32>, Vec<f32>), String> {
     validate(&request.mix)?;
     let tail = song::Windows { head: false, tail: true };
     let head = song::Windows { head: true, tail: false };
     let outgoing = crate::decode::song(&request.outgoing_url, tail)?;
     let incoming = crate::decode::song(&request.incoming_url, head)?;
     let (mut prepared, samples) = mix(models, &request.mix, &outgoing, &incoming)?;
-    if !request.source_rate { return Ok((prepared, samples)); }
+    let clips = if request.references { references(&mut prepared, &outgoing, &incoming) } else { Vec::new() };
+    if !request.source_rate { return Ok((prepared, samples, clips)); }
     let samples = resample_to(&mut prepared, samples, outgoing.rate)?;
-    Ok((prepared, samples))
+    Ok((prepared, samples, clips))
 }
 
 /// Resamples a finished render for a player running at `rate`; the plan itself stays at 48 kHz.
@@ -105,7 +162,7 @@ fn validate(request: &MixRequest) -> Result<(), String> {
     Ok(())
 }
 
-/// Whole-track planner evidence for one deck: V2's analysis, Beat This bar phase, bass weight,
+/// Whole-track planner evidence for one deck: V2's analysis, beat model bar phase, bass weight,
 /// and local chroma over `span`, the window a mix can use.
 pub fn deck(models: &mut Models, song: &Song, span: (f64, f64)) -> Result<serde_json::Value, String> {
     // ORCHARD_MIX_BEATS=earmark plans from Earmark's own beat grid, for A/B listening.
@@ -221,5 +278,6 @@ pub fn mix(models: &mut Models, request: &MixRequest, outgoing_song: &Song, inco
         warning,
         rate: song::RENDER_RATE,
         incoming_rate: incoming_song.rate,
+        references: None,
     }, samples))
 }

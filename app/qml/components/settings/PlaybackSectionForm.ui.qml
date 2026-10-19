@@ -129,6 +129,8 @@ ColumnLayout {
 
         CrossfadeMode { }
 
+        AppleMixFallback { }
+
         SettingsRow {
             visible: root.adaptiveMode === "standard"
             enabled: root.crossfadeEnabled

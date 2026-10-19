@@ -1,6 +1,7 @@
 /* Copyright (C) 2026 SFG545. Licensed under the PolyForm Shield License 1.0.0, see LICENSE-POLYFORM-SHIELD. */
 
 #include "adaptive_mix_controller.h"
+#include "auth/apple_music_assets.h"
 #include <QDebug>
 #include <QJsonObject>
 #include <QRegularExpression>
@@ -13,6 +14,8 @@ AdaptiveMixController::AdaptiveMixController(QObject *parent)
   m_mode = QSettings().value("playback/crossfadeMode", "standard").toString();
   if (m_mode != "adaptive")
     m_mode = "standard";
+  m_appleFallback = QSettings().value("playback/appleMixFallback").toString() == "scan"
+                        ? QStringLiteral("scan") : QStringLiteral("standard");
   connect(&m_worker, &AdaptiveMixWorker::finished, this, &AdaptiveMixController::receive);
   connect(&m_worker, &AdaptiveMixWorker::failed, this, [this](const QString &message) {
     if (m_preparing)
@@ -30,6 +33,20 @@ void AdaptiveMixController::setMode(const QString &mode) {
   QSettings().setValue("playback/crossfadeMode", m_mode);
   emit modeChanged();
 }
+void AdaptiveMixController::setAppleFallback(const QString &fallback) {
+  const QString normalized = fallback == "scan" ? fallback : QStringLiteral("standard");
+  if (normalized == m_appleFallback)
+    return;
+  m_appleFallback = normalized;
+  QSettings().setValue("playback/appleMixFallback", m_appleFallback);
+  emit appleFallbackChanged();
+}
+
+bool AdaptiveMixController::appleScanAvailable() {
+  static const bool staged = apple_music_assets::available();
+  return staged;
+}
+
 void AdaptiveMixController::setAvailable(bool available) {
   if (m_available == available)
     return;
@@ -49,6 +66,8 @@ void AdaptiveMixController::clear() {
   m_technique.clear();
   m_bpm = 0;
   m_pcm.clear();
+  m_references.clear();
+  m_referenceInfo = {};
   m_status.clear();
   m_outgoingStart = m_incomingCue = m_duration = 0;
   emit changed();
@@ -122,7 +141,7 @@ void AdaptiveMixController::prepare(const QString &pair, const QUrl &outgoing,
                                     const QUrl &incoming, double duration,
                                     double position, const QVariantMap &currentTrack,
                                     const QVariantMap &nextTrack, int fadeSeconds,
-                                    bool albumSequential) {
+                                    bool albumSequential, bool references) {
   if (!enabled() || pair == m_pair)
     return;
   clear();
@@ -140,7 +159,24 @@ void AdaptiveMixController::prepare(const QString &pair, const QUrl &outgoing,
                              {"currentTrack", QJsonObject::fromVariantMap(currentTrack)},
                              {"nextTrack", QJsonObject::fromVariantMap(nextTrack)},
                              {"fadeSeconds", fadeSeconds},
-                             {"albumSequential", albumSequential}});
+                             {"albumSequential", albumSequential},
+                             {"references", references}});
+}
+
+void AdaptiveMixController::showStatus(const QString &status) {
+  if (m_status == status)
+    return;
+  m_status = status;
+  emit changed();
+}
+
+void AdaptiveMixController::failPair(const QString &pair, const QString &message) {
+  if (!enabled() || pair == m_pair)
+    return;
+  clear();
+  m_pair = pair;
+  m_preparing = true;
+  fail(message);
 }
 void AdaptiveMixController::receive(const QJsonObject &object, const QByteArray &pcm) {
   if (!m_preparing)
@@ -152,13 +188,16 @@ void AdaptiveMixController::receive(const QJsonObject &object, const QByteArray 
   m_outgoingStart = object.value("outgoingStart").toDouble(-1);
   m_incomingCue = object.value("incomingCue").toDouble(-1);
   m_duration = object.value("duration").toDouble(-1);
+  const qint64 renderBytes = object.value("bytes").toInteger(-1);
   if (!std::isfinite(m_outgoingStart) || m_outgoingStart < 0 ||
       !std::isfinite(m_incomingCue) || m_incomingCue < 0 ||
       !std::isfinite(m_duration) || m_duration <= 0 || m_duration > 30 ||
-      pcm.size() != qRound64(m_duration * 48000) * 8) {
+      renderBytes != qRound64(m_duration * 48000) * 8 || pcm.size() < renderBytes) {
     fail(tr("Invalid rendered overlap."));
     return;
   }
+  m_references = pcm.mid(renderBytes);
+  m_referenceInfo = object.value("references").toObject();
   m_shapingUnavailable = !object.value("warning").toString().isEmpty();
   m_strategy = object.value("strategy").toString();
   m_technique = object.value("technique").toString();
@@ -174,7 +213,7 @@ void AdaptiveMixController::receive(const QJsonObject &object, const QByteArray 
                     << (loopBeats > 0 ? QStringLiteral("| loop %1 beats").arg(loopBeats) : QString())
                     << (kickLock != 0 ? QStringLiteral("| kick lock %1 ms").arg(kickLock) : QString())
                     << (m_shapingUnavailable ? "| no vocal shaping" : "");
-  m_pcm = pcm;
+  m_pcm = pcm.left(renderBytes);
   m_preparing = false;
   m_status = m_shapingUnavailable
                  ? tr("Adaptive mix ready · vocal shaping unavailable")
