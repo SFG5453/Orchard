@@ -93,7 +93,7 @@ See [Contributing](../contributing.md) for file limits and comment guidelines.
 
 Playback settings offer **Standard** and **Adaptive mix** crossfade modes. Adaptive mix prepares local beat-aware transitions and animates the artwork handoff.
 
-Desktop Adaptive mix requires a hardware WebGPU device for Beat This and FFmpeg on PATH. Beat inference has no CPU fallback. See the [adaptive mix crate](../crates/orchard-adaptive-mix/README.md) for runtime packaging, model provenance, and validation instructions, and [Crossfade and gapless playback](app/crossfade.md) for user-facing settings and limitations.
+Desktop Adaptive mix requires FFmpeg on PATH. Nirovi beat inference runs on a WebGPU device when one exists and on the CPU otherwise. See the [adaptive mix crate](../crates/orchard-adaptive-mix/README.md) for runtime packaging, model provenance, and validation instructions, and [Crossfade and gapless playback](app/crossfade.md) for user-facing settings and limitations.
 
 ## Desktop releases
 

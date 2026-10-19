@@ -17,6 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "apple_music_mix.h"
 #include "apple_music_player.h"
 #include "integrations/apple_music.h"
 #include "integrations/catalog_source.h"
@@ -29,6 +30,8 @@
 namespace {
 // The next Apple Music song is buffered on the spare player this close to the end.
 constexpr double kPrepareSeconds = 20.0;
+// Adaptive mix plans this far ahead, as for YouTube songs; mixes start up to a minute early.
+constexpr double kMixPrepareSeconds = 120.0;
 
 QString appleSongId(const QVariantMap &track) {
   const QString id = track.value(QStringLiteral("appleId")).toString();
@@ -46,6 +49,8 @@ void PlaybackController::setAppleMusic(AppleMusic *account, CatalogSource *sourc
   if (!AppleMusicPlayer::available() || m_apple)
     return;
   m_apple = new AppleMusicPlayer(account, this);
+  m_appleMix = new AppleMusicMix(m_provider, m_auth, &m_adaptiveMix, this);
+  connect(m_appleMix, &AppleMusicMix::changed, this, &PlaybackController::prepareAppleNext);
   applyMasterVolume();
   connect(m_apple, &AppleMusicPlayer::changed, this, &PlaybackController::appleChanged);
   connect(m_apple, &AppleMusicPlayer::playingChanged, this, [this] {
@@ -65,6 +70,10 @@ void PlaybackController::setAppleMusic(AppleMusic *account, CatalogSource *sourc
       return;
     emit stateChanged();
     updateIntegrations();
+  });
+  connect(m_apple, &AppleMusicPlayer::mixSettled, this, [this](const QString &reason) {
+    m_adaptiveMix.showStatus(reason.isEmpty() ? tr("Adaptive mix ready")
+                                              : tr("Adaptive mix unavailable: %1. This pair crossfades with Standard.").arg(reason));
   });
   connect(m_apple, &AppleMusicPlayer::ended, this, [this] { appleFinished({}); });
   connect(m_apple, &AppleMusicPlayer::advanced, this, &PlaybackController::appleFinished);
@@ -92,7 +101,8 @@ bool PlaybackController::appleActive() const {
 
 // The page lost the song (helper restart) or it ran out with nothing after it.
 bool PlaybackController::appleNeedsLoad() const {
-  if (!appleActive() || m_loading || m_apple->playing())
+  // A paused transition resumes in the page.
+  if (!appleActive() || m_loading || m_apple->playing() || !m_apple->fadingId().isEmpty())
     return false;
   return m_apple->currentId() != appleSongId(m_track) ||
          (duration() > 0.0 && position() >= duration() - 0.25);
@@ -176,12 +186,76 @@ void PlaybackController::prepareAppleNext() {
     candidate = m_cyclePlayed.isEmpty() ? m_track : m_cyclePlayed.first().toMap();
   const bool wanted = (m_gaplessEnabled || m_crossfadeEnabled) && isAppleTrack(candidate);
   const QString id = wanted ? appleSongId(candidate) : QString();
+  // Crossfades follow the same rules as YouTube songs; repeats and short songs start gaplessly.
+  const bool crossfade = hasCrossfadeTarget() && duration() > m_crossfadeDuration;
+  const double fade = crossfade ? m_crossfadeDuration : 0.0;
+  if (!id.isEmpty() && crossfade && m_adaptiveMix.enabled() && prepareAppleMix(candidate, fade))
+    return;
   if (!id.isEmpty() && (duration() <= 0.0 || duration() - position() > kPrepareSeconds))
     return;
-  // Standard crossfade at the set length, under the same rules as YouTube songs;
-  // repeats and short songs start gaplessly. Adaptive mix has no Apple Music render yet.
-  const bool fade = hasCrossfadeTarget() && duration() > m_crossfadeDuration;
-  m_apple->prepare(id, fade ? m_crossfadeDuration : 0.0);
+  m_apple->prepare(id, fade);
+}
+
+// True while adaptive mix owns the transition into `next`; false hands it to the crossfade.
+// Matching starts with the song so the scan fallback, which needs minutes, can start early.
+bool PlaybackController::prepareAppleMix(const QVariantMap &next, double fade) {
+  if (duration() <= 0.0)
+    return true;
+  const double remaining = duration() - position();
+  const QString id = appleSongId(next);
+  if (m_apple->mixPrepared() && m_apple->preparedId() == id)
+    return true;
+  if (m_apple->mixRefused(id))
+    return false;
+  const bool albumSequential = !m_shuffleEnabled && !m_bestMixSorted && isAlbumPlaythrough(m_track, next);
+  // The planner refuses positions far from the end; mixes only use the last minute anyway.
+  const double planPosition = std::max(position(), duration() - kMixPrepareSeconds);
+  m_appleMix->prepare(m_track, next, planPosition, m_crossfadeDuration, albumSequential,
+                      remaining <= kMixPrepareSeconds);
+  switch (m_appleMix->state()) {
+  case AppleMusicMix::State::Working:
+    // A plan that is still missing this close to the end gives way to the crossfade.
+    return remaining > kPrepareSeconds;
+  case AppleMusicMix::State::Ready: {
+    if (remaining > kMixPrepareSeconds)
+      return true;
+    const QJsonObject plan = m_appleMix->plan();
+    if (plan.isEmpty())
+      return false;
+    m_apple->mix(id, plan, fade);
+    return true;
+  }
+  case AppleMusicMix::State::Boundary:
+    // The planner keeps this pair apart: the next song starts when this one ends.
+    if (remaining <= kPrepareSeconds)
+      m_apple->prepare(id, 0.0);
+    return true;
+  case AppleMusicMix::State::NoMatch:
+    if (!m_adaptiveMix.appleScans())
+      return false;
+    m_apple->mix(id, {{QStringLiteral("scan"), m_appleMix->scanRequest()}}, fade);
+    m_adaptiveMix.showStatus(tr("Adaptive mix: scanning both songs in Apple's player…"));
+    return true;
+  default:
+    return false;
+  }
+}
+
+// A settings change re-decides the next transition; the page drops a pending scan or plan.
+void PlaybackController::replanAppleMix() {
+  if (!m_apple || !m_apple->mixPrepared() || !m_apple->fadingId().isEmpty())
+    return;
+  m_apple->prepare(m_apple->preparedId(), m_apple->preparedFade());
+  prepareAppleNext();
+}
+
+bool PlaybackController::appleMixPlanned() const {
+  return m_apple && m_apple->mixPrepared() && m_apple->mixStart() >= 0.0 && !m_queue.isEmpty() &&
+         m_apple->preparedId() == appleSongId(m_queue.first().toMap());
+}
+
+double PlaybackController::appleMixLength() const {
+  return m_apple ? m_apple->mixDuration() : 0.0;
 }
 
 // The queue's next song while the page blends it in.
@@ -198,6 +272,14 @@ double PlaybackController::appleMixStart() const {
   if (crossfadeActive())
     return m_apple->fadeFrom();
   if (!hasCrossfadeTarget() || !isAppleTrack(m_queue.first().toMap()))
+    return -1.0;
+  if (appleMixPlanned())
+    return m_apple->mixStart();
+  // Unknown until the page arms a plan, as for YouTube songs.
+  if (m_adaptiveMix.enabled() && m_apple->mixPrepared())
+    return -1.0;
+  if (m_adaptiveMix.enabled() && m_appleMix &&
+      (m_appleMix->state() == AppleMusicMix::State::Working || m_appleMix->state() == AppleMusicMix::State::Boundary))
     return -1.0;
   const double actual = duration();
   return actual > m_crossfadeDuration ? actual - m_crossfadeDuration : -1.0;

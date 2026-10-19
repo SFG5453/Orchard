@@ -23,6 +23,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QString>
 
 // Shared by the WebEngine and WebView2 Apple Music sign-in helpers.
@@ -41,6 +42,17 @@ inline QString jsString(const QString &value) {
 inline QString html(const QString &resource = QStringLiteral(":/auth/applemusic-signin.html")) {
   QFile page(resource);
   return page.open(QIODevice::ReadOnly) ? QString::fromUtf8(page.readAll()) : QString();
+}
+
+// The player page with its scripts inlined; Android's asset loader serves them as files instead.
+inline QString playerHtml() {
+  QString page = html(QStringLiteral(":/auth/applemusic-player.html"));
+  static const QRegularExpression script(QStringLiteral(R"re(<script src="([a-z]+\.js)"></script>)re"));
+  for (auto match = script.match(page); match.hasMatch(); match = script.match(page, match.capturedStart())) {
+    const QString source = html(QStringLiteral(":/auth/applemusic/") + match.captured(1));
+    page.replace(match.capturedStart(), match.capturedLength(), QStringLiteral("<script>\n") + source + QStringLiteral("</script>"));
+  }
+  return page;
 }
 
 // The parent writes {developerToken} as one line on stdin.

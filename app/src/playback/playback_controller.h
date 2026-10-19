@@ -49,6 +49,7 @@ class ConnectivityMonitor;
 class DownloadManager;
 class QobuzService;
 class AppleMusic;
+class AppleMusicMix;
 class AppleMusicPlayer;
 class CatalogSource;
 
@@ -349,9 +350,14 @@ private:
   void appleChanged();
   void appleFinished(const QString &advancedId);
   void prepareAppleNext();
+  bool prepareAppleMix(const QVariantMap &next, double fade);
+  void replanAppleMix();
+  bool appleMixPlanned() const;
+  double appleMixLength() const;
   QVariantMap appleFadeTrack() const;
   double appleMixStart() const;
   AppleMusicPlayer *m_apple{nullptr};
+  AppleMusicMix *m_appleMix{nullptr};
   AppleMusic *m_appleAccount{nullptr};
   CatalogSource *m_catalogSource{nullptr};
   // Song the page already started gaplessly; startTrack adopts it instead of loading.

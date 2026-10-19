@@ -61,8 +61,10 @@ PlaybackController::PlaybackController(YouTubeProvider *provider,
   connect(&m_adaptiveMix, &AdaptiveMixController::modeChanged, this, [this] {
     clearPreparedTrack();
     prepareNextTrack();
+    replanAppleMix();
     emit stateChanged();
   });
+  connect(&m_adaptiveMix, &AdaptiveMixController::appleFallbackChanged, this, &PlaybackController::replanAppleMix);
   connect(&m_adaptiveMix, &AdaptiveMixController::changed, this, &PlaybackController::stateChanged);
   m_gaplessEnabled =
       QSettings().value("playback/gaplessEnabled", false).toBool();

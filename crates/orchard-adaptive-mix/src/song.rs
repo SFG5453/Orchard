@@ -7,11 +7,11 @@ use earmark::AudioBuffer;
 use earmark::audio::resample::{StreamResampler, resample};
 use std::collections::VecDeque;
 
-/// Beat This windows and the whole-track mono are cut from 44.1 kHz, as in V2.
+/// Beat model windows and the whole-track mono are cut from 44.1 kHz, as in V2.
 pub const RATE: u32 = 44_100;
 /// V2's analysis rate: whole-track evidence is measured on 11,025 Hz mono.
 pub const ANALYSIS_RATE: u32 = 11_025;
-/// V2's Beat This window, sized to one model inference.
+/// V2's beat model window, sized to one inference.
 pub const BEAT_WINDOW: f64 = 29.76;
 /// Render windows: the outgoing tail and incoming head a mix can use.
 pub const WINDOW: f64 = 60.0;
@@ -23,7 +23,7 @@ pub struct Track {
     /// Equal-weight box downmix at `ANALYSIS_RATE`, as V2's analysis worker produced.
     pub mono: Vec<f32>,
     pub duration: f64,
-    /// Head and tail Beat This windows (44.1 kHz mono) with their start offsets.
+    /// Head and tail beat model windows (44.1 kHz mono) with their start offsets.
     /// A short track has one.
     pub beat_windows: Vec<(Vec<f32>, f64)>,
 }

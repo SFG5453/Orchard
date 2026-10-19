@@ -71,7 +71,8 @@ def main() -> None:
     shutil.copy2(require(qt / "plugins" / "sqldrivers" / "qsqlite.dll"),
                  stage / "sqldrivers" / "qsqlite.dll")
 
-    required = ("platforms/qwindows.dll", "multimedia/ffmpegmediaplugin.dll", "models/beat-this/beat_this_webgpu.onnx",
+    required = ("platforms/qwindows.dll", "multimedia/ffmpegmediaplugin.dll", "models/nirovi/nirovi_fp16.onnx",
+                "models/nirovi/nirovi_int8.onnx",
                 "models/vocal-separation/vocals_umxhq_fp32.onnx",
                 "models/docs-search/model_quantized.onnx", "models/docs-search/vocab.txt",
                 "models/slop/fakeprint_lr.f32")

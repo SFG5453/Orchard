@@ -155,7 +155,8 @@ required_files=(
     dxcompiler.dll
     ffmpeg.exe
     ffprobe.exe
-    models/beat-this/beat_this_webgpu.onnx
+    models/nirovi/nirovi_fp16.onnx
+    models/nirovi/nirovi_int8.onnx
     models/vocal-separation/vocals_umxhq_fp32.onnx
     models/docs-search/model_quantized.onnx
     models/docs-search/vocab.txt

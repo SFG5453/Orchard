@@ -58,6 +58,29 @@ inline bool retainedBestMixOrder(const QVariantList &current, const QVariantList
   }
   return true;
 }
+inline bool isAlbumPlaythrough(const QVariantMap &current, const QVariantMap &next) {
+  const QVariantMap origin = current.value(QStringLiteral("queueOrigin")).toMap();
+  const QVariantMap nextOrigin = next.value(QStringLiteral("queueOrigin")).toMap();
+  const QString album = QStringLiteral("album");
+  if (origin.value(QStringLiteral("kind")) != album ||
+      nextOrigin.value(QStringLiteral("kind")) != album)
+    return false;
+  const QString title = origin.value(QStringLiteral("title")).toString();
+  if (title.isEmpty() || title != nextOrigin.value(QStringLiteral("title")).toString() ||
+      origin.value(QStringLiteral("artist")).toString() !=
+          nextOrigin.value(QStringLiteral("artist")).toString())
+    return false;
+  bool currentOk = false;
+  bool nextOk = false;
+  const int currentIndex =
+      current.value(QStringLiteral("index")).toString().trimmed().toInt(&currentOk);
+  const int nextIndex =
+      next.value(QStringLiteral("index")).toString().trimmed().toInt(&nextOk);
+  // Missing track numbers leave the shared album origin as the best evidence.
+  if (!currentOk || !nextOk || currentIndex <= 0 || nextIndex <= 0)
+    return true;
+  return nextIndex == currentIndex + 1;
+}
 inline bool historyDebug() {
   static const bool enabled = qEnvironmentVariableIsSet("ORCHARD_HISTORY_DEBUG");
   return enabled;

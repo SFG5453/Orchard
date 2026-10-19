@@ -13,6 +13,10 @@ for name in orchard orchard-auth-helper orchard-adaptive-mix libwebgpu_dawn.so l
   cp "$build_dir/$name" "$appdir/usr/bin/$name"
 done
 cp -a "$build_dir/models" "$appdir/usr/bin/models"
+# The Apple Music scan fallback is optional at build time.
+if [ -d "$build_dir/applemusic-web" ]; then
+  cp -a "$build_dir/applemusic-web" "$appdir/usr/bin/applemusic-web"
+fi
 cp "$source_dir/LICENSE" "$source_dir/THIRD_PARTY_NOTICES.md" "$appdir/usr/share/orchard/"
 cp "$source_dir/vendor/discord_social_sdk/License-Notices.txt" "$appdir/usr/share/orchard/DiscordSocialSdk-Notices.txt"
 cp "$source_dir/vendor/litert/LICENSE" "$appdir/usr/share/orchard/LiteRT-LICENSE.txt"

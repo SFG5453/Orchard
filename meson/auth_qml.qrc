@@ -6,5 +6,11 @@
     <file alias="AppleMusicLoginView.qml">../app/qml-auth/webengine/AppleMusicLoginView.qml</file>
     <file alias="applemusic-signin.html">../mobile/android/app/src/main/assets/applemusic/signin.html</file>
     <file alias="applemusic-player.html">../mobile/android/app/src/main/assets/applemusic/player.html</file>
+    <file alias="applemusic/deck.js">../mobile/android/app/src/main/assets/applemusic/deck.js</file>
+    <file alias="applemusic/mixer.js">../mobile/android/app/src/main/assets/applemusic/mixer.js</file>
+    <file alias="applemusic/engine.js">../mobile/android/app/src/main/assets/applemusic/engine.js</file>
+    <file alias="applemusic/mix.js">../mobile/android/app/src/main/assets/applemusic/mix.js</file>
+    <file alias="applemusic/scan.js">../mobile/android/app/src/main/assets/applemusic/scan.js</file>
+    <file alias="applemusic/player.js">../mobile/android/app/src/main/assets/applemusic/player.js</file>
   </qresource>
 </RCC>

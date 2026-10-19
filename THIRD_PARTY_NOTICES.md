@@ -91,6 +91,23 @@ together with the model's `bert-base-uncased` vocabulary
 ([`vocab.txt`](models/docs-search/vocab.txt)). The model is by Benjamin Anderson
 under the MIT License, preserved in [`LICENSE`](models/docs-search/LICENSE).
 
+## ONNX Runtime Web (Apple Music scan fallback)
+
+On Linux, the Apple Music player page runs Nirovi and the vocal model through
+[ONNX Runtime Web](https://github.com/microsoft/onnxruntime) 1.30.0 when it scans songs
+without a YouTube Music match. Orchard ships `ort.wasm.min.mjs`,
+`ort-wasm-simd-threaded.mjs` and `ort-wasm-simd-threaded.wasm` from the `onnxruntime-web`
+npm package unchanged in `applemusic-web/`. Copyright (c) Microsoft Corporation, under the
+MIT License.
+
+## Nirovi beat and downbeat model
+
+[`models/nirovi`](models/nirovi/README.md) was trained on the log-mel spectrograms published
+with Beat This (Zenodo record 13922116, CC BY 4.0) and the annotations from
+[`CPJKU/beat_this_annotations`](https://github.com/CPJKU/beat_this_annotations) (MIT
+License), and distilled from the Beat This `final0` model (Foscarin, Schlüter and Widmer,
+ISMIR 2024; MIT License). Only the trained weights ship with Orchard.
+
 ## Earmark beat and downbeat tracker
 
 The constants in `crates/earmark/src/analysis/beat` (emission means, bar
