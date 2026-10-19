@@ -44,6 +44,11 @@ fn cpu_builder(threads: usize) -> Result<SessionBuilder, String> {
         .with_inter_threads(1)
         .map_err(|e| e.to_string())?
         .with_config_entry("session.intra_op.allow_spinning", "0")
+        .map_err(|e| e.to_string())?
+        // The arena and memory patterns keep each run's largest buffers for the worker's lifetime.
+        .with_execution_providers([ort::ep::CPU::default().with_arena_allocator(false).build()])
+        .map_err(|e| e.to_string())?
+        .with_memory_pattern(false)
         .map_err(|e| e.to_string())
 }
 
