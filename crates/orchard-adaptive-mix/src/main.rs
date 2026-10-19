@@ -97,5 +97,19 @@ fn run() {
         let _ = writeln!(stdout, "{response}");
         let _ = stdout.write_all(&pcm);
         let _ = stdout.flush();
+        drop(stdout);
+        trim_heap();
     }
 }
+
+// Each pair frees a few hundred MB of decode and analysis buffers; glibc keeps them unless asked.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn trim_heap() {
+    unsafe extern "C" {
+        fn malloc_trim(pad: usize) -> i32;
+    }
+    unsafe { malloc_trim(0) };
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+fn trim_heap() {}
