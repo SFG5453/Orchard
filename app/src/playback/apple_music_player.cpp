@@ -34,6 +34,7 @@
 namespace {
 // Events are short; anything longer is not from the page.
 constexpr qsizetype kMaxEventBytes = 64 * 1024;
+constexpr int kIdleReleaseMs = 5 * 60 * 1000;
 
 QString helperPath() {
   return QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("orchard-auth-helper"));
@@ -41,10 +42,15 @@ QString helperPath() {
 } // namespace
 
 AppleMusicPlayer::AppleMusicPlayer(AppleMusic *account, QObject *parent)
-    : QObject(parent), m_account(account), m_fadeTicker(new QTimer(this)) {
+    : QObject(parent), m_account(account), m_fadeTicker(new QTimer(this)), m_idleTimer(new QTimer(this)) {
   // Drives the blend animation; the page reports twice a second.
   m_fadeTicker->setInterval(50);
   connect(m_fadeTicker, &QTimer::timeout, this, &AppleMusicPlayer::changed);
+  m_idleTimer->setSingleShot(true);
+  m_idleTimer->setInterval(kIdleReleaseMs);
+  connect(m_idleTimer, &QTimer::timeout, this, &AppleMusicPlayer::releaseIdle);
+  connect(this, &AppleMusicPlayer::changed, this, &AppleMusicPlayer::updateIdleTimer);
+  connect(this, &AppleMusicPlayer::playingChanged, this, &AppleMusicPlayer::updateIdleTimer);
 }
 
 AppleMusicPlayer::~AppleMusicPlayer() {
@@ -136,8 +142,12 @@ void AppleMusicPlayer::load(const QString &appleId, double position, bool play) 
 }
 
 void AppleMusicPlayer::play() {
-  if (!m_process || m_id.isEmpty())
+  if (m_id.isEmpty())
     return;
+  if (!m_process) {
+    load(m_id, m_position, true);
+    return;
+  }
   send({{QStringLiteral("type"), QStringLiteral("play")}});
   m_loading = true;
   emit changed();
@@ -150,11 +160,12 @@ void AppleMusicPlayer::pause() {
 }
 
 void AppleMusicPlayer::seek(double seconds) {
-  if (!m_process || m_id.isEmpty())
+  if (m_id.isEmpty())
     return;
   m_position = m_duration > 0.0 ? std::clamp(seconds, 0.0, m_duration) : std::max(0.0, seconds);
   m_reportedAt.restart();
-  send({{QStringLiteral("type"), QStringLiteral("seek")}, {QStringLiteral("position"), m_position}});
+  if (m_process)
+    send({{QStringLiteral("type"), QStringLiteral("seek")}, {QStringLiteral("position"), m_position}});
   emit changed();
 }
 
@@ -180,8 +191,9 @@ void AppleMusicPlayer::setVolume(double gain) {
 void AppleMusicPlayer::prepare(const QString &appleId, double fadeSeconds) {
   if (appleId.isEmpty())
     fadeSeconds = 0.0;
+  // A released helper restarts on play(), and the next song is prepared again after that.
   if ((appleId == m_prepared && fadeSeconds == m_preparedFade && !m_preparedMix) ||
-      (appleId.isEmpty() && !m_process))
+      (!m_process && (appleId.isEmpty() || !m_id.isEmpty())))
     return;
   m_prepared = appleId;
   m_preparedFade = fadeSeconds;
@@ -192,10 +204,12 @@ void AppleMusicPlayer::prepare(const QString &appleId, double fadeSeconds) {
     start();
   send({{QStringLiteral("type"), QStringLiteral("prepare")}, {QStringLiteral("id"), appleId},
         {QStringLiteral("fade"), fadeSeconds}});
+  updateIdleTimer();
 }
 
 void AppleMusicPlayer::mix(const QString &appleId, QJsonObject plan, double fallbackFade) {
-  if (appleId.isEmpty() || plan.isEmpty() || (appleId == m_prepared && m_preparedMix) || mixRefused(appleId))
+  if (appleId.isEmpty() || plan.isEmpty() || (appleId == m_prepared && m_preparedMix) || mixRefused(appleId) ||
+      (!m_process && !m_id.isEmpty()))
     return;
   m_prepared = appleId;
   m_preparedFade = fallbackFade;
@@ -233,6 +247,32 @@ void AppleMusicPlayer::shutdown() {
   m_loading = false;
   if (std::exchange(m_playing, false))
     emit playingChanged();
+}
+
+// Nothing is playing or blending, and no song waits to follow a song from another source.
+bool AppleMusicPlayer::idle() const {
+  return m_process && !m_playing && !m_loading && m_fadeId.isEmpty() && (!m_id.isEmpty() || m_prepared.isEmpty());
+}
+
+void AppleMusicPlayer::updateIdleTimer() {
+  if (!idle())
+    m_idleTimer->stop();
+  else if (!m_idleTimer->isActive())
+    m_idleTimer->start();
+}
+
+// The helper holds a browser's worth of memory, so a paused song keeps only its place.
+void AppleMusicPlayer::releaseIdle() {
+  if (!idle())
+    return;
+  const QString id = m_id;
+  const double position = m_position;
+  const double duration = m_duration;
+  shutdown();
+  m_id = id;
+  m_position = position;
+  m_duration = duration;
+  emit changed();
 }
 
 double AppleMusicPlayer::position() const {
