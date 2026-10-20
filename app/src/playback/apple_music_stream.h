@@ -47,6 +47,8 @@ public:
   ~AppleMusicStreams() override;
 
   static bool available();
+  // Why available() is false, for the listener.
+  static QString unavailableReason();
 
   // A proxy stream for the catalog song `appleId` ("provider": "apple").
   void resolve(const QString &appleId, Resolved done);

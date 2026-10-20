@@ -20,6 +20,7 @@
 #include "apple_music_stream.h"
 #include "apple_music_playlist.h"
 #include "integrations/apple_music.h"
+#include "widevine_path.h"
 
 #include <QDebug>
 #include <QElapsedTimer>
@@ -89,7 +90,15 @@ AppleMusicStreams::AppleMusicStreams(AppleMusic *account, QObject *parent) : QOb
 AppleMusicStreams::~AppleMusicStreams() = default;
 
 bool AppleMusicStreams::available() {
-  return WidevineClient::available() && !qEnvironmentVariableIsSet("ORCHARD_APPLE_WEB_PLAYER");
+  return WidevineClient::available();
+}
+
+QString AppleMusicStreams::unavailableReason() {
+#ifdef Q_OS_LINUX
+  if (findWidevineCdm().isEmpty())
+    return tr("Apple Music playback needs Widevine. Install Google Chrome or Chromium with Widevine, then restart Orchard.");
+#endif
+  return tr("Apple Music playback is not available on this system yet.");
 }
 
 void AppleMusicStreams::resolve(const QString &appleId, Resolved done) {

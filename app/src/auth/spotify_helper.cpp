@@ -22,73 +22,60 @@
 #include "spotify_page.h"
 
 #include <QCoreApplication>
-#include <QDateTime>
 #include <QDebug>
 #include <QJsonObject>
-#include <QTimer>
 
-#ifdef ORCHARD_WEBENGINE_COOKIE_ADAPTER
+#ifdef ORCHARD_WEBKIT_AUTH
+#include "webkit_profile.h"
+#include "webkit_view.h"
+
+#include <QDateTime>
 #include <QNetworkCookie>
-#include <QQmlContext>
-#include <QQuickItem>
-#include <QQuickView>
-#include <QQuickWebEngineProfile>
-#include <QWebEngineCookieStore>
-#include <QWebEnginePage>
-#include <QWebEngineProfile>
-#include <QWebEngineScript>
-#include <QWebEngineScriptCollection>
+#include <QTimer>
+#include <utility>
 #endif
 
 using namespace spotify_page;
 
-#ifdef ORCHARD_WEBENGINE_COOKIE_ADAPTER
-namespace {
-
-bool isSpotifyCookie(const QNetworkCookie &cookie) {
-  const QString domain = cookie.domain().toLower();
-  return domain == QStringLiteral("spotify.com") || domain.endsWith(QStringLiteral(".spotify.com"));
-}
-
-} // namespace
-#endif
-
 int runSpotifyLogin(const QString &socketName) {
-#ifdef ORCHARD_WEBENGINE_COOKIE_ADAPTER
-  // QtWebView's WebEngine backend owns this profile; match its settings.
-  auto *profile = QQuickWebEngineProfile::defaultProfile();
-  profile->setStorageName(QCoreApplication::applicationName());
-  profile->setOffTheRecord(false);
-  auto *store = profile->cookieStore();
-
-  QQuickView view;
-  view.setResizeMode(QQuickView::SizeRootObjectToView);
-  view.resize(600, 760);
-  view.setTitle(QObject::tr("Log in to Spotify"));
-  view.setSource(QUrl(QStringLiteral("qrc:/auth/SpotifyLoginView.qml")));
-  if (view.status() == QQuickView::Error || !view.rootObject())
-    return 1;
-  QObject::connect(view.rootObject(), SIGNAL(closeRequested()), qApp, SLOT(quit()));
+#ifdef ORCHARD_WEBKIT_AUTH
+  WebKitProfile *profile = WebKitProfile::named();
+  WebKitView view;
+  QObject::connect(&view, &WebKitView::closeRequested, qApp, &QCoreApplication::quit);
 
   bool sent = false;
-  QObject::connect(store, &QWebEngineCookieStore::cookieAdded, qApp,
-                   [store, socketName, &sent, &view](const QNetworkCookie &cookie) {
-    if (sent || cookie.name() != "sp_dc" || !isSpotifyCookie(cookie) || cookie.value().isEmpty())
+  bool reading = false;
+  bool stale = false;
+  std::function<void()> check = [&] {
+    if (sent)
       return;
-    sent = true;
-    view.hide();
-    // The keychain keeps sp_dc; the shared browser profile forgets Spotify.
-    QObject::connect(store, &QWebEngineCookieStore::cookieAdded, qApp,
-                     [store](const QNetworkCookie &other) {
-      if (isSpotifyCookie(other))
-        store->deleteCookie(other);
+    if (reading) {
+      stale = true;
+      return;
+    }
+    reading = true;
+    profile->cookies(QUrl(QStringLiteral("https://open.spotify.com/")), [&](const QList<QNetworkCookie> &cookies) {
+      reading = false;
+      for (const auto &cookie : cookies) {
+        if (sent || cookie.name() != "sp_dc" || cookie.value().isEmpty())
+          continue;
+        sent = true;
+        view.hide();
+        // The keychain keeps sp_dc; the shared browser profile forgets Spotify.
+        const QString spdc = QString::fromLatin1(cookie.value());
+        profile->forget({QStringLiteral("spotify.com")}, [socketName, spdc] {
+          sendSessionAndQuit(socketName, {{QStringLiteral("spdc"), spdc}});
+        });
+        return;
+      }
+      if (std::exchange(stale, false))
+        check();
     });
-    store->deleteCookie(cookie);
-    store->loadAllCookies();
-    sendSessionAndQuit(socketName, {{QStringLiteral("spdc"), QString::fromLatin1(cookie.value())}});
-  });
-  store->loadAllCookies();
-  view.show();
+  };
+  QObject::connect(profile, &WebKitProfile::cookiesChanged, qApp, [&check] { check(); });
+  view.setUrl(QUrl(QStringLiteral("https://accounts.spotify.com/en/login")));
+  view.show(QObject::tr("Log in to Spotify"), QSize(600, 760), false);
+  check();
   return QCoreApplication::exec();
 #else
   Q_UNUSED(socketName);
@@ -97,21 +84,18 @@ int runSpotifyLogin(const QString &socketName) {
 }
 
 int runSpotifyToken(const QString &socketName) {
-  const QString spdc = spotify_page::readCookie();
+  const QString spdc = readCookie();
   if (spdc.isEmpty())
     return 1;
-#ifdef ORCHARD_WEBENGINE_COOKIE_ADAPTER
-  // Off the record: each harvest starts from the stored cookie and leaves nothing behind.
-  QWebEngineProfile profile;
-  profile.setHttpUserAgent(QString::fromLatin1(kBrowserUserAgent));
-  QWebEnginePage page(&profile);
-  QWebEngineScript hook;
-  hook.setName(QStringLiteral("orchard-spotify-token"));
-  hook.setSourceCode(QString::fromLatin1(kTokenHook));
-  hook.setInjectionPoint(QWebEngineScript::DocumentCreation);
-  hook.setWorldId(QWebEngineScript::MainWorld);
-  hook.setRunsOnSubFrames(false);
-  page.scripts().insert(hook);
+#ifdef ORCHARD_WEBKIT_AUTH
+  // Ephemeral: each harvest starts from the stored cookie and leaves nothing behind.
+  WebKitProfile *profile = WebKitProfile::ephemeral();
+  WebKitView::Options options;
+  options.profile = profile;
+  options.userAgent = QString::fromLatin1(kBrowserUserAgent);
+  options.startupScripts = {QString::fromLatin1(kTokenHook)};
+  WebKitView page(options);
+  page.showOffscreen(QSize(1280, 800));
 
   QNetworkCookie cookie("sp_dc", spdc.toLatin1());
   cookie.setDomain(QStringLiteral(".spotify.com"));
@@ -119,27 +103,14 @@ int runSpotifyToken(const QString &socketName) {
   cookie.setSecure(true);
   cookie.setHttpOnly(true);
   cookie.setExpirationDate(QDateTime::currentDateTimeUtc().addYears(1));
-  bool loading = false;
-  const auto load = [&page, &loading] {
-    if (loading)
-      return;
-    loading = true;
-    page.load(QUrl(QStringLiteral("https://open.spotify.com/")));
-  };
-  QObject::connect(profile.cookieStore(), &QWebEngineCookieStore::cookieAdded, qApp,
-                   [load](const QNetworkCookie &added) {
-    if (added.name() == "sp_dc")
-      load();
-  });
-  profile.cookieStore()->setCookie(cookie, QUrl(QStringLiteral("https://open.spotify.com")));
-  QTimer::singleShot(1000, qApp, load);
+  profile->setCookie(cookie, [&page] { page.setUrl(QUrl(QStringLiteral("https://open.spotify.com/"))); });
 
   bool sent = false;
   QTimer poll;
   poll.setInterval(400);
   QObject::connect(&poll, &QTimer::timeout, qApp, [&page, &sent, &poll, socketName] {
-    page.runJavaScript(QString::fromLatin1(kTokenRead), [&sent, &poll, socketName](const QVariant &value) {
-      const QJsonObject token = QJsonDocument::fromJson(value.toString().toUtf8()).object();
+    page.evaluate(QString::fromLatin1(kTokenRead), [&sent, &poll, socketName](const QString &value) {
+      const QJsonObject token = QJsonDocument::fromJson(value.toUtf8()).object();
       if (sent || token.value(QStringLiteral("accessToken")).toString().isEmpty())
         return;
       sent = true;
@@ -155,9 +126,8 @@ int runSpotifyToken(const QString &socketName) {
       return;
     }
     // Tells a dead cookie (anonymous token) apart from a player that never asked.
-    page.runJavaScript(QStringLiteral("String(window.__orchardSpotifyTokenSeen || 'none')"),
-                       [](const QVariant &seen) {
-      qInfo().noquote() << "Spotify token response:" << seen.toString();
+    page.evaluate(QStringLiteral("String(window.__orchardSpotifyTokenSeen || 'none')"), [](const QString &seen) {
+      qInfo().noquote() << "Spotify token response:" << seen;
       QCoreApplication::exit(3);
     });
   });

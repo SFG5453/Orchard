@@ -13,10 +13,6 @@ pub mod decode;
 pub mod downmix;
 pub mod evidence;
 pub mod lock;
-#[cfg(not(feature = "web"))]
-pub mod models;
-#[cfg(feature = "web")]
-#[path = "models_web.rs"]
 pub mod models;
 pub mod planner;
 pub mod prepare;

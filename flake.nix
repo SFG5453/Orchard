@@ -42,7 +42,7 @@
         pkgs:
         let
           # One merged Qt prefix, so CMake, plugins and QML imports all agree
-          # on where Qt lives. Seven Q-prefixed modules walk into a buildEnv...
+          # on where Qt lives. Five Q-prefixed modules walk into a buildEnv...
           qtEnv = pkgs.qt6.env "orchard-qt-${pkgs.qt6.qtbase.version}" (
             with pkgs.qt6;
             [
@@ -51,12 +51,6 @@
               qtmultimedia
               qtsvg
               qtwayland
-              # WebEngine's CMake config quietly insists on these two. Nobody
-              # asked where the login window is, but it knows anyway.
-              qtwebchannel
-              qtpositioning
-              qtwebview
-              qtwebengine
             ]
           );
 
@@ -100,6 +94,7 @@
               qtEnv
               vulkan-headers # Qt6Gui's CMake config goes looking for these
               libsecret # qtkeychain's Linux backend
+              webkitgtk_4_1 # the sign-in helper's browser
 
               # Rust core (the YouTube extractor needs rustc >= 1.96)
               rustToolchain

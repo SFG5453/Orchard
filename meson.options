@@ -4,5 +4,3 @@ option('host_qjsc', type: 'string', value: '', description: 'Host qjsc built fro
 option('host_rcc', type: 'string', value: '', description: 'Absolute path to the host Qt resource compiler')
 option('host_qsb', type: 'string', value: '', description: 'Absolute path to the host Qt shader baker')
 option('adaptive_platform', type: 'string', value: '', description: 'Adaptive mix staging platform override')
-option('apple_music_scan', type: 'feature', value: 'auto', description: 'Stage the Apple Music player scan fallback (needs a WASI sysroot and the wasm32-wasip1 Rust target)')
-option('wasi_sysroot', type: 'string', value: '/usr/share/wasi-sysroot', description: 'WASI sysroot with libc++ for the scan fallback')

@@ -49,9 +49,7 @@ class ConnectivityMonitor;
 class DownloadManager;
 class QobuzService;
 class AppleMusic;
-class AppleMusicMix;
 class AppleMusicStreams;
-class AppleMusicPlayer;
 class CatalogSource;
 
 class PlaybackController final : public QObject {
@@ -345,28 +343,13 @@ private:
   void resolveQobuz(const QVariantMap &track, std::function<void(const QJsonValue &, const QString &)> done);
   RemoteProvider *m_remoteProvider{nullptr};
   // playback_apple.cpp
-  bool appleActive() const;
-  bool appleNeedsLoad() const;
   void startAppleTrack();
-  // Native playback: the song's stream through the proxies, on the current or spare player.
+  // The song's stream through the proxies, on the current or spare player.
   void resolveAppleStream(const QVariantMap &track, bool prepared);
-  void appleChanged();
-  void appleFinished(const QString &advancedId);
-  void prepareAppleNext();
-  bool prepareAppleMix(const QVariantMap &next, double fade);
-  void replanAppleMix();
-  bool appleMixPlanned() const;
-  double appleMixLength() const;
-  QVariantMap appleFadeTrack() const;
-  double appleMixStart() const;
-  // Only one exists: native streams where orchard-widevine-host can run, the page otherwise.
+  // Exists where orchard-widevine-host can run.
   AppleMusicStreams *m_appleStreams{nullptr};
-  AppleMusicPlayer *m_apple{nullptr};
-  AppleMusicMix *m_appleMix{nullptr};
   AppleMusic *m_appleAccount{nullptr};
   CatalogSource *m_catalogSource{nullptr};
-  // Song the page already started gaplessly; startTrack adopts it instead of loading.
-  QString m_appleHandoff;
   // playback_offline.cpp
   QString downloadedFileFor(const QVariantMap &track) const;
   void startDownloadedFile(const QString &path);

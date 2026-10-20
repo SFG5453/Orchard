@@ -1,16 +1,6 @@
 <RCC>
   <qresource prefix="/auth">
     <file alias="AuthWebView.qml">../app/qml-auth/AuthWebView.qml</file>
-    <file alias="BrowserView.qml">../app/qml-auth/webengine/BrowserView.qml</file>
-    <file alias="SpotifyLoginView.qml">../app/qml-auth/SpotifyLoginView.qml</file>
-    <file alias="AppleMusicLoginView.qml">../app/qml-auth/webengine/AppleMusicLoginView.qml</file>
-    <file alias="applemusic-signin.html">../mobile/android/app/src/main/assets/applemusic/signin.html</file>
-    <file alias="applemusic-player.html">../mobile/android/app/src/main/assets/applemusic/player.html</file>
-    <file alias="applemusic/deck.js">../mobile/android/app/src/main/assets/applemusic/deck.js</file>
-    <file alias="applemusic/mixer.js">../mobile/android/app/src/main/assets/applemusic/mixer.js</file>
-    <file alias="applemusic/engine.js">../mobile/android/app/src/main/assets/applemusic/engine.js</file>
-    <file alias="applemusic/mix.js">../mobile/android/app/src/main/assets/applemusic/mix.js</file>
-    <file alias="applemusic/scan.js">../mobile/android/app/src/main/assets/applemusic/scan.js</file>
-    <file alias="applemusic/player.js">../mobile/android/app/src/main/assets/applemusic/player.js</file>
+    <file alias="BrowserView.qml">../app/qml-auth/qtwebview/BrowserView.qml</file>
   </qresource>
 </RCC>

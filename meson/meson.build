@@ -194,10 +194,6 @@ app_sources = [
   'app/src/playback/playback_remote.cpp',
   'app/src/playback/playback_remote.h',
   'app/src/playback/playback_apple.cpp',
-  'app/src/playback/apple_music_mix.cpp',
-  'app/src/playback/apple_music_mix.h',
-  'app/src/playback/apple_music_player.cpp',
-  'app/src/playback/apple_music_player.h',
   'app/src/playback/apple_music_playlist.cpp',
   'app/src/playback/apple_music_playlist.h',
   'app/src/playback/apple_music_stream.cpp',
@@ -294,12 +290,23 @@ helper_sources = [
   'app/src/orchard_core.h',
 ]
 
-helper_webengine_sources = [
+# Spotify and Apple Music modes; without WebKitGTK they report no sign-in browser.
+helper_browser_sources = [
   'app/src/auth/spotify_helper.cpp',
   'app/src/auth/apple_music_helper.cpp',
-  'app/src/auth/apple_music_player_host.cpp',
-  'app/src/playback/widevine_path.cpp',
-  'app/src/playback/widevine_path.h',
+]
+
+helper_webkit_sources = [
+  'app/src/auth/webkit_async.h',
+  'app/src/auth/webkit_profile.cpp',
+  'app/src/auth/webkit_profile.h',
+  'app/src/auth/webkit_view.cpp',
+  'app/src/auth/webkit_view.h',
+]
+
+helper_webkit_moc_headers = [
+  'app/src/auth/webkit_profile.h',
+  'app/src/auth/webkit_view.h',
 ]
 
 helper_webview2_sources = [
@@ -363,12 +370,6 @@ app_docs = [
 ]
 
 # The wasm32 export crate for the Apple Music player page.
-rust_web_sources = [
-  'crates/orchard-adaptive-mix-web/Cargo.toml',
-  'crates/orchard-adaptive-mix-web/Cargo.lock',
-  'crates/orchard-adaptive-mix-web/src/lib.rs',
-]
-
 rust_sources = [
   'crates/earmark/Cargo.toml',
   'crates/earmark/examples/beat_bench.rs',
@@ -433,7 +434,6 @@ rust_sources = [
   'crates/orchard-adaptive-mix/src/lock.rs',
   'crates/orchard-adaptive-mix/src/main.rs',
   'crates/orchard-adaptive-mix/src/models.rs',
-  'crates/orchard-adaptive-mix/src/models_web.rs',
   'crates/orchard-adaptive-mix/src/planner.rs',
   'crates/orchard-adaptive-mix/src/prepare.rs',
   'crates/orchard-adaptive-mix/src/repeat.rs',
@@ -623,8 +623,6 @@ app_moc_headers = [
   'app/src/playback/adaptive_mix/adaptive_mix_controller.h',
   'app/src/playback/adaptive_mix/adaptive_mix_worker.h',
   'app/src/playback/playback_controller.h',
-  'app/src/playback/apple_music_mix.h',
-  'app/src/playback/apple_music_player.h',
   'app/src/playback/apple_music_stream.h',
   'app/src/playback/widevine_client.h',
   'app/src/search/search_controller.h',

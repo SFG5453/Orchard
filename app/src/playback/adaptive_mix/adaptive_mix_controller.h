@@ -17,13 +17,6 @@ class AdaptiveMixController final : public QObject {
   Q_PROPERTY(bool ready READ ready NOTIFY changed)
   Q_PROPERTY(QString mixStyle READ mixStyle NOTIFY changed)
   Q_PROPERTY(double mixBpm READ mixBpm NOTIFY changed)
-  // Apple Music pairs without a YouTube Music upload: "standard" crossfades, "scan" analyses
-  // them in Apple's player (see AppleMusicMix).
-  Q_PROPERTY(QString appleFallback READ appleFallback WRITE setAppleFallback NOTIFY appleFallbackChanged)
-  Q_PROPERTY(bool appleScanAvailable READ appleScanAvailable CONSTANT)
-  // Apple Music plays in Apple's web player, so its mixes plan from YouTube Music matches.
-  // False where Apple songs stream natively and mix like any other song.
-  Q_PROPERTY(bool appleMatchesYouTube READ appleMatchesYouTube CONSTANT)
 public:
   explicit AdaptiveMixController(QObject *parent = nullptr);
   ~AdaptiveMixController() override;
@@ -33,12 +26,6 @@ public:
   // Qobuz streams aren't analysed, so playback turns adaptive mix off while it's on.
   void setAvailable(bool available);
   bool enabled() const { return mode() == QStringLiteral("adaptive"); }
-  QString appleFallback() const { return m_appleFallback; }
-  void setAppleFallback(const QString &fallback);
-  // This build staged the page's scan engine beside the player helper.
-  static bool appleScanAvailable();
-  static bool appleMatchesYouTube();
-  bool appleScans() const { return appleScanAvailable() && m_appleFallback == QStringLiteral("scan"); }
   QString status() const { return m_status; }
   bool ready() const { return !m_pcm.isEmpty(); }
   // Listener-facing name of the rendered strategy; empty until a render is ready.
@@ -63,19 +50,15 @@ public:
                bool albumSequential, bool references = false);
   // Records a pair that failed before reaching the worker, e.g. without a source to analyse.
   void failPair(const QString &pair, const QString &message);
-  // Status for work done elsewhere, such as the Apple Music player's own scan.
-  void showStatus(const QString &status);
   void clear();
 signals:
   void changed();
   void modeChanged();
-  void appleFallbackChanged();
 
 private:
   void fail(const QString &message);
   void receive(const QJsonObject &header, const QByteArray &pcm);
   QString m_mode;
-  QString m_appleFallback;
   QString m_status;
   QString m_pair;
   QString m_label; // "Outgoing -> Incoming" titles for logs.

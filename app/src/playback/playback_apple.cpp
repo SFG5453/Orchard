@@ -17,23 +17,13 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "apple_music_mix.h"
-#include "apple_music_player.h"
 #include "apple_music_stream.h"
 #include "integrations/apple_music.h"
 #include "integrations/catalog_source.h"
 #include "playback_controller.h"
 #include "playback_helpers.h"
 
-#include <cmath>
-#include <utility>
-
 namespace {
-// The next Apple Music song is buffered on the spare player this close to the end.
-constexpr double kPrepareSeconds = 20.0;
-// Adaptive mix plans this far ahead, as for YouTube songs; mixes start up to a minute early.
-constexpr double kMixPrepareSeconds = 120.0;
-
 QString appleSongId(const QVariantMap &track) {
   const QString id = track.value(QStringLiteral("appleId")).toString();
   if (!id.isEmpty())
@@ -47,91 +37,28 @@ QString appleSongId(const QVariantMap &track) {
 void PlaybackController::setAppleMusic(AppleMusic *account, CatalogSource *source) {
   m_appleAccount = account;
   m_catalogSource = source;
-  if (m_apple || m_appleStreams)
+  if (m_appleStreams || !AppleMusicStreams::available())
     return;
-  if (AppleMusicStreams::available()) {
-    m_appleStreams = new AppleMusicStreams(account, this);
-    installRangeReaders();
-    // The decryption host only runs while Apple is the music source and the account is usable.
-    const auto release = [this] {
-      const QString status = m_appleAccount->status();
-      if (m_catalogSource->apple() && (status == QStringLiteral("connected") || status == QStringLiteral("restoring")))
-        return;
-      if (isAppleTrack(m_track))
-        stop();
-      m_appleStreams->clear();
-    };
-    connect(source, &CatalogSource::changed, this, release);
-    connect(account, &AppleMusic::changed, this, release);
-    return;
-  }
-  if (!AppleMusicPlayer::available())
-    return;
-  m_apple = new AppleMusicPlayer(account, this);
-  m_appleMix = new AppleMusicMix(m_provider, m_auth, &m_adaptiveMix, this);
-  connect(m_appleMix, &AppleMusicMix::changed, this, &PlaybackController::prepareAppleNext);
-  applyMasterVolume();
-  connect(m_apple, &AppleMusicPlayer::changed, this, &PlaybackController::appleChanged);
-  connect(m_apple, &AppleMusicPlayer::playingChanged, this, [this] {
-    if (!appleActive())
-      return;
-    if (!playing()) {
-      m_persistTimer.stop();
-      savePlaybackState();
-    } else if (m_persistenceEnabled) {
-      m_persistTimer.start();
-    }
-    emit stateChanged();
-    updateSystemMedia();
-  });
-  connect(m_apple, &AppleMusicPlayer::fadeStarted, this, [this] {
-    if (!appleActive())
-      return;
-    emit stateChanged();
-    updateIntegrations();
-  });
-  connect(m_apple, &AppleMusicPlayer::mixSettled, this, [this](const QString &reason) {
-    m_adaptiveMix.showStatus(reason.isEmpty() ? tr("Adaptive mix ready")
-                                              : tr("Adaptive mix unavailable: %1. This pair crossfades with Standard.").arg(reason));
-  });
-  connect(m_apple, &AppleMusicPlayer::ended, this, [this] { appleFinished({}); });
-  connect(m_apple, &AppleMusicPlayer::advanced, this, &PlaybackController::appleFinished);
-  connect(m_apple, &AppleMusicPlayer::failed, this, [this](const QString &message) {
-    if (appleActive())
-      fail(message);
-  });
-  // The player shares the sign-in profile and holds a browser's worth of memory,
-  // so it only runs while Apple is the music source and the account is usable.
+  m_appleStreams = new AppleMusicStreams(account, this);
+  installRangeReaders();
+  // The decryption host only runs while Apple is the music source and the account is usable.
   const auto release = [this] {
     const QString status = m_appleAccount->status();
     if (m_catalogSource->apple() && (status == QStringLiteral("connected") || status == QStringLiteral("restoring")))
       return;
-    if (appleActive())
+    if (isAppleTrack(m_track))
       stop();
-    m_apple->shutdown();
+    m_appleStreams->clear();
   };
   connect(source, &CatalogSource::changed, this, release);
   connect(account, &AppleMusic::changed, this, release);
 }
 
-bool PlaybackController::appleActive() const {
-  return m_apple && isAppleTrack(m_track);
-}
-
-// The page lost the song (helper restart) or it ran out with nothing after it.
-bool PlaybackController::appleNeedsLoad() const {
-  // A paused transition resumes in the page.
-  if (!appleActive() || m_loading || m_apple->playing() || !m_apple->fadingId().isEmpty())
-    return false;
-  return m_apple->currentId() != appleSongId(m_track) ||
-         (duration() > 0.0 && position() >= duration() - 0.25);
-}
-
 void PlaybackController::startAppleTrack() {
   const QString id = appleSongId(m_track);
   QString message;
-  if (!m_apple && !m_appleStreams)
-    message = tr("Apple Music playback is not available on this system yet.");
+  if (!m_appleStreams)
+    message = AppleMusicStreams::unavailableReason();
   else if (!m_catalogSource || !m_catalogSource->apple())
     message = tr("Choose Apple as the music source under Settings, General to play Apple Music songs.");
   else if (!m_appleAccount->connected())
@@ -139,29 +66,14 @@ void PlaybackController::startAppleTrack() {
   else if (id.isEmpty())
     message = tr("This item is missing a playable track identity.");
   if (!message.isEmpty()) {
-    m_appleHandoff.clear();
     fail(message);
     return;
   }
-  if (m_appleStreams) {
-    // A restored song loads when play is pressed, like the other sources.
-    if (m_resumePaused)
-      m_loading = false;
-    else
-      resolveAppleStream(m_track, false);
-    return;
-  }
-  if (std::exchange(m_appleHandoff, {}) == id && m_apple->currentId() == id) {
-    m_loading = false;
-    m_resumePosition = 0.0;
-    return;
-  }
   // A restored song loads when play is pressed, like the other sources.
-  if (m_resumePaused) {
+  if (m_resumePaused)
     m_loading = false;
-    return;
-  }
-  m_apple->load(id, m_resumePosition, true);
+  else
+    resolveAppleStream(m_track, false);
 }
 
 void PlaybackController::resolveAppleStream(const QVariantMap &track, bool prepared) {
@@ -184,152 +96,4 @@ void PlaybackController::resolveAppleStream(const QVariantMap &track, bool prepa
     else
       startResolvedStream(stream);
   });
-}
-
-void PlaybackController::appleChanged() {
-  if (!appleActive() || m_apple->currentId() != appleSongId(m_track))
-    return;
-  if (m_loading && !m_apple->loading()) {
-    m_loading = false;
-    m_resumePosition = 0.0;
-  }
-  prepareAppleNext();
-  const double now = position();
-  if (std::abs(now - m_lastPublishedPosition) >= 1.0) {
-    m_lastPublishedPosition = now;
-    updateSystemMedia();
-  }
-  emit stateChanged();
-}
-
-// `advancedId` is the song the page already started gaplessly, or empty when it stopped.
-void PlaybackController::appleFinished(const QString &advancedId) {
-  if (!appleActive()) {
-    if (!advancedId.isEmpty())
-      m_apple->stop();
-    return;
-  }
-  m_appleHandoff = advancedId;
-  m_loading = false;
-  if (m_repeatMode == QStringLiteral("one"))
-    startTrack(m_track);
-  else if (canGoNext())
-    next();
-  else
-    updateSystemMedia();
-  // The queue no longer leads with the song the page moved on to.
-  if (!std::exchange(m_appleHandoff, {}).isEmpty())
-    m_apple->stop();
-  emit stateChanged();
-}
-
-void PlaybackController::prepareAppleNext() {
-  if (!appleActive() || m_loading)
-    return;
-  QVariantMap candidate;
-  if (m_repeatMode == QStringLiteral("one"))
-    candidate = m_track;
-  else if (!m_queue.isEmpty())
-    candidate = m_queue.first().toMap();
-  else if (m_repeatMode == QStringLiteral("all") && !m_shuffleEnabled)
-    candidate = m_cyclePlayed.isEmpty() ? m_track : m_cyclePlayed.first().toMap();
-  const bool wanted = (m_gaplessEnabled || m_crossfadeEnabled) && isAppleTrack(candidate);
-  const QString id = wanted ? appleSongId(candidate) : QString();
-  // Crossfades follow the same rules as YouTube songs; repeats and short songs start gaplessly.
-  const bool crossfade = hasCrossfadeTarget() && duration() > m_crossfadeDuration;
-  const double fade = crossfade ? m_crossfadeDuration : 0.0;
-  if (!id.isEmpty() && crossfade && m_adaptiveMix.enabled() && prepareAppleMix(candidate, fade))
-    return;
-  if (!id.isEmpty() && (duration() <= 0.0 || duration() - position() > kPrepareSeconds))
-    return;
-  m_apple->prepare(id, fade);
-}
-
-// True while adaptive mix owns the transition into `next`; false hands it to the crossfade.
-// Matching starts with the song so the scan fallback, which needs minutes, can start early.
-bool PlaybackController::prepareAppleMix(const QVariantMap &next, double fade) {
-  if (duration() <= 0.0)
-    return true;
-  const double remaining = duration() - position();
-  const QString id = appleSongId(next);
-  if (m_apple->mixPrepared() && m_apple->preparedId() == id)
-    return true;
-  if (m_apple->mixRefused(id))
-    return false;
-  const bool albumSequential = !m_shuffleEnabled && !m_bestMixSorted && isAlbumPlaythrough(m_track, next);
-  // The planner refuses positions far from the end; mixes only use the last minute anyway.
-  const double planPosition = std::max(position(), duration() - kMixPrepareSeconds);
-  m_appleMix->prepare(m_track, next, planPosition, m_crossfadeDuration, albumSequential,
-                      remaining <= kMixPrepareSeconds);
-  switch (m_appleMix->state()) {
-  case AppleMusicMix::State::Working:
-    // A plan that is still missing this close to the end gives way to the crossfade.
-    return remaining > kPrepareSeconds;
-  case AppleMusicMix::State::Ready: {
-    if (remaining > kMixPrepareSeconds)
-      return true;
-    const QJsonObject plan = m_appleMix->plan();
-    if (plan.isEmpty())
-      return false;
-    m_apple->mix(id, plan, fade);
-    return true;
-  }
-  case AppleMusicMix::State::Boundary:
-    // The planner keeps this pair apart: the next song starts when this one ends.
-    if (remaining <= kPrepareSeconds)
-      m_apple->prepare(id, 0.0);
-    return true;
-  case AppleMusicMix::State::NoMatch:
-    if (!m_adaptiveMix.appleScans())
-      return false;
-    m_apple->mix(id, {{QStringLiteral("scan"), m_appleMix->scanRequest()}}, fade);
-    m_adaptiveMix.showStatus(tr("Adaptive mix: scanning both songs in Apple's player…"));
-    return true;
-  default:
-    return false;
-  }
-}
-
-// A settings change re-decides the next transition; the page drops a pending scan or plan.
-void PlaybackController::replanAppleMix() {
-  if (!m_apple || !m_apple->mixPrepared() || !m_apple->fadingId().isEmpty())
-    return;
-  m_apple->prepare(m_apple->preparedId(), m_apple->preparedFade());
-  prepareAppleNext();
-}
-
-bool PlaybackController::appleMixPlanned() const {
-  return m_apple && m_apple->mixPrepared() && m_apple->mixStart() >= 0.0 && !m_queue.isEmpty() &&
-         m_apple->preparedId() == appleSongId(m_queue.first().toMap());
-}
-
-double PlaybackController::appleMixLength() const {
-  return m_apple ? m_apple->mixDuration() : 0.0;
-}
-
-// The queue's next song while the page blends it in.
-QVariantMap PlaybackController::appleFadeTrack() const {
-  const QString id = m_apple ? m_apple->fadingId() : QString();
-  if (id.isEmpty() || m_queue.isEmpty())
-    return {};
-  const QVariantMap next = m_queue.first().toMap();
-  return appleSongId(next) == id ? next : QVariantMap();
-}
-
-// Where the page's Standard crossfade begins, or -1 when the song ends without one.
-double PlaybackController::appleMixStart() const {
-  if (crossfadeActive())
-    return m_apple->fadeFrom();
-  if (!hasCrossfadeTarget() || !isAppleTrack(m_queue.first().toMap()))
-    return -1.0;
-  if (appleMixPlanned())
-    return m_apple->mixStart();
-  // Unknown until the page arms a plan, as for YouTube songs.
-  if (m_adaptiveMix.enabled() && m_apple->mixPrepared())
-    return -1.0;
-  if (m_adaptiveMix.enabled() && m_appleMix &&
-      (m_appleMix->state() == AppleMusicMix::State::Working || m_appleMix->state() == AppleMusicMix::State::Boundary))
-    return -1.0;
-  const double actual = duration();
-  return actual > m_crossfadeDuration ? actual - m_crossfadeDuration : -1.0;
 }
