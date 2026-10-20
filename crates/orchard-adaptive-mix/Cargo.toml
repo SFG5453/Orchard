@@ -11,8 +11,6 @@ default = ["desktop"]
 desktop = ["dep:ort", "ort/webgpu", "ort/download-binaries", "ort/tls-rustls", "ort/copy-dylibs"]
 # Android loads the ONNX Runtime its app package ships.
 android = ["dep:ort", "ort/load-dynamic"]
-# wasm32-wasip1 for a web page: the host runs the models through onnxruntime-web.
-web = []
 
 [[bin]]
 name = "orchard-adaptive-mix"

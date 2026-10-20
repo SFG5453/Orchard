@@ -17,7 +17,6 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "apple_music_player.h"
 #include "auth/auth_manager.h"
 #include "playback_controller.h"
 #include "playback_helpers.h"
@@ -333,8 +332,6 @@ int PlaybackController::bitrate() const {
 }
 
 bool PlaybackController::playing() const {
-  if (appleActive())
-    return m_apple->playing();
   return (m_player && m_player->playbackState() == QMediaPlayer::PlayingState) ||
          (m_crossfadeActive && m_nextPlayer &&
           m_nextPlayer->playbackState() == QMediaPlayer::PlayingState);
@@ -343,14 +340,10 @@ bool PlaybackController::playing() const {
 double PlaybackController::position() const {
   if (m_resumePosition > 0.0)
     return m_resumePosition;
-  if (appleActive())
-    return m_apple->position();
   return m_player ? m_player->position() / 1000.0 : 0.0;
 }
 
 double PlaybackController::audiblePosition() const {
-  if (appleActive())
-    return position();
   const double audible = m_resumePosition > 0.0 || m_crossfadeActive
                              ? -1.0
                              : m_audioEngineOutput.audiblePosition();
@@ -358,43 +351,27 @@ double PlaybackController::audiblePosition() const {
 }
 
 double PlaybackController::duration() const {
-  if (appleActive()) {
-    if (m_apple->duration() > 0.0)
-      return m_apple->duration();
-    const double listed = m_track.value(QStringLiteral("durationSeconds")).toDouble();
-    return listed > 0.0 ? listed : m_restoredDuration;
-  }
   const double playerDuration = m_player ? m_player->duration() / 1000.0 : 0.0;
   return playerDuration > 0.0 ? playerDuration : m_restoredDuration;
 }
 
 QVariantMap PlaybackController::transitionTrack() const {
-  return appleActive() ? appleFadeTrack() : m_crossfadeTrack;
+  return m_crossfadeTrack;
 }
 
 double PlaybackController::transitionPosition() const {
-  if (appleActive())
-    return crossfadeActive() ? m_apple->fadePosition() : 0.0;
   return m_crossfadeActive && m_nextPlayer ? std::max(0.0, m_nextPlayer->position() / 1000.0) : 0.0;
 }
 
 double PlaybackController::transitionDuration() const {
-  if (!appleActive())
-    return m_crossfadeActive ? m_crossfadeIncomingDuration : 0.0;
-  if (!crossfadeActive())
-    return 0.0;
-  if (m_apple->fadeDuration() > 0.0)
-    return m_apple->fadeDuration();
-  return appleFadeTrack().value(QStringLiteral("durationSeconds")).toDouble();
+  return m_crossfadeActive ? m_crossfadeIncomingDuration : 0.0;
 }
 
 bool PlaybackController::crossfadeActive() const {
-  return appleActive() ? !appleFadeTrack().isEmpty() : m_crossfadeActive;
+  return m_crossfadeActive;
 }
 
 double PlaybackController::crossfadeProgress() const {
-  if (appleActive())
-    return crossfadeActive() ? m_apple->fadeProgress() : 0.0;
   return m_crossfadeProgress;
 }
 

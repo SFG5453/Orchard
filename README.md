@@ -154,7 +154,7 @@ Select the **book icon** in the top bar to open the searchable in-app docs. You 
 
 ## Building from source
 
-Desktop builds require Meson 1.12+, CMake 3.24+, Ninja, Qt 6.8+, a C++20 toolchain, Node.js/npm, and Rust 1.96+. Qt must include the Quick, QML, Network, and Multimedia modules, plus WebView and WebEngine on Linux. Windows sign-in uses the Microsoft Edge WebView2 Runtime. Platform dependencies and sign-in backend setup are in the [development guide](docs/DEVELOPMENT.md).
+Desktop builds require Meson 1.12+, CMake 3.24+, Ninja, Qt 6.8+, a C++20 toolchain, Node.js/npm, and Rust 1.96+. Qt must include the Quick, QML, Network, and Multimedia modules. Linux sign-in uses WebKitGTK 4.1, and Windows sign-in uses the Microsoft Edge WebView2 Runtime. Platform dependencies and sign-in backend setup are in the [development guide](docs/DEVELOPMENT.md).
 
 ```sh
 git clone --recurse-submodules https://github.com/SFG5453/orchard-v4.git

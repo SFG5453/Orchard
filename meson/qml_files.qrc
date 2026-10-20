@@ -129,7 +129,6 @@
     <file alias="app/qml/components/player/MixSwapText.qml">../app/qml/components/player/MixSwapText.qml</file>
     <file alias="app/qml/components/player/FullscreenPlayer.qml">../app/qml/components/player/FullscreenPlayer.qml</file>
     <file alias="app/qml/components/settings/CrossfadeMode.qml">../app/qml/components/settings/CrossfadeMode.qml</file>
-    <file alias="app/qml/components/settings/AppleMixFallback.qml">../app/qml/components/settings/AppleMixFallback.qml</file>
     <file alias="app/qml/components/settings/AboutSectionForm.ui.qml">../app/qml/components/settings/AboutSectionForm.ui.qml</file>
     <file alias="app/qml/components/settings/AccountSettingForm.ui.qml">../app/qml/components/settings/AccountSettingForm.ui.qml</file>
     <file alias="app/qml/components/settings/AppearanceSectionForm.ui.qml">../app/qml/components/settings/AppearanceSectionForm.ui.qml</file>
@@ -138,7 +137,6 @@
     <file alias="app/qml/components/settings/ConfirmDialogBody.ui.qml">../app/qml/components/settings/ConfirmDialogBody.ui.qml</file>
     <file alias="app/qml/components/settings/CrossfadeModeForm.ui.qml">../app/qml/components/settings/CrossfadeModeForm.ui.qml</file>
     <file alias="app/qml/components/settings/DiscordCustomizeForm.ui.qml">../app/qml/components/settings/DiscordCustomizeForm.ui.qml</file>
-    <file alias="app/qml/components/settings/AppleMixFallbackForm.ui.qml">../app/qml/components/settings/AppleMixFallbackForm.ui.qml</file>
     <file alias="app/qml/components/settings/DiscordForm.ui.qml">../app/qml/components/settings/DiscordForm.ui.qml</file>
     <file alias="app/qml/components/settings/DownloadsSectionForm.ui.qml">../app/qml/components/settings/DownloadsSectionForm.ui.qml</file>
     <file alias="app/qml/components/settings/GeneralSectionForm.ui.qml">../app/qml/components/settings/GeneralSectionForm.ui.qml</file>

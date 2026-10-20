@@ -40,7 +40,7 @@ void PlaybackController::updateSystemMedia() {
   state.insert(QStringLiteral("canGoPrevious"), canGoPrevious());
   state.insert(QStringLiteral("canSeek"),
                duration() > 0.0 && !m_loading &&
-                   ((m_player && m_player->isSeekable()) || m_resumePaused || appleActive()));
+                   ((m_player && m_player->isSeekable()) || m_resumePaused));
   state.insert(QStringLiteral("currentTime"), position());
   state.insert(QStringLiteral("durationSeconds"), duration());
   state.insert(QStringLiteral("volume"),

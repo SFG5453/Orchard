@@ -34,14 +34,7 @@ int runAppleMusicLogin(const QString &socketName);
 // Clears the AppleMusic profile's cookies and MusicKit storage, then returns {ok}.
 int runAppleMusicLogout(const QString &socketName);
 
-// Sets Chromium flags for the player; call before Qt WebEngine starts.
-void prepareAppleMusicPlayer();
-
-// Hosts applemusic/player.html for the app: JSON commands on stdin, JSON events on
-// stdout, one object per line. Exits when stdin closes.
-int runAppleMusicPlayer();
-
-// Receives the Apple Music pages' messages (sign-in view and player).
+// Receives the Apple Music sign-in page's messages.
 class AppleMusicPageBridge final : public QObject {
   Q_OBJECT
 

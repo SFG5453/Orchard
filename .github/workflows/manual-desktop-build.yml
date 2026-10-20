@@ -51,7 +51,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             cmake ninja-build pkg-config clang mold ccache libclang-dev \
-            libsecret-1-dev libfuse2t64 libgl1-mesa-dev libvulkan-dev libnss3 ffmpeg \
+            libsecret-1-dev libwebkit2gtk-4.1-dev libfuse2t64 libgl1-mesa-dev libvulkan-dev ffmpeg \
             libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
             libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-shm0 \
             libxcb-sync1 libxcb-util1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 \
@@ -69,7 +69,7 @@ jobs:
       - name: Install Qt 6.12.0
         shell: bash
         run: |
-          python -m aqt install-qt linux desktop 6.12.0 linux_gcc_64 -m qtmultimedia qtshadertools qtwebengine qtwebview qtwebchannel qtpositioning qtwebsockets -O "$RUNNER_TEMP/Qt"
+          python -m aqt install-qt linux desktop 6.12.0 linux_gcc_64 -m qtmultimedia qtshadertools qtwebsockets -O "$RUNNER_TEMP/Qt"
           qt_config="$(find "$RUNNER_TEMP/Qt/6.12.0" -path '*/lib/cmake/Qt6/Qt6Config.cmake' -type f -print -quit)"
           test -n "$qt_config"
           qt_root="${qt_config%/lib/cmake/Qt6/Qt6Config.cmake}"
@@ -88,8 +88,6 @@ jobs:
           dependencies="$(LD_LIBRARY_PATH="$qt_root/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ldd "$qt_root/plugins/platforms/libqxcb.so")"
           echo "$dependencies"
           if grep -q 'not found' <<< "$dependencies"; then exit 1; fi
-      - name: Build QtWebView WebEngine backend
-        run: python scripts/build-qt-webview.py --qt-root "$QT_ROOT" --build-dir build/qt-webview
       - name: Build Orchard
         run: |
           npm ci --prefix providers/youtube

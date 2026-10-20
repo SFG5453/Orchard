@@ -36,7 +36,7 @@ class SpotifyCanvas final : public QObject {
   // restoring, disconnected, connecting, connected
   Q_PROPERTY(QString status READ status NOTIFY changed)
   Q_PROPERTY(bool connected READ connected NOTIFY changed)
-  // The login window needs Qt WebEngine; pasting the cookie works everywhere.
+  // The login window needs the helper's browser; pasting the cookie works everywhere.
   Q_PROPERTY(bool loginAvailable READ loginAvailable CONSTANT)
   Q_PROPERTY(QString message READ message NOTIFY changed)
   Q_PROPERTY(bool messageIsError READ messageIsError NOTIFY changed)

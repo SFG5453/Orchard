@@ -101,15 +101,6 @@ together with the model's `bert-base-uncased` vocabulary
 ([`vocab.txt`](models/docs-search/vocab.txt)). The model is by Benjamin Anderson
 under the MIT License, preserved in [`LICENSE`](models/docs-search/LICENSE).
 
-## ONNX Runtime Web (Apple Music scan fallback)
-
-On Linux, the Apple Music player page runs Nirovi and the vocal model through
-[ONNX Runtime Web](https://github.com/microsoft/onnxruntime) 1.30.0 when it scans songs
-without a YouTube Music match. Orchard ships `ort.wasm.min.mjs`,
-`ort-wasm-simd-threaded.mjs` and `ort-wasm-simd-threaded.wasm` from the `onnxruntime-web`
-npm package unchanged in `applemusic-web/`. Copyright (c) Microsoft Corporation, under the
-MIT License.
-
 ## Nirovi beat and downbeat model
 
 [`models/nirovi`](models/nirovi/README.md) was trained on the log-mel spectrograms published
