@@ -59,8 +59,7 @@ void AppleMusic::configure(std::function<void(const QString &error)> done) {
           {QStringLiteral("developerToken"), developerToken},
           {QStringLiteral("userToken"), m_userToken},
           {QStringLiteral("storefront"), storefront},
-          // The token's origin claim names the sign-in page's origin.
-          {QStringLiteral("origin"), QStringLiteral("https://appassets.androidplatform.net")},
+          {QStringLiteral("origin"), tokenOrigin()},
       });
     };
     const QString region = regionStorefront();

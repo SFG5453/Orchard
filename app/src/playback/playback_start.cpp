@@ -73,7 +73,7 @@ void PlaybackController::startTrack(const QVariantMap &track, bool replaceQueue,
   // and network request, including loads still in progress, instead of starting
   // the same song over from scratch at the track boundary.
   const bool prepared =
-      !apple && m_gaplessEnabled && !replaceQueue && initialPosition == 0.0 &&
+      (!apple || m_appleStreams) && m_gaplessEnabled && !replaceQueue && initialPosition == 0.0 &&
       !startPaused && selected.value("id") == m_preparedTrack.value("id") &&
       !m_nextPlayer->source().isEmpty() &&
       canReuseGaplessMedia(m_nextPlayer->mediaStatus(), m_nextPlayer->error());

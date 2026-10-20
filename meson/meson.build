@@ -198,6 +198,15 @@ app_sources = [
   'app/src/playback/apple_music_mix.h',
   'app/src/playback/apple_music_player.cpp',
   'app/src/playback/apple_music_player.h',
+  'app/src/playback/apple_music_playlist.cpp',
+  'app/src/playback/apple_music_playlist.h',
+  'app/src/playback/apple_music_stream.cpp',
+  'app/src/playback/apple_music_stream.h',
+  'app/src/playback/widevine_client.cpp',
+  'app/src/playback/widevine_client.h',
+  'app/src/playback/widevine_path.cpp',
+  'app/src/playback/widevine_path.h',
+  'app/src/widevine_host/widevine_protocol.h',
   'app/src/playback/apple_youtube_match.cpp',
   'app/src/playback/apple_youtube_match.h',
   'app/src/search/search_controller.cpp',
@@ -289,6 +298,8 @@ helper_webengine_sources = [
   'app/src/auth/spotify_helper.cpp',
   'app/src/auth/apple_music_helper.cpp',
   'app/src/auth/apple_music_player_host.cpp',
+  'app/src/playback/widevine_path.cpp',
+  'app/src/playback/widevine_path.h',
 ]
 
 helper_webview2_sources = [
@@ -614,6 +625,8 @@ app_moc_headers = [
   'app/src/playback/playback_controller.h',
   'app/src/playback/apple_music_mix.h',
   'app/src/playback/apple_music_player.h',
+  'app/src/playback/apple_music_stream.h',
+  'app/src/playback/widevine_client.h',
   'app/src/search/search_controller.h',
   'app/src/support/support_center.h',
   'app/src/providers/runtime/provider_runtime.h',
