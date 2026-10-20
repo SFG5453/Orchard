@@ -32,7 +32,8 @@ class QProcess;
 
 // Apple Music songs play through MusicKit JS in orchard-auth-helper's player mode
 // (applemusic/player.html). Apple's DRM keeps decoded audio inside that process, so
-// this side only sends commands and mirrors the state the page reports.
+// this side only sends commands and mirrors the state the page reports. An idle
+// helper ends after a few minutes; a paused song reloads at its position on play().
 class AppleMusicPlayer final : public QObject {
   Q_OBJECT
 
@@ -105,6 +106,9 @@ private:
   void clearFade();
   double fadeElapsed() const;
   void dropPrepared();
+  bool idle() const;
+  void updateIdleTimer();
+  void releaseIdle();
   QString errorText(const QString &code) const;
 
   AppleMusic *m_account;
@@ -138,4 +142,5 @@ private:
   double m_fadeBanked{0.0};
   QElapsedTimer m_fadeClock;
   QTimer *m_fadeTicker;
+  QTimer *m_idleTimer;
 };
