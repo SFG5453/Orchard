@@ -70,7 +70,7 @@ void PlaybackController::clearPreparedTrack() {
     cancelCrossfadeTransition();
   m_adaptiveMix.clear();
   m_nextRequest = 0;
-  ++m_preparedQobuzToken;
+  ++m_preparedResolveToken;
   m_preparedTrack.clear();
   m_preparedBitrate = 0;
   if (m_nextPlayer) {

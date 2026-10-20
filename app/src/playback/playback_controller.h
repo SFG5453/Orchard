@@ -50,6 +50,7 @@ class DownloadManager;
 class QobuzService;
 class AppleMusic;
 class AppleMusicMix;
+class AppleMusicStreams;
 class AppleMusicPlayer;
 class CatalogSource;
 
@@ -344,6 +345,8 @@ private:
   bool appleActive() const;
   bool appleNeedsLoad() const;
   void startAppleTrack();
+  // Native playback: the song's stream through the proxies, on the current or spare player.
+  void resolveAppleStream(const QVariantMap &track, bool prepared);
   void appleChanged();
   void appleFinished(const QString &advancedId);
   void prepareAppleNext();
@@ -353,6 +356,8 @@ private:
   double appleMixLength() const;
   QVariantMap appleFadeTrack() const;
   double appleMixStart() const;
+  // Only one exists: native streams where orchard-widevine-host can run, the page otherwise.
+  AppleMusicStreams *m_appleStreams{nullptr};
   AppleMusicPlayer *m_apple{nullptr};
   AppleMusicMix *m_appleMix{nullptr};
   AppleMusic *m_appleAccount{nullptr};
@@ -376,8 +381,8 @@ private:
 
   YouTubeProvider *m_provider;
   QobuzService *m_qobuz{nullptr};
-  // Invalidates a preload's pending Qobuz lookup; YouTube preloads use m_nextRequest.
-  quint64 m_preparedQobuzToken{0};
+  // Invalidates a preload's pending Qobuz or Apple Music lookup; YouTube preloads use m_nextRequest.
+  quint64 m_preparedResolveToken{0};
   bool m_qobuzWasActive{false};
   bool m_qobuzWasConnected{false};
   AuthManager *m_auth;

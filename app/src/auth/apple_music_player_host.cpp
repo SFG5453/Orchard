@@ -20,16 +20,15 @@
 #include "apple_music_helper.h"
 #include "apple_music_assets.h"
 #include "apple_music_page.h"
+#include "playback/widevine_path.h"
 
 #include <QCoreApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
 
 #ifdef ORCHARD_WEBENGINE_COOKIE_ADAPTER
-#include <QDir>
-#include <QFileInfo>
+#include <QFile>
 #include <QSocketNotifier>
-#include <QVersionNumber>
 #include <QWebChannel>
 #include <QWebEnginePage>
 #include <QWebEngineProfile>
@@ -40,7 +39,6 @@
 #include <QWebEngineUrlScheme>
 #include <QWebEngineUrlSchemeHandler>
 
-#include <algorithm>
 #include <cstdio>
 #include <unistd.h>
 #include <utility>
@@ -63,58 +61,6 @@ constexpr auto kBridge = R"JS(
   });
 })();
 )JS";
-
-QString widevineArch() {
-#if defined(Q_PROCESSOR_ARM_64)
-  return QStringLiteral("linux_arm64");
-#else
-  return QStringLiteral("linux_x64");
-#endif
-}
-
-// Newest versioned CDM under a browser's component-updater folder.
-QString newestCdm(const QString &root, const QString &relative) {
-  QStringList versions = QDir(root).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
-  std::sort(versions.begin(), versions.end(), [](const QString &a, const QString &b) {
-    return QVersionNumber::fromString(a) > QVersionNumber::fromString(b);
-  });
-  for (const QString &version : versions) {
-    const QString path = root + QLatin1Char('/') + version + relative;
-    if (QFileInfo::exists(path))
-      return path;
-  }
-  return {};
-}
-
-// Qt WebEngine ships no Widevine; borrow an installed browser's copy.
-QString findWidevine() {
-  const QString chosen = qEnvironmentVariable("ORCHARD_WIDEVINE_PATH");
-  if (!chosen.isEmpty())
-    return QFileInfo::exists(chosen) ? chosen : QString();
-  const QString bundled = QStringLiteral("/_platform_specific/") + widevineArch() + QStringLiteral("/libwidevinecdm.so");
-  for (const char *root : {"/opt/google/chrome/WidevineCdm", "/opt/google/chrome-beta/WidevineCdm",
-                           "/opt/google/chrome-unstable/WidevineCdm", "/usr/lib/chromium/WidevineCdm",
-                           "/usr/lib64/chromium/WidevineCdm", "/usr/lib/chromium-browser/WidevineCdm"}) {
-    const QString path = QString::fromLatin1(root) + bundled;
-    if (QFileInfo::exists(path))
-      return path;
-  }
-  const QString home = QDir::homePath();
-  for (const char *root : {"/.config/google-chrome/WidevineCdm", "/.config/chromium/WidevineCdm",
-                           "/.config/BraveSoftware/Brave-Browser/WidevineCdm",
-                           "/.var/app/com.google.Chrome/config/google-chrome/WidevineCdm"}) {
-    if (const QString path = newestCdm(home + QString::fromLatin1(root), bundled); !path.isEmpty())
-      return path;
-  }
-  const QDir firefox(home + QStringLiteral("/.mozilla/firefox"));
-  for (const QString &profile : firefox.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
-    const QString path = newestCdm(firefox.filePath(profile) + QStringLiteral("/gmp-widevinecdm"),
-                                   QStringLiteral("/libwidevinecdm.so"));
-    if (!path.isEmpty())
-      return path;
-  }
-  return {};
-}
 
 QString g_widevine;
 
@@ -161,7 +107,7 @@ QWebEngineScript bridgeScript() {
 
 void prepareAppleMusicPlayer() {
 #ifdef ORCHARD_WEBENGINE_COOKIE_ADAPTER
-  g_widevine = findWidevine();
+  g_widevine = findWidevineCdm();
   QByteArray flags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
   // Audio needs no GPU process. A page with no view counts as hidden, and hidden
   // pages get slow timers that would stall position reports and gapless handoffs.

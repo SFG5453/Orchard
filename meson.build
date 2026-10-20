@@ -441,6 +441,16 @@ auth_helper = executable('orchard-auth-helper', files(auth_sources) + helper_moc
   dependencies: auth_dependencies + [qt_entry_dep], cpp_args: auth_args,
   win_subsystem: 'windows', install: true)
 
+# Apple Music's Widevine streams decrypt here, outside the app and without a browser.
+if host_machine.system() == 'linux'
+  widevine_host = executable('orchard-widevine-host',
+    files('app/src/widevine_host/widevine_host_main.cpp', 'app/src/widevine_host/cdm_host.cpp',
+      'app/src/widevine_host/cenc_mp4.cpp'),
+    include_directories: include_directories('third_party/chromium_cdm'),
+    dependencies: [cpp.find_library('dl', required: false)],
+    install: true)
+endif
+
 qml_startup_test = executable('orchard_qml_startup_test',
   files('tests/qml_startup_test.cpp'),
   objects: [orchard.extract_objects(qml_module, qmldir_resources, qml_files_qrc, assets_qrc, exe_moc,
@@ -525,6 +535,7 @@ if get_option('tests')
     ['autoplay_select', 'tests/autoplay_select_test.cpp'],
     ['music_video_match', 'tests/music_video_match_test.cpp'],
     ['apple_youtube_match', 'tests/apple_youtube_match_test.cpp'],
+    ['apple_music_playlist', 'tests/apple_music_playlist_test.cpp'],
     ['letterbox', 'tests/letterbox_test.cpp'],
     ['video_ambient', 'tests/video_ambient_test.cpp'],
     ['artist_artwork', 'tests/artist_artwork_test.cpp'],
