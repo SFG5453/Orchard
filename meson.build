@@ -282,9 +282,10 @@ docs_qrc = qt6.compile_resources(sources: files('meson/app_docs.qrc'), extra_arg
 release_notes_qrc = qt6.compile_resources(sources: files('meson/release_notes.qrc'), extra_args: rcc_args)
 assets_qrc = qt6.compile_resources(sources: files('meson/qml_assets.qrc'), extra_args: rcc_args)
 qml_files_qrc = qt6.compile_resources(sources: files('meson/qml_files.qrc'), extra_args: rcc_args)
-# Windows sign-in hosts WebView2 directly; other platforms use QtWebView.
-auth_qrc = qt6.compile_resources(sources: files(host_machine.system() == 'windows'
-  ? 'meson/auth_qml_windows.qrc' : 'meson/auth_qml.qrc'), extra_args: rcc_args)
+# Sign-in hosts WebView2 on Windows and WebKitGTK on Linux; other platforms use QtWebView.
+auth_qrc_file = {'windows': 'meson/auth_qml_windows.qrc', 'linux': 'meson/auth_qml_linux.qrc'}.get(
+  host_machine.system(), 'meson/auth_qml.qrc')
+auth_qrc = qt6.compile_resources(sources: files(auth_qrc_file), extra_args: rcc_args)
 
 app_inc = include_directories('app/src', 'app/src/auth',
   'app/src/appearance', 'core/native', 'vendor/litert/include')
@@ -379,26 +380,6 @@ adaptive_stage = custom_target('adaptive mix stage',
     '--output', meson.current_build_dir() / 'adaptive-mix.stamp'],
   build_by_default: true)
 
-# The Apple Music player page's scan fallback, beside the Linux player helper.
-apple_music_scan = []
-wasi_sysroot = get_option('wasi_sysroot')
-if host_machine.system() == 'linux' and not get_option('apple_music_scan').disabled()
-  scan_ready = import('fs').is_dir(wasi_sysroot / 'lib' / 'wasm32-wasip1')
-  if not scan_ready and get_option('apple_music_scan').enabled()
-    error('apple_music_scan needs a WASI sysroot with libc++ at ' + wasi_sysroot)
-  endif
-  if scan_ready
-    apple_music_scan = custom_target('Apple Music scan fallback',
-      input: files(rust_sources + rust_web_sources + ['scripts/stage-apple-music-scan.py',
-        'providers/youtube/package-lock.json']),
-      output: 'apple-music-scan.stamp',
-      command: [python, files('scripts/stage-apple-music-scan.py'),
-        '--source-root', source_root, '--target-dir', meson.current_build_dir() / 'cargo-wasm',
-        '--sysroot', wasi_sysroot, '--destination', meson.current_build_dir(), '--output', '@OUTPUT@'],
-      build_by_default: true)
-  endif
-endif
-
 orchard = executable('orchard', files(app_executable_sources) + exe_moc +
   qml_module + [qmldir_resources] + qml_files_qrc + assets_qrc + licenses_qrc + docs_qrc + release_notes_qrc +
   [provider_resources, shaders_cpp],
@@ -422,14 +403,14 @@ if host_machine.system() == 'windows'
   webview2_arch = host_machine.cpu_family() == 'aarch64' ? 'arm64' : 'x64'
   configure_file(input: 'vendor/webview2/lib' / webview2_arch / 'WebView2Loader.dll',
     output: 'WebView2Loader.dll', copy: true, install: true, install_dir: get_option('bindir'))
+elif host_machine.system() == 'linux'
+  auth_sources += helper_browser_sources + helper_webkit_sources
+  auth_moc_headers += helper_webkit_moc_headers
+  auth_dependencies += [dependency('webkit2gtk-4.1', version: '>=2.40')]
+  auth_args += ['-DORCHARD_WEBKIT_AUTH', '-DORCHARD_NATIVE_COOKIE_AUTH']
 else
-  auth_sources += helper_webengine_sources
+  auth_sources += helper_browser_sources
   auth_dependencies += [dependency('qt6', version: '>=6.8', modules: ['WebView', 'WebViewQuick'])]
-  if host_machine.system() == 'linux'
-    auth_dependencies += [dependency('qt6', version: '>=6.8',
-      modules: ['WebEngineCore', 'WebEngineQuick', 'WebChannel'])]
-    auth_args += ['-DORCHARD_WEBENGINE_COOKIE_ADAPTER', '-DORCHARD_NATIVE_COOKIE_AUTH']
-  endif
 endif
 helper_moc = qt6.compile_moc(headers: auth_moc_headers,
   sources: ['app/src/providers/runtime/provider_runtime.cpp'],

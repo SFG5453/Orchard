@@ -39,7 +39,7 @@ class AppleMusic final : public QObject {
   // restoring, disconnected, connecting, connected
   Q_PROPERTY(QString status READ status NOTIFY changed)
   Q_PROPERTY(bool connected READ connected NOTIFY changed)
-  // Sign-in needs Qt WebEngine.
+  // Sign-in needs the helper's browser: WebKitGTK on Linux, WebView2 on Windows.
   Q_PROPERTY(bool loginAvailable READ loginAvailable CONSTANT)
   Q_PROPERTY(QString message READ message NOTIFY changed)
   Q_PROPERTY(bool messageIsError READ messageIsError NOTIFY changed)

@@ -17,7 +17,6 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "apple_music_player.h"
 #include "playback_controller.h"
 #include "playback_helpers.h"
 #include "gapless_playback.h"
@@ -61,10 +60,8 @@ PlaybackController::PlaybackController(YouTubeProvider *provider,
   connect(&m_adaptiveMix, &AdaptiveMixController::modeChanged, this, [this] {
     clearPreparedTrack();
     prepareNextTrack();
-    replanAppleMix();
     emit stateChanged();
   });
-  connect(&m_adaptiveMix, &AdaptiveMixController::appleFallbackChanged, this, &PlaybackController::replanAppleMix);
   connect(&m_adaptiveMix, &AdaptiveMixController::changed, this, &PlaybackController::stateChanged);
   m_gaplessEnabled =
       QSettings().value("playback/gaplessEnabled", false).toBool();
@@ -313,8 +310,6 @@ void PlaybackController::applyMasterVolume() {
   // UI and remote volume values stay in slider space; only output gain is curved.
   const double gain = m_exponentialVolumeEnabled ? volume * volume * volume : volume;
   m_audioEngineOutput.setMasterVolume(gain);
-  if (m_apple)
-    m_apple->setVolume(gain);
 }
 
 void PlaybackController::setExponentialVolumeEnabled(bool enabled) {
@@ -341,9 +336,6 @@ void PlaybackController::stop() {
     m_player->stop();
     m_player->setSource(QUrl());
   }
-  // A gapless handoff keeps the song the page already started.
-  if (m_apple && m_appleHandoff.isEmpty())
-    m_apple->stop();
   m_audioEngineOutput.setPlaying(false);
   m_audioEngineOutput.flush();
 

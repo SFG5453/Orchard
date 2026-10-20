@@ -13,20 +13,13 @@ for name in orchard orchard-auth-helper orchard-widevine-host orchard-adaptive-m
   cp "$build_dir/$name" "$appdir/usr/bin/$name"
 done
 cp -a "$build_dir/models" "$appdir/usr/bin/models"
-# The Apple Music scan fallback is optional at build time.
-if [ -d "$build_dir/applemusic-web" ]; then
-  cp -a "$build_dir/applemusic-web" "$appdir/usr/bin/applemusic-web"
-fi
 cp "$source_dir/LICENSE" "$source_dir/THIRD_PARTY_NOTICES.md" "$appdir/usr/share/orchard/"
 cp "$source_dir/vendor/discord_social_sdk/License-Notices.txt" "$appdir/usr/share/orchard/DiscordSocialSdk-Notices.txt"
 cp "$source_dir/vendor/litert/LICENSE" "$appdir/usr/share/orchard/LiteRT-LICENSE.txt"
 cp "$source_dir/third_party/chromium_cdm/LICENSE" "$appdir/usr/share/orchard/ChromiumCdm-LICENSE.txt"
-mkdir -p "$appdir/usr/plugins/webview" "$appdir/usr/plugins/sqldrivers"
-# These plugins are loaded by name, so an ELF dependency scan cannot see them.
-cp "$qt_root/plugins/webview/libqtwebview_webengine.so" "$appdir/usr/plugins/webview/"
+mkdir -p "$appdir/usr/plugins/sqldrivers"
+# This plugin is loaded by name, so an ELF dependency scan cannot see it.
 cp "$qt_root/plugins/sqldrivers/libqsqlite.so" "$appdir/usr/plugins/sqldrivers/"
-mkdir -p "$appdir/usr/qml"
-cp -a "$qt_root/qml/QtWebEngine" "$qt_root/qml/QtWebView" "$appdir/usr/qml/"
 
 # The Qt deploy plugin scans whole plugin directories, including unused drivers.
 # Mimer and NMEA can wait backstage instead of demanding client libraries.
@@ -57,9 +50,6 @@ cat > "$appdir/AppRun" <<'EOF'
 set -e
 here="$(dirname "$(readlink -f "$0")")"
 export PATH="$here/usr/bin:$PATH"
-export QTWEBENGINEPROCESS_PATH="$here/usr/bin/QtWebEngineProcess"
-export QTWEBENGINE_RESOURCES_PATH="$here/usr/resources"
-export QTWEBENGINE_LOCALES_PATH="$here/usr/translations/qtwebengine_locales"
 exec "$here/usr/bin/orchard" "$@"
 EOF
 chmod +x "$appdir/AppRun"
@@ -82,38 +72,30 @@ export PATH="$qt_root/bin:$PATH"
 export LD_LIBRARY_PATH="$qt_root/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export QMAKE="$qt_root/bin/qmake6"
 export QML_SOURCES_PATHS="$source_dir/app/qml"
-export EXTRA_QT_MODULES='sql;multimedia;webenginecore;webchannel'
+export EXTRA_QT_MODULES='sql;multimedia'
 export ARCH=x86_64
 export APPIMAGE_EXTRACT_AND_RUN=1
 cd "$output_dir"
 
-# linuxdeploy scans both Orchard executables and the WebEngine child process.
-# Chromium dlopens the host libsoftokn3, which must match the NSS core libraries.
-nss_excludes=(--exclude-library 'libnss3.so*' --exclude-library 'libnssutil3.so*' --exclude-library 'libsmime3.so*')
+# The sign-in helper uses the system WebKitGTK, whose child processes live at fixed
+# system paths. It and the GTK and GLib it is built against stay unbundled.
+system_excludes=()
+for library in libwebkit2gtk-4.1 libjavascriptcoregtk-4.1 libsoup-3.0 libgtk-3 libgdk-3 \
+  libglib-2.0 libgobject-2.0 libgio-2.0 libgmodule-2.0; do
+  system_excludes+=(--exclude-library "$library.so*")
+done
 
-./linuxdeploy-x86_64.AppImage --appdir "$appdir" "${nss_excludes[@]}" \
-  -e "$qt_root/libexec/QtWebEngineProcess" \
+./linuxdeploy-x86_64.AppImage --appdir "$appdir" "${system_excludes[@]}" \
   -e "$(command -v ffmpeg)" -e "$(command -v ffprobe)" \
   -i "$output_dir/orchard.png" \
   -d "$output_dir/orchard.desktop" --plugin qt
 
-# Bundled NSS must not survive the final linuxdeploy rescan.
-rm -f "$appdir"/usr/lib/libnss3.so "$appdir"/usr/lib/libnssutil3.so "$appdir"/usr/lib/libsmime3.so
-
-mkdir -p "$appdir/usr/resources" "$appdir/usr/translations/qtwebengine_locales"
-cp -a "$qt_root/resources/." "$appdir/usr/resources/"
-cp -a "$qt_root/translations/qtwebengine_locales/." "$appdir/usr/translations/qtwebengine_locales/"
-test -f "$appdir/usr/bin/QtWebEngineProcess"
 test -f "$appdir/usr/bin/ffmpeg"
 test -f "$appdir/usr/bin/ffprobe"
-test -f "$appdir/usr/resources/icudtl.dat"
-test -f "$appdir/usr/translations/qtwebengine_locales/en-US.pak"
-test -f "$appdir/usr/plugins/webview/libqtwebview_webengine.so"
 test -f "$appdir/usr/plugins/sqldrivers/libqsqlite.so"
-test -f "$appdir/usr/qml/QtWebEngine/libqtwebenginequickplugin.so"
 
-./linuxdeploy-x86_64.AppImage --appdir "$appdir" "${nss_excludes[@]}" --output appimage
-[[ -z "$(find "$appdir/usr/lib" -name 'libnss3.so*' -o -name 'libnssutil3.so*' -o -name 'libsmime3.so*')" ]] || { echo "Bundled NSS found in AppDir" >&2; exit 1; }
+./linuxdeploy-x86_64.AppImage --appdir "$appdir" "${system_excludes[@]}" --output appimage
+[[ -z "$(find "$appdir/usr/lib" -name 'libwebkit2gtk*' -o -name 'libgtk-3*' -o -name 'libglib-2.0*')" ]] || { echo "Bundled WebKitGTK stack found in AppDir" >&2; exit 1; }
 mapfile -t images < <(find "$output_dir" -maxdepth 1 -name '*.AppImage' ! -name 'linuxdeploy*' -print)
 [[ ${#images[@]} -eq 1 ]] || { echo "Expected one AppImage, found ${#images[@]}" >&2; exit 1; }
 mv "${images[0]}" "$output_dir/Orchard-Linux-x86_64.AppImage"

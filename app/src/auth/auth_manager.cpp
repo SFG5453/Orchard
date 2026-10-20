@@ -119,8 +119,8 @@ AuthManager::AuthManager(YouTubeProvider *youtubeProvider, bool embeddedWebAuth,
             }
 #endif
             if (!m_authWebViewActive) {
-              // QtWebView's document.cookie omits HttpOnly credentials. Let
-              // the browser restore and validate its own complete session.
+              // document.cookie omits HttpOnly credentials. Let the browser
+              // restore and validate its own complete session.
               m_profileLoading = false;
               m_profileRequestId = 0;
               startLogin();
@@ -404,8 +404,8 @@ bool AuthManager::handlePageAuth(const QString &authJson) {
               .arg(bool(captureState & 4)));
     }
     if (normalized != complete || !hasYouTubeSessionCookies(normalized)) {
-      // WebEngine never replays stored cookies, so a switch over the existing
-      // login sees no HttpOnly ones. The parent merges in the session it holds.
+      // A switch over the existing login may see no HttpOnly cookies from the
+      // browser. The parent merges in the session it holds.
       if (!m_switchMode || !hasYouTubeLoginCookie(normalized))
         return false;
       normalized = mergeCookies(normalized, complete);
@@ -713,8 +713,7 @@ void AuthManager::restoreSecretSession() {
             // The keychain read finishes after QML has created its
             // bindings. Notify the profile properties as well as status.
             emit userChanged();
-#if defined(ORCHARD_WEBENGINE_COOKIE_ADAPTER) ||                               \
-    defined(ORCHARD_NATIVE_COOKIE_AUTH)
+#ifdef ORCHARD_NATIVE_COOKIE_AUTH
             if (!hasYouTubeSessionCookies(m_cookie)) {
               // Older sessions saved document.cookie without HttpOnly
               // credentials. Opening the existing login profile initializes its

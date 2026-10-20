@@ -33,25 +33,23 @@
 #include <QQuickStyle>
 #include <QQuickView>
 #include <QTimer>
-#include <algorithm>
-#include <cstring>
 #ifdef ORCHARD_WEBVIEW2_AUTH
 #include "webview2_item.h"
+#include <QQmlEngine>
+#elif defined(ORCHARD_WEBKIT_AUTH)
+#include "webkit_profile.h"
+#include "webkit_view.h"
 #include <QQmlEngine>
 #else
 #include <QtWebView/QtWebView>
 #endif
 
 int main(int argc, char *argv[]) {
-  const bool applePlayer = std::any_of(argv + 1, argv + argc, [](const char *argument) {
-    return std::strcmp(argument, "--apple-music-player") == 0;
-  });
-#ifndef ORCHARD_WEBVIEW2_AUTH
-  if (applePlayer)
-    prepareAppleMusicPlayer();
-#endif
 #ifdef ORCHARD_WEBVIEW2_AUTH
   qmlRegisterType<WebView2Item>("Orchard.Auth", 1, 0, "WebView2Item");
+#elif defined(ORCHARD_WEBKIT_AUTH)
+  initializeWebKit(argc, argv);
+  qmlRegisterType<WebKitView>("Orchard.Auth", 1, 0, "WebKitView");
 #else
   QtWebView::initialize();
 #endif
@@ -63,10 +61,6 @@ int main(int argc, char *argv[]) {
   QGuiApplication application(argc, argv);
   QQuickStyle::setStyle(QStringLiteral("Basic"));
 
-#ifndef ORCHARD_WEBVIEW2_AUTH
-  if (applePlayer)
-    return runAppleMusicPlayer();
-#endif
   const QStringList arguments = application.arguments();
   const int socketArgument = arguments.indexOf(QStringLiteral("--auth-socket"));
   if (socketArgument < 0 || socketArgument + 1 >= arguments.size())
@@ -127,7 +121,16 @@ int main(int argc, char *argv[]) {
                      sessionClient->send(socketName, result);
                    });
 
+#ifdef ORCHARD_WEBKIT_AUTH
+  // The page opens its own GTK window; this view only runs the sign-in logic.
+  auto *page = view.rootObject()->findChild<WebKitView *>();
+  if (!page)
+    return 1;
+  QObject::connect(page, &WebKitView::closeRequested, &application, &QCoreApplication::quit);
+  page->show(view.title(), view.size(), true);
+#else
   view.show();
+#endif
   QTimer::singleShot(0, &authManager, &AuthManager::startLogin);
   return application.exec();
 }

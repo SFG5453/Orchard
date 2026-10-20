@@ -1,8 +1,6 @@
 /* Copyright (C) 2026 SFG545. Licensed under the PolyForm Shield License 1.0.0, see LICENSE-POLYFORM-SHIELD. */
 
 #include "adaptive_mix_controller.h"
-#include "auth/apple_music_assets.h"
-#include "playback/apple_music_stream.h"
 #include <QDebug>
 #include <QJsonObject>
 #include <QRegularExpression>
@@ -15,8 +13,6 @@ AdaptiveMixController::AdaptiveMixController(QObject *parent)
   m_mode = QSettings().value("playback/crossfadeMode", "standard").toString();
   if (m_mode != "adaptive")
     m_mode = "standard";
-  m_appleFallback = QSettings().value("playback/appleMixFallback").toString() == "scan"
-                        ? QStringLiteral("scan") : QStringLiteral("standard");
   connect(&m_worker, &AdaptiveMixWorker::finished, this, &AdaptiveMixController::receive);
   connect(&m_worker, &AdaptiveMixWorker::failed, this, [this](const QString &message) {
     if (m_preparing)
@@ -34,25 +30,6 @@ void AdaptiveMixController::setMode(const QString &mode) {
   QSettings().setValue("playback/crossfadeMode", m_mode);
   emit modeChanged();
 }
-void AdaptiveMixController::setAppleFallback(const QString &fallback) {
-  const QString normalized = fallback == "scan" ? fallback : QStringLiteral("standard");
-  if (normalized == m_appleFallback)
-    return;
-  m_appleFallback = normalized;
-  QSettings().setValue("playback/appleMixFallback", m_appleFallback);
-  emit appleFallbackChanged();
-}
-
-bool AdaptiveMixController::appleScanAvailable() {
-  static const bool staged = apple_music_assets::available();
-  return staged;
-}
-
-bool AdaptiveMixController::appleMatchesYouTube() {
-  static const bool page = !AppleMusicStreams::available();
-  return page;
-}
-
 void AdaptiveMixController::setAvailable(bool available) {
   if (m_available == available)
     return;
@@ -167,13 +144,6 @@ void AdaptiveMixController::prepare(const QString &pair, const QUrl &outgoing,
                              {"fadeSeconds", fadeSeconds},
                              {"albumSequential", albumSequential},
                              {"references", references}});
-}
-
-void AdaptiveMixController::showStatus(const QString &status) {
-  if (m_status == status)
-    return;
-  m_status = status;
-  emit changed();
 }
 
 void AdaptiveMixController::failPair(const QString &pair, const QString &message) {

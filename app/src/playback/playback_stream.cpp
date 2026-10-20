@@ -19,7 +19,6 @@
 
 #include "playback_controller.h"
 #include "autoplay_select.h"
-#include "apple_music_player.h"
 #include "playback_helpers.h"
 #include <QDebug>
 #include <QJsonArray>
@@ -198,8 +197,6 @@ void PlaybackController::fail(const QString &message) {
   m_request = 0;
   m_loading = false;
   m_player->stop();
-  if (appleActive())
-    m_apple->stop();
   m_track.remove(QStringLiteral("bitrate"));
   m_resumePosition = 0.0;
   m_persistTimer.stop();

@@ -82,7 +82,7 @@ void PlaybackController::clearPreparedTrack() {
 
 void PlaybackController::prepareNextTrack() {
   if ((!m_gaplessEnabled && !m_crossfadeEnabled) || m_crossfadeActive ||
-      m_switchingTrack || m_loading || m_track.isEmpty() || appleActive())
+      m_switchingTrack || m_loading || m_track.isEmpty())
     return;
   if (!m_player || !m_nextPlayer)
     return;
@@ -156,10 +156,6 @@ double PlaybackController::displayDuration() const {
     const double incoming = transitionDuration() > 0.0 ? transitionDuration() : from;
     return std::max(1.0, from + (incoming - from) * crossfadeProgress());
   }
-  if (appleActive()) {
-    const double start = appleMixStart();
-    return start >= 0.0 ? std::max(1.0, start) : actual;
-  }
   if (hasCrossfadeTarget() && m_adaptiveMix.enabled() &&
       !m_adaptiveMix.standardFallback())
     return m_adaptiveMix.ready() ? m_adaptiveMix.outgoingStart() : actual;
@@ -177,8 +173,6 @@ double PlaybackController::displayPosition() const {
 }
 
 double PlaybackController::mixStart() const {
-  if (appleActive())
-    return appleMixStart();
   if (m_crossfadeActive)
     return m_crossfadeOutgoingDisplayDuration;
   if (!hasCrossfadeTarget())
@@ -193,11 +187,10 @@ double PlaybackController::mixDuration() const {
   const double start = mixStart();
   if (start < 0.0)
     return 0.0;
-  const bool adaptive = appleActive()       ? appleMixPlanned()
-                        : m_crossfadeActive ? m_audioEngineOutput.adaptiveMixActive()
-                                                          : m_adaptiveMix.enabled() && !m_adaptiveMix.standardFallback();
+  const bool adaptive = m_crossfadeActive ? m_audioEngineOutput.adaptiveMixActive()
+                                          : m_adaptiveMix.enabled() && !m_adaptiveMix.standardFallback();
   if (adaptive)
-    return appleActive() ? appleMixLength() : m_adaptiveMix.duration();
+    return m_adaptiveMix.duration();
   return std::max(0.0, std::min<double>(m_crossfadeDuration, duration() - start));
 }
 
