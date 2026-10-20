@@ -193,19 +193,20 @@ The music source decides Home, search, artist, album and playlist pages on both 
 
 Apple Music songs play from Apple Music when **Music source** is **Apple**. They are not matched to YouTube Music. Under **Normal**, an Apple Music song shows "Choose Apple as the music source under Settings, General to play Apple Music songs." Your YouTube Music session is still required to play YouTube Music songs.
 
-Apple Music playback runs Apple's web player (MusicKit) in a separate Orchard process. That process uses about 250 MB of memory, and up to about 400 MB while the next song is buffered for gapless playback. It starts with the first Apple Music song and quits when you switch **Music source** to **Normal** or disconnect Apple Music.
+Orchard streams Apple Music songs itself and decrypts them in a small separate process, `orchard-widevine-host`, which uses about 80 MB of memory while songs play. It starts with the first Apple Music song and quits two minutes after playback stops, or when you switch **Music source** to **Normal** or disconnect Apple Music. Decrypted audio stays in memory and is never written to disk.
 
 - Platforms: Linux only for now. On Windows, an Apple Music song shows "Apple Music playback is not available on this system yet." On Android, it shows "Apple Music playback is not available yet."
 - Widevine: Apple Music audio is protected, so Linux needs the Widevine module from an installed Google Chrome, Chromium with Widevine, Brave, or Firefox. If none is found, the song shows "Apple Music playback needs Widevine." Set `ORCHARD_WIDEVINE_PATH` to a `libwidevinecdm.so` file to use another copy.
 - Quality: Apple Music plays 256 kbps AAC. The **Streaming quality** setting does not apply.
-- Transitions: see [Mix Apple Music songs](integrations.md#mix-apple-music-songs).
-- Autoplay, the Audio Engine, and AI-music scans do not apply to Apple Music songs.
+- Apple Music songs play through the same player as YouTube Music songs, so the Audio Engine, crossfade, gapless playback and Adaptive mix work as described in [Crossfade and gapless playback](crossfade.md). Adaptive mix analyses Apple's own audio.
+- Autoplay and AI-music scans do not apply to Apple Music songs.
 - Volume, play, pause, seek, next and previous work as usual, including from media keys and the system media controls.
 - Errors: "Apple Music is signed out" means the saved sign-in expired; connect Apple Music again. "Playing Apple Music songs needs an active Apple Music subscription" means the account has no subscription.
+- Web player: set `ORCHARD_APPLE_WEB_PLAYER=1` to play Apple Music songs in Apple's web player (MusicKit) instead. It runs in a separate Orchard process that uses about 250 MB of memory, up to about 400 MB while the next song is buffered, and quits after five minutes without playback. The next section describes its transitions.
 
-## Mix Apple Music songs
+## Mix Apple Music songs in the web player
 
-Crossfade, gapless playback and Adaptive mix work between two Apple Music songs. The blend plays inside Apple's player; Apple's audio never leaves it.
+With `ORCHARD_APPLE_WEB_PLAYER=1`, crossfade, gapless playback and Adaptive mix work between two Apple Music songs inside Apple's player; Apple's audio never leaves it.
 
 - **Standard crossfade:** the next song is buffered 20 seconds before the end, and the two songs blend over the crossfade length.
 - **Gapless playback** (with **Crossfade** off): the next song is buffered 20 seconds before the end and starts as soon as the current one ends.
