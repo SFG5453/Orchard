@@ -15,6 +15,16 @@ headers from `litert_cc_sdk.zip` and the prebuilt runtimes from
 LiteRT is licensed under the Apache License 2.0, preserved in
 [`vendor/litert/LICENSE`](vendor/litert/LICENSE) and shipped with packages.
 
+## Chromium CDM interface
+
+`orchard-widevine-host` uses Chromium's Content Decryption Module interface
+headers from `chromium.googlesource.com/chromium/cdm` at commit
+`d6c4e1ea4c8fc3dcd98ac3ab5a981f63067223a4`, vendored under
+`third_party/chromium_cdm`. They are licensed under the BSD 3-Clause license,
+preserved in [`third_party/chromium_cdm/LICENSE`](third_party/chromium_cdm/LICENSE)
+and shipped with Linux packages. Orchard does not ship the Widevine CDM; it
+loads the copy an installed browser keeps.
+
 ## Microsoft Edge WebView2 SDK
 
 The Windows sign-in helper uses the WebView2 SDK 1.0.4258.31 headers and loader

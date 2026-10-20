@@ -66,6 +66,11 @@ public:
     withDeveloperToken(std::move(done));
   }
 
+  // The listener's Music User Token; empty while disconnected.
+  QString userToken() const { return m_userToken; }
+  // The developer token's origin claim names the sign-in page's origin; Apple checks requests against it.
+  static QString tokenOrigin() { return QStringLiteral("https://appassets.androidplatform.net"); }
+
   static bool isAppleMusicId(const QString &browseId) { return browseId.startsWith(QStringLiteral("am.")); }
 
   // apple_music_catalog.cpp

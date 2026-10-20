@@ -19,6 +19,7 @@
 
 #include "apple_music_mix.h"
 #include "apple_music_player.h"
+#include "apple_music_stream.h"
 #include "integrations/apple_music.h"
 #include "integrations/catalog_source.h"
 #include "playback_controller.h"
@@ -46,7 +47,25 @@ QString appleSongId(const QVariantMap &track) {
 void PlaybackController::setAppleMusic(AppleMusic *account, CatalogSource *source) {
   m_appleAccount = account;
   m_catalogSource = source;
-  if (!AppleMusicPlayer::available() || m_apple)
+  if (m_apple || m_appleStreams)
+    return;
+  if (AppleMusicStreams::available()) {
+    m_appleStreams = new AppleMusicStreams(account, this);
+    installRangeReaders();
+    // The decryption host only runs while Apple is the music source and the account is usable.
+    const auto release = [this] {
+      const QString status = m_appleAccount->status();
+      if (m_catalogSource->apple() && (status == QStringLiteral("connected") || status == QStringLiteral("restoring")))
+        return;
+      if (isAppleTrack(m_track))
+        stop();
+      m_appleStreams->clear();
+    };
+    connect(source, &CatalogSource::changed, this, release);
+    connect(account, &AppleMusic::changed, this, release);
+    return;
+  }
+  if (!AppleMusicPlayer::available())
     return;
   m_apple = new AppleMusicPlayer(account, this);
   m_appleMix = new AppleMusicMix(m_provider, m_auth, &m_adaptiveMix, this);
@@ -111,7 +130,7 @@ bool PlaybackController::appleNeedsLoad() const {
 void PlaybackController::startAppleTrack() {
   const QString id = appleSongId(m_track);
   QString message;
-  if (!m_apple)
+  if (!m_apple && !m_appleStreams)
     message = tr("Apple Music playback is not available on this system yet.");
   else if (!m_catalogSource || !m_catalogSource->apple())
     message = tr("Choose Apple as the music source under Settings, General to play Apple Music songs.");
@@ -122,6 +141,14 @@ void PlaybackController::startAppleTrack() {
   if (!message.isEmpty()) {
     m_appleHandoff.clear();
     fail(message);
+    return;
+  }
+  if (m_appleStreams) {
+    // A restored song loads when play is pressed, like the other sources.
+    if (m_resumePaused)
+      m_loading = false;
+    else
+      resolveAppleStream(m_track, false);
     return;
   }
   if (std::exchange(m_appleHandoff, {}) == id && m_apple->currentId() == id) {
@@ -135,6 +162,28 @@ void PlaybackController::startAppleTrack() {
     return;
   }
   m_apple->load(id, m_resumePosition, true);
+}
+
+void PlaybackController::resolveAppleStream(const QVariantMap &track, bool prepared) {
+  const QString id = appleSongId(track);
+  if (prepared && (id.isEmpty() || !m_catalogSource->apple() || !m_appleAccount->connected()))
+    return;
+  const quint64 generation = m_generation;
+  const quint64 token = prepared ? ++m_preparedResolveToken : 0;
+  m_appleStreams->resolve(id, [this, generation, token, track, prepared](const QJsonObject &stream,
+                                                                         const QString &error) {
+    if (prepared) {
+      if (token == m_preparedResolveToken && m_preparedTrack.value("id") == track.value("id") && !stream.isEmpty())
+        openPreparedStream(stream);
+      return;
+    }
+    if (generation != m_generation)
+      return;
+    if (stream.isEmpty())
+      fail(error);
+    else
+      startResolvedStream(stream);
+  });
 }
 
 void PlaybackController::appleChanged() {

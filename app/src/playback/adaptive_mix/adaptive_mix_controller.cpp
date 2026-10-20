@@ -2,6 +2,7 @@
 
 #include "adaptive_mix_controller.h"
 #include "auth/apple_music_assets.h"
+#include "playback/apple_music_stream.h"
 #include <QDebug>
 #include <QJsonObject>
 #include <QRegularExpression>
@@ -45,6 +46,11 @@ void AdaptiveMixController::setAppleFallback(const QString &fallback) {
 bool AdaptiveMixController::appleScanAvailable() {
   static const bool staged = apple_music_assets::available();
   return staged;
+}
+
+bool AdaptiveMixController::appleMatchesYouTube() {
+  static const bool page = !AppleMusicStreams::available();
+  return page;
 }
 
 void AdaptiveMixController::setAvailable(bool available) {

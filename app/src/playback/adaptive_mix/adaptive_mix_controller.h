@@ -21,6 +21,9 @@ class AdaptiveMixController final : public QObject {
   // them in Apple's player (see AppleMusicMix).
   Q_PROPERTY(QString appleFallback READ appleFallback WRITE setAppleFallback NOTIFY appleFallbackChanged)
   Q_PROPERTY(bool appleScanAvailable READ appleScanAvailable CONSTANT)
+  // Apple Music plays in Apple's web player, so its mixes plan from YouTube Music matches.
+  // False where Apple songs stream natively and mix like any other song.
+  Q_PROPERTY(bool appleMatchesYouTube READ appleMatchesYouTube CONSTANT)
 public:
   explicit AdaptiveMixController(QObject *parent = nullptr);
   ~AdaptiveMixController() override;
@@ -34,6 +37,7 @@ public:
   void setAppleFallback(const QString &fallback);
   // This build staged the page's scan engine beside the player helper.
   static bool appleScanAvailable();
+  static bool appleMatchesYouTube();
   bool appleScans() const { return appleScanAvailable() && m_appleFallback == QStringLiteral("scan"); }
   QString status() const { return m_status; }
   bool ready() const { return !m_pcm.isEmpty(); }

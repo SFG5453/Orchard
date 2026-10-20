@@ -22,6 +22,7 @@ import QtQuick
 // Apple Music fallback row. Layout lives in AppleMixFallbackForm.ui.qml.
 AppleMixFallbackForm {
     visible: OrchardPlayback.adaptiveMix.mode === "adaptive" && OrchardHome.homeSource === "apple_music"
+             && OrchardPlayback.adaptiveMix.appleMatchesYouTube
     enabled: OrchardPlayback.crossfadeEnabled
     scanAvailable: OrchardPlayback.adaptiveMix.appleScanAvailable
     fallback: OrchardPlayback.adaptiveMix.appleFallback

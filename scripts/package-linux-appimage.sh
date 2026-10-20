@@ -9,7 +9,7 @@ source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 appdir="$output_dir/AppDir"
 mkdir -p "$output_dir" "$appdir/usr/bin" "$appdir/usr/share/orchard"
 
-for name in orchard orchard-auth-helper orchard-adaptive-mix libwebgpu_dawn.so libdiscord_partner_sdk.so libLiteRt.so; do
+for name in orchard orchard-auth-helper orchard-widevine-host orchard-adaptive-mix libwebgpu_dawn.so libdiscord_partner_sdk.so libLiteRt.so; do
   cp "$build_dir/$name" "$appdir/usr/bin/$name"
 done
 cp -a "$build_dir/models" "$appdir/usr/bin/models"
@@ -20,6 +20,7 @@ fi
 cp "$source_dir/LICENSE" "$source_dir/THIRD_PARTY_NOTICES.md" "$appdir/usr/share/orchard/"
 cp "$source_dir/vendor/discord_social_sdk/License-Notices.txt" "$appdir/usr/share/orchard/DiscordSocialSdk-Notices.txt"
 cp "$source_dir/vendor/litert/LICENSE" "$appdir/usr/share/orchard/LiteRT-LICENSE.txt"
+cp "$source_dir/third_party/chromium_cdm/LICENSE" "$appdir/usr/share/orchard/ChromiumCdm-LICENSE.txt"
 mkdir -p "$appdir/usr/plugins/webview" "$appdir/usr/plugins/sqldrivers"
 # These plugins are loaded by name, so an ELF dependency scan cannot see them.
 cp "$qt_root/plugins/webview/libqtwebview_webengine.so" "$appdir/usr/plugins/webview/"
