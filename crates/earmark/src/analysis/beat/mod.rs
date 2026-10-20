@@ -255,13 +255,18 @@ impl BeatTracker {
         (downbeats, meter, margin)
     }
 
-    /// Tracks mono `samples` at any rate; they are resampled to the 22.05 kHz frontend.
+    /// Tracks mono `samples` at any rate. 11.025 kHz input is read directly; other rates are
+    /// resampled to the 22.05 kHz frontend.
     pub(crate) fn track_samples(
         &self,
         frontends: &mut ModelFrontends,
         samples: &[f32],
         sample_rate: f64,
     ) -> Result<BeatTrack> {
+        if (sample_rate - BEAT_SPECTROGRAM_SAMPLE_RATE / 2.0).abs() <= 0.5 {
+            let spectrogram = frontends.beat_spectrogram_half_rate(samples)?;
+            return Ok(self.track(&spectrogram.values));
+        }
         let resampled;
         let mono = if (sample_rate - BEAT_SPECTROGRAM_SAMPLE_RATE).abs() <= 1.0 {
             samples
