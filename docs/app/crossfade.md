@@ -113,7 +113,7 @@ On Android, the remaining time under the player's progress bar sparkles in rainb
 
 Use the **Gapless playback** switch in the **Transitions** group. Its description reads "Preload the next song to minimize pauses between tracks." Gapless playback is off by default.
 
-Apple Music songs also crossfade, play gaplessly and use Adaptive mix. Adaptive mix plans them from their YouTube Music uploads; songs without one use the **Apple Music songs without a match** setting. See [Mix Apple Music songs](integrations.md#mix-apple-music-songs).
+Apple Music songs also crossfade, play gaplessly and use Adaptive mix, which analyses Apple's own audio. In Apple's web player (`ORCHARD_APPLE_WEB_PLAYER=1`), Adaptive mix plans them from their YouTube Music uploads instead; see [Mix Apple Music songs in the web player](integrations.md#mix-apple-music-songs-in-the-web-player).
 
 ## Tell when a crossfade is happening
 
