@@ -40,10 +40,23 @@ pub unsafe extern "C" fn orchard_youtube_extract(source: *const u8, length: usiz
         Ok(extraction) => serde_json::to_string(&extraction),
         Err(error) => serde_json::to_string(&serde_json::json!({ "error": error })),
     };
+    trim_heap();
     json.ok()
         .and_then(|json| CString::new(json).ok())
         .map_or(std::ptr::null_mut(), CString::into_raw)
 }
+
+// Semantic tables land in the main heap, which glibc keeps after free.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn trim_heap() {
+    unsafe extern "C" {
+        fn malloc_trim(pad: usize) -> i32;
+    }
+    unsafe { malloc_trim(0) };
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+fn trim_heap() {}
 
 /// # Safety
 /// `result` must be null or a live pointer returned by orchard_youtube_extract,
