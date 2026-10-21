@@ -196,6 +196,8 @@ internal fun AppearancePage(
             onChecked = { onSettings(settings.copy(animatedArtwork = it)) },
         )
         PanelDivider()
+        ArtworkQualityRows(settings, onSettings)
+        PanelDivider()
         ArtworkSourceOrder(settings, onSettings)
         PanelDivider()
         ToggleRow(

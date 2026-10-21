@@ -178,6 +178,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     val activeBitrate: StateFlow<Int> = graph.activeBitrate.asStateFlow()
     val isOnline: StateFlow<Boolean> = graph.networkMonitor.isOnline
+    val isNetworkMetered: StateFlow<Boolean> = graph.networkMonitor.isMetered
     val downloads: StateFlow<Map<String, DownloadItem>> = graph.downloads.downloads
     val downloadedTrackIds: StateFlow<Set<String>> = graph.downloads.downloadedTrackIds
     val downloadingTrackIds: StateFlow<Set<String>> = graph.downloads.downloadingTrackIds

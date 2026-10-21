@@ -64,6 +64,8 @@ Open **Settings → Appearance → Lyrics providers** to enable Bini Lyrics, Bet
 
 While signed in to Apple Music, Apple Music replaces Bini Lyrics, BetterLyrics, and LyricsPlus in settings and the song source picker. Its synced lyrics lead by default, with LRCLIB and YouTube Music available as fallbacks. Signing out restores the mirror providers and their saved settings.
 
+Animated artwork quality is set separately for Wi-Fi and mobile data under **Settings → Appearance → Player**. Choose **Automatic** to adapt to connection speed, **Data saver** for lower data use, **Balanced** for sharper covers, or **Highest** for the best available rendition. Both default to Automatic. Metered Wi-Fi uses the mobile data setting. Quality choices apply when the source offers multiple qualities; saved covers keep their downloaded quality.
+
 ### Connected listening
 
 * **Orchard Connect** - control Orchard desktop from the phone or the phone from the desktop, on the same Wi-Fi or across the internet, while a connected desktop prepares Smart Crossfades and artwork for the phone
