@@ -30,8 +30,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import dev.sfg.orchard.mobile.OrchardGraph
+import dev.sfg.orchard.mobile.artwork.LocalTallArtToggle
+import dev.sfg.orchard.mobile.artwork.TallArtToggle
+import dev.sfg.orchard.mobile.artwork.tallArtRejected
+import dev.sfg.orchard.mobile.artwork.withoutRejectedTallArt
 import dev.sfg.orchard.mobile.model.LocalMaxActive
 import dev.sfg.orchard.mobile.model.LocalStreamDetail
 import dev.sfg.orchard.mobile.model.LibrarySnapshot
@@ -92,11 +98,18 @@ fun NowPlayingOverlay(
 
     val liked = remember(library.likedTracks, currentTrack.id) { library.likedTracks.any { it.id == currentTrack.id } }
 
+    val context = LocalContext.current
+    val rejectedTallArt = remember { OrchardGraph.from(context).rejectedTallArt }
+    val rejectedUrls by rejectedTallArt.urls.collectAsStateWithLifecycle()
+    val tallArtToggle = currentTrack.animatedArtworkVerticalUrl.takeIf { it.isNotBlank() && settings.animatedArtwork }
+        ?.let { url -> TallArtToggle(currentTrack.tallArtRejected(rejectedUrls)) { rejectedTallArt.toggle(url) } }
+
     // The player's own backdrop, so glass inside it blurs the cover or video and not the page behind.
     val glassScene = rememberGlassScene()
     CompositionLocalProvider(
         LocalStreamDetail provides activeStreamDetail.copy(hiRes = activeStreamDetail.hiRes || currentTrack.hires),
         LocalGlassScene provides glassScene,
+        LocalTallArtToggle provides tallArtToggle,
     ) {
         NowPlayingScreen(
             modifier = modifier,
@@ -119,7 +132,7 @@ fun NowPlayingOverlay(
             videoPlayer = videoPlayer,
             onToggleMusicVideo = viewModel::toggleMusicVideo,
             onVideoQuality = viewModel::setVideoMaxHeight,
-            playback = playback,
+            playback = remember(playback, rejectedUrls) { playback.withoutRejectedTallArt(rejectedUrls) },
             transition = transition,
             mixProgress = mixProgress,
             targets = targets,
