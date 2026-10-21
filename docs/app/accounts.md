@@ -105,7 +105,7 @@ With the switch on, closing the window while signed in hides it and the music ke
 
 ## Add played songs to your YouTube Music history
 
-The **YouTube Music** group has a row named "Save plays to YouTube Music history" with a switch (accessible name "Send listening history to YouTube"). Its description reads "Songs you play in Orchard are added to your YouTube Music history." It is on by default. Turn it off to keep Orchard plays out of your YouTube Music history.
+The **YouTube Music** group has a row named "Save plays to YouTube Music history" with a switch (accessible name "Send listening history to YouTube"). Its description reads "Songs you play in Orchard are added to your YouTube Music history." It is on by default. Turn it off to keep Orchard plays out of your YouTube Music history. On Android, nothing is saved while **Music source** is **Apple Music**.
 
 ## Choose the music source
 
