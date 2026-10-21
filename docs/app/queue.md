@@ -83,6 +83,8 @@ Best Mix cannot measure vocals as precisely as playback does. A pair it expects 
 
 Best Mix runs the same local analysis worker as Adaptive mix, and the analysis stays on your device. FFmpeg must be installed. Songs that cannot be analyzed keep their place. Changing the queue while Best Mix runs cancels the sort. The queue then shows each song's tempo as a BPM label. The Android app sorts with the same code and analyzes the same low-bitrate audio, so the same queue gets the same order on both. Best Mix on Android downloads that audio separately from your downloads and deletes it after analysis.
 
+When **Music source** is **Apple Music**, Best Mix downloads nothing for Apple Music songs. It sorts them from Apple's own analysis of each song: tempo, key, loudness, energy and where the vocals are. Apple's analysis has no measured audio, so Best Mix orders those songs from its predictions without checking each pair with the planner; Adaptive mix still plans every transition from the audio as it plays. Songs Apple has not analysed keep their place. This works the same on desktop and Android.
+
 ## Cancel Best Mix
 
 Click the Best Mix button while it shows progress. Its tooltip reads "Click to cancel".

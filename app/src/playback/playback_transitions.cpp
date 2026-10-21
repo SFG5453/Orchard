@@ -227,9 +227,13 @@ void PlaybackController::maybeStartCrossfade() {
     // Best Mix order and shuffle are mixes, never album playthroughs.
     const bool albumSequential = !m_shuffleEnabled && !m_bestMixSorted &&
                                  isAlbumPlaythrough(m_track, candidate);
+    QJsonObject outgoingApple, incomingApple;
+    if (pair != m_adaptiveMix.pair() &&
+        !appleMixAnalyses(m_track, candidate, outgoingApple, incomingApple))
+      return;
     m_adaptiveMix.prepare(pair, m_player->source(), m_nextPlayer->source(),
                           actualDuration, position(), m_track, candidate,
-                          m_crossfadeDuration, albumSequential);
+                          m_crossfadeDuration, albumSequential, outgoingApple, incomingApple);
     adaptive = !m_adaptiveMix.standardFallback();
     if (adaptive && !m_adaptiveMix.ready())
       return;

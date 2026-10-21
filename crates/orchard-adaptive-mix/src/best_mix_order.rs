@@ -94,6 +94,11 @@ pub(crate) fn plan_input(left: &Value, right: &Value) -> Value {
         "tempoRamp":true})
 }
 
+/// False for edges built without audio (Apple Music's analysis): the planner needs spectra.
+fn plannable(edge: &Value) -> bool {
+    edge["plannable"].as_bool() != Some(false)
+}
+
 /// Costs of one musical run: `start[j]` from the song before it, `pair[i][j]` between its songs.
 struct Costs {
     start: Vec<f64>,
@@ -179,7 +184,9 @@ where
         let mut pending = Vec::new();
         for (position, &to) in order.iter().enumerate() {
             let from = position.checked_sub(1).map(|p| order[p]);
-            if (from.is_some() || plans_start) && !verified.contains_key(&(from, to)) {
+            let left = from.map_or(before, |from| Some(&summaries[run[from]]["tail"]));
+            if (from.is_some() || plans_start) && !verified.contains_key(&(from, to))
+                && left.is_some_and(plannable) && plannable(&summaries[run[to]]["head"]) {
                 pending.push((from, to));
             }
         }
@@ -348,5 +355,13 @@ mod tests {
             assert!(requests.contains(&(previous, song)), "pair {previous:?} -> {song} was never planned");
             previous = Some(song);
         }
+    }
+
+    #[test]
+    fn edges_without_audio_sort_on_predictions_alone() {
+        let edge = json!({"duration":150.0,"bpm":120.0,"beatConfidence":0.95,"plannable":false});
+        let summaries = vec![json!({"head":edge,"tail":edge}); 6];
+        let order = sort_lazy(&summaries, &edge, |_, _| Err("no pair should be fetched".to_owned())).unwrap();
+        assert_eq!(order.len(), summaries.len());
     }
 }

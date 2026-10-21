@@ -2,7 +2,7 @@
 
 //! Prepare a finite stereo overlap and its native-rate incoming handoff.
 //! `mix` is the whole decision and render path on every platform; hosts only decode.
-use crate::{analysis, evidence, lock, models::Models, planner, song::{self, Song}};
+use crate::{analysis, apple, evidence, lock, models::Models, planner, song::{self, Song}};
 use earmark::AudioBuffer;
 use earmark::audio::resample::resample;
 use earmark::dsp::filters::FilterKind;
@@ -25,8 +25,23 @@ pub struct MixRequest {
     #[serde(default)]
     pub album_sequential: bool,
     pub position: f64,
+    /// Apple Music's audio analysis of each song, sent only for songs played from Apple Music.
+    /// It replaces the beat model's bar phase and the UMX vocals.
+    #[serde(default)]
+    pub outgoing_apple: Option<serde_json::Value>,
+    #[serde(default)]
+    pub incoming_apple: Option<serde_json::Value>,
 }
 fn default_fade() -> f64 { 6.0 }
+
+impl MixRequest {
+    /// False when Apple's analysis covers the beat grid and vocals of both songs.
+    pub fn needs_models(&self) -> bool {
+        let covered = |analysis: &Option<serde_json::Value>| analysis.as_ref()
+            .is_some_and(|analysis| apple::grid(analysis).is_some() && analysis["vocalActivity"].is_array());
+        !(covered(&self.outgoing_apple) && covered(&self.incoming_apple))
+    }
+}
 
 /// The desktop worker's request: the pair plus the loopback streams to decode.
 #[cfg(feature = "desktop")]
@@ -127,7 +142,7 @@ fn references(prepared: &mut Prepared, outgoing: &Song, incoming: &Song) -> Vec<
 /// Decodes both loopback streams, then mixes them. Returns stereo f32 at 48 kHz, then the
 /// reference clips when the request asks for them.
 #[cfg(feature = "desktop")]
-pub fn prepare(models: &mut Models, request: Request) -> Result<(Prepared, Vec<f32>, Vec<f32>), String> {
+pub fn prepare(models: Option<&mut Models>, request: Request) -> Result<(Prepared, Vec<f32>, Vec<f32>), String> {
     validate(&request.mix)?;
     let tail = song::Windows { head: false, tail: true };
     let head = song::Windows { head: true, tail: false };
@@ -162,14 +177,19 @@ fn validate(request: &MixRequest) -> Result<(), String> {
     Ok(())
 }
 
-/// Whole-track planner evidence for one deck: V2's analysis, beat model bar phase, bass weight,
-/// and local chroma over `span`, the window a mix can use.
-pub fn deck(models: &mut Models, song: &Song, span: (f64, f64)) -> Result<serde_json::Value, String> {
+/// Whole-track planner evidence for one deck: V2's analysis, bar phase from Apple's grid or the
+/// beat model, bass weight, and local chroma over `span`, the window a mix can use.
+pub fn deck(models: Option<&mut Models>, song: &Song, span: (f64, f64), apple: Option<&serde_json::Value>)
+    -> Result<serde_json::Value, String> {
     // ORCHARD_MIX_BEATS=earmark plans from Earmark's own beat grid, for A/B listening.
     let earmark_only = std::env::var("ORCHARD_MIX_BEATS").is_ok_and(|v| v == "earmark");
     let track = &song.track;
-    let grids: Vec<_> = if earmark_only { Vec::new() } else {
-        track.beat_windows.iter().map(|(audio, offset)| (models.beats(audio), *offset)).collect()
+    let grids: Vec<_> = match (apple.and_then(apple::grid), models) {
+        _ if earmark_only => Vec::new(),
+        // Apple's grid covers the whole track, so it votes from offset zero.
+        (Some(grid), _) => vec![(Ok(grid), 0.0)],
+        (None, Some(models)) => track.beat_windows.iter().map(|(audio, offset)| (models.beats(audio), *offset)).collect(),
+        (None, None) => Vec::new(),
     };
     let mut value = analysis::track(track, &grids, span)?;
     value["bassCurve"] = evidence::bass_curve(&track.mono, song::ANALYSIS_RATE);
@@ -179,15 +199,26 @@ pub fn deck(models: &mut Models, song: &Song, span: (f64, f64)) -> Result<serde_
 
 /// Plans and renders the pair. Returns the plan and the overlap as interleaved stereo f32
 /// at `song::RENDER_RATE`.
-pub fn mix(models: &mut Models, request: &MixRequest, outgoing_song: &Song, incoming_song: &Song)
+/// Vocal share per UMX frame across a render window starting at track time `start`.
+fn vocal_frames(models: Option<&mut Models>, apple: Option<&serde_json::Value>, window: &AudioBuffer, start: f64)
+    -> Result<Vec<f64>, String> {
+    if let Some(frames) = apple.and_then(|analysis| apple::vocal_frames(analysis, start, window.duration())) {
+        return Ok(frames);
+    }
+    evidence::vocal_frames(models.ok_or("Vocal model is unavailable")?, window)
+}
+
+/// `models` may be None when [`MixRequest::needs_models`] is false.
+pub fn mix(mut models: Option<&mut Models>, request: &MixRequest, outgoing_song: &Song, incoming_song: &Song)
     -> Result<(Prepared, Vec<f32>), String> {
     validate(request)?;
     if outgoing_song.tail.is_empty() || incoming_song.head.is_empty() {
         return Err("Songs were decoded without render windows".into());
     }
     // Planning sees V2's whole-track evidence at 44.1 kHz.
-    let mut current = deck(models, outgoing_song, (outgoing_song.tail_offset, f64::INFINITY))?;
-    let mut next = deck(models, incoming_song, (0.0, incoming_song.head.duration()))?;
+    let (outgoing_apple, incoming_apple) = (request.outgoing_apple.as_ref(), request.incoming_apple.as_ref());
+    let mut current = deck(models.as_deref_mut(), outgoing_song, (outgoing_song.tail_offset, f64::INFINITY), outgoing_apple)?;
+    let mut next = deck(models.as_deref_mut(), incoming_song, (0.0, incoming_song.head.duration()), incoming_apple)?;
     let decoded = incoming_song.track.duration;
     // The render windows share the analysis timeline and match playback sample for sample.
     let offset = outgoing_song.tail_offset;
@@ -195,11 +226,11 @@ pub fn mix(models: &mut Models, request: &MixRequest, outgoing_song: &Song, inco
     let incoming = &incoming_song.head;
     // Measure vocals where a mix can happen so the planner hears real voices.
     // A missing model leaves the frame estimate in charge.
-    let outgoing_vocals = evidence::vocal_frames(models, &outgoing);
+    let outgoing_vocals = vocal_frames(models.as_deref_mut(), outgoing_apple, &outgoing, offset);
     let warning = outgoing_vocals.as_ref().err().cloned();
     if let Ok(frames) = &outgoing_vocals {
         current["vocalCurve"] = evidence::vocal_curve(frames, offset);
-        if let Ok(frames) = evidence::vocal_frames(models, incoming) {
+        if let Ok(frames) = vocal_frames(models.as_deref_mut(), incoming_apple, incoming, 0.0) {
             next["vocalCurve"] = evidence::vocal_curve(&frames, 0.0);
         }
     }

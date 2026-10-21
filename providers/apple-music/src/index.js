@@ -17,6 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { createAnalysisCatalog } from './analysis.js';
 import { createArtistCatalog } from './artist.js';
 import { createArtworkCatalog } from './artwork.js';
 import { createCatalog } from './catalog.js';
@@ -42,6 +43,7 @@ export function createAppleMusic({ fetchImpl = fetch, session }) {
   const client = createAppleMusicClient({ fetchImpl, session });
   const library = createLibraryCatalog(client);
   return {
+    ...createAnalysisCatalog(client),
     ...createArtistCatalog(client),
     ...createArtworkCatalog(client),
     ...createCatalog(client, library),

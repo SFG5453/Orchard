@@ -39,6 +39,7 @@ import dev.sfg.orchard.connect.R
 import dev.sfg.orchard.connect.app.MainActivity
 import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.playback.apple.AppleMixAnalysis
 import dev.sfg.orchard.mobile.playback.smart.CrossfadeMode
 import dev.sfg.orchard.mobile.playback.smart.MixSplicer
 import dev.sfg.orchard.mobile.playback.smart.TransitionFilter
@@ -178,7 +179,9 @@ class OrchardPlaybackService : MediaLibraryService() {
                 )
             },
             // A connected desktop does the heavy lifting; the phone keeps the clock and the speaker.
-            mixer = AdaptiveMixer(this, handler, remote = graph.connect::mixHost),
+            mixer = AdaptiveMixer(this, handler, remote = graph.connect::mixHost, appleAnalysis = { ids ->
+                runBlocking { AppleMixAnalysis.fetch(graph, ids) }
+            }),
             // Adaptive mixes decode whole songs, so both must be fully cached first.
             sourceFor = { uri ->
                 if (streamCache.isFullyCached(uri)) ({ streamCache.mediaDataSource(uri)?.let { streams.analysisSource(uri, it) } }) else null

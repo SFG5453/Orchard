@@ -9,7 +9,7 @@
 use jni::JNIEnv;
 use jni::objects::{JByteArray, JClass, JFloatArray, JObject, JString, JValue};
 use jni::sys::{jboolean, jbyteArray, jdouble, jint, jlong, jstring};
-use orchard_adaptive_mix::{best_mix, models::Models, prepare, song::{Song, SongBuilder, Windows}};
+use orchard_adaptive_mix::{apple, best_mix, models::Models, prepare, song::{Song, SongBuilder, Windows}};
 use serde_json::{Value, json};
 use std::sync::OnceLock;
 
@@ -107,6 +107,18 @@ pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nati
     string(&mut env, &output)
 }
 
+/// Desktop's `bestMixApple` response for one song: features from Apple Music's analysis JSON.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nativeBestMixApple(
+    mut env: JNIEnv<'_>, _class: JClass<'_>, analysis: JString<'_>, duration: jdouble,
+) -> jstring {
+    let output = read_string(&mut env, &analysis)
+        .and_then(|text| serde_json::from_str::<Value>(&text).map_err(|e| e.to_string()))
+        .and_then(|analysis| apple::best_mix(&analysis, duration))
+        .map_or_else(error_json, |value| value.to_string());
+    string(&mut env, &output)
+}
+
 /// Desktop's `bestMixSortLazy`: `{"order":[…]}` or `{"error":…}`. Full edges come from
 /// `pairs.pair(left, right)`, which answers like the desktop host does to `needPair`.
 #[unsafe(no_mangle)]
@@ -174,6 +186,16 @@ pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nati
     }
 }
 
+/// False when Apple Music's analysis in `request` covers both songs; true on unreadable JSON.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nativeMixNeedsModels(
+    mut env: JNIEnv<'_>, _class: JClass<'_>, request: JString<'_>,
+) -> jboolean {
+    read_string(&mut env, &request).ok()
+        .and_then(|text| serde_json::from_str::<prepare::MixRequest>(&text).ok())
+        .is_none_or(|request| request.needs_models()) as jboolean
+}
+
 /// Desktop's adaptive-mix worker response for one pair, framed for Kotlin: a big-endian
 /// u32 header length, the header JSON, then interleaved stereo f32 LE at `rate`.
 /// Must run on a thread with at least 4 MiB of stack: QuickJS plans in it.
@@ -201,7 +223,11 @@ fn frame_mix(env: &mut JNIEnv<'_>, models: jlong, request: &JString<'_>, outgoin
              incoming: jlong, rate: jint) -> Result<(Value, Vec<f32>), String> {
     let request: prepare::MixRequest = serde_json::from_str(&read_string(env, request)?)
         .map_err(|e| e.to_string())?;
-    let models = unsafe { borrow::<Models>(models) }.ok_or("Adaptive mix models are unavailable")?;
+    // 0 is allowed when Apple Music's analysis stands in for both models.
+    let models = unsafe { borrow::<Models>(models) };
+    if models.is_none() && request.needs_models() {
+        return Err("Adaptive mix models are unavailable".into());
+    }
     let outgoing = unsafe { borrow::<Song>(outgoing) }.ok_or("Missing outgoing song")?;
     let incoming = unsafe { borrow::<Song>(incoming) }.ok_or("Missing incoming song")?;
     let (mut prepared, samples) = prepare::mix(models, &request, outgoing, incoming)?;

@@ -47,7 +47,8 @@ public:
   void prepare(const QString &pair, const QUrl &outgoing, const QUrl &incoming,
                double duration, double position, const QVariantMap &currentTrack,
                const QVariantMap &nextTrack, int fadeSeconds,
-               bool albumSequential, bool references = false);
+               bool albumSequential, const QJsonObject &outgoingApple = {},
+               const QJsonObject &incomingApple = {}, bool references = false);
   // Records a pair that failed before reaching the worker, e.g. without a source to analyse.
   void failPair(const QString &pair, const QString &message);
   void clear();

@@ -140,6 +140,8 @@ app_sources = [
   'app/src/playback/audio_pipeline.cpp',
   'app/src/playback/audio_pipeline.h',
   'app/src/playback/best_mix_controller.cpp',
+  'app/src/playback/best_mix_apple.cpp',
+  'app/src/playback/best_mix_cache.cpp',
   'app/src/playback/best_mix_controller.h',
   'app/src/playback/ai_labels.cpp',
   'app/src/playback/ai_labels.h',
@@ -555,6 +557,7 @@ qobuz_sources = [
 ]
 
 apple_music_sources = [
+  'providers/apple-music/src/analysis.js',
   'providers/apple-music/src/artist.js',
   'providers/apple-music/src/artwork.js',
   'providers/apple-music/src/catalog.js',
