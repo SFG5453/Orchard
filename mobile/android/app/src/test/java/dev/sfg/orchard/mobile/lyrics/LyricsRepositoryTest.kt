@@ -7,6 +7,8 @@ package dev.sfg.orchard.mobile.lyrics
 
 import dev.sfg.orchard.mobile.model.LyricsProvider
 import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.model.LyricsProviderConfig
+import dev.sfg.orchard.mobile.model.visibleLyricsProviders
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -18,6 +20,38 @@ import org.junit.Test
 
 class LyricsRepositoryTest {
     private val track = Track(id = "abcdefghijk", title = "Song", artist = "Artist")
+
+    @Test
+    fun appleLyricsUseTrackIdentityAndKeepWordTiming() = runBlocking {
+        val client = OkHttpClient.Builder().addInterceptor { error("No mirror should be called") }.build()
+        val appleTrack = track.copy(id = "am.songs.123", title = "", artist = "")
+        var calls = 0
+        val repository = LyricsRepository(client, appleLyrics = {
+            calls++
+            assertEquals(appleTrack, it)
+            """<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="1s" end="3s"><span begin="1s" end="2s">Found</span> <span begin="2s" end="3s">lyrics</span></p></div></body></tt>"""
+        }) { error("YouTube must not be called") }
+        val lines = repository.lyrics(appleTrack, listOf(LyricsProvider.APPLE))
+        assertEquals(1000L, lines.single().startMs)
+        assertEquals(2, lines.single().words.size)
+        assertEquals(LyricsProvider.APPLE, repository.sources.value[appleTrack.id])
+        assertEquals(lines, repository.lyrics(appleTrack, listOf(LyricsProvider.APPLE)))
+        assertEquals(1, calls)
+    }
+
+    @Test
+    fun missingOrFailedAppleLyricsFallThroughWithoutCallingMirrors() = runBlocking {
+        val client = OkHttpClient.Builder().addInterceptor { error("No mirror should be called") }.build()
+        val configs = LyricsProvider.entries.map { LyricsProviderConfig(it, it != LyricsProvider.LRCLIB) }
+        val providers = visibleLyricsProviders(configs, true).filter { it.enabled }.map { it.provider }
+        for (failed in listOf(false, true)) {
+            val repository = LyricsRepository(client, appleLyrics = {
+                if (failed) error("Apple unavailable") else ""
+            }) { "YouTube fallback" }
+            assertEquals("YouTube fallback", repository.lyrics(track, providers).single().text)
+            assertEquals(LyricsProvider.YOUTUBE, repository.sources.value[track.id])
+        }
+    }
 
     @Test
     fun betterLyricsIsIndependentFromBiniAndOtherProviders() = runBlocking {

@@ -62,6 +62,8 @@ Orchard listens to the audio rather than trusting a catalog. Smart Crossfade and
 
 Open **Settings → Appearance → Lyrics providers** to enable Bini Lyrics, BetterLyrics, LyricsPlus, LRCLIB, or YouTube Music and move them up or down. The first enabled provider with lyrics wins. In the lyrics player, use **Lyrics source** to choose a different provider for the current song, or return to **Automatic**. Song-specific choices last for the current app session; the global order and switches are saved.
 
+While signed in to Apple Music, Apple Music replaces Bini Lyrics, BetterLyrics, and LyricsPlus in settings and the song source picker. Its synced lyrics lead by default, with LRCLIB and YouTube Music available as fallbacks. Signing out restores the mirror providers and their saved settings.
+
 ### Connected listening
 
 * **Orchard Connect** - control Orchard desktop from the phone or the phone from the desktop, on the same Wi-Fi or across the internet, while a connected desktop prepares Smart Crossfades and artwork for the phone

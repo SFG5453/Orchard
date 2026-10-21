@@ -38,6 +38,7 @@ import java.util.concurrent.TimeUnit
 /** Fetches lyrics from individually selectable providers. */
 class LyricsRepository(
     http: OkHttpClient,
+    private val appleLyrics: suspend (Track) -> String = { "" },
     /** Plain lyrics from YouTube Music's Lyrics tab, via the provider's `lyrics.youtube`. */
     private val youtubeLyrics: suspend (videoId: String) -> String,
 ) {
@@ -76,6 +77,7 @@ class LyricsRepository(
         }
 
     private suspend fun fetch(track: Track, provider: LyricsProvider): List<LyricLine> {
+        if (provider == LyricsProvider.APPLE) return LyricsParser.ttml(appleLyrics(track))
         if (provider == LyricsProvider.YOUTUBE) return LyricsParser.plain(youtubeLyrics(track.id))
         val metadata = track.lyricsMetadata() ?: return emptyList()
         return when (provider) {
@@ -84,6 +86,7 @@ class LyricsRepository(
             LyricsProvider.LYRICS_PLUS -> fromLyricsPlus(metadata)
             LyricsProvider.LRCLIB -> fromLrcLib(metadata)
             LyricsProvider.YOUTUBE -> emptyList()
+            LyricsProvider.APPLE -> emptyList()
         }
     }
 
