@@ -50,9 +50,9 @@ internal object AdaptiveMix {
     /** Matches `planner::NATURAL_BOUNDARY` in `orchard-adaptive-mix`. */
     internal const val NATURAL_BOUNDARY = "Shared planner keeps the natural boundary"
 
-    /** Beat This's mobile export and the INT8 UMX vocals; same graphs, quantized weights. */
-    private const val BEAT_MODEL = "beat_this_int8.onnx"
-    private const val VOCAL_MODEL = "vocals_umxhq_int8.onnx"
+    /** Desktop's CPU graphs: Nirovi INT8 and the pruned INT8 UMX vocals. */
+    private const val BEAT_MODEL = "nirovi_int8.ort"
+    private const val VOCAL_MODEL = "vocals_umxhq_presence_int8.ort"
     // Two threads leave the big cores to the UI; preparation has a two-minute head start anyway.
     private const val INFERENCE_THREADS = 2
 

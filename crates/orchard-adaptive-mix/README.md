@@ -94,7 +94,7 @@ worker loads.
 
 The fp16 Nirovi session requires WebGPU registration and sets
 `session.disable_cpu_ep_fallback=1`. If it fails, the worker loads
-`nirovi_int8.onnx` on two non-spinning CPU threads (about 0.17 s a window). The UMX-HQ LSTM
+`nirovi_int8.ort` on two non-spinning CPU threads (about 0.17 s a window). The UMX-HQ LSTM
 steps serially, so on WebGPU it issues thousands of tiny dispatches and starves
 the compositor; its CPU session finishes a 960-frame slice in about 0.15 s.
 There is no Supabase/cloud analysis. Resampling, decoding, spectrogram

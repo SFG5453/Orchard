@@ -156,8 +156,8 @@ required_files=(
     ffmpeg.exe
     ffprobe.exe
     models/nirovi/nirovi_fp16.onnx
-    models/nirovi/nirovi_int8.onnx
-    models/vocal-separation/vocals_umxhq_fp32.onnx
+    models/nirovi/nirovi_int8.ort
+    models/vocal-separation/vocals_umxhq_presence_int8.ort
     models/docs-search/model_quantized.onnx
     models/docs-search/vocab.txt
     models/slop/fakeprint_lr.f32

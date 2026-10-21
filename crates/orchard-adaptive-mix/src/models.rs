@@ -12,7 +12,14 @@ use ort::{session::{Session, builder::SessionBuilder}, value::Tensor};
 
 /// Nirovi exports; both take Beat This's `[1, 1500, 128]` spectrogram and return its logits.
 pub const GPU_BEAT: &str = "nirovi/nirovi_fp16.onnx";
-pub const CPU_BEAT: &str = "nirovi/nirovi_int8.onnx";
+pub const CPU_BEAT: &str = "nirovi/nirovi_int8.ort";
+/// UMX-HQ vocals cut to the bins vocal presence reads (scripts/prune-umx-vocals.py), int8.
+pub const VOCAL: &str = "vocal-separation/vocals_umxhq_presence_int8.ort";
+/// The model reads input bins below this.
+const VOCAL_INPUT_BINS: usize = 1487;
+/// Output bins 18..=372 (200 Hz to 4 kHz), the only ones vocal presence averages.
+const VOCAL_FIRST_BIN: usize = 18;
+const VOCAL_BINS: usize = 355;
 
 pub struct Models {
     beat: Session,
@@ -68,7 +75,7 @@ impl Models {
         // int8 on two CPU threads costs about 0.17 s a window where WebGPU is unavailable.
         let beat = session(&directory.join(GPU_BEAT))
             .or_else(|gpu| cpu_session(&directory.join(CPU_BEAT)).map_err(|cpu| format!("{gpu}; {cpu}")))?;
-        let vocal_result = cpu_session(&directory.join("vocal-separation/vocals_umxhq_fp32.onnx"));
+        let vocal_result = cpu_session(&directory.join(VOCAL));
         let (vocal, vocal_error) = match vocal_result {
             Ok(s) => (Some(s), None),
             Err(e) => (None, Some(e)),
@@ -167,13 +174,15 @@ impl Models {
         // Cover the entire search slice, not just the first possible overlap.
         for start in (0..spec.frames).step_by(WIDTH) {
             let used = (spec.frames - start).min(WIDTH);
-            let mut mix = vec![0.0; 2 * 2049 * WIDTH];
-            for band in 0..2 * 2049 {
-                mix[band * WIDTH..band * WIDTH + used].copy_from_slice(
-                    &spec.values[band * spec.frames + start..band * spec.frames + start + used],
-                );
+            let mut mix = vec![0.0; 2 * VOCAL_INPUT_BINS * WIDTH];
+            for channel in 0..2 {
+                for bin in 0..VOCAL_INPUT_BINS {
+                    let from = (channel * 2049 + bin) * spec.frames + start;
+                    let to = (channel * VOCAL_INPUT_BINS + bin) * WIDTH;
+                    mix[to..to + used].copy_from_slice(&spec.values[from..from + used]);
+                }
             }
-            let input = Tensor::from_array(([1, 2, 2049, WIDTH], mix.clone()))
+            let input = Tensor::from_array(([1, 2, VOCAL_INPUT_BINS, WIDTH], mix.clone()))
                 .map_err(|e| e.to_string())?;
             let outputs = session
                 .run(ort::inputs!["mix_magnitude"=>input])
@@ -181,17 +190,18 @@ impl Models {
             let (_, target) = outputs["target_magnitude"]
                 .try_extract_tensor::<f32>()
                 .map_err(|e| e.to_string())?;
-            if target.len() != mix.len() || target.iter().any(|v| !v.is_finite()) {
+            if target.len() != 2 * VOCAL_BINS * WIDTH || target.iter().any(|v| !v.is_finite()) {
                 return Err("Invalid vocal model output".into());
             }
             for frame in 0..used {
                 let mut sum = 0.0;
                 let mut count = 0;
                 for channel in 0..2 {
-                    for bin in 18..=372 {
-                        let i = (channel * 2049 + bin) * WIDTH + frame;
-                        if mix[i] > 1e-6 {
-                            sum += (target[i] / mix[i]).clamp(0.0, 1.0) as f64;
+                    for kept in 0..VOCAL_BINS {
+                        let m = mix[(channel * VOCAL_INPUT_BINS + VOCAL_FIRST_BIN + kept) * WIDTH + frame];
+                        if m > 1e-6 {
+                            let t = target[(channel * VOCAL_BINS + kept) * WIDTH + frame];
+                            sum += (t / m).clamp(0.0, 1.0) as f64;
                             count += 1;
                         }
                     }
