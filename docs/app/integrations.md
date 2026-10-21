@@ -195,13 +195,14 @@ Apple Music songs play from Apple Music when **Music source** is **Apple**. They
 
 Orchard streams Apple Music songs itself and decrypts them in a small separate process, `orchard-widevine-host`, which uses about 80 MB of memory while songs play. It starts with the first Apple Music song and quits two minutes after playback stops, or when you switch **Music source** to **Normal** or disconnect Apple Music. Decrypted audio stays in memory and is never written to disk.
 
-- Platforms: Linux only for now. On Windows, an Apple Music song shows "Apple Music playback is not available on this system yet." On Android, it shows "Apple Music playback is not available yet."
+- Platforms: Linux and Android. On Windows, an Apple Music song shows "Apple Music playback is not available on this system yet."
+- Android: the phone's own Widevine decrypts Apple Music songs inside Orchard's player, so no extra app or process is needed. Choose **Apple Music** under **Music source** first; otherwise an Apple Music song shows "Choose Apple Music as the music source in Settings to play Apple Music songs." Without a connected account it shows "Connect Apple Music in Settings to play this song." Apple Music songs play only on the phone, not on a Cast device or an Orchard Connect device ("Apple Music songs play only on this phone."). The stream cache keeps the encrypted file, so a cached song still needs a network connection for its license. Each source keeps its own cached copies, so changing **Streaming quality** or the Qobuz setting does not download cached Apple Music songs again. Best Mix skips Apple Music songs.
 - Widevine: Apple Music audio is protected, so Linux needs the Widevine module from an installed Google Chrome, Chromium with Widevine, Brave, or Firefox. If none is found, the song shows "Apple Music playback needs Widevine. Install Google Chrome or Chromium with Widevine, then restart Orchard." Set `ORCHARD_WIDEVINE_PATH` to a `libwidevinecdm.so` file to use another copy.
 - Quality: Apple Music plays 256 kbps AAC. The **Streaming quality** setting does not apply.
 - Apple Music songs play through the same player as YouTube Music songs, so the Audio Engine, crossfade, gapless playback and Adaptive mix work as described in [Crossfade and gapless playback](crossfade.md). Adaptive mix analyses Apple's own audio.
 - Autoplay and AI-music scans do not apply to Apple Music songs.
 - Volume, play, pause, seek, next and previous work as usual, including from media keys and the system media controls.
-- Errors: "Apple Music is signed out" means the saved sign-in expired; connect Apple Music again. "Playing Apple Music songs needs an active Apple Music subscription" means the account has no subscription.
+- Errors: when Apple refuses a song, Orchard shows Apple's own reason, such as a missing subscription, or "Apple Music did not offer this song for playback." On Android, "Sign in to Apple Music again." means the saved sign-in expired; connect Apple Music again.
 
 ## Disconnect Apple Music
 

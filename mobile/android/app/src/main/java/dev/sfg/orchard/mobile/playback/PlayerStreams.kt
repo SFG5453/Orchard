@@ -25,10 +25,12 @@ import androidx.core.net.toUri
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.drm.DefaultDrmSessionManagerProvider
 import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -36,9 +38,15 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import dev.sfg.orchard.mobile.OrchardGraph
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.AudioQuality
 import dev.sfg.orchard.mobile.model.StreamDetail
 import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.playback.apple.AppleMusicDataSource
+import dev.sfg.orchard.mobile.playback.apple.AppleMusicDrmProvider
+import dev.sfg.orchard.mobile.playback.apple.AppleMusicStream
+import dev.sfg.orchard.mobile.playback.apple.AppleMusicStreams
+import dev.sfg.orchard.mobile.playback.apple.LicensedMediaDataSource
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.ConcurrentHashMap
 
@@ -59,6 +67,15 @@ internal class PlayerStreams(
 ) {
     private val resolver = graph.streams
 
+    val appleMusic = AppleMusicStreams(graph.appleMusic, graph.http) {
+        when {
+            graph.settings.settings.value.homeSource != APPLE_MUSIC_SOURCE ->
+                "Choose Apple Music as the music source in Settings to play Apple Music songs."
+            !graph.appleMusic.signedIn() -> "Connect Apple Music in Settings to play this song."
+            else -> null
+        }
+    }
+
     /** The exact client identity behind each stable Orchard URI's most recent media fetch. */
     private val resolvedStreams = ConcurrentHashMap<String, ResolvedStream>()
 
@@ -74,11 +91,18 @@ internal class PlayerStreams(
     private var variant = graph.streamVariant()
 
     // Signing in to Qobuz or changing quality changes where audio comes from; streams resolved before that are stale.
+    // Apple Music streams do not depend on either.
     private fun dropStaleStreams() {
         val now = graph.streamVariant()
         if (now == variant) return
         variant = now
-        resolvedStreams.clear()
+        resolvedStreams.keys.removeIf { !AppleMusicDataSource.isApple(it.toUri()) }
+    }
+
+    /** Forgets YouTube and Qobuz streams after their variant changed. */
+    fun clearProviderStreams() {
+        resolvedStreams.keys.removeIf { !AppleMusicDataSource.isApple(it.toUri()) }
+        resolutionLocks.clear()
     }
 
     /** Returns a still-usable stream for a stable URI and drops expired CDN/session URLs. */
@@ -91,11 +115,35 @@ internal class PlayerStreams(
     }
 
     /** Forgets the stream behind a failed URI and returns it, so the next open resolves afresh. */
-    fun forget(stableUri: String): ResolvedStream? = resolvedStreams.remove(stableUri)
+    fun forget(stableUri: String): ResolvedStream? {
+        val uri = stableUri.toUri()
+        if (AppleMusicDataSource.isApple(uri)) appleMusic.forget(MediaItemMapper.sourceId(uri))
+        return resolvedStreams.remove(stableUri)
+    }
 
     fun clear() {
         resolvedStreams.clear()
         resolutionLocks.clear()
+        appleMusic.clear()
+    }
+
+    /** A cached song for analysis; Apple Music songs carry their license with them. */
+    fun analysisSource(uri: android.net.Uri, source: android.media.MediaDataSource): android.media.MediaDataSource {
+        if (!AppleMusicDataSource.isApple(uri)) return source
+        val sourceId = MediaItemMapper.sourceId(uri)
+        return LicensedMediaDataSource(source) { challenge -> appleMusic.license(sourceId, challenge) }
+    }
+
+    private fun onAppleStream(uri: android.net.Uri, stream: AppleMusicStream) {
+        val stableUri = uri.toString()
+        val resolved = ResolvedStream(
+            url = stream.media,
+            mimeType = "audio/mp4",
+            expiresAtMs = stream.expiresAtMs,
+            bitrateKbps = stream.bitrateKbps,
+            contentLength = stream.servedSize,
+        )
+        if (resolvedStreams.put(stableUri, resolved)?.url != resolved.url) onResolved(stableUri, resolved)
     }
 
     /** One player's source factory: cached progressive audio, uncached video, and authenticated HLS. */
@@ -107,6 +155,11 @@ internal class PlayerStreams(
         val httpFactory = OkHttpDataSource.Factory(graph.http)
             .setDefaultRequestProperties(mapOf("User-Agent" to YouTubeStreamResolver.CLIENT_USER_AGENT))
         val resolvingFactory = ResolvingDataSource.Factory(DefaultDataSource.Factory(context, httpFactory), ::resolve)
+        val audioFactory = DataSource.Factory {
+            AppleMusicDataSource.Router(resolvingFactory.createDataSource()) {
+                AppleMusicDataSource(appleMusic, httpFactory.createDataSource(), ::onAppleStream)
+            }
+        }
         // HLS segment requests are created after the orchard manifest URI has been
         // resolved, so they do not inherit that DataSpec's headers. Give the entire
         // HLS data-source family Safari's identity to match the player response.
@@ -120,7 +173,8 @@ internal class PlayerStreams(
         }
         // Cache above resolution: it keys on the stable orchard:// URI, and a hit skips the
         // resolver entirely rather than re-resolving a CDN URL it does not need.
-        val progressive = DefaultMediaSourceFactory(context).setDataSourceFactory(cache.dataSourceFactory(resolvingFactory))
+        val progressive = DefaultMediaSourceFactory(context).setDataSourceFactory(cache.dataSourceFactory(audioFactory))
+            .setDrmSessionManagerProvider(AppleMusicDrmProvider(appleMusic, httpFactory, DefaultDrmSessionManagerProvider()))
         // Video is viewed on demand and can be hundreds of megabytes. Do not evict the listener's
         // audio cache by writing the movie into the whole-track cache behind their back.
         val video = DefaultMediaSourceFactory(context).setDataSourceFactory(resolvingFactory)
@@ -148,7 +202,7 @@ internal class PlayerStreams(
                 (progressive.supportedTypes.asIterable() + C.CONTENT_TYPE_HLS).distinct().toIntArray()
 
             override fun setDrmSessionManagerProvider(provider: DrmSessionManagerProvider): MediaSource.Factory = apply {
-                progressive.setDrmSessionManagerProvider(provider)
+                progressive.setDrmSessionManagerProvider(AppleMusicDrmProvider(appleMusic, httpFactory, provider))
                 localFiles.setDrmSessionManagerProvider(provider)
                 video.setDrmSessionManagerProvider(provider)
                 hls.setDrmSessionManagerProvider(provider)
@@ -204,9 +258,6 @@ internal class PlayerStreams(
     }
 
     private fun fresh(original: DataSpec, videoId: String): ResolvedStream {
-        check(!videoId.startsWith("am.") && trackLookup(videoId)?.playbackSource != "apple_music") {
-            "Apple Music playback is not available yet."
-        }
         Log.d(TAG, "resolve: resolving videoId=$videoId")
         val uri = original.uri
         val stream = qobuz(videoId, uri) ?: when {
