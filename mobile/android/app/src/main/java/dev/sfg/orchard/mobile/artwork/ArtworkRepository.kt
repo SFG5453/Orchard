@@ -39,6 +39,8 @@ data class TrackArtwork(
     val staticUrl: String = "",
     val videoUrl: String = "",
     val videoUrlVertical: String = "",
+    /** Apple's portrait editorial cover; signed-in Apple Music listeners only. */
+    val heroTallUrl: String = "",
 ) {
     val preferredVideoUrl: String get() = videoUrlVertical.ifBlank { videoUrl }
 }
@@ -156,7 +158,10 @@ class ArtworkRepository(
                 direct
             } else {
                 val trackArt = fallback.await()
-                if (trackArt.hasMotion()) trackArt!!.copy(trackId = detail.id) else direct
+                // Motion may come from the title track; the album's own portrait cover stays.
+                if (trackArt.hasMotion()) {
+                    trackArt!!.copy(trackId = detail.id, heroTallUrl = direct?.heroTallUrl.orEmpty())
+                } else direct
             }
         }
     }

@@ -22,7 +22,14 @@ import test from 'node:test';
 
 import { createAppleMusic } from '../src/index.js';
 
-const art = { url: 'https://is1.mzstatic.com/image/{w}x{h}{c}.{f}', width: 3000, height: 3000 };
+const art = {
+  url: 'https://is1.mzstatic.com/image/{w}x{h}{c}.{f}', width: 3000, height: 3000,
+  bgColor: '024c5d', textColor1: 'ead1c3', textColor2: 'd0d0d6'
+};
+const tall = {
+  url: 'https://is1.mzstatic.com/hero/{w}x{h}bb.jpg', width: 1680, height: 2240,
+  bgColor: '153739', textColor1: 'ffffff', textColor2: 'eeeeee'
+};
 
 const sos = {
   data: [{
@@ -32,6 +39,7 @@ const sos = {
       name: 'SOS',
       artistName: 'SZA',
       artwork: art,
+      editorialArtwork: { superHeroTall: tall },
       editorialVideo: {
         motionDetailSquare: { video: 'https://mvod.example/square.m3u8' },
         motionDetailTall: { video: 'https://mvod.example/tall.m3u8' }
@@ -75,7 +83,9 @@ const expected = {
   artist: 'SZA',
   static: 'https://is1.mzstatic.com/image/1200x1200bb.jpg',
   animated: 'https://mvod.example/square.m3u8',
-  animatedVertical: 'https://mvod.example/tall.m3u8'
+  animatedVertical: 'https://mvod.example/tall.m3u8',
+  heroTall: 'https://is1.mzstatic.com/hero/1600x1600bb.jpg',
+  colors: { background: '#153739', text: '#ffffff', secondaryText: '#eeeeee' }
 };
 
 const plain = { data: [{ ...sos.data[0], attributes: { name: 'SOS', artistName: 'SZA', artwork: art } }] };
@@ -84,7 +94,7 @@ test('an Apple album id reads motion artwork straight from the album', async () 
   const calls = [];
   const result = await appleMusic([[/\/albums\/1657869377\?/, 200, sos]], calls).artwork({ albumId: 'am.albums.1657869377' });
   assert.deepEqual(result, expected);
-  assert.match(calls[0], /^https:\/\/amp-api\.music\.apple\.com\/.*extend=editorialVideo/);
+  assert.match(calls[0], /^https:\/\/amp-api\.music\.apple\.com\/.*extend=editorialArtwork%2CeditorialVideo/);
 });
 
 test('editorial reads carry the web token and music.apple.com origin, never the user token', async () => {
@@ -147,6 +157,8 @@ test('signed out, artwork never touches music.apple.com', async () => {
   const result = await client.artwork({ albumId: 'am.albums.1657869377' });
   assert.equal(result.static, expected.static);
   assert.equal(result.animated, '');
+  assert.equal(result.heroTall, '');
+  assert.deepEqual(result.colors, { background: '#024c5d', text: '#ead1c3', secondaryText: '#d0d0d6' });
   assert.ok(client.requests.every((request) => request.url.startsWith('https://api.music.apple.com')));
 });
 

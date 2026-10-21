@@ -32,7 +32,7 @@ Apple resources travel as Orchard browse ids `am.<type>.<id>`, such as
 | `catalog.artist.match` | `name` | `{browseId, title}` for an exact name match, or null |
 | `catalog.album` | `browseId` | album page with every track |
 | `catalog.playlist` | `browseId` | playlist page with every track |
-| `catalog.artwork` | `albumId`, `appleId`, `isrc`, or `title`, `artist`, `album` (`kind: "album"` for albums) | `{albumId, name, artist, static, animated, animatedVertical}`, or `{}` when nothing matches |
+| `catalog.artwork` | `albumId`, `appleId`, `isrc`, or `title`, `artist`, `album` (`kind: "album"` for albums) | `{albumId, name, artist, static, animated, animatedVertical, heroTall, colors}`, or `{}` when nothing matches; `heroTall` is the signed-in-only portrait cover and `colors` holds `#rrggbb` `background`, `text`, `secondaryText` |
 | `catalog.search` | `query`, `filter` | sections keyed `songs`, `albums`, `artists`, `playlists` |
 | `library` | none | the listener's library as sections keyed `artists`, `albums`, `songs`, `playlists` |
 | `library.playlists` | none | `{items}`: every playlist in the listener's library |
