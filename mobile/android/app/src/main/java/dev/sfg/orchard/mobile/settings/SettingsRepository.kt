@@ -28,6 +28,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import dev.sfg.orchard.mobile.model.AnimatedArtworkQuality
 import dev.sfg.orchard.mobile.model.AudioQuality
 import dev.sfg.orchard.mobile.model.ArtworkSource
 import dev.sfg.orchard.mobile.model.EqualizerConfig
@@ -58,6 +59,8 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         .map { values ->
             OrchardSettings(
                 animatedArtwork = values[ANIMATED_ARTWORK] ?: true,
+                animatedArtworkQuality = AnimatedArtworkQuality.fromStoredValue(values[ANIMATED_ARTWORK_QUALITY]),
+                cellularAnimatedArtworkQuality = AnimatedArtworkQuality.fromStoredValue(values[CELLULAR_ANIMATED_ARTWORK_QUALITY]),
                 artworkSourceOrder = decodeArtworkOrder(values[ARTWORK_SOURCE_ORDER]),
                 sendYouTubeHistory = values[SEND_YOUTUBE_HISTORY] ?: true,
                 downloadAnimatedArtwork = values[DOWNLOAD_ANIMATED_ARTWORK] ?: false,
@@ -125,6 +128,8 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         scope.launch {
             store.edit {
                 it[ANIMATED_ARTWORK] = value.animatedArtwork
+                it[ANIMATED_ARTWORK_QUALITY] = value.animatedArtworkQuality.name
+                it[CELLULAR_ANIMATED_ARTWORK_QUALITY] = value.cellularAnimatedArtworkQuality.name
                 it[ARTWORK_SOURCE_ORDER] = value.artworkSourceOrder.joinToString(",") { source -> source.name }
                 it[SEND_YOUTUBE_HISTORY] = value.sendYouTubeHistory
                 it[DOWNLOAD_ANIMATED_ARTWORK] = value.downloadAnimatedArtwork
@@ -246,6 +251,8 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
 
     private companion object {
         val ANIMATED_ARTWORK = booleanPreferencesKey("animated_artwork")
+        val ANIMATED_ARTWORK_QUALITY = stringPreferencesKey("animated_artwork_quality")
+        val CELLULAR_ANIMATED_ARTWORK_QUALITY = stringPreferencesKey("cellular_animated_artwork_quality")
         val ARTWORK_SOURCE_ORDER = stringPreferencesKey("artwork_source_order")
         val HOME_SOURCE = stringPreferencesKey("home_source")
         val SEND_YOUTUBE_HISTORY = booleanPreferencesKey("send_youtube_history")

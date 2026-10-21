@@ -63,6 +63,10 @@ data class LibrarySnapshot(
 
 data class OrchardSettings(
     val animatedArtwork: Boolean = true,
+    /** Motion cover quality on Wi-Fi and other unmetered networks. */
+    val animatedArtworkQuality: AnimatedArtworkQuality = AnimatedArtworkQuality.AUTOMATIC,
+    /** Motion cover quality on mobile data and other metered networks. */
+    val cellularAnimatedArtworkQuality: AnimatedArtworkQuality = AnimatedArtworkQuality.AUTOMATIC,
     val artworkSourceOrder: List<ArtworkSource> = ArtworkSource.entries,
     val sendYouTubeHistory: Boolean = true,
     /** Save motion covers alongside newly downloaded songs for offline playback. */

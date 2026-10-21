@@ -67,6 +67,8 @@ import dev.sfg.orchard.mobile.ui.glass.rememberGlassScene
 import dev.sfg.orchard.mobile.ui.glass.rememberGlassStyle
 import dev.sfg.orchard.mobile.ui.navigation.Routes
 import dev.sfg.orchard.mobile.ui.scroll.OrchardScrollPhysics
+import dev.sfg.orchard.mobile.model.artworkQuality
+import dev.sfg.orchard.mobile.ui.components.LocalAnimatedArtworkQuality
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
 @Composable
@@ -80,6 +82,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val targets by viewModel.targets.collectAsStateWithLifecycle()
     val library by viewModel.library.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val isMetered by viewModel.isNetworkMetered.collectAsStateWithLifecycle()
     val shareState by viewModel.shareState.collectAsStateWithLifecycle()
     val warning by viewModel.warning.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
@@ -158,6 +161,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val supportUi = dev.sfg.orchard.mobile.ui.support.rememberSupportUi()
 
     CompositionLocalProvider(
+        LocalAnimatedArtworkQuality provides settings.artworkQuality(isMetered),
         dev.sfg.orchard.mobile.ui.components.LocalLibraryUiLocal provides localLibraryUi,
         dev.sfg.orchard.mobile.ui.support.LocalSupportUi provides supportUi,
         LocalGlass provides glass,
