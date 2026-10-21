@@ -127,6 +127,7 @@ class OrchardGraph(context: Context) {
     val localLibrary = dev.sfg.orchard.mobile.local.LocalLibraryRepository(context, applicationScope, notify = { postWarning(it) })
     val songLinks = SongLinksRepository()
     val lastfm = LastfmRepository(context, http, applicationScope)
+    val rejectedTallArt = dev.sfg.orchard.mobile.artwork.RejectedTallArtwork(context)
     val listenBrainz = ListenBrainzRepository(context, http, applicationScope)
 
     /**
