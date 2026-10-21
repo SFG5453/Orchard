@@ -71,6 +71,12 @@ android {
         jniLibs {
             // Local reduced build wins over the full library in the onnxruntime-android AAR.
             pickFirsts += '**/libonnxruntime.so'
+            // Compressed in the APK (about 37 MB to 16 MB), extracted at install.
+            useLegacyPackaging = true
+        }
+        // Same for classes.dex (about 8 MB to 4 MB).
+        dex {
+            useLegacyPackaging = true
         }
     }
 
