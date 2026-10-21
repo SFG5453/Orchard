@@ -69,6 +69,7 @@ internal fun OrchardNavigation(
     val lastfmState by viewModel.lastfmState.collectAsStateWithLifecycle()
     val listenBrainzState by viewModel.listenBrainzState.collectAsStateWithLifecycle()
     val libraryFilter by viewModel.libraryFilter.collectAsStateWithLifecycle()
+    val appleLibraryActive by viewModel.appleLibraryActive.collectAsStateWithLifecycle()
     val localSnapshot by viewModel.localSnapshot.collectAsStateWithLifecycle()
     val localBusy by viewModel.localLibrary.busy.collectAsStateWithLifecycle()
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
@@ -175,8 +176,12 @@ internal fun OrchardNavigation(
                 localLibrary = viewModel.localLibrary,
                 localSnapshot = localSnapshot,
                 localBusy = localBusy,
-                youtubeAvailable = auth is dev.sfg.orchard.mobile.auth.AuthState.SignedIn,
-                onCreateYouTubePlaylist = { title -> viewModel.createPlaylist(title, null) },
+                onlineService = when {
+                    appleLibraryActive -> "Apple Music"
+                    auth is dev.sfg.orchard.mobile.auth.AuthState.SignedIn -> "YouTube Music"
+                    else -> null
+                },
+                onCreateOnlinePlaylist = { title -> viewModel.createPlaylist(title, null) },
             )
         }
         composable(Routes.DOWNLOADS) {

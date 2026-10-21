@@ -46,19 +46,19 @@ import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
 /**
- * Names a new playlist, on YouTube Music or on this phone. [youtubeAvailable] is false when no
+ * Names a new playlist, on the streaming [service] or on this phone. [service] is null when no
  * account is signed in, which leaves only the local choice.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun NewPlaylistSheet(
-    youtubeAvailable: Boolean,
+    service: String?,
     onDismiss: () -> Unit,
     /** [local] picks where it lives; [thenAddSongs] opens the file picker once a local playlist exists. */
     onCreate: (title: String, local: Boolean, thenAddSongs: Boolean) -> Unit,
 ) {
     var title by remember { mutableStateOf("") }
-    var local by remember { mutableStateOf(!youtubeAvailable) }
+    var local by remember { mutableStateOf(service == null) }
     val canCreate = title.isNotBlank()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -72,16 +72,16 @@ internal fun NewPlaylistSheet(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = !local,
-                    enabled = youtubeAvailable,
+                    enabled = service != null,
                     onClick = { local = false },
-                    label = { Text("YouTube Music") },
+                    label = { Text(service ?: "Online") },
                 )
                 FilterChip(selected = local, onClick = { local = true }, label = { Text("On this phone") })
             }
             Spacer(Modifier.height(8.dp))
             Text(
                 if (local) "Songs stay where they are on your phone. Orchard only remembers the list."
-                else "Created on YouTube Music, private until you share it.",
+                else "Created on $service, private until you share it.",
                 style = MaterialTheme.typography.bodySmall,
                 color = CanopyColors.Muted,
             )

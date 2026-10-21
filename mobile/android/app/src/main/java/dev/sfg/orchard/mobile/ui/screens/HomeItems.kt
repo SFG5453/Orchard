@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile.ui.screens
 
 import dev.sfg.orchard.mobile.catalog.PlaylistActions
+import dev.sfg.orchard.mobile.model.APPLE_PERSONAL_MIXES_SECTION
 import dev.sfg.orchard.mobile.model.Album
 import dev.sfg.orchard.mobile.model.Artist
 import dev.sfg.orchard.mobile.model.CatalogItem
@@ -121,15 +122,23 @@ internal fun offlineAlbumItems(downloadedTracks: List<Track>): List<CatalogItem.
     }
 }
 
-/** Spotlight cards: lead album or playlist of each shelf, library shelves last, saved playlists only to fill. */
+/**
+ * Spotlight cards: Apple Music's personal mixes first, then the lead album or playlist of each
+ * shelf, library shelves last, saved playlists only to fill.
+ */
 internal fun discoverEntries(
     state: LoadState<List<CatalogSection>>,
     library: LibrarySnapshot,
 ): List<DiscoverEntry> {
+    val mixes = mutableListOf<DiscoverEntry>()
     val editorial = mutableListOf<DiscoverEntry>()
     val fromLibrary = mutableListOf<DiscoverEntry>()
     if (state is LoadState.Content) {
         for (section in state.value) {
+            if (section.id == APPLE_PERSONAL_MIXES_SECTION) {
+                section.items.filter { it.artworkUrl.isNotBlank() }.forEach { mixes.add(DiscoverEntry(it, section.title)) }
+                continue
+            }
             // Liked Music art is a flat glyph that falls apart at spotlight size.
             val lead = section.items.firstOrNull {
                 it.artworkUrl.isNotBlank() &&
@@ -143,7 +152,7 @@ internal fun discoverEntries(
     val saved = library.savedPlaylists
         .filterNot { PlaylistActions.isLikedMusicPlaylist(it.id) }
         .map { DiscoverEntry(CatalogItem.Collection(it), "From your library") }
-    return (editorial + fromLibrary + saved)
+    return (mixes + editorial + fromLibrary + saved)
         .distinctBy { it.item.stableId }
         .take(6)
 }
