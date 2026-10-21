@@ -35,7 +35,7 @@ import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.model.LyricLine
 import dev.sfg.orchard.mobile.model.Track
-import dev.sfg.orchard.mobile.model.normalizeLyricsProviders
+import dev.sfg.orchard.mobile.model.visibleLyricsProviders
 
 @Composable
 internal fun PlayerLyrics(
@@ -69,7 +69,8 @@ private fun LyricsSourcePicker(trackId: String, accent: Color) {
     val settings by graph.settings.settings.collectAsStateWithLifecycle()
     val overrides by graph.lyrics.providerOverrides.collectAsStateWithLifecycle()
     val sources by graph.lyrics.sources.collectAsStateWithLifecycle()
-    val enabled = normalizeLyricsProviders(settings.lyricsProviders).filter { it.enabled }.map { it.provider }
+    val appleConnected = appleMusicConnectionStatus().connected
+    val enabled = visibleLyricsProviders(settings.lyricsProviders, appleConnected).filter { it.enabled }.map { it.provider }
     val selected = overrides[trackId]?.takeIf { it in enabled }
     val automatic = sources[trackId]?.let { "Automatic · ${it.label}" } ?: "Automatic"
     var expanded by remember(trackId) { mutableStateOf(false) }

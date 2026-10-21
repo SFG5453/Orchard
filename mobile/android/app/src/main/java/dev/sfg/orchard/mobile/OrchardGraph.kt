@@ -115,7 +115,7 @@ class OrchardGraph(context: Context) {
     val playlistActions = PlaylistActions(youtube, auth)
     val videoVersions = VideoVersionResolver(catalog)
     val library = LibraryRepository(LibraryCache(context), catalog, applicationScope)
-    val lyrics = LyricsRepository(http) { videoId ->
+    val lyrics = LyricsRepository(http, appleLyrics = appleMusic::lyrics) { videoId ->
         youtube.invoke("lyrics.youtube", JSONObject().put("session", auth.session().providerJson()).put("videoId", videoId))
             .text("text")
     }
