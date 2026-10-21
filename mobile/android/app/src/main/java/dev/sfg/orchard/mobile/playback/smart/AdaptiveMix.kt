@@ -4,8 +4,10 @@ package dev.sfg.orchard.mobile.playback.smart
 
 import android.content.Context
 import android.media.MediaDataSource
+import android.util.AtomicFile
 import android.util.Log
 import org.json.JSONObject
+import java.io.File
 import java.nio.ByteBuffer
 
 /** Standard is a trailing equal-power fade; smart is the desktop adaptive mix. */
@@ -94,11 +96,28 @@ internal object AdaptiveMix {
         // The app's ONNX Runtime; Rust binds to this copy instead of shipping its own.
         System.loadLibrary("onnxruntime")
         val started = System.currentTimeMillis()
-        val beat = context.assets.open(BEAT_MODEL).use { it.readBytes() }
-        val vocal = context.assets.open(VOCAL_MODEL).use { it.readBytes() }
+        val beat = modelFile(context, BEAT_MODEL).absolutePath
+        val vocal = modelFile(context, VOCAL_MODEL).absolutePath
         MixNative.nativeModelsLoad(beat, vocal, INFERENCE_THREADS).takeIf { it != 0L }
             ?.also { Log.d(TAG, "Models loaded in ${System.currentTimeMillis() - started}ms") }
     }.onFailure { Log.w(TAG, "Could not load adaptive mix models", it) }.getOrNull()
+
+    @Synchronized
+    private fun modelFile(context: Context, asset: String): File {
+        // Android clears the code cache on app upgrades, including model updates.
+        val file = AtomicFile(File(context.codeCacheDir, "adaptive-mix/$asset"))
+        if (!file.baseFile.isFile) {
+            val output = file.startWrite()
+            try {
+                context.assets.open(asset).use { it.copyTo(output) }
+                file.finishWrite(output)
+            } catch (error: Throwable) {
+                file.failWrite(output)
+                throw error
+            }
+        }
+        return file.baseFile
+    }
 
     fun freeModels(handle: Long) = MixNative.nativeModelsFree(handle)
 
