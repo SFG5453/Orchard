@@ -7,10 +7,15 @@ Beat This! `final0` (Foscarin, Schlüter & Widmer, ISMIR 2024).
 | File | Runtime | Size | SHA-256 |
 |---|---|---:|---|
 | `nirovi_fp16.onnx` | ORT WebGPU (desktop worker) | 15,252,717 | `f7491e4598d6ac3d65c8aa4af4621fe80378aba12bafab38ebc2af27853af202` |
-| `nirovi_int8.onnx` | CPU: desktop fallback, Apple Music page (onnxruntime-web) | 7,802,064 | `47d2fc9901cf44443a64f0b15997bf1d678d9047ea88d6e0795c625d34ac45ce` |
+| `nirovi_int8.ort` | CPU: desktop fallback, Android | 7,866,632 | `dbcd91af03bff671f15b66c8650b6b4c7ed17bdfb31962f5142c9c629571b42d` |
 
-`nirovi_int8.onnx` packs its weights as int8 (weight-only) and computes in fp32. The fp16
-graph is for GPUs; CPU runtimes load the int8 graph.
+`nirovi_int8.ort` packs its weights as int8 (weight-only) and computes in fp32. The fp16
+graph is for GPUs; CPU runtimes load the int8 graph. It is in ONNX Runtime's ORT format so
+Android's minimal runtime can load it: the int8 ONNX export (SHA-256
+`47d2fc9901cf44443a64f0b15997bf1d678d9047ea88d6e0795c625d34ac45ce`) converted with
+`python -m onnxruntime.tools.convert_onnx_models_to_ort DIR --optimization_style Fixed
+--target_platform arm` from onnxruntime 1.31.0. Desktop's ONNX Runtime 1.28 gives the same
+beats from both files.
 
 ## Source
 
@@ -46,10 +51,8 @@ The interface is Beat This's, so the frontend and peak picking are shared.
 
 The desktop worker loads `nirovi_fp16.onnx` on ONNX Runtime's WebGPU provider with
 `session.disable_cpu_ep_fallback=1`. Without a usable WebGPU device it loads
-`nirovi_int8.onnx` on two non-spinning CPU threads.
+`nirovi_int8.ort` on two non-spinning CPU threads. Android loads the same file.
 
 Measured on 14 song windows (Radeon RX 9060 XT, Ryzen CPU): fp16/WebGPU 42 ms and
 int8/CPU 166 ms per 1500-frame window, against 123 ms for Beat This fp32/WebGPU. The two
-Nirovi graphs agreed on beats (F 0.94–1.00 at 70 ms). In the Apple Music page's
-single-threaded onnxruntime-web, `nirovi_int8.onnx` takes about 670 ms per window and
-adds about 160 MB while loaded.
+Nirovi graphs agreed on beats (F 0.94–1.00 at 70 ms).
