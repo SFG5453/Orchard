@@ -36,7 +36,7 @@ internal object MixNative {
     /** Desktop's `bestMixApple`: Best Mix features from Apple Music's analysis JSON, or `{"error"}`. */
     @JvmStatic external fun nativeBestMixApple(analysis: String, duration: Double): String
     @JvmStatic external fun nativeBestMixSort(summaries: String, initial: String, pairs: BestMixPairs): String
-    @JvmStatic external fun nativeModelsLoad(beat: ByteArray, vocal: ByteArray, threads: Int): Long
+    @JvmStatic external fun nativeModelsLoad(beat: String, vocal: String, threads: Int): Long
     @JvmStatic external fun nativeModelsFree(models: Long)
     /** False when the request's Apple Music analysis covers both songs, so no model has to load. */
     @JvmStatic external fun nativeMixNeedsModels(request: String): Boolean

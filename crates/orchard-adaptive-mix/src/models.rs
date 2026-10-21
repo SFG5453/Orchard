@@ -1,7 +1,7 @@
 /* Copyright (C) 2026 SFG545. Licensed under the PolyForm Shield License 1.0.0, see LICENSE-POLYFORM-SHIELD. */
 
 //! Beat and UMX vocal models. Desktop runs Nirovi's fp16 graph on ORT's WebGPU provider, or
-//! its int8 graph on CPU; Android passes its int8 exports to `from_memory`. Pre- and
+//! its int8 graph on CPU; Android passes its extracted int8 exports to `from_files`. Pre- and
 //! post-processing are shared, so only the weights differ.
 use crate::{
     beats::{self, Grid},
@@ -88,13 +88,13 @@ impl Models {
         })
     }
 
-    /// CPU sessions from model bytes, for hosts that ship models inside a package.
-    pub fn from_memory(beat: &[u8], vocal: &[u8], threads: usize) -> Result<Self, String> {
+    /// CPU sessions from model files, including extracted package assets.
+    pub fn from_files(beat: &std::path::Path, vocal: &std::path::Path, threads: usize) -> Result<Self, String> {
         let beat = cpu_builder(threads)?
-            .commit_from_memory(beat)
+            .commit_from_file(beat)
             .map_err(|e| format!("Beat model: {e}"))?;
         let (vocal, vocal_error) = match cpu_builder(threads.min(2))
-            .and_then(|mut b| b.commit_from_memory(vocal).map_err(|e| format!("Vocal model: {e}")))
+            .and_then(|mut b| b.commit_from_file(vocal).map_err(|e| format!("Vocal model: {e}")))
         {
             Ok(s) => (Some(s), None),
             Err(e) => (None, Some(e)),

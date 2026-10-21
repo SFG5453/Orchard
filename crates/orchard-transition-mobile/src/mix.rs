@@ -7,7 +7,7 @@
 //! Handles are boxed Rust values owned by Kotlin, which frees each exactly once.
 
 use jni::JNIEnv;
-use jni::objects::{JByteArray, JClass, JFloatArray, JObject, JString, JValue};
+use jni::objects::{JClass, JFloatArray, JObject, JString, JValue};
 use jni::sys::{jboolean, jbyteArray, jdouble, jint, jlong, jstring};
 use orchard_adaptive_mix::{apple, best_mix, models::Models, prepare, song::{Song, SongBuilder, Windows}};
 use serde_json::{Value, json};
@@ -163,16 +163,16 @@ fn runtime() -> Result<(), String> {
     }).clone()
 }
 
-/// Loads Beat This and UMX from model bytes on `threads` CPU threads. 0 with no models.
+/// Loads Nirovi and UMX from model files on `threads` CPU threads. 0 with no models.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nativeModelsLoad(
-    env: JNIEnv<'_>, _class: JClass<'_>, beat: JByteArray<'_>, vocal: JByteArray<'_>, threads: jint,
+    mut env: JNIEnv<'_>, _class: JClass<'_>, beat: JString<'_>, vocal: JString<'_>, threads: jint,
 ) -> jlong {
     let loaded = (|| -> Result<Models, String> {
         runtime()?;
-        let beat = env.convert_byte_array(&beat).map_err(|e| e.to_string())?;
-        let vocal = env.convert_byte_array(&vocal).map_err(|e| e.to_string())?;
-        Models::from_memory(&beat, &vocal, threads.clamp(1, 8) as usize)
+        let beat = read_string(&mut env, &beat)?;
+        let vocal = read_string(&mut env, &vocal)?;
+        Models::from_files(beat.as_ref(), vocal.as_ref(), threads.clamp(1, 8) as usize)
     })();
     loaded.map_or(0, |models| Box::into_raw(Box::new(models)) as jlong)
 }
