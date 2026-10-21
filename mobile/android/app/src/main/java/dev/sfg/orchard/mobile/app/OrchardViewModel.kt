@@ -36,6 +36,8 @@ import dev.sfg.orchard.mobile.download.DownloadItem
 import dev.sfg.orchard.mobile.lastfm.LastfmState
 import dev.sfg.orchard.mobile.listenbrainz.ListenBrainzState
 import dev.sfg.orchard.mobile.local.toPlaylist
+import dev.sfg.orchard.mobile.library.AppleLibraryRepository
+import dev.sfg.orchard.mobile.library.withHistory
 import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.AudioQuality
 import dev.sfg.orchard.mobile.model.*
@@ -130,7 +132,9 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val detailRefreshing: StateFlow<Boolean> = details.refreshing
     val detailArtwork: StateFlow<TrackArtwork?> = details.artwork
     val artistImages: StateFlow<ArtistImages?> = details.artistImages
-    val library: StateFlow<LibrarySnapshot> = graph.library.library
+    /** Apple Music's library while it is the music source, with Orchard's Apple plays ahead of Apple's history. */
+    val library: StateFlow<LibrarySnapshot> =
+        combine(graph.library.library, graph.appleLibrary.library) { own, apple -> apple?.withHistory(own) ?: own }.stateIn(viewModelScope, SharingStarted.Eagerly, graph.library.library.value)
     /** Songs and playlists kept on this phone, and the one place that edits them. */
     val localLibrary = graph.localLibrary
     val localSnapshot: StateFlow<dev.sfg.orchard.mobile.local.LocalSnapshot> = graph.localLibrary.library
@@ -185,8 +189,11 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun removeDownloads(tracks: List<Track>) = graph.downloads.removeDownloads(tracks.map { it.id })
 
     /** Playlists a song may join: local songs go to local playlists, online songs to saved ones. */
-    fun playlistChoices(track: Track, saved: List<Playlist>): List<Playlist> =
-        if (track.isLocal) localSnapshot.value.let { snapshot -> snapshot.playlists.map { it.toPlaylist(snapshot) } } else saved
+    fun playlistChoices(track: Track, saved: List<Playlist>): List<Playlist> = when {
+        track.isLocal -> localSnapshot.value.let { snapshot -> snapshot.playlists.map { it.toPlaylist(snapshot) } }
+        graph.appleLibrary.active -> saved.filter(AppleLibraryRepository::canAddTo)
+        else -> saved
+    }
 
     fun createPlaylist(title: String, track: Track?, onCreated: (String) -> Unit = {}) =
         details.createPlaylist(title, track, onCreated)
@@ -258,7 +265,10 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         nonMusicSkipper.observe()
     }
 
-    fun refreshHome() = homeFeed.refresh()
+    fun refreshHome() {
+        homeFeed.refresh()
+        graph.appleLibrary.refresh()
+    }
 
     fun updateQuery(value: String) = searcher.update(value)
     fun runSearch(value: String = query.value) = searcher.run(value)
@@ -348,17 +358,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun renameDevice(device: PlaybackDevice, newName: String) {
         if (device.isLocal) playbackTargets.renameLocal(newName)
     }
-    fun toggleLiked(track: Track) {
-        val liked = graph.library.library.value.likedTracks.none { it.id == track.id }
-        graph.library.setLiked(track, liked)
-        viewModelScope.launch {
-            runCatching { withContext(Dispatchers.IO) { graph.playlistActions.setLiked(track, liked) } }
-                .onFailure {
-                    graph.library.setLiked(track, !liked)
-                    graph.postWarning(it.message ?: "Could not update liked music.")
-                }
-        }
-    }
+    fun toggleLiked(track: Track) = details.toggleLiked(track)
+    val appleLibraryActive: StateFlow<Boolean> = graph.appleLibrary.enabled
     fun updateSettings(value: OrchardSettings) = graph.settings.updateSettings(value)
 
     fun refreshCacheSize() {

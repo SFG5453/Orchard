@@ -236,6 +236,9 @@ data class HomeFeed(
     val artists: List<Artist> = emptyList(),
 )
 
+/** [CatalogSection.id] of Apple Music's personal mixes, which lead the daily discover carousel. */
+const val APPLE_PERSONAL_MIXES_SECTION = "apple-personal-mixes"
+
 data class LyricLine(
     val text: String,
     val startMs: Long? = null,

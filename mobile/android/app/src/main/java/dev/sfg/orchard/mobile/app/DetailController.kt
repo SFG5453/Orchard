@@ -24,6 +24,7 @@ import dev.sfg.orchard.mobile.artwork.ArtistImages
 import dev.sfg.orchard.mobile.artwork.TrackArtwork
 import dev.sfg.orchard.mobile.auth.AuthState
 import dev.sfg.orchard.mobile.catalog.PlaylistActions
+import dev.sfg.orchard.mobile.catalog.isAppleMusicId
 import dev.sfg.orchard.mobile.download.OfflineDetailSynthesizer
 import dev.sfg.orchard.mobile.local.isLocalPlaylistId
 import dev.sfg.orchard.mobile.model.Album
@@ -239,7 +240,35 @@ internal class DetailController(
         }
     }
 
+    /** Likes go to Apple Music while its library is the one shown. */
+    fun toggleLiked(track: Track) {
+        val apple = graph.appleLibrary
+        if (apple.active) {
+            val loved = !apple.isLiked(track)
+            scope.launch {
+                runCatching { withContext(Dispatchers.IO) { apple.setLiked(track, loved) } }
+                    .onFailure { graph.postWarning(it.message ?: "Could not update your Apple Music library.") }
+            }
+            return
+        }
+        val liked = graph.library.library.value.likedTracks.none { it.id == track.id }
+        graph.library.setLiked(track, liked)
+        scope.launch {
+            runCatching { withContext(Dispatchers.IO) { graph.playlistActions.setLiked(track, liked) } }
+                .onFailure {
+                    graph.library.setLiked(track, !liked)
+                    graph.postWarning(it.message ?: "Could not update liked music.")
+                }
+        }
+    }
+
     fun createPlaylist(title: String, track: Track?, onCreated: (String) -> Unit) = scope.launch {
+        if (graph.appleLibrary.active) {
+            runCatching { withContext(Dispatchers.IO) { graph.appleLibrary.createPlaylist(title, track) } }
+                .onSuccess(onCreated)
+                .onFailure { graph.postWarning(it.message ?: "Could not create the Apple Music playlist.") }
+            return@launch
+        }
         runCatching {
             withContext(Dispatchers.IO) { graph.playlistActions.create(title, track) }
         }
@@ -254,6 +283,15 @@ internal class DetailController(
     fun addTrackToPlaylist(playlistId: String, track: Track) = scope.launch {
         if (isLocalPlaylistId(playlistId)) {
             graph.localLibrary.addToPlaylist(playlistId, track.id)
+            return@launch
+        }
+        if (isAppleMusicId(playlistId)) {
+            runCatching { withContext(Dispatchers.IO) { graph.appleLibrary.addToPlaylist(playlistId, track) } }
+                .onSuccess {
+                    val open = active?.takeIf { it.id == playlistId } ?: return@onSuccess
+                    mutableDetail.value = LoadState.Content(open.copy(tracks = open.tracks + track))
+                }
+                .onFailure { graph.postWarning(it.message ?: "Could not add the song to the Apple Music playlist.") }
             return@launch
         }
         val likedMusic = PlaylistActions.isLikedMusicPlaylist(playlistId)
@@ -273,6 +311,15 @@ internal class DetailController(
     fun removeTrackFromPlaylist(playlistId: String, track: Track) = scope.launch {
         if (isLocalPlaylistId(playlistId)) {
             graph.localLibrary.removeFromPlaylist(playlistId, track.id)
+            return@launch
+        }
+        if (isAppleMusicId(playlistId)) {
+            runCatching { withContext(Dispatchers.IO) { graph.appleLibrary.addToPlaylist(playlistId, track) } }
+                .onSuccess {
+                    val open = active?.takeIf { it.id == playlistId } ?: return@onSuccess
+                    mutableDetail.value = LoadState.Content(open.copy(tracks = open.tracks + track))
+                }
+                .onFailure { graph.postWarning(it.message ?: "Could not add the song to the Apple Music playlist.") }
             return@launch
         }
         val likedMusic = PlaylistActions.isLikedMusicPlaylist(playlistId)

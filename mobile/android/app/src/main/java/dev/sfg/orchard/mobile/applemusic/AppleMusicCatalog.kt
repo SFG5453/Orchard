@@ -27,6 +27,8 @@ import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.HomeFeed
+import dev.sfg.orchard.mobile.model.LibrarySnapshot
+import dev.sfg.orchard.mobile.model.Playlist
 import dev.sfg.orchard.mobile.model.SearchResults
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.provider.ProviderBundle
@@ -63,9 +65,53 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
     suspend fun search(query: String): SearchResults =
         call("catalog.search", JSONObject().put("query", query).put("filter", "all")).providerSearch()
 
-    suspend fun home(): HomeFeed = HomeFeed(
-        sections = call("catalog.home", JSONObject()).optJSONArray("sections").providerSections("apple-home"),
-    )
+    suspend fun home(): HomeFeed =
+        HomeFeed(sections = call("catalog.home", JSONObject()).optJSONArray("sections").providerSections("apple-home"))
+
+    /** The listener's saved songs, albums, artists and playlists. */
+    suspend fun library(): LibrarySnapshot {
+        val sections = call("library", JSONObject()).optJSONArray("sections")
+            .mapObjects { it.text("key") to it.optJSONArray("items").mapObjects { item -> item.providerItem() } }
+            .toMap()
+        fun items(key: String) = sections[key].orEmpty()
+        return LibrarySnapshot(
+            likedTracks = items("songs").filterIsInstance<CatalogItem.Song>().map { it.track },
+            savedAlbums = items("albums").filterIsInstance<CatalogItem.Record>().map { it.album },
+            savedArtists = items("artists").filterIsInstance<CatalogItem.Performer>().map { it.artist },
+            savedPlaylists = items("playlists").filterIsInstance<CatalogItem.Collection>().map { it.playlist },
+        )
+    }
+
+    /** Songs played recently anywhere on Apple Music, newest first. */
+    suspend fun recentTracks(): List<Track> =
+        call("library.recent", JSONObject()).optJSONArray("items").mapObjects { it.providerItem() }
+            .filterIsInstance<CatalogItem.Song>().map { it.track }
+
+    /** Loving a song also saves it to the library. */
+    suspend fun setLiked(track: Track, liked: Boolean) {
+        call("library.like.set", JSONObject().put("track", track.payload()).put("liked", liked))
+    }
+
+    /** [playlistId] is the browse id, `am.playlists.p.…`. */
+    suspend fun addToPlaylist(playlistId: String, track: Track) {
+        call("library.playlist.add", JSONObject()
+            .put("track", track.payload())
+            .put("playlistId", playlistId.removePrefix(PLAYLIST_PREFIX)))
+    }
+
+    /** Browse id of the new playlist, seeded with [track] when set. */
+    suspend fun createPlaylist(title: String, track: Track?): String {
+        val payload = JSONObject().put("title", title.trim())
+        if (track != null) payload.put("track", track.payload())
+        return call("library.playlist.create", payload).text("playlistId").let { if (it.isEmpty()) it else PLAYLIST_PREFIX + it }
+    }
+
+    // Non-Apple tracks are matched to a catalog song by the provider.
+    private fun Track.payload() = JSONObject()
+        .put("id", id)
+        .put("title", title)
+        .put("artist", artist)
+        .put("album", album)
 
     suspend fun homeSection(id: String): List<CatalogItem> =
         call("catalog.home.section", JSONObject().put("browseId", id))
@@ -190,5 +236,6 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
         const val KEY_DEVELOPER_TOKEN = "developer_token"
         const val KEY_DEVELOPER_EXPIRY = "developer_token_expires_at"
         const val REFRESH_MARGIN_SECONDS = 24 * 60 * 60L
+        const val PLAYLIST_PREFIX = "am.playlists."
     }
 }

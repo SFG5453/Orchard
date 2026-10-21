@@ -89,3 +89,14 @@ test('See all recommendation contents follow pagination and preserve the dotted 
   for (const { url } of calls) assert.equal(new URL(url).searchParams.get('include[albums]'), 'artists');
   assert.deepEqual(await client.homeSection('UCyoutube'), []);
 });
+
+test('the personal mix shelf has a stable key for daily discover', async () => {
+  const mix = (id, name) => ({ id, type: 'playlists', attributes: { name, playlistType: 'personal-mix', playParams: { id, kind: 'playlist' } } });
+  const { client } = music([[/me\/recommendations/, 200, { data: [
+    recommendation('mixes', [mix('pl.pm-1', 'New Music'), mix('pl.pm-2', 'Chill')]),
+    recommendation('albums', [album('4')])
+  ] }]]);
+  const home = await client.home();
+  assert.deepEqual(home.sections.map((section) => section.key), ['apple-personal-mixes', 'apple-recommendation-albums']);
+  assert.deepEqual(home.sections[0].items.map((item) => item.browseId), ['am.playlists.pl.pm-1', 'am.playlists.pl.pm-2']);
+});

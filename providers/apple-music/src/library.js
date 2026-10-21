@@ -26,6 +26,9 @@ import { album, artist, artworkUrl, notes, playlist, releaseInfo, track, yearOf 
 
 const PAGE = 100;
 const PAGES = { artists: 10, albums: 10, songs: 20, playlists: 5 };
+// Apple serves at most 30 recent tracks per page and about 50 in all.
+const RECENT_PAGE = 30;
+const RECENT_PAGES = 2;
 
 function catalogId(resource) {
   return resource?.attributes?.playParams?.catalogId || resource?.relationships?.catalog?.data?.[0]?.id || '';
@@ -156,7 +159,15 @@ export function createLibraryCatalog(client) {
     };
   }
 
-  return { library, libraryPlaylists, libraryPlaylistPage, libraryAlbumPage };
+  /** Songs the listener played recently anywhere on Apple Music, newest first. */
+  async function recentTracks() {
+    const { items } = await client.all('/v1/me/recent/played/tracks', { limit: RECENT_PAGE }, RECENT_PAGES);
+    return items
+      .map((song, index) => (song.type === 'library-songs' ? libraryTrack(song, index) : song.type === 'songs' ? track(song, index) : null))
+      .filter(Boolean);
+  }
+
+  return { library, libraryPlaylists, libraryPlaylistPage, libraryAlbumPage, recentTracks };
 }
 
 /** Library ids start with a lowercase letter and a dot: p.abc for playlists, l.abc for albums. */
