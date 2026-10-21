@@ -1,8 +1,10 @@
-# UMX-HQ vocals, FP32
+# UMX-HQ vocals, presence cut, INT8
 
-`vocals_umxhq_fp32.onnx` is the original Open-Unmix UMX-HQ vocals checkpoint,
-exported without quantization and specialized to 960 frames. Adaptive mix uses
-it to measure vocal presence for Earmark’s outgoing filter sweep.
+`vocals_umxhq_presence_int8.ort` is the Open-Unmix UMX-HQ vocals checkpoint,
+specialized to 960 frames, cut to the bins vocal presence reads, and dynamically
+quantized to INT8, in ONNX Runtime's ORT format. Adaptive mix uses it to measure vocal presence for Earmark’s
+outgoing filter sweep. Desktop and Android ship this one file; the Android build
+copies it into its assets.
 
 ## Source and license
 
@@ -14,40 +16,35 @@ it to measure vocal presence for Earmark’s outgoing filter sweep.
 
 ## Reproduce
 
-Run `scripts/convert-umx-vocals-to-onnx.py CHECKPOINT OUTPUT.onnx` in an environment
-with the versions documented in that script. It checks the source hash, loads
-weights safely, exports the core spectrogram model, and folds constant shape
-arithmetic. Python and PyTorch are build-time tools only.
+1. `scripts/convert-umx-vocals-to-onnx.py CHECKPOINT vocals_umxhq_fp32.onnx` exports
+   the full FP32 model (SHA-256 `1ff89359f6d93507fd05d95159efd56d05b8e566bcef3c3ff11fb5893ff6503d`).
+2. `scripts/prune-umx-vocals.py vocals_umxhq_fp32.onnx pruned_fp32.onnx --int8 DIR/vocals_umxhq_presence_int8.onnx`
+   keeps the input bins the model reads and the output bins presence averages, then
+   quantizes: per-channel dynamic INT8 LSTMs, weight-only INT8 fully connected layers.
+3. `python -m onnxruntime.tools.convert_onnx_models_to_ort DIR --optimization_style Fixed --target_platform arm`
+   (onnxruntime 1.31.0) writes the ORT format file, which Android's minimal runtime needs.
+   Desktop's ONNX Runtime 1.28 gives bit-identical presence curves from it.
 
-V2 used a dynamically quantized INT8 export. This FP32 export keeps the original
-three-layer bidirectional LSTM and its full context; no retraining or architecture change.
+Python, PyTorch and ONNX are build-time tools only. The architecture is unchanged:
+three-layer bidirectional LSTM with its full 960-frame context, no retraining.
+Pruning leaves the kept bins bit-for-bit identical to the FP32 model. Against it, the INT8
+presence curve differs by 0.0044 on average (p99 0.017) on 24 songs, and 0.9% of frames
+cross the 0.6 activity threshold. The file is 7.7 MB (SHA-256
+`ab3f92846a88ce07b5135a5129e11cfa2a72cc26549f3a2366e198c28a9963fc`), against 35.6 MB
+for the full FP32 export; a 960-frame slice takes about 110 ms on two CPU threads.
 
-Playback runs it on ONNX Runtime's CPU provider with two non-spinning threads,
-about 0.15 s per 960-frame slice. The LSTM steps serially, so WebGPU spends
-13+ s on tiny dispatches and starves the compositor for the whole run.
-
-## Validation
-
-The FP32 WebGPU output was compared with the original PyTorch checkpoint on
-stereo music from the supplied transition reference:
-
-- Maximum magnitude error: `4.941225e-5` (output maximum `70.9773`).
-- Relative RMS error: `7.899375e-7`.
-- Vocal-band curve mean/max absolute error: `1.768956e-7` / `9.456151e-7`.
-
-The CPU provider output passes the same check on real music: relative RMS error
-`2.44e-7`, vocal-band curve max error `8.6e-7`.
-
-The `model_probe` Rust example uses the same CPU session settings as playback.
-`scripts/validate-vocal-model.py` reproduces parity checks on silence, a
-spectral stress signal, and optional real audio against the original checkpoint.
+Playback runs it on ONNX Runtime's CPU provider with two non-spinning threads. The
+LSTM steps serially, so WebGPU spends 13+ s on tiny dispatches and starves the
+compositor for the whole run. Its operators are in Android's reduced ONNX Runtime
+build (`mobile/android/app/native/onnxruntime/ops.config`).
 
 ## Tensor contract
 
-- Input `mix_magnitude`: float32 `[1, 2, 2049, 960]`, magnitude STFT,
-  44,100 Hz stereo, FFT 4096, hop 1024, periodic Hann, reflect-centered.
-- Output `target_magnitude`: float32 with the same shape.
-- Vocal presence: mean of clamped `target / mix` across channels and bins
-  covering 200 Hz–4 kHz, excluding effectively silent input bins.
+- Input `mix_magnitude`: float32 `[1, 2, 1487, 960]`, the first 1487 bins of a
+  magnitude STFT: 44,100 Hz stereo, FFT 4096, hop 1024, periodic Hann, reflect-centered.
+- Output `target_magnitude`: float32 `[1, 2, 355, 960]`, STFT bins 18..=372
+  (200 Hz to 4 kHz).
+- Vocal presence: mean of clamped `target / mix` across channels and those bins,
+  excluding effectively silent input bins.
 - Short windows are zero-padded. Search windows longer than 960 frames are
   processed in bounded chunks.

@@ -102,8 +102,9 @@ android {
     sourceSets {
         main {
             assets.srcDir layout.buildDirectory.dir('generated/slopAssets').get().asFile
+            assets.srcDir layout.buildDirectory.dir('generated/modelAssets').get().asFile
             jniLibs.srcDirs += earmarkJniLibsDir
-            // Reduced-op ORT for arm64; see native/onnxruntime/build.sh.
+            // Minimal ORT for arm64 (ORT format models only); see native/onnxruntime/build.sh.
             jniLibs.srcDirs += 'native/onnxruntime'
             // Google's prebuilt LiteRT for lyric translation, shared with desktop's vendor copy.
             jniLibs.srcDirs += '../../../vendor/litert/lib/android'
@@ -337,7 +338,7 @@ dependencies {
 
     implementation 'eu.buney.kopus:kopus:1.6.1.3'
 
-    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.30.0'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.31.0'
     implementation(name: 'discord_partner_sdk', ext: 'aar')
 
     testImplementation 'junit:junit:4.13.2'
@@ -510,6 +511,14 @@ tasks.register('copySlopAssets', Copy) {
     into layout.buildDirectory.dir('generated/slopAssets/slop')
 }
 tasks.named('preBuild').configure { dependsOn 'copySlopAssets' }
+
+// Desktop and Android share the beat and vocal models in the top-level models directory.
+tasks.register('copyModelAssets', Sync) {
+    from('../../../models/nirovi') { include 'nirovi_int8.ort' }
+    from('../../../models/vocal-separation') { include 'vocals_umxhq_presence_int8.ort' }
+    into layout.buildDirectory.dir('generated/modelAssets')
+}
+tasks.named('preBuild').configure { dependsOn 'copyModelAssets' }
 
 // Keep local Canary iteration free of automatic release lint checks.
 tasks.matching {

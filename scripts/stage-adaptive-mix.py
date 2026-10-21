@@ -67,8 +67,8 @@ if a.platform in FFMPEG:
 worker = "orchard-adaptive-mix" + (".exe" if a.platform.startswith("windows") else "")
 shutil.copy2(a.profile / worker, a.destination / worker)
 # Stage only the validated runtime graphs and their documentation/licenses.
-for relative in ("nirovi/nirovi_fp16.onnx", "nirovi/nirovi_int8.onnx", "nirovi/README.md",
-                 "vocal-separation/vocals_umxhq_fp32.onnx", "vocal-separation/README.md", "vocal-separation/LICENSE",
+for relative in ("nirovi/nirovi_fp16.onnx", "nirovi/nirovi_int8.ort", "nirovi/README.md",
+                 "vocal-separation/vocals_umxhq_presence_int8.ort", "vocal-separation/README.md", "vocal-separation/LICENSE",
                  "docs-search/model_quantized.onnx", "docs-search/vocab.txt", "docs-search/README.md",
                  "docs-search/LICENSE", "slop/fakeprint_lr.f32"):
     target = a.destination / "models" / relative
@@ -81,6 +81,8 @@ for name in ("libwgpu_native.so", "wgpu_native.dll", "libwgpu_native.dylib"):
     (a.destination / name).unlink(missing_ok=True)
 for relative in ("beat-this/beat_this.onnx", "beat-this/beat_this_webgpu.onnx", "beat-this/README.md",
                  "beat-this/LICENSE", "vocal-separation/vocals_umxhq_int8.onnx",
+                 "vocal-separation/vocals_umxhq_fp32.onnx", "nirovi/nirovi_int8.onnx",
+                 "vocal-separation/vocals_umxhq_presence_int8.onnx",
                  "vocal-separation/vocals_umxhq_fp32_fp16.onnx"):
     stale = a.destination / "models" / relative
     if stale.exists() and stale.resolve() != (a.models / relative).resolve():
