@@ -31,6 +31,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import dev.sfg.orchard.mobile.OrchardGraph
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.LocalMaxActive
 import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.LoadState
@@ -39,6 +40,7 @@ import dev.sfg.orchard.mobile.ui.components.PlaylistPickerSheet
 import dev.sfg.orchard.mobile.ui.motion.NavMotion
 import dev.sfg.orchard.mobile.ui.navigation.Routes
 import dev.sfg.orchard.mobile.ui.screens.DetailScreen
+import dev.sfg.orchard.mobile.ui.screens.HeroArt
 import dev.sfg.orchard.mobile.ui.screens.HomeActions
 import dev.sfg.orchard.mobile.ui.screens.HomeScreen
 import dev.sfg.orchard.mobile.ui.screens.rememberHomeData
@@ -331,6 +333,11 @@ internal fun OrchardNavigation(
             val animatedArtworkUrl = if (settings.animatedArtwork) {
                 detailArtwork?.let { it.videoUrl.ifBlank { it.videoUrlVertical } }.orEmpty()
             } else ""
+            // Apple Music listeners get Apple's portrait cover, which the phone hero prefers over motion.
+            val heroArt = HeroArt(
+                tallUrl = if (settings.homeSource == APPLE_MUSIC_SOURCE) detailArtwork?.heroTallUrl.orEmpty() else "",
+                animatedUrl = animatedArtworkUrl,
+            )
 
             // Only artist pages swap in TheAudioDB's photograph; albums keep their cover, which
             // also drives the page palette.
@@ -374,7 +381,7 @@ internal fun OrchardNavigation(
                 onDownloadTracks = viewModel::downloadTracks,
                 onRemoveDownloadTrack = viewModel::removeDownload,
                 onRemoveDownloadTracks = viewModel::removeDownloads,
-                animatedArtworkUrl = animatedArtworkUrl,
+                heroArt = heroArt,
                 artistPortraitUrl = artistImages?.portraitUrl.orEmpty(),
                 onShareTrack = viewModel::shareTrack,
                 onShareCollection = viewModel::shareCollection,

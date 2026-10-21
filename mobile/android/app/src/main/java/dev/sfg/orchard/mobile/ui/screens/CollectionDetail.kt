@@ -49,6 +49,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.model.BrowseDetail
@@ -63,6 +65,8 @@ import dev.sfg.orchard.mobile.ui.components.rememberHeroScrimProgress
 import dev.sfg.orchard.mobile.ui.components.MessagePanel
 import dev.sfg.orchard.mobile.ui.components.ReorderControls
 import dev.sfg.orchard.mobile.ui.components.TrackRow
+import dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout
+import dev.sfg.orchard.mobile.ui.components.collectionDownloadAction
 import dev.sfg.orchard.mobile.ui.components.filterTracks
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
@@ -90,7 +94,7 @@ internal fun CollectionDetailContent(
     onDownloadTracks: ((List<Track>) -> Unit)? = null,
     onRemoveDownloadTrack: ((String) -> Unit)? = null,
     onRemoveDownloadTracks: ((List<Track>) -> Unit)? = null,
-    animatedArtworkUrl: String = "",
+    heroArt: HeroArt = HeroArt(),
     artistPortraitUrl: String = "",
     onShareTrack: ((Track) -> Unit)? = null,
     onShareCollection: ((BrowseDetail) -> Unit)? = null,
@@ -106,8 +110,11 @@ internal fun CollectionDetailContent(
     val canEdit = detail.kind == CatalogKind.PLAYLIST && detail.editable && onMovePlaylistTrack != null
     val editRows = editing && canEdit && !isSearching
 
-    // The cover's own colours carry the whole screen.
-    val palette = rememberArtworkPalette(detail.artworkUrl)
+    // The cover's own colours carry the whole screen; phones sample the still the hero shows.
+    val wide = isFoldableOrWideLayout()
+    val palette = if (wide) rememberArtworkPalette(detail.artworkUrl)
+    else rememberArtworkPalette(heroArt.phoneStill(detail.artworkUrl), heroArt.phoneAspect)
+    val context = LocalContext.current
     val listState = rememberLazyListState()
     val scrimProgress = rememberHeroScrimProgress(listState)
     val bestMix = rememberBestMixLauncher(detail, downloadedTrackIds, onPlayAll, onPlayBestMix)
@@ -144,12 +151,13 @@ internal fun CollectionDetailContent(
         Modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(
+                // Phones continue the hero band, so the list sits on one flat tint.
+                if (wide) Brush.verticalGradient(
                     0f to palette.top.copy(alpha = 0.70f),
                     0.25f to palette.bottom.copy(alpha = 0.45f),
                     0.55f to palette.deep,
                     1f to palette.deep,
-                ),
+                ) else SolidColor(palette.deep),
             ),
     ) {
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 120.dp)) {
@@ -161,9 +169,12 @@ internal fun CollectionDetailContent(
                     onPlayAll = onPlayAll,
                     onShuffle = onShuffle,
                     onSave = onSave,
+                    onShare = { shareCollection(context, detail, onShareCollection) },
                     bestMix = bestMix,
                     isSaved = isSaved,
-                    animatedArtworkUrl = animatedArtworkUrl,
+                    heroArt = heroArt,
+                    onDownload = collectionDownloadAction(detail.tracks, downloadedTrackIds, onDownloadTracks, onRemoveDownloadTracks),
+                    isDownloaded = detail.tracks.isNotEmpty() && detail.tracks.all { it.id in downloadedTrackIds },
                     artistPortraitUrl = artistPortraitUrl,
                     onOpenArtist = albumArtistId?.let { id -> { onOpen(id) } },
                     smartCrossfadeEnabled = smartCrossfadeEnabled,

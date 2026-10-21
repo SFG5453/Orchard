@@ -22,6 +22,8 @@ package dev.sfg.orchard.mobile.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Search
@@ -37,6 +39,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.ui.theme.CanopyColors
+import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
 /**
  * Helper to produce the collection download / delete callback based on current download state.
@@ -80,6 +84,8 @@ fun CollectionTopBar(
     aboutLabel: String = "About",
     onDownload: (() -> Unit)? = null,
     isDownloaded: Boolean = false,
+    saveInBar: Boolean = false,
+    canSave: Boolean = true,
 ) {
     if (isSearching && onSearchQueryChange != null && onCloseSearch != null) {
         // Opaque enough that the field never sits on raw artwork.
@@ -96,11 +102,21 @@ fun CollectionTopBar(
     var menuOpen by remember { mutableStateOf(false) }
     val noun = if (aboutLabel.contains("album", true)) "album" else "playlist"
 
-    DetailFloatingChrome(onBack = onBack, scrimProgress = scrimProgress, modifier = modifier) {
+    // Phones drop the frosted backing so the icons sit directly on the art.
+    DetailFloatingChrome(onBack = onBack, scrimProgress = scrimProgress, modifier = modifier, transparent = saveInBar) {
         if (onSearch != null) {
             ChromeAction(Icons.Rounded.Search, "Search in collection", onSearch)
         }
-        ChromeAction(Icons.Rounded.IosShare, "Share", onShare)
+        if (!saveInBar) {
+            ChromeAction(Icons.Rounded.IosShare, "Share", onShare)
+        } else if (canSave) {
+            ChromeAction(
+                icon = if (isSaved) Icons.Rounded.Check else Icons.Rounded.Add,
+                contentDescription = if (isSaved) "Remove from library" else "Add to library",
+                onClick = onSave,
+                tint = if (isSaved) LocalAccent.current else CanopyColors.Text,
+            )
+        }
         Box {
             ChromeAction(Icons.Rounded.MoreHoriz, "More options", { menuOpen = true })
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -113,13 +129,23 @@ fun CollectionTopBar(
                         },
                     )
                 }
-                DropdownMenuItem(
-                    text = { Text(if (isSaved) "Remove from library" else "Add to library") },
-                    onClick = {
-                        menuOpen = false
-                        onSave()
-                    },
-                )
+                if (saveInBar) {
+                    DropdownMenuItem(
+                        text = { Text("Share") },
+                        onClick = {
+                            menuOpen = false
+                            onShare()
+                        },
+                    )
+                } else {
+                    DropdownMenuItem(
+                        text = { Text(if (isSaved) "Remove from library" else "Add to library") },
+                        onClick = {
+                            menuOpen = false
+                            onSave()
+                        },
+                    )
+                }
                 if (onAbout != null) {
                     DropdownMenuItem(
                         text = { Text(aboutLabel) },
