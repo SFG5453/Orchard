@@ -140,9 +140,16 @@ export function createAppleMusicClient({ fetchImpl, session }) {
     }
   }
 
+  /** Headers for play.itunes.apple.com, which wants the listener and a page Referer. */
+  function playbackHeaders() {
+    const result = headers(true);
+    if (result.Origin) result.Referer = `${result.Origin}/`;
+    return result;
+  }
+
   function storefront() {
     return (session() || {}).storefront || 'us';
   }
 
-  return { get, send, editorial, all, storefront };
+  return { get, send, editorial, all, storefront, playbackHeaders };
 }

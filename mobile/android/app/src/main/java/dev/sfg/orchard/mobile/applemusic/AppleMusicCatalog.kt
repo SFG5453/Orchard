@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile.applemusic
 
 import android.content.Context
+import android.util.Base64
 import dev.sfg.orchard.mobile.artwork.TrackArtwork
 import dev.sfg.orchard.mobile.auth.OrchardAccountService
 import dev.sfg.orchard.mobile.model.BrowseDetail
@@ -112,6 +113,20 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
             videoUrlVertical = result.text("animatedVertical"),
         )
         return artwork.takeIf { it.staticUrl.isNotBlank() || it.videoUrl.isNotBlank() || it.videoUrlVertical.isNotBlank() }
+    }
+
+    /** Playlist layout and license details of a catalog song's Widevine stream. */
+    suspend fun stream(id: String): JSONObject =
+        call("playback.stream", JSONObject().put("track", JSONObject().put("id", id)))
+
+    /** Apple's license for a Widevine [challenge] against a stream from [stream]. */
+    suspend fun license(stream: JSONObject, challenge: ByteArray): ByteArray {
+        val payload = JSONObject()
+            .put("licenseUrl", stream.text("licenseUrl"))
+            .put("keyUri", stream.text("keyUri"))
+            .put("appleId", stream.text("appleId"))
+            .put("challenge", Base64.encodeToString(challenge, Base64.NO_WRAP))
+        return Base64.decode(call("playback.license", payload).text("license"), Base64.DEFAULT)
     }
 
     private suspend fun call(method: String, payload: JSONObject, retry: Boolean = true): JSONObject {

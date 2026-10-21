@@ -21,7 +21,9 @@ package dev.sfg.orchard.mobile.app
 
 import android.util.Log
 import dev.sfg.orchard.mobile.OrchardGraph
+import dev.sfg.orchard.mobile.catalog.isAppleMusicId
 import dev.sfg.orchard.mobile.connect.ConnectWire
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.BestMixJob
 import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
@@ -91,8 +93,8 @@ internal class QueueLauncher(
     ) {
         Log.d(TAG, "playAll: ${tracks.size} tracks, startIndex=$startIndex, contextTitle='$contextTitle'")
         if (tracks.isEmpty()) return
-        if (tracks[startIndex.coerceIn(tracks.indices)].let { it.playbackSource == "apple_music" || it.id.startsWith("am.") }) {
-            showWarning("Apple Music playback is not available yet.")
+        appleMusicBlock(tracks[startIndex.coerceIn(tracks.indices)])?.let {
+            showWarning(it)
             return
         }
         scope.launch {
@@ -101,6 +103,18 @@ internal class QueueLauncher(
                 ?: tracks[safeIndex].album.takeIf { it.isMeaningfulPlaybackSource() }
                 ?: "Your queue"
             replaceQueue(tracks, safeIndex, source, shuffle)
+        }
+    }
+
+    /** Why an Apple Music song cannot start here, or null; the player repeats the source checks. */
+    private fun appleMusicBlock(track: Track): String? {
+        if (track.playbackSource != APPLE_MUSIC_SOURCE && !isAppleMusicId(track.id)) return null
+        return when {
+            targets.value.selected != PlaybackTarget.LocalPhone -> "Apple Music songs play only on this phone."
+            graph.settings.settings.value.homeSource != APPLE_MUSIC_SOURCE ->
+                "Choose Apple Music as the music source in Settings to play Apple Music songs."
+            !graph.appleMusic.signedIn() -> "Connect Apple Music in Settings to play this song."
+            else -> null
         }
     }
 

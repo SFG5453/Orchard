@@ -59,6 +59,8 @@ const methods = new Map([
   ['library.playlist.targets', async () => ({ playlists: await appleMusic.playlistTargets() })],
   ['library.playlist.add', async (payload = {}) => appleMusic.addToPlaylist(payload.track, payload.playlistId, payload.title)],
   ['library.playlist.create', async (payload = {}) => appleMusic.createPlaylist(payload.title, payload.track)],
+  ['playback.stream', async (payload = {}) => appleMusic.playback.stream(payload.track)],
+  ['playback.license', async (payload = {}) => appleMusic.playback.license(payload)],
   ['lyrics', async (payload = {}) => (await appleMusic.lyrics(payload)) || {}],
   ['close', async () => {
     session = null;
