@@ -54,6 +54,7 @@ const methods = new Map([
   ['catalog.search', async (payload = {}) => appleMusic.search(payload.query, payload.filter)],
   ['library', async () => appleMusic.library()],
   ['library.playlists', async () => ({ items: await appleMusic.libraryPlaylists() })],
+  ['library.recent', async () => ({ items: await appleMusic.recentTracks() })],
   ['library.like.status', async (payload = {}) => appleMusic.likeStatus(payload.track)],
   ['library.like.set', async (payload = {}) => appleMusic.setLike(payload.track, Boolean(payload.liked))],
   ['library.playlist.targets', async () => ({ playlists: await appleMusic.playlistTargets() })],

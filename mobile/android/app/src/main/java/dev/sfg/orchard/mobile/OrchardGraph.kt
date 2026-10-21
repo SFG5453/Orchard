@@ -189,6 +189,15 @@ class OrchardGraph(context: Context) {
         scope = applicationScope,
     )
 
+    /** Replaces [library] on screen while Apple Music is the music source; after [warningEvent], which it posts to. */
+    internal val appleLibrary = dev.sfg.orchard.mobile.library.AppleLibraryRepository(
+        appleMusic,
+        kotlinx.coroutines.flow.combine(settings.settings, appleMusic.connection) { values, apple ->
+            values.homeSource == dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE && apple.connected
+        },
+        applicationScope,
+    ) { postWarning(it) }
+
     fun postWarning(message: String) {
         warningEvent.tryEmit(message)
     }

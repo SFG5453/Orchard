@@ -121,3 +121,15 @@ test('lyrics fall back to line timing and miss quietly', async () => {
   assert.equal(await client.lyrics({ appleId: '222' }), null);
   assert.equal(await client.lyrics({ appleId: 'i.local' }), null);
 });
+
+test('recent tracks keep catalog and library songs in order and skip other kinds', async () => {
+  const catalogSong = { id: '222', type: 'songs', attributes: { name: 'Snooze', artistName: 'SZA', albumName: 'SOS', durationInMillis: 201000, artwork: art } };
+  const { client, requests } = appleMusic([
+    [/\/v1\/me\/recent\/played\/tracks\?limit=30$/, 200, {
+      data: [catalogSong, { id: 'ra.1', type: 'stations', attributes: { name: 'Radio' } }, librarySong('i.a', '111', 'Kill Bill')]
+    }]
+  ]);
+  const tracks = await client.recentTracks();
+  assert.deepEqual(tracks.map((item) => [item.browseId || item.id, item.title]), [['am.songs.222', 'Snooze'], ['am.songs.111', 'Kill Bill']]);
+  assert.match(requests.at(-1).url, /recent\/played\/tracks\?limit=30$/);
+});
