@@ -110,6 +110,8 @@ Animated artwork is on by default and uses extra network bandwidth. Not every so
 
 On an artist page, hold the pointer over an album card for about half a second. If that album has moving artwork, the cover starts playing in place. Move the pointer away and the cover goes back to the still image. Singles, videos, and playlists do not animate on hover. With the switch off, nothing animates. The Artwork source controls and Mirror query order list are disabled while the switch is off.
 
+On Android, the full player uses the tall version of an album's moving artwork when one exists. Some tall versions zoom into the cover and blur its lower part. To fix one, open the **⋯** menu in the full player and choose **Show Whole Cover**. Orchard plays the square version instead, or the still cover if there is no square version. The choice is saved for that album's artwork. Choose **Show Tall Cover** to undo it.
+
 ## Animate playlist collages
 
 Playlists that Orchard shows with a four-cover collage can play moving artwork inside the collage. This is off by default because it can be system intensive: up to four videos play at once, which uses extra CPU, GPU, and network bandwidth.
