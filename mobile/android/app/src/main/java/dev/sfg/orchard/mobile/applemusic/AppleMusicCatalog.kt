@@ -170,6 +170,12 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
     suspend fun audioAnalysis(ids: List<String>): JSONObject =
         call("catalog.audioAnalysis", JSONObject().put("ids", JSONArray(ids))).optJSONObject("items") ?: JSONObject()
 
+    suspend fun lyrics(track: Track): String {
+        val payload = JSONObject().put("title", track.title).put("artist", track.artist).put("album", track.album)
+        if (track.id.startsWith("am.songs.")) payload.put("appleId", track.id.removePrefix("am.songs."))
+        return call("lyrics", payload).text("ttml")
+    }
+
     /** Playlist layout and license details of a catalog song's Widevine stream. */
     suspend fun stream(id: String): JSONObject =
         call("playback.stream", JSONObject().put("track", JSONObject().put("id", id)))

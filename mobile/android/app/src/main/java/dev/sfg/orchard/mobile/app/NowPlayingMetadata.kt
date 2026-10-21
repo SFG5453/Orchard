@@ -29,7 +29,7 @@ import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.PlaybackTarget
 import dev.sfg.orchard.mobile.model.PlaybackTargetState
 import dev.sfg.orchard.mobile.model.Track
-import dev.sfg.orchard.mobile.model.normalizeLyricsProviders
+import dev.sfg.orchard.mobile.model.visibleLyricsProviders
 import dev.sfg.orchard.mobile.playback.LocalPlaybackController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
@@ -163,8 +163,9 @@ internal class NowPlayingMetadata(
                 playback.map { it.currentTrack }.distinctUntilChanged { old, new -> old?.id == new?.id },
                 graph.settings.loadedSettings.map { it.lyricsProviders }.distinctUntilChanged(),
                 graph.lyrics.providerOverrides,
-            ) { track, configs, overrides ->
-                val enabled = normalizeLyricsProviders(configs).filter { it.enabled }.map { it.provider }
+                graph.appleMusic.connection.map { it.connected }.distinctUntilChanged(),
+            ) { track, configs, overrides, appleConnected ->
+                val enabled = visibleLyricsProviders(configs, appleConnected).filter { it.enabled }.map { it.provider }
                 val selected = overrides[track?.id]?.takeIf { it in enabled }
                 track to (selected?.let(::listOf) ?: enabled)
             }.distinctUntilChanged { old, new -> old.first?.id == new.first?.id && old.second == new.second }
