@@ -47,6 +47,8 @@ class AdaptiveMixer internal constructor(
     private val handler: Handler,
     /** The desktop mixing for this phone while one is connected; asked per pair. */
     private val remote: () -> RemoteMix? = { null },
+    /** Apple Music's analysis by track id, for songs played from Apple Music. Blocks the worker. */
+    private val appleAnalysis: (List<String>) -> Map<String, JSONObject> = { emptyMap() },
 ) {
     // QuickJS plans on this thread and allows itself 2 MiB of stack; ART gives threads 1 MiB.
     // One pair at a time: a DJ with two hands, not four.
@@ -84,6 +86,7 @@ class AdaptiveMixer internal constructor(
         handler.removeCallbacks(idleRelease)
         worker.execute {
             val prepared = try {
+                withAppleAnalysis(request)
                 // Apple Music audio is licensed to this phone; a mix host would receive ciphertext.
                 (if (hasAppleMusic(request)) null else remote())?.prepare(request, outgoing, incoming)
                     ?: AdaptiveMix.prepare(::loadedModels, outgoing, incoming, request)
@@ -103,6 +106,14 @@ class AdaptiveMixer internal constructor(
                 handler.postDelayed(idleRelease, MODEL_IDLE_MS)
             }
         }
+    }
+
+    /** Adds Apple's analysis of both songs, which stands in for the beat and vocal models. */
+    private fun withAppleAnalysis(request: JSONObject) {
+        val ids = listOf("currentTrack", "nextTrack").map { request.optJSONObject(it)?.optString("id").orEmpty() }
+        val found = appleAnalysis(ids)
+        found[ids[0]]?.let { request.put("outgoingApple", it) }
+        found[ids[1]]?.let { request.put("incomingApple", it) }
     }
 
     private fun loadedModels(): Long? {

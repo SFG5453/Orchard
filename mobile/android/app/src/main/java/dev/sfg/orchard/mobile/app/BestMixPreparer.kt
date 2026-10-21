@@ -23,6 +23,7 @@ import android.util.Log
 import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.playback.ResolvedStream
+import dev.sfg.orchard.mobile.playback.apple.AppleMixAnalysis
 import dev.sfg.orchard.mobile.playback.smart.BestMixSorter
 import java.io.File
 import java.io.IOException
@@ -59,10 +60,24 @@ internal class BestMixPreparer(private val graph: OrchardGraph, cacheRoot: File)
             }
         }
         Log.i(TAG, "$label reused ${tracks.size - missing.size}/${tracks.size} cached analyses")
-        if (missing.isEmpty()) return
+        val (apple, others) = missing.partition { AppleMixAnalysis.eligible(graph, it.id) }
+        if (apple.isNotEmpty()) analyzeApple(apple, onProgress)
+        if (others.isEmpty()) return
         // Every download before any analysis, so decoding never holds a network slot.
-        val files = download(missing, onProgress)
+        val files = download(others, onProgress)
         if (files.isNotEmpty()) analyze(files, onProgress)
+    }
+
+    /** Apple Music songs sort on Apple's own analysis, as on desktop; nothing is downloaded. */
+    private suspend fun analyzeApple(tracks: List<Track>, onProgress: (String) -> Unit) {
+        onProgress("Reading Apple Music analysis...")
+        val analyses = AppleMixAnalysis.fetch(graph, tracks.map(Track::id))
+        val stored = withContext(Dispatchers.Default) {
+            tracks.count { track ->
+                analyses[track.id]?.let { BestMixSorter.analyzeApple(graph.bestMixFeatures, track, it) } == true
+            }
+        }
+        Log.i(TAG, "Apple Music analysis gave features for $stored/${tracks.size} songs")
     }
 
     private suspend fun download(tracks: List<Track>, onProgress: (String) -> Unit): List<Pair<Track, File>> {

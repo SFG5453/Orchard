@@ -75,8 +75,11 @@ internal object AdaptiveMix {
                 ?: return PreparedMix.Failed("Could not decode the incoming song")
             incomingSong.use {
                 val decoded = System.currentTimeMillis()
-                val handle = models() ?: return PreparedMix.Failed("Adaptive mix models are unavailable")
-                val framed = MixNative.nativeMix(handle, request.toString(), outgoingSong.handle,
+                val text = request.toString()
+                // Apple Music pairs carry Apple's own analysis, so the models never load for them.
+                val handle = if (!MixNative.nativeMixNeedsModels(text)) 0L
+                    else models() ?: return PreparedMix.Failed("Adaptive mix models are unavailable")
+                val framed = MixNative.nativeMix(handle, text, outgoingSong.handle,
                     incomingSong.handle, outgoingSong.rate)
                 Log.d(TAG, "Prepared in ${System.currentTimeMillis() - started}ms " +
                     "(decode ${decoded - started}ms)")

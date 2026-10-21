@@ -11,7 +11,9 @@
 #include <QSqlDatabase>
 #include <QVariantList>
 
+class AppleMusic;
 class AuthManager;
+class CatalogSource;
 class YouTubeProvider;
 class QNetworkReply;
 class QProcess;
@@ -42,6 +44,8 @@ public:
   QVariantList snapshot() const { return m_snapshot; }
   void start(const QVariantList &queue, const QVariantMap &current);
   void cancel();
+  // Songs played from Apple Music sort on Apple's own analysis instead of downloaded audio.
+  void setAppleMusic(AppleMusic *account, CatalogSource *source);
 signals:
   void changed();
   void orderReady(const QVariantList &snapshot, const QList<int> &order);
@@ -62,6 +66,22 @@ private:
   QJsonObject summary(const QString &id) const;
   QJsonObject edge(const QString &id, bool tail) const;
   void trimCache() const;
+  static double seconds(const QVariantMap &track);
+  static QString workerPath();
+  // best_mix_apple.cpp
+  QString appleId(const QVariantMap &track) const;
+  bool appleBusy() const { return !m_applePending.isEmpty() || m_appleWorker; }
+  void startApple();
+  void analyzeApple(const QJsonObject &items);
+  void finishApple(const QVariantMap &track, const QJsonObject &features);
+  void stopApple();
+  AppleMusic *m_appleAccount{nullptr};
+  CatalogSource *m_catalogSource{nullptr};
+  QList<QVariantMap> m_applePending;
+  // Songs the Apple worker is answering, in request order.
+  QList<QVariantMap> m_appleSongs;
+  QPointer<QProcess> m_appleWorker;
+  quint64 m_appleGeneration{0};
   YouTubeProvider *m_provider;
   AuthManager *m_auth;
   QNetworkAccessManager m_network;

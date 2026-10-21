@@ -32,6 +32,18 @@ object BestMixSorter {
         }
     }
 
+    /** Stores features built from Apple Music's [analysis] of [track]; no audio is decoded. */
+    fun analyzeApple(store: BestMixFeatureStore, track: Track, analysis: JSONObject): Boolean {
+        if (!MixNative.available) return false
+        val duration = track.durationMs / 1000.0
+        val result = JSONObject(MixNative.nativeBestMixApple(analysis.toString(), duration))
+        if (result.has("error")) {
+            Log.w(TAG, "Best Mix Apple analysis of ${track.id} failed: ${result.optString("error")}")
+            return false
+        }
+        return store.store(track.id, duration, result)
+    }
+
     /**
      * Orders [queue] to follow [current], as desktop's `BestMixController::sort`. Null when no
      * queue song has analysis or the native sort refused.
