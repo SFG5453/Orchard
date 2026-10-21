@@ -57,7 +57,6 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -158,6 +157,7 @@ fun AnimatedArtworkVideo(
     }
     val currentOnVideoAspect by rememberUpdatedState(onVideoAspect)
     val context = LocalContext.current
+    val quality = LocalAnimatedArtworkQuality.current
     var failed by remember(url) { mutableStateOf(false) }
     var firstFrameReady by remember(url) { mutableStateOf(false) }
     if (failed) return
@@ -166,26 +166,18 @@ fun AnimatedArtworkVideo(
         val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context)
             .setDataSourceFactory(AnimatedArtworkCache.dataSourceFactory(context))
 
-        // Motion covers are short silent loops, so the stock buffering targets (which hold
-        // playback until seconds of video are ready) just delay the first frame. Start as soon
-        // as there is anything to show, but let the buffer run past the 10s that adaptive
-        // selection demands before it will step up a rendition: capped shorter, an HLS cover
-        // stayed pinned to the lowest variant for the entire loop.
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(1_000, 30_000, 120, 240)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
-        // A cover loop is a few seconds long, so there is nothing to gain by easing into it at a
-        // low bitrate the way ABR would for a full track: take the best rendition immediately.
-        // The viewport constraint goes too, since it is sized for the display while the artwork
-        // is drawn zoom-cropped and can use detail beyond it.
-        val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context).apply {
-            setParameters(
-                buildUponParameters()
-                    .setForceHighestSupportedBitrate(true)
-                    .clearViewportSizeConstraints(),
-            )
+        // Short loops need to adapt without waiting for ten seconds of buffered video.
+        val adaptiveSelection = androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection.Factory(
+            1_000, 5_000, 1_000,
+            androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection.DEFAULT_BANDWIDTH_FRACTION,
+        )
+        val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context, adaptiveSelection).apply {
+            setParameters(buildUponParameters().artworkQuality(quality))
         }
 
         ExoPlayer.Builder(context)
@@ -199,6 +191,11 @@ fun AnimatedArtworkVideo(
                     .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
                     .build()
             }
+    }
+
+    LaunchedEffect(player, quality) {
+        val selector = player.trackSelector as androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+        selector.setParameters(selector.buildUponParameters().artworkQuality(quality))
     }
 
     LaunchedEffect(url, active) {
