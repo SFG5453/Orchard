@@ -171,6 +171,10 @@ class OrchardGraph(context: Context) {
     }
 
     /** Names where MAX audio comes from; cached streams and bytes from another source must not be reused. */
+    /** [streamVariant] for the song behind a stable stream URI. */
+    fun streamVariant(uri: android.net.Uri): String =
+        sourceCacheVariant(dev.sfg.orchard.mobile.playback.MediaItemMapper.sourceId(uri), ::streamVariant)
+
     fun streamVariant(): String {
         val quality = audioQuality()
         val qobuzEnabled = quality == AudioQuality.MAX && qobuzResolver.isAvailable()

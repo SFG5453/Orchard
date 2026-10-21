@@ -85,9 +85,10 @@ internal class NowPlayingPublisher(
         val measured = uri?.let { cache.cachedBitrateKbps(it, duration) } ?: 0
         val kbps = if (measured > 0) measured else graph.streams.knownBitrateKbps(item.mediaId)
         // A cache hit skips resolution, so the remembered format keeps the badge on its label.
-        val qobuzSelected = graph.streamVariant().contains("|qobuz|")
+        val variant = uri?.let(graph::streamVariant) ?: graph.streamVariant()
+        val qobuzSelected = variant.contains("|qobuz|")
         val remembered = if (qobuzSelected && resolved == null) {
-            graph.qobuzTiers.detail(item.mediaId, graph.streamVariant())
+            graph.qobuzTiers.detail(item.mediaId, variant)
         } else null
         if (remembered != null) {
             publish(kbps, qobuz = true, remembered)

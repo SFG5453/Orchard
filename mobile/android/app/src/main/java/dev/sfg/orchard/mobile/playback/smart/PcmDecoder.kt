@@ -9,6 +9,8 @@ import android.media.MediaDataSource
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import androidx.media3.common.MimeTypes
+import dev.sfg.orchard.mobile.playback.apple.DecoderDrm
+import dev.sfg.orchard.mobile.playback.apple.LicensedMediaDataSource
 import eu.buney.kopus.OpusDecoder
 import eu.buney.kopus.OpusLoader
 import java.nio.ByteOrder
@@ -22,9 +24,11 @@ internal interface PcmSink {
 /** Interleaved stereo PCM at the codec's rate, without retaining the decoded song. */
 internal object PcmDecoder {
     fun decode(source: MediaDataSource, sink: PcmSink): Boolean {
-        if (opus(source, sink)) return true
+        val licensed = source as? LicensedMediaDataSource
+        if (licensed == null && opus(source, sink)) return true
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
+        var drm: DecoderDrm? = null
         var started = false
         try {
             extractor.setDataSource(source)
@@ -36,8 +40,10 @@ internal object PcmDecoder {
             val mime = format.getString(MediaFormat.KEY_MIME) ?: return false
             // Float where the codec offers it; 16-bit output is widened below either way.
             format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_FLOAT)
-            codec = createDecoder(mime).apply { configure(format, null, null, 0); start() }
+            if (licensed != null) drm = DecoderDrm.open(extractor, mime, licensed.license) ?: return false
+            codec = createDecoder(mime).apply { configure(format, null, drm?.crypto, 0); start() }
             val info = MediaCodec.BufferInfo()
+            val cryptoInfo = MediaCodec.CryptoInfo()
             var inputDone = false
             var rate = 0
             var channels = 0
@@ -58,7 +64,12 @@ internal object PcmDecoder {
                         codec.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                         inputDone = true
                     } else {
-                        codec.queueInputBuffer(index, 0, size, extractor.sampleTime, 0)
+                        if (drm != null && extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_ENCRYPTED != 0) {
+                            extractor.getSampleCryptoInfo(cryptoInfo)
+                            codec.queueSecureInputBuffer(index, 0, cryptoInfo, extractor.sampleTime, 0)
+                        } else {
+                            codec.queueInputBuffer(index, 0, size, extractor.sampleTime, 0)
+                        }
                         extractor.advance()
                     }
                     fed = true
@@ -112,6 +123,7 @@ internal object PcmDecoder {
         } finally {
             runCatching { codec?.stop() }
             runCatching { codec?.release() }
+            drm?.close()
             extractor.release()
         }
     }

@@ -111,7 +111,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         streamResolver = graph.streams
         streamResolver.trackLookup = ::queueTrack
         streamResolver.warmUp()
-        streamCache = StreamCache(context = this, maxBytes = graph.settings.settings.value.cacheSizeBytes, variant = graph::streamVariant)
+        streamCache = StreamCache(context = this, maxBytes = graph.settings.settings.value.cacheSizeBytes, variant = { graph.streamVariant(it) })
         graph.onClearStreamCache = streamCache::clear
         streams = PlayerStreams(this, graph, streamCache, ::queueTrack) { uri, stream -> nowPlaying.onResolved(uri, stream) }
         nowPlaying = NowPlayingPublisher(graph, handler, ioScope, streamCache, streams::cached) {
@@ -180,7 +180,9 @@ class OrchardPlaybackService : MediaLibraryService() {
             // A connected desktop does the heavy lifting; the phone keeps the clock and the speaker.
             mixer = AdaptiveMixer(this, handler, remote = graph.connect::mixHost),
             // Adaptive mixes decode whole songs, so both must be fully cached first.
-            sourceFor = { uri -> if (streamCache.isFullyCached(uri)) ({ streamCache.mediaDataSource(uri) }) else null },
+            sourceFor = { uri ->
+                if (streamCache.isFullyCached(uri)) ({ streamCache.mediaDataSource(uri)?.let { streams.analysisSource(uri, it) } }) else null
+            },
             splicerFor = splicers::get,
             onMarker = { graph.transitionMarker.value = it },
             onHandoff = ::adoptPlayer,
@@ -468,7 +470,8 @@ class OrchardPlaybackService : MediaLibraryService() {
             // DataSource invokes their signed-in resolver; a guest resolve beside it would compete.
             val authenticated = uri != null &&
                 (MediaItemMapper.requiresAuthenticatedHls(uri) || MediaItemMapper.requiresAuthenticatedDirect(uri))
-            if (!authenticated && !MediaItemMapper.isVideoUri(uri)) streamResolver.prefetch(item.mediaId)
+            val apple = dev.sfg.orchard.mobile.playback.apple.AppleMusicDataSource.isApple(uri)
+            if (!authenticated && !apple && !MediaItemMapper.isVideoUri(uri)) streamResolver.prefetch(item.mediaId)
         }
         val uris = wanted.mapNotNull { it.localConfiguration?.uri }.filterNot(MediaItemMapper::isVideoUri)
         streamCache.retainOnly(uris)

@@ -84,7 +84,8 @@ class AdaptiveMixer internal constructor(
         handler.removeCallbacks(idleRelease)
         worker.execute {
             val prepared = try {
-                remote()?.prepare(request, outgoing, incoming)
+                // Apple Music audio is licensed to this phone; a mix host would receive ciphertext.
+                (if (hasAppleMusic(request)) null else remote())?.prepare(request, outgoing, incoming)
                     ?: AdaptiveMix.prepare(::loadedModels, outgoing, incoming, request)
             } catch (error: Throwable) {
                 // Native analysis must never take playback down with it.
@@ -167,6 +168,10 @@ class AdaptiveMixer internal constructor(
             .put("nextTrack", next.plannerJson())
             .put("fadeSeconds", fadeSeconds.toInt())
             .put("albumSequential", albumSequential)
+
+        private fun hasAppleMusic(request: JSONObject) = listOf("currentTrack", "nextTrack").any {
+            request.optJSONObject(it)?.optString("id").orEmpty().startsWith("am.")
+        }
 
         private fun Track.plannerJson(): JSONObject = JSONObject()
             .put("id", id).put("title", title).put("subtitle", artist)

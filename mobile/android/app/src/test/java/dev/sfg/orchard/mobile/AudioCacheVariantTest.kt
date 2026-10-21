@@ -44,4 +44,12 @@ class AudioCacheVariantTest {
             audioCacheVariant(AudioQuality.HIGH, false, "auto"),
         )
     }
+
+    @Test
+    fun appleMusicSongsIgnoreProviderSettings() {
+        val youtube = { audioCacheVariant(AudioQuality.MAX, true, "hires") }
+        assertEquals(APPLE_MUSIC_CACHE_VARIANT, sourceCacheVariant("am.songs.697195462", youtube))
+        assertEquals(APPLE_MUSIC_CACHE_VARIANT, sourceCacheVariant("am.songs.697195462") { audioCacheVariant(AudioQuality.DATA_SAVER, false, "auto") })
+        assertEquals(youtube(), sourceCacheVariant("dQw4w9WgXcQ", youtube))
+    }
 }

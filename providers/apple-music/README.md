@@ -42,10 +42,14 @@ Apple resources travel as Orchard browse ids `am.<type>.<id>`, such as
 | `library.playlist.add` | `track`, `playlistId`, `title` | `{playlistId, title}` |
 | `library.playlist.create` | `title`, optional `track` | `{playlistId, title}` |
 | `lyrics` | `appleId`, `isrc`, or `title`, `artist`, `album` | `{songId, ttml}`, or `{}` when Apple has no lyrics |
+| `playback.stream` | `track` (`id` or `appleId` of a catalog song) | `{appleId, flavor, licenseUrl, keyUri, media, ranges, durations, duration}`: one encrypted fragmented MP4 as `[start, size]` byte ranges, the init segment first |
+| `playback.license` | `licenseUrl`, `keyUri`, `appleId`, `challenge` (base64) | `{license}` (base64 Widevine license) |
 
 Apple API failures return `{error: {code, status, message}}`. Codes include
 `not_connected`, `not_signed_in`, `developer_token` (401), `user_token` (403),
-`not_found` and `rate_limited`.
+`not_found` and `rate_limited`; playback adds `not_playable` (library-only songs),
+`not_offered` or `playback_<failureType>` with Apple's own message, `no_widevine`,
+`bad_stream` and `license_refused`. The host fetches and decrypts the media itself.
 
 Artist pages request the undocumented `artistBio` and `editorialVideo`
 attributes and retry without them if Apple rejects the request. Third-party

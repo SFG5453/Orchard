@@ -24,12 +24,14 @@ import { createHomeCatalog } from './home.js';
 import { createLibraryCatalog } from './library.js';
 import { createLibraryWrites } from './libraryWrite.js';
 import { createLyricsCatalog } from './lyrics.js';
+import { createPlayback } from './playback.js';
 import { createAppleMusicClient } from './client.js';
 
 export { AppleMusicError, apiUrl } from './client.js';
 export { APPLE_MUSIC_SOURCE, browseId, isAppleMusicId, parseBrowseId } from './ids.js';
 export { ARTIST_VIEWS, heroVideo } from './artist.js';
 export { artworkUrl, releaseInfo } from './normalize.js';
+export { parsePlaylist, playbackId } from './playback.js';
 
 /**
  * Host-neutral Apple Music catalog. The host owns sign-in, token storage and
@@ -46,6 +48,7 @@ export function createAppleMusic({ fetchImpl = fetch, session }) {
     ...createHomeCatalog(client),
     ...library,
     ...createLibraryWrites(client),
-    ...createLyricsCatalog(client)
+    ...createLyricsCatalog(client),
+    playback: createPlayback(client, fetchImpl)
   };
 }
