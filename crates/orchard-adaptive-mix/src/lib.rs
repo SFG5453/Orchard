@@ -4,6 +4,7 @@
 //! Everything outside the `desktop` feature is shared with Android, which links it
 //! through `orchard-transition-mobile`, and with the web build (`web`).
 pub mod analysis;
+pub mod apple;
 pub mod best_mix;
 pub mod best_mix_cost;
 pub mod best_mix_order;

@@ -43,6 +43,7 @@ import dev.sfg.orchard.mobile.youtube.text
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
 
@@ -161,6 +162,13 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
         )
         return artwork.takeIf { it.staticUrl.isNotBlank() || it.videoUrl.isNotBlank() || it.videoUrlVertical.isNotBlank() }
     }
+
+    /**
+     * Apple's audio analysis (beat and bar grid, vocal activity) keyed by catalog song id, for
+     * `am.songs.` ids or bare catalog ids. Songs Apple has not analysed are missing.
+     */
+    suspend fun audioAnalysis(ids: List<String>): JSONObject =
+        call("catalog.audioAnalysis", JSONObject().put("ids", JSONArray(ids))).optJSONObject("items") ?: JSONObject()
 
     /** Playlist layout and license details of a catalog song's Widevine stream. */
     suspend fun stream(id: String): JSONObject =

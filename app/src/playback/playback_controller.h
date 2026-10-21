@@ -346,6 +346,13 @@ private:
   void startAppleTrack();
   // The song's stream through the proxies, on the current or spare player.
   void resolveAppleStream(const QVariantMap &track, bool prepared);
+  // Catalog id while the song plays from Apple Music as the music source, else empty.
+  QString appleMixId(const QVariantMap &track) const;
+  // Apple's audio analysis of both songs for adaptive mix; false while it is still being fetched.
+  bool appleMixAnalyses(const QVariantMap &current, const QVariantMap &next, QJsonObject &outgoing,
+                        QJsonObject &incoming);
+  QHash<QString, QJsonObject> m_appleAnalyses;
+  bool m_appleAnalysisPending{false};
   // Exists where orchard-widevine-host can run.
   AppleMusicStreams *m_appleStreams{nullptr};
   AppleMusic *m_appleAccount{nullptr};

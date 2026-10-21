@@ -51,6 +51,7 @@ const methods = new Map([
   ['catalog.playlist', async (payload = {}) => appleMusic.playlistPage(payload.browseId)],
   // Hosts parse the reply as an object, so a miss is {} rather than null.
   ['catalog.artwork', async (payload = {}) => (await appleMusic.artwork(payload)) || {}],
+  ['catalog.audioAnalysis', async (payload = {}) => appleMusic.audioAnalysis(payload.ids || [])],
   ['catalog.search', async (payload = {}) => appleMusic.search(payload.query, payload.filter)],
   ['library', async () => appleMusic.library()],
   ['library.playlists', async () => ({ items: await appleMusic.libraryPlaylists() })],

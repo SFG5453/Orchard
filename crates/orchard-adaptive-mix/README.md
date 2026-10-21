@@ -44,6 +44,14 @@ to save each pair's planner input and decisions for offline replay. Set
 `ORCHARD_MIX_BEATS=earmark` to plan from Earmark's own beat grid without the Beat
 This pass, for A/B listening.
 
+Songs played from Apple Music carry Apple's own audio analysis (`outgoingApple`,
+`incomingApple`; amp-api `audio-analysis` attributes). `apple.rs` turns its beat and bar grid into
+the whole-track opinion `refine` takes from Nirovi, so Earmark keeps its beats and Apple votes on
+bar phase, and maps its vocal strength spans onto UMX vocal shares (fitted on 88 replay pairs:
+medium sits on the planner's active-voice threshold). With both songs covered the worker never
+loads the models. Best Mix (`bestMixApple`) builds Apple summaries without audio; they are marked
+`plannable: false`, since the planner needs spectra, so those pairs sort on predicted costs.
+
 The planner returns an `arrangement` the renderer executes exactly: the
 technique (`bass_swap`, `beatmatched_blend`, `drop_in` or `beatless_bridge`),
 each side's equal-power fade span as fractions of the overlap, and the bass swap

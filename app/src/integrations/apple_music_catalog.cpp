@@ -22,6 +22,7 @@
 #include "providers/runtime/provider_runtime.h"
 
 #include <QCryptographicHash>
+#include <QJsonArray>
 #include <QJsonValue>
 #include <QLocale>
 
@@ -191,6 +192,15 @@ void AppleMusic::lyrics(const QJsonObject &track, PageReply done) {
     return;
   }
   call(QStringLiteral("lyrics"), track,
+       [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
+}
+
+void AppleMusic::audioAnalysis(const QStringList &ids, PageReply done) {
+  if (!connected()) {
+    done({}, {});
+    return;
+  }
+  call(QStringLiteral("catalog.audioAnalysis"), {{QStringLiteral("ids"), QJsonArray::fromStringList(ids)}},
        [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
 }
 

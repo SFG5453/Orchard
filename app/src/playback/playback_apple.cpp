@@ -37,6 +37,7 @@ QString appleSongId(const QVariantMap &track) {
 void PlaybackController::setAppleMusic(AppleMusic *account, CatalogSource *source) {
   m_appleAccount = account;
   m_catalogSource = source;
+  m_bestMix.setAppleMusic(account, source);
   if (m_appleStreams || !AppleMusicStreams::available())
     return;
   m_appleStreams = new AppleMusicStreams(account, this);
@@ -96,4 +97,40 @@ void PlaybackController::resolveAppleStream(const QVariantMap &track, bool prepa
     else
       startResolvedStream(stream);
   });
+}
+
+QString PlaybackController::appleMixId(const QVariantMap &track) const {
+  if (!isAppleTrack(track) || !m_catalogSource || !m_catalogSource->apple() || !m_appleAccount ||
+      !m_appleAccount->connected())
+    return {};
+  return appleSongId(track);
+}
+
+bool PlaybackController::appleMixAnalyses(const QVariantMap &current, const QVariantMap &next,
+                                          QJsonObject &outgoing, QJsonObject &incoming) {
+  const QString outgoingId = appleMixId(current);
+  const QString incomingId = appleMixId(next);
+  QStringList missing;
+  for (const QString &id : {outgoingId, incomingId})
+    if (!id.isEmpty() && !m_appleAnalyses.contains(id))
+      missing.append(id);
+  if (!missing.isEmpty()) {
+    if (m_appleAnalysisPending)
+      return false;
+    m_appleAnalysisPending = true;
+    m_appleAccount->audioAnalysis(missing, [this, missing](const QJsonObject &page, const QString &) {
+      m_appleAnalysisPending = false;
+      // Only the pair being prepared is worth keeping.
+      if (m_appleAnalyses.size() > 4)
+        m_appleAnalyses.clear();
+      const QJsonObject items = page.value(QStringLiteral("items")).toObject();
+      // A miss stays empty, so the pair mixes with the models instead of waiting again.
+      for (const QString &id : missing)
+        m_appleAnalyses.insert(id, items.value(id).toObject());
+    });
+    return false;
+  }
+  outgoing = m_appleAnalyses.value(outgoingId);
+  incoming = m_appleAnalyses.value(incomingId);
+  return true;
 }

@@ -124,7 +124,8 @@ void AdaptiveMixController::prepare(const QString &pair, const QUrl &outgoing,
                                     const QUrl &incoming, double duration,
                                     double position, const QVariantMap &currentTrack,
                                     const QVariantMap &nextTrack, int fadeSeconds,
-                                    bool albumSequential, bool references) {
+                                    bool albumSequential, const QJsonObject &outgoingApple,
+                                    const QJsonObject &incomingApple, bool references) {
   if (!enabled() || pair == m_pair)
     return;
   clear();
@@ -134,16 +135,22 @@ void AdaptiveMixController::prepare(const QString &pair, const QUrl &outgoing,
   m_preparing = true;
   m_status = tr("Preparing adaptive mix…");
   emit changed();
-  m_worker.start(QJsonObject{{"outgoingUrl", outgoing.toString()},
-                             {"incomingUrl", incoming.toString()},
-                             {"outgoingDuration", duration},
-                             {"position", position},
-                             {"incomingDuration", nextTrack.value("durationSeconds").toDouble()},
-                             {"currentTrack", QJsonObject::fromVariantMap(currentTrack)},
-                             {"nextTrack", QJsonObject::fromVariantMap(nextTrack)},
-                             {"fadeSeconds", fadeSeconds},
-                             {"albumSequential", albumSequential},
-                             {"references", references}});
+  QJsonObject request{{"outgoingUrl", outgoing.toString()},
+                      {"incomingUrl", incoming.toString()},
+                      {"outgoingDuration", duration},
+                      {"position", position},
+                      {"incomingDuration", nextTrack.value("durationSeconds").toDouble()},
+                      {"currentTrack", QJsonObject::fromVariantMap(currentTrack)},
+                      {"nextTrack", QJsonObject::fromVariantMap(nextTrack)},
+                      {"fadeSeconds", fadeSeconds},
+                      {"albumSequential", albumSequential},
+                      {"references", references}};
+  // Apple's own analysis replaces the beat and vocal models for songs played from Apple Music.
+  if (!outgoingApple.isEmpty())
+    request.insert("outgoingApple", outgoingApple);
+  if (!incomingApple.isEmpty())
+    request.insert("incomingApple", incomingApple);
+  m_worker.start(request);
 }
 
 void AdaptiveMixController::failPair(const QString &pair, const QString &message) {

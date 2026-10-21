@@ -33,9 +33,13 @@ internal object MixNative {
     @JvmStatic external fun nativeSongDuration(song: Long): Double
     @JvmStatic external fun nativeSongFree(song: Long)
     @JvmStatic external fun nativeBestMixAnalyze(song: Long, duration: Double): String
+    /** Desktop's `bestMixApple`: Best Mix features from Apple Music's analysis JSON, or `{"error"}`. */
+    @JvmStatic external fun nativeBestMixApple(analysis: String, duration: Double): String
     @JvmStatic external fun nativeBestMixSort(summaries: String, initial: String, pairs: BestMixPairs): String
     @JvmStatic external fun nativeModelsLoad(beat: ByteArray, vocal: ByteArray, threads: Int): Long
     @JvmStatic external fun nativeModelsFree(models: Long)
+    /** False when the request's Apple Music analysis covers both songs, so no model has to load. */
+    @JvmStatic external fun nativeMixNeedsModels(request: String): Boolean
     /** Interleaved stereo float overlap at [rate], framed as a u32 header length, header, PCM. */
     @JvmStatic external fun nativeMix(models: Long, request: String, outgoing: Long, incoming: Long, rate: Int): ByteArray?
 }
