@@ -23,6 +23,16 @@ import { artworkUrl } from './normalize.js';
 
 const CANDIDATES = 10;
 
+/** Apple's own background and text colours for an artwork, as `#rrggbb`; empty when absent. */
+function artworkColors(artwork) {
+  const hex = (value) => (/^[0-9a-f]{6}$/i.test(String(value || '')) ? `#${value}` : '');
+  return {
+    background: hex(artwork?.bgColor),
+    text: hex(artwork?.textColor1),
+    secondaryText: hex(artwork?.textColor2)
+  };
+}
+
 /** Search results carry no relationships; the album id is in the song's web URL. */
 function albumIdOf(song) {
   const fromRelationship = song?.relationships?.albums?.data?.[0]?.id;
@@ -34,20 +44,23 @@ export function createArtworkCatalog(client) {
   const path = (type, id = '') => `/v1/catalog/${client.storefront()}/${type}${id ? `/${encodeURIComponent(id)}` : ''}`;
 
   async function albumArtwork(id) {
-    // Only music.apple.com's API returns editorialVideo; the public one still has the cover.
-    const result = (await client.editorial(path('albums', id), { extend: 'editorialVideo' }))
+    // Only music.apple.com's API returns editorial fields; the public one still has the cover.
+    const result = (await client.editorial(path('albums', id), { extend: 'editorialArtwork,editorialVideo' }))
       || await client.get(path('albums', id));
     const resource = result.data?.[0];
     const attributes = resource?.attributes;
     if (!attributes) return null;
     const video = attributes.editorialVideo || {};
+    const heroTall = attributes.editorialArtwork?.superHeroTall;
     return {
       albumId: browseId('albums', resource.id),
       name: attributes.name || '',
       artist: attributes.artistName || '',
       static: artworkUrl(attributes.artwork, 1200),
       animated: video.motionDetailSquare?.video || '',
-      animatedVertical: video.motionDetailTall?.video || ''
+      animatedVertical: video.motionDetailTall?.video || '',
+      heroTall: artworkUrl(heroTall, 1600),
+      colors: artworkColors(heroTall?.url ? heroTall : attributes.artwork)
     };
   }
 

@@ -157,6 +157,7 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
             staticUrl = result.text("static"),
             videoUrl = result.text("animated"),
             videoUrlVertical = result.text("animatedVertical"),
+            heroTallUrl = result.text("heroTall"),
         )
         return artwork.takeIf { it.staticUrl.isNotBlank() || it.videoUrl.isNotBlank() || it.videoUrlVertical.isNotBlank() }
     }
@@ -239,3 +240,4 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
         const val PLAYLIST_PREFIX = "am.playlists."
     }
 }
+

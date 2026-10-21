@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -48,6 +49,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -73,11 +77,11 @@ import dev.sfg.orchard.mobile.ui.components.QobuzAlbumQualityChip
 import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.local.isLocalPlaylistId
 import dev.sfg.orchard.mobile.ui.components.AnimatedArtworkVideo
 import dev.sfg.orchard.mobile.ui.components.ArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.ArtworkTile
 import dev.sfg.orchard.mobile.ui.components.CollectionTopBar
-import dev.sfg.orchard.mobile.ui.components.DetailHeroFrame
 import dev.sfg.orchard.mobile.ui.components.ExplicitBadge
 import dev.sfg.orchard.mobile.ui.components.HeroAbout
 import dev.sfg.orchard.mobile.ui.components.HeroCircleButton
@@ -95,8 +99,8 @@ private fun BrowseDetail.supportsBestMix(enabled: Boolean) =
     enabled && (kind == CatalogKind.PLAYLIST || kind == CatalogKind.ALBUM) && tracks.size > 1
 
 /**
- * Album and playlist hero: faded full-bleed cover on phones (a shadowed card on wide
- * layouts), centred title, artist chip, info line, then shuffle / play / save.
+ * Album and playlist hero: art fading into a band in the cover's colour on phones (a
+ * shadowed card with centred text on wide layouts), title, artist chip, info line, actions.
  */
 @Composable
 internal fun CollectionHero(
@@ -106,12 +110,15 @@ internal fun CollectionHero(
     onPlayAll: (List<Track>, String) -> Unit,
     onShuffle: (List<Track>, String) -> Unit,
     onSave: (BrowseDetail) -> Unit,
+    onShare: () -> Unit,
     bestMix: BestMixLauncher,
     isSaved: Boolean = false,
-    animatedArtworkUrl: String = "",
+    heroArt: HeroArt = HeroArt(),
     artistPortraitUrl: String = "",
     onOpenArtist: (() -> Unit)? = null,
     smartCrossfadeEnabled: Boolean = false,
+    onDownload: (() -> Unit)? = null,
+    isDownloaded: Boolean = false,
 ) {
     val isAlbum = detail.kind == CatalogKind.ALBUM
     val albumAccent = remember(palette.accent) { palette.accent.legibleOnDarkChrome() }
@@ -127,87 +134,79 @@ internal fun CollectionHero(
         val year = if (kind.contains(detail.year)) "" else detail.year
         heroInfoLine(kind, year, detail.tracks.size, detail.tracks.sumOf { it.durationMs })
     }
+    // Only while MAX is on, as on desktop; the lookup is cached per album.
+    val loadAlbumQuality = LocalQobuzAlbumQuality.current
+    val albumQuality by produceState<QobuzAlbumQuality?>(null, detail.id, detail.tracks.size, loadAlbumQuality) {
+        value = if (isAlbum && detail.tracks.isNotEmpty()) loadAlbumQuality?.invoke(detail) else null
+    }
+    val wide = isFoldableOrWideLayout()
+    val seam = remember(palette) { seamColors(palette) }
+    val textColor = if (wide) CanopyColors.Text else seam.text
+    val explicit = remember(detail.tracks) { detail.tracks.any { it.explicit } }
 
-    val body: @Composable ColumnScope.() -> Unit = {
+    val details: @Composable ColumnScope.() -> Unit = {
+        val textAlign = if (wide) TextAlign.Center else TextAlign.Start
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = HeroGutter),
+            horizontalArrangement = if (wide) Arrangement.Center else Arrangement.Start,
+            modifier = if (wide) Modifier.padding(horizontal = HeroGutter) else Modifier,
         ) {
             Text(
                 text = detail.title,
                 style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = if (wide) FontWeight.Bold else FontWeight.ExtraBold,
                     fontSize = 30.sp,
                     lineHeight = 34.sp,
                     letterSpacing = (-0.5).sp,
                 ),
-                color = CanopyColors.Text,
-                textAlign = TextAlign.Center,
+                color = textColor,
+                textAlign = textAlign,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            if (detail.tracks.any { it.explicit }) {
+            if (wide && explicit) {
                 Spacer(Modifier.width(8.dp))
                 ExplicitBadge()
             }
         }
         if (artistName.isNotBlank()) {
-            Spacer(Modifier.height(8.dp))
-            ArtistChip(artistName, artistPortraitUrl, artistAccent, onOpenArtist)
+            Spacer(Modifier.height(if (wide) 8.dp else 6.dp))
+            ArtistChip(
+                name = artistName,
+                portraitUrl = artistPortraitUrl,
+                accent = if (wide) artistAccent else legibleOn(seam.band, artistAccent, seam.text),
+                onClick = onOpenArtist,
+                // Pulls the chip's touch padding out so its avatar lines up with the title.
+                modifier = if (wide) Modifier else Modifier.offset(x = (-8).dp),
+            )
         }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = infoLine,
-            style = MaterialTheme.typography.bodyMedium,
-            color = CanopyColors.Text.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = HeroGutter),
-        )
-        // Only while MAX is on, as on desktop; the lookup is cached per album.
-        val loadAlbumQuality = LocalQobuzAlbumQuality.current
-        val albumQuality by produceState<QobuzAlbumQuality?>(null, detail.id, detail.tracks.size, loadAlbumQuality) {
-            value = if (isAlbum && detail.tracks.isNotEmpty()) loadAlbumQuality?.invoke(detail) else null
+        Spacer(Modifier.height(if (wide) 8.dp else 4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Left-aligned titles wrap ragged, so the badge leads the info line instead.
+            if (!wide && explicit) {
+                ExplicitBadge()
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(
+                text = infoLine,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (wide) CanopyColors.Text.copy(alpha = 0.7f) else seam.secondaryText,
+                textAlign = textAlign,
+                modifier = if (wide) Modifier.padding(horizontal = HeroGutter) else Modifier,
+            )
         }
         albumQuality?.let {
             Spacer(Modifier.height(8.dp))
             QobuzAlbumQualityChip(it)
         }
+    }
 
-        Spacer(Modifier.height(24.dp))
-        HeroPlayRow(
-            onPlay = { onPlayAll(detail.tracks, detail.title) },
-            playEnabled = detail.tracks.isNotEmpty(),
-            // Albums keep their cover's colour on the disc; playlists stay neutral.
-            playFill = if (isAlbum) albumAccent else Color.White,
-            playIconTint = palette.deep,
-            leading = {
-                HeroCircleButton(
-                    onClick = { onShuffle(detail.tracks, detail.title) },
-                    icon = Icons.Rounded.Shuffle,
-                    contentDescription = "Shuffle",
-                    enabled = detail.tracks.isNotEmpty() && shuffleAvailable,
-                )
-            },
-            trailing = {
-                // A playlist on this phone is already in the library; there is nothing to add.
-                if (!dev.sfg.orchard.mobile.local.isLocalPlaylistId(detail.id)) {
-                    HeroCircleButton(
-                        onClick = { onSave(detail) },
-                        icon = if (isSaved) Icons.Rounded.Check else Icons.Rounded.Add,
-                        contentDescription = if (isSaved) "Saved to library" else "Add to library",
-                        tint = if (isSaved) LocalAccent.current else CanopyColors.Text,
-                    )
-                }
-            },
-        )
-
+    val extras: @Composable ColumnScope.() -> Unit = {
         if (detail.supportsBestMix(smartCrossfadeEnabled)) {
             Spacer(Modifier.height(12.dp))
             BestMixButton(isSorting = bestMix.isSorting, statusText = bestMix.statusText, onClick = bestMix::trigger)
         }
-
         if (detail.description.isNotBlank()) {
             Spacer(Modifier.height(20.dp))
             HeroAbout(
@@ -217,7 +216,7 @@ internal fun CollectionHero(
         }
     }
 
-    if (isFoldableOrWideLayout()) {
+    if (wide) {
         Column(
             modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(top = 72.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -231,20 +230,74 @@ internal fun CollectionHero(
                     .background(Color(0xFF1E1E1E)),
             ) {
                 ArtworkTile(detail.artworkUrl, "Artwork for ${detail.title}", Modifier.fillMaxSize(), radius = 16)
-                if (animatedArtworkUrl.isNotBlank()) {
-                    AnimatedArtworkVideo(url = animatedArtworkUrl, active = true, modifier = Modifier.fillMaxSize())
+                if (heroArt.animatedUrl.isNotBlank()) {
+                    AnimatedArtworkVideo(url = heroArt.animatedUrl, active = true, modifier = Modifier.fillMaxSize())
                 }
             }
             Spacer(Modifier.height(24.dp))
-            body()
+            details()
+            Spacer(Modifier.height(24.dp))
+            HeroPlayRow(
+                onPlay = { onPlayAll(detail.tracks, detail.title) },
+                playEnabled = detail.tracks.isNotEmpty(),
+                // Albums keep their cover's colour on the disc; playlists stay neutral.
+                playFill = if (isAlbum) albumAccent else Color.White,
+                playIconTint = palette.deep,
+                leading = {
+                    HeroCircleButton(
+                        onClick = { onShuffle(detail.tracks, detail.title) },
+                        icon = Icons.Rounded.Shuffle,
+                        contentDescription = "Shuffle",
+                        enabled = detail.tracks.isNotEmpty() && shuffleAvailable,
+                    )
+                },
+                trailing = {
+                    // A playlist on this phone is already in the library; there is nothing to add.
+                    if (!isLocalPlaylistId(detail.id)) {
+                        HeroCircleButton(
+                            onClick = { onSave(detail) },
+                            icon = if (isSaved) Icons.Rounded.Check else Icons.Rounded.Add,
+                            contentDescription = if (isSaved) "Saved to library" else "Add to library",
+                            tint = if (isSaved) LocalAccent.current else CanopyColors.Text,
+                        )
+                    }
+                },
+            )
+            extras()
         }
     } else {
-        DetailHeroFrame(
-            artworkUrl = detail.artworkUrl,
-            description = "Artwork for ${detail.title}",
-            animatedArtworkUrl = animatedArtworkUrl,
-            content = body,
-        )
+        Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            SeamHeroFrame(
+                coverUrl = detail.artworkUrl,
+                description = "Artwork for ${detail.title}",
+                art = heroArt,
+                colors = seam,
+                playFill = if (isAlbum) albumAccent else Color.White,
+                playIconTint = palette.deep,
+                playEnabled = detail.tracks.isNotEmpty(),
+                onPlay = { onPlayAll(detail.tracks, detail.title) },
+                actions = {
+                    SeamAction(
+                        icon = Icons.Rounded.Shuffle,
+                        contentDescription = "Shuffle",
+                        tint = seam.text,
+                        onClick = { onShuffle(detail.tracks, detail.title) },
+                        enabled = detail.tracks.isNotEmpty() && shuffleAvailable,
+                    )
+                    if (onDownload != null) {
+                        SeamAction(
+                            icon = if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
+                            contentDescription = if (isDownloaded) "Remove download" else "Download",
+                            tint = seam.text,
+                            onClick = onDownload,
+                        )
+                    }
+                    SeamAction(Icons.Rounded.IosShare, "Share", seam.text, onShare)
+                },
+                details = details,
+            )
+            extras()
+        }
     }
 
     if (bestMix.showPrompt) {
@@ -262,10 +315,16 @@ internal fun CollectionHero(
 
 /** Avatar plus name; opens the artist when the album names one. */
 @Composable
-private fun ArtistChip(name: String, portraitUrl: String, accent: Color, onClick: (() -> Unit)?) {
+private fun ArtistChip(
+    name: String,
+    portraitUrl: String,
+    accent: Color,
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
+        modifier = modifier
             .clip(CircleShape)
             .clickable(enabled = onClick != null) { onClick?.invoke() }
             .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -323,5 +382,8 @@ internal fun CollectionChrome(
         aboutLabel = "About this $noun",
         onDownload = collectionDownloadAction(detail.tracks, downloadedTrackIds, onDownloadTracks, onRemoveDownloadTracks),
         isDownloaded = detail.tracks.isNotEmpty() && detail.tracks.all { it.id in downloadedTrackIds },
+        // Phones carry save beside search; share and download sit in the hero band.
+        saveInBar = !isFoldableOrWideLayout(),
+        canSave = !isLocalPlaylistId(detail.id),
     )
 }
