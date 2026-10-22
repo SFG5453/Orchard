@@ -298,8 +298,13 @@ Item {
                         lineHeight: 1.5
                         wrapMode: Text.Wrap
                         textFormat: html ? Text.StyledText : Text.PlainText
+                        linkColor: "#f1f3ee"
                         maximumLineCount: expanded ? 400 : 5
                         elide: Text.ElideRight
+
+                        HoverHandler {
+                            cursorShape: aboutText.hoveredLink ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        }
                     }
 
                     Row {

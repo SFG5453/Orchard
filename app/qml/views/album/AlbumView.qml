@@ -234,6 +234,12 @@ Item {
             onBylineClicked: function(anchor, x, y) {
                 albumArtistMenu.viewArtist(anchor, x, y);
             }
+            onDescriptionLinkClicked: function(link) {
+                if (link.indexOf(".artists.") > 0)
+                    root.artistRequested({browseId: link, type: "artist", title: ""});
+                else if (link.indexOf(".albums.") > 0)
+                    root.albumRequested({browseId: link, type: "album", title: ""});
+            }
             onPlayClicked: root.playOrToggle()
             onShuffleClicked: root.shuffleRequested()
             onShareClicked: OrchardBackend.copySongLink(root.shareId, qsTr("album"))

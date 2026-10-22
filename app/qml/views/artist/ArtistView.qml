@@ -216,6 +216,12 @@ ArtistViewForm {
     backButton.onClicked: root.backRequested()
     pageLoad.onRetryRequested: OrchardArtist.retry()
     moreButton.onClicked: aboutText.expanded = !aboutText.expanded
+    aboutText.onLinkActivated: function(link) {
+        if (link.indexOf(".artists.") > 0)
+            root.artistRequested({browseId: link, type: "artist", title: ""});
+        else if (link.indexOf(".albums.") > 0)
+            root.albumRequested({browseId: link, type: "album", title: ""});
+    }
 
     hero.playButton.onClicked: root.playOrToggle()
     hero.shuffleButton.onClicked: OrchardPlayback.playCollection(root.tracks, 0, true)

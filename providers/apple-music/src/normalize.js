@@ -21,6 +21,7 @@
 // YouTube provider returns, so desktop QML and Android parse both alike.
 
 import { APPLE_MUSIC_SOURCE, browseId } from './ids.js';
+import { cleanNotes } from './notes.js';
 
 const RELEASE_SUFFIX = /\s+-\s+(Single|EP)$/i;
 export const ARTIST_INCLUDES = { 'include[albums]': 'artists', 'include[songs]': 'artists,albums' };
@@ -54,8 +55,7 @@ function clock(seconds) {
 
 function notes(value) {
   if (!value) return '';
-  if (typeof value === 'string') return value;
-  return String(value.standard || value.short || '');
+  return cleanNotes(typeof value === 'string' ? value : value.standard || value.short);
 }
 
 /** Apple suffixes single and EP names; the suffix becomes the release type. */
