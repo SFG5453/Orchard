@@ -224,7 +224,7 @@ internal fun LyricLines(
                         val active = displayIndex == activeDisplayIndex
                         val isAlternate = lines.getOrNull(item.afterLineIndex)?.agentLane == "alternate"
                         InstrumentalPauseRow(
-                            active = active,
+                            active = active && playing,
                             accent = accent,
                             onClick = {
                                 browsing = false
@@ -377,8 +377,7 @@ private fun InstrumentalPauseRow(
     modifier: Modifier = Modifier,
     alignment: Alignment.Horizontal = Alignment.Start,
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "PausePulse")
-    val basePulse by infiniteTransition.animateFloat(
+    val basePulse by if (active) rememberInfiniteTransition(label = "PausePulse").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -386,7 +385,7 @@ private fun InstrumentalPauseRow(
             repeatMode = RepeatMode.Restart,
         ),
         label = "BasePulse",
-    )
+    ) else remember { mutableFloatStateOf(0f) }
 
     val inactiveColor = Color.White.copy(alpha = 0.24f)
 

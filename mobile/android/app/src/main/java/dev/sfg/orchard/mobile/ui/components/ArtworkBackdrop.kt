@@ -84,7 +84,7 @@ fun ArtworkBackdrop(
 
     // Held still rather than animated to a fixed target: an infinite transition keeps asking for
     // frames for as long as it exists, so the app would never go idle with the drift switched off.
-    val drift: State<Float> = if (animated) {
+    val drift: State<Float> = if (animated && LocalArtworkMotionEnabled.current) {
         rememberInfiniteTransition(label = "BackdropDrift").animateFloat(
             initialValue = 0f,
             targetValue = 1f,
