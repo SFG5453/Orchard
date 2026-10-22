@@ -25,6 +25,7 @@ import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.model.Playlist
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.filterCatalogItems
+import dev.sfg.orchard.mobile.ui.components.filterPlaylists
 import dev.sfg.orchard.mobile.ui.components.filterTracks
 import dev.sfg.orchard.mobile.ui.components.normalizeSearchText
 import org.junit.Assert.assertEquals
@@ -154,5 +155,19 @@ class CollectionSearchTest {
 
         val blankMatch = filterCatalogItems(items, "")
         assertEquals(4, blankMatch.size)
+    }
+
+    @Test
+    fun playlistPickerMatchesNamesAndPreservesTargets() {
+        val playlists = listOf(
+            Playlist(id = "local:1", title = "Café evenings", tracks = listOf(track1)),
+            Playlist(id = "p2", title = "Evening drive"),
+            Playlist(id = "p3", title = "Workout", author = "Evening curator"),
+        )
+        assertEquals(playlists.take(2), filterPlaylists(playlists, " EVEN "))
+        assertEquals(listOf(playlists.first()), filterPlaylists(playlists, "cafe"))
+        assertEquals(playlists, filterPlaylists(playlists, "  "))
+        assertEquals(emptyList<Playlist>(), filterPlaylists(playlists, "missing"))
+        assertEquals(emptyList<Playlist>(), filterPlaylists(emptyList(), "even"))
     }
 }

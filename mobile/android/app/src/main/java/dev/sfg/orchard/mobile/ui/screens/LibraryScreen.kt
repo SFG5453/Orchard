@@ -84,6 +84,7 @@ fun LibraryScreen(
     var grid by rememberSaveable { mutableStateOf(true) }
     var creating by remember { mutableStateOf(false) }
     val searching = searchQuery.isNotBlank()
+    val playlistFilter = filter == LibraryFilter.PLAYLISTS
     val browse = { onOpenDetail(NEW_RELEASES_ID) }.takeUnless { searching }
     val completedDownloads = downloads.count { it.status == DownloadStatus.COMPLETED }
 
@@ -120,16 +121,21 @@ fun LibraryScreen(
             Column {
                 LibraryHeader(
                     summary = library.summary(localSnapshot.songs.size),
-                    searchOpen = searchOpen,
+                    searchOpen = searchOpen || searching,
+                    showSearch = !playlistFilter,
                     onToggleSearch = {
-                        if (searchOpen) searchQuery = ""
-                        searchOpen = !searchOpen
+                        if (searchOpen || searching) {
+                            searchQuery = ""
+                            searchOpen = false
+                        } else searchOpen = true
                     },
                     busy = localBusy,
                     onCreate = localLibrary?.let { { creating = true } },
                 )
                 LibraryChips(filter, onFilterChange)
-                if (searchOpen) LibraryFilterField(searchQuery, "Filter ${filter.label.lowercase()}") { searchQuery = it }
+                if (playlistFilter || searchOpen || searching) {
+                    LibraryFilterField(searchQuery, "Filter ${filter.label.lowercase()}", autoFocus = !playlistFilter) { searchQuery = it }
+                }
             }
         }
         when (filter) {

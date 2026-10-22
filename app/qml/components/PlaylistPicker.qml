@@ -31,13 +31,19 @@ Menu {
     readonly property bool localTrack: String(root.track.id || "").indexOf("local:") === 0
     property var localTargets: []
     readonly property var targets: root.localTrack ? root.localTargets : OrchardLibrary.playlistTargets
+    readonly property string query: searchField.text.trim().toLowerCase()
+    readonly property var filteredTargets: root.query
+        ? root.targets.filter(target => String(target.title || "").toLowerCase().includes(root.query))
+        : root.targets
     readonly property string status: root.localTrack
         ? (root.localTargets.length === 0 ? qsTr("No local playlists yet") : "")
         : OrchardLibrary.targetsLoading ? qsTr("Loading playlists…")
         : OrchardLibrary.targetsError || (OrchardLibrary.playlistTargets.length === 0 ? qsTr("No editable playlists yet") : "")
+    readonly property string emptyText: root.status || (root.filteredTargets.length === 0 ? qsTr("No matching playlists") : "")
 
     function openFor(track, position) {
         root.track = track;
+        searchField.clear();
         root.localTargets = root.localTrack ? OrchardLocal.targetsFor(track.id) : [];
         root.popup(position.x, position.y);
     }
@@ -47,6 +53,74 @@ Menu {
     Component.onCompleted: if ("popupType" in root) root["popupType"] = 0
     width: 250
     padding: 5
+    onOpened: searchField.forceActiveFocus()
+    contentItem: Column {
+        spacing: 5
+
+        TextField {
+            id: searchField
+            objectName: "playlistFilter"
+            width: parent.width
+            implicitHeight: 36
+            leftPadding: 10
+            rightPadding: clearButton.visible ? 34 : 10
+            placeholderText: qsTr("Filter playlists")
+            Accessible.name: qsTr("Filter playlists")
+            selectByMouse: true
+            color: "#f2f0eb"
+            placeholderTextColor: "#8d968e"
+            font.family: "Inter"
+            font.pixelSize: 13
+            onTextChanged: root.currentIndex = -1
+            Keys.onDownPressed: {
+                for (let index = 0; index < root.count; ++index) {
+                    const item = root.itemAt(index);
+                    if (item && item.enabled && item.visible) {
+                        root.currentIndex = index;
+                        item.forceActiveFocus();
+                        break;
+                    }
+                }
+            }
+            background: Rectangle {
+                radius: 6
+                color: "#18000000"
+                border.color: searchField.activeFocus ? OrchardAppearance.accent : "#24ffffff"
+            }
+            Button {
+                id: clearButton
+                objectName: "clearPlaylistFilter"
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                width: 30
+                height: 30
+                visible: searchField.text.length > 0
+                Accessible.name: qsTr("Clear filter")
+                onClicked: {
+                    searchField.clear();
+                    searchField.forceActiveFocus();
+                }
+                background: Rectangle {
+                    radius: 6
+                    color: clearButton.hovered ? "#20ffffff" : "transparent"
+                }
+                contentItem: LucideIcon { name: "x"; color: "#d6d9d3" }
+            }
+        }
+
+        ListView {
+            objectName: "playlistResults"
+            implicitHeight: Math.min(contentHeight, Math.max(36,
+                (root.parent ? root.parent.height : 480) - searchField.height - 2 * root.padding - 29))
+            width: parent.width
+            model: root.contentModel
+            currentIndex: root.currentIndex
+            onCurrentIndexChanged: if (currentIndex >= 0) positionViewAtIndex(currentIndex, ListView.Contain)
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: ScrollBar {}
+        }
+    }
     background: Rectangle { color: Qt.lighter(OrchardAppearance.popupColor, 1.25); radius: 8; border.color: "#24ffffff" }
     // Grow from the click point. Menus that just appear are how you get jump scares in a music app.
     transformOrigin: Popup.TopLeft
@@ -85,14 +159,13 @@ Menu {
         contentItem: Rectangle { implicitHeight: 1; color: "#455348" }
     }
     Entry {
-        text: root.status
+        text: root.emptyText
         visible: text.length > 0
         height: visible ? implicitHeight : 0
         enabled: false
     }
-    // Offset past the three fixed items above. The playlists queue up behind the bouncer.
     Instantiator {
-        model: root.targets
+        model: root.filteredTargets
         delegate: Entry {
             required property var modelData
             text: modelData.containsTrack ? qsTr("%1 · added").arg(modelData.title) : modelData.title

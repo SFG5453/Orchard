@@ -87,6 +87,7 @@ internal fun LibraryHeader(
     onToggleSearch: () -> Unit,
     busy: Boolean,
     onCreate: (() -> Unit)?,
+    showSearch: Boolean = true,
 ) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = LibraryGutter).padding(top = 16.dp),
@@ -102,7 +103,7 @@ internal fun LibraryHeader(
             Text(summary, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp), color = SettingsStyle.Description)
         }
         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            HeaderButton(
+            if (showSearch) HeaderButton(
                 icon = if (searchOpen) Icons.Rounded.Close else Icons.Rounded.Search,
                 label = if (searchOpen) "Close search" else "Search library",
                 filled = false,
@@ -172,10 +173,10 @@ private fun LibraryChip(label: String, on: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-internal fun LibraryFilterField(query: String, placeholder: String, onChange: (String) -> Unit) {
+internal fun LibraryFilterField(query: String, placeholder: String, autoFocus: Boolean = true, onChange: (String) -> Unit) {
     val shape = RoundedCornerShape(16.dp)
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    LaunchedEffect(autoFocus) { if (autoFocus) focus.requestFocus() }
     Row(
         Modifier
             .padding(horizontal = LibraryGutter)
@@ -197,7 +198,7 @@ internal fun LibraryFilterField(query: String, placeholder: String, onChange: (S
             BasicTextField(
                 value = query,
                 onValueChange = onChange,
-                modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                modifier = Modifier.fillMaxWidth().focusRequester(focus).semantics { contentDescription = placeholder },
                 textStyle = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, color = SettingsStyle.Title),
                 cursorBrush = SolidColor(SettingsStyle.Sage),
                 singleLine = true,

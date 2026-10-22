@@ -59,6 +59,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.model.CatalogItem
+import dev.sfg.orchard.mobile.model.Playlist
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
@@ -74,6 +75,12 @@ fun normalizeSearchText(value: String?): String {
         .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
         .lowercase()
         .trim()
+}
+
+internal fun filterPlaylists(playlists: List<Playlist>, query: String): List<Playlist> {
+    val normalizedQuery = normalizeSearchText(query)
+    return if (normalizedQuery.isEmpty()) playlists
+    else playlists.filter { normalizeSearchText(it.title).contains(normalizedQuery) }
 }
 
 /**
