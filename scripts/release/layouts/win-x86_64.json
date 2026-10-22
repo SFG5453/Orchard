@@ -31,7 +31,7 @@
     ]}
   },
   "app": {"map": [
-    {"from": "orchard.exe"}, {"from": "orchard-auth-helper.exe"}, {"from": "WebView2Loader.dll"}, {"from": "orchard-adaptive-mix.exe"},
+    {"from": "orchard.exe"}, {"from": "orchard-auth-helper.exe"}, {"from": "orchard-widevine-host.exe"}, {"from": "WebView2Loader.dll"}, {"from": "orchard-adaptive-mix.exe"},
     {"from": "discord_partner_sdk.dll"}, {"from": "libLiteRt.dll"},
     {"from": "LICENSE"}, {"from": "THIRD_PARTY_NOTICES.md"}, {"from": "DiscordSocialSdk-Notices.txt"}, {"from": "WebView2-LICENSE.txt"}
   ]},
