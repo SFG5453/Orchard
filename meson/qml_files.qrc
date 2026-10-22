@@ -22,6 +22,7 @@
     <file alias="app/qml/components/settings/Discord.qml">../app/qml/components/settings/Discord.qml</file>
     <file alias="app/qml/components/settings/DiscordCustomizePopup.qml">../app/qml/components/settings/DiscordCustomizePopup.qml</file>
     <file alias="app/qml/components/settings/LastFm.qml">../app/qml/components/settings/LastFm.qml</file>
+    <file alias="app/qml/components/settings/LocalApi.qml">../app/qml/components/settings/LocalApi.qml</file>
     <file alias="app/qml/components/settings/AppleMusic.qml">../app/qml/components/settings/AppleMusic.qml</file>
     <file alias="app/qml/components/settings/AppleMusicForm.ui.qml">../app/qml/components/settings/AppleMusicForm.ui.qml</file>
     <file alias="app/qml/components/settings/Qobuz.qml">../app/qml/components/settings/Qobuz.qml</file>
@@ -142,6 +143,7 @@
     <file alias="app/qml/components/settings/GeneralSectionForm.ui.qml">../app/qml/components/settings/GeneralSectionForm.ui.qml</file>
     <file alias="app/qml/components/settings/IntegrationsSection.ui.qml">../app/qml/components/settings/IntegrationsSection.ui.qml</file>
     <file alias="app/qml/components/settings/LastFmForm.ui.qml">../app/qml/components/settings/LastFmForm.ui.qml</file>
+    <file alias="app/qml/components/settings/LocalApiForm.ui.qml">../app/qml/components/settings/LocalApiForm.ui.qml</file>
     <file alias="app/qml/components/settings/LicenseViewer.ui.qml">../app/qml/components/settings/LicenseViewer.ui.qml</file>
     <file alias="app/qml/components/settings/LyricTranslationSettingsForm.ui.qml">../app/qml/components/settings/LyricTranslationSettingsForm.ui.qml</file>
     <file alias="app/qml/components/settings/MirrorMoveButton.ui.qml">../app/qml/components/settings/MirrorMoveButton.ui.qml</file>

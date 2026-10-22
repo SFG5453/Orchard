@@ -68,4 +68,13 @@ ColumnLayout {
         }
     }
 
+    SettingsSection {
+        Layout.fillWidth: true
+        title: qsTr("Local API")
+
+        LocalApi {
+            Layout.fillWidth: true
+        }
+    }
+
 }

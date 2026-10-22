@@ -18,6 +18,7 @@
  */
 
 #include "account/orchard_account.h"
+#include "api/local_api.h"
 #include "auth/auth_manager.h"
 #include "auth/auth_diagnostics.h"
 #include "auth/youtube_session_keeper.h"
@@ -322,6 +323,9 @@ int main(int argc, char *argv[]) {
   ConnectService connectService(&orchardAccount, playback.get(), homeController.get(), &authManager, &qobuz);
   connectService.setCatalog(&youtubeCatalog);
   connectService.setArtwork(&animatedArtwork);
+  LocalApi localApi(playback.get(), homeController.get(), &youtubeProvider, &authManager,
+                    &appleMusic, &catalogSource, &offlineLibrary, libraryActions.get(), &connectService);
+  localApi.start();
   SystemTray tray(playback.get(), &authManager);
   WindowState windowState;
   StartupSettings startup;
@@ -364,6 +368,7 @@ int main(int argc, char *argv[]) {
                                            playlistController.get());
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardPlayback"), playback.get());
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardConnect"), &connectService);
+  engine.rootContext()->setContextProperty(QStringLiteral("OrchardApi"), &localApi);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardIntegrations"), integrations.get());
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardQobuz"), &qobuz);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardSpotify"), &spotifyCanvas);

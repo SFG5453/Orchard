@@ -1,0 +1,20 @@
+<!--
+Copyright (C) 2026 SFG545
+
+This file is part of Orchard.
+
+Orchard is free software: you can redistribute it and/or modify it under the
+terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+details.
+
+You should have received a copy of the GNU Affero General Public License
+along with Orchard. If not, see <https://www.gnu.org/licenses/>.
+-->
+<!-- Lucide icons: ISC license. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144"><rect width="144" height="144" rx="20" fill="#141414"/><g transform="translate(40 40) scale(2.666667)" fill="none" stroke="#f2f6f3" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m11 5-5 4H3v6h3l5 4z"/><path d="M16 12h7"/><path d="M19.5 8.5v7"/></g></svg>
