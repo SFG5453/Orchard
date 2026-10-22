@@ -84,6 +84,7 @@ import dev.sfg.orchard.mobile.ui.components.ArtworkTile
 import dev.sfg.orchard.mobile.ui.components.CollectionTopBar
 import dev.sfg.orchard.mobile.ui.components.ExplicitBadge
 import dev.sfg.orchard.mobile.ui.components.HeroAbout
+import dev.sfg.orchard.mobile.ui.components.hasRichDescription
 import dev.sfg.orchard.mobile.ui.components.HeroCircleButton
 import dev.sfg.orchard.mobile.ui.components.HeroGutter
 import dev.sfg.orchard.mobile.ui.components.HeroPlayRow
@@ -116,6 +117,7 @@ internal fun CollectionHero(
     heroArt: HeroArt = HeroArt(),
     artistPortraitUrl: String = "",
     onOpenArtist: (() -> Unit)? = null,
+    onOpenLink: (String) -> Unit = {},
     smartCrossfadeEnabled: Boolean = false,
     onDownload: (() -> Unit)? = null,
     isDownloaded: Boolean = false,
@@ -212,6 +214,8 @@ internal fun CollectionHero(
             HeroAbout(
                 title = if (isAlbum) "About this album" else "About this playlist",
                 text = detail.description,
+                html = detail.hasRichDescription(),
+                onLink = onOpenLink,
             )
         }
     }

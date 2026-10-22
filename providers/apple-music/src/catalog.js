@@ -20,6 +20,7 @@
 import { AppleMusicError } from './client.js';
 import { APPLE_MUSIC_SOURCE, parseBrowseId } from './ids.js';
 import { isLibraryId } from './library.js';
+import { linkNotes, noteTargets } from './notes.js';
 import { ARTIST_INCLUDES, album, artworkUrl, items, notes, playlist, releaseInfo, track, yearOf } from './normalize.js';
 
 const SEARCH_TYPES = { songs: 'songs', albums: 'albums', artists: 'artists', playlists: 'playlists' };
@@ -54,6 +55,8 @@ export function createCatalog(client, library) {
     const { resource, tracks } = await resourceWithTracks('albums', id);
     const attributes = resource.attributes || {};
     const card = album(resource);
+    const cards = tracks.map((song, index) => track(song, index)).filter(Boolean);
+    const others = (await discography(card.artistBrowseId)).filter((entry) => entry.browseId !== id);
     return {
       kind: 'album',
       browseId: id,
@@ -65,14 +68,26 @@ export function createCatalog(client, library) {
       artistBrowseId: card.artistBrowseId,
       releaseType: releaseInfo(attributes).releaseType,
       year: yearOf(attributes.releaseDate),
-      description: notes(attributes.editorialNotes),
+      description: linkNotes(notes(attributes.editorialNotes), noteTargets(cards, [card, ...others])),
       thumbnail: artworkUrl(attributes.artwork, 1200),
       explicit: attributes.contentRating === 'explicit',
       itemCount: String(attributes.trackCount || tracks.length),
       copyright: attributes.copyright || '',
-      tracks: tracks.map((song, index) => track(song, index)).filter(Boolean),
+      tracks: cards,
       sections: []
     };
+  }
+
+  /** Albums by the artist, for linking titles in the notes; a failure only costs the links. */
+  async function discography(artistBrowseId) {
+    const parsed = parseBrowseId(artistBrowseId);
+    if (!parsed || parsed.type !== 'artists') return [];
+    try {
+      const path = catalogPath(`artists/${encodeURIComponent(parsed.id)}/albums`);
+      return items((await client.all(path, { limit: 100 }, 2)).items);
+    } catch {
+      return [];
+    }
   }
 
   async function playlistPage(id) {
@@ -81,6 +96,7 @@ export function createCatalog(client, library) {
     const { resource, tracks } = await resourceWithTracks('playlists', id);
     const attributes = resource.attributes || {};
     const card = playlist(resource);
+    const cards = tracks.map((song, index) => track(song, index)).filter(Boolean);
     return {
       kind: 'playlist',
       browseId: id,
@@ -88,10 +104,10 @@ export function createCatalog(client, library) {
       title: card.title,
       author: card.artist,
       subtitle: card.subtitle,
-      description: card.description,
+      description: linkNotes(card.description, noteTargets(cards)),
       thumbnail: artworkUrl(attributes.artwork, 1200),
       itemCount: String(tracks.length),
-      tracks: tracks.map((song, index) => track(song, index)).filter(Boolean),
+      tracks: cards,
       sections: []
     };
   }
