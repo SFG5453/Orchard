@@ -177,6 +177,7 @@ internal fun CollectionDetailContent(
                     isDownloaded = detail.tracks.isNotEmpty() && detail.tracks.all { it.id in downloadedTrackIds },
                     artistPortraitUrl = artistPortraitUrl,
                     onOpenArtist = albumArtistId?.let { id -> { onOpen(id) } },
+                    onOpenLink = onOpen,
                     smartCrossfadeEnabled = smartCrossfadeEnabled,
                 )
             }
