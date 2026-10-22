@@ -28,7 +28,11 @@
 namespace {
 
 QString widevineArch() {
-#if defined(Q_PROCESSOR_ARM_64)
+#if defined(Q_OS_WIN) && defined(Q_PROCESSOR_ARM_64)
+  return QStringLiteral("win_arm64");
+#elif defined(Q_OS_WIN)
+  return QStringLiteral("win_x64");
+#elif defined(Q_PROCESSOR_ARM_64)
   return QStringLiteral("linux_arm64");
 #else
   return QStringLiteral("linux_x64");
@@ -49,12 +53,35 @@ QString newestCdm(const QString &root, const QString &relative) {
   return {};
 }
 
-} // namespace
-
-QString findWidevineCdm() {
-  const QString chosen = qEnvironmentVariable("ORCHARD_WIDEVINE_PATH");
-  if (!chosen.isEmpty())
-    return QFileInfo::exists(chosen) ? chosen : QString();
+#ifdef Q_OS_WIN
+// Edge's component updater installs the CDM on every Windows; Chrome also bundles one beside its binary.
+QString findInstalledCdm() {
+  const QString bundled = QStringLiteral("/_platform_specific/") + widevineArch() + QStringLiteral("/widevinecdm.dll");
+  const QString local = qEnvironmentVariable("LOCALAPPDATA");
+  for (const char *browser : {"Microsoft/Edge", "Microsoft/Edge Beta", "Microsoft/Edge Dev", "Microsoft/Edge SxS",
+                              "Google/Chrome", "Google/Chrome Beta", "Chromium", "BraveSoftware/Brave-Browser"}) {
+    const QString root = local + QLatin1Char('/') + QString::fromLatin1(browser) + QStringLiteral("/User Data/WidevineCdm");
+    if (const QString path = newestCdm(root, bundled); !path.isEmpty())
+      return path;
+  }
+  for (const QString &base : {qEnvironmentVariable("ProgramFiles"), qEnvironmentVariable("ProgramFiles(x86)"), local}) {
+    if (base.isEmpty())
+      continue;
+    const QString path = newestCdm(base + QStringLiteral("/Google/Chrome/Application"), QStringLiteral("/WidevineCdm") + bundled);
+    if (!path.isEmpty())
+      return path;
+  }
+  const QDir firefox(qEnvironmentVariable("APPDATA") + QStringLiteral("/Mozilla/Firefox/Profiles"));
+  for (const QString &profile : firefox.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+    const QString path = newestCdm(firefox.filePath(profile) + QStringLiteral("/gmp-widevinecdm"),
+                                   QStringLiteral("/widevinecdm.dll"));
+    if (!path.isEmpty())
+      return path;
+  }
+  return {};
+}
+#else
+QString findInstalledCdm() {
   const QString bundled = QStringLiteral("/_platform_specific/") + widevineArch() + QStringLiteral("/libwidevinecdm.so");
   for (const char *root : {"/opt/google/chrome/WidevineCdm", "/opt/google/chrome-beta/WidevineCdm",
                            "/opt/google/chrome-unstable/WidevineCdm", "/usr/lib/chromium/WidevineCdm",
@@ -78,4 +105,14 @@ QString findWidevineCdm() {
       return path;
   }
   return {};
+}
+#endif
+
+} // namespace
+
+QString findWidevineCdm() {
+  const QString chosen = qEnvironmentVariable("ORCHARD_WIDEVINE_PATH");
+  if (!chosen.isEmpty())
+    return QFileInfo::exists(chosen) ? chosen : QString();
+  return findInstalledCdm();
 }

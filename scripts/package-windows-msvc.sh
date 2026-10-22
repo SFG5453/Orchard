@@ -128,6 +128,7 @@ done
 # always contains exactly the build output selected above.
 cp -p "$executable" "$deployment_dir/orchard.exe"
 cp -p "$auth_helper_executable" "$deployment_dir/orchard-auth-helper.exe"
+cp -p "$build_dir/orchard-widevine-host.exe" "$deployment_dir/orchard-widevine-host.exe"
 cp -p "$build_dir/WebView2Loader.dll" "$deployment_dir/WebView2Loader.dll"
 cp -p "$source_dir/vendor/webview2/LICENSE.txt" "$deployment_dir/WebView2-LICENSE.txt"
 for adaptive_file in "${adaptive_files[@]}"; do
@@ -148,6 +149,7 @@ required_files=(
     icuuc.dll
     icuin.dll
     orchard-auth-helper.exe
+    orchard-widevine-host.exe
     WebView2Loader.dll
     orchard-adaptive-mix.exe
     webgpu_dawn.dll
