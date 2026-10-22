@@ -43,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -53,6 +54,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -70,6 +75,9 @@ import dev.sfg.orchard.mobile.download.AnimatedArtworkCache
 import dev.sfg.orchard.mobile.ui.theme.OrchardColors
 import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.delay
+
+/** Covered pages keep their layout for dismissal, while their artwork motion can rest. */
+val LocalArtworkMotionEnabled = compositionLocalOf { true }
 
 @Composable
 fun RemoteArtwork(
@@ -150,13 +158,15 @@ fun AnimatedArtworkVideo(
     onGlassFrame: ((Bitmap) -> Unit)? = null,
 ) {
     if (url.isBlank()) return
+    val playing = active && LocalArtworkMotionEnabled.current
     // GIF covers chosen by the user are not video; the platform decoder animates them.
     if (isGifArtwork(url)) {
-        AnimatedGifArtwork(url, active, modifier)
+        AnimatedGifArtwork(url, playing, modifier)
         return
     }
     val currentOnVideoAspect by rememberUpdatedState(onVideoAspect)
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val quality = LocalAnimatedArtworkQuality.current
     var failed by remember(url) { mutableStateOf(false) }
     var firstFrameReady by remember(url) { mutableStateOf(false) }
@@ -198,7 +208,7 @@ fun AnimatedArtworkVideo(
         selector.setParameters(selector.buildUponParameters().artworkQuality(quality))
     }
 
-    LaunchedEffect(url, active) {
+    LifecycleStartEffect(player, url, playing) {
         if (player.currentMediaItem?.localConfiguration?.uri?.toString() != url) {
             val mediaItem = MediaItem.Builder()
                 .setUri(url)
@@ -213,7 +223,8 @@ fun AnimatedArtworkVideo(
             player.setMediaItem(mediaItem)
             player.prepare()
         }
-        player.playWhenReady = active
+        player.playWhenReady = playing
+        onStopOrDispose { player.pause() }
     }
 
     DisposableEffect(player, url) {
@@ -257,30 +268,34 @@ fun AnimatedArtworkVideo(
     // The texture is the zoom-cropped frame as drawn, so a caller tinting the screen
     // around the video can sample it directly without replaying the crop.
     if (onFrame != null) {
-        LaunchedEffect(playerView, firstFrameReady, url) {
+        LaunchedEffect(playerView, firstFrameReady, url, playing, lifecycle) {
             val texture = playerView?.videoSurfaceView as? TextureView ?: return@LaunchedEffect
-            if (!firstFrameReady) return@LaunchedEffect
-            while (true) {
-                if (texture.isAvailable && texture.width > 0 && texture.height > 0) {
-                    val height = (FRAME_SAMPLE_WIDTH * texture.height / texture.width).coerceAtLeast(1)
-                    texture.getBitmap(FRAME_SAMPLE_WIDTH, height)?.let(onFrame)
+            if (!firstFrameReady || !playing) return@LaunchedEffect
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    if (texture.isAvailable && texture.width > 0 && texture.height > 0) {
+                        val height = (FRAME_SAMPLE_WIDTH * texture.height / texture.width).coerceAtLeast(1)
+                        texture.getBitmap(FRAME_SAMPLE_WIDTH, height)?.let(onFrame)
+                    }
+                    delay(FRAME_SAMPLE_INTERVAL_MS)
                 }
-                delay(FRAME_SAMPLE_INTERVAL_MS)
             }
         }
     }
 
     if (onGlassFrame != null) {
         val currentOnGlassFrame by rememberUpdatedState(onGlassFrame)
-        LaunchedEffect(playerView, firstFrameReady, url, active) {
+        LaunchedEffect(playerView, firstFrameReady, url, playing, lifecycle) {
             val texture = playerView?.videoSurfaceView as? TextureView ?: return@LaunchedEffect
-            if (!firstFrameReady || !active) return@LaunchedEffect
-            while (true) {
-                if (texture.isAvailable && texture.width > 0 && texture.height > 0) {
-                    val height = (GLASS_FRAME_WIDTH * texture.height / texture.width).coerceAtLeast(1)
-                    texture.getBitmap(GLASS_FRAME_WIDTH, height)?.let(currentOnGlassFrame)
+            if (!firstFrameReady || !playing) return@LaunchedEffect
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    if (texture.isAvailable && texture.width > 0 && texture.height > 0) {
+                        val height = (GLASS_FRAME_WIDTH * texture.height / texture.width).coerceAtLeast(1)
+                        texture.getBitmap(GLASS_FRAME_WIDTH, height)?.let(currentOnGlassFrame)
+                    }
+                    delay(GLASS_FRAME_INTERVAL_MS)
                 }
-                delay(GLASS_FRAME_INTERVAL_MS)
             }
         }
     }
