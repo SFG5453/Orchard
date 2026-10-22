@@ -503,6 +503,7 @@ if get_option('tests')
     ['playback_persistence', 'tests/playback_persistence_test.cpp'],
     ['playback_recovery', 'tests/playback_recovery_test.cpp'],
     ['songlink', 'tests/songlink_test.cpp'],
+    ['music_link', 'tests/music_link_test.cpp'],
     ['animated_artwork', 'tests/animated_artwork_test.cpp'],
     ['artwork_video_cache', 'tests/artwork_video_cache_test.cpp'],
     ['artwork_sampler', 'tests/artwork_sampler_test.cpp'],

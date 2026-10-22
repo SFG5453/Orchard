@@ -40,6 +40,7 @@
 #include "integrations/catalog_source.h"
 #include "integrations/spotify_canvas.h"
 #include "instance_coordinator.h"
+#include "music_link_controller.h"
 #include "library/library_actions.h"
 #include "local/local_library.h"
 #include "lyrics/lyrics_controller.h"
@@ -179,7 +180,7 @@ int main(int argc, char *argv[]) {
   // Declared before every other local so it arms only once they are all destroyed.
   ShutdownDeadline shutdownDeadline;
   InstanceCoordinator instance;
-  const auto instanceResult = instance.start();
+  const auto instanceResult = instance.start(application.arguments().mid(1));
   if (instanceResult == InstanceCoordinator::StartResult::Forwarded)
     return 0;
   if (instanceResult == InstanceCoordinator::StartResult::Failed) {
@@ -279,6 +280,13 @@ int main(int argc, char *argv[]) {
   playlistController->setOfflineLibrary(&offlineLibrary);
   auto integrations = std::make_unique<Integrations>(&orchardAccount, &youtubeCatalog, &authManager);
   auto playback = std::make_unique<PlaybackController>(&youtubeProvider, &authManager, homeController.get(), &systemMedia, integrations.get(), &animatedArtwork, &qobuz);
+  MusicLinkController musicLinks(&youtubeProvider, &authManager);
+  QObject::connect(&musicLinks, &MusicLinkController::noticeRequested, &backend, &BackendInfo::noticeRequested);
+  QObject::connect(&musicLinks, &MusicLinkController::songRequested, playback.get(), &PlaybackController::playSong);
+  QObject::connect(&musicLinks, &MusicLinkController::collectionRequested, playback.get(),
+                   [&playback](const QVariantList &tracks, int startIndex, const QString &id, const QString &continuation) {
+    playback->playCollection(tracks, startIndex, false, id, continuation);
+  });
   QObject::connect(&application, &QCoreApplication::aboutToQuit,
                    playback.get(), &PlaybackController::savePlaybackState);
   playback->setOfflineSources(&downloads, &connectivity);
@@ -408,11 +416,15 @@ int main(int argc, char *argv[]) {
   }
   // A launch during QML loading waits here for a real window to receive it.
   instance.setActivationHandler([&tray] { tray.showWindow(); });
+  instance.setLinkHandler([&musicLinks](const QString &uri) { musicLinks.open(uri); });
 
   QObject::connect(&systemMedia, &SystemMediaBridge::commandReceived,
-                   [&tray](const QString &kind, const QVariant &) {
+                   [&tray, &musicLinks](const QString &kind, const QVariant &value) {
     if (kind == QStringLiteral("raise")) {
       tray.showWindow();
+    } else if (kind == QStringLiteral("open-uri")) {
+      tray.showWindow();
+      musicLinks.open(value.toString());
     } else if (kind == QStringLiteral("quit")) {
       QGuiApplication::quit();
     }

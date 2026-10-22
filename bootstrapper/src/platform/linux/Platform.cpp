@@ -1,6 +1,20 @@
 /*
  * Copyright (C) 2026 SFG545
- * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "platform/Platform.hpp"
@@ -46,6 +60,19 @@ std::string quoteExec(const std::string &path) {
       out += c;
   }
   return out + "\"";
+}
+
+void refreshDesktopDatabase(const fs::path &applications) {
+  try {
+    SpawnOptions options;
+    options.args = {applications.string()};
+    options.background = true;
+    auto process = spawn("update-desktop-database", options);
+    waitProcess(process, std::chrono::seconds(5));
+    releaseProcess(process);
+  } catch (const Error &) {
+    // Minimal desktops may not install desktop-file-utils.
+  }
 }
 
 } // namespace
@@ -204,9 +231,11 @@ std::vector<std::string> registerInstallation(const fs::path &, const fs::path &
                            "Exec=" + quoteExec(bootstrapper.string()) + " %U\n"
                            "Icon=" + iconName + "\n"
                            "Terminal=false\n"
+                           "MimeType=x-scheme-handler/orchard;\n"
                            "Categories=AudioVideo;Audio;Player;\n"
                            "StartupWMClass=orchard\n");
   created.push_back(desktop.string());
+  refreshDesktopDatabase(desktop.parent_path());
   return created;
 }
 
@@ -216,6 +245,7 @@ void unregisterInstallation(const std::vector<std::string> &created) {
     if (entry.starts_with("/"))
       fs::remove(entry, error);
   }
+  refreshDesktopDatabase(dataHome() / "applications");
 }
 
 void removeInstallRoot(const fs::path &root) { removeTree(root); }

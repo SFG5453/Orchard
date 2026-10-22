@@ -91,6 +91,16 @@ Right-click a song, album, playlist, or artist and pick the copy entry:
 
 Album, playlist, and artist pages also have a share button that copies the same link. Share links open the song, album, playlist, or artist directly on YouTube Music.
 
+## Open a shared link in Orchard
+
+Launch Orchard with a YouTube Music, youtube.com, or youtu.be song link to play the song. Playlist links and album links also start playback. If Orchard is running, the link opens in that window. Sign in to YouTube Music when prompted; Orchard keeps the latest link until sign-in completes.
+
+On Linux, run `orchard 'https://music.youtube.com/watch?v=dQw4w9WgXcQ'`. A running Orchard also accepts `playerctl -p Orchard open 'https://music.youtube.com/watch?v=dQw4w9WgXcQ'` through the system media controls.
+
+The Linux and Windows installers register `orchard://` links. For example, `orchard://watch?v=dQw4w9WgXcQ` plays a song, `orchard://playlist?list=PLAYLIST_ID` plays a playlist, and `orchard://browse/MPRE_ALBUM_ID` plays an album. Use the actual playlist or album ID in place of the example ID. Your browser may ask permission to open Orchard.
+
+Ordinary HTTPS links still open in your browser unless you configure a browser or operating-system rule to send them to Orchard. Installing Orchard does not change your default browser. Portable builds need a manually configured protocol handler.
+
 ## Open an album or artist from a song
 
 Right-click the song and select **View album** or **View artist**. A song with several artists shows a list of artists to choose from.

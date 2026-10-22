@@ -58,8 +58,9 @@ cat > "$output_dir/orchard.desktop" <<'EOF'
 [Desktop Entry]
 Type=Application
 Name=Orchard
-Exec=orchard
+Exec=orchard %U
 Icon=orchard
+MimeType=x-scheme-handler/orchard;
 Categories=AudioVideo;Audio;Player;
 EOF
 cp "$source_dir/app/qml/assets/orchard-logo.png" "$output_dir/orchard.png"

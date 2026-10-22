@@ -224,6 +224,12 @@ def main():
     check(os.access(ROOT / "versions/1.0.0/orchard", os.X_OK), "executable bit kept")
     check((ROOT / "orchard").exists(), "bootstrapper copied into the root")
     check((WORK / "xdg/applications/orchard.desktop").exists(), "desktop entry created")
+    desktop = (WORK / "xdg/applications/orchard.desktop").read_text()
+    check("MimeType=x-scheme-handler/orchard;" in desktop and " %U\n" in desktop,
+          "desktop entry accepts Orchard links")
+    if shutil.which("update-desktop-database"):
+        cache = (WORK / "xdg/applications/mimeinfo.cache").read_text()
+        check("x-scheme-handler/orchard=orchard.desktop;" in cache, "Orchard protocol handler indexed")
     check(not any((ROOT / "cache/objects").rglob("*")) if (ROOT / "cache/objects").exists() else True,
           "object cache emptied after staging")
 
@@ -236,6 +242,10 @@ def main():
     check(f"ORCHARD_BOOTSTRAPPER={ROOT}/orchard" in run, "app can find the bootstrapper")
     time.sleep(0.3)
     check(state()["versions"]["1.0.0"]["healthy"], "clean exit marks the version healthy")
+
+    boot("orchard://watch?v=abcdefghijk")
+    check("args=--from-manifest orchard://watch?v=abcdefghijk" in wait_for_app_run(),
+          "protocol link passed to the application")
 
     print("incremental update")
     qt2 = bytearray(qt1)

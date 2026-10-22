@@ -1,6 +1,20 @@
 /*
  * Copyright (C) 2026 SFG545
- * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
 #include "platform/Platform.hpp"
@@ -30,6 +44,7 @@ namespace orchard::boot::platform {
 namespace {
 
 constexpr wchar_t kUninstallKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Orchard";
+constexpr wchar_t kProtocolKey[] = L"Software\\Classes\\orchard";
 constexpr char kRegistryPrefix[] = "registry:HKCU\\";
 // Matches SetCurrentProcessExplicitAppUserModelID in app/src/main.cpp so
 // pinned shortcuts and the running window share one taskbar button.
@@ -127,6 +142,18 @@ std::vector<std::string> registerInstallation(const fs::path &root, const fs::pa
     setDword(key, L"NoRepair", 1);
     RegCloseKey(key);
     created.push_back(std::string(kRegistryPrefix) + narrow(kUninstallKey));
+  }
+  if (RegCreateKeyExW(HKEY_CURRENT_USER, kProtocolKey, 0, nullptr, 0, KEY_SET_VALUE, nullptr, &key, nullptr) ==
+      ERROR_SUCCESS) {
+    setString(key, nullptr, L"URL:Orchard Protocol");
+    setString(key, L"URL Protocol", L"");
+    RegCloseKey(key);
+    created.push_back(std::string(kRegistryPrefix) + narrow(kProtocolKey));
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Classes\\orchard\\shell\\open\\command", 0, nullptr, 0,
+                       KEY_SET_VALUE, nullptr, &key, nullptr) == ERROR_SUCCESS) {
+      setString(key, nullptr, L"\"" + bootstrapper.wstring() + L"\" -- \"%1\"");
+      RegCloseKey(key);
+    }
   }
   return created;
 }
