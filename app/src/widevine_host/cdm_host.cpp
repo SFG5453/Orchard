@@ -19,18 +19,43 @@
 
 #include "cdm_host.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <dlfcn.h>
-#include <poll.h>
+#endif
 
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <thread>
 
 namespace {
 
 constexpr char kKeySystem[] = "com.widevine.alpha";
 // License calls settle synchronously in the CDMs seen so far; this bounds a CDM that waits on its own timers.
 constexpr double kPromiseTimeoutMs = 10000;
+
+#ifdef _WIN32
+void *openLibrary(const std::string &path) {
+  const int size = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0);
+  std::wstring wide(size_t(std::max(size, 1)), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wide.data(), size);
+  return LoadLibraryW(wide.c_str());
+}
+void *symbol(void *library, const char *name) {
+  return reinterpret_cast<void *>(GetProcAddress(static_cast<HMODULE>(library), name));
+}
+void closeLibrary(void *library) { FreeLibrary(static_cast<HMODULE>(library)); }
+std::string libraryError() { return "error " + std::to_string(GetLastError()); }
+#else
+void *openLibrary(const std::string &path) { return dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL); }
+void *symbol(void *library, const char *name) { return dlsym(library, name); }
+void closeLibrary(void *library) { dlclose(library); }
+std::string libraryError() { return dlerror(); }
+#endif
+
+void sleepMs(int ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
 
 double nowMs() {
   return std::chrono::duration<double, std::milli>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -88,19 +113,19 @@ CdmHost::~CdmHost() {
   if (m_cdm)
     m_cdm->Destroy();
   if (m_library) {
-    if (auto deinitialize = reinterpret_cast<void (*)()>(dlsym(m_library, "DeinitializeCdmModule")))
+    if (auto deinitialize = reinterpret_cast<void (*)()>(symbol(m_library, "DeinitializeCdmModule")))
       deinitialize();
-    dlclose(m_library);
+    closeLibrary(m_library);
   }
 }
 
 std::string CdmHost::load(const std::string &path) {
-  m_library = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
+  m_library = openLibrary(path);
   if (!m_library)
-    return std::string("could not load the CDM: ") + dlerror();
-  auto initialize = reinterpret_cast<void (*)()>(dlsym(m_library, "InitializeCdmModule_4"));
+    return std::string("could not load the CDM: ") + libraryError();
+  auto initialize = reinterpret_cast<void (*)()>(symbol(m_library, "InitializeCdmModule_4"));
   auto create = reinterpret_cast<void *(*)(int, const char *, uint32_t, GetCdmHostFunc, void *)>(
-      dlsym(m_library, "CreateCdmInstance"));
+      symbol(m_library, "CreateCdmInstance"));
   if (!initialize || !create)
     return "the CDM does not export module version 4";
   initialize();
@@ -112,7 +137,7 @@ std::string CdmHost::load(const std::string &path) {
   m_cdm->Initialize(false, false, false);
   const double deadline = nowMs() + kPromiseTimeoutMs;
   while (!m_initializeDone && nowMs() < deadline) {
-    poll(nullptr, 0, std::max(1, std::min(nextTimerMs(), 20)));
+    sleepMs(std::max(1, std::min(nextTimerMs(), 20)));
     runTimers();
   }
   return m_initialized ? std::string() : "the CDM did not initialize";
@@ -123,7 +148,7 @@ std::string CdmHost::wait(uint32_t promise) {
   while (!m_promises[promise].settled && nowMs() < deadline) {
     runTimers();
     if (!m_promises[promise].settled)
-      poll(nullptr, 0, std::max(1, std::min(nextTimerMs(), 20)));
+      sleepMs(std::max(1, std::min(nextTimerMs(), 20)));
   }
   const Promise done = m_promises[promise];
   m_promises.erase(promise);

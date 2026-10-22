@@ -28,6 +28,10 @@
 
 #include <utility>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+
 using namespace widevine_protocol;
 
 namespace {
@@ -35,7 +39,11 @@ namespace {
 constexpr int kIdleMs = 2 * 60 * 1000;
 
 QString hostPath() {
+#ifdef Q_OS_WIN
+  return QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("orchard-widevine-host.exe"));
+#else
   return QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("orchard-widevine-host"));
+#endif
 }
 } // namespace
 
@@ -58,7 +66,7 @@ WidevineClient::~WidevineClient() {
 }
 
 bool WidevineClient::available() {
-#ifdef Q_OS_LINUX
+#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
   return QFileInfo(hostPath()).isExecutable() && !findWidevineCdm().isEmpty();
 #else
   return false;
@@ -74,6 +82,10 @@ bool WidevineClient::start() {
   m_buffer.clear();
   m_process = new QProcess(this);
   m_process->setProcessChannelMode(QProcess::ForwardedErrorChannel);
+#ifdef Q_OS_WIN
+  m_process->setCreateProcessArgumentsModifier(
+      [](QProcess::CreateProcessArguments *args) { args->flags |= CREATE_NO_WINDOW; });
+#endif
   connect(m_process, &QProcess::readyReadStandardOutput, this, &WidevineClient::readFrames);
   connect(m_process, &QProcess::finished, this, &WidevineClient::processEnded);
   connect(m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {

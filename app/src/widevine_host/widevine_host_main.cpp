@@ -17,7 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// orchard-widevine-host <libwidevinecdm.so>
+// orchard-widevine-host <libwidevinecdm.so | widevinecdm.dll>
 // Decrypts Apple Music's Widevine streams for Orchard over the frames in
 // widevine_protocol.h. Runs in its own process so a CDM crash or a Chrome update
 // that breaks the interface costs one song, not the app. Exits when stdin closes.
@@ -25,8 +25,20 @@
 #include "cdm_host.h"
 #include "widevine_protocol.h"
 
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#include <windows.h>
+
+#include <chrono>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <thread>
+#else
 #include <poll.h>
 #include <unistd.h>
+#endif
 
 #include <algorithm>
 #include <cerrno>
@@ -38,6 +50,32 @@ using cenc_mp4::Bytes;
 
 namespace {
 
+#ifdef _WIN32
+bool readExactly(uint8_t *data, size_t size) {
+  const HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+  while (size) {
+    DWORD got = 0;
+    if (!ReadFile(input, data, DWORD(std::min<size_t>(size, 1u << 20)), &got, nullptr) || !got)
+      return false;
+    data += got;
+    size -= got;
+  }
+  return true;
+}
+
+bool writeExactly(const uint8_t *data, size_t size) {
+  const HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+  while (size) {
+    DWORD put = 0;
+    if (!WriteFile(output, data, DWORD(std::min<size_t>(size, 1u << 20)), &put, nullptr) || !put)
+      return false;
+    data += put;
+    size -= put;
+  }
+  return true;
+}
+
+#else
 bool readExactly(uint8_t *data, size_t size) {
   while (size) {
     const ssize_t got = read(STDIN_FILENO, data, size);
@@ -63,6 +101,7 @@ bool writeExactly(const uint8_t *data, size_t size) {
   }
   return true;
 }
+#endif
 
 uint32_t le32(const uint8_t *p) { return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24; }
 
@@ -83,13 +122,89 @@ bool replyError(uint32_t id, const std::string &message) {
   return reply(id, Error, reinterpret_cast<const uint8_t *>(message.data()), message.size());
 }
 
+struct Frame {
+  uint32_t id{0};
+  uint8_t op{0};
+  Bytes payload;
+};
+
+enum class Input { Frame, Timeout, Closed, Malformed };
+
+Input readFrame(Frame &frame) {
+  uint8_t header[kHeaderBytes];
+  if (!readExactly(header, sizeof header))
+    return Input::Closed;
+  const uint32_t length = le32(header);
+  if (length < 5 || length > kMaxFrameBytes)
+    return Input::Malformed;
+  frame.id = le32(header + 4);
+  frame.op = header[8];
+  frame.payload.resize(length - 5);
+  return readExactly(frame.payload.data(), frame.payload.size()) ? Input::Frame : Input::Closed;
+}
+
+#ifdef _WIN32
+// Pipes cannot be waited on with a timeout, so a thread blocks on stdin and hands whole frames over.
+class FrameQueue {
+public:
+  FrameQueue() {
+    std::thread([this] {
+      for (;;) {
+        Frame frame;
+        const Input input = readFrame(frame);
+        std::lock_guard lock(m_mutex);
+        if (input != Input::Frame) {
+          m_end = input;
+          m_changed.notify_one();
+          return;
+        }
+        m_frames.push_back(std::move(frame));
+        m_changed.notify_one();
+      }
+    }).detach();
+  }
+  Input next(int timeoutMs, Frame &frame) {
+    std::unique_lock lock(m_mutex);
+    const auto ready = [this] { return !m_frames.empty() || m_end != Input::Frame; };
+    if (timeoutMs < 0)
+      m_changed.wait(lock, ready);
+    else if (!m_changed.wait_for(lock, std::chrono::milliseconds(timeoutMs), ready))
+      return Input::Timeout;
+    if (m_frames.empty())
+      return m_end;
+    frame = std::move(m_frames.front());
+    m_frames.pop_front();
+    return Input::Frame;
+  }
+
+private:
+  std::mutex m_mutex;
+  std::condition_variable m_changed;
+  std::deque<Frame> m_frames;
+  Input m_end{Input::Frame};
+};
+#else
+Input nextFrame(int timeoutMs, Frame &frame) {
+  pollfd input{STDIN_FILENO, POLLIN, 0};
+  const int ready = poll(&input, 1, timeoutMs);
+  if (ready < 0)
+    return errno == EINTR ? Input::Timeout : Input::Malformed;
+  return ready ? readFrame(frame) : Input::Timeout;
+}
+#endif
+
 } // namespace
 
 int main(int argc, char **argv) {
   if (argc != 2) {
-    std::fprintf(stderr, "usage: orchard-widevine-host <libwidevinecdm.so>\n");
+    std::fprintf(stderr, "usage: orchard-widevine-host <widevine cdm library>\n");
     return 2;
   }
+#ifdef _WIN32
+  _setmode(_fileno(stdin), _O_BINARY);
+  _setmode(_fileno(stdout), _O_BINARY);
+  FrameQueue queue;
+#endif
   CdmHost host;
   if (const std::string error = host.load(argv[1]); !error.empty()) {
     std::fprintf(stderr, "orchard-widevine-host: %s\n", error.c_str());
@@ -105,24 +220,20 @@ int main(int argc, char **argv) {
   std::map<uint32_t, cenc_mp4::Track> tracks;
 
   while (writable) {
-    pollfd input{STDIN_FILENO, POLLIN, 0};
-    const int ready = poll(&input, 1, host.nextTimerMs());
-    if (ready < 0 && errno != EINTR)
-      return 1;
+    Frame frame;
+#ifdef _WIN32
+    const Input input = queue.next(host.nextTimerMs(), frame);
+#else
+    const Input input = nextFrame(host.nextTimerMs(), frame);
+#endif
     host.runTimers();
-    if (ready <= 0)
+    if (input == Input::Timeout)
       continue;
-    uint8_t header[kHeaderBytes];
-    if (!readExactly(header, sizeof header))
-      return 0;
-    const uint32_t length = le32(header);
-    const uint32_t id = le32(header + 4);
-    const uint8_t op = header[8];
-    if (length < 5 || length > kMaxFrameBytes)
-      return 1;
-    Bytes payload(length - 5);
-    if (!readExactly(payload.data(), payload.size()))
-      return 0;
+    if (input != Input::Frame)
+      return input == Input::Closed ? 0 : 1;
+    const uint32_t id = frame.id;
+    const uint8_t op = frame.op;
+    const Bytes &payload = frame.payload;
     if (payload.size() < 4) {
       writable = replyError(id, "frame has no stream");
       continue;

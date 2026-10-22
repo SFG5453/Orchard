@@ -423,11 +423,12 @@ auth_helper = executable('orchard-auth-helper', files(auth_sources) + helper_moc
   win_subsystem: 'windows', install: true)
 
 # Apple Music's Widevine streams decrypt here, outside the app and without a browser.
-if host_machine.system() == 'linux'
+if host_machine.system() in ['linux', 'windows']
   widevine_host = executable('orchard-widevine-host',
     files('app/src/widevine_host/widevine_host_main.cpp', 'app/src/widevine_host/cdm_host.cpp',
       'app/src/widevine_host/cenc_mp4.cpp'),
     include_directories: include_directories('third_party/chromium_cdm'),
+    cpp_args: host_machine.system() == 'windows' ? ['-DNOMINMAX', '-DWIN32_LEAN_AND_MEAN'] : [],
     dependencies: [cpp.find_library('dl', required: false)],
     install: true)
 endif
