@@ -494,6 +494,21 @@ if get_option('tests')
     files('tests/instance_coordinator_test.cpp', 'app/src/instance_coordinator.cpp') + instance_test_moc,
     include_directories: app_inc, dependencies: [qt_test_dep, qt_dep])
   test('orchard_instance', instance_test, timeout: 15)
+  if host_machine.system() == 'linux'
+    system_media_moc = qt6.compile_moc(sources: ['tests/system_media_test.cpp'],
+      headers: ['app/src/system_media_bridge.h'],
+      include_directories: app_inc, dependencies: [qt_test_dep, qt_dep])
+    system_media_test = executable('orchard_system_media_tests',
+      files('tests/system_media_test.cpp', 'app/src/system_media_bridge.cpp') + system_media_moc,
+      include_directories: app_inc,
+      dependencies: [qt_test_dep, qt_dep, rust_dep, dependency('qt6', modules: ['DBus'])])
+    dbus_run_session = find_program('dbus-run-session', required: false)
+    if dbus_run_session.found()
+      test('orchard_system_media', dbus_run_session,
+        args: ['--', system_media_test], timeout: 30,
+        env: ['QT_QPA_PLATFORM=offscreen'])
+    endif
+  endif
   app_test_specs = [
     ['audio_proxy', 'tests/audio_stream_proxy_test.cpp'],
     ['account', 'tests/orchard_account_test.cpp'],

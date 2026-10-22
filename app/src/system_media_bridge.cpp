@@ -20,6 +20,8 @@
 #include "system_media_bridge.h"
 
 #include <QByteArray>
+#include <QCoreApplication>
+#include <QKeyEvent>
 #include <QMetaObject>
 #include <QPointer>
 #include <QRegularExpression>
@@ -75,6 +77,25 @@ uint32_t repeatMode(const QString &value)
     }
     return 0;
 }
+
+QString mediaKeyCommand(int key)
+{
+    switch (key) {
+    case Qt::Key_MediaPlay:
+    case Qt::Key_MediaTogglePlayPause:
+        return QStringLiteral("play-pause");
+    case Qt::Key_MediaPause:
+        return QStringLiteral("pause");
+    case Qt::Key_MediaStop:
+        return QStringLiteral("stop");
+    case Qt::Key_MediaNext:
+        return QStringLiteral("next");
+    case Qt::Key_MediaPrevious:
+        return QStringLiteral("previous");
+    default:
+        return {};
+    }
+}
 }
 
 SystemMediaBridge::SystemMediaBridge(QObject *parent)
@@ -100,6 +121,10 @@ QString SystemMediaBridge::lastError() const
 
 bool SystemMediaBridge::start(qulonglong windowHandle)
 {
+#ifdef Q_OS_LINUX
+    // Some Linux sessions deliver media keys to the focused window directly.
+    QCoreApplication::instance()->installEventFilter(this);
+#endif
     const bool wasAttached = attached();
     destroyHandle();
 
@@ -127,6 +152,26 @@ bool SystemMediaBridge::start(qulonglong windowHandle)
         emit attachedChanged();
     }
     return attached();
+}
+
+bool SystemMediaBridge::eventFilter(QObject *watched, QEvent *event)
+{
+    if (event->type() != QEvent::ShortcutOverride &&
+        event->type() != QEvent::KeyPress && event->type() != QEvent::KeyRelease) {
+        return QObject::eventFilter(watched, event);
+    }
+
+    const auto *keyEvent = static_cast<QKeyEvent *>(event);
+    const QString command = mediaKeyCommand(keyEvent->key());
+    if (command.isEmpty()) {
+        return QObject::eventFilter(watched, event);
+    }
+
+    event->accept();
+    if (event->type() == QEvent::KeyPress && !keyEvent->isAutoRepeat()) {
+        emit commandReceived(command, QVariant());
+    }
+    return true;
 }
 
 bool SystemMediaBridge::publish(const QVariantMap &state)
@@ -247,6 +292,9 @@ bool SystemMediaBridge::publish(const QVariantMap &state)
 
 void SystemMediaBridge::stop()
 {
+#ifdef Q_OS_LINUX
+    QCoreApplication::instance()->removeEventFilter(this);
+#endif
     if (m_handle == nullptr) {
         return;
     }

@@ -51,6 +51,7 @@ signals:
     void commandReceived(const QString &type, const QVariant &value);
 
 private:
+    bool eventFilter(QObject *watched, QEvent *event) override;
     static void receiveCommand(void *context, const OrchardSystemMediaCommand *command);
     void destroyHandle();
 
