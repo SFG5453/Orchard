@@ -1,0 +1,71 @@
+<!--
+Copyright (C) 2026 SFG545
+
+This file is part of Orchard.
+
+Orchard is free software: you can redistribute it and/or modify it under the
+terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+details.
+
+You should have received a copy of the GNU Affero General Public License
+along with Orchard. If not, see <https://www.gnu.org/licenses/>.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Orchard</title>
+  <style>
+    :root { color-scheme: dark; font: 13px system-ui, sans-serif; color: #eeeeee; background: #202020; }
+    body { margin: 18px; }
+    header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+    header img { width: 30px; height: 30px; border-radius: 8px; }
+    h1 { font-size: 17px; margin: 0; }
+    p { color: #b5b5b5; line-height: 1.5; }
+    label { display: block; margin: 14px 0 5px; }
+    input, select, button { box-sizing: border-box; width: 100%; font: inherit; color: inherit; background: #303030; border: 1px solid #505050; border-radius: 6px; padding: 8px; }
+    button { margin-top: 10px; cursor: pointer; background: #383838; }
+    input[type=checkbox] { width: auto; margin-right: 6px; }
+    [hidden] { display: none !important; }
+    #status { color: #eab98b; overflow-wrap: anywhere; }
+    details { margin-top: 22px; color: #b5b5b5; }
+  </style>
+  <script src="inspector.js" defer></script>
+</head>
+<body>
+  <header><img src="icons/plugin.png" alt=""><h1>Orchard</h1></header>
+  <p id="hint">Open Orchard to connect automatically. Button images follow playback.</p>
+  <section id="volume" hidden>
+    <label for="step">Volume step (%)</label><input id="step" type="number" min="1" max="100" value="5">
+    <p>Rotate a dial to adjust volume. Press Mute to restore the last volume.</p>
+  </section>
+  <section id="seek" hidden>
+    <label for="seconds">Seek distance (seconds)</label><input id="seconds" type="number" min="1" max="600" value="10">
+  </section>
+  <section id="mix" hidden>
+    <button id="loadMixes" type="button">Load my mixes</button>
+    <label for="mixPicker">Mix</label><select id="mixPicker"><option value="">Choose a mix</option></select>
+    <label for="mixId">Mix or playlist browse ID</label><input id="mixId" placeholder="Paste an ID from the Orchard API">
+    <label for="mixTitle">Button label</label><input id="mixTitle" placeholder="My Supermix">
+    <label><input id="shuffle" type="checkbox">Shuffle the playlist</label>
+  </section>
+  <section id="request" hidden>
+    <label for="query">Song search</label><input id="query" placeholder="Artist and song title">
+    <label><input id="next" type="checkbox">Play next</label>
+    <p>Queues a matching song and skips tracks already playing or queued.</p>
+  </section>
+  <p id="status" role="status"></p>
+  <details><summary>Connection</summary>
+    <p>The plugin reads Orchard's local API discovery file. Leave this blank for automatic setup.</p>
+    <label for="discoveryFile">Discovery file path</label><input id="discoveryFile" placeholder="Automatic">
+    <button id="saveConnection" type="button">Save connection</button>
+  </details>
+</body>
+</html>

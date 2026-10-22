@@ -1,5 +1,9 @@
 # Source and asset inventory migrated from the former CMake desktop build.
 app_sources = [
+  'app/src/api/local_api.cpp',
+  'app/src/api/local_api_http.cpp',
+  'app/src/api/local_api_rpc.cpp',
+  'app/src/api/local_api_catalog.cpp',
   'app/src/account/orchard_account.cpp',
   'app/src/account/orchard_account.h',
   'app/src/appearance/appearance_settings.cpp',
@@ -575,6 +579,7 @@ apple_music_sources = [
 
 
 app_moc_headers = [
+  'app/src/api/local_api.h',
   'app/src/lyrics/lyrics_provider_settings.h',
   'app/src/startup_settings.h',
   'app/src/account/orchard_account.h',
