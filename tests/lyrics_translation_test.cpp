@@ -109,6 +109,33 @@ private slots:
     QCOMPARE(planOf(lines).source, std::string("por"));
   }
 
+  void remoteTargetsPreserveTheirOwnLines() {
+    const std::vector<std::pair<std::string, std::string>> examples{
+      {"eng", "I can't stop thinking about you"}, {"spa", "Te quiero más que a mi vida"},
+      {"hin", "मैं तुमसे प्यार करता हूँ"}, {"kor", "오늘 밤 너와 춤추고 싶어"},
+      {"jpn", "今夜は君と踊りたい"}, {"fra", "Je ne veux pas vivre sans toi"},
+    };
+    for (const auto &[target, text] : examples) {
+      QVERIFY(lyric_language::supportedTarget(target));
+      const auto same = lyric_language::remotePlan({text}, target);
+      QVERIFY(same.translate == bools({false}));
+      const auto other = lyric_language::remotePlan({text}, target == "eng" ? "spa" : "eng");
+      QVERIFY(other.translate == bools({true}));
+    }
+    QVERIFY(!lyric_language::supportedTarget("invalid"));
+    QCOMPARE(lyric_language::displayName("hin"), std::string("Hindi"));
+  }
+
+  void remoteTargetsKeepMixedSongAlignment() {
+    const std::vector<std::string> lines{"Te quiero más que a mi vida", "I know you want me", "사랑해", "", "123 🎵"};
+    QVERIFY(lyric_language::remotePlan(lines, "spa").translate == bools({false, true, true, false, false}));
+    QVERIFY(lyric_language::remotePlan(lines, "eng").translate == bools({true, false, true, false, false}));
+    QVERIFY(lyric_language::remotePlan({"君のことを考えると眠れない", "永遠"}, "jpn").translate == bools({false, false}));
+    QVERIFY(lyric_language::remotePlan({"I love you", "Starlight"}, "eng").translate == bools({false, false}));
+    QVERIFY(lyric_language::remotePlan({"Eu não sei o que fazer"}, "spa").translate == bools({true}));
+    QVERIFY(lyric_language::remotePlan({"unrecognizedword"}, "eng").translate == bools({true}));
+  }
+
   void storeRoundTrips() {
     QTemporaryDir dir;
     const QString path = dir.filePath(QStringLiteral("t.sqlite"));

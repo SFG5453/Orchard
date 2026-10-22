@@ -36,6 +36,8 @@ internal object TranslationNative {
     /** JSON {source, name, translate[]} for UTF-8 lines; source is empty for English songs. */
     @JvmStatic external fun plan(lines: Array<ByteArray>): ByteArray
 
+    @JvmStatic external fun remoteMask(lines: Array<ByteArray>, target: ByteArray): ByteArray
+
     /** Loads a pack folder; throws IllegalStateException with LiteRT's reason on failure. */
     @JvmStatic external fun open(runtime: String, directory: ByteArray, threads: Int): Long
 

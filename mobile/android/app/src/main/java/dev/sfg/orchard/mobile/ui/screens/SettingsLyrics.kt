@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,9 +28,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,6 +51,7 @@ import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.lyrics.translation.TranslationNative
 import dev.sfg.orchard.mobile.model.LyricTranslationQuality
 import dev.sfg.orchard.mobile.model.LyricTranslationProvider
+import dev.sfg.orchard.mobile.model.LyricTranslationLanguage
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import kotlinx.coroutines.delay
 
@@ -73,6 +76,9 @@ internal fun LyricTranslationSection(
             }
         }
     }
+    var languageMenu by remember { mutableStateOf(false) }
+    val languages = if (provider == LyricTranslationProvider.LOCAL) listOf(LyricTranslationLanguage.ENGLISH)
+        else LyricTranslationLanguage.entries
     var sourceDialog by remember { mutableStateOf(false) }
     var modelDraft by remember(provider, settings.lyricTranslationModels[provider.key]) {
         mutableStateOf(settings.lyricTranslationModels[provider.key].orEmpty())
@@ -82,17 +88,32 @@ internal fun LyricTranslationSection(
 
     SectionLabel("Lyrics", labelIndex)
     SettingsPanel(index = labelIndex + 1) {
-        ToggleRow(
-            title = "Translate lyrics to English",
+        SettingsRow(
+            title = "Translate lyrics to",
             subtitle = if (provider == LyricTranslationProvider.LOCAL)
-                "Runs on this phone. Each language downloads its model the first time you need it."
+                "Local models translate to English on this phone. Choose an API or Orchard Account for other target languages."
             else if (provider == LyricTranslationProvider.ORCHARD)
                 "Gemma 4. ${quota?.description() ?: "Translation allowance unavailable."} Resets at 00:00 UTC. Cached songs are free."
             else "Sends lyric lines to ${provider.label}; your provider may charge for requests.",
-            icon = Icons.Rounded.Translate,
-            checked = settings.translateLyrics,
-            onChecked = { onSettings(settings.copy(translateLyrics = it)) },
-        )
+        ) {
+            Box {
+                val label = if (!settings.translateLyrics) "Off" else
+                    (if (provider == LyricTranslationProvider.LOCAL) LyricTranslationLanguage.ENGLISH else settings.lyricTranslationLanguage).label
+                SettingsPill("$label ▾", onClick = { languageMenu = true })
+                DropdownMenu(expanded = languageMenu, onDismissRequest = { languageMenu = false }) {
+                    DropdownMenuItem(text = { Text("Off") }, onClick = {
+                        onSettings(settings.copy(translateLyrics = false))
+                        languageMenu = false
+                    })
+                    languages.forEach { language ->
+                        DropdownMenuItem(text = { Text(language.label) }, onClick = {
+                            onSettings(settings.copy(translateLyrics = true, lyricTranslationLanguage = language))
+                            languageMenu = false
+                        })
+                    }
+                }
+            }
+        }
         PanelDivider()
         SettingsRow(
             title = "Translation source",

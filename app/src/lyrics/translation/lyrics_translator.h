@@ -38,12 +38,13 @@ class QNetworkReply;
 class TranslationPacks;
 class TranslationWorker;
 
-// Lyric translation into English. Local models remain the default; remote providers are opt-in.
+// Lyric translation into the selected language. Local models remain the default; remote providers are opt-in.
 class LyricsTranslator final : public QObject {
   Q_OBJECT
   Q_PROPERTY(bool enabled READ enabled WRITE setEnabled NOTIFY enabledChanged)
   // "standard" (small, quick) or "high" (larger models, better lines).
   Q_PROPERTY(QString quality READ quality WRITE setQuality NOTIFY qualityChanged)
+  Q_PROPERTY(QString targetLanguage READ targetLanguage WRITE setTargetLanguage NOTIFY targetLanguageChanged)
   Q_PROPERTY(QString provider READ provider WRITE setProvider NOTIFY providerChanged)
   Q_PROPERTY(QString model READ model WRITE setModel NOTIFY providerChanged)
   Q_PROPERTY(QString endpoint READ endpoint WRITE setEndpoint NOTIFY providerChanged)
@@ -67,6 +68,8 @@ public:
 
   [[nodiscard]] bool enabled() const { return m_enabled; }
   void setEnabled(bool enabled);
+  [[nodiscard]] QString targetLanguage() const { return m_targetLanguage; }
+  void setTargetLanguage(const QString &language);
   [[nodiscard]] QString quality() const { return m_quality; }
   void setQuality(const QString &quality);
   [[nodiscard]] QString provider() const { return m_provider; }
@@ -94,6 +97,7 @@ public:
 signals:
   void enabledChanged();
   void qualityChanged();
+  void targetLanguageChanged();
   void providerChanged();
   void stateChanged();
   void packsChanged();
@@ -130,6 +134,7 @@ private:
   QTimer m_flush;
 
   bool m_enabled{false};
+  QString m_targetLanguage{QStringLiteral("eng")};
   QString m_quality{QStringLiteral("standard")};
   QString m_provider{QStringLiteral("local")};
   QString m_model;

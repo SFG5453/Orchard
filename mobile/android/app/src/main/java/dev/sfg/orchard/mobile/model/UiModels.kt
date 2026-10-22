@@ -151,8 +151,9 @@ data class OrchardSettings(
     val betaChannelEnabled: Boolean = false,
     /** Tallest music video picture to fetch, in lines; 0 takes the best available. */
     val videoMaxHeight: Int = DEFAULT_VIDEO_MAX_HEIGHT,
-    /** Translate lyrics to English using a local model or an explicitly selected API. */
+    /** Translate lyrics using a local model or an explicitly selected API. */
     val translateLyrics: Boolean = false,
+    val lyricTranslationLanguage: LyricTranslationLanguage = LyricTranslationLanguage.ENGLISH,
     val lyricTranslationQuality: LyricTranslationQuality = LyricTranslationQuality.STANDARD,
     val lyricTranslationProvider: LyricTranslationProvider = LyricTranslationProvider.LOCAL,
     val lyricTranslationModels: Map<String, String> = emptyMap(),

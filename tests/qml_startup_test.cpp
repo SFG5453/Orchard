@@ -1,3 +1,22 @@
+/*
+ * Copyright (C) 2026 SFG545
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include <QGuiApplication>
 #include <QQuickStyle>
 #include <QFile>
@@ -72,6 +91,37 @@ static bool verifyScaleControls(QQmlEngine &engine, QTextStream &output) {
   return true;
 }
 
+static bool verifyTranslationControls(QQmlEngine &engine, QTextStream &output) {
+  SettingsMap translation;
+  const QVariantMap values{{"enabled", false}, {"targetLanguage", "eng"}, {"quality", "standard"},
+    {"provider", "custom"}, {"model", "test"}, {"endpoint", "http://localhost/v1"}, {"hasApiKey", false},
+    {"credentialMessage", ""}, {"accountQuotaMessage", ""}, {"packs", QVariantList{}}};
+  for (auto it = values.cbegin(); it != values.cend(); ++it) translation.insert(it.key(), it.value());
+  engine.rootContext()->setContextProperty(QStringLiteral("OrchardTranslation"), &translation);
+  engine.rootContext()->setContextProperty(QStringLiteral("OrchardAccount"), QVariantMap{{"isSignedIn", true}});
+  QQmlComponent component(&engine,
+      QUrl(QStringLiteral("qrc:/qt/qml/Orchard/app/qml/components/settings/LyricTranslationSettings.qml")));
+  std::unique_ptr<QObject> object(component.create());
+  if (!object) {
+    for (const auto &error : component.errors()) output << error.toString() << '\n';
+    return false;
+  }
+  object->setProperty("visible", false);
+  auto *picker = qvariant_cast<QObject *>(object->property("languagePicker"));
+  if (!picker || picker->property("count").toInt() != 7 || picker->property("currentIndex").toInt() != 0) return false;
+  const QStringList targets{"eng", "spa", "hin", "kor", "jpn", "fra"};
+  for (int index = 1; index <= targets.size(); ++index) {
+    QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, index));
+    if (!translation.value("enabled").toBool() || translation.value("targetLanguage").toString() != targets[index - 1]) return false;
+  }
+  QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, 0));
+  if (translation.value("enabled").toBool()) return false;
+  translation.insert("provider", "local");
+  if (picker->property("count").toInt() != 2) return false;
+  QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, 1));
+  return translation.value("enabled").toBool() && translation.value("targetLanguage").toString() == "eng";
+}
+
 int main(int argc, char *argv[]) {
   QGuiApplication application(argc, argv);
   QQuickStyle::setStyle(QStringLiteral("Basic"));
@@ -99,6 +149,10 @@ int main(int argc, char *argv[]) {
   }
   if (!verifyScaleControls(engine, output)) {
     output << "Orchard interface scale controls failed their runtime check.\n";
+    return 1;
+  }
+  if (!verifyTranslationControls(engine, output)) {
+    output << "Orchard translation language controls failed their runtime check.\n";
     return 1;
   }
   output << "Orchard QML startup check passed.\n";

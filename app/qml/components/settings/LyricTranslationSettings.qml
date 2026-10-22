@@ -9,8 +9,8 @@
  * later version.
  *
  * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
  * You should have received a copy of the GNU Affero General Public License
@@ -25,6 +25,7 @@ LyricTranslationSettingsForm {
 
     accountSignedIn: OrchardAccount.isSignedIn
     translationEnabled: OrchardTranslation.enabled
+    targetLanguage: OrchardTranslation.targetLanguage
     quality: OrchardTranslation.quality
     provider: OrchardTranslation.provider
     modelName: OrchardTranslation.model
@@ -48,7 +49,11 @@ LyricTranslationSettingsForm {
         return packs ? packs.filter(pack => pack.installed) : [];
     }
 
-    enableSwitch.onToggled: OrchardTranslation.enabled = enableSwitch.checked
+    languagePicker.onActivated: index => {
+        const language = root.languageValues[index];
+        if (language) OrchardTranslation.targetLanguage = language;
+        OrchardTranslation.enabled = index > 0;
+    }
     qualityPicker.onPicked: value => OrchardTranslation.quality = value
     providerPicker.onActivated: index => {
         OrchardTranslation.provider = root.providerValues[index];

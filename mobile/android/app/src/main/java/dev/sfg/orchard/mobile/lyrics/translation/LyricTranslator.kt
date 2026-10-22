@@ -24,6 +24,7 @@ import android.os.Process
 import dev.sfg.orchard.mobile.model.LyricLine
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.model.LyricTranslationProvider
+import dev.sfg.orchard.mobile.model.LyricTranslationLanguage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -118,7 +119,7 @@ class LyricTranslator(
 
     private data class Config(
         val enabled: Boolean, val quality: String, val provider: LyricTranslationProvider,
-        val model: String, val endpoint: String,
+        val model: String, val endpoint: String, val target: LyricTranslationLanguage,
     )
 
     init {
@@ -131,7 +132,7 @@ class LyricTranslator(
         val wanted = settings.map {
             Config(it.translateLyrics && (it.lyricTranslationProvider != LyricTranslationProvider.LOCAL || TranslationNative.available),
                 it.lyricTranslationQuality.key, it.lyricTranslationProvider,
-                it.lyricTranslationModels[it.lyricTranslationProvider.key].orEmpty(), it.lyricTranslationEndpoint)
+                it.lyricTranslationModels[it.lyricTranslationProvider.key].orEmpty(), it.lyricTranslationEndpoint, it.lyricTranslationLanguage)
         }
             .distinctUntilChanged()
         scope.launch {
@@ -218,7 +219,7 @@ class LyricTranslator(
         if (lines == null) return
         activePack = ""
         if (config.provider == LyricTranslationProvider.ORCHARD) {
-            runAccount(lines, songId)
+            runAccount(lines, songId, config.target)
             return
         }
         if (config.provider != LyricTranslationProvider.LOCAL) {
@@ -310,16 +311,21 @@ class LyricTranslator(
         val base = LyricTranslationState(LyricTranslationState.Status.IDLE, lines = lines,
             translations = List(lines.size) { null })
         val pending = LinkedHashMap<String, MutableList<Int>>()
+        val mask = remoteMask(texts, config.target)
         texts.forEachIndexed { index, text ->
-            if (text.isNotEmpty()) pending.getOrPut(text) { mutableListOf() } += index
+            if (mask[index] && text.isNotEmpty()) pending.getOrPut(text) { mutableListOf() } += index
         }
         val results = arrayOfNulls<String>(lines.size)
+        if (pending.isEmpty()) {
+            mutableState.value = base.copy(message = "Lyrics are already in the selected language")
+            return
+        }
         try {
             if (config.model.isBlank()) error("Enter a translation model in Settings.")
             val key = withContext(Dispatchers.IO) { apiKeys.load(config.provider) }
             if (config.provider != LyricTranslationProvider.CUSTOM && key.isBlank()) error("Add an API key in Settings.")
             RemoteLyricTranslation.endpoint(config.provider, config.endpoint, key)
-            val revision = RemoteLyricTranslation.cacheRevision(config.provider, config.model, config.endpoint)
+            val revision = RemoteLyricTranslation.cacheRevision(config.provider, config.model, config.endpoint, config.target)
             val cached = withContext(Dispatchers.IO) { store.lookup(revision, pending.keys) }
             cached.forEach { (text, translation) -> pending.remove(text)?.forEach { results[it] = shown(text, translation) } }
             val ready = base.copy(status = LyricTranslationState.Status.READY,
@@ -332,7 +338,7 @@ class LyricTranslator(
                 message = "Translating with ${config.provider.label}", translations = results.toList())
             // Twenty-four lines fit comfortably in a response without losing chorus alignment.
             pending.keys.toList().chunked(RemoteLyricTranslation.BATCH_SIZE).forEach { batch ->
-                val output = remote.translate(config.provider, config.model, config.endpoint, key, batch)
+                val output = remote.translate(config.provider, config.model, config.endpoint, key, batch, config.target)
                 withContext(Dispatchers.IO) {
                     batch.zip(output).forEach { (text, translated) -> store.store(revision, text, translated) }
                 }
@@ -351,15 +357,21 @@ class LyricTranslator(
         }
     }
 
-    private suspend fun runAccount(lines: List<LyricLine>, songId: String) {
+    private suspend fun runAccount(lines: List<LyricLine>, songId: String, target: LyricTranslationLanguage) {
         val texts = lines.map(::lineText)
-        val wanted = texts.filter(String::isNotEmpty).distinct()
+        val mask = remoteMask(texts, target)
+        val wanted = texts.filterIndexed { index, text -> mask[index] && text.isNotEmpty() }.distinct()
         val base = LyricTranslationState(LyricTranslationState.Status.TRANSLATING,
             message = "Translating with Orchard Account", lines = lines, translations = List(lines.size) { null })
+        if (wanted.isEmpty()) {
+            mutableState.value = base.copy(status = LyricTranslationState.Status.IDLE,
+                message = "Lyrics are already in the selected language")
+            return
+        }
         mutableState.value = base
         try {
             check(account.state.value.signedIn) { "Sign in to Orchard to translate lyrics." }
-            val output = if (wanted.isEmpty()) emptyList() else accountRemote.translate(songId, wanted)
+            val output = accountRemote.translate(songId, wanted, target.key)
             val translations = wanted.zip(output).toMap()
             mutableState.value = base.copy(status = LyricTranslationState.Status.READY,
                 message = "Translated with Orchard Account",
@@ -370,6 +382,13 @@ class LyricTranslator(
             mutableState.value = base.copy(status = LyricTranslationState.Status.FAILED,
                 message = error.message ?: "Account translation failed")
         }
+    }
+
+    private fun remoteMask(texts: List<String>, target: LyricTranslationLanguage): List<Boolean> {
+        if (!TranslationNative.available) return texts.map(String::isNotBlank)
+        val mask = org.json.JSONArray(TranslationNative.remoteMask(
+            texts.map { it.encodeToByteArray() }.toTypedArray(), target.key.encodeToByteArray()).decodeToString())
+        return List(texts.size) { mask.getBoolean(it) }
     }
 
     // Model thread only.

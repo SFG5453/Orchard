@@ -1,3 +1,22 @@
+/*
+ * Copyright (C) 2026 SFG545
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import assert from 'node:assert/strict';
 import { beforeEach, afterEach, it, mock } from 'node:test';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -299,4 +318,56 @@ it('reports provider capacity and timeout errors separately without leaking upst
   assert.equal((await timedOut.json()).error, 'translation_timeout');
   assert.equal(usage(), 2);
   assert.equal(env.DB.raw.prepare('SELECT count(*) AS count FROM lyric_translations').get().count, 0);
+});
+
+it('keys shared cached translations by target and validates targets before charging', async () => {
+  for (const [target, name] of [['spa', 'Spanish'], ['hin', 'Hindi'], ['kor', 'Korean'], ['jpn', 'Japanese'], ['fra', 'French']]) {
+    env.AI.run = async (_, payload) => {
+      calls++;
+      assert.ok(payload.messages[0].content.includes(`natural ${name}`));
+      assert.ok(payload.messages[0].content.includes(`Keep ${name} lines unchanged`));
+      return { response: JSON.stringify([`${name} output`]) };
+    };
+    const options = { lines: ['I love you'], extra: { target_language: target } };
+    const first = await (await translate('same', options)).json();
+    assert.equal(first.target_language, target);
+    assert.deepEqual(first.lines, [`${name} output`]);
+    assert.equal(first.cached, false);
+    assert.equal((await (await translate('same', options)).json()).cached, true);
+  }
+  assert.equal(calls, 5);
+  assert.equal(usage(), 5);
+  for (const target of ['invalid', 'English', '__proto__', null, {}, 42]) {
+    assert.equal((await translate('bad', { extra: { target_language: target } })).status, 400);
+  }
+  assert.equal(usage(), 5);
+});
+it('skips songs already in the target language without inference, cache writes, or admission', async () => {
+  const examples = [
+    ['eng', ["I can't stop thinking about you", 'Starlight']],
+    ['spa', ['Te quiero más que a mi vida', 'Despacito']],
+    ['hin', ['मैं तुमसे प्यार करता हूँ']], ['kor', ['오늘 밤 너와 춤추고 싶어']],
+    ['jpn', ['今夜は君と踊りたい', '永遠']], ['fra', ['Je ne veux pas vivre sans toi']],
+  ];
+  env.AI = null;
+  env.DB.raw.prepare('UPDATE users SET translation_daily_limit = 0').run();
+  for (const [target, lines] of examples) {
+    const response = await translate('same-language', { lines, extra: { target_language: target } });
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).lines, lines);
+  }
+  assert.equal(calls, 0);
+  assert.equal(usage(), 0);
+  assert.equal(env.DB.raw.prepare('SELECT count(*) AS count FROM lyric_translations').get().count, 0);
+});
+it('translates only foreign lines and restores their positions in a mixed-language song', async () => {
+  env.AI.run = async (_, payload) => {
+    calls++;
+    assert.deepEqual(JSON.parse(payload.messages[1].content), ['I love you', '사랑해']);
+    return { response: '["Te amo", "Te quiero"]' };
+  };
+  const lines = ['Te quiero más que a mi vida', 'I love you', '사랑해', '🎵'];
+  const result = await (await translate('mixed', { lines, extra: { target_language: 'spa' } })).json();
+  assert.deepEqual(result.lines, [lines[0], 'Te amo', 'Te quiero', '🎵']);
+  assert.equal(usage(), 1);
 });

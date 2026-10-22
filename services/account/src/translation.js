@@ -1,13 +1,30 @@
-/* Copyright (C) 2026 SFG545
- * SPDX-License-Identifier: AGPL-3.0-or-later
+/*
+ * Copyright (C) 2026 SFG545
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { hashSecret } from './crypto.js';
 import { HttpError, json, nowSeconds } from './http.js';
 import { readTranslationQuota, translationContext } from './translation_quota.js';
 
+import { TARGET_LANGUAGES, translationMask } from './translation_language.js';
 import { inferSong, translationFailure } from './translation_inference.js';
 export { TRANSLATION_MODEL } from './translation_inference.js';
-export const TRANSLATION_REVISION = 'gemma4-english-v1';
+export const TRANSLATION_REVISION = 'gemma4-target-v2';
 const MAX_BODY_BYTES = 48 * 1024;
 const CACHE_SECONDS = 90 * 86400;
 const LEASE_SECONDS = 180;
@@ -44,7 +61,11 @@ async function readSong(request) {
   if (new TextEncoder().encode(JSON.stringify(lines)).length > 24 * 1024) {
     throw new HttpError(413, 'lyrics_too_large', 'Lyrics are too large');
   }
-  return { songId: body.song_id.trim(), lines };
+  const target = body.target_language === undefined ? 'eng' : body.target_language;
+  if (typeof target !== 'string' || !Object.hasOwn(TARGET_LANGUAGES, target)) {
+    throw new HttpError(400, 'invalid_target_language', 'Choose English, Spanish, Hindi, Korean, Japanese, or French');
+  }
+  return { songId: body.song_id.trim(), lines, target };
 }
 
 function retryError(status, code, message, seconds) {
@@ -66,9 +87,11 @@ export async function translateSong(request, env) {
 }
 
 async function translateAuthorizedSong(request, env, { accountId, ipHash }) {
-  const { songId, lines } = await readSong(request);
+  const { songId, lines, target } = await readSong(request);
+  const mask = translationMask(lines, target);
+  if (!mask.some(Boolean)) return { song_id: songId, target_language: target, lines, cached: false };
   const lyricsHash = await hashSecret(JSON.stringify(lines));
-  const key = [songId, TRANSLATION_REVISION, lyricsHash];
+  const key = [songId, `${TRANSLATION_REVISION}-${target}`, lyricsHash];
   const now = nowSeconds();
   const day = Math.floor(now / 86400);
   const resetSeconds = (day + 1) * 86400 - now;
@@ -76,7 +99,7 @@ async function translateAuthorizedSong(request, env, { accountId, ipHash }) {
     'SELECT translations, expires_at FROM lyric_translations WHERE song_id = ? AND revision = ? AND lyrics_hash = ?',
   ).bind(...key).first();
   if (cached?.expires_at > now) {
-    if (cached.translations) return { song_id: songId, lines: JSON.parse(cached.translations), cached: true };
+    if (cached.translations) return { song_id: songId, target_language: target, lines: JSON.parse(cached.translations), cached: true };
     throw retryError(409, 'translation_pending', 'This song is being translated. Try again shortly.', 5);
   }
   if (!env.AI) throw new HttpError(503, 'translation_unavailable', 'Account translation is unavailable');
@@ -99,12 +122,14 @@ async function translateAuthorizedSong(request, env, { accountId, ipHash }) {
   const startedAt = Date.now();
   console.log(JSON.stringify({ event: 'translation.started', request_id: lease, song_id: songId, lines: lines.length }));
   try {
-    const translated = await inferSong(env.AI, lines);
+    const output = await inferSong(env.AI, lines.filter((_, index) => mask[index]), target);
+    let index = 0;
+    const translated = lines.map((line, i) => mask[i] ? output[index++] : line);
     await env.DB.prepare(`UPDATE lyric_translations SET translations = ?, expires_at = ?, account_id = NULL, ip_hash = NULL
       WHERE song_id = ? AND revision = ? AND lyrics_hash = ? AND lease_token = ?`)
       .bind(JSON.stringify(translated), nowSeconds() + CACHE_SECONDS, ...key, lease).run();
     console.log(JSON.stringify({ event: 'translation.completed', request_id: lease, elapsed_ms: Date.now() - startedAt }));
-    return { song_id: songId, lines: translated, cached: false };
+    return { song_id: songId, target_language: target, lines: translated, cached: false };
   } catch (error) {
     const { failure, upstreamCode } = translationFailure(error);
     console.error(JSON.stringify({ event: 'translation.failed', request_id: lease, elapsed_ms: Date.now() - startedAt,

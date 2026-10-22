@@ -1,11 +1,27 @@
 /*
  * Copyright (C) 2026 SFG545
- * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
+
 package dev.sfg.orchard.mobile.lyrics.translation
 
 import com.sun.net.httpserver.HttpServer
 import dev.sfg.orchard.mobile.model.LyricTranslationProvider
+import dev.sfg.orchard.mobile.model.LyricTranslationLanguage
 import java.net.InetSocketAddress
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -64,6 +80,13 @@ class RemoteLyricTranslationTest {
         )
     }
 
+    @Test fun targetLanguagesHaveSeparateCaches() {
+        val revisions = LyricTranslationLanguage.entries.map {
+            RemoteLyricTranslation.cacheRevision(LyricTranslationProvider.CUSTOM, "model", "https://example.com/v1", it)
+        }
+        assertEquals(6, revisions.toSet().size)
+    }
+
     @Test fun customApiReceivesOrderedLines() = runBlocking {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         var request: JSONObject? = null
@@ -77,11 +100,14 @@ class RemoteLyricTranslationTest {
         try {
             val output = RemoteLyricTranslation(okhttp3.OkHttpClient()).translate(
                 LyricTranslationProvider.CUSTOM, "test-model", "http://127.0.0.1:${server.address.port}/v1", "",
-                listOf("Hola", "Buenas noches"),
+                listOf("Hola", "Buenas noches"), LyricTranslationLanguage.FRENCH,
             )
             assertEquals(listOf("Hello", "Good night"), output)
             val sent = requireNotNull(request)
             assertEquals("test-model", sent.getString("model"))
+            val instruction = sent.getJSONArray("messages").getJSONObject(0).getString("content")
+            assertTrue(instruction.contains("natural French"))
+            assertTrue(instruction.contains("Keep French lines unchanged"))
             assertTrue(sent.getJSONArray("messages").getJSONObject(1).getString("content").contains("Buenas noches"))
         } finally {
             server.stop(0)

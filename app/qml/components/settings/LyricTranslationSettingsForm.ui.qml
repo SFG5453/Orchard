@@ -9,8 +9,8 @@
  * later version.
  *
  * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
  * details.
  *
  * You should have received a copy of the GNU Affero General Public License
@@ -28,6 +28,8 @@ SettingsSection {
     property bool accountSignedIn: false
     property var providerValues: accountSignedIn ? ["local", "openai", "claude", "gemini", "custom", "orchard"] : ["local", "openai", "claude", "gemini", "custom"]
     property bool translationEnabled: true
+    property string targetLanguage: "eng"
+    readonly property var languageValues: provider === "local" ? ["", "eng"] : ["", "eng", "spa", "hin", "kor", "jpn", "fra"]
     property string quality: "standard"
     property string provider: "local"
     property string modelName: ""
@@ -37,7 +39,7 @@ SettingsSection {
     property string accountQuotaMessage: ""
     // Downloaded packs: { name, code, quality, sizeBytes, credit }.
     property var installed: []
-    property alias enableSwitch: enableSwitch
+    property alias languagePicker: languagePicker
     property alias qualityPicker: qualityPicker
     property alias providerPicker: providerPicker
     property alias modelField: modelField
@@ -53,16 +55,25 @@ SettingsSection {
 
     SettingsRow {
         iconName: "languages"
-        title: qsTr("Translate lyrics to English")
+        title: qsTr("Translate lyrics to")
         description: root.provider === "local"
-            ? qsTr("Orchard detects each song's language and translates it on this computer. Lyrics never leave your computer.")
+            ? qsTr("Local models translate to English on this computer. Choose an API or Orchard Account for other target languages.")
             : root.provider === "orchard" ? qsTr("Gemma 4. %1 Resets at 00:00 UTC. Cached songs are free.").arg(root.accountQuotaMessage)
             : qsTr("Orchard sends lyric lines to your selected API for translation. Your provider may charge for requests.")
 
-        SettingsSwitch {
-            id: enableSwitch
-            checked: root.translationEnabled
-            Accessible.name: qsTr("Translate lyrics to English")
+        SettingsSelect {
+            id: languagePicker
+            Layout.fillWidth: false
+            Layout.preferredWidth: 160
+            model: root.provider === "local" ? [qsTr("Off"), qsTr("English")]
+                : [qsTr("Off"), qsTr("English"), qsTr("Spanish"), qsTr("Hindi"), qsTr("Korean"), qsTr("Japanese"), qsTr("French")]
+            currentIndex: !root.translationEnabled ? 0 : root.provider === "local" ? 1 : root.languageValues.indexOf(root.targetLanguage)
+            Accessible.name: qsTr("Translate lyrics to")
+            background: Rectangle {
+                radius: height / 2
+                color: languagePicker.hovered ? "#18ffffff" : "#10ffffff"
+                border.color: languagePicker.visualFocus ? "#80ffffff" : "#14ffffff"
+            }
         }
     }
 

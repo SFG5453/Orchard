@@ -56,6 +56,7 @@ import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.lyrics.translation.LyricTranslationState
 import dev.sfg.orchard.mobile.lyrics.translation.LyricTranslationState.Status
 import dev.sfg.orchard.mobile.model.LyricLine
+import dev.sfg.orchard.mobile.model.LyricTranslationProvider
 
 /** Registers [lines] as on screen, which is what lets the translator spend CPU on them. */
 @Composable
@@ -116,6 +117,8 @@ internal fun LyricTranslateChip(state: LyricTranslationState, modifier: Modifier
     val graph = OrchardGraph.from(LocalContext.current)
     val settings by graph.settings.settings.collectAsStateWithLifecycle()
     val enabled = settings.translateLyrics
+    val target = if (settings.lyricTranslationProvider == LyricTranslationProvider.LOCAL) "English"
+        else settings.lyricTranslationLanguage.label
     val caption = when (state.status) {
         Status.OFF, Status.IDLE -> null
         // Same wording as desktop's LyricsTranslateBar.
@@ -138,7 +141,7 @@ internal fun LyricTranslateChip(state: LyricTranslationState, modifier: Modifier
     ) {
         Icon(
             imageVector = Icons.Rounded.Translate,
-            contentDescription = if (enabled) "Stop translating lyrics" else "Translate lyrics to English",
+            contentDescription = if (enabled) "Stop translating lyrics" else "Translate lyrics to $target",
             tint = Color.White.copy(alpha = if (enabled) 0.95f else 0.6f),
             modifier = Modifier.size(16.dp),
         )

@@ -1,6 +1,6 @@
 ---
 title: Lyrics
-summary: Show lyrics for the current song, translate them to English, see where they come from, and handle missing lyrics.
+summary: Show lyrics for the current song, translate them into your chosen language, see where they come from, and handle missing lyrics.
 group: Basics
 icon: mic-vocal
 keywords:
@@ -72,11 +72,11 @@ The lyrics view shows "Lyrics unavailable" when no source has lyrics for the son
 
 The lyrics view shows "Play something to see its lyrics" when no song is loaded. Play a song and the lyrics load. The view shows "Loading lyrics" while it looks them up.
 
-## Translate lyrics to English
+## Choose a translation language
 
-Select the translate button (accessible name "Translate lyrics") at the top right of the lyrics view. Orchard detects the song's language and shows an English line above each lyric line. The original line stays below it in smaller text, and the word-by-word highlight keeps following the original words. Lines that are already in English, and lines in other languages, stay as they are.
+In Settings > Downloads > Lyric translation, choose a language from **Translate lyrics to**. API providers and Orchard Account offer English, Spanish, Hindi, Korean, Japanese, and French. Local models translate to English. Choose **Off** to disable translation. On Android, open Settings > Appearance > Lyrics for the same choices.
 
-Translation stays on until you select the button again ("Stop translating lyrics"). You can also turn it on or off in Settings > Downloads > Lyric translation with **Translate lyrics to English**.
+The translate button at the top right of the lyrics view turns translation on or off with your saved language. Translated lines appear above the original lyrics, which stay in smaller text, and the word-by-word highlight keeps following the original words. Orchard checks for lines already in the target language and keeps them as written.
 
 **Local** is the default translation source. It runs on your computer. Lyrics are never sent anywhere, including lyrics for local files.
 
@@ -84,7 +84,7 @@ Translation stays on until you select the button again ("Stop translating lyrics
 
 In Settings > Downloads > Lyric translation, choose **OpenAI**, **Claude**, **Gemini**, or **Custom API** as the translation source. Enter a model ID offered by that provider, paste your API key, and select **Save**. Orchard stores the key in your operating system keychain. To revoke Orchard's copy, select **Remove**. A custom OpenAI compatible API needs a base URL; Orchard appends `/chat/completions` unless the URL already ends with that path. A keyless custom API can use HTTP; an API with a key needs HTTPS or localhost.
 
-With an API selected, Orchard sends lyric lines to that service when translation is enabled and the lyrics are visible. This also applies to lyrics from local files. The service may charge for requests and process the lyrics under its own policies. Orchard caches translated lines for the selected model and endpoint. Switching back to **Local** stops API translation.
+With an API selected, Orchard sends lyric lines to that service when translation is enabled and the lyrics are visible. This also applies to lyrics from local files. The service may charge for requests and process the lyrics under its own policies. Orchard caches translated lines for the selected target language, model, and endpoint. Switching back to **Local** stops API translation.
 
 On Android, find the same choices in Settings > Appearance > Lyrics. API keys are encrypted with Android Keystore. The model and custom URL are saved separately from the key.
 
@@ -92,9 +92,9 @@ On Android, find the same choices in Settings > Appearance > Lyrics. API keys ar
 
 Sign in to your [Orchard Account](accounts.md), then choose **Orchard Account** under **Translation source**. On desktop, open Settings > Downloads > Lyric translation. On Android, open Settings > Appearance > Lyrics. The choice appears while you are signed in and needs no API key or model ID.
 
-Orchard Account sends the song's lyrics to Cloudflare Workers AI and uses Gemma 4 26B A4B to translate them into English. Translation settings show your account's daily allowance and how many translations you have left, as reported by the account service. The remaining count includes any shared network limit. Accounts with an elevated allowance only use their account limit. Limits reset at **00:00 UTC**. Devices on the same account share the account limit.
+Orchard Account sends the song's lyrics to Cloudflare Workers AI and uses Gemma 4 26B A4B to translate them into your selected language. Translation settings show your account's daily allowance and how many translations you have left, as reported by the account service. The remaining count includes any shared network limit. Accounts with an elevated allowance only use their account limit. Limits reset at **00:00 UTC**. Devices on the same account share the account limit.
 
-Cached songs do not use the daily allowance. Orchard keeps translations by song ID for 90 days, and checks the lyric version so lines stay aligned. A translation that starts and then fails still uses one slot. If the daily limit is reached, cached translations remain available; wait until 00:00 UTC to translate a new song.
+Songs detected as already in the target language do not use the daily allowance. Cached songs do not use the daily allowance. Orchard keeps translations by song ID and target language for 90 days, and checks the lyric version so lines stay aligned. A translation that starts and then fails still uses one slot. If the daily limit is reached, cached translations remain available; wait until 00:00 UTC to translate a new song.
 
 ## Languages that can be translated
 

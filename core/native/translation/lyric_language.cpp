@@ -38,13 +38,13 @@ struct LatinLanguage {
 // Portuguese has no model yet; it is here so it never gets mistaken for Spanish.
 constexpr std::array<LatinLanguage, 9> kLatin{{
     {"eng", "the and you i'm i you're it's is are was to of in on that this with your my me we "
-            "don't can't won't what when just all now like love know never get got gonna wanna be", ""},
+            "don't can't won't what when just all now like love know never get got gonna wanna be hello goodbye", ""},
     {"spa", "el los las que y en un una es por con para mi tu te yo como pero más quiero eres estoy "
-            "está todo nada cuando porque sin mí qué contigo corazón amor vida soy aquí", "ñ¿¡"},
+            "está todo nada cuando porque sin mí qué contigo corazón amor vida soy aquí hola", "ñ¿¡"},
     {"por", "os as um uma não é eu você meu minha com para na do da em mais mas seu sua tudo "
             "coração quando tão também pra só estou vou", "ãõ"},
     {"fra", "le les des et je il elle nous vous est qui pas ne dans pour avec mon ma mes ton ta moi "
-            "toi c'est j'ai suis plus mais sur au du ce tout", "œêûî"},
+            "toi c'est j'ai suis plus mais sur au du ce tout bonjour", "œêûî"},
     {"deu", "der die das und ich du nicht ist ein eine mit mich mir dich dir wir auf für sie zu den "
             "dem im auch noch nur wenn aber mein dein kein bin hab war", "ßä"},
     {"ita", "il lo gli che di e è non per con mi ti sono sei io del della nel ma più come cosa "
@@ -128,7 +128,7 @@ const std::map<std::u32string, std::vector<const char *>> &wordSets() {
 }
 
 struct Scripts {
-  int hangul{0}, kana{0}, han{0}, cyrillic{0}, greek{0}, arabic{0}, latin{0};
+  int hangul{0}, kana{0}, han{0}, cyrillic{0}, greek{0}, arabic{0}, devanagari{0}, latin{0};
 };
 
 Scripts countScripts(const std::u32string &text) {
@@ -146,6 +146,8 @@ Scripts countScripts(const std::u32string &text) {
       ++s.greek;
     else if (u >= 0x0600 && u <= 0x06ff)
       ++s.arabic;
+    else if (u >= 0x0900 && u <= 0x097f)
+      ++s.devanagari;
     else if (isLatinLetter(u))
       ++s.latin;
   }
@@ -214,6 +216,8 @@ std::string detect(const std::u32string &text) {
     return "ell";
   if (s.arabic)
     return "ara";
+  if (s.devanagari)
+    return "hin";
   return s.latin ? detectLatin(text) : std::string();
 }
 
@@ -279,9 +283,35 @@ SongPlan plan(const std::vector<std::string> &lines) {
   return out;
 }
 
+bool supportedTarget(std::string_view code) {
+  return code == "eng" || code == "spa" || code == "hin" || code == "kor" || code == "jpn" || code == "fra";
+}
+
+SongPlan remotePlan(const std::vector<std::string> &lines, std::string_view target) {
+  std::vector<std::string> detected;
+  for (const auto &line : lines) detected.push_back(detectLine(line));
+  if (std::find(detected.begin(), detected.end(), "jpn") != detected.end())
+    std::replace(detected.begin(), detected.end(), std::string("zho"), std::string("jpn"));
+  std::map<std::string, int> counts;
+  for (const auto &code : detected)
+    if (!code.empty()) ++counts[code];
+  SongPlan out;
+  int best = 0;
+  for (const auto &code : detected)
+    if (!code.empty() && counts[code] > best) { out.source = code; best = counts[code]; }
+  for (size_t i = 0; i < lines.size(); ++i) {
+    const auto decoded = decode(lines[i]);
+    const bool voiced = std::any_of(decoded.begin(), decoded.end(), isLetter);
+    const bool targetLatin = detected[i].empty() && isLatinCode(out.source) && out.source == target &&
+                             countScripts(decoded).latin > 0;
+    out.translate.push_back(voiced && detected[i] != target && !targetLatin);
+  }
+  return out;
+}
+
 std::string displayName(std::string_view code) {
   static constexpr std::pair<std::string_view, std::string_view> kNames[] = {
-      {"eng", "English"}, {"kor", "Korean"},  {"jpn", "Japanese"}, {"zho", "Chinese"},  {"rus", "Russian"},
+      {"hin", "Hindi"}, {"eng", "English"}, {"kor", "Korean"},  {"jpn", "Japanese"}, {"zho", "Chinese"},  {"rus", "Russian"},
       {"ell", "Greek"},   {"ara", "Arabic"},  {"tur", "Turkish"},  {"fra", "French"},   {"deu", "German"},
       {"spa", "Spanish"}, {"ita", "Italian"}, {"nld", "Dutch"},    {"cat", "Catalan"},  {"por", "Portuguese"},
   };

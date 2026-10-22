@@ -30,14 +30,18 @@ namespace lyric_language {
 std::string detectLine(std::string_view text);
 
 struct SongPlan {
-  // Main non-English language of the song, or empty when it is English or unclear.
+  // Main source language. Local plans leave this empty for English or unclear lyrics.
   std::string source;
-  // Per input line: true when that line should go through the source->English model.
+  // Per input line: true when that line needs translation.
   std::vector<bool> translate;
 };
 
 // English lines, adlib-only lines, and lines in other languages stay as written.
 SongPlan plan(const std::vector<std::string> &lines);
+
+// Remote models can translate every source language, preserving lines already in the target.
+SongPlan remotePlan(const std::vector<std::string> &lines, std::string_view target);
+bool supportedTarget(std::string_view code);
 
 // English display name for a code, for the lyrics badge.
 std::string displayName(std::string_view code);

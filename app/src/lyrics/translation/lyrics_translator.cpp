@@ -63,6 +63,8 @@ LyricsTranslator::LyricsTranslator(LyricsController *lyrics, QObject *parent)
   m_enabled = QSettings().value(kEnabledKey, false).toBool();
   if (QSettings().value(kQualityKey).toString() == QStringLiteral("high"))
     m_quality = QStringLiteral("high");
+  const QString target = QSettings().value(QStringLiteral("lyrics/translationTarget"), QStringLiteral("eng")).toString();
+  if (lyric_language::supportedTarget(target.toStdString())) m_targetLanguage = target;
   const QString savedProvider = QSettings().value(kProviderKey).toString();
   if (QStringList{QStringLiteral("orchard"), QStringLiteral("openai"), QStringLiteral("claude"), QStringLiteral("gemini"), QStringLiteral("custom")}.contains(savedProvider))
     m_provider = savedProvider;
@@ -110,6 +112,17 @@ void LyricsTranslator::setEnabled(bool enabled) {
   // Switching off mid-download means "not now", so the half-fetched model goes too.
   if (!enabled)
     m_packs->cancel();
+  cancelRemote();
+  m_key.clear();
+  sync();
+}
+
+void LyricsTranslator::setTargetLanguage(const QString &language) {
+  if (!lyric_language::supportedTarget(language.toStdString()) || m_targetLanguage == language) return;
+  m_targetLanguage = language;
+  QSettings().setValue(QStringLiteral("lyrics/translationTarget"), language);
+  emit targetLanguageChanged();
+  ++*m_generation;
   cancelRemote();
   m_key.clear();
   sync();
@@ -314,7 +327,8 @@ void LyricsTranslator::start() {
   utf8.reserve(m_texts.size());
   for (const QString &text : std::as_const(m_texts))
     utf8.push_back(text.toStdString());
-  const lyric_language::SongPlan plan = lyric_language::plan(utf8);
+  const lyric_language::SongPlan plan = m_provider == QStringLiteral("local") ? lyric_language::plan(utf8)
+      : lyric_language::remotePlan(utf8, m_targetLanguage.toStdString());
   m_source = QString::fromStdString(plan.source);
   m_pack.clear();
   if (m_source.isEmpty() && m_provider == QStringLiteral("local")) {
@@ -331,11 +345,15 @@ void LyricsTranslator::start() {
 
   QStringList wanted;
   for (qsizetype i = 0; i < m_texts.size(); ++i) {
-    if ((m_provider == QStringLiteral("local") && !plan.translate[size_t(i)]) || m_texts.at(i).isEmpty())
+    if (!plan.translate[size_t(i)] || m_texts.at(i).isEmpty())
       continue;
     if (!m_pending.contains(m_texts.at(i)))
       wanted.append(m_texts.at(i));
     m_pending[m_texts.at(i)].append(int(i));
+  }
+  if (m_pending.isEmpty()) {
+    setStatus(QStringLiteral("idle"), tr("Lyrics are already in the selected language"));
+    return;
   }
   if (m_provider == QStringLiteral("orchard")) {
     runAccountRemote();

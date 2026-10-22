@@ -1,6 +1,22 @@
-/* Copyright (C) 2026 SFG545
- * SPDX-License-Identifier: AGPL-3.0-or-later
+/*
+ * Copyright (C) 2026 SFG545
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
+
 package dev.sfg.orchard.mobile.lyrics.translation
 
 import dev.sfg.orchard.mobile.auth.OrchardAccountService
@@ -44,10 +60,10 @@ internal class AccountLyricTranslation(http: OkHttpClient, private val account: 
         request("/lyrics/quota")
     }
 
-    suspend fun translate(songId: String, lines: List<String>): List<String> {
+    suspend fun translate(songId: String, lines: List<String>, target: String): List<String> {
         check(account.state.value.signedIn) { "Sign in to Orchard to translate lyrics." }
         require(songId.isNotBlank()) { "This song has no ID." }
-        val payload = JSONObject().put("song_id", songId).put("lines", JSONArray(lines))
+        val payload = JSONObject().put("song_id", songId).put("lines", JSONArray(lines)).put("target_language", target)
         val body = request("/lyrics/translate", payload)
         return parseAccountLines(body, lines.size) ?: error("The translation returned an invalid number of lines.")
     }

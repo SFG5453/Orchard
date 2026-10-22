@@ -1,6 +1,22 @@
-/* Copyright (C) 2026 SFG545
- * SPDX-License-Identifier: AGPL-3.0-or-later
+/*
+ * Copyright (C) 2026 SFG545
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
+
 #include "lyrics_translator.h"
 #include "remote_translation.h"
 #include "account/orchard_account.h"
@@ -83,7 +99,7 @@ void LyricsTranslator::runAccountRemote() {
   }
   QStringList texts;
   for (const QString &text : std::as_const(m_texts))
-    if (!text.isEmpty() && !texts.contains(text)) texts.append(text);
+    if (m_pending.contains(text) && !texts.contains(text)) texts.append(text);
   if (texts.isEmpty()) { setStatus(QStringLiteral("ready")); return; }
   const int generation = m_generation->load();
   const QString songId = m_lyrics->trackId();
@@ -102,7 +118,8 @@ void LyricsTranslator::runAccountRemote() {
     request.setTransferTimeout(130000);
     QJsonArray input;
     for (const QString &text : texts) input.append(text);
-    const QJsonObject payload{{QStringLiteral("song_id"), songId}, {QStringLiteral("lines"), input}};
+    const QJsonObject payload{{QStringLiteral("song_id"), songId}, {QStringLiteral("lines"), input},
+                              {QStringLiteral("target_language"), self->m_targetLanguage}};
     auto *reply = self->m_network->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
     self->m_reply = reply;
     // Qt's transfer timeout is an inactivity timeout; this bounds total wait too.

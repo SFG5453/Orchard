@@ -113,6 +113,22 @@ JNIEXPORT jbyteArray JNICALL Java_dev_sfg_orchard_mobile_lyrics_translation_Tran
   return toBytes(env, json + "]}");
 }
 
+JNIEXPORT jbyteArray JNICALL Java_dev_sfg_orchard_mobile_lyrics_translation_TranslationNative_remoteMask(
+    JNIEnv *env, jclass, jobjectArray lines, jbyteArray target) {
+  std::vector<std::string> texts;
+  const jsize count = lines ? env->GetArrayLength(lines) : 0;
+  for (jsize i = 0; i < count; ++i) {
+    auto *line = static_cast<jbyteArray>(env->GetObjectArrayElement(lines, i));
+    texts.push_back(bytes(env, line));
+    env->DeleteLocalRef(line);
+  }
+  const auto plan = lyric_language::remotePlan(texts, bytes(env, target));
+  std::string json = "[";
+  for (size_t i = 0; i < plan.translate.size(); ++i)
+    json += (i ? "," : "") + std::string(plan.translate[i] ? "true" : "false");
+  return toBytes(env, json + ']');
+}
+
 JNIEXPORT jlong JNICALL Java_dev_sfg_orchard_mobile_lyrics_translation_TranslationNative_open(JNIEnv *env, jclass,
                                                                                               jstring runtime,
                                                                                               jbyteArray directory,
