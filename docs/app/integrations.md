@@ -1,6 +1,6 @@
 ---
 title: Integrations
-summary: Show what you play in Discord, send your listens to Last.fm, add Spotify Canvas loops, connect Qobuz for MAX quality, and connect Apple Music for browsing, Home and playback.
+summary: Show what you play in Discord, send your listens to Last.fm, add Spotify Canvas loops, connect Qobuz for MAX quality, connect Apple Music for browsing, Home and playback, and control Orchard from local apps through the Local API.
 group: Customize
 icon: plug
 keywords:
@@ -25,6 +25,9 @@ keywords:
   - memory
   - adaptive mix apple music
   - scan
+  - local api
+  - stream deck
+  - api port
 platforms:
   - desktop
 order: 130
@@ -32,7 +35,7 @@ order: 130
 
 # Integrations
 
-Integrations connect Orchard to other apps. Settings, Integrations has cards for **Discord**, **Last.fm**, **Spotify**, **Qobuz**, and **Apple Music**.
+Integrations connect Orchard to other apps. Settings, Integrations has cards for **Discord**, **Last.fm**, **Spotify**, **Qobuz**, **Apple Music**, and **Local API**.
 
 ## Turn on Discord Rich Presence
 
@@ -187,3 +190,22 @@ Orchard streams Apple Music songs itself and decrypts them in a small separate p
 ## Disconnect Apple Music
 
 Select **Disconnect** in the **Apple Music** card in **Settings**, **Integrations** on desktop or **Settings**, **Connections**, **Apple Music** on Android. Orchard removes the saved Apple Music user token and clears Apple's sign-in cookies and MusicKit page storage. If **Music source** is **Apple** on desktop, Home shows "Connect Apple Music in Settings to load Home." On Android, Home shows an Apple Music connection error until you reconnect or choose YouTube Music.
+
+## Turn the Local API on or off
+
+The Local API lets apps on this computer, such as the Orchard Stream Deck plugin, control playback, the queue, and search. It is on by default and only accepts connections from this computer.
+
+1. Open **Settings**, then **Integrations**.
+2. In the **Local API** card, turn the **Local API** switch on or off.
+
+The change applies right away. Turning it off disconnects connected apps.
+
+## Change the Local API port
+
+The Local API uses port 32145 for HTTP and the next port, 32146, for WebSocket.
+
+1. Open **Settings**, then **Integrations**.
+2. In the **Local API** card, type a port from 1024 to 65534 in **Port**.
+3. Select **Apply** or press Enter.
+
+Orchard reconnects on the new port right away. If another app is using that port or the next one, the card shows "Ports 32145 and 32146 are unavailable. Choose another port." with your port numbers. Pick a different port. Apps that read Orchard's `api.json` file find the new port automatically.

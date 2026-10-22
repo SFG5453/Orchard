@@ -1,0 +1,8 @@
+{
+  "name": "orchard-streamdeck",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Orchard controls for Stream Deck, OpenDeck and Tacto",
+  "license": "AGPL-3.0-or-later",
+  "dependencies": { "ws": "8.18.3" }
+}
