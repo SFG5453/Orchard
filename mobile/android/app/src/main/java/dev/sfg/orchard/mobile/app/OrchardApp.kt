@@ -57,6 +57,7 @@ import dev.sfg.orchard.mobile.ui.components.OrchardBottomBar
 import dev.sfg.orchard.mobile.ui.components.SongShareBottomSheet
 import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.LocalPlayerClock
+import dev.sfg.orchard.mobile.ui.components.LocalArtworkMotionEnabled
 import dev.sfg.orchard.mobile.ui.components.rememberHandoffMarker
 import dev.sfg.orchard.mobile.ui.components.rememberPlayerPresentation
 import dev.sfg.orchard.mobile.ui.glass.LocalGlass
@@ -189,32 +190,34 @@ fun OrchardApp(viewModel: OrchardViewModel) {
             // Everything the chrome floats over is recorded here, and only here. A pane cannot
             // blur a recording it is itself part of, which is why the pill and the bar were
             // lifted out of this box and into the overlay below.
-            Box(Modifier.fillMaxSize().glassSceneSource(glassScene)) {
-                Box(Modifier.fillMaxSize().glassWashSource(glassScene)) {
-                    ArtworkBackdrop(
-                        palette = backdropPalette,
-                        animated = settings.animatedBackground,
-                    )
-                    // Home, Settings and Library wear the current song; the shader idles once playback pauses.
-                    dev.sfg.orchard.mobile.ui.components.HomeBackdrop(
-                        visible = route == Routes.HOME || route == Routes.SETTINGS || route == Routes.LIBRARY,
-                        artworkUrl = playerPlayback.currentTrack?.artworkUrl.orEmpty(),
-                        isPlaying = playerPlayback.isPlaying && settings.animatedBackground,
-                    )
-                }
+            CompositionLocalProvider(LocalArtworkMotionEnabled provides !playerOpen) {
+                Box(Modifier.fillMaxSize().glassSceneSource(glassScene)) {
+                    Box(Modifier.fillMaxSize().glassWashSource(glassScene)) {
+                        ArtworkBackdrop(
+                            palette = backdropPalette,
+                            animated = settings.animatedBackground,
+                        )
+                        // Home, Settings and Library wear the current song; the shader idles once playback pauses.
+                        dev.sfg.orchard.mobile.ui.components.HomeBackdrop(
+                            visible = route == Routes.HOME || route == Routes.SETTINGS || route == Routes.LIBRARY,
+                            artworkUrl = playerPlayback.currentTrack?.artworkUrl.orEmpty(),
+                            isPlaying = playerPlayback.isPlaying && settings.animatedBackground,
+                        )
+                    }
 
-                val isFoldable = dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
-                val contentModifier = if (isFoldable && !chromeHidden) {
-                    Modifier
-                        .fillMaxSize()
-                        .padding(start = dev.sfg.orchard.mobile.ui.foldable.FoldableNavRailWidth)
-                        .then(contentInset)
-                } else {
-                    Modifier.fillMaxSize().then(contentInset)
-                }
+                    val isFoldable = dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
+                    val contentModifier = if (isFoldable && !chromeHidden) {
+                        Modifier
+                            .fillMaxSize()
+                            .padding(start = dev.sfg.orchard.mobile.ui.foldable.FoldableNavRailWidth)
+                            .then(contentInset)
+                    } else {
+                        Modifier.fillMaxSize().then(contentInset)
+                    }
 
-                Box(contentModifier) {
-                    OrchardNavigation(navController, viewModel, playback, targets, library, settings, onOpenSearch = { searchOpen = true })
+                    Box(contentModifier) {
+                        OrchardNavigation(navController, viewModel, playback, targets, library, settings, onOpenSearch = { searchOpen = true })
+                    }
                 }
             }
 

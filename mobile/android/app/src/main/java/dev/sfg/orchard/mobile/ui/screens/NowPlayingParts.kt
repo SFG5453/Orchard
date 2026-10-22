@@ -352,7 +352,7 @@ internal fun PlayerBackdropLayer(
         // layer is either the tiny Kawarp source or the static palette fallback.
         animatedArtworkEnabled = animatedArtworkEnabled && !wideLayout,
         warpedArtworkEnabled = wideLayout && animatedBackgroundEnabled,
-        ambientGlowEnabled = !wideLayout,
+        ambientGlowEnabled = !wideLayout && animatedBackgroundEnabled,
         gesturesEnabled = gesturesEnabled || (isFoldable && hasRichArtwork),
         onNext = onNext,
         onPrevious = onPrevious,
@@ -373,7 +373,8 @@ internal fun PlayerBackdropLayer(
     )
     val roomAlpha = animateFloatAsState(if (lyricsRoom) 1f else 0f, tween(420), label = "LyricsRoomAlpha")
     if (lyricsRoom || roomAlpha.value > 0.001f) {
-        LyricsRoom(track.artworkUrl, isPlaying, Modifier.graphicsLayer { alpha = roomAlpha.value })
+        LyricsRoom(track.artworkUrl, isPlaying && lyricsRoom && animatedBackgroundEnabled,
+            Modifier.graphicsLayer { alpha = roomAlpha.value })
     }
     // Blur is a no-op below API 31, so darken as well to keep lyrics legible everywhere.
     if (!lyricsRoom && (wideLayout || isFoldable || panel != PlayerPanel.NONE)) {

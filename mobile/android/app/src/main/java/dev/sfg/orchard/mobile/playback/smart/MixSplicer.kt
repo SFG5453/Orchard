@@ -114,18 +114,26 @@ class MixSplicer : BaseAudioProcessor() {
     override fun queueInput(inputBuffer: ByteBuffer) {
         val frames = inputBuffer.remaining() / (2 * inputChannels)
         if (frames == 0) return
+        val out = outgoing
+        val into = incoming
+        val currentFade = fade
+        if (inputChannels == 2 && out == null && into == null && currentFade == null) {
+            position += frames
+            val output = replaceOutputBuffer(inputBuffer.remaining())
+            output.put(inputBuffer)
+            output.flip()
+            return
+        }
         val input = ShortArray(frames * 2)
         val shorts = inputBuffer.order(ByteOrder.nativeOrder()).asShortBuffer()
         if (inputChannels == 2) shorts.get(input) else for (i in 0 until frames) {
             val v = shorts.get(i); input[2 * i] = v; input[2 * i + 1] = v
         }
         inputBuffer.position(inputBuffer.limit())
-        val out = outgoing
-        val into = incoming
         val produced = when {
             out != null && out.rate == rate -> spliceOutgoing(out, input, frames)
             into != null && into.rate == rate -> spliceIncoming(into, input, frames)
-            else -> input.also { fade?.let { applyFade(it, input, frames) } }
+            else -> input.also { currentFade?.let { applyFade(it, input, frames) } }
         }
         position += frames
         val output = replaceOutputBuffer(produced.size * 2)
