@@ -133,3 +133,19 @@ test('recent tracks keep catalog and library songs in order and skip other kinds
   assert.deepEqual(tracks.map((item) => [item.browseId || item.id, item.title]), [['am.songs.222', 'Snooze'], ['am.songs.111', 'Kill Bill']]);
   assert.match(requests.at(-1).url, /recent\/played\/tracks\?limit=30$/);
 });
+
+test('library playlist tracks keep catalog album and artist ids', async () => {
+  const song = librarySong('i.a', '111', 'Kill Bill');
+  song.relationships = { catalog: { data: [{ id: '111', type: 'songs', relationships: {
+    albums: { data: [{ id: '222', type: 'albums' }] },
+    artists: { data: [{ id: '333', type: 'artists', attributes: { name: 'SZA' } }] }
+  } }] } };
+  const { client, requests } = appleMusic([
+    [/\/v1\/me\/library\/playlists\/p\.abc\/tracks/, 200, { data: [song] }],
+    [/\/v1\/me\/library\/playlists\/p\.abc$/, 200, { data: [{ id: 'p.abc', type: 'library-playlists', attributes: { name: 'Mine' } }] }]
+  ]);
+  const [track] = (await client.playlistPage('am.playlists.p.abc')).tracks;
+  assert.equal(track.albumId, 'am.albums.222');
+  assert.deepEqual(track.artistBrowseIds, ['am.artists.333']);
+  assert.match(requests.find((request) => request.url.includes('/tracks')).url, /include=catalog/);
+});

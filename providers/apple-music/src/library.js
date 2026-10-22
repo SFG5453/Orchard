@@ -34,9 +34,12 @@ function catalogId(resource) {
   return resource?.attributes?.playParams?.catalogId || resource?.relationships?.catalog?.data?.[0]?.id || '';
 }
 
+// The included catalog song carries catalog album and artist ids; library relationships carry library ids.
 function asCatalog(resource) {
   const id = catalogId(resource);
-  return id ? { ...resource, id } : resource;
+  if (!id) return resource;
+  const relationships = resource.relationships?.catalog?.data?.[0]?.relationships;
+  return { ...resource, id, ...(relationships ? { relationships } : { relationships: undefined }) };
 }
 
 export function libraryTrack(resource, index) {
@@ -93,7 +96,8 @@ export function createLibraryCatalog(client) {
   }
 
   async function tracksOf(path) {
-    const { items } = await client.all(path, { limit: PAGE }, PAGES.songs);
+    const query = { limit: PAGE, include: 'catalog', 'include[songs]': 'artists,albums' };
+    const { items } = await client.all(path, query, PAGES.songs);
     return items.filter((song) => song.type === 'library-songs');
   }
 
