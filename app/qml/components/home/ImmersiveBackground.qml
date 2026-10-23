@@ -23,9 +23,9 @@ import QtQuick
 KawarpBackground {
     id: root
 
-    // Keep the expensive warp at 60% of logical size, capped at 720p.
+    // The blurred artwork needs only 40% of logical size, capped at 480p.
     // Only the single-sample composite runs at the window's full resolution.
-    readonly property real renderScale: Math.min(0.6, Math.sqrt(1280 * 720 / Math.max(1, width * height)))
+    readonly property real renderScale: Math.min(0.4, Math.sqrt(854 * 480 / Math.max(1, width * height)))
 
     layer.enabled: visible && ready
     layer.textureSize: Qt.size(Math.max(2, Math.round(width * renderScale)), Math.max(2, Math.round(height * renderScale)))
