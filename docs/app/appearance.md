@@ -38,7 +38,7 @@ order: 110
 
 # Appearance
 
-Appearance settings control Orchard's colors, the player layout, the player bar bitrate indicator, the fullscreen player, animated artwork, and the immersive background. They are in Settings, Appearance.
+Appearance settings control Orchard's colors, the player layout, the player bar bitrate indicator, the fullscreen player, lyrics motion, animated artwork, and the immersive background. They are in Settings, Appearance.
 
 ## Pick an accent color
 
@@ -134,6 +134,18 @@ Orchard asks artwork mirrors for motion art in order, from top to bottom. If a m
 
 Select **Reset order** (accessible name "Reset mirror order") to restore the default order.
 
+## Change how lyrics move
+
+Synced lyrics highlight the line being sung. Three switches in the **Lyrics** group of **Settings**, **Appearance** change how the lines around it look. All three are on by default.
+
+- **Blur distant lines**: lines blur more the further they are from the current line. Turn it off if lyrics make the app feel slow, because blur uses extra GPU power.
+- **Fade distant lines**: lines dim the further they are from the current line.
+- **Staggered scrolling**: when the lyrics advance, each line glides into place a moment after the one above it. With it off, the lyrics scroll as one block.
+
+Blur and fade apply only while the lyrics follow the song. Scroll the lyrics by hand and every line shows sharp and bright until the lyrics catch up again. Hovering a line also shows it sharp. During an instrumental gap, three dots fill from left to right as the gap passes.
+
+**Reset controls** turns all three switches back on.
+
 ## Turn on the immersive background
 
 The immersive background paints flowing colors from the current song's artwork behind Orchard. It is off by default.
@@ -154,4 +166,4 @@ Four sliders in the **Immersive background** group shape the effect. They are di
 
 ## Reset the immersive background controls
 
-Select **Reset controls**. The button restores Speed, Intensity, Saturation, and Brightness to their defaults. It also turns **Hide controls when idle**, **Pulse with the music**, and **Enable animated artwork** back on, sets the artwork source to Apple Music, restores the default mirror order, and turns **Play a music video behind the artist** off. It leaves **Use artwork background** and **Show audio bitrate** as they are.
+Select **Reset controls**. The button restores Speed, Intensity, Saturation, and Brightness to their defaults. It also turns **Hide controls when idle**, **Pulse with the music**, the three **Lyrics** switches, and **Enable animated artwork** back on, sets the artwork source to Apple Music, restores the default mirror order, and turns **Play a music video behind the artist** off. It leaves **Use artwork background** and **Show audio bitrate** as they are.

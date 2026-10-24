@@ -82,15 +82,34 @@ Column {
                                : Math.max(0, Math.min(1, (clock - start) / Math.max(0.1, end - start)));
         }
         readonly property bool singing: lit && progress > 0 && progress < 1
+        // Unclamped position in the word; runs past 1 while the last letters settle.
+        readonly property real raw: {
+            if (!lit)
+                return 0;
+            const clock = wordRows.clockSource ? wordRows.clockSource.wordClock : wordRows.clock;
+            return (clock - start) / Math.max(0.1, end - start);
+        }
+        // Splitting joins and combining marks breaks shaping, so only plain Latin text lifts per letter.
+        readonly property bool splittable: /^[\u0020-\u024F\u2019]+$/.test(text)
+        readonly property int count: text.length
+        // Share of the word that one lifting wave covers.
+        readonly property real span: Math.max(0.45, 4 / Math.max(1, count))
+        readonly property bool lettered: splittable && lit && raw > 0 && raw < 1 + span
         readonly property real feather: Math.min(0.5, pixelSize * 0.38 / Math.max(1, base.implicitWidth))
 
         implicitWidth: base.implicitWidth
         implicitHeight: base.implicitHeight
 
+        function mix(a, b, t) {
+            return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, a.a + (b.a - a.a) * t);
+        }
+
         Text {
             id: base
             text: word.text
             color: word.lit && word.progress >= 1 ? wordRows.doneColor : word.baseColor
+            // Letters take over while the word is sung.
+            opacity: word.lettered ? 0 : 1
             font.family: "Inter"
             font.pixelSize: word.pixelSize
             font.weight: word.weight
@@ -102,18 +121,39 @@ Column {
         Loader {
             active: word.lit
             sourceComponent: Item {
+                // One letter at a time rises as the fill reaches it, then settles.
+                Loader {
+                    active: word.lettered
+                    sourceComponent: Item {
+                        Repeater {
+                            model: word.lettered ? word.count : 0
+                            Text {
+                                required property int index
+                                readonly property real from: index / word.count
+                                readonly property real local: Math.max(0, Math.min(1, (word.raw - from) / word.span))
+                                x: wordRows.metrics.advanceWidth(word.text.slice(0, index))
+                                y: -word.pixelSize * 0.018 * Math.sin(Math.PI * local)
+                                text: word.text[index]
+                                color: word.raw >= 1 ? wordRows.doneColor
+                                       : word.mix(word.baseColor, word.fillColor, Math.max(0, Math.min(1, (word.raw - from) * word.count / 1.5)))
+                                font: base.font
+                            }
+                        }
+                    }
+                }
+
                 // Solid fill up to the playhead, then two fading slivers stand in for a soft gradient edge.
                 // Stays up once the word finishes and eases to white, so the hand-off to the base text never flashes dim.
                 Sliver {
                     source: base
                     color: word.progress >= 1 ? wordRows.doneColor : word.fillColor
-                    visible: word.progress > 0
+                    visible: word.progress > 0 && !word.lettered
                     from: 0
                     span: word.progress
                     Behavior on color { ColorAnimation { duration: 240 } }
                 }
-                Sliver { source: base; color: word.fillColor; visible: word.singing; from: word.progress; span: word.feather / 2; opacity: 0.55 }
-                Sliver { source: base; color: word.fillColor; visible: word.singing; from: word.progress + word.feather / 2; span: word.feather / 2; opacity: 0.22 }
+                Sliver { source: base; color: word.fillColor; visible: word.singing && !word.lettered; from: word.progress; span: word.feather / 2; opacity: 0.55 }
+                Sliver { source: base; color: word.fillColor; visible: word.singing && !word.lettered; from: word.progress + word.feather / 2; span: word.feather / 2; opacity: 0.22 }
             }
         }
     }

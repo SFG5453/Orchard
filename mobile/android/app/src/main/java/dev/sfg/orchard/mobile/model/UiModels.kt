@@ -119,6 +119,12 @@ data class OrchardSettings(
     val equalizerConfig: EqualizerConfig = EqualizerConfig(),
     /** Enable swipe and tap gestures on the player artwork. */
     val playerGesturesEnabled: Boolean = true,
+    /** Blur lyric lines by their distance from the current line. */
+    val lyricsFocusBlur: Boolean = true,
+    /** Dim lyric lines by their distance from the current line. */
+    val lyricsDistanceFade: Boolean = true,
+    /** Let lyric lines glide into place one after another when the lyrics advance. */
+    val lyricsStaggeredScroll: Boolean = true,
     /** Whether the phone bottom bar has a Settings tab. */
     val showSettingsTab: Boolean = false,
     /** [HomeSource][dev.sfg.orchard.mobile.home.HomeSource] id that fills Home; others are fallbacks. */

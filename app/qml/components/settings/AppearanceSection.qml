@@ -28,6 +28,9 @@ AppearanceSectionForm {
     fullscreenWindowed: OrchardAppearance.fullscreenWindowed
     fullscreenAutoHide: OrchardAppearance.fullscreenAutoHide
     fullscreenPulse: OrchardAppearance.fullscreenPulse
+    lyricsFocusBlur: OrchardAppearance.lyricsFocusBlur
+    lyricsDistanceFade: OrchardAppearance.lyricsDistanceFade
+    lyricsStaggeredScroll: OrchardAppearance.lyricsStaggeredScroll
     artistVideoBackdrop: OrchardAppearance.artistVideoBackdrop
     animatedArtworkEnabled: OrchardAppearance.animatedArtworkEnabled
     animatedCollageEnabled: OrchardAppearance.animatedCollageEnabled
@@ -46,6 +49,9 @@ AppearanceSectionForm {
     windowedSwitch.onToggled: OrchardAppearance.fullscreenWindowed = windowedSwitch.checked
     autoHideSwitch.onToggled: OrchardAppearance.fullscreenAutoHide = autoHideSwitch.checked
     pulseSwitch.onToggled: OrchardAppearance.fullscreenPulse = pulseSwitch.checked
+    lyricsBlurSwitch.onToggled: OrchardAppearance.lyricsFocusBlur = lyricsBlurSwitch.checked
+    lyricsFadeSwitch.onToggled: OrchardAppearance.lyricsDistanceFade = lyricsFadeSwitch.checked
+    lyricsStaggerSwitch.onToggled: OrchardAppearance.lyricsStaggeredScroll = lyricsStaggerSwitch.checked
     artistVideoSwitch.onToggled: OrchardAppearance.artistVideoBackdrop = artistVideoSwitch.checked
     animatedArtworkSwitch.onToggled: OrchardAppearance.animatedArtworkEnabled = animatedArtworkSwitch.checked
     collageSwitch.onToggled: OrchardAppearance.animatedCollageEnabled = collageSwitch.checked

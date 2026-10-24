@@ -19,13 +19,17 @@
 
 import QtQuick
 
-// Three breathing dots for an instrumental gap or a loading state.
+// Three dots for an instrumental gap or a loading state. A progress in 0..1 fills them
+// left to right over the gap; a negative progress breathes them as a wave.
 Row {
     id: dots
 
     property bool active: false
     property bool running: true
     property color color: "#f0eee7"
+    property real progress: -1
+    // Phase of the breathing cycle, 0..1.
+    property real phase: 0
 
     spacing: 8
     height: active ? 40 : 0
@@ -34,35 +38,38 @@ Row {
     Behavior on height { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
     Behavior on opacity { NumberAnimation { duration: 240 } }
 
-    // Every line carries one of these; the dots and their loops exist only while one is open.
+    NumberAnimation on phase {
+        running: dots.active && dots.running
+        from: 0
+        to: 1
+        duration: 2600
+        loops: Animation.Infinite
+    }
+
+    // Every line carries one of these; the dots exist only while one is open.
     Repeater {
         model: dots.active || dots.height > 0 ? 3 : 0
         Rectangle {
             id: dot
             required property int index
+            readonly property real wave: (1 + Math.sin(2 * Math.PI * (dots.phase - index * 0.12))) / 2
+            readonly property real lit: dots.progress < 0 ? 1 : Math.max(0, Math.min(1, dots.progress * 3 - index))
+            // Pops in one after another when the gap opens.
+            property real shown: dots.active ? 1 : 0
+            Behavior on shown {
+                SequentialAnimation {
+                    PauseAnimation { duration: dots.active ? dot.index * 80 : 0 }
+                    NumberAnimation { duration: 380; easing.type: Easing.OutBack; easing.overshoot: 2 }
+                }
+            }
+
             y: 15
             width: 9
             height: 9
             radius: 4.5
             color: dots.color
-            scale: 0.85
-            opacity: 0.45
-
-            SequentialAnimation {
-                running: dots.active && dots.running
-                loops: Animation.Infinite
-                onRunningChanged: if (!running) { dot.scale = 0.85; dot.opacity = 0.45; }
-                PauseAnimation { duration: dot.index * 200 }
-                ParallelAnimation {
-                    NumberAnimation { target: dot; property: "scale"; to: 1.25; duration: 700; easing.type: Easing.InOutSine }
-                    NumberAnimation { target: dot; property: "opacity"; to: 1; duration: 700; easing.type: Easing.InOutSine }
-                }
-                ParallelAnimation {
-                    NumberAnimation { target: dot; property: "scale"; to: 0.85; duration: 700; easing.type: Easing.InOutSine }
-                    NumberAnimation { target: dot; property: "opacity"; to: 0.45; duration: 700; easing.type: Easing.InOutSine }
-                }
-                PauseAnimation { duration: (2 - dot.index) * 200 }
-            }
+            scale: shown * (0.78 + 0.22 * lit + 0.14 * wave * lit)
+            opacity: 0.25 + 0.75 * lit * (dots.progress < 0 ? 0.45 + 0.55 * wave : 0.8 + 0.2 * wave)
         }
     }
 }

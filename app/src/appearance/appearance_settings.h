@@ -38,6 +38,9 @@ class AppearanceSettings final : public QObject {
     Q_PROPERTY(bool fullscreenWindowed READ fullscreenWindowed WRITE setFullscreenWindowed NOTIFY changed)
     Q_PROPERTY(bool fullscreenAutoHide READ fullscreenAutoHide WRITE setFullscreenAutoHide NOTIFY changed)
     Q_PROPERTY(bool fullscreenPulse READ fullscreenPulse WRITE setFullscreenPulse NOTIFY changed)
+    Q_PROPERTY(bool lyricsFocusBlur READ lyricsFocusBlur WRITE setLyricsFocusBlur NOTIFY changed)
+    Q_PROPERTY(bool lyricsDistanceFade READ lyricsDistanceFade WRITE setLyricsDistanceFade NOTIFY changed)
+    Q_PROPERTY(bool lyricsStaggeredScroll READ lyricsStaggeredScroll WRITE setLyricsStaggeredScroll NOTIFY changed)
     Q_PROPERTY(bool artistVideoBackdrop READ artistVideoBackdrop WRITE setArtistVideoBackdrop NOTIFY changed)
     Q_PROPERTY(bool animatedArtworkEnabled READ animatedArtworkEnabled WRITE setAnimatedArtworkEnabled NOTIFY changed)
     Q_PROPERTY(bool animatedCollageEnabled READ animatedCollageEnabled WRITE setAnimatedCollageEnabled NOTIFY changed)
@@ -71,6 +74,9 @@ public:
     bool fullscreenWindowed() const { return m_fullscreenWindowed; }
     bool fullscreenAutoHide() const { return m_fullscreenAutoHide; }
     bool fullscreenPulse() const { return m_fullscreenPulse; }
+    bool lyricsFocusBlur() const { return m_lyricsFocusBlur; }
+    bool lyricsDistanceFade() const { return m_lyricsDistanceFade; }
+    bool lyricsStaggeredScroll() const { return m_lyricsStaggeredScroll; }
     bool artistVideoBackdrop() const { return m_artistVideoBackdrop; }
     bool animatedArtworkEnabled() const { return m_animatedArtwork; }
     bool animatedCollageEnabled() const { return m_animatedCollage; }
@@ -102,6 +108,9 @@ public:
     void setFullscreenWindowed(bool value);
     void setFullscreenAutoHide(bool value);
     void setFullscreenPulse(bool value);
+    void setLyricsFocusBlur(bool value);
+    void setLyricsDistanceFade(bool value);
+    void setLyricsStaggeredScroll(bool value);
     void setArtistVideoBackdrop(bool value);
     void setAnimatedArtworkEnabled(bool value);
     void setAnimatedCollageEnabled(bool value);
@@ -145,6 +154,9 @@ private:
     bool m_fullscreenWindowed{false};
     bool m_fullscreenAutoHide{true};
     bool m_fullscreenPulse{true};
+    bool m_lyricsFocusBlur{true};
+    bool m_lyricsDistanceFade{true};
+    bool m_lyricsStaggeredScroll{true};
     // Plays one of the artist's music videos, muted, behind the artist page hero.
     bool m_artistVideoBackdrop{false};
     // Moving album art: when a still image simply isn't consuming enough of your monthly data plan.

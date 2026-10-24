@@ -97,6 +97,9 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                     bassBoost = values[EQUALIZER_BASS_BOOST] ?: 0f,
                 ),
                 playerGesturesEnabled = values[PLAYER_GESTURES_ENABLED] ?: true,
+                lyricsFocusBlur = values[LYRICS_FOCUS_BLUR] ?: true,
+                lyricsDistanceFade = values[LYRICS_DISTANCE_FADE] ?: true,
+                lyricsStaggeredScroll = values[LYRICS_STAGGERED_SCROLL] ?: true,
                 showSettingsTab = values[SHOW_SETTINGS_TAB] ?: false,
                 homeSource = values[HOME_SOURCE] ?: YOUTUBE_SOURCE,
                 homeLayoutOnline = decodeHomeLayout(values[HOME_LAYOUT_ONLINE], true),
@@ -162,6 +165,9 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[EQUALIZER_PREAMP] = value.equalizerConfig.preampDb
                 it[EQUALIZER_BASS_BOOST] = value.equalizerConfig.bassBoost
                 it[PLAYER_GESTURES_ENABLED] = value.playerGesturesEnabled
+                it[LYRICS_FOCUS_BLUR] = value.lyricsFocusBlur
+                it[LYRICS_DISTANCE_FADE] = value.lyricsDistanceFade
+                it[LYRICS_STAGGERED_SCROLL] = value.lyricsStaggeredScroll
                 it[SHOW_SETTINGS_TAB] = value.showSettingsTab
                 it[HOME_SOURCE] = value.homeSource
                 it[HOME_LAYOUT_ONLINE] = encodeHomeLayout(value.homeLayoutOnline)
@@ -296,6 +302,9 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val EQUALIZER_PREAMP = floatPreferencesKey("equalizer_preamp")
         val EQUALIZER_BASS_BOOST = floatPreferencesKey("equalizer_bass_boost")
         val PLAYER_GESTURES_ENABLED = booleanPreferencesKey("player_gestures_enabled")
+        val LYRICS_FOCUS_BLUR = booleanPreferencesKey("lyrics_focus_blur")
+        val LYRICS_DISTANCE_FADE = booleanPreferencesKey("lyrics_distance_fade")
+        val LYRICS_STAGGERED_SCROLL = booleanPreferencesKey("lyrics_staggered_scroll")
         val SHOW_SETTINGS_TAB = booleanPreferencesKey("show_settings_tab")
         val HOME_LAYOUT_ONLINE = stringPreferencesKey("home_layout_online")
         val HOME_LAYOUT_OFFLINE = stringPreferencesKey("home_layout_offline")

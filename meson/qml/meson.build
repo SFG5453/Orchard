@@ -121,6 +121,7 @@ qml_sources = [
   'app/qml/components/player/SleepTimerButton.qml',
   'app/qml/components/player/VolumePopup.qml',
   'app/qml/components/player/LyricsView.qml',
+  'app/qml/components/player/LyricsLine.qml',
   'app/qml/components/player/TransitionArtwork.qml',
   'app/qml/components/player/MixSwapText.qml',
   'app/qml/components/player/FullscreenPlayer.qml',

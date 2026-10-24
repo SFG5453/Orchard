@@ -33,6 +33,9 @@ ColumnLayout {
     property bool fullscreenWindowed: false
     property bool fullscreenAutoHide: true
     property bool fullscreenPulse: true
+    property bool lyricsFocusBlur: true
+    property bool lyricsDistanceFade: true
+    property bool lyricsStaggeredScroll: true
     property bool artistVideoBackdrop: false
     property bool animatedArtworkEnabled: true
     property bool animatedCollageEnabled: false
@@ -49,6 +52,9 @@ ColumnLayout {
     property alias windowedSwitch: windowedSwitch
     property alias autoHideSwitch: autoHideSwitch
     property alias pulseSwitch: pulseSwitch
+    property alias lyricsBlurSwitch: lyricsBlurSwitch
+    property alias lyricsFadeSwitch: lyricsFadeSwitch
+    property alias lyricsStaggerSwitch: lyricsStaggerSwitch
     property alias artistVideoSwitch: artistVideoSwitch
     property alias animatedArtworkSwitch: animatedArtworkSwitch
     property alias collageSwitch: collageSwitch
@@ -202,6 +208,52 @@ ColumnLayout {
                 objectName: "fullscreenPulseToggle"
                 checked: root.fullscreenPulse
                 Accessible.name: qsTr("Pulse with the music")
+            }
+        }
+    }
+
+    SettingsSection {
+        Layout.fillWidth: true
+        title: qsTr("Lyrics")
+        rowSpacing: 0
+        verticalPadding: 0
+
+        SettingsRow {
+            iconName: "mic-vocal"
+            title: qsTr("Blur distant lines")
+            description: qsTr("Lines blur more the further they are from the line being sung. Uses extra GPU power.")
+
+            SettingsSwitch {
+                id: lyricsBlurSwitch
+                objectName: "lyricsFocusBlurToggle"
+                checked: root.lyricsFocusBlur
+                Accessible.name: qsTr("Blur distant lines")
+            }
+        }
+
+        SettingsRow {
+            iconName: "moon"
+            title: qsTr("Fade distant lines")
+            description: qsTr("Lines dim the further they are from the line being sung.")
+
+            SettingsSwitch {
+                id: lyricsFadeSwitch
+                objectName: "lyricsDistanceFadeToggle"
+                checked: root.lyricsDistanceFade
+                Accessible.name: qsTr("Fade distant lines")
+            }
+        }
+
+        SettingsRow {
+            iconName: "arrow-up-down"
+            title: qsTr("Staggered scrolling")
+            description: qsTr("Lines glide into place one after another when the lyrics advance.")
+
+            SettingsSwitch {
+                id: lyricsStaggerSwitch
+                objectName: "lyricsStaggeredScrollToggle"
+                checked: root.lyricsStaggeredScroll
+                Accessible.name: qsTr("Staggered scrolling")
             }
         }
     }
