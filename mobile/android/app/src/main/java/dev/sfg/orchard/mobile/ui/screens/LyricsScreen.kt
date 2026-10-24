@@ -19,12 +19,7 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -44,9 +39,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -66,6 +61,9 @@ internal fun LyricLines(
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 32.dp),
     accent: Color = CanopyColors.LyricActive,
+    blurDistant: Boolean = true,
+    fadeDistant: Boolean = true,
+    staggered: Boolean = true,
 ) {
     // Playback snapshots arrive twice a second. Keep one frame-clock coroutine alive between
     // them and fold small clock corrections in gently; restarting the animation at every
@@ -155,9 +153,12 @@ internal fun LyricLines(
     val listState = rememberLazyListState()
     val dragging by listState.interactionSource.collectIsDraggedAsState()
     var browsing by remember(lines) { mutableStateOf(false) }
+    val glide = remember(lines) { LyricGlide() }
     LaunchedEffect(dragging) {
-        if (dragging) browsing = true
-        else if (browsing) {
+        if (dragging) {
+            browsing = true
+            glide.settle()
+        } else if (browsing) {
             delay(4_000)
             browsing = false
         }
@@ -170,7 +171,7 @@ internal fun LyricLines(
 
         LaunchedEffect(activeDisplayIndex, browsing, inset) {
             if (activeDisplayIndex >= 0 && !browsing && !dragging) {
-                listState.animateScrollToItem(activeDisplayIndex)
+                glide.scrollTo(listState, activeDisplayIndex, staggered && synced)
             }
         }
 
@@ -231,6 +232,10 @@ internal fun LyricLines(
                                 onSeek(item.startMs)
                             },
                             alignment = if (isAlternate) Alignment.End else Alignment.Start,
+                            progress = {
+                                val span = (item.endMs - item.startMs).toFloat().coerceAtLeast(1f)
+                                ((smoothPosition.value - item.startMs) / span).coerceIn(0f, 1f)
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(start = if (isAlternate) 48.dp else 0.dp),
@@ -259,6 +264,19 @@ internal fun LyricLines(
                             animationSpec = tween(280),
                             label = "LyricAlpha",
                         )
+                        // Distance from the line being sung; browsing shows every line crisp.
+                        val depth = if (synced && !browsing && activeDisplayIndex >= 0) abs(displayIndex - activeDisplayIndex) else 0
+                        val depthFade by animateFloatAsState(
+                            targetValue = if (fadeDistant && depth > 0) (1f - depth * DEPTH_FADE_STEP).coerceAtLeast(DEPTH_FADE_FLOOR) else 1f,
+                            animationSpec = tween(380),
+                            label = "LyricDepthFade",
+                        )
+                        val depthBlur by animateFloatAsState(
+                            targetValue = if (blurDistant && canBlurLyrics && depth in 1..DEPTH_BLUR_RANGE) minOf(depth * DEPTH_BLUR_STEP_DP, DEPTH_BLUR_MAX_DP) else 0f,
+                            animationSpec = tween(380),
+                            label = "LyricDepthBlur",
+                        )
+                        val density = LocalDensity.current.density
 
                         Column(
                             modifier = Modifier
@@ -267,7 +285,12 @@ internal fun LyricLines(
                                 .graphicsLayer {
                                     scaleX = emphasis.value
                                     scaleY = emphasis.value
-                                    alpha = animatedAlpha
+                                    alpha = animatedAlpha * depthFade
+                                    translationY = glide.shift(displayIndex)
+                                    renderEffect = if (depthBlur > 0.05f) {
+                                        val radius = depthBlur * density
+                                        BlurEffect(radius, radius, TileMode.Decal)
+                                    } else null
                                     transformOrigin = if (isAlternate) TransformOrigin(1f, 0.5f) else TransformOrigin(0f, 0.5f)
                                 }
                                 .clickable(enabled = line.startMs != null) {
@@ -368,73 +391,6 @@ internal fun LyricLines(
     }
 }
 
-/** 3 cascading glowing dots signaling instrumental breaks (>= 7 seconds). */
-@Composable
-private fun InstrumentalPauseRow(
-    active: Boolean,
-    accent: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    alignment: Alignment.Horizontal = Alignment.Start,
-) {
-    val basePulse by if (active) rememberInfiniteTransition(label = "PausePulse").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1400, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "BasePulse",
-    ) else remember { mutableFloatStateOf(0f) }
-
-    val inactiveColor = Color.White.copy(alpha = 0.24f)
-
-    Box(
-        modifier = modifier
-            .padding(vertical = 12.dp)
-            .clickable(onClick = onClick),
-        contentAlignment = if (alignment == Alignment.End) Alignment.CenterEnd else Alignment.CenterStart,
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            repeat(3) { index ->
-                val phaseOffset = index * (200f / 1400f)
-                val dotProgress = (basePulse + phaseOffset) % 1f
-                val wave = kotlin.math.sin(dotProgress * Math.PI).toFloat().coerceIn(0f, 1f)
-                val scale = if (active) 0.85f + 0.40f * wave else 0.85f
-                val alpha = if (active) 0.45f + 0.55f * wave else 0.24f
-                val dotColor = if (active) accent else inactiveColor
-
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .graphicsLayer {
-                            scaleX = scale
-                            scaleY = scale
-                        }
-                        .drawWithCache {
-                            val radius = size.minDimension / 2f
-                            onDrawBehind {
-                                if (active) {
-                                    drawCircle(
-                                        color = dotColor.copy(alpha = 0.40f * alpha),
-                                        radius = radius * 2.2f,
-                                    )
-                                }
-                                drawCircle(
-                                    color = dotColor.copy(alpha = alpha),
-                                    radius = radius,
-                                )
-                            }
-                        },
-                )
-            }
-        }
-    }
-}
-
 /** Matches the desktop lyric mask: `linear-gradient(transparent, #000 13%, #000 82%, transparent)`. */
 private fun Modifier.verticalEdgeFade(): Modifier = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
@@ -467,3 +423,9 @@ internal const val ADLIB_UNSUNG_ALPHA = 0.48f
 private const val BROWSING_ALPHA = 0.68f
 private const val UNSYNCED_ALPHA = 0.72f
 private val LINE_SPACING = 11.dp
+private const val DEPTH_FADE_STEP = 0.14f
+private const val DEPTH_FADE_FLOOR = 0.55f
+private const val DEPTH_BLUR_RANGE = 6
+private const val DEPTH_BLUR_STEP_DP = 1.1f
+private const val DEPTH_BLUR_MAX_DP = 5f
+private val canBlurLyrics = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S

@@ -46,6 +46,7 @@ internal fun PlayerLyrics(
     accent: Color,
     contentPadding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 24.dp),
 ) {
+    val settings by OrchardGraph.from(LocalContext.current).settings.settings.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize()) {
         if (!track.isLocal) LyricsSourcePicker(track.id, accent)
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -53,6 +54,9 @@ internal fun PlayerLyrics(
                 is LoadState.Content -> LyricLines(
                     lines = lyrics.value, songId = track.id, playing = playing,
                     onSeek = onSeek, accent = accent, contentPadding = contentPadding,
+                    blurDistant = settings.lyricsFocusBlur,
+                    fadeDistant = settings.lyricsDistanceFade,
+                    staggered = settings.lyricsStaggeredScroll,
                 )
                 LoadState.Loading -> LyricsNotice("Finding lyrics…", isLoading = true)
                 is LoadState.Empty -> LyricsNotice(lyrics.message, icon = Icons.Rounded.MusicNote)

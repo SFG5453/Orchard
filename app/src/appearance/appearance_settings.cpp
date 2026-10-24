@@ -66,6 +66,9 @@ AppearanceSettings::AppearanceSettings(QObject *parent) : QObject(parent) {
     m_fullscreenWindowed = m_settings.value(QStringLiteral("fullscreenWindowed"), false).toBool();
     m_fullscreenAutoHide = m_settings.value(QStringLiteral("fullscreenAutoHide"), true).toBool();
     m_fullscreenPulse = m_settings.value(QStringLiteral("fullscreenPulse"), true).toBool();
+    m_lyricsFocusBlur = m_settings.value(QStringLiteral("lyricsFocusBlur"), true).toBool();
+    m_lyricsDistanceFade = m_settings.value(QStringLiteral("lyricsDistanceFade"), true).toBool();
+    m_lyricsStaggeredScroll = m_settings.value(QStringLiteral("lyricsStaggeredScroll"), true).toBool();
     m_artistVideoBackdrop = m_settings.value(QStringLiteral("artistVideoBackdrop"), false).toBool();
     m_animatedArtwork = m_settings.value(QStringLiteral("animatedArtworkEnabled"), true).toBool();
     m_animatedCollage = m_settings.value(QStringLiteral("animatedCollageEnabled"), false).toBool();
@@ -135,6 +138,9 @@ void AppearanceSettings::setFlag(const QString &key, bool value, bool &field) {
 void AppearanceSettings::setFullscreenWindowed(bool value) { setFlag(QStringLiteral("fullscreenWindowed"), value, m_fullscreenWindowed); }
 void AppearanceSettings::setFullscreenAutoHide(bool value) { setFlag(QStringLiteral("fullscreenAutoHide"), value, m_fullscreenAutoHide); }
 void AppearanceSettings::setFullscreenPulse(bool value) { setFlag(QStringLiteral("fullscreenPulse"), value, m_fullscreenPulse); }
+void AppearanceSettings::setLyricsFocusBlur(bool value) { setFlag(QStringLiteral("lyricsFocusBlur"), value, m_lyricsFocusBlur); }
+void AppearanceSettings::setLyricsDistanceFade(bool value) { setFlag(QStringLiteral("lyricsDistanceFade"), value, m_lyricsDistanceFade); }
+void AppearanceSettings::setLyricsStaggeredScroll(bool value) { setFlag(QStringLiteral("lyricsStaggeredScroll"), value, m_lyricsStaggeredScroll); }
 void AppearanceSettings::setArtistVideoBackdrop(bool value) { setFlag(QStringLiteral("artistVideoBackdrop"), value, m_artistVideoBackdrop); }
 
 void AppearanceSettings::setAnimatedArtworkEnabled(bool value) {
@@ -314,6 +320,9 @@ void AppearanceSettings::reset() {
     setFullscreenWindowed(false);
     setFullscreenAutoHide(true);
     setFullscreenPulse(true);
+    setLyricsFocusBlur(true);
+    setLyricsDistanceFade(true);
+    setLyricsStaggeredScroll(true);
     setArtistVideoBackdrop(false);
     setAnimatedArtworkEnabled(true);
     setAnimatedCollageEnabled(false);
