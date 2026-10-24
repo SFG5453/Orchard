@@ -44,7 +44,8 @@ static bool verifyScaleControls(QQmlEngine &engine, QTextStream &output) {
   const QVariantMap values{
       {"layoutStyle", "glade"}, {"uiScale", 1.0}, {"uiScaleRestartRequired", false},
       {"showBitrate", false}, {"fullscreenWindowed", false}, {"fullscreenAutoHide", true},
-      {"fullscreenPulse", true}, {"artistVideoBackdrop", false}, {"animatedArtworkEnabled", true},
+      {"fullscreenPulse", true}, {"lyricsFocusBlur", true},
+      {"lyricsDistanceFade", true}, {"lyricsStaggeredScroll", true}, {"artistVideoBackdrop", false}, {"animatedArtworkEnabled", true},
       {"animatedCollageEnabled", false}, {"artworkSource", "apple_music"},
       {"immersiveBackground", false}, {"speed", 1.38}, {"intensity", 0.92},
       {"saturation", 1.24}, {"brightness", 1.0}, {"availableMirrors", QVariantList{}}};

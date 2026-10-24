@@ -220,8 +220,9 @@ internal fun AppearancePage(
         )
     }
 
-    LyricsProvidersSection(settings, onSettings, labelIndex = 10)
-    LyricTranslationSection(settings, onSettings, labelIndex = 12)
+    LyricsMotionSection(settings, onSettings, labelIndex = 10)
+    LyricsProvidersSection(settings, onSettings, labelIndex = 12)
+    LyricTranslationSection(settings, onSettings, labelIndex = 14)
 }
 
 /** Orchard palette or the wallpaper palette, with a swatch strip previewing the choice. */
