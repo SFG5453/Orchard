@@ -313,6 +313,7 @@ private:
   void receiveStream(quint64 id, const QJsonValue &result);
   void ensurePlaybackBackend();
   void wirePlayer(QMediaPlayer *source);
+  void scheduleTrackEnd(QMediaPlayer *source);
   void wireStreamProxy(AudioStreamProxy *proxy);
   void scheduleStreamRecovery(bool retryable, const QString &message);
   void applyPendingResume();

@@ -386,6 +386,9 @@ void PlaybackController::finishCrossfade() {
   updateSystemMedia();
   ensureAutoplay();
   prepareNextTrack();
+  // The incoming decoder can finish while the audio thread completes the mix.
+  if (m_player->mediaStatus() == QMediaPlayer::EndOfMedia)
+    scheduleTrackEnd(m_player);
   savePlaybackState();
   if (qEnvironmentVariableIsSet("ORCHARD_PLAYBACK_TIMING"))
     qInfo() << "Playback: crossfade track switch took" << switchTimer.elapsed() << "ms";

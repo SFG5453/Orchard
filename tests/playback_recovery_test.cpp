@@ -22,6 +22,8 @@
 #include "providers/youtube/youtube_provider.h"
 
 #include <QDataStream>
+#include <QFile>
+#include <QJsonArray>
 #include <QSettings>
 #include <QSignalSpy>
 #include <QStandardPaths>
@@ -35,8 +37,8 @@ struct Invocation {
 };
 QList<Invocation> invocations;
 
-QByteArray silentWave() {
-  const QByteArray samples(60 * 8000 * 2, '\0');
+QByteArray silentWave(int seconds = 60) {
+  const QByteArray samples(seconds * 8000 * 2, '\0');
   QByteArray wave;
   QDataStream out(&wave, QIODevice::WriteOnly);
   out.setByteOrder(QDataStream::LittleEndian);
@@ -129,6 +131,84 @@ private slots:
     invocations.clear();
   }
 
+  void queueContinuesAtNaturalTrackBoundaries_data() {
+    QTest::addColumn<bool>("gapless");
+    QTest::addColumn<bool>("crossfade");
+    QTest::addColumn<bool>("streamed");
+    QTest::addColumn<bool>("autoplay");
+    QTest::newRow("standard") << false << false << false << false;
+    QTest::newRow("gapless") << true << false << false << false;
+    QTest::newRow("crossfade") << false << true << false << false;
+    QTest::newRow("streamed standard") << false << false << true << false;
+    QTest::newRow("streamed gapless") << true << false << true << false;
+    QTest::newRow("streamed crossfade") << false << true << true << false;
+    QTest::newRow("autoplay standard") << false << false << true << true;
+    QTest::newRow("autoplay gapless") << true << false << true << true;
+    QTest::newRow("autoplay crossfade") << false << true << true << true;
+  }
+
+  void queueContinuesAtNaturalTrackBoundaries() {
+    QFETCH(bool, gapless);
+    QFETCH(bool, crossfade);
+    QFETCH(bool, streamed);
+    QFETCH(bool, autoplay);
+    QTemporaryDir media;
+    QFile file(media.filePath("audio.wav"));
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    const auto wave = silentWave(2);
+    QCOMPARE(file.write(wave), wave.size());
+    file.close();
+    Session session;
+    if (streamed) {
+      QVERIFY(session.auth.setSession("SAPISID=fixture; SID=fixture"));
+      session.provider.resultReady(0, QJsonObject{{"name", "Fixture"}});
+      QVERIFY(session.auth.isSignedIn());
+      for (auto &proxy : session.playback.m_proxies)
+        proxy.setRangeReader([wave](const QJsonObject &, qint64 start, qint64 end, auto done) {
+          QTimer::singleShot(0, [wave, start, end, done] { done(wave.mid(start, end - start + 1), 0); });
+        });
+    }
+    QVariantList tracks;
+    QTimer resolver;
+    int handled = 0;
+    connect(&resolver, &QTimer::timeout, &session.provider, [&] {
+      while (handled < invocations.size()) {
+        const int index = handled++;
+        if (invocations.at(index).method == "playback.resolve") {
+          auto resolved = stream();
+          resolved.insert("contentLength", wave.size());
+          resolved.insert("durationSeconds", 2);
+          session.provider.resultReady(index + 1, resolved);
+        } else if (invocations.at(index).method == "catalog.upNext") {
+          session.provider.resultReady(index + 1, QJsonArray::fromVariantList(tracks.mid(1)));
+        }
+      }
+    });
+    resolver.start(10);
+    auto &playback = session.playback;
+    playback.setGaplessEnabled(gapless);
+    playback.setCrossfadeEnabled(crossfade);
+    playback.setCrossfadeDuration(1);
+    playback.setAutoplayEnabled(autoplay);
+    for (int index = 0; index < 4; ++index)
+      tracks.append(QVariantMap{{"id", QString(streamed ? "stream:%1" : "local:%1").arg(index)},
+                                {"type", "song"}, {"localPath", file.fileName()},
+                                {"durationSeconds", 2}});
+    if (!autoplay)
+      playback.m_queue = tracks.mid(1);
+    playback.m_orderedQueue = playback.m_queue;
+    playback.startTrack(tracks.first().toMap());
+    for (int index = 0; index < tracks.size(); ++index) {
+      QTRY_COMPARE_WITH_TIMEOUT(playback.track().value("id"),
+                               tracks.at(index).toMap().value("id"), 5000);
+      QTRY_VERIFY(playback.playing());
+    }
+    QTRY_VERIFY_WITH_TIMEOUT(!playback.playing(), 5000);
+    QCOMPARE(playback.history().size(), 3);
+    QVERIFY(playback.queue().isEmpty());
+    QVERIFY(playback.errorMessage().isEmpty());
+  }
+
   void demuxFailureRefreshesAndResumesTheSameTrack() {
     Session session;
     load(session);
@@ -147,6 +227,95 @@ private slots:
     QCOMPARE(playback.queue(), queue);
     QCOMPARE(playback.history(), history);
     finishRecovery(session);
+  }
+
+  void crossfadeContinuesWhenIncomingTrackEndsDuringHandoff_data() {
+    QTest::addColumn<bool>("delayedPromotion");
+    QTest::newRow("incoming ends during mix") << false;
+    QTest::newRow("incoming ends before promotion") << true;
+  }
+
+  void crossfadeContinuesWhenIncomingTrackEndsDuringHandoff() {
+    QFETCH(bool, delayedPromotion);
+    QTemporaryDir media;
+    QVariantList tracks;
+    for (int index = 0; index < 3; ++index) {
+      const int seconds = index == 1 ? 1 : 4;
+      QFile file(media.filePath(QString("%1.wav").arg(index)));
+      QVERIFY(file.open(QIODevice::WriteOnly));
+      const auto wave = silentWave(seconds);
+      QCOMPARE(file.write(wave), wave.size());
+      tracks.append(QVariantMap{{"id", QString("local:%1").arg(index)},
+                                {"type", "song"}, {"localPath", file.fileName()},
+                                {"durationSeconds", seconds}});
+    }
+    Session session;
+    auto &playback = session.playback;
+    playback.setCrossfadeEnabled(true);
+    playback.setCrossfadeDuration(3);
+    playback.m_queue = tracks.mid(1);
+    playback.m_orderedQueue = playback.m_queue;
+    QSignalBlocker handoff(&playback.m_audioEngineOutput);
+    if (!delayedPromotion)
+      handoff.unblock();
+    playback.startTrack(tracks.first().toMap());
+    if (delayedPromotion) {
+      QTRY_VERIFY(playback.crossfadeActive());
+      QTRY_COMPARE(playback.m_nextPlayer->mediaStatus(), QMediaPlayer::EndOfMedia);
+      handoff.unblock();
+      playback.finishCrossfade();
+    }
+    QTRY_COMPARE_WITH_TIMEOUT(playback.track().value("id"),
+                             tracks.last().toMap().value("id"), 10000);
+    QTRY_VERIFY(playback.playing());
+    QCOMPARE(playback.history().size(), 2);
+  }
+
+  void pendingTrackEndRespectsTransport_data() {
+    QTest::addColumn<bool>("stop");
+    QTest::newRow("stop") << true;
+    QTest::newRow("next") << false;
+  }
+
+  void pendingTrackEndRespectsTransport() {
+    QFETCH(bool, stop);
+    QTemporaryDir media;
+    QFile file(media.filePath("audio.wav"));
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    const auto wave = silentWave(2);
+    QCOMPARE(file.write(wave), wave.size());
+    file.close();
+    Session session;
+    auto &playback = session.playback;
+    QVariantList tracks;
+    for (int index = 0; index < 3; ++index)
+      tracks.append(QVariantMap{{"id", QString("local:%1").arg(index)},
+                                {"type", "song"}, {"localPath", file.fileName()}});
+    playback.m_queue = tracks.mid(1);
+    playback.m_orderedQueue = playback.m_queue;
+    playback.startTrack(tracks.first().toMap());
+    bool ended = false;
+    connect(playback.m_player, &QMediaPlayer::mediaStatusChanged, &playback,
+            [&](QMediaPlayer::MediaStatus status) {
+      if (status != QMediaPlayer::EndOfMedia)
+        return;
+      ended = true;
+      if (stop)
+        playback.stop();
+      else
+        playback.next();
+    });
+    QTRY_VERIFY(ended);
+    QCoreApplication::sendPostedEvents(&playback, QEvent::MetaCall);
+    if (stop) {
+      QVERIFY(playback.track().isEmpty());
+      QVERIFY(!playback.playing());
+      QCOMPARE(playback.queue().size(), 2);
+    } else {
+      QCOMPARE(playback.track().value("id"), tracks.at(1).toMap().value("id"));
+      QCOMPARE(playback.queue().size(), 1);
+      QTRY_VERIFY(playback.playing());
+    }
   }
 
   void proxyAndDecoderFailuresShareOneRecovery_data() {

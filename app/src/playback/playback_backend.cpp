@@ -109,25 +109,13 @@ void PlaybackController::wirePlayer(QMediaPlayer *source) {
   });
   connect(source, &QMediaPlayer::mediaStatusChanged, this,
           [this, source](QMediaPlayer::MediaStatus status) {
+            if (status == QMediaPlayer::EndOfMedia)
+              scheduleTrackEnd(source);
             if (source != m_player)
               return;
             if (status == QMediaPlayer::LoadedMedia ||
                 status == QMediaPlayer::BufferedMedia) {
               applyPendingResume();
-            }
-            if (status == QMediaPlayer::EndOfMedia) {
-              if (m_crossfadeActive) {
-                if (m_audioEngineOutput.adaptiveMixActive()) return;
-                m_audioEngineOutput.completeCrossfade();
-                return;
-              }
-              if (m_repeatMode == "one" && !m_track.isEmpty()) {
-                startTrack(m_track);
-              } else if (canGoNext()) {
-                next();
-              } else {
-                updateSystemMedia();
-              }
             }
           });
   connect(source, &QMediaPlayer::errorOccurred, this,
@@ -146,6 +134,32 @@ void PlaybackController::wirePlayer(QMediaPlayer *source) {
             else if (source == m_nextPlayer && !source->source().isEmpty())
               failPreparedTrack(0);
           });
+}
+
+void PlaybackController::scheduleTrackEnd(QMediaPlayer *source) {
+  if (source != m_player && !(m_crossfadeActive && source == m_nextPlayer))
+    return;
+  const auto generation = m_generation;
+  const auto url = source->source();
+  // Let the decoder finish its notification before switching or clearing it.
+  QMetaObject::invokeMethod(this, [this, source, generation, url] {
+    if (generation != m_generation || source->source() != url ||
+        source->mediaStatus() != QMediaPlayer::EndOfMedia)
+      return;
+    if (m_crossfadeActive && (source == m_player || source == m_nextPlayer)) {
+      if (!m_audioEngineOutput.adaptiveMixActive())
+        m_audioEngineOutput.completeCrossfade();
+      return;
+    }
+    if (source != m_player)
+      return;
+    if (m_repeatMode == "one" && !m_track.isEmpty())
+      startTrack(m_track);
+    else if (canGoNext())
+      next();
+    else
+      updateSystemMedia();
+  }, Qt::QueuedConnection);
 }
 
 PlaybackController::~PlaybackController() {
