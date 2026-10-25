@@ -73,7 +73,7 @@ Example: set **Activity text template** to `{song} by {artist}` to show both in 
 
 ## Choose the platform name shown in Discord
 
-Pick **YouTube Music** or **Orchard V3** in the **Platform** list. Discord shows the selection as "Listening to" followed by the platform name. The default is YouTube Music.
+Pick **YouTube Music / Apple Music** or **Orchard V3** in the **Platform** list. Discord shows the selection as "Listening to" followed by the platform name. The default is **YouTube Music / Apple Music**, which shows YouTube Music or Apple Music depending on the service playing the current song.
 
 ## Change the Discord activity type
 
