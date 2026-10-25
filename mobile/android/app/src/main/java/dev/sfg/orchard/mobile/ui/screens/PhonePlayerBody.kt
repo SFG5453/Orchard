@@ -138,7 +138,8 @@ internal fun PhonePlayerBody(
     artworkSeam: Float? = null,
     /** Reports the px above the controls at their natural height, for the art to grow into. */
     onArtworkRoom: (Float?) -> Unit = {},
-    reserveSwitchSpace: Boolean = false,
+    /** Non-null when the track has a music video to switch to. */
+    onWatchVideo: (() -> Unit)? = null,
 ) {
     val queueOpen = panel == PlayerPanel.QUEUE
     var modesOpen by remember { mutableStateOf(false) }
@@ -189,6 +190,7 @@ internal fun PhonePlayerBody(
                     isDownloaded = isDownloaded,
                     onDownload = onDownloadTrack?.let { action -> { action(track) } },
                     onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
+                    onWatchVideo = onWatchVideo,
                 )
             } else {
                 PlayerPanelHeader(
@@ -205,12 +207,10 @@ internal fun PhonePlayerBody(
                     isDownloaded = isDownloaded,
                     onDownload = onDownloadTrack?.let { action -> { action(track) } },
                     onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
+                    onWatchVideo = onWatchVideo,
                     onLiked = onLiked,
                 )
             }
-
-            // The Song/Video switch floats over this strip.
-            if (reserveSwitchSpace) Spacer(Modifier.height(SONG_SWITCH_SPACE))
 
             Box(
                 modifier = Modifier
@@ -232,6 +232,7 @@ internal fun PhonePlayerBody(
                             Modifier.pointerInput(Unit) { detectTapGestures(onDoubleTap = { onLiked() }) }
                         } else Modifier,
                     )
+                    .holdToSwitch(onWatchVideo != null && panel == PlayerPanel.NONE) { onWatchVideo?.invoke() }
                     .then(if (queueOpen) Modifier.queueEdgeFade() else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
@@ -443,6 +444,3 @@ private fun Modifier.queueEdgeFade(): Modifier = this
             blendMode = BlendMode.DstIn,
         )
     }
-
-/** Space under the header for the floating Song/Video switch. */
-internal val SONG_SWITCH_SPACE = SONG_SWITCH_TOP - 56.dp + SongVideoSwitchHeight

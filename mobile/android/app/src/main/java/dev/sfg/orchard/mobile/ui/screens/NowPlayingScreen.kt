@@ -452,7 +452,7 @@ fun NowPlayingScreen(
                 onBestMixUpcoming = onBestMixUpcoming,
                 artworkSeam = artworkSeam,
                 onArtworkRoom = { artworkRoom = it },
-                reserveSwitchSpace = musicVideo.playing || musicVideo.available || musicVideo.checking,
+                onWatchVideo = onToggleMusicVideo.takeIf { musicVideo.available },
             )
         }
 
