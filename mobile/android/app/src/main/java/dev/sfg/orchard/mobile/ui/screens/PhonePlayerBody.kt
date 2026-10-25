@@ -430,7 +430,7 @@ private val BODY_BOTTOM_PADDING = 20.dp
 private const val SPREAD_MS = 420
 
 /** Dissolves the queue into the header and title at either end. */
-private fun Modifier.queueEdgeFade(): Modifier = this
+internal fun Modifier.queueEdgeFade(): Modifier = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     .drawWithContent {
         drawContent()

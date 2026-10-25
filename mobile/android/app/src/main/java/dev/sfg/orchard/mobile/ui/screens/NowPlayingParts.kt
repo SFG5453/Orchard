@@ -52,6 +52,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.util.lerp
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.RemoteArtwork
@@ -218,6 +219,52 @@ internal fun artistOpenAction(
         else -> null
     }
 }
+
+/** [artistOpenAction] plus the picker it opens when the track credits several artists. */
+@Composable
+internal fun rememberArtistOpen(track: Track, onOpenCollection: ((String) -> Unit)?): (() -> Unit)? {
+    var showArtistDialog by remember(track.id) { mutableStateOf(false) }
+    if (showArtistDialog) {
+        val selectableArtists = remember(track.artists) { selectableTrackArtists(track) }
+        dev.sfg.orchard.mobile.ui.components.ArtistSelectionDialog(
+            artists = selectableArtists,
+            onDismiss = { showArtistDialog = false },
+            onArtistSelected = { id ->
+                showArtistDialog = false
+                onOpenCollection?.invoke(id)
+            },
+        )
+    }
+    return artistOpenAction(track, onOpenCollection, onMultipleArtists = { showArtistDialog = true })
+}
+
+/** The body settling back and fading while the cover flies into the pill. */
+internal fun Modifier.collapsingBody(collapse: PlayerCollapse, playerSize: () -> IntSize, collapseBounds: Rect?): Modifier =
+    graphicsLayer {
+        val progress = collapse.progress
+        if (progress <= 0f) return@graphicsLayer
+        if (playerSize().width == 0) {
+            // Not measured yet: stay hidden rather than flashing at full size.
+            alpha = 0f
+            return@graphicsLayer
+        }
+        // Only the cover has to land on the pill; shrinking the body too would squash the controls.
+        transformOrigin = TransformOrigin(0.5f, 0f)
+        val shrink = lerp(1f, BODY_SHRINK, progress)
+        scaleX = shrink
+        scaleY = shrink
+        translationY = lerp(0f, (collapseBounds?.top ?: size.height) * 0.5f, progress)
+        // Early, so the cover finishes its flight over the page underneath.
+        alpha = (1f - progress / BODY_FADE_COMPLETE).coerceIn(0f, 1f)
+        shape = RoundedCornerShape(lerp(0f, 34f, progress).dp)
+        clip = true
+    }
+
+/** Fraction of the collapse over which the player body fades out entirely. */
+private const val BODY_FADE_COMPLETE = 0.55f
+
+/** How far the body draws back as it goes, so it recedes rather than merely fading. */
+private const val BODY_SHRINK = 0.90f
 
 /**
  * The cover, flying between the player and the pill's thumbnail.
