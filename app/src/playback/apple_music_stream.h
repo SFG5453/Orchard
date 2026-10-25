@@ -35,7 +35,9 @@ class AppleMusic;
 // Apple Music songs as plain MP4 for the audio stream proxy. A song's HLS playlist
 // names byte ranges of one encrypted fragmented MP4; each range is fetched, decrypted
 // by orchard-widevine-host and served at its own offset, so Qt's media backend sees
-// an ordinary seekable file. Clear audio lives only in a few fragments in memory.
+// an ordinary seekable file. The newest songs keep their whole encrypted file and every
+// fragment decrypted so far, since Widevine rate-limits decryption and seeks would
+// otherwise wait on it; older songs keep a few clear fragments.
 class AppleMusicStreams final : public QObject {
   Q_OBJECT
 
@@ -66,6 +68,12 @@ private:
   Stream *find(const QString &playbackId) const;
   void segment(Stream *stream, int index, Done done);
   void fetchSegment(const QString &playbackId, int index);
+  void fetchRange(const QString &playbackId, int index);
+  void decryptSegment(const QString &playbackId, int index, const QByteArray &bytes);
+  void startPrefetch(Stream *stream);
+  void pumpPrefetch(const QString &playbackId);
+  void dropPrefetch(Stream *stream);
+  void trimPrefetches();
   void ready(Stream *stream, Done done);
   void license(const QString &playbackId, const QByteArray &challenge, Done done);
   void renew(quint32 streamId, const QByteArray &message);

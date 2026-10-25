@@ -18,7 +18,7 @@
  */
 
 #include "apple_music_stream.h"
-#include "apple_music_playlist.h"
+#include "apple_music_stream_state.h"
 #include "integrations/apple_music.h"
 #include "widevine_path.h"
 
@@ -41,8 +41,6 @@ const QStringList kFlavors{QStringLiteral("28:ctrp256"), QStringLiteral("30:cbcp
                            QStringLiteral("34:cbcp64")};
 // The current song, the prepared one and a song or two the listener skipped back to.
 constexpr int kOpenStreams = 4;
-// Decrypted fragments kept per stream: the one playing and a read-ahead or two.
-constexpr int kClearFragments = 4;
 
 QNetworkRequest appleRequest(const QUrl &url, const QString &developerToken, const QString &userToken) {
   QNetworkRequest request(url);
@@ -66,22 +64,6 @@ QString replyError(QNetworkReply *reply) {
   return status ? QStringLiteral("HTTP %1").arg(status) : reply->errorString();
 }
 } // namespace
-
-struct AppleMusicStreams::Stream {
-  quint32 id{0};
-  QString playbackId;
-  apple_music_playlist::Playlist playlist;
-  QUrl licenseUrl;
-  QString appleId;
-  // Host generation the session was licensed under; another one means no session.
-  quint64 generation{~quint64(0)};
-  bool licensing{false};
-  QList<Done> readyWaiters;
-  QByteArray rawInit;
-  QHash<int, QByteArray> clear;
-  QList<int> recent;
-  QHash<int, QList<Done>> loading;
-};
 
 AppleMusicStreams::AppleMusicStreams(AppleMusic *account, QObject *parent) : QObject(parent), m_account(account) {
   connect(&m_cdm, &WidevineClient::renewal, this, &AppleMusicStreams::renew);
@@ -180,10 +162,13 @@ void AppleMusicStreams::loadPlaylist(const QString &appleId, const QJsonObject &
     m_streams.insert(playbackId, stream);
     m_order.append(playbackId);
     evict(kOpenStreams);
+    trimPrefetches();
     // License and fetch the opening fragment while the player sets up.
     segment(stream.get(), 0, [](const QString &) {});
     if (playlist.ranges.size() > 1)
       segment(stream.get(), 1, [](const QString &) {});
+    // After the opening requests so they are not queued behind it.
+    startPrefetch(stream.get());
     done({{QStringLiteral("provider"), QStringLiteral("apple")},
           {QStringLiteral("playbackId"), playbackId},
           {QStringLiteral("contentLength"), double(length)},
@@ -206,6 +191,8 @@ void AppleMusicStreams::read(const QString &playbackId, qint64 start, qint64 end
     done({}, stream ? 416 : 404);
     return;
   }
+  // The prefetch fills from the playhead first.
+  stream->prefetchFrom = std::max(index, 1);
   segment(stream, index, [this, playbackId, index, start, end, done = std::move(done)](const QString &error) {
     Stream *stream = find(playbackId);
     if (!stream || !error.isEmpty()) {
@@ -243,47 +230,30 @@ void AppleMusicStreams::segment(Stream *stream, int index, Done done) {
   ready(stream, [this, id = stream->playbackId](const QString &error) { finishSegment(id, 0, error); });
 }
 
-void AppleMusicStreams::fetchSegment(const QString &playbackId, int index) {
+void AppleMusicStreams::decryptSegment(const QString &playbackId, int index, const QByteArray &bytes) {
   Stream *stream = find(playbackId);
   if (!stream)
     return;
-  const auto [start, size] = stream->playlist.ranges.at(index);
-  QNetworkRequest request(stream->playlist.media);
-  request.setTransferTimeout(30000);
-  request.setRawHeader("Range", "bytes=" + QByteArray::number(start) + '-' + QByteArray::number(start + size - 1));
-  QNetworkReply *reply = m_network.get(request);
-  connect(reply, &QNetworkReply::finished, this, [this, reply, playbackId, index, size] {
-    reply->deleteLater();
+  // The host may have restarted while the fragment downloaded.
+  ready(stream, [this, playbackId, index, bytes](const QString &error) {
     Stream *stream = find(playbackId);
     if (!stream)
       return;
-    const QByteArray bytes = reply->readAll();
-    if (reply->error() != QNetworkReply::NoError || bytes.size() != size) {
-      finishSegment(playbackId, index, reply->error() != QNetworkReply::NoError ? replyError(reply)
-                                                                                 : QStringLiteral("short range"));
+    if (!error.isEmpty()) {
+      finishSegment(playbackId, index, error);
       return;
     }
-    // The host may have restarted while the fragment downloaded.
-    ready(stream, [this, playbackId, index, bytes](const QString &error) {
+    m_cdm.request(Fragment, stream->id, bytes, [this, playbackId, index](const QByteArray &clear, const QString &error) {
       Stream *stream = find(playbackId);
       if (!stream)
         return;
-      if (!error.isEmpty()) {
-        finishSegment(playbackId, index, error);
-        return;
+      if (error.isEmpty()) {
+        stream->clear.insert(index, clear);
+        stream->recent.append(index);
+        if (!stream->whole)
+          stream->trimClear();
       }
-      m_cdm.request(Fragment, stream->id, bytes, [this, playbackId, index](const QByteArray &clear, const QString &error) {
-        Stream *stream = find(playbackId);
-        if (!stream)
-          return;
-        if (error.isEmpty()) {
-          stream->clear.insert(index, clear);
-          stream->recent.append(index);
-          while (stream->recent.size() > kClearFragments)
-            stream->clear.remove(stream->recent.takeFirst());
-        }
-        finishSegment(playbackId, index, error);
-      });
+      finishSegment(playbackId, index, error);
     });
   });
 }
@@ -309,7 +279,12 @@ void AppleMusicStreams::ready(Stream *stream, Done done) {
   const QString playbackId = stream->playbackId;
   QElapsedTimer clock;
   clock.start();
-  const auto finish = [this, playbackId, clock](const QString &error) {
+  // The license and the init segment download in parallel; Init needs both. Negative once finished.
+  const auto pending = std::make_shared<int>(stream->rawInit.isEmpty() ? 2 : 1);
+  const auto finish = [this, playbackId, clock, pending](const QString &error) {
+    if (*pending < 0)
+      return;
+    *pending = -1;
     if (timing())
       qInfo() << "AppleMusic: licensed after" << clock.elapsed() << "ms" << error;
     Stream *stream = find(playbackId);
@@ -319,51 +294,51 @@ void AppleMusicStreams::ready(Stream *stream, Done done) {
     for (const Done &waiter : std::exchange(stream->readyWaiters, {}))
       waiter(error);
   };
-  const auto open = [this, playbackId, finish] {
+  const quint64 generation = m_cdm.generation();
+  const auto decryptInit = [this, playbackId, generation, finish, pending] {
+    if (*pending < 0 || --*pending > 0)
+      return;
     Stream *stream = find(playbackId);
     if (!stream)
       return;
-    const quint64 generation = m_cdm.generation();
-    m_cdm.request(Open, stream->id, stream->playlist.pssh,
-                  [this, playbackId, generation, finish](const QByteArray &challenge, const QString &error) {
+    m_cdm.request(Init, stream->id, stream->rawInit,
+                  [this, playbackId, generation, finish](const QByteArray &clear, const QString &error) {
+      Stream *stream = find(playbackId);
+      QString failure = error;
+      if (failure.isEmpty() && generation != m_cdm.generation())
+        failure = QStringLiteral("the host restarted");
+      const QByteArray index = stream && failure.isEmpty() ? stream->playlist.segmentIndex(clear) : QByteArray();
+      if (stream && failure.isEmpty() && index.isEmpty())
+        failure = QStringLiteral("the init segment names no track timing");
+      if (stream && failure.isEmpty()) {
+        stream->clear.insert(0, clear + index);
+        stream->generation = generation;
+      }
+      finish(failure);
+    });
+  };
+  m_cdm.request(Open, stream->id, stream->playlist.pssh,
+                [this, playbackId, finish, decryptInit](const QByteArray &challenge, const QString &error) {
+    if (!error.isEmpty()) {
+      finish(error);
+      return;
+    }
+    license(playbackId, challenge, [finish, decryptInit](const QString &error) {
       if (!error.isEmpty()) {
         finish(error);
         return;
       }
-      license(playbackId, challenge, [this, playbackId, generation, finish](const QString &error) {
-        Stream *stream = find(playbackId);
-        if (!stream || !error.isEmpty()) {
-          finish(error);
-          return;
-        }
-        m_cdm.request(Init, stream->id, stream->rawInit,
-                      [this, playbackId, generation, finish](const QByteArray &clear, const QString &error) {
-          Stream *stream = find(playbackId);
-          QString failure = error;
-          if (failure.isEmpty() && generation != m_cdm.generation())
-            failure = QStringLiteral("the host restarted");
-          const QByteArray index = stream && failure.isEmpty() ? stream->playlist.segmentIndex(clear) : QByteArray();
-          if (stream && failure.isEmpty() && index.isEmpty())
-            failure = QStringLiteral("the init segment names no track timing");
-          if (stream && failure.isEmpty()) {
-            stream->clear.insert(0, clear + index);
-            stream->generation = generation;
-          }
-          finish(failure);
-        });
-      });
+      decryptInit();
     });
-  };
-  if (!stream->rawInit.isEmpty()) {
-    open();
+  });
+  if (!stream->rawInit.isEmpty())
     return;
-  }
   const auto [start, size] = stream->playlist.ranges.first();
   QNetworkRequest request(stream->playlist.media);
   request.setTransferTimeout(20000);
   request.setRawHeader("Range", "bytes=" + QByteArray::number(start) + '-' + QByteArray::number(start + size - 1));
   QNetworkReply *reply = m_network.get(request);
-  connect(reply, &QNetworkReply::finished, this, [this, reply, playbackId, size, open, finish] {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, playbackId, size, finish, decryptInit] {
     reply->deleteLater();
     Stream *stream = find(playbackId);
     if (!stream)
@@ -374,7 +349,7 @@ void AppleMusicStreams::ready(Stream *stream, Done done) {
       return;
     }
     stream->rawInit = init;
-    open();
+    decryptInit();
   });
 }
 
@@ -433,6 +408,7 @@ void AppleMusicStreams::evict(int keep) {
     const std::shared_ptr<Stream> stream = m_streams.take(m_order.takeFirst());
     if (!stream)
       continue;
+    dropPrefetch(stream.get());
     m_cdm.close(stream->id);
     const QString closed = tr("The song's stream was closed.");
     for (const Done &waiter : std::exchange(stream->readyWaiters, {}))
