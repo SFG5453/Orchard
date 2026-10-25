@@ -72,7 +72,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import dev.sfg.orchard.mobile.auth.AuthState
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.OrchardSettings
+import dev.sfg.orchard.mobile.model.YOUTUBE_SOURCE
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
 /** Live values the category rows summarise. Built once by the screen so the hub stays dumb. */
@@ -105,7 +107,19 @@ internal fun SettingsHub(
 
     Column(Modifier.padding(top = 16.dp)) { AccountCard(auth, onSignIn, onSwitchAccount, onSignOut) }
 
-    SectionLabel("Quick switches", 2)
+    SectionLabel("Music service", 2)
+    SettingsPanel(index = 3) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            RowSubtitle("Powers Home, search, albums, artists and playlists.")
+            SettingsSegmented(
+                options = listOf(YOUTUBE_SOURCE to "YouTube Music", APPLE_MUSIC_SOURCE to "Apple Music"),
+                selected = settings.homeSource,
+                onSelect = { onSettings(settings.copy(homeSource = it)) },
+            )
+        }
+    }
+
+    SectionLabel("Quick switches", 4)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             QuickTile(Icons.Rounded.Loop, "Autoplay", settings.autoplayEnabled, Modifier.weight(1f)) { enabled ->
@@ -125,8 +139,8 @@ internal fun SettingsHub(
         }
     }
 
-    SectionLabel("All settings", 4)
-    SettingsPanel(index = 5) {
+    SectionLabel("All settings", 5)
+    SettingsPanel(index = 6) {
         val quality = settings.audioQuality.label
         val eq = if (settings.equalizerConfig.enabled) "on" else "off"
         ActionRow(
@@ -160,7 +174,7 @@ internal fun SettingsHub(
     }
 
     Column(Modifier.padding(top = 16.dp)) {
-        SettingsPanel(index = 6) {
+        SettingsPanel(index = 7) {
             val support = dev.sfg.orchard.mobile.ui.support.LocalSupportUi.current
             if (support != null) {
                 val unread = support.service.state.collectAsStateWithLifecycle().value.unread
