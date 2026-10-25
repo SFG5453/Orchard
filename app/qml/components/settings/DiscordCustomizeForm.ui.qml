@@ -112,7 +112,7 @@ ColumnLayout {
 
             SettingsSelect {
                 id: platformSelect
-                model: [qsTr("YouTube Music"), qsTr("Orchard V3")]
+                model: [qsTr("YouTube Music / Apple Music"), qsTr("Orchard V3")]
                 Accessible.name: qsTr("Platform shown in Discord")
             }
         }
