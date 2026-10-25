@@ -21,7 +21,6 @@ package dev.sfg.orchard.mobile.app
 
 import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
@@ -31,6 +30,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -53,7 +54,8 @@ import dev.sfg.orchard.mobile.model.PlaybackTarget
 import androidx.compose.ui.graphics.Color
 import dev.sfg.orchard.mobile.ui.components.ArtworkBackdrop
 import dev.sfg.orchard.mobile.ui.components.CanopyReadout
-import dev.sfg.orchard.mobile.ui.components.OrchardBottomBar
+import dev.sfg.orchard.mobile.ui.components.OrchardDock
+import dev.sfg.orchard.mobile.ui.components.rememberDockCollapse
 import dev.sfg.orchard.mobile.ui.components.SongShareBottomSheet
 import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.LocalPlayerClock
@@ -124,6 +126,8 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     var readoutArtworkBounds by remember { mutableStateOf<Rect?>(null) }
     // Outlives the player so the cover can fly on the way in as well as on the way out.
     var playerCoverBounds by remember { mutableStateOf<Rect?>(null) }
+    val dockCollapse = rememberDockCollapse()
+    LaunchedEffect(route, searchOpen) { dockCollapse.collapsed = false }
 
     val chromeHidden = route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME || route == Routes.QOBUZ_LOGIN
     // Collection artwork runs under the status bar, so these screens take no top inset and
@@ -223,7 +227,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                         Modifier.fillMaxSize().then(contentInset)
                     }
 
-                    Box(contentModifier) {
+                    Box(contentModifier.nestedScroll(dockCollapse.connection)) {
                         OrchardNavigation(navController, viewModel, playback, targets, library, settings, onOpenSearch = { searchOpen = true })
                     }
                 }
@@ -266,7 +270,15 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                         }
                     } else {
                         Box(Modifier.fillMaxSize().then(contentInset)) {
-                            Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+                            OrchardDock(
+                                currentRoute = chromeRoute,
+                                onSelect = selectTopLevel,
+                                onSearch = { searchOpen = true },
+                                collapsed = dockCollapse.collapsed && playerPlayback.currentTrack != null,
+                                onExpand = { dockCollapse.collapsed = false },
+                                showSettings = settings.showSettingsTab,
+                                modifier = Modifier.align(Alignment.BottomCenter),
+                            ) {
                                 CanopyReadout(
                                     playback = playerPlayback,
                                     transition = playerMarker,
@@ -282,7 +294,6 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                                         viewModel.clearQueue()
                                     },
                                 )
-                                OrchardBottomBar(chromeRoute, selectTopLevel, showSettings = settings.showSettingsTab)
                             }
                         }
                     }
