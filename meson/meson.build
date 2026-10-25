@@ -204,6 +204,8 @@ app_sources = [
   'app/src/playback/apple_music_playlist.h',
   'app/src/playback/apple_music_stream.cpp',
   'app/src/playback/apple_music_stream.h',
+  'app/src/playback/apple_music_stream_state.h',
+  'app/src/playback/apple_music_prefetch.cpp',
   'app/src/playback/widevine_client.cpp',
   'app/src/playback/widevine_client.h',
   'app/src/playback/widevine_path.cpp',
