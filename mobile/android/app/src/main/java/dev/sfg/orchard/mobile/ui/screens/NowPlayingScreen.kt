@@ -27,29 +27,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.util.lerp
 import androidx.media3.common.Player
-import androidx.window.layout.FoldingFeature
-import androidx.window.layout.WindowInfoTracker
 import dev.sfg.orchard.mobile.app.MusicVideoState
 import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.model.LyricLine
@@ -60,7 +51,7 @@ import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.model.TransitionMarker
 import dev.sfg.orchard.mobile.ui.foldable.FoldableNowPlayingBody
 import dev.sfg.orchard.mobile.ui.foldable.isFoldableActive
-import dev.sfg.orchard.mobile.audio.isFoldableHardware
+import dev.sfg.orchard.mobile.ui.foldable.rememberTabletopHinge
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
 /** Full player: backdrop, then the phone, tablet or foldable body, plus the collapse flight. */
@@ -135,17 +126,7 @@ fun NowPlayingScreen(
     val lyricsOpen = panel == PlayerPanel.LYRICS
     val queueOpen = panel == PlayerPanel.QUEUE
     val onQueue = { panel = if (queueOpen) PlayerPanel.NONE else PlayerPanel.QUEUE }
-    
-    val context = LocalContext.current
-    // Hinge posture only exists on foldables; elsewhere the subscription is pure open-time cost.
-    if (remember { context.isFoldableHardware() }) {
-        val windowInfoTracker = remember { WindowInfoTracker.getOrCreate(context) }
-        val layoutInfo by windowInfoTracker.windowLayoutInfo(context as android.app.Activity).collectAsState(initial = null)
-        val hinge = layoutInfo?.displayFeatures?.filterIsInstance<FoldingFeature>()?.firstOrNull()?.state
-        LaunchedEffect(hinge) {
-            if (hinge == FoldingFeature.State.HALF_OPENED && panel == PlayerPanel.NONE) panel = PlayerPanel.QUEUE
-        }
-    }
+    val tabletop = rememberTabletopHinge()
 
     // Back closes an open panel before it closes the player.
     BackHandler(enabled = panel != PlayerPanel.NONE) { panel = PlayerPanel.NONE }
@@ -155,24 +136,7 @@ fun NowPlayingScreen(
         return
     }
 
-    var showArtistDialog by remember(track.id) { mutableStateOf(false) }
-    val selectableArtists = remember(track.artists) { selectableTrackArtists(track) }
-    val onOpenArtist = artistOpenAction(
-        track = track,
-        onOpenCollection = onOpenCollection,
-        onMultipleArtists = { showArtistDialog = true },
-    )
-
-    if (showArtistDialog) {
-        dev.sfg.orchard.mobile.ui.components.ArtistSelectionDialog(
-            artists = selectableArtists,
-            onDismiss = { showArtistDialog = false },
-            onArtistSelected = { id ->
-                showArtistDialog = false
-                onOpenCollection?.invoke(id)
-            },
-        )
-    }
+    val onOpenArtist = rememberArtistOpen(track, onOpenCollection)
 
     val localControls = targets.selected is PlaybackTarget.LocalPhone
     // A Connect target accepts every transport and queue command.
@@ -196,6 +160,8 @@ fun NowPlayingScreen(
     val wideLayout = with(LocalDensity.current) {
         LocalWindowInfo.current.containerSize.width.toDp() >= 840.dp
     }
+    // Tabletop frames ordinary covers in the upright half; Apple's tall art bleeds as on a phone.
+    val framedCover = wideLayout || (tabletop != null && !hasTabletopTallArt(track, animatedArtworkEnabled))
 
     val collapse = rememberPlayerCollapse(onBack)
     // Collapse progress is read only in layers and callbacks; reading it here would recompose
@@ -221,29 +187,7 @@ fun NowPlayingScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer {
-                    val progress = collapse.progress
-                    if (progress <= 0f) return@graphicsLayer
-                    if (playerSize.width == 0) {
-                        // Not measured yet — stay hidden rather than flashing at full size.
-                        alpha = 0f
-                        return@graphicsLayer
-                    }
-                    // The body no longer has to land on the pill; the cover does that. It
-                    // just settles back and clears out, which avoids squashing the controls
-                    // into a bar on the way down.
-                    val target = collapseBounds
-                    transformOrigin = TransformOrigin(0.5f, 0f)
-                    val shrink = lerp(1f, BODY_SHRINK, progress)
-                    scaleX = shrink
-                    scaleY = shrink
-                    translationY = lerp(0f, (target?.top ?: size.height) * 0.5f, progress)
-                    // Early, so the cover finishes its flight over the page underneath
-                    // rather than over a ghost of the player.
-                    alpha = (1f - progress / BODY_FADE_COMPLETE).coerceIn(0f, 1f)
-                    shape = RoundedCornerShape(lerp(0f, 34f, progress).dp)
-                    clip = true
-                }
+                .collapsingBody(collapse, { playerSize }, collapseBounds)
                 .background(CanopyColors.PlayerBackdrop),
         ) {
             // One sample feeds the backdrop and the lyrics, so sung words carry the same
@@ -260,7 +204,7 @@ fun NowPlayingScreen(
                 track = track,
                 isPlaying = playback.isPlaying,
                 panel = panel,
-                wideLayout = wideLayout,
+                wideLayout = framedCover,
                 isFoldable = isFoldable,
                 hasRichArtwork = hasRichArtwork,
                 palette = palette,
@@ -274,11 +218,71 @@ fun NowPlayingScreen(
                 onPrevious = onPrevious,
                 onLiked = onLiked,
                 onVideoFrame = { videoFrame = it },
-                onArtworkBounds = { if ((!wideLayout || isFoldable) && hasRichArtwork && settledOpen()) onRestingCoverBounds(it) },
-                swipe = swipe.takeIf { !wideLayout && !isFoldable },
+                onArtworkBounds = { if ((!framedCover || isFoldable) && hasRichArtwork && settledOpen()) onRestingCoverBounds(it) },
+                swipe = swipe.takeIf { !framedCover && !isFoldable },
                 onArtworkSeam = { artworkSeam = it },
-                artworkRoom = artworkRoom,
+                // The player fills the window, so the hinge's window px are the room above it.
+                artworkRoom = tabletop?.top ?: artworkRoom,
             )
+
+            if (tabletop != null) {
+                TabletopPlayerBody(
+                    hinge = tabletop,
+                    track = track,
+                    playback = playback,
+                    targets = targets,
+                    lyrics = lyrics,
+                    lyricAccent = lyricAccent,
+                    incomingTrack = incomingTrack,
+                    outgoingTrack = outgoingTrack,
+                    onCoverBounds = { if (settledOpen()) onRestingCoverBounds(it) },
+                    transition = transition,
+                    mixProgress = activeMixProgress,
+                    canControl = canControl,
+                    localControls = localControls,
+                    liked = liked,
+                    panel = panel,
+                    animatedArtworkEnabled = animatedArtworkEnabled,
+                    showBitrate = showBitrate,
+                    bitrateKbps = bitrateKbps,
+                    isQobuz = isQobuz,
+                    remoteVolume = remoteVolume,
+                    modifier = dragHandle,
+                    onRemoteVolumeChange = onRemoteVolumeChange,
+                    onBack = onBack,
+                    onSeek = onSeek,
+                    onToggle = onToggle,
+                    onPrevious = onPrevious,
+                    onNext = onNext,
+                    onShuffle = onShuffle,
+                    onRepeat = onRepeat,
+                    onLiked = onLiked,
+                    onDevices = onDevices,
+                    onPlayQueueIndex = onPlayQueueIndex,
+                    onRemoveQueueIndex = onRemoveQueueIndex,
+                    onMoveQueueItem = onMoveQueueItem,
+                    onClearUpcoming = onClearUpcoming,
+                    downloadedTrackIds = downloadedTrackIds,
+                    onDownloadTrack = onDownloadTrack,
+                    onRemoveDownloadTrack = onRemoveDownloadTrack,
+                    onAddToPlaylist = onAddToPlaylist,
+                    onShare = onShare,
+                    onOpenCollection = onOpenCollection,
+                    onOpenArtist = onOpenArtist,
+                    onLyricsPanel = { panel = if (lyricsOpen) PlayerPanel.NONE else PlayerPanel.LYRICS },
+                    onQueuePanel = onQueue,
+                    sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
+                    sleepTimerEndOfTrack = sleepTimerEndOfTrack,
+                    onSleepTimer = { sleepTimerDialogOpen = true },
+                    autoplayEnabled = autoplayEnabled,
+                    autoplayLoading = autoplayLoading,
+                    autoplayError = autoplayError,
+                    onAutoplayEnabled = onAutoplayEnabled,
+                    smartCrossfade = smartCrossfade,
+                    onBestMixUpcoming = onBestMixUpcoming,
+                )
+                return@Box
+            }
 
             if (isFoldable) {
                 FoldableNowPlayingBody(
@@ -489,9 +493,3 @@ fun NowPlayingScreen(
         )
     }
 }
-
-/** Fraction of the collapse over which the player body fades out entirely. */
-private const val BODY_FADE_COMPLETE = 0.55f
-
-/** How far the body draws back as it goes, so it recedes rather than merely fading. */
-private const val BODY_SHRINK = 0.90f
