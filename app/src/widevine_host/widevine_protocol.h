@@ -37,12 +37,21 @@ enum Op : uint8_t {
   Fragment = 4,
   // -> nothing; closes the stream's session
   Close = 5,
+  // video init segment -> empty; starts the CDM's decoder on the stream's track
+  VideoInit = 6,
+  // moof + mdat -> empty after a Picture per decoded frame; an empty body drains held frames
+  VideoFragment = 7,
+  // -> empty; drops held frames before a seek
+  VideoReset = 8,
 
   Ok = 0x80,
   // UTF-8 message
   Error = 0x81,
   // Unrequested (id 0): u32 stream + a renewal challenge to post to the license server
   Renewal = 0x82,
+  // Unrequested (id 0) during VideoFragment: u32 stream, i64 presentation microseconds,
+  // u16 width, u16 height, then I420 planes packed without padding
+  Picture = 0x83,
 };
 
 constexpr uint32_t kHeaderBytes = 9;

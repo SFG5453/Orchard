@@ -56,9 +56,10 @@ void AppleMusicStreams::fetchRange(const QString &playbackId, int index) {
   if (!stream)
     return;
   const auto [start, size] = stream->playlist.ranges.at(index);
-  QNetworkRequest request(stream->playlist.media);
+  QNetworkRequest request(stream->playlist.url(index));
   request.setTransferTimeout(30000);
-  request.setRawHeader("Range", "bytes=" + QByteArray::number(start) + '-' + QByteArray::number(start + size - 1));
+  if (const QByteArray range = stream->playlist.rangeHeader(index); !range.isEmpty())
+    request.setRawHeader("Range", range);
   // Ranges the player waits on go ahead of the prefetch.
   request.setPriority(stream->loading.contains(index) ? QNetworkRequest::HighPriority : QNetworkRequest::LowPriority);
   stream->fetching.insert(index);

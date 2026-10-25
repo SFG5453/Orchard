@@ -127,6 +127,76 @@ QByteArray Playlist::segmentIndex(const QByteArray &init) const {
   return box;
 }
 
+void Playlist::setFileSizes(const QList<qint64> &sizes) {
+  qint64 offset = 0;
+  for (int i = 0; i < ranges.size() && i < sizes.size(); ++i) {
+    ranges[i] = {offset, sizes.at(i)};
+    offset += sizes.at(i);
+  }
+}
+
+QByteArray Playlist::rangeHeader(int index) const {
+  if (!files.isEmpty())
+    return {};
+  const auto [start, size] = ranges.at(index);
+  return "bytes=" + QByteArray::number(start) + '-' + QByteArray::number(start + size - 1);
+}
+
+QString parseMaster(const QUrl &playlistUrl, const QByteArray &text, Master &master) {
+  master = {};
+  const QStringList lines = QString::fromUtf8(text).split(QLatin1Char('\n'));
+  if (lines.isEmpty() || !lines.first().trimmed().startsWith(QStringLiteral("#EXTM3U")))
+    return QStringLiteral("not an HLS playlist");
+  QHash<QString, QString> pending;
+  for (const QString &raw : lines) {
+    const QString line = raw.trimmed();
+    if (line.startsWith(QStringLiteral("#EXT-X-MEDIA:"))) {
+      const auto media = attributes(line.mid(13));
+      const QString group = media.value(QStringLiteral("GROUP-ID"));
+      if (media.value(QStringLiteral("TYPE")) == QStringLiteral("AUDIO") && !master.audio.contains(group) &&
+          media.contains(QStringLiteral("URI")))
+        master.audio.insert(group, playlistUrl.resolved(QUrl(media.value(QStringLiteral("URI")))));
+    } else if (line.startsWith(QStringLiteral("#EXT-X-STREAM-INF:"))) {
+      pending = attributes(line.mid(18));
+    } else if (!line.isEmpty() && !line.startsWith(QLatin1Char('#')) && !pending.isEmpty()) {
+      Variant variant;
+      variant.url = playlistUrl.resolved(QUrl(line));
+      variant.height = pending.value(QStringLiteral("RESOLUTION")).section(QLatin1Char('x'), 1, 1).toInt();
+      variant.bandwidth = pending.value(QStringLiteral("BANDWIDTH")).toLongLong();
+      variant.audioGroup = pending.value(QStringLiteral("AUDIO"));
+      const QString allowed = pending.value(QStringLiteral("ALLOWED-CPC"));
+      variant.software = allowed.isEmpty() || allowed.contains(QStringLiteral("WIDEVINE_SOFTWARE"));
+      master.variants.append(variant);
+      pending.clear();
+    }
+  }
+  return master.variants.isEmpty() ? QStringLiteral("no video variants") : QString();
+}
+
+const Variant *pickVariant(const Master &master, int maxHeight) {
+  const Variant *best = nullptr;
+  const Variant *smallest = nullptr;
+  for (const Variant &variant : master.variants) {
+    if (!variant.software)
+      continue;
+    if (!smallest || variant.height < smallest->height)
+      smallest = &variant;
+    if (maxHeight > 0 && variant.height > maxHeight)
+      continue;
+    if (!best || variant.height > best->height || (variant.height == best->height && variant.bandwidth > best->bandwidth))
+      best = &variant;
+  }
+  return best ? best : smallest;
+}
+
+QUrl pickAudio(const Master &master) {
+  for (const QString &rate : {QStringLiteral("stereo-256"), QStringLiteral("stereo-128")})
+    for (auto it = master.audio.cbegin(); it != master.audio.cend(); ++it)
+      if (it.key().endsWith(rate))
+        return it.value();
+  return master.audio.isEmpty() ? QUrl() : master.audio.cbegin().value();
+}
+
 QByteArray widevinePssh(const QByteArray &keyId) {
   // WidevinePsshData { key_ids: keyId }
   const QByteArray data = QByteArray("\x12\x10", 2) + keyId;
@@ -159,9 +229,15 @@ QString parse(const QUrl &playlistUrl, const QByteArray &text, Playlist &playlis
       }
     } else if (line.startsWith(QStringLiteral("#EXT-X-MAP:"))) {
       const auto map = attributes(line.mid(11));
-      if (!playlist.ranges.isEmpty() || !byteRange(map.value(QStringLiteral("BYTERANGE")), 0, range))
-        return QStringLiteral("init segment is not a byte range");
+      if (!playlist.ranges.isEmpty())
+        return QStringLiteral("more than one init segment");
       playlist.media = playlistUrl.resolved(QUrl(map.value(QStringLiteral("URI"))));
+      if (!map.contains(QStringLiteral("BYTERANGE"))) {
+        playlist.files.append(playlist.media);
+        range = {0, 0};
+      } else if (!byteRange(map.value(QStringLiteral("BYTERANGE")), 0, range)) {
+        return QStringLiteral("malformed init byte range");
+      }
       playlist.ranges.append(range);
     } else if (line.startsWith(QStringLiteral("#EXTINF:"))) {
       segmentDuration = line.mid(8).section(QLatin1Char(','), 0, 0).toDouble();
@@ -170,6 +246,12 @@ QString parse(const QUrl &playlistUrl, const QByteArray &text, Playlist &playlis
       if (!byteRange(line.mid(17), follows, range))
         return QStringLiteral("malformed byte range");
       pendingRange = true;
+    } else if (!line.isEmpty() && !line.startsWith(QLatin1Char('#')) && !playlist.files.isEmpty()) {
+      playlist.files.append(playlistUrl.resolved(QUrl(line)));
+      playlist.ranges.append({0, 0});
+      playlist.durations.append(segmentDuration);
+      playlist.duration += segmentDuration;
+      segmentDuration = 0.0;
     } else if (!line.isEmpty() && !line.startsWith(QLatin1Char('#'))) {
       if (!pendingRange || playlist.ranges.isEmpty())
         return QStringLiteral("segment is not a byte range of the init file");

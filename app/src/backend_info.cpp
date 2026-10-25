@@ -71,6 +71,7 @@ QString BackendInfo::licenseText(const QString &key) const
         {QStringLiteral("plog"), QStringLiteral(":/licenses/plog.txt")},
         {QStringLiteral("mbedtls"), QStringLiteral(":/licenses/mbedtls.txt")},
         {QStringLiteral("nlohmann-json"), QStringLiteral(":/licenses/nlohmann-json.txt")},
+        {QStringLiteral("fidelityfx-fsr"), QStringLiteral(":/licenses/fidelityfx-fsr.txt")},
     };
 
     QString path = licensePaths.value(key);

@@ -23,15 +23,26 @@
 
 #include "content_decryption_module.h"
 
+#include <array>
 #include <functional>
 #include <map>
 #include <string>
+#include <vector>
 
 // Chrome's Widevine CDM, loaded from the browser's install and driven through
-// Chromium's CDM interface 10 the way a browser's media pipeline would. It only
-// decrypts; decoding and output stay with Orchard's own audio pipeline.
+// Chromium's CDM interface 10 the way a browser's media pipeline would. Audio is
+// only decrypted. Video licenses refuse plain decryption, so the CDM decodes video
+// itself and hands back frames.
 class CdmHost final : public cdm::Host_10 {
 public:
+  struct Picture {
+    int64_t timeUs{0};
+    uint16_t width{0};
+    uint16_t height{0};
+    // I420, planes packed without padding.
+    cenc_mp4::Bytes pixels;
+  };
+
   ~CdmHost() override;
 
   std::string load(const std::string &path);
@@ -40,6 +51,18 @@ public:
   std::string update(uint32_t stream, const cenc_mp4::Bytes &license);
   std::string decrypt(const cenc_mp4::Track &track, cenc_mp4::Sample &sample);
   void close(uint32_t stream);
+  // The usable key the stream's pssh names, or the license's first usable key when the
+  // pssh names none it granted. Waits a little for keys held back for output protection.
+  std::string keyFor(uint32_t stream, uint8_t (&keyId)[16]);
+
+  // One H.264 decoder for the whole CDM; starting it again replaces the last one.
+  std::string startVideo(const cenc_mp4::Track &track);
+  // Decodes `sample`, or drains held frames when it is null; `picture` is filled when a
+  // frame comes out, with `got` set.
+  std::string decodeVideo(const cenc_mp4::Track &track, cenc_mp4::Sample *sample, Picture &picture, bool &got);
+  // Drops held frames before a seek.
+  void resetVideo();
+  void stopVideo();
 
   // Milliseconds until the CDM's next timer, or -1 without one.
   int nextTimerMs() const;
@@ -73,7 +96,7 @@ private:
   void OnExpirationChange(const char *, uint32_t, cdm::Time) override {}
   void OnSessionClosed(const char *, uint32_t) override {}
   void SendPlatformChallenge(const char *, uint32_t, const char *, uint32_t) override;
-  void EnableOutputProtection(uint32_t) override {}
+  void EnableOutputProtection(uint32_t mask) override;
   void QueryOutputProtectionStatus() override;
   void OnDeferredInitializationDone(cdm::StreamType, cdm::Status) override {}
   cdm::FileIO *CreateFileIO(cdm::FileIOClient *client) override;
@@ -83,12 +106,15 @@ private:
   cdm::ContentDecryptionModule_10 *m_cdm{nullptr};
   bool m_initialized{false};
   bool m_initializeDone{false};
+  bool m_videoStarted{false};
   uint32_t m_nextPromise{1};
   std::map<uint32_t, Promise> m_promises;
   // Due time in milliseconds since the epoch.
   std::multimap<double, void *> m_timers;
   std::map<uint32_t, std::string> m_sessions;
-  std::map<std::string, int> m_usableKeys;
+  using KeyId = std::array<uint8_t, 16>;
+  std::map<std::string, std::vector<std::pair<KeyId, cdm::KeyStatus>>> m_keys;
+  std::map<uint32_t, KeyId> m_psshKeys;
   // Set while a session is created: its first message and id land here.
   bool m_creating{false};
   std::string m_createdSession;

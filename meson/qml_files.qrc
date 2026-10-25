@@ -70,6 +70,7 @@
     <file alias="app/qml/components/home/NavigationSidebar.qml">../app/qml/components/home/NavigationSidebar.qml</file>
     <file alias="app/qml/components/home/SidebarSearch.qml">../app/qml/components/home/SidebarSearch.qml</file>
     <file alias="app/qml/components/home/MediaCard.qml">../app/qml/components/home/MediaCard.qml</file>
+    <file alias="app/qml/components/home/VideoCardButton.qml">../app/qml/components/home/VideoCardButton.qml</file>
     <file alias="app/qml/components/home/ShelfView.qml">../app/qml/components/home/ShelfView.qml</file>
     <file alias="app/qml/components/home/FeatureCarousel.qml">../app/qml/components/home/FeatureCarousel.qml</file>
     <file alias="app/qml/components/home/RailArrow.qml">../app/qml/components/home/RailArrow.qml</file>
@@ -88,6 +89,7 @@
     <file alias="app/qml/components/player/PlayerSideControls.qml">../app/qml/components/player/PlayerSideControls.qml</file>
     <file alias="app/qml/components/player/MusicVideoTheater.qml">../app/qml/components/player/MusicVideoTheater.qml</file>
     <file alias="app/qml/components/player/TheaterBottomBar.qml">../app/qml/components/player/TheaterBottomBar.qml</file>
+    <file alias="app/qml/components/player/TheaterQualityMenu.qml">../app/qml/components/player/TheaterQualityMenu.qml</file>
     <file alias="app/qml/components/player/TheaterButton.qml">../app/qml/components/player/TheaterButton.qml</file>
     <file alias="app/qml/components/player/TheaterUpNext.qml">../app/qml/components/player/TheaterUpNext.qml</file>
     <file alias="app/qml/components/player/TheaterSkipButton.qml">../app/qml/components/player/TheaterSkipButton.qml</file>
@@ -204,6 +206,7 @@
     <file alias="app/qml/views/search/SearchView.qml">../app/qml/views/search/SearchView.qml</file>
     <file alias="app/qml/views/home/UnderConstructionView.qml">../app/qml/views/home/UnderConstructionView.qml</file>
     <file alias="app/qml/views/album/AlbumView.qml">../app/qml/views/album/AlbumView.qml</file>
+    <file alias="app/qml/views/album/AlbumShelves.qml">../app/qml/views/album/AlbumShelves.qml</file>
     <file alias="app/qml/views/playlist/PlaylistView.qml">../app/qml/views/playlist/PlaylistView.qml</file>
     <file alias="app/qml/views/login/LoginView.qml">../app/qml/views/login/LoginView.qml</file>
     <file alias="app/qml/components/welcome/WelcomeButton.qml">../app/qml/components/welcome/WelcomeButton.qml</file>

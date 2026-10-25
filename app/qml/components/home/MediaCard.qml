@@ -67,8 +67,9 @@ Item {
     TapHandler {
         enabled: root.songlist || root.playable || root.playbackBlocked || root.navigable
         onTapped: function(point) {
-            // One handler owns the row so the ellipsis tap never also plays the song.
-            if (root.songlist && root.overMore(point.position)) {
+            // One handler owns the card so the ellipsis tap never also plays the song.
+            const moreButton = root.songlist ? more : root.video ? videoMore : null;
+            if (moreButton && root.over(moreButton, point.position)) {
                 root.openMenu(point.position.x, point.position.y);
                 return;
             }
@@ -77,10 +78,10 @@ Item {
         }
     }
 
-    function overMore(position) {
-        const origin = more.mapToItem(root, 0, 0);
-        return position.x >= origin.x && position.x <= origin.x + more.width
-            && position.y >= origin.y && position.y <= origin.y + more.height;
+    function over(item, position) {
+        const origin = item.mapToItem(root, 0, 0);
+        return position.x >= origin.x && position.x <= origin.x + item.width
+            && position.y >= origin.y && position.y <= origin.y + item.height;
     }
 
     property string presentation: "album"
@@ -169,6 +170,13 @@ Item {
             anchors.fill: parent
             radius: 10
             visible: root.landscape || root.video
+            opacity: root.landscape || hover.hovered || root.activeFocus ? 1 : 0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 140
+                }
+            }
 
             gradient: Gradient {
                 GradientStop {
@@ -192,7 +200,7 @@ Item {
             id: durationBadge
 
             anchors.right: parent.right
-            anchors.bottom: parent.bottom
+            anchors.top: parent.top
             anchors.margins: 7
             width: durationLabel.implicitWidth + 10
             height: 20
@@ -210,6 +218,28 @@ Item {
                 font.pixelSize: 10
                 font.weight: Font.DemiBold
             }
+        }
+
+        VideoCardButton {
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+            anchors.margins: 8
+            visible: root.video
+            shown: hover.hovered || root.activeFocus
+            icon: "play"
+            Accessible.name: qsTr("Play %1").arg(root.media.title || "")
+        }
+
+        VideoCardButton {
+            id: videoMore
+
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.margins: 8
+            visible: root.video
+            shown: hover.hovered || root.activeFocus
+            icon: "ellipsis"
+            Accessible.name: qsTr("More options")
         }
 
         Behavior on y {

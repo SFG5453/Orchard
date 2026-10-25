@@ -37,6 +37,31 @@ QByteArray playlist(const QByteArray &secondRange = "326173@382710") {
          "#EXT-X-ENDLIST\n";
 }
 
+const QUrl kVideoMedia(QStringLiteral("https://mvod.itunes.apple.com/itunes-assets/v/P1_audio_gr256.m3u8?accessKey=k"));
+
+// A music video's audio rendition: an init file and one file per fragment.
+QByteArray videoAudioPlaylist() {
+  return "#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-VERSION:7\n#EXT-X-PLAYLIST-TYPE:VOD\n"
+         "#EXT-X-KEY:METHOD=SAMPLE-AES,URI=\"skd://itunes.apple.com/p1/c6\",KEYFORMAT=\"com.apple.streamingkeydelivery\"\n"
+         "#EXT-X-KEY:METHOD=SAMPLE-AES,URI=\"data:text/plain;base64,AAAAOHBzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAABgSEAAAAAA0FjR4YzYgICAgICBI88aJmwY=\","
+         "KEYFORMAT=\"urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed\",KEYFORMATVERSIONS=\"1\"\n"
+         "#EXT-X-MAP:URI=\"P1_audio-0.mp4\"\n"
+         "#EXTINF:5.99075,\t\n#EXT-X-BITRATE:135\nP1_audio-1.m4s\n"
+         "#EXTINF:4.5,\t\nP1_audio-2.m4s\n#EXT-X-ENDLIST\n";
+}
+
+QByteArray masterPlaylist() {
+  return "#EXTM3U\n#EXT-X-VERSION:7\n"
+         "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio-HE-stereo-64\",NAME=\"English\",URI=\"a64.m3u8\"\n"
+         "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio-stereo-256\",NAME=\"English\",URI=\"a256.m3u8\"\n"
+         "#EXT-X-STREAM-INF:BANDWIDTH=408333,RESOLUTION=480x270,AUDIO=\"audio-HE-stereo-64\","
+         "ALLOWED-CPC=\"com.microsoft.playready:SL2000,urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed:WIDEVINE_SOFTWARE\"\nv270.m3u8\n"
+         "#EXT-X-STREAM-INF:BANDWIDTH=2688747,RESOLUTION=864x486,AUDIO=\"audio-stereo-256\","
+         "ALLOWED-CPC=\"urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed:WIDEVINE_SOFTWARE\"\nv486.m3u8\n"
+         "#EXT-X-STREAM-INF:BANDWIDTH=4621667,RESOLUTION=1280x720,AUDIO=\"audio-stereo-256\","
+         "ALLOWED-CPC=\"urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed:WIDEVINE_HARDWARE\"\nv720.m3u8\n";
+}
+
 } // namespace
 
 class ApplePlaylistTest final : public QObject {
@@ -111,6 +136,33 @@ private slots:
     QCOMPARE(parsed.pssh.mid(4, 4), QByteArray("pssh"));
     QCOMPARE(parsed.pssh.mid(12, 16).toHex(), QByteArray("edef8ba979d64acea3c827dcd51d21ed"));
     QCOMPARE(parsed.pssh.mid(32), QByteArray("\x12\x10", 2) + keyId);
+  }
+
+  void readsOneFilePerFragment() {
+    Playlist parsed;
+    QCOMPARE(parse(kVideoMedia, videoAudioPlaylist(), parsed), QString());
+    QCOMPARE(parsed.files.size(), 3);
+    QCOMPARE(parsed.files.at(2), QUrl(QStringLiteral("https://mvod.itunes.apple.com/itunes-assets/v/P1_audio-2.m4s")));
+    QCOMPARE(parsed.durations.size(), 2);
+    QVERIFY(parsed.keyUri.startsWith(QStringLiteral("data:text/plain;base64,")));
+    QVERIFY(!parsed.pssh.isEmpty());
+    QCOMPARE(parsed.rangeHeader(1), QByteArray());
+    QCOMPARE(parsed.url(1), parsed.files.at(1));
+    parsed.setFileSizes({900, 4000, 3000});
+    QCOMPARE(parsed.ranges.at(2), (QPair<qint64, qint64>{4900, 3000}));
+    QCOMPARE(parsed.servedSize(), 7900 + parsed.indexBytes());
+  }
+
+  void picksSoftwareVideoAndBestAudio() {
+    Master master;
+    QCOMPARE(parseMaster(QUrl(QStringLiteral("https://x.example/m/master.m3u8")), masterPlaylist(), master), QString());
+    QCOMPARE(master.variants.size(), 3);
+    QCOMPARE(pickVariant(master, 0)->height, 486);
+    QCOMPARE(pickVariant(master, 300)->height, 270);
+    // Nothing fits: the smallest software rendition still plays.
+    QCOMPARE(pickVariant(master, 100)->height, 270);
+    QCOMPARE(pickVariant(master, 0)->url, QUrl(QStringLiteral("https://x.example/m/v486.m3u8")));
+    QCOMPARE(pickAudio(master), QUrl(QStringLiteral("https://x.example/m/a256.m3u8")));
   }
 
   void ignoresFairPlayKeys() {
