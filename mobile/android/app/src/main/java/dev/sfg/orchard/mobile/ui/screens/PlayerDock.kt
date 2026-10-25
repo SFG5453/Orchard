@@ -58,11 +58,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.model.RepeatMode
-import dev.sfg.orchard.mobile.ui.glass.GlassTone
-import dev.sfg.orchard.mobile.ui.glass.glassPane
 
 internal val DockHeight = 56.dp
 private val DockInset = 4.dp
+/** Resting fill for the player's transport and dock controls. */
+internal val ControlSurface = Color(0xFF2D2A25)
 internal val DockContent = Color(0xFF0E1520)
 internal val DockHighlight = Color.White.copy(alpha = 0.92f)
 
@@ -115,8 +115,8 @@ internal fun PlayerDock(
             modifier = Modifier
                 .size(DockHeight)
                 .then(
-                    if (trayOpen) Modifier.clip(CircleShape).background(DockHighlight)
-                    else Modifier.glassPane(CircleShape, GlassTone.CONTROL),
+                    if (trayOpen) Modifier.coverFill(CircleShape, COVER_FILL_ACTIVE)
+                    else Modifier.clip(CircleShape).background(ControlSurface),
                 )
                 .clip(CircleShape)
                 .selectable(selected = trayOpen, role = Role.Button, onClick = onToggleTray)
@@ -126,7 +126,7 @@ internal fun PlayerDock(
             Icon(
                 imageVector = Icons.Rounded.Tune,
                 contentDescription = null,
-                tint = if (trayOpen) DockContent else Color.White.copy(alpha = 0.78f),
+                tint = if (trayOpen) Color.White else Color.White.copy(alpha = 0.78f),
                 modifier = Modifier.size(24.dp),
             )
             if (modeActive && !trayOpen) {
@@ -156,7 +156,8 @@ private fun DockTabs(
     BoxWithConstraints(
         modifier = modifier
             .height(DockHeight)
-            .glassPane(CircleShape, GlassTone.CONTROL)
+            .clip(CircleShape)
+            .background(ControlSurface)
             .padding(DockInset),
     ) {
         val slot = maxWidth / 3
@@ -164,7 +165,7 @@ private fun DockTabs(
             Modifier
                 .offset(x = slot * position)
                 .size(width = slot, height = DockHeight - DockInset * 2)
-                .background(DockHighlight, CircleShape),
+                .coverFill(CircleShape, COVER_FILL_ACTIVE),
         )
         Row(Modifier.fillMaxWidth()) {
             DockTab(selected == 0, "Lyrics", onLyrics, Modifier.weight(1f)) { tint ->
@@ -219,6 +220,6 @@ private fun DockTab(
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        icon(if (selected) DockContent else Color.White.copy(alpha = 0.78f))
+        icon(if (selected) Color.White else Color.White.copy(alpha = 0.78f))
     }
 }
