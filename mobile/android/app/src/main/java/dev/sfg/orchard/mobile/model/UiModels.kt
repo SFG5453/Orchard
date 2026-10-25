@@ -81,6 +81,10 @@ data class OrchardSettings(
     val useSystemColors: Boolean = false,
     /** Let the artwork-tinted background drift instead of holding still between tracks. */
     val animatedBackground: Boolean = false,
+    val backdropSpeed: Float = DEFAULT_BACKDROP_SPEED,
+    val backdropIntensity: Float = DEFAULT_BACKDROP_INTENSITY,
+    val backdropSaturation: Float = DEFAULT_BACKDROP_SATURATION,
+    val backdropBrightness: Float = DEFAULT_BACKDROP_BRIGHTNESS,
     /** Overlap the end of a track with the start of the next one. */
     val crossfadeEnabled: Boolean = false,
     val crossfadeSeconds: Int = DEFAULT_CROSSFADE_SECONDS,
@@ -178,6 +182,11 @@ data class OrchardSettings(
         const val MIN_CROSSFADE_SECONDS = 1
         const val MAX_CROSSFADE_SECONDS = 12
         const val DEFAULT_CROSSFADE_SECONDS = 6
+
+        const val DEFAULT_BACKDROP_SPEED = 1.38f
+        const val DEFAULT_BACKDROP_INTENSITY = 1f
+        const val DEFAULT_BACKDROP_SATURATION = 1.22f
+        const val DEFAULT_BACKDROP_BRIGHTNESS = 1f
 
         const val MIN_CACHE_SIZE_MB = 256
         const val MAX_CACHE_SIZE_MB = 8192

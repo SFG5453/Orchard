@@ -72,6 +72,10 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                     .getOrDefault(AudioQuality.HIGH),
                 useSystemColors = values[SYSTEM_COLORS] ?: false,
                 animatedBackground = values[ANIMATED_BACKGROUND] ?: false,
+                backdropSpeed = values[BACKDROP_SPEED] ?: OrchardSettings.DEFAULT_BACKDROP_SPEED,
+                backdropIntensity = values[BACKDROP_INTENSITY] ?: OrchardSettings.DEFAULT_BACKDROP_INTENSITY,
+                backdropSaturation = values[BACKDROP_SATURATION] ?: OrchardSettings.DEFAULT_BACKDROP_SATURATION,
+                backdropBrightness = values[BACKDROP_BRIGHTNESS] ?: OrchardSettings.DEFAULT_BACKDROP_BRIGHTNESS,
                 crossfadeEnabled = values[CROSSFADE_ENABLED] ?: false,
                 crossfadeSeconds = values[CROSSFADE_SECONDS] ?: OrchardSettings.DEFAULT_CROSSFADE_SECONDS,
                 smartCrossfade = values[SMART_CROSSFADE] ?: false,
@@ -144,6 +148,10 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[CELLULAR_AUDIO_QUALITY] = value.cellularAudioQuality.name
                 it[SYSTEM_COLORS] = value.useSystemColors
                 it[ANIMATED_BACKGROUND] = value.animatedBackground
+                it[BACKDROP_SPEED] = value.backdropSpeed
+                it[BACKDROP_INTENSITY] = value.backdropIntensity
+                it[BACKDROP_SATURATION] = value.backdropSaturation
+                it[BACKDROP_BRIGHTNESS] = value.backdropBrightness
                 it[CROSSFADE_ENABLED] = value.crossfadeEnabled
                 it[CROSSFADE_SECONDS] = value.crossfadeSeconds
                 it[SMART_CROSSFADE] = value.smartCrossfade
@@ -280,6 +288,10 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val LYRIC_TRANSLATION_ENDPOINT = stringPreferencesKey("lyric_translation_endpoint")
         val SYSTEM_COLORS = booleanPreferencesKey("system_colors")
         val ANIMATED_BACKGROUND = booleanPreferencesKey("animated_background")
+        val BACKDROP_SPEED = floatPreferencesKey("backdrop_speed")
+        val BACKDROP_INTENSITY = floatPreferencesKey("backdrop_intensity")
+        val BACKDROP_SATURATION = floatPreferencesKey("backdrop_saturation")
+        val BACKDROP_BRIGHTNESS = floatPreferencesKey("backdrop_brightness")
         val CROSSFADE_ENABLED = booleanPreferencesKey("crossfade_enabled")
         val CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
         val SMART_CROSSFADE = booleanPreferencesKey("smart_crossfade")

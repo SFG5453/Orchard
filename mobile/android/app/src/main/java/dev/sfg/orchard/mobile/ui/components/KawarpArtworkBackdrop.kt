@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,6 +47,16 @@ import dev.kawarp.KawarpEngine
 import dev.sfg.orchard.mobile.artwork.highResolutionArtworkUrl
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+
+/** User-adjustable look of the warp; the same four controls as desktop. */
+data class KawarpTuning(
+    val speed: Float = 1.38f,
+    val intensity: Float = 1f,
+    val saturation: Float = 1.22f,
+    val brightness: Float = 1f,
+)
+
+val LocalKawarpTuning = compositionLocalOf { KawarpTuning() }
 
 /**
  * Low-bandwidth full-screen artwork motion for the tablet player and the Home backdrop.
@@ -70,8 +81,6 @@ fun KawarpArtworkBackdrop(
         } else {
             runCatching {
                 KawarpEngine().apply {
-                    setAnimationSpeed(0.72f)
-                    setSaturation(1.22f)
                     setScale(1.08f)
                     setAutoDarken(0.68f)
                     setTransitionDuration(700)
@@ -81,6 +90,14 @@ fun KawarpArtworkBackdrop(
         }
     }
     if (engine == null || artworkUrl.isBlank()) return
+
+    val tuning = LocalKawarpTuning.current
+    LaunchedEffect(engine, tuning) {
+        engine.setAnimationSpeed(tuning.speed)
+        engine.setWarpIntensity(tuning.intensity)
+        engine.setSaturation(tuning.saturation)
+        engine.setBrightness(tuning.brightness)
+    }
 
     // A revision starts the draw clock after an asynchronously loaded cover reaches the engine.
     // Without it, a paused player could stop invalidating before a slow network load completes.
