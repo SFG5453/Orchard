@@ -165,6 +165,13 @@ fun OrchardApp(viewModel: OrchardViewModel) {
         LocalAnimatedArtworkQuality provides settings.artworkQuality(isMetered),
         dev.sfg.orchard.mobile.ui.components.LocalLibraryUiLocal provides localLibraryUi,
         dev.sfg.orchard.mobile.ui.support.LocalSupportUi provides supportUi,
+        dev.sfg.orchard.mobile.ui.components.LocalKawarpTuning provides remember(
+            settings.backdropSpeed, settings.backdropIntensity, settings.backdropSaturation, settings.backdropBrightness,
+        ) {
+            dev.sfg.orchard.mobile.ui.components.KawarpTuning(
+                settings.backdropSpeed, settings.backdropIntensity, settings.backdropSaturation, settings.backdropBrightness,
+            )
+        },
         LocalGlass provides glass,
         LocalGlassScene provides glassScene,
         LocalAccent provides effectiveAccent,
