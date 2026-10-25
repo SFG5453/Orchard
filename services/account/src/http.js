@@ -37,6 +37,18 @@ export function htmlPage(title, message, status) {
   return new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
 }
 
+// Bare 302s to custom schemes leave some Android browsers on a blank page.
+export function appReturnPage(location) {
+  const escape = (text) => text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const target = JSON.stringify(location).replace(/</g, "\\u003c");
+  const body = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<title>Return to Orchard</title><body style="font-family:system-ui;background:#1c211e;color:#f0eee7;display:grid;place-items:center;height:100vh;margin:0">` +
+    `<main style="text-align:center"><h1>Return to Orchard</h1><p>If the app does not open, tap the button.</p>` +
+    `<p><a href="${escape(location)}" style="display:inline-block;padding:12px 24px;border-radius:999px;background:#f0eee7;color:#1c211e;text-decoration:none">Open Orchard</a></p></main>` +
+    `<script>setTimeout(function(){location.href=${target}},0)</script></body>`;
+  return new Response(body, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+}
+
 export function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
     status,
