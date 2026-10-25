@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Crop
@@ -90,6 +91,7 @@ internal fun TrackActionsPopup(
     onDownload: (() -> Unit)? = null,
     onRemoveDownload: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
+    onWatchVideo: (() -> Unit)? = null,
     onViewAlbum: (() -> Unit)? = null,
     onViewArtist: (() -> Unit)? = null,
     tallArt: TallArtToggle? = null,
@@ -166,6 +168,9 @@ internal fun TrackActionsPopup(
             }
             onRemoveDownload?.let { action ->
                 PopupActionRow(Icons.Rounded.Delete, "Remove Download", slot++) { onDismiss(); action() }
+            }
+            onWatchVideo?.let { action ->
+                PopupActionRow(Icons.Rounded.Videocam, "Watch Music Video", slot++) { onDismiss(); action() }
             }
             onViewAlbum?.let { action ->
                 if (track.albumId.isNotBlank()) {

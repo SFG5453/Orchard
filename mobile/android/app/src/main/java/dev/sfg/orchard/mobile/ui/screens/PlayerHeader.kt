@@ -66,6 +66,7 @@ internal fun PlayerHeader(
     isDownloaded: Boolean,
     onDownload: (() -> Unit)?,
     onRemoveDownload: (() -> Unit)?,
+    onWatchVideo: (() -> Unit)? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     if (menuOpen) {
@@ -77,6 +78,7 @@ internal fun PlayerHeader(
             onDownload = if (!isDownloaded) onDownload else null,
             onRemoveDownload = if (isDownloaded) onRemoveDownload else null,
             onShare = onShare,
+            onWatchVideo = onWatchVideo,
             onViewArtist = onOpenArtist,
             onViewAlbum = onOpenAlbum,
             tallArt = LocalTallArtToggle.current,

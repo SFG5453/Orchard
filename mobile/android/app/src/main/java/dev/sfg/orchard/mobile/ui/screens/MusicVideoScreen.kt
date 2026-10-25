@@ -20,17 +20,13 @@
 package dev.sfg.orchard.mobile.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -70,6 +66,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -80,7 +77,6 @@ import dev.sfg.orchard.mobile.app.MusicVideoState
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
-import kotlinx.coroutines.delay
 
 /** Transport callbacks shared by the portrait and fullscreen video layouts. */
 internal class MusicVideoActions(
@@ -98,8 +94,8 @@ internal class MusicVideoActions(
 )
 
 /**
- * The video player over the song player while the video is on, plus the Song/Video switch.
- * One switch serves both views, so its thumb slides and it rises into the video header.
+ * The video player over the song player while the video is on. Holding the video or
+ * tapping Song returns to the song.
  */
 @Composable
 internal fun BoxScope.MusicVideoLayer(
@@ -112,23 +108,7 @@ internal fun BoxScope.MusicVideoLayer(
     actions: MusicVideoActions,
 ) {
     var fullscreen by remember(track.id) { mutableStateOf(false) }
-    // The service swaps sources asynchronously; the thumb answers the tap at once.
-    var requested by remember(track.id) { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(requested, musicVideo.playing) {
-        if (requested == musicVideo.playing) requested = null
-        else if (requested != null) {
-            delay(SWITCH_SETTLE_MS)
-            requested = null
-        }
-    }
     LaunchedEffect(musicVideo.playing) { if (!musicVideo.playing) fullscreen = false }
-    val video = requested ?: musicVideo.playing
-    val switchTo = { wanted: Boolean ->
-        if (wanted != musicVideo.playing) {
-            requested = wanted
-            actions.onSwitch()
-        }
-    }
 
     AnimatedVisibility(
         visible = musicVideo.playing,
@@ -145,7 +125,7 @@ internal fun BoxScope.MusicVideoLayer(
                 playback = playback,
                 localControls = localControls,
                 actions = actions,
-                onSong = { fullscreen = false; switchTo(false) },
+                onSong = { fullscreen = false; actions.onSwitch() },
                 onExit = { fullscreen = false },
             )
         } else {
@@ -160,26 +140,6 @@ internal fun BoxScope.MusicVideoLayer(
                 onFullscreen = { fullscreen = true },
             )
         }
-    }
-
-    AnimatedVisibility(
-        visible = !fullscreen && (musicVideo.playing || musicVideo.available || musicVideo.checking),
-        enter = fadeIn() + scaleIn(initialScale = 0.85f),
-        exit = fadeOut() + scaleOut(targetScale = 0.85f),
-        modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding(),
-    ) {
-        // Centred on the video header row, or just under the song header.
-        val top by animateDpAsState(
-            if (video) VIDEO_HEADER_CENTER - SongVideoSwitchHeight / 2 else SONG_SWITCH_TOP,
-            spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
-            label = "switch rise",
-        )
-        SongVideoSwitch(
-            video = video,
-            checking = musicVideo.checking,
-            onSelect = switchTo,
-            modifier = Modifier.padding(top = top),
-        )
     }
 }
 
@@ -207,7 +167,6 @@ private fun MusicVideoPortrait(
                 .background(Color.Black.copy(alpha = 0.35f)),
         )
         Column(Modifier.fillMaxSize().systemBarsPadding()) {
-            // The shared switch floats over the middle of this row.
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -216,11 +175,12 @@ private fun MusicVideoPortrait(
                 IconButton(onClick = actions.onMinimize) {
                     Icon(Icons.Rounded.ExpandMore, "Minimize player", tint = CanopyColors.Text)
                 }
+                SongTab(actions.onSwitch)
                 IconButton(onClick = actions.onDevices) {
                     Icon(Icons.Rounded.Cast, "Connect to a device", tint = CanopyColors.Text)
                 }
             }
-            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black)) {
+            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black).holdToSwitch(true, actions.onSwitch)) {
                 MusicVideoSurface(player, Modifier.fillMaxSize())
                 VideoQualityButton(musicVideo, actions.onQuality, Modifier.align(Alignment.BottomStart).padding(12.dp))
                 IconButton(onClick = onFullscreen, modifier = Modifier.align(Alignment.BottomEnd)) {
@@ -310,11 +270,21 @@ private fun UpNextPeek(next: Track, onNext: () -> Unit) {
     }
 }
 
-/** Gives up on a tap the service never acted on, such as a cast target refusing video. */
-private const val SWITCH_SETTLE_MS = 4_000L
-
-/** The video header row is 8 dp padding around a 48 dp icon button. */
-private val VIDEO_HEADER_CENTER = 32.dp
-
-/** Clears the song player header: 4 dp padding around a 48 dp icon button. */
-internal val SONG_SWITCH_TOP = 64.dp
+/** Flat text control that returns from the video to the song. */
+@Composable
+internal fun SongTab(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Text(
+        "Song",
+        color = CanopyColors.Text,
+        fontSize = 15.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = modifier
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    )
+}
