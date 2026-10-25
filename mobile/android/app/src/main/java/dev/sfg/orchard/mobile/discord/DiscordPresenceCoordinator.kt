@@ -100,6 +100,14 @@ class DiscordPresenceCoordinator(
             return
         }
 
+        if (snapshot.status == PlaybackStatus.PAUSED) {
+            if (lastStatus != PlaybackStatus.PAUSED) {
+                clearPresence()
+                lastStatus = PlaybackStatus.PAUSED
+            }
+            return
+        }
+
         val isPlaying = snapshot.status == PlaybackStatus.PLAYING
         val positionMs = snapshot.positionMs.coerceAtLeast(0)
         val durationMs = snapshot.durationMs.takeIf { it > 0 } ?: track.durationMs
@@ -157,7 +165,7 @@ class DiscordPresenceCoordinator(
         DiscordNative.setPresence(
             type = DISCORD_LISTENING,
             name = artist,
-            details = if (isPlaying) title else "Paused - $title",
+            details = title,
             state = artist,
             startMs = start,
             endMs = end,
