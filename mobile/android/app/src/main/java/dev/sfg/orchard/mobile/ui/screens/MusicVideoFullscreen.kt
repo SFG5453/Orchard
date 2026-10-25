@@ -131,7 +131,7 @@ internal fun MusicVideoFullscreen(
                         Text(track.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(track.artist, color = CanopyColors.MutedStrong, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    SongVideoSwitch(video = true, onSelect = { if (!it) onSong() })
+                    SongTab(onSong)
                 }
                 Row(
                     Modifier.align(Alignment.Center),
