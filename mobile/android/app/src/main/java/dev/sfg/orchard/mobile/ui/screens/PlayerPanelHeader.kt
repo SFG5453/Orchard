@@ -109,9 +109,9 @@ internal fun PlayerPanelHeader(
                 )
             }
             if (showLike) {
-                TrackActionButtons(liked = liked, onLiked = onLiked, onOpenMenu = { menuOpen = true })
+                TrackActionButtons(liked = liked, onLiked = onLiked, onOpenMenu = { menuOpen = true }, glass = false)
             } else {
-                OverflowButton(onClick = { menuOpen = true })
+                OverflowButton(onClick = { menuOpen = true }, glass = false)
             }
         }
     }
