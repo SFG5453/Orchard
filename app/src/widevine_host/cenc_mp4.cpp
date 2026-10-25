@@ -19,6 +19,7 @@
 
 #include "cenc_mp4.h"
 
+#include <algorithm>
 #include <cstring>
 
 namespace cenc_mp4 {
@@ -129,6 +130,9 @@ std::string clearInit(Bytes &init, Track &track) {
     const Box *box = find(level, type);
     if (!box)
       return "init segment has no sample description";
+    if (const Box *mdhd = type == fourcc("minf") ? find(level, fourcc("mdhd")) : nullptr;
+        mdhd && mdhd->end - mdhd->body >= 24)
+      track.timescale = be32(init, mdhd->body + (init[mdhd->body] == 1 ? 20 : 12));
     if (type == fourcc("stsd")) {
       stsd = box;
       break;
@@ -144,6 +148,12 @@ std::string clearInit(Bytes &init, Track &track) {
   if (entry.type != fourcc("enca") && entry.type != fourcc("encv"))
     return "track is not encrypted";
   const std::vector<Box> entryKids = children(init, entryChildren(init, entry), entry.end);
+  if (entry.type == fourcc("encv") && entry.end - entry.body >= 28) {
+    track.width = be16(init, entry.body + 24);
+    track.height = be16(init, entry.body + 26);
+    if (const Box *avcC = find(entryKids, fourcc("avcC")))
+      track.avcC.assign(init.begin() + long(avcC->body), init.begin() + long(avcC->end));
+  }
   const Box *sinf = find(entryKids, fourcc("sinf"));
   if (!sinf)
     return "sample entry has no sinf";
@@ -167,12 +177,10 @@ std::string clearInit(Bytes &init, Track &track) {
   return {};
 }
 
-std::string clearFragment(Bytes &fragment, const Track &track,
-                          const std::function<std::string(Sample &)> &decrypt) {
-  const std::vector<Box> top = children(fragment, 0, fragment.size());
-  const Box *moof = find(top, fourcc("moof"));
-  if (!moof)
-    return "fragment has no moof";
+namespace {
+
+std::string clearMoof(Bytes &fragment, const Box *moof, const Track &track,
+                      const std::function<std::string(Sample &)> &decrypt) {
   const std::vector<Box> moofKids = children(fragment, moof->body, moof->end);
   for (const Box &box : moofKids)
     if (box.type == fourcc("pssh"))
@@ -189,13 +197,26 @@ std::string clearFragment(Bytes &fragment, const Track &track,
   // An absolute base offset points into the whole file, which this fragment cannot see.
   if (tfFlags & 1)
     return "fragment uses an absolute base offset";
-  size_t at = tfhd->body + 8;
-  at += (tfFlags & 2 ? 4 : 0) + (tfFlags & 8 ? 4 : 0);
+  size_t at = tfhd->body + 8 + (tfFlags & 2 ? 4 : 0);
+  uint32_t defaultDuration = 0;
+  if (tfFlags & 8) {
+    if (at + 4 > tfhd->end)
+      return "tfhd is truncated";
+    defaultDuration = be32(fragment, at);
+    at += 4;
+  }
   uint32_t defaultSize = 0;
   if (tfFlags & 0x10) {
     if (at + 4 > tfhd->end)
       return "tfhd is truncated";
     defaultSize = be32(fragment, at);
+  }
+
+  int64_t decodeTime = 0;
+  if (const Box *tfdt = find(trafKids, fourcc("tfdt")); tfdt && tfdt->end - tfdt->body >= 8) {
+    const bool wide = fragment[tfdt->body] == 1 && tfdt->end - tfdt->body >= 12;
+    decodeTime = wide ? int64_t(uint64_t(be32(fragment, tfdt->body + 4)) << 32 | be32(fragment, tfdt->body + 8))
+                      : int64_t(be32(fragment, tfdt->body + 4));
   }
 
   const uint32_t sencFlags = be32(fragment, senc->body) & 0xffffff;
@@ -222,19 +243,28 @@ std::string clearFragment(Bytes &fragment, const Track &track,
     if (field + perSample * count > trun.end)
       return "trun is truncated";
     for (uint32_t i = 0; i < count; ++i, ++sampleIndex) {
-      if (flags & 0x100)
+      uint32_t duration = defaultDuration;
+      if (flags & 0x100) {
+        duration = be32(fragment, field);
         field += 4;
+      }
       uint32_t size = defaultSize;
       if (flags & 0x200) {
         size = be32(fragment, field);
         field += 4;
       }
-      field += (flags & 0x400 ? 4 : 0) + (flags & 0x800 ? 4 : 0);
+      field += flags & 0x400 ? 4 : 0;
+      int32_t offset = 0;
+      if (flags & 0x800) {
+        offset = int32_t(be32(fragment, field));
+        field += 4;
+      }
       if (sampleIndex >= sencCount)
         return "senc describes fewer samples than trun";
       if (next + size > fragment.size())
         return "sample runs past the fragment";
-      Sample sample{&fragment[next], size, {}, 16, {}};
+      Sample sample{&fragment[next], size, {}, 16, {}, decodeTime + offset};
+      decodeTime += duration;
       if (track.perSampleIvSize) {
         if (info + track.perSampleIvSize > senc->end)
           return "senc is truncated";
@@ -262,6 +292,80 @@ std::string clearFragment(Bytes &fragment, const Track &track,
     if (box.type == fourcc("senc") || box.type == fourcc("saiz") || box.type == fourcc("saio"))
       rename(fragment, box, kFree);
   return {};
+}
+
+} // namespace
+
+std::string clearFragment(Bytes &fragment, const Track &track,
+                          const std::function<std::string(Sample &)> &decrypt) {
+  // An HLS segment may hold several moof + mdat pairs; music videos often carry two.
+  bool found = false;
+  for (const Box &box : children(fragment, 0, fragment.size())) {
+    if (box.type != fourcc("moof"))
+      continue;
+    found = true;
+    if (std::string error = clearMoof(fragment, &box, track, decrypt); !error.empty())
+      return error;
+  }
+  return found ? std::string() : "fragment has no moof";
+}
+
+bool psshKeyId(const Bytes &pssh, uint8_t (&keyId)[16]) {
+  if (pssh.size() < 32 || be32(pssh, 4) != fourcc("pssh"))
+    return false;
+  size_t at = 28;
+  if (pssh[8] >= 1) {
+    const uint32_t count = be32(pssh, at);
+    at += 4;
+    if (count && at + 16 <= pssh.size()) {
+      std::memcpy(keyId, pssh.data() + at, 16);
+      return true;
+    }
+    at += size_t(count) * 16;
+  }
+  if (at + 4 > pssh.size())
+    return false;
+  const size_t end = std::min(pssh.size(), at + 4 + be32(pssh, at));
+  at += 4;
+  // WidevinePsshData: field 2 (key_id) is length-delimited.
+  const auto varint = [&](uint64_t &value) {
+    value = 0;
+    for (int shift = 0; at < end && shift < 64; shift += 7) {
+      const uint8_t byte = pssh[at++];
+      value |= uint64_t(byte & 0x7f) << shift;
+      if (!(byte & 0x80))
+        return true;
+    }
+    return false;
+  };
+  uint64_t tag = 0;
+  while (at < end && varint(tag)) {
+    uint64_t length = 0;
+    switch (tag & 7) {
+    case 0:
+      if (!varint(length))
+        return false;
+      break;
+    case 2:
+      if (!varint(length) || length > end - at)
+        return false;
+      if (tag >> 3 == 2 && length == 16) {
+        std::memcpy(keyId, pssh.data() + at, 16);
+        return true;
+      }
+      at += size_t(length);
+      break;
+    case 5:
+      at += 4;
+      break;
+    case 1:
+      at += 8;
+      break;
+    default:
+      return false;
+    }
+  }
+  return false;
 }
 
 } // namespace cenc_mp4

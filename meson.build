@@ -274,6 +274,15 @@ foreach shader : shader_sources
     input: files(shader), output: name + '.qsb',
     command: [qsb, '--glsl', '100 es,120,150', '--hlsl', '50', '--msl', '12', '-o', '@OUTPUT@', '@INPUT@'])
 endforeach
+# FSR 1 includes AMD's headers unchanged; their bit casts need GLSL 330 or ES 300.
+foreach shader : ['app/qml/shaders/fsr_easu.frag', 'app/qml/shaders/fsr_rcas.frag']
+  name = shader.split('/')[-1]
+  shader_resources += custom_target('shader ' + name,
+    input: files(shader), output: name + '.qsb',
+    depfile: name + '.d',
+    command: [qsb, '--glsl', '330,300 es', '--hlsl', '50', '--msl', '12', '--depfile', '@DEPFILE@',
+      '-o', '@OUTPUT@', '@INPUT@'])
+endforeach
 shaders_cpp = custom_target('shader resources', input: shader_resources,
   output: 'qrc_shader_resources.cpp',
   command: [python, files('scripts/meson-rcc.py'), '--rcc', rcc,
@@ -433,12 +442,23 @@ auth_helper = executable('orchard-auth-helper', files(auth_sources) + helper_moc
 
 # Apple Music's Widevine streams decrypt here, outside the app and without a browser.
 if host_machine.system() in ['linux', 'windows']
+  widevine_host_args = []
+  widevine_host_deps = [cpp.find_library('dl', required: false)]
+  if host_machine.system() == 'windows'
+    widevine_host_args = ['-DNOMINMAX', '-DWIN32_LEAN_AND_MEAN']
+    # HdcpSession reports and requests HDCP for Widevine keys that require it.
+    if cpp.has_header('windows.media.protection.h')
+      widevine_host_args += ['-DORCHARD_HDCP_SESSION']
+      widevine_host_deps += [cpp.find_library('runtimeobject'), cpp.find_library('user32')]
+    endif
+  endif
   widevine_host = executable('orchard-widevine-host',
     files('app/src/widevine_host/widevine_host_main.cpp', 'app/src/widevine_host/cdm_host.cpp',
-      'app/src/widevine_host/cenc_mp4.cpp'),
+      'app/src/widevine_host/cenc_mp4.cpp', 'app/src/widevine_host/annex_b.cpp',
+      'app/src/widevine_host/output_protection.cpp'),
     include_directories: include_directories('third_party/chromium_cdm'),
-    cpp_args: host_machine.system() == 'windows' ? ['-DNOMINMAX', '-DWIN32_LEAN_AND_MEAN'] : [],
-    dependencies: [cpp.find_library('dl', required: false)],
+    cpp_args: widevine_host_args,
+    dependencies: widevine_host_deps,
     install: true)
 endif
 
@@ -560,6 +580,12 @@ if get_option('tests')
     test_env = spec[0] == 'slop_fingerprint' ? ['ORCHARD_MODELS_DIR=' + source_root / 'models'] : []
     test(test_name, test_exe, timeout: 120, env: test_env)
   endforeach
+
+  widevine_host_test = executable('orchard_widevine_host_tests',
+    files('tests/widevine_host_test.cpp', 'app/src/widevine_host/cenc_mp4.cpp', 'app/src/widevine_host/annex_b.cpp'),
+    qt6.compile_moc(sources: ['tests/widevine_host_test.cpp']),
+    include_directories: include_directories('app/src'), dependencies: [qt_test_dep])
+  test('orchard_widevine_host', widevine_host_test, timeout: 60)
 
   auth_test_moc = qt6.compile_moc(
     sources: ['tests/auth_manager_test.cpp'],

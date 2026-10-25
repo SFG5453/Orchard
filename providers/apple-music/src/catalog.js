@@ -24,6 +24,9 @@ import { linkNotes, noteTargets } from './notes.js';
 import { ARTIST_INCLUDES, album, artworkUrl, items, notes, playlist, releaseInfo, track, yearOf } from './normalize.js';
 
 const SEARCH_TYPES = { songs: 'songs', albums: 'albums', artists: 'artists', playlists: 'playlists' };
+// Shelves under an album, in page order; the public API serves only PUBLIC_ALBUM_VIEWS.
+const ALBUM_VIEWS = ['related-videos', 'more-by-artist', 'other-versions', 'you-might-also-like', 'appears-on'];
+const PUBLIC_ALBUM_VIEWS = ['related-videos', 'other-versions'];
 
 function requireId(id, type) {
   const parsed = parseBrowseId(id);
@@ -56,7 +59,8 @@ export function createCatalog(client, library) {
     const attributes = resource.attributes || {};
     const card = album(resource);
     const cards = tracks.map((song, index) => track(song, index)).filter(Boolean);
-    const others = (await discography(card.artistBrowseId)).filter((entry) => entry.browseId !== id);
+    const [discographyItems, views] = await Promise.all([discography(card.artistBrowseId), albumViews(appleId)]);
+    const others = discographyItems.filter((entry) => entry.browseId !== id);
     return {
       kind: 'album',
       browseId: id,
@@ -74,7 +78,30 @@ export function createCatalog(client, library) {
       itemCount: String(attributes.trackCount || tracks.length),
       copyright: attributes.copyright || '',
       tracks: cards,
-      sections: []
+      sections: ALBUM_VIEWS.map((name) => albumSection(id, name, views[name])).filter(Boolean)
+    };
+  }
+
+  /** The album's related shelves; a failure only costs the shelves. */
+  async function albumViews(appleId) {
+    const path = catalogPath(`albums/${encodeURIComponent(appleId)}`);
+    try {
+      const page = await client.editorial(path, { views: ALBUM_VIEWS.join(','), ...ARTIST_INCLUDES })
+        || await client.get(path, { views: PUBLIC_ALBUM_VIEWS.join(','), ...ARTIST_INCLUDES });
+      return page?.data?.[0]?.views || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function albumSection(id, name, view) {
+    const sectionItems = items(view?.data).filter((entry) => entry.browseId !== id);
+    if (!sectionItems.length) return null;
+    return {
+      key: name,
+      title: view.attributes?.title || name,
+      items: sectionItems,
+      browsePayload: null
     };
   }
 

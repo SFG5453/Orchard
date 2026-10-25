@@ -256,11 +256,69 @@ int main(int argc, char **argv) {
     case Init: {
       cenc_mp4::Track track;
       const std::string error = cenc_mp4::clearInit(body, track);
+      // Apple's music videos leave tenc's key id zero and name the key only in the playlist's pssh.
+      if (error.empty() && std::all_of(std::begin(track.keyId), std::end(track.keyId), [](uint8_t b) { return !b; }))
+        host.keyFor(stream, track.keyId);
       if (error.empty())
         tracks[stream] = track;
       writable = error.empty() ? reply(id, Ok, body.data(), body.size()) : replyError(id, error);
       break;
     }
+    case VideoInit: {
+      cenc_mp4::Track track;
+      std::string error = cenc_mp4::clearInit(body, track);
+      if (error.empty() && std::all_of(std::begin(track.keyId), std::end(track.keyId), [](uint8_t b) { return !b; }))
+        error = host.keyFor(stream, track.keyId);
+      if (error.empty())
+        error = host.startVideo(track);
+      if (error.empty())
+        tracks[stream] = track;
+      writable = error.empty() ? reply(id, Ok, nullptr, 0) : replyError(id, error);
+      break;
+    }
+    case VideoFragment: {
+      const auto track = tracks.find(stream);
+      if (track == tracks.end()) {
+        writable = replyError(id, "fragment before its init segment");
+        break;
+      }
+      CdmHost::Picture picture;
+      const auto send = [&] {
+        Bytes message(16 + picture.pixels.size());
+        putLe32(message.data(), stream);
+        putLe32(message.data() + 4, uint32_t(uint64_t(picture.timeUs)));
+        putLe32(message.data() + 8, uint32_t(uint64_t(picture.timeUs) >> 32));
+        message[12] = uint8_t(picture.width);
+        message[13] = uint8_t(picture.width >> 8);
+        message[14] = uint8_t(picture.height);
+        message[15] = uint8_t(picture.height >> 8);
+        std::copy(picture.pixels.begin(), picture.pixels.end(), message.begin() + 16);
+        writable = writable && reply(0, Picture, message.data(), message.size());
+      };
+      std::string error;
+      bool got = false;
+      if (body.empty()) {
+        // Drain until the decoder has nothing left.
+        do {
+          error = host.decodeVideo(track->second, nullptr, picture, got);
+          if (got)
+            send();
+        } while (got && error.empty());
+      } else {
+        error = cenc_mp4::clearFragment(body, track->second, [&](cenc_mp4::Sample &sample) {
+          std::string failed = host.decodeVideo(track->second, &sample, picture, got);
+          if (got)
+            send();
+          return failed;
+        });
+      }
+      writable = writable && (error.empty() ? reply(id, Ok, nullptr, 0) : replyError(id, error));
+      break;
+    }
+    case VideoReset:
+      host.resetVideo();
+      writable = reply(id, Ok, nullptr, 0);
+      break;
     case Fragment: {
       const auto track = tracks.find(stream);
       if (track == tracks.end()) {
@@ -273,6 +331,8 @@ int main(int argc, char **argv) {
       break;
     }
     case Close:
+      if (const auto track = tracks.find(stream); track != tracks.end() && !track->second.avcC.empty())
+        host.stopVideo();
       host.close(stream);
       tracks.erase(stream);
       break;

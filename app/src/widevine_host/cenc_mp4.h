@@ -40,6 +40,12 @@ struct Track {
   uint8_t constantIvSize{0};
   uint8_t cryptBlocks{0};
   uint8_t skipBlocks{0};
+  // Media timescale from mdhd; sample times count in it.
+  uint32_t timescale{0};
+  // Video tracks: the visual sample entry's size and its avcC body.
+  uint16_t width{0};
+  uint16_t height{0};
+  std::vector<uint8_t> avcC;
 };
 
 struct Sample {
@@ -49,6 +55,8 @@ struct Sample {
   uint32_t ivSize;
   // Pairs of clear and encrypted byte counts; empty when the whole sample is encrypted.
   std::vector<std::pair<uint32_t, uint32_t>> subsamples;
+  // Presentation time in the track's timescale.
+  int64_t time{0};
 };
 
 constexpr uint32_t fourcc(const char (&code)[5]) {
@@ -60,9 +68,13 @@ constexpr uint32_t fourcc(const char (&code)[5]) {
 // Returns an error message, or an empty string.
 std::string clearInit(Bytes &init, Track &track);
 
-// Hands each encrypted sample of a moof + mdat fragment to `decrypt`, which overwrites
+// Hands each encrypted sample of every moof + mdat pair to `decrypt`, which overwrites
 // it with clear bytes, then marks the fragment clear.
 std::string clearFragment(Bytes &fragment, const Track &track,
                           const std::function<std::string(Sample &)> &decrypt);
+
+// The first key id a Widevine pssh box names, from its v1 key list or its data's key_id
+// field. False when it names none.
+bool psshKeyId(const Bytes &pssh, uint8_t (&keyId)[16]);
 
 } // namespace cenc_mp4

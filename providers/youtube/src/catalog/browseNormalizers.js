@@ -21,6 +21,7 @@
 import { releaseTypeFromText } from './musicItemTypes.js';
 import { playlistItemCount, playlistTotalItemCount } from './playlistCount.js';
 import { createBrowseItemNormalizers } from './browseItemNormalizers.js';
+import { withAlbumVideos } from './albumVideos.js';
 export function createBrowseNormalizers({
   asText,
   bestThumbnail,
@@ -406,11 +407,10 @@ export function createBrowseNormalizers({
       description,
       thumbnail,
       tracks,
-      sections: rawSectionList(album)
+      sections: withAlbumVideos(rawSectionList(album)
         .slice(1)
         .map(normalizeBrowseSection)
-        .filter((section) => section.items.length > 0)
-        .slice(0, 2)
+        .filter((section) => section.items.length > 0), tracks)
     };
   }
 

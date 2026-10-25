@@ -31,6 +31,8 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+class AppleMusic;
+class AppleMusicPicture;
 class AuthManager;
 class QVideoSink;
 class PlaybackController;
@@ -53,11 +55,18 @@ class MusicVideoController final : public QObject {
   // Heights the current video offers, tallest first, and the one playing.
   Q_PROPERTY(QVariantList heights READ heights NOTIFY changed)
   Q_PROPERTY(int height READ height NOTIFY changed)
+  // FSR 1 for pictures smaller than the screen, and its sharpening from 0 to 1; saved across sessions.
+  Q_PROPERTY(bool upscaling READ upscaling WRITE setUpscaling NOTIFY changed)
+  Q_PROPERTY(double sharpness READ sharpness WRITE setSharpness NOTIFY changed)
+  // Why the quality menu stops where it does, or empty.
+  Q_PROPERTY(QString qualityNote READ qualityNote NOTIFY changed)
   // Picture inside black bars baked into the video, in 0..1 frame coordinates.
   Q_PROPERTY(QRectF contentRect READ contentRect NOTIFY contentRectChanged)
 public:
   MusicVideoController(YouTubeProvider *provider, AuthManager *auth, PlaybackController *playback,
                        QObject *parent = nullptr);
+  // Apple Music videos play their own picture through the account's Widevine host.
+  void setAppleMusic(AppleMusic *account);
 
   [[nodiscard]] QString status() const { return m_status; }
   [[nodiscard]] bool available() const;
@@ -70,6 +79,11 @@ public:
   [[nodiscard]] QVariantList heights() const { return m_heights; }
   [[nodiscard]] int height() const { return m_height; }
   [[nodiscard]] QRectF contentRect() const;
+  [[nodiscard]] bool upscaling() const { return m_upscaling; }
+  void setUpscaling(bool enabled);
+  [[nodiscard]] double sharpness() const { return m_sharpness; }
+  void setSharpness(double sharpness);
+  [[nodiscard]] QString qualityNote() const;
 
   Q_INVOKABLE void show();
   // Plays a video row from the catalog and opens the theater on it.
@@ -109,6 +123,8 @@ private:
   quint64 m_streamRequest{0};
   bool m_open{false};
   int m_maxHeight{1080};
+  bool m_upscaling{true};
+  double m_sharpness{0.8};
   int m_height{0};
   QVariantList m_heights;
   QPointer<QVideoSink> m_sink;
@@ -116,4 +132,7 @@ private:
   QRectF m_contentRect;
   // Track id to video id; an empty value records a confirmed miss.
   QHash<QString, QString> m_lookups;
+  AppleMusicPicture *m_applePicture{nullptr};
+  // The playing item is an Apple Music video; m_videoId holds its catalog id.
+  bool m_apple{false};
 };

@@ -18,6 +18,7 @@
     <file alias="plog.txt">../third_party/libdatachannel/deps/plog/LICENSE</file>
     <file alias="mbedtls.txt">../third_party/mbedtls/LICENSE</file>
     <file alias="nlohmann-json.txt">../third_party/json/LICENSE.MIT</file>
+    <file alias="fidelityfx-fsr.txt">../third_party/FidelityFX-FSR/license.txt</file>
     <file alias="kawarp/LICENSE">../third_party/kawarp/LICENSE</file>
     <file alias="liquidglass/LICENSE">../third_party/liquidglass/LICENSE</file>
   </qresource>

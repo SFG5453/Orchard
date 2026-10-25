@@ -25,6 +25,15 @@ preserved in [`third_party/chromium_cdm/LICENSE`](third_party/chromium_cdm/LICEN
 and shipped with Linux packages. Orchard does not ship the Widevine CDM; it
 loads the copy an installed browser keeps.
 
+## AMD FidelityFX Super Resolution 1
+
+The music video player upscales and sharpens small videos with FSR 1 from
+`github.com/GPUOpen-Effects/FidelityFX-FSR` v1.0.2, a submodule at
+`third_party/FidelityFX-FSR`. Orchard's shaders include `ffx_a.h` and
+`ffx_fsr1.h` unchanged. They are licensed under the MIT license, preserved in
+[`third_party/FidelityFX-FSR/license.txt`](third_party/FidelityFX-FSR/license.txt)
+and shipped with packages.
+
 ## Microsoft Edge WebView2 SDK
 
 The Windows sign-in helper uses the WebView2 SDK 1.0.4258.31 headers and loader

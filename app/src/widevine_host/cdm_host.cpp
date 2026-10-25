@@ -18,6 +18,8 @@
  */
 
 #include "cdm_host.h"
+#include "annex_b.h"
+#include "output_protection.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -35,6 +37,8 @@ namespace {
 constexpr char kKeySystem[] = "com.widevine.alpha";
 // License calls settle synchronously in the CDMs seen so far; this bounds a CDM that waits on its own timers.
 constexpr double kPromiseTimeoutMs = 10000;
+// Keys that need HDCP turn usable once the CDM sees the protection the OS reports.
+constexpr double kRestrictedWaitMs = 3000;
 
 #ifdef _WIN32
 void *openLibrary(const std::string &path) {
@@ -88,6 +92,33 @@ public:
 
 private:
   cdm::Buffer *m_buffer{nullptr};
+};
+
+class VideoFrame final : public cdm::VideoFrame {
+public:
+  ~VideoFrame() override {
+    if (buffer)
+      buffer->Destroy();
+  }
+  void SetFormat(cdm::VideoFormat value) override { format = value; }
+  cdm::VideoFormat Format() const override { return format; }
+  void SetSize(cdm::Size value) override { size = value; }
+  cdm::Size Size() const override { return size; }
+  void SetFrameBuffer(cdm::Buffer *value) override { buffer = value; }
+  cdm::Buffer *FrameBuffer() override { return buffer; }
+  void SetPlaneOffset(cdm::VideoPlane plane, uint32_t value) override { offsets[plane] = value; }
+  uint32_t PlaneOffset(cdm::VideoPlane plane) override { return offsets[plane]; }
+  void SetStride(cdm::VideoPlane plane, uint32_t value) override { strides[plane] = value; }
+  uint32_t Stride(cdm::VideoPlane plane) override { return strides[plane]; }
+  void SetTimestamp(int64_t value) override { timestamp = value; }
+  int64_t Timestamp() const override { return timestamp; }
+
+  cdm::VideoFormat format{cdm::kUnknownVideoFormat};
+  cdm::Size size{};
+  cdm::Buffer *buffer{nullptr};
+  uint32_t offsets[cdm::kMaxPlanes]{};
+  uint32_t strides[cdm::kMaxPlanes]{};
+  int64_t timestamp{0};
 };
 
 // Temporary sessions need no storage; every open fails so the CDM falls back to memory.
@@ -170,6 +201,8 @@ std::string CdmHost::open(uint32_t stream, const cenc_mp4::Bytes &pssh, cenc_mp4
   if (!error.empty())
     return error;
   m_sessions[stream] = m_createdSession;
+  if (uint8_t named[16]; cenc_mp4::psshKeyId(pssh, named))
+    std::memcpy(m_psshKeys[stream].data(), named, sizeof named);
   challenge = std::move(m_createdMessage);
   return {};
 }
@@ -183,7 +216,8 @@ std::string CdmHost::update(uint32_t stream, const cenc_mp4::Bytes &license) {
                        uint32_t(license.size()));
   if (std::string error = wait(promise); !error.empty())
     return error;
-  return m_usableKeys[session->second] > 0 ? std::string() : "the license has no usable key";
+  uint8_t keyId[16];
+  return keyFor(stream, keyId);
 }
 
 std::string CdmHost::decrypt(const cenc_mp4::Track &track, cenc_mp4::Sample &sample) {
@@ -216,6 +250,130 @@ std::string CdmHost::decrypt(const cenc_mp4::Track &track, cenc_mp4::Sample &sam
   return {};
 }
 
+std::string CdmHost::keyFor(uint32_t stream, uint8_t (&keyId)[16]) {
+  const auto session = m_sessions.find(stream);
+  if (session == m_sessions.end())
+    return "no session for this stream";
+  const auto named = m_psshKeys.find(stream);
+  const double deadline = nowMs() + kRestrictedWaitMs;
+  bool asked = false;
+  for (;;) {
+    const auto &keys = m_keys[session->second];
+    const std::pair<KeyId, cdm::KeyStatus> *pick = nullptr;
+    bool restricted = false;
+    for (const auto &key : keys) {
+      if (named != m_psshKeys.end() && key.first == named->second) {
+        pick = &key;
+        restricted = key.second == cdm::kOutputRestricted;
+        break;
+      }
+      if (!pick && key.second == cdm::kUsable)
+        pick = &key;
+      restricted = restricted || key.second == cdm::kOutputRestricted;
+    }
+    if (pick && pick->second == cdm::kUsable) {
+      std::memcpy(keyId, pick->first.data(), sizeof keyId);
+      return {};
+    }
+    if (!restricted)
+      return "the license has no usable key";
+    if (!asked) {
+      output_protection::enable(cdm::kProtectionHDCP);
+      asked = true;
+    }
+    if (nowMs() >= deadline)
+      return "the license needs protected (HDCP) display output";
+    runTimers();
+    sleepMs(20);
+  }
+}
+
+std::string CdmHost::startVideo(const cenc_mp4::Track &track) {
+  stopVideo();
+  if (track.avcC.size() < 2 || !track.width || !track.height || !track.timescale)
+    return "not an H.264 video track";
+  cdm::VideoDecoderConfig_2 config{};
+  config.codec = cdm::kCodecH264;
+  const uint8_t profile = track.avcC[1];
+  config.profile = profile == 66 ? cdm::kH264ProfileBaseline : profile == 77 ? cdm::kH264ProfileMain
+                   : profile == 88 ? cdm::kH264ProfileExtended : cdm::kH264ProfileHigh;
+  config.format = cdm::kI420;
+  config.coded_size = {track.width, track.height};
+  std::vector<uint8_t> extra = track.avcC;
+  config.extra_data = extra.data();
+  config.extra_data_size = uint32_t(extra.size());
+  config.encryption_scheme =
+      track.scheme == cenc_mp4::fourcc("cbcs") ? cdm::EncryptionScheme::kCbcs : cdm::EncryptionScheme::kCenc;
+  if (m_cdm->InitializeVideoDecoder(config) != cdm::kSuccess)
+    return "the CDM cannot decode this video";
+  m_videoStarted = true;
+  return {};
+}
+
+std::string CdmHost::decodeVideo(const cenc_mp4::Track &track, cenc_mp4::Sample *sample, Picture &picture,
+                                 bool &got) {
+  got = false;
+  if (!m_videoStarted)
+    return "the video decoder is not started";
+  cenc_mp4::Bytes data;
+  std::vector<std::pair<uint32_t, uint32_t>> ranges;
+  std::vector<cdm::SubsampleEntry> subsamples;
+  cdm::InputBuffer_2 input{};
+  if (sample) {
+    if (std::string error = annex_b::convert(*sample, track.avcC, data, ranges); !error.empty())
+      return error;
+    for (const auto &[clear, cipher] : ranges)
+      subsamples.push_back({clear, cipher});
+    const bool cbcs = track.scheme == cenc_mp4::fourcc("cbcs");
+    input.data = data.data();
+    input.data_size = uint32_t(data.size());
+    input.encryption_scheme = cbcs ? cdm::EncryptionScheme::kCbcs : cdm::EncryptionScheme::kCenc;
+    input.key_id = track.keyId;
+    input.key_id_size = sizeof track.keyId;
+    input.iv = sample->iv;
+    input.iv_size = sample->ivSize;
+    input.subsamples = subsamples.data();
+    input.num_subsamples = uint32_t(subsamples.size());
+    if (cbcs)
+      input.pattern = {track.cryptBlocks, track.skipBlocks};
+    input.timestamp = sample->time * 1000000 / track.timescale;
+  }
+  VideoFrame frame;
+  const cdm::Status status = m_cdm->DecryptAndDecodeFrame(input, &frame);
+  if (status == cdm::kNeedMoreData)
+    return {};
+  if (status == cdm::kNoKey)
+    return "no key";
+  if (status != cdm::kSuccess || !frame.buffer)
+    return "video decoding failed";
+  picture.timeUs = frame.timestamp;
+  picture.width = uint16_t(frame.size.width);
+  picture.height = uint16_t(frame.size.height);
+  picture.pixels.clear();
+  picture.pixels.reserve(size_t(picture.width) * picture.height * 3 / 2 + picture.width);
+  const uint8_t *pixels = frame.buffer->Data();
+  for (int plane = 0; plane < 3; ++plane) {
+    const int width = plane ? (picture.width + 1) / 2 : picture.width;
+    const int height = plane ? (picture.height + 1) / 2 : picture.height;
+    const uint8_t *row = pixels + frame.offsets[plane];
+    for (int y = 0; y < height; ++y, row += frame.strides[plane])
+      picture.pixels.insert(picture.pixels.end(), row, row + width);
+  }
+  got = true;
+  return {};
+}
+
+void CdmHost::resetVideo() {
+  if (m_videoStarted)
+    m_cdm->ResetDecoder(cdm::kStreamTypeVideo);
+}
+
+void CdmHost::stopVideo() {
+  if (m_videoStarted)
+    m_cdm->DeinitializeDecoder(cdm::kStreamTypeVideo);
+  m_videoStarted = false;
+}
+
 void CdmHost::close(uint32_t stream) {
   const auto session = m_sessions.find(stream);
   if (session == m_sessions.end())
@@ -223,7 +381,8 @@ void CdmHost::close(uint32_t stream) {
   const uint32_t promise = m_nextPromise++;
   m_cdm->CloseSession(promise, session->second.data(), uint32_t(session->second.size()));
   wait(promise);
-  m_usableKeys.erase(session->second);
+  m_keys.erase(session->second);
+  m_psshKeys.erase(stream);
   m_sessions.erase(session);
 }
 
@@ -290,17 +449,29 @@ void CdmHost::OnSessionMessage(const char *session, uint32_t sessionSize, cdm::M
 
 void CdmHost::OnSessionKeysChange(const char *session, uint32_t sessionSize, bool,
                                   const cdm::KeyInformation *keys, uint32_t count) {
-  int usable = 0;
-  for (uint32_t i = 0; i < count; ++i)
-    usable += keys[i].status == cdm::kUsable;
-  m_usableKeys[std::string(session, sessionSize)] = usable;
+  std::vector<std::pair<KeyId, cdm::KeyStatus>> known;
+  for (uint32_t i = 0; i < count; ++i) {
+    if (keys[i].key_id_size != 16)
+      continue;
+    KeyId id;
+    std::memcpy(id.data(), keys[i].key_id, id.size());
+    known.emplace_back(id, keys[i].status);
+  }
+  m_keys[std::string(session, sessionSize)] = std::move(known);
 }
 
 void CdmHost::SendPlatformChallenge(const char *, uint32_t, const char *, uint32_t) {
   m_cdm->OnPlatformChallengeResponse({});
 }
 
-void CdmHost::QueryOutputProtectionStatus() { m_cdm->OnQueryOutputProtectionStatus(cdm::kQuerySucceeded, 0, 0); }
+void CdmHost::EnableOutputProtection(uint32_t mask) { output_protection::enable(mask); }
+
+void CdmHost::QueryOutputProtectionStatus() {
+  uint32_t links = 0;
+  uint32_t protection = 0;
+  output_protection::query(links, protection);
+  m_cdm->OnQueryOutputProtectionStatus(cdm::kQuerySucceeded, links, protection);
+}
 
 cdm::FileIO *CdmHost::CreateFileIO(cdm::FileIOClient *client) { return new NoStorage(client); }
 

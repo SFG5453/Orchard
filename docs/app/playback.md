@@ -91,13 +91,23 @@ Press Esc, press F, or select the close button (tooltip "Close (Esc)").
 
 ## Watch music videos
 
-When the playing song has a music video, the player bar shows a video button (tooltip "Watch music video"). Select it to open the music video player. The button is dimmed while Orchard looks for a video ("Finding music video") and hidden when the song has none. Selecting a video in search, Home, your library, or an artist page also opens the player.
+When the playing song has a music video, the player bar shows a video button (tooltip "Watch music video"). Select it to open the music video player. The button is dimmed while Orchard looks for a video ("Finding music video") and hidden when the song has none. Selecting a video in search, Home, your library, an artist page, or an album page also opens the player.
+
+A video card shows the video's thumbnail. Point at it to show a play button in the bottom left corner and a **More options** button (three dots) in the bottom right corner. Select the card or the play button to watch the video. **More options** opens the same menu as right-clicking the card.
+
+Album pages list related shelves under the tracks:
+
+- YouTube Music: a **Music Videos** shelf with the album's videos, when it has any, then shelves such as **Other versions** and **Releases for you**.
+- Apple Music: **Music Videos**, **More By** the artist, **Other Versions**, **You Might Also Like**, and **Featured On** (playlists with the album), when Apple has them.
+
+Apple Music videos play from Apple Music in the same player when **Music source** is **Apple**. See [Watch Apple Music videos](integrations.md#watch-apple-music-videos).
 
 The video fills the window. When a video has black bars built into it, Orchard trims them so the picture itself fills the space. Click the picture to play or pause, and double-click it to go full screen. The controls fade out a few seconds after you stop moving the mouse while the video plays, and come back when you move it:
 
 - **Song** returns to the regular player. The close button and Esc do the same.
 - The **Up next** button shows the queue beside the video. Select a row to play it.
-- The quality button (it shows the playing height, for example "1080p") opens a menu: **Best available** or a height cap such as 720p. Orchard remembers the choice.
+- The quality button (it shows the playing height, for example "1080p") opens a menu: **Best available** or a height cap such as 720p. Orchard remembers the choice. For Apple Music videos on Linux, the menu notes "Apple limits videos on Linux to 486p."
+- **FSR 1 upscaling** in the same menu sharpens a video that is smaller than the window, using AMD FidelityFX Super Resolution 1. It is on by default and only works when the picture is shown larger than the video. Drag **Sharpness** to the left for a softer picture or to the right for crisper edges. Orchard remembers both. On computers where Orchard falls back to OpenGL, the setting has no effect.
 - Marked parts of the video show as colored spans on the seek bar, from SponsorBlock: non-music parts in orange, and sponsor segments, self-promotion and subscribe reminders in green. The **Non-music parts** setting in Settings, Playback applies: **Skip button** shows a skip button over the picture, and **Auto skip** skips them.
 - The full screen button makes the window full screen. Esc leaves full screen first.
 

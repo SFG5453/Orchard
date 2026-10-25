@@ -311,6 +311,7 @@ int main(int argc, char *argv[]) {
   LyricsTranslator lyricsTranslation(lyrics.get());
   lyricsTranslation.setAccount(&orchardAccount);
   MusicVideoController musicVideo(&youtubeProvider, &authManager, playback.get());
+  musicVideo.setAppleMusic(&appleMusic);
   ArtistVideoBackdrop artistVideo(&youtubeProvider, &authManager);
   // Local imports announce themselves through the same pill as copied links.
   QObject::connect(&localLibrary, &LocalLibrary::noticeRequested, &backend, &BackendInfo::noticeRequested);

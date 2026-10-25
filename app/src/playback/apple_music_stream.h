@@ -65,6 +65,11 @@ private:
 
   void requestPlayback(const QString &appleId, const QString &developerToken, Resolved done);
   void loadPlaylist(const QString &appleId, const QJsonObject &song, Resolved done);
+  // A music video's own soundtrack: its audio rendition, one file per fragment.
+  void loadVideoAudio(const QString &appleId, const QJsonObject &song, Resolved done);
+  void openStream(const QString &appleId, const QUrl &licenseUrl, std::shared_ptr<Stream> stream,
+                  const Resolved &done);
+  void measureFiles(const std::shared_ptr<Stream> &stream, Done done);
   Stream *find(const QString &playbackId) const;
   void segment(Stream *stream, int index, Done done);
   void fetchSegment(const QString &playbackId, int index);

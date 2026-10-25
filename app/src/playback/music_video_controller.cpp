@@ -19,6 +19,8 @@
 
 #include "music_video_controller.h"
 
+#include "apple_music_picture.h"
+#include "apple_music_stream.h"
 #include "auth/auth_manager.h"
 #include "letterbox.h"
 #include "local/local_track.h"
@@ -36,6 +38,8 @@
 namespace {
 
 const QString kMaxHeightKey = QStringLiteral("musicVideo/maxHeight");
+const QString kUpscalingKey = QStringLiteral("musicVideo/upscaling");
+const QString kSharpnessKey = QStringLiteral("musicVideo/sharpness");
 
 bool isYouTubeId(const QString &id) {
   static const QRegularExpression pattern(QStringLiteral("^[\\w-]{11}$"));
@@ -62,7 +66,25 @@ MusicVideoController::MusicVideoController(YouTubeProvider *provider, AuthManage
   // One frame a second is enough; bars do not move within a video.
   m_frameTimer.setInterval(1000);
   connect(&m_frameTimer, &QTimer::timeout, this, &MusicVideoController::sampleFrame);
-  m_maxHeight = QSettings().value(kMaxHeightKey, m_maxHeight).toInt();
+  QSettings settings;
+  m_maxHeight = settings.value(kMaxHeightKey, m_maxHeight).toInt();
+  m_upscaling = settings.value(kUpscalingKey, m_upscaling).toBool();
+  m_sharpness = qBound(0.0, settings.value(kSharpnessKey, m_sharpness).toDouble(), 1.0);
+  syncTrack();
+}
+
+void MusicVideoController::setAppleMusic(AppleMusic *account) {
+  if (m_applePicture || !AppleMusicStreams::available())
+    return;
+  m_applePicture = new AppleMusicPicture(account, m_playback, this);
+  m_applePicture->setSink(m_sink);
+  connect(m_applePicture, &AppleMusicPicture::started, this, [this] {
+    m_height = m_applePicture->height();
+    m_heights = m_applePicture->heights();
+    setStatus(QStringLiteral("ready"));
+  });
+  connect(m_applePicture, &AppleMusicPicture::failed, this,
+          [this](const QString &message) { setStatus(QStringLiteral("error"), message); });
   syncTrack();
 }
 
@@ -72,6 +94,8 @@ QRectF MusicVideoController::contentRect() const {
 
 void MusicVideoController::watchFrames(QObject *sink) {
   m_sink = qobject_cast<QVideoSink *>(sink);
+  if (m_applePicture)
+    m_applePicture->setSink(m_sink);
   if (m_sink)
     m_frameTimer.start();
   else
@@ -112,6 +136,32 @@ void MusicVideoController::setMaxHeight(int height) {
   // The soundtrack keeps playing; only the picture is fetched again.
   if (m_open && !m_videoId.isEmpty())
     resolveStream();
+}
+
+void MusicVideoController::setUpscaling(bool enabled) {
+  if (enabled == m_upscaling)
+    return;
+  m_upscaling = enabled;
+  QSettings().setValue(kUpscalingKey, enabled);
+  emit changed();
+}
+
+void MusicVideoController::setSharpness(double sharpness) {
+  sharpness = qBound(0.0, sharpness, 1.0);
+  if (qFuzzyCompare(sharpness, m_sharpness))
+    return;
+  m_sharpness = sharpness;
+  QSettings().setValue(kSharpnessKey, sharpness);
+  emit changed();
+}
+
+QString MusicVideoController::qualityNote() const {
+#ifdef Q_OS_LINUX
+  // Apple licenses taller renditions only to players with HDCP output, which Linux cannot report.
+  if (m_apple)
+    return tr("Apple limits videos on Linux to 486p.");
+#endif
+  return {};
 }
 
 bool MusicVideoController::available() const {
@@ -179,6 +229,17 @@ void MusicVideoController::syncTrack() {
   m_searchRequest = 0;
   m_streamRequest = 0;
   clearStream();
+  m_apple = m_applePicture && id.startsWith(QStringLiteral("am.music-videos."));
+  if (m_apple) {
+    m_videoId = track.value(QStringLiteral("appleId")).toString();
+    if (m_videoId.isEmpty())
+      m_videoId = id.section(QLatin1Char('.'), 2);
+    if (m_open)
+      resolveStream();
+    else
+      setStatus(QStringLiteral("available"));
+    return;
+  }
   if (id.isEmpty() || local::isLocalTrack(track) || !isYouTubeId(id)) {
     setStatus(QString());
     return;
@@ -210,6 +271,11 @@ void MusicVideoController::lookup() {
 void MusicVideoController::resolveStream() {
   clearStream();
   setStatus(QStringLiteral("loading"));
+  if (m_apple) {
+    // The audio engine already plays the video's own soundtrack.
+    m_applePicture->start(m_videoId, m_maxHeight);
+    return;
+  }
   m_streamRequest = m_provider->invoke(QStringLiteral("playback.resolveVideo"), QJsonObject{
       {QStringLiteral("session"), m_auth->sessionObject()},
       {QStringLiteral("streamQuality"), QStringLiteral("high")},
@@ -271,6 +337,8 @@ void MusicVideoController::setStatus(const QString &status, const QString &error
 }
 
 void MusicVideoController::clearStream() {
+  if (m_applePicture)
+    m_applePicture->stop();
   resetContentRect();
   m_height = 0;
   m_heights.clear();

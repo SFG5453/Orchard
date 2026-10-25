@@ -34,44 +34,6 @@ Item {
     readonly property var track: OrchardPlayback.track || ({})
     readonly property bool windowFullScreen: Window.window !== null && Window.window.visibility === Window.FullScreen
 
-    // Heights the current video offers; a fixed ladder until the first resolve reports them.
-    readonly property var heightOptions: (OrchardMusicVideo.heights || []).length
-        ? OrchardMusicVideo.heights : [2160, 1440, 1080, 720, 480, 360]
-
-    component QualityItem: MenuItem {
-        id: item
-
-        implicitWidth: 200
-        implicitHeight: 36
-        checkable: true
-
-        contentItem: Row {
-            spacing: 10
-            leftPadding: 4
-
-            LucideIcon {
-                anchors.verticalCenter: parent.verticalCenter
-                name: "check"
-                color: "#f0eee7"
-                width: 14
-                height: 14
-                opacity: item.checked ? 1 : 0
-            }
-
-            Label {
-                anchors.verticalCenter: parent.verticalCenter
-                text: item.text
-                color: "#f7f5f0"
-                font.pixelSize: 13
-            }
-        }
-
-        background: Rectangle {
-            radius: 8
-            color: item.highlighted ? "#1fffffff" : "transparent"
-        }
-    }
-
     function heightLabel(height) {
         return height >= 2160 ? qsTr("4K") : height + "p";
     }
@@ -270,38 +232,12 @@ Item {
                     verticalAlignment: Text.AlignVCenter
                 }
 
-                Menu {
+                TheaterQualityMenu {
                     id: qualityMenu
 
                     y: -implicitHeight - 8
                     x: qualityButton.width - width
-
-                    padding: 6
-
-                    background: Rectangle {
-                        implicitWidth: 212
-                        radius: 12
-                        color: Qt.alpha(OrchardAppearance.popupColor, 0.93)
-                        border.color: "#1fffffff"
-                    }
-
-                    QualityItem {
-                        text: qsTr("Best available")
-                        checked: OrchardMusicVideo.maxHeight === 0
-                        onTriggered: OrchardMusicVideo.maxHeight = 0
-                    }
-
-                    Repeater {
-                        model: root.heightOptions
-
-                        QualityItem {
-                            required property int modelData
-
-                            text: root.heightLabel(modelData)
-                            checked: OrchardMusicVideo.maxHeight === modelData
-                            onTriggered: OrchardMusicVideo.maxHeight = modelData
-                        }
-                    }
+                    accentColor: root.accentColor
                 }
             }
 

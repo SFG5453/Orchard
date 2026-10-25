@@ -377,6 +377,9 @@ Item {
                 onPlaylistRequested: function(playlist) {
                     scene.shell.openDetail("playlist", playlist);
                 }
+                onVideoRequested: function(video) {
+                    OrchardMusicVideo.playVideo(video);
+                }
                 // Album origin lets playback keep an in-order playthrough gapless.
                 function albumTracks() {
                     const detail = OrchardAlbum.detail || {};
