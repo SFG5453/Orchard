@@ -21,6 +21,10 @@ package dev.sfg.orchard.mobile.ui.screens
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 
 @Composable
 internal fun AppleMusicLogo(modifier: Modifier) = Unit
+
+@Composable
+internal fun AppleMusicMark(modifier: Modifier, tint: Color) = Unit

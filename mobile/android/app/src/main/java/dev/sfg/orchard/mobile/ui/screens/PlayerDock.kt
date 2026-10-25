@@ -172,7 +172,7 @@ private fun DockTabs(
             }
             DockTab(selected == 1, "Now playing", onCover, Modifier.weight(1f)) { tint ->
                 if (playbackSourceHasMark(source)) {
-                    PlaybackSourceMark(source, size = 24.dp)
+                    PlaybackSourceMark(source, tint, size = 24.dp)
                 } else {
                     Icon(Icons.Rounded.Album, null, tint = tint, modifier = Modifier.size(24.dp))
                 }
