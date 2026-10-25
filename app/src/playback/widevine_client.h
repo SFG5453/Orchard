@@ -52,6 +52,8 @@ public:
 signals:
   // A session's license needs renewing; post `message` and answer with License.
   void renewal(quint32 stream, const QByteArray &message);
+  // A decoded video frame, I420 without padding, before its VideoFragment request answers.
+  void picture(quint32 stream, qint64 timeUs, int width, int height, const QByteArray &pixels);
 
 private:
   bool start();

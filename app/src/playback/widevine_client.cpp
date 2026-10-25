@@ -123,18 +123,30 @@ void WidevineClient::write(Op op, quint32 id, quint32 stream, const QByteArray &
 
 void WidevineClient::readFrames() {
   m_buffer.append(m_process->readAllStandardOutput());
-  while (m_buffer.size() >= int(kHeaderBytes)) {
-    const quint32 length = qFromLittleEndian<quint32>(m_buffer.constData());
+  // Parse by offset and trim once: a segment's pictures arrive together, and trimming per
+  // frame would shift megabytes on the UI thread for every one.
+  qsizetype at = 0;
+  while (m_buffer.size() - at >= qsizetype(kHeaderBytes)) {
+    const char *frame = m_buffer.constData() + at;
+    const quint32 length = qFromLittleEndian<quint32>(frame);
     if (length < 5 || length > kMaxFrameBytes) {
       shutdown();
       return;
     }
-    if (m_buffer.size() < qsizetype(length) + 4)
-      return;
-    const quint32 id = qFromLittleEndian<quint32>(m_buffer.constData() + 4);
-    const auto op = Op(quint8(m_buffer.at(8)));
-    QByteArray payload = m_buffer.mid(kHeaderBytes, length - 5);
-    m_buffer.remove(0, length + 4);
+    if (m_buffer.size() - at < qsizetype(length) + 4)
+      break;
+    const quint32 id = qFromLittleEndian<quint32>(frame + 4);
+    const auto op = Op(quint8(frame[8]));
+    const char *body = frame + kHeaderBytes;
+    const qsizetype size = qsizetype(length) - 5;
+    at += qsizetype(length) + 4;
+    if (op == Picture && size >= 16) {
+      emit picture(qFromLittleEndian<quint32>(body), qFromLittleEndian<qint64>(body + 4),
+                   qFromLittleEndian<quint16>(body + 12), qFromLittleEndian<quint16>(body + 14),
+                   QByteArray(body + 16, size - 16));
+      continue;
+    }
+    const QByteArray payload(body, size);
     if (op == Renewal && payload.size() >= 4) {
       emit renewal(qFromLittleEndian<quint32>(payload.constData()), payload.mid(4));
       continue;
@@ -145,6 +157,7 @@ void WidevineClient::readFrames() {
     if (!m_process)
       return;
   }
+  m_buffer.remove(0, at);
   if (m_pending.isEmpty())
     m_idle.start();
 }

@@ -18,6 +18,7 @@
  */
 
 #include "apple_music_stream.h"
+#include "apple_music_requests.h"
 #include "apple_music_stream_state.h"
 #include "integrations/apple_music.h"
 #include "widevine_path.h"
@@ -35,35 +36,20 @@
 using namespace widevine_protocol;
 
 namespace {
-const QUrl kPlaybackUrl(QStringLiteral("https://play.itunes.apple.com/WebObjects/MZPlay.woa/wa/webPlayback"));
 // AAC-LC 256 kbps with AES-CTR first; the cbcs flavors carry the same audio.
 const QStringList kFlavors{QStringLiteral("28:ctrp256"), QStringLiteral("30:cbcp256"), QStringLiteral("32:ctrp64"),
                            QStringLiteral("34:cbcp64")};
 // The current song, the prepared one and a song or two the listener skipped back to.
 constexpr int kOpenStreams = 4;
 
-QNetworkRequest appleRequest(const QUrl &url, const QString &developerToken, const QString &userToken) {
-  QNetworkRequest request(url);
-  request.setTransferTimeout(20000);
-  request.setRawHeader("Authorization", "Bearer " + developerToken.toUtf8());
-  request.setRawHeader("Music-User-Token", userToken.toUtf8());
-  const QByteArray origin = AppleMusic::tokenOrigin().toUtf8();
-  request.setRawHeader("Origin", origin);
-  request.setRawHeader("Referer", origin + '/');
-  request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-  return request;
-}
-
 bool timing() {
   static const bool on = qEnvironmentVariableIsSet("ORCHARD_PLAYBACK_TIMING");
   return on;
 }
 
-QString replyError(QNetworkReply *reply) {
-  const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-  return status ? QStringLiteral("HTTP %1").arg(status) : reply->errorString();
-}
 } // namespace
+
+using apple_music_requests::replyError;
 
 AppleMusicStreams::AppleMusicStreams(AppleMusic *account, QObject *parent) : QObject(parent), m_account(account) {
   connect(&m_cdm, &WidevineClient::renewal, this, &AppleMusicStreams::renew);
@@ -107,9 +93,9 @@ void AppleMusicStreams::resolve(const QString &appleId, Resolved done) {
 }
 
 void AppleMusicStreams::requestPlayback(const QString &appleId, const QString &developerToken, Resolved done) {
-  QNetworkReply *reply = m_network.post(appleRequest(kPlaybackUrl, developerToken, m_account->userToken()),
-                                        QJsonDocument(QJsonObject{{QStringLiteral("salableAdamId"), appleId}})
-                                            .toJson(QJsonDocument::Compact));
+  QNetworkReply *reply = m_network.post(
+      apple_music_requests::request(apple_music_requests::kWebPlaybackUrl, developerToken, m_account->userToken()),
+      apple_music_requests::webPlaybackBody(appleId));
   connect(reply, &QNetworkReply::finished, this, [this, reply, appleId, done = std::move(done)] {
     reply->deleteLater();
     const QJsonObject body = QJsonDocument::fromJson(reply->readAll()).object();
@@ -121,7 +107,11 @@ void AppleMusicStreams::requestPlayback(const QString &appleId, const QString &d
       done({}, message.isEmpty() ? tr("Apple Music did not offer this song for playback.") : message);
       return;
     }
-    loadPlaylist(appleId, song, done);
+    // Music videos answer with a master playlist and no audio assets.
+    if (song.value(QStringLiteral("assets")).toArray().isEmpty() && song.contains(QStringLiteral("hls-playlist-url")))
+      loadVideoAudio(appleId, song, done);
+    else
+      loadPlaylist(appleId, song, done);
   });
 }
 
@@ -152,31 +142,36 @@ void AppleMusicStreams::loadPlaylist(const QString &appleId, const QJsonObject &
       done({}, tr("Apple Music returned a stream Orchard cannot play."));
       return;
     }
-    const QString playbackId = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    stream->id = m_nextStream++;
-    stream->playbackId = playbackId;
-    stream->licenseUrl = licenseUrl;
-    stream->appleId = appleId;
-    const apple_music_playlist::Playlist &playlist = stream->playlist;
-    const qint64 length = playlist.servedSize();
-    m_streams.insert(playbackId, stream);
-    m_order.append(playbackId);
-    evict(kOpenStreams);
-    trimPrefetches();
-    // License and fetch the opening fragment while the player sets up.
-    segment(stream.get(), 0, [](const QString &) {});
-    if (playlist.ranges.size() > 1)
-      segment(stream.get(), 1, [](const QString &) {});
-    // After the opening requests so they are not queued behind it.
-    startPrefetch(stream.get());
-    done({{QStringLiteral("provider"), QStringLiteral("apple")},
-          {QStringLiteral("playbackId"), playbackId},
-          {QStringLiteral("contentLength"), double(length)},
-          {QStringLiteral("mimeType"), QStringLiteral("audio/mp4; codecs=mp4a.40.2")},
-          {QStringLiteral("durationSeconds"), playlist.duration},
-          {QStringLiteral("bitrate"), playlist.duration > 0 ? int(length * 8 / playlist.duration) : 0}},
-         {});
+    openStream(appleId, licenseUrl, stream, done);
   });
+}
+
+void AppleMusicStreams::openStream(const QString &appleId, const QUrl &licenseUrl, std::shared_ptr<Stream> stream,
+                                   const Resolved &done) {
+  const QString playbackId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+  stream->id = m_nextStream++;
+  stream->playbackId = playbackId;
+  stream->licenseUrl = licenseUrl;
+  stream->appleId = appleId;
+  const apple_music_playlist::Playlist &playlist = stream->playlist;
+  const qint64 length = playlist.servedSize();
+  m_streams.insert(playbackId, stream);
+  m_order.append(playbackId);
+  evict(kOpenStreams);
+  trimPrefetches();
+  // License and fetch the opening fragment while the player sets up.
+  segment(stream.get(), 0, [](const QString &) {});
+  if (playlist.ranges.size() > 1)
+    segment(stream.get(), 1, [](const QString &) {});
+  // After the opening requests so they are not queued behind it.
+  startPrefetch(stream.get());
+  done({{QStringLiteral("provider"), QStringLiteral("apple")},
+        {QStringLiteral("playbackId"), playbackId},
+        {QStringLiteral("contentLength"), double(length)},
+        {QStringLiteral("mimeType"), QStringLiteral("audio/mp4; codecs=mp4a.40.2")},
+        {QStringLiteral("durationSeconds"), playlist.duration},
+        {QStringLiteral("bitrate"), playlist.duration > 0 ? int(length * 8 / playlist.duration) : 0}},
+       {});
 }
 
 AppleMusicStreams::Stream *AppleMusicStreams::find(const QString &playbackId) const {
@@ -334,9 +329,10 @@ void AppleMusicStreams::ready(Stream *stream, Done done) {
   if (!stream->rawInit.isEmpty())
     return;
   const auto [start, size] = stream->playlist.ranges.first();
-  QNetworkRequest request(stream->playlist.media);
+  QNetworkRequest request(stream->playlist.url(0));
   request.setTransferTimeout(20000);
-  request.setRawHeader("Range", "bytes=" + QByteArray::number(start) + '-' + QByteArray::number(start + size - 1));
+  if (const QByteArray range = stream->playlist.rangeHeader(0); !range.isEmpty())
+    request.setRawHeader("Range", range);
   QNetworkReply *reply = m_network.get(request);
   connect(reply, &QNetworkReply::finished, this, [this, reply, playbackId, size, finish, decryptInit] {
     reply->deleteLater();
@@ -363,27 +359,18 @@ void AppleMusicStreams::license(const QString &playbackId, const QByteArray &cha
       done(error.isEmpty() ? QStringLiteral("no developer token") : error);
       return;
     }
-    const QJsonObject body{{QStringLiteral("challenge"), QString::fromLatin1(challenge.toBase64())},
-                           {QStringLiteral("key-system"), QStringLiteral("com.widevine.alpha")},
-                           {QStringLiteral("uri"), stream->playlist.keyUri},
-                           // Library songs license by their catalog id too.
-                           {QStringLiteral("adamId"), stream->appleId},
-                           {QStringLiteral("isLibrary"), false},
-                           {QStringLiteral("user-initiated"), true}};
-    QNetworkReply *reply = m_network.post(appleRequest(stream->licenseUrl, token, m_account->userToken()),
-                                          QJsonDocument(body).toJson(QJsonDocument::Compact));
+    QNetworkReply *reply = m_network.post(
+        apple_music_requests::request(stream->licenseUrl, token, m_account->userToken()),
+        apple_music_requests::licenseBody(challenge, stream->playlist.keyUri, stream->appleId));
     connect(reply, &QNetworkReply::finished, this, [this, reply, playbackId, done] {
       reply->deleteLater();
       Stream *stream = find(playbackId);
       if (!stream)
         return;
-      const QJsonObject answer = QJsonDocument::fromJson(reply->readAll()).object();
-      const QByteArray license = QByteArray::fromBase64(answer.value(QStringLiteral("license")).toString().toLatin1());
-      if (reply->error() != QNetworkReply::NoError || answer.value(QStringLiteral("status")).toInt(-1) != 0 ||
-          license.isEmpty()) {
-        done(reply->error() != QNetworkReply::NoError
-                 ? replyError(reply)
-                 : QStringLiteral("license refused (status %1)").arg(answer.value(QStringLiteral("status")).toInt()));
+      QString error;
+      const QByteArray license = apple_music_requests::license(reply, error);
+      if (!error.isEmpty()) {
+        done(error);
         return;
       }
       m_cdm.request(License, stream->id, license, [done](const QByteArray &, const QString &error) { done(error); });

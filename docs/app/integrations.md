@@ -24,6 +24,7 @@ keywords:
   - widevine
   - memory
   - adaptive mix apple music
+  - apple music videos
   - scan
   - local api
   - stream deck
@@ -186,6 +187,14 @@ Orchard streams Apple Music songs itself and decrypts them in a small separate p
 - Autoplay and AI-music scans do not apply to Apple Music songs.
 - Volume, play, pause, seek, next and previous work as usual, including from media keys and the system media controls.
 - Errors: when Apple refuses a song, Orchard shows Apple's own reason, such as a missing subscription, or "Apple Music did not offer this song for playback." On Android, "Sign in to Apple Music again." means the saved sign-in expired; connect Apple Music again.
+
+## Watch Apple Music videos
+
+With **Music source** set to **Apple**, Apple Music videos (for example on an album's **Music Videos** shelf) play from Apple Music in the music video player. You hear the video's own soundtrack, also after you return to the regular player.
+
+- Picture quality: up to 486p. Apple licenses its 576p, 720p and 1080p versions only to players that report protected (HDCP) video output, which a desktop Widevine module cannot. The quality menu lists the heights Orchard can play.
+- Memory: `orchard-widevine-host` decodes the picture as well, a few seconds ahead of the playhead, and Orchard holds those frames. Expect about 100 MB more while the video player is open.
+- Platforms: Linux and Windows. On Android, Apple Music videos do not play yet.
 
 ## Disconnect Apple Music
 

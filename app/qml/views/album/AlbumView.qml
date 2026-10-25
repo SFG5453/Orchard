@@ -70,6 +70,7 @@ Item {
     signal playRequested()
     signal shuffleRequested()
     signal trackRequested(var track, int index)
+    signal videoRequested(var video)
 
     function rgb(value, fallback) {
         const color = value && value.length >= 3 ? value : fallback;
@@ -362,6 +363,16 @@ Item {
                     font.pixelSize: 12
                 }
 
+            }
+
+            AlbumShelves {
+                width: parent.width
+                sections: root.detail.sections || []
+                onAlbumRequested: function(album) { root.albumRequested(album); }
+                onArtistRequested: function(artist) { root.artistRequested(artist); }
+                onPlaylistRequested: function(playlist) { root.playlistRequested(playlist); }
+                onVideoRequested: function(video) { root.videoRequested(video); }
+                onVerticalScrollRequested: function(delta, smooth) { scroll.scrollBy(delta, smooth); }
             }
 
         }

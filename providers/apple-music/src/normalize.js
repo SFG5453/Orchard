@@ -160,9 +160,39 @@ export function artist(resource) {
   };
 }
 
-const itemMappers = { songs: track, albums: album, playlists: playlist, artists: artist };
+/** A 16:9 poster for video artwork; Apple's `mv` crop keeps the frame's own aspect. */
+export function videoArtworkUrl(artwork, width = 640) {
+  const template = String(artwork?.url || '');
+  if (!template) return '';
+  return template.replace('{w}', String(width)).replace('{h}', String(Math.round(width * 9 / 16)))
+    .replace('{c}', 'mv').replace('{f}', 'jpg');
+}
 
-/** Any supported resource as a card; stations, videos and curators are skipped. */
+export function musicVideo(resource) {
+  const attributes = resource?.attributes;
+  if (!attributes || !resource.id) return null;
+  const seconds = (Number(attributes.durationInMillis) || 0) / 1000;
+  return {
+    id: browseId('music-videos', resource.id),
+    type: 'video',
+    appleId: resource.id,
+    source: APPLE_MUSIC_SOURCE,
+    title: attributes.name || 'Untitled',
+    artist: attributes.artistName || '',
+    ...artistCredits(resource),
+    thumbnail: videoArtworkUrl(attributes.artwork),
+    durationSeconds: seconds,
+    duration: clock(seconds),
+    year: yearOf(attributes.releaseDate),
+    explicit: attributes.contentRating === 'explicit',
+    isrc: attributes.isrc || '',
+    unplayable: !attributes.playParams
+  };
+}
+
+const itemMappers = { songs: track, albums: album, playlists: playlist, artists: artist, 'music-videos': musicVideo };
+
+/** Any supported resource as a card; stations and curators are skipped. */
 export function item(resource) {
   return itemMappers[resource?.type]?.(resource) || null;
 }

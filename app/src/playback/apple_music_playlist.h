@@ -20,6 +20,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QHash>
 #include <QList>
 #include <QPair>
 #include <QString>
@@ -35,6 +36,9 @@ namespace apple_music_playlist {
 // samples relative to their own moof, and lets playback start after one fragment.
 struct Playlist {
   QUrl media;
+  // Music videos keep each segment in its own file, first the init segment; the
+  // ranges then lay those files end to end once setFileSizes() knows their sizes.
+  QList<QUrl> files;
   // The EXT-X-KEY URI, which the license request repeats.
   QString keyUri;
   QByteArray pssh;
@@ -53,7 +57,33 @@ struct Playlist {
   int indexAt(qint64 offset) const;
   // The sidx for the track in `init`; empty when its tkhd or mdhd cannot be read.
   QByteArray segmentIndex(const QByteArray &init) const;
+  void setFileSizes(const QList<qint64> &sizes);
+  // Where range `index` is fetched from, and the Range header it needs (empty for a whole file).
+  QUrl url(int index) const { return files.isEmpty() ? media : files.at(index); }
+  QByteArray rangeHeader(int index) const;
 };
+
+// One rendition of a music video's master playlist.
+struct Variant {
+  QUrl url;
+  int height{0};
+  qint64 bandwidth{0};
+  QString audioGroup;
+  // Software Widevine may play it; Apple keeps larger renditions for hardware CDMs.
+  bool software{false};
+};
+
+struct Master {
+  QList<Variant> variants;
+  // Audio rendition playlists by GROUP-ID.
+  QHash<QString, QUrl> audio;
+};
+
+QString parseMaster(const QUrl &playlistUrl, const QByteArray &text, Master &master);
+// The tallest software variant no taller than `maxHeight` (0 for any), or the shortest one.
+const Variant *pickVariant(const Master &master, int maxHeight);
+// The best stereo audio rendition, preferring 256 kbps AAC.
+QUrl pickAudio(const Master &master);
 
 // Returns an error, or an empty string with `playlist` filled.
 QString parse(const QUrl &playlistUrl, const QByteArray &text, Playlist &playlist);
