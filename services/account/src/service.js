@@ -23,7 +23,7 @@ import { openHub } from "./connect.js";
 import { hashSecret, pkceChallenge, randomToken } from "./crypto.js";
 import { finishGithubLink, githubIdentity, publicGithub, startGithubLink, unlinkGithub } from "./github.js";
 import { exchangeGoogleCode, googleAuthorizeUrl } from "./google.js";
-import { HttpError, htmlPage, issuer, json, nowSeconds, readJson, requireSession } from "./http.js";
+import { HttpError, appReturnPage, htmlPage, issuer, json, nowSeconds, readJson, requireSession } from "./http.js";
 import { ACCESS_TOKEN_AUDIENCE, publicJwk, signJwt } from "./jwt.js";
 import { createReport, getReport, isScreenshotPath, listReports, markReportRead, serveScreenshot } from "./support.js";
 import { githubWebhook } from "./support_sync.js";
@@ -49,6 +49,10 @@ const STATE_PATTERN = /^[A-Za-z0-9._~-]{16,256}$/;
 
 function redirect(location) {
   return new Response(null, { status: 302, headers: { location, "cache-control": "no-store" } });
+}
+
+function returnToApp(location) {
+  return location.startsWith("http:") ? redirect(location) : appReturnPage(location);
 }
 
 function isAllowedRedirect(value) {
@@ -160,7 +164,7 @@ async function finishGoogleSignIn(request, env) {
   const code = params.get("code");
   if (!code) {
     back.searchParams.set("error", params.get("error") === "access_denied" ? "access_denied" : "server_error");
-    return redirect(back.toString());
+    return returnToApp(back.toString());
   }
 
   let claims;
@@ -169,7 +173,7 @@ async function finishGoogleSignIn(request, env) {
   } catch (error) {
     console.error("Google sign-in failed:", error.message);
     back.searchParams.set("error", "server_error");
-    return redirect(back.toString());
+    return returnToApp(back.toString());
   }
 
   const user = await upsertGoogleUser(env, claims);
@@ -179,7 +183,7 @@ async function finishGoogleSignIn(request, env) {
   ).bind(await hashSecret(orchardCode), user.id, pending.redirect_uri, pending.code_challenge, nowSeconds() + AUTH_CODE_SECONDS).run();
 
   back.searchParams.set("code", orchardCode);
-  return redirect(back.toString());
+  return returnToApp(back.toString());
 }
 
 async function redeemAuthorizationCode(env, body) {
