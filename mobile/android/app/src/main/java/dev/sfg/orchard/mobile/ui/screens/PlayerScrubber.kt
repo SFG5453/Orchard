@@ -243,7 +243,7 @@ fun PlayerScrubber(
                     horizontalArrangement = Arrangement.spacedBy(5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (showSource) playback.currentTrack?.let { PlaybackSourceMark(it.playbackSource) }
+                    if (showSource) playback.currentTrack?.let { PlaybackSourceMark(it.playbackSource, Color.White.copy(alpha = 0.85f)) }
                     dev.sfg.orchard.mobile.ui.components.LosslessBadge(
                         showBitrate = showBitrate,
                         bitrateKbps = bitrateKbps,
