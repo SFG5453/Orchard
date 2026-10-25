@@ -56,8 +56,9 @@ async function authorize({ redirectUri = LOOPBACK } = {}) {
   assert.equal(google.origin, "https://accounts.google.com");
 
   const callback = await call("GET", `/auth/google/callback?code=google-code&state=${google.searchParams.get("state")}`);
-  assert.equal(callback.status, 302);
-  const back = new URL(callback.headers.get("location"));
+  const location = callback.status === 302 ? callback.headers.get("location")
+    : (await callback.text()).match(/href="([^"]+)"/)[1].replaceAll("&amp;", "&");
+  const back = new URL(location);
   assert.equal(back.searchParams.get("state"), clientState);
   return { verifier, back, google };
 }
@@ -199,6 +200,18 @@ describe("sign-in", () => {
     const google = new URL((await call("GET", `/auth/google/start?${query}`)).headers.get("location"));
     const response = await call("GET", `/auth/google/callback?error=access_denied&state=${google.searchParams.get("state")}`);
     assert.equal(new URL(response.headers.get("location")).searchParams.get("error"), "access_denied");
+  });
+
+  it("returns Android callbacks through an HTML page", async () => {
+    const clientState = randomToken(16);
+    const query = new URLSearchParams({ redirect_uri: ANDROID, state: clientState, code_challenge: await pkceChallenge(randomToken()), code_challenge_method: "S256" });
+    const google = new URL((await call("GET", `/auth/google/start?${query}`)).headers.get("location"));
+    const response = await call("GET", `/auth/google/callback?code=google-code&state=${google.searchParams.get("state")}`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "text/html; charset=utf-8");
+    const html = await response.text();
+    assert.match(html, /href="dev\.sfg\.orchard\.mobile:\/\/account\/callback\?/);
+    assert.ok(html.includes(`state=${clientState}`) && html.includes("code="));
   });
 
   it("rejects ID tokens for another client", async () => {
