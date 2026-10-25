@@ -175,20 +175,21 @@ fun TrackActionButtons(
     liked: Boolean,
     onLiked: () -> Unit,
     onOpenMenu: (() -> Unit)?,
+    glass: Boolean = true,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         AnimatedFavoriteButton(liked = liked, onLiked = onLiked)
-        if (onOpenMenu != null) OverflowButton(onClick = onOpenMenu)
+        if (onOpenMenu != null) OverflowButton(onClick = onOpenMenu, glass = glass)
     }
 }
 
 @Composable
-fun OverflowButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun OverflowButton(onClick: () -> Unit, modifier: Modifier = Modifier, glass: Boolean = true) {
     Surface(
         onClick = onClick,
         shape = CircleShape,
         color = Color.Transparent,
-        modifier = modifier.size(36.dp).glassPane(CircleShape, GlassTone.CONTROL),
+        modifier = modifier.size(36.dp).then(if (glass) Modifier.glassPane(CircleShape, GlassTone.CONTROL) else Modifier),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
