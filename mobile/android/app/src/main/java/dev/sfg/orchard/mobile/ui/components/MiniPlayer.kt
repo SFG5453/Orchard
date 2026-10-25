@@ -97,7 +97,7 @@ import dev.sfg.orchard.mobile.ui.motion.pressScale
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private val MiniPlayerShape = RoundedCornerShape(16.dp)
+private val MiniPlayerShape = CircleShape
 
 /** Expressive floating mini-player component matching SimpMusic design. */
 @Composable
@@ -182,7 +182,6 @@ fun MiniPlayer(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 4.dp)
             .offset { IntOffset(0, currentOffsetY.roundToInt()) }
             .alpha(dismissAlpha)
             .then(dragModifier)
@@ -193,7 +192,7 @@ fun MiniPlayer(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(60.dp)
+                .height(56.dp)
                 .background(
                     Brush.horizontalGradient(
                         listOf(
@@ -209,7 +208,7 @@ fun MiniPlayer(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 10.dp),
+                    .padding(start = 8.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AnimatedContent(
@@ -223,9 +222,9 @@ fun MiniPlayer(
                         url = artUrl,
                         description = artTitle,
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(40.dp)
                             .onGloballyPositioned { onArtworkBounds?.invoke(it.boundsInRoot()) },
-                        radius = 10
+                        radius = 20
                     )
                 }
                 Spacer(Modifier.width(10.dp))
@@ -255,16 +254,15 @@ fun MiniPlayer(
                     }
                 }
                 SlopBadge(track.id)
-                Spacer(Modifier.width(6.dp))
-                val buttonColor = lerp(palette.accent, Color.White, 0.62f)
+                Spacer(Modifier.width(2.dp))
                 val toggleSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                // Bare glyph on the glass, like the dock's other icons.
                 IconButton(
                     onClick = onTogglePlay,
                     interactionSource = toggleSource,
                     modifier = Modifier
                         .pressScale(toggleSource, 0.82f)
-                        .size(40.dp)
-                        .background(buttonColor, CircleShape)
+                        .size(44.dp)
                 ) {
                     // Glyphs scale past each other so play and pause never just blink.
                     AnimatedContent(
@@ -278,9 +276,8 @@ fun MiniPlayer(
                         Icon(
                             imageVector = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                             contentDescription = if (playing) "Pause" else "Play",
-                            // Keep the glyph readable whatever hue the cover produced.
-                            tint = if (buttonColor.luminance() > 0.5f) Color.Black else Color.White,
-                            modifier = Modifier.size(24.dp),
+                            tint = Color.White,
+                            modifier = Modifier.size(30.dp),
                         )
                     }
                 }
@@ -292,6 +289,8 @@ fun MiniPlayer(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    // Inset so the bar stays inside the pill's rounded ends.
+                    .padding(horizontal = 28.dp)
                     .align(Alignment.BottomCenter),
             ) {
                 LinearProgressIndicator(
