@@ -173,13 +173,13 @@ fun NowPlayingScreen(
     BackHandler(enabled = panel == PlayerPanel.NONE) { collapse.dismiss() }
     var playerSize by remember { mutableStateOf(IntSize.Zero) }
 
-    // The cover is a shared element: the body fades out early and this outer box keeps
-    // the flying artwork clear of that fade, so the cover itself carries the motion all
-    // the way onto the pill's thumbnail.
     Box(
         modifier = modifier
             .fillMaxSize()
-            .onSizeChanged { playerSize = it }
+            .onSizeChanged {
+                playerSize = it
+                collapse.collapseSpan = it.height.toFloat().coerceAtLeast(1f)
+            }
             // Being hit-testable is what blocks the page below; events are observed, never
             // consumed, so the player's own drags and taps behave as before.
             .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
@@ -187,7 +187,7 @@ fun NowPlayingScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .collapsingBody(collapse, { playerSize }, collapseBounds)
+                .collapsingBody(collapse, { playerSize })
                 .background(CanopyColors.PlayerBackdrop),
         ) {
             // One sample feeds the backdrop and the lyrics, so sung words carry the same
@@ -459,14 +459,6 @@ fun NowPlayingScreen(
                 onWatchVideo = onToggleMusicVideo.takeIf { musicVideo.available },
             )
         }
-
-        SharedCoverFlight(
-            url = track.artworkUrl,
-            description = track.title,
-            progress = { collapse.progress },
-            source = restingCoverBounds,
-            destination = collapseArtworkBounds,
-        )
 
         MusicVideoLayer(
             musicVideo = musicVideo,
