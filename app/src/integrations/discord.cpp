@@ -49,9 +49,20 @@ QString artworkUrl(const QVariantMap &track)
     return {};
 }
 
+bool isAppleTrack(const QVariantMap &track)
+{
+    return track.value(QStringLiteral("source")).toString() == QLatin1String("apple_music") ||
+           track.value(QStringLiteral("playbackSource")).toString() == QLatin1String("apple_music") ||
+           track.value(QStringLiteral("id")).toString().startsWith(QLatin1String("am."));
+}
+
 QString listenUrl(const QVariantMap &track)
 {
     const QString id = track.value(QStringLiteral("id")).toString().trimmed();
+    if (isAppleTrack(track)) {
+        const QString appleId = id.startsWith(QLatin1String("am.")) ? id.mid(3) : QString();
+        return appleId.isEmpty() ? QString() : QStringLiteral("https://music.apple.com/song/") + appleId;
+    }
     if (!id.isEmpty()) {
         return youtubeShareUrl(id);
     }
@@ -365,11 +376,16 @@ void Discord::refresh(bool force)
         return;
     }
 
+    const bool apple = isAppleTrack(m_track);
+    // The default "YouTube Music" entry follows the service of the playing track.
+    const QString platform = apple && m_platform == QLatin1String("YouTube Music")
+                                 ? QStringLiteral("Apple Music")
+                                 : m_platform;
     const QJsonObject payload{
         {QStringLiteral("song"), song},
         {QStringLiteral("artist"), m_track.value(QStringLiteral("artist")).toString()},
         {QStringLiteral("album"), m_track.value(QStringLiteral("album")).toString()},
-        {QStringLiteral("platform"), m_platform},
+        {QStringLiteral("platform"), platform},
         {QStringLiteral("app"), QStringLiteral("Orchard V3")},
         {QStringLiteral("status"), m_playing ? QStringLiteral("Playing") : QStringLiteral("Paused")},
         {QStringLiteral("activityText"), m_activityText},
@@ -386,7 +402,8 @@ void Discord::refresh(bool force)
         {QStringLiteral("artworkText"), QStringLiteral("{album}")},
         {QStringLiteral("artistImageUrl"), m_artistImage},
         {QStringLiteral("listenUrl"), listenUrl(m_track)},
-        {QStringLiteral("listenButtonText"), QStringLiteral("Listen on YouTube Music")},
+        {QStringLiteral("listenButtonText"), apple ? QStringLiteral("Listen on Apple Music")
+                                                              : QStringLiteral("Listen on YouTube Music")},
         {QStringLiteral("projectButton"), m_projectButtonEnabled},
         {QStringLiteral("currentTime"), m_position},
         {QStringLiteral("duration"), m_duration},

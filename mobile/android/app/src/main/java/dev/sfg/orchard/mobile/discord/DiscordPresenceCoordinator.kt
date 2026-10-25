@@ -23,6 +23,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import dev.sfg.orchard.mobile.artwork.ArtistImageRepository
 import dev.sfg.orchard.mobile.catalog.CatalogRepository
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.PlaybackStatus
 import dev.sfg.orchard.mobile.model.Track
@@ -144,7 +145,12 @@ class DiscordPresenceCoordinator(
         val end = if (isPlaying && durationMs > positionMs) start + durationMs else 0L
 
         val buttons = buildList {
-            songLinks.trackUrl(track)?.takeIf(String::isNotBlank)?.let { add("Listen on YouTube Music" to it) }
+            if (track.playbackSource == APPLE_MUSIC_SOURCE || track.id.startsWith("am.")) {
+                track.id.removePrefix("am.").takeIf { it.isNotBlank() }
+                    ?.let { add("Listen on Apple Music" to "https://music.apple.com/song/$it") }
+            } else {
+                songLinks.trackUrl(track)?.takeIf(String::isNotBlank)?.let { add("Listen on YouTube Music" to it) }
+            }
             add("View the Orchard Project" to DISCORD_ORCHARD_PROJECT_URL)
         }
 
