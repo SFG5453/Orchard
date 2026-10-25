@@ -218,6 +218,7 @@ internal fun AppearancePage(
             checked = settings.animatedBackground,
             onChecked = { onSettings(settings.copy(animatedBackground = it)) },
         )
+        BackdropControls(settings, onSettings)
     }
 
     LyricsMotionSection(settings, onSettings, labelIndex = 10)
