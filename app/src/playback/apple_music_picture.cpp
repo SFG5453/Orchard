@@ -50,6 +50,12 @@ constexpr qint64 kSyncNs = 250'000'000;
 constexpr double kJumpSeconds = 0.2;
 // Share of the measured error taken per sync; averages out the engine's stepped position.
 constexpr double kSlew = 0.15;
+// Windows reports HDCP to the CDM, so Apple's taller renditions may play there.
+#ifdef Q_OS_WIN
+constexpr bool kTryHardware = true;
+#else
+constexpr bool kTryHardware = false;
+#endif
 } // namespace
 
 AppleMusicPicture::AppleMusicPicture(AppleMusic *account, PlaybackController *playback, QObject *parent)
@@ -67,6 +73,7 @@ void AppleMusicPicture::start(const QString &appleId, int maxHeight) {
   stop();
   m_appleId = appleId;
   m_maxHeight = maxHeight;
+  m_hardware = kTryHardware && !m_hdcpRefused;
   const quint64 session = m_session;
   if (!m_account || !m_account->connected()) {
     fail(session, {}, tr("Connect Apple Music under Settings, Integrations to watch this video."));
@@ -89,6 +96,7 @@ void AppleMusicPicture::stop() {
   if (m_ready)
     m_cdm.close(m_stream);
   m_ready = false;
+  m_variantHardware = false;
   m_shown = false;
   m_decoding = false;
   m_drained = false;
@@ -131,20 +139,21 @@ void AppleMusicPicture::loadMaster(quint64 session, const QString &token, const 
     QString error = reply->error() == QNetworkReply::NoError ? QString() : replyError(reply);
     if (error.isEmpty())
       error = apple_music_playlist::parseMaster(reply->url(), reply->readAll(), master);
-    const apple_music_playlist::Variant *variant = apple_music_playlist::pickVariant(master, m_maxHeight);
+    const apple_music_playlist::Variant *variant = apple_music_playlist::pickVariant(master, m_maxHeight, m_hardware);
     if (!variant) {
       fail(session, error.isEmpty() ? QStringLiteral("no software rendition") : error);
       return;
     }
     QList<int> heights;
     for (const auto &entry : std::as_const(master.variants))
-      if (entry.software && !heights.contains(entry.height))
+      if ((entry.software || m_hardware) && !heights.contains(entry.height))
         heights.append(entry.height);
     std::sort(heights.begin(), heights.end(), std::greater<>());
     m_heights.clear();
     for (int height : heights)
       m_heights.append(height);
     m_height = variant->height;
+    m_variantHardware = !variant->software;
     QNetworkReply *media = m_network.get(QNetworkRequest(variant->url));
     connect(media, &QNetworkReply::finished, this, [this, media, session, token, licenseUrl] {
       media->deleteLater();
@@ -403,6 +412,13 @@ void AppleMusicPicture::fail(quint64 session, const QString &error, const QStrin
     return;
   if (!error.isEmpty())
     qWarning().noquote() << "AppleMusic: music video picture failed |" << error;
+  // A failed HDCP rendition usually means the display lacks HDCP; stay on software ones after that.
+  if (m_variantHardware && !m_ready) {
+    m_hdcpRefused = true;
+    qInfo().noquote() << "AppleMusic: falling back to software renditions";
+    start(m_appleId, m_maxHeight);
+    return;
+  }
   stop();
   emit failed(message.isEmpty() ? tr("This video could not be shown.") : message);
 }
