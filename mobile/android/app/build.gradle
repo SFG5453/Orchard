@@ -534,7 +534,8 @@ tasks.matching {
 
 // The Apple Music logo is supplied locally and never tracked.
 def appleMusicLogoDir = rootProject.file('local/apple-music/res')
-def appleMusicLogo = new File(appleMusicLogoDir, 'drawable-nodpi/apple_music_logo.png').isFile()
+def appleMusicLogo = new File(appleMusicLogoDir, 'drawable-nodpi/apple_music_logo.png').isFile() &&
+        new File(appleMusicLogoDir, 'drawable/apple_music_mark.xml').isFile()
 android.defaultConfig.buildConfigField 'boolean', 'APPLE_MUSIC_LOGO', appleMusicLogo.toString()
 android.sourceSets.main.kotlin.directories.add(appleMusicLogo ? 'src/appleMusicLogo/java' : 'src/noAppleMusicLogo/java')
 if (appleMusicLogo) android.sourceSets.main.res.srcDir appleMusicLogoDir
