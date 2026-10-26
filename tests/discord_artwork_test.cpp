@@ -234,7 +234,7 @@ private slots:
       if (request.path == QStringLiteral("/artwork")) {
         uploaded = request.body;
         return jsonResponse(201, {{QStringLiteral("url"), QStringLiteral("https://artwork.sfg545.dev/abc.webp")},
-                                  {QStringLiteral("expires_at"), QJsonValue::Null}});
+                                  {QStringLiteral("expires_at"), QDateTime::currentSecsSinceEpoch() + 86400}});
       }
       return source(request);
     });
@@ -277,7 +277,7 @@ private slots:
         return jsonResponse(200, {{QStringLiteral("files"), QJsonArray{QJsonObject{
             {QStringLiteral("source_sha256"), digest},
             {QStringLiteral("url"), QStringLiteral("https://artwork.sfg545.dev/abc.webp")},
-            {QStringLiteral("expires_at"), QJsonValue::Null}}}}});
+            {QStringLiteral("expires_at"), QDateTime::currentSecsSinceEpoch() + 86400}}}}});
       }
       return source(request);
     });
