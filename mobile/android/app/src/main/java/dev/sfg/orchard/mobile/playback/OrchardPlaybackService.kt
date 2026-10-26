@@ -19,7 +19,7 @@
 
 package dev.sfg.orchard.mobile.playback
 
-import android.app.PendingIntent
+import android.app.NotificationManager
 import android.content.ComponentCallbacks2
 import android.content.Intent
 import android.os.Handler
@@ -29,14 +29,11 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DataSourceBitmapLoader
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import dev.sfg.orchard.connect.R
-import dev.sfg.orchard.connect.app.MainActivity
 import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.playback.apple.AppleMixAnalysis
@@ -68,6 +65,7 @@ class OrchardPlaybackService : MediaLibraryService() {
     private lateinit var spare: ExoPlayer
     private lateinit var crossfade: CrossfadeEngine
     private lateinit var mediaSession: MediaLibrarySession
+    private lateinit var connectSession: ConnectMediaSession
     private lateinit var stateStore: PlaybackStateStore
     private lateinit var streamResolver: YouTubeStreamResolver
     private lateinit var streamCache: StreamCache
@@ -151,22 +149,21 @@ class OrchardPlaybackService : MediaLibraryService() {
             onLayoutChanged = ::updateCustomLayout,
         )
         mediaSession = MediaLibrarySession.Builder(this, OrchardSessionPlayer(player), callback)
-            .setSessionActivity(mainActivityIntent())
-            // The app's OkHttp stack: the default URLConnection loader fails on some provider
-            // artwork URLs, and WearOS then falls back to a gray notification background.
-            .setBitmapLoader(
-                DataSourceBitmapLoader.Builder(this)
-                    .setDataSourceFactory(OkHttpDataSource.Factory(graph.http))
-                    .setMaximumOutputDimension(1024)
-                    .setMakeShared(true)
-                    .build()
-            )
+            .setSessionActivity(mainActivityIntent(this))
+            .setBitmapLoader(artworkBitmapLoader(this, graph.http))
             .build()
+        connectSession = ConnectMediaSession(this, graph.connect, mainActivityIntent(this), artworkBitmapLoader(this, graph.http)) {
+            onUpdateNotification(mediaSession, false)
+        }
+        addSession(connectSession.session)
         updateCustomLayout()
         handler.post { nowPlaying.hydrateArtwork() }
         // Media3's default small icon is a play glyph, which the media player then badges.
         setMediaNotificationProvider(
-            DefaultMediaNotificationProvider.Builder(this).build().apply { setSmallIcon(R.drawable.ic_notification) }
+            DefaultMediaNotificationProvider.Builder(this)
+                .setNotificationIdProvider(ConnectMediaSession::notificationId)
+                .build()
+                .apply { setSmallIcon(R.drawable.ic_notification) }
         )
         crossfade = CrossfadeEngine(
             handler = handler,
@@ -269,6 +266,15 @@ class OrchardPlaybackService : MediaLibraryService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession = mediaSession
 
+    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
+        if (session === mediaSession && ::connectSession.isInitialized && connectSession.hasMedia && !session.player.isPlaying) {
+            getSystemService(NotificationManager::class.java)
+                .cancel(ConnectMediaSession.notificationId(session))
+            return
+        }
+        super.onUpdateNotification(session, startInForegroundRequired)
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val result = super.onStartCommand(intent, flags, startId)
         val target = authoritativePlayer() ?: return result
@@ -307,6 +313,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         if (::spare.isInitialized) spare.release()
         if (::playbackVolume.isInitialized) playbackVolume.close()
         if (::mediaSession.isInitialized) mediaSession.release()
+        if (::connectSession.isInitialized) connectSession.release()
         streamResolver.trackLookup = { null }
         queueSnapshot = emptyMap()
         OrchardGraph.from(this).onClearStreamCache = null
@@ -463,30 +470,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         OrchardSessionCallback.applyLayout(mediaSession, authoritativePlayer() ?: return)
     }
 
-    private fun prefetchAround(player: Player) {
-        val wanted = (player.currentMediaItemIndex..player.currentMediaItemIndex + 1)
-            .filter { it in 0 until player.mediaItemCount }
-            .map(player::getMediaItemAt)
-        for (item in wanted) {
-            val uri = item.localConfiguration?.uri
-            // Authenticated progressive items are prefetched through StreamCache below, whose
-            // DataSource invokes their signed-in resolver; a guest resolve beside it would compete.
-            val authenticated = uri != null &&
-                (MediaItemMapper.requiresAuthenticatedHls(uri) || MediaItemMapper.requiresAuthenticatedDirect(uri))
-            val apple = dev.sfg.orchard.mobile.playback.apple.AppleMusicDataSource.isApple(uri)
-            if (!authenticated && !apple && !MediaItemMapper.isVideoUri(uri)) streamResolver.prefetch(item.mediaId)
-        }
-        val uris = wanted.mapNotNull { it.localConfiguration?.uri }.filterNot(MediaItemMapper::isVideoUri)
-        streamCache.retainOnly(uris)
-        uris.forEach(streamCache::prefetch)
-    }
-
-    private fun mainActivityIntent(): PendingIntent = PendingIntent.getActivity(
-        this,
-        0,
-        Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-    )
+    private fun prefetchAround(player: Player) = prefetchAround(player, streamResolver, streamCache)
 
     companion object {
         private const val TAG = "OrchardPlayback"

@@ -75,6 +75,8 @@ This computer stops controlling the other device. Music on the other device keep
 
 When your phone connects to this computer, the **This computer** row reads "Controlled by" and the phone's name, and the cast button lights up. The computer keeps playing through its own speakers, and the phone shows the same song and queue.
 
+The phone's notification, lock screen, and other media controls (Bluetooth headphones, a watch, Android Auto) also show the computer's song. Play, pause, next, previous, and seeking from them control the computer.
+
 If you close Orchard on the phone, the music keeps playing on the computer.
 
 ## What the computer does for a connected phone

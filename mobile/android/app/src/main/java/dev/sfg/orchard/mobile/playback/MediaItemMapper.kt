@@ -23,7 +23,10 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.annotation.OptIn
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaConstants
 import dev.sfg.orchard.mobile.model.Track
 
 /** Converts provider-neutral tracks to Media3 items without persisting stream URLs. */
@@ -33,11 +36,14 @@ object MediaItemMapper {
     private const val VIDEO_AUTHORITY = "video"
     private const val TRACK_JSON = "orchard.track.json"
 
+    @OptIn(UnstableApi::class)
     fun toMediaItem(track: Track, videoId: String = ""): MediaItem {
         val storedTrack = track.copy(musicVideoId = track.musicVideoId.ifBlank { videoId })
         val extras = Bundle().apply {
             putString(TRACK_JSON, dev.sfg.orchard.mobile.model.CatalogJson.track(storedTrack).toString())
             putBoolean("explicit", track.explicit)
+            // Media3 copies Long extras into the platform metadata, where Auto and watches read this key.
+            if (track.explicit) putLong(MediaConstants.EXTRAS_KEY_IS_EXPLICIT, MediaConstants.EXTRAS_VALUE_ATTRIBUTE_PRESENT)
         }
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
