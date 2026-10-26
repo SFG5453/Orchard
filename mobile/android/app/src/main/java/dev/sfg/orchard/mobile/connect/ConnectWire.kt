@@ -143,6 +143,13 @@ internal object ConnectWire {
         )
     }
 
+    /** [snapshot] played forward [elapsedMs]; a buffering or paused target holds still. */
+    fun projected(snapshot: PlaybackSnapshot, elapsedMs: Long): PlaybackSnapshot {
+        if (snapshot.status != PlaybackStatus.PLAYING || elapsedMs <= 0) return snapshot
+        val position = snapshot.positionMs + elapsedMs
+        return snapshot.copy(positionMs = if (snapshot.durationMs > 0) position.coerceAtMost(snapshot.durationMs) else position)
+    }
+
     /** Wire index of an absolute index into [snapshot]'s queue; -1 for history or the current track. */
     fun upcomingIndex(snapshot: PlaybackSnapshot, index: Int): Int =
         (index - snapshot.currentIndex.coerceAtLeast(-1) - 1).takeIf { it >= 0 } ?: -1
