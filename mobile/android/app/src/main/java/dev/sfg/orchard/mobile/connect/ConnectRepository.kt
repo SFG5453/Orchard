@@ -24,6 +24,7 @@ import android.os.SystemClock
 import android.util.Log
 import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.auth.OrchardAccountService
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.PlaybackStatus
 import dev.sfg.orchard.mobile.playback.LocalPlaybackController
@@ -119,6 +120,12 @@ class ConnectRepository(
 
     fun command(action: String, args: JSONObject = JSONObject()) =
         node { ConnectNative.command(it, JSONObject().put("action", action).put("args", args).toString()) }
+
+    /** The controlled target can play Apple Music catalog ids itself. */
+    fun targetPlaysAppleMusic(): Boolean {
+        val target = roles.value.target
+        return target.isNotBlank() && target != deviceId && roles.value.providerHosts[APPLE_MUSIC_SOURCE] == target
+    }
 
     /** Absolute index into [remote]'s queue; history and the current track are not addressable. */
     fun queueCommand(action: String, vararg indices: Pair<String, Int>) {
@@ -216,7 +223,7 @@ class ConnectRepository(
             }
         }
         scope.launch {
-            combine(graph.auth.state, graph.qobuz.status, graph.settings.settings) { _, _, _ -> Unit }
+            combine(graph.auth.state, graph.qobuz.status, graph.settings.settings, graph.appleMusic.connection) { _, _, _, _ -> Unit }
                 .collect { refreshDevice() }
         }
         scope.launch {

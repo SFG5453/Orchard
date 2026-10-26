@@ -138,9 +138,9 @@ void ConnectService::refreshDevice() {
       // Mixing for a peer needs only the worker; this desktop's own crossfade mode is beside the point.
       {QStringLiteral("can_mix_audio"), AdaptiveMixWorker::installed()},
       {QStringLiteral("can_fetch_artwork"), true},
-      {QStringLiteral("providers"), QJsonArray{QStringLiteral("youtube"), QStringLiteral("qobuz")}},
-      {QStringLiteral("provider_sessions"),
-       QJsonObject{{QStringLiteral("youtube"), m_auth->isSignedIn()}, {QStringLiteral("qobuz"), m_qobuz->connected()}}},
+      {QStringLiteral("providers"),
+       QJsonArray{QStringLiteral("youtube"), QStringLiteral("qobuz"), QStringLiteral("apple_music")}},
+      {QStringLiteral("provider_sessions"), providerSessions()},
       {QStringLiteral("audio_transports"), QJsonArray{QStringLiteral("pcm_s16"), QStringLiteral("pcm_f32"), QStringLiteral("source")}}};
   const QByteArray encoded = QJsonDocument(device).toJson(QJsonDocument::Compact);
   if (encoded == m_lastDevice)

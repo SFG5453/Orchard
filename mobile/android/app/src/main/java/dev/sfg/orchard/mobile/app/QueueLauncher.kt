@@ -94,8 +94,11 @@ internal class QueueLauncher(
     /** Why an Apple Music song cannot start here, or null; the player repeats the source checks. */
     private fun appleMusicBlock(track: Track): String? {
         if (track.playbackSource != APPLE_MUSIC_SOURCE && !isAppleMusicId(track.id)) return null
+        if (targets.value.selected != PlaybackTarget.LocalPhone) {
+            return if (graph.connect.targetPlaysAppleMusic()) null
+            else "Sign in to Apple Music on the other device to play Apple Music songs there."
+        }
         return when {
-            targets.value.selected != PlaybackTarget.LocalPhone -> "Apple Music songs play only on this phone."
             graph.settings.settings.value.homeSource != APPLE_MUSIC_SOURCE ->
                 "Choose Apple Music as the music source in Settings to play Apple Music songs."
             !graph.appleMusic.signedIn() -> "Connect Apple Music in Settings to play this song."
