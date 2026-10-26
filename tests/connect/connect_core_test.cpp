@@ -166,6 +166,9 @@ private slots:
     QVERIFY(normalizeCommand(move).empty());
     Json negative = {{"action", "remove_queue_item"}, {"args", {{"index", -1}}}};
     QVERIFY(!normalizeCommand(negative).empty());
+    Json skipBack = {{"action", "previous"}, {"args", {{"restart", false}, {"extra", 1}}}};
+    QVERIFY(normalizeCommand(skipBack).empty());
+    QCOMPARE(skipBack["args"], Json({{"restart", false}}));
   }
 
   void lanAddressRanking() {

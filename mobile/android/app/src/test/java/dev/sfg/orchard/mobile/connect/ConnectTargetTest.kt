@@ -35,7 +35,7 @@ class ConnectTargetTest {
         override fun pause() { calls += "pause" }
         override fun toggle() { calls += "toggle" }
         override fun next() { calls += "next" }
-        override fun previous() { calls += "previous" }
+        override fun previous(restart: Boolean) { calls += if (restart) "previous" else "skip_back" }
         override fun seek(positionMs: Long) { calls += "seek $positionMs" }
         override fun setVolume(volume: Float) { calls += "volume $volume" }
         override fun setShuffle(enabled: Boolean) { calls += "shuffle $enabled" }

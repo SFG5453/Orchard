@@ -48,7 +48,7 @@ void ConnectService::applyCommand(const QJsonObject &event) {
   } else if (action == QStringLiteral("next")) {
     playback->next();
   } else if (action == QStringLiteral("previous")) {
-    playback->previous();
+    playback->previous(args.value(QStringLiteral("restart")).toBool(true));
   } else if (action == QStringLiteral("set_volume")) {
     m_home->setVolume(args.value(QStringLiteral("volume")).toDouble());
   } else if (action == QStringLiteral("set_shuffle")) {

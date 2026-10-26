@@ -73,7 +73,8 @@ internal class ConnectSessionPlayer(
             .setRepeatMode(repeatMode(snapshot.repeatMode))
         val current = snapshot.currentTrack ?: return builder.setPlaybackState(STATE_IDLE).build()
         val durationMs = snapshot.durationMs.takeIf { it > 0 } ?: current.durationMs
-        val items = snapshot.queue.take(QUEUE_LIMIT).mapIndexed { index, track ->
+        // The playlist starts at the current track; queue indices shift by the history in front of it.
+        val items = snapshot.queue.drop(snapshot.currentIndex.coerceAtLeast(0)).take(QUEUE_LIMIT).mapIndexed { index, track ->
             val itemDurationMs = if (index == 0) durationMs else track.durationMs
             MediaItemData.Builder("$index:${track.id}")
                 .setMediaItem(MediaItemMapper.toMediaItem(track.copy(artworkUrl = highResolutionArtworkUrl(track.artworkUrl, 1024))))
@@ -104,7 +105,7 @@ internal class ConnectSessionPlayer(
         // The target decides between restarting and going back, like its own previous button.
         seekCommand == COMMAND_SEEK_TO_PREVIOUS || seekCommand == COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> send("previous")
         mediaItemIndex > 0 -> {
-            connect.queueCommand("play_queue_index", "index" to mediaItemIndex)
+            connect.queueCommand("play_queue_index", "index" to mediaItemIndex + snapshot.currentIndex.coerceAtLeast(0))
             awaitRemote()
         }
         else -> send("seek", JSONObject().put("position", (if (positionMs == C.TIME_UNSET) 0 else positionMs) / 1000.0))

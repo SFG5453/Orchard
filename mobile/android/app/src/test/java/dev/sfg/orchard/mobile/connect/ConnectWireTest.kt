@@ -100,6 +100,20 @@ class ConnectWireTest {
         })
         assertEquals("all", wire.getString("repeat"))
         assertTrue(wire.getBoolean("autoplay"))
+        assertEquals(history.id, wire.getJSONObject("previous").getString("id"))
+    }
+
+    @Test
+    fun remotePreviousSitsBeforeCurrent() {
+        val wire = JSONObject()
+            .put("track", ConnectWire.track(song))
+            .put("previous", ConnectWire.track(song.copy(id = "p")))
+            .put("queue", JSONArray().put(ConnectWire.track(song.copy(id = "n1"))))
+        val shown = ConnectWire.snapshot(wire)
+        assertEquals(listOf("p", "abc123", "n1"), shown.queue.map { it.id })
+        assertEquals(1, shown.currentIndex)
+        assertEquals(0, ConnectWire.upcomingIndex(shown, 2))
+        assertEquals(-1, ConnectWire.upcomingIndex(shown, 0))
     }
 
     @Test

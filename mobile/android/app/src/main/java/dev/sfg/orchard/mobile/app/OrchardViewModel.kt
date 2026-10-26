@@ -330,6 +330,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     }
     fun next() = transport.next()
     fun previous() = transport.previous()
+    fun skipBack() = transport.skipBack()
     fun seek(positionMs: Long) = transport.seek(positionMs)
     fun toggleShuffle() = transport.toggleShuffle()
     fun cycleRepeat() = transport.cycleRepeat()

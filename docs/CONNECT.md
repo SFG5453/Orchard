@@ -88,12 +88,13 @@ Events (`{"event": name, ...}`): `hub`, `devices`, `session`, `session_ended`,
 `initial_playback`, `remote_state`, `roles`, `command`, `command_result`, `rpc`, `rpc_result`,
 `stream_end`, `stream_sent`, `stream_failed`, `flow`, `error`.
 
-Commands (`normalizeCommand`): `play`, `pause`, `toggle`, `next`, `previous`, `clear_queue`,
+Commands (`normalizeCommand`): `play`, `pause`, `toggle`, `next`, `previous {restart?}`, `clear_queue`,
 `seek {position}`, `set_volume {volume}`, `set_repeat {mode}`, `set_shuffle {enabled}`,
 `play_queue_index {index}`, `remove_queue_item {index}`, `move_queue_item {from, to}`,
 `enqueue {track, next}`, `play_track {track, tracks, position, play, context_title}`,
 `replace_queue {tracks, index, position, play, context_title}`. Queue indices count upcoming
-tracks only, from 0.
+tracks only, from 0. `previous` with `restart: false` skips back even past the opening seconds;
+snapshots carry the track it returns to as `previous`.
 
 ## RPC methods
 

@@ -225,7 +225,8 @@ public:
   Q_INVOKABLE void seekBy(double seconds);
   Q_INVOKABLE void stop();
   Q_INVOKABLE void next();
-  Q_INVOKABLE void previous();
+  // restart=false skips back even when the song is past its opening seconds.
+  Q_INVOKABLE void previous(bool restart = true);
 
   // playback_video_source.cpp. Swaps the current track between album audio and its
   // music video's muxed stream at the same position, so picture and sound share a clock.
