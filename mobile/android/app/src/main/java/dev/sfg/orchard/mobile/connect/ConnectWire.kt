@@ -19,6 +19,7 @@
 
 package dev.sfg.orchard.mobile.connect
 
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.Artist
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.PlaybackStatus
@@ -36,6 +37,8 @@ import org.json.JSONObject
 internal object ConnectWire {
     // Desktop caps its queue at this; a longer one is cut to fit.
     const val QUEUE_LIMIT = 2500
+    private const val YOUTUBE = "youtube"
+    private const val APPLE_SONG_PREFIX = "am.songs."
 
     fun track(track: Track): JSONObject {
         val extra = JSONObject()
@@ -53,7 +56,7 @@ internal object ConnectWire {
             .put("album", track.album)
             .put("artwork", track.artworkUrl)
             .put("duration", track.durationMs / 1000.0)
-            .put("provider", "youtube")
+            .put("provider", provider(track))
             .put("album_id", track.albumId)
             .put("artist_id", track.artistId)
             .put("explicit", track.explicit)
@@ -82,9 +85,14 @@ internal object ConnectWire {
             musicVideoType = extra.optString("musicVideoType"),
             musicVideoId = extra.optString("musicVideoId"),
             isUpload = extra.optBoolean("isUpload"),
+            playbackSource = if (json.optString("provider") == APPLE_MUSIC_SOURCE) APPLE_MUSIC_SOURCE else YOUTUBE,
             artists = artists,
         )
     }
+
+    // Peers only know YouTube and Apple Music tracks; anything else plays through YouTube there.
+    private fun provider(track: Track): String =
+        if (track.playbackSource == APPLE_MUSIC_SOURCE || track.id.startsWith(APPLE_SONG_PREFIX)) APPLE_MUSIC_SOURCE else YOUTUBE
 
     fun tracks(list: List<Track>, limit: Int = QUEUE_LIMIT): JSONArray =
         JSONArray().also { array -> list.take(limit).forEach { array.put(track(it)) } }

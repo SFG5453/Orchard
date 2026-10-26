@@ -29,8 +29,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 
-/** Desktop's answer to ResolveArtwork: a larger cover and, when one exists, a looping video. */
-data class ConnectArtwork(val staticUrl: String, val animatedUrl: String)
+/** Desktop's answer to ResolveArtwork: a larger cover and, when they exist, square and tall loops. */
+data class ConnectArtwork(val staticUrl: String, val animatedUrl: String, val animatedVerticalUrl: String = "")
 
 /**
  * Provider and artwork work across Connect. Credentials never cross: a peer gets match results,
@@ -156,7 +156,11 @@ internal class ConnectProviders(
             .put("artwork", track.artworkUrl)
         val result = connect.request("artwork", "ResolveArtwork", params, timeoutMs = 15_000)?.optJSONObject("result")
             ?: return null
-        return ConnectArtwork(result.optString("static_url"), result.optString("animated_url"))
+        return ConnectArtwork(
+            result.optString("static_url"),
+            result.optString("animated_url"),
+            result.optString("animated_vertical_url"),
+        )
     }
 
     private companion object {

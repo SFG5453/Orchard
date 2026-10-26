@@ -130,7 +130,12 @@ internal class NowPlayingMetadata(
             // desktop resolves the rest, and local lookup covers a silent one.
             onStill(TrackArtwork(track.id, track.artworkUrl))
             graph.connect.providers.artwork(track)?.let { desktop ->
-                TrackArtwork(track.id, desktop.staticUrl.ifBlank { track.artworkUrl }, desktop.animatedUrl)
+                TrackArtwork(
+                    track.id,
+                    desktop.staticUrl.ifBlank { track.artworkUrl },
+                    desktop.animatedUrl,
+                    desktop.animatedVerticalUrl,
+                )
             } ?: graph.artwork.artwork(track)
         }
         else -> graph.artwork.artwork(track)
