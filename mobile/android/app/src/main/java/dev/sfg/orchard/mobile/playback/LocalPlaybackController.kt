@@ -167,8 +167,8 @@ class LocalPlaybackController(
     }
     fun pause() = withController(Player::pause)
     fun next() = withController { if (it.hasNextMediaItem()) it.seekToNextMediaItem() }
-    fun previous() = withController {
-        if (it.currentPosition > 5_000) it.seekTo(0) else if (it.hasPreviousMediaItem()) it.seekToPreviousMediaItem()
+    fun previous(restart: Boolean = true) = withController {
+        if (restart && it.currentPosition > 5_000 || !it.hasPreviousMediaItem()) it.seekTo(0) else it.seekToPreviousMediaItem()
     }
     fun seek(positionMs: Long) = withController { player ->
         val item = player.currentMediaItem ?: return@withController

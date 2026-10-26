@@ -107,6 +107,7 @@ internal fun PhonePlayerBody(
     onSeek: (Long) -> Unit,
     onToggle: () -> Unit,
     onPrevious: () -> Unit,
+    onSkipBack: () -> Unit,
     onNext: () -> Unit,
     onShuffle: () -> Unit,
     onRepeat: () -> Unit,
@@ -223,7 +224,7 @@ internal fun PhonePlayerBody(
                         enabled = swipeEnabled,
                         hasPrevious = previous != null,
                         hasNext = next != null,
-                        onPrevious = onPrevious,
+                        onPrevious = onSkipBack,
                         onNext = onNext,
                     )
                     // This box sits over the backdrop and takes its touches, so it owns double-tap too.

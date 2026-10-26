@@ -105,6 +105,7 @@ internal object ConnectWire {
         val current = local.currentTrack
         return JSONObject()
             .put("track", current?.let(::track) ?: JSONObject.NULL)
+            .put("previous", local.history.lastOrNull()?.let(::track) ?: JSONObject.NULL)
             .put("position", local.positionMs / 1000.0)
             .put("duration", local.durationMs / 1000.0)
             .put("playing", local.isPlaying)
@@ -117,9 +118,10 @@ internal object ConnectWire {
             .put("autoplay", autoplay)
     }
 
-    /** A target's state as the phone shows it: current track first, then what plays next. */
+    /** A target's state as the phone shows it: the track a skip back reaches, the current one, then what plays next. */
     fun snapshot(json: JSONObject): PlaybackSnapshot {
         val current = track(json.optJSONObject("track"))
+        val previous = current?.let { track(json.optJSONObject("previous")) }
         val upcoming = tracks(json.optJSONArray("queue"))
         val playing = json.optBoolean("playing")
         val buffering = json.optBoolean("buffering")
@@ -131,8 +133,8 @@ internal object ConnectWire {
                 else -> PlaybackStatus.IDLE
             },
             currentTrack = current,
-            queue = listOfNotNull(current) + upcoming,
-            currentIndex = if (current != null) 0 else -1,
+            queue = listOfNotNull(previous, current) + upcoming,
+            currentIndex = if (current == null) -1 else if (previous != null) 1 else 0,
             positionMs = (json.optDouble("position", 0.0) * 1000).toLong(),
             durationMs = (json.optDouble("duration", 0.0) * 1000).toLong(),
             isPlaying = playing,

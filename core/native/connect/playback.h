@@ -35,6 +35,7 @@ constexpr std::size_t kCommandQueueLimit = 2500;
 // The target's authoritative playback state. Positions are seconds.
 struct PlaybackSnapshot {
   Json track;            // canonical track or null
+  Json previous;         // canonical track a skip back returns to, or null
   double position = 0.0; // at `timestamp`
   double duration = 0.0;
   bool playing = false;

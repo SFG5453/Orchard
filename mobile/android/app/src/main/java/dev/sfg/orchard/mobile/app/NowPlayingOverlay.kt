@@ -149,6 +149,7 @@ fun NowPlayingOverlay(
             onBack = { onOpenChange(false) },
             onToggle = viewModel::togglePlayback,
             onPrevious = viewModel::previous,
+            onSkipBack = viewModel::skipBack,
             onNext = viewModel::next,
             onSeek = { positionMs ->
                 // At the audible handoff the UI is already on the incoming timeline while the engine
