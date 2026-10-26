@@ -172,7 +172,7 @@ to restore the default. Account deletion also removes the allowance.
 
 ## Artwork
 
-Permanent hosting for Discord Rich Presence artwork in Backblaze B2. The worker
+Hosting for Discord Rich Presence artwork in Backblaze B2. The worker
 receives the bytes so it can parse the WebP container before storage. Public
 files are served from `https://artwork.sfg545.dev`, which maps to the bucket
 root; the B2 application key stays with the worker.
@@ -184,17 +184,22 @@ root; the B2 application key stays with the worker.
   2 in flight per user. Rejections are 429 with `Retry-After`.
 - Index: uploads may include `x-orchard-source-sha256`, the lowercase SHA-256
   of the source URL's UTF-8 bytes. `GET /artwork/index` returns the caller's
-  `{source_sha256, url, expires_at: null}` files. It accepts an optional
+  `{source_sha256, url, expires_at}` files. It accepts an optional
   `source_sha256` query to find one source and a `cursor` query to page through
   the full index (500 files per page; `next_cursor` is null on the last page).
   The desktop client checks the index before downloading or converting motion
   artwork. URL changes, including rotating query strings, cause a miss.
-- Files do not expire. The hourly cron only clears old upload quota entries.
-  Existing R2-backed D1 rows are treated as legacy and are not served from B2;
+- Expiry: files expire 24 hours after their last use. An upload of the same
+  bytes or an index lookup by `source_sha256` pushes `expires_at` out again; a
+  full index listing does not. The hourly cron deletes up to 40 expired files
+  per run from B2 and D1. A row is marked `purging` before its B2 delete, so a
+  failed delete is retried and the file is never advertised meanwhile.
+  Re-uploading bytes whose row survived but whose file is missing stores them
+  again.
+- Existing R2-backed D1 rows are treated as legacy and are not served from B2;
   re-uploading the bytes migrates them. Clients that omit the source digest
-  receive an account-hosted proxy URL and a far-future expiry marker for
-  compatibility with older desktop builds. Both URLs serve the same permanent
-  B2 object.
+  receive an account-hosted proxy URL for compatibility with older desktop
+  builds. Both URLs serve the same B2 object.
 
 ## Bug reports
 
@@ -271,8 +276,10 @@ production JSONC; check it before either command.
    `npx wrangler d1 create orchard-accounts`
 3. Use the `Orchard-Art` B2 bucket already served at `artwork.sfg545.dev`.
    The Worker uses its lowercase S3 name `orchard-art` and endpoint region
-   `us-west-004`. Keep artwork files without an expiration lifecycle rule.
-   Create a bucket-scoped application key with read and write file permissions.
+   `us-west-004`. The Worker deletes expired files itself. Set the lifecycle
+   rule to keep only the last version so hidden (deleted) files are removed.
+   Create a bucket-scoped application key with read and write file permissions,
+   which include deleting files.
    The bucket root maps to the artwork domain root.
 4. Set `GOOGLE_CLIENT_ID` in `wrangler.production.jsonc`, then add the secrets:
    ```sh

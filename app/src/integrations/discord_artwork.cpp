@@ -61,7 +61,7 @@ constexpr int kUploadRetryDelayMs = 5000;
 constexpr int kDefaultRetryAfterSeconds = 60;
 constexpr qsizetype kMaxProcessOutput = 1024 * 1024;
 constexpr qsizetype kStderrTail = 4096;
-// Only legacy responses have an expiry; keep their cached URLs fresh.
+// Hosted artwork expires a day after its last use; drop cached URLs early.
 constexpr qint64 kExpiryMarginSeconds = 60 * 60;
 
 const QSet<QString> kImageCodecs{QStringLiteral("webp"), QStringLiteral("png"), QStringLiteral("mjpeg"),
@@ -363,8 +363,8 @@ bool DiscordArtwork::isCurrent(const std::shared_ptr<Job> &job) const { return j
 
 std::optional<QString> DiscordArtwork::cachedUrl(const QString &key) const {
   const auto it = m_hosted.constFind(key);
-  if (it == m_hosted.constEnd() ||
-      (it->expiresAt.isValid() && it->expiresAt < QDateTime::currentDateTimeUtc().addSecs(kExpiryMarginSeconds)))
+  if (it == m_hosted.constEnd() || !it->expiresAt.isValid() ||
+      it->expiresAt < QDateTime::currentDateTimeUtc().addSecs(kExpiryMarginSeconds))
     return std::nullopt;
   return it->url;
 }
@@ -390,7 +390,8 @@ void DiscordArtwork::loadHosted() {
     const QJsonValue expiry = entry.value(QStringLiteral("expires_at"));
     const QDateTime expiresAt = expiry.isNull() ? QDateTime()
         : QDateTime::fromSecsSinceEpoch(expiry.toInteger(), QTimeZone::UTC);
-    if (!url.isEmpty() && (!expiresAt.isValid() || expiresAt > cutoff))
+    // Entries without an expiry predate artwork expiry and may point at deleted files.
+    if (!url.isEmpty() && expiresAt.isValid() && expiresAt > cutoff)
       m_hosted.insert(it.key(), {url, expiresAt});
   }
 }
@@ -399,10 +400,9 @@ void DiscordArtwork::saveHosted() const {
   const QDateTime now = QDateTime::currentDateTimeUtc();
   QJsonObject entries;
   for (auto it = m_hosted.constBegin(); it != m_hosted.constEnd(); ++it) {
-    if (!it->expiresAt.isValid() || it->expiresAt > now)
+    if (it->expiresAt.isValid() && it->expiresAt > now)
       entries.insert(it.key(), QJsonObject{{QStringLiteral("url"), it->url},
-                                           {QStringLiteral("expires_at"), it->expiresAt.isValid()
-                                               ? QJsonValue(it->expiresAt.toSecsSinceEpoch()) : QJsonValue::Null}});
+                                           {QStringLiteral("expires_at"), it->expiresAt.toSecsSinceEpoch()}});
   }
   QDir().mkpath(QFileInfo(m_hostedPath).absolutePath());
   QSaveFile file(m_hostedPath);

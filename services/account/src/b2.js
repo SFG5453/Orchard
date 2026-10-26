@@ -40,3 +40,9 @@ export async function getArtworkObject(env, key, method = "GET") {
   if (response.status === 404) return null;
   return expectSuccess(response, "download");
 }
+
+// On a versioned bucket this only hides the file; the lifecycle rule removes hidden versions.
+export async function deleteArtworkObject(env, key) {
+  const response = await request(env, key, { method: "DELETE" });
+  if (response.status !== 404) expectSuccess(response, "delete");
+}
