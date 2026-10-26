@@ -80,8 +80,9 @@ struct Master {
 };
 
 QString parseMaster(const QUrl &playlistUrl, const QByteArray &text, Master &master);
-// The tallest software variant no taller than `maxHeight` (0 for any), or the shortest one.
-const Variant *pickVariant(const Master &master, int maxHeight);
+// The tallest variant no taller than `maxHeight` (0 for any), or the shortest one. Only
+// software variants unless `hardware`.
+const Variant *pickVariant(const Master &master, int maxHeight, bool hardware = false);
 // The best stereo audio rendition, preferring 256 kbps AAC.
 QUrl pickAudio(const Master &master);
 

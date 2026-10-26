@@ -173,11 +173,11 @@ QString parseMaster(const QUrl &playlistUrl, const QByteArray &text, Master &mas
   return master.variants.isEmpty() ? QStringLiteral("no video variants") : QString();
 }
 
-const Variant *pickVariant(const Master &master, int maxHeight) {
+const Variant *pickVariant(const Master &master, int maxHeight, bool hardware) {
   const Variant *best = nullptr;
   const Variant *smallest = nullptr;
   for (const Variant &variant : master.variants) {
-    if (!variant.software)
+    if (!variant.software && !hardware)
       continue;
     if (!smallest || variant.height < smallest->height)
       smallest = &variant;

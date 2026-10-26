@@ -192,8 +192,10 @@ Orchard streams Apple Music songs itself and decrypts them in a small separate p
 
 With **Music source** set to **Apple**, Apple Music videos (for example on an album's **Music Videos** shelf) play from Apple Music in the music video player. You hear the video's own soundtrack, also after you return to the regular player.
 
-- Picture quality: up to 486p. Apple licenses its 576p, 720p and 1080p versions only to players that report protected (HDCP) video output, which a desktop Widevine module cannot. The quality menu lists the heights Orchard can play.
-- Memory: `orchard-widevine-host` decodes the picture as well, a few seconds ahead of the playhead, and Orchard holds those frames. Expect about 100 MB more while the video player is open.
+- Picture quality on Linux: up to 486p. Apple licenses its 576p, 720p and 1080p versions only to players that report protected (HDCP) video output, and Linux cannot report it.
+- Picture quality on Windows: up to 1080p when every connected display has HDCP (most HDMI and DisplayPort monitors, and built-in laptop screens). Orchard asks Windows to turn HDCP on. If a display lacks it, Orchard plays the 486p version for the rest of the session. Screens shared over Miracast count as unprotected.
+- The quality menu lists the heights Orchard can play.
+- Memory: `orchard-widevine-host` decodes the picture as well, a few seconds ahead of the playhead, and Orchard holds those frames. Expect about 100 MB more while the video player is open at 486p, and several hundred MB more at 1080p.
 - Platforms: Linux and Windows. On Android, Apple Music videos do not play yet.
 
 ## Disconnect Apple Music

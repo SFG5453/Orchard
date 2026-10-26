@@ -44,7 +44,7 @@ class AppleMusicPicture final : public QObject {
 public:
   AppleMusicPicture(AppleMusic *account, PlaybackController *playback, QObject *parent = nullptr);
 
-  // `maxHeight` 0 picks the best rendition a software CDM may play.
+  // `maxHeight` 0 picks the best rendition this platform's CDM may play.
   void start(const QString &appleId, int maxHeight);
   void stop();
   void setSink(QVideoSink *sink);
@@ -94,6 +94,10 @@ private:
   qint64 m_syncedNs{0};
   QString m_appleId;
   int m_maxHeight{0};
+  // Try renditions Apple keeps for HDCP output; cleared for the run once one fails.
+  bool m_hardware{false};
+  bool m_hdcpRefused{false};
+  bool m_variantHardware{false};
   apple_music_playlist::Playlist m_playlist;
   QVariantList m_heights;
   int m_height{0};
