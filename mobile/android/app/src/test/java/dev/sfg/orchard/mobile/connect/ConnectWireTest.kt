@@ -19,6 +19,7 @@
 
 package dev.sfg.orchard.mobile.connect
 
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.Artist
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.PlaybackStatus
@@ -58,6 +59,14 @@ class ConnectWireTest {
         assertEquals(song.musicVideoType, back.musicVideoType)
         assertEquals(listOf("Band", "Guest"), back.artists.map { it.name })
         assertEquals("UC2", back.artists[1].id)
+    }
+
+    @Test
+    fun appleTrackKeepsSource() {
+        val wire = ConnectWire.track(song.copy(id = "am.songs.123", playbackSource = APPLE_MUSIC_SOURCE))
+        assertEquals(APPLE_MUSIC_SOURCE, wire.getString("provider"))
+        assertEquals(APPLE_MUSIC_SOURCE, ConnectWire.track(wire)!!.playbackSource)
+        assertEquals("youtube", ConnectWire.track(ConnectWire.track(song))!!.playbackSource)
     }
 
     @Test

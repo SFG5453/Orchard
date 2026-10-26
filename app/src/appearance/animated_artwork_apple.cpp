@@ -76,3 +76,19 @@ void AnimatedArtworkService::fetchApple(std::shared_ptr<LookupState> state, bool
       acceptMotionUrl(motion, state);
   });
 }
+
+void AnimatedArtworkService::resolveTallArtwork(const QString &title, const QString &artist, const QString &album,
+                                                std::function<void(const QString &)> done) {
+  if (!appleActive() || title.isEmpty()) {
+    done({});
+    return;
+  }
+  const QJsonObject query{
+      {QStringLiteral("title"), title},
+      {QStringLiteral("artist"), artist},
+      {QStringLiteral("album"), album},
+  };
+  m_appleMusic->artwork(query, [done = std::move(done)](const QJsonObject &result, const QString &) {
+    done(result.value(QStringLiteral("animatedVertical")).toString().trimmed());
+  });
+}

@@ -21,9 +21,13 @@
 
 #include "home/home_controller.h"
 #include "playback/playback_controller.h"
+#include "playback/playback_helpers.h"
 
 namespace connect_tracks {
 namespace {
+
+const QString kAppleMusic = QStringLiteral("apple_music");
+const QString kAppleSongPrefix = QStringLiteral("am.songs.");
 
 QString clock(double seconds) {
   const int total = static_cast<int>(seconds);
@@ -57,7 +61,7 @@ QJsonObject toWire(const QVariantMap &track) {
   wire.insert(QStringLiteral("artist"), artist);
   wire.insert(QStringLiteral("album"), track.value(QStringLiteral("album")).toString());
   wire.insert(QStringLiteral("artwork"), track.value(QStringLiteral("thumbnail")).toString());
-  wire.insert(QStringLiteral("provider"), QStringLiteral("youtube"));
+  wire.insert(QStringLiteral("provider"), isAppleTrack(track) ? kAppleMusic : QStringLiteral("youtube"));
   if (const double seconds = durationOf(track); seconds > 0.0)
     wire.insert(QStringLiteral("duration"), seconds);
   if (const QString albumId = track.value(QStringLiteral("albumId")).toString(); !albumId.isEmpty())
@@ -112,6 +116,11 @@ QVariantMap fromWire(const QJsonObject &wire) {
   track.insert(QStringLiteral("artistBrowseIds"), artistIds);
   track.insert(QStringLiteral("musicVideoType"), extra.value(QStringLiteral("musicVideoType")).toString());
   track.insert(QStringLiteral("isAudioOnly"), extra.value(QStringLiteral("isAudioOnly")).toBool());
+  if (wire.value(QStringLiteral("provider")).toString() == kAppleMusic || id.startsWith(kAppleSongPrefix)) {
+    track.insert(QStringLiteral("source"), kAppleMusic);
+    if (id.startsWith(kAppleSongPrefix))
+      track.insert(QStringLiteral("appleId"), id.mid(kAppleSongPrefix.size()));
+  }
   return track;
 }
 

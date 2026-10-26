@@ -53,6 +53,10 @@ public:
     void resolveAlbumArtwork(const QString &title, const QString &artist,
                              quint64 requestId, std::function<void(quint64, const QString &)> callback);
 
+    // Apple's tall loop as an HLS url; empty unless Apple Music is the active source.
+    void resolveTallArtwork(const QString &title, const QString &artist, const QString &album,
+                            std::function<void(const QString &)> done);
+
     // QML entry point; answers through albumArtworkResolved, synchronously on a cache hit.
     Q_INVOKABLE void requestAlbumArtwork(const QString &title, const QString &artist);
 
