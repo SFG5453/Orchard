@@ -65,6 +65,21 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/orchard-release.jks"
           chmod 600 "$RUNNER_TEMP/orchard-release.jks"
 
+      # The Apple Music logo is kept out of Git; builds without the secret omit it.
+      - name: Restore Apple Music logo
+        env:
+          APPLE_MUSIC_LOGO_PNG_BASE64: ${{ secrets.APPLE_MUSIC_LOGO_PNG_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$APPLE_MUSIC_LOGO_PNG_BASE64" ]]; then
+            echo "::warning::APPLE_MUSIC_LOGO_PNG_BASE64 is not set; building without the Apple Music logo."
+            exit 0
+          fi
+          logo_dir=mobile/android/local/apple-music/res/drawable-nodpi
+          mkdir -p "$logo_dir"
+          printf '%s' "$APPLE_MUSIC_LOGO_PNG_BASE64" | base64 --decode > "$logo_dir/apple_music_logo.png"
+          file "$logo_dir/apple_music_logo.png" | grep -q 'PNG image data'
+
       - name: Build canary APK
         working-directory: mobile/android
         env:
