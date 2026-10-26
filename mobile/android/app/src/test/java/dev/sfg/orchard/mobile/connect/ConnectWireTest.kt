@@ -121,4 +121,13 @@ class ConnectWireTest {
         assertEquals(1, ConnectWire.upcomingIndex(shown, 2))
         assertEquals(-1, ConnectWire.upcomingIndex(shown, 0))
     }
+
+    @Test
+    fun projectionMovesOnlyWhilePlaying() {
+        val playing = PlaybackSnapshot(status = PlaybackStatus.PLAYING, positionMs = 10_000, durationMs = 11_000, isPlaying = true)
+        assertEquals(10_500, ConnectWire.projected(playing, 500).positionMs)
+        assertEquals(11_000, ConnectWire.projected(playing, 5_000).positionMs)
+        val buffering = playing.copy(status = PlaybackStatus.BUFFERING)
+        assertEquals(10_000, ConnectWire.projected(buffering, 500).positionMs)
+    }
 }
