@@ -35,29 +35,57 @@ import kotlinx.coroutines.cancel
 /**
  * The song on the Connect target this phone controls, as its own session. The app's controller
  * stays on the local session, so the phone's queue never mixes with the target's.
+ *
+ * The session exists only while the target has a song. An idle session still counts as active to
+ * other devices, and a watch can pick it over the session that is actually playing.
  */
 @UnstableApi
 internal class ConnectMediaSession(
-    service: MediaSessionService,
+    private val service: MediaSessionService,
     connect: ConnectRepository,
-    sessionActivity: PendingIntent,
-    bitmapLoader: BitmapLoader,
-    onMediaChanged: () -> Unit,
+    private val sessionActivity: PendingIntent,
+    private val bitmapLoader: BitmapLoader,
+    private val onMediaChanged: () -> Unit,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val player = ConnectSessionPlayer(connect, scope) { onMediaChanged() }
-    val session: MediaSession = MediaSession.Builder(service, player)
-        .setId(ID)
-        .setSessionActivity(sessionActivity)
-        .setBitmapLoader(bitmapLoader)
-        .build()
+    private var ready = false
+    private val player = ConnectSessionPlayer(connect, scope) {
+        if (ready) sync()
+        onMediaChanged()
+    }
+    private var session: MediaSession? = null
+
+    init {
+        ready = true
+        sync()
+    }
 
     /** A target's song is showing; a paused local notification gives way to it. */
     val hasMedia: Boolean get() = player.hasMedia
 
+    private fun sync() {
+        val current = session
+        if (player.hasMedia && current == null) {
+            session = MediaSession.Builder(service, player)
+                .setId(ID)
+                .setSessionActivity(sessionActivity)
+                .setBitmapLoader(bitmapLoader)
+                .build()
+                .also(service::addSession)
+        } else if (!player.hasMedia && current != null) {
+            session = null
+            service.removeSession(current)
+            current.release()
+        }
+    }
+
     fun release() {
         scope.cancel()
-        session.release()
+        session?.let {
+            service.removeSession(it)
+            it.release()
+        }
+        session = null
         player.release()
     }
 

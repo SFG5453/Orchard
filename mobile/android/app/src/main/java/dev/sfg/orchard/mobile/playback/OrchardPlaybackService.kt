@@ -155,7 +155,6 @@ class OrchardPlaybackService : MediaLibraryService() {
         connectSession = ConnectMediaSession(this, graph.connect, mainActivityIntent(this), artworkBitmapLoader(this, graph.http)) {
             onUpdateNotification(mediaSession, false)
         }
-        addSession(connectSession.session)
         updateCustomLayout()
         handler.post { nowPlaying.hydrateArtwork() }
         // Media3's default small icon is a play glyph, which the media player then badges.
