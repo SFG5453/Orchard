@@ -20,10 +20,12 @@
 package dev.sfg.orchard.mobile.connect
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.auth.OrchardAccountService
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
+import dev.sfg.orchard.mobile.model.PlaybackStatus
 import dev.sfg.orchard.mobile.playback.LocalPlaybackController
 import dev.sfg.orchard.mobile.playback.RemoteMix
 import kotlinx.coroutines.CompletableDeferred
@@ -32,6 +34,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,6 +43,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -81,6 +86,16 @@ class ConnectRepository(
     private val mutableRemote = MutableStateFlow(PlaybackSnapshot())
     /** The target's state while this phone controls another device. */
     val remote: StateFlow<PlaybackSnapshot> = mutableRemote.asStateFlow()
+    /** [remote] ticking twice a second while playing; the target resends position only on a jump. */
+    val remotePlayback: Flow<PlaybackSnapshot> = remote.transformLatest { snapshot ->
+        emit(snapshot)
+        if (snapshot.status != PlaybackStatus.PLAYING) return@transformLatest
+        val receivedAt = SystemClock.elapsedRealtime()
+        while (true) {
+            delay(REMOTE_TICK_MS)
+            emit(ConnectWire.projected(snapshot, SystemClock.elapsedRealtime() - receivedAt))
+        }
+    }
     private val mutableRoles = MutableStateFlow(ConnectRoles())
     val roles: StateFlow<ConnectRoles> = mutableRoles.asStateFlow()
 
@@ -330,5 +345,6 @@ class ConnectRepository(
 
     private companion object {
         const val TAG = "OrchardConnect"
+        const val REMOTE_TICK_MS = 500L
     }
 }

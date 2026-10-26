@@ -88,7 +88,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val targets: StateFlow<PlaybackTargetState> = playbackTargets.state
     private val targetPlayback: StateFlow<PlaybackSnapshot> = combine(
         local.snapshot,
-        graph.connect.remote,
+        graph.connect.remotePlayback,
         targets,
     ) { localSnapshot, remoteSnapshot, targetState ->
         when (targetState.selected) {
