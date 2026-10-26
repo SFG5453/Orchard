@@ -150,6 +150,9 @@ QJsonObject localSnapshot(const PlaybackController &playback, const HomeControll
   QJsonObject snapshot;
   const QJsonObject current = toWire(playback.track());
   snapshot.insert(QStringLiteral("track"), current.isEmpty() ? QJsonValue() : QJsonValue(current));
+  const QVariantList history = playback.history();
+  const QJsonObject previous = history.isEmpty() ? QJsonObject() : toWire(history.last().toMap());
+  snapshot.insert(QStringLiteral("previous"), previous.isEmpty() ? QJsonValue() : QJsonValue(previous));
   snapshot.insert(QStringLiteral("position"), playback.position());
   snapshot.insert(QStringLiteral("duration"), playback.duration());
   snapshot.insert(QStringLiteral("playing"), playback.playing());
