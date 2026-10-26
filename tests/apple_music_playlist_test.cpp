@@ -162,6 +162,8 @@ private slots:
     // Nothing fits: the smallest software rendition still plays.
     QCOMPARE(pickVariant(master, 100)->height, 270);
     QCOMPARE(pickVariant(master, 0)->url, QUrl(QStringLiteral("https://x.example/m/v486.m3u8")));
+    QCOMPARE(pickVariant(master, 0, true)->height, 720);
+    QCOMPARE(pickVariant(master, 600, true)->height, 486);
     QCOMPARE(pickAudio(master), QUrl(QStringLiteral("https://x.example/m/a256.m3u8")));
   }
 
