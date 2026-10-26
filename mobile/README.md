@@ -152,8 +152,10 @@ Your library remains on YouTube Music. Apple Music playback is not available yet
 Apple Music tracks keep their provider identity and are not matched to YouTube Music.
 
 The Apple Music logo is optional and not tracked in Git. Place a square PNG at
-`mobile/android/local/apple-music/res/drawable-nodpi/apple_music_logo.png` to
-show it in Settings and on the now playing source mark.
+`mobile/android/local/apple-music/res/drawable-nodpi/apple_music_logo.png` and a
+one-color vector at `mobile/android/local/apple-music/res/drawable/apple_music_mark.xml`
+to show it in Settings and on the now playing source mark. CI builds restore both
+from the `APPLE_MUSIC_LOGO_PNG_BASE64` and `APPLE_MUSIC_MARK_XML_BASE64` secrets.
 
 ## Orchard Connect
 

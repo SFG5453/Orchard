@@ -91,16 +91,19 @@ jobs:
       - name: Restore Apple Music logo
         env:
           APPLE_MUSIC_LOGO_PNG_BASE64: ${{ secrets.APPLE_MUSIC_LOGO_PNG_BASE64 }}
+          APPLE_MUSIC_MARK_XML_BASE64: ${{ secrets.APPLE_MUSIC_MARK_XML_BASE64 }}
         run: |
           set -euo pipefail
-          if [[ -z "$APPLE_MUSIC_LOGO_PNG_BASE64" ]]; then
-            echo "::warning::APPLE_MUSIC_LOGO_PNG_BASE64 is not set; building without the Apple Music logo."
+          if [[ -z "$APPLE_MUSIC_LOGO_PNG_BASE64" || -z "$APPLE_MUSIC_MARK_XML_BASE64" ]]; then
+            echo "::warning::APPLE_MUSIC_LOGO_PNG_BASE64 or APPLE_MUSIC_MARK_XML_BASE64 is not set; building without the Apple Music logo."
             exit 0
           fi
-          logo_dir=mobile/android/local/apple-music/res/drawable-nodpi
-          mkdir -p "$logo_dir"
-          printf '%s' "$APPLE_MUSIC_LOGO_PNG_BASE64" | base64 --decode > "$logo_dir/apple_music_logo.png"
-          file "$logo_dir/apple_music_logo.png" | grep -q 'PNG image data'
+          res_dir=mobile/android/local/apple-music/res
+          mkdir -p "$res_dir/drawable-nodpi" "$res_dir/drawable"
+          printf '%s' "$APPLE_MUSIC_LOGO_PNG_BASE64" | base64 --decode > "$res_dir/drawable-nodpi/apple_music_logo.png"
+          printf '%s' "$APPLE_MUSIC_MARK_XML_BASE64" | base64 --decode > "$res_dir/drawable/apple_music_mark.xml"
+          file "$res_dir/drawable-nodpi/apple_music_logo.png" | grep -q 'PNG image data'
+          grep -q '<vector' "$res_dir/drawable/apple_music_mark.xml"
 
       - name: Build release APK
         working-directory: mobile/android
