@@ -17,11 +17,11 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Permanent WebP artwork hosting for Discord Rich Presence. Content-addressed
-// and validated here before storage in B2.
+// WebP artwork hosting for Discord Rich Presence. Content-addressed, validated
+// here before storage in B2, and deleted a day after its last use.
 
 import { HttpError, json, nowSeconds, requireSession } from "./http.js";
-import { getArtworkObject, putArtworkObject } from "./b2.js";
+import { deleteArtworkObject, getArtworkObject, putArtworkObject } from "./b2.js";
 import { WebpError, parseWebp } from "./webp.js";
 
 // A full Apple Music motion loop at 512px q90 lands around 7-9 MiB.
@@ -37,12 +37,13 @@ export const IP_UPLOAD_LIMIT = [60 * 60, 50];
 export const MAX_CONCURRENT_UPLOADS = 2;
 // Uploads that never finish (worker killed mid-request) stop counting after this.
 const UPLOAD_LEASE_SECONDS = 120;
+// Uploads and index hits push expiry this far out.
+export const ARTWORK_IDLE_SECONDS = 24 * 60 * 60;
+// B2 deletes per cron run; each is one subrequest under the free-plan cap of 50.
+export const ARTWORK_PURGE_BATCH = 40;
 
 const HASH_PATTERN = /^\/artwork\/([0-9a-f]{64})\.webp$/;
 const SHA_PATTERN = /^[0-9a-f]{64}$/;
-// Older clients require a numeric expiry to accept an upload response. The
-// value is only a compatibility marker; B2 files have no expiry policy here.
-const LEGACY_COMPAT_EXPIRES_AT = 4102444800;
 
 function objectKey(hash) {
   return `${hash}.webp`;
@@ -64,7 +65,7 @@ function describe(row, env, reused, legacyClient) {
   return {
     url: legacyClient ? legacyUrl(env, row.hash) : publicUrl(env, row.hash),
     sha256: row.hash,
-    expires_at: legacyClient ? LEGACY_COMPAT_EXPIRES_AT : null,
+    expires_at: row.expires_at,
     width: row.width,
     height: row.height,
     frames: row.frames,
@@ -178,24 +179,31 @@ async function linkSource(env, userId, sourceSha, hash, now) {
   ).bind(userId, sourceSha, hash, now).run();
 }
 
+async function touchArtwork(env, hash, now) {
+  return env.DB.prepare("UPDATE artwork SET expires_at = ? WHERE hash = ? AND storage = 'b2' RETURNING *")
+    .bind(now + ARTWORK_IDLE_SECONDS, hash).first();
+}
+
 async function storeArtwork(env, bytes, userId, sourceSha) {
   const info = validateArtwork(bytes);
   const hash = hex(await crypto.subtle.digest("SHA-256", bytes));
   const now = nowSeconds();
 
   const existing = await env.DB.prepare("SELECT * FROM artwork WHERE hash = ?").bind(hash).first();
-  if (existing?.storage === "b2") {
+  // The row can outlive its object if a purge raced an earlier reuse.
+  if (existing?.storage === "b2" && await getArtworkObject(env, objectKey(hash), "HEAD")) {
+    const row = await touchArtwork(env, hash, now);
     await linkSource(env, userId, sourceSha, hash, now);
-    return json(describe(existing, env, true, !sourceSha));
+    return json(describe(row, env, true, !sourceSha));
   }
 
   await putArtworkObject(env, objectKey(hash), bytes);
   const row = await env.DB.prepare(
     `INSERT INTO artwork (hash, bytes, width, height, frames, uploaded_by, created_at, expires_at, storage)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'b2')
-     ON CONFLICT (hash) DO UPDATE SET created_at = excluded.created_at, expires_at = 0, storage = 'b2'
+     ON CONFLICT (hash) DO UPDATE SET created_at = excluded.created_at, expires_at = excluded.expires_at, storage = 'b2'
      RETURNING *`,
-  ).bind(hash, bytes.byteLength, info.width, info.height, info.frames, userId, now, 0).first();
+  ).bind(hash, bytes.byteLength, info.width, info.height, info.frames, userId, now, now + ARTWORK_IDLE_SECONDS).first();
   await linkSource(env, userId, sourceSha, hash, now);
   return json(describe(row, env, false, !sourceSha), 201);
 }
@@ -223,18 +231,23 @@ export async function listArtwork(request, env) {
   if ((sourceSha && !SHA_PATTERN.test(sourceSha)) || (cursor && !SHA_PATTERN.test(cursor))) {
     throw new HttpError(400, "invalid_request", "Invalid artwork index digest");
   }
+  const now = nowSeconds();
   const { results } = await env.DB.prepare(
-    `SELECT s.source_sha256, a.hash FROM artwork_sources s
+    `SELECT s.source_sha256, a.hash, a.expires_at FROM artwork_sources s
      JOIN artwork a ON a.hash = s.hash
      WHERE s.user_id = ? AND a.storage = 'b2' AND s.source_sha256 > ?
        AND (? IS NULL OR s.source_sha256 = ?)
      ORDER BY s.source_sha256 LIMIT 501`,
   ).bind(claims.sub, cursor || "", sourceSha, sourceSha).all();
   const page = results.slice(0, 500);
+  // A lookup by source is a client about to show that artwork, which revives it before the purge claims it.
+  if (sourceSha) {
+    for (const row of page) row.expires_at = (await touchArtwork(env, row.hash, now))?.expires_at ?? row.expires_at;
+  }
   return json({ files: page.map((row) => ({
     source_sha256: row.source_sha256,
     url: publicUrl(env, row.hash),
-    expires_at: null,
+    expires_at: row.expires_at,
   })), next_cursor: results.length > 500 ? page.at(-1).source_sha256 : null },
   200, { "cache-control": "private, no-store" });
 }
@@ -249,7 +262,7 @@ export async function serveArtwork(request, env) {
     "content-type": "image/webp",
     "cache-control": "public, max-age=31536000, immutable",
     etag: `"${row.hash}"`,
-    "x-orchard-expires": String(LEGACY_COMPAT_EXPIRES_AT),
+    "x-orchard-expires": String(row.expires_at),
   };
   const object = await getArtworkObject(env, objectKey(row.hash), request.method);
   if (!object) throw new HttpError(404, "not_found", "No such artwork");
@@ -264,6 +277,29 @@ export function isArtworkPath(pathname) {
 }
 
 export async function purgeArtwork(env, now = nowSeconds()) {
-  // Only the quota ledger ages out. Artwork and its source index stay put.
   await env.DB.prepare("DELETE FROM artwork_uploads WHERE started_at <= ?").bind(now - 24 * 60 * 60).run();
+  const { results } = await env.DB.prepare(
+    `SELECT hash FROM artwork
+     WHERE storage = 'purging' OR (storage = 'b2' AND expires_at <= ?)
+     ORDER BY expires_at LIMIT ?`,
+  ).bind(now, ARTWORK_PURGE_BATCH).all();
+  for (const { hash } of results) {
+    // Claim the row only if nothing used it meanwhile; 'purging' rows are neither served nor advertised.
+    const claimed = await env.DB.prepare(
+      `UPDATE artwork SET storage = 'purging'
+       WHERE hash = ? AND (storage = 'purging' OR (storage = 'b2' AND expires_at <= ?)) RETURNING hash`,
+    ).bind(hash, now).first();
+    if (!claimed) continue;
+    try {
+      await deleteArtworkObject(env, objectKey(hash));
+    } catch (error) {
+      console.error(`artwork purge will retry ${hash}: ${error.message}`);
+      continue;
+    }
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM artwork WHERE hash = ? AND storage = 'purging'").bind(hash),
+      env.DB.prepare("DELETE FROM artwork_sources WHERE hash = ? AND NOT EXISTS (SELECT 1 FROM artwork WHERE hash = ?)")
+        .bind(hash, hash),
+    ]);
+  }
 }

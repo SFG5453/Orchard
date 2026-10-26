@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 
 import worker from "../src/index.js";
-import { ARTWORK_MAX_BYTES, validateArtwork } from "../src/artwork.js";
+import { ARTWORK_IDLE_SECONDS, ARTWORK_MAX_BYTES, validateArtwork } from "../src/artwork.js";
 import { signJwt } from "../src/jwt.js";
 import { purgeExpired } from "../src/service.js";
 import { parseWebp } from "../src/webp.js";
@@ -162,7 +162,7 @@ describe("artwork upload", () => {
     assert.match(body.url, /^https:\/\/artwork\.test\/[0-9a-f]{64}\.webp$/);
     assert.equal(body.reused, false);
     assert.equal(body.frames, 3);
-    assert.equal(body.expires_at, null);
+    assert.ok(Math.abs(body.expires_at - (now() + ARTWORK_IDLE_SECONDS)) <= 5);
     assert.equal(env.B2_STORE.has(`${body.sha256}.webp`), true);
 
     const served = await fetchArtwork(body.url);
@@ -170,7 +170,7 @@ describe("artwork upload", () => {
     assert.deepEqual(new Uint8Array(await served.arrayBuffer()), bytes);
     const head = await fetchArtwork(body.url, "HEAD");
     assert.equal(head.status, 200);
-    assert.ok(Number(head.headers.get("x-orchard-expires")) > now() + 50 * 365 * 86400);
+    assert.equal(Number(head.headers.get("x-orchard-expires")), body.expires_at);
 
     const again = await upload(bytes);
     assert.equal(again.status, 200);
@@ -181,12 +181,12 @@ describe("artwork upload", () => {
   it("keeps older desktop builds working through the account URL", async () => {
     const result = await (await upload(animatedWebp())).json();
     assert.match(result.url, /^https:\/\/account\.test\/artwork\/[0-9a-f]{64}\.webp$/);
-    assert.ok(result.expires_at > now() + 50 * 365 * 86400);
+    assert.ok(result.expires_at > now());
     assert.equal((await fetchArtwork(result.url)).status, 200);
     assert.equal((await (await index()).json()).files.length, 0);
   });
 
-  it("reuses permanent artwork even when a legacy expiry value remains", async () => {
+  it("pushes expiry out when artwork is uploaded again", async () => {
     const bytes = animatedWebp();
     const source = "https://cdn.example/reuse.mp4";
     const { sha256 } = await (await uploadFrom(source, bytes)).json();
@@ -194,7 +194,16 @@ describe("artwork upload", () => {
     const refreshed = await (await uploadFrom(source, bytes)).json();
     assert.equal(refreshed.sha256, sha256);
     assert.equal(refreshed.reused, true);
-    assert.equal(refreshed.expires_at, null);
+    assert.ok(refreshed.expires_at > now() + ARTWORK_IDLE_SECONDS - 5);
+  });
+
+  it("stores the bytes again when a reused row lost its file", async () => {
+    const bytes = animatedWebp();
+    const { sha256 } = await (await uploadFrom("https://cdn.example/lost.mp4", bytes)).json();
+    env.B2_STORE.clear();
+    const again = await uploadFrom("https://cdn.example/lost.mp4", bytes);
+    assert.equal(again.status, 201);
+    assert.equal(env.B2_STORE.has(`${sha256}.webp`), true);
   });
 
   it("indexes hosted files by source for the same account", async () => {
@@ -215,7 +224,17 @@ describe("artwork upload", () => {
     }), env).then((response) => response.json())).files, []);
   });
 
-  it("does not advertise legacy R2 rows and keeps B2 rows permanent", async () => {
+  it("revives artwork found through the index", async () => {
+    const source = "https://cdn.example/revive.mp4";
+    await uploadFrom(source, animatedWebp());
+    env.DB.raw.prepare("UPDATE artwork SET expires_at = ?").run(now() - 60);
+    const [file] = (await (await index(token, `?source_sha256=${await sourceSha(source)}`)).json()).files;
+    assert.ok(file.expires_at > now() + ARTWORK_IDLE_SECONDS - 5);
+    await purgeExpired(env, now());
+    assert.equal(env.B2_STORE.size, 1);
+  });
+
+  it("does not advertise legacy R2 rows", async () => {
     const source = "https://cdn.example/old.mp4";
     const uploaded = await (await uploadFrom(source, animatedWebp())).json();
     env.DB.raw.prepare("UPDATE artwork SET storage = 'r2'").run();
@@ -225,7 +244,7 @@ describe("artwork upload", () => {
     assert.equal((await (await index()).json()).files.length, 1);
   });
 
-  it("pages a growing permanent index", async () => {
+  it("pages a growing index", async () => {
     const { sha256 } = await (await upload(animatedWebp())).json();
     const insert = env.DB.raw.prepare(
       "INSERT INTO artwork_sources (user_id, source_sha256, hash, created_at) VALUES ('user-1', ?, ?, 0)");
@@ -298,17 +317,35 @@ describe("upload limits", () => {
   });
 });
 
-describe("permanent artwork", () => {
-  it("keeps objects and rows during the hourly cleanup", async () => {
+describe("artwork expiry", () => {
+  it("keeps artwork used within the last day", async () => {
     const { url } = await (await upload(animatedWebp())).json();
-    await purgeExpired(env, now() + 365 * 86400);
+    await purgeExpired(env, now() + ARTWORK_IDLE_SECONDS - 60);
     assert.equal(env.B2_STORE.size, 1);
     assert.equal((await fetchArtwork(url)).status, 200);
   });
 
-  it("serves B2 artwork regardless of legacy expiry values", async () => {
-    const { url } = await (await upload(animatedWebp())).json();
-    env.DB.raw.prepare("UPDATE artwork SET expires_at = ?").run(now() - 1);
-    assert.equal((await fetchArtwork(url)).status, 200);
+  it("deletes the file, row and index entry a day after last use", async () => {
+    const source = "https://cdn.example/expired.mp4";
+    const { url } = await (await uploadFrom(source, animatedWebp())).json();
+    await purgeExpired(env, now() + ARTWORK_IDLE_SECONDS + 1);
+    assert.equal(env.B2_STORE.size, 0);
+    assert.equal((await fetchArtwork(url)).status, 404);
+    assert.equal(env.DB.raw.prepare("SELECT COUNT(*) AS n FROM artwork").get().n, 0);
+    assert.deepEqual((await (await index()).json()).files, []);
+    assert.equal((await uploadFrom(source, animatedWebp())).status, 201);
+  });
+
+  it("retries a delete that B2 refused", async () => {
+    await upload(animatedWebp());
+    const working = env.B2_FETCH;
+    env.B2_FETCH = async (request) => request.method === "DELETE" ? new Response(null, { status: 503 }) : working(request);
+    await purgeExpired(env, now() + ARTWORK_IDLE_SECONDS + 1);
+    assert.equal(env.B2_STORE.size, 1);
+    assert.equal(env.DB.raw.prepare("SELECT storage FROM artwork").get().storage, "purging");
+    env.B2_FETCH = working;
+    await purgeExpired(env, now() + ARTWORK_IDLE_SECONDS + 1);
+    assert.equal(env.B2_STORE.size, 0);
+    assert.equal(env.DB.raw.prepare("SELECT COUNT(*) AS n FROM artwork").get().n, 0);
   });
 });
