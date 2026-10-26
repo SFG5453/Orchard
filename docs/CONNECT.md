@@ -20,6 +20,9 @@ bytes: the hub WebSocket, playback snapshots, events, RPC answers and audio.
 target when it is a capable desktop, else to a capable desktop controller, else to the target.
 Each provider goes to a signed-in device, target first; no signed-in device means
 `provider_unavailable`.
+An `apple_music` session means the device plays Apple catalog ids itself; a controller sends
+`am.songs.` ids only to a target that hosts `apple_music`, and the desktop target switches its
+catalog source to Apple Music when one arrives.
 
 ## Versioning
 

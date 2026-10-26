@@ -62,11 +62,14 @@ void ConnectService::applyCommand(const QJsonObject &event) {
       tracks.prepend(connect_tracks::fromWire(args.value(QStringLiteral("track")).toObject()));
       start = 0;
     }
+    if (start >= 0 && start < tracks.size())
+      preferAppleSource(tracks.at(start).toMap());
     playback->playFrom(tracks, start, args.value(QStringLiteral("position")).toDouble(),
                        args.value(QStringLiteral("play")).toBool(true));
   } else if (action == QStringLiteral("enqueue")) {
-    playback->enqueue(connect_tracks::fromWire(args.value(QStringLiteral("track")).toObject()),
-                      args.value(QStringLiteral("next")).toBool());
+    const QVariantMap track = connect_tracks::fromWire(args.value(QStringLiteral("track")).toObject());
+    preferAppleSource(track);
+    playback->enqueue(track, args.value(QStringLiteral("next")).toBool());
   } else if (action == QStringLiteral("remove_queue_item")) {
     playback->removeFromQueue(index("index"));
   } else if (action == QStringLiteral("move_queue_item")) {
@@ -89,6 +92,7 @@ void ConnectService::applyTransfer(const QJsonObject &snapshot) {
   if (current.isEmpty())
     return;
   tracks.prepend(current);
+  preferAppleSource(current);
   // Set before the queue arrives: turning shuffle on reshuffles whatever is queued.
   playback->setShuffleEnabled(snapshot.value(QStringLiteral("shuffle")).toBool());
   playback->setRepeatMode(snapshot.value(QStringLiteral("repeat")).toString(QStringLiteral("off")));
