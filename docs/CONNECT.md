@@ -104,7 +104,8 @@ tracks only, from 0.
   provider host's account.
 - `Search {provider, query, filter}`, `GetAlbum {provider, id}`, `GetArtist {provider, id}`:
   catalog calls on the YouTube provider host.
-- `ResolveArtwork {track}`: artwork host answers `{static_url, animated_url}`.
+- `ResolveArtwork {track}`: artwork host answers `{static_url, animated_url, animated_vertical_url?}`.
+  The tall loop comes from Apple Music when it is the host's catalog source.
 - `MixPrepare {mix, request, codecs}`: see below.
 
 ## Audio streams
