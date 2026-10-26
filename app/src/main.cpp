@@ -324,6 +324,7 @@ int main(int argc, char *argv[]) {
   ConnectService connectService(&orchardAccount, playback.get(), homeController.get(), &authManager, &qobuz);
   connectService.setCatalog(&youtubeCatalog);
   connectService.setArtwork(&animatedArtwork);
+  connectService.setAppleMusic(&appleMusic, &catalogSource);
   LocalApi localApi(playback.get(), homeController.get(), &youtubeProvider, &authManager,
                     &appleMusic, &catalogSource, &offlineLibrary, libraryActions.get(), &connectService);
   localApi.start();

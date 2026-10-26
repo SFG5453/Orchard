@@ -17,6 +17,7 @@ keywords:
   - controlled by
   - mix host
   - qobuz on phone
+  - apple music on computer
 platforms:
   - desktop
 order: 65
@@ -76,6 +77,8 @@ This computer stops controlling the other device. Music on the other device keep
 When your phone connects to this computer, the **This computer** row reads "Controlled by" and the phone's name, and the cast button lights up. The computer keeps playing through its own speakers, and the phone shows the same song and queue.
 
 The phone's notification, lock screen, and other media controls (Bluetooth headphones, a watch, Android Auto) also show the computer's song. Play, pause, next, previous, and seeking from them control the computer.
+
+The phone can start Apple Music songs on the computer when both devices are connected to Apple Music. If the computer uses YouTube Music as its music source, it switches to Apple Music when the first Apple Music song arrives. If the computer is not connected to Apple Music, the phone shows "Sign in to Apple Music on the other device to play Apple Music songs there."
 
 If you close Orchard on the phone, the music keeps playing on the computer.
 

@@ -241,6 +241,7 @@ app_sources = [
   'app/src/providers/youtube/catalog/youtube_catalog.h',
   'app/src/providers/youtube/youtube_provider.cpp',
   'app/src/providers/youtube/youtube_provider.h',
+  'app/src/connect/connect_apple.cpp',
   'app/src/connect/connect_hub_socket.cpp',
   'app/src/connect/connect_hub_socket.h',
   'app/src/connect/connect_mix.cpp',
