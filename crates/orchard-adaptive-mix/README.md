@@ -13,8 +13,9 @@ match playback sample for sample; an input seek lands tens of milliseconds off
 on Opus/WebM. Stereo fold-down and anti-aliased 44.1 → 22.05 kHz conversion
 run on the CPU. `ort` 2.0.0-rc.13 with the `webgpu`
 feature runs Nirovi's fp16 beat graph (`models/nirovi`), or its int8 graph on
-two CPU threads without a WebGPU device; the FP32 UMX-HQ vocal graph runs on
-ORT's CPU provider with two non-spinning threads. The shared planner
+two CPU threads without a WebGPU device; the FP32 Syvenu vocal graph
+(`models/syvenu`) reads the same beat spectrogram on ORT's CPU provider
+with two non-spinning threads. The shared planner
 selects beat/bar-aligned overlap positions and a pitch-preserving tempo glide
 for pairs up to 12% apart: one shared tempo moves geometrically from the
 outgoing BPM to the incoming BPM, so the outgoing song starts and the incoming
@@ -32,8 +33,8 @@ early), and fades the render into native playback over its last 5 ms.
 Before planning, the worker measures each song's bass (35-140 Hz, every 0.25 s,
 relative to the song's usual level), its sub-bass weight (25-60 Hz against
 60-250 Hz over the body), local chroma over both render windows (Earmark's
-peak-picked pitch classes every 0.5 s, with each frame's tonal weight), and UMX
-vocal activity across both render windows (about 1 s of CPU per pair). Local
+peak-picked pitch classes every 0.5 s, with each frame's tonal weight), and
+vocal activity across both render windows (about 0.25 s of CPU per pair). Local
 chroma only decides whether a beatless bridge's keys clash; beatmatched blends
 use whole-song keys. The planner uses them to keep a beat going through
 the overlap, drop a beatless intro's first beat on the bass swap, avoid fading in
@@ -47,7 +48,7 @@ This pass, for A/B listening.
 Songs played from Apple Music carry Apple's own audio analysis (`outgoingApple`,
 `incomingApple`; amp-api `audio-analysis` attributes). `apple.rs` turns its beat and bar grid into
 the whole-track opinion `refine` takes from Nirovi, so Earmark keeps its beats and Apple votes on
-bar phase, and maps its vocal strength spans onto UMX vocal shares (fitted on 88 replay pairs:
+bar phase, and maps its vocal strength spans onto UMX-HQ-scale vocal shares (fitted on 88 replay pairs:
 medium sits on the planner's active-voice threshold). With both songs covered the worker never
 loads the models. Best Mix (`bestMixApple`) builds Apple summaries without audio; they are marked
 `plannable: false`, since the planner needs spectra, so those pairs sort on predicted costs.
@@ -102,9 +103,9 @@ worker loads.
 
 The fp16 Nirovi session requires WebGPU registration and sets
 `session.disable_cpu_ep_fallback=1`. If it fails, the worker loads
-`nirovi_int8.ort` on two non-spinning CPU threads (about 0.17 s a window). The UMX-HQ LSTM
-steps serially, so on WebGPU it issues thousands of tiny dispatches and starves
-the compositor; its CPU session finishes a 960-frame slice in about 0.15 s.
+`nirovi_int8.ort` on two non-spinning CPU threads (about 0.17 s a window). Syvenu
+stays on the CPU, about 120 ms for a 60 s window, so the GPU is left
+to the compositor.
 There is no Supabase/cloud analysis. Resampling, decoding, spectrogram
 construction, planning, and audio DSP are ordinary CPU work. Unavailable beat
 inference leaves the natural track boundary intact. An unavailable optional
@@ -143,11 +144,8 @@ occur during playback. Model sessions are retained in the isolated worker.
 - `cargo test -p orchard-adaptive-mix --test docs_embed` (CPU only)
 - `cargo clippy -p orchard-adaptive-mix --all-targets -- -D warnings`
 - Model test: `cargo test -p orchard-adaptive-mix --test models -- --ignored`.
-- `scripts/validate-vocal-model.py` compares vocal inference with the original
-  PyTorch checkpoint.
 - `ctest --test-dir build -R 'orchard_audio_proxy|orchard_playback_persistence|orchard_adaptive_mix_span' --output-on-failure`
 - `ctest --test-dir build -R orchard_docs_search --output-on-failure` runs the docs search tests against the staged worker.
 
-The FP16 vocal export failed the strict GPU-only session check, so only FP32
-is packaged. Source hashes, licenses, tensor contracts, and measured numerical
+Source hashes, licenses, tensor contracts, and measured numerical
 errors live with the models under `models/`.

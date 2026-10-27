@@ -521,7 +521,7 @@ tasks.named('preBuild').configure { dependsOn 'copySlopAssets' }
 // Desktop and Android share the beat and vocal models in the top-level models directory.
 tasks.register('copyModelAssets', Sync) {
     from('../../../models/nirovi') { include 'nirovi_int8.ort' }
-    from('../../../models/vocal-separation') { include 'vocals_umxhq_presence_int8.ort' }
+    from('../../../models/syvenu') { include 'syvenu.ort' }
     into layout.buildDirectory.dir('generated/modelAssets')
 }
 tasks.named('preBuild').configure { dependsOn 'copyModelAssets' }

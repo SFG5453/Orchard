@@ -26,7 +26,7 @@ pub struct MixRequest {
     pub album_sequential: bool,
     pub position: f64,
     /// Apple Music's audio analysis of each song, sent only for songs played from Apple Music.
-    /// It replaces the beat model's bar phase and the UMX vocals.
+    /// It replaces the beat model's bar phase and the model vocals.
     #[serde(default)]
     pub outgoing_apple: Option<serde_json::Value>,
     #[serde(default)]
@@ -199,7 +199,7 @@ pub fn deck(models: Option<&mut Models>, song: &Song, span: (f64, f64), apple: O
 
 /// Plans and renders the pair. Returns the plan and the overlap as interleaved stereo f32
 /// at `song::RENDER_RATE`.
-/// Vocal share per UMX frame across a render window starting at track time `start`.
+/// Vocal share per vocal model frame across a render window starting at track time `start`.
 fn vocal_frames(models: Option<&mut Models>, apple: Option<&serde_json::Value>, window: &AudioBuffer, start: f64)
     -> Result<Vec<f64>, String> {
     if let Some(frames) = apple.and_then(|analysis| apple::vocal_frames(analysis, start, window.duration())) {

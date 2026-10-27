@@ -4,7 +4,7 @@
 official **final0** checkpoint as a fixed 1500-frame dynamic INT8 graph. It runs
 on ONNX Runtime's CPU provider with four threads. For playback planning, the
 bounded Earmark analysis passes its spectral vocal-risk estimates to the shared
-desktop planner. This does not load the separate open-unmix vocal separator.
+desktop planner. This does not load the separate Syvenu vocal model.
 
 Spectral vocal risk is broad: synths can score as vocals. The shared planner
 uses it to rank entry cues and measure overlap, but its vocal-collision gate

@@ -4,7 +4,7 @@
 use crate::{models::Models, song};
 use earmark::AudioBuffer;
 use earmark::audio::resample;
-use earmark::analysis::{ChromaFrames, VOCAL_SPECTROGRAM_HOP};
+use earmark::analysis::{BEAT_SPECTROGRAM_HOP, BEAT_SPECTROGRAM_SAMPLE_RATE, ChromaFrames};
 use serde_json::{Value, json};
 
 /// Curve resolution handed to the planner, in seconds.
@@ -99,14 +99,14 @@ pub fn chroma_curve(chroma: &ChromaFrames, span: (f64, f64)) -> Value {
     json!({"start": compact(start.unwrap_or(span.0)), "step": chroma.step, "values": values, "weights": weights})
 }
 
-/// Raw UMX vocal share per model frame for a render window, at 44.1 kHz frame times.
+/// Raw vocal share per model frame for a render window.
 pub fn vocal_frames(models: &mut Models, window: &AudioBuffer) -> Result<Vec<f64>, String> {
     let audio = resample::resample(window, song::RATE).map_err(|e| e.to_string())?;
     models.vocals(&audio)
 }
 
 /// Seconds between vocal model frames; frame `i` is centred on `i * VOCAL_FRAME`.
-pub const VOCAL_FRAME: f64 = VOCAL_SPECTROGRAM_HOP as f64 / song::RATE as f64;
+pub const VOCAL_FRAME: f64 = BEAT_SPECTROGRAM_HOP as f64 / BEAT_SPECTROGRAM_SAMPLE_RATE;
 
 /// Vocal share every `STEP` from model frames, starting at track time `start`.
 pub fn vocal_curve(frames: &[f64], start: f64) -> Value {

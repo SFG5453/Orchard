@@ -68,7 +68,7 @@ worker = "orchard-adaptive-mix" + (".exe" if a.platform.startswith("windows") el
 shutil.copy2(a.profile / worker, a.destination / worker)
 # Stage only the validated runtime graphs and their documentation/licenses.
 for relative in ("nirovi/nirovi_fp16.onnx", "nirovi/nirovi_int8.ort", "nirovi/README.md",
-                 "vocal-separation/vocals_umxhq_presence_int8.ort", "vocal-separation/README.md", "vocal-separation/LICENSE",
+                 "syvenu/syvenu.ort", "syvenu/README.md", "syvenu/TRAINING_CREDITS.tsv.gz",
                  "docs-search/model_quantized.onnx", "docs-search/vocab.txt", "docs-search/README.md",
                  "docs-search/LICENSE", "slop/fakeprint_lr.f32"):
     target = a.destination / "models" / relative
@@ -83,9 +83,13 @@ for relative in ("beat-this/beat_this.onnx", "beat-this/beat_this_webgpu.onnx", 
                  "beat-this/LICENSE", "vocal-separation/vocals_umxhq_int8.onnx",
                  "vocal-separation/vocals_umxhq_fp32.onnx", "nirovi/nirovi_int8.onnx",
                  "vocal-separation/vocals_umxhq_presence_int8.onnx",
-                 "vocal-separation/vocals_umxhq_fp32_fp16.onnx"):
+                 "vocal-separation/vocals_umxhq_fp32_fp16.onnx",
+                 "vocal-separation/vocals_umxhq_presence_int8.ort", "vocal-separation/README.md",
+                 "vocal-separation/LICENSE"):
     stale = a.destination / "models" / relative
     if stale.exists() and stale.resolve() != (a.models / relative).resolve():
         stale.unlink()
-if (a.destination / "models" / "beat-this").is_dir() and not any((a.destination / "models" / "beat-this").iterdir()):
-    (a.destination / "models" / "beat-this").rmdir()
+for retired in ("beat-this", "vocal-separation"):
+    folder = a.destination / "models" / retired
+    if folder.is_dir() and not any(folder.iterdir()):
+        folder.rmdir()

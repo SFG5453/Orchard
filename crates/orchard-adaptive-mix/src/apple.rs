@@ -1,11 +1,11 @@
 /* Copyright (C) 2026 SFG545. Licensed under the PolyForm Shield License 1.0.0, see LICENSE-POLYFORM-SHIELD. */
 
 //! Apple Music's own audio analysis (amp-api `audio-analysis` attributes) in the shapes the
-//! beat model and UMX passes produce, for songs played from Apple Music.
+//! beat and vocal model passes produce, for songs played from Apple Music.
 use crate::{beats::{Grid, median}, evidence::{STEP, VOCAL_FRAME}, song::WINDOW};
 use serde_json::{Value, json};
 
-/// UMX vocal share for no voice, then Apple's very-low to very-high, fitted on 88 replay pairs.
+/// Vocal share (UMX-HQ scale) for no voice, then Apple's very-low to very-high, fitted on 88 replay pairs.
 /// Medium lands on the planner's active-voice threshold (share 0.42, activity 0.6).
 const VOCAL_SHARE: [f64; 6] = [0.15, 0.2, 0.3, 0.42, 0.5, 0.58];
 /// Strength from which a passage counts as sung.
@@ -77,7 +77,7 @@ fn level_at(spans: &[(f64, f64, usize)], time: f64) -> usize {
     spans.iter().filter(|(start, end, _)| time >= *start && time < *end).map(|span| span.2).max().unwrap_or(0)
 }
 
-/// Vocal share per UMX frame over `duration` seconds from track time `start`, as
+/// Vocal share per vocal model frame over `duration` seconds from track time `start`, as
 /// `evidence::vocal_frames` measures a render window. None without vocal activity data.
 pub fn vocal_frames(analysis: &Value, start: f64, duration: f64) -> Option<Vec<f64>> {
     analysis["vocalActivity"].as_array()?;
@@ -178,7 +178,7 @@ mod tests {
     }
 
     #[test]
-    fn vocal_frames_follow_strength_on_the_umx_clock() {
+    fn vocal_frames_follow_strength_on_the_model_clock() {
         let frames = vocal_frames(&analysis(), 9.0, 2.0).unwrap();
         assert_eq!(frames.len(), (2.0 / VOCAL_FRAME) as usize + 1);
         assert_eq!(frames[0], VOCAL_SHARE[0]);
