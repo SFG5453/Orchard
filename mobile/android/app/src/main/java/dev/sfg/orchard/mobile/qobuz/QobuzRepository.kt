@@ -32,6 +32,8 @@ import kotlinx.coroutines.launch
 private const val PREFS_NAME = "orchard_qobuz"
 private const val KEY_TOKEN = "qobuz_token"
 private const val KEY_USER_ID = "qobuz_user_id"
+private const val KEY_APP_ID = "qobuz_app_id"
+private const val KEY_APP_SECRET = "qobuz_app_secret"
 private const val KEY_ENABLED = "qobuz_enabled"
 private const val KEY_QUALITY = "qobuz_quality"
 
@@ -61,13 +63,20 @@ class QobuzRepository(
         val token = prefs.getString(KEY_TOKEN, "").orEmpty()
         val userId = prefs.getLong(KEY_USER_ID, -1L)
         if (token.isBlank() || userId <= 0) return null
-        return QobuzSession(token = token, userId = userId)
+        return QobuzSession(
+            token = token,
+            userId = userId,
+            appId = prefs.getString(KEY_APP_ID, "").orEmpty(),
+            appSecret = prefs.getString(KEY_APP_SECRET, "").orEmpty(),
+        )
     }
 
-    fun connect(token: String, userId: Long) {
+    fun connect(token: String, userId: Long, appId: String = "", appSecret: String = "") {
         prefs.edit {
             putString(KEY_TOKEN, token)
             putLong(KEY_USER_ID, userId)
+            putString(KEY_APP_ID, appId)
+            putString(KEY_APP_SECRET, appSecret)
             putBoolean(KEY_ENABLED, true)
         }
 
@@ -82,6 +91,8 @@ class QobuzRepository(
         prefs.edit {
             remove(KEY_TOKEN)
             remove(KEY_USER_ID)
+            remove(KEY_APP_ID)
+            remove(KEY_APP_SECRET)
             putBoolean(KEY_ENABLED, false)
         }
 

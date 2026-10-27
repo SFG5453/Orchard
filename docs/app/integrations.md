@@ -17,6 +17,10 @@ keywords:
   - sp_dc
   - qobuz
   - lossless
+  - qobuz token
+  - auth token
+  - app id
+  - app secret
   - apple music
   - musickit
   - home source
@@ -147,6 +151,24 @@ Connecting Qobuz unlocks the **MAX** streaming quality, which plays lossless and
 4. Return to Orchard.
 
 When the connection finishes, the card says "Qobuz is connected, and streaming quality is now MAX." Select **Cancel** to stop connecting. Orchard stores the Qobuz sign-in in the system keychain. This uses Qobuz's private web API, so it may stop working when Qobuz changes its web player. See [Streaming quality](streaming-quality.md) for what MAX does.
+
+## Connect Qobuz with a token
+
+Use this when the browser sign-in does not work for you.
+
+1. Sign in at play.qobuz.com in a web browser.
+2. Open the browser's developer tools and find the local storage entry named `localuser`. Copy its `id` (your user ID) and `token` (your auth token).
+3. In Orchard, open **Settings**, then **Integrations**.
+4. In the **Qobuz** card, select **Use a token**.
+5. Enter the user ID and the auth token, then select **Sign in**.
+
+### Use your own Qobuz app ID and secret
+
+The token form also has optional **App ID** and **App secret** fields. Fill in both or neither. With them, Orchard signs requests with your app secret and plays the FLAC file that the Qobuz API (`track/getFileUrl`) returns. Without them, Orchard uses the web player's credentials.
+
+The auth token must come from the same app ID. A token copied from play.qobuz.com only works without your own app ID. "Qobuz rejected the app secret" means the secret does not match the app ID. "Qobuz returned a preview clip" means the account cannot stream that track in full.
+
+Orchard checks the token with Qobuz before saving it. "Qobuz rejected this user ID and token" means the token expired or the user ID is wrong. Signing out of the Qobuz web player can end the token. Treat the token like a password.
 
 ## Disconnect Qobuz
 

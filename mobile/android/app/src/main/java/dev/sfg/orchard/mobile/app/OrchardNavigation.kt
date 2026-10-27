@@ -229,6 +229,7 @@ internal fun OrchardNavigation(
                 onConnectSpotify = { nav.navigate(Routes.SPOTIFY_LOGIN) },
                 qobuzStatus = qobuzStatus,
                 onConnectQobuz = { nav.navigate(Routes.QOBUZ_LOGIN) },
+                onConnectQobuzToken = { nav.navigate(Routes.QOBUZ_TOKEN_LOGIN) },
                 onConnectAppleMusic = { nav.navigate(Routes.APPLE_MUSIC_LOGIN) },
                 onDisconnectQobuz = viewModel::disconnectQobuz,
                 onQobuzEnabledChange = viewModel::setQobuzEnabled,
@@ -292,6 +293,16 @@ internal fun OrchardNavigation(
                 qobuz = graph.qobuzResolver,
                 onSuccess = { token, userId ->
                     viewModel.connectQobuz(token, userId)
+                    nav.popBackStack()
+                },
+                onCancel = { nav.popBackStack() },
+            )
+        }
+        composable(Routes.QOBUZ_TOKEN_LOGIN) {
+            dev.sfg.orchard.mobile.ui.screens.QobuzTokenLoginScreen(
+                qobuz = OrchardGraph.from(context).qobuzResolver,
+                onSuccess = { session ->
+                    viewModel.connectQobuz(session.token, session.userId, session.appId, session.appSecret)
                     nav.popBackStack()
                 },
                 onCancel = { nav.popBackStack() },

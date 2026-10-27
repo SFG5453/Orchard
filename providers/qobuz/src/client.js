@@ -55,8 +55,10 @@ export function createQobuzClient({
   let pendingSession = null;
 
   async function authHeaders({ withSession = false } = {}) {
-    const [web, auth] = await Promise.all([bootstrap.get(), credentials()]);
+    const auth = await credentials();
     if (!auth?.token) throw new Error('Qobuz is not connected');
+    // User-supplied app credentials replace the web player's, so no bootstrap fetch.
+    const web = auth.appId ? { appId: String(auth.appId) } : await bootstrap.get();
     return {
       web,
       auth,
@@ -166,7 +168,32 @@ export function createQobuzClient({
     return ids.map((id) => normalizeQobuzTrackQuality(byId.get(id) || {}, id));
   }
 
+  // Signed with the user's app secret; returns one plain FLAC URL.
+  async function directFileUrl(trackId, quality, auth) {
+    const { headers } = await authHeaders();
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const args = {
+      format_id: QOBUZ_FORMAT_IDS[normalizeQobuzQuality(quality)],
+      intent: 'stream',
+      track_id: Number(trackId)
+    };
+    const query = formEncode({
+      ...args,
+      request_ts: timestamp,
+      request_sig: signedRequest('trackgetFileUrl', args, timestamp, auth.appSecret)
+    });
+    const value = await responseJson(
+      await fetchImpl(`${QOBUZ_BASE_URL}/track/getFileUrl?${query}`, { headers }),
+      'Qobuz track/getFileUrl'
+    );
+    if (!value?.url) throw new Error('Qobuz returned no file URL');
+    if (value.sample) throw new Error('Qobuz returned a preview clip; the account cannot stream this track');
+    return { ...value, direct: true };
+  }
+
   async function streamingInfo(trackId, quality, { retry = true } = {}) {
+    const auth = await credentials();
+    if (auth?.appSecret) return directFileUrl(trackId, quality, auth);
     await ensureSession();
     const { web, headers } = await authHeaders({ withSession: true });
     const timestamp = String(Math.floor(Date.now() / 1000));

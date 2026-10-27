@@ -31,7 +31,16 @@ ColumnLayout {
     property bool connected: false
     property string message: ""
     property bool messageIsError: false
+    property bool enteringToken: false
+    // A token check is running, so the browser hint does not apply.
+    property bool tokenPending: false
     property alias connectButton: connectButton
+    property alias tokenToggleButton: tokenToggleButton
+    property alias userIdField: userIdField
+    property alias tokenField: tokenField
+    property alias appIdField: appIdField
+    property alias appSecretField: appSecretField
+    property alias tokenSaveButton: tokenSaveButton
     property alias cancelButton: cancelButton
     property alias disconnectButton: disconnectButton
 
@@ -51,7 +60,9 @@ ColumnLayout {
 
             SettingsHint {
                 text: root.status === "restoring" ? qsTr("Checking for a saved Qobuz connection...")
-                    : root.status === "connecting" ? qsTr("Waiting for you to sign in to Qobuz in your browser.")
+                    : root.status === "connecting"
+                        ? (root.tokenPending ? qsTr("Checking the Qobuz token...")
+                            : qsTr("Waiting for you to sign in to Qobuz in your browser."))
                     : root.status === "connected"
                         ? (root.active
                             ? qsTr("Connected. Streaming quality is MAX, so matching songs play from Qobuz.")
@@ -69,6 +80,12 @@ ColumnLayout {
         }
 
         SettingsButton {
+            id: tokenToggleButton
+            visible: root.status === "disconnected"
+            text: root.enteringToken ? qsTr("Cancel") : qsTr("Use a token")
+        }
+
+        SettingsButton {
             id: cancelButton
             visible: root.status === "connecting"
             text: qsTr("Cancel")
@@ -78,6 +95,67 @@ ColumnLayout {
             id: disconnectButton
             visible: root.connected
             text: qsTr("Disconnect")
+        }
+    }
+
+    ColumnLayout {
+        Layout.fillWidth: true
+        visible: root.enteringToken && root.status === "disconnected"
+        spacing: 8
+
+        SettingsHint {
+            text: qsTr("Signed in at play.qobuz.com, the browser's local storage entry \"localuser\" holds your user ID and auth token.")
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            SettingsTextField {
+                id: userIdField
+                Layout.preferredWidth: 160
+                Layout.fillWidth: false
+                inputMethodHints: Qt.ImhDigitsOnly
+                placeholderText: qsTr("User ID")
+                Accessible.name: qsTr("Qobuz user ID")
+            }
+
+            SettingsTextField {
+                id: tokenField
+                echoMode: TextInput.Password
+                placeholderText: qsTr("Paste the auth token")
+                Accessible.name: qsTr("Qobuz auth token")
+            }
+        }
+
+        SettingsHint {
+            text: qsTr("Optional: with your own app ID and secret, Orchard streams FLAC files from the Qobuz API (track/getFileUrl). The token must come from the same app.")
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            SettingsTextField {
+                id: appIdField
+                Layout.preferredWidth: 160
+                Layout.fillWidth: false
+                inputMethodHints: Qt.ImhDigitsOnly
+                placeholderText: qsTr("App ID")
+                Accessible.name: qsTr("Qobuz app ID")
+            }
+
+            SettingsTextField {
+                id: appSecretField
+                echoMode: TextInput.Password
+                placeholderText: qsTr("App secret")
+                Accessible.name: qsTr("Qobuz app secret")
+            }
+
+            SettingsButton {
+                id: tokenSaveButton
+                text: qsTr("Sign in")
+            }
         }
     }
 

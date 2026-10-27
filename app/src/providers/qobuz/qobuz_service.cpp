@@ -164,24 +164,46 @@ void QobuzService::finishConnection(const QString &code) {
   setMessage(tr("Finishing the Qobuz connection..."));
   call(QStringLiteral("oauth.finish"), QJsonObject{{QStringLiteral("code"), code}},
        [this, generation](const QJsonValue &result, const QString &error) {
-         if (generation != m_connectGeneration)
-           return;
-         const QJsonObject account = result.toObject();
-         const QString token = account.value(QStringLiteral("token")).toString();
-         const qint64 userId = static_cast<qint64>(account.value(QStringLiteral("userId")).toDouble());
-         if (!error.isEmpty() || token.isEmpty() || userId <= 0) {
-           setStatus(QStringLiteral("disconnected"));
-           setMessage(error.isEmpty() ? tr("Qobuz did not return an account.")
-                                      : tr("Qobuz sign-in failed: %1").arg(error),
-                      true);
-           return;
-         }
-         storeSession(token, userId);
-         applySession(token, userId);
-         setStatus(QStringLiteral("connected"));
-         setMessage(tr("Qobuz is connected, and streaming quality is now MAX."));
-         emit accountConnected();
+         acceptAccount(generation, result, error);
        });
+}
+
+void QobuzService::connectWithToken(const QString &userId, const QString &token, const QString &appId,
+                                    const QString &appSecret) {
+  if (m_status == QStringLiteral("connecting") || m_status == QStringLiteral("restoring"))
+    return;
+  const quint64 generation = ++m_connectGeneration;
+  setStatus(QStringLiteral("connecting"));
+  setMessage(tr("Checking the Qobuz token..."));
+  call(QStringLiteral("token.verify"),
+       QJsonObject{{QStringLiteral("userId"), userId.trimmed()},
+                   {QStringLiteral("token"), token.trimmed()},
+                   {QStringLiteral("appId"), appId.trimmed()},
+                   {QStringLiteral("appSecret"), appSecret.trimmed()}},
+       [this, generation](const QJsonValue &result, const QString &error) {
+         acceptAccount(generation, result, error);
+       });
+}
+
+void QobuzService::acceptAccount(quint64 generation, const QJsonValue &result, const QString &error) {
+  if (generation != m_connectGeneration)
+    return;
+  const QJsonObject account = result.toObject();
+  const QString token = account.value(QStringLiteral("token")).toString();
+  const qint64 userId = static_cast<qint64>(account.value(QStringLiteral("userId")).toDouble());
+  m_callback->close();
+  if (!error.isEmpty() || token.isEmpty() || userId <= 0) {
+    setStatus(QStringLiteral("disconnected"));
+    setMessage(error.isEmpty() ? tr("Qobuz did not return an account.")
+                               : tr("Qobuz sign-in failed: %1").arg(error),
+               true);
+    return;
+  }
+  storeSession(account);
+  applySession(account);
+  setStatus(QStringLiteral("connected"));
+  setMessage(tr("Qobuz is connected, and streaming quality is now MAX."));
+  emit accountConnected();
 }
 
 void QobuzService::cancelConnection() {
@@ -204,10 +226,9 @@ void QobuzService::disconnectAccount() {
   emit accountDisconnected();
 }
 
-void QobuzService::applySession(const QString &token, qint64 userId) {
+void QobuzService::applySession(const QJsonObject &account) {
   m_albumQuality.clear();
-  call(QStringLiteral("session.set"),
-       QJsonObject{{QStringLiteral("token"), token}, {QStringLiteral("userId"), userId}});
+  call(QStringLiteral("session.set"), account);
 }
 
 void QobuzService::restoreSession() {
@@ -223,7 +244,7 @@ void QobuzService::restoreSession() {
     const QString token = saved.value(QStringLiteral("token")).toString();
     const qint64 userId = static_cast<qint64>(saved.value(QStringLiteral("userId")).toDouble());
     if (read->error() == QKeychain::NoError && !token.isEmpty() && userId > 0) {
-      applySession(token, userId);
+      applySession(saved);
       setStatus(QStringLiteral("connected"));
       return;
     }
@@ -235,13 +256,11 @@ void QobuzService::restoreSession() {
   job->start();
 }
 
-void QobuzService::storeSession(const QString &token, qint64 userId) {
+void QobuzService::storeSession(const QJsonObject &account) {
   auto *job = new QKeychain::WritePasswordJob(QString::fromLatin1(kKeychainService), this);
   job->setKey(QString::fromLatin1(kKeychainEntry));
   job->setInsecureFallback(false);
-  job->setTextData(QString::fromUtf8(
-      QJsonDocument(QJsonObject{{QStringLiteral("token"), token}, {QStringLiteral("userId"), userId}})
-          .toJson(QJsonDocument::Compact)));
+  job->setTextData(QString::fromUtf8(QJsonDocument(account).toJson(QJsonDocument::Compact)));
   connect(job, &QKeychain::Job::finished, this, [this](QKeychain::Job *done) {
     // Without a keychain the connection still works until Orchard quits.
     if (done->error() != QKeychain::NoError)

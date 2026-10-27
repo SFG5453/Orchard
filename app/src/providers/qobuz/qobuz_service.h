@@ -58,6 +58,10 @@ public:
   bool messageIsError() const { return m_messageIsError; }
 
   Q_INVOKABLE void connectAccount();
+  // Signs in with a user ID and auth token. An optional app ID and secret make
+  // playback use track/getFileUrl with the user's own app.
+  Q_INVOKABLE void connectWithToken(const QString &userId, const QString &token,
+                                    const QString &appId = {}, const QString &appSecret = {});
   Q_INVOKABLE void cancelConnection();
   Q_INVOKABLE void disconnectAccount();
 
@@ -82,10 +86,12 @@ private:
   void readBytes(const QString &method, const QString &playbackId, qint64 start, qint64 end, Bytes done);
   quint64 call(const QString &method, const QJsonValue &payload, Reply done = {});
   void restoreSession();
-  void storeSession(const QString &token, qint64 userId);
+  // `account` holds token, userId and the optional appId and appSecret.
+  void storeSession(const QJsonObject &account);
   void forgetSession();
-  void applySession(const QString &token, qint64 userId);
+  void applySession(const QJsonObject &account);
   void finishConnection(const QString &code);
+  void acceptAccount(quint64 generation, const QJsonValue &result, const QString &error);
   void setStatus(const QString &status);
   void setMessage(const QString &message, bool error = false);
 

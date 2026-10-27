@@ -22,6 +22,7 @@
 import { albumCandidates, selectQobuzAlbum } from './album.js';
 import { createQobuz } from './index.js';
 import { createQobuzAuthorizationUrl, exchangeQobuzAuthorizationCode } from './oauth.js';
+import { verifyQobuzToken } from './token.js';
 
 const hostCrypto = Object.freeze({
   hkdfSha256: ({ key, salt, info, length }) => globalThis.__orchardHkdfSha256(key, salt, info, length),
@@ -60,7 +61,11 @@ const methods = new Map([
   ['session.set', async (payload = {}) => {
     const token = String(payload.token || '');
     const userId = Number(payload.userId);
-    credentials = token && Number.isSafeInteger(userId) ? { token, userId } : null;
+    const appId = String(payload.appId || '');
+    const appSecret = String(payload.appSecret || '');
+    credentials = token && Number.isSafeInteger(userId)
+      ? { token, userId, ...(appId && appSecret ? { appId, appSecret } : {}) }
+      : null;
     qobuz.client.reset();
     return { connected: Boolean(credentials) };
   }],
@@ -72,6 +77,14 @@ const methods = new Map([
     code: payload.code,
     fetchImpl: (...args) => fetch(...args),
     web: await qobuz.bootstrap.get()
+  })],
+  ['token.verify', async (payload = {}) => verifyQobuzToken({
+    bootstrap: qobuz.bootstrap,
+    fetchImpl: (...args) => fetch(...args),
+    token: payload.token,
+    userId: payload.userId,
+    appId: payload.appId,
+    appSecret: payload.appSecret
   })],
   ['playback.resolve', async (payload = {}) => {
     const resolved = await qobuz.resolveTrack(payload.track || {}, payload.quality);

@@ -209,6 +209,7 @@ internal fun ConnectionDetail(
     onDisconnectListenBrainz: () -> Unit,
     onConnectSpotify: () -> Unit,
     onConnectQobuz: () -> Unit,
+    onConnectQobuzToken: () -> Unit,
     onConnectAppleMusic: () -> Unit,
     onDisconnectQobuz: () -> Unit,
     onQobuzEnabledChange: (Boolean) -> Unit,
@@ -241,6 +242,7 @@ internal fun ConnectionDetail(
                 ConnectionService.Qobuz -> QobuzSettingsCard(
                     status = qobuzStatus,
                     onConnect = onConnectQobuz,
+                    onConnectToken = onConnectQobuzToken,
                     onDisconnect = onDisconnectQobuz,
                     onEnabledChange = onQobuzEnabledChange,
                     onQualityChange = onQobuzQualityChange,

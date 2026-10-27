@@ -125,6 +125,7 @@ export {
 export { createQobuzMatcher, normalizedQobuzText, selectQobuzMatch } from './matcher.js';
 export { createQobuzAuthorizationUrl, exchangeQobuzAuthorizationCode } from './oauth.js';
 export { createQobuzPlayback } from './playback.js';
+export { verifyQobuzToken } from './token.js';
 export { createQobuzReporter } from './reports.js';
 export { normalizeQobuzAlbumQuality, normalizeQobuzTrackQuality } from './quality.js';
 export {

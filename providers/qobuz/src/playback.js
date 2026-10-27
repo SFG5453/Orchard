@@ -25,6 +25,7 @@ import {
   parseQobuzInitSegment,
   unwrapQobuzContentKey
 } from './cmaf.js';
+import { openQobuzDirectSource, readQobuzDirectRange } from './direct.js';
 
 const SOURCE_LIMIT = 12;
 const SEGMENT_CACHE_LIMIT = 4;
@@ -89,6 +90,10 @@ export function createQobuzPlayback({
     if (!source.refreshPromise) {
       source.refreshPromise = (async () => {
         const info = await client.streamingInfo(source.trackId, source.quality);
+        if (source.direct) {
+          source.direct.url = info.url;
+          return;
+        }
         source.urlTemplate = info.url_template;
         source.contentKey = contentKey(info, crypto);
         source.expiresAt = streamExpiry(info);
@@ -133,8 +138,34 @@ export function createQobuzPlayback({
     return pending;
   }
 
+  async function resolveDirectStream(match, quality, info) {
+    const direct = await openQobuzDirectSource(info, { fetchImpl });
+    const playbackId = randomUuid();
+    const source = {
+      playbackId,
+      trackId: match.qobuzTrackId,
+      quality,
+      formatId: Number(info.format_id || 0),
+      durationSeconds: Number(info.duration || match.durationSeconds || 0),
+      blob: String(info.blob || ''),
+      trackContextUuid: randomUuid(),
+      direct,
+      lastAccess: Date.now()
+    };
+    sources.set(playbackId, source);
+    prune();
+    return {
+      provider: 'qobuz', playbackId, codec: 'flac', mimeType: 'audio/flac',
+      bitDepth: direct.bitDepth || match.bitDepth || undefined,
+      sampleRate: direct.sampleRate || match.sampleRate || undefined,
+      durationSeconds: source.durationSeconds, formatId: source.formatId,
+      totalBytes: direct.totalLength
+    };
+  }
+
   async function resolveStream(match, quality) {
     const info = await client.streamingInfo(match.qobuzTrackId, quality);
+    if (info.direct) return resolveDirectStream(match, quality, info);
     const initBytes = await fetchBytes(info.url_template.replace('$SEGMENT$', '0'), 'Qobuz init segment');
     const init = parseQobuzInitSegment(initBytes);
     const playbackId = randomUuid();
@@ -176,6 +207,11 @@ export function createQobuzPlayback({
     const source = sources.get(playbackId);
     if (!source) throw new Error('Qobuz playback source expired');
     touch(playbackId, source);
+    if (source.direct) {
+      const rangeEnd = end === undefined ? source.direct.totalLength - 1 : Number(end);
+      return readQobuzDirectRange(source, Number(start), rangeEnd,
+        { fetchImpl, refresh: refreshSource, singleChunk: singleSegment });
+    }
     const totalLength = source.init.totalLength;
     const rangeStart = Number(start);
     const rangeEnd = end === undefined ? totalLength - 1 : Number(end);

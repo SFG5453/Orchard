@@ -57,4 +57,22 @@ class QobuzProviderTest {
             assertTrue(error.message.orEmpty().contains("bytes"))
         }
     }
+
+    @Test fun `token sign-in rejects a non-numeric user ID offline`() = runBlocking {
+        try {
+            provider.invoke("token.verify", JSONObject().put("userId", "me@example.com").put("token", "t"))
+            fail()
+        } catch (error: ProviderException) {
+            assertTrue(error.message.orEmpty().contains("numeric Qobuz user ID"))
+        }
+    }
+
+    @Test fun `token sign-in needs both app credentials or neither`() = runBlocking {
+        try {
+            provider.invoke("token.verify", JSONObject().put("userId", 7).put("token", "t").put("appId", "123"))
+            fail()
+        } catch (error: ProviderException) {
+            assertTrue(error.message.orEmpty().contains("both the app ID and the app secret"))
+        }
+    }
 }

@@ -42,6 +42,9 @@ export interface QobuzByteRange {
 export interface QobuzCredentials {
   token: string;
   userId: number;
+  /** The user's own app; with appSecret, playback uses track/getFileUrl. */
+  appId?: string;
+  appSecret?: string;
 }
 
 export interface QobuzBootstrap {
@@ -187,6 +190,14 @@ export function exchangeQobuzAuthorizationCode(options: {
   code: string;
   fetchImpl?: FetchLike;
   web: QobuzBootstrap;
+}): Promise<QobuzCredentials>;
+export function verifyQobuzToken(options: {
+  token: string;
+  userId: number | string;
+  appId?: string;
+  appSecret?: string;
+  bootstrap?: QobuzBootstrapLoader;
+  fetchImpl?: FetchLike;
 }): Promise<QobuzCredentials>;
 export function createQobuzClient(options: {
   bootstrap: QobuzBootstrapLoader;

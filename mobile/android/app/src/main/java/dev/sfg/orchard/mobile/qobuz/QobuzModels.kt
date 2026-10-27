@@ -33,6 +33,9 @@ enum class QobuzQuality(val id: String, val label: String, val formatId: Int) {
 data class QobuzSession(
     val token: String,
     val userId: Long,
+    // The user's own app; with a secret, playback uses track/getFileUrl.
+    val appId: String = "",
+    val appSecret: String = "",
 )
 
 data class QobuzStatus(

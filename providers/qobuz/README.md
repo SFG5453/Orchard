@@ -18,6 +18,9 @@ returns a requested range of the logical FLAC stream as `Uint8Array`.
 Range reads locate the seek span in the segment table and fetch only its segments
 in batches of up to four. Overlapping reads share downloads and session renewal;
 the decrypted segment cache holds four segments.
+Credentials may carry the user's own `appId` and `appSecret`. Then the client
+skips the web-player bootstrap, signs `track/getFileUrl` with that secret, and
+`src/direct.js` serves the returned FLAC file through HTTP Range requests.
 `readChunk()` yields the FLAC metadata or one audio segment as soon as it is ready. The
 desktop and Android loopback servers use it to avoid holding ready audio behind
 later downloads, keeping up to four requested segments in flight. Android

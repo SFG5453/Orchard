@@ -180,7 +180,11 @@ class QobuzResolver(
             if (session == syncedSession) return
             provider.invoke(
                 "session.set",
-                JSONObject().put("token", session?.token.orEmpty()).put("userId", session?.userId ?: 0L),
+                JSONObject()
+                    .put("token", session?.token.orEmpty())
+                    .put("userId", session?.userId ?: 0L)
+                    .put("appId", session?.appId.orEmpty())
+                    .put("appSecret", session?.appSecret.orEmpty()),
             )
             syncedSession = session
         }
@@ -193,6 +197,24 @@ class QobuzResolver(
     suspend fun exchangeCode(code: String): QobuzSession {
         val account = provider.invoke("oauth.finish", JSONObject().put("code", code))
         return QobuzSession(account.getString("token"), account.getLong("userId"))
+    }
+
+    /** Checks a user ID and auth token, plus an optional app ID and secret, with Qobuz. */
+    suspend fun verifyToken(userId: String, token: String, appId: String = "", appSecret: String = ""): QobuzSession {
+        val account = provider.invoke(
+            "token.verify",
+            JSONObject()
+                .put("userId", userId.trim())
+                .put("token", token.trim())
+                .put("appId", appId.trim())
+                .put("appSecret", appSecret.trim()),
+        )
+        return QobuzSession(
+            account.getString("token"),
+            account.getLong("userId"),
+            account.optString("appId"),
+            account.optString("appSecret"),
+        )
     }
 
     fun release() {

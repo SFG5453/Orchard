@@ -53,6 +53,7 @@ val QobuzGold = Color(0xFFDFB15B)
 fun QobuzSettingsCard(
     status: QobuzStatus,
     onConnect: () -> Unit,
+    onConnectToken: () -> Unit,
     onDisconnect: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
     onQualityChange: (QobuzQuality) -> Unit,
@@ -115,6 +116,7 @@ fun QobuzSettingsCard(
 
             if (!isConnected) {
                 IntegrationAction("Sign in to Qobuz", onClick = onConnect)
+                IntegrationAction("Sign in with a token", onClick = onConnectToken)
             } else {
                 // Quality options row
                 Text(

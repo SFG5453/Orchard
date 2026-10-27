@@ -152,7 +152,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val activeTrackIsQobuz: StateFlow<Boolean> = graph.activeTrackIsQobuz.asStateFlow()
     val activeStreamDetail: StateFlow<dev.sfg.orchard.mobile.model.StreamDetail> = graph.activeStreamDetail.asStateFlow()
 
-    fun connectQobuz(token: String, userId: Long) = graph.qobuz.connect(token, userId)
+    fun connectQobuz(token: String, userId: Long, appId: String = "", appSecret: String = "") =
+        graph.qobuz.connect(token, userId, appId, appSecret)
     val maxActive: StateFlow<Boolean> = graph.maxActive
 
     fun disconnectQobuz() {
