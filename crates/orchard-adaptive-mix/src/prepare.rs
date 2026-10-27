@@ -3,7 +3,7 @@
 //! Prepare a finite stereo overlap and its native-rate incoming handoff.
 //! `mix` is the whole decision and render path on every platform; hosts only decode.
 use crate::{analysis, apple, evidence, lock, measured::{self, Measured}, models::Models, planner, song::{self, Song}};
-use earmark::AudioBuffer;
+use earmark::{AudioBuffer, TransitionStrategy};
 use earmark::audio::resample::resample;
 use earmark::dsp::filters::FilterKind;
 use orchard_transition_core::depth_curve;
@@ -300,13 +300,15 @@ pub fn mix(mut models: Option<&mut Models>, request: &MixRequest, outgoing_song:
     if let Some(shift) = kick_lock {
         plan.incoming_start += shift;
     }
-    // The low-pass rides the vocals that actually play, loop included.
+    // A filtered blend's low-pass rides the vocals that actually play, loop included. A muffle
+    // closes all the way whatever the vocals do.
     let outgoing_vocals = outgoing_vocals.map(|frames| match beat_loop {
         Some(beat_loop) => beat_loop.remap(&frames, evidence::VOCAL_FRAME, outgoing.duration()),
         None => frames,
     });
     let mut masked = false;
     if let Ok(frames) = &outgoing_vocals
+        && plan.strategy == TransitionStrategy::FilteredBlend
         && plan.filters.outgoing.iter().any(|filter| filter.kind == FilterKind::LowPass)
         && let Some(curve) = depth_curve(
             evidence::crop(frames, plan.outgoing_start, plan.outgoing_end()), 0.0, 1.0)

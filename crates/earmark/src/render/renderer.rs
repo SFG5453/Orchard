@@ -10,7 +10,7 @@ use crate::config::EngineConfig;
 use crate::dsp::automation::AutomationCurve;
 use crate::dsp::limiter;
 use crate::error::{CrossfadeError, Result};
-use crate::render::stage;
+use crate::render::{bass, stage};
 use crate::types::transition::{TransitionOutput, TransitionPlan};
 
 /// Owns the stretch processor and the envelope scratch buffers across renders.
@@ -108,6 +108,10 @@ impl Renderer {
         });
         self.apply_gain_curve(&plan.fade.outgoing_gain, frames);
         stage::mix_stem(&mut mixed, &outgoing_stem.audio, &self.envelope);
+        if let Some(swap) = plan.fade.bass_crossover {
+            bass::hold_low_band(&mut mixed, &outgoing_stem.audio, &self.envelope, bass::Side::Outgoing,
+                plan.fade.outgoing_curve, &plan.fade.outgoing_gain, swap, config)?;
+        }
         limiter::frame_peaks(
             outgoing_stem.audio.planar(),
             Some(&self.envelope),
@@ -119,6 +123,10 @@ impl Renderer {
         });
         self.apply_gain_curve(&plan.fade.incoming_gain, frames);
         stage::mix_stem(&mut mixed, &incoming_stem.audio, &self.envelope);
+        if let Some(swap) = plan.fade.bass_crossover {
+            bass::hold_low_band(&mut mixed, &incoming_stem.audio, &self.envelope, bass::Side::Incoming,
+                plan.fade.incoming_curve, &plan.fade.incoming_gain, swap, config)?;
+        }
         limiter::frame_peaks(
             incoming_stem.audio.planar(),
             Some(&self.envelope),

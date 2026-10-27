@@ -56,6 +56,9 @@ pub struct FadePlan {
     /// Fractions of the transition each side's fade moves over; `(0, 1)` fades across all of it.
     pub outgoing_span: (f32, f32),
     pub incoming_span: (f32, f32),
+    /// Where a bass swap hands the low band over. Each side's low band then fades as if its fade
+    /// crossed there instead of the middle; `None` keeps it with the rest of the side.
+    pub bass_crossover: Option<f32>,
 }
 
 /// A fade spanning the whole transition.
@@ -70,6 +73,7 @@ impl Default for FadePlan {
             incoming_gain: AutomationCurve::constant(1.0),
             outgoing_span: FULL_SPAN,
             incoming_span: FULL_SPAN,
+            bass_crossover: None,
         }
     }
 }

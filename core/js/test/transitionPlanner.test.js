@@ -250,6 +250,16 @@ test('speech/live guards and short-track guards precede pair search', () => {
   assert.equal('pairPlan' in short, false);
 });
 
+test('an album intro or skit is never mixed into, only out of', () => {
+  const into = (title) => planTransition(smartOptions({ nextTrack: { id: 'incoming', title, durationSeconds: 120 } }));
+  assert.equal(into('Intro').reason, 'blocked-speech-or-live');
+  assert.equal(into('Skit (feat. Someone)').reason, 'blocked-speech-or-live');
+  assert.notEqual(into('Introduction to Love').reason, 'blocked-speech-or-live');
+  assert.notEqual(into('Trustworthy (Interlude)').reason, 'blocked-speech-or-live');
+  const outOf = planTransition(smartOptions({ currentTrack: { id: 'outgoing', title: 'Intro', durationSeconds: 120 } }));
+  assert.notEqual(outOf.reason, 'blocked-speech-or-live');
+});
+
 const fixtureData = JSON.parse(
   fs.readFileSync(new URL('./fixtures/transitionChoreography.json', import.meta.url), 'utf8')
 );
