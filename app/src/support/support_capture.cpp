@@ -21,6 +21,7 @@
 // the report popup opens, so it shows the screen the problem was on.
 
 #include "support/support_center.h"
+#include "playback/output_health.h"
 
 #include <QBuffer>
 #include <QImageReader>
@@ -180,6 +181,12 @@ void SupportCenter::updateDiagnostics(QQuickWindow *window, const QString &page)
   }
   if (!page.isEmpty())
     info.insert(QStringLiteral("page"), page);
+  if (OutputHealth::sinkBufferMs > 0)
+    info.insert(QStringLiteral("audioOutput"),
+                QStringLiteral("%1 ms buffer, %2 underruns, longest gap %3 ms")
+                    .arg(OutputHealth::sinkBufferMs.load())
+                    .arg(OutputHealth::underruns.load())
+                    .arg(OutputHealth::longestGapMs.load()));
   m_diagnostics = QString::fromUtf8(QJsonDocument(info).toJson(QJsonDocument::Indented)).trimmed();
   emit diagnosticsChanged();
 }
