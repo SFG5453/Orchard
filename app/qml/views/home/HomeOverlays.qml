@@ -25,6 +25,7 @@ import "../../components/support"
 import "../../components/welcome"
 import Orchard
 import QtQuick
+import QtQuick.Window
 
 // Settings, docs, release notes, spotlight and support popups plus the shell keyboard shortcuts.
 Item {
@@ -37,6 +38,8 @@ Item {
 
     readonly property bool signedIn: OrchardAuth.isSignedIn
     readonly property bool welcomeOpen: welcomeLoader.active
+    // Window state to return to when F11 leaves fullscreen; -1 when F11 didn't enter it.
+    property int visibilityBeforeF11: -1
 
     anchors.fill: parent
     z: 200
@@ -111,6 +114,24 @@ Item {
             if (spotlightLoader.item)
                 spotlightLoader.item.openSpotlight(query || "");
         });
+    }
+
+    function toggleWindowFullscreen() {
+        const win = overlays.Window.window;
+        if (!win)
+            return;
+        if (win.visibility !== Window.FullScreen) {
+            overlays.visibilityBeforeF11 = win.visibility;
+            if (win.visibility === Window.Windowed)
+                overlays.shell.sizeBeforeFullscreen = Qt.size(win.width, win.height);
+            win.showFullScreen();
+            return;
+        }
+        // The fullscreen player's saved state wins when the player put the window here.
+        const before = overlays.shell.visibilityBeforeFullscreen !== -1 ? overlays.shell.visibilityBeforeFullscreen : overlays.visibilityBeforeF11;
+        overlays.shell.visibilityBeforeFullscreen = -1;
+        overlays.visibilityBeforeF11 = -1;
+        overlays.shell.leaveFullScreen(win, before);
     }
 
     function overlayOpen(loader) {
@@ -265,6 +286,14 @@ Item {
         autoRepeat: false
         enabled: overlays.shell.visible && !overlays.welcomeOpen && !OrchardMusicVideo.open && Boolean(OrchardPlayback.track.id) && !overlays.overlayOpen(spotlightLoader) && !overlays.overlayOpen(settingsLoader) && !overlays.readerOpen() && !supportHost.popupOpen && !overlays.shell.isEditableFocused()
         onActivated: overlays.shell.setFullscreen(!overlays.shell.fullscreenOpen)
+    }
+
+    // Fills the screen with the normal layout; the fullscreen player stays separate.
+    Shortcut {
+        sequence: "F11"
+        autoRepeat: false
+        enabled: overlays.shell.visible && !overlays.welcomeOpen
+        onActivated: overlays.toggleWindowFullscreen()
     }
 
     Shortcut {

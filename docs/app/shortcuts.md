@@ -12,6 +12,7 @@ keywords:
   - seek
   - playback speed
   - fullscreen shortcut
+  - f11
 platforms:
   - desktop
 order: 140
@@ -34,6 +35,7 @@ Settings, Shortcuts shows the same list in the app. Orchard turns playback short
 - `Up` and `Down` inside Spotlight or Quick Search: move through the results.
 - `Enter` inside Spotlight or Quick Search: open the highlighted result in Spotlight, or play the highlighted song in Quick Search.
 - Double-click the title bar: maximize or restore the window.
+- `F11`: make the window fullscreen, or leave fullscreen.
 
 ## Play or pause with the keyboard
 
@@ -70,3 +72,7 @@ Press Esc. It closes search windows and popups, closes the fullscreen player, an
 ## Maximize or restore the window
 
 Double-click the title bar. Orchard uses its own title bar, and the double-click toggles between maximized and restored.
+
+## Make the window fullscreen
+
+Press F11. The window fills the screen and keeps the normal layout, with the player bar at the bottom. Press F11 again to return to the previous window size. The fullscreen player is separate: open it with F.

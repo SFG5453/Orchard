@@ -177,20 +177,18 @@ Item {
                 root.sizeBeforeFullscreen = Qt.size(win.width, win.height);
             win.showFullScreen();
         } else if (win && !open && root.visibilityBeforeFullscreen !== -1) {
-            if (win.visibility === Window.FullScreen) {
-                if (root.visibilityBeforeFullscreen === Window.Maximized) {
-                    // Go through Windowed so the compositor issues a fresh maximize configure.
-                    win.showNormal();
-                    restoreMaximize.restart();
-                } else {
-                    win.showNormal();
-                    root.restoreWindowedSize(win);
-                }
-            }
+            if (win.visibility === Window.FullScreen)
+                root.leaveFullScreen(win, root.visibilityBeforeFullscreen);
             root.visibilityBeforeFullscreen = -1;
         }
         root.measureFullscreenOrigin();
         root.fullscreenOpen = open;
+    }
+
+    function leaveFullScreen(win, before) {
+        // Go through Windowed so the compositor issues a fresh maximize configure.
+        win.showNormal();
+        before === Window.Maximized ? restoreMaximize.restart() : root.restoreWindowedSize(win);
     }
 
     function restoreWindowedSize(win) {

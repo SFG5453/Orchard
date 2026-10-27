@@ -55,7 +55,10 @@ ColumnLayout {
                   keys: [{ label: "Esc" }] },
                 { name: qsTr("Toggle Maximize"), icon: "app-window",
                   desc: qsTr("Double click the title bar to expand or restore the window."),
-                  keys: [{ label: qsTr("Double Click Title Bar") }] }
+                  keys: [{ label: qsTr("Double Click Title Bar") }] },
+                { name: qsTr("Toggle Fullscreen"), icon: "maximize",
+                  desc: qsTr("Fill the screen with the window, or put it back."),
+                  keys: [{ label: "F11" }] }
             ]
         },
         {
