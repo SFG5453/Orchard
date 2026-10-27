@@ -110,6 +110,7 @@ pub fn build_fade(strategy: TransitionStrategy, gains: GainPlan) -> FadePlan {
         ),
         outgoing_span: FULL_SPAN,
         incoming_span: FULL_SPAN,
+        bass_crossover: None,
     }
 }
 

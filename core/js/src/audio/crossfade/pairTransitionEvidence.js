@@ -310,6 +310,8 @@ export function buildCandidatePairs(
   const pairs = [];
   const rejected = { bounds: 0, tempo: 0, duration: 0 };
   const fits = { matched: 0, moving: 0, far: 0 };
+  // Section tempos of the closest unmatched cue pair; a beat switch can sit far from the song tempo.
+  let nearest = null;
   let combinations = 0;
   if (!((finite(fit.targetBpm) ?? 0) > 0)) {
     return { finalists: [], diagnostics: { combinations, rejected, fits, detailed: 0 } };
@@ -327,6 +329,9 @@ export function buildCandidatePairs(
       if (!(targetBpm > 0)) continue;
       const matched = Boolean(cueFit.beatmatched);
       fits[matched ? 'matched' : cueFit.movingTempo ? 'moving' : 'far'] += 1;
+      if (!matched && !cueFit.movingTempo && !(cueFit.deviation >= nearest?.deviation)) {
+        nearest = { outgoingBpm: cueFit.outgoingBpm, incomingBpm: cueFit.incomingBpm, deviation: cueFit.deviation };
+      }
       // Unmatched fits keep native ratios and plan ordinary short blends.
       const outgoingRatio = matched ? finite(cueFit.outgoingRatio) ?? 1 : 1;
       const incomingRatio = matched ? finite(cueFit.incomingRatio) ?? 1 : 1;
@@ -417,6 +422,7 @@ export function buildCandidatePairs(
       combinations,
       rejected,
       fits,
+      nearest,
       detailed: finalists.length
     }
   };

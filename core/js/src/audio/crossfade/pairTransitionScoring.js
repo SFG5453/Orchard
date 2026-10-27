@@ -148,12 +148,14 @@ export function evaluatePair(pair, context) {
     pair.durationSeconds,
     pair.incomingRatio
   );
-  // Voices only meet while the outgoing is still audible.
-  const audible = fadeSpansFor(pair).outgoing[1];
+  // Voices only meet while both sides are audible; a muffle hides the outgoing voice early.
+  const spans = fadeSpansFor(pair);
+  const heard = spans.incoming[0] * pair.durationSeconds;
+  const voiced = pair.voicesUntil ?? spans.outgoing[1];
   const collision = mappedVocalCollision(outgoing, incoming, {
-    outgoingStart: pair.outgoingStart,
-    incomingStart: pair.incomingStart,
-    durationSeconds: pair.durationSeconds * audible,
+    outgoingStart: pair.outgoingStart + heard * pair.outgoingRatio,
+    incomingStart: pair.incomingStart + heard * pair.incomingRatio,
+    durationSeconds: Math.max(0, pair.durationSeconds * voiced - heard),
     outgoingRatio: pair.outgoingRatio,
     incomingRatio: pair.incomingRatio,
     tempoRamp: pair.tempoRamp,

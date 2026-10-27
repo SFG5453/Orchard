@@ -194,8 +194,12 @@ export function candidateGates({
   // within four beats, too fast for any line to ride over.
   const waived = voice.singsOut && pair.alignment !== 'start';
   if (measuredVoice && voice.outgoing >= 0.3 && !waived) lower('voice-cut', 'normal_boundary', 'veto');
-  // Blends that only work behind a filter sound forced; they play out.
-  if (needsFilter(harmonic, spectral, collision, measuredVoice)) lower('needs-filter', 'simple_crossfade', 'veto');
+  // Blends that only work behind a filter sound forced; they play out. A muffle is that
+  // filter, so only voices that still meet inside its short overlap refuse it.
+  const filtered = pair.exitStyle
+    ? (measuredVoice ? (collision.simultaneousMean ?? 0) > 0.25 : sustained(collision))
+    : needsFilter(harmonic, spectral, collision, measuredVoice);
+  if (filtered) lower('needs-filter', 'simple_crossfade', 'veto');
 
   const left = pair.outgoingCandidate;
   const right = pair.incomingCandidate;
@@ -268,6 +272,7 @@ export function compareEvaluations(left, right) {
 export function strategyFor(evaluation) {
   if (evaluation.transitionClass === 'silence_trim') return 'boundary_handoff';
   if (evaluation.transitionClass === 'normal_boundary') return 'boundary_handoff';
+  if (evaluation.pair.exitStyle) return evaluation.pair.exitStyle;
   if (evaluation.transitionClass === 'simple_crossfade') {
     if (
       (evaluation.collision.longestRunBeats ?? 0) >= 4 ||

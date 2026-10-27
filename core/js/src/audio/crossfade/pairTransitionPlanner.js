@@ -15,12 +15,13 @@ import {
   strategyFor
 } from './pairTransitionGates.js';
 import { evaluatePair } from './pairTransitionScoring.js';
-import { bassSwapFraction, productionContrast } from './transitionFlow.js';
+import { bassSwapFraction, chooseBassSwap, productionContrast } from './transitionFlow.js';
 import { findOutgoingLoop, loopedAnalysis } from './outgoingLoop.js';
 import { fallbackFor, fallbackPlan } from './pairTransitionFallback.js';
 import { TECHNIQUE, createArrangement, fadeSpansFor } from './transitionArrangement.js';
 import { explainRefusal } from './transitionExplain.js';
 import { planBeatlessBridge } from './beatlessBridge.js';
+import { planMuffles } from './muffle.js';
 
 export { PAIR_TRANSITION_POLICY };
 
@@ -221,7 +222,8 @@ export function planPairTransition({
           ? 'incoming-runway'
           : '';
     return refuse(explainRefusal({
-      fit, fits: built.diagnostics.fits, rejected: built.diagnostics.rejected, precheck
+      fit, fits: built.diagnostics.fits, nearest: built.diagnostics.nearest,
+      rejected: built.diagnostics.rejected, precheck
     }));
   }
 
@@ -234,17 +236,24 @@ export function planPairTransition({
       .filter((evaluation) => renderModeFor(evaluation.transitionClass) === 'native')
   ].sort(compareEvaluations);
   if (!evaluations.length) {
-    return refuse(explainRefusal({ fit, fits: built.diagnostics.fits, rejected: built.diagnostics.rejected }));
+    return refuse(explainRefusal({
+      fit, fits: built.diagnostics.fits, nearest: built.diagnostics.nearest, rejected: built.diagnostics.rejected
+    }));
   }
   let { winner, winnerMargin } = settle(evaluations);
   let native = ['full_beatmatched', 'conservative_beatmatched'].includes(winner.transitionClass);
   const drops = native ? [] : dropIn();
   if (drops.length) ({ winner, winnerMargin } = settle(drops));
   native ||= drops.length > 0;
+  // A pair that only needed a filter can still leave behind a muffle.
+  const muffles = native ? [] : planMuffles(evaluations, { outgoing, incoming, fit, harmonic, contrast });
+  if (muffles.length) ({ winner, winnerMargin } = settle(muffles));
+  native ||= muffles.length > 0;
   const strategy = strategyFor(winner);
   const explain = native ? null : explainRefusal({
     matched: evaluations.filter((evaluation) => evaluation.pair.beatmatched),
-    fit, fits: built.diagnostics.fits, rejected: built.diagnostics.rejected, contrast
+    fit, fits: built.diagnostics.fits, nearest: built.diagnostics.nearest,
+    rejected: built.diagnostics.rejected, contrast
   });
   const diagnostics = {
     generated,
@@ -258,12 +267,16 @@ export function planPairTransition({
   if (!native) return refuse(explain, { evaluation: winner, confidence: winner.confidence, diagnostics });
   const fallback = fallbackFor(outgoing, incoming, winner, '');
   const pair = winner.pair;
-  const swap = bassSwapFraction(pair, incoming);
+  // A bass swap's bar line follows the music; a muffle keeps the one its gates were judged on.
+  const swap = strategy === 'bass_swap' && !pair.exitStyle
+    ? chooseBassSwap(pair, pair.loop ? looped : outgoing, incoming)
+    : bassSwapFraction(pair, incoming);
   const spans = fadeSpansFor(pair);
   const arrangement = createArrangement({
     technique: pair.alignment === 'start'
       ? TECHNIQUE.DROP_IN
-      : strategy === 'bass_swap' ? TECHNIQUE.BASS_SWAP : TECHNIQUE.BLEND,
+      : pair.exitStyle ? pair.exitStyle
+        : strategy === 'bass_swap' ? TECHNIQUE.BASS_SWAP : TECHNIQUE.BLEND,
     outgoingFade: spans.outgoing,
     incomingFade: spans.incoming,
     bassSwapFraction: swap
@@ -304,8 +317,8 @@ export function planPairTransition({
     arrangement,
     rendering: {
       fade: 'equal_power',
-      bassHandoff: strategy === 'bass_swap',
-      filters: ['filtered_blend', 'bass_swap'].includes(strategy),
+      bassHandoff: ['bass_swap', 'muffle_swap'].includes(strategy),
+      filters: ['filtered_blend', 'bass_swap', 'muffle_swap'].includes(strategy),
       vocalDuckCurve: []
     },
     confidence: winner.confidence,

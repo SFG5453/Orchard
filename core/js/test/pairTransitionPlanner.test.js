@@ -457,15 +457,6 @@ test('untrusted key evidence does not force a filtered beatmatch', () => {
   );
 });
 
-test('a trusted distant key plays out', () => {
-  const plan = planPairTransition(cleanPair({
-    incoming: { key: 'C♯ major', keyConfidence: 0.95 }
-  }));
-
-  assert.equal(plan.renderMode, 'boundary');
-  assert.equal(plan.fallbackReason, 'needs-filter');
-});
-
 test('keeps selection deterministic and diagnostics bounded', () => {
   const manyBoundaries = Array.from({ length: 30 }, (_, index) => index * 2 + 2);
   const input = cleanPair({

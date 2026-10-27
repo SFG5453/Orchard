@@ -8,6 +8,7 @@ export const TECHNIQUE = Object.freeze({
   BLEND: 'beatmatched_blend',
   DROP_IN: 'drop_in',
   BRIDGE: 'beatless_bridge',
+  MUFFLE: 'muffle_swap',
   BOUNDARY: 'boundary'
 });
 
@@ -18,9 +19,10 @@ export const DROP_OUT_SPAN = 0.5;
 /**
  * Fader spans a candidate's alignment implies. A drop-in ("start") lands the new song at full
  * level on its first beat and pulls the old one out over half the overlap; every other
- * alignment fades both sides across the whole overlap.
+ * alignment fades both sides across the whole overlap. A technique may set its own `spans`.
  */
 export function fadeSpansFor(pair) {
+  if (pair?.spans) return pair.spans;
   if (pair?.alignment !== 'start' || !(pair.beats > 0)) return { outgoing: FULL, incoming: FULL };
   return { outgoing: Object.freeze([0, DROP_OUT_SPAN]), incoming: Object.freeze([0, rounded(1 / pair.beats)]) };
 }

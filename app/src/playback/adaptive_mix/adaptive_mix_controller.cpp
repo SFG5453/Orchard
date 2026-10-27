@@ -64,6 +64,8 @@ QString AdaptiveMixController::mixStyle() const {
     return tr("Bridge");
   if (m_technique == QStringLiteral("drop_in"))
     return tr("Drop-in");
+  if (m_technique == QStringLiteral("muffle_swap"))
+    return tr("Muffle");
   if (m_strategy == QStringLiteral("beatmatched crossfade"))
     return tr("Beatmatched");
   if (m_strategy == QStringLiteral("bass swap"))
