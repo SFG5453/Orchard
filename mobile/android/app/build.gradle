@@ -1,5 +1,6 @@
 apply plugin: 'com.android.application'
 apply plugin: 'org.jetbrains.kotlin.plugin.compose'
+apply from: 'shazam.gradle'
 
 def orchardReleaseKeystore = System.getenv("ANDROID_KEYSTORE_FILE")
 def orchardReleaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")

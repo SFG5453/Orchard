@@ -157,6 +157,34 @@ one-color vector at `mobile/android/local/apple-music/res/drawable/apple_music_m
 to show it in Settings and on the now playing source mark. CI builds restore both
 from the `APPLE_MUSIC_LOGO_PNG_BASE64` and `APPLE_MUSIC_MARK_XML_BASE64` secrets.
 
+## Shazam song identification
+
+Place the locally supplied `shazamkit-android-release.aar` at
+`mobile/android/local/shazam/shazamkit-android-release.aar` before building.
+The directory is ignored by Git; do not commit Apple's SDK or its documentation.
+Gradle includes the SDK, its Retrofit dependencies, and microphone permission
+only when that file exists. Without it, search has no Shazam control.
+
+CI downloads the SDK from the private R2 object
+`applethings/shazamkit-android-release.aar` through R2's S3 API and checks the
+SHA-256 pinned in the Android workflows. Set `SHAZAM_R2_ENDPOINT`
+(`https://<account id>.r2.cloudflarestorage.com`), `SHAZAM_R2_ACCESS_KEY_ID`
+and `SHAZAM_R2_SECRET_ACCESS_KEY` from an R2 API token with Object Read on that
+bucket only. Update the pinned hash when the SDK changes. Builds without the
+secrets omit Shazam.
+
+In search, tap **Identify song with Shazam**, allow microphone access, and play
+music nearby. Shazam listens for up to ten seconds and searches the selected
+music catalog for the recognized title and artist. Canceling, closing search,
+or putting the app in the background stops recording. Audio stays on the device;
+Shazam receives its generated signature.
+
+Identification uses its own cached developer token from the account service's
+`/apple/shazam-token`, which has no `origin` claim because ShazamKit sends no
+`Origin` header. An Orchard account is required, but an Apple Music
+subscription or sign-in is not. The account worker's Media Services key must
+have ShazamKit enabled.
+
 ## Orchard Connect
 
 Sign in to the same Orchard account on the phone and the desktop. Each one then lists the other: on the phone, open the devices sheet from the full player; on the desktop, select the cast button in the player bar. Pick a device to play there, and pick this phone to bring playback home.

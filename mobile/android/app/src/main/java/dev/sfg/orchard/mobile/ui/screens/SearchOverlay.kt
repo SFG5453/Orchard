@@ -83,6 +83,7 @@ import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.model.SearchResults
 import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.shazam.IdentifySongButton
 import dev.sfg.orchard.mobile.ui.components.HomeBackdrop
 import dev.sfg.orchard.mobile.ui.components.TrackRow
 import dev.sfg.orchard.mobile.ui.components.TrackRowShimmer
@@ -212,6 +213,7 @@ private fun SearchBar(query: String, actions: SearchActions, focus: FocusRequest
                     Icon(Icons.Rounded.Close, "Clear search", tint = SettingsStyle.Chevron, modifier = Modifier.size(16.dp))
                 }
             }
+            IdentifySongButton { value -> actions.onQueryChange(value); actions.onSubmit(value) }
         }
         Box(
             Modifier.height(52.dp).clickable(onClick = actions.onClose).padding(horizontal = 12.dp),
