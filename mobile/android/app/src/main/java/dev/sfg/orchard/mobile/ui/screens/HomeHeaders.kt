@@ -37,7 +37,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -71,7 +70,6 @@ import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 @Composable
 internal fun GlassHomeHeader(
     auth: AuthState,
-    onSearch: () -> Unit,
     onProfile: () -> Unit,
 ) {
     val firstName = remember(auth) { firstNameOf(auth) }
@@ -102,15 +100,6 @@ internal fun GlassHomeHeader(
                 color = CanopyColors.Text,
                 modifier = Modifier.weight(1f),
             )
-            HeaderAction(onClick = onSearch, description = "Search") {
-                Icon(
-                    Icons.Rounded.Search,
-                    contentDescription = null,
-                    tint = CanopyColors.Text,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-            Spacer(Modifier.width(4.dp))
             HeaderAction(onClick = onProfile, description = "Profile") {
                 ProfileAvatar(avatarUrl, firstName, Modifier.size(34.dp))
             }

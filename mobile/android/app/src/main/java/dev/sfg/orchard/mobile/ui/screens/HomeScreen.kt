@@ -102,7 +102,7 @@ fun HomeScreen(data: HomeData) {
         ) {
             // Masthead. Greets you, judges your 3am listening silently.
             item {
-                GlassHomeHeader(auth = data.auth, onSearch = actions.search, onProfile = actions.openProfile)
+                GlassHomeHeader(auth = data.auth, onProfile = actions.openProfile)
             }
 
             if (quickGridItems.isNotEmpty() && !offline) {

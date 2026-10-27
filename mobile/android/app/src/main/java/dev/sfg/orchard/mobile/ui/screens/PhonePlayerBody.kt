@@ -47,6 +47,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.sfg.orchard.mobile.OrchardGraph
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -159,8 +162,10 @@ internal fun PhonePlayerBody(
     val spreadHeight by animateFloatAsState(spreadTarget, tween(SPREAD_MS), label = "ControlsSpread")
     val spreading = spreadHeight > 0f
     // A synced lyric line takes all the slack between title and scrubber; otherwise every gap shares it.
+    val underTitle by OrchardGraph.from(LocalContext.current).settings.settings.collectAsStateWithLifecycle()
+    val peekLyrics = if (underTitle.lyricsUnderTitle) lyrics else LoadState.Idle
     val peekFills = spreading && panel == PlayerPanel.NONE &&
-        (lyrics as? LoadState.Content)?.value?.any { it.startMs != null } == true
+        (peekLyrics as? LoadState.Content)?.value?.any { it.startMs != null } == true
     // Measured with no panel open, so opening lyrics or the queue never resizes the art.
     var controlsHeight by remember { mutableIntStateOf(0) }
     val artworkRoom = if (hasRichArtwork && bodyHeight > 0 && controlsHeight > 0) {
@@ -327,9 +332,9 @@ internal fun PhonePlayerBody(
                     Spacer(Modifier.height(8.dp))
                 }
                 if (peekFills) {
-                    LyricPeek(lyrics = lyrics, onOpen = onLyricsPanel, modifier = Modifier.weight(1f))
+                    LyricPeek(lyrics = peekLyrics, onOpen = onLyricsPanel, modifier = Modifier.weight(1f))
                 } else {
-                    if (panel == PlayerPanel.NONE) LyricPeek(lyrics = lyrics, onOpen = onLyricsPanel)
+                    if (panel == PlayerPanel.NONE) LyricPeek(lyrics = peekLyrics, onOpen = onLyricsPanel)
                     gap(24.dp)
                 }
 

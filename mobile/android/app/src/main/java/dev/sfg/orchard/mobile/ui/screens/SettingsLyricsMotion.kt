@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.Contrast
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.SwapVert
 import dev.sfg.orchard.mobile.model.OrchardSettings
 
@@ -21,6 +22,14 @@ internal fun LyricsMotionSection(
 ) {
     SectionLabel("Lyrics motion", labelIndex)
     SettingsPanel(index = labelIndex + 1) {
+        ToggleRow(
+            title = "Lyrics under the title",
+            subtitle = "Show the current line below the song title in the player",
+            icon = Icons.Rounded.MusicNote,
+            checked = settings.lyricsUnderTitle,
+            onChecked = { onSettings(settings.copy(lyricsUnderTitle = it)) },
+        )
+        PanelDivider()
         ToggleRow(
             title = "Blur distant lines",
             subtitle = "Blur lines further from the current one. Needs Android 12 or newer",

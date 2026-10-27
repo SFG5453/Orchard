@@ -104,6 +104,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 lyricsFocusBlur = values[LYRICS_FOCUS_BLUR] ?: true,
                 lyricsDistanceFade = values[LYRICS_DISTANCE_FADE] ?: true,
                 lyricsStaggeredScroll = values[LYRICS_STAGGERED_SCROLL] ?: true,
+                lyricsUnderTitle = values[LYRICS_UNDER_TITLE] ?: true,
                 showSettingsTab = values[SHOW_SETTINGS_TAB] ?: false,
                 homeSource = values[HOME_SOURCE] ?: YOUTUBE_SOURCE,
                 homeLayoutOnline = decodeHomeLayout(values[HOME_LAYOUT_ONLINE], true),
@@ -176,6 +177,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[LYRICS_FOCUS_BLUR] = value.lyricsFocusBlur
                 it[LYRICS_DISTANCE_FADE] = value.lyricsDistanceFade
                 it[LYRICS_STAGGERED_SCROLL] = value.lyricsStaggeredScroll
+                it[LYRICS_UNDER_TITLE] = value.lyricsUnderTitle
                 it[SHOW_SETTINGS_TAB] = value.showSettingsTab
                 it[HOME_SOURCE] = value.homeSource
                 it[HOME_LAYOUT_ONLINE] = encodeHomeLayout(value.homeLayoutOnline)
@@ -317,6 +319,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val LYRICS_FOCUS_BLUR = booleanPreferencesKey("lyrics_focus_blur")
         val LYRICS_DISTANCE_FADE = booleanPreferencesKey("lyrics_distance_fade")
         val LYRICS_STAGGERED_SCROLL = booleanPreferencesKey("lyrics_staggered_scroll")
+        val LYRICS_UNDER_TITLE = booleanPreferencesKey("lyrics_under_title")
         val SHOW_SETTINGS_TAB = booleanPreferencesKey("show_settings_tab")
         val HOME_LAYOUT_ONLINE = stringPreferencesKey("home_layout_online")
         val HOME_LAYOUT_OFFLINE = stringPreferencesKey("home_layout_offline")
