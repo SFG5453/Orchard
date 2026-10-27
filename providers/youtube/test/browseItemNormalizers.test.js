@@ -97,3 +97,32 @@ test('playlist tiles with a play-overlay remain playlists', () => {
   assert.equal(result.id, null);
   assert.equal(result.browseId, 'VL_playlist');
 });
+
+function songRow(subtitleRuns) {
+  return { musicResponsiveListItemRenderer: {
+    flexColumns: [
+      { musicResponsiveListItemFlexColumnRenderer: { text: { runs: [{
+        text: 'Russian Roulette', navigationEndpoint: { watchEndpoint: { videoId: 'song-id' } }
+      }] } } },
+      { musicResponsiveListItemFlexColumnRenderer: { text: { runs: subtitleRuns } } }
+    ]
+  } };
+}
+
+test('song rows keep an artist credit that has no channel link', () => {
+  const album = { text: 'Scandinavian Metal Attack', navigationEndpoint: { browseEndpoint: browseEndpoint('MPREb_x') } };
+  const filtered = normalizeRawResponsiveListItem(songRow([
+    { text: 'Mentzer' }, { text: ' • ' }, album, { text: ' • ' }, { text: '4:25' }
+  ]));
+  assert.equal(filtered.artist, 'Mentzer');
+  assert.deepEqual(filtered.artists, ['Mentzer']);
+  assert.deepEqual(filtered.artistBrowseIds, []);
+
+  const labelled = normalizeRawResponsiveListItem(songRow([
+    { text: 'Song' }, { text: ' • ' }, { text: 'Mentzer' }, { text: ' • ' }, album
+  ]));
+  assert.equal(labelled.artist, 'Mentzer');
+
+  const uncredited = normalizeRawResponsiveListItem(songRow([album, { text: ' • ' }, { text: '4:25' }]));
+  assert.equal(uncredited.artist, '');
+});

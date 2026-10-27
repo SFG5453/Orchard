@@ -111,6 +111,25 @@ test('selects another exact audio-only ID after an age gate', async () => {
   assert.equal(selected, 'audio-id');
 });
 
+// Issue 216: a Red Velvet row without duration or video type played another act's song.
+test('keeps the queued song when search returns it, without borrowing a same-titled one', async () => {
+  const preferredAudioTrack = createPreferredAudioTrack({
+    normalizedLookupText: (value) => String(value).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(),
+    shelfItems: (items) => items
+  });
+  const songs = [
+    { id: 'red-velvet', title: '러시안 룰렛 Russian Roulette', artist: 'Red Velvet', duration: '3:32', isAudioOnly: true },
+    { id: 'no-credit', title: 'Russian Roulette', artist: '', duration: '4:30', isAudioOnly: true }
+  ];
+  const yt = { music: { search: async () => ({ songs }) } };
+  const target = { videoId: 'red-velvet', title: '러시안 룰렛 Russian Roulette', artist: 'Red Velvet', preferAudioOnly: true };
+
+  assert.equal(await preferredAudioTrack(yt, target), 'red-velvet');
+  // Absent from results, the only same-titled song has no credit to compare.
+  const missing = { music: { search: async () => ({ songs: songs.slice(1) }) } };
+  assert.equal(await preferredAudioTrack(missing, { ...target, videoId: 'red-velvet-mv' }), 'red-velvet-mv');
+});
+
 test('rawPlayableAudioFormats preserves cipher properties and ignores video streams', () => {
   const formats = [
     { itag: 18, mimeType: 'video/mp4; codecs="avc1.42001E, mp4a.40.2"', bitrate: 96000, signatureCipher: 'cipher18' },

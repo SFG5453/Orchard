@@ -82,11 +82,16 @@ export function createPreferredAudioTrack({ normalizedLookupText, shelfItems }) 
     });
   }
 
+  function artistName(item = {}) {
+    const first = item.artists?.[0];
+    return item.artist || (typeof first === 'string' ? first : first?.name) || '';
+  }
+
   function trackMatchScore(candidate, target) {
     const candidateTitle = normalizedLookupText(candidate.title);
     const targetTitle = normalizedLookupText(target.title);
-    const candidateArtist = normalizedLookupText(candidate.artist || candidate.artists?.[0] || '');
-    const targetArtist = normalizedLookupText(target.artist || target.artists?.[0] || '');
+    const candidateArtist = normalizedLookupText(artistName(candidate));
+    const targetArtist = normalizedLookupText(artistName(target));
     const targetQualifiers = titleVariantQualifiers(target.title);
     const candidateQualifiers = titleVariantQualifiers(candidate.title);
     const matchingDuration = durationMatches(candidate, target);
@@ -94,7 +99,8 @@ export function createPreferredAudioTrack({ normalizedLookupText, shelfItems }) 
     let score = 0;
 
     if (!candidateTitle || !targetTitle || candidateTitle !== targetTitle) return -Infinity;
-    if (candidateArtist && targetArtist && candidateArtist !== targetArtist) return -Infinity;
+    // An unknown candidate artist could be any act with a same-named song.
+    if (targetArtist && candidateArtist !== targetArtist) return -Infinity;
     if (targetQualifiers.some((qualifier) => !candidateQualifiers.includes(qualifier))) return -Infinity;
     if (matchingDuration === false) return -Infinity;
     if (titleTokenCount <= 1 && matchingDuration !== true && target.album && candidate.album && normalizedLookupText(candidate.album) !== normalizedLookupText(target.album)) {
@@ -119,7 +125,7 @@ export function createPreferredAudioTrack({ normalizedLookupText, shelfItems }) 
       return target.videoId;
     }
 
-    const query = [target.title, target.artist || target.artists?.[0]]
+    const query = [target.title, artistName(target)]
       .filter(Boolean)
       .join(' ')
       .trim();
@@ -127,7 +133,13 @@ export function createPreferredAudioTrack({ normalizedLookupText, shelfItems }) 
 
     try {
       const search = await yt.music.search(query, { type: 'song' });
-      const candidates = shelfItems(search.songs)
+      const songs = shelfItems(search.songs);
+      // Rows without a video type can still be the audio track itself.
+      if (!target.retryAlternateAudio && songs.some((item) => item.id === target.videoId &&
+          (item.musicVideoType === 'MUSIC_VIDEO_TYPE_ATV' || item.isAudioOnly))) {
+        return target.videoId;
+      }
+      const candidates = songs
         .filter((item) =>
           item.id &&
           !excludedVideoIds.has(item.id) &&

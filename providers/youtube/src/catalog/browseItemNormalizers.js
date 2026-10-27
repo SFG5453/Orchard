@@ -59,6 +59,21 @@ export function createBrowseItemNormalizers({
       browseId.startsWith('FEmusic_library_privately_owned_release');
   }
 
+  // Some catalog acts have no channel, so their credit is plain text ahead of the album.
+  function unlinkedArtistNames(runs = []) {
+    const segments = [[]];
+    for (const run of runs) {
+      if (run.text?.trim() === '•') segments.push([]);
+      else segments.at(-1).push(run);
+    }
+    const credit = /^(song|video|episode|podcast)$/i.test(asText({ runs: segments[0] }).trim())
+      ? segments[1] : segments[0];
+    if (!credit?.length || credit.some((run) => run.navigationEndpoint)) return [];
+    const name = asText({ runs: credit }).trim();
+    if (!name || durationText(name) || /\b(views?|plays?)$/i.test(name)) return [];
+    return [name];
+  }
+
   function normalizeRawResponsiveListItem(item, index = 0, fallbackArtist = '') {
     const renderer = item?.musicResponsiveListItemRenderer || item || {};
     const titleColumn = renderer.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text || {};
@@ -96,7 +111,10 @@ export function createBrowseItemNormalizers({
     const browsePayload = titleRun.navigationEndpoint?.browseEndpoint || renderer.navigationEndpoint?.browseEndpoint || null;
     const collectionType = browseMediaType(browsePayload);
     const thumbnail = renderer.thumbnail?.musicThumbnailRenderer?.thumbnail || renderer.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail || renderer.thumbnail || [];
-    const artistNames = artistRuns.map((run) => asText(run.text)).filter(Boolean);
+    const linkedArtistNames = artistRuns.map((run) => asText(run.text)).filter(Boolean);
+    const artistNames = linkedArtistNames.length || collectionType || !watchEndpoint?.videoId
+      ? linkedArtistNames
+      : unlinkedArtistNames(renderer.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs);
     const artistBrowseIds = artistRuns.map((run) => run.navigationEndpoint?.browseEndpoint?.browseId).filter(Boolean);
     const artistName = artistNames[0] || fallbackArtist || '';
 
