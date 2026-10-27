@@ -23,6 +23,7 @@
 
 #include <QAudioDevice>
 #include <QAudioFormat>
+#include <QtAudio>
 #include <QElapsedTimer>
 #include <QList>
 #include <QObject>
@@ -106,6 +107,7 @@ private:
   // Queues the next render frames through the engine, holding the handoff fade.
   bool emitAdaptiveRender(qint64 frames);
   void flushPending();
+  void onSinkStateChanged(QtAudio::State state);
 
   static constexpr int kSampleRate = 48000;
   static constexpr int kChannels = 2;
@@ -117,10 +119,18 @@ private:
   static constexpr qint64 kAlignLead = 480;
   // The render fades into native incoming playback over its last 5 ms.
   static constexpr qint64 kHandoffFade = 256;
-  // Output starts once 150 ms is queued. Decoder threads feed this thread
-  // directly, so the cushion only has to cover decoder jitter.
+  // Decoders deliver in real time, so the prime is the only cushion against
+  // stalls on this thread. WASAPI has no server-side buffer to absorb them,
+  // and re-priming after an underrun rebuilds the cushion.
+#ifdef Q_OS_WIN
+  static constexpr qint64 kPrimeFrames = 19200;
+  static constexpr qint64 kSinkFrames = 48000;
+  static constexpr bool kReprimeOnUnderrun = true;
+#else
   static constexpr qint64 kPrimeFrames = 7200;
   static constexpr qint64 kSinkFrames = 12000;
+  static constexpr bool kReprimeOnUnderrun = false;
+#endif
 
   QAudioFormat m_format;
   QAudioDevice m_device;
@@ -165,10 +175,12 @@ private:
   // stamps drift from the audio, and the join follows the audio.
   qint64 m_clockCorrectionUs{0};
   qint64 m_handoffCorrectionUs{0};
-  // ORCHARD_PLAYBACK_TIMING: buffer stalls and underrun reports around transitions.
+  // ORCHARD_PLAYBACK_TIMING: buffer stall reports around transitions.
   bool m_timing{false};
   QElapsedTimer m_timingClock;
   qint64 m_lastBufferMs{-1};
   qint64 m_transitionMs{-1};
+  // Set when the sink drains during playback, cleared when it resumes.
+  qint64 m_underrunStartMs{-1};
   bool m_awaitingIncoming{false};
 };
