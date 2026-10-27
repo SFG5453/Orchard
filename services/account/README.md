@@ -38,6 +38,7 @@ expires. The account routes (`/me`, `/devices`) also check the device row.
 | `POST /auth/token` | `authorization_code` or `refresh_token` grant |
 | `POST /auth/logout` | refresh token in body |
 | `GET /apple/developer-token` | Bearer, live device; per-IP, per-account and daily limits |
+| `GET /apple/shazam-token` | Same as `/apple/developer-token` |
 | `GET /me` | Bearer |
 | `POST /lyrics/translate` | Bearer, live device, Cloudflare IP |
 | `GET /devices` | Bearer |
@@ -80,6 +81,11 @@ pages. The default is `https://appassets.androidplatform.net`, the Android
 sign-in page. Set `APPLE_MUSIC_ORIGINS` to a comma-separated list to replace it.
 Clients outside a browser can forge `Origin`; the account requirement is the
 real control.
+
+`GET /apple/shazam-token` returns the same body and passes the same session
+check and limits, sharing the daily count, but its token has no `origin` claim.
+ShazamKit for Android sends no `Origin` header, so Apple answers origin-bound
+tokens with 401. The Media Services key must have ShazamKit enabled.
 
 Apple handles subscriber authorization in MusicKit JS and returns a separate
 Music User Token to the app. The Worker only signs developer tokens and does not

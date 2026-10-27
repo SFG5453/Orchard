@@ -67,7 +67,7 @@ export async function purgeAppleTokenUsage(env, now) {
   await env.DB.prepare("DELETE FROM apple_token_daily_usage WHERE day < ?").bind(Math.floor(now / 86400) - 1).run();
 }
 
-export async function appleDeveloperToken(request, env) {
+async function issueToken(request, env, withOrigin) {
   const session = await requireSession(request, env);
   const keyId = String(env.APPLE_MUSIC_KEY_ID || "").trim();
   const teamId = String(env.APPLE_MUSIC_TEAM_ID || "").trim();
@@ -83,8 +83,9 @@ export async function appleDeveloperToken(request, env) {
   await chargeDailyToken(env, session.sub, now);
   const expiresAt = now + APPLE_DEVELOPER_TOKEN_SECONDS;
   const header = encodeJsonSegment({ alg: "ES256", kid: keyId });
-  const claims = encodeJsonSegment({ iss: teamId, iat: now, exp: expiresAt, origin: origins(env) });
-  const input = `${header}.${claims}`;
+  const claims = { iss: teamId, iat: now, exp: expiresAt };
+  if (withOrigin) claims.origin = origins(env);
+  const input = `${header}.${encodeJsonSegment(claims)}`;
   let signature;
   try {
     const key = await importPrivateKey(pem);
@@ -95,4 +96,13 @@ export async function appleDeveloperToken(request, env) {
     throw unavailable();
   }
   return json({ developer_token: `${input}.${base64url(new Uint8Array(signature))}`, expires_at: expiresAt });
+}
+
+export function appleDeveloperToken(request, env) {
+  return issueToken(request, env, true);
+}
+
+// ShazamKit's HTTP client sends no Origin header, so Apple rejects origin-bound tokens with 401.
+export function appleShazamToken(request, env) {
+  return issueToken(request, env, false);
 }
