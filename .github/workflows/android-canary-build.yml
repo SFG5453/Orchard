@@ -83,6 +83,26 @@ jobs:
           file "$res_dir/drawable-nodpi/apple_music_logo.png" | grep -q 'PNG image data'
           grep -q '<vector' "$res_dir/drawable/apple_music_mark.xml"
 
+      # Apple's ShazamKit SDK is too large for a secret; fetch it from private R2 and pin its hash.
+      - name: Restore ShazamKit SDK
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SHAZAM_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SHAZAM_R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          SHAZAM_R2_ENDPOINT: ${{ secrets.SHAZAM_R2_ENDPOINT }}
+          SHAZAM_AAR_OBJECT: s3://applethings/shazamkit-android-release.aar
+          SHAZAM_AAR_SHA256: e85310c6737f1025a3b0f7852fa73f06840fad5b484ea38ca4912d5d8ad2bc86
+        run: |
+          set -euo pipefail
+          if [[ -z "$AWS_ACCESS_KEY_ID" || -z "$AWS_SECRET_ACCESS_KEY" || -z "$SHAZAM_R2_ENDPOINT" ]]; then
+            echo "::warning::SHAZAM_R2_* secrets are not set; building without Shazam."
+            exit 0
+          fi
+          aar=mobile/android/local/shazam/shazamkit-android-release.aar
+          mkdir -p "$(dirname "$aar")"
+          aws s3 cp --only-show-errors --endpoint-url "$SHAZAM_R2_ENDPOINT" "$SHAZAM_AAR_OBJECT" "$aar"
+          echo "$SHAZAM_AAR_SHA256  $aar" | sha256sum --check --quiet
+
       - name: Build canary APK
         working-directory: mobile/android
         env:

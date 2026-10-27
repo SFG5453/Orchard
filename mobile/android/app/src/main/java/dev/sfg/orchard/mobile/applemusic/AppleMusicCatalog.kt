@@ -57,6 +57,8 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
     private val prefs = context.applicationContext.getSharedPreferences("orchard_apple_music", Context.MODE_PRIVATE)
     private val cipher = AndroidKeystoreCipher("orchard_apple_music_developer_token_v1")
     private val tokens = AppleMusicDeveloperTokenClient(account.serviceUrl)
+    // ShazamKit sends no Origin header, so it needs a token without an origin claim.
+    private val shazamTokens = AppleMusicDeveloperTokenClient(account.serviceUrl, "/apple/shazam-token")
     private val mutex = Mutex()
     private var configuredFor = ""
 
@@ -225,18 +227,26 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
             .put("origin", AppleMusicWebSession.PAGE_ORIGIN))
     }
 
+    private suspend fun developerToken(): String = cachedToken(tokens, KEY_DEVELOPER_TOKEN, KEY_DEVELOPER_EXPIRY)
+
+    internal suspend fun shazamToken(): String = cachedToken(shazamTokens, KEY_SHAZAM_TOKEN, KEY_SHAZAM_EXPIRY)
+
+    internal fun forgetShazamToken() {
+        prefs.edit().remove(KEY_SHAZAM_TOKEN).remove(KEY_SHAZAM_EXPIRY).apply()
+    }
+
     /** Reuses the stored token until a day before it expires. */
-    private suspend fun developerToken(): String {
+    private suspend fun cachedToken(client: AppleMusicDeveloperTokenClient, tokenKey: String, expiryKey: String): String {
         val now = System.currentTimeMillis() / 1000
-        val stored = runCatching { prefs.getString(KEY_DEVELOPER_TOKEN, null)?.let(cipher::decrypt) }.getOrNull()
-        if (!stored.isNullOrEmpty() && prefs.getLong(KEY_DEVELOPER_EXPIRY, 0) > now + REFRESH_MARGIN_SECONDS) return stored
+        val stored = runCatching { prefs.getString(tokenKey, null)?.let(cipher::decrypt) }.getOrNull()
+        if (!stored.isNullOrEmpty() && prefs.getLong(expiryKey, 0) > now + REFRESH_MARGIN_SECONDS) return stored
         val accessToken = account.accessToken()
             ?: throw AppleMusicException("orchard_account", "Sign in to your Orchard account to use Apple Music.")
-        val token = tokens.fetch(accessToken)
+        val token = client.fetch(accessToken)
         runCatching {
             prefs.edit()
-                .putString(KEY_DEVELOPER_TOKEN, cipher.encrypt(token.value))
-                .putLong(KEY_DEVELOPER_EXPIRY, token.expiresAt)
+                .putString(tokenKey, cipher.encrypt(token.value))
+                .putLong(expiryKey, token.expiresAt)
                 .apply()
         }
         return token.value
@@ -250,6 +260,8 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
     private companion object {
         const val KEY_DEVELOPER_TOKEN = "developer_token"
         const val KEY_DEVELOPER_EXPIRY = "developer_token_expires_at"
+        const val KEY_SHAZAM_TOKEN = "shazam_token"
+        const val KEY_SHAZAM_EXPIRY = "shazam_token_expires_at"
         const val REFRESH_MARGIN_SECONDS = 24 * 60 * 60L
         const val PLAYLIST_PREFIX = "am.playlists."
     }

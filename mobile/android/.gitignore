@@ -12,6 +12,7 @@ local.properties
 *.hprof
 .cxx/
 /local/apple-music/
+/local/shazam/
 
 # generated inline modules
 app/src/main/java/inline/
