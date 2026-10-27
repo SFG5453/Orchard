@@ -209,7 +209,7 @@ internal class QueueLauncher(
             val rest = playable.drop(1)
             bestMix.prepare(listOf(first) + rest.take(BestMixSorter.SNAPSHOT), "Best Mix") { reportBestMix(it, onProgress) }
             reportBestMix("Sorting Best Mix...", onProgress)
-            val sorted = withContext(Dispatchers.IO) { BestMixSorter.sort(graph.bestMixFeatures, rest, first) }
+            val sorted = withContext(Dispatchers.IO) { BestMixSorter.sort(graph.bestMixFeatures, rest, first, graph.mixEvidence) }
             if (sorted == null) showWarning("No songs could be analyzed for Best Mix.")
             playAll(listOf(first) + (sorted ?: rest), contextTitle = bestMixTitle)
         } catch (cancelled: CancellationException) {
@@ -243,7 +243,7 @@ internal class QueueLauncher(
                 "Queue Best Mix") { reportBestMix(it, onProgress) }
             reportBestMix("Sorting queue...", onProgress)
             val sortedUpcoming = withContext(Dispatchers.IO) {
-                BestMixSorter.sort(graph.bestMixFeatures, upcoming, currentTrack)
+                BestMixSorter.sort(graph.bestMixFeatures, upcoming, currentTrack, graph.mixEvidence)
             } ?: run {
                 showWarning("No songs could be analyzed for Best Mix.")
                 return@launch

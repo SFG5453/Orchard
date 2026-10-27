@@ -3,7 +3,7 @@
 //! Best Mix queue order. Every pair gets a cheap predicted cost; the whole path is optimized at
 //! once, so the best transitions are not spent on the first few songs; then the shared planner
 //! checks every adjacent pair and the path is re-optimized around what it actually found.
-use crate::best_mix_cost::{self, has_musical, number};
+use crate::{best_mix_cost::{self, has_musical, number}, measured};
 use serde_json::{Value, json};
 use std::{collections::HashMap, sync::mpsc, thread};
 
@@ -81,10 +81,15 @@ impl Drop for PlannerPool {
 /// lifts Earmark's grid to this whenever the beat model agrees with it.
 const CONFIRMED_BEAT_CONFIDENCE: f64 = 0.95;
 
-/// Plans each pair the way playback will: tempo glide on, beats confirmed. Sorting cannot
-/// run the beat model, so it assumes the confirmation playback gets for most songs.
+/// Plans each pair the way playback will: tempo glide on, beats confirmed. A song an earlier
+/// mix measured brings the beat model's real verdict (`beatModel`); for the rest sorting assumes
+/// the confirmation playback gets for most songs.
 pub(crate) fn plan_input(left: &Value, right: &Value) -> Value {
     let confirmed = |edge: &Value| {
+        if let Some(mut measured) = measured::beat_model_edge(edge, &edge["beatModel"]) {
+            measured.as_object_mut().map(|edge| edge.remove("beatModel"));
+            return measured;
+        }
         let mut edge = edge.clone();
         edge["beatConfidence"] = json!(number(&edge, "beatConfidence").max(CONFIRMED_BEAT_CONFIDENCE));
         edge
@@ -225,6 +230,14 @@ pub fn sort_lazy<F>(summaries: &[Value], initial: &Value, mut fetch_pair: F) -> 
 where
     F: FnMut(Option<usize>, usize) -> Result<(Value, Value), String>,
 {
+    // Hosts put each measured song's `beatModel` beside its summaries; planning reads it on the edges.
+    let mut fetch_pair = |left: Option<usize>, right: usize| {
+        let (mut tail, mut head) = fetch_pair(left, right)?;
+        let model = |index: Option<usize>| index.map_or(&initial["beatModel"], |index| &summaries[index]["beatModel"]);
+        if model(left).is_object() { tail["beatModel"] = model(left).clone(); }
+        if model(Some(right)).is_object() { head["beatModel"] = model(Some(right)).clone(); }
+        Ok((tail, head))
+    };
     let planner = PlannerPool::new(PLANNER_THREADS);
     let mut output = Vec::with_capacity(summaries.len());
     let mut before = Some(initial);
@@ -315,6 +328,12 @@ mod tests {
         assert_eq!(input["analysis"]["beatConfidence"], json!(CONFIRMED_BEAT_CONFIDENCE));
         assert_eq!(input["nextAnalysis"]["beatConfidence"], json!(0.97));
         assert_eq!(input["tempoRamp"], json!(true));
+        // A measured song plans with what the beat model said, even when it said no.
+        let doubted = json!({"duration": 200.0, "beatConfidence": 0.8,
+            "beatModel": {"version": measured::VERSION, "beatConfidence": 0.45}});
+        let input = plan_input(&doubted, &json!({"duration": 180.0}));
+        assert_eq!(input["analysis"]["beatConfidence"], json!(0.45));
+        assert!(input["analysis"].get("beatModel").is_none());
     }
 
     #[test]

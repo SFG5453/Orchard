@@ -101,7 +101,16 @@ pub fn chroma_curve(chroma: &ChromaFrames, span: (f64, f64)) -> Value {
 
 /// Raw vocal share per model frame for a render window.
 pub fn vocal_frames(models: &mut Models, window: &AudioBuffer) -> Result<Vec<f64>, String> {
-    let audio = resample::resample(window, song::RATE).map_err(|e| e.to_string())?;
+    // Folded before resampling, which is linear: one channel to convert instead of two.
+    let channels = window.planar();
+    let mono = if channels.len() > 1 {
+        let gain = std::f32::consts::FRAC_1_SQRT_2;
+        (0..window.frames()).map(|i| channels.iter().map(|c| c[i]).sum::<f32>() * gain).collect()
+    } else {
+        window.channel(0).to_vec()
+    };
+    let mono = AudioBuffer::new(vec![mono], window.sample_rate()).map_err(|e| e.to_string())?;
+    let audio = resample::resample(&mono, song::RATE).map_err(|e| e.to_string())?;
     models.vocals(&audio)
 }
 

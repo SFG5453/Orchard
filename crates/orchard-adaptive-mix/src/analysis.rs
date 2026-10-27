@@ -2,7 +2,7 @@
 
 //! V2's playback analysis: whole-track Earmark evidence, then the beat model picks bar phase.
 use crate::{beats::Grid, evidence, song::{ANALYSIS_RATE, Track}};
-use earmark::{WholeTrackAnalysis, WholeTrackAnalyzer};
+use earmark::{WholeTrackAnalysis, WholeTrackAnalyzer, analysis::ChromaFrames};
 use serde_json::{Value, json};
 
 // Matches the compaction V2's native addon applied before JS saw any value.
@@ -164,10 +164,16 @@ fn refine(raw: &Value, windows: &[(Result<Grid, String>, f64)]) -> Option<Value>
 /// covers only `chroma_span`, the part of the song a mix can reach.
 pub fn track(track: &Track, grids: &[(Result<Grid, String>, f64)], chroma_span: (f64, f64))
     -> Result<Value, String> {
+    let (mut value, chroma) = measure(track, grids)?;
+    value["chromaCurve"] = evidence::chroma_curve(&chroma, chroma_span);
+    Ok(value)
+}
+
+/// [`track`] without the local chroma curve, plus the chroma frames that curve is cut from.
+pub fn measure(track: &Track, grids: &[(Result<Grid, String>, f64)]) -> Result<(Value, ChromaFrames), String> {
     let measured = WholeTrackAnalyzer::new().map_err(|e| e.to_string())?
         .analyze(&track.mono, ANALYSIS_RATE as f64, track.duration).map_err(|e| e.to_string())?;
     let mut value = to_json(&measured);
-    value["chromaCurve"] = evidence::chroma_curve(&measured.chroma_frames, chroma_span);
     let bpm = value["bpm"].as_f64().unwrap_or(0.0);
     if !(40.0..=240.0).contains(&bpm) {
         return Err("Native audio analysis returned an invalid BPM".into());
@@ -180,7 +186,7 @@ pub fn track(track: &Track, grids: &[(Result<Grid, String>, f64)], chroma_span: 
     value["analyzedTempoConfidence"] = tempo_confidence;
     value["analysisSource"] = json!("local-native");
     value["bpmSource"] = json!("local-native");
-    Ok(value)
+    Ok((value, measured.chroma_frames))
 }
 
 #[cfg(test)]

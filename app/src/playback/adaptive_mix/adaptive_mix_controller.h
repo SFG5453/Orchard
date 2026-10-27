@@ -2,6 +2,7 @@
 
 #pragma once
 #include "adaptive_mix_worker.h"
+#include "mix_evidence_store.h"
 #include <QJsonObject>
 #include <QObject>
 #include <QUrl>
@@ -59,6 +60,7 @@ signals:
 private:
   void fail(const QString &message);
   void receive(const QJsonObject &header, const QByteArray &pcm);
+  void keepEvidence(const QJsonObject &header);
   QString m_mode;
   QString m_status;
   QString m_pair;
@@ -70,6 +72,12 @@ private:
   QByteArray m_references;
   QJsonObject m_referenceInfo;
   AdaptiveMixWorker m_worker;
+  MixEvidenceStore m_evidence;
+  // The pair being prepared, for storing the evidence its response brings.
+  QString m_outgoingId;
+  QString m_incomingId;
+  double m_outgoingDuration{0};
+  double m_incomingDuration{0};
   bool m_available{true};
   bool m_preparing{false};
   bool m_failed{false};

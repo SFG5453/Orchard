@@ -4,11 +4,14 @@ package dev.sfg.orchard.mobile.playback.smart
 
 import android.content.Context
 import android.media.MediaDataSource
+import android.os.Process
 import android.util.AtomicFile
 import android.util.Log
 import org.json.JSONObject
 import java.io.File
 import java.nio.ByteBuffer
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.FutureTask
 
 /** Standard is a trailing equal-power fade; smart is the desktop adaptive mix. */
 enum class CrossfadeMode { STANDARD, SMART }
@@ -52,7 +55,7 @@ internal object AdaptiveMix {
     /** Matches `planner::NATURAL_BOUNDARY` in `orchard-adaptive-mix`. */
     internal const val NATURAL_BOUNDARY = "Shared planner keeps the natural boundary"
 
-    /** Desktop's CPU graphs: Nirovi INT8 and Syvenu FP32. */
+    /** Desktop's CPU graphs: Nirovi with int8 activations and Syvenu FP32. */
     private const val BEAT_MODEL = "nirovi_int8.ort"
     private const val VOCAL_MODEL = "syvenu.ort"
     // Two threads leave the big cores to the UI; preparation has a two-minute head start anyway.
@@ -61,20 +64,37 @@ internal object AdaptiveMix {
     /**
      * Runs on the caller's thread, which needs a deep stack: QuickJS plans inside it.
      * [models] is asked only after both songs decode; the caller owns the handle it returns.
+     * [onMeasured] receives the response header, with any evidence measured, refusals included.
      */
     fun prepare(
         models: () -> Long?,
         outgoing: () -> MediaDataSource?,
         incoming: () -> MediaDataSource?,
         request: JSONObject,
+        onMeasured: (JSONObject) -> Unit = {},
     ): PreparedMix {
         if (!MixNative.available) return PreparedMix.Failed("Adaptive mix library unavailable")
         val started = System.currentTimeMillis()
-        val outgoingSong = outgoing()?.use { SongDecoder.decode(it, tail = true) }
-            ?: return PreparedMix.Failed("Could not decode the outgoing song")
+        // The two songs decode side by side, the incoming one on a second thread at this priority.
+        val priority = Process.getThreadPriority(Process.myTid())
+        val incomingDecode = FutureTask { incoming()?.use { SongDecoder.decode(it, head = true) } }
+        Thread({
+            Process.setThreadPriority(priority)
+            incomingDecode.run()
+        }, "orchard-mix-decode").start()
+        val outgoingSong = try {
+            outgoing()?.use { SongDecoder.decode(it, tail = true) }
+        } catch (error: Throwable) {
+            runCatching { incomingDecode.awaitSong() }.getOrNull()?.close()
+            throw error
+        }
+        val incomingSong = incomingDecode.awaitSong()
+        if (outgoingSong == null) {
+            incomingSong?.close()
+            return PreparedMix.Failed("Could not decode the outgoing song")
+        }
         outgoingSong.use {
-            val incomingSong = incoming()?.use { SongDecoder.decode(it, head = true) }
-                ?: return PreparedMix.Failed("Could not decode the incoming song")
+            incomingSong ?: return PreparedMix.Failed("Could not decode the incoming song")
             incomingSong.use {
                 val decoded = System.currentTimeMillis()
                 val text = request.toString()
@@ -85,9 +105,16 @@ internal object AdaptiveMix {
                     incomingSong.handle, outgoingSong.rate)
                 Log.d(TAG, "Prepared in ${System.currentTimeMillis() - started}ms " +
                     "(decode ${decoded - started}ms)")
-                return parse(framed ?: return PreparedMix.Failed("Adaptive mix returned nothing"), incomingSong.rate)
+                return parse(framed ?: return PreparedMix.Failed("Adaptive mix returned nothing"), incomingSong.rate, onMeasured)
             }
         }
+    }
+
+    /** The decoded song, or rethrows what the decode threw. */
+    private fun FutureTask<DecodedSong?>.awaitSong(): DecodedSong? = try {
+        get()
+    } catch (error: ExecutionException) {
+        throw error.cause ?: error
     }
 
     /** Builds both ONNX sessions; free the handle with [freeModels]. Session threads inherit the caller's priority. */
@@ -121,12 +148,13 @@ internal object AdaptiveMix {
 
     fun freeModels(handle: Long) = MixNative.nativeModelsFree(handle)
 
-    private fun parse(framed: ByteArray, incomingRate: Int): PreparedMix {
+    private fun parse(framed: ByteArray, incomingRate: Int, onMeasured: (JSONObject) -> Unit): PreparedMix {
         val buffer = ByteBuffer.wrap(framed)
         if (framed.size < 4) return PreparedMix.Failed("Invalid adaptive mix response")
         val length = buffer.int
         if (length < 0 || length > framed.size - 4) return PreparedMix.Failed("Invalid adaptive mix response")
         val header = JSONObject(String(framed, 4, length))
+        onMeasured(header)
         header.optString("error").takeIf { it.isNotEmpty() }?.let { error ->
             return if (error.startsWith(NATURAL_BOUNDARY)) PreparedMix.NoMix(error) else PreparedMix.Failed(error)
         }

@@ -67,7 +67,8 @@ constexpr int kFeatureVersion = 4;
 } // namespace
 
 BestMixController::BestMixController(YouTubeProvider *provider, AuthManager *auth, QObject *parent)
-    : QObject(parent), m_provider(provider), m_auth(auth) {
+    : QObject(parent), m_provider(provider), m_auth(auth),
+      m_evidence(QStringLiteral("orchard-bestmix-evidence-%1").arg(reinterpret_cast<quintptr>(this))) {
   const QDir cacheRoot(QStandardPaths::writableLocation(QStandardPaths::CacheLocation));
   m_cacheDir = cacheRoot.filePath("best-mix-v2");
   // v1 features are windowed and vocal-blind. Keep its audio, re-analyze, sort with both ears.
@@ -350,13 +351,19 @@ void BestMixController::sort() {
   m_tempos.clear();
   for (const auto &value : m_snapshot) {
     const QString id = value.toMap().value("id").toString();
-    const QJsonObject entry = summary(id);
+    QJsonObject entry = summary(id);
     // Head tempo is what the listener hears as the song mixes in.
     const double bpm = entry.value("head").toObject().value("bpm").toDouble();
     if (bpm > 0) m_tempos.insert(id, bpm);
+    const QJsonObject beatModel =
+        m_evidence.beatModel(id, entry.value("head").toObject().value("duration").toDouble());
+    if (!beatModel.isEmpty()) entry.insert("beatModel", beatModel);
     summaries.append(entry);
   }
-  const QJsonObject initial = summary(m_current.value("id").toString()).value("tail").toObject();
+  QJsonObject initial = summary(m_current.value("id").toString()).value("tail").toObject();
+  const QJsonObject currentModel =
+      m_evidence.beatModel(m_current.value("id").toString(), initial.value("duration").toDouble());
+  if (!currentModel.isEmpty()) initial.insert("beatModel", currentModel);
   const QJsonObject request{{"kind", "bestMixSortLazy"}, {"summaries", summaries}, {"initial", initial}};
   QProcess *worker = new QProcess(this);
   m_sortWorker = worker;

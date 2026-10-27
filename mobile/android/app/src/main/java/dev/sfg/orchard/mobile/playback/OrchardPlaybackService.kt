@@ -177,7 +177,7 @@ class OrchardPlaybackService : MediaLibraryService() {
             // A connected desktop does the heavy lifting; the phone keeps the clock and the speaker.
             mixer = AdaptiveMixer(this, handler, remote = graph.connect::mixHost, appleAnalysis = { ids ->
                 runBlocking { AppleMixAnalysis.fetch(graph, ids) }
-            }),
+            }, evidence = { graph.mixEvidence }),
             // Adaptive mixes decode whole songs, so both must be fully cached first.
             sourceFor = { uri ->
                 if (streamCache.isFullyCached(uri)) ({ streamCache.mediaDataSource(uri)?.let { streams.analysisSource(uri, it) } }) else null

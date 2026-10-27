@@ -9,7 +9,7 @@
 use jni::JNIEnv;
 use jni::objects::{JClass, JFloatArray, JObject, JString, JValue};
 use jni::sys::{jboolean, jbyteArray, jdouble, jint, jlong, jstring};
-use orchard_adaptive_mix::{apple, best_mix, models::Models, prepare, song::{Song, SongBuilder, Windows}};
+use orchard_adaptive_mix::{apple, best_mix, models::Models, prepare::{self, Measurements}, song::{Song, SongBuilder, Windows}};
 use serde_json::{Value, json};
 use std::sync::OnceLock;
 
@@ -197,21 +197,25 @@ pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nati
 }
 
 /// Desktop's adaptive-mix worker response for one pair, framed for Kotlin: a big-endian
-/// u32 header length, the header JSON, then interleaved stereo f32 LE at `rate`.
+/// u32 header length, the header JSON, then interleaved stereo f32 LE at `rate`. The header
+/// carries fresh song evidence (`outgoingMeasured`, `incomingMeasured`) even on an error.
 /// Must run on a thread with at least 4 MiB of stack: QuickJS plans in it.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nativeMix(
     mut env: JNIEnv<'_>, _class: JClass<'_>, models: jlong, request: JString<'_>,
     outgoing: jlong, incoming: jlong, rate: jint,
 ) -> jbyteArray {
-    let (header, pcm) = match frame_mix(&mut env, models, &request, outgoing, incoming, rate) {
+    let mut measured = Measurements::default();
+    let (mut header, pcm) = match frame_mix(&mut env, models, &request, outgoing, incoming, rate, &mut measured) {
         Ok((mut header, samples)) => {
             let pcm: Vec<u8> = samples.iter().flat_map(|v| v.to_le_bytes()).collect();
             header["bytes"] = pcm.len().into();
-            (header.to_string(), pcm)
+            (header, pcm)
         }
-        Err(error) => (error_json(error), Vec::new()),
+        Err(error) => (json!({ "error": error }), Vec::new()),
     };
+    measured.attach(&mut header);
+    let header = header.to_string();
     let mut framed = Vec::with_capacity(4 + header.len() + pcm.len());
     framed.extend_from_slice(&(header.len() as u32).to_be_bytes());
     framed.extend_from_slice(header.as_bytes());
@@ -220,7 +224,7 @@ pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nati
 }
 
 fn frame_mix(env: &mut JNIEnv<'_>, models: jlong, request: &JString<'_>, outgoing: jlong,
-             incoming: jlong, rate: jint) -> Result<(Value, Vec<f32>), String> {
+             incoming: jlong, rate: jint, measured: &mut Measurements) -> Result<(Value, Vec<f32>), String> {
     let request: prepare::MixRequest = serde_json::from_str(&read_string(env, request)?)
         .map_err(|e| e.to_string())?;
     // 0 is allowed when Apple Music's analysis stands in for both models.
@@ -230,7 +234,7 @@ fn frame_mix(env: &mut JNIEnv<'_>, models: jlong, request: &JString<'_>, outgoin
     }
     let outgoing = unsafe { borrow::<Song>(outgoing) }.ok_or("Missing outgoing song")?;
     let incoming = unsafe { borrow::<Song>(incoming) }.ok_or("Missing incoming song")?;
-    let (mut prepared, samples) = prepare::mix(models, &request, outgoing, incoming)?;
+    let (mut prepared, samples) = prepare::mix(models, &request, outgoing, incoming, measured)?;
     // The plan is made at 48 kHz like desktop's; only the finished audio meets the player's rate.
     let samples = prepare::resample_to(&mut prepared, samples, u32::try_from(rate).unwrap_or(0))?;
     let header = serde_json::to_value(prepared).map_err(|e| e.to_string())?;

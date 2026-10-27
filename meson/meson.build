@@ -179,6 +179,8 @@ app_sources = [
   'app/src/playback/adaptive_mix/adaptive_mix_worker.cpp',
   'app/src/playback/adaptive_mix/adaptive_mix_worker.h',
   'app/src/playback/adaptive_mix/adaptive_mix_output.cpp',
+  'app/src/playback/adaptive_mix/mix_evidence_store.cpp',
+  'app/src/playback/adaptive_mix/mix_evidence_store.h',
   'app/src/playback/playback_transitions.cpp',
   'app/src/playback/playback_backend.cpp',
   'app/src/playback/playback_recovery.cpp',

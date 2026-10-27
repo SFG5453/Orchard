@@ -9,7 +9,8 @@
 #include <utility>
 
 AdaptiveMixController::AdaptiveMixController(QObject *parent)
-    : QObject(parent) {
+    : QObject(parent),
+      m_evidence(QStringLiteral("orchard-mix-evidence-%1").arg(reinterpret_cast<quintptr>(this))) {
   m_mode = QSettings().value("playback/crossfadeMode", "standard").toString();
   if (m_mode != "adaptive")
     m_mode = "standard";
@@ -150,6 +151,17 @@ void AdaptiveMixController::prepare(const QString &pair, const QUrl &outgoing,
     request.insert("outgoingApple", outgoingApple);
   if (!incomingApple.isEmpty())
     request.insert("incomingApple", incomingApple);
+  // A song an earlier mix measured skips the beat model; the worker checks it is the same audio.
+  m_outgoingId = currentTrack.value("id").toString();
+  m_incomingId = nextTrack.value("id").toString();
+  m_outgoingDuration = duration;
+  m_incomingDuration = nextTrack.value("durationSeconds").toDouble();
+  if (outgoingApple.isEmpty())
+    if (const QJsonObject stored = m_evidence.evidence(m_outgoingId, m_outgoingDuration); !stored.isEmpty())
+      request.insert("outgoingMeasured", stored);
+  if (incomingApple.isEmpty())
+    if (const QJsonObject stored = m_evidence.evidence(m_incomingId, m_incomingDuration); !stored.isEmpty())
+      request.insert("incomingMeasured", stored);
   m_worker.start(request);
 }
 
@@ -161,9 +173,16 @@ void AdaptiveMixController::failPair(const QString &pair, const QString &message
   m_preparing = true;
   fail(message);
 }
+void AdaptiveMixController::keepEvidence(const QJsonObject &header) {
+  // Refusals and errors bring it too: the songs were measured before planning.
+  m_evidence.store(m_outgoingId, m_outgoingDuration, header.value("outgoingMeasured").toObject());
+  m_evidence.store(m_incomingId, m_incomingDuration, header.value("incomingMeasured").toObject());
+}
+
 void AdaptiveMixController::receive(const QJsonObject &object, const QByteArray &pcm) {
   if (!m_preparing)
     return;
+  keepEvidence(object);
   if (object.contains("error")) {
     fail(object.value("error").toString());
     return;
