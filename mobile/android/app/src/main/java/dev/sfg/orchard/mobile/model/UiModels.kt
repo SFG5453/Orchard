@@ -129,6 +129,8 @@ data class OrchardSettings(
     val lyricsDistanceFade: Boolean = true,
     /** Let lyric lines glide into place one after another when the lyrics advance. */
     val lyricsStaggeredScroll: Boolean = true,
+    /** Show the current synced lyric line under the title in the player. */
+    val lyricsUnderTitle: Boolean = true,
     /** Whether the phone bottom bar has a Settings tab. */
     val showSettingsTab: Boolean = false,
     /** [HomeSource][dev.sfg.orchard.mobile.home.HomeSource] id that fills Home; others are fallbacks. */
