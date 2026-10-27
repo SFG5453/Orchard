@@ -129,14 +129,12 @@ internal class QueueLauncher(
 
         when (targets.value.selected) {
             PlaybackTarget.LocalPhone -> {
-                local.replaceQueue(queue, edited.currentIndex, contextTitle = source)
-                // After the queue lands, never before: the service remembers the order it
-                // shuffles over, and enabling shuffle first would have it remember the queue
-                // this one is replacing, leaving nothing to restore when shuffle goes off.
-                if (shuffle) local.setShuffle(true)
+                local.replaceQueue(queue, edited.currentIndex, contextTitle = source, shuffle = shuffle)
             }
             is PlaybackTarget.Remote -> {
                 // The target owns the queue; it receives the whole list and plays from here.
+                // Shuffle goes off first so turning it back on shuffles this queue.
+                if (shuffle) graph.connect.command("set_shuffle", JSONObject().put("enabled", false))
                 val skip = if (edited.currentIndex < ConnectWire.QUEUE_LIMIT) 0 else edited.currentIndex
                 graph.connect.command(
                     "replace_queue",

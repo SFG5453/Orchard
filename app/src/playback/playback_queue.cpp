@@ -23,6 +23,7 @@
 #include "playback_helpers.h"
 #include "providers/youtube/youtube_provider.h"
 #include <QJsonObject>
+#include <QRandomGenerator>
 #include <QSettings>
 
 void PlaybackController::playCollection(const QVariantList &tracks,
@@ -31,10 +32,18 @@ void PlaybackController::playCollection(const QVariantList &tracks,
                                         const QString &continuation) {
   if (remoteActive()) {
     // The target owns the queue; it gets this page, without continuation loading.
-    if (shuffle)
-      forwardRemote(QStringLiteral("set_shuffle"), {{QStringLiteral("enabled"), true}});
-    forwardRemote(QStringLiteral("replace_queue"),
-                  {{QStringLiteral("tracks"), tracks}, {QStringLiteral("index"), shuffle ? 0 : startIndex}});
+    if (!shuffle) {
+      forwardRemote(QStringLiteral("replace_queue"),
+                    {{QStringLiteral("tracks"), tracks}, {QStringLiteral("index"), startIndex}});
+      return;
+    }
+    // A random opener leads the collection order; cycling shuffle makes the target shuffle the rest.
+    QVariantList queue = tracks;
+    if (!queue.isEmpty())
+      queue.move(QRandomGenerator::global()->bounded(int(queue.size())), 0);
+    forwardRemote(QStringLiteral("set_shuffle"), {{QStringLiteral("enabled"), false}});
+    forwardRemote(QStringLiteral("replace_queue"), {{QStringLiteral("tracks"), queue}, {QStringLiteral("index"), 0}});
+    forwardRemote(QStringLiteral("set_shuffle"), {{QStringLiteral("enabled"), true}});
     return;
   }
   // Apple Music songs need no YouTube Music session.
