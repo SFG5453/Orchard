@@ -51,7 +51,7 @@ Orchard Mobile is the phone half of [Orchard](../) — a standalone native Andro
 
 ### On-device analysis
 
-Orchard listens to the audio rather than trusting a catalog. Smart Crossfade and Best Mix run the desktop adaptive-mix worker's own Rust (`crates/orchard-adaptive-mix`) in process: Earmark's beat tracker and analysis, the Nirovi beat model's bar-phase check, open-unmix vocals, the QuickJS planner (`crates/orchard-transition-planner`) and the Earmark render. Kotlin only decodes the songs at their native rate and splices the rendered overlap into ExoPlayer (`MixSplicer`), so a pair mixes and a queue sorts as it does on desktop. The decoder (MediaCodec here, FFmpeg there) and the beat model's weights (INT8 here, FP16 on desktop GPUs) are the only differences.
+Orchard listens to the audio rather than trusting a catalog. Smart Crossfade and Best Mix run the desktop adaptive-mix worker's own Rust (`crates/orchard-adaptive-mix`) in process: Earmark's beat tracker and analysis, the Nirovi beat model's bar-phase check, Syvenu vocal presence, the QuickJS planner (`crates/orchard-transition-planner`) and the Earmark render. Kotlin only decodes the songs at their native rate and splices the rendered overlap into ExoPlayer (`MixSplicer`), so a pair mixes and a queue sorts as it does on desktop. The decoder (MediaCodec here, FFmpeg there) and the beat model's weights (INT8 here, FP16 on desktop GPUs) are the only differences.
 
 ### Library and browsing
 
@@ -174,7 +174,7 @@ cd android
 
 The unit suite covers auth signing, queue edits and restoration, playback state, artwork matching, transition filtering and planning, the Connect wire format, remote commands and transfers, and remote mixes. The protocol itself is tested once, on desktop, with two real nodes talking over loopback sockets and WebRTC. Instrumented tests cover the analysis models, which need a real device.
 
-Model provenance lives in [Nirovi's README](../models/nirovi/README.md) and [the vocal model's README](../models/vocal-separation/README.md).
+Model provenance lives in [Nirovi's README](../models/nirovi/README.md) and [Syvenu's README](../models/syvenu/README.md).
 
 ### Project map
 
@@ -211,10 +211,10 @@ AGPL rather than GPL so code can move freely between here and Orchard desktop, w
 
 ### Third-party components
 
-Smart Crossfade ships trained models. Both were chosen because their **weights**, carry a permissive license. Most published music-information-retrieval weights, Essentia's included, are CC BY-NC-SA and cannot be distributed in an application.
+Smart Crossfade ships trained models. Both are distilled from teachers whose **weights** carry a permissive license. Most published music-information-retrieval weights, Essentia's included, are CC BY-NC-SA and cannot be distributed in an application.
 
 * **Nirovi**: Orchard's beat and downbeat model, distilled from [Beat This!](https://github.com/CPJKU/beat_this) `final0` (Foscarin, Schlüter & Widmer, ISMIR 2024; code and weights MIT). Mobile ships its INT8 graph. See [models/nirovi/README.md](../models/nirovi/README.md).
-* **open-unmix** (Stöter & Liutkus, Inria/SigSep) — used only to measure how much vocal content is present at a given instant. Code and the umxhq weights both MIT, confirmed on the weights' own [Zenodo deposit](https://zenodo.org/record/3370489). Only the `vocals` target ships, cut to the bins vocal presence reads and quantized to INT8. Meta's htdemucs separates better but releases its weights under CC-BY-NC-4.0, which a distributed app cannot ship.
+* **Syvenu**: Orchard's vocal presence model, distilled from [open-unmix](https://github.com/sigsep/open-unmix-pytorch) UMX-HQ vocals (Stöter & Liutkus, Inria/SigSep; code and weights MIT) on Creative Commons music from MTG-Jamendo, Jamendo and the Free Music Archive. Used only to measure how much vocal content is present at a given instant. Most of that music carries NonCommercial terms; every training track is credited in `models/syvenu/TRAINING_CREDITS.tsv.gz`. See [models/syvenu/README.md](../models/syvenu/README.md).
 * **ONNX Runtime** (Microsoft) — MIT.
 * **[QuickJS-ng](https://github.com/quickjs-ng/quickjs)**: runs the shared provider and planner JavaScript, from `third_party/quickjs`. MIT.
 * **[SimpMusic](https://github.com/maxrave-dev/SimpMusic)** (maxrave-dev): the full-bleed player's smoothstep scrim and canvas layout are adapted from SimpMusic v2.2.0. GPL-3.0, combined under AGPL-3.0 section 13. See `ui/components/SmoothScrim.kt`.

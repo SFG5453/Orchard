@@ -163,7 +163,7 @@ fn runtime() -> Result<(), String> {
     }).clone()
 }
 
-/// Loads Nirovi and UMX from model files on `threads` CPU threads. 0 with no models.
+/// Loads Nirovi and Syvenu from model files on `threads` CPU threads. 0 with no models.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nativeModelsLoad(
     mut env: JNIEnv<'_>, _class: JClass<'_>, beat: JString<'_>, vocal: JString<'_>, threads: jint,
