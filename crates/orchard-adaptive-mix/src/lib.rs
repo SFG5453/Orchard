@@ -14,6 +14,7 @@ pub mod decode;
 pub mod downmix;
 pub mod evidence;
 pub mod lock;
+pub mod measured;
 pub mod models;
 pub mod planner;
 pub mod prepare;

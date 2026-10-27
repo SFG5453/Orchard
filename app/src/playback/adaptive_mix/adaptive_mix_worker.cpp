@@ -10,6 +10,7 @@
 namespace {
 // A 30 s overlap at 192 kHz is 46 MB; anything past this is a confused worker.
 constexpr qint64 kMaxPcmBytes = 64ll * 1024 * 1024;
+constexpr qint64 kMaxHeaderBytes = 8ll * 1024 * 1024;
 
 QString program() {
   QString path = QDir(QCoreApplication::applicationDirPath()).filePath("orchard-adaptive-mix");
@@ -90,7 +91,8 @@ void AdaptiveMixWorker::receive() {
   if (m_pcmBytes < 0) {
     const auto newline = m_stdout.indexOf('\n');
     if (newline < 0) {
-      if (m_stdout.size() > 65536)
+      // The header carries up to two songs' measured evidence.
+      if (m_stdout.size() > kMaxHeaderBytes)
         fail(tr("Invalid analysis response."));
       return;
     }

@@ -5,13 +5,15 @@ use orchard_adaptive_mix::{
     apple,
     best_mix,
     models::Models,
-    prepare::{Request, prepare},
+    prepare::{Measurements, Request, prepare},
     text_embed::{self, TextEmbedder},
 };
 use std::{
     io::{self, BufRead, Write},
     path::PathBuf,
 };
+
+const MAX_REQUEST: usize = 8 * 1024 * 1024;
 
 fn main() {
     // QuickJS allows the planner 2 MiB of stack; Windows gives the main thread 1 MiB.
@@ -35,10 +37,12 @@ fn run() {
         let mut line = String::new();
         let Ok(size) = input.read_line(&mut line) else { break };
         if size == 0 { break; }
-        if line.len() > 512 * 1024 {
+        // A mix request carries up to two songs' stored evidence, a few hundred KB each.
+        if line.len() > MAX_REQUEST {
             break;
         }
         let mut pcm = Vec::new();
+        let mut measured = Measurements::default();
         let result: Result<serde_json::Value, String> = (|| {
             // Queue sorting is CPU-only and must never pay for model startup.
             if line.trim_start().starts_with('{') {
@@ -81,7 +85,7 @@ fn run() {
             let Some(request) = request else {
                 return Ok(serde_json::json!({"ready":true}));
             };
-            let (prepared, samples, references) = prepare(models.as_mut(), request)?;
+            let (prepared, samples, references) = prepare(models.as_mut(), request, &mut measured)?;
             let mut value = serde_json::to_value(prepared).map_err(|e| e.to_string())?;
             pcm = samples.iter().flat_map(|sample| sample.to_le_bytes()).collect();
             value["bytes"] = pcm.len().into();
@@ -92,13 +96,14 @@ fn run() {
             }
             Ok(value)
         })();
-        let response = match result {
+        let mut response = match result {
             Ok(value) => value,
             Err(error) => {
                 pcm.clear();
                 serde_json::json!({"error":error})
             }
         };
+        measured.attach(&mut response);
         // Raw PCM follows the header line; "bytes" gives its length. No temp files were harmed.
         let mut stdout = io::stdout().lock();
         let _ = writeln!(stdout, "{response}");

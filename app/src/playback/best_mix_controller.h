@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "adaptive_mix/mix_evidence_store.h"
 #include <QHash>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
@@ -98,6 +99,8 @@ private:
   QString m_cacheDir;
   QString m_dbName;
   QSqlDatabase m_db;
+  // Songs adaptive mix measured; their beat model verdict replaces the planning assumption.
+  MixEvidenceStore m_evidence;
   QString m_error;
   int m_downloaded{0};
   int m_completed{0};
