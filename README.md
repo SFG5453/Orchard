@@ -3,7 +3,7 @@
 
 # Orchard
 
-**Your YouTube Music library, with more control over how you listen.**
+**Your YouTube Music or Apple Music library, with more control over how you listen.**
 
 Adaptive mixes · Best Mix queues · Synced lyrics · Lossless audio · Orchard Connect
 
@@ -23,24 +23,25 @@ Adaptive mixes · Best Mix queues · Synced lyrics · Lossless audio · Orchard 
   </p>
 </div>
 
-Orchard is an open-source music player for Windows, Linux, and Android. Browse your YouTube Music recommendations, library, and playlists, shape the sound, and move playback between your computer and phone. The desktop app uses a native Qt interface and Rust audio core.
+Orchard is an open-source music player for Windows, Linux, and Android. Browse your YouTube Music or Apple Music recommendations, library, and playlists, shape the sound, and move playback between your computer and phone. The desktop app uses a native Qt interface and Rust audio core.
 
-Orchard is an independent project and is not affiliated with or endorsed by Google, YouTube, or Qobuz.
+Orchard is an independent project and is not affiliated with or endorsed by Google, YouTube, Apple, or Qobuz.
 
 ## Screenshots
 
 <div align="center">
-  <img src="docs/screenshots/home.png" width="100%" alt="Orchard desktop Home with recommendations, playlists, and the player bar">
+  <img src="docs/screenshots/lyrics.png" width="100%" alt="Fullscreen player with album artwork and synced Apple Music lyrics">
+  <p>Follow along with synced lyrics</p>
 </div>
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/artist.png" alt="Artist page with popular songs and the latest release"></td>
-    <td width="50%"><img src="docs/screenshots/lyrics.png" alt="Fullscreen player with album artwork and synced lyrics"></td>
+    <td width="50%"><img src="docs/screenshots/artist.png" alt="Apple Music artist page with an animated header, the latest release, and top songs"></td>
+    <td width="50%"><img src="docs/screenshots/album.png" alt="Apple Music album page with the playing song highlighted"></td>
   </tr>
   <tr>
     <td align="center">Explore artists and their music</td>
-    <td align="center">Follow along with synced lyrics</td>
+    <td align="center">Browse albums from Apple Music or YouTube Music</td>
   </tr>
 </table>
 
@@ -68,7 +69,7 @@ To try desktop canary builds, turn on **Canary builds** under **Settings → Gen
 - **Gapless playback and autoplay:** minimize pauses between tracks and keep listening when the queue ends.
 - **Editable queue:** add, remove, and drag songs into the order you want.
 
-Desktop Adaptive mix requires a GPU with WebGPU support and FFmpeg. Turn the Audio Engine off to enable it, and choose a streaming quality other than MAX. See [Crossfade and gapless playback](docs/app/crossfade.md) and [Manage the queue](docs/app/queue.md) for setup and requirements.
+Desktop Adaptive mix requires FFmpeg. A GPU with WebGPU support speeds up beat detection but is optional. Turn the Audio Engine off to enable it, and choose a streaming quality other than MAX. See [Crossfade and gapless playback](docs/app/crossfade.md) and [Manage the queue](docs/app/queue.md) for setup and requirements.
 
 https://github.com/user-attachments/assets/983fb4b1-e0ff-4f90-9ff5-b92702664a3d
 
@@ -96,11 +97,22 @@ See [Audio Engine and equalizer](docs/app/audio-engine.md) and [Streaming qualit
 
 See [Offline mode and downloads](docs/app/offline-mode.md), [Local files](docs/app/local-files.md), [Lyrics](docs/app/lyrics.md), and [AI-generated music](docs/app/ai-music.md).
 
+### Play from Apple Music
+
+- **Apple Music as your music source:** connect your Apple Music subscription and choose **Apple** under **Settings → General → Music source**. Home, search, artist, album, and playlist pages, and your library, come from Apple Music.
+- **Apple Music playback:** songs stream from Apple Music at 256 kbps AAC on Windows, Linux, and Android, through the same player as everything else.
+- **Mixes from Apple's analysis:** Adaptive mix, Best Mix, crossfade, and gapless playback work with Apple Music songs. Orchard uses Apple's own beat and vocal analysis, so mixes are ready sooner.
+- **Apple Music lyrics:** synced lyrics come from Apple Music while you are signed in.
+- **Apple Music videos:** watch videos from Apple Music on desktop, up to 1080p on Windows with HDCP displays and 486p on Linux.
+- **Library changes:** love songs, create playlists, and add songs to your Apple Music playlists from Orchard.
+
+Orchard never mixes the two services on one page. Apple Music playback needs Widevine: on Linux, install Google Chrome or Chromium with Widevine; on Windows, open Microsoft Edge or Google Chrome once. Android uses the phone's own Widevine. An Orchard account is also required. See [Integrations](docs/app/integrations.md#play-apple-music-songs).
+
 ### Listen across devices
 
 - **Orchard Connect:** control playback on your computer from your phone, or on your phone from your computer, on the same network or over the internet.
 - **Desktop help for mobile mixes:** a connected computer can prepare Adaptive mixes while the phone keeps playing.
-- **Discord Rich Presence:** show your current song and artwork on your profile.
+- **Discord Rich Presence:** show your current song and artwork on your profile, labeled YouTube Music or Apple Music.
 - **Last.fm:** send your listening history to your Last.fm account.
 - **Desktop controls:** keyboard shortcuts, media keys, and system tray support.
 
@@ -108,14 +120,15 @@ See [Orchard Connect](docs/app/connect.md), [Integrations](docs/app/integrations
 
 ## Orchard Mobile for Android
 
-Orchard Mobile plays music directly on your phone. It includes on-device Smart Crossfade, synced lyrics, animated artwork, Android Auto, Chromecast, and Orchard Connect.
+Orchard Mobile plays music directly on your phone, from YouTube Music or Apple Music. It includes on-device Smart Crossfade, synced lyrics, animated artwork, Android Auto, Chromecast, and Orchard Connect.
 
 <div align="center">
-  <img src="mobile/docs/screenshots/home.png" width="19%" alt="Android Home with recommendations and playlists">
-  <img src="mobile/docs/screenshots/now-playing.png" width="19%" alt="Android Now Playing with artwork and Hi-Res audio information">
-  <img src="mobile/docs/screenshots/lyrics.png" width="19%" alt="Android synced lyrics">
-  <img src="mobile/docs/screenshots/queue.png" width="19%" alt="Android queue with sleep timer, autoplay, and song controls">
-  <img src="mobile/docs/screenshots/album.png" width="19%" alt="Android album page with Qobuz Hi-Res quality">
+  <img src="mobile/docs/screenshots/home.png" width="16%" alt="Android Home with Apple Music playlists and recommendations">
+  <img src="mobile/docs/screenshots/now-playing.png" width="16%" alt="Android Now Playing with artwork and audio quality information">
+  <img src="mobile/docs/screenshots/lyrics.png" width="16%" alt="Android synced lyrics from Apple Music">
+  <img src="mobile/docs/screenshots/queue.png" width="16%" alt="Android queue with song controls">
+  <img src="mobile/docs/screenshots/artist.png" width="16%" alt="Android Apple Music artist page with latest release and top songs">
+  <img src="mobile/docs/screenshots/album.png" width="16%" alt="Android Apple Music album page">
 </div>
 
 <p align="center">
@@ -130,12 +143,12 @@ To connect your phone and computer:
 3. On desktop, select the cast button in the player bar. On Android, open the device picker in the full player.
 4. Select the device you want to control.
 
-Your Orchard account connects the devices. Your YouTube Music and Qobuz sign-ins stay on their own device. See [Orchard Connect](docs/app/connect.md) for playback handoff and troubleshooting.
+Your Orchard account connects the devices. Your YouTube Music, Apple Music, and Qobuz sign-ins stay on their own device. Your phone can start Apple Music songs on your computer when both are connected to Apple Music. Apple Music songs on the phone play only on the phone. See [Orchard Connect](docs/app/connect.md) for playback handoff and troubleshooting.
 
 ## Getting started
 
 1. Install and open Orchard.
-2. Select **Continue with Google** and finish signing in to YouTube Music.
+2. Select **Continue with Google** and finish signing in to YouTube Music. To use Apple Music, connect it under **Settings → Integrations** and choose **Apple** as the music source.
 3. Pick a song from **Home**, or search for an artist, album, or playlist.
 4. Open **Settings** from your account button to choose playback quality, sound settings, and appearance.
 
