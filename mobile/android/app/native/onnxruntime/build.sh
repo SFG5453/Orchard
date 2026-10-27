@@ -13,7 +13,7 @@ OUT=${OUT:-${XDG_CACHE_HOME:-$HOME/.cache}/orchard-ort-build-arm64}
 # ops.config comes from converting the shipped .onnx sources to .ort:
 #   python -m onnxruntime.tools.convert_onnx_models_to_ort DIR --optimization_style Fixed \
 #     --target_platform arm --enable_type_reduction
-python "$ORT_SRC/tools/ci_build/build.py" --build_dir "$OUT" --config MinSizeRel --parallel 8 \
+python "$ORT_SRC/tools/ci_build/build.py" --build_dir "$OUT" --config MinSizeRel --parallel "$(nproc)" \
   --skip_tests --build_shared_lib --android --android_abi arm64-v8a --android_api 31 \
   --android_sdk_path "$SDK" --android_ndk_path "$NDK" --disable_ml_ops --disable_rtti \
   --minimal_build --no_telemetry --enable_reduced_operator_type_support \
