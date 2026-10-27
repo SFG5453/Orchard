@@ -17,7 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { appleDeveloperToken, purgeAppleTokenUsage } from "./apple.js";
+import { appleDeveloperToken, appleShazamToken, purgeAppleTokenUsage } from "./apple.js";
 import { isArtworkPath, listArtwork, purgeArtwork, serveArtwork, uploadArtwork } from "./artwork.js";
 import { openHub } from "./connect.js";
 import { hashSecret, pkceChallenge, randomToken } from "./crypto.js";
@@ -317,6 +317,10 @@ async function route(request, env, ctx) {
   if (method === "GET" && pathname === "/apple/developer-token") {
     await rateLimit(env, request, "apple");
     return appleDeveloperToken(request, env);
+  }
+  if (method === "GET" && pathname === "/apple/shazam-token") {
+    await rateLimit(env, request, "apple");
+    return appleShazamToken(request, env);
   }
   if (method === "GET" && pathname === "/lyrics/quota") return translationQuota(request, env);
   if (method === "POST" && pathname === "/lyrics/translate") {
