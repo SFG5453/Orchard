@@ -21,7 +21,6 @@ package dev.sfg.orchard.mobile.ui.screens
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.referentialEqualityPolicy
@@ -76,6 +75,7 @@ class HomeData internal constructor(
     actions: HomeActions,
 ) {
     // Collections compare by reference; structural equals on every recomposition is costly.
+    // Rails below are getters: they read these States directly, so they never go stale.
     var settings by mutableStateOf(settings, referentialEqualityPolicy()); internal set
     var state by mutableStateOf(state, referentialEqualityPolicy()); internal set
     var library by mutableStateOf(library, referentialEqualityPolicy()); internal set
@@ -88,27 +88,37 @@ class HomeData internal constructor(
     /** Rail whose "See all" sheet is open. */
     var sheet by mutableStateOf<HomeSectionSheetState?>(null)
 
-    val offline by derivedStateOf { isOffline || state is LoadState.Error }
+    val offline get() = isOffline || state is LoadState.Error
     val layout: List<HomeSectionConfig>
         get() = if (offline) settings.homeLayoutOffline else settings.homeLayoutOnline
-    val sections by derivedStateOf { (state as? LoadState.Content)?.value.orEmpty() }
+    val sections get() = (state as? LoadState.Content)?.value.orEmpty()
 
-    val downloadedTracks by derivedStateOf {
+    val downloadedTracks get() = run {
         downloads.filter { it.status == DownloadStatus.COMPLETED && it.filePath.isNotBlank() }.map { it.track }
     }
-    private val likedIds by derivedStateOf { library.likedTracks.mapTo(HashSet()) { it.id } }
+    private var likedFor: LibrarySnapshot? = null
+    private var likedCache: Set<String> = emptySet()
+    // Rows ask once each, so the set is rebuilt only when the library changes.
+    private val likedIds: Set<String>
+        get() = library.let { current ->
+            if (current !== likedFor) {
+                likedCache = current.likedTracks.mapTo(HashSet()) { it.id }
+                likedFor = current
+            }
+            likedCache
+        }
 
-    val playlists by derivedStateOf {
+    val playlists get() = run {
         library.savedPlaylists.map { CatalogItem.Collection(it) }
             .ifEmpty { itemsOfKind<CatalogItem.Collection>() }
             .distinctBy { it.stableId }
     }
-    val artists by derivedStateOf {
+    val artists get() = run {
         library.savedArtists.map { CatalogItem.Performer(it) }
             .ifEmpty { itemsOfKind<CatalogItem.Performer>() }
             .distinctBy { it.stableId }
     }
-    val topSongs by derivedStateOf {
+    val topSongs get() = run {
         library.mostPlayed
             .ifEmpty { library.likedTracks }
             .ifEmpty { library.recentlyPlayed }
@@ -116,18 +126,18 @@ class HomeData internal constructor(
             .distinctBy { it.id }
     }
 
-    val offlinePlaylists by derivedStateOf {
+    val offlinePlaylists get() = run {
         offlinePlaylistItems(downloadedTracks, downloadedTrackIds, library.savedPlaylists)
     }
-    val offlineArtists by derivedStateOf { offlineArtistItems(downloadedTracks, library.savedArtists) }
-    val offlineAlbums by derivedStateOf { offlineAlbumItems(downloadedTracks) }
+    val offlineArtists get() = offlineArtistItems(downloadedTracks, library.savedArtists)
+    val offlineAlbums get() = offlineAlbumItems(downloadedTracks)
 
-    internal val spotlight by derivedStateOf { discoverEntries(state, library) }
-    internal val quickGrid by derivedStateOf {
+    internal val spotlight get() = discoverEntries(state, library)
+    internal val quickGrid get() = run {
         quickGridItems(library, state, { actions.openDetail(it) }, ::open, ::play)
     }
     /** Artwork-bearing catalog items first, then saved playlists, albums and likes. */
-    val heroItems by derivedStateOf {
+    val heroItems get() = run {
         (
             sections.flatMap { it.items }.filter { it.artworkUrl.isNotBlank() } +
                 library.savedPlaylists.map { CatalogItem.Collection(it) } +
