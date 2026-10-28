@@ -54,6 +54,7 @@ internal class QueueLauncher(
     private val bestMix: BestMixPreparer,
     private val showWarning: (String) -> Unit,
     private val openDetail: (String) -> Unit,
+    private val station: MutableStateFlow<StationQueue?>,
 ) {
     private val bestMixJobState = MutableStateFlow<BestMixJob?>(null)
     val bestMixJob: StateFlow<BestMixJob?> = bestMixJobState
@@ -71,25 +72,36 @@ internal class QueueLauncher(
         playAll(listOf(track), contextTitle = contextTitle)
     }
 
-    /** Plays [track] over a fresh queue of YouTube Music's radio for it, whatever Autoplay is set to. */
+    /**
+     * Plays [track] over a fresh queue of its radio (YouTube Music's, or the song's Apple Music
+     * station), whatever Autoplay is set to.
+     */
     fun startMix(track: Track) {
         if (track.isLocal || !graph.networkMonitor.isOnline.value) {
             play(track)
             return
         }
+        appleMusicBlock(track)?.let {
+            showWarning(it)
+            return
+        }
         scope.launch {
-            val related = runCatching { graph.catalog.upNext(track.id) }.getOrDefault(emptyList())
+            val related = runCatching {
+                if (isAppleMusicId(track.id)) graph.appleMusic.upNext(track.id) else graph.catalog.upNext(track.id)
+            }.getOrDefault(emptyList())
             val additions = AutoplayRecommendations.select(listOf(track), related, MIX_LIMIT)
             if (additions.isEmpty()) showWarning("No songs for a mix were found.")
             replaceQueue(listOf(track) + additions, 0, "Mix: ${track.title}", shuffle = false)
         }
     }
 
+    /** [stationId] is the am.stations id when [tracks] are a station's first songs. */
     fun playAll(
         tracks: List<Track>,
         startIndex: Int = 0,
         contextTitle: String = "",
         shuffle: Boolean = false,
+        stationId: String = "",
     ) {
         Log.d(TAG, "playAll: ${tracks.size} tracks, startIndex=$startIndex, contextTitle='$contextTitle'")
         if (tracks.isEmpty()) return
@@ -102,7 +114,7 @@ internal class QueueLauncher(
             val source = contextTitle.takeIf { it.isMeaningfulPlaybackSource() }
                 ?: tracks[safeIndex].album.takeIf { it.isMeaningfulPlaybackSource() }
                 ?: "Your queue"
-            replaceQueue(tracks, safeIndex, source, shuffle)
+            replaceQueue(tracks, safeIndex, source, shuffle, stationId)
         }
     }
 
@@ -121,7 +133,13 @@ internal class QueueLauncher(
         }
     }
 
-    private suspend fun replaceQueue(tracks: List<Track>, safeIndex: Int, source: String, shuffle: Boolean) {
+    private suspend fun replaceQueue(
+        tracks: List<Track>,
+        safeIndex: Int,
+        source: String,
+        shuffle: Boolean,
+        stationId: String = "",
+    ) {
         val start = tracks[safeIndex]
         Log.d(TAG, "playAll: starting playback with track ${start.id} ('${start.title}')")
         val edited = QueueEditor.replaceAndPlay(tracks, safeIndex)
@@ -129,9 +147,11 @@ internal class QueueLauncher(
 
         when (targets.value.selected) {
             PlaybackTarget.LocalPhone -> {
+                station.value = stationId.takeIf { it.isNotBlank() }?.let { StationQueue(it, source) }
                 local.replaceQueue(queue, edited.currentIndex, contextTitle = source, shuffle = shuffle)
             }
             is PlaybackTarget.Remote -> {
+                station.value = null
                 // The target owns the queue; it receives the whole list and plays from here.
                 // Shuffle goes off first so turning it back on shuffles this queue.
                 if (shuffle) graph.connect.command("set_shuffle", JSONObject().put("enabled", false))
@@ -177,7 +197,7 @@ internal class QueueLauncher(
      * follows the randomly chosen opener, so the collection's own order is what shuffle is
      * remembered as being turned on over and switching it off restores the album or playlist.
      */
-    fun shuffleAll(tracks: List<Track>, contextTitle: String = "") {
+    fun shuffleAll(tracks: List<Track>, contextTitle: String = "", stationId: String = "") {
         val playable = tracks.distinctBy(Track::id).filter { it.id.isNotBlank() }
         if (playable.isEmpty()) return
         playAll(
@@ -185,6 +205,7 @@ internal class QueueLauncher(
             startIndex = kotlin.random.Random.Default.nextInt(playable.size),
             contextTitle = contextTitle,
             shuffle = true,
+            stationId = stationId,
         )
     }
 
@@ -279,6 +300,7 @@ internal class QueueLauncher(
                     startIndex = if (shuffle) kotlin.random.Random.Default.nextInt(tracks.size) else 0,
                     contextTitle = contextTitle.ifBlank { detail?.title.orEmpty() },
                     shuffle = shuffle,
+                    stationId = id.takeIf { it.startsWith(APPLE_STATION_PREFIX) }.orEmpty(),
                 )
             } else {
                 showWarning("No playable tracks found")
@@ -296,8 +318,9 @@ internal class QueueLauncher(
         }
     }
 
-    private companion object {
-        const val TAG = "QueueLauncher"
-        const val MIX_LIMIT = 40
+    companion object {
+        const val APPLE_STATION_PREFIX = "am.stations."
+        private const val TAG = "QueueLauncher"
+        private const val MIX_LIMIT = 40
     }
 }

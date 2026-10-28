@@ -94,6 +94,8 @@ public:
   void libraryAction(const QString &method, const QJsonObject &payload, PageReply done);
   // {ttml} for a track from any service (appleId, isrc or title/artist/album); empty when Apple has none.
   void lyrics(const QJsonObject &track, PageReply done);
+  // {items}: the next songs from a song's station (am.songs id) or a station (am.stations id).
+  void upNext(const QString &seed, PageReply done);
   // {items: {catalogId: attributes}}: Apple's audio analysis (beat grid, vocals) for catalog songs.
   void audioAnalysis(const QStringList &ids, PageReply done);
 

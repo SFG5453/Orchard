@@ -134,3 +134,29 @@ bool PlaybackController::appleMixAnalyses(const QVariantMap &current, const QVar
   incoming = m_appleAnalyses.value(incomingId);
   return true;
 }
+
+bool PlaybackController::requestAppleAutoplay(const QString &seed, bool mix) {
+  if (!m_appleAccount || !m_catalogSource || !m_catalogSource->apple() || !m_appleAccount->connected()) {
+    m_autoplayError = tr("Choose Apple Music as the music source and connect it to continue this queue.");
+    return false;
+  }
+  // The high bit keeps these ids apart from the YouTube provider's request ids.
+  static quint64 counter = 0;
+  const quint64 request = (quint64{1} << 63) | ++counter;
+  m_autoplayRequest = request;
+  m_mixRequest = mix;
+  m_appleAccount->upNext(seed, [this, request](const QJsonObject &page, const QString &error) {
+    if (request != m_autoplayRequest)
+      return;
+    if (error.isEmpty()) {
+      applyAutoplay(page.value(QStringLiteral("items")).toArray());
+      return;
+    }
+    m_autoplayRequest = 0;
+    m_mixRequest = false;
+    m_waitingForAutoplay = false;
+    m_autoplayError = error;
+    emit stateChanged();
+  });
+  return true;
+}

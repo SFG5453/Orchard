@@ -358,15 +358,20 @@ internal fun OrchardNavigation(
                 )
             }
 
+            // A station page holds its first songs; the queue keeps drawing from the station.
+            val stationId = (shownDetail as? LoadState.Content)?.value?.id
+                ?.takeIf { it.startsWith(QueueLauncher.APPLE_STATION_PREFIX) }.orEmpty()
             DetailScreen(
                 state = shownDetail,
                 localEdit = localEdit,
                 onBack = nav::popBackStack,
-                onPlayAll = { tracks, source -> viewModel.playAll(tracks, contextTitle = source) },
-                onShuffle = { tracks, source -> viewModel.shuffleAll(tracks, source) },
+                onPlayAll = { tracks, source -> viewModel.playAll(tracks, contextTitle = source, stationId = stationId) },
+                onShuffle = { tracks, source -> viewModel.shuffleAll(tracks, source, stationId) },
                 shuffleAvailable = canShuffle,
                 onPlay = { track, source -> viewModel.play(track, source) },
-                onPlayTrack = { tracks, index, source -> viewModel.playAll(tracks, startIndex = index, contextTitle = source) },
+                onPlayTrack = { tracks, index, source ->
+                    viewModel.playAll(tracks, startIndex = index, contextTitle = source, stationId = stationId)
+                },
                 onPlayNext = if (canControlQueue) viewModel::playNext else null,
                 onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
                 onAddToPlaylist = { playlistPickerTrack = it },

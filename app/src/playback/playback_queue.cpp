@@ -90,6 +90,8 @@ void PlaybackController::playCollection(const QVariantList &tracks,
   cancelQueueLoading();
   m_autoplaySuppressed.clear();
   m_playlistId = playlistId;
+  if (playlistId.startsWith(QStringLiteral("am.stations.")))
+    m_appleStation = playlistId;
   m_queueContinuation = continuation;
   m_playlistLoaded = tracks.size();
   m_shuffleEnabled = shuffle;
@@ -116,6 +118,7 @@ void PlaybackController::playCollection(const QVariantList &tracks,
 void PlaybackController::cancelQueueLoading() {
   m_queueRequest = 0;
   m_playlistId.clear();
+  m_appleStation.clear();
   m_queueContinuation.clear();
   m_queuePages.clear();
   m_queueError.clear();
@@ -393,31 +396,41 @@ void PlaybackController::startMix(const QVariantMap &track) {
   }
   m_autoplaySeed = track.value("id").toString();
   m_autoplayError.clear();
-  m_mixRequest = true;
-  m_autoplayRequest = m_provider->invoke(
-      "catalog.upNext", QJsonObject{{"videoId", m_autoplaySeed}, {"session", m_auth->sessionObject()}});
+  if (isAppleTrack(track)) {
+    requestAppleAutoplay(m_autoplaySeed, true);
+  } else {
+    m_mixRequest = true;
+    m_autoplayRequest = m_provider->invoke(
+        "catalog.upNext", QJsonObject{{"videoId", m_autoplaySeed}, {"session", m_auth->sessionObject()}});
+  }
   emit stateChanged();
 }
 
 void PlaybackController::ensureAutoplay() {
-  // Local songs have no "up next" on YouTube; the playlist ends when it ends.
-  if (!m_autoplayEnabled || m_autoplayRequest || m_track.isEmpty() ||
-      !m_auth->isSignedIn() || local::isLocalTrack(m_track) || isAppleTrack(m_track) || offlineMode() ||
+  // Local songs have no "up next"; the playlist ends when it ends. Stations refill with Autoplay off.
+  const bool station = !m_appleStation.isEmpty();
+  if ((!m_autoplayEnabled && !station) || m_autoplayRequest || m_track.isEmpty() ||
+      local::isLocalTrack(m_track) || offlineMode() ||
       m_repeatMode != "off" ||
       m_queue.size() > 3 ||
       m_queueRequest || !m_queueContinuation.isEmpty() ||
       m_autoplaySuppressed == m_track.value("id").toString())
     return;
+  const auto seedTrack = m_queue.isEmpty() ? m_track : m_queue.last().toMap();
+  const bool apple = station || isAppleTrack(seedTrack);
+  if (!apple && !m_auth->isSignedIn())
+    return;
   m_autoplaySuppressed.clear();
-  const auto seed = (m_queue.isEmpty() ? m_track : m_queue.last().toMap())
-                        .value("id")
-                        .toString();
+  const auto seed = seedTrack.value("id").toString();
   if (seed.isEmpty() || seed == m_autoplaySeed)
     return;
   m_autoplaySeed = seed;
   m_autoplayError.clear();
-  m_autoplayRequest = m_provider->invoke(
-      "catalog.upNext",
-      QJsonObject{{"videoId", seed}, {"session", m_auth->sessionObject()}});
+  if (apple)
+    requestAppleAutoplay(station ? m_appleStation : seed, station);
+  else
+    m_autoplayRequest = m_provider->invoke(
+        "catalog.upNext",
+        QJsonObject{{"videoId", seed}, {"session", m_auth->sessionObject()}});
   emit stateChanged();
 }

@@ -26,6 +26,7 @@ import { createLibraryCatalog } from './library.js';
 import { createLibraryWrites } from './libraryWrite.js';
 import { createLyricsCatalog } from './lyrics.js';
 import { createPlayback } from './playback.js';
+import { createStationCatalog } from './stations.js';
 import { createAppleMusicClient } from './client.js';
 
 export { AppleMusicError, apiUrl } from './client.js';
@@ -51,6 +52,7 @@ export function createAppleMusic({ fetchImpl = fetch, session }) {
     ...library,
     ...createLibraryWrites(client),
     ...createLyricsCatalog(client),
+    ...createStationCatalog(client),
     playback: createPlayback(client, fetchImpl)
   };
 }

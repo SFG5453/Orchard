@@ -229,6 +229,7 @@ Item {
             compact: root.compact
             kind: root.isLocal ? qsTr("Local playlist")
                 : root.isOffline ? (root.detail.collectionKind === "album" ? qsTr("Downloaded album") : qsTr("Downloaded playlist"))
+                : root.detail.station ? qsTr("Station")
                 : qsTr("Playlist")
             title: root.detail.title || qsTr("Playlist")
             byline: root.detail.author || ""

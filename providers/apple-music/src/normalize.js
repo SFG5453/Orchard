@@ -160,6 +160,23 @@ export function artist(resource) {
   };
 }
 
+/** A track station as a playlist card; live radio streams are not playable and are skipped. */
+export function station(resource) {
+  const attributes = resource?.attributes;
+  if (!attributes || attributes.isLive || !resource.id) return null;
+  return {
+    type: 'playlist',
+    station: true,
+    browseId: browseId('stations', resource.id),
+    source: APPLE_MUSIC_SOURCE,
+    title: attributes.name || '',
+    artist: 'Apple Music',
+    subtitle: 'Station',
+    thumbnail: artworkUrl(attributes.artwork),
+    description: notes(attributes.editorialNotes)
+  };
+}
+
 /** A 16:9 poster for video artwork; Apple's `mv` crop keeps the frame's own aspect. */
 export function videoArtworkUrl(artwork, width = 640) {
   const template = String(artwork?.url || '');
@@ -190,9 +207,9 @@ export function musicVideo(resource) {
   };
 }
 
-const itemMappers = { songs: track, albums: album, playlists: playlist, artists: artist, 'music-videos': musicVideo };
+const itemMappers = { songs: track, albums: album, playlists: playlist, artists: artist, stations: station, 'music-videos': musicVideo };
 
-/** Any supported resource as a card; stations and curators are skipped. */
+/** Any supported resource as a card; curators and live radio are skipped. */
 export function item(resource) {
   return itemMappers[resource?.type]?.(resource) || null;
 }

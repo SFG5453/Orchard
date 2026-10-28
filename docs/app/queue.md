@@ -50,7 +50,7 @@ The song menu is also available from the **More** button in the fullscreen playe
 1. Right-click a song.
 2. Select **Start mix**.
 
-The queue is replaced with that song followed by similar songs from YouTube Music. This works with Autoplay off. It needs a signed-in account and a connection. On Android, use **Start Mix** in the song's menu.
+The queue is replaced with that song followed by similar songs from YouTube Music. For an Apple Music song, the similar songs come from the song's Apple Music station instead, and no YouTube Music sign-in is needed. This works with Autoplay off. It needs a connection, and a YouTube Music sign-in for YouTube Music songs. On Android, use **Start Mix** in the song's menu.
 
 ## Play a song from the queue
 

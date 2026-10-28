@@ -134,8 +134,9 @@ void AppleMusic::detail(const QString &browseId, PageReply done) {
   const QString type = browseId.section(QLatin1Char('.'), 1, 1);
   const QString method = type == QStringLiteral("artists")   ? QStringLiteral("catalog.artist")
                          : type == QStringLiteral("albums")  ? QStringLiteral("catalog.album")
-                         : type == QStringLiteral("playlists") ? QStringLiteral("catalog.playlist")
-                                                              : QString();
+                         : type == QStringLiteral("playlists") || type == QStringLiteral("stations")
+                             ? QStringLiteral("catalog.playlist")
+                             : QString();
   if (method.isEmpty()) {
     done({}, tr("Apple Music cannot open this."));
     return;
@@ -201,6 +202,15 @@ void AppleMusic::audioAnalysis(const QStringList &ids, PageReply done) {
     return;
   }
   call(QStringLiteral("catalog.audioAnalysis"), {{QStringLiteral("ids"), QJsonArray::fromStringList(ids)}},
+       [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
+}
+
+void AppleMusic::upNext(const QString &seed, PageReply done) {
+  if (!connected()) {
+    done({}, tr("Connect Apple Music in Settings to play this song."));
+    return;
+  }
+  call(QStringLiteral("catalog.upNext"), {{QStringLiteral("seed"), seed}},
        [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
 }
 
