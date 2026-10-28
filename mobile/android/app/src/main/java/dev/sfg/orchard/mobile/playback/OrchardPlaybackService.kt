@@ -64,6 +64,7 @@ class OrchardPlaybackService : MediaLibraryService() {
     private lateinit var player: ExoPlayer
     private lateinit var spare: ExoPlayer
     private lateinit var crossfade: CrossfadeEngine
+    private lateinit var carErrors: CarPlaybackErrors
     private lateinit var mediaSession: MediaLibrarySession
     private lateinit var connectSession: ConnectMediaSession
     private lateinit var stateStore: PlaybackStateStore
@@ -139,6 +140,8 @@ class OrchardPlaybackService : MediaLibraryService() {
         unshuffledOrder = stateStore.load().also { it.restoreInto(player) }.unshuffledOrder
         // The restored song is known before anything can ask for it. No more amnesiac cold starts.
         snapshotQueue(player)
+        val sessionActivity = mainActivityIntent(this)
+        carErrors = CarPlaybackErrors(graph, sessionActivity) { mediaSession }
         val callback = OrchardSessionCallback(
             packageName = packageName,
             browseTree = browseTree,
@@ -146,12 +149,15 @@ class OrchardPlaybackService : MediaLibraryService() {
             browseScope = ioScope,
             target = { authoritativePlayer() ?: player },
             onSetVideoMode = ::setVideoMode,
+            onToggleLike = { ioScope.toggleLike(graph, (authoritativePlayer() ?: player).currentMediaItem, carErrors) },
             onLayoutChanged = ::updateCustomLayout,
+            sessionActivity = sessionActivity,
         )
         mediaSession = MediaLibrarySession.Builder(this, OrchardSessionPlayer(player), callback)
-            .setSessionActivity(mainActivityIntent(this))
+            .setSessionActivity(sessionActivity)
             .setBitmapLoader(artworkBitmapLoader(this, graph.http))
             .build()
+        ioScope.notifyLibraryChanges(graph, browseTree, { mediaSession }, ::updateCustomLayout)
         connectSession = ConnectMediaSession(this, graph.connect, mainActivityIntent(this), artworkBitmapLoader(this, graph.http)) {
             onUpdateNotification(mediaSession, false)
         }
@@ -418,6 +424,7 @@ class OrchardPlaybackService : MediaLibraryService() {
             }
             OrchardWidgetUpdater.onPlayerChanged(this@OrchardPlaybackService, this@OrchardPlaybackService.player)
             nowPlaying.updateScrobbling(player)
+            carErrors.onEvents(player)
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
@@ -455,6 +462,7 @@ class OrchardPlaybackService : MediaLibraryService() {
 
         override fun onPlayerError(error: PlaybackException) {
             Log.e(TAG, "onPlayerError: ${error.errorCodeName} - ${error.message}", error)
+            carErrors.onPlayerError(player, error)
             recovery.recover(player, error)
         }
     }
@@ -466,7 +474,8 @@ class OrchardPlaybackService : MediaLibraryService() {
 
     private fun updateCustomLayout() {
         if (!::mediaSession.isInitialized) return
-        OrchardSessionCallback.applyLayout(mediaSession, authoritativePlayer() ?: return)
+        val source = authoritativePlayer() ?: return
+        OrchardSessionCallback.applyLayout(mediaSession, source, likedState(OrchardGraph.from(this), source.currentMediaItem))
     }
 
     private fun prefetchAround(player: Player) = prefetchAround(player, streamResolver, streamCache)

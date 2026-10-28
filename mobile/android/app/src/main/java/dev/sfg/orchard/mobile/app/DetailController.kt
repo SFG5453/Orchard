@@ -240,25 +240,10 @@ internal class DetailController(
         }
     }
 
-    /** Likes go to Apple Music while its library is the one shown. */
     fun toggleLiked(track: Track) {
-        val apple = graph.appleLibrary
-        if (apple.active) {
-            val loved = !apple.isLiked(track)
-            scope.launch {
-                runCatching { withContext(Dispatchers.IO) { apple.setLiked(track, loved) } }
-                    .onFailure { graph.postWarning(it.message ?: "Could not update your Apple Music library.") }
-            }
-            return
-        }
-        val liked = graph.library.library.value.likedTracks.none { it.id == track.id }
-        graph.library.setLiked(track, liked)
         scope.launch {
-            runCatching { withContext(Dispatchers.IO) { graph.playlistActions.setLiked(track, liked) } }
-                .onFailure {
-                    graph.library.setLiked(track, !liked)
-                    graph.postWarning(it.message ?: "Could not update liked music.")
-                }
+            runCatching { graph.likes.toggle(track) }
+                .onFailure { graph.postWarning(it.message ?: graph.likes.failureMessage()) }
         }
     }
 

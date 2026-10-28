@@ -19,6 +19,7 @@
 
 package dev.sfg.orchard.mobile.playback
 
+import android.app.PendingIntent
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -74,8 +75,13 @@ internal class OrchardSessionCallback(
     private val browseScope: CoroutineScope,
     private val target: () -> Player,
     private val onSetVideoMode: (trackId: String, videoId: String, maxHeight: Int?) -> Unit,
+    private val onToggleLike: () -> Unit,
     private val onLayoutChanged: () -> Unit,
+    /** Opened from a car error screen to connect an account. */
+    private val sessionActivity: PendingIntent,
 ) : MediaLibrarySession.Callback {
+    // Query -> results, kept between the car's search and its paged reads of the results.
+    private val searchResults = java.util.concurrent.ConcurrentHashMap<String, List<MediaItem>>()
 
     override fun onGetLibraryRoot(
         session: MediaLibrarySession,
@@ -98,15 +104,58 @@ internal class OrchardSessionCallback(
     ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
         val future = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
         browseScope.launch {
-            val result = runCatching { browseTree.children(parentId) }
-                .onFailure { Log.w(TAG, "Browse of $parentId failed", it) }
-                .getOrDefault(emptyList())
-            // A playlist can run to thousands of rows; hand back only the window asked for.
-            val window = result.drop(page * pageSize).take(pageSize)
-            future.set(LibraryResult.ofItemList(ImmutableList.copyOf(window), params))
+            val result = try {
+                browseTree.children(parentId)
+            } catch (signIn: SignInRequired) {
+                // Media3 replicates this code to the platform session, where Auto shows a sign-in screen.
+                val error = SessionError(SessionError.ERROR_SESSION_AUTHENTICATION_EXPIRED, signIn.message.orEmpty(),
+                    resolutionExtras(sessionActivity))
+                future.set(LibraryResult.ofError(error))
+                return@launch
+            } catch (error: Exception) {
+                Log.w(TAG, "Browse of $parentId failed", error)
+                emptyList()
+            }
+            future.set(LibraryResult.ofItemList(ImmutableList.copyOf(window(result, page, pageSize)), params))
         }
         return future
     }
+
+    override fun onSearch(
+        session: MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        query: String,
+        params: MediaLibraryService.LibraryParams?,
+    ): ListenableFuture<LibraryResult<Void>> {
+        browseScope.launch {
+            val found = runCatching { browseTree.searchResults(query) }
+                .onFailure { Log.w(TAG, "Search for '$query' failed", it) }
+                .getOrDefault(emptyList())
+            searchResults[query] = found
+            session.notifySearchResultChanged(browser, query, found.size, params)
+        }
+        return Futures.immediateFuture(LibraryResult.ofVoid())
+    }
+
+    override fun onGetSearchResult(
+        session: MediaLibrarySession,
+        browser: MediaSession.ControllerInfo,
+        query: String,
+        page: Int,
+        pageSize: Int,
+        params: MediaLibraryService.LibraryParams?,
+    ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+        val future = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
+        browseScope.launch {
+            val found = searchResults[query]
+                ?: runCatching { browseTree.searchResults(query) }.getOrDefault(emptyList()).also { searchResults[query] = it }
+            future.set(LibraryResult.ofItemList(ImmutableList.copyOf(window(found, page, pageSize)), params))
+        }
+        return future
+    }
+
+    /** A list can run to thousands of rows; hand back only the window asked for. */
+    private fun window(items: List<MediaItem>, page: Int, pageSize: Int) = items.drop(page * pageSize).take(pageSize)
 
     override fun onGetItem(
         session: MediaLibrarySession,
@@ -130,6 +179,7 @@ internal class OrchardSessionCallback(
             .add(COMMAND_TOGGLE_SHUFFLE)
             .add(COMMAND_TOGGLE_REPEAT)
             .add(COMMAND_SET_VIDEO_MODE)
+            .add(COMMAND_TOGGLE_LIKE)
             .build()
         val playerCommands = session.player.availableCommands.buildUpon()
             .add(Player.COMMAND_PLAY_PAUSE)
@@ -278,6 +328,7 @@ internal class OrchardSessionCallback(
                 Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
                 else -> Player.REPEAT_MODE_OFF
             }
+            ACTION_TOGGLE_LIKE -> onToggleLike()
             ACTION_SET_VIDEO_MODE -> onSetVideoMode(
                 args.getString(VIDEO_MODE_TRACK_ID).orEmpty(),
                 args.getString(VIDEO_MODE_VIDEO_ID).orEmpty(),
@@ -293,11 +344,13 @@ internal class OrchardSessionCallback(
         private const val ACTION_TOGGLE_SHUFFLE = "dev.sfg.orchard.ACTION_TOGGLE_SHUFFLE"
         private const val ACTION_TOGGLE_REPEAT = "dev.sfg.orchard.ACTION_TOGGLE_REPEAT"
         private const val ACTION_SET_VIDEO_MODE = "dev.sfg.orchard.ACTION_SET_VIDEO_MODE"
+        private const val ACTION_TOGGLE_LIKE = "dev.sfg.orchard.ACTION_TOGGLE_LIKE"
         internal const val VIDEO_MODE_TRACK_ID = "track_id"
         internal const val VIDEO_MODE_VIDEO_ID = "video_id"
         internal const val VIDEO_MODE_MAX_HEIGHT = "max_height"
         private val COMMAND_TOGGLE_SHUFFLE = SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY)
         private val COMMAND_TOGGLE_REPEAT = SessionCommand(ACTION_TOGGLE_REPEAT, Bundle.EMPTY)
+        private val COMMAND_TOGGLE_LIKE = SessionCommand(ACTION_TOGGLE_LIKE, Bundle.EMPTY)
         internal val COMMAND_SET_VIDEO_MODE = SessionCommand(ACTION_SET_VIDEO_MODE, Bundle.EMPTY)
         private val HANDLED_KEYS = setOf(
             KeyEvent.KEYCODE_MEDIA_PLAY,
@@ -309,8 +362,17 @@ internal class OrchardSessionCallback(
             KeyEvent.KEYCODE_MEDIA_STOP,
         )
 
-        /** Notification, watch and car buttons for shuffle and repeat, drawn from [source]'s modes. */
-        fun applyLayout(session: MediaSession, source: Player) {
+        /**
+         * Notification, watch and car buttons for like, shuffle and repeat, drawn from [source]'s
+         * modes. [liked] is null when the playing song cannot be liked.
+         */
+        fun applyLayout(session: MediaSession, source: Player, liked: Boolean?) {
+            val likeButton = liked?.let {
+                CommandButton.Builder(if (it) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
+                    .setDisplayName(if (it) "Liked" else "Like")
+                    .setSessionCommand(COMMAND_TOGGLE_LIKE)
+                    .build()
+            }
             val shuffleOn = source.shuffleModeEnabled
             val shuffleButton =
                 CommandButton.Builder(if (shuffleOn) CommandButton.ICON_SHUFFLE_ON else CommandButton.ICON_SHUFFLE_OFF)
@@ -336,8 +398,8 @@ internal class OrchardSessionCallback(
                 .setDisplayName("Next")
                 .setPlayerCommand(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
                 .build()
-            session.setMediaButtonPreferences(listOf(previousButton, shuffleButton, repeatButton, nextButton))
-            session.setCustomLayout(listOf(shuffleButton, repeatButton))
+            session.setMediaButtonPreferences(listOfNotNull(previousButton, likeButton, shuffleButton, repeatButton, nextButton))
+            session.setCustomLayout(listOfNotNull(likeButton, shuffleButton, repeatButton))
         }
     }
 }
