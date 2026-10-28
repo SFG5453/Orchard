@@ -18,8 +18,9 @@ export const MUFFLE = Object.freeze({
   // Bass level drop, in dB, past which the new beat sounds weak after the old one.
   maxEnergyDrop: 5,
   levelSeconds: 8,
-  // Seconds past the new song's first beat the mix may land; deeper cues sound like a skip.
-  maxSkipSeconds: 9,
+  // Seconds past the new song's first beat the mix may land. Behind the muffle a song can join
+  // mid-verse; every entry heard so far landed within 40 s.
+  maxSkipSeconds: 40,
   // Seconds of the new song that play before its fader moves; fading in its first notes loses its start.
   minOpeningSeconds: 2,
   // Old song's bass through the close, against its usual level; a thin song muffles to a murmur.
