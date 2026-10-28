@@ -20,9 +20,9 @@
 import { AppleMusicError } from './client.js';
 import { browseId, parseBrowseId } from './ids.js';
 import { linkNotes, noteTargets } from './notes.js';
-import { ARTIST_INCLUDES, artworkUrl, items, notes, track } from './normalize.js';
+import { ARTIST_INCLUDES, artworkUrl, items, notes, station, track } from './normalize.js';
 
-// Shelves in page order. Music videos and stations wait for Apple Music playback.
+// Shelves in page order.
 export const ARTIST_VIEWS = [
   'latest-release',
   'top-songs',
@@ -85,7 +85,7 @@ function viewSection(artistId, name, view) {
 export function createArtistCatalog(client) {
   async function fetchArtist(id) {
     const path = `/v1/catalog/${client.storefront()}/artists/${encodeURIComponent(id)}`;
-    const query = { views: ARTIST_VIEWS.join(','), ...ARTIST_INCLUDES };
+    const query = { views: ARTIST_VIEWS.join(','), include: 'station', ...ARTIST_INCLUDES };
     const editorial = await client.editorial(path, { ...query, extend: EDITORIAL_EXTEND });
     if (editorial) return editorial;
     try {
@@ -114,6 +114,8 @@ export function createArtistCatalog(client) {
     const sections = viewNames
       .map((name) => viewSection(parsed.id, name, views[name]))
       .filter(Boolean);
+    const artistStation = station(resource.relationships?.station?.data?.[0]);
+    if (artistStation) sections.push({ key: 'station', title: 'Station', items: [artistStation], browsePayload: null });
     const targets = noteTargets(tracks, sections.flatMap((section) => section.items));
     for (const [name, target] of targets) if (target === id) targets.delete(name);
     return {

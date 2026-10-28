@@ -211,7 +211,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     }
     fun moveTrackInCurrentPlaylist(fromIndex: Int, toIndex: Int) = details.moveTrackInActivePlaylist(fromIndex, toIndex)
 
-    private val autoplay = AutoplayController(graph, viewModelScope, local, playback, targets)
+    private val stationQueue = MutableStateFlow<StationQueue?>(null)
+    private val autoplay = AutoplayController(graph, viewModelScope, local, playback, targets, stationQueue)
     val autoplayLoading: StateFlow<Boolean> = autoplay.loading
     val autoplayError: StateFlow<String> = autoplay.error
 
@@ -233,7 +234,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     private val launcher = QueueLauncher(
         graph, viewModelScope, local, playback, targets, BestMixPreparer(graph, application.cacheDir),
-        showWarning = { showWarning(it) }, openDetail = ::openDetail,
+        showWarning = { showWarning(it) }, openDetail = ::openDetail, station = stationQueue,
     )
     private val accountLinks = AccountLinks(graph, viewModelScope) { showWarning(it) }
 
@@ -306,10 +307,16 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     fun play(track: Track, contextTitle: String = "") = launcher.play(track, contextTitle)
     fun startMix(track: Track) = launcher.startMix(track)
-    fun playAll(tracks: List<Track>, startIndex: Int = 0, contextTitle: String = "", shuffle: Boolean = false) =
-        launcher.playAll(tracks, startIndex, contextTitle, shuffle)
+    fun playAll(
+        tracks: List<Track>,
+        startIndex: Int = 0,
+        contextTitle: String = "",
+        shuffle: Boolean = false,
+        stationId: String = "",
+    ) = launcher.playAll(tracks, startIndex, contextTitle, shuffle, stationId)
     fun playFromSearch(query: String) = launcher.playFromSearch(query)
-    fun shuffleAll(tracks: List<Track>, contextTitle: String = "") = launcher.shuffleAll(tracks, contextTitle)
+    fun shuffleAll(tracks: List<Track>, contextTitle: String = "", stationId: String = "") =
+        launcher.shuffleAll(tracks, contextTitle, stationId)
     val bestMixJob: StateFlow<dev.sfg.orchard.mobile.model.BestMixJob?> get() = launcher.bestMixJob
     fun playBestMix(tracks: List<Track>, title: String, onProgress: (String) -> Unit = {}, onComplete: () -> Unit = {}) =
         launcher.playBestMix(tracks, title, onProgress, onComplete)

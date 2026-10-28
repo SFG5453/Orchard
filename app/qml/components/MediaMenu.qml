@@ -138,7 +138,9 @@ Menu {
         text: qsTr("Start mix")
         visible: root.isSong && !root.isLocalSong
         height: visible ? implicitHeight : 0
-        enabled: !root.media.unplayable && OrchardAuth.isSignedIn && !OrchardNetwork.offline
+        // Apple Music songs mix from their Apple station, which needs no YouTube sign-in.
+        enabled: !root.media.unplayable && !OrchardNetwork.offline
+            && (OrchardAuth.isSignedIn || root.media.source === "apple_music")
         onTriggered: OrchardPlayback.startMix(root.media)
     }
     Entry {

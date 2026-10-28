@@ -28,6 +28,7 @@
 #include "local/local_track.h"
 #include <QElapsedTimer>
 #include <QHash>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QMediaPlayer>
 #include <QObject>
@@ -305,6 +306,8 @@ private:
   QString m_autoplaySeed;
   QString m_autoplaySuppressed;
   QString m_autoplayError;
+  // Adds Autoplay or Start mix rows; Start mix rows are plain queue entries.
+  void applyAutoplay(const QJsonArray &result);
   void appendPlaylistTracks(const QString &playlistId,
                             const QVariantList &tracks);
   void cancelQueueLoading();
@@ -352,6 +355,10 @@ private:
   // Apple's audio analysis of both songs for adaptive mix; false while it is still being fetched.
   bool appleMixAnalyses(const QVariantMap &current, const QVariantMap &next, QJsonObject &outgoing,
                         QJsonObject &incoming);
+  // Next songs from Apple's station for [seed] (am.songs or am.stations id); false when unavailable.
+  bool requestAppleAutoplay(const QString &seed, bool mix);
+  // am.stations id while the queue plays a station; it refills even with Autoplay off.
+  QString m_appleStation;
   QHash<QString, QJsonObject> m_appleAnalyses;
   bool m_appleAnalysisPending{false};
   // Exists where orchard-widevine-host can run.

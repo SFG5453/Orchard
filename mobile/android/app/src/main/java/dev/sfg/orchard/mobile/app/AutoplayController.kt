@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile.app
 
 import dev.sfg.orchard.mobile.OrchardGraph
+import dev.sfg.orchard.mobile.catalog.isAppleMusicId
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.PlaybackTarget
 import dev.sfg.orchard.mobile.model.PlaybackTargetState
@@ -35,10 +36,14 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
+/** An Apple Music station feeding the queue titled [contextTitle]; it refills with Autoplay off. */
+internal data class StationQueue(val stationId: String, val contextTitle: String)
+
 /**
- * Autoplay: once the queue is nearly out, ask YouTube Music what would come next after the last
- * queued track and append it. Only the local player is refilled, because a Connect device owns
- * its own queue and would fight us for it.
+ * Autoplay: once the queue is nearly out, ask what would come next after the last queued track
+ * (YouTube Music's radio, or the song's Apple Music station) and append it. A station queue keeps
+ * drawing from its station. Only the local player is refilled, because a Connect device owns its
+ * own queue and would fight us for it.
  */
 internal class AutoplayController(
     private val graph: OrchardGraph,
@@ -46,6 +51,7 @@ internal class AutoplayController(
     private val local: LocalPlaybackController,
     private val playback: StateFlow<PlaybackSnapshot>,
     private val targets: StateFlow<PlaybackTargetState>,
+    private val station: StateFlow<StationQueue?>,
 ) {
     private val mutableLoading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = mutableLoading.asStateFlow()
@@ -70,6 +76,7 @@ internal class AutoplayController(
         val remaining: Int,
         val enabled: Boolean,
         val isLocal: Boolean,
+        val stationId: String,
     )
 
     fun setEnabled(enabled: Boolean) {
@@ -94,7 +101,7 @@ internal class AutoplayController(
                 .collect { gate.value = it }
         }
         scope.launch {
-            combine(playback, gate, targets) { snapshot, enabled, target ->
+            combine(playback, gate, targets, station) { snapshot, enabled, target, station ->
                 val upcoming = snapshot.upcoming
                 Trigger(
                     // The tail of the queue is the seed: recommendations should follow the music the
@@ -103,6 +110,8 @@ internal class AutoplayController(
                     remaining = upcoming.size,
                     enabled = enabled,
                     isLocal = target.selected is PlaybackTarget.LocalPhone,
+                    // Best Mix appends to the title, so the station holds while the title starts with its own.
+                    stationId = station?.takeIf { snapshot.contextTitle.startsWith(it.contextTitle) }?.stationId.orEmpty(),
                 )
             }
                 // Playback ticks every second; without this the refill check would run with it.
@@ -112,7 +121,8 @@ internal class AutoplayController(
     }
 
     private fun refill(trigger: Trigger) {
-        if (!trigger.enabled || !trigger.isLocal) return
+        val fromStation = trigger.stationId.isNotBlank()
+        if ((!trigger.enabled && !fromStation) || !trigger.isLocal) return
         if (trigger.remaining > REFILL_THRESHOLD) return
         // Local files have no "up next" on YouTube; the queue ends when it ends.
         if (dev.sfg.orchard.mobile.local.isLocalTrackId(trigger.seedId)) return
@@ -123,15 +133,22 @@ internal class AutoplayController(
         mutableLoading.value = true
         mutableError.value = ""
         scope.launch {
-            runCatching { graph.catalog.upNext(trigger.seedId) }
-                .onSuccess { candidates -> append(trigger.seedId, candidates) }
+            runCatching {
+                when {
+                    fromStation -> graph.appleMusic.upNext(trigger.stationId)
+                    isAppleMusicId(trigger.seedId) -> graph.appleMusic.upNext(trigger.seedId)
+                    else -> graph.catalog.upNext(trigger.seedId)
+                }
+            }
+                .onSuccess { candidates -> append(trigger.seedId, candidates, generated = !fromStation) }
                 .onFailure { mutableError.value = it.message ?: "Could not load Autoplay recommendations." }
             mutableLoading.value = false
             seedInFlight = ""
         }
     }
 
-    private fun append(seedId: String, candidates: List<Track>) {
+    /** Station rows are not [Track.autoplayGenerated], so turning Autoplay off keeps them. */
+    private fun append(seedId: String, candidates: List<Track>, generated: Boolean) {
         // Filtered against the queue as it stands, because the listener may have queued or skipped
         // while the request was in the air. The append filters again on the player's own state,
         // which is authoritative; this pass only decides whether the seed is exhausted.
@@ -139,7 +156,7 @@ internal class AutoplayController(
         val known = snapshot.queue + listOfNotNull(snapshot.currentTrack)
         val additions = AutoplayRecommendations
             .select(known, candidates, QUEUE_LIMIT)
-            .map { it.copy(autoplayGenerated = true) }
+            .map { if (generated) it.copy(autoplayGenerated = true) else it }
         if (additions.isEmpty()) {
             exhaustedSeed = seedId
             mutableError.value = "No more recommendations were found."

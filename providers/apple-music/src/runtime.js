@@ -48,7 +48,10 @@ const methods = new Map([
   ['catalog.artist.view', async (payload = {}) => ({ items: await appleMusic.artistView(payload.browseId, payload.params) })],
   ['catalog.artist.match', async (payload = {}) => appleMusic.matchArtist(payload.name)],
   ['catalog.album', async (payload = {}) => appleMusic.albumPage(payload.browseId)],
-  ['catalog.playlist', async (payload = {}) => appleMusic.playlistPage(payload.browseId)],
+  ['catalog.playlist', async (payload = {}) => (String(payload.browseId || '').startsWith('am.stations.')
+    ? appleMusic.stationPage(payload.browseId)
+    : appleMusic.playlistPage(payload.browseId))],
+  ['catalog.upNext', async (payload = {}) => ({ items: await appleMusic.upNext(payload.seed) })],
   // Hosts parse the reply as an object, so a miss is {} rather than null.
   ['catalog.artwork', async (payload = {}) => (await appleMusic.artwork(payload)) || {}],
   ['catalog.audioAnalysis', async (payload = {}) => appleMusic.audioAnalysis(payload.ids || [])],

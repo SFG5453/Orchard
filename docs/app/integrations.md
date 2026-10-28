@@ -23,6 +23,8 @@ keywords:
   - app secret
   - apple music
   - musickit
+  - apple music station
+  - radio
   - home source
   - recommendations
   - widevine
@@ -191,7 +193,7 @@ On Android, open **Settings**, **Connections**, **Apple Music**, then select **S
 
 On desktop, open **Settings**, **General** and set **Music source** to **Apple**. **Normal**, the default, uses YouTube Music. On Android, open **Settings**, **Appearance**, **Home screen layout**, then choose **Apple Music** under **Music source** on the **Online** tab.
 
-The music source decides Home, search, artist, album and playlist pages on both platforms. Orchard never mixes the two services and never falls back to the other one. With **Apple** selected, Home shows Apple Music recommendations or charts, the sidebar search uses Apple Music, and an artist named on a YouTube Music song opens its Apple Music page. A YouTube Music album or playlist shows a message asking you to switch to YouTube Music; an Apple Music page shows the matching message under **Normal**. If Apple Music is disconnected or fails, the page shows an error instead of YouTube Music. Changing the source returns to Home on desktop. On desktop, the sidebar and Library show your Apple Music library. On Android, the **Library** tab and Home's **Listen now** grid and **Your playlists** show your Apple Music library: its songs, albums, artists and playlists. **Your daily discover** starts with Apple's personal mixes (such as Your Essentials, New Music, Chill and Heavy Rotation). Apple's personal stations, such as Discovery Station, are not shown because Orchard cannot play stations. Home's **Latest Songs** and **Recent** in the Library tab show your Apple Music listening history plus Apple Music songs you played in Orchard. Songs you played from YouTube Music are left out.
+The music source decides Home, search, artist, album and playlist pages on both platforms. Orchard never mixes the two services and never falls back to the other one. With **Apple** selected, Home shows Apple Music recommendations or charts, the sidebar search uses Apple Music, and an artist named on a YouTube Music song opens its Apple Music page. A YouTube Music album or playlist shows a message asking you to switch to YouTube Music; an Apple Music page shows the matching message under **Normal**. If Apple Music is disconnected or fails, the page shows an error instead of YouTube Music. Changing the source returns to Home on desktop. On desktop, the sidebar and Library show your Apple Music library. On Android, the **Library** tab and Home's **Listen now** grid and **Your playlists** show your Apple Music library: its songs, albums, artists and playlists. **Your daily discover** starts with Apple's personal mixes (such as Your Essentials, New Music, Chill and Heavy Rotation). Apple's stations, such as Discovery Station, appear as cards. See [Play Apple Music stations](integrations.md#play-apple-music-stations). Home's **Latest Songs** and **Recent** in the Library tab show your Apple Music listening history plus Apple Music songs you played in Orchard. Songs you played from YouTube Music are left out.
 
 With **Apple** selected, the like button loves the song in Apple Music and saves it to your Apple Music library. **New playlist** under **Create** makes the playlist in your Apple Music library, and **Add to playlist** lists only Apple Music playlists you made. Songs from YouTube Music are matched to the same song on Apple Music first. Orchard cannot remove songs from your Apple Music library or delete Apple Music playlists, so un-loving a song keeps it in your library; remove it in the Apple Music app.
 
@@ -206,9 +208,22 @@ Orchard streams Apple Music songs itself and decrypts them in a small separate p
 - Widevine: Apple Music audio is protected, so Linux needs the Widevine module from an installed Google Chrome, Chromium with Widevine, Brave, or Firefox. If none is found, the song shows "Apple Music playback needs Widevine. Install Google Chrome or Chromium with Widevine, then restart Orchard." Windows uses the Widevine module that Microsoft Edge downloads, or the one from Google Chrome, Chromium, Brave, or Firefox. If none is found, the song shows "Apple Music playback needs Widevine. Open Microsoft Edge or Google Chrome once so it downloads Widevine, then restart Orchard." Set `ORCHARD_WIDEVINE_PATH` to a `libwidevinecdm.so` or `widevinecdm.dll` file to use another copy.
 - Quality: Apple Music plays 256 kbps AAC. The **Streaming quality** setting does not apply.
 - Apple Music songs play through the same player as YouTube Music songs, so the Audio Engine, crossfade, gapless playback and Adaptive mix work as described in [Crossfade and gapless playback](crossfade.md). Adaptive mix analyses Apple's own audio.
-- Autoplay and AI-music scans do not apply to Apple Music songs.
+- Autoplay continues an Apple Music queue with songs from the last song's Apple Music station. **Start mix** on an Apple Music song uses that song's station, and it does not need a YouTube Music sign-in.
+- AI-music scans do not apply to Apple Music songs.
 - Volume, play, pause, seek, next and previous work as usual, including from media keys and the system media controls.
 - Errors: when Apple refuses a song, Orchard shows Apple's own reason, such as a missing subscription, or "Apple Music did not offer this song for playback." On Android, "Sign in to Apple Music again." means the saved sign-in expired; connect Apple Music again.
+
+## Play Apple Music stations
+
+With **Music source** set to **Apple**, Apple Music stations appear as cards on Home and in the **Station** shelf at the end of an artist page.
+
+1. Select a station card. Its page lists the station's next songs.
+2. Select **Play**, or select a song in the list.
+
+The queue keeps adding songs from the station, ten at a time, while it plays. This works with Autoplay off. Playing another song, album or playlist ends the station.
+
+- Live radio, such as Apple Music 1, is not shown. Orchard cannot play live streams.
+- On Android, the station only continues on the phone. Apple Music songs do not play on a Cast device.
 
 ## Watch Apple Music videos
 

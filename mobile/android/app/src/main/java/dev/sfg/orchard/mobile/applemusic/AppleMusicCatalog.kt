@@ -39,6 +39,7 @@ import dev.sfg.orchard.mobile.youtube.providerDetail
 import dev.sfg.orchard.mobile.youtube.providerItem
 import dev.sfg.orchard.mobile.youtube.providerSections
 import dev.sfg.orchard.mobile.youtube.providerSearch
+import dev.sfg.orchard.mobile.youtube.providerTrack
 import dev.sfg.orchard.mobile.youtube.text
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -124,12 +125,16 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
         val kind = when (id.split('.').getOrNull(1)) {
             "artists" -> CatalogKind.ARTIST
             "albums" -> CatalogKind.ALBUM
-            "playlists" -> CatalogKind.PLAYLIST
+            "playlists", "stations" -> CatalogKind.PLAYLIST
             else -> throw AppleMusicException("bad_id", "Apple Music cannot open this.")
         }
         val method = "catalog." + kind.name.lowercase()
         return call(method, JSONObject().put("browseId", id)).providerDetail(id, kind)
     }
+
+    /** The next songs from a song's station (am.songs id) or from a station (am.stations id). */
+    suspend fun upNext(seed: String): List<Track> =
+        call("catalog.upNext", JSONObject().put("seed", seed)).optJSONArray("items").mapObjects { it.providerTrack() }
 
     /** Browse id of the Apple Music artist named exactly [name], or null. */
     suspend fun matchArtist(name: String): String? {
