@@ -37,7 +37,8 @@ private slots:
     QProcess second;
     second.start(QCoreApplication::applicationFilePath(),
                  {QStringLiteral("--activate"), QCoreApplication::applicationName()});
-    QVERIFY(second.waitForFinished(5000));
+    // Keep this side's event loop running: on Windows the second launch only exits once we read its pipe.
+    QTRY_VERIFY_WITH_TIMEOUT(second.state() == QProcess::NotRunning, 5000);
     QCOMPARE(second.exitStatus(), QProcess::NormalExit);
     QCOMPARE(second.exitCode(), 0);
     QTRY_COMPARE(activations, 1);
@@ -65,7 +66,8 @@ private slots:
     QProcess second;
     second.start(QCoreApplication::applicationFilePath(),
                  QStringList{QStringLiteral("--activate"), QCoreApplication::applicationName()} + links);
-    QVERIFY(second.waitForFinished(5000));
+    // Keep this side's event loop running: on Windows the second launch only exits once we read its pipe.
+    QTRY_VERIFY_WITH_TIMEOUT(second.state() == QProcess::NotRunning, 5000);
     QCOMPARE(second.exitCode(), 0);
     QCoreApplication::processEvents();
     QStringList received;

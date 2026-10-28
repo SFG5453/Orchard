@@ -70,6 +70,7 @@ private slots:
     QVERIFY(file.open(QIODevice::ReadOnly));
     QCOMPARE(file.readAll(), body);
     QCOMPARE(cache.localUrl(remote), local);
+    file.close(); // Windows cannot delete a file that is still open.
 
     cache.discard(remote);
     QVERIFY(!QFile::exists(QUrl(local).toLocalFile()));
@@ -94,7 +95,8 @@ private slots:
                 .isEmpty());
     QVERIFY(failed.wait(5000));
     QCOMPARE(failed.at(0).at(1).toBool(), true);
-    QCOMPARE(QDir(dir.path()).entryList(QDir::Files).size(), 0);
+    // Windows QSaveFile keeps a named temp file until the reply lets go of it.
+    QTRY_COMPARE(QDir(dir.path()).entryList(QDir::Files).size(), 0);
   }
 };
 

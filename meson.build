@@ -435,7 +435,8 @@ qml_startup_test = executable('orchard_qml_startup_test',
 if get_option('tests')
   test('orchard_qml_startup', qml_startup_test, timeout: 60,
     env: ['QT_QPA_PLATFORM=offscreen', 'QT_QUICK_BACKEND=software'])
-  qt_test_dep = dependency('qt6', modules: ['Test'])
+  # Core too: the Windows qmake lookup does not add it for Test the way pkg-config does.
+  qt_test_dep = dependency('qt6', modules: ['Core', 'Test'])
   ui_scaling_moc = qt6.compile_moc(sources: ['tests/ui_scaling_test.cpp'],
     headers: ['app/src/appearance/appearance_settings.h'],
     include_directories: app_inc, dependencies: [qt_test_dep, qt_dep])

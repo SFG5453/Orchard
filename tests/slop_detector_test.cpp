@@ -83,6 +83,9 @@ class SlopDetectorTest : public QObject {
 private slots:
   void initTestCase() {
     QStandardPaths::setTestModeEnabled(true);
+    // Without an organization name QSettings cannot write on Windows (the registry needs one).
+    QCoreApplication::setOrganizationName(QStringLiteral("OrchardTests"));
+    QSettings::setDefaultFormat(QSettings::IniFormat);
     QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)).removeRecursively();
     QSettings().remove(QStringLiteral("playback/slopAction"));
     QSettings().remove(QStringLiteral("playback/slopAudioScan"));

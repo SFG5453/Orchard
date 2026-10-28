@@ -265,11 +265,12 @@ private slots:
   }
 
   void usesHostedIndexBeforeDownloading() {
+    const FakeServer *self = nullptr; // MSVC rejects naming server in its own initializer.
     FakeServer server([&](const Request &request) {
       if (request.path == QStringLiteral("/auth/token"))
         return jsonResponse(200, tokens());
       if (request.path.startsWith(QStringLiteral("/artwork/index?source_sha256="))) {
-        const QString sourceUrl = server.url(QStringLiteral("/one.mp4")).toString();
+        const QString sourceUrl = self->url(QStringLiteral("/one.mp4")).toString();
         const QString digest = QString::fromLatin1(
             QCryptographicHash::hash(sourceUrl.toUtf8(), QCryptographicHash::Sha256).toHex());
         if (request.path != QStringLiteral("/artwork/index?source_sha256=") + digest)
@@ -281,6 +282,7 @@ private slots:
       }
       return source(request);
     });
+    self = &server;
     QUrl opened;
     OrchardAccount account({server.url(), false, [&opened](const QUrl &url) { opened = url; }});
     signIn(account, opened);
@@ -350,16 +352,18 @@ private slots:
   }
 
   void newerTrackReplacesOlderJob() {
+    const FakeServer *self = nullptr; // MSVC rejects naming server in its own initializer.
     FakeServer server([&](const Request &request) {
       if (request.path == QStringLiteral("/auth/token"))
         return jsonResponse(200, tokens());
       if (request.method == "HEAD")
         return Response{404, {}, {}};
       if (request.path == QStringLiteral("/artwork"))
-        return jsonResponse(201, {{QStringLiteral("url"), server.url(QStringLiteral("/artwork/two.webp")).toString()},
+        return jsonResponse(201, {{QStringLiteral("url"), self->url(QStringLiteral("/artwork/two.webp")).toString()},
                                   {QStringLiteral("expires_at"), QDateTime::currentSecsSinceEpoch() + 86400 * 7}});
       return source(request);
     });
+    self = &server;
     QUrl opened;
     OrchardAccount account({server.url(), false, [&opened](const QUrl &url) { opened = url; }});
     signIn(account, opened);
@@ -384,6 +388,7 @@ private slots:
     QVERIFY(file.open(QIODevice::ReadOnly));
     const QByteArray bytes = file.readAll();
     QByteArray uploaded;
+    const FakeServer *self = nullptr; // MSVC rejects naming server in its own initializer.
     FakeServer server([&](const Request &request) {
       if (request.path == QStringLiteral("/auth/token"))
         return jsonResponse(200, tokens());
@@ -391,11 +396,12 @@ private slots:
         return Response{404, {}, {}};
       if (request.path == QStringLiteral("/artwork")) {
         uploaded = request.body;
-        return jsonResponse(201, {{QStringLiteral("url"), server.url(QStringLiteral("/artwork/m.webp")).toString()},
+        return jsonResponse(201, {{QStringLiteral("url"), self->url(QStringLiteral("/artwork/m.webp")).toString()},
                                   {QStringLiteral("expires_at"), QDateTime::currentSecsSinceEpoch() + 86400 * 7}});
       }
       return Response{200, bytes, {}};
     });
+    self = &server;
     QUrl opened;
     OrchardAccount account({server.url(), false, [&opened](const QUrl &url) { opened = url; }});
     signIn(account, opened);
