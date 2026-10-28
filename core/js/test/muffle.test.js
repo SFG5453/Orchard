@@ -3,6 +3,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { finalizeTrackAnalysis } from '../shared/trackAnalysis.js';
+import { candidateGates } from '../src/audio/crossfade/pairTransitionGates.js';
 import { planPairTransition } from '../src/audio/crossfade/pairTransitionPlanner.js';
 import { TECHNIQUE } from '../src/audio/crossfade/transitionArrangement.js';
 import { explainRefusal } from '../src/audio/crossfade/transitionExplain.js';
@@ -48,6 +50,37 @@ test('a muffle never fades in the first notes of the new song', () => {
       result.arrangement.incomingFade[0] * result.durationSeconds * result.incoming.tempoRatio;
     assert.ok(heard - start >= 2 - 1e-6, `fades in ${heard - start} s into a song starting at ${start}`);
   }
+});
+
+test('a muffle may join the new song mid-verse', () => {
+  const result = plan(outgoing(), clashing({ structuralBoundaryCandidates: raw({ boundaries: [36, 52] }).structuralBoundaryCandidates }));
+  assert.equal(result.technique, TECHNIQUE.MUFFLE);
+  assert.ok(result.incoming.start > 9, `lands ${result.incoming.start} s in`);
+});
+
+test('a muffle closes over a singer mid-line once the new beat is playing', () => {
+  const singing = raw({ boundaries: [104, 112], vocal: (time) => (time > 90 ? 0.9 : 0.1) });
+  assert.equal(plan(singing, clashing()).technique, TECHNIQUE.MUFFLE);
+});
+
+test('a muffle heard over the new song\'s beatless intro keeps the voice-cut veto', () => {
+  const candidate = { source: 'detected-change', confidence: 0.9 };
+  const gates = (incomingStart, exitStyle) => candidateGates({
+    pair: {
+      exitStyle, incomingStart, durationSeconds: 8, incomingRatio: 1, spans: { incoming: [0.5, 1] },
+      outgoingCandidate: candidate, incomingCandidate: candidate
+    },
+    fit: { beatmatched: true },
+    outgoing: finalizeTrackAnalysis(raw()),
+    incoming: finalizeTrackAnalysis(raw({ beatFrom: 10 })),
+    harmonic: { confidence: 0.9, score: 0.9 },
+    collision: {},
+    voice: { incoming: 0.1, outgoing: 0.8, singsOut: false }
+  }).gates.map((gate) => gate.code);
+  // Heard 4 s into the overlap: 8 s into the new song, then right on its first beat at 10 s.
+  assert.ok(gates(4, 'muffle_swap').includes('voice-cut'));
+  assert.ok(!gates(6, 'muffle_swap').includes('voice-cut'));
+  assert.ok(gates(6, null).includes('voice-cut'));
 });
 
 test('a tempo refusal names the section tempos where a beat switch moved them', () => {
