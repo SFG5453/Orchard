@@ -96,6 +96,8 @@ public:
   void lyrics(const QJsonObject &track, PageReply done);
   // {items}: the next songs from a song's station (am.songs id) or a station (am.stations id).
   void upNext(const QString &seed, PageReply done);
+  // {videoId}: Apple's music video for a catalog song (am.songs id or catalog id), or {} when it has none.
+  void musicVideo(const QString &songId, PageReply done);
   // {items: {catalogId: attributes}}: Apple's audio analysis (beat grid, vocals) for catalog songs.
   void audioAnalysis(const QStringList &ids, PageReply done);
 

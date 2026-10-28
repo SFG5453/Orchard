@@ -30,7 +30,7 @@ This appears on Windows only. The Google, Spotify, and Apple Music sign-in windo
 
 ## The music video player says "No music video for this song."
 
-Orchard found no official video with the same title and artist and a similar length. Select **Back to song** to return to the regular player. See [Watch music videos](playback.md#watch-music-videos).
+Orchard found no official video with the same title and artist and a similar length. For an Apple Music song, Apple also has no video of it. Select **Back to song** to return to the regular player. See [Watch music videos](playback.md#watch-music-videos).
 
 ## The music video player says "The video couldn't be played."
 

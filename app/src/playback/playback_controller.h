@@ -234,6 +234,9 @@ public:
   // music video's muxed stream at the same position, so picture and sound share a clock.
   void playVideoSource(const QJsonObject &stream);
   void playAlbumSource();
+  // Resolves an Apple music video's soundtrack for playVideoSource; fails when Apple playback is unavailable.
+  void resolveAppleVideo(const QString &appleVideoId,
+                         std::function<void(const QJsonObject &stream, const QString &error)> done);
 
   // playback_remote.cpp. The plain getters above always describe this desktop's
   // own player; QML and other views read these, which follow a Connect target.

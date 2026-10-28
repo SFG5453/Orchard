@@ -214,6 +214,15 @@ void AppleMusic::upNext(const QString &seed, PageReply done) {
        [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
 }
 
+void AppleMusic::musicVideo(const QString &songId, PageReply done) {
+  if (!connected()) {
+    done({}, tr("Connect Apple Music in Settings first."));
+    return;
+  }
+  call(QStringLiteral("catalog.musicVideo"), {{QStringLiteral("id"), songId}},
+       [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
+}
+
 void AppleMusic::libraryAction(const QString &method, const QJsonObject &payload, PageReply done) {
   if (!connected()) {
     done({}, tr("Connect Apple Music in Settings first."));

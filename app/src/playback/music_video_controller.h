@@ -101,6 +101,11 @@ signals:
 private:
   void syncTrack();
   void lookup();
+  // Apple's own video for an Apple song, falling back to lookup() when Apple has none.
+  void appleLookup();
+  void useAppleVideo(const QString &videoId);
+  // Asks again after a lookup that failed on the network.
+  void retryLookup();
   void resolveStream();
   void receive(quint64 requestId, const QJsonValue &result);
   void fail(quint64 requestId, const QString &message);
@@ -132,7 +137,12 @@ private:
   QRectF m_contentRect;
   // Track id to video id; an empty value records a confirmed miss.
   QHash<QString, QString> m_lookups;
+  // Apple song id to Apple video id, as m_lookups.
+  QHash<QString, QString> m_appleLookups;
+  AppleMusic *m_account{nullptr};
   AppleMusicPicture *m_applePicture{nullptr};
-  // The playing item is an Apple Music video; m_videoId holds its catalog id.
+  // The picture is an Apple Music video; m_videoId holds its catalog id.
   bool m_apple{false};
+  // That video belongs to an Apple song, so the engine swaps to the video's soundtrack.
+  bool m_appleSong{false};
 };

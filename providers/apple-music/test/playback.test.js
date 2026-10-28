@@ -109,3 +109,15 @@ test('a refused license is an error', async () => {
   await assert.rejects(client.playback.license({ licenseUrl: 'https://x/license', challenge: 'a', keyUri: KEY_URI, appleId: '1' }),
     { code: 'license_refused' });
 });
+
+test('a music video resolves to its master playlist', async () => {
+  const { client, requests } = appleMusic([[/^POST .*webPlayback$/, 200, { songList: [{
+    'hls-playlist-url': 'https://play-edge.itunes.apple.com/master.m3u8',
+    'hls-key-server-url': 'https://play.itunes.apple.com/license'
+  }] }]]);
+  assert.deepEqual(await client.playback.video('am.music-videos.1458003118'), {
+    appleId: '1458003118', licenseUrl: 'https://play.itunes.apple.com/license', master: 'https://play-edge.itunes.apple.com/master.m3u8'
+  });
+  assert.deepEqual(requests[0].body, { salableAdamId: '1458003118' });
+  await assert.rejects(client.playback.video('am.songs.1'), { code: 'not_playable' });
+});

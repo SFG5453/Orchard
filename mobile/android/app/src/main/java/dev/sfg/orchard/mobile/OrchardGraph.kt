@@ -114,7 +114,11 @@ class OrchardGraph(context: Context) {
     val homeFeeds = HomeFeeds(listOf(YouTubeHomeSource(catalog),
         dev.sfg.orchard.mobile.home.AppleMusicHomeSource(appleMusic))) { settings.settings.value.homeSource }
     val playlistActions = PlaylistActions(youtube, auth)
-    val videoVersions = VideoVersionResolver(catalog)
+    val videoVersions = VideoVersionResolver(catalog) { track ->
+        val apple = settings.settings.value.homeSource == dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
+        if (!apple || !dev.sfg.orchard.mobile.catalog.isAppleMusicId(track.id) || !appleMusic.signedIn()) null
+        else appleMusic.musicVideo(track.id).ifBlank { null }
+    }
     val library = LibraryRepository(LibraryCache(context), catalog, applicationScope)
     val lyrics = LyricsRepository(http, appleLyrics = appleMusic::lyrics) { videoId ->
         youtube.invoke("lyrics.youtube", JSONObject().put("session", auth.session().providerJson()).put("videoId", videoId))
