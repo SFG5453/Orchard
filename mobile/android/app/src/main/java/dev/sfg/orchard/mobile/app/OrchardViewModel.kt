@@ -132,9 +132,23 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val detailRefreshing: StateFlow<Boolean> = details.refreshing
     val detailArtwork: StateFlow<TrackArtwork?> = details.artwork
     val artistImages: StateFlow<ArtistImages?> = details.artistImages
-    /** Apple Music's library while it is the music source, with Orchard's Apple plays ahead of Apple's history. */
+    /**
+     * Apple Music's library while it is the music source, with Orchard's Apple plays ahead of Apple's
+     * history. The YouTube Music library never stands in for it, and nothing shows until the stored
+     * source is known.
+     */
     val library: StateFlow<LibrarySnapshot> =
-        combine(graph.library.library, graph.appleLibrary.library) { own, apple -> apple?.withHistory(own) ?: own }.stateIn(viewModelScope, SharingStarted.Eagerly, graph.library.library.value)
+        combine(
+            graph.library.library,
+            graph.appleLibrary.library,
+            graph.settings.loadedSettings.map<OrchardSettings, Boolean?> { it.homeSource == APPLE_MUSIC_SOURCE }.onStart { emit(null) },
+        ) { own, apple, appleSource ->
+            when (appleSource) {
+                null -> LibrarySnapshot()
+                true -> (apple ?: LibrarySnapshot()).withHistory(own)
+                false -> own
+            }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, LibrarySnapshot())
     /** Songs and playlists kept on this phone, and the one place that edits them. */
     val localLibrary = graph.localLibrary
     val localSnapshot: StateFlow<dev.sfg.orchard.mobile.local.LocalSnapshot> = graph.localLibrary.library
