@@ -69,6 +69,9 @@ QStringList LocalLibrary::lyricsNameFilters() const {
 }
 
 QString LocalLibrary::pathFrom(const QVariant &file) {
+  // QUrl would read the drive letter of "C:/Music/a.mp3" as a scheme.
+  if (file.userType() != QMetaType::QUrl && QDir::isAbsolutePath(file.toString()))
+    return file.toString();
   const QUrl url = file.userType() == QMetaType::QUrl ? file.toUrl() : QUrl(file.toString());
   if (url.isLocalFile())
     return url.toLocalFile();
