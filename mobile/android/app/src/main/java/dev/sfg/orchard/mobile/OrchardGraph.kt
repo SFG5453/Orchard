@@ -203,6 +203,7 @@ class OrchardGraph(context: Context) {
         },
         applicationScope,
     ) { postWarning(it) }
+    internal val likes = dev.sfg.orchard.mobile.library.TrackLikes(library, appleLibrary, playlistActions)
 
     fun postWarning(message: String) {
         warningEvent.tryEmit(message)
