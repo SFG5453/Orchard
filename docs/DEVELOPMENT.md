@@ -36,7 +36,7 @@ On Linux, QtWebView's WebEngine cookie store supplies the native session. The re
 python scripts/build-qt-webview.py --qt-root /path/to/Qt/6.12.0/gcc_64 --build-dir build/qt-webview
 ```
 
-On Windows, use the Qt 6.11.2 `msvc2022_64` SDK from an MSVC developer shell. Windows packaging checks that all imported Qt symbols exist in the staged DLLs. A complete native YouTube cookie session completes sign-in on both platforms. Account name/avatar probing is best effort and cannot reject a session with an `accounts_list` error.
+On Windows, use the Qt 6.11.2 `msvc2022_64` SDK from an MSVC developer shell, and configure with `--buildtype debugoptimized` rather than `debug`: the Rust core always links the release C runtime (`/MD`), which debug C++ objects (`/MDd`) cannot link against. Windows packaging checks that all imported Qt symbols exist in the staged DLLs. A complete native YouTube cookie session completes sign-in on both platforms. Account name/avatar probing is best effort and cannot reject a session with an `accounts_list` error.
 
 ### Cross compilation
 
