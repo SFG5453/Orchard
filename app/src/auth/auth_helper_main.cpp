@@ -23,6 +23,7 @@
 #include "providers/youtube/youtube_provider.h"
 #include "apple_music_helper.h"
 #include "spotify_helper.h"
+#include "youtube_refresh.h"
 
 #include <QCoreApplication>
 #include <QGuiApplication>
@@ -67,6 +68,10 @@ int main(int argc, char *argv[]) {
     return runAppleMusicLogin(socketName);
   if (arguments.contains(QStringLiteral("--apple-music-logout")))
     return runAppleMusicLogout(socketName);
+#ifdef ORCHARD_WEBVIEW2_AUTH
+  if (arguments.contains(QStringLiteral("--youtube-refresh")))
+    return runYouTubeRefresh(socketName);
+#endif
 
   const bool switchAccount = arguments.contains(QStringLiteral("--switch-account"));
 
