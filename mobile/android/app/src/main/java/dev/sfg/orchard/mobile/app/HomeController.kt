@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -52,7 +53,7 @@ internal class HomeController(
             }
         }
         scope.launch {
-            graph.settings.settings.map { it.homeSource }.distinctUntilChanged().drop(1).collect { refresh() }
+            graph.settings.loadedSettings.map { it.homeSource }.distinctUntilChanged().drop(1).collect { refresh() }
         }
         scope.launch {
             graph.appleMusic.connection.map { it.connected }.distinctUntilChanged().drop(1).collect {
@@ -65,7 +66,9 @@ internal class HomeController(
         loadJob?.cancel()
         loadJob = scope.launch {
             mutableHome.value = LoadState.Loading
-            mutableHome.value = runCatching { graph.homeFeeds.load() }.fold(
+            // The settings StateFlow starts at defaults (YouTube Music); read the stored choice.
+            val source = graph.settings.loadedSettings.first().homeSource
+            mutableHome.value = runCatching { graph.homeFeeds.load(source) }.fold(
                 onSuccess = { result ->
                     result.warning?.let(showWarning)
                     val sections = result.feed.sections
