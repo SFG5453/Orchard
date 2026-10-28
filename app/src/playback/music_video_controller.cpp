@@ -21,6 +21,7 @@
 
 #include "apple_music_picture.h"
 #include "apple_music_stream.h"
+#include "integrations/apple_music.h"
 #include "auth/auth_manager.h"
 #include "letterbox.h"
 #include "local/local_track.h"
@@ -45,6 +46,8 @@ bool isYouTubeId(const QString &id) {
   static const QRegularExpression pattern(QStringLiteral("^[\\w-]{11}$"));
   return pattern.match(id).hasMatch();
 }
+
+bool isAppleSongId(const QString &id) { return id.startsWith(QStringLiteral("am.songs.")); }
 
 } // namespace
 
@@ -76,6 +79,7 @@ MusicVideoController::MusicVideoController(YouTubeProvider *provider, AuthManage
 void MusicVideoController::setAppleMusic(AppleMusic *account) {
   if (m_applePicture || !AppleMusicStreams::available())
     return;
+  m_account = account;
   m_applePicture = new AppleMusicPicture(account, m_playback, this);
   m_applePicture->setSink(m_sink);
   connect(m_applePicture, &AppleMusicPicture::started, this, [this] {
@@ -175,9 +179,19 @@ void MusicVideoController::show() {
   m_open = true;
   if (!m_videoId.isEmpty())
     resolveStream();
-  else if (m_searchRequest == 0 && !m_lookups.contains(m_trackId) && isYouTubeId(m_trackId) &&
-           !local::isLocalTrack(m_track))
-    lookup(); // Retries a lookup that failed on the network.
+  else
+    retryLookup();
+}
+
+void MusicVideoController::retryLookup() {
+  const bool appleSong = isAppleSongId(m_trackId) && m_applePicture;
+  if (m_status == QStringLiteral("checking") || local::isLocalTrack(m_track))
+    emit changed();
+  else if (appleSong && !m_appleLookups.contains(m_trackId))
+    appleLookup();
+  else if (m_searchRequest == 0 && !m_lookups.contains(m_trackId) &&
+           (isYouTubeId(m_trackId) || isAppleSongId(m_trackId)))
+    lookup();
   else
     emit changed();
 }
@@ -197,8 +211,8 @@ void MusicVideoController::playVideo(const QVariantMap &media) {
   }
   if (!m_videoId.isEmpty())
     resolveStream();
-  else if (m_searchRequest == 0)
-    lookup();
+  else
+    retryLookup();
 }
 
 void MusicVideoController::hide() {
@@ -229,6 +243,7 @@ void MusicVideoController::syncTrack() {
   m_searchRequest = 0;
   m_streamRequest = 0;
   clearStream();
+  m_appleSong = false;
   m_apple = m_applePicture && id.startsWith(QStringLiteral("am.music-videos."));
   if (m_apple) {
     m_videoId = track.value(QStringLiteral("appleId")).toString();
@@ -238,6 +253,13 @@ void MusicVideoController::syncTrack() {
       resolveStream();
     else
       setStatus(QStringLiteral("available"));
+    return;
+  }
+  if (isAppleSongId(id) && !local::isLocalTrack(track)) {
+    if (m_applePicture)
+      appleLookup();
+    else
+      lookup();
     return;
   }
   if (id.isEmpty() || local::isLocalTrack(track) || !isYouTubeId(id)) {
@@ -268,12 +290,61 @@ void MusicVideoController::lookup() {
       {QStringLiteral("filter"), QStringLiteral("videos")}});
 }
 
+void MusicVideoController::appleLookup() {
+  const auto found = m_appleLookups.constFind(m_trackId);
+  if (found != m_appleLookups.cend()) {
+    useAppleVideo(*found);
+    return;
+  }
+  setStatus(QStringLiteral("checking"));
+  const QString trackId = m_trackId;
+  QString songId = m_track.value(QStringLiteral("appleId")).toString();
+  if (songId.isEmpty())
+    songId = trackId;
+  m_account->musicVideo(songId, [this, trackId](const QJsonObject &page, const QString &error) {
+    const QString videoId = page.value(QStringLiteral("videoId")).toString();
+    // Failures stay uncached, so reopening the player asks Apple again.
+    if (error.isEmpty())
+      m_appleLookups.insert(trackId, videoId);
+    if (trackId == m_trackId)
+      useAppleVideo(videoId);
+  });
+}
+
+void MusicVideoController::useAppleVideo(const QString &videoId) {
+  if (videoId.isEmpty()) {
+    lookup();
+    return;
+  }
+  m_apple = true;
+  m_appleSong = true;
+  m_videoId = videoId;
+  if (m_open)
+    resolveStream();
+  else
+    setStatus(QStringLiteral("available"));
+}
+
 void MusicVideoController::resolveStream() {
   clearStream();
   setStatus(QStringLiteral("loading"));
   if (m_apple) {
-    // The audio engine already plays the video's own soundtrack.
     m_applePicture->start(m_videoId, m_maxHeight);
+    // An Apple music video item already plays its own soundtrack; a song swaps to it.
+    if (!m_appleSong)
+      return;
+    const QString trackId = m_trackId;
+    const QString videoId = m_videoId;
+    m_playback->resolveAppleVideo(videoId, [this, trackId, videoId](const QJsonObject &stream, const QString &error) {
+      if (!m_open || trackId != m_trackId || videoId != m_videoId)
+        return;
+      if (stream.isEmpty()) {
+        clearStream();
+        setStatus(QStringLiteral("error"), error);
+        return;
+      }
+      m_playback->playVideoSource(stream);
+    });
     return;
   }
   m_streamRequest = m_provider->invoke(QStringLiteral("playback.resolveVideo"), QJsonObject{

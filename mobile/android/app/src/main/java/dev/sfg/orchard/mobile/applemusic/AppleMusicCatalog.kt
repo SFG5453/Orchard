@@ -187,6 +187,14 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
     suspend fun stream(id: String): JSONObject =
         call("playback.stream", JSONObject().put("track", JSONObject().put("id", id)))
 
+    /** A music video's master playlist and license endpoint, for an am.music-videos id. */
+    suspend fun video(id: String): JSONObject = call("playback.video", JSONObject().put("id", id))
+
+    /** The am.music-videos id of a catalog song's music video, or blank when Apple has none. */
+    suspend fun musicVideo(songId: String): String =
+        call("catalog.musicVideo", JSONObject().put("id", songId)).optString("videoId")
+            .takeIf(String::isNotBlank)?.let { "am.music-videos.$it" }.orEmpty()
+
     /** Apple's license for a Widevine [challenge] against a stream from [stream]. */
     suspend fun license(stream: JSONObject, challenge: ByteArray): ByteArray {
         val payload = JSONObject()

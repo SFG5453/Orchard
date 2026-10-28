@@ -46,6 +46,7 @@ import dev.sfg.orchard.mobile.playback.apple.AppleMusicDataSource
 import dev.sfg.orchard.mobile.playback.apple.AppleMusicDrmProvider
 import dev.sfg.orchard.mobile.playback.apple.AppleMusicStream
 import dev.sfg.orchard.mobile.playback.apple.AppleMusicStreams
+import dev.sfg.orchard.mobile.playback.apple.AppleMusicVideos
 import dev.sfg.orchard.mobile.playback.apple.LicensedMediaDataSource
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.ConcurrentHashMap
@@ -75,6 +76,15 @@ internal class PlayerStreams(
             else -> null
         }
     }
+
+    val appleVideos = AppleMusicVideos(graph.appleMusic, graph.http, {
+        when {
+            graph.settings.settings.value.homeSource != APPLE_MUSIC_SOURCE ->
+                "Choose Apple Music as the music source in Settings to play Apple Music videos."
+            !graph.appleMusic.signedIn() -> "Connect Apple Music in Settings to play this video."
+            else -> null
+        }
+    }) { graph.settings.settings.value.videoMaxHeight }
 
     /** The exact client identity behind each stable Orchard URI's most recent media fetch. */
     private val resolvedStreams = ConcurrentHashMap<String, ResolvedStream>()
@@ -125,6 +135,7 @@ internal class PlayerStreams(
         resolvedStreams.clear()
         resolutionLocks.clear()
         appleMusic.clear()
+        appleVideos.clear()
     }
 
     /** A cached song for analysis; Apple Music songs carry their license with them. */
@@ -179,6 +190,7 @@ internal class PlayerStreams(
         // audio cache by writing the movie into the whole-track cache behind their back.
         val video = DefaultMediaSourceFactory(context).setDataSourceFactory(resolvingFactory)
         val hls = HlsMediaSource.Factory(hlsResolvingFactory)
+        val appleVideo = appleVideos.mediaSourceFactory(httpFactory)
         // Songs from this phone: plain reads from storage, no resolver and no copy into the stream cache.
         val localFiles = DefaultMediaSourceFactory(context)
         return object : MediaSource.Factory {
@@ -187,6 +199,8 @@ internal class PlayerStreams(
                 return when {
                     uri != null && (uri.scheme == "content" || uri.scheme == "file") -> localFiles.createMediaSource(mediaItem)
                     uri != null && MediaItemMapper.requiresAuthenticatedHls(uri) -> hls.createMediaSource(mediaItem)
+                    // Apple's HLS carries the picture and its soundtrack together.
+                    AppleMusicVideos.isAppleVideo(uri) -> appleVideo.createMediaSource(mediaItem)
                     // The picture keeps the queue item as its own, so the player still reports it.
                     MediaItemMapper.isVideoUri(uri) -> MergingMediaSource(
                         true,
@@ -213,6 +227,7 @@ internal class PlayerStreams(
                 localFiles.setLoadErrorHandlingPolicy(policy)
                 video.setLoadErrorHandlingPolicy(policy)
                 hls.setLoadErrorHandlingPolicy(policy)
+                appleVideo.setLoadErrorHandlingPolicy(policy)
             }
         }
     }

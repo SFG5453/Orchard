@@ -155,6 +155,24 @@ export function createPlayback(client, fetchImpl) {
     return { appleId, licenseUrl, flavor: asset.flavor, ...playlist };
   }
 
+  /** A music video's HLS master playlist and license endpoint; renditions name their own keys. */
+  async function video(id) {
+    const parsed = parseBrowseId(id);
+    const appleId = parsed ? (parsed.type === 'music-videos' ? parsed.id : '') : String(id || '');
+    if (!/^\d+$/.test(appleId)) throw new AppleMusicError(0, 'not_playable', 'This is not an Apple Music video.');
+    const answer = await post(PLAYBACK_URL, { salableAdamId: appleId });
+    const item = answer.songList?.[0];
+    if (!item) {
+      throw new AppleMusicError(0, answer.failureType ? `playback_${answer.failureType}` : 'not_offered',
+        answer.customerMessage || 'Apple Music did not offer this video for playback.');
+    }
+    const master = String(item['hls-playlist-url'] || '');
+    const licenseUrl = String(item['hls-key-server-url'] || '');
+    if (!master.startsWith('https://') || !licenseUrl.startsWith('https://'))
+      throw new AppleMusicError(0, 'no_widevine', 'Apple Music has no Widevine stream for this video.');
+    return { appleId, licenseUrl, master };
+  }
+
   /** Base64 license for a base64 Widevine challenge from [stream]'s key. */
   async function license({ licenseUrl, challenge, keyUri, appleId } = {}) {
     if (!String(licenseUrl || '').startsWith('https://') || !challenge || !keyUri)
@@ -173,5 +191,5 @@ export function createPlayback(client, fetchImpl) {
     return { license: answer.license };
   }
 
-  return { stream, license };
+  return { stream, video, license };
 }

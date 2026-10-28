@@ -51,6 +51,7 @@ const methods = new Map([
   ['catalog.playlist', async (payload = {}) => (String(payload.browseId || '').startsWith('am.stations.')
     ? appleMusic.stationPage(payload.browseId)
     : appleMusic.playlistPage(payload.browseId))],
+  ['catalog.musicVideo', async (payload = {}) => appleMusic.musicVideoFor(payload.appleId || payload.id)],
   ['catalog.upNext', async (payload = {}) => ({ items: await appleMusic.upNext(payload.seed) })],
   // Hosts parse the reply as an object, so a miss is {} rather than null.
   ['catalog.artwork', async (payload = {}) => (await appleMusic.artwork(payload)) || {}],
@@ -65,6 +66,7 @@ const methods = new Map([
   ['library.playlist.add', async (payload = {}) => appleMusic.addToPlaylist(payload.track, payload.playlistId, payload.title)],
   ['library.playlist.create', async (payload = {}) => appleMusic.createPlaylist(payload.title, payload.track)],
   ['playback.stream', async (payload = {}) => appleMusic.playback.stream(payload.track)],
+  ['playback.video', async (payload = {}) => appleMusic.playback.video(payload.id)],
   ['playback.license', async (payload = {}) => appleMusic.playback.license(payload)],
   ['lyrics', async (payload = {}) => (await appleMusic.lyrics(payload)) || {}],
   ['close', async () => {

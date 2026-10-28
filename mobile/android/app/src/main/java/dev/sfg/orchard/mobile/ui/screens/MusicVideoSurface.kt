@@ -19,7 +19,9 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import android.view.SurfaceView
 import android.view.TextureView
+import android.view.View
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -30,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -44,6 +47,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import dev.sfg.orchard.mobile.playback.apple.AppleMusicVideos
 import kotlinx.coroutines.delay
 import kotlin.math.max
 import kotlin.math.min
@@ -51,11 +55,13 @@ import kotlin.math.roundToInt
 
 /**
  * The picture on a TextureView laid out here, so black bars baked into the video can be cropped
- * away. [fill] zooms until no bars remain and trims the edges of the picture.
+ * away. [fill] zooms until no bars remain and trims the edges of the picture. Apple Music videos
+ * go to a secure SurfaceView instead: hardware-protected frames never reach a TextureView.
  */
 @Composable
 internal fun MusicVideoSurface(player: Player?, modifier: Modifier = Modifier, fill: Boolean = false) {
-    var textureView by remember { mutableStateOf<TextureView?>(null) }
+    var surface by remember { mutableStateOf<View?>(null) }
+    var secure by remember(player) { mutableStateOf(player.playsAppleVideo()) }
     var videoSize by remember(player) { mutableStateOf(player?.videoSize ?: VideoSize.UNKNOWN) }
     var buffering by remember(player) { mutableStateOf(player?.playbackState == Player.STATE_BUFFERING) }
     var crop by remember(player) { mutableStateOf<ContentRect?>(null) }
@@ -73,18 +79,30 @@ internal fun MusicVideoSurface(player: Player?, modifier: Modifier = Modifier, f
             override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
                 crop = null
             }
+
+            // Switching a song to its video replaces the item's source without a transition.
+            override fun onEvents(player: Player, events: Player.Events) {
+                secure = player.playsAppleVideo()
+            }
         }
         player?.addListener(listener)
         onDispose { player?.removeListener(listener) }
     }
-    DisposableEffect(player, textureView) {
-        val view = textureView
-        if (player != null && view != null) player.setVideoTextureView(view)
-        onDispose { if (player != null && view != null) player.clearVideoTextureView(view) }
+    DisposableEffect(player, surface) {
+        when (val view = surface) {
+            is TextureView -> player?.setVideoTextureView(view)
+            is SurfaceView -> player?.setVideoSurfaceView(view)
+        }
+        onDispose {
+            when (val view = surface) {
+                is TextureView -> player?.clearVideoTextureView(view)
+                is SurfaceView -> player?.clearVideoSurfaceView(view)
+            }
+        }
     }
-    // One frame a second is enough; bars do not move within a video.
-    LaunchedEffect(textureView, videoSize) {
-        val view = textureView ?: return@LaunchedEffect
+    // One frame a second is enough; bars do not move within a video. Secure frames cannot be read.
+    LaunchedEffect(surface, videoSize) {
+        val view = surface as? TextureView ?: return@LaunchedEffect
         if (videoSize.width <= 0 || videoSize.height <= 0) return@LaunchedEffect
         val width = VideoLetterbox.SAMPLE_WIDTH
         val height = max(1, width * videoSize.height / videoSize.width)
@@ -107,32 +125,36 @@ internal fun MusicVideoSurface(player: Player?, modifier: Modifier = Modifier, f
     val zoom by animateFloatAsState(if (fill) 1f else 0f, tween(CROP_EASE_MS), label = "fill")
 
     Box(modifier.clipToBounds().background(Color.Black)) {
-        AndroidView(
-            factory = { context -> TextureView(context).also { textureView = it } },
-            modifier = Modifier.layout { measurable, constraints ->
-                val boxWidth = constraints.maxWidth
-                val boxHeight = constraints.maxHeight
-                val frameWidth = videoSize.width * videoSize.pixelWidthHeightRatio
-                val frameHeight = videoSize.height.toFloat()
-                if (frameWidth <= 0f || frameHeight <= 0f || boxWidth == Constraints.Infinity || boxHeight == Constraints.Infinity) {
-                    val placeable = measurable.measure(constraints)
-                    return@layout layout(placeable.width, placeable.height) { placeable.place(0, 0) }
-                }
-                // Scale so the cropped picture fits the box, or covers it when filling.
-                val pictureWidth = frameWidth * (right - left)
-                val pictureHeight = frameHeight * (bottom - top)
-                val fit = min(boxWidth / pictureWidth, boxHeight / pictureHeight)
-                val cover = max(boxWidth / pictureWidth, boxHeight / pictureHeight)
-                val scale = fit + (cover - fit) * zoom
-                val viewWidth = (frameWidth * scale).roundToInt()
-                val viewHeight = (frameHeight * scale).roundToInt()
-                val placeable = measurable.measure(Constraints.fixed(viewWidth, viewHeight))
-                // Centre the picture's middle, not the frame's, on the box.
-                val x = boxWidth / 2f - (left + right) / 2f * viewWidth
-                val y = boxHeight / 2f - (top + bottom) / 2f * viewHeight
-                layout(boxWidth, boxHeight) { placeable.place(x.roundToInt(), y.roundToInt()) }
-            },
-        )
+        key(secure) {
+            AndroidView(
+                factory = { context ->
+                    (if (secure) SurfaceView(context).apply { setSecure(true) } else TextureView(context)).also { surface = it }
+                },
+                modifier = Modifier.layout { measurable, constraints ->
+                    val boxWidth = constraints.maxWidth
+                    val boxHeight = constraints.maxHeight
+                    val frameWidth = videoSize.width * videoSize.pixelWidthHeightRatio
+                    val frameHeight = videoSize.height.toFloat()
+                    if (frameWidth <= 0f || frameHeight <= 0f || boxWidth == Constraints.Infinity || boxHeight == Constraints.Infinity) {
+                        val placeable = measurable.measure(constraints)
+                        return@layout layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                    }
+                    // Scale so the cropped picture fits the box, or covers it when filling.
+                    val pictureWidth = frameWidth * (right - left)
+                    val pictureHeight = frameHeight * (bottom - top)
+                    val fit = min(boxWidth / pictureWidth, boxHeight / pictureHeight)
+                    val cover = max(boxWidth / pictureWidth, boxHeight / pictureHeight)
+                    val scale = fit + (cover - fit) * zoom
+                    val viewWidth = (frameWidth * scale).roundToInt()
+                    val viewHeight = (frameHeight * scale).roundToInt()
+                    val placeable = measurable.measure(Constraints.fixed(viewWidth, viewHeight))
+                    // Centre the picture's middle, not the frame's, on the box.
+                    val x = boxWidth / 2f - (left + right) / 2f * viewWidth
+                    val y = boxHeight / 2f - (top + bottom) / 2f * viewHeight
+                    layout(boxWidth, boxHeight) { placeable.place(x.roundToInt(), y.roundToInt()) }
+                },
+            )
+        }
         if (buffering) {
             CircularProgressIndicator(Modifier.align(Alignment.Center).size(36.dp), color = Color.White, strokeWidth = 3.dp)
         }
@@ -140,3 +162,8 @@ internal fun MusicVideoSurface(player: Player?, modifier: Modifier = Modifier, f
 }
 
 private const val CROP_EASE_MS = 600
+
+private fun Player?.playsAppleVideo(): Boolean {
+    val item = this?.currentMediaItem ?: return false
+    return AppleMusicVideos.isAppleVideo(item.localConfiguration?.uri ?: item.requestMetadata.mediaUri)
+}
