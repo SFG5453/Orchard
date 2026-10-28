@@ -3,6 +3,7 @@
 """Stage the worker, ORT's Dawn runtime, FFmpeg and model files beside orchard."""
 import argparse
 import hashlib
+import os
 from pathlib import Path
 import shutil
 import urllib.request
@@ -45,11 +46,27 @@ FFMPEG = {
                             "b1860fbeb14e87d1de44aecc5eb9e25dfecc7ee8efa8d54250995a9acfbe6070"),
 }
 FFMPEG["windows-x86_64-gnu"] = FFMPEG["windows-x86_64-msvc"]
-if a.platform in FFMPEG:
-    tag, stem, digest = FFMPEG[a.platform]
+
+
+def stage_local_ffmpeg(reason):
+    """BtbN prunes old autobuild releases, so a pinned build eventually stops downloading."""
+    local = os.environ.get("ORCHARD_FFMPEG_EXE") or shutil.which("ffmpeg")
+    if not local:
+        raise SystemExit(f"FFmpeg download failed ({reason}); set ORCHARD_FFMPEG_EXE to a local ffmpeg.exe")
+    print(f"FFmpeg download failed ({reason}); staging {local}")
+    shutil.copy2(local, a.destination / "ffmpeg.exe")
+    (a.destination / "ffmpeg-LICENSE.txt").write_text(
+        f"ffmpeg.exe was staged from {local}. FFmpeg licensing: https://ffmpeg.org/legal.html\n")
+
+
+def stage_pinned_ffmpeg(tag, stem, digest):
     archive = a.cache / (stem + ".zip")
     if not archive.exists():
-        data = urllib.request.urlopen(f"https://github.com/BtbN/FFmpeg-Builds/releases/download/{tag}/{stem}.zip", timeout=300).read()
+        try:
+            data = urllib.request.urlopen(f"https://github.com/BtbN/FFmpeg-Builds/releases/download/{tag}/{stem}.zip", timeout=300).read()
+        except OSError as error:
+            stage_local_ffmpeg(error)
+            return
         if hashlib.sha256(data).hexdigest() != digest:
             raise SystemExit("FFmpeg download checksum mismatch")
         archive.write_bytes(data)
@@ -64,6 +81,10 @@ if a.platform in FFMPEG:
         for member, name in ((f"{stem}/bin/ffmpeg.exe", "ffmpeg.exe"), (f"{stem}/LICENSE.txt", "ffmpeg-LICENSE.txt")):
             with z.open(member) as source, (a.destination / name).open("wb") as target:
                 shutil.copyfileobj(source, target)
+
+
+if a.platform in FFMPEG:
+    stage_pinned_ffmpeg(*FFMPEG[a.platform])
 worker = "orchard-adaptive-mix" + (".exe" if a.platform.startswith("windows") else "")
 shutil.copy2(a.profile / worker, a.destination / worker)
 # Stage only the validated runtime graphs and their documentation/licenses.
