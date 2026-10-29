@@ -5,6 +5,8 @@
 const TAPS: usize = 63;
 const HALF: isize = (TAPS / 2) as isize;
 const LANES: usize = 8;
+// A 60 s window that went through the 48 kHz render rate can come back a few samples long.
+const MAX_FRAMES: usize = 44_100 * 60 + 64;
 
 // 63-tap Hann-windowed sinc, cutoff 0.48 of the input Nyquist, normalized to unity DC gain.
 // Beats deserve an anti-aliasing filter; the cymbals did not ask to become a bass drum.
@@ -26,7 +28,7 @@ fn kernel() -> [f32; TAPS] {
 
 /// 44.1 kHz mono to 22.05 kHz mono. Edges clamp to the first and last sample.
 pub fn beat_mono(mono: &[f32]) -> Result<Vec<f32>, String> {
-    if mono.len() < 4 || mono.len() > 44_100 * 60 {
+    if mono.len() < 4 || mono.len() > MAX_FRAMES {
         return Err("Invalid PCM window".into());
     }
     let weights = kernel();
@@ -88,6 +90,16 @@ mod tests {
         let result = beat_mono(&mono).unwrap();
         assert!(result.iter().zip(&expected).all(|(a, b)| a.to_bits() == b.to_bits()));
         assert_eq!(result.len(), expected.len());
+    }
+
+    #[test]
+    fn takes_a_full_window_from_a_44_1_khz_song() {
+        // The vocal model reads render windows, which a 44.1 kHz song reaches through 48 kHz.
+        let frames = (crate::song::WINDOW * crate::song::RATE as f64) as usize;
+        let window = earmark::AudioBuffer::new(vec![vec![0.1; frames]], crate::song::RATE).unwrap();
+        let render = earmark::audio::resample::resample(&window, crate::song::RENDER_RATE).unwrap();
+        let back = earmark::audio::resample::resample(&render, crate::song::RATE).unwrap();
+        assert!(beat_mono(back.channel(0)).is_ok(), "{} frames", back.frames());
     }
 
     #[test]
