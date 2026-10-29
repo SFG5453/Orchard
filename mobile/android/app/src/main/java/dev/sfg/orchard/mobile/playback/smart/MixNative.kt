@@ -36,7 +36,8 @@ internal object MixNative {
     /** Desktop's `bestMixApple`: Best Mix features from Apple Music's analysis JSON, or `{"error"}`. */
     @JvmStatic external fun nativeBestMixApple(analysis: String, duration: Double): String
     @JvmStatic external fun nativeBestMixSort(summaries: String, initial: String, pairs: BestMixPairs): String
-    @JvmStatic external fun nativeModelsLoad(beat: String, vocal: String, threads: Int): Long
+    /** A nonzero [npu] is an open NPU backend that the models take over, with [vtable] from `NpuNative`. */
+    @JvmStatic external fun nativeModelsLoad(beat: String, vocal: String, threads: Int, npu: Long, vtable: Long): Long
     @JvmStatic external fun nativeModelsFree(models: Long)
     /** False when the request's Apple Music analysis covers both songs, so no model has to load. */
     @JvmStatic external fun nativeMixNeedsModels(request: String): Boolean

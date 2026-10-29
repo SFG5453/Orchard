@@ -356,6 +356,8 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                     onInstall = viewModel::installUpdate,
                     onDismiss = viewModel::dismissUpdate,
                 )
+
+                dev.sfg.orchard.mobile.ui.components.NpuDialogHost(settings, viewModel::updateSettings)
             }
         }
 

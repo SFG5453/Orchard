@@ -9,7 +9,7 @@
 use jni::JNIEnv;
 use jni::objects::{JClass, JFloatArray, JObject, JString, JValue};
 use jni::sys::{jboolean, jbyteArray, jdouble, jint, jlong, jstring};
-use orchard_adaptive_mix::{apple, best_mix, models::Models, prepare::{self, Measurements}, song::{Song, SongBuilder, Windows}};
+use orchard_adaptive_mix::{apple, best_mix, models::Models, npu::Npu, prepare::{self, Measurements}, song::{Song, SongBuilder, Windows}};
 use serde_json::{Value, json};
 use std::sync::OnceLock;
 
@@ -164,15 +164,21 @@ fn runtime() -> Result<(), String> {
 }
 
 /// Loads Nirovi and Syvenu from model files on `threads` CPU threads. 0 with no models.
+/// A nonzero `npu` is an open `NpuNative` backend, owned from here on (freed even on failure),
+/// with `vtable` from `NpuNative.nativeVtable`; the CPU sessions back it up.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nativeModelsLoad(
     mut env: JNIEnv<'_>, _class: JClass<'_>, beat: JString<'_>, vocal: JString<'_>, threads: jint,
+    npu: jlong, vtable: jlong,
 ) -> jlong {
+    let npu = unsafe { Npu::from_raw(npu as usize, vtable as usize) };
     let loaded = (|| -> Result<Models, String> {
         runtime()?;
         let beat = read_string(&mut env, &beat)?;
         let vocal = read_string(&mut env, &vocal)?;
-        Models::from_files(beat.as_ref(), vocal.as_ref(), threads.clamp(1, 8) as usize)
+        let mut models = Models::from_files(beat.as_ref(), vocal.as_ref(), threads.clamp(1, 8) as usize)?;
+        models.set_npu(npu);
+        Ok(models)
     })();
     loaded.map_or(0, |models| Box::into_raw(Box::new(models)) as jlong)
 }

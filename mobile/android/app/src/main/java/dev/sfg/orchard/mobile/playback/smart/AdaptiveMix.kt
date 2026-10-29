@@ -7,6 +7,7 @@ import android.media.MediaDataSource
 import android.os.Process
 import android.util.AtomicFile
 import android.util.Log
+import dev.sfg.orchard.mobile.playback.smart.npu.NpuSupport
 import org.json.JSONObject
 import java.io.File
 import java.nio.ByteBuffer
@@ -125,8 +126,10 @@ internal object AdaptiveMix {
         val started = System.currentTimeMillis()
         val beat = modelFile(context, BEAT_MODEL).absolutePath
         val vocal = modelFile(context, VOCAL_MODEL).absolutePath
-        MixNative.nativeModelsLoad(beat, vocal, INFERENCE_THREADS).takeIf { it != 0L }
-            ?.also { Log.d(TAG, "Models loaded in ${System.currentTimeMillis() - started}ms") }
+        // The CPU sessions still load: they take over if the NPU ever fails mid-song.
+        val npu = NpuSupport.openForMix()
+        MixNative.nativeModelsLoad(beat, vocal, INFERENCE_THREADS, npu?.first ?: 0L, npu?.second ?: 0L).takeIf { it != 0L }
+            ?.also { Log.d(TAG, "Models loaded in ${System.currentTimeMillis() - started}ms (NPU ${npu != null})") }
     }.onFailure { Log.w(TAG, "Could not load adaptive mix models", it) }.getOrNull()
 
     @Synchronized

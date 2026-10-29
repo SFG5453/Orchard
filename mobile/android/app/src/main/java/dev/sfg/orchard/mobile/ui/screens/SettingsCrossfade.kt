@@ -26,15 +26,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.model.LocalMaxActive
 import dev.sfg.orchard.mobile.model.OrchardSettings
+import dev.sfg.orchard.mobile.playback.smart.npu.NpuSupport
+import dev.sfg.orchard.mobile.ui.components.NpuPrompt
 import kotlin.math.roundToInt
 
 /**
@@ -44,6 +49,7 @@ import kotlin.math.roundToInt
 @Composable
 internal fun CrossfadeRow(settings: OrchardSettings, onSettings: (OrchardSettings) -> Unit) {
     val maxActive = LocalMaxActive.current
+    val npu by NpuSupport.state.collectAsStateWithLifecycle()
     Column {
         ToggleRow(
             title = "Crossfade",
@@ -94,9 +100,30 @@ internal fun CrossfadeRow(settings: OrchardSettings, onSettings: (OrchardSetting
                     },
                     icon = Icons.Rounded.AutoAwesome,
                     checked = settings.smartCrossfade && !maxActive,
-                    onChecked = { onSettings(settings.copy(smartCrossfade = it)) },
+                    onChecked = { on ->
+                        // A supported NPU that is not set up yet is offered first; the offer turns adaptive mix on.
+                        if (on && npu.supported && !npu.ready) NpuPrompt.requested = true
+                        else onSettings(settings.copy(smartCrossfade = on))
+                    },
                     enabled = !maxActive,
                 )
+                AnimatedVisibility(visible = npu.supported && npu.ready) {
+                    Column {
+                        PanelDivider()
+                        ToggleRow(
+                            title = "NPU Support",
+                            subtitle = when {
+                                npu.compiling -> "Optimizing for your ${npu.device?.vendor?.brand} NPU…"
+                                npu.enabled -> "Adaptive mix runs on your ${npu.device?.vendor?.brand} NPU"
+                                else -> "Run adaptive mix on your ${npu.device?.vendor?.brand} NPU instead of the CPU"
+                            },
+                            icon = Icons.Rounded.Memory,
+                            checked = npu.enabled,
+                            onChecked = NpuSupport::setEnabled,
+                            enabled = !npu.compiling,
+                        )
+                    }
+                }
             }
         }
     }
