@@ -219,7 +219,7 @@ private slots:
                          {"codec", "pcm_s16"}, {"sample_rate", 48000}, {"channels", 2}};
     QVERIFY(pc.node().sendData(session.value("session_id", ""), header.dump(), pcm));
     QTRY_COMPARE_WITH_TIMEOUT(phone.received().size(), std::size_t(1), 5000);
-    QCOMPARE(phone.received()[0].first, header);
+    QVERIFY(phone.received()[0].first == header);
     QVERIFY(phone.received()[0].second == pcm);
   }
 
