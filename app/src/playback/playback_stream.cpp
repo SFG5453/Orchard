@@ -121,7 +121,6 @@ void PlaybackController::startResolvedStream(const QJsonObject &stream) {
   }
   rememberStreamTracking(m_track.value("id").toString(), stream);
   applyStreamQuality();
-  reportQobuzStarted(m_proxy, m_resumePosition);
   m_player->setSource(localUrl);
   if (m_resumePaused) {
     m_player->pause();
@@ -154,7 +153,6 @@ void PlaybackController::fail(const QString &message) {
   const bool restoring = m_restoringPlayback;
   m_restoringPlayback = false;
   cancelAutoplay();
-  reportQobuzEnded(m_proxy, m_player);
   m_proxy->clear();
   m_request = 0;
   m_loading = false;

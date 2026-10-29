@@ -55,7 +55,7 @@ class FakeCtx {
 const v2 = { connect_protocol_major: 2, connect_protocol_minor: 0 };
 
 function device(id, platform, extra = {}) {
-  return { id: "spoofed", name: id, platform, providers: ["youtube", "qobuz"], provider_sessions: { qobuz: false }, ...extra };
+  return { id: "spoofed", name: id, platform, providers: ["youtube", "example"], provider_sessions: { example: false }, ...extra };
 }
 
 describe("Connect hub", () => {

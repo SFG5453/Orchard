@@ -149,7 +149,7 @@ internal class AppleMusicVideos(
  * Apple licenses by that `data:` URI, which holds exactly the pssh box Media3 parsed from it.
  */
 @UnstableApi
-private class KeyUriMediaDrm(private val inner: ExoMediaDrm) : ExoMediaDrm by inner {
+internal class KeyUriMediaDrm(private val inner: ExoMediaDrm) : ExoMediaDrm by inner {
     override fun getKeyRequest(
         scope: ByteArray,
         schemeDatas: List<DrmInitData.SchemeData>?,

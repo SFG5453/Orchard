@@ -17,7 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-//! Key derivation and AES for segmented provider streams (Qobuz CMAF).
+//! Key derivation and AES for segmented provider streams.
 //! Web Crypto is absent from QuickJS, so the provider host calls these.
 
 use aes::Aes128;

@@ -41,7 +41,7 @@ import org.json.JSONTokener
 class ProviderException(message: String) : IOException(message)
 
 /** Bytecode bundles the native host embeds; the ordinal is the JNI selector. */
-enum class ProviderBundle { YouTube, Qobuz, AppleMusic }
+enum class ProviderBundle { YouTube, AppleMusic }
 
 /**
  * A desktop provider from the repo `providers` directory, running in the shared QuickJS host.

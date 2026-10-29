@@ -175,6 +175,14 @@ object MediaItemMapper {
             .build()
     }
 
+    fun requiresAppleStereo(uri: Uri): Boolean = uri.getQueryParameter("apple_stereo") == "1"
+
+    fun asAppleStereoFallback(item: MediaItem): MediaItem {
+        val uri = item.localConfiguration!!.uri.buildUpon().appendQueryParameter("apple_stereo", "1").build()
+        return item.buildUpon().setUri(uri).setMimeType(null)
+            .setRequestMetadata(item.requestMetadata.buildUpon().setMediaUri(uri).build()).build()
+    }
+
     private const val VIDEO_HEIGHT = "h"
     private const val VIDEO_PART = "part"
     private const val SOUND = "sound"

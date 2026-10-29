@@ -40,12 +40,11 @@ internal object ConnectDeviceInfo {
         // The phone can mix and fetch artwork for itself; a desktop still wins both roles.
         .put("can_mix_audio", true)
         .put("can_fetch_artwork", true)
-        .put("providers", JSONArray(listOf("youtube", "qobuz", "apple_music")))
+        .put("providers", JSONArray(listOf("youtube", "apple_music")))
         .put(
             "provider_sessions",
             JSONObject()
                 .put("youtube", graph.auth.state.value is AuthState.SignedIn)
-                .put("qobuz", graph.qobuzResolver.hasSession())
                 .put("apple_music", graph.appleMusic.signedIn()),
         )
         .put("audio_transports", JSONArray(listOf("pcm_s16", "pcm_f32", "source")))

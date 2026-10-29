@@ -114,7 +114,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         streamCache = StreamCache(context = this, maxBytes = graph.settings.settings.value.cacheSizeBytes, variant = { graph.streamVariant(it) })
         graph.onClearStreamCache = streamCache::clear
         streams = PlayerStreams(this, graph, streamCache, ::queueTrack) { uri, stream -> nowPlaying.onResolved(uri, stream) }
-        nowPlaying = NowPlayingPublisher(graph, handler, ioScope, streamCache, streams::cached) {
+        nowPlaying = NowPlayingPublisher(graph, handler, ioScope, streamCache, streams::cached, streams::atmosBitrateKbps) {
             if (::player.isInitialized) player else null
         }
         recovery = PlaybackRecovery(streamResolver, streams, graph::postWarning)
@@ -177,7 +177,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                 CrossfadeEngine.Config(
                     enabled = settings.crossfadeMs > 0,
                     fadeSeconds = settings.crossfadeMs / 1000.0,
-                    mode = if (settings.smartCrossfade && !graph.maxActive.value) CrossfadeMode.SMART else CrossfadeMode.STANDARD,
+                    mode = if (settings.smartCrossfade) CrossfadeMode.SMART else CrossfadeMode.STANDARD,
                 )
             },
             // A connected desktop does the heavy lifting; the phone keeps the clock and the speaker.
@@ -191,7 +191,9 @@ class OrchardPlaybackService : MediaLibraryService() {
             splicerFor = splicers::get,
             onMarker = { graph.transitionMarker.value = it },
             onHandoff = ::adoptPlayer,
-            canCrossfadeTo = { dev.sfg.orchard.mobile.playback.slop.SlopPlayback.allowsTransition(graph, it) },
+            canCrossfadeTo = { dev.sfg.orchard.mobile.playback.slop.SlopPlayback.allowsTransition(graph, it) &&
+                !(graph.settings.settings.value.appleMusicAtmos && dev.sfg.orchard.mobile.catalog.isAppleMusicId(it)) },
+            canCrossfadeFrom = { !(graph.settings.settings.value.appleMusicAtmos && dev.sfg.orchard.mobile.catalog.isAppleMusicId(it)) },
         )
         crossfade.start(player, spare)
         loadedAudioVariant = graph.streamVariant()
@@ -236,7 +238,7 @@ class OrchardPlaybackService : MediaLibraryService() {
     private fun buildPlayer(filter: TransitionFilter, eq: EqualizerAudioProcessor, handlesAudioFocus: Boolean): ExoPlayer {
         val splicer = MixSplicer()
         return buildOrchardPlayer(this, streams.mediaSourceFactory(), splicer, filter, eq, playbackVolume.state, handlesAudioFocus)
-            .also { splicers[it] = splicer }
+            .also { splicers[it] = splicer; nowPlaying.observeAudioFormat(it) }
     }
 
     /**
@@ -323,7 +325,6 @@ class OrchardPlaybackService : MediaLibraryService() {
         queueSnapshot = emptyMap()
         OrchardGraph.from(this).onClearStreamCache = null
         if (::streamCache.isInitialized) streamCache.release()
-        OrchardGraph.from(this).qobuzResolver.release()
         if (::streams.isInitialized) streams.clear()
         super.onDestroy()
     }
@@ -478,7 +479,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         OrchardSessionCallback.applyLayout(mediaSession, source, likedState(OrchardGraph.from(this), source.currentMediaItem))
     }
 
-    private fun prefetchAround(player: Player) = prefetchAround(player, streamResolver, streamCache)
+    private fun prefetchAround(player: Player) = prefetchAround(player, streamResolver, streamCache, streams::useAppleAtmos)
 
     companion object {
         private const val TAG = "OrchardPlayback"

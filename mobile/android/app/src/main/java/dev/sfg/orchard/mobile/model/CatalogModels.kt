@@ -75,9 +75,6 @@ data class Track(
     val isLocal: Boolean
         get() = playbackSource.equals(LOCAL_SOURCE, ignoreCase = true)
 
-    val isQobuz: Boolean
-        get() = playbackSource.equals("qobuz", ignoreCase = true)
-
     /** True for album audio, which is the version a listener expects from an album or search. */
     val isAudioOnly: Boolean
         get() = musicVideoType == MUSIC_VIDEO_TYPE_ATV

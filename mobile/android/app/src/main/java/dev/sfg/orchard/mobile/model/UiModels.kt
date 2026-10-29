@@ -77,6 +77,7 @@ data class OrchardSettings(
     val audioQuality: AudioQuality = AudioQuality.HIGH,
     /** Quality on mobile data and other metered networks. */
     val cellularAudioQuality: AudioQuality = AudioQuality.HIGH,
+    val appleMusicAtmos: Boolean = false,
     /** Take the accent from the system's wallpaper palette instead of Orchard's own green. */
     val useSystemColors: Boolean = false,
     /** Let the artwork-tinted background drift instead of holding still between tracks. */
@@ -199,7 +200,7 @@ data class OrchardSettings(
     }
 }
 
-enum class AudioQuality { DATA_SAVER, NORMAL, HIGH, MAX }
+enum class AudioQuality { DATA_SAVER, NORMAL, HIGH }
 
 enum class ArtworkSource(val label: String) {
     M8TEC("m8tec"), BOIDU("boidu"), SPOTIFY("Spotify Canvas")

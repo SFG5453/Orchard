@@ -70,6 +70,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                     .getOrDefault(AudioQuality.HIGH),
                 cellularAudioQuality = runCatching { AudioQuality.valueOf(values[CELLULAR_AUDIO_QUALITY].orEmpty()) }
                     .getOrDefault(AudioQuality.HIGH),
+                appleMusicAtmos = values[APPLE_MUSIC_ATMOS] ?: false,
                 useSystemColors = values[SYSTEM_COLORS] ?: false,
                 animatedBackground = values[ANIMATED_BACKGROUND] ?: false,
                 backdropSpeed = values[BACKDROP_SPEED] ?: OrchardSettings.DEFAULT_BACKDROP_SPEED,
@@ -147,6 +148,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[DOWNLOAD_TO_SD_CARD] = value.downloadToSdCard
                 it[AUDIO_QUALITY] = value.audioQuality.name
                 it[CELLULAR_AUDIO_QUALITY] = value.cellularAudioQuality.name
+                it[APPLE_MUSIC_ATMOS] = value.appleMusicAtmos
                 it[SYSTEM_COLORS] = value.useSystemColors
                 it[ANIMATED_BACKGROUND] = value.animatedBackground
                 it[BACKDROP_SPEED] = value.backdropSpeed
@@ -288,6 +290,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val LYRIC_TRANSLATION_PROVIDER = stringPreferencesKey("lyric_translation_provider")
         val LYRIC_TRANSLATION_MODELS = stringPreferencesKey("lyric_translation_models")
         val LYRIC_TRANSLATION_ENDPOINT = stringPreferencesKey("lyric_translation_endpoint")
+        val APPLE_MUSIC_ATMOS = booleanPreferencesKey("apple_music_atmos")
         val SYSTEM_COLORS = booleanPreferencesKey("system_colors")
         val ANIMATED_BACKGROUND = booleanPreferencesKey("animated_background")
         val BACKDROP_SPEED = floatPreferencesKey("backdrop_speed")

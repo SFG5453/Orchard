@@ -26,7 +26,6 @@
 #include "integrations/apple_music.h"
 #include "integrations/catalog_source.h"
 #include "playback/playback_helpers.h"
-#include "providers/qobuz/qobuz_service.h"
 
 void ConnectService::setAppleMusic(AppleMusic *appleMusic, CatalogSource *source) {
   m_appleMusic = appleMusic;
@@ -37,7 +36,6 @@ void ConnectService::setAppleMusic(AppleMusic *appleMusic, CatalogSource *source
 
 QJsonObject ConnectService::providerSessions() const {
   return {{QStringLiteral("youtube"), m_auth && m_auth->isSignedIn()},
-          {QStringLiteral("qobuz"), m_qobuz && m_qobuz->connected()},
           {QStringLiteral("apple_music"), m_appleMusic && m_appleMusic->connected()}};
 }
 

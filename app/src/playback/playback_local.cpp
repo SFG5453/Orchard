@@ -65,7 +65,6 @@ void PlaybackController::openFile(const QString &path, int bitrate) {
     return;
   }
   m_request = 0;
-  // A stale stream from the previous song must not paint a Qobuz badge on this one.
   m_proxy->clear();
   applyStreamQuality();
   m_player->setSource(QUrl::fromLocalFile(path));

@@ -31,15 +31,15 @@ using namespace orchard::connect;
 
 namespace {
 
-DeviceInfo device(const std::string &id, const std::string &platform, bool qobuz = false) {
+DeviceInfo device(const std::string &id, const std::string &platform, bool example = false) {
   DeviceInfo info;
   info.id = id;
   info.platform = platform;
   info.kind = platform == "android" ? "mobile" : "desktop";
   info.canMixAudio = info.kind == "desktop";
   info.canFetchArtwork = info.kind == "desktop";
-  info.providers = {"youtube", "qobuz"};
-  info.providerSessions = {{"youtube", true}, {"qobuz", qobuz}};
+  info.providers = {"youtube", "example"};
+  info.providerSessions = {{"youtube", true}, {"example", example}};
   return info;
 }
 
@@ -95,14 +95,14 @@ private slots:
     const DeviceInfo phone = device("phone", "android", true);
     const DeviceInfo pc = device("pc", "linux", false);
     const Roles pcTarget = selectRoles(pc, {phone});
-    QCOMPARE(QString::fromStdString(pcTarget.providerHosts.at("qobuz")), QStringLiteral("phone"));
+    QCOMPARE(QString::fromStdString(pcTarget.providerHosts.at("example")), QStringLiteral("phone"));
     QCOMPARE(QString::fromStdString(pcTarget.providerHosts.at("youtube")), QStringLiteral("pc"));
     // When both are signed in, the target uses its own account.
     const Roles both = selectRoles(device("pc", "linux", true), {phone});
-    QCOMPARE(QString::fromStdString(both.providerHosts.at("qobuz")), QStringLiteral("pc"));
+    QCOMPARE(QString::fromStdString(both.providerHosts.at("example")), QStringLiteral("pc"));
     // Nobody signed in: the provider reports unavailable.
     const Roles none = selectRoles(device("pc", "linux"), {device("phone", "android")});
-    QVERIFY(!none.providerHosts.count("qobuz"));
+    QVERIFY(!none.providerHosts.count("example"));
   }
 
   void initialPlaybackRules() {

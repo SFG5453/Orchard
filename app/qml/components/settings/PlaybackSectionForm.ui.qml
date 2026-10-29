@@ -25,7 +25,6 @@ ColumnLayout {
     id: root
 
     property string streamQuality: "high"
-    property bool qobuzReachable: false
     property bool crossfadeEnabled: true
     property string adaptiveMode: "standard"
     property real crossfadeDuration: 6
@@ -61,9 +60,7 @@ ColumnLayout {
             title: qsTr("Streaming quality")
             description: (root.streamQuality === "saver" ? qsTr("Lowest bitrate audio and 480p video.")
                 : root.streamQuality === "normal" ? qsTr("Up to 128 kbps audio and 720p video.")
-                : root.streamQuality === "max" ? qsTr("Lossless and Hi-Res from your Qobuz subscription, up to 24-bit/192 kHz. Songs Qobuz can't match play at High.")
                 : qsTr("Best available audio and video."))
-                + (root.qobuzReachable ? "" : " " + qsTr("MAX needs a Qobuz account. Connect one in Settings, Integrations."))
 
             SettingsSegmented {
                 id: streamQualityPicker
@@ -72,13 +69,7 @@ ColumnLayout {
                     { value: "saver", label: qsTr("Saver"), name: qsTr("Saver quality") },
                     { value: "normal", label: qsTr("Normal"), name: qsTr("Normal quality") },
                     { value: "high", label: qsTr("High"), name: qsTr("High quality") },
-                    // Members only: the velvet rope is a Qobuz login.
-                    {
-                        value: "max", label: qsTr("MAX"), name: qsTr("MAX quality from Qobuz"),
-                        // A connected phone's Qobuz sign-in counts too; Connect streams its bytes here.
-                        enabled: root.qobuzReachable,
-                        tip: qsTr("Connect Qobuz in Settings, Integrations to use MAX.")
-                    }
+
                 ]
             }
         }

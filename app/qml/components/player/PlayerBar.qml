@@ -107,21 +107,6 @@ Item {
         return String(Math.round(num >= 1000 ? num / 1000 : num));
     }
 
-    // Untyped on purpose: a compiled binding reading the track map trips qmlcachegen.
-    function qobuzLabel(track) {
-        if (!track || track.playbackSource !== "qobuz")
-            return "";
-        const parts = [track.hires ? qsTr("Hi-Res") : qsTr("Lossless")];
-        if (track.bitDepth || track.sampleRate) {
-            const depth = track.bitDepth ? qsTr("%1-bit").arg(track.bitDepth) : "";
-            const rate = track.sampleRate ? qsTr("%1 kHz").arg(Number((track.sampleRate / 1000).toFixed(1))) : "";
-            parts.push([depth, rate].filter(Boolean).join(" / "));
-        }
-        if (track.streamCodec)
-            parts.push(track.streamCodec);
-        return parts.join(" · ");
-    }
-
     // Streamed songs: bitrate then codec, e.g. "128 kbps · Opus". Needs the bitrate setting.
     function streamLabel(track) {
         if (!OrchardAppearance.showBitrate || OrchardPlayback.bitrate <= 0)
@@ -399,7 +384,7 @@ Item {
                 // Proof to your ears that this stream is indeed high fidelity, not two tin cans and a string.
                 Rectangle {
                     id: bitratePill
-                    // Qobuz songs always say so; kbps waits for the bitrate setting.
+                    // Stream bitrate waits for the bitrate setting.
                     visible: bitrateLabel.text.length > 0
                     anchors.verticalCenter: parent.verticalCenter
                     Accessible.role: Accessible.StaticText
@@ -414,8 +399,7 @@ Item {
                         anchors.centerIn: parent
                         // While controlling, the pill names the target; its stream details live there.
                         text: OrchardConnect.controlling ? qsTr("On %1").arg(OrchardConnect.peer.name)
-                              : root.qobuzLabel(OrchardPlayback.track)
-                              || root.localLabel(OrchardPlayback.track)
+                              : root.localLabel(OrchardPlayback.track)
                               || root.streamLabel(OrchardPlayback.track)
                         color: root.accentColor
                         font.family: "Inter"

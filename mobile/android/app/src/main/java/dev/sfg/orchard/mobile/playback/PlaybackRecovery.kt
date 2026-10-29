@@ -57,6 +57,12 @@ internal class PlaybackRecovery(
             postWarning("Video unavailable. Continuing with audio.")
             return
         }
+        if (streams.selectedAppleAtmos(failedUri)) {
+            Log.w(TAG, "Atmos playback failed; continuing in stereo", error)
+            replace(player, MediaItemMapper.asAppleStereoFallback(failedItem), player.currentPosition.coerceAtLeast(0), player.playWhenReady)
+            postWarning("Atmos unavailable. Continuing in stereo.")
+            return
+        }
         val resolvedStream = streams.forget(failedUri.toString())
         val responseCode = playbackHttpResponseCode(error)
         val rejectedClient = !isAppleMusicId(sourceId) && resolvedStream != null && responseCode != null &&

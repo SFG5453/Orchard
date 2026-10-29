@@ -160,7 +160,7 @@ internal fun SettingsHub(
         PanelDivider()
         ActionRow(
             title = SettingsPage.Connections.title,
-            subtitle = "Last.fm, Qobuz, Discord and more",
+            subtitle = "Last.fm, Discord and more",
             icon = SettingsPage.Connections.icon,
             value = summaries.connectedCount.takeIf { it > 0 }?.let { "$it of ${ConnectionService.entries.size}" },
             onClick = { onOpen(SettingsPage.Connections) },

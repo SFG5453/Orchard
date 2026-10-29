@@ -353,7 +353,7 @@ private slots:
             // Answer later, as the provider thread would.
             QTimer::singleShot(0, [&flac, start, end, done] { done(flac.mid(start, end - start + 1), 0); });
         });
-        const auto url = proxy.open({{"provider", "qobuz"}, {"playbackId", "abc"},
+        const auto url = proxy.open({{"provider", "example"}, {"playbackId", "abc"},
                                      {"contentLength", double(flac.size())}, {"mimeType", "audio/flac"}});
         QNetworkAccessManager client;
         QNetworkRequest request(url);
@@ -372,7 +372,7 @@ private slots:
         AudioStreamProxy proxy;
         QSignalSpy failures(&proxy, &AudioStreamProxy::streamFailed);
         proxy.setRangeReader([](const QJsonObject &, qint64, qint64, auto done) { done({}, 502); });
-        const auto url = proxy.open({{"provider", "qobuz"}, {"playbackId", "gone"}, {"contentLength", 64}});
+        const auto url = proxy.open({{"provider", "example"}, {"playbackId", "gone"}, {"contentLength", 64}});
         QNetworkAccessManager client;
         auto *reply = client.get(QNetworkRequest(url));
         QTRY_VERIFY(reply->isFinished());
@@ -392,7 +392,7 @@ private slots:
             else
                 pending = done;
         });
-        const auto url = proxy.open({{"provider", "qobuz"}, {"contentLength", 8}});
+        const auto url = proxy.open({{"provider", "example"}, {"contentLength", 8}});
         QNetworkAccessManager client;
         auto *reply = client.get(QNetworkRequest(url));
         QTRY_VERIFY(reply->bytesAvailable() == 4);
@@ -411,7 +411,7 @@ private slots:
         AudioStreamProxy proxy;
         QSignalSpy failures(&proxy, &AudioStreamProxy::streamFailed);
         proxy.setRangeReader([](const QJsonObject &, qint64, qint64, auto done) { done("too long", 0); });
-        const auto url = proxy.open({{"provider", "qobuz"}, {"contentLength", 4}});
+        const auto url = proxy.open({{"provider", "example"}, {"contentLength", 4}});
         QNetworkAccessManager client;
         auto *reply = client.get(QNetworkRequest(url));
         QTRY_VERIFY(reply->isFinished());

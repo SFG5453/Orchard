@@ -36,7 +36,6 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.sfg.orchard.mobile.model.LocalMaxActive
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.playback.smart.npu.NpuSupport
 import dev.sfg.orchard.mobile.ui.components.NpuPrompt
@@ -48,7 +47,6 @@ import kotlin.math.roundToInt
  */
 @Composable
 internal fun CrossfadeRow(settings: OrchardSettings, onSettings: (OrchardSettings) -> Unit) {
-    val maxActive = LocalMaxActive.current
     val npu by NpuSupport.state.collectAsStateWithLifecycle()
     Column {
         ToggleRow(
@@ -93,19 +91,14 @@ internal fun CrossfadeRow(settings: OrchardSettings, onSettings: (OrchardSetting
                 PanelDivider()
                 ToggleRow(
                     title = "Adaptive mix",
-                    subtitle = if (maxActive) {
-                        "Unavailable while audio quality is Max"
-                    } else {
-                        "Place the overlap on the beat and end it where the music does"
-                    },
+                    subtitle = "Place the overlap on the beat and end it where the music does",
                     icon = Icons.Rounded.AutoAwesome,
-                    checked = settings.smartCrossfade && !maxActive,
+                    checked = settings.smartCrossfade,
                     onChecked = { on ->
                         // A supported NPU that is not set up yet is offered first; the offer turns adaptive mix on.
                         if (on && npu.supported && !npu.ready) NpuPrompt.requested = true
                         else onSettings(settings.copy(smartCrossfade = on))
                     },
-                    enabled = !maxActive,
                 )
                 AnimatedVisibility(visible = npu.supported && npu.ready) {
                     Column {

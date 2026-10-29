@@ -95,13 +95,7 @@ fun SettingsScreen(
     onConnectListenBrainz: (String) -> Unit = {},
     onDisconnectListenBrainz: () -> Unit = {},
     onConnectSpotify: () -> Unit = {},
-    qobuzStatus: dev.sfg.orchard.mobile.qobuz.QobuzStatus = dev.sfg.orchard.mobile.qobuz.QobuzStatus(),
-    onConnectQobuz: () -> Unit = {},
-    onConnectQobuzToken: () -> Unit = {},
     onConnectAppleMusic: () -> Unit = {},
-    onDisconnectQobuz: () -> Unit = {},
-    onQobuzEnabledChange: (Boolean) -> Unit = {},
-    onQobuzQualityChange: (dev.sfg.orchard.mobile.qobuz.QobuzQuality) -> Unit = {},
     onWelcome: () -> Unit = {},
     onCheckForUpdates: () -> Unit = {},
     onInstallUpdate: (MobileUpdateMetadata) -> Unit = {},
@@ -136,7 +130,7 @@ fun SettingsScreen(
     val account = remember { OrchardAccountService.get(context) }
     val accountState by account.state.collectAsStateWithLifecycle()
     val statuses = connectionStatuses(
-        settings, discordStatus, lastfmState, listenBrainzState, qobuzStatus, accountState.email,
+        settings, discordStatus, lastfmState, listenBrainzState, accountState.email,
         appleMusicConnectionStatus(),
     )
     val summaries = SettingsSummaries(
@@ -197,7 +191,6 @@ fun SettingsScreen(
                                 discordStatus = discordStatus,
                                 lastfmState = lastfmState,
                                 listenBrainzState = listenBrainzState,
-                                qobuzStatus = qobuzStatus,
                                 onSettings = onSettings,
                                 onConnectLastfm = onConnectLastfm,
                                 onCompleteLastfm = onCompleteLastfm,
@@ -205,12 +198,7 @@ fun SettingsScreen(
                                 onConnectListenBrainz = onConnectListenBrainz,
                                 onDisconnectListenBrainz = onDisconnectListenBrainz,
                                 onConnectSpotify = onConnectSpotify,
-                                onConnectQobuz = onConnectQobuz,
-                                onConnectQobuzToken = onConnectQobuzToken,
                                 onConnectAppleMusic = onConnectAppleMusic,
-                                onDisconnectQobuz = onDisconnectQobuz,
-                                onQobuzEnabledChange = onQobuzEnabledChange,
-                                onQobuzQualityChange = onQobuzQualityChange,
                             )
                         }
                         SettingsPage.Storage -> StoragePage(

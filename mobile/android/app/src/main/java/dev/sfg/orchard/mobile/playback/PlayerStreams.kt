@@ -39,16 +39,15 @@ import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
-import dev.sfg.orchard.mobile.model.AudioQuality
-import dev.sfg.orchard.mobile.model.StreamDetail
 import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.playback.apple.AppleAtmosCapability
+import dev.sfg.orchard.mobile.playback.apple.AppleMusicAtmos
 import dev.sfg.orchard.mobile.playback.apple.AppleMusicDataSource
 import dev.sfg.orchard.mobile.playback.apple.AppleMusicDrmProvider
 import dev.sfg.orchard.mobile.playback.apple.AppleMusicStream
 import dev.sfg.orchard.mobile.playback.apple.AppleMusicStreams
 import dev.sfg.orchard.mobile.playback.apple.AppleMusicVideos
 import dev.sfg.orchard.mobile.playback.apple.LicensedMediaDataSource
-import kotlinx.coroutines.runBlocking
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -77,6 +76,8 @@ internal class PlayerStreams(
         }
     }
 
+    private val appleAtmos = AppleMusicAtmos(graph.appleMusic, graph.http)
+
     val appleVideos = AppleMusicVideos(graph.appleMusic, graph.http, {
         when {
             graph.settings.settings.value.homeSource != APPLE_MUSIC_SOURCE ->
@@ -92,7 +93,7 @@ internal class PlayerStreams(
     /**
      * Media3 can open the same stable URI from the active player, the spare crossfade player, and
      * the whole-track prefetcher at the same time. Keep resolution itself single-flight per URI;
-     * otherwise each range request mints another Qobuz session and the last callback can replace
+     * otherwise simultaneous requests can duplicate work and the last callback can replace
      * the source metadata for the song that is actually playing.
      */
     private val resolutionLocks = ConcurrentHashMap<String, Any>()
@@ -100,7 +101,7 @@ internal class PlayerStreams(
     @Volatile
     private var variant = graph.streamVariant()
 
-    // Signing in to Qobuz or changing quality changes where audio comes from; streams resolved before that are stale.
+    // Quality changes make resolved YouTube streams stale.
     // Apple Music streams do not depend on either.
     private fun dropStaleStreams() {
         val now = graph.streamVariant()
@@ -109,7 +110,7 @@ internal class PlayerStreams(
         resolvedStreams.keys.removeIf { !AppleMusicDataSource.isApple(it.toUri()) }
     }
 
-    /** Forgets YouTube and Qobuz streams after their variant changed. */
+    /** Forgets YouTube streams after their variant changed. */
     fun clearProviderStreams() {
         resolvedStreams.keys.removeIf { !AppleMusicDataSource.isApple(it.toUri()) }
         resolutionLocks.clear()
@@ -191,6 +192,7 @@ internal class PlayerStreams(
         val video = DefaultMediaSourceFactory(context).setDataSourceFactory(resolvingFactory)
         val hls = HlsMediaSource.Factory(hlsResolvingFactory)
         val appleVideo = appleVideos.mediaSourceFactory(httpFactory)
+        val atmos = appleAtmos.mediaSourceFactory(httpFactory)
         // Songs from this phone: plain reads from storage, no resolver and no copy into the stream cache.
         val localFiles = DefaultMediaSourceFactory(context)
         return object : MediaSource.Factory {
@@ -199,6 +201,10 @@ internal class PlayerStreams(
                 return when {
                     uri != null && (uri.scheme == "content" || uri.scheme == "file") -> localFiles.createMediaSource(mediaItem)
                     uri != null && MediaItemMapper.requiresAuthenticatedHls(uri) -> hls.createMediaSource(mediaItem)
+                    uri != null && useAppleAtmos(uri) -> AppleAtmosSelectingSource(mediaItem,
+                        chooseAtmos = { appleAtmos.available(MediaItemMapper.sourceId(uri)) },
+                        stereo = { progressive.createMediaSource(mediaItem) },
+                        atmos = { atmos.createMediaSource(mediaItem.buildUpon().setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8).build()) })
                     // Apple's HLS carries the picture and its soundtrack together.
                     AppleMusicVideos.isAppleVideo(uri) -> appleVideo.createMediaSource(mediaItem)
                     // The picture keeps the queue item as its own, so the player still reports it.
@@ -232,6 +238,13 @@ internal class PlayerStreams(
         }
     }
 
+    fun useAppleAtmos(uri: android.net.Uri): Boolean = graph.settings.settings.value.appleMusicAtmos &&
+        AppleMusicDataSource.isApple(uri) && !MediaItemMapper.requiresAppleStereo(uri) && AppleAtmosCapability.decoderAvailable
+
+    fun atmosBitrateKbps(id: String): Int = appleAtmos.bitrateKbps(id)
+
+    fun selectedAppleAtmos(uri: android.net.Uri): Boolean = useAppleAtmos(uri) && appleAtmos.selected(MediaItemMapper.sourceId(uri))
+
     private fun resolve(original: DataSpec): DataSpec {
         Log.d(TAG, "resolve: request uri=${original.uri}")
         dropStaleStreams()
@@ -242,28 +255,14 @@ internal class PlayerStreams(
         return synchronized(lock) {
             var stream: ResolvedStream
             var selectedVariant: String
-            var freshlyResolved: Boolean
             while (true) {
                 selectedVariant = graph.streamVariant()
-                // A source toggle can finish while a Qobuz match is still resolving.
+                // Quality may change while a stream is resolving.
                 val existing = cached(stableUri)
-                freshlyResolved = existing == null
                 stream = existing?.also { Log.d(TAG, "resolve: reusing stream for $videoId") } ?: fresh(original, videoId)
                 if (selectedVariant == graph.streamVariant()) break
             }
             resolvedStreams[stableUri] = stream
-            if (freshlyResolved && !MediaItemMapper.isVideoUri(original.uri)) {
-                if (stream.isQobuz) {
-                    graph.qobuzTiers.record(videoId, selectedVariant, StreamDetail(
-                        hiRes = stream.hires,
-                        bitDepth = stream.bitDepth ?: 0,
-                        sampleRate = stream.sampleRate ?: 0,
-                        codec = "FLAC",
-                    ))
-                } else {
-                    graph.qobuzTiers.clear(videoId, selectedVariant)
-                }
-            }
             onResolved(stableUri, stream)
             // The CDN checks the URL against the client it was issued to, so the fetch
             // has to claim the identity that resolved it rather than the factory's
@@ -275,7 +274,7 @@ internal class PlayerStreams(
     private fun fresh(original: DataSpec, videoId: String): ResolvedStream {
         Log.d(TAG, "resolve: resolving videoId=$videoId")
         val uri = original.uri
-        val stream = qobuz(videoId, uri) ?: when {
+        val stream = when {
             MediaItemMapper.isVideoUri(uri) -> resolver.resolveVideo(
                 videoId,
                 MediaItemMapper.videoHeight(uri) ?: graph.settings.settings.value.videoMaxHeight,
@@ -285,39 +284,6 @@ internal class PlayerStreams(
         }
         Log.d(TAG, "resolve: $videoId -> ${stream.url.take(60)}...")
         return stream
-    }
-
-    /** The Qobuz match for a MAX-quality audio item, or null to fall back to the catalog stream. */
-    private fun qobuz(videoId: String, uri: android.net.Uri): ResolvedStream? {
-        if (graph.audioQuality() != AudioQuality.MAX) return null
-        if (MediaItemMapper.isVideoUri(uri) || MediaItemMapper.requiresAuthenticatedDirect(uri) ||
-            MediaItemMapper.requiresAuthenticatedHls(uri)
-        ) return null
-        val track = trackLookup(videoId)?.takeUnless { it.isUpload } ?: return null
-        // Loader threads may block, so this runs here without hopping to another dispatcher.
-        val match = runCatching {
-            runBlocking {
-                graph.qobuzResolver.resolve(
-                    id = track.id,
-                    title = track.title,
-                    artists = listOf(track.artist),
-                    album = track.album,
-                    durationMs = track.durationMs,
-                    explicit = track.explicit,
-                )
-            }
-        }.getOrNull() ?: return null
-        Log.i(TAG, "resolve: $videoId via Qobuz (${match.bitrateKbps} kbps)")
-        return ResolvedStream(
-            url = match.streamUrl,
-            mimeType = "audio/flac",
-            expiresAtMs = System.currentTimeMillis() + QOBUZ_URL_LIFETIME_MS,
-            bitrateKbps = match.bitrateKbps,
-            isQobuz = true,
-            bitDepth = match.bitDepth,
-            sampleRate = match.sampleRate,
-            hires = match.hires,
-        )
     }
 
     /**
@@ -346,6 +312,5 @@ internal class PlayerStreams(
         // Shares the service tag so existing logcat filters keep working.
         const val TAG = "OrchardPlayback"
         const val EXPIRY_BUFFER_MS = 60_000L
-        const val QOBUZ_URL_LIFETIME_MS = 4 * 3600_000L
     }
 }

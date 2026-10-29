@@ -189,7 +189,7 @@ have ShazamKit enabled.
 
 Sign in to the same Orchard account on the phone and the desktop. Each one then lists the other: on the phone, open the devices sheet from the full player; on the desktop, select the cast button in the player bar. Pick a device to play there, and pick this phone to bring playback home.
 
-The account service introduces the devices and hands both a fresh session key. They connect directly on the local network when they can and over WebRTC otherwise, and prove that key to each other before anything else crosses. When the desktop controls a playing phone, the phone sends each pair of songs to the desktop, which plans and renders the Smart Crossfade and sends the blend back; the phone still plays it on its own clock, and mixes for itself whenever the desktop is gone. Qobuz and YouTube sign-ins never leave their device.
+The account service introduces the devices and hands both a fresh session key. They connect directly on the local network when they can and over WebRTC otherwise, and prove that key to each other before anything else crosses. When the desktop controls a playing phone, the phone sends each pair of songs to the desktop, which plans and renders the Smart Crossfade and sends the blend back; the phone still plays it on its own clock, and mixes for itself whenever the desktop is gone. Apple Music and YouTube sign-ins never leave their device.
 
 Phone and desktop run the same C++ protocol core (`core/native/connect`), reached here through JNI. See [docs/CONNECT.md](../docs/CONNECT.md).
 

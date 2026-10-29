@@ -25,7 +25,7 @@ Adaptive mixes · Best Mix queues · Synced lyrics · Lossless audio · Orchard 
 
 Orchard is an open-source music player for Windows, Linux, and Android. Browse your YouTube Music or Apple Music recommendations, library, and playlists, shape the sound, and move playback between your computer and phone. The desktop app uses a native Qt interface and Rust audio core.
 
-Orchard is an independent project and is not affiliated with or endorsed by Google, YouTube, Apple, or Qobuz.
+Orchard is an independent project and is not affiliated with or endorsed by Google, YouTube, or Apple.
 
 ## Screenshots
 
@@ -81,7 +81,6 @@ https://github.com/user-attachments/assets/983fb4b1-e0ff-4f90-9ff5-b92702664a3d
 - **Automatic EQ and dynamic leveling:** balance the sound and reduce sudden volume jumps.
 - **Per-song gain:** Orchard remembers your volume adjustment for each track.
 - **Output device selection:** send Orchard to your speakers, headphones, or DAC.
-- **Qobuz lossless and Hi-Res:** connect your own Qobuz subscription and select MAX quality. Matched songs play from Qobuz, with YouTube Music supplying your library and playlists.
 
 See [Audio Engine and equalizer](docs/app/audio-engine.md) and [Streaming quality](docs/app/streaming-quality.md).
 
@@ -143,7 +142,7 @@ To connect your phone and computer:
 3. On desktop, select the cast button in the player bar. On Android, open the device picker in the full player.
 4. Select the device you want to control.
 
-Your Orchard account connects the devices. Your YouTube Music, Apple Music, and Qobuz sign-ins stay on their own device. Your phone can start Apple Music songs on your computer when both are connected to Apple Music. Apple Music songs on the phone play only on the phone. See [Orchard Connect](docs/app/connect.md) for playback handoff and troubleshooting.
+Your Orchard account connects the devices. Your YouTube Music and Apple Music sign-ins stay on their own device. Your phone can start Apple Music songs on your computer when both are connected to Apple Music. Apple Music songs on the phone play only on the phone. See [Orchard Connect](docs/app/connect.md) for playback handoff and troubleshooting.
 
 ## Getting started
 

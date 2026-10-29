@@ -48,7 +48,6 @@ class Integrations;
 class AnimatedArtworkService;
 class ConnectivityMonitor;
 class DownloadManager;
-class QobuzService;
 class AppleMusic;
 class AppleMusicStreams;
 class CatalogSource;
@@ -98,8 +97,6 @@ class PlaybackController final : public QObject {
                  NOTIFY streamQualityChanged)
   Q_PROPERTY(QString audioQuality READ streamQuality WRITE setStreamQuality
                  NOTIFY streamQualityChanged)
-  // Signed in to Qobuz here, or on a connected Connect peer whose session this desktop borrows.
-  Q_PROPERTY(bool qobuzReachable READ qobuzReachable NOTIFY streamQualityChanged)
   Q_PROPERTY(bool shuffleEnabled READ shownShuffle WRITE setShuffleEnabled
                  NOTIFY stateChanged)
   Q_PROPERTY(QString repeatMode READ shownRepeatMode WRITE setRepeatMode NOTIFY
@@ -125,7 +122,6 @@ public:
                      SystemMediaBridge *systemMedia = nullptr,
                      Integrations *integrations = nullptr,
                      AnimatedArtworkService *animatedArtwork = nullptr,
-                     QobuzService *qobuz = nullptr,
                      QObject *parent = nullptr);
   ~PlaybackController() override;
   QVariantMap track() const { return m_track; }
@@ -185,7 +181,7 @@ public:
   // Last visited page snapshot; follows the same persistence switch as the queue.
   Q_INVOKABLE void savePage(const QVariantMap &page);
   Q_INVOKABLE QVariantMap restoredPage() const;
-  // saver, normal, high or max. Saved MAX reads as high while Qobuz is disconnected.
+  // saver, normal, high or max. Saved MAX reads as high.
   QString streamQuality() const;
   void setStreamQuality(const QString &quality);
   bool shuffleEnabled() const { return m_shuffleEnabled; }
@@ -249,8 +245,6 @@ public:
   void setAppleMusic(AppleMusic *account, CatalogSource *source);
   bool offlineMode() const;
   // Connect roles moved, so a peer's provider session may have come or gone.
-  void remoteProviderChanged();
-  bool qobuzReachable() const;
   bool remoteActive() const { return m_remote && m_remote->active(); }
   // The remote's state moved or remote mode toggled.
   void remoteChanged();
@@ -297,7 +291,6 @@ private:
   bool m_autoplayEnabled{true};
   bool m_mixRequest{false};
   QString m_streamQuality{QStringLiteral("high")};
-  bool m_qobuzWasReachable{false};
   // Temporarily store position so quality hopping doesn't send the user back to
   // second zero.
   double m_resumePosition{0.0};
@@ -340,14 +333,7 @@ private:
   // Starts a validated stream (YouTube or provider) on the current player.
   void startResolvedStream(const QJsonObject &stream);
   void openPreparedStream(const QJsonObject &stream);
-  // playback_qobuz.cpp: Qobuz first when it is on, YouTube otherwise.
-  void attachQobuz();
   void installRangeReaders();
-  bool qobuzEligible(const QVariantMap &track) const;
-  bool localQobuzActive() const;
-  // Local Qobuz, or a Connect peer's when only it is signed in.
-  bool qobuzAvailable() const;
-  void resolveQobuz(const QVariantMap &track, std::function<void(const QJsonValue &, const QString &)> done);
   RemoteProvider *m_remoteProvider{nullptr};
   // playback_apple.cpp
   void startAppleTrack();
@@ -374,21 +360,15 @@ private:
   void applyOffline();
   DownloadManager *m_downloads{nullptr};
   ConnectivityMonitor *m_connectivity{nullptr};
-  // YouTube has no MAX; Qobuz misses play at High.
+  // YouTube MAX plays at High.
   QString youtubeQuality() const;
-  void requestStream(bool refreshStream = false, bool tryQobuz = true);
+  void requestStream(bool refreshStream = false);
   void requestPreparedStream(bool refreshStream);
-  QJsonObject qobuzStream(const QVariantMap &track, const QJsonValue &result) const;
   void applyStreamQuality();
-  void reportQobuzStarted(AudioStreamProxy *proxy, double position);
-  void reportQobuzEnded(AudioStreamProxy *proxy, QMediaPlayer *player);
 
   YouTubeProvider *m_provider;
-  QobuzService *m_qobuz{nullptr};
-  // Invalidates a preload's pending Qobuz or Apple Music lookup; YouTube preloads use m_nextRequest.
+  // Invalidates a preload's pending Apple Music lookup; YouTube preloads use m_nextRequest.
   quint64 m_preparedResolveToken{0};
-  bool m_qobuzWasActive{false};
-  bool m_qobuzWasConnected{false};
   AuthManager *m_auth;
   HomeController *m_home;
   SystemMediaBridge *m_systemMedia;

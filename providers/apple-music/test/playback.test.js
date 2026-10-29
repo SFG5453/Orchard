@@ -121,3 +121,26 @@ test('a music video resolves to its master playlist', async () => {
   assert.deepEqual(requests[0].body, { salableAdamId: '1458003118' });
   await assert.rejects(client.playback.video('am.songs.1'), { code: 'not_playable' });
 });
+
+test('Atmos resolution returns the enhanced playlist and the playback license endpoint', async () => {
+  const { createPlayback } = await import('../src/playback.js');
+  const calls = [];
+  const client = { storefront: () => 'us', playbackHeaders: () => ({}), editorial: async (path, query, options) => {
+    calls.push({ path, query, options });
+    return { data: [{ attributes: { audioTraits: ['atmos'], extendedAssetUrls: { enhancedHls: 'https://example.com/master.m3u8' } } }] };
+  } };
+  const playback = createPlayback(client, async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ songList: [{ 'hls-key-server-url': 'https://example.com/license' }] }) }));
+  assert.deepEqual(await playback.atmos('am.songs.123'), { appleId: '123', available: true, master: 'https://example.com/master.m3u8', licenseUrl: 'https://example.com/license' });
+  assert.deepEqual(calls[0].query, { extend: 'audioTraits,extendedAssetUrls' });
+  await assert.rejects(playback.atmos('am.songs.i.1'), { code: 'not_playable' });
+});
+
+
+test('non-Atmos tracks use stereo without requesting a playback license', async () => {
+  const { createPlayback } = await import('../src/playback.js');
+  let requested = false;
+  const client = { storefront: () => 'us', editorial: async () => ({ data: [{ attributes: { audioTraits: ['lossless', 'lossy-stereo'], extendedAssetUrls: { enhancedHls: 'https://example.com/master' } } }] }) };
+  const playback = createPlayback(client, async () => { requested = true; throw new Error('unexpected'); });
+  assert.deepEqual(await playback.atmos('am.songs.123'), { appleId: '123', available: false });
+  assert.equal(requested, false);
+});

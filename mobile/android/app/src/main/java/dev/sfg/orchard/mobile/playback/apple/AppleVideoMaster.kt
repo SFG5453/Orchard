@@ -99,7 +99,7 @@ internal fun withKeyId(init: ByteArray, keyId: ByteArray): ByteArray {
 }
 
 /** The first key id in a Widevine pssh box: from a version 1 header, else the WidevinePsshData key_id field. */
-private fun psshKeyId(box: ByteArray): ByteArray? {
+internal fun psshKeyId(box: ByteArray): ByteArray? {
     if (box.size < 32 || String(box, 4, 4, Charsets.US_ASCII) != "pssh") return null
     val version = box[8].toInt()
     var at = 28

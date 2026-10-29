@@ -90,6 +90,7 @@ class MixSplicer : BaseAudioProcessor() {
     }
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
+        if (inputAudioFormat.channelCount > 2) return AudioProcessor.AudioFormat.NOT_SET
         if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT || inputAudioFormat.channelCount !in 1..2) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }

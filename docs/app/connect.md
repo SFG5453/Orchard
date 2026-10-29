@@ -16,7 +16,6 @@ keywords:
   - devices
   - controlled by
   - mix host
-  - qobuz on phone
   - apple music on computer
 platforms:
   - desktop
@@ -34,7 +33,7 @@ Orchard Connect lets one device control playback on another. Your computer can p
 - An up-to-date Orchard on both devices. A device with an older Orchard shows "Update Orchard on this device to use Connect" and cannot be selected.
 - An internet connection on both devices. The devices find each other through your Orchard account, so they do not need to be on the same Wi-Fi.
 
-Your YouTube Music and Qobuz sign-ins never leave the device they are on. Connect does not copy passwords or tokens between devices.
+Your YouTube Music and Apple Music sign-ins never leave the device they are on. Connect does not copy passwords or tokens between devices.
 
 ## Open Orchard Connect
 
@@ -90,12 +89,6 @@ When your phone plays music and this computer is connected to it, the computer h
 - **Artwork**: the computer looks up album artwork for the phone.
 
 The phone keeps control of playback, volume, and its speakers. The computer only helps.
-
-## Use Qobuz from your phone's account
-
-If your phone is signed in to Qobuz and this computer is not, this computer can play Qobuz songs through the phone's Qobuz sign-in while the two are connected. Set the streaming quality on this computer to **MAX**. See [Streaming quality](streaming-quality.md). The phone sends the audio, and the Qobuz password and tokens stay on the phone.
-
-If no connected device is signed in to Qobuz, Orchard says "No connected device is signed in to that service."
 
 ## Connect messages and what to do
 

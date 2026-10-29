@@ -26,7 +26,7 @@ test('provider coordination uses opaque sources without an HTTP proxy', async ()
   const calls = [];
   const coordinator = createPlaybackProviderCoordinator({
     providers: [{
-      id: 'qobuz',
+      id: 'example',
       enabled: () => true,
       quality: () => 'lossless',
       matchTrack: async () => ({ id: 42 }),
@@ -39,11 +39,11 @@ test('provider coordination uses opaque sources without an HTTP proxy', async ()
   });
 
   assert.deepEqual(await coordinator.resolve({ title: 'Track' }), {
-    provider: 'qobuz',
+    provider: 'example',
     match: { id: 42 },
     source: { playbackId: 'opaque' }
   });
-  assert.deepEqual((await coordinator.readRange('qobuz', 'opaque', { start: 2 })).bytes, Uint8Array.of(1, 2, 3));
+  assert.deepEqual((await coordinator.readRange('example', 'opaque', { start: 2 })).bytes, Uint8Array.of(1, 2, 3));
   assert.deepEqual(calls, [['opaque', { start: 2 }]]);
 });
 

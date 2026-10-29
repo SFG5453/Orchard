@@ -187,6 +187,8 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
     suspend fun stream(id: String): JSONObject =
         call("playback.stream", JSONObject().put("track", JSONObject().put("id", id)))
 
+    suspend fun atmos(id: String): JSONObject = call("playback.atmos", JSONObject().put("id", id))
+
     /** A music video's master playlist and license endpoint, for an am.music-videos id. */
     suspend fun video(id: String): JSONObject = call("playback.video", JSONObject().put("id", id))
 

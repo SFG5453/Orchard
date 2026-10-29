@@ -50,8 +50,8 @@ TestDevice::TestDevice(FakeHub &hub, const std::string &id, const std::string &p
               {"can_render_audio", true},
               {"can_mix_audio", desktop},
               {"can_fetch_artwork", desktop},
-              {"providers", {"youtube", "qobuz"}},
-              {"provider_sessions", {{"youtube", true}, {"qobuz", false}}},
+              {"providers", {"youtube", "example"}},
+              {"provider_sessions", {{"youtube", true}, {"example", false}}},
               {"audio_transports", {"pcm_s16"}}};
   m_playback = Json::object();
   config.advertiseLoopback = true;

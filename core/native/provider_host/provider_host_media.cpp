@@ -47,10 +47,6 @@ Bundle youtubeBundle() {
   return {"youtube-provider.qjc", "OrchardYouTubeProvider", "YouTube"};
 }
 
-Bundle qobuzBundle() {
-  return {"qobuz-provider.qjc", "OrchardQobuzProvider", "Qobuz"};
-}
-
 Bundle appleMusicBundle() {
   return {"apple-music-provider.qjc", "OrchardAppleMusicProvider", "Apple Music"};
 }

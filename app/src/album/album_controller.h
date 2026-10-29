@@ -32,7 +32,6 @@ class AuthManager;
 class YouTubeCatalog;
 class QNetworkReply;
 class AnimatedArtworkService;
-class QobuzService;
 class AppleMusic;
 class CatalogSource;
 
@@ -44,8 +43,6 @@ class AlbumController final : public QObject {
   Q_PROPERTY(QVariantMap palette READ palette NOTIFY stateChanged)
   Q_PROPERTY(bool artworkLoading READ artworkLoading NOTIFY stateChanged)
   Q_PROPERTY(QString animatedArtworkUrl READ animatedArtworkUrl NOTIFY stateChanged)
-  // {tier: "hires"|"lossless", bitDepth, sampleRate} from Qobuz, or empty.
-  Q_PROPERTY(QVariantMap streamQuality READ streamQuality NOTIFY streamQualityChanged)
   Q_PROPERTY(QVariantMap expandedSection READ expandedSection NOTIFY sectionChanged)
   Q_PROPERTY(bool sectionLoading READ sectionLoading NOTIFY sectionChanged)
   Q_PROPERTY(QString sectionError READ sectionError NOTIFY sectionChanged)
@@ -54,8 +51,7 @@ public:
   // Artist instances share request isolation and artwork sampling with albums.
   explicit AlbumController(YouTubeCatalog *catalog, AuthManager *auth,
                            QObject *parent = nullptr, bool artistMode = false,
-                           AnimatedArtworkService *animatedArtwork = nullptr,
-                           QobuzService *qobuz = nullptr);
+                           AnimatedArtworkService *animatedArtwork = nullptr);
 
   [[nodiscard]] bool loading() const { return m_loading; }
   [[nodiscard]] QString errorMessage() const { return m_errorMessage; }
@@ -63,7 +59,6 @@ public:
   [[nodiscard]] QVariantMap palette() const { return m_palette; }
   [[nodiscard]] bool artworkLoading() const { return m_artworkLoading; }
   [[nodiscard]] QString animatedArtworkUrl() const { return m_animatedArtworkUrl; }
-  [[nodiscard]] QVariantMap streamQuality() const { return m_streamQuality; }
   [[nodiscard]] QVariantMap expandedSection() const { return m_expandedSection; }
   [[nodiscard]] bool sectionLoading() const { return m_sectionLoading; }
   [[nodiscard]] QString sectionError() const { return m_sectionError; }
@@ -79,12 +74,10 @@ public:
 
 signals:
   void stateChanged();
-  void streamQualityChanged();
   void sectionChanged();
 
 private:
   void updateAnimatedArtwork();
-  void updateStreamQuality();
   void receiveAlbum(quint64 requestId, const QJsonObject &album);
   void receiveFailure(quint64 requestId, const QString &message);
   void receiveSection(quint64 requestId, const QJsonObject &page, const QString &error = {});
@@ -116,12 +109,9 @@ private:
   AnimatedArtworkService *m_animatedArtworkService{nullptr};
   QString m_animatedArtworkUrl;
   quint64 m_animatedArtworkRequestId{0};
-  QobuzService *m_qobuz{nullptr};
   AppleMusic *m_appleMusic{nullptr};
   CatalogSource *m_source{nullptr};
   quint64 m_appleRequests{0};
-  QVariantMap m_streamQuality;
-  quint64 m_streamQualityRequest{0};
   QVariantMap m_expandedSection;
   quint64 m_sectionRequest{0};
   bool m_sectionLoading{false};

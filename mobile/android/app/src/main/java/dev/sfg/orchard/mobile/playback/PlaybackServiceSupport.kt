@@ -51,7 +51,8 @@ internal fun artworkBitmapLoader(context: Context, http: OkHttpClient): BitmapLo
 
 /** Resolves and caches the current and next items ahead of playback. */
 @UnstableApi
-internal fun prefetchAround(player: Player, streamResolver: YouTubeStreamResolver, streamCache: StreamCache) {
+internal fun prefetchAround(player: Player, streamResolver: YouTubeStreamResolver, streamCache: StreamCache,
+                            skipAudio: (android.net.Uri) -> Boolean = { false }) {
     val wanted = (player.currentMediaItemIndex..player.currentMediaItemIndex + 1)
         .filter { it in 0 until player.mediaItemCount }
         .map(player::getMediaItemAt)
@@ -64,7 +65,7 @@ internal fun prefetchAround(player: Player, streamResolver: YouTubeStreamResolve
         val apple = dev.sfg.orchard.mobile.playback.apple.AppleMusicDataSource.isApple(uri)
         if (!authenticated && !apple && !MediaItemMapper.isVideoUri(uri)) streamResolver.prefetch(item.mediaId)
     }
-    val uris = wanted.mapNotNull { it.localConfiguration?.uri }.filterNot(MediaItemMapper::isVideoUri)
+    val uris = wanted.mapNotNull { it.localConfiguration?.uri }.filterNot { MediaItemMapper.isVideoUri(it) || skipAudio(it) }
     streamCache.retainOnly(uris)
     uris.forEach(streamCache::prefetch)
 }

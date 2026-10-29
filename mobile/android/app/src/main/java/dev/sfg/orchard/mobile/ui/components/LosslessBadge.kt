@@ -45,83 +45,34 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-val LosslessGold = Color(0xFFDFB15B)
-
-private fun kHz(rate: Int): String {
-    val khz = rate / 1000.0
-    return if (khz % 1.0 == 0.0) "${khz.toInt()} kHz" else "%.1f kHz".format(khz)
-}
-
-/** "Hi-Res · 24-bit / 44.1 kHz · FLAC", leaving out what the stream has not reported. */
-private fun qobuzLabel(detail: StreamDetail): String {
-    val format = listOfNotNull(
-        if (detail.bitDepth > 0) "${detail.bitDepth}-bit" else null,
-        if (detail.sampleRate > 0) kHz(detail.sampleRate) else null,
-    ).joinToString(" / ")
-    return listOf(if (detail.hiRes) "Hi-Res" else "Lossless", format, detail.codec).filter { it.isNotBlank() }.joinToString(" · ")
-}
-
-/**
- * Bitrate readout badge under the player scrubber.
- *
- * For standard streams, renders "$bitrate kbps · codec".
- * For Qobuz streams, renders the tier, format and codec in gold; clicking it smoothly animates
- * between that and the numeric bitrate readout.
- */
 @Composable
 fun LosslessBadge(
     showBitrate: Boolean,
     bitrateKbps: Int,
-    isQobuz: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val detail = LocalStreamDetail.current
+    if (detail.codec == "Atmos") {
+        val label = if (bitrateKbps > 0) "Atmos · $bitrateKbps kbps" else "Atmos"
+        Text(
+            text = label,
+            modifier = modifier,
+            color = Color.White.copy(alpha = 0.85f),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 11.sp, fontFamily = FontFamily.Default, fontWeight = FontWeight.SemiBold,
+            ),
+        )
+        return
+    }
     if (!showBitrate || bitrateKbps <= 0) return
 
-    if (!isQobuz) {
-        Box(modifier = modifier, contentAlignment = Alignment.Center) {
-            Text(
-                text = listOf("$bitrateKbps kbps", LocalStreamDetail.current.codec).filter { it.isNotBlank() }.joinToString(" · "),
-                color = Color.White.copy(alpha = 0.85f),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Default,
-                    fontWeight = FontWeight.SemiBold,
-                ),
-            )
-        }
-    } else {
-        var showNumeric by remember { mutableStateOf(false) }
-        val tierLabel = qobuzLabel(LocalStreamDetail.current)
-
-        Box(
-            modifier = modifier
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) {
-                    showNumeric = !showNumeric
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            AnimatedContent(
-                targetState = showNumeric,
-                transitionSpec = {
-                    val slideDirection = if (targetState) 1 else -1
-                    (fadeIn(animationSpec = tween(200)) + slideInVertically(animationSpec = tween(200)) { height -> slideDirection * height / 2 })
-                        .togetherWith(fadeOut(animationSpec = tween(200)) + slideOutVertically(animationSpec = tween(200)) { height -> -slideDirection * height / 2 })
-                },
-                label = "LosslessBitrateTransition",
-            ) { numeric ->
-                Text(
-                    text = if (numeric) "$bitrateKbps kbps" else tierLabel,
-                    color = LosslessGold,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Default,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                )
-            }
-        }
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Text(
+            text = listOf("$bitrateKbps kbps", detail.codec).filter { it.isNotBlank() }.joinToString(" · "),
+            color = Color.White.copy(alpha = 0.85f),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 11.sp, fontFamily = FontFamily.Default, fontWeight = FontWeight.SemiBold,
+            ),
+        )
     }
 }

@@ -9,6 +9,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.random.Random
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -75,6 +76,14 @@ class MixSplicerTest {
         assertEquals(10_000.toShort(), out[0])
         assertEquals(7_071.0, out[rate / 2].toDouble(), 2.0)
         assertTrue(out.copyOfRange(rate, out.size).all { it == 0.toShort() })
+    }
+
+    @Test
+    fun `multichannel input bypasses the stereo splicer`() {
+        val splicer = MixSplicer()
+        assertEquals(AudioProcessor.AudioFormat.NOT_SET, splicer.configure(AudioProcessor.AudioFormat(rate, 6, C.ENCODING_PCM_16BIT)))
+        splicer.flush(AudioProcessor.StreamMetadata.DEFAULT)
+        assertFalse(splicer.isActive)
     }
 
     @Test

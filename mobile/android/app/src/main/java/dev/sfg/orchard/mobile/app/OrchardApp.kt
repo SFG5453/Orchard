@@ -94,11 +94,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val nonMusicSkip = remember(viewModel) {
         dev.sfg.orchard.mobile.ui.components.NonMusicSkip(nonMusicSegment, viewModel::skipNonMusic)
     }
-    val qobuzStatus by viewModel.qobuzStatus.collectAsStateWithLifecycle()
     val bestMixJob by viewModel.bestMixJob.collectAsStateWithLifecycle()
-    val maxActive by viewModel.maxActive.collectAsStateWithLifecycle()
-    val albumQualityLoader: (suspend (dev.sfg.orchard.mobile.model.BrowseDetail) -> dev.sfg.orchard.mobile.model.QobuzAlbumQuality?)? =
-        if (maxActive) viewModel::qobuzAlbumQuality else null
     // Transition plans belong to the phone's two-player engine, never a selected Connect target.
     val localTransitionMarker = rememberHandoffMarker(
         transitionMarker.takeIf { targets.selected is PlaybackTarget.LocalPhone },
@@ -129,7 +125,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val dockCollapse = rememberDockCollapse()
     LaunchedEffect(route, searchOpen) { dockCollapse.collapsed = false }
 
-    val chromeHidden = route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME || route == Routes.QOBUZ_LOGIN
+    val chromeHidden = route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME
     // Collection artwork runs under the status bar, so these screens take no top inset and
     // apply it themselves where the content actually needs it.
     val isDetail = route == Routes.DETAIL || route?.startsWith("detail") == true
@@ -184,9 +180,6 @@ fun OrchardApp(viewModel: OrchardViewModel) {
         dev.sfg.orchard.mobile.ui.components.LocalNonMusicSkip provides nonMusicSkip,
         dev.sfg.orchard.mobile.model.LocalBestMixJob provides bestMixJob,
         dev.sfg.orchard.mobile.model.LocalStartMix provides viewModel::startMix,
-        dev.sfg.orchard.mobile.model.LocalQobuzLinked provides qobuzStatus.isConnected,
-        dev.sfg.orchard.mobile.model.LocalMaxActive provides maxActive,
-        dev.sfg.orchard.mobile.model.LocalQobuzAlbumQuality provides albumQualityLoader,
     ) {
         Scaffold(
             // Transparent so the artwork wash below shows through every screen.

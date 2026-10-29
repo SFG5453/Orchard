@@ -96,7 +96,6 @@ fun PlayerScrubber(
     mixProgress: Float? = null,
     showBitrate: Boolean = false,
     bitrateKbps: Int = 0,
-    isQobuz: Boolean = false,
     /** Shows the provider mark beside the stream readout. */
     showSource: Boolean = false,
 ) {
@@ -247,7 +246,6 @@ fun PlayerScrubber(
                     dev.sfg.orchard.mobile.ui.components.LosslessBadge(
                         showBitrate = showBitrate,
                         bitrateKbps = bitrateKbps,
-                        isQobuz = isQobuz || playback.currentTrack?.isQobuz == true,
                     )
                 }
             }

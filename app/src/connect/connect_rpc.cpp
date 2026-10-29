@@ -27,7 +27,6 @@
 #include "connect_mix.h"
 #include "auth/auth_manager.h"
 #include "connect_tracks.h"
-#include "providers/qobuz/qobuz_service.h"
 #include "providers/youtube/catalog/youtube_catalog.h"
 #include "system_media_bridge.h"
 
@@ -35,9 +34,6 @@
 #include <memory>
 
 namespace {
-
-// One range per request keeps a slow link from stalling other traffic for long.
-constexpr qint64 kMaxRangeBytes = 4 * 1024 * 1024;
 
 QString provider(const QJsonObject &params) { return params.value(QStringLiteral("provider")).toString(); }
 
@@ -97,8 +93,6 @@ void ConnectService::handleRpc(const QJsonObject &event) {
     serveArtwork(id, params);
   else if (method == QStringLiteral("MixPrepare"))
     m_mix->prepare(id, event.value(QStringLiteral("session_id")).toString(), params);
-  else if (provider(params) == QStringLiteral("qobuz"))
-    serveQobuz(id, event.value(QStringLiteral("session_id")).toString(), method, params);
   else if (provider(params) == QStringLiteral("youtube"))
     serveCatalog(id, method, params);
   else
@@ -124,55 +118,6 @@ void ConnectService::serveCatalog(const QString &id, const QString &method, cons
     return;
   }
   m_catalogRequests.insert(requestId, id);
-}
-
-void ConnectService::serveQobuz(const QString &id, const QString &sessionId, const QString &method,
-                                const QJsonObject &params) {
-  if (!m_qobuz || !m_qobuz->connected()) {
-    respond(id, false, {}, QStringLiteral("provider_unavailable"));
-    return;
-  }
-  const QPointer<ConnectService> self(this);
-  const QString playbackId = params.value(QStringLiteral("playback_id")).toString();
-  if (method == QStringLiteral("ResolveTrack")) {
-    const QVariantMap track = connect_tracks::fromWire(params.value(QStringLiteral("track")).toObject());
-    m_qobuz->resolveTrack(
-        track,
-        [self, id](const QJsonValue &result, const QString &error) {
-          if (self)
-            self->respond(id, error.isEmpty(), result, error);
-        },
-        true);
-  } else if (method == QStringLiteral("ReadRange")) {
-    const auto start = static_cast<qint64>(params.value(QStringLiteral("start")).toDouble(-1));
-    const auto end = static_cast<qint64>(params.value(QStringLiteral("end")).toDouble(-1));
-    if (start < 0 || end < start || end - start >= kMaxRangeBytes) {
-      respond(id, false, {}, QStringLiteral("invalid_request"));
-      return;
-    }
-    m_qobuz->readRange(playbackId, start, end, [self, id, sessionId](const QByteArray &bytes, const QString &error) {
-      if (!self || !self->m_node)
-        return;
-      if (!error.isEmpty()) {
-        self->respond(id, false, {}, error);
-        return;
-      }
-      // Bytes ride a data frame ahead of the result on the same ordered link.
-      const QJsonObject header{{QStringLiteral("kind"), QStringLiteral("range")}, {QStringLiteral("rpc"), id}};
-      self->m_node->sendData(sessionId.toStdString(), QJsonDocument(header).toJson(QJsonDocument::Compact).toStdString(),
-                             bytes.toStdString());
-      self->respond(id, true, QJsonObject{{QStringLiteral("length"), static_cast<double>(bytes.size())}});
-    });
-  } else if (method == QStringLiteral("PlaybackReport")) {
-    const double position = params.value(QStringLiteral("position")).toDouble();
-    if (params.value(QStringLiteral("started")).toBool())
-      m_qobuz->playbackStarted(playbackId, position);
-    else
-      m_qobuz->playbackEnded(playbackId, position);
-    respond(id, true, {});
-  } else {
-    respond(id, false, {}, QStringLiteral("unsupported"));
-  }
 }
 
 void ConnectService::serveArtwork(const QString &id, const QJsonObject &params) {

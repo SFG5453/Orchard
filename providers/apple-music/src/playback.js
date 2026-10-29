@@ -155,6 +155,24 @@ export function createPlayback(client, fetchImpl) {
     return { appleId, licenseUrl, flavor: asset.flavor, ...playlist };
   }
 
+  /** Enhanced HLS and the playback license endpoint for an Atmos-capable song. */
+  async function atmos(id) {
+    const appleId = playbackId({ id });
+    if (!appleId) throw new AppleMusicError(0, 'not_playable', 'This song cannot be streamed.');
+    const catalog = await client.editorial(`/v1/catalog/${client.storefront()}/songs/${appleId}`,
+      { extend: 'audioTraits,extendedAssetUrls' }, { personal: true });
+    const attributes = catalog?.data?.[0]?.attributes || {};
+    const traits = attributes.audioTraits || [];
+    if (!Array.isArray(traits) || !traits.some((trait) => trait === 'atmos' || trait === 'dolby-atmos'))
+      return { appleId, available: false };
+    const master = String(attributes.extendedAssetUrls?.enhancedHls || '');
+    if (!master.startsWith('https://')) return { appleId, available: false };
+    const answer = await post(PLAYBACK_URL, { salableAdamId: appleId });
+    const licenseUrl = String(answer.songList?.[0]?.['hls-key-server-url'] || '');
+    if (!licenseUrl.startsWith('https://')) throw new AppleMusicError(0, 'no_widevine', 'No Widevine license for this song.');
+    return { appleId, available: true, master, licenseUrl };
+  }
+
   /** A music video's HLS master playlist and license endpoint; renditions name their own keys. */
   async function video(id) {
     const parsed = parseBrowseId(id);
@@ -191,5 +209,5 @@ export function createPlayback(client, fetchImpl) {
     return { license: answer.license };
   }
 
-  return { stream, video, license };
+  return { stream, atmos, video, license };
 }

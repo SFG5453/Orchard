@@ -43,7 +43,6 @@ class AuthManager;
 class HomeController;
 class OrchardAccount;
 class PlaybackController;
-class QobuzService;
 class YouTubeCatalog;
 
 // Orchard Connect on the desktop (QML: OrchardConnect). The protocol, roles and
@@ -70,7 +69,7 @@ class ConnectService final : public QObject,
 
 public:
   ConnectService(OrchardAccount *account, PlaybackController *playback, HomeController *home, AuthManager *auth,
-                 QobuzService *qobuz, QObject *parent = nullptr);
+                 QObject *parent = nullptr);
   ~ConnectService() override;
 
   void setCatalog(YouTubeCatalog *catalog);
@@ -94,7 +93,7 @@ public:
   Q_INVOKABLE void setRemoteVolume(double volume);
   Q_INVOKABLE void clearMessage();
 
-  // Sends an RPC to the device holding a role ("artwork", "mix", "provider:qobuz").
+  // Sends an RPC to the device holding a role ("artwork", "mix").
   // The callback runs on the UI thread with {ok, result, error}.
   void request(const QString &host, const QString &method, const QJsonObject &params,
                std::function<void(const QJsonObject &)> done);
@@ -166,7 +165,6 @@ private:
   void handleRpc(const QJsonObject &event);
   void respond(const QString &id, bool ok, const QJsonValue &result, const QString &error = {});
   void serveCatalog(const QString &id, const QString &method, const QJsonObject &params);
-  void serveQobuz(const QString &id, const QString &sessionId, const QString &method, const QJsonObject &params);
   void serveArtwork(const QString &id, const QJsonObject &params);
   void wireCatalog();
   void setupMixHost();
@@ -175,7 +173,6 @@ private:
   QPointer<PlaybackController> m_playback;
   QPointer<HomeController> m_home;
   QPointer<AuthManager> m_auth;
-  QPointer<QobuzService> m_qobuz;
   QPointer<YouTubeCatalog> m_catalog;
   QPointer<AnimatedArtworkService> m_artwork;
   QPointer<AppleMusic> m_appleMusic;

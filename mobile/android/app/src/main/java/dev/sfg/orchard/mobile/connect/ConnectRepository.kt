@@ -79,7 +79,7 @@ class ConnectRepository(
     private var deviceId = ""
     private var player: LocalConnectPlayer? = null
     private val requests = ConcurrentHashMap<String, CompletableDeferred<JSONObject>>()
-    internal val providers = ConnectProviders(this, graph)
+    internal val providers = ConnectProviders(this)
     private val mix = ConnectMix(this)
 
     private val mutableState = MutableStateFlow(ConnectState())
@@ -140,7 +140,7 @@ class ConnectRepository(
 
     fun clearMessage() = mutableState.update { it.copy(message = "") }
 
-    /** RPC to whoever holds `host` ("artwork", "mix", "provider:qobuz"). Null on any failure. */
+    /** RPC to whoever holds `host` ("artwork", "mix"). Null on any failure. */
     internal suspend fun request(host: String, method: String, params: JSONObject, timeoutMs: Long = 30_000): JSONObject? {
         val id = withContext(nodeDispatcher) {
             val current = handle
@@ -223,7 +223,7 @@ class ConnectRepository(
             }
         }
         scope.launch {
-            combine(graph.auth.state, graph.qobuz.status, graph.settings.settings, graph.appleMusic.connection) { _, _, _, _ -> Unit }
+            combine(graph.auth.state, graph.settings.settings, graph.appleMusic.connection) { _, _, _ -> Unit }
                 .collect { refreshDevice() }
         }
         scope.launch {
@@ -263,7 +263,7 @@ class ConnectRepository(
 
     override fun onData(sessionId: String, headerJson: String, payload: ByteArray) {
         val header = runCatching { JSONObject(headerJson) }.getOrNull() ?: return
-        if (header.optString("kind") == "audio") mix.onAudio(header, payload) else providers.onData(header, payload)
+        if (header.optString("kind") == "audio") mix.onAudio(header, payload)
     }
 
     private fun handleEvent(event: JSONObject) {

@@ -18,7 +18,6 @@ import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.model.EQ_BANDS
 import dev.sfg.orchard.mobile.model.EQ_PRESETS
 import dev.sfg.orchard.mobile.model.EqualizerConfig
-import dev.sfg.orchard.mobile.model.LocalMaxActive
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
@@ -28,25 +27,20 @@ import kotlin.math.roundToInt
 @Composable
 internal fun EqualizerRow(settings: OrchardSettings, onSettings: (OrchardSettings) -> Unit) {
     var showSheet by remember { mutableStateOf(false) }
-    val maxActive = LocalMaxActive.current
 
     SettingsRow(
         title = "Audio Equalizer",
-        enabled = !maxActive,
-        subtitle = if (maxActive) {
-            "Unavailable while audio quality is Max"
-        } else if (settings.equalizerConfig.enabled) {
+        subtitle = if (settings.equalizerConfig.enabled) {
             "Enabled (${EQ_PRESETS.find { it.id == settings.equalizerConfig.presetId }?.label ?: "Custom"})"
         } else {
             "Disabled"
         },
         icon = Icons.Rounded.Tune,
-        modifier = Modifier.clickable(enabled = !maxActive) { showSheet = true },
+        modifier = Modifier.clickable { showSheet = true },
     ) {
         SettingsSwitch(
-            checked = settings.equalizerConfig.enabled && !maxActive,
-            enabled = !maxActive,
-            onCheckedChange = {
+            checked = settings.equalizerConfig.enabled,
+                onCheckedChange = {
                 onSettings(settings.copy(equalizerConfig = settings.equalizerConfig.copy(enabled = it)))
             },
         )

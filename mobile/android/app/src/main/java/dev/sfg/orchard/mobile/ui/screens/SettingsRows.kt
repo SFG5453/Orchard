@@ -67,7 +67,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.model.AudioQuality
-import dev.sfg.orchard.mobile.model.LocalQobuzLinked
 import dev.sfg.orchard.mobile.model.NonMusicSkipMode
 import dev.sfg.orchard.mobile.ui.motion.popOnChange
 import dev.sfg.orchard.mobile.ui.motion.riseIn
@@ -310,16 +309,14 @@ internal fun QualityRow(
     title: String = "Wi-Fi quality",
     icon: ImageVector = Icons.Rounded.Headphones,
 ) {
-    val linked = LocalQobuzLinked.current
-    // Without a subscription MAX cannot play, so the row shows what actually streams.
-    val value = if (stored == AudioQuality.MAX && !linked) AudioQuality.HIGH else stored
+    val value = stored
     Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             RowIcon(icon)
             Column {
                 RowTitle(title)
                 RowSubtitle(
-                    value.description + if (!linked) ". Max needs a linked Qobuz account." else "",
+                    value.description,
                 )
             }
         }
@@ -328,7 +325,6 @@ internal fun QualityRow(
             options = AudioQuality.entries.map { it to it.label },
             selected = value,
             onSelect = onChange,
-            isEnabled = { it != AudioQuality.MAX || linked },
         )
     }
 }
@@ -364,7 +360,7 @@ internal fun NonMusicSkipRow(value: NonMusicSkipMode, onChange: (NonMusicSkipMod
 }
 
 internal val AudioQuality.label: String
-    get() = when (this) { AudioQuality.DATA_SAVER -> "Saver"; AudioQuality.NORMAL -> "Normal"; AudioQuality.HIGH -> "High"; AudioQuality.MAX -> "Max" }
+    get() = when (this) { AudioQuality.DATA_SAVER -> "Saver"; AudioQuality.NORMAL -> "Normal"; AudioQuality.HIGH -> "High" }
 
 private val AudioQuality.description: String
-    get() = when (this) { AudioQuality.DATA_SAVER -> "Uses the least data"; AudioQuality.NORMAL -> "Balanced quality and data"; AudioQuality.HIGH -> "Best quality, more data"; AudioQuality.MAX -> "Lossless and Hi-Res from Qobuz. Adaptive mix and the equalizer are off" }
+    get() = when (this) { AudioQuality.DATA_SAVER -> "Uses the least data"; AudioQuality.NORMAL -> "Balanced quality and data"; AudioQuality.HIGH -> "Best quality, more data" }

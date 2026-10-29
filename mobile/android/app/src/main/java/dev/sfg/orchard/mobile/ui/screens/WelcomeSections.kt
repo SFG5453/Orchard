@@ -79,7 +79,6 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import dev.sfg.orchard.mobile.auth.AuthState
 import dev.sfg.orchard.mobile.model.AudioQuality
-import dev.sfg.orchard.mobile.model.LocalQobuzLinked
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
@@ -401,10 +400,8 @@ internal fun WelcomeQualityAndStorageSection(
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                val linked = LocalQobuzLinked.current
                 AudioQuality.entries.forEach { quality ->
-                    val choosable = quality != AudioQuality.MAX || linked
-                    val isSelected = quality == settings.audioQuality && choosable
+                    val isSelected = quality == settings.audioQuality
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -413,8 +410,7 @@ internal fun WelcomeQualityAndStorageSection(
                                 if (isSelected) LocalAccent.current else Color.Transparent,
                                 CircleShape,
                             )
-                            .clickable(enabled = choosable) { onUpdateSettings(settings.copy(audioQuality = quality)) }
-                            .alpha(if (choosable) 1f else 0.4f),
+                            .clickable { onUpdateSettings(settings.copy(audioQuality = quality)) },
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -422,7 +418,6 @@ internal fun WelcomeQualityAndStorageSection(
                                 AudioQuality.DATA_SAVER -> "Saver"
                                 AudioQuality.NORMAL -> "Normal"
                                 AudioQuality.HIGH -> "High"
-                                AudioQuality.MAX -> "Max"
                             },
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,

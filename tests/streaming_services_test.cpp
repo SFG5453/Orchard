@@ -20,8 +20,6 @@
 #include "appearance/animated_artwork_store.h"
 #include "integrations/spotify_canvas.h"
 #include "playback/adaptive_mix/adaptive_mix_controller.h"
-#include "providers/qobuz/qobuz_oauth_callback.h"
-#include "providers/qobuz/qobuz_service.h"
 
 #include <QJsonDocument>
 #include <QNetworkAccessManager>
@@ -32,7 +30,7 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
-// Spotify and Qobuz pieces that need no account, network or keychain.
+// Spotify and audio pieces that need no account, network or keychain.
 class StreamingServicesTest final : public QObject {
   Q_OBJECT
 
@@ -82,45 +80,6 @@ private slots:
                                             QStringLiteral("Kendrick Lamar")),
              QStringLiteral("right"));
     QVERIFY(SpotifyCanvas::matchingTrackId(result, QStringLiteral("Love"), QStringLiteral("Someone Else")).isEmpty());
-  }
-
-  void qobuzCallbackReadsTheCode() {
-    const QByteArray path = "/qobuz-callback";
-    QCOMPARE(QobuzOAuthCallback::codeFromRequest(
-                 "GET /qobuz-callback?code_autorisation=abc%2B1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n", path),
-             QStringLiteral("abc+1"));
-    QVERIFY(QobuzOAuthCallback::codeFromRequest("GET /favicon.ico HTTP/1.1\r\n\r\n", path).isEmpty());
-    QVERIFY(QobuzOAuthCallback::codeFromRequest("POST /qobuz-callback?code_autorisation=x HTTP/1.1\r\n\r\n", path).isEmpty());
-  }
-
-  void qobuzCallbackAnswersTheBrowserOnce() {
-    QobuzOAuthCallback callback;
-    QSignalSpy received(&callback, &QobuzOAuthCallback::codeReceived);
-    QUrl url = callback.listen();
-    QVERIFY(url.isValid());
-    url.setQuery(QStringLiteral("code_autorisation=xyz"));
-    QNetworkAccessManager browser;
-    QNetworkReply *reply = browser.get(QNetworkRequest(url));
-    QTRY_VERIFY(reply->isFinished());
-    QCOMPARE(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
-    QCOMPARE(received.count(), 1);
-    QCOMPARE(received.first().at(0).toString(), QStringLiteral("xyz"));
-    QVERIFY(!callback.listening());
-    reply->deleteLater();
-  }
-
-  void qobuzOffAnswersAtOnce() {
-    QobuzService qobuz(nullptr, false);
-    QVERIFY(!qobuz.active());
-    bool answered = false;
-    qobuz.resolveTrack({{QStringLiteral("title"), QStringLiteral("Song")}},
-                       [&answered](const QJsonValue &result, const QString &error) {
-      answered = result.isNull() && error.isEmpty();
-    });
-    QVERIFY(answered);
-    // Connected is not enough; only MAX turns Qobuz playback on.
-    qobuz.setEnabled(true);
-    QVERIFY(!qobuz.active());
   }
 
   void adaptiveMixStepsAsideAndComesBack() {

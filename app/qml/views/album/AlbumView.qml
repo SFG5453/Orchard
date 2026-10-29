@@ -219,7 +219,6 @@ Item {
             artwork: root.highResolutionArtwork(root.detail.thumbnail || "")
             animatedArtwork: OrchardAlbum.animatedArtworkUrl
             explicit: Boolean(root.detail.explicit)
-            streamQuality: OrchardAlbum.streamQuality
             actionsEnabled: root.tracks.length > 0 && !OrchardAlbum.loading
             playing: root.collectionPlaying
             shareLabel: qsTr("Copy album link")

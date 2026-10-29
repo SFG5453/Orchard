@@ -227,13 +227,6 @@ po_bundle = custom_target('YouTube PO minter bundle',
   output: ['youtube-po-minter.js', 'youtube-po-minter-licenses.txt'],
   command: [npm, '--prefix', source_root / 'providers/youtube', 'run',
     'build:po-minter', '--', '--outfile=' + meson.current_build_dir() / 'youtube-po-minter.js'])
-qobuz_bundle = custom_target('Qobuz provider bundle',
-  input: files(qobuz_sources + ['providers/youtube/package-lock.json']),
-  output: 'qobuz-provider.js',
-  command: [npm, '--prefix', source_root / 'providers/youtube', 'exec', '--offline',
-    '--', 'esbuild', source_root / 'providers/qobuz/src/runtime.js', '--bundle',
-    '--platform=browser', '--format=iife', '--target=es2023',
-    '--legal-comments=none', '--outfile=' + meson.current_build_dir() / 'qobuz-provider.js'])
 apple_music_bundle = custom_target('Apple Music provider bundle',
   input: files(apple_music_sources + ['providers/youtube/package-lock.json']),
   output: 'apple-music-provider.js',
@@ -247,15 +240,12 @@ youtube_bytecode = custom_target('YouTube provider bytecode', input: youtube_bun
 po_bytecode = custom_target('YouTube PO minter bytecode', input: po_bundle[0],
   output: 'youtube-po-minter.qjc',
   command: [qjsc, '-b', '-C', '-s', '-n', 'youtube-po-minter.js', '-o', '@OUTPUT@', '@INPUT@'])
-qobuz_bytecode = custom_target('Qobuz provider bytecode', input: qobuz_bundle,
-  output: 'qobuz-provider.qjc',
-  command: [qjsc, '-b', '-C', '-n', 'qobuz-provider.js', '-o', '@OUTPUT@', '@INPUT@'])
 apple_music_bytecode = custom_target('Apple Music provider bytecode', input: apple_music_bundle,
   output: 'apple-music-provider.qjc',
   command: [qjsc, '-b', '-C', '-n', 'apple-music-provider.js', '-o', '@OUTPUT@', '@INPUT@'])
 
 provider_resources = custom_target('provider resources',
-  input: [youtube_bytecode, po_bytecode, po_bundle[1], qobuz_bytecode, apple_music_bytecode],
+  input: [youtube_bytecode, po_bytecode, po_bundle[1], apple_music_bytecode],
   output: 'qrc_provider_resources.cpp',
   command: [python, files('scripts/meson-rcc.py'), '--rcc', rcc,
     '--name', 'provider_resources', '--prefix', '/providers',
@@ -611,7 +601,7 @@ if get_option('tests')
     command: [qjsc, '-b', '-C', '-n', 'provider-media-test.js',
       '-o', '@OUTPUT@', '@INPUT@'])
   test_provider_qrc = custom_target('provider test resources',
-    input: [youtube_bytecode, po_bytecode, qobuz_bytecode, media_bytecode],
+    input: [youtube_bytecode, po_bytecode, media_bytecode],
     output: 'qrc_provider_test_resources.cpp',
     command: [python, files('scripts/meson-rcc.py'), '--rcc', rcc,
       '--name', 'provider_test_resources', '--prefix', '/providers',
@@ -677,8 +667,6 @@ if get_option('tests')
       args: ['--test', files('tests/fullscreen_layout_test.js')], timeout: 120)
     test('orchard_domain_js', node, args: ['--test'],
       workdir: source_root / 'core/js', timeout: 120)
-    test('orchard_qobuz_js', node, args: ['--test'],
-      workdir: source_root / 'providers/qobuz', timeout: 120)
     test('orchard_youtube_js', node, args: ['--test'],
       workdir: source_root / 'providers/youtube', timeout: 120)
   endif

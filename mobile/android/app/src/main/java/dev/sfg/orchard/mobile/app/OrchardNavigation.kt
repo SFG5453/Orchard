@@ -32,7 +32,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
-import dev.sfg.orchard.mobile.model.LocalMaxActive
 import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.model.PlaybackTarget
@@ -82,7 +81,6 @@ internal fun OrchardNavigation(
     val totalBytesUsed by viewModel.totalBytesUsed.collectAsStateWithLifecycle()
     val cacheSizeBytes by viewModel.cacheSizeBytes.collectAsStateWithLifecycle()
     val isClearingCache by viewModel.isClearingCache.collectAsStateWithLifecycle()
-    val qobuzStatus by viewModel.qobuzStatus.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val connectRemoteVolume by viewModel.connectRemoteVolume.collectAsStateWithLifecycle()
     // Connect targets accept every queue command.
@@ -227,13 +225,7 @@ internal fun OrchardNavigation(
                 onConnectListenBrainz = viewModel::connectListenBrainz,
                 onDisconnectListenBrainz = viewModel::disconnectListenBrainz,
                 onConnectSpotify = { nav.navigate(Routes.SPOTIFY_LOGIN) },
-                qobuzStatus = qobuzStatus,
-                onConnectQobuz = { nav.navigate(Routes.QOBUZ_LOGIN) },
-                onConnectQobuzToken = { nav.navigate(Routes.QOBUZ_TOKEN_LOGIN) },
                 onConnectAppleMusic = { nav.navigate(Routes.APPLE_MUSIC_LOGIN) },
-                onDisconnectQobuz = viewModel::disconnectQobuz,
-                onQobuzEnabledChange = viewModel::setQobuzEnabled,
-                onQobuzQualityChange = viewModel::setQobuzQuality,
                 onWelcome = { nav.navigate(Routes.WELCOME) },
                 onCheckForUpdates = viewModel::checkForUpdates,
                 onInstallUpdate = viewModel::installUpdate,
@@ -286,27 +278,6 @@ internal fun OrchardNavigation(
         }
         composable(Routes.APPLE_MUSIC_LOGIN) {
             dev.sfg.orchard.mobile.ui.screens.AppleMusicLoginScreen(onDone = { nav.popBackStack() })
-        }
-        composable(Routes.QOBUZ_LOGIN) {
-            val graph = OrchardGraph.from(context)
-            dev.sfg.orchard.mobile.ui.screens.QobuzLoginScreen(
-                qobuz = graph.qobuzResolver,
-                onSuccess = { token, userId ->
-                    viewModel.connectQobuz(token, userId)
-                    nav.popBackStack()
-                },
-                onCancel = { nav.popBackStack() },
-            )
-        }
-        composable(Routes.QOBUZ_TOKEN_LOGIN) {
-            dev.sfg.orchard.mobile.ui.screens.QobuzTokenLoginScreen(
-                qobuz = OrchardGraph.from(context).qobuzResolver,
-                onSuccess = { session ->
-                    viewModel.connectQobuz(session.token, session.userId, session.appId, session.appSecret)
-                    nav.popBackStack()
-                },
-                onCancel = { nav.popBackStack() },
-            )
         }
         composable(
             route = Routes.DETAIL,
@@ -391,7 +362,7 @@ internal fun OrchardNavigation(
                 onShareTrack = viewModel::shareTrack,
                 onShareCollection = viewModel::shareCollection,
                 onFetchSectionItems = viewModel::fetchSectionItems,
-                smartCrossfadeEnabled = settings.smartCrossfade && !LocalMaxActive.current,
+                smartCrossfadeEnabled = settings.smartCrossfade,
                 onPlayBestMix = viewModel::playBestMix,
                 isRefreshing = detailRefreshing,
                 onRefresh = viewModel::refreshDetail,

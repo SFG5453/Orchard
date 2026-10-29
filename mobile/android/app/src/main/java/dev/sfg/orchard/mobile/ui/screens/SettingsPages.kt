@@ -61,6 +61,7 @@ import dev.sfg.orchard.connect.BuildConfig
 import dev.sfg.orchard.mobile.MobileUpdateMetadata
 import dev.sfg.orchard.mobile.UpdateState
 import dev.sfg.orchard.mobile.model.OrchardSettings
+import dev.sfg.orchard.mobile.playback.apple.AppleAtmosCapability
 import dev.sfg.orchard.mobile.settings.CacheManager
 
 @Composable
@@ -69,6 +70,8 @@ internal fun AudioPage(
     onSettings: (OrchardSettings) -> Unit,
     onAutoplayEnabled: ((Boolean) -> Unit)?,
 ) {
+    val appleConnected = appleMusicConnectionStatus().connected
+    val hasAtmosDecoder = remember { AppleAtmosCapability.decoderAvailable }
     SectionLabel("Quality")
     SettingsPanel(index = 1) {
         QualityRow(settings.audioQuality, { onSettings(settings.copy(audioQuality = it)) })
@@ -79,6 +82,16 @@ internal fun AudioPage(
             title = "Mobile data quality",
             icon = Icons.Rounded.SignalCellularAlt,
         )
+        if (appleConnected && hasAtmosDecoder) {
+            PanelDivider()
+            ToggleRow(
+                title = "Apple Music Dolby Atmos",
+                subtitle = "Applies to the next song. Crossfade is off for Apple Music.",
+                icon = Icons.AutoMirrored.Rounded.VolumeUp,
+                checked = settings.appleMusicAtmos,
+                onChecked = { onSettings(settings.copy(appleMusicAtmos = it)) },
+            )
+        }
         PanelDivider()
         ToggleRow(
             title = "Show audio bitrate",

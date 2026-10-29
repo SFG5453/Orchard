@@ -74,7 +74,6 @@ cargo test -p orchard-youtube-extractor -p orchard-core-ffi --lib
 ```
 
 - `core/js` holds platform-neutral playback policy.
-- `providers/qobuz` holds the fetch-based Qobuz provider.
 - `providers/youtube` holds YouTube.js catalog parsing, authenticated request signing, format selection, routing, history/likes, playlist mutation, SponsorBlock, and PO-token cache policy.
 - `orchard-system-media` uses playwire and reaches Qt through the Rust core's C ABI.
 - `crates/orchard-transition-mobile` provides the Android UniFFI/JNI adapter and builds against `orchard-transition-core` and Earmark.
