@@ -95,6 +95,9 @@ public:
     Q_INVOKABLE static QMap<QString, QString> parseCookieString(const QString &cookie);
     static QString mergeCookies(const QString &base, const QString &overlay);
     Q_INVOKABLE void refreshSession();
+    // Takes a fresher copy of this same session from the sign-in browser
+    // profile (see YouTubeSessionKeeper). Refuses any other account.
+    bool absorbRenewedSession(const QJsonObject &session);
     void acceptHelperResult(const QJsonObject &result);
 
 signals:

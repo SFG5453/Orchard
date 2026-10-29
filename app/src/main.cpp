@@ -20,6 +20,7 @@
 #include "account/orchard_account.h"
 #include "auth/auth_manager.h"
 #include "auth/auth_diagnostics.h"
+#include "auth/youtube_session_keeper.h"
 #include "album/album_controller.h"
 #include "playlist/playlist_controller.h"
 #include "backend_info.h"
@@ -251,6 +252,8 @@ int main(int argc, char *argv[]) {
   // Bug reports with receipts: GitHub tells us who answered, we tell you.
   SupportCenter support(&orchardAccount);
   YouTubeCatalog youtubeCatalog(&youtubeProvider);
+  // Windows holds a frozen copy of the YouTube cookies; this renews it from the sign-in profile.
+  YouTubeSessionKeeper youtubeSessionKeeper(&authManager, &youtubeCatalog);
   // YouTube picks the songs; Qobuz, when invited, brings the good speakers.
   QobuzService qobuz;
   SearchController searchController(&youtubeCatalog, &authManager);
