@@ -6,6 +6,7 @@
 use crate::{
     beats::{self, Grid},
     downmix,
+    npu::Npu,
 };
 use earmark::{AudioBuffer, WholeTrackAnalyzer};
 use ort::{session::{Session, builder::SessionBuilder}, value::Tensor};
@@ -21,6 +22,8 @@ pub struct Models {
     vocal: Option<Session>,
     vocal_error: Option<String>,
     frontend: WholeTrackAnalyzer,
+    /// Runs both models when set; the CPU sessions take over if it ever fails.
+    npu: Option<Npu>,
 }
 
 #[cfg(feature = "desktop")]
@@ -78,6 +81,7 @@ impl Models {
             vocal,
             vocal_error,
             frontend: WholeTrackAnalyzer::new().map_err(|e| e.to_string())?,
+            npu: None,
         })
     }
 
@@ -97,7 +101,34 @@ impl Models {
             vocal,
             vocal_error,
             frontend: WholeTrackAnalyzer::new().map_err(|e| e.to_string())?,
+            npu: None,
         })
+    }
+
+    pub fn set_npu(&mut self, npu: Option<Npu>) {
+        self.npu = npu;
+    }
+
+    /// Beat and downbeat logits for one spectrogram chunk.
+    fn beat_logits(&mut self, values: Vec<f32>) -> Result<(Vec<f32>, Vec<f32>), String> {
+        if let Some(npu) = &self.npu {
+            match npu.beat(&values) {
+                Ok(logits) => return Ok(logits),
+                Err(_) => self.npu = None,
+            }
+        }
+        let input = Tensor::from_array(([1, beats::CHUNK, 128], values)).map_err(|e| e.to_string())?;
+        let output = self
+            .beat
+            .run(ort::inputs!["input_spectrogram"=>input])
+            .map_err(|e| e.to_string())?;
+        let (_, b) = output["beat"]
+            .try_extract_tensor::<f32>()
+            .map_err(|e| e.to_string())?;
+        let (_, d) = output["downbeat"]
+            .try_extract_tensor::<f32>()
+            .map_err(|e| e.to_string())?;
+        Ok((b.to_vec(), d.to_vec()))
     }
 
     /// Beat grid for one 44.1 kHz mono window.
@@ -120,21 +151,10 @@ impl Models {
             let mut values = vec![0.0; beats::CHUNK * 128];
             values[left * 128..(left + to - from) * 128]
                 .copy_from_slice(&spec.values[from * 128..to * 128]);
-            let input =
-                Tensor::from_array(([1, beats::CHUNK, 128], values)).map_err(|e| e.to_string())?;
-            let output = self
-                .beat
-                .run(ort::inputs!["input_spectrogram"=>input])
-                .map_err(|e| e.to_string())?;
-            let (_, b) = output["beat"]
-                .try_extract_tensor::<f32>()
-                .map_err(|e| e.to_string())?;
-            let (_, d) = output["downbeat"]
-                .try_extract_tensor::<f32>()
-                .map_err(|e| e.to_string())?;
+            let (b, d) = self.beat_logits(values)?;
             if b.len() != beats::CHUNK
                 || d.len() != beats::CHUNK
-                || b.iter().chain(d).any(|v| !v.is_finite())
+                || b.iter().chain(&d).any(|v| !v.is_finite())
             {
                 return Err("Invalid beat model output".into());
             }
@@ -154,10 +174,6 @@ impl Models {
     // flat filter ride in place.
     /// Vocal share per beat spectrogram frame (`evidence::VOCAL_FRAME`) of a 44.1 kHz window.
     pub fn vocals(&mut self, audio: &AudioBuffer) -> Result<Vec<f64>, String> {
-        let session = self
-            .vocal
-            .as_mut()
-            .ok_or_else(|| self.vocal_error.clone().unwrap_or_default())?;
         let channels = audio.planar();
         // Trained on ffmpeg's `-ac 1` fold, (L + R) / sqrt(2).
         let gain = if channels.len() > 1 { std::f32::consts::FRAC_1_SQRT_2 } else { 1.0 };
@@ -171,6 +187,16 @@ impl Models {
         if spec.frames == 0 {
             return Err("Vocal window is too short".into());
         }
+        if let Some(npu) = &self.npu {
+            match npu.vocal(&spec.values, spec.frames) {
+                Ok(presence) => return Ok(presence.iter().map(|v| f64::from(*v)).collect()),
+                Err(_) => self.npu = None,
+            }
+        }
+        let session = self
+            .vocal
+            .as_mut()
+            .ok_or_else(|| self.vocal_error.clone().unwrap_or_default())?;
         let input = Tensor::from_array(([1, spec.frames, 128], spec.values)).map_err(|e| e.to_string())?;
         let outputs = session
             .run(ort::inputs!["mel"=>input])

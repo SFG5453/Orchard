@@ -523,6 +523,8 @@ tasks.named('preBuild').configure { dependsOn 'copySlopAssets' }
 tasks.register('copyModelAssets', Sync) {
     from('../../../models/nirovi') { include 'nirovi_int8.ort' }
     from('../../../models/syvenu') { include 'syvenu.ort' }
+    // All-int8 Neuron graphs for MediaTek NPUs; Snapdragon's models ship in its add-on.
+    from('../../../models/npu/neuron') { include '*.npug'; into 'npu' }
     into layout.buildDirectory.dir('generated/modelAssets')
 }
 tasks.named('preBuild').configure { dependsOn 'copyModelAssets' }

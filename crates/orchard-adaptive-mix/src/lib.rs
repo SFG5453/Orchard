@@ -16,6 +16,7 @@ pub mod evidence;
 pub mod lock;
 pub mod measured;
 pub mod models;
+pub mod npu;
 pub mod planner;
 pub mod prepare;
 pub mod repeat;
