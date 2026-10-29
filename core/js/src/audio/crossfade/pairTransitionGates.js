@@ -155,12 +155,8 @@ function measuredVoices(voice = {}) {
   return Number.isFinite(voice.incoming) && Number.isFinite(voice.outgoing);
 }
 
-/**
- * A muffle hides a line cut short when the new song's beat is already playing as it fades in.
- * Over the new song's beatless intro, the cut is all there is to hear.
- */
+/** True when a muffle fades the new song in after its first beat, false before it. */
 function muffledIntoBeat(pair, incoming) {
-  if (pair.exitStyle !== 'muffle_swap') return false;
   const opening = firstBeat(incoming);
   const heard = pair.incomingStart +
     (pair.spans?.incoming?.[0] ?? 0) * pair.durationSeconds * pair.incomingRatio;
@@ -204,8 +200,13 @@ export function candidateGates({
   // Fading the outgoing singer out mid-line sounds forced even over a clean incoming,
   // unless the voice never stops before the song does. A drop-in pulls the outgoing out
   // within four beats, too fast for any line to ride over.
-  const waived = (voice.singsOut && pair.alignment !== 'start') || muffledIntoBeat(pair, incoming);
-  if (measuredVoice && voice.outgoing >= 0.3 && !waived) lower('voice-cut', 'normal_boundary', 'veto');
+  // A muffle hides a cut line once the new song's beat is playing as it fades in. Over the
+  // new song's beatless intro the cut is all there is to hear, even a line trailing off.
+  const muffled = pair.exitStyle === 'muffle_swap';
+  const intoBeat = muffled && muffledIntoBeat(pair, incoming);
+  const waived = (voice.singsOut && pair.alignment !== 'start') || intoBeat;
+  const cutAt = muffled && !intoBeat ? 0.1 : 0.3;
+  if (measuredVoice && voice.outgoing >= cutAt && !waived) lower('voice-cut', 'normal_boundary', 'veto');
   // Blends that only work behind a filter sound forced; they play out. A muffle is that
   // filter, so only voices that still meet inside its short overlap refuse it.
   const filtered = pair.exitStyle

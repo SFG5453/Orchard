@@ -65,7 +65,7 @@ test('a muffle closes over a singer mid-line once the new beat is playing', () =
 
 test('a muffle heard over the new song\'s beatless intro keeps the voice-cut veto', () => {
   const candidate = { source: 'detected-change', confidence: 0.9 };
-  const gates = (incomingStart, exitStyle) => candidateGates({
+  const gates = (incomingStart, exitStyle, outgoingVoice = 0.8) => candidateGates({
     pair: {
       exitStyle, incomingStart, durationSeconds: 8, incomingRatio: 1, spans: { incoming: [0.5, 1] },
       outgoingCandidate: candidate, incomingCandidate: candidate
@@ -75,12 +75,16 @@ test('a muffle heard over the new song\'s beatless intro keeps the voice-cut vet
     incoming: finalizeTrackAnalysis(raw({ beatFrom: 10 })),
     harmonic: { confidence: 0.9, score: 0.9 },
     collision: {},
-    voice: { incoming: 0.1, outgoing: 0.8, singsOut: false }
+    voice: { incoming: 0.1, outgoing: outgoingVoice, singsOut: false }
   }).gates.map((gate) => gate.code);
   // Heard 4 s into the overlap: 8 s into the new song, then right on its first beat at 10 s.
   assert.ok(gates(4, 'muffle_swap').includes('voice-cut'));
   assert.ok(!gates(6, 'muffle_swap').includes('voice-cut'));
   assert.ok(gates(6, null).includes('voice-cut'));
+  // Over the intro even a line trailing off is exposed; a silent singer is fine.
+  assert.ok(gates(4, 'muffle_swap', 0.2).includes('voice-cut'));
+  assert.ok(!gates(4, 'muffle_swap', 0).includes('voice-cut'));
+  assert.ok(!gates(4, null, 0.2).includes('voice-cut'));
 });
 
 test('a tempo refusal names the section tempos where a beat switch moved them', () => {
