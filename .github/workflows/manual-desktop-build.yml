@@ -152,6 +152,17 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: amd64
+      - uses: msys2/setup-msys2@v2
+        id: ffmpeg-msys2
+        with:
+          msystem: MINGW64
+          install: >-
+            make nasm mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja mingw-w64-x86_64-pkgconf mingw-w64-x86_64-zlib
+      - name: Select FFmpeg build shell
+        shell: pwsh
+        run: |
+          "ORCHARD_FFMPEG_BASH=${{ steps.ffmpeg-msys2.outputs.msys2-location }}/usr/bin/bash.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Restore Windows compiler cache
         uses: actions/cache/restore@v4
         with:

@@ -106,13 +106,15 @@ spectrograms, annotations or audio do.
 
 ## FFmpeg (Windows packages)
 
-Windows packages bundle a static `ffmpeg.exe` from BtbN FFmpeg-Builds
-(`ffmpeg-n9.0.2-25-g67b60c310b-win64-gpl-9.0`, release
-`autobuild-2026-10-11-13-04`), used by `orchard-adaptive-mix` to decode audio.
-This build is licensed under the GNU GPL version 3; its license text ships as
-`ffmpeg-LICENSE.txt`. Corresponding source: FFmpeg at
-<https://github.com/FFmpeg/FFmpeg/tree/n9.0.2> and the build scripts at
-<https://github.com/BtbN/FFmpeg-Builds>.
+Windows packages build static `ffmpeg.exe` and `ffprobe.exe` from the FFmpeg
+`n9.0.2` submodule (`946fcce07b6dcd0331c8cc609192aeff5e1924f8`), with
+libwebp `v1.6.0` (`4fa21912338357f89e4fd51cf2368325b59e9bd9`). They provide
+audio analysis, local metadata and artwork conversion. FFmpeg is built under
+LGPL 2.1 or later; libwebp uses a BSD license. Both license texts ship in
+`ffmpeg-LICENSE.txt`. Sources are pinned in `third_party/ffmpeg` and
+`third_party/libwebp`; configuration is in `scripts/build-ffmpeg-windows.sh`.
+Source: <https://github.com/FFmpeg/FFmpeg/tree/n9.0.2> and
+<https://github.com/webmproject/libwebp/tree/v1.6.0>.
 
 ## SimpMusic (Android full-bleed player)
 

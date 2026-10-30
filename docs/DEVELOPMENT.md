@@ -24,6 +24,22 @@ meson test -C build/dev --print-errorlogs
 
 The `orchard` executable launches the embedded Qt Quick interface. The Rust core and native system media service are linked into the desktop application. Run `./build/dev/orchard` on Linux or `build\dev\orchard.exe` from a Windows command prompt.
 
+### Windows FFmpeg
+
+Windows x86_64 builds compile the pinned FFmpeg `n9.0.2` and libwebp `v1.6.0`
+submodules through `scripts/build-ffmpeg-windows.sh`, invoked by runtime staging.
+Initialize the submodules with the command above. Native Windows builds require
+MSYS2 MINGW64 with make, nasm, GCC, CMake, Ninja, pkgconf and static zlib;
+`ORCHARD_FFMPEG_BASH` selects its `usr/bin/bash.exe` (default: `C:/msys64`).
+Linux cross builds require the `x86_64-w64-mingw32` toolchain and static target
+zlib. No prebuilt FFmpeg archive is downloaded. Outputs are cached under
+`.cache/adaptive-mix` by source revisions and build-script contents.
+
+The static tools include common local audio formats, HTTP/HTTPS and HLS input,
+H.264/HEVC/VP8/VP9 video decoding, PNG/JPEG extraction, MPEG-4 loop encoding,
+float WAV output and animated WebP. `ffprobe.exe` ships beside `ffmpeg.exe`.
+Qt Multimedia's own FFmpeg DLLs remain part of the Qt runtime deployment.
+
 ### Sign-in backend
 
 Windows sign-in hosts Microsoft Edge WebView2 directly in the short-lived authentication helper (`app/src/auth/webview2_*`), with no Qt web modules. The YouTube session comes from the WebView2 cookie manager, which includes HttpOnly cookies. Spotify and Apple Music use the same views. Apple Music keeps its own `AppleMusic` profile. Browser data lives in `%LOCALAPPDATA%\SFG545\Orchard\WebView2`.

@@ -2,11 +2,10 @@
 
 """Stage the worker, ORT's Dawn runtime, FFmpeg and model files beside orchard."""
 import argparse
-import hashlib
 from pathlib import Path
 import shutil
-import urllib.request
-import zipfile
+import subprocess
+import sys
 
 PLATFORMS = ("linux-x86_64", "linux-aarch64", "windows-x86_64-msvc", "windows-x86_64-gnu",
              "windows-aarch64-msvc", "macos-x86_64", "macos-aarch64")
@@ -39,31 +38,11 @@ if not found:
     raise SystemExit("ort's Dawn runtime was not found in Cargo's linker output")
 if a.platform == "windows-x86_64-msvc" and dxc != {"dxil.dll", "dxcompiler.dll"}:
     raise SystemExit("ort's DXC libraries were not found in Cargo's linker output")
-# Static FFmpeg for Windows, where no system decoder is on PATH.
-FFMPEG = {
-    "windows-x86_64-msvc": ("autobuild-2026-10-11-13-04", "ffmpeg-n9.0.2-25-g67b60c310b-win64-gpl-9.0",
-                            "b1860fbeb14e87d1de44aecc5eb9e25dfecc7ee8efa8d54250995a9acfbe6070"),
-}
-FFMPEG["windows-x86_64-gnu"] = FFMPEG["windows-x86_64-msvc"]
-if a.platform in FFMPEG:
-    tag, stem, digest = FFMPEG[a.platform]
-    archive = a.cache / (stem + ".zip")
-    if not archive.exists():
-        data = urllib.request.urlopen(f"https://github.com/BtbN/FFmpeg-Builds/releases/download/{tag}/{stem}.zip", timeout=300).read()
-        if hashlib.sha256(data).hexdigest() != digest:
-            raise SystemExit("FFmpeg download checksum mismatch")
-        archive.write_bytes(data)
-    # Hash in chunks: the archive is ~185 MB.
-    h = hashlib.sha256()
-    with archive.open("rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    if h.hexdigest() != digest:
-        raise SystemExit("FFmpeg cached checksum mismatch")
-    with zipfile.ZipFile(archive) as z:
-        for member, name in ((f"{stem}/bin/ffmpeg.exe", "ffmpeg.exe"), (f"{stem}/LICENSE.txt", "ffmpeg-LICENSE.txt")):
-            with z.open(member) as source, (a.destination / name).open("wb") as target:
-                shutil.copyfileobj(source, target)
+if a.platform in ("windows-x86_64-msvc", "windows-x86_64-gnu"):
+    subprocess.run([
+        sys.executable, str(Path(__file__).with_name("stage-ffmpeg-windows.py")),
+        str(a.destination), str(a.cache),
+    ], check=True)
 worker = "orchard-adaptive-mix" + (".exe" if a.platform.startswith("windows") else "")
 shutil.copy2(a.profile / worker, a.destination / worker)
 # Stage only the validated runtime graphs and their documentation/licenses.

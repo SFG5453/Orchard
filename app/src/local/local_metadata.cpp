@@ -258,7 +258,9 @@ bool convertToLoopVideo(const QString &sourcePath, const QString &outFile) {
   const bool ok = runTool(
       ffmpegProgram(),
       {QStringLiteral("-v"), QStringLiteral("error"), QStringLiteral("-y"), QStringLiteral("-i"), sourcePath,
-       QStringLiteral("-an"), QStringLiteral("-movflags"), QStringLiteral("+faststart"), QStringLiteral("-pix_fmt"),
+       QStringLiteral("-an"), QStringLiteral("-c:v"), QStringLiteral("mpeg4"),
+       QStringLiteral("-q:v"), QStringLiteral("3"),
+       QStringLiteral("-movflags"), QStringLiteral("+faststart"), QStringLiteral("-pix_fmt"),
        QStringLiteral("yuv420p"), QStringLiteral("-vf"),
        QStringLiteral("scale=trunc(iw/2)*2:trunc(ih/2)*2"), outFile},
       kConvertTimeoutMs);

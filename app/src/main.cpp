@@ -191,7 +191,6 @@ int main(int argc, char *argv[]) {
 
 #ifdef Q_OS_WIN
   // Analysis workers inherit this; Windows has no ffmpeg on PATH to fall back to.
-  // 165 MB of ffmpeg.exe, and we use it to read audio. Very reasonable.
   const QString bundledFfmpeg =
       QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("ffmpeg.exe"));
   if (!qEnvironmentVariableIsSet("ORCHARD_FFMPEG") && QFileInfo::exists(bundledFfmpeg))

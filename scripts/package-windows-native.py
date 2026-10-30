@@ -48,7 +48,7 @@ def main() -> None:
     stage.mkdir(parents=True)
 
     binaries = ("orchard.exe", "orchard-auth-helper.exe", "WebView2Loader.dll", "orchard-adaptive-mix.exe",
-                "webgpu_dawn.dll", "dxil.dll", "dxcompiler.dll", "discord_partner_sdk.dll", "libLiteRt.dll", "ffmpeg.exe",
+                "webgpu_dawn.dll", "dxil.dll", "dxcompiler.dll", "discord_partner_sdk.dll", "libLiteRt.dll", "ffmpeg.exe", "ffprobe.exe",
                 "ffmpeg-LICENSE.txt")
     for name in binaries:
         shutil.copy2(require(build / name), stage / name)

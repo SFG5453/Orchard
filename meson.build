@@ -111,7 +111,9 @@ else
   qt_dep = dependency('qt6', version: '>=6.8', modules: qt_modules, main: true)
   qt_entry_dep = []
 endif
-qt_gui_private = dependency('Qt6GuiPrivate', method: 'cmake', modules: ['Qt6::GuiPrivate'])
+qt_gui_private = dependency('qt6',
+  modules: ['Core', 'Gui'],
+  private_headers: true)
 thread_dep = dependency('threads')
 platform_deps = [thread_dep]
 # DBus (Linux) and IOKit (macOS) back the screen wake lock.
@@ -369,8 +371,13 @@ if adaptive_platform == ''
     adaptive_platform = 'linux-' + adaptive_arch
   endif
 endif
+ffmpeg_stage_sources = files(
+  'scripts/stage-ffmpeg-windows.py',
+  'scripts/build-ffmpeg-windows.sh',
+  '.gitmodules'
+)
 adaptive_stage = custom_target('adaptive mix stage',
-  input: [rust_archive] + files(rust_sources + ['scripts/stage-adaptive-mix.py']),
+  input: [rust_archive] + files(rust_sources + ['scripts/stage-adaptive-mix.py']) + ffmpeg_stage_sources,
   output: 'adaptive-mix.stamp',
   command: [python, files('scripts/meson-stage-adaptive.py'),
     '--target-dir', cargo_target_dir, '--target', rust_target,

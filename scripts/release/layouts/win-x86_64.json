@@ -2,8 +2,9 @@
   "_comment": "Input: the staged Orchard folder from scripts/package-windows-native.py or package-windows-msvc.sh. Unmapped files fail the build so new Qt plugin folders get a deliberate home. DLLs do not file their own travel papers.",
   "exclude": [],
   "components": {
-    "ffmpeg": {"version": "8.0.2-4", "map": [
+    "ffmpeg": {"version": "9.0.2-orchard-1", "map": [
       {"from": "ffmpeg.exe", "to": "ffmpeg.exe"},
+      {"from": "ffprobe.exe", "to": "ffprobe.exe"},
       {"from": "ffmpeg-LICENSE.txt", "to": "LICENSE.txt"},
       {"from": "avcodec-*.dll"}, {"from": "avformat-*.dll"},
       {"from": "avutil-*.dll"}, {"from": "swresample-*.dll"}, {"from": "swscale-*.dll"}
