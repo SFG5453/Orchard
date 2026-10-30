@@ -28,6 +28,7 @@ class AudioCacheVariantTest {
     @Test
     fun qualitiesHaveSeparateKeys() {
         assertNotEquals(audioCacheVariant(AudioQuality.DATA_SAVER), audioCacheVariant(AudioQuality.HIGH))
+        assertEquals(audioCacheVariant(AudioQuality.HIGH), audioCacheVariant(AudioQuality.ATMOS))
     }
 
     @Test

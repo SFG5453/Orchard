@@ -21,6 +21,9 @@ package dev.sfg.orchard.mobile
 
 import android.content.Context
 import dev.sfg.orchard.mobile.model.AudioQuality
+import dev.sfg.orchard.mobile.model.atmosQualityAvailable
+import dev.sfg.orchard.mobile.model.audioQualityForNetwork
+import dev.sfg.orchard.mobile.playback.apple.AppleAtmosCapability
 import kotlinx.coroutines.flow.stateIn
 import dev.sfg.orchard.mobile.artwork.ArtistImageRepository
 import dev.sfg.orchard.mobile.artwork.ArtworkRepository
@@ -157,7 +160,10 @@ class OrchardGraph(context: Context) {
     val activeBitrate = kotlinx.coroutines.flow.MutableStateFlow(0)
     /** The tier for the current network: cellular on metered connections, otherwise the Wi-Fi tier. */
     fun audioQuality(s: dev.sfg.orchard.mobile.model.OrchardSettings = settings.settings.value): AudioQuality =
-        if (networkMonitor.isMetered.value) s.cellularAudioQuality else s.audioQuality
+        s.audioQualityForNetwork(networkMonitor.isMetered.value)
+
+    fun atmosEnabled(): Boolean = audioQuality() == AudioQuality.ATMOS &&
+        atmosQualityAvailable(settings.settings.value.homeSource, appleMusic.signedIn(), AppleAtmosCapability.decoderAvailable)
 
     val activeStreamDetail = kotlinx.coroutines.flow.MutableStateFlow(dev.sfg.orchard.mobile.model.StreamDetail())
 

@@ -40,7 +40,6 @@ import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.Track
-import dev.sfg.orchard.mobile.playback.apple.AppleAtmosCapability
 import dev.sfg.orchard.mobile.playback.apple.AppleMusicAtmos
 import dev.sfg.orchard.mobile.playback.apple.AppleMusicDataSource
 import dev.sfg.orchard.mobile.playback.apple.AppleMusicDrmProvider
@@ -238,8 +237,8 @@ internal class PlayerStreams(
         }
     }
 
-    fun useAppleAtmos(uri: android.net.Uri): Boolean = graph.settings.settings.value.appleMusicAtmos &&
-        AppleMusicDataSource.isApple(uri) && !MediaItemMapper.requiresAppleStereo(uri) && AppleAtmosCapability.decoderAvailable
+    fun useAppleAtmos(uri: android.net.Uri): Boolean = graph.atmosEnabled() &&
+        AppleMusicDataSource.isApple(uri) && !MediaItemMapper.requiresAppleStereo(uri)
 
     fun atmosBitrateKbps(id: String): Int = appleAtmos.bitrateKbps(id)
 

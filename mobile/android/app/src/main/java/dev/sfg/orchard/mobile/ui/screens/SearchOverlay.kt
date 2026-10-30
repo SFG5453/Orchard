@@ -24,11 +24,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -45,6 +43,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -55,9 +54,7 @@ import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -72,6 +69,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -87,15 +85,24 @@ import dev.sfg.orchard.mobile.shazam.IdentifySongButton
 import dev.sfg.orchard.mobile.ui.components.HomeBackdrop
 import dev.sfg.orchard.mobile.ui.components.TrackRow
 import dev.sfg.orchard.mobile.ui.components.TrackRowShimmer
-import dev.sfg.orchard.mobile.ui.glass.GlassTone
-import dev.sfg.orchard.mobile.ui.glass.glassPane
 import dev.sfg.orchard.mobile.ui.scroll.OrchardLazyColumn as LazyColumn
 
-// Light enough that the panes have something to blur.
-private val GlassScrim = Color(0x59080B09)
+// Opaque enough that the screen underneath does not compete with results.
+private val PageScrim = Color(0xD9080B09)
+private val PageFill = Color(0xFF0B0F0C)
+// Desktop SidebarSearch palette.
+private val BoxShape = RoundedCornerShape(12.dp)
+private val BoxIdle = Color(0x10FFFFFF)
+private val BoxFocused = Color(0x1AFFFFFF)
+private val BoxBorder = Color(0x24FFFFFF)
+private val BoxIcon = Color(0xFFA6ADB2)
+private val BoxPlaceholder = Color(0xFF929BA1)
+private val BoxText = Color(0xFFF1EEE7)
+private val BoxClear = Color(0x26FFFFFF)
 private const val PanelMaxWidthDp = 640
 private const val SongsOnAll = 4
 private const val OthersOnAll = 3
+private const val ShelfOnAll = 12
 
 /** Everything the overlay can ask of its host. Closing is the host's call. */
 internal class SearchActions(
@@ -148,12 +155,7 @@ internal fun SearchOverlay(
 
         Box(Modifier.fillMaxSize()) {
             if (showBackdrop) HomeBackdrop(true, backdropArtworkUrl, backdropPlaying)
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(GlassScrim)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = actions.onClose),
-            )
+            Box(Modifier.fillMaxSize().background(if (showBackdrop) PageScrim else PageFill))
             Column(
                 Modifier
                     .align(Alignment.TopCenter)
@@ -162,15 +164,14 @@ internal fun SearchOverlay(
                     .fillMaxHeight()
                     .statusBarsPadding()
                     .imePadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(start = 12.dp, end = 12.dp, top = 12.dp),
             ) {
                 SearchBar(query, actions, focus, youtubeCatalog)
                 Spacer(Modifier.height(8.dp))
-                // Wraps its rows and stops at the keyboard; the empty remainder falls through to the scrim.
                 SearchPanel(
                     query, state, history, downloadedTrackIds, downloadingTrackIds, actions,
                     youtubeCatalog,
-                    Modifier.weight(1f, fill = false),
+                    Modifier.weight(1f),
                 )
             }
         }
@@ -179,23 +180,23 @@ internal fun SearchOverlay(
 
 @Composable
 private fun SearchBar(query: String, actions: SearchActions, focus: FocusRequester, youtubeCatalog: Boolean) {
-    val shape = RoundedCornerShape(16.dp)
+    var focused by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Row(
             Modifier
                 .weight(1f)
-                .height(52.dp)
-                .clip(shape)
-                .glassPane(shape, GlassTone.CONTROL)
-                .border(1.dp, SettingsStyle.Sage.copy(alpha = 0.55f), shape)
-                .padding(start = 16.dp, end = 4.dp),
+                .height(48.dp)
+                .clip(BoxShape)
+                .background(if (focused) BoxFocused else BoxIdle)
+                .border(1.dp, if (focused) SettingsStyle.Sage.copy(alpha = 0.6f) else BoxBorder, BoxShape)
+                .padding(start = 14.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Rounded.Search, null, tint = SettingsStyle.Sage, modifier = Modifier.size(20.dp))
-            Box(Modifier.weight(1f).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
-                val textStyle = MaterialTheme.typography.bodyLarge.copy(color = SettingsStyle.Title)
+            Icon(Icons.Rounded.Search, null, tint = BoxIcon, modifier = Modifier.size(20.dp))
+            Box(Modifier.weight(1f).padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart) {
+                val textStyle = MaterialTheme.typography.bodyLarge.copy(color = BoxText, fontSize = 16.sp)
                 if (query.isEmpty()) {
-                    Text(if (youtubeCatalog) "Search YouTube Music" else "Search Apple Music", style = textStyle, color = SettingsStyle.Description)
+                    Text(if (youtubeCatalog) "Songs, artists, albums" else "Search Apple Music", style = textStyle, color = BoxPlaceholder, maxLines = 1)
                 }
                 BasicTextField(
                     value = query,
@@ -205,21 +206,29 @@ private fun SearchBar(query: String, actions: SearchActions, focus: FocusRequest
                     cursorBrush = SolidColor(SettingsStyle.Sage),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { actions.onSubmit(query) }),
-                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused = it.isFocused },
                 )
             }
             if (query.isNotEmpty()) {
-                IconButton(onClick = { actions.onQueryChange("") }, modifier = Modifier.size(44.dp)) {
-                    Icon(Icons.Rounded.Close, "Clear search", tint = SettingsStyle.Chevron, modifier = Modifier.size(16.dp))
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .clickable(onClickLabel = "Clear search") { actions.onQueryChange("") },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(Modifier.size(22.dp).background(BoxClear, CircleShape), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.Close, "Clear search", tint = BoxText, modifier = Modifier.size(14.dp))
+                    }
                 }
             }
             IdentifySongButton { value -> actions.onQueryChange(value); actions.onSubmit(value) }
         }
         Box(
-            Modifier.height(52.dp).clickable(onClick = actions.onClose).padding(horizontal = 12.dp),
+            Modifier.height(48.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = actions.onClose).padding(horizontal = 12.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text("Cancel", style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold), color = SettingsStyle.Sage)
+            Text("Cancel", style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.Medium), color = BoxText)
         }
     }
 }
@@ -236,14 +245,10 @@ private fun SearchPanel(
     modifier: Modifier,
 ) {
     var scope by rememberSaveable { mutableStateOf(SearchScope.All) }
-    Surface(
-        color = Color.Transparent,
-        shape = SettingsStyle.PanelShape,
-        border = BorderStroke(1.dp, SettingsStyle.PanelBorder),
-        // Swallows taps on the panel's own padding so they do not dismiss through to the scrim.
-        modifier = modifier.fillMaxWidth().glassPane(SettingsStyle.PanelShape, GlassTone.PANEL).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
-    ) {
-        LazyColumn(contentPadding = PaddingValues(bottom = 6.dp)) {
+    Column(modifier.fillMaxWidth()) {
+        // Pinned so the filter stays reachable while results scroll.
+        if (state is LoadState.Content) ScopeChips(scope) { scope = it }
+        LazyColumn(contentPadding = PaddingValues(top = 4.dp, bottom = 120.dp)) {
             when (state) {
                 LoadState.Idle -> idle(history, actions, youtubeCatalog)
                 LoadState.Loading -> items(4) { TrackRowShimmer() }
@@ -269,13 +274,11 @@ private fun SearchPanel(
 
 private fun LazyListScope.idle(history: List<String>, actions: SearchActions, youtubeCatalog: Boolean) {
     if (youtubeCatalog) {
-        item { PanelCaption("Browse") }
+        item { SectionHeading("Browse") }
         item { BrowseTiles(actions.onOpenDetail) }
-    } else {
-        item { PanelCaption("Apple Music") }
     }
     if (history.isEmpty()) return
-    item { Column { PanelDivider(); PanelCaption("Recent", "Clear all", actions.onClearHistory) } }
+    item { SectionHeading("Recent searches", "Clear", actions.onClearHistory) }
     items(history.size, key = { history[it] }) { index ->
         val value = history[index]
         HistoryRow(
@@ -296,23 +299,19 @@ private fun LazyListScope.results(
     actions: SearchActions,
 ) {
     val all = scope == SearchScope.All
-    item { ScopeChips(scope, onScope) }
     val top = if (all) topResult(results, query) else null
     if (top != null) {
         item {
-            Column {
-                PanelDivider()
-                TopResultRow(
-                    item = top,
-                    onOpen = { actions.onOpenDetail(top.stableId) },
-                    onPlay = { (top as? CatalogItem.Song)?.let { actions.onPlay(it.track) } },
-                )
-            }
+            TopResultCard(
+                item = top,
+                onOpen = { actions.onOpenDetail(top.stableId) },
+                onPlay = { (top as? CatalogItem.Song)?.let { actions.onPlay(it.track) } },
+            )
         }
     }
     val songs = results.tracks.filterNot { top is CatalogItem.Song && it.id == top.track.id }
     if ((all || scope == SearchScope.Songs) && songs.isNotEmpty()) {
-        item { Column { PanelDivider(); PanelCaption("Songs", "See all".takeIf { all && songs.size > SongsOnAll }) { onScope(SearchScope.Songs) } } }
+        item { SectionHeading("Songs", "See all".takeIf { all && songs.size > SongsOnAll }) { onScope(SearchScope.Songs) } }
         itemsIndexed(if (all) songs.take(SongsOnAll) else songs, key = { index, it -> "track:${it.id}_$index" }) { _, track ->
             TrackRow(
                 track = track,
@@ -349,8 +348,14 @@ private fun <T : CatalogItem> LazyListScope.shelf(
 ) {
     val all = scope == SearchScope.All
     if (entries.isEmpty() || !(all || scope == own)) return
-    item { Column { PanelDivider(); PanelCaption(title, "See all".takeIf { all && entries.size > OthersOnAll }) { onScope(own) } } }
-    itemsIndexed(if (all) entries.take(OthersOnAll) else entries, key = { index, it -> "$title:${it.stableId}_$index" }) { _, entry ->
+    item { SectionHeading(title, "See all".takeIf { all && entries.size > ShelfOnAll }) { onScope(own) } }
+    if (all) {
+        item(key = "$title:shelf") {
+            CoverShelf(entries.distinctBy { it.stableId }.take(ShelfOnAll), subtitle, round) { actions.onOpenDetail(it.stableId) }
+        }
+        return
+    }
+    itemsIndexed(entries, key = { index, it -> "$title:${it.stableId}_$index" }) { _, entry ->
         ResultRow(entry, subtitle(entry), round) { actions.onOpenDetail(entry.stableId) }
     }
 }

@@ -192,8 +192,8 @@ class OrchardPlaybackService : MediaLibraryService() {
             onMarker = { graph.transitionMarker.value = it },
             onHandoff = ::adoptPlayer,
             canCrossfadeTo = { dev.sfg.orchard.mobile.playback.slop.SlopPlayback.allowsTransition(graph, it) &&
-                !(graph.settings.settings.value.appleMusicAtmos && dev.sfg.orchard.mobile.catalog.isAppleMusicId(it)) },
-            canCrossfadeFrom = { !(graph.settings.settings.value.appleMusicAtmos && dev.sfg.orchard.mobile.catalog.isAppleMusicId(it)) },
+                !(graph.atmosEnabled() && dev.sfg.orchard.mobile.catalog.isAppleMusicId(it)) },
+            canCrossfadeFrom = { !(graph.atmosEnabled() && dev.sfg.orchard.mobile.catalog.isAppleMusicId(it)) },
         )
         crossfade.start(player, spare)
         loadedAudioVariant = graph.streamVariant()

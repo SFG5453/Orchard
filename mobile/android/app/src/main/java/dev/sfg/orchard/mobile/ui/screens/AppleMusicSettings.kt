@@ -58,7 +58,7 @@ internal fun AppleMusicSettingsCard(onConnect: () -> Unit) {
     val state by auth.state.collectAsStateWithLifecycle()
     val account = remember(context) { OrchardAccountService.get(context) }
     val accountState by account.state.collectAsStateWithLifecycle()
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (BuildConfig.APPLE_MUSIC_LOGO) AppleMusicLogo(Modifier.size(44.dp))

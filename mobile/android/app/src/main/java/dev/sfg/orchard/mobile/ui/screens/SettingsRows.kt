@@ -67,6 +67,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.model.AudioQuality
+import dev.sfg.orchard.mobile.model.audioQualityOptions
+import dev.sfg.orchard.mobile.model.visibleAudioQuality
 import dev.sfg.orchard.mobile.model.NonMusicSkipMode
 import dev.sfg.orchard.mobile.ui.motion.popOnChange
 import dev.sfg.orchard.mobile.ui.motion.riseIn
@@ -85,7 +87,7 @@ internal fun SectionLabel(value: String, index: Int = 0) {
         color = SettingsStyle.Caption,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.padding(start = 6.dp, top = 26.dp, bottom = 8.dp).riseIn(index, distance = 14f),
+        modifier = Modifier.padding(start = 6.dp, top = 20.dp, bottom = 6.dp).riseIn(index, distance = 14f),
     )
 }
 
@@ -108,23 +110,19 @@ internal fun PanelDivider() {
     Box(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
             .height(1.dp)
             .background(SettingsStyle.Divider),
     )
 }
 
-/** Icon in a neutral rounded tile; every row shares it so the left edge lines up. */
+/** Bare row icon in a fixed box so the left edge lines up; [fill] tints a highlighted row. */
 @Composable
-internal fun RowIcon(icon: ImageVector, tint: Color = SettingsStyle.TileIcon, fill: Color = SettingsStyle.Tile) {
+internal fun RowIcon(icon: ImageVector, tint: Color = SettingsStyle.TileIcon, fill: Color = Color.Transparent) {
     Box(
-        modifier = Modifier
-            .size(36.dp)
-            .background(fill, RoundedCornerShape(10.dp))
-            .border(1.dp, SettingsStyle.TileBorder, RoundedCornerShape(10.dp)),
+        modifier = Modifier.size(24.dp).background(fill, RoundedCornerShape(6.dp)),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -132,7 +130,7 @@ internal fun RowIcon(icon: ImageVector, tint: Color = SettingsStyle.TileIcon, fi
 internal fun RowTitle(text: String, enabled: Boolean = true, color: Color = SettingsStyle.Title) {
     Text(
         text,
-        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.Medium),
+        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.Normal),
         color = if (enabled) color else SettingsStyle.Caption,
     )
 }
@@ -141,9 +139,9 @@ internal fun RowTitle(text: String, enabled: Boolean = true, color: Color = Sett
 internal fun RowSubtitle(text: String) {
     Text(
         text,
-        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp, lineHeight = 16.sp),
         color = SettingsStyle.Description,
-        modifier = Modifier.padding(top = 3.dp),
+        modifier = Modifier.padding(top = 2.dp),
     )
 }
 
@@ -163,8 +161,8 @@ internal fun SettingsRow(
     Row(
         modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 68.dp)
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .defaultMinSize(minHeight = 56.dp)
+            .padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -249,8 +247,8 @@ internal fun <T> SettingsSegmented(
     Row(
         modifier
             .fillMaxWidth()
-            .background(SettingsStyle.Tile, CircleShape)
-            .border(1.dp, SettingsStyle.TileBorder, CircleShape)
+            .background(SettingsStyle.Panel, SegmentShape)
+            .border(1.dp, SettingsStyle.TileBorder, SegmentShape)
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -260,8 +258,8 @@ internal fun <T> SettingsSegmented(
             Box(
                 Modifier
                     .weight(1f)
-                    .height(38.dp)
-                    .background(if (isSelected) SettingsStyle.Selected else Color.Transparent, CircleShape)
+                    .height(34.dp)
+                    .background(if (isSelected) SettingsStyle.Sage else Color.Transparent, SegmentThumbShape)
                     .clickable(enabled = optionEnabled, role = Role.RadioButton) { onSelect(value) }
                     .alpha(if (optionEnabled) 1f else 0.4f),
                 contentAlignment = Alignment.Center,
@@ -269,14 +267,17 @@ internal fun <T> SettingsSegmented(
                 Text(
                     label,
                     style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),
-                    color = if (isSelected) SettingsStyle.Title else SettingsStyle.SegmentIdle,
+                    color = if (isSelected) SettingsStyle.OnAccent else SettingsStyle.SegmentIdle,
                 )
             }
         }
     }
 }
 
-/** Neutral outlined pill; [destructive] swaps the label to the danger colour. */
+private val SegmentShape = RoundedCornerShape(8.dp)
+private val SegmentThumbShape = RoundedCornerShape(6.dp)
+
+/** Neutral outlined button; [destructive] swaps the label to the danger colour. */
 @Composable
 internal fun SettingsPill(
     label: String,
@@ -286,15 +287,15 @@ internal fun SettingsPill(
 ) {
     Surface(
         onClick = onClick,
-        shape = CircleShape,
+        shape = SegmentShape,
         color = SettingsStyle.ButtonFill,
         border = BorderStroke(1.dp, SettingsStyle.ButtonBorder),
-        modifier = modifier.defaultMinSize(minHeight = 44.dp),
+        modifier = modifier.defaultMinSize(minHeight = 40.dp),
     ) {
-        Box(Modifier.padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
             Text(
                 label,
-                style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium),
+                style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),
                 color = if (destructive) CanopyColors.Danger else SettingsStyle.Title,
             )
         }
@@ -306,11 +307,12 @@ internal fun SettingsPill(
 internal fun QualityRow(
     stored: AudioQuality,
     onChange: (AudioQuality) -> Unit,
+    atmosAvailable: Boolean = false,
     title: String = "Wi-Fi quality",
     icon: ImageVector = Icons.Rounded.Headphones,
 ) {
-    val value = stored
-    Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+    val value = visibleAudioQuality(stored, atmosAvailable)
+    Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             RowIcon(icon)
             Column {
@@ -320,9 +322,9 @@ internal fun QualityRow(
                 )
             }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(10.dp))
         SettingsSegmented(
-            options = AudioQuality.entries.map { it to it.label },
+            options = audioQualityOptions(atmosAvailable).map { it to it.label },
             selected = value,
             onSelect = onChange,
         )
@@ -332,7 +334,7 @@ internal fun QualityRow(
 /** What to do about talking intros, skits and applause, as one segmented control. */
 @Composable
 internal fun NonMusicSkipRow(value: NonMusicSkipMode, onChange: (NonMusicSkipMode) -> Unit) {
-    Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+    Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             RowIcon(Icons.Rounded.SkipNext)
             Column {
@@ -346,7 +348,7 @@ internal fun NonMusicSkipRow(value: NonMusicSkipMode, onChange: (NonMusicSkipMod
                 )
             }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(10.dp))
         SettingsSegmented(
             options = listOf(
                 NonMusicSkipMode.OFF to "Off",
@@ -360,7 +362,12 @@ internal fun NonMusicSkipRow(value: NonMusicSkipMode, onChange: (NonMusicSkipMod
 }
 
 internal val AudioQuality.label: String
-    get() = when (this) { AudioQuality.DATA_SAVER -> "Saver"; AudioQuality.NORMAL -> "Normal"; AudioQuality.HIGH -> "High" }
+    get() = when (this) { AudioQuality.DATA_SAVER -> "Saver"; AudioQuality.NORMAL -> "Normal"; AudioQuality.HIGH -> "High"; AudioQuality.ATMOS -> "Atmos" }
 
 private val AudioQuality.description: String
-    get() = when (this) { AudioQuality.DATA_SAVER -> "Uses the least data"; AudioQuality.NORMAL -> "Balanced quality and data"; AudioQuality.HIGH -> "Best quality, more data" }
+    get() = when (this) {
+        AudioQuality.DATA_SAVER -> "Uses the least data"
+        AudioQuality.NORMAL -> "Balanced quality and data"
+        AudioQuality.HIGH -> "Best quality, more data"
+        AudioQuality.ATMOS -> "Dolby Atmos when available. Applies to the next song; Apple Music crossfade is off."
+    }

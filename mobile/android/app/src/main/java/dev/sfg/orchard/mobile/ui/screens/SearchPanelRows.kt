@@ -82,88 +82,18 @@ internal fun topResult(results: SearchResults, query: String): CatalogItem? {
     return null
 }
 
-private fun CatalogItem.kindLabel(): String = when (this) {
-    is CatalogItem.Song -> "Song · ${track.artist}"
-    is CatalogItem.Record -> "Album · ${album.artist}"
-    is CatalogItem.Performer -> "Artist"
-    is CatalogItem.Collection -> "Playlist · ${playlist.author}"
-    is CatalogItem.Category -> ""
-}
-
-/** Small caps heading inside the panel, with an optional action on the right. */
-@Composable
-internal fun PanelCaption(text: String, action: String? = null, onAction: () -> Unit = {}) {
-    Row(
-        Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text.uppercase(),
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.9.sp,
-            ),
-            color = SettingsStyle.Caption,
-            modifier = Modifier.padding(vertical = 8.dp),
-        )
-        if (action != null) {
-            Text(
-                action,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
-                color = SettingsStyle.Sage,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onAction)
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-            )
-        }
-    }
-}
-
-@Composable
-internal fun ScopeChips(selected: SearchScope, onSelect: (SearchScope) -> Unit) {
-    androidx.compose.foundation.lazy.LazyRow(
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        items(SearchScope.entries.size) { index ->
-            val scope = SearchScope.entries[index]
-            val on = scope == selected
-            val shape = RoundedCornerShape(18.dp)
-            Box(
-                Modifier
-                    .height(36.dp)
-                    .clip(shape)
-                    .background(if (on) SettingsStyle.Selected else Color.Transparent, shape)
-                    .border(1.dp, if (on) Color.Transparent else SettingsStyle.ButtonBorder, shape)
-                    .clickable { onSelect(scope) }
-                    .padding(horizontal = 14.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    scope.label,
-                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
-                    color = if (on) SettingsStyle.Title else SettingsStyle.SegmentIdle,
-                )
-            }
-        }
-    }
-}
-
 /** Artwork, two lines and a chevron; shared by albums, artists and playlists. */
 @Composable
 internal fun ResultRow(item: CatalogItem, subtitle: String, round: Boolean, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(64.dp)
             .clickable(onClick = onClick)
             .padding(start = 12.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ArtworkTile(item.artworkUrl, item.title, Modifier.size(38.dp), radius = if (round) 19 else 8)
+        ArtworkTile(item.artworkUrl, item.title, Modifier.size(48.dp), radius = if (round) 24 else 8)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -187,54 +117,6 @@ internal fun ResultRow(item: CatalogItem, subtitle: String, round: Boolean, onCl
     }
 }
 
-/** Larger row for the best match; songs get a play button, everything else opens. */
-@Composable
-internal fun TopResultRow(item: CatalogItem, onOpen: () -> Unit, onPlay: () -> Unit) {
-    val isSong = item is CatalogItem.Song
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(Color(0x0AFFFFFF))
-            .clickable(onClick = if (isSong) onPlay else onOpen)
-            .padding(start = 12.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ArtworkTile(item.artworkUrl, item.title, Modifier.size(56.dp), radius = if (item is CatalogItem.Performer) 28 else 10)
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                "TOP RESULT",
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.9.sp),
-                color = SettingsStyle.Sage,
-            )
-            Text(
-                item.title,
-                style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
-                color = SettingsStyle.Title,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                item.kindLabel(),
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                color = SettingsStyle.Description,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (isSong) {
-            IconButton(
-                onClick = onPlay,
-                modifier = Modifier.size(44.dp).background(SettingsStyle.SwitchOn, CircleShape),
-            ) {
-                Icon(Icons.Rounded.PlayArrow, "Play", tint = Color.White, modifier = Modifier.size(22.dp))
-            }
-        } else {
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = SettingsStyle.Chevron, modifier = Modifier.size(20.dp))
-        }
-    }
-}
-
 private class BrowseEntry(val label: String, val icon: ImageVector, val id: String)
 
 // Same shelves the old chips opened; browse ids are YouTube Music's own.
@@ -247,20 +129,20 @@ private val browseEntries = listOf(
 @Composable
 internal fun BrowseTiles(onOpen: (String) -> Unit) {
     val shape = RoundedCornerShape(12.dp)
-    Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         browseEntries.forEach { entry ->
             Column(
                 Modifier
                     .weight(1f)
-                    .height(64.dp)
+                    .height(84.dp)
                     .clip(shape)
                     .background(SettingsStyle.Tile, shape)
                     .border(1.dp, SettingsStyle.TileBorder, shape)
                     .clickable { onOpen(entry.id) }
-                    .padding(10.dp),
+                    .padding(12.dp),
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
-                Icon(entry.icon, null, tint = SettingsStyle.TileIcon, modifier = Modifier.size(18.dp))
+                Icon(entry.icon, null, tint = SettingsStyle.TileIcon, modifier = Modifier.size(22.dp))
                 Text(
                     entry.label,
                     style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),

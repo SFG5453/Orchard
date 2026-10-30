@@ -75,7 +75,7 @@ internal fun CacheSizeRow(settings: OrchardSettings, onSettings: (OrchardSetting
     // size and the control has somewhere obvious to land.
     val index = steps.indexOfFirst { it >= settings.cacheSizeMb }.takeIf { it >= 0 } ?: steps.lastIndex
 
-    Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+    Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             RowIcon(Icons.Rounded.Inventory2)
             Column(Modifier.weight(1f)) {

@@ -78,7 +78,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import dev.sfg.orchard.mobile.auth.AuthState
-import dev.sfg.orchard.mobile.model.AudioQuality
+import dev.sfg.orchard.mobile.model.audioQualityOptions
+import dev.sfg.orchard.mobile.model.visibleAudioQuality
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
@@ -361,6 +362,8 @@ internal fun WelcomeQualityAndStorageSection(
     settings: OrchardSettings,
     onUpdateSettings: (OrchardSettings) -> Unit,
 ) {
+    val atmosAvailable = appleAtmosQualityAvailable(settings)
+    val quality = visibleAudioQuality(settings.audioQuality, atmosAvailable)
     WelcomeSectionCard(
         title = "Audio Quality & Cache",
         subtitle = "Streaming fidelity and offline cache limit",
@@ -384,7 +387,7 @@ internal fun WelcomeQualityAndStorageSection(
                         color = CanopyColors.Text,
                     )
                     Text(
-                        settings.audioQuality.name.lowercase().replace('_', ' ').replaceFirstChar(Char::titlecase),
+                        quality.label,
                         style = MaterialTheme.typography.bodySmall,
                         color = LocalAccent.current,
                     )
@@ -400,8 +403,8 @@ internal fun WelcomeQualityAndStorageSection(
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                AudioQuality.entries.forEach { quality ->
-                    val isSelected = quality == settings.audioQuality
+                audioQualityOptions(atmosAvailable).forEach { option ->
+                    val isSelected = option == quality
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -410,15 +413,11 @@ internal fun WelcomeQualityAndStorageSection(
                                 if (isSelected) LocalAccent.current else Color.Transparent,
                                 CircleShape,
                             )
-                            .clickable { onUpdateSettings(settings.copy(audioQuality = quality)) },
+                            .clickable { onUpdateSettings(settings.copy(audioQuality = option)) },
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = when (quality) {
-                                AudioQuality.DATA_SAVER -> "Saver"
-                                AudioQuality.NORMAL -> "Normal"
-                                AudioQuality.HIGH -> "High"
-                            },
+                            text = option.label,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) Color.Black else CanopyColors.Muted,

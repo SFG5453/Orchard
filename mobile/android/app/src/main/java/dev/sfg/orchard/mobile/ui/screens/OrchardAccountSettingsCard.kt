@@ -52,7 +52,7 @@ fun OrchardAccountSettingsCard() {
         if (state.signedIn) account.refreshDevices()
     }
 
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp)) {
         Text(
             if (state.signedIn) state.name.ifBlank { state.email } else
                 "Sign in with Google to use your Orchard account on this device.",

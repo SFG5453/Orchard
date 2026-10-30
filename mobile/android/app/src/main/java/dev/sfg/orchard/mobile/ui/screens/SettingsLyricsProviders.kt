@@ -44,7 +44,7 @@ internal fun LyricsProvidersSection(
 
     SectionLabel("Lyrics providers", labelIndex)
     SettingsPanel(index = labelIndex + 1) {
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             RowSubtitle("Try enabled providers from top to bottom. The first lyrics found are used. You can also choose a source for one song in the lyrics player.")
         }
         providers.forEachIndexed { index, config ->

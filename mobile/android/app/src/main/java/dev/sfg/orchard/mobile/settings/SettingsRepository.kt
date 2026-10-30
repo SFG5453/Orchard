@@ -29,7 +29,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.sfg.orchard.mobile.model.AnimatedArtworkQuality
-import dev.sfg.orchard.mobile.model.AudioQuality
+import dev.sfg.orchard.mobile.model.storedAudioQuality
 import dev.sfg.orchard.mobile.model.ArtworkSource
 import dev.sfg.orchard.mobile.model.EqualizerConfig
 import dev.sfg.orchard.mobile.model.LyricTranslationLanguage
@@ -66,11 +66,8 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 sendYouTubeHistory = values[SEND_YOUTUBE_HISTORY] ?: true,
                 downloadAnimatedArtwork = values[DOWNLOAD_ANIMATED_ARTWORK] ?: false,
                 downloadToSdCard = values[DOWNLOAD_TO_SD_CARD] ?: false,
-                audioQuality = runCatching { AudioQuality.valueOf(values[AUDIO_QUALITY].orEmpty()) }
-                    .getOrDefault(AudioQuality.HIGH),
-                cellularAudioQuality = runCatching { AudioQuality.valueOf(values[CELLULAR_AUDIO_QUALITY].orEmpty()) }
-                    .getOrDefault(AudioQuality.HIGH),
-                appleMusicAtmos = values[APPLE_MUSIC_ATMOS] ?: false,
+                audioQuality = storedAudioQuality(values[AUDIO_QUALITY], values[APPLE_MUSIC_ATMOS] == true),
+                cellularAudioQuality = storedAudioQuality(values[CELLULAR_AUDIO_QUALITY], values[APPLE_MUSIC_ATMOS] == true),
                 useSystemColors = values[SYSTEM_COLORS] ?: false,
                 animatedBackground = values[ANIMATED_BACKGROUND] ?: false,
                 backdropSpeed = values[BACKDROP_SPEED] ?: OrchardSettings.DEFAULT_BACKDROP_SPEED,
@@ -148,7 +145,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[DOWNLOAD_TO_SD_CARD] = value.downloadToSdCard
                 it[AUDIO_QUALITY] = value.audioQuality.name
                 it[CELLULAR_AUDIO_QUALITY] = value.cellularAudioQuality.name
-                it[APPLE_MUSIC_ATMOS] = value.appleMusicAtmos
+                it.remove(APPLE_MUSIC_ATMOS)
                 it[SYSTEM_COLORS] = value.useSystemColors
                 it[ANIMATED_BACKGROUND] = value.animatedBackground
                 it[BACKDROP_SPEED] = value.backdropSpeed

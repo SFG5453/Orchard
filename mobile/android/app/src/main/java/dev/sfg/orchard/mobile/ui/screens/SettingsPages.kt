@@ -32,16 +32,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Description
-import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.GridView
-import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Loop
 import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.SignalCellularAlt
 import androidx.compose.material.icons.rounded.Speed
-import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.TouchApp
@@ -57,41 +52,27 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.sfg.orchard.connect.BuildConfig
-import dev.sfg.orchard.mobile.MobileUpdateMetadata
-import dev.sfg.orchard.mobile.UpdateState
 import dev.sfg.orchard.mobile.model.OrchardSettings
-import dev.sfg.orchard.mobile.playback.apple.AppleAtmosCapability
 import dev.sfg.orchard.mobile.settings.CacheManager
 
 @Composable
-internal fun AudioPage(
+internal fun PlaybackPage(
     settings: OrchardSettings,
     onSettings: (OrchardSettings) -> Unit,
     onAutoplayEnabled: ((Boolean) -> Unit)?,
 ) {
-    val appleConnected = appleMusicConnectionStatus().connected
-    val hasAtmosDecoder = remember { AppleAtmosCapability.decoderAvailable }
+    val atmosAvailable = appleAtmosQualityAvailable(settings)
     SectionLabel("Quality")
     SettingsPanel(index = 1) {
-        QualityRow(settings.audioQuality, { onSettings(settings.copy(audioQuality = it)) })
+        QualityRow(settings.audioQuality, { onSettings(settings.copy(audioQuality = it)) }, atmosAvailable = atmosAvailable)
         PanelDivider()
         QualityRow(
             settings.cellularAudioQuality,
             { onSettings(settings.copy(cellularAudioQuality = it)) },
+            atmosAvailable = atmosAvailable,
             title = "Mobile data quality",
             icon = Icons.Rounded.SignalCellularAlt,
         )
-        if (appleConnected && hasAtmosDecoder) {
-            PanelDivider()
-            ToggleRow(
-                title = "Apple Music Dolby Atmos",
-                subtitle = "Applies to the next song. Crossfade is off for Apple Music.",
-                icon = Icons.AutoMirrored.Rounded.VolumeUp,
-                checked = settings.appleMusicAtmos,
-                onChecked = { onSettings(settings.copy(appleMusicAtmos = it)) },
-            )
-        }
         PanelDivider()
         ToggleRow(
             title = "Show audio bitrate",
@@ -121,8 +102,6 @@ internal fun AudioPage(
             checked = settings.volumeNormalizationEnabled,
             onChecked = { onSettings(settings.copy(volumeNormalizationEnabled = it)) },
         )
-        PanelDivider()
-        CrossfadeRow(settings, onSettings)
     }
 
     SectionLabel("Queue", 4)
@@ -138,19 +117,11 @@ internal fun AudioPage(
         )
     }
 
-    SectionLabel("Non-music", 6)
-    SettingsPanel(index = 7) {
-        NonMusicSkipRow(settings.nonMusicSkip) { onSettings(settings.copy(nonMusicSkip = it)) }
-    }
+    SectionLabel("Devices", 6)
+    SettingsPanel(index = 7) { ChromecastSettingsRow() }
 
-    SectionLabel("AI-generated music", 8)
-    SettingsPanel(index = 9) { SlopSettingsRow(settings, onSettings) }
-
-    SectionLabel("Devices", 10)
-    SettingsPanel(index = 11) { ChromecastSettingsRow() }
-
-    SectionLabel("Listening history", 12)
-    SettingsPanel(index = 13) {
+    SectionLabel("Listening history", 8)
+    SettingsPanel(index = 9) {
         ToggleRow(
             title = "Save plays to YouTube Music history",
             subtitle = "Add songs you play in Orchard to your YouTube Music history",
@@ -200,26 +171,6 @@ internal fun AppearancePage(
             checked = settings.playerGesturesEnabled,
             onChecked = { onSettings(settings.copy(playerGesturesEnabled = it)) },
         )
-        PanelDivider()
-        ToggleRow(
-            title = "Animated artwork",
-            subtitle = "Move artwork while music plays",
-            icon = Icons.Rounded.Image,
-            checked = settings.animatedArtwork,
-            onChecked = { onSettings(settings.copy(animatedArtwork = it)) },
-        )
-        PanelDivider()
-        ArtworkQualityRows(settings, onSettings)
-        PanelDivider()
-        ArtworkSourceOrder(settings, onSettings)
-        PanelDivider()
-        ToggleRow(
-            title = "Download animated artwork",
-            subtitle = "Save motion covers with new downloads for offline playback",
-            icon = Icons.Rounded.Download,
-            checked = settings.downloadAnimatedArtwork,
-            onChecked = { onSettings(settings.copy(downloadAnimatedArtwork = it)) },
-        )
     }
 
     SectionLabel("Background", 8)
@@ -233,10 +184,6 @@ internal fun AppearancePage(
         )
         BackdropControls(settings, onSettings)
     }
-
-    LyricsMotionSection(settings, onSettings, labelIndex = 10)
-    LyricsProvidersSection(settings, onSettings, labelIndex = 12)
-    LyricTranslationSection(settings, onSettings, labelIndex = 14)
 }
 
 /** Orchard palette or the wallpaper palette, with a swatch strip previewing the choice. */
@@ -255,7 +202,7 @@ private fun ColourSourceRow(settings: OrchardSettings, onSettings: (OrchardSetti
             emptyList()
         }
     }
-    Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+    Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             RowIcon(Icons.Rounded.Palette)
             Column {
@@ -295,16 +242,12 @@ private val orchardSwatches = listOf(
 @Composable
 internal fun StoragePage(
     settings: OrchardSettings,
-    updateState: UpdateState,
     cacheSizeBytes: Long,
     isClearingCache: Boolean,
     onSettings: (OrchardSettings) -> Unit,
     onClearCache: () -> Unit,
     downloadedBytes: Long,
     onDeleteAllDownloads: () -> Unit,
-    onCheckForUpdates: () -> Unit,
-    onInstallUpdate: (MobileUpdateMetadata) -> Unit,
-    onShowNotes: () -> Unit,
 ) {
     SectionLabel("Cache")
     SettingsPanel(index = 1) {
@@ -328,56 +271,4 @@ internal fun StoragePage(
         PanelDivider()
         DeleteDownloadsRow(downloadedBytes = downloadedBytes, onDelete = onDeleteAllDownloads)
     }
-
-    SectionLabel("Updates", 4)
-    SettingsPanel(index = 5) {
-        val available = (updateState as? UpdateState.Available)?.metadata
-        if (available != null) {
-            ActionRow(
-                title = "Update available (${available.version})",
-                subtitle = if (available.codename.isNotBlank()) "\"${available.codename}\" • Tap to install" else "Tap to install",
-                icon = Icons.Rounded.SystemUpdate,
-                onClick = { onInstallUpdate(available) },
-            )
-            PanelDivider()
-            ActionRow(
-                title = "Release notes",
-                subtitle = "View changes in Orchard ${available.version}",
-                icon = Icons.Rounded.Description,
-                onClick = onShowNotes,
-            )
-        } else {
-            ActionRow(
-                title = "Release notes",
-                subtitle = updateSubtitle(settings),
-                icon = Icons.Rounded.Description,
-                onClick = onShowNotes,
-            )
-            if (BuildConfig.UPDATER_ENABLED) {
-                PanelDivider()
-                ActionRow(
-                    title = "Check for updates",
-                    subtitle = "Check for newer Orchard releases",
-                    icon = Icons.Rounded.SystemUpdate,
-                    onClick = onCheckForUpdates,
-                )
-            }
-        }
-        if (BuildConfig.UPDATER_ENABLED) {
-            PanelDivider()
-            ToggleRow(
-                title = "Beta channel",
-                subtitle = "Get beta builds from GitHub releases instead of the regular channel. Beta builds may be less stable.",
-                icon = Icons.Rounded.Science,
-                checked = settings.betaChannelEnabled,
-                onChecked = { onSettings(settings.copy(betaChannelEnabled = it)) },
-            )
-        }
-    }
-}
-
-private fun updateSubtitle(settings: OrchardSettings): String = when {
-    !BuildConfig.UPDATER_ENABLED -> "Orchard ${BuildConfig.VERSION_NAME} • Updates disabled"
-    settings.betaChannelEnabled -> "Orchard ${BuildConfig.VERSION_NAME} • Beta channel • Up to date"
-    else -> "Orchard ${BuildConfig.VERSION_NAME} • Up to date"
 }

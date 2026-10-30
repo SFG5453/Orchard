@@ -41,11 +41,8 @@ import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Image
-import androidx.compose.material.icons.rounded.Loop
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.automirrored.rounded.VolumeUp
-import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -57,7 +54,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -75,6 +71,7 @@ import coil3.compose.AsyncImage
 import dev.sfg.orchard.mobile.auth.AuthState
 import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.OrchardSettings
+import dev.sfg.orchard.mobile.model.visibleAudioQuality
 import dev.sfg.orchard.mobile.model.YOUTUBE_SOURCE
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
@@ -82,16 +79,21 @@ import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 internal data class SettingsSummaries(
     val connectedCount: Int,
     val storage: String,
+    val about: String,
 )
 
-/** Top level of settings: search, account, quick switches and one row per page. */
+@Composable
+private fun PageRow(page: SettingsPage, subtitle: String, onOpen: (SettingsPage) -> Unit, value: String? = null) {
+    ActionRow(title = page.title, subtitle = subtitle, icon = page.icon, value = value, onClick = { onOpen(page) })
+}
+
+/** Top level of settings: search, account, music service and grouped page rows. */
 @Composable
 internal fun SettingsHub(
     settings: OrchardSettings,
     auth: AuthState,
     summaries: SettingsSummaries,
     onSettings: (OrchardSettings) -> Unit,
-    onAutoplayEnabled: ((Boolean) -> Unit)?,
     onOpen: (SettingsPage) -> Unit,
     onSignIn: () -> Unit,
     onSwitchAccount: () -> Unit,
@@ -110,7 +112,7 @@ internal fun SettingsHub(
 
     SectionLabel("Music service", 2)
     SettingsPanel(index = 3) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             RowSubtitle("Powers Home, search, albums, artists and playlists.")
             SettingsSegmented(
                 options = listOf(YOUTUBE_SOURCE to "YouTube Music", APPLE_MUSIC_SOURCE to "Apple Music"),
@@ -120,62 +122,39 @@ internal fun SettingsHub(
         }
     }
 
-    SectionLabel("Quick switches", 4)
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            QuickTile(Icons.Rounded.Loop, "Autoplay", settings.autoplayEnabled, Modifier.weight(1f)) { enabled ->
-                onAutoplayEnabled?.invoke(enabled) ?: onSettings(settings.copy(autoplayEnabled = enabled))
-            }
-            QuickTile(Icons.Rounded.Waves, "Crossfade", settings.crossfadeEnabled, Modifier.weight(1f)) {
-                onSettings(settings.copy(crossfadeEnabled = it))
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            QuickTile(Icons.AutoMirrored.Rounded.VolumeUp, "Normalize volume", settings.volumeNormalizationEnabled, Modifier.weight(1f)) {
-                onSettings(settings.copy(volumeNormalizationEnabled = it))
-            }
-            QuickTile(Icons.Rounded.Image, "Animated artwork", settings.animatedArtwork, Modifier.weight(1f)) {
-                onSettings(settings.copy(animatedArtwork = it))
-            }
-        }
+    val quality = visibleAudioQuality(settings.audioQuality, appleAtmosQualityAvailable(settings)).label
+    SectionLabel("Listening", 4)
+    SettingsPanel(index = 5) {
+        PageRow(SettingsPage.Playback, "$quality quality · Equalizer ${if (settings.equalizerConfig.enabled) "on" else "off"}", onOpen)
+        PanelDivider()
+        PageRow(SettingsPage.Mixing, if (settings.crossfadeEnabled) "Crossfade on" else "Crossfade off", onOpen)
     }
 
-    SectionLabel("All settings", 5)
-    SettingsPanel(index = 6) {
-        val quality = settings.audioQuality.label
-        val eq = if (settings.equalizerConfig.enabled) "on" else "off"
-        ActionRow(
-            title = SettingsPage.Audio.title,
-            subtitle = "Quality: $quality · Equalizer $eq",
-            icon = SettingsPage.Audio.icon,
-            onClick = { onOpen(SettingsPage.Audio) },
+    SectionLabel("Look & feel", 6)
+    SettingsPanel(index = 7) {
+        PageRow(SettingsPage.Appearance, if (settings.useSystemColors) "System colours" else "Orchard green", onOpen)
+        PanelDivider()
+        PageRow(SettingsPage.Artwork, if (settings.animatedArtwork) "Animated" else "Still", onOpen)
+        PanelDivider()
+        PageRow(SettingsPage.Lyrics, SettingsPage.Lyrics.blurb, onOpen)
+    }
+
+    SectionLabel("App", 8)
+    SettingsPanel(index = 9) {
+        PageRow(
+            SettingsPage.Connections,
+            "Last.fm, Discord and more",
+            onOpen,
+            summaries.connectedCount.takeIf { it > 0 }?.let { "$it connected" },
         )
         PanelDivider()
-        ActionRow(
-            title = SettingsPage.Appearance.title,
-            subtitle = (if (settings.useSystemColors) "System colours" else "Orchard green") + " · Home layout, player",
-            icon = SettingsPage.Appearance.icon,
-            onClick = { onOpen(SettingsPage.Appearance) },
-        )
+        PageRow(SettingsPage.Storage, summaries.storage, onOpen)
         PanelDivider()
-        ActionRow(
-            title = SettingsPage.Connections.title,
-            subtitle = "Last.fm, Discord and more",
-            icon = SettingsPage.Connections.icon,
-            value = summaries.connectedCount.takeIf { it > 0 }?.let { "$it of ${ConnectionService.entries.size}" },
-            onClick = { onOpen(SettingsPage.Connections) },
-        )
-        PanelDivider()
-        ActionRow(
-            title = SettingsPage.Storage.title,
-            subtitle = summaries.storage,
-            icon = SettingsPage.Storage.icon,
-            onClick = { onOpen(SettingsPage.Storage) },
-        )
+        PageRow(SettingsPage.About, summaries.about, onOpen)
     }
 
     Column(Modifier.padding(top = 16.dp)) {
-        SettingsPanel(index = 7) {
+        SettingsPanel(index = 10) {
             val support = dev.sfg.orchard.mobile.ui.support.LocalSupportUi.current
             if (support != null) {
                 val unread = support.service.state.collectAsStateWithLifecycle().value.unread
@@ -268,49 +247,6 @@ private fun SettingsSearchField(query: String, onQuery: (String) -> Unit) {
     )
 }
 
-/** Switch tile: lit with the sage selection gradient when on, plain glass when off. */
-@Composable
-private fun QuickTile(
-    icon: ImageVector,
-    label: String,
-    on: Boolean,
-    modifier: Modifier = Modifier,
-    onChange: (Boolean) -> Unit,
-) {
-    val shape = RoundedCornerShape(16.dp)
-    val lit = Brush.verticalGradient(listOf(Color(0x338CC4A0), Color(0x1A8CC4A0)))
-    Column(
-        modifier
-            .clip(shape)
-            .background(if (on) lit else SolidColor(SettingsStyle.Panel))
-            .border(1.dp, if (on) Color(0x38A0D6B4) else SettingsStyle.PanelBorder, shape)
-            .toggleable(value = on, role = Role.Switch, onValueChange = onChange)
-            .defaultMinSize(minHeight = 96.dp)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = if (on) SettingsStyle.SageSoft else SettingsStyle.Description,
-            modifier = Modifier.size(22.dp),
-        )
-        Column {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
-                color = SettingsStyle.Title,
-            )
-            Text(
-                if (on) "On" else "Off",
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-                color = SettingsStyle.Description,
-            )
-        }
-    }
-}
-
-/** Signed-in identity with switch and sign-out actions. */
 @Composable
 private fun AccountCard(
     auth: AuthState,

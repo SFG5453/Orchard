@@ -316,7 +316,7 @@ class YouTubeStreamResolver(
     private fun streamQuality(): String = when (qualityProvider()) {
         AudioQuality.DATA_SAVER -> "saver"
         AudioQuality.NORMAL -> "normal"
-        AudioQuality.HIGH -> "high"
+        AudioQuality.HIGH, AudioQuality.ATMOS -> "high"
     }
 
     private fun expiry(json: JSONObject): Long =

@@ -63,7 +63,7 @@ private fun ArtworkQualityRow(
     value: AnimatedArtworkQuality,
     onChange: (AnimatedArtworkQuality) -> Unit,
 ) {
-    Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+    Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             RowIcon(icon)
             Column {

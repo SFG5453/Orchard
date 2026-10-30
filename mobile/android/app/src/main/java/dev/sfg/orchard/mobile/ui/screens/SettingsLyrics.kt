@@ -123,7 +123,7 @@ internal fun LyricTranslationSection(
         }
         if (provider != LyricTranslationProvider.LOCAL && provider != LyricTranslationProvider.ORCHARD) {
             PanelDivider()
-            Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
                 RowTitle("Model ID")
                 RowSubtitle("Enter a model supported by ${provider.label}.")
                 Spacer(Modifier.height(10.dp))
@@ -139,7 +139,7 @@ internal fun LyricTranslationSection(
             }
             if (provider == LyricTranslationProvider.CUSTOM) {
                 PanelDivider()
-                Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
                     RowTitle("API base URL")
                     RowSubtitle("OpenAI compatible; keyless HTTP APIs and localhost are allowed.")
                     Spacer(Modifier.height(10.dp))
@@ -155,7 +155,7 @@ internal fun LyricTranslationSection(
                 }
             }
             PanelDivider()
-            Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
                 RowTitle("API key")
                 RowSubtitle(if (apiKeys.has(provider)) "Saved with Android Keystore encryption."
                     else if (provider == LyricTranslationProvider.CUSTOM) "Optional for a keyless API."
@@ -183,7 +183,7 @@ internal fun LyricTranslationSection(
         }
         if (provider == LyricTranslationProvider.LOCAL && TranslationNative.available) {
             PanelDivider()
-            Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     RowIcon(Icons.Rounded.Tune)
                     Column {

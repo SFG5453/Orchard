@@ -62,7 +62,7 @@ fun SpotifySettingsCard(
         shape = shape,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             SpotifyToggleRow(
                 title = "Spotify Canvas",
                 subtitle = "Animated artwork from Spotify",

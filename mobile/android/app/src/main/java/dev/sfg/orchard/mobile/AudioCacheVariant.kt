@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile
 
 import dev.sfg.orchard.mobile.model.AudioQuality
+import dev.sfg.orchard.mobile.model.youtubeAudioQuality
 
 /** Separates playback cache bytes by selected provider and encoding tier. */
 /** Apple Music serves one 256 kbps AAC encode whatever the quality setting says. */
@@ -30,4 +31,4 @@ internal fun sourceCacheVariant(sourceId: String, providerVariant: () -> String)
     if (sourceId.startsWith("am.")) APPLE_MUSIC_CACHE_VARIANT else providerVariant()
 
 internal fun audioCacheVariant(quality: AudioQuality): String =
-    "v2|youtube|${quality.name}"
+    "v2|youtube|${youtubeAudioQuality(quality).name}"
