@@ -31,6 +31,8 @@ app_sources = [
   'app/src/auth/auth_diagnostics.h',
   'app/src/auth/auth_session_channel.cpp',
   'app/src/auth/auth_session_channel.h',
+  'app/src/auth/youtube_session_keeper.cpp',
+  'app/src/auth/youtube_session_keeper.h',
   'app/src/backend_info.cpp',
   'app/src/backend_info.h',
   'app/src/youtube_links.h',
@@ -268,6 +270,7 @@ helper_sources = [
   'app/src/auth/spotify_page.h',
   'app/src/auth/apple_music_helper.h',
   'app/src/auth/apple_music_page.h',
+  'app/src/auth/youtube_refresh.h',
   'app/src/providers/runtime/provider_runtime.cpp',
   'app/src/providers/runtime/provider_runtime.h',
   'core/native/provider_host/provider_host.cpp',
@@ -285,6 +288,7 @@ helper_webengine_sources = [
 
 helper_webview2_sources = [
   'app/src/auth/spotify_helper_webview2.cpp',
+  'app/src/auth/youtube_refresh_webview2.cpp',
   'app/src/auth/apple_music_helper_webview2.cpp',
   'app/src/auth/webview2_cookies.cpp',
   'app/src/auth/webview2_environment.cpp',
@@ -558,6 +562,7 @@ app_moc_headers = [
   'app/src/auth/browser_cookie_adapter.h',
   'app/src/auth/auth_manager.h',
   'app/src/auth/auth_session_channel.h',
+  'app/src/auth/youtube_session_keeper.h',
   'app/src/backend_info.h',
   'app/src/docs/docs_assistant.h',
   'app/src/docs/docs_embedder.h',
