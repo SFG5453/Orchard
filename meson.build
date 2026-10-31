@@ -107,13 +107,15 @@ if meson.is_cross_build() and host_machine.system() == 'windows'
   qt_dep = declare_dependency(dependencies: target_qt_deps)
   qt_entry_dep = dependency('Qt6Core', method: 'cmake',
     modules: ['Qt6::EntryPointPrivate'])
+  qt_gui_private = dependency('Qt6GuiPrivate', method: 'cmake',
+    modules: ['Qt6::GuiPrivate'])
 else
   qt_dep = dependency('qt6', version: '>=6.8', modules: qt_modules, main: true)
   qt_entry_dep = []
+  qt_gui_private = dependency('qt6',
+    modules: ['Core', 'Gui'],
+    private_headers: true)
 endif
-qt_gui_private = dependency('qt6',
-  modules: ['Core', 'Gui'],
-  private_headers: true)
 thread_dep = dependency('threads')
 platform_deps = [thread_dep]
 # DBus (Linux) and IOKit (macOS) back the screen wake lock.
