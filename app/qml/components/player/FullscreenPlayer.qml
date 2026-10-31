@@ -242,21 +242,61 @@ FullscreenPlayerForm {
     }
 
     queuePane.queueItems: OrchardPlayback.queue || []
+    queuePane.continuous: OrchardPlayback.queueLayout === "continuous"
+    queuePane.history: queuePane.continuous ? (OrchardPlayback.history || []) : []
+    queuePane.currentTrack: OrchardPlayback.track
     queuePane.autoplayEnabled: OrchardPlayback.autoplayEnabled
     queuePane.clearButton.onClicked: OrchardPlayback.clearQueue()
-    queuePane.list.delegate: FullscreenQueueRow {
+    queuePane.list.delegate: Item {
+        id: queueEntry
         required property var modelData
         required property int index
+        readonly property bool previous: root.queuePane.continuous && index < root.queuePane.history.length
+        readonly property bool current: root.queuePane.continuous && !previous && index < root.queuePane.leading
+        readonly property int queueIndex: index - root.queuePane.leading
+        readonly property string section: !root.queuePane.continuous ? ""
+            : previous && index === 0 ? qsTr("PLAYED")
+            : current ? qsTr("NOW PLAYING")
+            : queueIndex === 0 ? qsTr("UP NEXT") : ""
         width: root.queuePane.list.width - 8
-        track: modelData
-        rowIndex: index
-        artistText: root.artistLabel(modelData)
-        paneSwap: root.paneSwap
-        accentColor: root.accentColor
-        primaryText: root.primaryText
-        mutedText: root.mutedText
-        onClicked: OrchardPlayback.playQueueIndex(index)
-        removeButton.onClicked: OrchardPlayback.removeFromQueue(index)
+        height: queueRow.height + (section ? 26 : 0)
+
+        Text {
+            visible: queueEntry.section !== ""
+            text: queueEntry.section
+            color: root.mutedText
+            font.family: "Inter"
+            font.pixelSize: 11
+            font.bold: true
+            anchors.left: parent.left
+            anchors.leftMargin: 8
+            anchors.top: parent.top
+            anchors.topMargin: 8
+        }
+
+        FullscreenQueueRow {
+            id: queueRow
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            track: queueEntry.modelData
+            rowIndex: queueEntry.index
+            artistText: root.artistLabel(queueEntry.modelData)
+            paneSwap: root.paneSwap
+            accentColor: root.accentColor
+            primaryText: root.primaryText
+            mutedText: root.mutedText
+            opacity: enter * (queueEntry.previous ? 0.6 : 1)
+            enabled: !queueEntry.current
+            removeButton.visible: !queueEntry.previous && !queueEntry.current
+            onClicked: {
+                if (queueEntry.previous)
+                    OrchardPlayback.playHistoryIndex(queueEntry.index);
+                else if (!queueEntry.current)
+                    OrchardPlayback.playQueueIndex(queueEntry.queueIndex);
+            }
+            removeButton.onClicked: OrchardPlayback.removeFromQueue(queueEntry.queueIndex)
+        }
     }
 
     controls.seekLimit: mixStart >= 0 ? Math.max(0, mixStart - 5, OrchardPlayback.position) : OrchardPlayback.duration
