@@ -51,7 +51,7 @@ internal class YouTubeHistoryReporter(private val graph: OrchardGraph, private v
         val settings = graph.settings.settings.value
         // Apple Music listening stays out of YouTube's history.
         val apple = settings.homeSource == APPLE_MUSIC_SOURCE || isAppleMusicId(currentId)
-        val eligible = player.isPlaying && !local && !apple &&
+        val eligible = player.isPlaying && !local && !apple && !graph.activeTrackIsQobuz.value &&
             settings.sendYouTubeHistory && graph.networkMonitor.isOnline.value &&
             graph.auth.session() != null
         if (currentId == trackId) positionMs = player.currentPosition.coerceAtLeast(0)

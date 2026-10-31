@@ -24,6 +24,7 @@ public:
   QString mode() const { return m_available ? m_mode : QStringLiteral("standard"); }
   void setMode(const QString &mode);
   bool available() const { return m_available; }
+  // Qobuz streams aren't analysed, so playback turns adaptive mix off while it's on.
   void setAvailable(bool available);
   bool enabled() const { return mode() == QStringLiteral("adaptive"); }
   QString status() const { return m_status; }

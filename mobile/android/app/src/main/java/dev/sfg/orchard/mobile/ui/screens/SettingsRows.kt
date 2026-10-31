@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.mobile.model.AudioQuality
+import dev.sfg.orchard.mobile.model.LocalQobuzLinked
 import dev.sfg.orchard.mobile.model.audioQualityOptions
 import dev.sfg.orchard.mobile.model.visibleAudioQuality
 import dev.sfg.orchard.mobile.model.NonMusicSkipMode
@@ -311,14 +312,15 @@ internal fun QualityRow(
     title: String = "Wi-Fi quality",
     icon: ImageVector = Icons.Rounded.Headphones,
 ) {
-    val value = visibleAudioQuality(stored, atmosAvailable)
+    val linked = LocalQobuzLinked.current
+    val value = visibleAudioQuality(stored, atmosAvailable, linked)
     Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             RowIcon(icon)
             Column {
                 RowTitle(title)
                 RowSubtitle(
-                    value.description,
+                    value.description + if (!linked) ". Max needs a linked Qobuz account." else "",
                 )
             }
         }
@@ -327,6 +329,7 @@ internal fun QualityRow(
             options = audioQualityOptions(atmosAvailable).map { it to it.label },
             selected = value,
             onSelect = onChange,
+            isEnabled = { it != AudioQuality.MAX || linked },
         )
     }
 }
@@ -362,7 +365,10 @@ internal fun NonMusicSkipRow(value: NonMusicSkipMode, onChange: (NonMusicSkipMod
 }
 
 internal val AudioQuality.label: String
-    get() = when (this) { AudioQuality.DATA_SAVER -> "Saver"; AudioQuality.NORMAL -> "Normal"; AudioQuality.HIGH -> "High"; AudioQuality.ATMOS -> "Atmos" }
+    get() = when (this) {
+        AudioQuality.DATA_SAVER -> "Saver"; AudioQuality.NORMAL -> "Normal"; AudioQuality.HIGH -> "High"
+        AudioQuality.ATMOS -> "Atmos"; AudioQuality.MAX -> "Max"
+    }
 
 private val AudioQuality.description: String
     get() = when (this) {
@@ -370,4 +376,5 @@ private val AudioQuality.description: String
         AudioQuality.NORMAL -> "Balanced quality and data"
         AudioQuality.HIGH -> "Best quality, more data"
         AudioQuality.ATMOS -> "Dolby Atmos when available. Applies to the next song; Apple Music crossfade is off."
+        AudioQuality.MAX -> "Lossless and Hi-Res from Qobuz. Adaptive mix and the equalizer are off"
     }

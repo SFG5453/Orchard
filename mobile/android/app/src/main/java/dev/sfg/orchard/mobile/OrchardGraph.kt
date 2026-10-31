@@ -158,6 +158,12 @@ class OrchardGraph(context: Context) {
     val transitionMarker = kotlinx.coroutines.flow.MutableStateFlow<dev.sfg.orchard.mobile.model.TransitionMarker?>(null)
     val warningEvent = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 16)
     val activeBitrate = kotlinx.coroutines.flow.MutableStateFlow(0)
+    val activeTrackIsQobuz = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val activeStreamDetail = kotlinx.coroutines.flow.MutableStateFlow(dev.sfg.orchard.mobile.model.StreamDetail())
+    val qobuzTiers = dev.sfg.orchard.mobile.qobuz.QobuzTierMemory(context)
+    val qobuz = dev.sfg.orchard.mobile.qobuz.QobuzRepository(context, applicationScope)
+    val qobuzResolver = dev.sfg.orchard.mobile.qobuz.QobuzResolver(qobuz, http, providerAsset)
+
     /** The tier for the current network: cellular on metered connections, otherwise the Wi-Fi tier. */
     fun audioQuality(s: dev.sfg.orchard.mobile.model.OrchardSettings = settings.settings.value): AudioQuality =
         s.audioQualityForNetwork(networkMonitor.isMetered.value)
@@ -165,12 +171,27 @@ class OrchardGraph(context: Context) {
     fun atmosEnabled(): Boolean = audioQuality() == AudioQuality.ATMOS &&
         atmosQualityAvailable(settings.settings.value.homeSource, appleMusic.signedIn(), AppleAtmosCapability.decoderAvailable)
 
-    val activeStreamDetail = kotlinx.coroutines.flow.MutableStateFlow(dev.sfg.orchard.mobile.model.StreamDetail())
+    /** Active Qobuz playback leaves adaptive mix and the equalizer off. */
+    val maxActive: kotlinx.coroutines.flow.StateFlow<Boolean> by lazy {
+        kotlinx.coroutines.flow.combine(settings.settings, qobuz.status, connect.state, networkMonitor.isMetered) { s, _, _, _ ->
+            audioQuality(s) == AudioQuality.MAX && qobuzResolver.isAvailable()
+        }.stateIn(
+            applicationScope,
+            kotlinx.coroutines.flow.SharingStarted.Eagerly,
+            audioQuality() == AudioQuality.MAX && qobuzResolver.isAvailable(),
+        )
+    }
 
+    /** Names where MAX audio comes from; cached streams and bytes from another source must not be reused. */
+    /** [streamVariant] for the song behind a stable stream URI. */
     fun streamVariant(uri: android.net.Uri): String =
         sourceCacheVariant(dev.sfg.orchard.mobile.playback.MediaItemMapper.sourceId(uri), ::streamVariant)
 
-    fun streamVariant(): String = audioCacheVariant(audioQuality())
+    fun streamVariant(): String {
+        val quality = audioQuality()
+        val qobuzEnabled = quality == AudioQuality.MAX && qobuzResolver.isAvailable()
+        return audioCacheVariant(quality, qobuzEnabled, qobuz.status.value.quality.id)
+    }
 
     val discordPresence = dev.sfg.orchard.mobile.discord.DiscordPresenceCoordinator(
         context = context,

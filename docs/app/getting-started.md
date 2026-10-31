@@ -53,7 +53,7 @@ Select the **Account and settings** button in the top bar at the top right of th
 - **General**: startup behavior, system tray, listening history, and your accounts. See [Accounts and startup](accounts.md).
 - **Playback**: streaming quality, Audio Engine, crossfade, gapless playback, autoplay, and AI-generated music handling. See [Streaming quality](streaming-quality.md), [Audio Engine](audio-engine.md), [Crossfade and gapless playback](crossfade.md), and [AI-generated music](ai-music.md).
 - **Appearance**: player bar bitrate, animated artwork, and the immersive background. See [Appearance](appearance.md).
-- **Integrations**: Discord Rich Presence, Last.fm, Spotify Canvas and Apple Music. See [Integrations](integrations.md).
+- **Integrations**: Discord Rich Presence, Last.fm, Spotify Canvas, Qobuz, and Apple Music. See [Integrations](integrations.md).
 - **Shortcuts**: the keyboard shortcut list. See [Keyboard shortcuts](shortcuts.md).
 - **About**: version, credits, and open source licenses.
 

@@ -210,7 +210,7 @@ internal class NowPlayingMetadata(
                     track?.let { Triple(it.id, it.musicVideoType, it.musicVideoId) }
                 }
                 .collectLatest { track ->
-                    if (track == null || track.isLocal) {
+                    if (track == null || track.isQobuz || track.isLocal) {
                         mutableMusicVideo.value = MusicVideoState()
                         return@collectLatest
                     }

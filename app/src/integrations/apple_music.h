@@ -40,6 +40,8 @@ class AppleMusic final : public QObject {
   // restoring, disconnected, connecting, connected
   Q_PROPERTY(QString status READ status NOTIFY changed)
   Q_PROPERTY(bool connected READ connected NOTIFY changed)
+  // The Atmos streaming quality can play; its 5.1 bed is rendered binaurally.
+  Q_PROPERTY(bool atmosAvailable READ atmosAvailable NOTIFY changed)
   // Sign-in needs the helper's browser: WebKitGTK on Linux, WebView2 on Windows.
   Q_PROPERTY(bool loginAvailable READ loginAvailable CONSTANT)
   Q_PROPERTY(QString message READ message NOTIFY changed)
@@ -54,6 +56,13 @@ public:
 
   QString status() const { return m_status; }
   bool connected() const { return m_status == QStringLiteral("connected"); }
+  bool atmosAvailable() const {
+#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    return connected();
+#else
+    return false;
+#endif
+  }
   bool loginAvailable() const;
   QString message() const { return m_message; }
   bool messageIsError() const { return m_messageIsError; }
@@ -100,6 +109,8 @@ public:
   void musicVideo(const QString &songId, PageReply done);
   // {items: {catalogId: attributes}}: Apple's audio analysis (beat grid, vocals) for catalog songs.
   void audioAnalysis(const QStringList &ids, PageReply done);
+  // A catalog song's Atmos master playlist and license endpoint; `available` false without one.
+  void atmos(const QString &appleId, PageReply done);
 
 signals:
   void changed();

@@ -205,6 +205,15 @@ void AppleMusic::audioAnalysis(const QStringList &ids, PageReply done) {
        [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
 }
 
+void AppleMusic::atmos(const QString &appleId, PageReply done) {
+  if (!connected()) {
+    done({}, tr("Connect Apple Music in Settings to play this song."));
+    return;
+  }
+  call(QStringLiteral("playback.atmos"), {{QStringLiteral("id"), appleId}},
+       [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
+}
+
 void AppleMusic::upNext(const QString &seed, PageReply done) {
   if (!connected()) {
     done({}, tr("Connect Apple Music in Settings to play this song."));

@@ -33,7 +33,7 @@ import kotlinx.coroutines.withContext
 
 internal fun observeAudioVariants(graph: OrchardGraph, scope: CoroutineScope, onChange: () -> Unit) {
     scope.launch {
-        combine(graph.settings.settings, graph.connect.state) { _, _ ->
+        combine(graph.settings.settings, graph.qobuz.status, graph.connect.state) { _, _, _ ->
             graph.streamVariant()
         }.distinctUntilChanged().collect {
             withContext(Dispatchers.Main.immediate) { onChange() }

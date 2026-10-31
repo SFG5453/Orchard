@@ -46,6 +46,9 @@ struct Track {
   uint16_t width{0};
   uint16_t height{0};
   std::vector<uint8_t> avcC;
+  // Protection per sample description in stsd order; Apple's Atmos tracks give each its own
+  // key and constant IV. The fields above repeat the first.
+  std::vector<Track> descriptions;
 };
 
 struct Sample {
@@ -57,6 +60,10 @@ struct Sample {
   std::vector<std::pair<uint32_t, uint32_t>> subsamples;
   // Presentation time in the track's timescale.
   int64_t time{0};
+  // The key and pattern of the sample's description.
+  const uint8_t *keyId{nullptr};
+  uint8_t cryptBlocks{0};
+  uint8_t skipBlocks{0};
 };
 
 constexpr uint32_t fourcc(const char (&code)[5]) {

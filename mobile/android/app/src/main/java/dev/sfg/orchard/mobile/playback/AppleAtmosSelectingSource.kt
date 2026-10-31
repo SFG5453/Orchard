@@ -20,16 +20,29 @@ import kotlinx.coroutines.launch
 /** Reads catalog traits off the playback thread and prepares the corresponding source. */
 @UnstableApi
 internal class AppleAtmosSelectingSource(
-    private val item: MediaItem,
+    private var item: MediaItem,
     private val chooseAtmos: () -> Boolean,
-    private val stereo: () -> MediaSource,
-    private val atmos: () -> MediaSource,
+    private val stereo: (MediaItem) -> MediaSource,
+    private val atmos: (MediaItem) -> MediaSource,
+    private val atmosItem: (MediaItem) -> MediaItem,
 ) : CompositeMediaSource<Int>() {
     private var scope: CoroutineScope? = null
     private var child: MediaSource? = null
+    private var selectedAtmos = false
     private var generation = 0
 
     override fun getMediaItem(): MediaItem = item
+
+    // Metadata updates (such as embedded artwork) must not rebuild the source mid-song.
+    override fun canUpdateMediaItem(mediaItem: MediaItem): Boolean =
+        child?.canUpdateMediaItem(childItem(mediaItem)) ?: (mediaItem.localConfiguration == item.localConfiguration)
+
+    override fun updateMediaItem(mediaItem: MediaItem) {
+        item = mediaItem
+        child?.updateMediaItem(childItem(mediaItem))
+    }
+
+    private fun childItem(mediaItem: MediaItem) = if (selectedAtmos) atmosItem(mediaItem) else mediaItem
 
     override fun prepareSourceInternal(mediaTransferListener: TransferListener?) {
         super.prepareSourceInternal(mediaTransferListener)
@@ -41,7 +54,8 @@ internal class AppleAtmosSelectingSource(
             val selected = runCatching(chooseAtmos).getOrDefault(false)
             handler.post {
                 if (current == generation) {
-                    val source = if (selected) atmos() else stereo()
+                    selectedAtmos = selected
+                    val source = if (selected) atmos(atmosItem(item)) else stereo(item)
                     child = source
                     prepareChildSource(0, source)
                 }

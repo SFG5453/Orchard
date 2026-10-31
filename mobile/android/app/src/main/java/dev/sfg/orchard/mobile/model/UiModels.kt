@@ -199,7 +199,7 @@ data class OrchardSettings(
     }
 }
 
-enum class AudioQuality { DATA_SAVER, NORMAL, HIGH, ATMOS }
+enum class AudioQuality { DATA_SAVER, NORMAL, HIGH, ATMOS, MAX }
 
 enum class ArtworkSource(val label: String) {
     M8TEC("m8tec"), BOIDU("boidu"), SPOTIFY("Spotify Canvas")

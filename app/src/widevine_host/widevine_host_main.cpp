@@ -193,6 +193,18 @@ Input nextFrame(int timeoutMs, Frame &frame) {
 }
 #endif
 
+bool isZero(const uint8_t *keyId) {
+  return std::all_of(keyId, keyId + 16, [](uint8_t b) { return !b; });
+}
+
+// Descriptions whose tenc names no key use the key the stream's own session licensed.
+cenc_mp4::Track withSessionKey(cenc_mp4::Track track) {
+  for (cenc_mp4::Track &description : track.descriptions)
+    if (isZero(description.keyId))
+      std::copy(std::begin(track.keyId), std::end(track.keyId), std::begin(description.keyId));
+  return track;
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -257,18 +269,19 @@ int main(int argc, char **argv) {
       cenc_mp4::Track track;
       const std::string error = cenc_mp4::clearInit(body, track);
       // Apple's music videos leave tenc's key id zero and name the key only in the playlist's pssh.
-      if (error.empty() && std::all_of(std::begin(track.keyId), std::end(track.keyId), [](uint8_t b) { return !b; }))
+      if (error.empty() && isZero(track.keyId))
         host.keyFor(stream, track.keyId);
       if (error.empty())
-        tracks[stream] = track;
+        tracks[stream] = withSessionKey(track);
       writable = error.empty() ? reply(id, Ok, body.data(), body.size()) : replyError(id, error);
       break;
     }
     case VideoInit: {
       cenc_mp4::Track track;
       std::string error = cenc_mp4::clearInit(body, track);
-      if (error.empty() && std::all_of(std::begin(track.keyId), std::end(track.keyId), [](uint8_t b) { return !b; }))
+      if (error.empty() && isZero(track.keyId))
         error = host.keyFor(stream, track.keyId);
+      track = withSessionKey(track);
       if (error.empty())
         error = host.startVideo(track);
       if (error.empty())

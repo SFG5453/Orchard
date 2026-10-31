@@ -34,7 +34,7 @@ RowLayout {
         { key: "playback", label: qsTr("Playback"), icon: "audio-lines", blurb: qsTr("Quality, audio engine, and transitions between songs."), keywords: qsTr("quality crossfade blend gapless autoplay queue volume equalizer ai skip") },
         { key: "downloads", label: qsTr("Downloads"), icon: "download", blurb: qsTr("Offline listening, download quality, storage, and lyric translation models."), keywords: qsTr("offline storage translation models lyrics") },
         { key: "appearance", label: qsTr("Appearance"), icon: "palette", blurb: qsTr("Colors, layout, artwork, and backgrounds."), keywords: qsTr("theme color accent popup menu background layout artwork scale size") },
-        { key: "integrations", label: qsTr("Integrations"), icon: "plug", blurb: qsTr("Music services and the apps Orchard talks to."), keywords: qsTr("apple music spotify youtube last.fm discord connect integrations") },
+        { key: "integrations", label: qsTr("Integrations"), icon: "plug", blurb: qsTr("Music services and the apps Orchard talks to."), keywords: qsTr("apple music spotify qobuz youtube last.fm discord connect integrations") },
         { key: "shortcuts", label: qsTr("Shortcuts"), icon: "keyboard", blurb: qsTr("Keyboard shortcuts for playback and navigation."), keywords: qsTr("keyboard keys hotkeys") },
         { key: "about", label: qsTr("About"), icon: "info", blurb: qsTr("Version, release notes, credits, and open source licenses."), keywords: qsTr("version licenses release notes credits") }
     ]

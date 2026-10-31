@@ -34,8 +34,9 @@ SettingsRow {
     iconName: "shuffle"
     title: qsTr("Crossfade style")
     enabled: crossfadeEnabled
+    // MAX plays Qobuz audio, which skips the mix worker, so it benches adaptive mix too.
     description: (!adaptiveAvailable
-        ? qsTr("Use the same crossfade length between songs. Adaptive mix is unavailable.")
+        ? qsTr("Use the same crossfade length between songs. Adaptive mix is unavailable while streaming quality is MAX.")
         : audioEngineEnabled && adaptiveMode !== "adaptive"
         ? qsTr("Use the same crossfade length between songs. Adaptive mix is unavailable while the audio engine is on.")
         : adaptiveMode === "adaptive"

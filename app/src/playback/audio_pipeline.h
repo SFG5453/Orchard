@@ -19,12 +19,14 @@
 
 #pragma once
 
+#include "binaural_renderer.h"
 #include "orchard_core.h"
 
 #include <QAudioDevice>
 #include <QAudioFormat>
 #include <QtAudio>
 #include <QElapsedTimer>
+#include <QHash>
 #include <QList>
 #include <QObject>
 #include <QTimer>
@@ -52,7 +54,7 @@ public:
 
   // Starts the flush and meter timers on the owning thread.
   void start();
-  void processBuffer(const QMediaPlayer *source, const QAudioBuffer &buffer);
+  void processBuffer(const QMediaPlayer *source, const QAudioBuffer &decoded);
   void configure(const OrchardAudioEngineConfig &base, const QVariantMap &trackGains);
   void setCurrentPlayer(const QMediaPlayer *player);
   void setActiveTrackId(const QString &trackId);
@@ -148,6 +150,8 @@ private:
   const QMediaPlayer *m_currentPlayer{nullptr};
   QString m_activeTrackId;
   const QMediaPlayer *m_crossfadePlayer{nullptr};
+  // Surround decodes become stereo here, one renderer per player.
+  QHash<const QMediaPlayer *, BinauralRenderer> m_binaural;
   QString m_crossfadeTrackId;
   QByteArray m_crossfadeOutgoingPending;
   QByteArray m_crossfadeIncomingPending;

@@ -78,6 +78,7 @@ private val entries = listOf(
     SettingsEntry("Last.fm", "Now-playing updates and listens", SettingsPage.Connections, "scrobble"),
     SettingsEntry("ListenBrainz", "Send listens with a user token", SettingsPage.Connections, "scrobble"),
     SettingsEntry("Spotify", "Spotify Canvas animated artwork", SettingsPage.Connections, "canvas cookie"),
+    SettingsEntry("Qobuz", "Lossless and Hi-Res audio", SettingsPage.Connections, "hires streaming"),
     SettingsEntry("Orchard Account", "Sign in with Google and manage devices", SettingsPage.Connections, "account devices google"),
     SettingsEntry("Save plays to YouTube Music history", "Add played songs to your YouTube Music history", SettingsPage.Playback, "listening history tracking"),
     SettingsEntry("Cached audio", "Cache limit for played tracks", SettingsPage.Storage, "size limit"),

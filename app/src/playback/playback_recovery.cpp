@@ -77,6 +77,7 @@ void PlaybackController::scheduleStreamRecovery(bool retryable, const QString &m
     m_request = 0;
     m_restoredDuration = streamDuration;
     m_error.clear();
+    reportQobuzEnded(m_proxy, m_player);
     m_player->stop();
     m_player->setSource(QUrl());
     m_proxy->clear();

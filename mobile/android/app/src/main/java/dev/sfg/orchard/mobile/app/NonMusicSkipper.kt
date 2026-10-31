@@ -49,7 +49,7 @@ import org.json.JSONObject
  * A skip is a plain seek, so synced lyrics need no correction: they follow the position on the
  * same clock the segments were measured against. That only holds while the segments really belong
  * to the stream being played, which is why they are looked up by the stream's own video and
- * length, and why anything on another timeline (music video, a rendered mix, a remote
+ * length, and why anything on another timeline (music video, Qobuz, a rendered mix, a remote
  * device) is left alone.
  */
 internal class NonMusicSkipper(
@@ -77,6 +77,7 @@ internal class NonMusicSkipper(
                 track == null || found == null || found.trackId != track.id -> null
                 target.selected !is PlaybackTarget.LocalPhone || partyState.isActive -> null
                 snapshot.playingVideo || snapshot.renderedMixPositionMs != null -> null
+                track.isQobuz || graph.activeTrackIsQobuz.value -> null
                 else -> found.spans.firstOrNull {
                     // The last half second is not worth interrupting for.
                     snapshot.positionMs >= it.startMs && snapshot.positionMs < it.endMs - END_GRACE_MS

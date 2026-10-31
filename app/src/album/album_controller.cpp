@@ -24,6 +24,7 @@
 #include "appearance/animated_artwork_service.h"
 #include "appearance/artwork_sampler.h"
 #include "auth/auth_manager.h"
+#include "providers/qobuz/qobuz_service.h"
 #include "providers/youtube/catalog/youtube_catalog.h"
 
 #include <QByteArray>
@@ -62,10 +63,11 @@ void copyIfMissing(QVariantMap &target, const QVariantMap &source,
 
 AlbumController::AlbumController(YouTubeCatalog *catalog, AuthManager *auth,
                                  QObject *parent, bool artistMode,
-                                 AnimatedArtworkService *animatedArtwork)
+                                 AnimatedArtworkService *animatedArtwork,
+                                 QobuzService *qobuz)
     : QObject(parent), m_artistMode(artistMode), m_catalog(catalog),
       m_auth(auth), m_network(this), m_palette(defaultPalette()),
-      m_animatedArtworkService(animatedArtwork) {
+      m_animatedArtworkService(animatedArtwork), m_qobuz(qobuz) {
   Q_ASSERT(m_catalog);
   Q_ASSERT(m_auth);
 
@@ -80,6 +82,8 @@ AlbumController::AlbumController(YouTubeCatalog *catalog, AuthManager *auth,
   connect(m_catalog, &YouTubeCatalog::requestFailed, this,
           [this](quint64 id, const QString &error) { receiveSection(id, {}, error); });
   connect(m_auth, &AuthManager::sessionChanged, this, &AlbumController::clear);
+  if (m_qobuz && !m_artistMode)
+    connect(m_qobuz, &QobuzService::changed, this, &AlbumController::updateStreamQuality);
 }
 
 QVariantMap AlbumController::defaultPalette() {
@@ -102,6 +106,7 @@ void AlbumController::openAlbum(const QVariantMap &item) {
   m_animatedArtworkUrl.clear();
   cancelArtwork();
   m_detail.clear();
+  updateStreamQuality();
   const QString browseId = browseIdFromItem(item);
   if (browseId.isEmpty()) {
     m_pendingItem = item;
@@ -186,6 +191,7 @@ void AlbumController::clear() {
   cancelArtwork();
   m_pendingItem.clear();
   m_detail.clear();
+  updateStreamQuality();
   m_palette = defaultPalette();
   m_errorMessage.clear();
   m_loading = false;
@@ -243,12 +249,42 @@ void AlbumController::receiveAlbum(quint64 requestId,
   emit stateChanged();
 
   updateAnimatedArtwork();
+  updateStreamQuality();
   const QString heroArtwork = m_detail.value(QStringLiteral("heroArtwork")).toString();
   requestArtwork(heroArtwork.isEmpty()
                      ? m_detail.value(QStringLiteral("thumbnail")).toString()
                      : heroArtwork);
   if (m_artistMode)
     requestArtistArtwork();
+}
+
+// Hi-Res or Lossless, when the user's Qobuz plays this album. Nothing otherwise.
+void AlbumController::updateStreamQuality() {
+  const quint64 request = ++m_streamQualityRequest;
+  const QString title = m_detail.value(QStringLiteral("title")).toString();
+  const bool loaded = !m_artistMode && m_qobuz && m_qobuz->active() && !m_loading &&
+                      !m_detail.value(QStringLiteral("tracks")).toList().isEmpty();
+  if (!loaded) {
+    if (!m_streamQuality.isEmpty()) {
+      m_streamQuality.clear();
+      emit streamQualityChanged();
+    }
+    return;
+  }
+  const QVariantMap album{
+      {QStringLiteral("title"), title},
+      {QStringLiteral("artist"), m_detail.value(QStringLiteral("artist"))},
+      {QStringLiteral("year"), m_detail.value(QStringLiteral("year"))},
+      {QStringLiteral("trackCount"), m_detail.value(QStringLiteral("tracks")).toList().size()}};
+  m_qobuz->albumQuality(album, [this, request](const QJsonValue &result, const QString &) {
+    if (request != m_streamQualityRequest)
+      return;
+    const QVariantMap quality = result.toObject().toVariantMap();
+    if (quality == m_streamQuality)
+      return;
+    m_streamQuality = quality;
+    emit streamQualityChanged();
+  });
 }
 
 // Who needs static covers when you can burn GPU cycles looping a 2-second clip from Cupertino?

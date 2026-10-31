@@ -183,6 +183,8 @@ void AudioPipeline::flush() {
   m_clockCorrectionUs = 0;
   m_pending.clear();
   m_primed = false;
+  for (BinauralRenderer &renderer : m_binaural)
+    renderer.reset();
   if (m_sink) {
     m_sink->reset();
     m_sinkDevice = m_sink->start();
@@ -278,11 +280,24 @@ void AudioPipeline::completeCrossfade() {
   emit crossfadeFinished(m_mixSerial);
 }
 
-void AudioPipeline::processBuffer(const QMediaPlayer *source, const QAudioBuffer &buffer) {
+void AudioPipeline::processBuffer(const QMediaPlayer *source, const QAudioBuffer &decoded) {
   const bool outgoing = source == m_currentPlayer;
   const bool incoming = m_crossfadeActive && source == m_crossfadePlayer;
-  if ((!outgoing && !incoming) || !buffer.isValid() || buffer.format() != m_format)
+  if (!outgoing && !incoming)
     return;
+  const QAudioBuffer buffer =
+      decoded.format().channelCount() > 2 ? m_binaural[source].render(decoded, m_format) : decoded;
+  if (!buffer.isValid() || buffer.format() != m_format) {
+    static bool warned = false;
+    if (!warned && decoded.isValid()) {
+      warned = true;
+      const QAudioFormat format = decoded.format();
+      qWarning() << "Playback: dropping decoded audio in an unexpected format:" << format.sampleRate() << "Hz,"
+                 << format.channelCount() << "channels, config" << format.channelConfig() << ", sample format"
+                 << format.sampleFormat();
+    }
+    return;
+  }
   emit decodedAudio(outgoing ? m_activeTrackId : m_crossfadeTrackId, buffer);
   if (m_timing) {
     // A gap longer than the cushion starves the sink.

@@ -20,17 +20,16 @@
 #include "appearance/animated_artwork_store.h"
 #include "integrations/spotify_canvas.h"
 #include "playback/adaptive_mix/adaptive_mix_controller.h"
+#include "providers/qobuz/qobuz_service.h"
 
 #include <QJsonDocument>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
 #include <QSettings>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
 
-// Spotify and audio pieces that need no account, network or keychain.
+// Spotify and Qobuz pieces that need no account, network or keychain.
 class StreamingServicesTest final : public QObject {
   Q_OBJECT
 
@@ -80,6 +79,20 @@ private slots:
                                             QStringLiteral("Kendrick Lamar")),
              QStringLiteral("right"));
     QVERIFY(SpotifyCanvas::matchingTrackId(result, QStringLiteral("Love"), QStringLiteral("Someone Else")).isEmpty());
+  }
+
+  void qobuzOffAnswersAtOnce() {
+    QobuzService qobuz(nullptr, false);
+    QVERIFY(!qobuz.active());
+    bool answered = false;
+    qobuz.resolveTrack({{QStringLiteral("title"), QStringLiteral("Song")}},
+                       [&answered](const QJsonValue &result, const QString &error) {
+      answered = result.isNull() && error.isEmpty();
+    });
+    QVERIFY(answered);
+    // Connected is not enough; only MAX turns Qobuz playback on.
+    qobuz.setEnabled(true);
+    QVERIFY(!qobuz.active());
   }
 
   void adaptiveMixStepsAsideAndComesBack() {

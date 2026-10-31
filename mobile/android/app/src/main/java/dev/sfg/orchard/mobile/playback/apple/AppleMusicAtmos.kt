@@ -1,6 +1,7 @@
 package dev.sfg.orchard.mobile.playback.apple
 
 import android.net.Uri
+import android.util.Log
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
@@ -32,6 +33,8 @@ internal class AppleMusicAtmos(private val catalog: AppleMusicCatalog, private v
     private val songs = ConcurrentHashMap<String, JSONObject>()
     private val initKeys = ConcurrentHashMap<String, List<ByteArray>>()
     private val bitrates = ConcurrentHashMap<String, Int>()
+    private data class Prepared(val playlist: AtmosPlaylist, val expires: Long)
+    private val prepared = ConcurrentHashMap<String, Prepared>()
 
     fun mediaSourceFactory(httpFactory: DataSource.Factory): HlsMediaSource.Factory =
         HlsMediaSource.Factory(DataSource.Factory { AtmosDataSource(httpFactory.createDataSource(), ::playlist, initKeys) })
@@ -61,10 +64,32 @@ internal class AppleMusicAtmos(private val catalog: AppleMusicCatalog, private v
         return synchronized(locks.computeIfAbsent(id) { Any() }) {
             cached()?.let { return@synchronized it }
             val info = runBlocking { catalog.atmos(id) }
-            decisions[id] = Decision(info, System.currentTimeMillis() + 3_600_000L)
-            if (info.optBoolean("available")) songs[id] = info
-            info.optBoolean("available")
+            // Building the playlist here lets a warmed song skip both playlist downloads at play time.
+            val offered = info.optBoolean("available")
+            val ready = offered && runCatching { prepare(id, info) }
+                .onFailure { Log.i(TAG, "Atmos playlist unavailable for $id: ${it.message}") }.isSuccess
+            if (!ready) info.put("available", false)
+            // A failed playlist fetch may be transient, so it is retried sooner than Apple's answer.
+            val ttl = if (offered && !ready) 300_000L else 3_600_000L
+            decisions[id] = Decision(info.apply { remove("masterText") }, System.currentTimeMillis() + ttl)
+            ready
         }
+    }
+
+    /** Resolves Atmos for an upcoming song off the playback path. */
+    fun warm(id: String) {
+        runCatching { available(id) }
+    }
+
+    private fun prepare(id: String, info: JSONObject): AtmosPlaylist {
+        val master = info.getString("master")
+        val variant = atmosVariant(info.optString("masterText").ifEmpty { download(master) }, master)
+        val result = atmosPlaylist(download(variant.url), variant.url)
+        songs[id] = info
+        bitrates[id] = variant.bitrateKbps
+        initKeys[result.initPath] = result.keys
+        prepared[id] = Prepared(result, System.currentTimeMillis() + PLAYLIST_TTL_MS)
+        return result
     }
 
     fun selected(id: String): Boolean = decisions[id]?.let { it.expires > System.currentTimeMillis() && it.info.optBoolean("available") } == true
@@ -73,13 +98,14 @@ internal class AppleMusicAtmos(private val catalog: AppleMusicCatalog, private v
 
     private fun playlist(uri: Uri): ByteArray {
         val id = MediaItemMapper.sourceId(uri)
+        prepared[id]?.takeIf { it.expires > System.currentTimeMillis() }?.let { return it.playlist.text.toByteArray() }
         val info = songs[id] ?: throw java.io.IOException("Atmos metadata expired")
-        val master = info.getString("master")
-        val variant = atmosVariant(download(master), master)
-        val result = atmosPlaylist(download(variant.url), variant.url)
-        bitrates[id] = variant.bitrateKbps
-        initKeys[result.initPath] = result.keys
-        return result.text.toByteArray()
+        return prepare(id, info).text.toByteArray()
+    }
+
+    private companion object {
+        const val TAG = "OrchardAtmos"
+        const val PLAYLIST_TTL_MS = 10 * 60_000L
     }
 
 }

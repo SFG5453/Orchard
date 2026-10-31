@@ -110,6 +110,42 @@ size_t entryChildren(const Bytes &d, const Box &entry) {
   return entry.body + (version == 1 ? 44 : version == 2 ? 64 : 28);
 }
 
+// Reads one encrypted sample entry's protection into `track` and marks the entry clear.
+std::string clearEntry(Bytes &init, const Box &entry, Track &track) {
+  Track description;
+  const std::vector<Box> entryKids = children(init, entryChildren(init, entry), entry.end);
+  if (entry.type == fourcc("encv") && entry.end - entry.body >= 28 && track.descriptions.empty()) {
+    track.width = be16(init, entry.body + 24);
+    track.height = be16(init, entry.body + 26);
+    if (const Box *avcC = find(entryKids, fourcc("avcC")))
+      track.avcC.assign(init.begin() + long(avcC->body), init.begin() + long(avcC->end));
+  }
+  const Box *sinf = find(entryKids, fourcc("sinf"));
+  if (!sinf)
+    return "sample entry has no sinf";
+  const std::vector<Box> sinfKids = children(init, sinf->body, sinf->end);
+  const Box *frma = find(sinfKids, fourcc("frma"));
+  const Box *schm = find(sinfKids, fourcc("schm"));
+  const Box *schi = find(sinfKids, fourcc("schi"));
+  if (!frma || frma->end - frma->body < 4 || !schm || schm->end - schm->body < 8 || !schi)
+    return "sinf is incomplete";
+  description.scheme = be32(init, schm->body + 4);
+  if (description.scheme != fourcc("cenc") && description.scheme != fourcc("cbcs"))
+    return "unsupported protection scheme";
+  if (!track.descriptions.empty() && description.scheme != track.descriptions.front().scheme)
+    return "sample descriptions use different protection schemes";
+  const std::vector<Box> schiKids = children(init, schi->body, schi->end);
+  const Box *tenc = find(schiKids, fourcc("tenc"));
+  if (!tenc)
+    return "schi has no tenc";
+  if (std::string error = readTenc(init, *tenc, description); !error.empty())
+    return error;
+  track.descriptions.push_back(description);
+  rename(init, entry, be32(init, frma->body));
+  rename(init, *sinf, kFree);
+  return {};
+}
+
 } // namespace
 
 std::string clearInit(Bytes &init, Track &track) {
@@ -144,36 +180,22 @@ std::string clearInit(Bytes &init, Track &track) {
   const std::vector<Box> entries = children(init, stsd->body + 8, stsd->end);
   if (entries.empty())
     return "stsd has no sample entry";
-  const Box &entry = entries.front();
-  if (entry.type != fourcc("enca") && entry.type != fourcc("encv"))
+  if (entries.front().type != fourcc("enca") && entries.front().type != fourcc("encv"))
     return "track is not encrypted";
-  const std::vector<Box> entryKids = children(init, entryChildren(init, entry), entry.end);
-  if (entry.type == fourcc("encv") && entry.end - entry.body >= 28) {
-    track.width = be16(init, entry.body + 24);
-    track.height = be16(init, entry.body + 26);
-    if (const Box *avcC = find(entryKids, fourcc("avcC")))
-      track.avcC.assign(init.begin() + long(avcC->body), init.begin() + long(avcC->end));
+  for (const Box &entry : entries) {
+    if (entry.type != fourcc("enca") && entry.type != fourcc("encv"))
+      return "track mixes clear and encrypted sample descriptions";
+    if (std::string error = clearEntry(init, entry, track); !error.empty())
+      return error;
   }
-  const Box *sinf = find(entryKids, fourcc("sinf"));
-  if (!sinf)
-    return "sample entry has no sinf";
-  const std::vector<Box> sinfKids = children(init, sinf->body, sinf->end);
-  const Box *frma = find(sinfKids, fourcc("frma"));
-  const Box *schm = find(sinfKids, fourcc("schm"));
-  const Box *schi = find(sinfKids, fourcc("schi"));
-  if (!frma || frma->end - frma->body < 4 || !schm || schm->end - schm->body < 8 || !schi)
-    return "sinf is incomplete";
-  track.scheme = be32(init, schm->body + 4);
-  if (track.scheme != fourcc("cenc") && track.scheme != fourcc("cbcs"))
-    return "unsupported protection scheme";
-  const std::vector<Box> schiKids = children(init, schi->body, schi->end);
-  const Box *tenc = find(schiKids, fourcc("tenc"));
-  if (!tenc)
-    return "schi has no tenc";
-  if (std::string error = readTenc(init, *tenc, track); !error.empty())
-    return error;
-  rename(init, entry, be32(init, frma->body));
-  rename(init, *sinf, kFree);
+  const Track &first = track.descriptions.front();
+  track.scheme = first.scheme;
+  std::memcpy(track.keyId, first.keyId, 16);
+  track.perSampleIvSize = first.perSampleIvSize;
+  std::memcpy(track.constantIv, first.constantIv, 16);
+  track.constantIvSize = first.constantIvSize;
+  track.cryptBlocks = first.cryptBlocks;
+  track.skipBlocks = first.skipBlocks;
   return {};
 }
 
@@ -197,7 +219,18 @@ std::string clearMoof(Bytes &fragment, const Box *moof, const Track &track,
   // An absolute base offset points into the whole file, which this fragment cannot see.
   if (tfFlags & 1)
     return "fragment uses an absolute base offset";
-  size_t at = tfhd->body + 8 + (tfFlags & 2 ? 4 : 0);
+  size_t at = tfhd->body + 8;
+  uint32_t description = 1;
+  if (tfFlags & 2) {
+    if (at + 4 > tfhd->end)
+      return "tfhd is truncated";
+    description = be32(fragment, at);
+    at += 4;
+  }
+  // A track built without clearInit has no description list and uses its own fields.
+  if (description < 1 || (!track.descriptions.empty() && description > track.descriptions.size()))
+    return "fragment names an unknown sample description";
+  const Track &protection = track.descriptions.empty() ? track : track.descriptions[description - 1];
   uint32_t defaultDuration = 0;
   if (tfFlags & 8) {
     if (at + 4 > tfhd->end)
@@ -263,15 +296,16 @@ std::string clearMoof(Bytes &fragment, const Box *moof, const Track &track,
         return "senc describes fewer samples than trun";
       if (next + size > fragment.size())
         return "sample runs past the fragment";
-      Sample sample{&fragment[next], size, {}, 16, {}, decodeTime + offset};
+      Sample sample{&fragment[next], size, {}, 16, {}, decodeTime + offset, protection.keyId, protection.cryptBlocks,
+                    protection.skipBlocks};
       decodeTime += duration;
-      if (track.perSampleIvSize) {
-        if (info + track.perSampleIvSize > senc->end)
+      if (protection.perSampleIvSize) {
+        if (info + protection.perSampleIvSize > senc->end)
           return "senc is truncated";
-        std::memcpy(sample.iv, &fragment[info], track.perSampleIvSize);
-        info += track.perSampleIvSize;
+        std::memcpy(sample.iv, &fragment[info], protection.perSampleIvSize);
+        info += protection.perSampleIvSize;
       } else {
-        std::memcpy(sample.iv, track.constantIv, track.constantIvSize);
+        std::memcpy(sample.iv, protection.constantIv, protection.constantIvSize);
       }
       if (sencFlags & 2) {
         if (info + 2 > senc->end)

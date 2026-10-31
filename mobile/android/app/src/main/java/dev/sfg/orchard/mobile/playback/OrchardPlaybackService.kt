@@ -177,7 +177,7 @@ class OrchardPlaybackService : MediaLibraryService() {
                 CrossfadeEngine.Config(
                     enabled = settings.crossfadeMs > 0,
                     fadeSeconds = settings.crossfadeMs / 1000.0,
-                    mode = if (settings.smartCrossfade) CrossfadeMode.SMART else CrossfadeMode.STANDARD,
+                    mode = if (settings.smartCrossfade && !graph.maxActive.value) CrossfadeMode.SMART else CrossfadeMode.STANDARD,
                 )
             },
             // A connected desktop does the heavy lifting; the phone keeps the clock and the speaker.
@@ -325,6 +325,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         queueSnapshot = emptyMap()
         OrchardGraph.from(this).onClearStreamCache = null
         if (::streamCache.isInitialized) streamCache.release()
+        OrchardGraph.from(this).qobuzResolver.release()
         if (::streams.isInitialized) streams.clear()
         super.onDestroy()
     }
@@ -479,7 +480,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         OrchardSessionCallback.applyLayout(mediaSession, source, likedState(OrchardGraph.from(this), source.currentMediaItem))
     }
 
-    private fun prefetchAround(player: Player) = prefetchAround(player, streamResolver, streamCache, streams::useAppleAtmos)
+    private fun prefetchAround(player: Player) = prefetchAround(player, streamResolver, streamCache, streams::useAppleAtmos) { ioScope.launch { streams.warmAppleAtmos(it) } }
 
     companion object {
         private const val TAG = "OrchardPlayback"

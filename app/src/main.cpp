@@ -53,6 +53,7 @@
 #include "playback/artist_video_backdrop.h"
 #include "playback/music_video_controller.h"
 #include "playback/playback_controller.h"
+#include "providers/qobuz/qobuz_service.h"
 #include "providers/youtube/catalog/youtube_catalog.h"
 #include "providers/youtube/youtube_provider.h"
 #include "screen_wake_lock.h"
@@ -254,11 +255,13 @@ int main(int argc, char *argv[]) {
   YouTubeCatalog youtubeCatalog(&youtubeProvider);
   // Windows holds a frozen copy of the YouTube cookies; this renews it from the sign-in profile.
   YouTubeSessionKeeper youtubeSessionKeeper(&authManager, &youtubeCatalog);
+  // YouTube picks the songs; Qobuz, when invited, brings the good speakers.
+  QobuzService qobuz;
   SearchController searchController(&youtubeCatalog, &authManager);
   auto homeController = std::make_unique<HomeController>(&youtubeCatalog, &authManager);
   homeController->setAppleMusic(&appleMusic, &catalogSource);
   auto artistController = std::make_unique<AlbumController>(&youtubeCatalog, &authManager, nullptr, true);
-  auto albumController = std::make_unique<AlbumController>(&youtubeCatalog, &authManager, nullptr, false, &animatedArtwork);
+  auto albumController = std::make_unique<AlbumController>(&youtubeCatalog, &authManager, nullptr, false, &animatedArtwork, &qobuz);
   // Songs and playlists that live on disk instead of YouTube Music: no buffering, no ads, no excuses.
   LocalLibrary localLibrary;
   // Declared before the controllers that read them, so they outlive those controllers.
@@ -278,7 +281,7 @@ int main(int argc, char *argv[]) {
   searchController.setAppleMusic(&appleMusic, &catalogSource);
   playlistController->setOfflineLibrary(&offlineLibrary);
   auto integrations = std::make_unique<Integrations>(&orchardAccount, &youtubeCatalog, &authManager);
-  auto playback = std::make_unique<PlaybackController>(&youtubeProvider, &authManager, homeController.get(), &systemMedia, integrations.get(), &animatedArtwork);
+  auto playback = std::make_unique<PlaybackController>(&youtubeProvider, &authManager, homeController.get(), &systemMedia, integrations.get(), &animatedArtwork, &qobuz);
   MusicLinkController musicLinks(&youtubeProvider, &authManager);
   QObject::connect(&musicLinks, &MusicLinkController::noticeRequested, &backend, &BackendInfo::noticeRequested);
   QObject::connect(&musicLinks, &MusicLinkController::songRequested, playback.get(), &PlaybackController::playSong);
@@ -318,7 +321,7 @@ int main(int argc, char *argv[]) {
   QObject::connect(libraryActions.get(), &LibraryActions::removedFromPlaylist,
                    playlistController.get(), &PlaylistController::removeTrack);
   // Phone in one hand, desktop in the other, and only one of them gets to be the DJ.
-  ConnectService connectService(&orchardAccount, playback.get(), homeController.get(), &authManager);
+  ConnectService connectService(&orchardAccount, playback.get(), homeController.get(), &authManager, &qobuz);
   connectService.setCatalog(&youtubeCatalog);
   connectService.setArtwork(&animatedArtwork);
   connectService.setAppleMusic(&appleMusic, &catalogSource);
@@ -369,6 +372,7 @@ int main(int argc, char *argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardConnect"), &connectService);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardApi"), &localApi);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardIntegrations"), integrations.get());
+  engine.rootContext()->setContextProperty(QStringLiteral("OrchardQobuz"), &qobuz);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardSpotify"), &spotifyCanvas);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardAppleMusic"), &appleMusic);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardLyrics"), lyrics.get());

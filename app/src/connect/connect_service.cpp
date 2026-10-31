@@ -25,6 +25,7 @@
 #include "connect_tracks.h"
 #include "home/home_controller.h"
 #include "playback/playback_controller.h"
+#include "providers/qobuz/qobuz_service.h"
 
 #include <QHostAddress>
 #include <QJsonArray>
@@ -43,8 +44,8 @@ std::string compact(const QJsonObject &object) {
 } // namespace
 
 ConnectService::ConnectService(OrchardAccount *account, PlaybackController *playback, HomeController *home,
-                               AuthManager *auth, QObject *parent)
-    : QObject(parent), m_account(account), m_playback(playback), m_home(home), m_auth(auth),
+                               AuthManager *auth, QobuzService *qobuz, QObject *parent)
+    : QObject(parent), m_account(account), m_playback(playback), m_home(home), m_auth(auth), m_qobuz(qobuz),
       m_hub(account) {
   m_publishTimer.setSingleShot(true);
   m_publishTimer.setInterval(120);
@@ -74,6 +75,7 @@ ConnectService::ConnectService(OrchardAccount *account, PlaybackController *play
   connect(m_account, &OrchardAccount::statusChanged, this, &ConnectService::accountChanged);
   connect(m_account, &OrchardAccount::userChanged, this, &ConnectService::accountChanged);
   connect(m_auth, &AuthManager::statusChanged, this, &ConnectService::refreshDevice);
+  connect(m_qobuz, &QobuzService::changed, this, &ConnectService::refreshDevice);
   connect(m_playback, &PlaybackController::stateChanged, this, &ConnectService::schedulePublish);
   connect(m_playback, &PlaybackController::queueChanged, this, &ConnectService::schedulePublish);
   connect(m_home, &HomeController::volumeChanged, this, &ConnectService::schedulePublish);
@@ -137,7 +139,7 @@ void ConnectService::refreshDevice() {
       {QStringLiteral("can_mix_audio"), AdaptiveMixWorker::installed()},
       {QStringLiteral("can_fetch_artwork"), true},
       {QStringLiteral("providers"),
-       QJsonArray{QStringLiteral("youtube"), QStringLiteral("apple_music")}},
+       QJsonArray{QStringLiteral("youtube"), QStringLiteral("qobuz"), QStringLiteral("apple_music")}},
       {QStringLiteral("provider_sessions"), providerSessions()},
       {QStringLiteral("audio_transports"), QJsonArray{QStringLiteral("pcm_s16"), QStringLiteral("pcm_f32"), QStringLiteral("source")}}};
   const QByteArray encoded = QJsonDocument(device).toJson(QJsonDocument::Compact);
@@ -293,6 +295,7 @@ void ConnectService::handleEvent(const QJsonObject &event) {
     }
   } else if (name == QStringLiteral("roles")) {
     m_roles = event.value(QStringLiteral("roles")).toObject();
+    m_playback->remoteProviderChanged();
     emit rolesChanged();
   } else if (name == QStringLiteral("command")) {
     applyCommand(event);

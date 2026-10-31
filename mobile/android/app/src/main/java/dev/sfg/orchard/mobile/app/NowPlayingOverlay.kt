@@ -38,6 +38,7 @@ import dev.sfg.orchard.mobile.artwork.LocalTallArtToggle
 import dev.sfg.orchard.mobile.artwork.TallArtToggle
 import dev.sfg.orchard.mobile.artwork.tallArtRejected
 import dev.sfg.orchard.mobile.artwork.withoutRejectedTallArt
+import dev.sfg.orchard.mobile.model.LocalMaxActive
 import dev.sfg.orchard.mobile.model.LocalStreamDetail
 import dev.sfg.orchard.mobile.model.LibrarySnapshot
 import dev.sfg.orchard.mobile.model.OrchardSettings
@@ -82,6 +83,7 @@ fun NowPlayingOverlay(
 
     val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
     val activeBitrate by viewModel.activeBitrate.collectAsStateWithLifecycle()
+    val activeTrackIsQobuz by viewModel.activeTrackIsQobuz.collectAsStateWithLifecycle()
     val activeStreamDetail by viewModel.activeStreamDetail.collectAsStateWithLifecycle()
     val autoplayLoading by viewModel.autoplayLoading.collectAsStateWithLifecycle()
     val autoplayError by viewModel.autoplayError.collectAsStateWithLifecycle()
@@ -124,7 +126,7 @@ fun NowPlayingOverlay(
             onStartSleepTimer = viewModel::startSleepTimer,
             onStartSleepTimerAtEndOfTrack = viewModel::startSleepTimerAtEndOfTrack,
             onCancelSleepTimer = viewModel::cancelSleepTimer,
-            smartCrossfade = settings.smartCrossfade,
+            smartCrossfade = settings.smartCrossfade && !LocalMaxActive.current,
             onBestMixUpcoming = viewModel::bestMixUpcoming,
             musicVideo = musicVideo,
             videoPlayer = videoPlayer,
@@ -140,6 +142,7 @@ fun NowPlayingOverlay(
             gesturesEnabled = settings.playerGesturesEnabled,
             showBitrate = settings.showBitrate,
             bitrateKbps = activeBitrate,
+            isQobuz = activeTrackIsQobuz || currentTrack.isQobuz,
             liked = liked,
             remoteVolume = connectRemoteVolume,
             onRemoteVolumeChange = viewModel::setRemoteVolume,

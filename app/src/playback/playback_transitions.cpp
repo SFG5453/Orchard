@@ -346,6 +346,7 @@ void PlaybackController::finishCrossfade() {
 
   std::swap(m_player, m_nextPlayer);
   std::swap(m_proxy, m_nextProxy);
+  reportQobuzEnded(m_nextProxy, outgoingPlayer);
   outgoingPlayer->stop();
   m_audioEngineOutput.setCurrentPlayer(m_player);
   m_audioEngineOutput.setPlaying(m_player->playbackState() ==
@@ -356,6 +357,7 @@ void PlaybackController::finishCrossfade() {
   if (m_crossfadeBitrate > 0)
     m_track.insert(QStringLiteral("bitrate"), m_crossfadeBitrate);
   applyStreamQuality();
+  reportQobuzStarted(m_proxy, m_player->position() / 1000.0);
   m_loading = false;
   m_error.clear();
   m_retried = false;

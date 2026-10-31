@@ -39,6 +39,8 @@ Item {
     // Albums behind a four-cover playlist collage; see CollageArtwork.
     property var collageAlbums: []
     property bool explicit: false
+    // Qobuz quality for albums it can stream; see QualityBadge.
+    property var streamQuality: ({})
     property bool compact: false
     property bool actionsEnabled: true
     property bool playing: false
@@ -175,6 +177,12 @@ Item {
             ExplicitBadge {
                 visible: root.explicit
                 anchors.verticalCenter: parent.verticalCenter
+            }
+            QualityBadge {
+                anchors.verticalCenter: parent.verticalCenter
+                quality: root.streamQuality
+                color: root.tint(root.accentSoftColor, 0.18)
+                textColor: root.accentSoftColor
             }
         }
         Item { width: 1; height: 6 }

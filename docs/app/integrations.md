@@ -1,6 +1,6 @@
 ---
 title: Integrations
-summary: Show what you play in Discord, send your listens to Last.fm, add Spotify Canvas loops, connect Apple Music for browsing, Home and playback, and control Orchard from local apps through the Local API.
+summary: Show what you play in Discord, send your listens to Last.fm, add Spotify Canvas loops, connect Qobuz for MAX quality, connect Apple Music for browsing, Home and playback, and control Orchard from local apps through the Local API.
 group: Customize
 icon: plug
 keywords:
@@ -15,7 +15,9 @@ keywords:
   - spotify
   - spotify canvas
   - sp_dc
+  - qobuz
   - lossless
+  - qobuz token
   - auth token
   - app id
   - app secret
@@ -41,7 +43,7 @@ order: 130
 
 # Integrations
 
-Integrations connect Orchard to other apps. Settings, Integrations has cards for **Discord**, **Last.fm**, **Spotify**, **Apple Music**, and **Local API**.
+Integrations connect Orchard to other apps. Settings, Integrations has cards for **Discord**, **Last.fm**, **Spotify**, **Qobuz**, **Apple Music**, and **Local API**.
 
 ## Turn on Discord Rich Presence
 
@@ -142,6 +144,33 @@ A whole Cookie header also works; Orchard keeps only the `sp_dc` part. Orchard s
 
 Select **Disconnect** in the **Spotify** card. Orchard removes the saved cookie from the keychain and stops asking Spotify for Canvas loops.
 
+## Connect Qobuz
+
+Connecting Qobuz unlocks the **MAX** streaming quality, which plays lossless and Hi-Res audio from your own Qobuz subscription.
+
+Orchard does not include a Qobuz app. You need your own Qobuz API app ID and app secret from Qobuz, and a Qobuz subscription. You also need a user ID and auth token that Qobuz issued to that same app. Use the sign-in that Qobuz gives your app to get them.
+
+1. Open **Settings**, then **Integrations**.
+2. In the **Qobuz** card, select **Connect Qobuz**.
+3. Enter the **App ID** and **App secret**.
+4. Enter the **User ID** and the auth token, then select **Sign in**.
+
+Orchard checks all four with Qobuz before saving them. When the check passes, the card says "Qobuz is connected, and streaming quality is now MAX." Select **Cancel** to stop. Orchard stores the sign-in in the system keychain. Treat the app secret and the token like passwords.
+
+Orchard signs each stream request with your app secret and plays the FLAC file that the Qobuz API (`track/getFileUrl`) returns. See [Streaming quality](streaming-quality.md) for what MAX does.
+
+Errors:
+- "Qobuz rejected this user ID and token": the token expired, the user ID is wrong, or the token belongs to another app.
+- "Qobuz rejected the app ID": the app ID is not valid.
+- "Qobuz rejected the app secret": the secret does not match the app ID.
+- "Qobuz returned a preview clip": the account cannot stream that track in full.
+
+A Qobuz sign-in saved by an older Orchard without an app ID and secret does not restore. Connect again with your app.
+
+## Disconnect Qobuz
+
+Select **Disconnect** in the **Qobuz** card. Orchard removes the Qobuz sign-in from this device and switches MAX back to High.
+
 ## Connect Apple Music
 
 Connect Apple Music to browse Apple Music artist pages, use personal recommendations on Home, and play Apple Music songs. An Apple Music subscription and an Orchard account are required.
@@ -170,10 +199,10 @@ Apple Music songs play from Apple Music when **Music source** is **Apple**. They
 Orchard streams Apple Music songs itself and decrypts them in a small separate process, `orchard-widevine-host`, which uses about 80 MB of memory while songs play. It starts with the first Apple Music song and quits two minutes after playback stops, or when you switch **Music source** to **Normal** or disconnect Apple Music. Decrypted audio stays in memory and is never written to disk.
 
 - Platforms: Linux, Windows, and Android. On other systems, an Apple Music song shows "Apple Music playback is not available on this system yet."
-- Android: the phone's own Widevine decrypts Apple Music songs inside Orchard's player, so no extra app or process is needed. Choose **Apple Music** under **Music source** first; otherwise an Apple Music song shows "Choose Apple Music as the music source in Settings to play Apple Music songs." Without a connected account it shows "Connect Apple Music in Settings to play this song." Apple Music songs do not play on a Cast device. They play on an Orchard Connect computer that is connected to Apple Music; otherwise the phone shows "Sign in to Apple Music on the other device to play Apple Music songs there." See [Orchard Connect](connect.md). The stream cache keeps encrypted stereo files, so a cached stereo song still needs a network connection for its license. Atmos streams are not cached. Each source keeps its own cached copies, so changing **Streaming quality** does not download cached Apple Music songs again. Best Mix sorts Apple Music songs from Apple's own analysis, as on desktop.
+- Android: the phone's own Widevine decrypts Apple Music songs inside Orchard's player, so no extra app or process is needed. Choose **Apple Music** under **Music source** first; otherwise an Apple Music song shows "Choose Apple Music as the music source in Settings to play Apple Music songs." Without a connected account it shows "Connect Apple Music in Settings to play this song." Apple Music songs do not play on a Cast device. They play on an Orchard Connect computer that is connected to Apple Music; otherwise the phone shows "Sign in to Apple Music on the other device to play Apple Music songs there." See [Orchard Connect](connect.md). The stream cache keeps encrypted stereo files, so a cached stereo song still needs a network connection for its license. Atmos streams are not cached. Each source keeps its own cached copies, so changing **Streaming quality** or connecting Qobuz does not download cached Apple Music songs again. Best Mix sorts Apple Music songs from Apple's own analysis, as on desktop.
 - Android Atmos: choose **Atmos** under **Wi-Fi quality** or **Mobile data quality** in **Settings → Audio & playback**. The choice appears when Apple Music is selected and connected and the phone has a compatible decoder. It applies to the next song. Orchard selects Atmos when Apple advertises it; other songs play in stereo. If Atmos playback fails, Orchard continues in stereo. Apple Music crossfade is off while Atmos is selected for the active network. Atmos output depends on the phone and the connected speakers or headphones.
 - Widevine: Apple Music audio is protected, so Linux needs the Widevine module from an installed Google Chrome, Chromium with Widevine, Brave, or Firefox. If none is found, the song shows "Apple Music playback needs Widevine. Install Google Chrome or Chromium with Widevine, then restart Orchard." Windows uses the Widevine module that Microsoft Edge downloads, or the one from Google Chrome, Chromium, Brave, or Firefox. If none is found, the song shows "Apple Music playback needs Widevine. Open Microsoft Edge or Google Chrome once so it downloads Widevine, then restart Orchard." Set `ORCHARD_WIDEVINE_PATH` to a `libwidevinecdm.so` or `widevinecdm.dll` file to use another copy.
-- Quality: Apple Music plays 256 kbps AAC. The **Streaming quality** setting does not apply.
+- Quality: Apple Music plays 256 kbps AAC. With **Streaming quality** set to **Atmos**, songs that have a Dolby Atmos version play that version, rendered for headphones. See [Streaming quality](streaming-quality.md). Other settings do not change Apple Music songs.
 - Apple Music songs play through the same player as YouTube Music songs, so the Audio Engine, crossfade, gapless playback and Adaptive mix work as described in [Crossfade and gapless playback](crossfade.md). Adaptive mix analyses Apple's own audio.
 - Autoplay continues an Apple Music queue with songs from the last song's Apple Music station. **Start mix** on an Apple Music song uses that song's station, and it does not need a YouTube Music sign-in.
 - AI-music scans do not apply to Apple Music songs.

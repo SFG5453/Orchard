@@ -23,6 +23,7 @@
 #include "auth/auth_manager.h"
 #include "home/home_controller.h"
 #include "local/local_track.h"
+#include "providers/qobuz/qobuz_service.h"
 #include "providers/youtube/youtube_provider.h"
 #include "system_media_bridge.h"
 #include <QDebug>
@@ -36,8 +37,8 @@ PlaybackController::PlaybackController(YouTubeProvider *provider,
                                        SystemMediaBridge *systemMedia,
                                        Integrations *integrations,
                                        AnimatedArtworkService *animatedArtwork,
-                                       QObject *parent)
-    : QObject(parent), m_provider(provider), m_auth(auth), m_home(home),
+                                       QobuzService *qobuz, QObject *parent)
+    : QObject(parent), m_provider(provider), m_qobuz(qobuz), m_auth(auth), m_home(home),
       m_systemMedia(systemMedia), m_integrations(integrations),
       m_bestMix(provider, auth), m_slop(provider, auth),
       m_animatedArtworkService(animatedArtwork) {
@@ -76,7 +77,7 @@ PlaybackController::PlaybackController(YouTubeProvider *provider,
                         .value("playback/streamQuality", QStringLiteral("high"))
                         .toString();
   if (m_streamQuality != "saver" && m_streamQuality != "normal" &&
-      m_streamQuality != "high" && m_streamQuality != "max") {
+      m_streamQuality != "high" && m_streamQuality != "max" && m_streamQuality != "atmos") {
     m_streamQuality = QStringLiteral("high");
   }
   m_persistenceEnabled =
@@ -263,7 +264,7 @@ PlaybackController::PlaybackController(YouTubeProvider *provider,
   }
   for (auto &streamProxy : m_proxies)
     wireStreamProxy(&streamProxy);
-  installRangeReaders();
+  attachQobuz();
 
   if (m_systemMedia) {
     connect(m_systemMedia, &SystemMediaBridge::attachedChanged, this,
@@ -329,6 +330,7 @@ void PlaybackController::stop() {
   ++m_generation;
   m_request = 0;
   m_failedPreparedPair.clear();
+  reportQobuzEnded(m_proxy, m_player);
   m_proxy->clear();
   if (m_player) {
     m_player->stop();

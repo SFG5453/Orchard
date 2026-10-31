@@ -78,6 +78,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import dev.sfg.orchard.mobile.auth.AuthState
+import dev.sfg.orchard.mobile.model.AudioQuality
+import dev.sfg.orchard.mobile.model.LocalQobuzLinked
 import dev.sfg.orchard.mobile.model.audioQualityOptions
 import dev.sfg.orchard.mobile.model.visibleAudioQuality
 import dev.sfg.orchard.mobile.model.OrchardSettings
@@ -363,7 +365,8 @@ internal fun WelcomeQualityAndStorageSection(
     onUpdateSettings: (OrchardSettings) -> Unit,
 ) {
     val atmosAvailable = appleAtmosQualityAvailable(settings)
-    val quality = visibleAudioQuality(settings.audioQuality, atmosAvailable)
+    val linked = LocalQobuzLinked.current
+    val quality = visibleAudioQuality(settings.audioQuality, atmosAvailable, linked)
     WelcomeSectionCard(
         title = "Audio Quality & Cache",
         subtitle = "Streaming fidelity and offline cache limit",
@@ -404,6 +407,7 @@ internal fun WelcomeQualityAndStorageSection(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 audioQualityOptions(atmosAvailable).forEach { option ->
+                    val choosable = option != AudioQuality.MAX || linked
                     val isSelected = option == quality
                     Box(
                         modifier = Modifier
@@ -413,7 +417,8 @@ internal fun WelcomeQualityAndStorageSection(
                                 if (isSelected) LocalAccent.current else Color.Transparent,
                                 CircleShape,
                             )
-                            .clickable { onUpdateSettings(settings.copy(audioQuality = option)) },
+                            .clickable(enabled = choosable) { onUpdateSettings(settings.copy(audioQuality = option)) }
+                            .alpha(if (choosable) 1f else 0.4f),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(

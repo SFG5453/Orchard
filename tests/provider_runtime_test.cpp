@@ -423,6 +423,22 @@ private slots:
         QCOMPARE(success.first().at(1).value<QJsonValue>().toObject().value("bytes").toArray().size(), 2);
     }
 
+    void qobuzBytecodeBootsInQuickJs()
+    {
+        ProviderRuntime runtime(orchard::provider::qobuzBundle());
+        QSignalSpy success(&runtime, &ProviderRuntime::invocationSucceeded);
+        QSignalSpy failure(&runtime, &ProviderRuntime::invocationFailed);
+        runtime.invoke("session.set", QJsonObject{{"token", "token"}, {"userId", 42}, {"appId", "123"}, {"appSecret", "s"}});
+        QVERIFY(success.wait(3000));
+        QCOMPARE(success.first().at(1).value<QJsonValue>().toObject().value("connected").toBool(), true);
+        runtime.invoke("playback.read", QJsonObject{{"playbackId", "missing"}, {"start", 0}});
+        QVERIFY(failure.wait(3000));
+        QVERIFY(failure.first().at(1).toString().contains("expired"));
+        runtime.invoke("missing.method", QJsonObject{});
+        QTRY_COMPARE_WITH_TIMEOUT(failure.size(), 2, 3000);
+        QVERIFY(failure.last().at(1).toString().contains("Unknown Qobuz provider method"));
+    }
+
     void catalogRoutesItsOwnFailures()
     {
         YouTubeProvider provider;

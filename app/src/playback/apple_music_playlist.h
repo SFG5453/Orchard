@@ -24,6 +24,7 @@
 #include <QList>
 #include <QPair>
 #include <QString>
+#include <QStringList>
 #include <QUrl>
 
 // Apple Music's audio HLS playlists: one fragmented MP4 addressed by byte ranges,
@@ -42,6 +43,10 @@ struct Playlist {
   // The EXT-X-KEY URI, which the license request repeats.
   QString keyUri;
   QByteArray pssh;
+  // Every Widevine key in playlist order, the first being keyUri and pssh. Atmos playlists
+  // name one per sample description.
+  QStringList keyUris;
+  QList<QByteArray> psshes;
   // Start and size of each range of Apple's file in order; the first is the init
   // segment. They tile the file without gaps.
   QList<QPair<qint64, qint64>> ranges;

@@ -18,6 +18,7 @@
  */
 
 #include "apple_music_stream.h"
+#include "apple_music_atmos.h"
 #include "apple_music_requests.h"
 #include "apple_music_stream_state.h"
 #include "integrations/apple_music.h"
@@ -150,6 +151,9 @@ void AppleMusicStreams::openStream(const QString &appleId, const QUrl &licenseUr
                                    const Resolved &done) {
   const QString playbackId = QUuid::createUuid().toString(QUuid::WithoutBraces);
   stream->id = m_nextStream++;
+  stream->keyStreams = {stream->id};
+  for (qsizetype key = 1; key < stream->playlist.psshes.size(); ++key)
+    stream->keyStreams.append(m_nextStream++);
   stream->playbackId = playbackId;
   stream->licenseUrl = licenseUrl;
   stream->appleId = appleId;
@@ -168,7 +172,9 @@ void AppleMusicStreams::openStream(const QString &appleId, const QUrl &licenseUr
   done({{QStringLiteral("provider"), QStringLiteral("apple")},
         {QStringLiteral("playbackId"), playbackId},
         {QStringLiteral("contentLength"), double(length)},
-        {QStringLiteral("mimeType"), QStringLiteral("audio/mp4; codecs=mp4a.40.2")},
+        {QStringLiteral("mimeType"), stream->atmos ? QStringLiteral("audio/mp4; codecs=ec-3")
+                                                    : QStringLiteral("audio/mp4; codecs=mp4a.40.2")},
+        {QStringLiteral("atmos"), stream->atmos},
         {QStringLiteral("durationSeconds"), playlist.duration},
         {QStringLiteral("bitrate"), playlist.duration > 0 ? int(length * 8 / playlist.duration) : 0}},
        {});
@@ -274,8 +280,8 @@ void AppleMusicStreams::ready(Stream *stream, Done done) {
   const QString playbackId = stream->playbackId;
   QElapsedTimer clock;
   clock.start();
-  // The license and the init segment download in parallel; Init needs both. Negative once finished.
-  const auto pending = std::make_shared<int>(stream->rawInit.isEmpty() ? 2 : 1);
+  // Every key's license and the init segment arrive in parallel; Init needs all. Negative once finished.
+  const auto pending = std::make_shared<int>(int(stream->keyStreams.size()) + (stream->rawInit.isEmpty() ? 1 : 0));
   const auto finish = [this, playbackId, clock, pending](const QString &error) {
     if (*pending < 0)
       return;
@@ -296,7 +302,17 @@ void AppleMusicStreams::ready(Stream *stream, Done done) {
     Stream *stream = find(playbackId);
     if (!stream)
       return;
-    m_cdm.request(Init, stream->id, stream->rawInit,
+    QByteArray init = stream->rawInit;
+    if (stream->keyStreams.size() > 1) {
+      QList<QByteArray> keyIds;
+      for (const QByteArray &pssh : std::as_const(stream->playlist.psshes))
+        keyIds.append(apple_music_atmos::psshKeyId(pssh));
+      if (const QString error = apple_music_atmos::keyInit(init, keyIds); !error.isEmpty()) {
+        finish(error);
+        return;
+      }
+    }
+    m_cdm.request(Init, stream->id, init,
                   [this, playbackId, generation, finish](const QByteArray &clear, const QString &error) {
       Stream *stream = find(playbackId);
       QString failure = error;
@@ -312,20 +328,24 @@ void AppleMusicStreams::ready(Stream *stream, Done done) {
       finish(failure);
     });
   };
-  m_cdm.request(Open, stream->id, stream->playlist.pssh,
-                [this, playbackId, finish, decryptInit](const QByteArray &challenge, const QString &error) {
-    if (!error.isEmpty()) {
-      finish(error);
-      return;
-    }
-    license(playbackId, challenge, [finish, decryptInit](const QString &error) {
+  for (int key = 0; key < stream->keyStreams.size(); ++key) {
+    const quint32 hostStream = stream->keyStreams.at(key);
+    m_cdm.request(Open, hostStream, stream->playlist.psshes.at(key),
+                  [this, playbackId, hostStream, key, finish, decryptInit](const QByteArray &challenge,
+                                                                           const QString &error) {
       if (!error.isEmpty()) {
         finish(error);
         return;
       }
-      decryptInit();
+      license(playbackId, hostStream, key, challenge, [finish, decryptInit](const QString &error) {
+        if (!error.isEmpty()) {
+          finish(error);
+          return;
+        }
+        decryptInit();
+      });
     });
-  });
+  }
   if (!stream->rawInit.isEmpty())
     return;
   const auto [start, size] = stream->playlist.ranges.first();
@@ -349,9 +369,10 @@ void AppleMusicStreams::ready(Stream *stream, Done done) {
   });
 }
 
-void AppleMusicStreams::license(const QString &playbackId, const QByteArray &challenge, Done done) {
-  m_account->playbackToken([this, playbackId, challenge, done = std::move(done)](const QString &token,
-                                                                               const QString &error) {
+void AppleMusicStreams::license(const QString &playbackId, quint32 hostStream, int key, const QByteArray &challenge,
+                                Done done) {
+  m_account->playbackToken([this, playbackId, hostStream, key, challenge, done = std::move(done)](const QString &token,
+                                                                                               const QString &error) {
     Stream *stream = find(playbackId);
     if (!stream)
       return;
@@ -361,8 +382,8 @@ void AppleMusicStreams::license(const QString &playbackId, const QByteArray &cha
     }
     QNetworkReply *reply = m_network.post(
         apple_music_requests::request(stream->licenseUrl, token, m_account->userToken()),
-        apple_music_requests::licenseBody(challenge, stream->playlist.keyUri, stream->appleId));
-    connect(reply, &QNetworkReply::finished, this, [this, reply, playbackId, done] {
+        apple_music_requests::licenseBody(challenge, stream->playlist.keyUris.at(key), stream->appleId));
+    connect(reply, &QNetworkReply::finished, this, [this, reply, playbackId, hostStream, done] {
       reply->deleteLater();
       Stream *stream = find(playbackId);
       if (!stream)
@@ -373,16 +394,17 @@ void AppleMusicStreams::license(const QString &playbackId, const QByteArray &cha
         done(error);
         return;
       }
-      m_cdm.request(License, stream->id, license, [done](const QByteArray &, const QString &error) { done(error); });
+      m_cdm.request(License, hostStream, license, [done](const QByteArray &, const QString &error) { done(error); });
     });
   });
 }
 
 void AppleMusicStreams::renew(quint32 streamId, const QByteArray &message) {
   for (const auto &stream : std::as_const(m_streams)) {
-    if (stream->id != streamId)
+    const int key = int(stream->keyStreams.indexOf(streamId));
+    if (key < 0)
       continue;
-    license(stream->playbackId, message, [](const QString &error) {
+    license(stream->playbackId, streamId, key, message, [](const QString &error) {
       if (!error.isEmpty())
         qWarning().noquote() << "AppleMusic: license renewal failed |" << error;
     });
@@ -396,7 +418,8 @@ void AppleMusicStreams::evict(int keep) {
     if (!stream)
       continue;
     dropPrefetch(stream.get());
-    m_cdm.close(stream->id);
+    for (const quint32 hostStream : std::as_const(stream->keyStreams))
+      m_cdm.close(hostStream);
     const QString closed = tr("The song's stream was closed.");
     for (const Done &waiter : std::exchange(stream->readyWaiters, {}))
       waiter(closed);

@@ -78,6 +78,50 @@ Bytes pair(uint8_t fill, uint32_t time) {
   return join({moof, box("mdat", Bytes(4, fill))});
 }
 
+// An enca sample entry protected with cbcs, constant IV `iv` and key `key`.
+Bytes encryptedEntry(uint8_t key, uint8_t iv) {
+  Bytes tenc{1, 0, 0, 0, 0, 0x19, 1, 0};
+  tenc.insert(tenc.end(), 16, key);
+  tenc.push_back(16);
+  tenc.insert(tenc.end(), 16, iv);
+  Bytes schm{0, 0, 0, 0};
+  schm.insert(schm.end(), {'c', 'b', 'c', 's'});
+  put32(schm, 0x10000);
+  const Bytes sinf = box("sinf", join({box("frma", {'e', 'c', '-', '3'}), box("schm", schm), box("schi", box("tenc", tenc))}));
+  return box("enca", join({Bytes(28, 0), sinf}));
+}
+
+// An init segment whose track has one sample description per entry.
+Bytes initWith(std::initializer_list<Bytes> entries) {
+  Bytes stsd{0, 0, 0, 0};
+  put32(stsd, uint32_t(entries.size()));
+  for (const Bytes &entry : entries)
+    stsd.insert(stsd.end(), entry.begin(), entry.end());
+  Bytes mdhd(24, 0);
+  mdhd[15] = 0x80;  // timescale 128
+  const Bytes stbl = box("stbl", box("stsd", stsd));
+  return box("moov", box("trak", box("mdia", join({box("mdhd", mdhd), box("minf", stbl)}))));
+}
+
+// One moof + mdat whose single 4-byte sample uses sample description `description`.
+Bytes describedPair(uint32_t description) {
+  Bytes tfhd{0, 0x02, 0, 0x02};
+  put32(tfhd, 1);
+  put32(tfhd, description);
+  Bytes senc{0, 0, 0, 0};
+  put32(senc, 1);
+  Bytes trun{0, 0, 0x02, 0x01};
+  put32(trun, 1);
+  put32(trun, 0);
+  put32(trun, 4);
+  Bytes moof = box("moof", box("traf", join({box("tfhd", tfhd), box("senc", senc), box("trun", trun)})));
+  const uint32_t offset = uint32_t(moof.size() + 8);
+  const auto at = std::search(moof.begin(), moof.end(), "trun", "trun" + 4) - moof.begin();
+  for (int i = 0; i < 4; ++i)
+    moof[size_t(at) + 12 + size_t(i)] = uint8_t(offset >> (24 - 8 * i));
+  return join({moof, box("mdat", Bytes(4, 0x55))});
+}
+
 } // namespace
 
 class WidevineHostTest final : public QObject {
@@ -100,6 +144,30 @@ private slots:
     const std::string text(segment.begin(), segment.end());
     QCOMPARE(text.find("senc"), std::string::npos);
     QCOMPARE(std::count(segment.begin(), segment.end(), uint8_t(0x99)), 8);
+  }
+
+  void keysEachSampleDescriptionApart() {
+    Bytes init = initWith({encryptedEntry(0xa1, 0x01), encryptedEntry(0xa2, 0x02)});
+    cenc_mp4::Track track;
+    QCOMPARE(QString::fromStdString(cenc_mp4::clearInit(init, track)), QString());
+    QCOMPARE(track.descriptions.size(), size_t(2));
+    QCOMPARE(track.keyId[0], uint8_t(0xa1));
+    const std::string text(init.begin(), init.end());
+    QCOMPARE(text.find("enca"), std::string::npos);
+    for (const uint32_t description : {1u, 2u}) {
+      Bytes fragment = describedPair(description);
+      uint8_t key = 0, iv = 0;
+      const std::string error = cenc_mp4::clearFragment(fragment, track, [&](cenc_mp4::Sample &sample) {
+        key = sample.keyId[0];
+        iv = sample.iv[0];
+        return std::string();
+      });
+      QCOMPARE(QString::fromStdString(error), QString());
+      QCOMPARE(key, uint8_t(0xa0 + description));
+      QCOMPARE(iv, uint8_t(description));
+    }
+    Bytes unknown = describedPair(3);
+    QVERIFY(!cenc_mp4::clearFragment(unknown, track, [](cenc_mp4::Sample &) { return std::string(); }).empty());
   }
 
   void annexBPrependsParameterSetsToIdr() {

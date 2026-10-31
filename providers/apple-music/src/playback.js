@@ -157,7 +157,7 @@ export function createPlayback(client, fetchImpl) {
 
   /** Enhanced HLS and the playback license endpoint for an Atmos-capable song. */
   async function atmos(id) {
-    const appleId = playbackId({ id });
+    const appleId = playbackId({ id, appleId: id });
     if (!appleId) throw new AppleMusicError(0, 'not_playable', 'This song cannot be streamed.');
     const catalog = await client.editorial(`/v1/catalog/${client.storefront()}/songs/${appleId}`,
       { extend: 'audioTraits,extendedAssetUrls' }, { personal: true });
@@ -167,10 +167,15 @@ export function createPlayback(client, fetchImpl) {
       return { appleId, available: false };
     const master = String(attributes.extendedAssetUrls?.enhancedHls || '');
     if (!master.startsWith('https://')) return { appleId, available: false };
-    const answer = await post(PLAYBACK_URL, { salableAdamId: appleId });
+    // The master playlist needs no license, so it loads beside the playback request.
+    const [answer, masterText] = await Promise.all([
+      post(PLAYBACK_URL, { salableAdamId: appleId }),
+      fetchImpl(master, {}).then(async (response) => response.ok ? { url: response.url || master, text: await response.text() } : null)
+        .catch(() => null)
+    ]);
     const licenseUrl = String(answer.songList?.[0]?.['hls-key-server-url'] || '');
     if (!licenseUrl.startsWith('https://')) throw new AppleMusicError(0, 'no_widevine', 'No Widevine license for this song.');
-    return { appleId, available: true, master, licenseUrl };
+    return { appleId, available: true, master: masterText?.url || master, licenseUrl, ...(masterText ? { masterText: masterText.text } : {}) };
   }
 
   /** A music video's HLS master playlist and license endpoint; renditions name their own keys. */

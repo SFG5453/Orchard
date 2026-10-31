@@ -79,10 +79,11 @@ Adaptive mix picks each blend length from the songs.
 
 ## Why the Adaptive mix button is disabled
 
-The **Adaptive mix** button is disabled in two cases:
+The **Adaptive mix** button is disabled in three cases:
 
 - **Crossfade** is off. Turn it on.
 - The **Audio Engine** is on. Turn the Audio Engine off, or keep Standard mode. The **Crossfade style** text reads "Adaptive mix is unavailable while the audio engine is on."
+- **Streaming quality** is **MAX**. Songs from Qobuz can't be analyzed for a mix, so crossfades use Standard mode. The **Crossfade style** text reads "Adaptive mix is unavailable while streaming quality is MAX." Choose another quality to bring Adaptive mix back. See [Streaming quality](streaming-quality.md).
 
 If Adaptive mix was selected earlier and the Audio Engine is on, turning Crossfade on switches the mode back to Standard.
 

@@ -83,8 +83,7 @@ void PlaybackController::resolveAppleStream(const QVariantMap &track, bool prepa
     return;
   const quint64 generation = m_generation;
   const quint64 token = prepared ? ++m_preparedResolveToken : 0;
-  m_appleStreams->resolve(id, [this, generation, token, track, prepared](const QJsonObject &stream,
-                                                                         const QString &error) {
+  auto done = [this, generation, token, track, prepared](const QJsonObject &stream, const QString &error) {
     if (prepared) {
       if (token == m_preparedResolveToken && m_preparedTrack.value("id") == track.value("id") && !stream.isEmpty())
         openPreparedStream(stream);
@@ -96,7 +95,11 @@ void PlaybackController::resolveAppleStream(const QVariantMap &track, bool prepa
       fail(error);
     else
       startResolvedStream(stream);
-  });
+  };
+  if (m_appleAccount->atmosAvailable() && m_streamQuality == QStringLiteral("atmos"))
+    m_appleStreams->resolveAtmos(id, std::move(done));
+  else
+    m_appleStreams->resolve(id, std::move(done));
 }
 
 QString PlaybackController::appleMixId(const QVariantMap &track) const {

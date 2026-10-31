@@ -71,6 +71,7 @@ import coil3.compose.AsyncImage
 import dev.sfg.orchard.mobile.auth.AuthState
 import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.OrchardSettings
+import dev.sfg.orchard.mobile.model.LocalQobuzLinked
 import dev.sfg.orchard.mobile.model.visibleAudioQuality
 import dev.sfg.orchard.mobile.model.YOUTUBE_SOURCE
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
@@ -122,7 +123,7 @@ internal fun SettingsHub(
         }
     }
 
-    val quality = visibleAudioQuality(settings.audioQuality, appleAtmosQualityAvailable(settings)).label
+    val quality = visibleAudioQuality(settings.audioQuality, appleAtmosQualityAvailable(settings), LocalQobuzLinked.current).label
     SectionLabel("Listening", 4)
     SettingsPanel(index = 5) {
         PageRow(SettingsPage.Playback, "$quality quality · Equalizer ${if (settings.equalizerConfig.enabled) "on" else "off"}", onOpen)
@@ -143,7 +144,7 @@ internal fun SettingsHub(
     SettingsPanel(index = 9) {
         PageRow(
             SettingsPage.Connections,
-            "Last.fm, Discord and more",
+            "Last.fm, Qobuz, Discord and more",
             onOpen,
             summaries.connectedCount.takeIf { it > 0 }?.let { "$it connected" },
         )

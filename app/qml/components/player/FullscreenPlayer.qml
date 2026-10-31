@@ -68,6 +68,21 @@ FullscreenPlayerForm {
     animatedArtworkUrl: OrchardPlayback.animatedArtworkUrl
     canvasLoop: /\.cnvs\.mp4/.test(OrchardPlayback.animatedArtworkUrl || "")
 
+    // Qobuz songs show their tier instead of kbps. Untyped for qmlcachegen's sake.
+    function sourceQuality(track) {
+        if (!track || track.playbackSource !== "qobuz")
+            return "";
+        const parts = [track.hires ? qsTr("Hi-Res") : qsTr("Lossless")];
+        if (track.bitDepth || track.sampleRate) {
+            const depth = track.bitDepth ? qsTr("%1-bit").arg(track.bitDepth) : "";
+            const rate = track.sampleRate ? qsTr("%1 kHz").arg(Number((track.sampleRate / 1000).toFixed(1))) : "";
+            parts.push([depth, rate].filter(Boolean).join(" / "));
+        }
+        if (track.streamCodec)
+            parts.push(track.streamCodec);
+        return parts.join(" · ");
+    }
+
     // Streamed songs: bitrate then codec, e.g. "128 kbps · Opus". Needs the bitrate setting.
     function streamQuality(track) {
         if (!OrchardAppearance.showBitrate || OrchardPlayback.bitrate <= 0)
@@ -226,7 +241,7 @@ FullscreenPlayerForm {
     controls.remainingText: root.shownDuration > 0
         ? "-" + timeLabel(root.shownDuration - (controls.scrubbing ? controls.scrubPosition : root.shownPosition)) : "-:--"
     controls.mixDurationText: mixDuration > 0 ? timeLabel(mixDuration) : ""
-    controls.qualityText: streamQuality(OrchardPlayback.track)
+    controls.qualityText: sourceQuality(OrchardPlayback.track) || streamQuality(OrchardPlayback.track)
     controls.volume: OrchardHome.volume
 
     controls.progress.onPressedChanged: if (!controls.progress.pressed && controls.progress.enabled) OrchardPlayback.seek(controls.scrubPosition)

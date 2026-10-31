@@ -20,11 +20,13 @@
 // Track starts and quality switches, split out of playback_controller.cpp to
 // keep both files readable.
 
+#include "integrations/apple_music.h"
 #include "playback_controller.h"
 #include "playback_helpers.h"
 #include "gapless_playback.h"
 #include "auth/auth_manager.h"
 #include "local/local_track.h"
+#include "providers/qobuz/qobuz_service.h"
 #include <QDebug>
 #include <QScopedValueRollback>
 #include <QSettings>
@@ -85,6 +87,7 @@ void PlaybackController::startTrack(const QVariantMap &track, bool replaceQueue,
     ++m_generation;
     m_request = 0;
     m_nextRequest = 0;
+    reportQobuzEnded(m_proxy, m_player);
     m_player->stop();
     // Keep each decoder attached to its output. Musical chairs are for parties,
     // not audio sinks that already have the next song buffered.
@@ -96,6 +99,7 @@ void PlaybackController::startTrack(const QVariantMap &track, bool replaceQueue,
     m_audioEngineOutput.setActiveTrackId(m_track.value(QStringLiteral("id")).toString());
     m_track.insert(QStringLiteral("bitrate"), m_preparedBitrate);
     applyStreamQuality();
+    reportQobuzStarted(m_proxy, 0.0);
     m_loading = false;
     m_error.clear();
     m_retried = false;
@@ -151,14 +155,23 @@ void PlaybackController::startTrack(const QVariantMap &track, bool replaceQueue,
 }
 
 void PlaybackController::setStreamQuality(const QString &quality) {
-  if ((quality != "saver" && quality != "normal" && quality != "high") ||
+  if ((quality != "saver" && quality != "normal" && quality != "high" &&
+       quality != "max" && quality != "atmos") ||
       quality == m_streamQuality)
+    return;
+  if (quality == "atmos" && !(m_appleAccount && m_appleAccount->atmosAvailable()))
+    return;
+  // MAX is Qobuz; without an account here or on a Connect peer there is nothing to turn up to.
+  if (quality == "max" && !qobuzReachable())
     return;
   clearPreparedTrack();
   m_streamQuality = quality;
   QSettings().setValue("playback/streamQuality", quality);
+  if (m_qobuz)
+    m_qobuz->setEnabled(quality == "max");
   emit streamQualityChanged();
-  // Apple Music picks its own bitrate; the setting is for YouTube.
+  // Apple Music picks its own bitrate; the setting is for YouTube and Qobuz. Atmos applies
+  // to the next Apple song.
   if (m_track.isEmpty() || !m_auth->isSignedIn() || isAppleTrack(m_track))
     return;
   if ((!m_player || m_player->source().isEmpty()) && m_resumePaused)

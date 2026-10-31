@@ -65,8 +65,10 @@ void PlaybackController::openFile(const QString &path, int bitrate) {
     return;
   }
   m_request = 0;
+  // A stale stream from the previous song must not paint a Qobuz badge on this one.
   m_proxy->clear();
   applyStreamQuality();
+  m_audioEngineOutput.setSurround(m_player, false);
   m_player->setSource(QUrl::fromLocalFile(path));
   if (m_resumePaused) {
     m_player->pause();
@@ -94,6 +96,7 @@ void PlaybackController::openPreparedFile(const QString &path, int bitrate) {
   if (!QFileInfo::exists(path))
     return;
   m_preparedBitrate = bitrate;
+  m_audioEngineOutput.setSurround(m_nextPlayer, false);
   m_nextPlayer->setSource(QUrl::fromLocalFile(path));
   m_nextPlayer->pause();
   maybeStartCrossfade();

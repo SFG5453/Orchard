@@ -129,12 +129,32 @@ test('Atmos resolution returns the enhanced playlist and the playback license en
     calls.push({ path, query, options });
     return { data: [{ attributes: { audioTraits: ['atmos'], extendedAssetUrls: { enhancedHls: 'https://example.com/master.m3u8' } } }] };
   } };
-  const playback = createPlayback(client, async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ songList: [{ 'hls-key-server-url': 'https://example.com/license' }] }) }));
-  assert.deepEqual(await playback.atmos('am.songs.123'), { appleId: '123', available: true, master: 'https://example.com/master.m3u8', licenseUrl: 'https://example.com/license' });
+  const fetched = [];
+  const playback = createPlayback(client, async (url) => {
+    fetched.push(url);
+    if (url === 'https://example.com/master.m3u8') return { ok: true, status: 200, url, text: async () => '#EXTM3U' };
+    return { ok: true, status: 200, text: async () => JSON.stringify({ songList: [{ 'hls-key-server-url': 'https://example.com/license' }] }) };
+  });
+  assert.deepEqual(await playback.atmos('am.songs.123'), {
+    appleId: '123', available: true, master: 'https://example.com/master.m3u8', licenseUrl: 'https://example.com/license', masterText: '#EXTM3U'
+  });
+  assert.equal(fetched.length, 2);
+  assert.equal((await playback.atmos('123')).appleId, '123');
   assert.deepEqual(calls[0].query, { extend: 'audioTraits,extendedAssetUrls' });
   await assert.rejects(playback.atmos('am.songs.i.1'), { code: 'not_playable' });
 });
 
+
+test('Atmos resolution still answers when the master playlist fails', async () => {
+  const { createPlayback } = await import('../src/playback.js');
+  const client = { storefront: () => 'us', playbackHeaders: () => ({}), editorial: async () =>
+    ({ data: [{ attributes: { audioTraits: ['atmos'], extendedAssetUrls: { enhancedHls: 'https://example.com/master.m3u8' } } }] }) };
+  const playback = createPlayback(client, async (url) => url.endsWith('master.m3u8')
+    ? { ok: false, status: 503, text: async () => '' }
+    : { ok: true, status: 200, text: async () => JSON.stringify({ songList: [{ 'hls-key-server-url': 'https://example.com/license' }] }) });
+  assert.deepEqual(await playback.atmos('am.songs.123'),
+    { appleId: '123', available: true, master: 'https://example.com/master.m3u8', licenseUrl: 'https://example.com/license' });
+});
 
 test('non-Atmos tracks use stereo without requesting a playback license', async () => {
   const { createPlayback } = await import('../src/playback.js');

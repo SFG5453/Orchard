@@ -130,16 +130,37 @@ QVariantList AudioEngineOutput::outputDevices() const {
 void AudioEngineOutput::attachPlayer(QMediaPlayer *player) {
   if (!player || m_bufferOutputs.contains(player))
     return;
-  auto *output = new QAudioBufferOutput(AudioPipeline::format(), this);
+  QAudioBufferOutput *output = makeOutput(player, AudioPipeline::format());
   m_bufferOutputs.insert(player, output);
   player->setAudioBufferOutput(output);
   player->setPlaybackRate(effectiveSpeed());
+}
+
+void AudioEngineOutput::setSurround(QMediaPlayer *player, bool surround) {
+  if (!player)
+    return;
+  attachPlayer(player);
+  // Both outputs live as long as the player: deleting a replaced one detaches its successor.
+  QAudioBufferOutput *wanted = m_bufferOutputs.value(player);
+  if (surround) {
+    QAudioBufferOutput *&output = m_surroundOutputs[player];
+    if (!output)
+      output = makeOutput(player, BinauralRenderer::inputFormat());
+    wanted = output;
+  }
+  if (player->audioBufferOutput() != wanted)
+    player->setAudioBufferOutput(wanted);
+}
+
+QAudioBufferOutput *AudioEngineOutput::makeOutput(QMediaPlayer *player, const QAudioFormat &format) {
+  auto *output = new QAudioBufferOutput(format, this);
   // Qt emits from its decoder threads; the pipeline context queues each buffer
   // straight onto the audio thread.
   connect(output, &QAudioBufferOutput::audioBufferReceived, m_pipeline,
           [pipeline = m_pipeline, player](const QAudioBuffer &buffer) {
             pipeline->processBuffer(player, buffer);
           });
+  return output;
 }
 
 void AudioEngineOutput::setCurrentPlayer(QMediaPlayer *player) {

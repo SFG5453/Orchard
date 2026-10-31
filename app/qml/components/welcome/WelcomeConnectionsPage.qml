@@ -58,5 +58,14 @@ WelcomePage {
         }
     }
 
+    WelcomeRow {
+        title: qsTr("Qobuz")
+        hint: qsTr("Lossless streaming with a Qobuz account.")
 
+        WelcomeButton {
+            compact: true
+            text: OrchardQobuz.connected ? qsTr("Connected") : qsTr("Set up")
+            onClicked: settingsRequested()
+        }
+    }
 }

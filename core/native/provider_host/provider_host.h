@@ -44,6 +44,7 @@ struct Bundle {
 };
 
 Bundle youtubeBundle();
+Bundle qobuzBundle();
 Bundle appleMusicBundle();
 
 enum class Cipher { Aes128CbcDecrypt, Aes128Ctr };

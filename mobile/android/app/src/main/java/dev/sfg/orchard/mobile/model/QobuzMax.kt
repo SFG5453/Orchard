@@ -21,6 +21,9 @@ package dev.sfg.orchard.mobile.model
 
 import androidx.compose.runtime.compositionLocalOf
 
+/** Tier and format of a Qobuz album, as the provider's catalog reports it. */
+data class QobuzAlbumQuality(val hiRes: Boolean, val bitDepth: Int, val sampleRate: Int)
+
 /** Format of the playing stream; zero and blank mean unknown. */
 data class StreamDetail(
     val hiRes: Boolean = false,
@@ -31,3 +34,12 @@ data class StreamDetail(
 
 /** What the player badge describes about the current stream. */
 val LocalStreamDetail = compositionLocalOf { StreamDetail() }
+
+/** True while a Qobuz subscription is linked; MAX can only be chosen then. */
+val LocalQobuzLinked = compositionLocalOf { false }
+
+/** True while MAX is the effective quality, which benches adaptive mix and the equalizer. */
+val LocalMaxActive = compositionLocalOf { false }
+
+/** Looks up an album's Qobuz tier; null while MAX is off. */
+val LocalQobuzAlbumQuality = compositionLocalOf<(suspend (BrowseDetail) -> QobuzAlbumQuality?)?> { null }

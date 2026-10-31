@@ -24,6 +24,8 @@ PlaybackSectionForm {
     id: root
 
     streamQuality: OrchardPlayback.streamQuality
+    qobuzReachable: OrchardPlayback.qobuzReachable
+    atmosAvailable: OrchardAppleMusic.atmosAvailable
     crossfadeEnabled: OrchardPlayback.crossfadeEnabled
     adaptiveMode: OrchardPlayback.adaptiveMix.mode
     crossfadeDuration: OrchardPlayback.crossfadeDuration

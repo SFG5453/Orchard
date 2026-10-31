@@ -139,10 +139,12 @@ internal fun observeAudioSettings(
 ) {
     volume.exponentialEnabled = graph.settings.settings.value.exponentialVolumeEnabled
     scope.launch {
-        graph.settings.settings.collect { settings ->
+        graph.settings.settings.combine(graph.maxActive) { settings, max -> settings to max }.collect { (settings, max) ->
             volume.exponentialEnabled = settings.exponentialVolumeEnabled
             filters.forEach { it.volumeNormalizationEnabled = settings.volumeNormalizationEnabled }
-            equalizers.forEach { it.config = settings.equalizerConfig }
+            // MAX streams Qobuz bytes untouched by the equalizer.
+            val eq = if (max) settings.equalizerConfig.copy(enabled = false) else settings.equalizerConfig
+            equalizers.forEach { it.config = eq }
         }
     }
 }

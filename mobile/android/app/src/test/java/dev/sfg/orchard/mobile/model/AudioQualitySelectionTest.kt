@@ -17,9 +17,16 @@ class AudioQualitySelectionTest {
     @Test fun unavailableAtmosDisplaysAndStreamsAsHigh() {
         assertFalse(audioQualityOptions(false).contains(AudioQuality.ATMOS))
         assertTrue(audioQualityOptions(true).contains(AudioQuality.ATMOS))
-        assertEquals(AudioQuality.HIGH, visibleAudioQuality(AudioQuality.ATMOS, false))
-        assertEquals(AudioQuality.ATMOS, visibleAudioQuality(AudioQuality.ATMOS, true))
+        assertEquals(AudioQuality.HIGH, visibleAudioQuality(AudioQuality.ATMOS, false, true))
+        assertEquals(AudioQuality.ATMOS, visibleAudioQuality(AudioQuality.ATMOS, true, false))
         assertEquals(AudioQuality.HIGH, youtubeAudioQuality(AudioQuality.ATMOS))
+    }
+
+    @Test fun maxWithoutQobuzDisplaysAndStreamsAsHigh() {
+        assertTrue(audioQualityOptions(false).contains(AudioQuality.MAX))
+        assertEquals(AudioQuality.HIGH, visibleAudioQuality(AudioQuality.MAX, true, false))
+        assertEquals(AudioQuality.MAX, visibleAudioQuality(AudioQuality.MAX, false, true))
+        assertEquals(AudioQuality.HIGH, youtubeAudioQuality(AudioQuality.MAX))
     }
 
     @Test fun legacyAtmosMigratesWithoutOverridingFutureQualityChoices() {

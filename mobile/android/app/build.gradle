@@ -413,6 +413,27 @@ tasks.register('compileYouTubeProvider', Exec) {
         '-o', new File(providerBundles, 'youtube-provider.qjc').absolutePath,
         new File(providerBundles, 'youtube-provider.js').absolutePath
 }
+// Qobuz has no npm dependencies, so it borrows the YouTube provider's esbuild, as desktop does.
+tasks.register('bundleQobuzProvider', Exec) {
+    def source = rootProject.file('../../providers/qobuz')
+    workingDir source
+    inputs.files fileTree(source) { include 'src/**/*.js' }
+    inputs.file new File(providerSource, 'package-lock.json')
+    outputs.file new File(providerBundles, 'qobuz-provider.js')
+    commandLine 'npm', '--prefix', providerSource.absolutePath, 'exec', '--offline', '--',
+        'esbuild', new File(source, 'src/runtime.js').absolutePath, '--bundle', '--platform=browser',
+        '--format=iife', '--target=es2023', '--legal-comments=none',
+        "--outfile=${new File(providerBundles, 'qobuz-provider.js')}"
+}
+tasks.register('compileQobuzProvider', Exec) {
+    dependsOn 'buildHostJs', 'bundleQobuzProvider'
+    inputs.file new File(providerBundles, 'qobuz-provider.js')
+    inputs.file hostQjsc
+    outputs.file new File(providerBundles, 'qobuz-provider.qjc')
+    commandLine hostQjsc.absolutePath, '-b', '-C', '-n', 'qobuz-provider.js',
+        '-o', new File(providerBundles, 'qobuz-provider.qjc').absolutePath,
+        new File(providerBundles, 'qobuz-provider.js').absolutePath
+}
 tasks.register('bundleAppleMusicProvider', Exec) {
     def source = rootProject.file('../../providers/apple-music')
     workingDir source
@@ -457,21 +478,21 @@ abstract class ProviderAssetsTask extends DefaultTask {
         }
     }
 }
-def providerAssetFiles = ['youtube-provider.qjc', 'youtube-po-minter.qjc', 'youtube-po-minter-licenses.txt',
+def providerAssetFiles = ['youtube-provider.qjc', 'youtube-po-minter.qjc', 'youtube-po-minter-licenses.txt', 'qobuz-provider.qjc',
     'apple-music-provider.qjc']
     .collect { new File(providerBundles, it) }
 // Registered through the variant API so every asset consumer, lint included, depends on it.
 androidComponents {
     onVariants(selector().all()) { variant ->
         def task = tasks.register("${variant.name}YouTubeProviderAssets", ProviderAssetsTask) {
-            dependsOn 'compileYouTubeProvider', 'compileYouTubePoMinter', 'compileAppleMusicProvider'
+            dependsOn 'compileYouTubeProvider', 'compileYouTubePoMinter', 'compileQobuzProvider', 'compileAppleMusicProvider'
             sources.from(providerAssetFiles)
         }
         variant.sources.assets?.addGeneratedSourceDirectory(task) { it.outputDirectory }
     }
 }
 tasks.withType(Test).configureEach {
-    dependsOn 'compileYouTubeProvider', 'compileYouTubePoMinter', 'compileAppleMusicProvider'
+    dependsOn 'compileYouTubeProvider', 'compileYouTubePoMinter', 'compileQobuzProvider', 'compileAppleMusicProvider'
     systemProperty 'orchard.providerAssets', providerBundles.absolutePath
 }
 

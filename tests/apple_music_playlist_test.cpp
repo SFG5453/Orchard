@@ -17,6 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "playback/apple_music_atmos.h"
 #include "playback/apple_music_playlist.h"
 #include <QTest>
 #include <QtEndian>
@@ -174,6 +175,43 @@ private slots:
     Playlist parsed;
     QCOMPARE(parse(kPlaylist, text, parsed), QString());
     QVERIFY(parsed.keyUri.startsWith(QStringLiteral("data:")));
+  }
+  void collectsEveryAtmosKey() {
+    QByteArray text = playlist();
+    const QByteArray second = widevinePssh(QByteArray(16, '\x22')).toBase64();
+    text.replace("#EXTINF:9.98458,\t\n#EXT-X-BYTERANGE:326173",
+                 "#EXT-X-KEY:METHOD=ISO-23001-7,URI=\"data:text/plain;base64," + second +
+                     "\"\n#EXTINF:9.98458,\t\n#EXT-X-BYTERANGE:326173");
+    Playlist parsed;
+    QCOMPARE(parse(kPlaylist, text, parsed), QString());
+    QCOMPARE(parsed.keyUris.size(), 2);
+    QCOMPARE(parsed.keyUri, parsed.keyUris.first());
+    QCOMPARE(apple_music_atmos::psshKeyId(parsed.psshes.at(1)), QByteArray(16, '\x22'));
+  }
+
+  void picksTheJocRendition() {
+    const QByteArray master =
+        "#EXTM3U\n"
+        "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"stereo\",CHANNELS=\"2\",URI=\"a.m3u8\"\n"
+        "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"atmos\",CHANNELS=\"16/JOC\",URI=\"b.m3u8\"\n"
+        "#EXT-X-STREAM-INF:BANDWIDTH=300000,CODECS=\"mp4a.40.2\",AUDIO=\"stereo\"\nstereo.m3u8\n"
+        "#EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=768000,BANDWIDTH=800000,CODECS=\"ec-3\",AUDIO=\"atmos\"\natmos.m3u8\n";
+    const apple_music_atmos::Rendition rendition = apple_music_atmos::pick(kPlaylist, master);
+    QCOMPARE(rendition.url, kPlaylist.resolved(QUrl(QStringLiteral("atmos.m3u8"))));
+    QCOMPARE(rendition.bitrateKbps, 768);
+    QVERIFY(apple_music_atmos::pick(kPlaylist, "#EXTM3U\n").url.isEmpty());
+  }
+
+  void keysEachAtmosDescription() {
+    // Two tenc boxes with zero key ids, as Apple ships them.
+    QByteArray tenc(32, '\0');
+    qToBigEndian<quint32>(32, tenc.data());
+    tenc.replace(4, 4, "tenc");
+    QByteArray init = QByteArray("prefix") + tenc + tenc;
+    QCOMPARE(apple_music_atmos::keyInit(init, {QByteArray(16, '\x01'), QByteArray(16, '\x02')}), QString());
+    QCOMPARE(init.mid(6 + 16, 16), QByteArray(16, '\x01'));
+    QCOMPARE(init.mid(6 + 32 + 16, 16), QByteArray(16, '\x02'));
+    QVERIFY(!apple_music_atmos::keyInit(init, {QByteArray(16, '\x01')}).isEmpty());
   }
 };
 

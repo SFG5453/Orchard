@@ -33,7 +33,7 @@ class VideoVersionResolver(
     private val resolved = mutableMapOf<LookupKey, String?>()
 
     suspend fun videoId(track: Track): String? = withContext(Dispatchers.IO) {
-        if (track.id.isBlank() || track.title.isBlank()) return@withContext null
+        if (track.isQobuz || track.id.isBlank() || track.title.isBlank()) return@withContext null
         track.musicVideoId.takeIf(String::isNotBlank)?.let { return@withContext it }
         if (track.isVideoUpload) return@withContext track.id
 

@@ -26,9 +26,10 @@ import dev.sfg.orchard.mobile.model.youtubeAudioQuality
 /** Apple Music serves one 256 kbps AAC encode whatever the quality setting says. */
 internal const val APPLE_MUSIC_CACHE_VARIANT = "v1|apple|aac256"
 
-/** The variant for one song: Apple Music songs ignore the YouTube quality setting. */
+/** The variant for one song: Apple Music songs ignore the YouTube and Qobuz settings. */
 internal fun sourceCacheVariant(sourceId: String, providerVariant: () -> String): String =
     if (sourceId.startsWith("am.")) APPLE_MUSIC_CACHE_VARIANT else providerVariant()
 
-internal fun audioCacheVariant(quality: AudioQuality): String =
-    "v2|youtube|${youtubeAudioQuality(quality).name}"
+internal fun audioCacheVariant(quality: AudioQuality, qobuzEnabled: Boolean, qobuzTier: String): String =
+    if (qobuzEnabled && quality == AudioQuality.MAX) "v2|qobuz|$qobuzTier"
+    else "v2|youtube|${youtubeAudioQuality(quality).name}"

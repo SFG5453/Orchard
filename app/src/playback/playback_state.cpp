@@ -225,6 +225,7 @@ void PlaybackController::rememberStreamTracking(const QString &trackId,
         m_playbackVideoIds.insert(currentId, current);
     }
     m_playbackVideoIds.insert(trackId, playbackVideoId);
+    // Qobuz audio is a different recording than the video SponsorBlock timed, so skip it.
     if (!stream.contains(QStringLiteral("playbackId")))
       requestNonMusicSegments(trackId, playbackVideoId, stream.value("durationSeconds").toDouble());
     else

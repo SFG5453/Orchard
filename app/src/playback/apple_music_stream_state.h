@@ -26,6 +26,9 @@
 
 struct AppleMusicStreams::Stream {
   quint32 id{0};
+  // One host session per playlist key, the first being `id`.
+  QList<quint32> keyStreams;
+  bool atmos{false};
   QString playbackId;
   apple_music_playlist::Playlist playlist;
   QUrl licenseUrl;

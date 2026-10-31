@@ -222,10 +222,12 @@ QString parse(const QUrl &playlistUrl, const QByteArray &text, Playlist &playlis
       const auto key = attributes(line.mid(11));
       const QString format = key.value(QStringLiteral("KEYFORMAT"));
       const bool widevine = format.isEmpty() || format.contains(QStringLiteral("edef8ba9"), Qt::CaseInsensitive);
-      if (widevine && playlist.pssh.isEmpty() && key.value(QStringLiteral("METHOD")) != QStringLiteral("NONE")) {
-        playlist.pssh = psshFromKeyUri(key.value(QStringLiteral("URI")));
-        if (!playlist.pssh.isEmpty())
-          playlist.keyUri = key.value(QStringLiteral("URI"));
+      const QString uri = key.value(QStringLiteral("URI"));
+      if (widevine && key.value(QStringLiteral("METHOD")) != QStringLiteral("NONE") && !playlist.keyUris.contains(uri)) {
+        if (const QByteArray pssh = psshFromKeyUri(uri); !pssh.isEmpty()) {
+          playlist.keyUris.append(uri);
+          playlist.psshes.append(pssh);
+        }
       }
     } else if (line.startsWith(QStringLiteral("#EXT-X-MAP:"))) {
       const auto map = attributes(line.mid(11));
@@ -267,8 +269,10 @@ QString parse(const QUrl &playlistUrl, const QByteArray &text, Playlist &playlis
       pendingRange = false;
     }
   }
-  if (playlist.pssh.isEmpty())
+  if (playlist.psshes.isEmpty())
     return QStringLiteral("no Widevine key");
+  playlist.keyUri = playlist.keyUris.first();
+  playlist.pssh = playlist.psshes.first();
   if (playlist.ranges.size() < 2 || playlist.ranges.first().first != 0)
     return QStringLiteral("no media segments");
   return {};

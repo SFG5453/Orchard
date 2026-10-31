@@ -43,6 +43,8 @@ import dev.sfg.orchard.mobile.model.AudioQuality
 import dev.sfg.orchard.mobile.model.*
 import dev.sfg.orchard.mobile.playback.ListeningPartyManager
 import dev.sfg.orchard.mobile.playback.LocalPlaybackController
+import dev.sfg.orchard.mobile.qobuz.QobuzQuality
+import dev.sfg.orchard.mobile.qobuz.QobuzStatus
 import dev.sfg.orchard.mobile.settings.CacheManager
 import dev.sfg.orchard.mobile.social.PartyState
 import dev.sfg.orchard.mobile.songlinks.LinkResolution
@@ -160,7 +162,30 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         .stateIn(viewModelScope, SharingStarted.Eagerly, 1f)
     val lyrics: StateFlow<LoadState<List<LyricLine>>> = nowPlaying.lyrics
     val discordStatus: StateFlow<DiscordPresenceStatus> = graph.discordPresence.status
+    val qobuzStatus: StateFlow<QobuzStatus> = graph.qobuz.status
+    val activeTrackIsQobuz: StateFlow<Boolean> = graph.activeTrackIsQobuz.asStateFlow()
     val activeStreamDetail: StateFlow<dev.sfg.orchard.mobile.model.StreamDetail> = graph.activeStreamDetail.asStateFlow()
+
+    fun connectQobuz(token: String, userId: Long, appId: String, appSecret: String) =
+        graph.qobuz.connect(token, userId, appId, appSecret)
+    val maxActive: StateFlow<Boolean> = graph.maxActive
+
+    fun disconnectQobuz() {
+        graph.qobuz.disconnect()
+        // MAX needs a subscription; fall back to High rather than leave a dead choice selected.
+        val current = graph.settings.settings.value
+        if (current.audioQuality == AudioQuality.MAX || current.cellularAudioQuality == AudioQuality.MAX) {
+            graph.settings.updateSettings(
+                current.copy(
+                    audioQuality = current.audioQuality.takeUnless { it == AudioQuality.MAX } ?: AudioQuality.HIGH,
+                    cellularAudioQuality = current.cellularAudioQuality.takeUnless { it == AudioQuality.MAX } ?: AudioQuality.HIGH,
+                ),
+            )
+        }
+    }
+    suspend fun qobuzAlbumQuality(detail: BrowseDetail) = graph.qobuzResolver.albumQuality(detail)
+    fun setQobuzEnabled(enabled: Boolean) = graph.qobuz.setEnabled(enabled)
+    fun setQobuzQuality(quality: QobuzQuality) = graph.qobuz.setQuality(quality)
 
     val lastfmState: StateFlow<LastfmState> = graph.lastfm.state
     val listenBrainzState: StateFlow<ListenBrainzState> = graph.listenBrainz.state

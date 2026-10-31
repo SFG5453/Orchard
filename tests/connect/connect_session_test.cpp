@@ -186,14 +186,14 @@ private slots:
     FakeHub hub;
     TestDevice pc(hub, "pc", "linux");
     TestDevice phone(hub, "phone", "android");
-    phone.setDevice([](Json &d) { d["provider_sessions"]["example"] = true; });
+    phone.setDevice([](Json &d) { d["provider_sessions"]["qobuz"] = true; });
     QVERIFY(!connectAndWait(phone, pc).empty());
     QVERIFY(!pc.waitEvent([](const Json &e) {
-                 return e.value("event", "") == "roles" && e["roles"]["provider_hosts"].value("example", "") == "phone";
+                 return e.value("event", "") == "roles" && e["roles"]["provider_hosts"].value("qobuz", "") == "phone";
                }).empty());
     const auto from = pc.mark();
     const std::string id =
-        pc.node().request(Json{{"method", "ResolveTrack"}, {"host", "provider:example"}, {"params", {{"id", "12345"}}}}
+        pc.node().request(Json{{"method", "ResolveTrack"}, {"host", "provider:qobuz"}, {"params", {{"id", "12345"}}}}
                               .dump());
     const Json result = pc.waitEvent(
         [&](const Json &e) { return e.value("event", "") == "rpc_result" && e.value("id", "") == id; }, 5000, from);

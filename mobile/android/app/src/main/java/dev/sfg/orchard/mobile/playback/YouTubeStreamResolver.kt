@@ -52,6 +52,7 @@ data class ResolvedStream(
     val referer: String? = null,
     /** Whether independent bounded ranges may be fetched concurrently. */
     val supportsParallelRanges: Boolean = false,
+    val isQobuz: Boolean = false,
     val bitDepth: Int? = null,
     val sampleRate: Int? = null,
     val hires: Boolean = false,
@@ -316,7 +317,7 @@ class YouTubeStreamResolver(
     private fun streamQuality(): String = when (qualityProvider()) {
         AudioQuality.DATA_SAVER -> "saver"
         AudioQuality.NORMAL -> "normal"
-        AudioQuality.HIGH, AudioQuality.ATMOS -> "high"
+        AudioQuality.HIGH, AudioQuality.ATMOS, AudioQuality.MAX -> "high"
     }
 
     private fun expiry(json: JSONObject): Long =

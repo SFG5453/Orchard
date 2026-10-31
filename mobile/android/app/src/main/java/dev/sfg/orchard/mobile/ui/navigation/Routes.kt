@@ -31,6 +31,7 @@ object Routes {
     const val LOGIN = "login"
     const val ACCOUNT_SWITCH = "account-switch"
     const val SPOTIFY_LOGIN = "spotify-login"
+    const val QOBUZ_TOKEN_LOGIN = "qobuz-token-login"
     const val APPLE_MUSIC_LOGIN = "apple-music-login"
     const val DOWNLOADS = "downloads"
     const val DETAIL = "detail/{id}"

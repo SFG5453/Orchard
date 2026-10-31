@@ -230,14 +230,15 @@ std::string CdmHost::decrypt(const cenc_mp4::Track &track, cenc_mp4::Sample &sam
   input.data_size = sample.size;
   const bool cbcs = track.scheme == cenc_mp4::fourcc("cbcs");
   input.encryption_scheme = cbcs ? cdm::EncryptionScheme::kCbcs : cdm::EncryptionScheme::kCenc;
-  input.key_id = track.keyId;
+  input.key_id = sample.keyId ? sample.keyId : track.keyId;
   input.key_id_size = sizeof track.keyId;
   input.iv = sample.iv;
   input.iv_size = sample.ivSize;
   input.subsamples = subsamples.empty() ? nullptr : subsamples.data();
   input.num_subsamples = uint32_t(subsamples.size());
   if (cbcs)
-    input.pattern = {track.cryptBlocks, track.skipBlocks};
+    input.pattern = sample.keyId ? cdm::Pattern{sample.cryptBlocks, sample.skipBlocks}
+                                 : cdm::Pattern{track.cryptBlocks, track.skipBlocks};
   Block block;
   const cdm::Status status = m_cdm->Decrypt(input, &block);
   if (status == cdm::kNoKey)

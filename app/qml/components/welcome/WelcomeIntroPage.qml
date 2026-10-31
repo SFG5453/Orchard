@@ -43,7 +43,7 @@ WelcomePage {
 
     WelcomeRow {
         title: qsTr("Connections")
-        hint: qsTr("Last.fm, Discord and Spotify.")
+        hint: qsTr("Last.fm, Discord, Spotify and Qobuz.")
     }
 
     WelcomeRow {

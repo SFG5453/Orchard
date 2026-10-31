@@ -107,9 +107,9 @@ class StreamCache(
      * Wraps [upstream] so reads are served from disk when possible and written to it when not.
      *
      * The song's source variant is folded into the cache key: the same track at DATA_SAVER and
-     * HIGH is different bytes, and keying both as the track alone would
+     * HIGH, or from YouTube and Qobuz, is different bytes, and keying both as the track alone would
      * serve whichever was fetched first. Apple Music songs have one variant of their own, so a
-     * YouTube quality change leaves their bytes in place.
+     * YouTube or Qobuz setting change leaves their bytes in place.
      */
     fun dataSourceFactory(upstream: DataSource.Factory): DataSource.Factory {
         upstreamFactory = upstream

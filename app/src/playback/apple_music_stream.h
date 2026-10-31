@@ -54,6 +54,8 @@ public:
 
   // A proxy stream for the catalog song `appleId` ("provider": "apple").
   void resolve(const QString &appleId, Resolved done);
+  // The song's Dolby Atmos rendition ("atmos": true, E-AC-3), else the stereo stream.
+  void resolveAtmos(const QString &appleId, Resolved done);
   // The AudioStreamProxy range reader for streams from resolve().
   void read(const QString &playbackId, qint64 start, qint64 end, Bytes done);
   // Forgets every stream and ends the host.
@@ -69,6 +71,7 @@ private:
   void loadVideoAudio(const QString &appleId, const QJsonObject &song, Resolved done);
   void openStream(const QString &appleId, const QUrl &licenseUrl, std::shared_ptr<Stream> stream,
                   const Resolved &done);
+  void loadAtmos(const QString &appleId, const QJsonObject &answer, Resolved done);
   void measureFiles(const std::shared_ptr<Stream> &stream, Done done);
   Stream *find(const QString &playbackId) const;
   void segment(Stream *stream, int index, Done done);
@@ -80,7 +83,8 @@ private:
   void dropPrefetch(Stream *stream);
   void trimPrefetches();
   void ready(Stream *stream, Done done);
-  void license(const QString &playbackId, const QByteArray &challenge, Done done);
+  // Licenses the host session `hostStream`, which holds the playlist key `key`.
+  void license(const QString &playbackId, quint32 hostStream, int key, const QByteArray &challenge, Done done);
   void renew(quint32 streamId, const QByteArray &message);
   void finishSegment(const QString &playbackId, int index, const QString &error);
   void evict(int keep);

@@ -26,16 +26,34 @@ import org.junit.Test
 
 class AudioCacheVariantTest {
     @Test
-    fun qualitiesHaveSeparateKeys() {
-        assertNotEquals(audioCacheVariant(AudioQuality.DATA_SAVER), audioCacheVariant(AudioQuality.HIGH))
-        assertEquals(audioCacheVariant(AudioQuality.HIGH), audioCacheVariant(AudioQuality.ATMOS))
+    fun disablingQobuzSelectsSeparateYouTubeBytes() {
+        val qobuz = audioCacheVariant(AudioQuality.MAX, true, "hires")
+        val youtube = audioCacheVariant(AudioQuality.MAX, false, "hires")
+        assertNotEquals(qobuz, youtube)
+        assertEquals(audioCacheVariant(AudioQuality.HIGH, false, "auto"), youtube)
+    }
+
+    @Test
+    fun qobuzTiersAndYouTubeQualitiesHaveSeparateKeys() {
+        assertNotEquals(
+            audioCacheVariant(AudioQuality.MAX, true, "hires"),
+            audioCacheVariant(AudioQuality.MAX, true, "lossless"),
+        )
+        assertNotEquals(
+            audioCacheVariant(AudioQuality.DATA_SAVER, false, "auto"),
+            audioCacheVariant(AudioQuality.HIGH, false, "auto"),
+        )
+        assertEquals(
+            audioCacheVariant(AudioQuality.HIGH, false, "auto"),
+            audioCacheVariant(AudioQuality.ATMOS, false, "auto"),
+        )
     }
 
     @Test
     fun appleMusicSongsIgnoreProviderSettings() {
-        val youtube = { audioCacheVariant(AudioQuality.HIGH) }
+        val youtube = { audioCacheVariant(AudioQuality.MAX, true, "hires") }
         assertEquals(APPLE_MUSIC_CACHE_VARIANT, sourceCacheVariant("am.songs.697195462", youtube))
-        assertEquals(APPLE_MUSIC_CACHE_VARIANT, sourceCacheVariant("am.songs.697195462") { audioCacheVariant(AudioQuality.DATA_SAVER) })
+        assertEquals(APPLE_MUSIC_CACHE_VARIANT, sourceCacheVariant("am.songs.697195462") { audioCacheVariant(AudioQuality.DATA_SAVER, false, "auto") })
         assertEquals(youtube(), sourceCacheVariant("dQw4w9WgXcQ", youtube))
     }
 }

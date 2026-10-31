@@ -33,6 +33,7 @@
 class AudioPipeline;
 class QAudioBuffer;
 class QAudioBufferOutput;
+class QAudioFormat;
 class QAudioDevice;
 class QMediaPlayer;
 
@@ -84,6 +85,8 @@ public:
   QVariantList spectrum() const;
 
   void attachPlayer(QMediaPlayer *player);
+  // Set before a source loads: a 5.1 decode the pipeline renders binaurally, else stereo.
+  void setSurround(QMediaPlayer *player, bool surround);
   void setCurrentPlayer(QMediaPlayer *player);
   void setActiveTrackId(const QString &trackId);
   void setMasterVolume(double volume);
@@ -157,11 +160,13 @@ private:
   // Runs work on the audio thread and waits. That thread never waits on this
   // one, so the round trip cannot deadlock.
   void ask(const std::function<void()> &work) const;
+  QAudioBufferOutput *makeOutput(QMediaPlayer *player, const QAudioFormat &format);
 
   QThread m_audioThread;
   AudioPipeline *m_pipeline{nullptr};
   std::unique_ptr<QMediaDevices> m_mediaDevices;
   QHash<QMediaPlayer *, QAudioBufferOutput *> m_bufferOutputs;
+  QHash<QMediaPlayer *, QAudioBufferOutput *> m_surroundOutputs;
   quint64 m_mixSerial{0};
   bool m_adaptive{false};
 

@@ -42,7 +42,8 @@ QString PlaybackController::downloadedFileFor(const QVariantMap &track) const {
   if (!m_downloads || local::isLocalTrack(track))
     return {};
   const QString path = m_downloads->audioPathFor(track.value(QStringLiteral("id")).toString());
-  if (path.isEmpty())
+  // Online MAX streams the lossless Qobuz match; the saved copy is YouTube audio.
+  if (path.isEmpty() || (!offlineMode() && qobuzEligible(track)))
     return {};
   return path;
 }
