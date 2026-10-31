@@ -181,6 +181,8 @@ qml_sources = [
   'app/qml/components/player/FullscreenQueueRow.ui.qml',
   'app/qml/components/player/FullscreenTrackInfo.ui.qml',
   'app/qml/components/player/FullscreenTransportButton.ui.qml',
+  'app/qml/components/player/CanvasStageMask.ui.qml',
+  'app/qml/components/player/CanvasStageShade.ui.qml',
   'app/qml/components/player/FullscreenUpNext.ui.qml',
   'app/qml/components/player/BassPulse.qml',
   'app/qml/views/home/AppTopBar.qml',

@@ -33,6 +33,7 @@ ColumnLayout {
     property bool fullscreenWindowed: false
     property bool fullscreenAutoHide: true
     property bool fullscreenPulse: true
+    property bool fullscreenCanvasStage: false
     property bool lyricsFocusBlur: true
     property bool lyricsDistanceFade: true
     property bool lyricsStaggeredScroll: true
@@ -52,6 +53,7 @@ ColumnLayout {
     property alias windowedSwitch: windowedSwitch
     property alias autoHideSwitch: autoHideSwitch
     property alias pulseSwitch: pulseSwitch
+    property alias canvasStageSwitch: canvasStageSwitch
     property alias lyricsBlurSwitch: lyricsBlurSwitch
     property alias lyricsFadeSwitch: lyricsFadeSwitch
     property alias lyricsStaggerSwitch: lyricsStaggerSwitch
@@ -208,6 +210,19 @@ ColumnLayout {
                 objectName: "fullscreenPulseToggle"
                 checked: root.fullscreenPulse
                 Accessible.name: qsTr("Pulse with the music")
+            }
+        }
+
+        SettingsRow {
+            iconName: "image"
+            title: qsTr("Canvas stage")
+            description: qsTr("When a song has a tall loop (Spotify Canvas, or Apple Music tall artwork while signed in), it fills the player side of the screen and the controls sit on top of it. Needs animated artwork.")
+
+            SettingsSwitch {
+                id: canvasStageSwitch
+                objectName: "fullscreenCanvasStageToggle"
+                checked: root.fullscreenCanvasStage
+                Accessible.name: qsTr("Canvas stage")
             }
         }
     }

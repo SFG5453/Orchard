@@ -20,6 +20,7 @@
 // Apple's own album motion artwork, used in place of the unofficial mirrors while the
 // listener is signed in to Apple Music.
 #include "animated_artwork_lookup.h"
+#include "appearance_settings.h"
 #include "integrations/apple_music.h"
 #include "integrations/catalog_source.h"
 
@@ -90,5 +91,28 @@ void AnimatedArtworkService::resolveTallArtwork(const QString &title, const QStr
   };
   m_appleMusic->artwork(query, [done = std::move(done)](const QJsonObject &result, const QString &) {
     done(result.value(QStringLiteral("animatedVertical")).toString().trimmed());
+  });
+}
+
+void AnimatedArtworkService::requestTallVideo(const QString &title, const QString &artist, const QString &album) {
+  const auto answer = [this, title, artist](const QString &url) { emit tallVideoResolved(title, artist, url); };
+  if (!m_settings || !m_settings->animatedArtworkEnabled() || !m_settings->fullscreenCanvasStage()) {
+    answer({});
+    return;
+  }
+  const QString key = QStringLiteral("tall:") + cacheKey(title, artist, album);
+  if (const auto hit = m_cache.constFind(key); hit != m_cache.constEnd()) {
+    answer(*hit);
+    return;
+  }
+  resolveTallArtwork(title, artist, album, [this, key, answer](const QString &hls) {
+    if (hls.isEmpty()) {
+      answer({});
+      return;
+    }
+    resolveHlsVariant(hls, nullptr, [this, key, answer](const QString &mp4) {
+      m_cache.insert(key, mp4);
+      answer(mp4);
+    });
   });
 }

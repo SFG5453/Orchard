@@ -28,6 +28,7 @@ AppearanceSectionForm {
     fullscreenWindowed: OrchardAppearance.fullscreenWindowed
     fullscreenAutoHide: OrchardAppearance.fullscreenAutoHide
     fullscreenPulse: OrchardAppearance.fullscreenPulse
+    fullscreenCanvasStage: OrchardAppearance.fullscreenCanvasStage
     lyricsFocusBlur: OrchardAppearance.lyricsFocusBlur
     lyricsDistanceFade: OrchardAppearance.lyricsDistanceFade
     lyricsStaggeredScroll: OrchardAppearance.lyricsStaggeredScroll
@@ -49,6 +50,7 @@ AppearanceSectionForm {
     windowedSwitch.onToggled: OrchardAppearance.fullscreenWindowed = windowedSwitch.checked
     autoHideSwitch.onToggled: OrchardAppearance.fullscreenAutoHide = autoHideSwitch.checked
     pulseSwitch.onToggled: OrchardAppearance.fullscreenPulse = pulseSwitch.checked
+    canvasStageSwitch.onToggled: OrchardAppearance.fullscreenCanvasStage = canvasStageSwitch.checked
     lyricsBlurSwitch.onToggled: OrchardAppearance.lyricsFocusBlur = lyricsBlurSwitch.checked
     lyricsFadeSwitch.onToggled: OrchardAppearance.lyricsDistanceFade = lyricsFadeSwitch.checked
     lyricsStaggerSwitch.onToggled: OrchardAppearance.lyricsStaggeredScroll = lyricsStaggerSwitch.checked

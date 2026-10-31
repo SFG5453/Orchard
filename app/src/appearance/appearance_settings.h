@@ -38,6 +38,7 @@ class AppearanceSettings final : public QObject {
     Q_PROPERTY(bool fullscreenWindowed READ fullscreenWindowed WRITE setFullscreenWindowed NOTIFY changed)
     Q_PROPERTY(bool fullscreenAutoHide READ fullscreenAutoHide WRITE setFullscreenAutoHide NOTIFY changed)
     Q_PROPERTY(bool fullscreenPulse READ fullscreenPulse WRITE setFullscreenPulse NOTIFY changed)
+    Q_PROPERTY(bool fullscreenCanvasStage READ fullscreenCanvasStage WRITE setFullscreenCanvasStage NOTIFY changed)
     Q_PROPERTY(bool lyricsFocusBlur READ lyricsFocusBlur WRITE setLyricsFocusBlur NOTIFY changed)
     Q_PROPERTY(bool lyricsDistanceFade READ lyricsDistanceFade WRITE setLyricsDistanceFade NOTIFY changed)
     Q_PROPERTY(bool lyricsStaggeredScroll READ lyricsStaggeredScroll WRITE setLyricsStaggeredScroll NOTIFY changed)
@@ -74,6 +75,7 @@ public:
     bool fullscreenWindowed() const { return m_fullscreenWindowed; }
     bool fullscreenAutoHide() const { return m_fullscreenAutoHide; }
     bool fullscreenPulse() const { return m_fullscreenPulse; }
+    bool fullscreenCanvasStage() const { return m_fullscreenCanvasStage; }
     bool lyricsFocusBlur() const { return m_lyricsFocusBlur; }
     bool lyricsDistanceFade() const { return m_lyricsDistanceFade; }
     bool lyricsStaggeredScroll() const { return m_lyricsStaggeredScroll; }
@@ -108,6 +110,7 @@ public:
     void setFullscreenWindowed(bool value);
     void setFullscreenAutoHide(bool value);
     void setFullscreenPulse(bool value);
+    void setFullscreenCanvasStage(bool value);
     void setLyricsFocusBlur(bool value);
     void setLyricsDistanceFade(bool value);
     void setLyricsStaggeredScroll(bool value);
@@ -154,6 +157,7 @@ private:
     bool m_fullscreenWindowed{false};
     bool m_fullscreenAutoHide{true};
     bool m_fullscreenPulse{true};
+    bool m_fullscreenCanvasStage{false};
     bool m_lyricsFocusBlur{true};
     bool m_lyricsDistanceFade{true};
     bool m_lyricsStaggeredScroll{true};

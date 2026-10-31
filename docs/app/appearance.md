@@ -87,6 +87,10 @@ Turn off **Hide controls when idle** in the **Fullscreen player** group. The ful
 
 Turn off **Pulse with the music** in the **Fullscreen player** group. The glow behind the cover then breathes slowly instead of brightening on each bass hit, and the background stays steady. The setting is on by default.
 
+## Fill the fullscreen player with a tall loop
+
+Turn on **Canvas stage** in the **Fullscreen player** group. When a song has a tall moving artwork loop, the loop fills the player side of the fullscreen player from top to bottom and fades into the lyrics. The title, timeline, and controls sit at the bottom of the loop. Tall loops come from Spotify Canvas, and from Apple Music when you are signed in to Apple Music and it is the music source. The setting needs **Enable animated artwork**. It applies only when the window is at least 980 pixels wide; narrower windows show the loop as a tall card. The setting is off by default.
+
 ## Play a music video behind artist pages
 
 Turn on **Play a music video behind the artist** in the **Artist pages** group. The top of each artist page then plays the first video from the artist's **Videos** shelf, muted, in place of the artist photo. The setting is off by default and uses extra network bandwidth.
@@ -166,4 +170,4 @@ Four sliders in the **Immersive background** group shape the effect. They are di
 
 ## Reset the immersive background controls
 
-Select **Reset controls**. The button restores Speed, Intensity, Saturation, and Brightness to their defaults. It also turns **Hide controls when idle**, **Pulse with the music**, the three **Lyrics** switches, and **Enable animated artwork** back on, sets the artwork source to Apple Music, restores the default mirror order, and turns **Play a music video behind the artist** off. It leaves **Use artwork background** and **Show audio bitrate** as they are.
+Select **Reset controls**. The button restores Speed, Intensity, Saturation, and Brightness to their defaults. It also turns **Canvas stage** off, turns **Hide controls when idle**, **Pulse with the music**, the three **Lyrics** switches, and **Enable animated artwork** back on, sets the artwork source to Apple Music, restores the default mirror order, and turns **Play a music video behind the artist** off. It leaves **Use artwork background** and **Show audio bitrate** as they are.

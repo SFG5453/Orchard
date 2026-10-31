@@ -61,6 +61,7 @@ Item {
     property url animatedArtworkUrl: ""
     property bool canvasLoop: false
     property real canvasAspect: 9 / 16
+    property bool canvasStageEnabled: false
     property real bump: 1
     property real infoShift: 0
     // Controls fade out after the pointer rests; the logic layer drives this.
@@ -123,6 +124,10 @@ Item {
     property real canvasShape: canvasLive ? 1 : 0
     // A little stretch before the show. Even covers do yoga.
     Behavior on canvasShape { NumberAnimation { duration: 720; easing.type: Easing.OutBack; easing.overshoot: 0.8 } }
+    // Wide layouts can hand the whole player side to the loop.
+    property real stageShape: canvasStageEnabled && canvasLive && wide ? 1 : 0
+    Behavior on stageShape { NumberAnimation { duration: 900; easing.type: Easing.OutQuint } }
+    readonly property var stage: FullscreenLayout.stage(width, height, split, canvasAspect, layout.paneX)
     readonly property real artHeight: layout.artHeight
     readonly property real artWidth: layout.artWidth
 
@@ -235,6 +240,7 @@ Item {
         font.pixelSize: 10
         font.weight: Font.DemiBold
         font.letterSpacing: 1.6
+        z: 3
         opacity: root.stage35 * root.chrome
     }
 
@@ -293,7 +299,7 @@ Item {
         blurMax: 64
         saturation: 0.35
         scale: 1 + 0.06 * root.pulse
-        opacity: root.stage30 * (!root.playing ? 0.14 : root.reactive ? 0.3 + 0.32 * root.pulse : 0.34 + 0.16 * breath) * artHolder.idleScale
+        opacity: (1 - root.stageShape) * root.stage30 * (!root.playing ? 0.14 : root.reactive ? 0.3 + 0.32 * root.pulse : 0.34 + 0.16 * breath) * artHolder.idleScale
         Behavior on opacity { enabled: !root.reactive; NumberAnimation { duration: 500 } }
 
         SequentialAnimation on breath {
@@ -307,16 +313,19 @@ Item {
     // Flies from the pill to its slot; reveal is already eased, so linear interpolation reads as a curve.
     Item {
         id: artHolder
-        readonly property real targetX: root.columnX + (root.columnWidth - root.artWidth) / 2
-        readonly property real targetY: root.columnY
+        readonly property real cardX: root.columnX + (root.columnWidth - root.artWidth) / 2
+        readonly property real targetX: cardX + (root.stage.x - cardX) * root.stageShape
+        readonly property real targetY: root.columnY * (1 - root.stageShape)
+        readonly property real targetWidth: root.artWidth + (root.stage.width - root.artWidth) * root.stageShape
+        readonly property real targetHeight: root.artHeight + (root.stage.height - root.artHeight) * root.stageShape
         // Paused covers settle back a little. Even album art needs a breather.
         property real idleScale: root.playing || !root.currentTrack.id ? 1 : 0.9
         Behavior on idleScale { NumberAnimation { duration: 640; easing.type: Easing.OutBack; easing.overshoot: 1.6 } }
 
         x: root.originRect.x + (targetX - root.originRect.x) * root.reveal
         y: root.originRect.y + (targetY - root.originRect.y) * root.reveal
-        width: root.originRect.width + (root.artWidth - root.originRect.width) * root.reveal
-        height: root.originRect.height + (root.artHeight - root.originRect.height) * root.reveal
+        width: root.originRect.width + (targetWidth - root.originRect.width) * root.reveal
+        height: root.originRect.height + (targetHeight - root.originRect.height) * root.reveal
         z: 2
         opacity: Math.min(1, root.reveal * 5)
         scale: (1 + (idleScale * root.bump - 1) * root.reveal) * (1 + 0.012 * root.pulse)
@@ -327,7 +336,7 @@ Item {
             anchors.topMargin: 18
             radius: art.radius
             color: "black"
-            opacity: 0.45 * root.reveal
+            opacity: 0.45 * root.reveal * (1 - root.stageShape)
             layer.enabled: true
             layer.effect: MultiEffect {
                 autoPaddingEnabled: true
@@ -340,12 +349,20 @@ Item {
         TransitionArtwork {
             id: art
             anchors.fill: parent
-            radius: root.originRect.width / 2 + (18 - root.originRect.width / 2) * Math.min(1, root.reveal * 1.4)
+            radius: (root.originRect.width / 2 + (18 - root.originRect.width / 2) * Math.min(1, root.reveal * 1.4)) * (1 - root.stageShape)
             source: root.currentTrack.thumbnail || ""
             incomingSource: root.transitionTrack.thumbnail || ""
             transitioning: root.crossfadeActive
             progress: root.crossfadeProgress
             dissolve: true
+            layer.enabled: root.stageShape > 0.001
+            layer.effect: MultiEffect {
+                maskEnabled: true
+                maskSource: stageMask
+                // Maps mask alpha 0..1 onto a smooth ramp; the defaults threshold it to a hard edge.
+                maskThresholdMin: 0.5
+                maskSpreadAtMin: 1
+            }
 
             Loader {
                 id: canvasLoader
@@ -361,6 +378,20 @@ Item {
                     }
                 }
             }
+
+            CanvasStageShade {
+                anchors.fill: parent
+                shape: root.stageShape
+            }
+        }
+
+        CanvasStageMask {
+            id: stageMask
+            anchors.fill: parent
+            visible: false
+            shape: root.stageShape
+            leftFeather: root.stage.leftFeather
+            rightFeather: root.stage.rightFeather
         }
 
         MouseArea {
@@ -374,7 +405,8 @@ Item {
     FullscreenControls {
         id: controls
         x: root.layout.controlsX
-        y: root.layout.controlsY
+        y: root.layout.controlsY + (root.layout.dockY - root.layout.controlsY) * root.stageShape
+        z: 3
         width: root.columnWidth
         scale: root.layout.controlsScale
         transformOrigin: Item.TopLeft
@@ -402,6 +434,7 @@ Item {
     // Lyrics and queue share the pane in both split and stacked layouts.
     Item {
         id: sidePane
+        z: 3
         readonly property real shown: root.layout.stacked ? root.stage35 : Math.min(root.split, root.stage35)
         x: root.layout.paneX
         y: root.layout.paneY

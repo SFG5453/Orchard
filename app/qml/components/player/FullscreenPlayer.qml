@@ -40,6 +40,8 @@ FullscreenPlayerForm {
     readonly property bool fading: OrchardPlayback.crossfadeActive
     property double fadeEndedAt: 0
     property point lastPointer: Qt.point(-1, -1)
+    // Apple's tall loop for the canvas stage; empty when the song has none.
+    property string tallArtworkUrl: ""
     // Controls stay up while paused, while in use, or with the queue open.
     readonly property bool chromeHeld: !OrchardAppearance.fullscreenAutoHide || !OrchardPlayback.playing
         || pane === "queue" || controls.hover.hovered || closeButton.hovered || upNext.area.containsMouse
@@ -65,8 +67,9 @@ FullscreenPlayerForm {
     crossfadeProgress: OrchardPlayback.crossfadeProgress
     queueOriginTitle: String((OrchardPlayback.track.queueOrigin || ({})).title || "")
     animatedArtworkEnabled: OrchardAppearance.animatedArtworkEnabled
-    animatedArtworkUrl: OrchardPlayback.animatedArtworkUrl
-    canvasLoop: /\.cnvs\.mp4/.test(OrchardPlayback.animatedArtworkUrl || "")
+    animatedArtworkUrl: tallArtworkUrl || OrchardPlayback.animatedArtworkUrl
+    canvasLoop: tallArtworkUrl.length > 0 || /\.cnvs\.mp4/.test(OrchardPlayback.animatedArtworkUrl || "")
+    canvasStageEnabled: OrchardAppearance.fullscreenCanvasStage
 
     // Qobuz songs show their tier instead of kbps. Untyped for qmlcachegen's sake.
     function sourceQuality(track) {
@@ -109,6 +112,13 @@ FullscreenPlayerForm {
         return Math.floor(total / 60) + ":" + String(total % 60).padStart(2, "0");
     }
 
+    function requestTallArtwork() {
+        tallArtworkUrl = "";
+        const track = OrchardPlayback.track;
+        if (open && canvasStageEnabled && animatedArtworkEnabled && track.title)
+            OrchardAnimatedArtwork.requestTallVideo(track.title, track.artist || "", track.album || "");
+    }
+
     function togglePane(name) {
         pane = pane === name ? "" : name;
     }
@@ -120,6 +130,7 @@ FullscreenPlayerForm {
     }
 
     onOpenChanged: {
+        requestTallArtwork();
         if (!open)
             return;
         forceActiveFocus();
@@ -143,10 +154,23 @@ FullscreenPlayerForm {
     onCanvasLiveChanged: if (canvasLive && canvasItem.videoAspect > 0) canvasAspect = Math.max(0.5, Math.min(1, canvasItem.videoAspect))
 
     onFadingChanged: if (!fading) fadeEndedAt = Date.now()
+    onCanvasStageEnabledChanged: requestTallArtwork()
+    onAnimatedArtworkEnabledChanged: requestTallArtwork()
     onTrackIdChanged: {
+        requestTallArtwork();
         if (!visible || fading || Date.now() - fadeEndedAt < 500)
             return;
         bumpAnimation.restart();
+    }
+
+    Connections {
+        target: OrchardAnimatedArtwork
+
+        function onTallVideoResolved(title, artist, url) {
+            const track = OrchardPlayback.track;
+            if (title === track.title && artist === (track.artist || ""))
+                root.tallArtworkUrl = url;
+        }
     }
 
     Timer {
