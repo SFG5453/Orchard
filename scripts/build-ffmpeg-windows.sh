@@ -6,6 +6,7 @@ if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]]; then
   tool_prefix=
 fi
 
+jobs="$(nproc)"
 source_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 build_root="${1:?usage: build-ffmpeg-windows.sh BUILD_DIRECTORY}"
 mkdir -p "$build_root"
@@ -36,7 +37,7 @@ cmake --fresh -S "$source_root/third_party/libwebp" -B "$build_root/webp" -G Nin
   -DWEBP_BUILD_ANIM_UTILS=OFF -DWEBP_BUILD_CWEBP=OFF -DWEBP_BUILD_DWEBP=OFF \
   -DWEBP_BUILD_GIF2WEBP=OFF -DWEBP_BUILD_IMG2WEBP=OFF -DWEBP_BUILD_VWEBP=OFF \
   -DWEBP_BUILD_WEBPINFO=OFF -DWEBP_BUILD_WEBPMUX=OFF -DWEBP_BUILD_EXTRAS=OFF
-cmake --build "$build_root/webp"
+cmake --build "$build_root/webp" --parallel "$jobs"
 cmake --install "$build_root/webp"
 
 mkdir -p "$build_root/ffmpeg"
@@ -58,7 +59,7 @@ bash "$source_root/third_party/ffmpeg/configure" \
   --enable-muxer=webp,image2,mp4,wav \
   --enable-filter=scale,format,fps,transpose,hflip,vflip,rotate,aresample,aformat,anull,null,trim,atrim,setpts,asetpts \
   --enable-bsf=aac_adtstoasc
-make -j"${NUMBER_OF_PROCESSORS:-4}"
+make -j"$jobs"
 make install
 cat "$source_root/third_party/ffmpeg/COPYING.LGPLv2.1" \
   "$source_root/third_party/libwebp/COPYING" > "$prefix/bin/ffmpeg-LICENSE.txt"
