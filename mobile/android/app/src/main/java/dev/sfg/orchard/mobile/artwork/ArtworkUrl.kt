@@ -35,3 +35,13 @@ internal fun highResolutionArtworkUrl(url: String, pixels: Int = 540): String = 
 }
 
 
+
+private val appleCover = Regex("^(https://[^/]+\\.mzstatic\\.com/image/thumb/.+)/\\d+x\\d+bb\\.(jpg|png|webp)$")
+
+/**
+ * Apple's portrait (superHeroTall) crop of a catalog album cover. Apple renders it from the cover's own
+ * image for every album, so it can be requested before the editorial lookup answers. Matches the
+ * provider's `heroTall` URL so both share one cache entry.
+ */
+internal fun appleTallArtworkUrl(coverUrl: String): String =
+    appleCover.find(coverUrl)?.let { "${it.groupValues[1]}/960x1280SHT.AMTPPS01.jpg?l=en-US" }.orEmpty()

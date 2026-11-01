@@ -59,7 +59,7 @@ export function createArtworkCatalog(client) {
       static: artworkUrl(attributes.artwork, 1200),
       animated: video.motionDetailSquare?.video || '',
       animatedVertical: video.motionDetailTall?.video || '',
-      heroTall: artworkUrl(heroTall, 1600),
+      heroTall: artworkUrl(heroTall, 1280),
       colors: artworkColors(heroTall?.url ? heroTall : attributes.artwork)
     };
   }

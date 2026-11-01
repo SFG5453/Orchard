@@ -31,6 +31,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import dev.sfg.orchard.mobile.OrchardGraph
+import dev.sfg.orchard.mobile.artwork.appleTallArtworkUrl
 import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.LocalMaxActive
 import dev.sfg.orchard.mobile.model.CatalogKind
@@ -322,8 +323,13 @@ internal fun OrchardNavigation(
                 detailArtwork?.let { it.videoUrl.ifBlank { it.videoUrlVertical } }.orEmpty()
             } else ""
             // Apple Music listeners get Apple's portrait cover, which the phone hero prefers over motion.
+            // Catalog album covers yield it directly, so the page needn't wait on the artwork lookup.
+            val loadedAlbum = (detail as? LoadState.Content)?.value?.takeIf { it.kind == CatalogKind.ALBUM }
             val heroArt = HeroArt(
-                tallUrl = if (settings.homeSource == APPLE_MUSIC_SOURCE) detailArtwork?.heroTallUrl.orEmpty() else "",
+                tallUrl = if (settings.homeSource == APPLE_MUSIC_SOURCE) {
+                    appleTallArtworkUrl(loadedAlbum?.artworkUrl.orEmpty())
+                        .ifBlank { detailArtwork?.heroTallUrl.orEmpty() }
+                } else "",
                 animatedUrl = animatedArtworkUrl,
             )
 

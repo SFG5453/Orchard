@@ -167,7 +167,7 @@ internal class DetailController(
                                 detailVal.id, detailVal.artworkUrl, graph.localLibrary.animatedCoverOf(detailVal.id),
                             )
                         } else {
-                            mutableArtwork.value = graph.artwork.artwork(detailVal)
+                            mutableArtwork.value = graph.artwork.artwork(detailVal) { mutableArtwork.value = it }
                             val performer = detailVal.artist
                                 .ifBlank { detailVal.tracks.firstOrNull { it.artist.isNotBlank() }?.artist.orEmpty() }
                             if (performer.isNotBlank()) {
@@ -175,7 +175,7 @@ internal class DetailController(
                             }
                         }
                         CatalogKind.ALBUM -> {
-                            mutableArtwork.value = graph.artwork.artwork(detailVal)
+                            mutableArtwork.value = graph.artwork.artwork(detailVal) { mutableArtwork.value = it }
                             val performer = detailVal.artist
                                 .ifBlank { detailVal.tracks.firstOrNull { it.artist.isNotBlank() }?.artist.orEmpty() }
                             if (performer.isNotBlank()) {

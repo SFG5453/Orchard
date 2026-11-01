@@ -84,7 +84,7 @@ const expected = {
   static: 'https://is1.mzstatic.com/image/1200x1200bb.jpg',
   animated: 'https://mvod.example/square.m3u8',
   animatedVertical: 'https://mvod.example/tall.m3u8',
-  heroTall: 'https://is1.mzstatic.com/hero/1600x1600bb.jpg',
+  heroTall: 'https://is1.mzstatic.com/hero/960x1280bb.jpg',
   colors: { background: '#153739', text: '#ffffff', secondaryText: '#eeeeee' }
 };
 

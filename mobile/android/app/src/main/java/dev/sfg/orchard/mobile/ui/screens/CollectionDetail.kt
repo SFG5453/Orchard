@@ -120,11 +120,11 @@ internal fun CollectionDetailContent(
     val canEdit = detail.kind == CatalogKind.PLAYLIST && detail.editable && onMovePlaylistTrack != null
     val editRows = editing && canEdit && !isSearching
 
-    // The cover's own colours carry the whole screen; phones sample the still the hero shows.
+    // The cover's own colours carry the whole screen; phones sample its hero crop so they hold before the portrait loads.
     val wide = isFoldableOrWideLayout()
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val palette = if (wide) rememberArtworkPalette(detail.artworkUrl)
-    else rememberArtworkPalette(heroArt.phoneStill(detail.artworkUrl), heroArt.phoneAspect)
+    else rememberArtworkPalette(detail.artworkUrl, heroArt.phoneAspect)
     val context = LocalContext.current
     val listState = rememberLazyListState()
     val scrimProgress = rememberHeroScrimProgress(listState)
@@ -168,7 +168,7 @@ internal fun CollectionDetailContent(
                     0.25f to palette.bottom.copy(alpha = 0.45f),
                     0.55f to palette.deep,
                     1f to palette.deep,
-                ) else SolidColor(palette.deep),
+                ) else SolidColor(palette.edge),
             ),
     ) {
         val hero: @Composable () -> Unit = {

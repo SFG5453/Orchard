@@ -60,8 +60,14 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import dev.sfg.orchard.mobile.ui.components.AnimatedArtworkVideo
 import dev.sfg.orchard.mobile.ui.components.ArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.ArtworkTile
@@ -75,9 +81,6 @@ data class HeroArt(
 ) {
     /** Width over height of the phone hero's crop. */
     val phoneAspect: Float get() = if (tallUrl.isNotBlank()) TALL_ASPECT else 1f
-
-    /** The still the phone hero shows. */
-    fun phoneStill(coverUrl: String): String = tallUrl.ifBlank { coverUrl }
 }
 
 /** Apple's portrait covers are 3:4. */
@@ -88,7 +91,7 @@ internal data class SeamColors(val band: Color, val text: Color, val secondaryTe
 
 /** The band is the page's own tint, taken from the art's bottom edge, so band and list read as one surface. */
 internal fun seamColors(palette: ArtworkPalette): SeamColors =
-    SeamColors(palette.deep, Color.White, Color.White.copy(alpha = 0.72f))
+    SeamColors(palette.edge, Color.White, Color.White.copy(alpha = 0.72f))
 
 /** [preferred] when it holds 3:1 against [background], else [fallback]. */
 internal fun legibleOn(background: Color, preferred: Color, fallback: Color): Color {
@@ -100,8 +103,14 @@ internal fun legibleOn(background: Color, preferred: Color, fallback: Color): Co
 private val SeamArtMaxHeight = 680.dp
 private val PlayDiscSize = 72.dp
 
-/** Share of the art's height that fades into the band; short enough to keep the cover crisp. */
-private const val SeamFade = 0.22f
+/** Share of the art's height that fades into the band. */
+private const val SeamFade = 0.34f
+
+/** Share of the art's height shaded behind the top bar. */
+private const val TopShade = 0.28f
+
+/** Share of the art's height the band's text overlaps, inside the fade so the title reads. */
+private const val SeamOverlap = 0.14f
 
 /**
  * Phone collection header: full-bleed art whose last strip fades into a solid colour band, with
@@ -120,13 +129,14 @@ internal fun SeamHeroFrame(
     actions: @Composable RowScope.() -> Unit,
     details: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth()) {
-        SeamArt(coverUrl, description, art)
-        Box(Modifier.fillMaxWidth()) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val artHeight = min(maxWidth / art.phoneAspect, SeamArtMaxHeight)
+        SeamArt(coverUrl, description, art, artHeight)
+        // The band rides up into the art's fade; the page behind it is already the band colour.
+        Box(Modifier.fillMaxWidth().padding(top = artHeight * (1f - SeamOverlap))) {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .background(colors.band)
                     .padding(start = 24.dp, end = 24.dp, top = 22.dp, bottom = 10.dp),
             ) {
                 // Clear of the disc, which overhangs the band's top end corner.
@@ -152,7 +162,7 @@ internal fun SeamHeroFrame(
 }
 
 @Composable
-private fun SeamArt(coverUrl: String, description: String, art: HeroArt) {
+private fun SeamArt(coverUrl: String, description: String, art: HeroArt, height: Dp) {
     // Art settles from a slight zoom as the page opens.
     var settled by rememberSaveable { mutableStateOf(false) }
     val settle = remember { Animatable(if (settled) 1f else 1.08f) }
@@ -162,40 +172,60 @@ private fun SeamArt(coverUrl: String, description: String, art: HeroArt) {
         settled = true
     }
     val tall = art.tallUrl.isNotBlank()
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val height = min(maxWidth / art.phoneAspect, SeamArtMaxHeight)
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(height)
-                .clipToBounds()
-                // Offscreen so DstIn masks the art alone; the page tint shows through the tail.
-                .graphicsLayer {
-                    compositingStrategy = CompositingStrategy.Offscreen
-                    scaleX = settle.value
-                    scaleY = settle.value
-                }
-                .drawWithContent {
-                    drawContent()
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(Color.Black, Color.Transparent),
-                            startY = size.height * (1f - SeamFade),
-                            endY = size.height,
-                        ),
-                        blendMode = BlendMode.DstIn,
-                    )
-                },
-        ) {
-            ArtworkTile(
-                url = art.phoneStill(coverUrl),
-                description = description,
-                modifier = Modifier.fillMaxSize(),
-                radius = 0,
-            )
-            if (!tall && art.animatedUrl.isNotBlank()) {
-                AnimatedArtworkVideo(url = art.animatedUrl, active = true, modifier = Modifier.fillMaxSize())
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(height)
+            .clipToBounds()
+            // Offscreen so DstIn masks the art alone; the page tint shows through the tail.
+            .graphicsLayer {
+                compositingStrategy = CompositingStrategy.Offscreen
+                scaleX = settle.value
+                scaleY = settle.value
             }
+            .drawWithContent {
+                drawContent()
+                drawRect(
+                    // Eased so the fade has no visible start line.
+                    brush = Brush.verticalGradient(
+                        0f to Color.Black,
+                        0.3f to Color.Black.copy(alpha = 0.82f),
+                        0.6f to Color.Black.copy(alpha = 0.42f),
+                        0.85f to Color.Black.copy(alpha = 0.1f),
+                        1f to Color.Transparent,
+                        startY = size.height * (1f - SeamFade),
+                        endY = size.height,
+                    ),
+                    blendMode = BlendMode.DstIn,
+                )
+                // Keeps the floating chrome's white icons legible on bright covers.
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        0f to Color.Black.copy(alpha = 0.42f),
+                        0.55f to Color.Black.copy(alpha = 0.26f),
+                        1f to Color.Transparent,
+                        endY = size.height * TopShade,
+                    ),
+                    size = size.copy(height = size.height * TopShade),
+                )
+            },
+    ) {
+        // The cached square cover holds the frame while Apple renders the portrait crop.
+        ArtworkTile(
+            url = coverUrl,
+            description = description,
+            modifier = Modifier.fillMaxSize(),
+            radius = 0,
+        )
+        if (tall) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current).data(art.tallUrl).crossfade(300).build(),
+                contentDescription = description,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else if (art.animatedUrl.isNotBlank()) {
+            AnimatedArtworkVideo(url = art.animatedUrl, active = true, modifier = Modifier.fillMaxSize())
         }
     }
 }

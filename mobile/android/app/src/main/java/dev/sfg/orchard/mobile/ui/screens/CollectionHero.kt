@@ -269,8 +269,8 @@ internal fun CollectionHero(
                 description = "Artwork for ${detail.title}",
                 art = heroArt,
                 colors = seam,
-                playFill = if (isAlbum) albumAccent else Color.White,
-                playIconTint = palette.deep,
+                playFill = if (isAlbum) legibleOn(seam.band, albumAccent, Color.White) else Color.White,
+                playIconTint = seam.band,
                 playEnabled = detail.tracks.isNotEmpty(),
                 onPlay = { onPlayAll(detail.tracks, detail.title) },
                 actions = {

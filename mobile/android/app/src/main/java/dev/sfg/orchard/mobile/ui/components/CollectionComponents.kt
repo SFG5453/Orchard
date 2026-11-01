@@ -102,8 +102,8 @@ fun CollectionTopBar(
     var menuOpen by remember { mutableStateOf(false) }
     val noun = if (aboutLabel.contains("album", true)) "album" else "playlist"
 
-    // Phones drop the frosted backing so the icons sit directly on the art.
-    DetailFloatingChrome(onBack = onBack, scrimProgress = scrimProgress, modifier = modifier, transparent = saveInBar) {
+    // No frosted backing: the icons sit directly on the art or page tint.
+    DetailFloatingChrome(onBack = onBack, scrimProgress = scrimProgress, modifier = modifier, transparent = true) {
         if (onSearch != null) {
             ChromeAction(Icons.Rounded.Search, "Search in collection", onSearch)
         }

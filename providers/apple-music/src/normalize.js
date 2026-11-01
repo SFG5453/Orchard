@@ -30,8 +30,12 @@ export const ARTIST_INCLUDES = { 'include[albums]': 'artists', 'include[songs]':
 export function artworkUrl(artwork, size = 600, format = 'jpg') {
   const template = String(artwork?.url || '');
   if (!template) return '';
-  const width = Math.min(size, Number(artwork.width) || size);
-  const height = Math.min(size, Number(artwork.height) || size);
+  // Keep the source aspect: crop transforms such as SHT fill whatever box is asked for.
+  const sourceWidth = Number(artwork.width) || size;
+  const sourceHeight = Number(artwork.height) || size;
+  const scale = Math.min(1, size / Math.max(sourceWidth, sourceHeight));
+  const width = Math.round(sourceWidth * scale);
+  const height = Math.round(sourceHeight * scale);
   return template
     .replace('{w}', String(width))
     .replace('{h}', String(height))

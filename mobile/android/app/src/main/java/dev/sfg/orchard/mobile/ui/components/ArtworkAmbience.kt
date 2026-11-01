@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import android.graphics.Color as AndroidColor
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
@@ -52,6 +53,8 @@ data class ArtworkPalette(
     val bottom: Color = CanopyColors.PlayerBackdrop,
     val accent: Color = CanopyColors.PlayerBackdrop,
     val deep: Color = CanopyColors.PlayerBackdrop,
+    /** The bottom edge at full colour, dimmed only as far as white text needs. */
+    val edge: Color = CanopyColors.PlayerBackdrop,
 )
 
 /**
@@ -112,7 +115,8 @@ fun rememberArtworkPalette(
     val bottom by animateColorAsState(sampled.bottom, tween(700), label = "ArtworkTintBottom")
     val accent by animateColorAsState(sampled.accent, tween(700), label = "ArtworkTintAccent")
     val deep by animateColorAsState(sampled.deep, tween(700), label = "ArtworkTintDeep")
-    return ArtworkPalette(top, bottom, accent, deep)
+    val edge by animateColorAsState(sampled.edge, tween(700), label = "ArtworkTintEdge")
+    return ArtworkPalette(top, bottom, accent, deep, edge)
 }
 
 /**
@@ -163,8 +167,21 @@ private fun palette(bitmap: Bitmap, visibleAspect: Float): ArtworkPalette {
         bottom = bottom,
         accent = accent.shade(0.92f),
         deep = deep,
+        edge = rawBottom.dimForWhiteText(),
     )
 }
+
+/** Darkens without shifting hue until white text holds about 4:1. */
+private fun Color.dimForWhiteText(): Color {
+    var color = this
+    repeat(24) {
+        if (color.luminance() <= EDGE_MAX_LUMINANCE) return color
+        color = Color(color.red * 0.92f, color.green * 0.92f, color.blue * 0.92f, color.alpha)
+    }
+    return color
+}
+
+private const val EDGE_MAX_LUMINANCE = 0.2f
 
 /** Averages a horizontal band of the cover across the columns the crop leaves visible. */
 private fun edgeAverage(bitmap: Bitmap, firstRow: Int, lastRow: Int, firstColumn: Int, lastColumn: Int): Color {

@@ -141,10 +141,10 @@ test('artist page maps views onto the shared artist shape', async () => {
   assert.equal(page.title, 'SZA');
   assert.equal(page.description, 'Born in St. Louis.');
   assert.equal(page.heroVideo, 'https://video.example/full.m3u8');
-  assert.equal(page.heroPoster, 'https://is1.mzstatic.com/frame/1920x1920bb.jpg');
+  assert.equal(page.heroPoster, 'https://is1.mzstatic.com/frame/1920x1080bb.jpg');
   assert.equal(page.heroTint, 'a6abb4');
-  assert.equal(page.logo, 'https://is1.mzstatic.com/logo/1200x960bb.png');
-  assert.equal(page.heroArtwork, 'https://is1.mzstatic.com/wide/2400x1080bb.jpg');
+  assert.equal(page.logo, 'https://is1.mzstatic.com/logo/1200x445bb.png');
+  assert.equal(page.heroArtwork, 'https://is1.mzstatic.com/wide/2400x600bb.jpg');
   assert.equal(page.thumbnail, 'https://is1.mzstatic.com/vip/1200x1200bb.jpg');
   assert.equal(page.tracks.length, 6);
   assert.deepEqual(page.tracks[0], {
