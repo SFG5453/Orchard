@@ -29,13 +29,14 @@ Settings, Shortcuts shows the same list in the app. Orchard turns playback short
 - `[` and `]`: slow down or speed up playback by 0.05x. They need the Audio Engine on.
 - Media Prev and Media Next: previous or next song in the queue.
 - `F`: open or close the fullscreen player. It needs a loaded song and does nothing while the music video player is open.
-- `Esc`: close the music video player, the fullscreen player, Spotlight, Quick Search, a popup, or Settings, or go back to the previous page.
+- `Esc`: shrink the music video player into a corner of the window, close the fullscreen player, Spotlight, Quick Search, a popup, or Settings, or go back to the previous page.
 - `/` or Ctrl+K: open Spotlight search.
 - Any letter or number on a loaded playlist page: open Quick Search for that playlist.
 - `Up` and `Down` inside Spotlight or Quick Search: move through the results.
 - `Enter` inside Spotlight or Quick Search: open the highlighted result in Spotlight, or play the highlighted song in Quick Search.
 - Double-click the title bar: maximize or restore the window.
 - `F11`: make the window fullscreen, or leave fullscreen.
+- In the picture in picture video window, `Space` plays or pauses and `Esc` returns the video to the main window.
 
 ## Play or pause with the keyboard
 

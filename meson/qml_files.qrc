@@ -95,6 +95,10 @@
     <file alias="app/qml/components/player/TheaterSkipButton.qml">../app/qml/components/player/TheaterSkipButton.qml</file>
     <file alias="app/qml/components/player/TheaterTopBar.qml">../app/qml/components/player/TheaterTopBar.qml</file>
     <file alias="app/qml/components/player/TheaterPicture.qml">../app/qml/components/player/TheaterPicture.qml</file>
+    <file alias="app/qml/components/player/MusicVideoPlayer.qml">../app/qml/components/player/MusicVideoPlayer.qml</file>
+    <file alias="app/qml/components/player/PipWindow.qml">../app/qml/components/player/PipWindow.qml</file>
+    <file alias="app/qml/components/player/MiniVideo.qml">../app/qml/components/player/MiniVideo.qml</file>
+    <file alias="app/qml/components/player/PipForm.ui.qml">../app/qml/components/player/PipForm.ui.qml</file>
     <file alias="app/qml/components/PlaylistPicker.qml">../app/qml/components/PlaylistPicker.qml</file>
     <file alias="app/qml/components/DetailListView.qml">../app/qml/components/DetailListView.qml</file>
     <file alias="app/qml/components/WheelGlide.qml">../app/qml/components/WheelGlide.qml</file>

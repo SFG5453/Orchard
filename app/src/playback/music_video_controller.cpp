@@ -73,6 +73,7 @@ MusicVideoController::MusicVideoController(YouTubeProvider *provider, AuthManage
   m_maxHeight = settings.value(kMaxHeightKey, m_maxHeight).toInt();
   m_upscaling = settings.value(kUpscalingKey, m_upscaling).toBool();
   m_sharpness = qBound(0.0, settings.value(kSharpnessKey, m_sharpness).toDouble(), 1.0);
+  loadPipSettings();
   syncTrack();
 }
 
@@ -174,8 +175,12 @@ bool MusicVideoController::available() const {
 }
 
 void MusicVideoController::show() {
-  if (m_open)
+  if (m_open) {
+    m_pip = false;
+    m_mini = false;
+    emit changed();
     return;
+  }
   m_open = true;
   if (!m_videoId.isEmpty())
     resolveStream();
@@ -199,6 +204,7 @@ void MusicVideoController::retryLookup() {
 void MusicVideoController::playVideo(const QVariantMap &media) {
   const bool sameTrack = media.value(QStringLiteral("id")).toString() == m_trackId;
   m_open = true;
+  m_mini = false;
   clearStream();
   setStatus(QStringLiteral("loading"));
   // Starts the row like any catalog click. A new id reaches syncTrack, which resolves
@@ -219,6 +225,8 @@ void MusicVideoController::hide() {
   if (!m_open)
     return;
   m_open = false;
+  m_pip = false;
+  m_mini = false;
   clearStream();
   m_playback->playAlbumSource();
   if (!m_videoId.isEmpty())

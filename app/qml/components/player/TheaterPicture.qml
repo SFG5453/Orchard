@@ -28,6 +28,10 @@ Item {
     id: root
 
     readonly property alias output: output
+    // Shared YouTube decoder; Apple frames reach the same sink through OrchardMusicVideo.
+    property MediaPlayer player: null
+    // Only one picture is fed at a time; a live picture takes the frames from any other.
+    property bool live: true
     readonly property real frameWidth: output.sourceRect.width
     readonly property real frameHeight: output.sourceRect.height
     readonly property bool known: frameWidth > 0 && frameHeight > 0
@@ -99,6 +103,20 @@ Item {
         }
     }
 
-    Component.onCompleted: OrchardMusicVideo.watchFrames(output.videoSink)
-    Component.onDestruction: OrchardMusicVideo.watchFrames(null)
+    function claim() {
+        if (player)
+            player.videoOutput = output;
+        OrchardMusicVideo.watchFrames(output.videoSink);
+    }
+
+    function release() {
+        if (player && player.videoOutput === output)
+            player.videoOutput = null;
+        OrchardMusicVideo.releaseFrames(output.videoSink);
+    }
+
+    onLiveChanged: live ? claim() : release()
+    onPlayerChanged: if (live && player) player.videoOutput = output
+    Component.onCompleted: if (live) claim()
+    Component.onDestruction: release()
 }

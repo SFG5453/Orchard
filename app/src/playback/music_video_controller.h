@@ -25,6 +25,7 @@
 #include <QJsonValue>
 #include <QObject>
 #include <QPointer>
+#include <QRect>
 #include <QRectF>
 #include <QTimer>
 #include <QUrl>
@@ -62,6 +63,14 @@ class MusicVideoController final : public QObject {
   Q_PROPERTY(QString qualityNote READ qualityNote NOTIFY changed)
   // Picture inside black bars baked into the video, in 0..1 frame coordinates.
   Q_PROPERTY(QRectF contentRect READ contentRect NOTIFY contentRectChanged)
+  // The open video plays in a floating window instead of the theater.
+  Q_PROPERTY(bool pip READ pip WRITE setPip NOTIFY changed)
+  // The open video plays in a small player inside the main window.
+  Q_PROPERTY(bool mini READ mini WRITE setMini NOTIFY changed)
+  // Main window corner of the small player, 0 to 3 from top left to bottom right; saved across sessions.
+  Q_PROPERTY(int miniCorner READ miniCorner WRITE setMiniCorner NOTIFY changed)
+  // The full-window theater is showing.
+  Q_PROPERTY(bool theater READ theater NOTIFY changed)
 public:
   MusicVideoController(YouTubeProvider *provider, AuthManager *auth, PlaybackController *playback,
                        QObject *parent = nullptr);
@@ -84,6 +93,13 @@ public:
   [[nodiscard]] double sharpness() const { return m_sharpness; }
   void setSharpness(double sharpness);
   [[nodiscard]] QString qualityNote() const;
+  [[nodiscard]] bool pip() const { return m_pip; }
+  void setPip(bool enabled);
+  [[nodiscard]] bool mini() const { return m_mini; }
+  void setMini(bool enabled);
+  [[nodiscard]] int miniCorner() const { return m_miniCorner; }
+  void setMiniCorner(int corner);
+  [[nodiscard]] bool theater() const { return m_open && !m_pip && !m_mini; }
 
   Q_INVOKABLE void show();
   // Plays a video row from the catalog and opens the theater on it.
@@ -93,6 +109,11 @@ public:
   Q_INVOKABLE void retry();
   // Samples frames from the theater's VideoOutput sink to find baked-in bars.
   Q_INVOKABLE void watchFrames(QObject *sink);
+  // Drops `sink` only if it is still the one fed, so an outgoing view never blanks its successor.
+  Q_INVOKABLE void releaseFrames(QObject *sink);
+  // Saved floating window geometry, placed on a connected screen.
+  Q_INVOKABLE QRect pipGeometry() const;
+  Q_INVOKABLE void savePipGeometry(const QRect &geometry);
 
 signals:
   void changed();
@@ -113,6 +134,7 @@ private:
   void clearStream();
   void sampleFrame();
   void resetContentRect();
+  void loadPipSettings();
 
   YouTubeProvider *m_provider;
   AuthManager *m_auth;
@@ -127,6 +149,9 @@ private:
   quint64 m_searchRequest{0};
   quint64 m_streamRequest{0};
   bool m_open{false};
+  bool m_pip{false};
+  bool m_mini{false};
+  int m_miniCorner{3};
   int m_maxHeight{1080};
   bool m_upscaling{true};
   double m_sharpness{0.8};

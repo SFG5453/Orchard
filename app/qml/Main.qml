@@ -184,20 +184,68 @@ Window {
             }
         }
 
+        Item {
+            id: miniLayer
+
+            anchors.fill: parent
+
+            Loader {
+                id: miniVideo
+
+                readonly property bool shown: OrchardMusicVideo.open && OrchardMusicVideo.mini && !OrchardMusicVideo.pip
+                                              && homeShell.visible
+
+                active: shown || opacity > 0
+                opacity: shown ? 1 : 0
+                sourceComponent: Component {
+                    MiniVideo {
+                        area: miniLayer
+                        player: musicVideoPlayer.item
+                        live: miniVideo.shown
+                        topInset: homeShell.item && homeShell.item.canopy ? 96 : 72
+                        bottomInset: homeShell.item && homeShell.item.canopy ? 20 : 110
+                    }
+                }
+
+                Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
+            }
+        }
+
         // Grows in from just under full size and stays loaded until its fade-out ends.
         Loader {
             id: theater
 
-            readonly property bool shown: OrchardMusicVideo.open && homeShell.visible
+            readonly property bool shown: OrchardMusicVideo.theater && homeShell.visible
 
             anchors.fill: parent
             active: shown || opacity > 0
             opacity: shown ? 1 : 0
             scale: shown ? 1 : 0.94
-            sourceComponent: Component { MusicVideoTheater {} }
+            sourceComponent: Component {
+                MusicVideoTheater {
+                    player: musicVideoPlayer.item
+                    pictureLive: theater.shown
+                }
+            }
 
             Behavior on opacity { NumberAnimation { duration: 420; easing.type: Easing.OutCubic } }
             Behavior on scale { NumberAnimation { duration: 560; easing.type: Easing.OutExpo } }
+        }
+    }
+
+    Loader {
+        id: musicVideoPlayer
+
+        active: OrchardMusicVideo.open
+        sourceComponent: Component { MusicVideoPlayer {} }
+    }
+
+    Loader {
+        active: OrchardMusicVideo.open && OrchardMusicVideo.pip
+        sourceComponent: Component {
+            PipWindow {
+                player: musicVideoPlayer.item
+            }
         }
     }
 

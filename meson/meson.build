@@ -175,6 +175,7 @@ app_sources = [
   'app/src/playback/fmp4_index.h',
   'app/src/playback/music_video_controller.cpp',
   'app/src/playback/music_video_controller.h',
+  'app/src/playback/music_video_pip.cpp',
   'app/src/playback/letterbox.cpp',
   'app/src/playback/letterbox.h',
   'app/src/playback/autoplay_select.cpp',

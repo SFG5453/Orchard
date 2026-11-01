@@ -242,6 +242,16 @@ Item {
             }
 
             TheaterButton {
+                glyph: "picture-in-picture-2"
+                label: qsTr("Picture in picture")
+                onClicked: {
+                    if (root.windowFullScreen)
+                        Window.window.showNormal();
+                    OrchardMusicVideo.pip = true;
+                }
+            }
+
+            TheaterButton {
                 glyph: root.windowFullScreen ? "minimize" : "maximize"
                 label: root.windowFullScreen ? qsTr("Exit full screen") : qsTr("Full screen")
                 onClicked: root.windowFullScreen ? Window.window.showNormal() : Window.window.showFullScreen()

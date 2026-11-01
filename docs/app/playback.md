@@ -17,6 +17,10 @@ keywords:
   - up next
   - screensaver
   - player bar
+  - picture in picture
+  - pip
+  - floating video
+  - mini player
 platforms:
   - desktop
 order: 20
@@ -104,14 +108,46 @@ Apple Music videos play from Apple Music in the same player when **Music source*
 
 The video fills the window. When a video has black bars built into it, Orchard trims them so the picture itself fills the space. Click the picture to play or pause, and double-click it to go full screen. The controls fade out a few seconds after you stop moving the mouse while the video plays, and come back when you move it:
 
-- **Song** returns to the regular player. The close button and Esc do the same.
+- **Song** returns to the regular player and the album audio.
+- The minimize button (top left, tooltip "Minimize video") and Esc shrink the video into a corner of the main window, so you can browse Orchard while it plays. See [Keep watching while you browse](playback.md#keep-watching-while-you-browse).
 - The **Up next** button shows the queue beside the video. Select a row to play it.
 - The quality button (it shows the playing height, for example "1080p") opens a menu: **Best available** or a height cap such as 720p. Orchard remembers the choice. For Apple Music videos on Linux, the menu notes "Apple limits videos on Linux to 486p."
 - **FSR 1 upscaling** in the same menu sharpens a video that is smaller than the window, using AMD FidelityFX Super Resolution 1. It is on by default and only works when the picture is shown larger than the video. Drag **Sharpness** to the left for a softer picture or to the right for crisper edges. Orchard remembers both. On computers where Orchard falls back to OpenGL, the setting has no effect.
 - Marked parts of the video show as colored spans on the seek bar, from SponsorBlock: non-music parts in orange, and sponsor segments, self-promotion and subscribe reminders in green. The **Non-music parts** setting in Settings, Playback applies: **Skip button** shows a skip button over the picture, and **Auto skip** skips them.
 - The full screen button makes the window full screen. Esc leaves full screen first.
+- The picture in picture button, next to the full screen button, moves the video into a small floating window. See [Watch in picture in picture](playback.md#watch-in-picture-in-picture).
 
 While the music video player is open, you hear the video's own soundtrack, so the picture and sound always match. The video starts from the song's current position. Returning to the regular player switches back to the album audio at the same point.
+
+## Keep watching while you browse
+
+Select the minimize button in the music video player, or press Esc, to shrink the video into a corner of the Orchard window. The rest of Orchard works as usual, and the video keeps playing with its own soundtrack.
+
+- Drag the small player to move it. When you let go, it settles in the nearest corner. Orchard remembers the corner.
+- Point at it to show its controls: **Expand video** (top left), play or pause (center), **Picture in picture** and **Close video** (top right).
+- **Expand video**, or a double-click on the picture, returns to the full music video player.
+- **Picture in picture** moves the video into its own window. Closing that window brings the video back to the corner.
+- **Close video** stops the video and switches back to the album audio, like **Song**.
+- The video button in the player bar also returns to the full music video player.
+
+## Watch in picture in picture
+
+Select the picture in picture button (tooltip "Picture in picture") in the music video player or on the small player in the corner. The video moves into a small window without a frame that stays above other windows, and the main window goes back to the regular player. The video keeps playing in step with the sound, and you still hear the video's own soundtrack. YouTube and Apple Music videos both work.
+
+- Drag anywhere on the picture to move the window. Drag an edge or a corner to resize it.
+- Point at the window to show its controls: **Back to app** (top left), play or pause (center), and **Close picture in picture** (top right). They fade out after two seconds while the video plays.
+- **Back to app**, or a double-click on the picture, returns the video to the music video player and brings the main window to the front.
+- **Close picture in picture**, Esc, or closing the window another way (for example Alt+F4) also returns the video to the main window, without bringing it forward. The video goes back to where it was: the music video player, or the corner of the window.
+- Space plays or pauses while the window is focused.
+- Minimizing the main window leaves the video window up.
+- The video button in the player bar also returns the video to the music video player.
+- Orchard remembers the window's size and position. A position on a screen that is no longer connected falls back to the bottom right corner of the main screen.
+
+Limits:
+
+- KDE Plasma on Wayland: Wayland does not let apps keep their own windows above others, so the video window can go behind other windows. To keep it on top, press Alt+F3 on the video window and choose **More Actions**, **Keep Above Others**. For a permanent fix, add a KWin window rule (System Settings, Window Management, Window Rules) that matches the window title "Orchard Picture in Picture" and forces **Keep above other windows**.
+- Wayland: apps cannot place their own windows, so Orchard restores only the size there. Plasma picks the position.
+- With FSR 1 upscaling on, the small window rarely shows the picture larger than the video, so upscaling often has nothing to do.
 
 ## See a crossfade happening
 
