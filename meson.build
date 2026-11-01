@@ -568,6 +568,7 @@ if get_option('tests')
     ['apple_music_playlist', 'tests/apple_music_playlist_test.cpp'],
     ['binaural_renderer', 'tests/binaural_renderer_test.cpp'],
     ['letterbox', 'tests/letterbox_test.cpp'],
+    ['fmp4_index', 'tests/fmp4_index_test.cpp'],
     ['video_ambient', 'tests/video_ambient_test.cpp'],
     ['artist_artwork', 'tests/artist_artwork_test.cpp'],
     ['audiodb_artist', 'tests/audiodb_artist_test.cpp'],

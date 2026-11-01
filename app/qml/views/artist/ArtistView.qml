@@ -44,6 +44,9 @@ ArtistViewForm {
     readonly property string appleMotion: OrchardAppearance.artistVideoBackdrop ? detail.heroVideo || "" : ""
     // Complete H.264 file resolved from Apple's master and media playlists.
     property string appleMotionStream: ""
+    // Indexed loopback stream once the file's head is in; HLS fallbacks play as is.
+    readonly property string appleMotionSource: appleMotionStream && OrchardAppleMotion.file === appleMotionStream
+        ? OrchardAppleMotion.source.toString() : appleMotionStream
     // The full video behind the Watch button; the top song's video when the page has no Videos shelf.
     readonly property var watchMedia: backdropVideo || tracks[0] || null
     readonly property var tintRgb: HeroTint.pageRgb(detail.heroTint)
@@ -93,7 +96,7 @@ ArtistViewForm {
         ].filter((credit) => credit.label && credit.value);
     }
     heroVideoWanted: !!appleMotion || (!!backdropVideo && OrchardArtistVideo.status !== "error")
-    heroVideoSource: appleMotion ? appleMotionStream
+    heroVideoSource: appleMotion ? appleMotionSource
         : backdropVideo && OrchardArtistVideo.videoId === backdropVideo.id ? OrchardArtistVideo.source : ""
     heroVideoTitle: watchMedia ? watchMedia.title || "" : ""
     // Runs only while the hero is on screen and the window is shown.
@@ -158,6 +161,8 @@ ArtistViewForm {
     }
 
     function resolveMotion() {
+        if (appleMotionStream && OrchardAppleMotion.file === appleMotionStream)
+            OrchardAppleMotion.clear();
         appleMotionStream = "";
         const master = appleMotion;
         if (!master)
@@ -175,7 +180,10 @@ ArtistViewForm {
             media.onreadystatechange = function() {
                 if (media.readyState !== XMLHttpRequest.DONE || master !== root.appleMotion)
                     return;
-                root.appleMotionStream = media.status === 200 ? HlsVariant.mediaSource(media.responseText, picked) : picked;
+                const file = media.status === 200 ? HlsVariant.mediaSource(media.responseText, picked) : picked;
+                if (file !== picked)
+                    OrchardAppleMotion.open(file, media.responseText);
+                root.appleMotionStream = file;
             };
             media.open("GET", picked);
             media.send();
@@ -193,7 +201,11 @@ ArtistViewForm {
 
     onAppleMotionChanged: resolveMotion()
     onSamplingVideoChanged: OrchardArtistVideo.watchFrames(samplingVideo ? hero.backdropVideo.sink : null)
-    Component.onDestruction: OrchardArtistVideo.watchFrames(null)
+    Component.onDestruction: {
+        OrchardArtistVideo.watchFrames(null);
+        if (appleMotionStream && OrchardAppleMotion.file === appleMotionStream)
+            OrchardAppleMotion.clear();
+    }
 
     onBrowseIdentityChanged: {
         scroll.contentY = 0;
