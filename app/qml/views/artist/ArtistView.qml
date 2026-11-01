@@ -229,7 +229,7 @@ ArtistViewForm {
     // Apple's loops are composed from the first frame; music videos open on label cards.
     hero.backdropVideo.startAt: root.appleMotion ? 0 : 0.22
     hero.backdropVideo.onFailed: OrchardArtistVideo.retry()
-    hero.shareButton.onClicked: OrchardBackend.copyToClipboard("https://music.youtube.com/channel/" + root.browseIdentity, qsTr("Copied artist link to clipboard"))
+    hero.shareButton.onClicked: OrchardBackend.copyToClipboard(OrchardBackend.songLink(root.browseIdentity, "artist"), qsTr("Copied artist link to clipboard"))
 
     stickyBar.onPlayClicked: root.playOrToggle()
     stickyBar.onBackToTopClicked: scroll.contentY = 0

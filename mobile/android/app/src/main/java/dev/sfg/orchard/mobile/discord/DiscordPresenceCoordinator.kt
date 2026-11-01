@@ -154,8 +154,7 @@ class DiscordPresenceCoordinator(
 
         val buttons = buildList {
             if (track.playbackSource == APPLE_MUSIC_SOURCE || track.id.startsWith("am.")) {
-                track.id.removePrefix("am.").takeIf { it.isNotBlank() }
-                    ?.let { add("Listen on Apple Music" to "https://music.apple.com/song/$it") }
+                songLinks.trackUrl(track)?.let { add("Listen on Apple Music" to it) }
             } else {
                 songLinks.trackUrl(track)?.takeIf(String::isNotBlank)?.let { add("Listen on YouTube Music" to it) }
             }

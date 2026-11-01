@@ -18,6 +18,7 @@
  */
 
 #include "backend_info.h"
+#include "apple_music_links.h"
 #include "youtube_links.h"
 #include "orchard_core.h"
 #include <QClipboard>
@@ -109,10 +110,18 @@ QString BackendInfo::songLinkAlbumUrl(const QString &audioPlaylistId) const
 
 QString BackendInfo::songLink(const QString &idOrUrl, const QString &kind) const
 {
+    const QString id = idOrUrl.trimmed();
+    if (isAppleMusicBrowseId(id))
+        return appleMusicShareUrl(id);
+    if (kind.compare(QLatin1String("artist"), Qt::CaseInsensitive) == 0) {
+        if (id.isEmpty() || id.contains(QLatin1Char('/')))
+            return youtubeShareUrl(id);
+        return QStringLiteral("https://music.youtube.com/channel/") + QString::fromLatin1(QUrl::toPercentEncoding(id));
+    }
     const bool isAlbumOrPlaylist =
         kind.compare(QLatin1String("album"), Qt::CaseInsensitive) == 0 ||
         kind.compare(QLatin1String("playlist"), Qt::CaseInsensitive) == 0;
-    return youtubeShareUrl(idOrUrl, isAlbumOrPlaylist);
+    return youtubeShareUrl(id, isAlbumOrPlaylist);
 }
 
 void BackendInfo::copyToClipboard(const QString &text, const QString &notice)
@@ -131,6 +140,10 @@ void BackendInfo::copyToClipboard(const QString &text, const QString &notice)
 void BackendInfo::copySongLink(const QString &idOrUrl, const QString &label)
 {
     const QString link = songLink(idOrUrl, label);
+    if (link.isEmpty()) {
+        emit noticeRequested(tr("This item has no public link"));
+        return;
+    }
     const QString notice = label.trimmed().isEmpty()
         ? tr("Copied song link to clipboard")
         : tr("Copied %1 link to clipboard").arg(label.trimmed());
@@ -140,6 +153,8 @@ void BackendInfo::copySongLink(const QString &idOrUrl, const QString &label)
 void BackendInfo::openSongLink(const QString &idOrUrl, const QString &kind) const
 {
     // Unleashing a browser window into the wild web.
-    QDesktopServices::openUrl(QUrl(songLink(idOrUrl, kind)));
+    const QString link = songLink(idOrUrl, kind);
+    if (!link.isEmpty())
+        QDesktopServices::openUrl(QUrl(link));
 }
 

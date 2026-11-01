@@ -19,6 +19,7 @@
 
 #include "discord.h"
 #include "auth/auth_manager.h"
+#include "apple_music_links.h"
 #include "youtube_links.h"
 
 #include <QJsonDocument>
@@ -60,8 +61,8 @@ QString listenUrl(const QVariantMap &track)
 {
     const QString id = track.value(QStringLiteral("id")).toString().trimmed();
     if (isAppleTrack(track)) {
-        const QString appleId = id.startsWith(QLatin1String("am.")) ? id.mid(3) : QString();
-        return appleId.isEmpty() ? QString() : QStringLiteral("https://music.apple.com/song/") + appleId;
+        const QString appleId = track.value(QStringLiteral("appleId")).toString().trimmed();
+        return appleMusicShareUrl(isAppleMusicBrowseId(id) || appleId.isEmpty() ? id : QStringLiteral("am.songs.") + appleId);
     }
     if (!id.isEmpty()) {
         return youtubeShareUrl(id);

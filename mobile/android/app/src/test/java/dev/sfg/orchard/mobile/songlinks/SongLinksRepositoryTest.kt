@@ -46,6 +46,21 @@ class SongLinksRepositoryTest {
     }
 
     @Test
+    fun buildsAppleMusicLinks() {
+        assertEquals("https://music.apple.com/song/1440857781",
+            repo.trackUrl(Track(id = "am.songs.1440857781", title = "Song", artist = "Artist",
+                playbackSource = "apple_music")))
+        assertEquals("https://music.apple.com/artist/605800394",
+            repo.collectionUrl(BrowseDetail(id = "am.artists.605800394", kind = CatalogKind.ARTIST,
+                title = "Artist")))
+        assertEquals("https://music.apple.com/playlist/pl.u-abc",
+            repo.collectionUrl(BrowseDetail(id = "am.playlists.pl.u-abc", kind = CatalogKind.PLAYLIST,
+                title = "Playlist")))
+        assertNull(repo.trackUrl(Track(id = "am.songs.i.abc", title = "Upload", artist = "Artist",
+            playbackSource = "apple_music")))
+    }
+
+    @Test
     fun doesNotShareInternalOrLocalIdentities() {
         assertNull(repo.trackUrl(Track(id = "local_track", title = "Song", artist = "Artist",
             playbackSource = "local")))

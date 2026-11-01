@@ -26,12 +26,16 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /** Builds the same public links as desktop and recognizes links pasted into search. */
 class SongLinksRepository {
-    fun trackUrl(track: Track): String? = track.id.trim()
-        .takeIf { track.playbackSource.equals("youtube", ignoreCase = true) && !track.isUpload }
-        ?.takeIf { YOUTUBE_ID_REGEX.matches(it) }
-        ?.let { "https://music.youtube.com/watch?v=$it" }
+    fun trackUrl(track: Track): String? {
+        val id = track.id.trim()
+        if (id.startsWith(APPLE_PREFIX)) return appleMusicUrl(id)
+        return id.takeIf { track.playbackSource.equals("youtube", ignoreCase = true) && !track.isUpload }
+            ?.takeIf { YOUTUBE_ID_REGEX.matches(it) }
+            ?.let { "https://music.youtube.com/watch?v=$it" }
+    }
 
     fun collectionUrl(detail: BrowseDetail): String? {
+        if (detail.id.trim().startsWith(APPLE_PREFIX)) return appleMusicUrl(detail.id.trim())
         if (detail.kind == CatalogKind.ARTIST) {
             val id = detail.id.trim()
             return id.takeIf { it.startsWith("UC") && PUBLIC_ID_REGEX.matches(it) }
@@ -45,6 +49,16 @@ class SongLinksRepository {
         return id.takeIf { PUBLIC_ID_REGEX.matches(it) &&
             (it.startsWith("OLAK") || it.startsWith("PL") || it.startsWith("RD")) }
             ?.let { "https://music.youtube.com/playlist?list=$it" }
+    }
+
+    /** music.apple.com link for an am.<type>.<id> browse id; null for library-only ids (i., l., p., r.). */
+    fun appleMusicUrl(browseId: String): String? {
+        val rest = browseId.removePrefix(APPLE_PREFIX)
+        val type = rest.substringBefore('.', "")
+        val id = rest.substringAfter('.', "")
+        if (type.isEmpty() || id.isEmpty() || APPLE_LIBRARY_ID_REGEX.containsMatchIn(id)) return null
+        val path = APPLE_PATHS[type] ?: return null
+        return "https://music.apple.com/$path/${java.net.URLEncoder.encode(id, "UTF-8")}"
     }
 
     fun parseLink(rawInput: String): SongLinkTarget? {
@@ -118,6 +132,10 @@ class SongLinksRepository {
     }
 
     private companion object {
+        const val APPLE_PREFIX = "am."
+        val APPLE_LIBRARY_ID_REGEX = Regex("^[ilpr]\\.")
+        val APPLE_PATHS = mapOf("songs" to "song", "albums" to "album", "artists" to "artist",
+            "playlists" to "playlist", "music-videos" to "music-video", "stations" to "station")
         val YOUTUBE_ID_REGEX = Regex("^[a-zA-Z0-9_-]{11}$")
         val SHARED_URL_REGEX = Regex("https?://\\S+", RegexOption.IGNORE_CASE)
         val PUBLIC_ID_REGEX = Regex("^[a-zA-Z0-9_-]+$")

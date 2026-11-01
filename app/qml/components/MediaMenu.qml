@@ -233,7 +233,7 @@ Menu {
         visible: root.isArtist
         height: visible ? implicitHeight : 0
         enabled: root.artistIds.length > 0
-        onTriggered: OrchardBackend.copyToClipboard("https://music.youtube.com/channel/" + root.artistIds[0], qsTr("Copied artist link to clipboard"))
+        onTriggered: OrchardBackend.copyToClipboard(OrchardBackend.songLink(root.artistIds[0], "artist"), qsTr("Copied artist link to clipboard"))
     }
     Entry {
         visible: !root.isArtist && !root.isLocalSong && !root.isLocalPlaylist
