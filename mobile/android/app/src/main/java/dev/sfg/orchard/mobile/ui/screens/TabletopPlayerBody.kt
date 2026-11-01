@@ -118,6 +118,7 @@ internal fun TabletopPlayerBody(
     onRemoveDownloadTrack: ((String) -> Unit)?,
     onAddToPlaylist: ((Track) -> Unit)?,
     onShare: (() -> Unit)?,
+    onWatchVideo: (() -> Unit)? = null,
     onOpenCollection: ((String) -> Unit)?,
     onOpenArtist: (() -> Unit)?,
     onLyricsPanel: () -> Unit,
@@ -237,6 +238,7 @@ internal fun TabletopPlayerBody(
                         onOpenAlbum = track.albumId.takeIf { it.isNotBlank() }
                             ?.let { id -> onOpenCollection?.let { open -> { open(id) } } },
                         onOpenArtist = onOpenArtist,
+                        onWatchVideo = onWatchVideo,
                     )
                     Spacer(Modifier.height(16.dp))
                     Spacer(Modifier.weight(1f))

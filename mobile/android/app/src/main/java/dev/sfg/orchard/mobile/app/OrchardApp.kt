@@ -23,6 +23,7 @@ import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.compose.animation.animateColorAsState
@@ -217,15 +218,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                         )
                     }
 
-                    val isFoldable = dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
-                    val contentModifier = if (isFoldable && !chromeHidden) {
-                        Modifier
-                            .fillMaxSize()
-                            .padding(start = dev.sfg.orchard.mobile.ui.foldable.FoldableNavRailWidth)
-                            .then(contentInset)
-                    } else {
-                        Modifier.fillMaxSize().then(contentInset)
-                    }
+                    val contentModifier = Modifier.fillMaxSize().then(contentInset)
 
                     Box(contentModifier.nestedScroll(dockCollapse.connection)) {
                         OrchardNavigation(navController, viewModel, playback, targets, library, settings, onOpenSearch = { searchOpen = true })
@@ -233,43 +226,43 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                 }
             }
 
-            Box(Modifier.fillMaxSize()) {
-                val isFoldable = dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
-                if (!chromeHidden) {
-                    if (isFoldable) {
-                        dev.sfg.orchard.mobile.ui.foldable.OrchardNavigationRail(
-                            currentRoute = chromeRoute,
-                            onSelect = selectTopLevel,
-                            modifier = Modifier.align(Alignment.CenterStart),
-                        )
+            val isFoldable = dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
+            val readout: @Composable (Modifier) -> Unit = { readoutModifier ->
+                CanopyReadout(
+                    playback = playerPlayback,
+                    transition = playerMarker,
+                    mixProgress = playerPresentation.mixProgress,
+                    modifier = readoutModifier.onGloballyPositioned { readoutBounds = it.boundsInRoot() },
+                    onArtworkBounds = { readoutArtworkBounds = it },
+                    onOpen = { playerOpen = true },
+                    onToggle = viewModel::togglePlayback,
+                    onNext = viewModel::next,
+                    onPrevious = viewModel::previous,
+                    onClear = {
+                        playerOpen = false
+                        viewModel.clearQueue()
+                    },
+                )
+            }
 
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(start = dev.sfg.orchard.mobile.ui.foldable.FoldableNavRailWidth)
-                                .then(contentInset),
-                            contentAlignment = Alignment.BottomCenter,
-                        ) {
-                            CanopyReadout(
-                                playback = playerPlayback,
-                                transition = playerMarker,
-                                mixProgress = playerPresentation.mixProgress,
-                                modifier = Modifier
-                                    .padding(horizontal = 24.dp, vertical = 12.dp)
-                                    .onGloballyPositioned { readoutBounds = it.boundsInRoot() },
-                                onArtworkBounds = { readoutArtworkBounds = it },
-                                onOpen = { playerOpen = true },
-                                onToggle = viewModel::togglePlayback,
-                                onNext = viewModel::next,
-                                onPrevious = viewModel::previous,
-                                onClear = {
-                                    playerOpen = false
-                                    viewModel.clearQueue()
-                                },
+            Box(Modifier.fillMaxSize()) {
+                if (!chromeHidden) {
+                    Box(Modifier.fillMaxSize().then(contentInset)) {
+                        if (isFoldable) {
+                            dev.sfg.orchard.mobile.ui.foldable.FoldableSidePill(
+                                currentRoute = chromeRoute,
+                                onSelect = selectTopLevel,
+                                onSearch = { searchOpen = true },
+                                showSettings = settings.showSettingsTab,
+                                modifier = Modifier.align(Alignment.BottomEnd),
                             )
-                        }
-                    } else {
-                        Box(Modifier.fillMaxSize().then(contentInset)) {
+                            Box(Modifier.align(Alignment.BottomCenter)) {
+                                readout(
+                                    Modifier.widthIn(max = dev.sfg.orchard.mobile.ui.foldable.FoldableReadoutMaxWidth)
+                                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                                )
+                            }
+                        } else {
                             OrchardDock(
                                 currentRoute = chromeRoute,
                                 onSelect = selectTopLevel,
@@ -279,21 +272,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                                 showSettings = settings.showSettingsTab,
                                 modifier = Modifier.align(Alignment.BottomCenter),
                             ) {
-                                CanopyReadout(
-                                    playback = playerPlayback,
-                                    transition = playerMarker,
-                                    mixProgress = playerPresentation.mixProgress,
-                                    modifier = Modifier.onGloballyPositioned { readoutBounds = it.boundsInRoot() },
-                                    onArtworkBounds = { readoutArtworkBounds = it },
-                                    onOpen = { playerOpen = true },
-                                    onToggle = viewModel::togglePlayback,
-                                    onNext = viewModel::next,
-                                    onPrevious = viewModel::previous,
-                                    onClear = {
-                                        playerOpen = false
-                                        viewModel.clearQueue()
-                                    },
-                                )
+                                readout(Modifier)
                             }
                         }
                     }

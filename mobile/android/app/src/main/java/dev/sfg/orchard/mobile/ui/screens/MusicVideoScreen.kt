@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -71,6 +73,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout
 import androidx.media3.common.Player
 import coil3.compose.AsyncImage
 import dev.sfg.orchard.mobile.app.MusicVideoState
@@ -160,13 +163,13 @@ private fun MusicVideoPortrait(
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(380.dp)
+                .then(if (isFoldableOrWideLayout()) Modifier.fillMaxHeight(0.8f) else Modifier.height(380.dp))
                 .padding(top = 40.dp)
                 .blur(70.dp)
                 .background(Brush.verticalGradient(listOf(palette.deep, palette.accent, Color.Transparent)))
                 .background(Color.Black.copy(alpha = 0.35f)),
         )
-        Column(Modifier.fillMaxSize().systemBarsPadding()) {
+        val header: @Composable () -> Unit = {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -180,7 +183,9 @@ private fun MusicVideoPortrait(
                     Icon(Icons.Rounded.Cast, "Connect to a device", tint = CanopyColors.Text)
                 }
             }
-            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black).holdToSwitch(true, actions.onSwitch)) {
+        }
+        val video: @Composable (Modifier) -> Unit = { modifier ->
+            Box(modifier.aspectRatio(16f / 9f).background(Color.Black).holdToSwitch(true, actions.onSwitch)) {
                 MusicVideoSurface(player, Modifier.fillMaxSize())
                 VideoQualityButton(musicVideo, actions.onQuality, Modifier.align(Alignment.BottomStart).padding(12.dp))
                 IconButton(onClick = onFullscreen, modifier = Modifier.align(Alignment.BottomEnd)) {
@@ -192,8 +197,10 @@ private fun MusicVideoPortrait(
                     }
                 }
             }
+        }
+        val controls: @Composable ColumnScope.(Boolean) -> Unit = { pinNextToBottom ->
             Row(
-                Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 24.dp),
+                Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = if (pinNextToBottom) 24.dp else 0.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
@@ -235,8 +242,29 @@ private fun MusicVideoPortrait(
                 onRepeat = actions.onRepeat,
                 modifier = Modifier.padding(horizontal = 20.dp),
             )
-            Spacer(Modifier.weight(1f))
+            if (pinNextToBottom) Spacer(Modifier.weight(1f)) else Spacer(Modifier.height(16.dp))
             playback.upcoming.firstOrNull()?.let { next -> UpNextPeek(next, actions.onNext) }
+        }
+        if (isFoldableOrWideLayout()) {
+            // Wide screens put the picture beside its controls so neither is pushed off screen.
+            Column(Modifier.fillMaxSize().systemBarsPadding()) {
+                header()
+                Row(Modifier.weight(1f).padding(start = 24.dp, end = 16.dp, bottom = 24.dp)) {
+                    Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                        video(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)))
+                    }
+                    Column(
+                        Modifier.width(380.dp).fillMaxHeight(),
+                        verticalArrangement = Arrangement.Center,
+                    ) { controls(false) }
+                }
+            }
+        } else {
+            Column(Modifier.fillMaxSize().systemBarsPadding()) {
+                header()
+                video(Modifier.fillMaxWidth())
+                controls(true)
+            }
         }
     }
 }

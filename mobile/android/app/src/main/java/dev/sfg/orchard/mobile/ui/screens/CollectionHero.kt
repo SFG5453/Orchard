@@ -30,13 +30,13 @@ package dev.sfg.orchard.mobile.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -85,9 +85,6 @@ import dev.sfg.orchard.mobile.ui.components.CollectionTopBar
 import dev.sfg.orchard.mobile.ui.components.ExplicitBadge
 import dev.sfg.orchard.mobile.ui.components.HeroAbout
 import dev.sfg.orchard.mobile.ui.components.hasRichDescription
-import dev.sfg.orchard.mobile.ui.components.HeroCircleButton
-import dev.sfg.orchard.mobile.ui.components.HeroGutter
-import dev.sfg.orchard.mobile.ui.components.HeroPlayRow
 import dev.sfg.orchard.mobile.ui.components.collectionDownloadAction
 import dev.sfg.orchard.mobile.ui.components.heroInfoLine
 import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
@@ -147,12 +144,8 @@ internal fun CollectionHero(
     val explicit = remember(detail.tracks) { detail.tracks.any { it.explicit } }
 
     val details: @Composable ColumnScope.() -> Unit = {
-        val textAlign = if (wide) TextAlign.Center else TextAlign.Start
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = if (wide) Arrangement.Center else Arrangement.Start,
-            modifier = if (wide) Modifier.padding(horizontal = HeroGutter) else Modifier,
-        ) {
+        val textAlign = TextAlign.Start
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = detail.title,
                 style = MaterialTheme.typography.headlineMedium.copy(
@@ -167,10 +160,6 @@ internal fun CollectionHero(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            if (wide && explicit) {
-                Spacer(Modifier.width(8.dp))
-                ExplicitBadge()
-            }
         }
         if (artistName.isNotBlank()) {
             Spacer(Modifier.height(if (wide) 8.dp else 6.dp))
@@ -180,13 +169,13 @@ internal fun CollectionHero(
                 accent = if (wide) artistAccent else legibleOn(seam.band, artistAccent, seam.text),
                 onClick = onOpenArtist,
                 // Pulls the chip's touch padding out so its avatar lines up with the title.
-                modifier = if (wide) Modifier else Modifier.offset(x = (-8).dp),
+                modifier = Modifier.offset(x = (-8).dp),
             )
         }
         Spacer(Modifier.height(if (wide) 8.dp else 4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             // Left-aligned titles wrap ragged, so the badge leads the info line instead.
-            if (!wide && explicit) {
+            if (explicit) {
                 ExplicitBadge()
                 Spacer(Modifier.width(8.dp))
             }
@@ -195,7 +184,6 @@ internal fun CollectionHero(
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (wide) CanopyColors.Text.copy(alpha = 0.7f) else seam.secondaryText,
                 textAlign = textAlign,
-                modifier = if (wide) Modifier.padding(horizontal = HeroGutter) else Modifier,
             )
         }
         albumQuality?.let {
@@ -221,52 +209,57 @@ internal fun CollectionHero(
     }
 
     if (wide) {
+        // Side panel: square cover, left-aligned titles and actions, as on desktop.
         Column(
-            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(top = 72.dp, bottom = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(start = 24.dp, end = 20.dp, top = 72.dp, bottom = 16.dp),
         ) {
-            // A full-bleed square would fill the whole fold, so wide layouts get a card.
             Box(
                 modifier = Modifier
-                    .size(if (isAlbum) 450.dp else 300.dp)
-                    .shadow(28.dp, RoundedCornerShape(16.dp), spotColor = Color.Black.copy(alpha = 0.7f))
-                    .clip(RoundedCornerShape(16.dp))
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .shadow(20.dp, RoundedCornerShape(8.dp), spotColor = Color.Black.copy(alpha = 0.7f))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xFF1E1E1E)),
             ) {
-                ArtworkTile(detail.artworkUrl, "Artwork for ${detail.title}", Modifier.fillMaxSize(), radius = 16)
+                ArtworkTile(detail.artworkUrl, "Artwork for ${detail.title}", Modifier.fillMaxSize(), radius = 8)
                 if (heroArt.animatedUrl.isNotBlank()) {
                     AnimatedArtworkVideo(url = heroArt.animatedUrl, active = true, modifier = Modifier.fillMaxSize())
                 }
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
             details()
-            Spacer(Modifier.height(24.dp))
-            HeroPlayRow(
+            Spacer(Modifier.height(20.dp))
+            CollectionPanelActions(
                 onPlay = { onPlayAll(detail.tracks, detail.title) },
                 playEnabled = detail.tracks.isNotEmpty(),
-                // Albums keep their cover's colour on the disc; playlists stay neutral.
-                playFill = if (isAlbum) albumAccent else Color.White,
-                playIconTint = palette.deep,
-                leading = {
-                    HeroCircleButton(
-                        onClick = { onShuffle(detail.tracks, detail.title) },
-                        icon = Icons.Rounded.Shuffle,
-                        contentDescription = "Shuffle",
-                        enabled = detail.tracks.isNotEmpty() && shuffleAvailable,
+                playFill = Color(0xFFF1EFEA),
+                playInk = Color(0xFF121212),
+            ) {
+                PanelIconButton(
+                    onClick = { onShuffle(detail.tracks, detail.title) },
+                    icon = Icons.Rounded.Shuffle,
+                    contentDescription = "Shuffle",
+                    enabled = detail.tracks.isNotEmpty() && shuffleAvailable,
+                )
+                if (onDownload != null) {
+                    PanelIconButton(
+                        onClick = onDownload,
+                        icon = if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
+                        contentDescription = if (isDownloaded) "Remove download" else "Download",
+                        tint = if (isDownloaded) albumAccent else CanopyColors.Text,
                     )
-                },
-                trailing = {
-                    // A playlist on this phone is already in the library; there is nothing to add.
-                    if (!isLocalPlaylistId(detail.id)) {
-                        HeroCircleButton(
-                            onClick = { onSave(detail) },
-                            icon = if (isSaved) Icons.Rounded.Check else Icons.Rounded.Add,
-                            contentDescription = if (isSaved) "Saved to library" else "Add to library",
-                            tint = if (isSaved) LocalAccent.current else CanopyColors.Text,
-                        )
-                    }
-                },
-            )
+                }
+                PanelIconButton(onShare, Icons.Rounded.IosShare, "Share")
+                // A playlist on this phone is already in the library; there is nothing to add.
+                if (!isLocalPlaylistId(detail.id)) {
+                    PanelIconButton(
+                        onClick = { onSave(detail) },
+                        icon = if (isSaved) Icons.Rounded.Check else Icons.Rounded.Add,
+                        contentDescription = if (isSaved) "Saved to library" else "Add to library",
+                        tint = if (isSaved) LocalAccent.current else CanopyColors.Text,
+                    )
+                }
+            }
             extras()
         }
     } else {

@@ -62,7 +62,6 @@ import android.graphics.Bitmap
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import dev.sfg.orchard.mobile.ui.components.ArtworkPalette
@@ -256,7 +255,6 @@ internal fun PlayerBackdropLayer(
     panel: PlayerPanel,
     wideLayout: Boolean,
     isFoldable: Boolean,
-    hasRichArtwork: Boolean,
     palette: ArtworkPalette,
     incomingPalette: ArtworkPalette?,
     incomingArtworkUrl: String?,
@@ -304,17 +302,16 @@ internal fun PlayerBackdropLayer(
         label = "ArtworkAlpha",
     )
 
-    val isSplitModeFoldable = isFoldable && panel != PlayerPanel.NONE
     FullBleedPlayerBackdrop(
         track = track,
         // Fully covered by the lyrics room, so its video can rest.
         isPlaying = isPlaying && !lyricsRoom && (panel == PlayerPanel.LYRICS || !panelObscuresArtwork),
-        // A tablet's real motion cover belongs only in the framed square. Its full-screen
-        // layer is either the tiny Kawarp source or the static palette fallback.
-        animatedArtworkEnabled = animatedArtworkEnabled && !wideLayout,
+        // Tablets and foldables frame the motion cover in a square; a near-square screen
+        // would crop tall art down to its middle.
+        animatedArtworkEnabled = animatedArtworkEnabled && !wideLayout && !isFoldable,
         warpedArtworkEnabled = wideLayout && animatedBackgroundEnabled,
         ambientGlowEnabled = !wideLayout && animatedBackgroundEnabled,
-        gesturesEnabled = gesturesEnabled || (isFoldable && hasRichArtwork),
+        gesturesEnabled = gesturesEnabled,
         onNext = onNext,
         onPrevious = onPrevious,
         onLiked = onLiked,
@@ -328,9 +325,7 @@ internal fun PlayerBackdropLayer(
         swipe = swipe,
         onArtworkSeam = onArtworkSeam,
         artworkRoom = artworkRoom,
-        modifier = Modifier
-            .blur(backdropBlur)
-            .then(if (isSplitModeFoldable) Modifier.fillMaxWidth(0.512f) else Modifier.fillMaxWidth()),
+        modifier = Modifier.blur(backdropBlur),
     )
     val roomAlpha = animateFloatAsState(if (lyricsRoom) 1f else 0f, tween(420), label = "LyricsRoomAlpha")
     if (lyricsRoom || roomAlpha.value > 0.001f) {
@@ -340,7 +335,6 @@ internal fun PlayerBackdropLayer(
     // Blur is a no-op below API 31, so darken as well to keep lyrics legible everywhere.
     if (!lyricsRoom && (wideLayout || isFoldable || panel != PlayerPanel.NONE)) {
         val scrimAlpha = when {
-            isFoldable && panel == PlayerPanel.NONE && hasRichArtwork -> 0.05f
             isFoldable && panel == PlayerPanel.NONE -> 0.15f
             isFoldable -> 0.18f
             panel == PlayerPanel.LYRICS -> 0.38f

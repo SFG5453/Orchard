@@ -34,10 +34,13 @@ object MediaItemMapper {
     private const val SCHEME = "orchard"
     private const val AUDIO_AUTHORITY = "stream"
     private const val VIDEO_AUTHORITY = "video"
+    private const val APPLE_VIDEO_PREFIX = "am.music-videos."
     private const val TRACK_JSON = "orchard.track.json"
 
     @OptIn(UnstableApi::class)
-    fun toMediaItem(track: Track, videoId: String = ""): MediaItem {
+    fun toMediaItem(track: Track, requestedVideoId: String = ""): MediaItem {
+        // An Apple music video has no audio-only stream, so it always loads as video.
+        val videoId = requestedVideoId.ifBlank { track.id.takeIf { it.startsWith(APPLE_VIDEO_PREFIX) }.orEmpty() }
         val storedTrack = track.copy(musicVideoId = track.musicVideoId.ifBlank { videoId })
         val extras = Bundle().apply {
             putString(TRACK_JSON, dev.sfg.orchard.mobile.model.CatalogJson.track(storedTrack).toString())

@@ -49,7 +49,6 @@ import dev.sfg.orchard.mobile.model.PlaybackTarget
 import dev.sfg.orchard.mobile.model.PlaybackTargetState
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.model.TransitionMarker
-import dev.sfg.orchard.mobile.ui.foldable.FoldableNowPlayingBody
 import dev.sfg.orchard.mobile.ui.foldable.isFoldableActive
 import dev.sfg.orchard.mobile.ui.foldable.rememberTabletopHinge
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
@@ -208,7 +207,6 @@ fun NowPlayingScreen(
                 panel = panel,
                 wideLayout = framedCover,
                 isFoldable = isFoldable,
-                hasRichArtwork = hasRichArtwork,
                 palette = palette,
                 incomingPalette = incomingPalette,
                 incomingArtworkUrl = incomingTrack?.artworkUrl,
@@ -220,7 +218,7 @@ fun NowPlayingScreen(
                 onPrevious = onSkipBack,
                 onLiked = onLiked,
                 onVideoFrame = { videoFrame = it },
-                onArtworkBounds = { if ((!framedCover || isFoldable) && hasRichArtwork && settledOpen()) onRestingCoverBounds(it) },
+                onArtworkBounds = { if (!framedCover && !isFoldable && hasRichArtwork && settledOpen()) onRestingCoverBounds(it) },
                 swipe = swipe.takeIf { !framedCover && !isFoldable },
                 onArtworkSeam = { artworkSeam = it },
                 // The player fills the window, so the hinge's window px are the room above it.
@@ -271,62 +269,7 @@ fun NowPlayingScreen(
                     onShare = onShare,
                     onOpenCollection = onOpenCollection,
                     onOpenArtist = onOpenArtist,
-                    onLyricsPanel = { panel = if (lyricsOpen) PlayerPanel.NONE else PlayerPanel.LYRICS },
-                    onQueuePanel = onQueue,
-                    sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
-                    sleepTimerEndOfTrack = sleepTimerEndOfTrack,
-                    onSleepTimer = { sleepTimerDialogOpen = true },
-                    autoplayEnabled = autoplayEnabled,
-                    autoplayLoading = autoplayLoading,
-                    autoplayError = autoplayError,
-                    onAutoplayEnabled = onAutoplayEnabled,
-                    smartCrossfade = smartCrossfade,
-                    onBestMixUpcoming = onBestMixUpcoming,
-                )
-                return@Box
-            }
-
-            if (isFoldable) {
-                FoldableNowPlayingBody(
-                    track = track,
-                    playback = playback,
-                    targets = targets,
-                    lyrics = lyrics,
-                    lyricAccent = lyricAccent,
-                    onCoverBounds = { if (settledOpen()) onRestingCoverBounds(it) },
-                    animatedArtworkEnabled = animatedArtworkEnabled,
-                    liked = liked,
-                    panel = panel,
-                    canControl = canControl,
-                    localControls = localControls,
-                    transition = transition,
-                    mixProgress = activeMixProgress,
-                    showBitrate = showBitrate,
-                    bitrateKbps = bitrateKbps,
-                    isQobuz = isQobuz,
-                    remoteVolume = remoteVolume,
-                    modifier = dragHandle,
-                    onRemoteVolumeChange = onRemoteVolumeChange,
-                    onBack = onBack,
-                    onSeek = onSeek,
-                    onToggle = onToggle,
-                    onPrevious = onPrevious,
-                    onNext = onNext,
-                    onShuffle = onShuffle,
-                    onRepeat = onRepeat,
-                    onLiked = onLiked,
-                    onDevices = onDevices,
-                    onPlayQueueIndex = onPlayQueueIndex,
-                    onRemoveQueueIndex = onRemoveQueueIndex,
-                    onMoveQueueItem = onMoveQueueItem,
-                    onClearUpcoming = onClearUpcoming,
-                    downloadedTrackIds = downloadedTrackIds,
-                    onDownloadTrack = onDownloadTrack,
-                    onRemoveDownloadTrack = onRemoveDownloadTrack,
-                    onAddToPlaylist = onAddToPlaylist,
-                    onShare = onShare,
-                    onOpenCollection = onOpenCollection,
-                    onOpenArtist = onOpenArtist,
+                    onWatchVideo = onToggleMusicVideo.takeIf { musicVideo.available },
                     onLyricsPanel = { panel = if (lyricsOpen) PlayerPanel.NONE else PlayerPanel.LYRICS },
                     onQueuePanel = onQueue,
                     sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
@@ -345,7 +288,7 @@ fun NowPlayingScreen(
             // A tablet has room to stop trading one thing for another: the cover
             // keeps its own frame on the left while lyrics or the queue occupy the
             // right, instead of displacing the artwork the way the phone must.
-            if (wideLayout) {
+            if (wideLayout || isFoldable) {
                 TabletPlayerBody(
                     track = track,
                     playback = playback,
@@ -386,6 +329,7 @@ fun NowPlayingScreen(
                     onShare = onShare,
                     onOpenCollection = onOpenCollection,
                     onOpenArtist = onOpenArtist,
+                    onWatchVideo = onToggleMusicVideo.takeIf { musicVideo.available },
                     onLyricsPanel = { panel = if (lyricsOpen) PlayerPanel.NONE else PlayerPanel.LYRICS },
                     onQueuePanel = onQueue,
                     sleepTimerRemainingSeconds = sleepTimerRemainingSeconds,
@@ -397,6 +341,7 @@ fun NowPlayingScreen(
                     onAutoplayEnabled = onAutoplayEnabled,
                     smartCrossfade = smartCrossfade,
                     onBestMixUpcoming = onBestMixUpcoming,
+                    crease = isFoldable && !wideLayout,
                 )
                 return@Box
             }

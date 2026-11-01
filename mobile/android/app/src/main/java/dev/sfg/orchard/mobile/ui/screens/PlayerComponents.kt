@@ -240,8 +240,11 @@ fun TrackInfoRow(
     isDownloaded: Boolean = false,
     onDownload: (() -> Unit)? = null,
     onRemoveDownload: (() -> Unit)? = null,
+    /** Non-null when the track has a music video to switch to. */
+    onWatchVideo: (() -> Unit)? = null,
     /** Off where the player header already carries the overflow menu. */
     showMenu: Boolean = true,
+    glass: Boolean = true,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
 
@@ -254,6 +257,7 @@ fun TrackInfoRow(
             onDownload = if (!isDownloaded) onDownload else null,
             onRemoveDownload = if (isDownloaded) onRemoveDownload else null,
             onShare = onShare,
+            onWatchVideo = onWatchVideo,
             onViewArtist = onOpenArtist,
             onViewAlbum = onOpenAlbum,
         )
@@ -350,6 +354,7 @@ fun TrackInfoRow(
             liked = liked,
             onLiked = onLiked,
             onOpenMenu = if (showMenu) ({ menuOpen = true }) else null,
+            glass = glass,
         )
     }
 }

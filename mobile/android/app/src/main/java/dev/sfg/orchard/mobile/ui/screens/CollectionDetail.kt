@@ -25,6 +25,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -70,6 +78,8 @@ import dev.sfg.orchard.mobile.ui.components.collectionDownloadAction
 import dev.sfg.orchard.mobile.ui.components.filterTracks
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
+private val SidePanelWidth = 340.dp
+
 /** Standard album and playlist presentation. */
 @Composable
 internal fun CollectionDetailContent(
@@ -112,6 +122,7 @@ internal fun CollectionDetailContent(
 
     // The cover's own colours carry the whole screen; phones sample the still the hero shows.
     val wide = isFoldableOrWideLayout()
+    val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val palette = if (wide) rememberArtworkPalette(detail.artworkUrl)
     else rememberArtworkPalette(heroArt.phoneStill(detail.artworkUrl), heroArt.phoneAspect)
     val context = LocalContext.current
@@ -160,27 +171,27 @@ internal fun CollectionDetailContent(
                 ) else SolidColor(palette.deep),
             ),
     ) {
-        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 120.dp)) {
-            item {
-                CollectionHero(
-                    detail = detail,
-                    palette = palette,
-                    shuffleAvailable = shuffleAvailable,
-                    onPlayAll = onPlayAll,
-                    onShuffle = onShuffle,
-                    onSave = onSave,
-                    onShare = { shareCollection(context, detail, onShareCollection) },
-                    bestMix = bestMix,
-                    isSaved = isSaved,
-                    heroArt = heroArt,
-                    onDownload = collectionDownloadAction(detail.tracks, downloadedTrackIds, onDownloadTracks, onRemoveDownloadTracks),
-                    isDownloaded = detail.tracks.isNotEmpty() && detail.tracks.all { it.id in downloadedTrackIds },
-                    artistPortraitUrl = artistPortraitUrl,
-                    onOpenArtist = albumArtistId?.let { id -> { onOpen(id) } },
-                    onOpenLink = onOpen,
-                    smartCrossfadeEnabled = smartCrossfadeEnabled,
-                )
-            }
+        val hero: @Composable () -> Unit = {
+            CollectionHero(
+                detail = detail,
+                palette = palette,
+                shuffleAvailable = shuffleAvailable,
+                onPlayAll = onPlayAll,
+                onShuffle = onShuffle,
+                onSave = onSave,
+                onShare = { shareCollection(context, detail, onShareCollection) },
+                bestMix = bestMix,
+                isSaved = isSaved,
+                heroArt = heroArt,
+                onDownload = collectionDownloadAction(detail.tracks, downloadedTrackIds, onDownloadTracks, onRemoveDownloadTracks),
+                isDownloaded = detail.tracks.isNotEmpty() && detail.tracks.all { it.id in downloadedTrackIds },
+                artistPortraitUrl = artistPortraitUrl,
+                onOpenArtist = albumArtistId?.let { id -> { onOpen(id) } },
+                onOpenLink = onOpen,
+                smartCrossfadeEnabled = smartCrossfadeEnabled,
+            )
+        }
+        val listBody: LazyListScope.() -> Unit = {
             if (canEdit && !isSearching) {
                 item {
                     PlaylistEditBar(
@@ -378,6 +389,25 @@ internal fun CollectionDetailContent(
                         }
                     }
                 }
+            }
+        }
+        if (wide) {
+            Row(Modifier.fillMaxSize()) {
+                Column(Modifier.width(SidePanelWidth).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                    hero()
+                    Spacer(Modifier.height(120.dp))
+                }
+                LazyColumn(
+                    Modifier.weight(1f).fillMaxHeight(),
+                    state = listState,
+                    contentPadding = PaddingValues(top = topInset + 72.dp, bottom = 120.dp),
+                    content = listBody,
+                )
+            }
+        } else {
+            LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 120.dp)) {
+                item { hero() }
+                listBody()
             }
         }
 
