@@ -111,6 +111,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 betaChannelEnabled = values[BETA_CHANNEL_ENABLED] ?: false,
                 videoMaxHeight = values[VIDEO_MAX_HEIGHT] ?: OrchardSettings.DEFAULT_VIDEO_MAX_HEIGHT,
                 translateLyrics = values[TRANSLATE_LYRICS] ?: false,
+                preferAppleTranslation = values[PREFER_APPLE_TRANSLATION] ?: false,
                 lyricsProviders = decodeLyricsProviders(values[LYRICS_PROVIDERS]),
                 lyricTranslationLanguage = LyricTranslationLanguage.entries
                     .firstOrNull { it.key == values[LYRIC_TRANSLATION_LANGUAGE] } ?: LyricTranslationLanguage.ENGLISH,
@@ -185,6 +186,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[BETA_CHANNEL_ENABLED] = value.betaChannelEnabled
                 it[VIDEO_MAX_HEIGHT] = value.videoMaxHeight
                 it[TRANSLATE_LYRICS] = value.translateLyrics
+                it[PREFER_APPLE_TRANSLATION] = value.preferAppleTranslation
                 it[LYRICS_PROVIDERS] = encodeLyricsProviders(value.lyricsProviders)
                 it[LYRIC_TRANSLATION_LANGUAGE] = value.lyricTranslationLanguage.key
                 it[LYRIC_TRANSLATION_QUALITY] = value.lyricTranslationQuality.key
@@ -281,6 +283,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val CELLULAR_AUDIO_QUALITY = stringPreferencesKey("cellular_audio_quality")
         val VIDEO_MAX_HEIGHT = intPreferencesKey("video_max_height")
         val TRANSLATE_LYRICS = booleanPreferencesKey("translate_lyrics")
+        val PREFER_APPLE_TRANSLATION = booleanPreferencesKey("prefer_apple_translation")
         val LYRICS_PROVIDERS = stringPreferencesKey("lyrics_providers")
         val LYRIC_TRANSLATION_LANGUAGE = stringPreferencesKey("lyric_translation_language")
         val LYRIC_TRANSLATION_QUALITY = stringPreferencesKey("lyric_translation_quality")

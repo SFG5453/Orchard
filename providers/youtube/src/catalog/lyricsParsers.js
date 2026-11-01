@@ -128,6 +128,7 @@ function makeLyricLine(text, startMs = 0, endMs = 0, words = [], adlibs = [], me
   if (startMs > 0 || endMs > 0) line.startTime = Math.max(0, startMs / 1000);
   if (endMs > startMs) line.endTime = Math.max(0, endMs / 1000);
   if (meta.agent) line.agent = meta.agent;
+  if (meta.key) line.key = meta.key;
   const timedWords = normalizeTimedLyricWords(words);
   const timedAdlibs = normalizeTimedLyricWords(adlibs);
   if (timedWords.length > 1) line.words = timedWords;
@@ -192,7 +193,7 @@ export function parseAmLyricsTtml(ttml = '') {
         agent = agentNode.getAttribute('ttm:agent') || '';
         agentNode = agentNode.parentNode;
       }
-      return makeLyricLine(mainText, startMs, endMs, wordSpans, adlibSpans, { agent });
+      return makeLyricLine(mainText, startMs, endMs, wordSpans, adlibSpans, { agent, key: node.getAttribute('itunes:key') || '' });
     })
     .filter((line) => line.text || line.adlibs?.length)
     .sort((a, b) => (a.startTime || 0) - (b.startTime || 0));

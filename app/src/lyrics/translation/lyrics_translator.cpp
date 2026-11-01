@@ -35,6 +35,7 @@ namespace {
 const QString kEnabledKey = QStringLiteral("lyrics/translate");
 const QString kQualityKey = QStringLiteral("lyrics/translationQuality");
 const QString kProviderKey = QStringLiteral("lyrics/translationProvider");
+const QString kPreferAppleKey = QStringLiteral("lyrics/preferAppleTranslation");
 constexpr auto kKeychainService = "dev.sfg.orchard";
 
 QString keychainEntry(const QString &provider) { return QStringLiteral("lyric-translation-%1").arg(provider); }
@@ -61,6 +62,7 @@ LyricsTranslator::LyricsTranslator(LyricsController *lyrics, QObject *parent)
     : QObject(parent), m_lyrics(lyrics), m_network(new QNetworkAccessManager(this)),
       m_packs(new TranslationPacks(m_network, this)), m_generation(std::make_shared<std::atomic_int>(0)) {
   m_enabled = QSettings().value(kEnabledKey, false).toBool();
+  m_preferApple = QSettings().value(kPreferAppleKey, false).toBool();
   if (QSettings().value(kQualityKey).toString() == QStringLiteral("high"))
     m_quality = QStringLiteral("high");
   const QString target = QSettings().value(QStringLiteral("lyrics/translationTarget"), QStringLiteral("eng")).toString();
@@ -137,6 +139,17 @@ void LyricsTranslator::setQuality(const QString &quality) {
   emit qualityChanged();
   // A download for the other quality is no longer wanted.
   m_packs->cancel();
+  cancelRemote();
+  m_key.clear();
+  sync();
+}
+
+void LyricsTranslator::setPreferAppleTranslation(bool prefer) {
+  if (m_preferApple == prefer) return;
+  m_preferApple = prefer;
+  QSettings().setValue(kPreferAppleKey, prefer);
+  emit providerChanged();
+  ++*m_generation;
   cancelRemote();
   m_key.clear();
   sync();
@@ -323,6 +336,12 @@ void LyricsTranslator::start() {
   m_pending.clear();
   m_progress = 0;
   m_lines = QStringList(m_texts.size(), QString());
+  if (tryApple())
+    return;
+  startProvider();
+}
+
+void LyricsTranslator::startProvider() {
   std::vector<std::string> utf8;
   utf8.reserve(m_texts.size());
   for (const QString &text : std::as_const(m_texts))

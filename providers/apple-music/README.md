@@ -105,7 +105,10 @@ artist requests also retry without extended attributes after a public 400.
 
 Lyrics try `syllable-lyrics` and then `lyrics` on the editorial API, sending the
 listener's token as `Media-User-Token`, and return raw TTML for the host to
-parse. Artwork lookup resolves an album from an ID, ISRC, or metadata and can
+parse. `lyrics.translation` takes the same track query plus `language` (a BCP 47
+tag) and returns `{songId, language, translations}` keyed by TTML line key, read from
+the `ttmlLocalizations` extension with `l[lyrics]`; it returns `{}` when Apple has no
+translation for that language. Artwork lookup resolves an album from an ID, ISRC, or metadata and can
 return static artwork, colors, and signed-in editorial motion artwork. Audio
 analysis uses the editorial API in batches of 50 and omits songs without
 available analysis. These editorial features depend on Apple responses and may

@@ -276,14 +276,7 @@ void LyricsController::resolve(const QVariantMap &track, quint64 &generation) {
     start(request);
     return;
   }
-  const QJsonObject song = request.value(QStringLiteral("track")).toObject();
-  const QJsonObject query{
-      {QStringLiteral("appleId"), track.value(QStringLiteral("appleId")).toString()},
-      {QStringLiteral("isrc"), track.value(QStringLiteral("isrc")).toString()},
-      {QStringLiteral("title"), song.value(QStringLiteral("title"))},
-      {QStringLiteral("artist"), song.value(QStringLiteral("artist"))},
-      {QStringLiteral("album"), song.value(QStringLiteral("album"))},
-  };
+  const QJsonObject query = appleQuery(track, request.value(QStringLiteral("track")).toObject());
   m_appleMusic->lyrics(query, [self = QPointer(this), current = generation, request, start](
                                   const QJsonObject &result, const QString &) mutable {
     if (!self || (current != self->m_requestGeneration && current != self->m_prefetchGeneration))
@@ -292,6 +285,34 @@ void LyricsController::resolve(const QVariantMap &track, quint64 &generation) {
     request.insert(QStringLiteral("appleTtml"), result.value(QStringLiteral("ttml")).toString());
     start(request);
   });
+}
+
+QJsonObject LyricsController::appleQuery(const QVariantMap &track, const QJsonObject &song) const {
+  return QJsonObject{
+      {QStringLiteral("appleId"), track.value(QStringLiteral("appleId")).toString()},
+      {QStringLiteral("isrc"), track.value(QStringLiteral("isrc")).toString()},
+      {QStringLiteral("title"), song.value(QStringLiteral("title"))},
+      {QStringLiteral("artist"), song.value(QStringLiteral("artist"))},
+      {QStringLiteral("album"), song.value(QStringLiteral("album"))},
+  };
+}
+
+bool LyricsController::appleTranslation(const QString &language,
+                                        std::function<void(const QHash<QString, QString> &)> done) {
+  const QVariantMap track = viewTrack();
+  const QString id = track.value(QStringLiteral("id")).toString();
+  if (!m_appleMusic || !m_appleMusic->connected() || m_source != QStringLiteral("apple") || id != m_trackId)
+    return false;
+  QJsonObject query = appleQuery(track, payload(track).value(QStringLiteral("track")).toObject());
+  query.insert(QStringLiteral("language"), language);
+  m_appleMusic->lyricsTranslation(query, [done = std::move(done)](const QJsonObject &result, const QString &) {
+    QHash<QString, QString> lines;
+    const QJsonObject translations = result.value(QStringLiteral("translations")).toObject();
+    for (auto it = translations.begin(); it != translations.end(); ++it)
+      lines.insert(it.key(), it.value().toString());
+    done(lines);
+  });
+  return true;
 }
 
 QJsonObject LyricsController::payload(const QVariantMap &track) const {

@@ -183,6 +183,15 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
         return call("lyrics", payload).text("ttml")
     }
 
+    /** Apple's translation of a song's lyrics as `{line key: text}` in [language], a BCP 47 tag; empty when Apple has none. */
+    suspend fun lyricsTranslation(track: Track, language: String): Map<String, String> {
+        val payload = JSONObject().put("title", track.title).put("artist", track.artist).put("album", track.album)
+            .put("language", language)
+        if (track.id.startsWith("am.songs.")) payload.put("appleId", track.id.removePrefix("am.songs."))
+        val translations = call("lyrics.translation", payload).optJSONObject("translations") ?: return emptyMap()
+        return translations.keys().asSequence().associateWith { translations.optString(it) }.filterValues(String::isNotBlank)
+    }
+
     /** Playlist layout and license details of a catalog song's Widevine stream. */
     suspend fun stream(id: String): JSONObject =
         call("playback.stream", JSONObject().put("track", JSONObject().put("id", id)))

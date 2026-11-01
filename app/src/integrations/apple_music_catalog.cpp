@@ -196,6 +196,15 @@ void AppleMusic::lyrics(const QJsonObject &track, PageReply done) {
        [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
 }
 
+void AppleMusic::lyricsTranslation(const QJsonObject &track, PageReply done) {
+  if (!connected()) {
+    done({}, {});
+    return;
+  }
+  call(QStringLiteral("lyrics.translation"), track,
+       [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
+}
+
 void AppleMusic::audioAnalysis(const QStringList &ids, PageReply done) {
   if (!connected()) {
     done({}, {});

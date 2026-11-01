@@ -170,6 +170,8 @@ data class OrchardSettings(
     val lyricTranslationProvider: LyricTranslationProvider = LyricTranslationProvider.LOCAL,
     val lyricTranslationModels: Map<String, String> = emptyMap(),
     val lyricTranslationEndpoint: String = "",
+    /** Show Apple Music's own translation for Apple lyrics; the selected source covers the rest. */
+    val preferAppleTranslation: Boolean = false,
     val lyricsProviders: List<LyricsProviderConfig> = LyricsProvider.entries.map(::LyricsProviderConfig),
 ) {
     /** Clamped, because a persisted value from an older build must not size the cache absurdly. */

@@ -40,6 +40,23 @@ class LyricsRepositoryTest {
     }
 
     @Test
+    fun appleTranslationOnlyAppliesToLyricsShownFromApple() = runBlocking {
+        val client = OkHttpClient.Builder().addInterceptor { error("No mirror should be called") }.build()
+        val appleTrack = track.copy(id = "am.songs.123")
+        val asked = mutableListOf<Pair<String, String>>()
+        val repository = LyricsRepository(client,
+            appleLyrics = { """<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="1s" end="3s"><span>Found</span></p></div></body></tt>""" },
+            appleTranslation = { shown, language -> asked += shown.id to language; mapOf("L1" to "Translated") },
+        ) { "" }
+
+        assertEquals(emptyMap<String, String>(), repository.appleTranslation(appleTrack.id, "en-US"))
+        repository.lyrics(appleTrack, listOf(LyricsProvider.APPLE))
+        assertEquals(mapOf("L1" to "Translated"), repository.appleTranslation(appleTrack.id, "en-US"))
+        assertEquals(listOf(appleTrack.id to "en-US"), asked)
+        assertEquals(emptyMap<String, String>(), repository.appleTranslation("other", "en-US"))
+    }
+
+    @Test
     fun missingOrFailedAppleLyricsFallThroughWithoutCallingMirrors() = runBlocking {
         val client = OkHttpClient.Builder().addInterceptor { error("No mirror should be called") }.build()
         val configs = LyricsProvider.entries.map { LyricsProviderConfig(it, it != LyricsProvider.LRCLIB) }

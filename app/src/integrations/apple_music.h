@@ -103,6 +103,8 @@ public:
   void libraryAction(const QString &method, const QJsonObject &payload, PageReply done);
   // {ttml} for a track from any service (appleId, isrc or title/artist/album); empty when Apple has none.
   void lyrics(const QJsonObject &track, PageReply done);
+  // {translations: {lineKey: text}} in track.language (BCP 47) from Apple's own lyric translation; empty when it has none.
+  void lyricsTranslation(const QJsonObject &track, PageReply done);
   // {items}: the next songs from a song's station (am.songs id) or a station (am.stations id).
   void upNext(const QString &seed, PageReply done);
   // {videoId}: Apple's music video for a catalog song (am.songs id or catalog id), or {} when it has none.

@@ -74,6 +74,8 @@ class LyricTranslator(
     http: OkHttpClient,
     private val settings: StateFlow<OrchardSettings>,
     private val scope: CoroutineScope,
+    /** Apple's translation of a song's lyrics as `{line key: text}` for a BCP 47 tag; empty when it has none. */
+    private val appleTranslation: suspend (songId: String, language: String) -> Map<String, String> = { _, _ -> emptyMap() },
 ) {
     val packs = TranslationPacks(context.applicationContext, http)
     private val store = TranslationStore(context.applicationContext)
@@ -120,6 +122,7 @@ class LyricTranslator(
     private data class Config(
         val enabled: Boolean, val quality: String, val provider: LyricTranslationProvider,
         val model: String, val endpoint: String, val target: LyricTranslationLanguage,
+        val preferApple: Boolean,
     )
 
     init {
@@ -132,7 +135,8 @@ class LyricTranslator(
         val wanted = settings.map {
             Config(it.translateLyrics && (it.lyricTranslationProvider != LyricTranslationProvider.LOCAL || TranslationNative.available),
                 it.lyricTranslationQuality.key, it.lyricTranslationProvider,
-                it.lyricTranslationModels[it.lyricTranslationProvider.key].orEmpty(), it.lyricTranslationEndpoint, it.lyricTranslationLanguage)
+                it.lyricTranslationModels[it.lyricTranslationProvider.key].orEmpty(), it.lyricTranslationEndpoint, it.lyricTranslationLanguage,
+                it.preferAppleTranslation)
         }
             .distinctUntilChanged()
         scope.launch {
@@ -218,6 +222,7 @@ class LyricTranslator(
         // Nobody is looking; keep what is on screen for when they come back.
         if (lines == null) return
         activePack = ""
+        if (config.preferApple && runApple(lines, songId, config)) return
         if (config.provider == LyricTranslationProvider.ORCHARD) {
             runAccount(lines, songId, config.target)
             return
@@ -304,6 +309,27 @@ class LyricTranslator(
             mutableState.value = base.copy(status = LyricTranslationState.Status.FAILED,
                 message = error.message ?: "Translation failed", translations = results.toList())
         }
+    }
+
+    /** Shows Apple's own translation for Apple lyrics. False hands the song to the selected source. */
+    private suspend fun runApple(lines: List<LyricLine>, songId: String, config: Config): Boolean {
+        val target = if (config.provider == LyricTranslationProvider.LOCAL) LyricTranslationLanguage.ENGLISH else config.target
+        val language = appleLanguage(target)
+        if (lines.all { it.key == null }) return false
+        mutableState.value = LyricTranslationState(LyricTranslationState.Status.TRANSLATING,
+            message = "Checking Apple Music for a translation", lines = lines, translations = List(lines.size) { null })
+        val found = try {
+            appleTranslation(songId, language)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyMap()
+        }
+        if (found.isEmpty()) return false
+        mutableState.value = LyricTranslationState(LyricTranslationState.Status.READY,
+            message = "Translated by Apple Music", lines = lines,
+            translations = lines.map { line -> line.key?.let(found::get)?.let { shown(lineText(line), it) } })
+        return true
     }
 
     private suspend fun runRemote(lines: List<LyricLine>, config: Config) {
@@ -412,6 +438,16 @@ class LyricTranslator(
         // About 75 MB resident while loaded; songs in a row reuse it, idle gives it back.
         const val UNLOAD_AFTER_MS = 90_000L
         const val PUBLISH_NANOS = 120_000_000L
+
+        // Locale tags Apple's lyric translations are requested with.
+        fun appleLanguage(target: LyricTranslationLanguage): String = when (target) {
+            LyricTranslationLanguage.ENGLISH -> "en-US"
+            LyricTranslationLanguage.SPANISH -> "es-MX"
+            LyricTranslationLanguage.HINDI -> "hi"
+            LyricTranslationLanguage.KOREAN -> "ko"
+            LyricTranslationLanguage.JAPANESE -> "ja"
+            LyricTranslationLanguage.FRENCH -> "fr-FR"
+        }
 
         fun lineText(line: LyricLine): String =
             line.text.trim().ifEmpty { line.words.joinToString(" ") { it.text.trim() }.trim() }

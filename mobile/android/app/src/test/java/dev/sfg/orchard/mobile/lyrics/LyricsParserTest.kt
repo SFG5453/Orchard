@@ -116,6 +116,18 @@ class LyricsParserTest {
     }
 
     @Test
+    fun appleTtmlKeepsTheLineKeyWhenPresent() {
+        val lines = LyricsParser.ttml(
+            """<tt xmlns="http://www.w3.org/ns/ttml" xmlns:itunes="http://music.apple.com/lyric-ttml-internal"><body><div>
+              <p begin="1.0s" end="3.0s" itunes:key="L1"><span>Keyed line</span></p>
+              <p begin="4.0s" end="6.0s"><span>Plain line</span></p>
+            </div></body></tt>""",
+        )
+
+        assertEquals(listOf("L1", null), lines.map { it.key })
+    }
+
+    @Test
     fun instrumentalLrclibResponseIsNotReportedAsMissing() {
         assertEquals(
             listOf("Instrumental"),

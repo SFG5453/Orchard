@@ -70,6 +70,7 @@ const methods = new Map([
   ['playback.video', async (payload = {}) => appleMusic.playback.video(payload.id)],
   ['playback.license', async (payload = {}) => appleMusic.playback.license(payload)],
   ['lyrics', async (payload = {}) => (await appleMusic.lyrics(payload)) || {}],
+  ['lyrics.translation', async (payload = {}) => (await appleMusic.lyricsTranslation(payload)) || {}],
   ['close', async () => {
     session = null;
     return null;

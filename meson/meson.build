@@ -98,6 +98,7 @@ app_sources = [
   'app/src/lyrics/translation/lyrics_translator.cpp',
   'app/src/lyrics/translation/lyrics_remote_translation.cpp',
   'app/src/lyrics/translation/lyrics_account_translation.cpp',
+  'app/src/lyrics/translation/lyrics_apple_translation.cpp',
   'app/src/lyrics/translation/lyrics_translator.h',
   'app/src/lyrics/translation/remote_translation.cpp',
   'app/src/lyrics/translation/remote_translation.h',

@@ -96,6 +96,12 @@ Orchard Account sends the song's lyrics to Cloudflare Workers AI and uses Gemma 
 
 Songs detected as already in the target language do not use the daily allowance. Cached songs do not use the daily allowance. Orchard keeps translations by song ID and target language for 90 days, and checks the lyric version so lines stay aligned. A translation that starts and then fails still uses one slot. If the daily limit is reached, cached translations remain available; wait until 00:00 UTC to translate a new song.
 
+## Use Apple Music translations
+
+Connect Apple Music, then turn on **Use Apple Music translations** in Settings > Downloads > Lyric translation. On Android, open Settings > Appearance > Lyrics. When the lyrics come from Apple Music, Orchard asks Apple for its own translation in your selected language and shows it. This is available for English, Spanish, Hindi, Korean, Japanese, and French.
+
+Apple does not translate every song. If Apple has no translation for the song or language, or the lyrics come from another source, Orchard uses your selected translation source instead (Local, an API, or Orchard Account).
+
 ## Languages that can be translated
 
 Local models translate Korean, Japanese, Chinese, Russian, Arabic, Greek, Turkish, French, German, Spanish, Italian, Dutch, and Catalan into English. For other languages, the lyrics view shows "[Language] lyrics can't be translated yet." An API model can handle other languages if that model supports them.

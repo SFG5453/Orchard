@@ -115,6 +115,13 @@ internal fun LyricTranslationSection(
             }
         }
         PanelDivider()
+        ToggleRow(
+            title = "Use Apple Music translations",
+            subtitle = "For lyrics from Apple Music, show Apple's own translation when it has one. Other songs and misses use the source below.",
+            checked = settings.preferAppleTranslation,
+            onChecked = { onSettings(settings.copy(preferAppleTranslation = it)) },
+        )
+        PanelDivider()
         SettingsRow(
             title = "Translation source",
             subtitle = "Local models are private. API translation also works with other languages.",

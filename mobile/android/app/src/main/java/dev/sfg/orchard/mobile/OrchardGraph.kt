@@ -123,13 +123,13 @@ class OrchardGraph(context: Context) {
         else appleMusic.musicVideo(track.id).ifBlank { null }
     }
     val library = LibraryRepository(LibraryCache(context), catalog, applicationScope)
-    val lyrics = LyricsRepository(http, appleLyrics = appleMusic::lyrics) { videoId ->
+    val lyrics = LyricsRepository(http, appleLyrics = appleMusic::lyrics, appleTranslation = appleMusic::lyricsTranslation) { videoId ->
         youtube.invoke("lyrics.youtube", JSONObject().put("session", auth.session().providerJson()).put("videoId", videoId))
             .text("text")
     }
     /** Lyrics in English, courtesy of a 20 MB model that has never heard a song in its life. */
     val lyricTranslation = dev.sfg.orchard.mobile.lyrics.translation.LyricTranslator(
-        context, http, settings.settings, applicationScope,
+        context, http, settings.settings, applicationScope, lyrics::appleTranslation,
     )
     /** Songs and playlists kept on this phone; no account or network needed. */
     val localLibrary = dev.sfg.orchard.mobile.local.LocalLibraryRepository(context, applicationScope, notify = { postWarning(it) })

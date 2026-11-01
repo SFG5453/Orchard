@@ -246,6 +246,8 @@ data class LyricLine(
     val words: List<LyricWord> = emptyList(),
     val adlibs: List<LyricWord> = emptyList(),
     val agentLane: String? = null,
+    /** Apple's line key, which its translations are indexed by. */
+    val key: String? = null,
 )
 
 data class LyricWord(

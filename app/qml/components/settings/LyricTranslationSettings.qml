@@ -27,6 +27,7 @@ LyricTranslationSettingsForm {
     translationEnabled: OrchardTranslation.enabled
     targetLanguage: OrchardTranslation.targetLanguage
     quality: OrchardTranslation.quality
+    preferApple: OrchardTranslation.preferAppleTranslation
     provider: OrchardTranslation.provider
     modelName: OrchardTranslation.model
     endpoint: OrchardTranslation.endpoint
@@ -55,6 +56,7 @@ LyricTranslationSettingsForm {
         OrchardTranslation.enabled = index > 0;
     }
     qualityPicker.onPicked: value => OrchardTranslation.quality = value
+    appleSwitch.onToggled: OrchardTranslation.preferAppleTranslation = appleSwitch.checked
     providerPicker.onActivated: index => {
         OrchardTranslation.provider = root.providerValues[index];
         keyField.clear();

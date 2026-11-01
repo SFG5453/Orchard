@@ -39,6 +39,7 @@ import java.util.concurrent.TimeUnit
 class LyricsRepository(
     http: OkHttpClient,
     private val appleLyrics: suspend (Track) -> String = { "" },
+    private val appleTranslation: suspend (Track, String) -> Map<String, String> = { _, _ -> emptyMap() },
     /** Plain lyrics from YouTube Music's Lyrics tab, via the provider's `lyrics.youtube`. */
     private val youtubeLyrics: suspend (videoId: String) -> String,
 ) {
@@ -56,6 +57,7 @@ class LyricsRepository(
     val providerOverrides = mutableOverrides.asStateFlow()
     private val mutableSources = MutableStateFlow<Map<String, LyricsProvider>>(emptyMap())
     val sources = mutableSources.asStateFlow()
+    private val appleTracks = LinkedHashMap<String, Track>()
 
     /** A source choice for this song, kept for the current app session. Null restores the saved order. */
     fun selectProvider(trackId: String, provider: LyricsProvider?) {
@@ -71,10 +73,22 @@ class LyricsRepository(
             mutableSources.update { it - track.id }
             val result = resolver.resolve(track, providers)
             result.provider?.let { provider ->
+                if (provider == LyricsProvider.APPLE) synchronized(appleTracks) {
+                    appleTracks.remove(track.id)
+                    appleTracks[track.id] = track
+                    while (appleTracks.size > 32) appleTracks.remove(appleTracks.keys.first())
+                }
                 mutableSources.update { (it - track.id + (track.id to provider)).entries.toList().takeLast(32).associate { it.toPair() } }
             }
             result.lines
         }
+
+    /** Apple's translation of the lyrics shown for [trackId] as `{line key: text}`; empty when they are not Apple's. */
+    suspend fun appleTranslation(trackId: String, language: String): Map<String, String> {
+        if (mutableSources.value[trackId] != LyricsProvider.APPLE) return emptyMap()
+        val track = synchronized(appleTracks) { appleTracks[trackId] } ?: return emptyMap()
+        return appleTranslation(track, language)
+    }
 
     private suspend fun fetch(track: Track, provider: LyricsProvider): List<LyricLine> {
         if (provider == LyricsProvider.APPLE) return LyricsParser.ttml(appleLyrics(track))
