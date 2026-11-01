@@ -46,6 +46,8 @@ internal class AppleMusicStream(
     val expiresAtMs: Long,
 ) {
     val duration: Double = durations.sum()
+    /** Resolved as Apple's 64 kbps encode. */
+    @Volatile var standard = false
     val appleSize: Long = ranges.last().first + ranges.last().second
 
     /** Init, pssh and sidx as served; set once the init segment is fetched. */

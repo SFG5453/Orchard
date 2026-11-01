@@ -47,6 +47,8 @@ The selected button is highlighted. **MAX** is disabled until a Qobuz account is
 - **MAX**: lossless and Hi-Res audio from Qobuz, up to 24-bit/192 kHz. Songs Qobuz can't match play at High.
 - **Atmos**: Dolby Atmos for Apple Music songs that have it, rendered for headphones. Other songs play at High.
 
+Apple Music songs have two stereo versions: 64 kbps AAC with **Saver** or **Normal**, and 256 kbps AAC with **High** or **MAX**. A change applies from the next Apple Music song.
+
 ## Use MAX quality with Qobuz
 
 MAX needs a Qobuz subscription and your own Qobuz API app ID and secret.

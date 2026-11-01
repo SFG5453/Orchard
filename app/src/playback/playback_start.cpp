@@ -170,8 +170,7 @@ void PlaybackController::setStreamQuality(const QString &quality) {
   if (m_qobuz)
     m_qobuz->setEnabled(quality == "max");
   emit streamQualityChanged();
-  // Apple Music picks its own bitrate; the setting is for YouTube and Qobuz. Atmos applies
-  // to the next Apple song.
+  // Apple songs switch between 64 kbps, 256 kbps and Atmos from the next song.
   if (m_track.isEmpty() || !m_auth->isSignedIn() || isAppleTrack(m_track))
     return;
   if ((!m_player || m_player->source().isEmpty()) && m_resumePaused)

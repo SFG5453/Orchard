@@ -38,8 +38,10 @@ using namespace widevine_protocol;
 
 namespace {
 // AAC-LC 256 kbps with AES-CTR first; the cbcs flavors carry the same audio.
-const QStringList kFlavors{QStringLiteral("28:ctrp256"), QStringLiteral("30:cbcp256"), QStringLiteral("32:ctrp64"),
-                           QStringLiteral("34:cbcp64")};
+const QStringList kHighFlavors{QStringLiteral("28:ctrp256"), QStringLiteral("30:cbcp256"), QStringLiteral("32:ctrp64"),
+                               QStringLiteral("34:cbcp64")};
+const QStringList kStandardFlavors{QStringLiteral("32:ctrp64"), QStringLiteral("34:cbcp64"), QStringLiteral("28:ctrp256"),
+                                   QStringLiteral("30:cbcp256")};
 // The current song, the prepared one and a song or two the listener skipped back to.
 constexpr int kOpenStreams = 4;
 
@@ -119,7 +121,7 @@ void AppleMusicStreams::requestPlayback(const QString &appleId, const QString &d
 void AppleMusicStreams::loadPlaylist(const QString &appleId, const QJsonObject &song, Resolved done) {
   QUrl playlistUrl;
   const QJsonArray assets = song.value(QStringLiteral("assets")).toArray();
-  for (const QString &flavor : kFlavors) {
+  for (const QString &flavor : m_standard ? kStandardFlavors : kHighFlavors) {
     for (const QJsonValue &asset : assets)
       if (asset[QStringLiteral("flavor")].toString() == flavor)
         playlistUrl = QUrl(asset[QStringLiteral("URL")].toString());

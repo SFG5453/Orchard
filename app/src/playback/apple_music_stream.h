@@ -56,6 +56,8 @@ public:
   void resolve(const QString &appleId, Resolved done);
   // The song's Dolby Atmos rendition ("atmos": true, E-AC-3), else the stereo stream.
   void resolveAtmos(const QString &appleId, Resolved done);
+  // Prefer Apple's 64 kbps encode for songs resolved after this; 256 kbps otherwise.
+  void setStandard(bool standard) { m_standard = standard; }
   // The AudioStreamProxy range reader for streams from resolve().
   void read(const QString &playbackId, qint64 start, qint64 end, Bytes done);
   // Forgets every stream and ends the host.
@@ -96,4 +98,5 @@ private:
   // Oldest first; the newest few streams stay open for the current and next song.
   QList<QString> m_order;
   quint32 m_nextStream{1};
+  bool m_standard{false};
 };

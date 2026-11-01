@@ -21,6 +21,8 @@ package dev.sfg.orchard.mobile
 
 import dev.sfg.orchard.mobile.model.AudioQuality
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
@@ -52,8 +54,19 @@ class AudioCacheVariantTest {
     @Test
     fun appleMusicSongsIgnoreProviderSettings() {
         val youtube = { audioCacheVariant(AudioQuality.MAX, true, "hires") }
-        assertEquals(APPLE_MUSIC_CACHE_VARIANT, sourceCacheVariant("am.songs.697195462", youtube))
+        assertEquals(APPLE_MUSIC_CACHE_VARIANT, sourceCacheVariant("am.songs.697195462", providerVariant = youtube))
         assertEquals(APPLE_MUSIC_CACHE_VARIANT, sourceCacheVariant("am.songs.697195462") { audioCacheVariant(AudioQuality.DATA_SAVER, false, "auto") })
-        assertEquals(youtube(), sourceCacheVariant("dQw4w9WgXcQ", youtube))
+        assertEquals(youtube(), sourceCacheVariant("dQw4w9WgXcQ", true, youtube))
+    }
+
+    @Test
+    fun appleMusicStandardKeepsItsOwnBytes() {
+        val youtube = { audioCacheVariant(AudioQuality.HIGH, false, "auto") }
+        assertEquals(APPLE_MUSIC_STANDARD_CACHE_VARIANT, sourceCacheVariant("am.songs.1", true, youtube))
+        assertTrue(appleMusicStandard(AudioQuality.DATA_SAVER))
+        assertTrue(appleMusicStandard(AudioQuality.NORMAL))
+        assertFalse(appleMusicStandard(AudioQuality.HIGH))
+        assertFalse(appleMusicStandard(AudioQuality.ATMOS))
+        assertFalse(appleMusicStandard(AudioQuality.MAX))
     }
 }

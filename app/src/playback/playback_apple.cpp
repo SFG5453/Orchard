@@ -96,6 +96,7 @@ void PlaybackController::resolveAppleStream(const QVariantMap &track, bool prepa
     else
       startResolvedStream(stream);
   };
+  m_appleStreams->setStandard(m_streamQuality == QStringLiteral("saver") || m_streamQuality == QStringLiteral("normal"));
   if (m_appleAccount->atmosAvailable() && m_streamQuality == QStringLiteral("atmos"))
     m_appleStreams->resolveAtmos(id, std::move(done));
   else

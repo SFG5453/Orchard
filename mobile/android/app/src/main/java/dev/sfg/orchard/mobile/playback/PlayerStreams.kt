@@ -38,6 +38,7 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import dev.sfg.orchard.mobile.OrchardGraph
+import dev.sfg.orchard.mobile.appleMusicStandard
 import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.AudioQuality
 import dev.sfg.orchard.mobile.model.StreamDetail
@@ -69,14 +70,19 @@ internal class PlayerStreams(
 ) {
     private val resolver = graph.streams
 
-    val appleMusic = AppleMusicStreams(graph.appleMusic, graph.http) {
-        when {
-            graph.settings.settings.value.homeSource != APPLE_MUSIC_SOURCE ->
-                "Choose Apple Music as the music source in Settings to play Apple Music songs."
-            !graph.appleMusic.signedIn() -> "Connect Apple Music in Settings to play this song."
-            else -> null
-        }
-    }
+    val appleMusic = AppleMusicStreams(
+        graph.appleMusic,
+        graph.http,
+        blocked = {
+            when {
+                graph.settings.settings.value.homeSource != APPLE_MUSIC_SOURCE ->
+                    "Choose Apple Music as the music source in Settings to play Apple Music songs."
+                !graph.appleMusic.signedIn() -> "Connect Apple Music in Settings to play this song."
+                else -> null
+            }
+        },
+        standard = { appleMusicStandard(graph.audioQuality()) },
+    )
 
     private val appleAtmos = AppleMusicAtmos(graph.appleMusic, graph.http)
 

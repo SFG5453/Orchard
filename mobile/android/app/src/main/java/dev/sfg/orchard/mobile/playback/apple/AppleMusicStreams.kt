@@ -38,6 +38,8 @@ internal class AppleMusicStreams(
     private val http: OkHttpClient,
     /** Null while Apple songs may play, else what the listener should do first. */
     private val blocked: () -> String?,
+    /** True while the quality setting asks for Apple's 64 kbps encode. */
+    private val standard: () -> Boolean = { false },
 ) {
     private val streams = ConcurrentHashMap<String, AppleMusicStream>()
     private val locks = ConcurrentHashMap<String, Any>()
@@ -47,13 +49,15 @@ internal class AppleMusicStreams(
         synchronized(locks.computeIfAbsent(sourceId) { Any() }) {
             cached(sourceId)?.let { return it }
             blocked()?.let { throw AppleMusicPlaybackException(it) }
-            val reply = apple { catalog.stream(sourceId) }
+            val wantStandard = standard()
+            val reply = apple { catalog.stream(sourceId, wantStandard) }
             val stream = try {
                 AppleMusicStream.parse(reply, STREAM_LIFETIME_MS)
             } catch (error: Exception) {
                 Log.w(TAG, "Unusable stream for $sourceId", error)
                 throw AppleMusicPlaybackException("Apple Music returned a stream Orchard cannot play.", error)
             }
+            stream.standard = wantStandard
             stream.head = stream.buildHead(init(stream))
                 ?: throw AppleMusicPlaybackException("Apple Music returned a stream Orchard cannot play.")
             Log.i(TAG, "Resolved $sourceId (${reply.optString("flavor")}, ${stream.bitrateKbps} kbps)")
@@ -64,7 +68,7 @@ internal class AppleMusicStreams(
 
     fun cached(sourceId: String): AppleMusicStream? {
         val stream = streams[sourceId] ?: return null
-        if (stream.expiresAtMs > System.currentTimeMillis()) return stream
+        if (stream.expiresAtMs > System.currentTimeMillis() && stream.standard == standard()) return stream
         streams.remove(sourceId, stream)
         return null
     }

@@ -193,8 +193,10 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
     }
 
     /** Playlist layout and license details of a catalog song's Widevine stream. */
-    suspend fun stream(id: String): JSONObject =
-        call("playback.stream", JSONObject().put("track", JSONObject().put("id", id)))
+    /** [standard] prefers Apple's 64 kbps encode over 256 kbps. */
+    suspend fun stream(id: String, standard: Boolean = false): JSONObject =
+        call("playback.stream", JSONObject().put("track", JSONObject().put("id", id))
+            .put("quality", if (standard) "standard" else "high"))
 
     suspend fun atmos(id: String): JSONObject = call("playback.atmos", JSONObject().put("id", id))
 

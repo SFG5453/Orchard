@@ -24,8 +24,9 @@ import { AppleMusicError } from './client.js';
 import { parseBrowseId } from './ids.js';
 
 const PLAYBACK_URL = 'https://play.itunes.apple.com/WebObjects/MZPlay.woa/wa/webPlayback';
-// AAC-LC 256 kbps with AES-CTR first; the cbcs flavors carry the same audio.
-const FLAVORS = ['28:ctrp256', '30:cbcp256', '32:ctrp64', '34:cbcp64'];
+// AAC-LC with AES-CTR first; the cbcs flavors carry the same audio. Standard is Apple's 64 kbps encode.
+const HIGH_FLAVORS = ['28:ctrp256', '30:cbcp256', '32:ctrp64', '34:cbcp64'];
+const STANDARD_FLAVORS = ['32:ctrp64', '34:cbcp64', '28:ctrp256', '30:cbcp256'];
 const WIDEVINE_KEYFORMAT = 'edef8ba9';
 
 function attributes(list) {
@@ -130,7 +131,7 @@ export function createPlayback(client, fetchImpl) {
   }
 
   /** The Widevine stream of a catalog song: playlist layout plus what its license needs. */
-  async function stream(track) {
+  async function stream(track, quality = 'high') {
     const appleId = playbackId(track);
     if (!appleId) throw new AppleMusicError(0, 'not_playable', 'This song is only in your library and cannot be streamed.');
     const answer = await post(PLAYBACK_URL, { salableAdamId: appleId });
@@ -140,7 +141,8 @@ export function createPlayback(client, fetchImpl) {
         answer.customerMessage || 'Apple Music did not offer this song for playback.');
     }
     const assets = song.assets || [];
-    const asset = FLAVORS.map((flavor) => assets.find((item) => item.flavor === flavor)).find((item) => item?.URL);
+    const flavors = quality === 'standard' ? STANDARD_FLAVORS : HIGH_FLAVORS;
+    const asset = flavors.map((flavor) => assets.find((item) => item.flavor === flavor)).find((item) => item?.URL);
     const licenseUrl = String(song['hls-key-server-url'] || '');
     if (!asset || !licenseUrl.startsWith('https://'))
       throw new AppleMusicError(0, 'no_widevine', 'Apple Music has no Widevine stream for this song.');

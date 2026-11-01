@@ -74,6 +74,18 @@ function appleMusic(routes) {
   return { client, requests };
 }
 
+test('standard quality prefers the 64 kbps flavor', async () => {
+  const { client } = appleMusic([
+    [/^POST .*webPlayback$/, 200, { songList: [{
+      'hls-key-server-url': 'https://play.itunes.apple.com/WebObjects/MZPlay.woa/wa/acquireWebPlaybackLicense',
+      assets: [{ flavor: '28:ctrp256', URL: 'https://example.invalid/high.m3u8' }, { flavor: '32:ctrp64', URL: PLAYLIST_URL }]
+    }] }],
+    [/^GET .*P697195462_default\.m3u8$/, 200, playlist()]
+  ]);
+  const stream = await client.playback.stream({ id: 'am.songs.697195462' }, 'standard');
+  assert.equal(stream.flavor, '32:ctrp64');
+});
+
 test('resolves the preferred flavor and licenses it', async () => {
   const { client, requests } = appleMusic([
     [/^POST .*webPlayback$/, 200, { songList: [{
