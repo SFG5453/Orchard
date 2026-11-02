@@ -40,6 +40,7 @@ void PlaybackController::setRemoteProvider(RemoteProvider *provider) {
 void PlaybackController::remoteChanged() {
   emit stateChanged();
   emit queueChanged();
+  updateSystemMedia();
 }
 
 bool PlaybackController::forwardRemote(const QString &action, const QVariantMap &args) {

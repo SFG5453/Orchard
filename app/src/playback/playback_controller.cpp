@@ -286,7 +286,7 @@ PlaybackController::PlaybackController(YouTubeProvider *provider,
               } else if (kind == QStringLiteral("seek")) {
                 seek(value.toDouble());
               } else if (kind == QStringLiteral("seek-relative")) {
-                seek(position() + value.toDouble());
+                seek(shownPosition() + value.toDouble());
               } else if (kind == QStringLiteral("set-shuffle")) {
                 setShuffleEnabled(value.toBool());
               } else if (kind == QStringLiteral("set-repeat-mode")) {
