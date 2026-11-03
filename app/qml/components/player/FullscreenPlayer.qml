@@ -157,11 +157,13 @@ FullscreenPlayerForm {
     onCanvasStageEnabledChanged: requestTallArtwork()
     onAnimatedArtworkEnabledChanged: requestTallArtwork()
     onTrackIdChanged: {
+        queuePane.currentTrack = OrchardPlayback.track;
         requestTallArtwork();
         if (!visible || fading || Date.now() - fadeEndedAt < 500)
             return;
         bumpAnimation.restart();
     }
+    Component.onCompleted: queuePane.currentTrack = OrchardPlayback.track
 
     Connections {
         target: OrchardAnimatedArtwork
@@ -245,7 +247,8 @@ FullscreenPlayerForm {
     queuePane.queueItems: OrchardPlayback.queue || []
     queuePane.continuous: OrchardPlayback.queueLayout === "continuous"
     queuePane.history: queuePane.continuous ? (OrchardPlayback.history || []) : []
-    queuePane.currentTrack: OrchardPlayback.track
+    // Snapshot from onTrackIdChanged; track notifies on every position tick, which would rebuild and rescroll the list.
+    queuePane.currentTrack: ({})
     queuePane.autoplayEnabled: OrchardPlayback.autoplayEnabled
     queuePane.clearButton.onClicked: OrchardPlayback.clearQueue()
     queuePane.list.delegate: Item {
