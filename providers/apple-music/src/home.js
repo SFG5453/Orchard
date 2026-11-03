@@ -20,12 +20,22 @@
 import { AppleMusicError } from './client.js';
 import { APPLE_MUSIC_SOURCE } from './ids.js';
 import { ARTIST_INCLUDES, items } from './normalize.js';
+import { createStationArtwork } from './stationArtwork.js';
+
+// Apple's daily and weekly personal playlists (Your Essentials, New Music, Chill...).
+export const PERSONAL_MIXES_KEY = 'apple-personal-mixes';
+
+function isPersonalMixShelf(resources) {
+  return resources.length > 0 && resources.every((entry) => entry.attributes?.playlistType === 'personal-mix');
+}
 
 function titleOf(value) {
   return typeof value === 'string' ? value : value?.stringForDisplay || '';
 }
 
 export function createHomeCatalog(client) {
+  const stationArtwork = createStationArtwork(client);
+
   async function recommendationSections(resources, seen = new Set()) {
     const sections = [];
     for (const resource of resources) {
@@ -33,10 +43,10 @@ export function createHomeCatalog(client) {
       seen.add(resource.id);
       const contents = resource.relationships?.contents;
       const children = [...(resource.relationships?.recommendations?.data || [])];
-      const cards = items(contents?.data);
+      const cards = await stationArtwork.fill(items(contents?.data));
       if (cards.length) {
         sections.push({
-          key: `apple-recommendation-${resource.id}`,
+          key: isPersonalMixShelf(contents.data) ? PERSONAL_MIXES_KEY : `apple-recommendation-${resource.id}`,
           title: titleOf(resource.attributes?.title) || 'For You',
           items: cards,
           browsePayload: contents.next ? { browseId: `am.recommendations.${resource.id}`, params: '' } : null
@@ -72,7 +82,7 @@ export function createHomeCatalog(client) {
     const prefix = 'am.recommendations.';
     if (!String(id).startsWith(prefix) || !String(id).slice(prefix.length)) return [];
     const response = await client.all(`/v1/me/recommendations/${encodeURIComponent(id.slice(prefix.length))}/contents`, ARTIST_INCLUDES);
-    return items(response.items);
+    return stationArtwork.fill(items(response.items));
   }
 
   return { home, homeSection };

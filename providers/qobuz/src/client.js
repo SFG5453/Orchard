@@ -46,28 +46,21 @@ export function qobuzRequestSignature(method, args, timestamp, secret) {
 }
 
 export function createQobuzClient({
-  bootstrap,
   credentials,
   fetchImpl = fetch,
   softwareVersion = '@orchardmusic/qobuz'
 } = {}) {
-  let session = null;
-  let pendingSession = null;
-
-  async function authHeaders({ withSession = false } = {}) {
+  async function authHeaders() {
     const auth = await credentials();
     if (!auth?.token) throw new Error('Qobuz is not connected');
-    // User-supplied app credentials replace the web player's, so no bootstrap fetch.
-    const web = auth.appId ? { appId: String(auth.appId) } : await bootstrap.get();
+    if (!auth.appId || !auth.appSecret) throw new Error('Qobuz needs your own app ID and app secret');
     return {
-      web,
       auth,
       headers: {
         'Accept': 'application/json',
         'User-Agent': QOBUZ_USER_AGENT,
-        'X-App-Id': web.appId,
-        'X-User-Auth-Token': auth.token,
-        ...(withSession && session?.sessionId ? { 'X-Session-Id': session.sessionId } : {})
+        'X-App-Id': String(auth.appId),
+        'X-User-Auth-Token': auth.token
       }
     };
   }
@@ -80,8 +73,8 @@ export function createQobuzClient({
     throw error;
   }
 
-  async function apiGet(path, params = {}, options = {}) {
-    const { headers } = await authHeaders(options);
+  async function apiGet(path, params = {}) {
+    const { headers } = await authHeaders();
     const query = formEncode(params);
     return responseJson(await fetchImpl(`${QOBUZ_BASE_URL}/${path}?${query}`, { headers }), `Qobuz ${path}`);
   }
@@ -97,39 +90,6 @@ export function createQobuzClient({
       },
       body: payload
     }), `Qobuz ${path}`);
-  }
-
-  async function renewSession() {
-    const { web, headers } = await authHeaders();
-    const timestamp = String(Math.floor(Date.now() / 1000));
-    const args = { profile: 'qbz-1' };
-    const body = {
-      ...args,
-      request_ts: timestamp,
-      request_sig: signedRequest('sessionstart', args, timestamp, web.rngInit)
-    };
-    const value = await responseJson(await fetchImpl(`${QOBUZ_BASE_URL}/session/start`, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: formEncode(body)
-    }), 'Qobuz session/start');
-    if (!value?.session_id || !value?.infos) throw new Error('Qobuz returned an incomplete playback session');
-    session = {
-      sessionId: String(value.session_id),
-      infos: String(value.infos),
-      expiresAt: Number(value.expires_at || 0) * 1000
-    };
-    return session;
-  }
-
-  async function ensureSession({ refresh = false } = {}) {
-    if (!refresh && session?.expiresAt > Date.now() + 60_000) return session;
-    if (!pendingSession) {
-      pendingSession = renewSession().finally(() => {
-        pendingSession = null;
-      });
-    }
-    return pendingSession;
   }
 
   async function search(query) {
@@ -169,8 +129,8 @@ export function createQobuzClient({
   }
 
   // Signed with the user's app secret; returns one plain FLAC URL.
-  async function directFileUrl(trackId, quality, auth) {
-    const { headers } = await authHeaders();
+  async function streamingInfo(trackId, quality) {
+    const { auth, headers } = await authHeaders();
     const timestamp = String(Math.floor(Date.now() / 1000));
     const args = {
       format_id: QOBUZ_FORMAT_IDS[normalizeQobuzQuality(quality)],
@@ -188,39 +148,7 @@ export function createQobuzClient({
     );
     if (!value?.url) throw new Error('Qobuz returned no file URL');
     if (value.sample) throw new Error('Qobuz returned a preview clip; the account cannot stream this track');
-    return { ...value, direct: true };
-  }
-
-  async function streamingInfo(trackId, quality, { retry = true } = {}) {
-    const auth = await credentials();
-    if (auth?.appSecret) return directFileUrl(trackId, quality, auth);
-    await ensureSession();
-    const { web, headers } = await authHeaders({ withSession: true });
-    const timestamp = String(Math.floor(Date.now() / 1000));
-    const args = {
-      format_id: QOBUZ_FORMAT_IDS[normalizeQobuzQuality(quality)],
-      intent: 'stream',
-      track_id: Number(trackId)
-    };
-    const params = {
-      ...args,
-      request_ts: timestamp,
-      request_sig: signedRequest('fileurl', args, timestamp, web.rngInit)
-    };
-    const query = formEncode(params);
-    const response = await fetchImpl(`${QOBUZ_BASE_URL}/file/url?${query}`, { headers });
-    if (!response.ok && retry && [401, 403, 410].includes(response.status)) {
-      session = null;
-      await ensureSession({ refresh: true });
-      return streamingInfo(trackId, quality, { retry: false });
-    }
-    const value = await responseJson(response, 'Qobuz file/url');
-    if (!value?.url_template) throw new Error('Qobuz returned no segmented playback URL');
-    return {
-      ...value,
-      session: { ...session },
-      rngInit: web.rngInit
-    };
+    return value;
   }
 
   async function reportStreamingStart(source) {
@@ -242,13 +170,9 @@ export function createQobuzClient({
     }, { json: true });
   }
 
-  function reset() {
-    session = null;
-    pendingSession = null;
-  }
+  function reset() {}
 
   return {
-    ensureSession,
     reportStreamingEnd,
     reportStreamingStart,
     reset,

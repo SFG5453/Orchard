@@ -23,6 +23,7 @@ import android.util.Log
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import dev.sfg.orchard.mobile.catalog.isAppleMusicId
 
 /** Answers a failed load on the session player: refresh the stream, fall back, or give up. */
 @UnstableApi
@@ -56,9 +57,15 @@ internal class PlaybackRecovery(
             postWarning("Video unavailable. Continuing with audio.")
             return
         }
+        if (streams.selectedAppleAtmos(failedUri)) {
+            Log.w(TAG, "Atmos playback failed; continuing in stereo", error)
+            replace(player, MediaItemMapper.asAppleStereoFallback(failedItem), player.currentPosition.coerceAtLeast(0), player.playWhenReady)
+            postWarning("Atmos unavailable. Continuing in stereo.")
+            return
+        }
         val resolvedStream = streams.forget(failedUri.toString())
         val responseCode = playbackHttpResponseCode(error)
-        val rejectedClient = resolvedStream != null && responseCode != null &&
+        val rejectedClient = !isAppleMusicId(sourceId) && resolvedStream != null && responseCode != null &&
             resolver.reject(sourceId, resolvedStream, responseCode)
         if (!rejectedClient) resolver.resetForRetry(sourceId)
         if (MediaItemMapper.requiresAuthenticatedDirect(failedUri)) {

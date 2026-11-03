@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.sfg.orchard.mobile.artwork.LocalTallArtToggle
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.TrackActionsPopup
 
@@ -65,6 +66,7 @@ internal fun PlayerHeader(
     isDownloaded: Boolean,
     onDownload: (() -> Unit)?,
     onRemoveDownload: (() -> Unit)?,
+    onWatchVideo: (() -> Unit)? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     if (menuOpen) {
@@ -76,8 +78,10 @@ internal fun PlayerHeader(
             onDownload = if (!isDownloaded) onDownload else null,
             onRemoveDownload = if (isDownloaded) onRemoveDownload else null,
             onShare = onShare,
+            onWatchVideo = onWatchVideo,
             onViewArtist = onOpenArtist,
             onViewAlbum = onOpenAlbum,
+            tallArt = LocalTallArtToggle.current,
         )
     }
 

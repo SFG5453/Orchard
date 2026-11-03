@@ -19,6 +19,9 @@
 
 #include "music_video_controller.h"
 
+#include "apple_music_picture.h"
+#include "apple_music_stream.h"
+#include "integrations/apple_music.h"
 #include "auth/auth_manager.h"
 #include "letterbox.h"
 #include "local/local_track.h"
@@ -36,11 +39,15 @@
 namespace {
 
 const QString kMaxHeightKey = QStringLiteral("musicVideo/maxHeight");
+const QString kUpscalingKey = QStringLiteral("musicVideo/upscaling");
+const QString kSharpnessKey = QStringLiteral("musicVideo/sharpness");
 
 bool isYouTubeId(const QString &id) {
   static const QRegularExpression pattern(QStringLiteral("^[\\w-]{11}$"));
   return pattern.match(id).hasMatch();
 }
+
+bool isAppleSongId(const QString &id) { return id.startsWith(QStringLiteral("am.songs.")); }
 
 } // namespace
 
@@ -62,7 +69,27 @@ MusicVideoController::MusicVideoController(YouTubeProvider *provider, AuthManage
   // One frame a second is enough; bars do not move within a video.
   m_frameTimer.setInterval(1000);
   connect(&m_frameTimer, &QTimer::timeout, this, &MusicVideoController::sampleFrame);
-  m_maxHeight = QSettings().value(kMaxHeightKey, m_maxHeight).toInt();
+  QSettings settings;
+  m_maxHeight = settings.value(kMaxHeightKey, m_maxHeight).toInt();
+  m_upscaling = settings.value(kUpscalingKey, m_upscaling).toBool();
+  m_sharpness = qBound(0.0, settings.value(kSharpnessKey, m_sharpness).toDouble(), 1.0);
+  loadPipSettings();
+  syncTrack();
+}
+
+void MusicVideoController::setAppleMusic(AppleMusic *account) {
+  if (m_applePicture || !AppleMusicStreams::available())
+    return;
+  m_account = account;
+  m_applePicture = new AppleMusicPicture(account, m_playback, this);
+  m_applePicture->setSink(m_sink);
+  connect(m_applePicture, &AppleMusicPicture::started, this, [this] {
+    m_height = m_applePicture->height();
+    m_heights = m_applePicture->heights();
+    setStatus(QStringLiteral("ready"));
+  });
+  connect(m_applePicture, &AppleMusicPicture::failed, this,
+          [this](const QString &message) { setStatus(QStringLiteral("error"), message); });
   syncTrack();
 }
 
@@ -72,6 +99,8 @@ QRectF MusicVideoController::contentRect() const {
 
 void MusicVideoController::watchFrames(QObject *sink) {
   m_sink = qobject_cast<QVideoSink *>(sink);
+  if (m_applePicture)
+    m_applePicture->setSink(m_sink);
   if (m_sink)
     m_frameTimer.start();
   else
@@ -114,20 +143,60 @@ void MusicVideoController::setMaxHeight(int height) {
     resolveStream();
 }
 
+void MusicVideoController::setUpscaling(bool enabled) {
+  if (enabled == m_upscaling)
+    return;
+  m_upscaling = enabled;
+  QSettings().setValue(kUpscalingKey, enabled);
+  emit changed();
+}
+
+void MusicVideoController::setSharpness(double sharpness) {
+  sharpness = qBound(0.0, sharpness, 1.0);
+  if (qFuzzyCompare(sharpness, m_sharpness))
+    return;
+  m_sharpness = sharpness;
+  QSettings().setValue(kSharpnessKey, sharpness);
+  emit changed();
+}
+
+QString MusicVideoController::qualityNote() const {
+#ifdef Q_OS_LINUX
+  // Apple licenses taller renditions only to players with HDCP output, which Linux cannot report.
+  if (m_apple)
+    return tr("Apple limits videos on Linux to 486p.");
+#endif
+  return {};
+}
+
 bool MusicVideoController::available() const {
   return !m_videoId.isEmpty() && m_status != QStringLiteral("checking") &&
          m_status != QStringLiteral("unavailable");
 }
 
 void MusicVideoController::show() {
-  if (m_open)
+  if (m_open) {
+    m_pip = false;
+    m_mini = false;
+    emit changed();
     return;
+  }
   m_open = true;
   if (!m_videoId.isEmpty())
     resolveStream();
-  else if (m_searchRequest == 0 && !m_lookups.contains(m_trackId) && isYouTubeId(m_trackId) &&
-           !local::isLocalTrack(m_track))
-    lookup(); // Retries a lookup that failed on the network.
+  else
+    retryLookup();
+}
+
+void MusicVideoController::retryLookup() {
+  const bool appleSong = isAppleSongId(m_trackId) && m_applePicture;
+  if (m_status == QStringLiteral("checking") || local::isLocalTrack(m_track))
+    emit changed();
+  else if (appleSong && !m_appleLookups.contains(m_trackId))
+    appleLookup();
+  else if (m_searchRequest == 0 && !m_lookups.contains(m_trackId) &&
+           (isYouTubeId(m_trackId) || isAppleSongId(m_trackId)))
+    lookup();
   else
     emit changed();
 }
@@ -135,6 +204,7 @@ void MusicVideoController::show() {
 void MusicVideoController::playVideo(const QVariantMap &media) {
   const bool sameTrack = media.value(QStringLiteral("id")).toString() == m_trackId;
   m_open = true;
+  m_mini = false;
   clearStream();
   setStatus(QStringLiteral("loading"));
   // Starts the row like any catalog click. A new id reaches syncTrack, which resolves
@@ -147,14 +217,16 @@ void MusicVideoController::playVideo(const QVariantMap &media) {
   }
   if (!m_videoId.isEmpty())
     resolveStream();
-  else if (m_searchRequest == 0)
-    lookup();
+  else
+    retryLookup();
 }
 
 void MusicVideoController::hide() {
   if (!m_open)
     return;
   m_open = false;
+  m_pip = false;
+  m_mini = false;
   clearStream();
   m_playback->playAlbumSource();
   if (!m_videoId.isEmpty())
@@ -179,6 +251,25 @@ void MusicVideoController::syncTrack() {
   m_searchRequest = 0;
   m_streamRequest = 0;
   clearStream();
+  m_appleSong = false;
+  m_apple = m_applePicture && id.startsWith(QStringLiteral("am.music-videos."));
+  if (m_apple) {
+    m_videoId = track.value(QStringLiteral("appleId")).toString();
+    if (m_videoId.isEmpty())
+      m_videoId = id.section(QLatin1Char('.'), 2);
+    if (m_open)
+      resolveStream();
+    else
+      setStatus(QStringLiteral("available"));
+    return;
+  }
+  if (isAppleSongId(id) && !local::isLocalTrack(track)) {
+    if (m_applePicture)
+      appleLookup();
+    else
+      lookup();
+    return;
+  }
   if (id.isEmpty() || local::isLocalTrack(track) || !isYouTubeId(id)) {
     setStatus(QString());
     return;
@@ -207,9 +298,63 @@ void MusicVideoController::lookup() {
       {QStringLiteral("filter"), QStringLiteral("videos")}});
 }
 
+void MusicVideoController::appleLookup() {
+  const auto found = m_appleLookups.constFind(m_trackId);
+  if (found != m_appleLookups.cend()) {
+    useAppleVideo(*found);
+    return;
+  }
+  setStatus(QStringLiteral("checking"));
+  const QString trackId = m_trackId;
+  QString songId = m_track.value(QStringLiteral("appleId")).toString();
+  if (songId.isEmpty())
+    songId = trackId;
+  m_account->musicVideo(songId, [this, trackId](const QJsonObject &page, const QString &error) {
+    const QString videoId = page.value(QStringLiteral("videoId")).toString();
+    // Failures stay uncached, so reopening the player asks Apple again.
+    if (error.isEmpty())
+      m_appleLookups.insert(trackId, videoId);
+    if (trackId == m_trackId)
+      useAppleVideo(videoId);
+  });
+}
+
+void MusicVideoController::useAppleVideo(const QString &videoId) {
+  if (videoId.isEmpty()) {
+    lookup();
+    return;
+  }
+  m_apple = true;
+  m_appleSong = true;
+  m_videoId = videoId;
+  if (m_open)
+    resolveStream();
+  else
+    setStatus(QStringLiteral("available"));
+}
+
 void MusicVideoController::resolveStream() {
   clearStream();
   setStatus(QStringLiteral("loading"));
+  if (m_apple) {
+    m_applePicture->start(m_videoId, m_maxHeight);
+    // An Apple music video item already plays its own soundtrack; a song swaps to it.
+    if (!m_appleSong)
+      return;
+    const QString trackId = m_trackId;
+    const QString videoId = m_videoId;
+    m_playback->resolveAppleVideo(videoId, [this, trackId, videoId](const QJsonObject &stream, const QString &error) {
+      if (!m_open || trackId != m_trackId || videoId != m_videoId)
+        return;
+      if (stream.isEmpty()) {
+        clearStream();
+        setStatus(QStringLiteral("error"), error);
+        return;
+      }
+      m_playback->playVideoSource(stream);
+    });
+    return;
+  }
   m_streamRequest = m_provider->invoke(QStringLiteral("playback.resolveVideo"), QJsonObject{
       {QStringLiteral("session"), m_auth->sessionObject()},
       {QStringLiteral("streamQuality"), QStringLiteral("high")},
@@ -271,6 +416,8 @@ void MusicVideoController::setStatus(const QString &status, const QString &error
 }
 
 void MusicVideoController::clearStream() {
+  if (m_applePicture)
+    m_applePicture->stop();
   resetContentRect();
   m_height = 0;
   m_heights.clear();

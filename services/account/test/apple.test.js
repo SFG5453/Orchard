@@ -247,3 +247,19 @@ it("purges usage older than yesterday", async () => {
   await purgeAppleTokenUsage(env, NOW);
   assert.deepEqual(env.DB.raw.prepare("SELECT user_id FROM apple_token_daily_usage").all().map(row => row.user_id), ["user-1"]);
 });
+
+it("issues Shazam tokens without an origin claim", async () => {
+  const response = await call({ path: "/apple/shazam-token" });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const [header, claims] = claimsOf(body);
+  assert.deepEqual(header, { alg: "ES256", kid: "KEY1234567" });
+  assert.deepEqual(claims, { iss: "TEAM123456", iat: NOW, exp: NOW + APPLE_DEVELOPER_TOKEN_SECONDS });
+  assertSignature(body.developer_token);
+});
+
+it("shares the daily cap and session check with Shazam tokens", async () => {
+  assert.equal((await call({ path: "/apple/shazam-token", auth: null })).status, 401);
+  for (let i = 0; i < APPLE_DAILY_TOKENS; i++) assert.equal((await call()).status, 200);
+  assert.equal((await call({ path: "/apple/shazam-token" })).status, 429);
+});

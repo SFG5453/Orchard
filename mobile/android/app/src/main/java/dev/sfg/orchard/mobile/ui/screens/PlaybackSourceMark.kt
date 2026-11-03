@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -43,19 +45,20 @@ internal fun playbackSourceHasMark(source: String): Boolean = when (source.lower
     else -> false
 }
 
-/** Provider icon for the playing track. Draws nothing for local files and providers without a mark. */
+/** One-color provider icon for the playing track, drawn in [tint]. Draws nothing for local files and providers without a mark. */
 @Composable
-internal fun PlaybackSourceMark(source: String, modifier: Modifier = Modifier, size: Dp = MarkSize) {
+internal fun PlaybackSourceMark(source: String, tint: Color, modifier: Modifier = Modifier, size: Dp = MarkSize) {
     when (source.lowercase()) {
         YOUTUBE_SOURCE -> Image(
-            painter = painterResource(R.drawable.ic_source_youtube_music),
+            painter = painterResource(R.drawable.ic_source_youtube_music_mark),
             contentDescription = "Playing from YouTube Music",
             modifier = modifier.size(size),
+            colorFilter = ColorFilter.tint(tint),
         )
         // The logo only ships in builds that bundle the local Apple Music artwork.
         APPLE_MUSIC_SOURCE -> if (BuildConfig.APPLE_MUSIC_LOGO) {
             Box(modifier.size(size).semantics { contentDescription = "Playing from Apple Music" }) {
-                AppleMusicLogo(Modifier.size(size))
+                AppleMusicMark(Modifier.size(size), tint)
             }
         }
     }

@@ -7,6 +7,7 @@ package dev.sfg.orchard.mobile.settings
 
 import dev.sfg.orchard.mobile.model.LyricsProvider
 import dev.sfg.orchard.mobile.model.LyricsProviderConfig
+import dev.sfg.orchard.mobile.model.visibleLyricsProviders
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -34,8 +35,37 @@ class LyricsProviderPreferencesTest {
             {"provider":"unknown"}, {"provider":"betterlyrics","enabled":false},
             {"provider":"betterlyrics","enabled":true}
         ]""")
-        assertEquals(LyricsProviderConfig(LyricsProvider.BETTER_LYRICS, false), decoded.first())
+        assertEquals(LyricsProviderConfig(LyricsProvider.APPLE), decoded.first())
+        assertEquals(LyricsProviderConfig(LyricsProvider.BETTER_LYRICS, false), decoded[1])
         assertEquals(LyricsProvider.entries.size, decoded.size)
         assertEquals(LyricsProvider.entries.toSet(), decoded.map { it.provider }.toSet())
+    }
+
+    @Test
+    fun appleLeadsMigratedPreferencesWithoutChangingSavedOrderOrSwitches() {
+        val decoded = decodeLyricsProviders("""[
+            {"provider":"youtube","enabled":false}, {"provider":"lrclib"},
+            {"provider":"bini","enabled":false}
+        ]""")
+        assertEquals(listOf(LyricsProvider.APPLE, LyricsProvider.YOUTUBE, LyricsProvider.LRCLIB,
+            LyricsProvider.BINI, LyricsProvider.BETTER_LYRICS, LyricsProvider.LYRICS_PLUS), decoded.map { it.provider })
+        assertFalse(decoded[1].enabled)
+        assertFalse(decoded[3].enabled)
+        assertEquals(decoded, decodeLyricsProviders(encodeLyricsProviders(decoded)))
+    }
+
+    @Test
+    fun connectionReplacesOnlyAppleMirrorsAndRetainsHiddenPreferences() {
+        val saved = LyricsProvider.entries.reversed().map {
+            LyricsProviderConfig(it, it != LyricsProvider.APPLE && it != LyricsProvider.BINI)
+        }
+        val connected = visibleLyricsProviders(saved, true)
+        assertEquals(listOf(LyricsProvider.YOUTUBE, LyricsProvider.LRCLIB, LyricsProvider.APPLE),
+            connected.map { it.provider })
+        assertFalse(connected.last().enabled)
+        val disconnected = visibleLyricsProviders(saved, false)
+        assertEquals(saved.filter { it.provider != LyricsProvider.APPLE }, disconnected)
+        assertFalse(disconnected.first { it.provider == LyricsProvider.BINI }.enabled)
+        assertEquals(saved, decodeLyricsProviders(encodeLyricsProviders(saved)))
     }
 }

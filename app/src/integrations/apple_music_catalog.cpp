@@ -22,8 +22,10 @@
 #include "providers/runtime/provider_runtime.h"
 
 #include <QCryptographicHash>
+#include <QJsonArray>
 #include <QJsonValue>
 #include <QLocale>
+#include <QSettings>
 
 namespace {
 QString sessionKey(const QString &developerToken, const QString &userToken) {
@@ -59,8 +61,7 @@ void AppleMusic::configure(std::function<void(const QString &error)> done) {
           {QStringLiteral("developerToken"), developerToken},
           {QStringLiteral("userToken"), m_userToken},
           {QStringLiteral("storefront"), storefront},
-          // The token's origin claim names the sign-in page's origin.
-          {QStringLiteral("origin"), QStringLiteral("https://appassets.androidplatform.net")},
+          {QStringLiteral("origin"), tokenOrigin()},
       });
     };
     const QString region = regionStorefront();
@@ -134,13 +135,25 @@ void AppleMusic::detail(const QString &browseId, PageReply done) {
   const QString type = browseId.section(QLatin1Char('.'), 1, 1);
   const QString method = type == QStringLiteral("artists")   ? QStringLiteral("catalog.artist")
                          : type == QStringLiteral("albums")  ? QStringLiteral("catalog.album")
-                         : type == QStringLiteral("playlists") ? QStringLiteral("catalog.playlist")
-                                                              : QString();
+                         : type == QStringLiteral("playlists") || type == QStringLiteral("stations")
+                             ? QStringLiteral("catalog.playlist")
+                             : QString();
   if (method.isEmpty()) {
     done({}, tr("Apple Music cannot open this."));
     return;
   }
   call(method, {{QStringLiteral("browseId"), browseId}},
+       [done](const QJsonValue &page, const QString &error) { done(page.toObject(), error); });
+}
+
+void AppleMusic::playlistStart(const QString &browseId, PageReply done) {
+  call(QStringLiteral("catalog.playlist"), {{QStringLiteral("browseId"), browseId}, {QStringLiteral("firstPage"), true}},
+       [done](const QJsonValue &page, const QString &error) { done(page.toObject(), error); });
+}
+
+void AppleMusic::playlistMore(const QString &continuation, int startIndex, PageReply done) {
+  call(QStringLiteral("catalog.playlist.more"),
+       {{QStringLiteral("continuation"), continuation}, {QStringLiteral("startIndex"), startIndex}},
        [done](const QJsonValue &page, const QString &error) { done(page.toObject(), error); });
 }
 
@@ -192,6 +205,68 @@ void AppleMusic::lyrics(const QJsonObject &track, PageReply done) {
     return;
   }
   call(QStringLiteral("lyrics"), track,
+       [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
+}
+
+void AppleMusic::lyricsTranslation(const QJsonObject &track, PageReply done) {
+  if (!connected()) {
+    done({}, {});
+    return;
+  }
+  call(QStringLiteral("lyrics.translation"), track,
+       [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
+}
+
+void AppleMusic::audioAnalysis(const QStringList &ids, PageReply done) {
+  if (!connected()) {
+    done({}, {});
+    return;
+  }
+  call(QStringLiteral("catalog.audioAnalysis"), {{QStringLiteral("ids"), QJsonArray::fromStringList(ids)}},
+       [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
+}
+
+void AppleMusic::reportPlay(const QString &method, const QJsonObject &play) {
+  if (!connected() || !m_playHistoryEnabled)
+    return;
+  call(method, play, [method](const QJsonValue &, const QString &error) {
+    if (!error.isEmpty())
+      qWarning().noquote() << "Apple Music" << method << "failed:" << error;
+  });
+}
+
+void AppleMusic::setPlayHistoryEnabled(bool enabled) {
+  if (m_playHistoryEnabled == enabled)
+    return;
+  m_playHistoryEnabled = enabled;
+  QSettings().setValue(QStringLiteral("appleMusic/playHistoryEnabled"), enabled);
+  emit changed();
+}
+
+void AppleMusic::atmos(const QString &appleId, PageReply done) {
+  if (!connected()) {
+    done({}, tr("Connect Apple Music in Settings to play this song."));
+    return;
+  }
+  call(QStringLiteral("playback.atmos"), {{QStringLiteral("id"), appleId}},
+       [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
+}
+
+void AppleMusic::upNext(const QString &seed, PageReply done) {
+  if (!connected()) {
+    done({}, tr("Connect Apple Music in Settings to play this song."));
+    return;
+  }
+  call(QStringLiteral("catalog.upNext"), {{QStringLiteral("seed"), seed}},
+       [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
+}
+
+void AppleMusic::musicVideo(const QString &songId, PageReply done) {
+  if (!connected()) {
+    done({}, tr("Connect Apple Music in Settings first."));
+    return;
+  }
+  call(QStringLiteral("catalog.musicVideo"), {{QStringLiteral("id"), songId}},
        [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
 }
 

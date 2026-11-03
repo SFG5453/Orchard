@@ -19,3 +19,6 @@
 [submodule "third_party/libwebp"]
 	path = third_party/libwebp
 	url = https://github.com/webmproject/libwebp.git
+[submodule "third_party/FidelityFX-FSR"]
+	path = third_party/FidelityFX-FSR
+	url = https://github.com/GPUOpen-Effects/FidelityFX-FSR.git

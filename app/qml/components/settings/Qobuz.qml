@@ -29,27 +29,22 @@ QobuzForm {
     message: OrchardQobuz.message
     messageIsError: OrchardQobuz.messageIsError
 
-    onStatusChanged: if (status !== "connecting") tokenPending = false
-
     function signInWithToken() {
         if (!tokenSaveButton.enabled)
             return;
-        root.tokenPending = true;
         OrchardQobuz.connectWithToken(userIdField.text, tokenField.text, appIdField.text, appSecretField.text);
         tokenField.clear();
         appSecretField.clear();
         root.enteringToken = false;
     }
 
-    connectButton.onClicked: OrchardQobuz.connectAccount()
     tokenToggleButton.onClicked: root.enteringToken = !root.enteringToken
     userIdField.onAccepted: root.signInWithToken()
     tokenField.onAccepted: root.signInWithToken()
     appIdField.onAccepted: root.signInWithToken()
     appSecretField.onAccepted: root.signInWithToken()
-    // App credentials are optional, but only as a pair.
     tokenSaveButton.enabled: userIdField.text.trim().length > 0 && tokenField.text.trim().length > 0
-        && (appIdField.text.trim().length > 0) === (appSecretField.text.trim().length > 0)
+        && appIdField.text.trim().length > 0 && appSecretField.text.trim().length > 0
     tokenSaveButton.onClicked: root.signInWithToken()
     cancelButton.onClicked: OrchardQobuz.cancelConnection()
     disconnectButton.onClicked: OrchardQobuz.disconnectAccount()

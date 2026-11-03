@@ -21,6 +21,7 @@
 // YouTube provider returns, so desktop QML and Android parse both alike.
 
 import { APPLE_MUSIC_SOURCE, browseId } from './ids.js';
+import { cleanNotes } from './notes.js';
 
 const RELEASE_SUFFIX = /\s+-\s+(Single|EP)$/i;
 export const ARTIST_INCLUDES = { 'include[albums]': 'artists', 'include[songs]': 'artists,albums' };
@@ -29,8 +30,12 @@ export const ARTIST_INCLUDES = { 'include[albums]': 'artists', 'include[songs]':
 export function artworkUrl(artwork, size = 600, format = 'jpg') {
   const template = String(artwork?.url || '');
   if (!template) return '';
-  const width = Math.min(size, Number(artwork.width) || size);
-  const height = Math.min(size, Number(artwork.height) || size);
+  // Keep the source aspect: crop transforms such as SHT fill whatever box is asked for.
+  const sourceWidth = Number(artwork.width) || size;
+  const sourceHeight = Number(artwork.height) || size;
+  const scale = Math.min(1, size / Math.max(sourceWidth, sourceHeight));
+  const width = Math.round(sourceWidth * scale);
+  const height = Math.round(sourceHeight * scale);
   return template
     .replace('{w}', String(width))
     .replace('{h}', String(height))
@@ -54,8 +59,7 @@ function clock(seconds) {
 
 function notes(value) {
   if (!value) return '';
-  if (typeof value === 'string') return value;
-  return String(value.standard || value.short || '');
+  return cleanNotes(typeof value === 'string' ? value : value.standard || value.short);
 }
 
 /** Apple suffixes single and EP names; the suffix becomes the release type. */
@@ -160,9 +164,56 @@ export function artist(resource) {
   };
 }
 
-const itemMappers = { songs: track, albums: album, playlists: playlist, artists: artist };
+/** A track station as a playlist card; live radio streams are not playable and are skipped. */
+export function station(resource) {
+  const attributes = resource?.attributes;
+  if (!attributes || attributes.isLive || !resource.id) return null;
+  return {
+    type: 'playlist',
+    station: true,
+    browseId: browseId('stations', resource.id),
+    source: APPLE_MUSIC_SOURCE,
+    title: attributes.name || '',
+    artist: 'Apple Music',
+    subtitle: 'Station',
+    thumbnail: artworkUrl(attributes.artwork),
+    description: notes(attributes.editorialNotes)
+  };
+}
 
-/** Any supported resource as a card; stations, videos and curators are skipped. */
+/** A 16:9 poster for video artwork; Apple's `mv` crop keeps the frame's own aspect. */
+export function videoArtworkUrl(artwork, width = 640) {
+  const template = String(artwork?.url || '');
+  if (!template) return '';
+  return template.replace('{w}', String(width)).replace('{h}', String(Math.round(width * 9 / 16)))
+    .replace('{c}', 'mv').replace('{f}', 'jpg');
+}
+
+export function musicVideo(resource) {
+  const attributes = resource?.attributes;
+  if (!attributes || !resource.id) return null;
+  const seconds = (Number(attributes.durationInMillis) || 0) / 1000;
+  return {
+    id: browseId('music-videos', resource.id),
+    type: 'video',
+    appleId: resource.id,
+    source: APPLE_MUSIC_SOURCE,
+    title: attributes.name || 'Untitled',
+    artist: attributes.artistName || '',
+    ...artistCredits(resource),
+    thumbnail: videoArtworkUrl(attributes.artwork),
+    durationSeconds: seconds,
+    duration: clock(seconds),
+    year: yearOf(attributes.releaseDate),
+    explicit: attributes.contentRating === 'explicit',
+    isrc: attributes.isrc || '',
+    unplayable: !attributes.playParams
+  };
+}
+
+const itemMappers = { songs: track, albums: album, playlists: playlist, artists: artist, stations: station, 'music-videos': musicVideo };
+
+/** Any supported resource as a card; curators and live radio are skipped. */
 export function item(resource) {
   return itemMappers[resource?.type]?.(resource) || null;
 }

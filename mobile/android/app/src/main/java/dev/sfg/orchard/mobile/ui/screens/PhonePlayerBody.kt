@@ -47,6 +47,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.sfg.orchard.mobile.OrchardGraph
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -107,6 +110,7 @@ internal fun PhonePlayerBody(
     onSeek: (Long) -> Unit,
     onToggle: () -> Unit,
     onPrevious: () -> Unit,
+    onSkipBack: () -> Unit,
     onNext: () -> Unit,
     onShuffle: () -> Unit,
     onRepeat: () -> Unit,
@@ -138,7 +142,8 @@ internal fun PhonePlayerBody(
     artworkSeam: Float? = null,
     /** Reports the px above the controls at their natural height, for the art to grow into. */
     onArtworkRoom: (Float?) -> Unit = {},
-    reserveSwitchSpace: Boolean = false,
+    /** Non-null when the track has a music video to switch to. */
+    onWatchVideo: (() -> Unit)? = null,
 ) {
     val queueOpen = panel == PlayerPanel.QUEUE
     var modesOpen by remember { mutableStateOf(false) }
@@ -157,8 +162,10 @@ internal fun PhonePlayerBody(
     val spreadHeight by animateFloatAsState(spreadTarget, tween(SPREAD_MS), label = "ControlsSpread")
     val spreading = spreadHeight > 0f
     // A synced lyric line takes all the slack between title and scrubber; otherwise every gap shares it.
+    val underTitle by OrchardGraph.from(LocalContext.current).settings.settings.collectAsStateWithLifecycle()
+    val peekLyrics = if (underTitle.lyricsUnderTitle) lyrics else LoadState.Idle
     val peekFills = spreading && panel == PlayerPanel.NONE &&
-        (lyrics as? LoadState.Content)?.value?.any { it.startMs != null } == true
+        (peekLyrics as? LoadState.Content)?.value?.any { it.startMs != null } == true
     // Measured with no panel open, so opening lyrics or the queue never resizes the art.
     var controlsHeight by remember { mutableIntStateOf(0) }
     val artworkRoom = if (hasRichArtwork && bodyHeight > 0 && controlsHeight > 0) {
@@ -189,6 +196,7 @@ internal fun PhonePlayerBody(
                     isDownloaded = isDownloaded,
                     onDownload = onDownloadTrack?.let { action -> { action(track) } },
                     onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
+                    onWatchVideo = onWatchVideo,
                 )
             } else {
                 PlayerPanelHeader(
@@ -205,12 +213,10 @@ internal fun PhonePlayerBody(
                     isDownloaded = isDownloaded,
                     onDownload = onDownloadTrack?.let { action -> { action(track) } },
                     onRemoveDownload = onRemoveDownloadTrack?.let { action -> { action(track.id) } },
+                    onWatchVideo = onWatchVideo,
                     onLiked = onLiked,
                 )
             }
-
-            // The Song/Video switch floats over this strip.
-            if (reserveSwitchSpace) Spacer(Modifier.height(SONG_SWITCH_SPACE))
 
             Box(
                 modifier = Modifier
@@ -223,7 +229,7 @@ internal fun PhonePlayerBody(
                         enabled = swipeEnabled,
                         hasPrevious = previous != null,
                         hasNext = next != null,
-                        onPrevious = onPrevious,
+                        onPrevious = onSkipBack,
                         onNext = onNext,
                     )
                     // This box sits over the backdrop and takes its touches, so it owns double-tap too.
@@ -232,6 +238,7 @@ internal fun PhonePlayerBody(
                             Modifier.pointerInput(Unit) { detectTapGestures(onDoubleTap = { onLiked() }) }
                         } else Modifier,
                     )
+                    .holdToSwitch(onWatchVideo != null && panel == PlayerPanel.NONE) { onWatchVideo?.invoke() }
                     .then(if (queueOpen) Modifier.queueEdgeFade() else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
@@ -325,9 +332,9 @@ internal fun PhonePlayerBody(
                     Spacer(Modifier.height(8.dp))
                 }
                 if (peekFills) {
-                    LyricPeek(lyrics = lyrics, onOpen = onLyricsPanel, modifier = Modifier.weight(1f))
+                    LyricPeek(lyrics = peekLyrics, onOpen = onLyricsPanel, modifier = Modifier.weight(1f))
                 } else {
-                    if (panel == PlayerPanel.NONE) LyricPeek(lyrics = lyrics, onOpen = onLyricsPanel)
+                    if (panel == PlayerPanel.NONE) LyricPeek(lyrics = peekLyrics, onOpen = onLyricsPanel)
                     gap(24.dp)
                 }
 
@@ -429,7 +436,7 @@ private val BODY_BOTTOM_PADDING = 20.dp
 private const val SPREAD_MS = 420
 
 /** Dissolves the queue into the header and title at either end. */
-private fun Modifier.queueEdgeFade(): Modifier = this
+internal fun Modifier.queueEdgeFade(): Modifier = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     .drawWithContent {
         drawContent()
@@ -443,6 +450,3 @@ private fun Modifier.queueEdgeFade(): Modifier = this
             blendMode = BlendMode.DstIn,
         )
     }
-
-/** Space under the header for the floating Song/Video switch. */
-internal val SONG_SWITCH_SPACE = SONG_SWITCH_TOP - 56.dp + SongVideoSwitchHeight

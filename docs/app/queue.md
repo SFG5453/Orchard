@@ -50,7 +50,7 @@ The song menu is also available from the **More** button in the fullscreen playe
 1. Right-click a song.
 2. Select **Start mix**.
 
-The queue is replaced with that song followed by similar songs from YouTube Music. This works with Autoplay off. It needs a signed-in account and a connection. On Android, use **Start Mix** in the song's menu.
+The queue is replaced with that song followed by similar songs from YouTube Music. For an Apple Music song, the similar songs come from the song's Apple Music station instead, and no YouTube Music sign-in is needed. This works with Autoplay off. It needs a connection, and a YouTube Music sign-in for YouTube Music songs. On Android, use **Start Mix** in the song's menu.
 
 ## Play a song from the queue
 
@@ -89,6 +89,8 @@ Best Mix cannot measure vocals as precisely as playback does. A pair it expects 
 3. Wait while the button shows "Downloading", "Analyzing", and "Finding transitions…" with a progress count such as 3/20.
 
 Best Mix runs the same local analysis worker as Adaptive mix, and the analysis stays on your device. FFmpeg must be installed. Songs that cannot be analyzed keep their place. Changing the queue while Best Mix runs cancels the sort. The queue then shows each song's tempo as a BPM label. The Android app sorts with the same code and analyzes the same low-bitrate audio, so the same queue gets the same order on both. Best Mix on Android downloads that audio separately from your downloads and deletes it after analysis.
+
+When **Music source** is **Apple Music**, Best Mix downloads nothing for Apple Music songs. It sorts them from Apple's own analysis of each song: tempo, key, loudness, energy and where the vocals are. Apple's analysis has no measured audio, so Best Mix orders those songs from its predictions without checking each pair with the planner; Adaptive mix still plans every transition from the audio as it plays. Songs Apple has not analysed keep their place. This works the same on desktop and Android.
 
 ## Cancel Best Mix
 

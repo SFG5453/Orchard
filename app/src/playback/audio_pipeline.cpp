@@ -18,11 +18,13 @@
  */
 
 #include "audio_pipeline.h"
+#include "output_health.h"
 
 #include <QAudioBuffer>
 #include <QAudioSink>
 #include <QDebug>
 #include <QIODevice>
+#include <QMediaPlayer>
 
 #include <algorithm>
 #include <cmath>
@@ -141,18 +143,38 @@ void AudioPipeline::rebuildSink() {
   m_pending.clear();
   // A null device makes Qt pick the system default.
   m_sink = std::make_unique<QAudioSink>(m_device, m_format);
-  if (m_timing)
-    connect(m_sink.get(), &QAudioSink::stateChanged, this, [this](QtAudio::State state) {
-      // Idle while pushing means the sink ran dry.
-      if (state == QtAudio::IdleState && m_transitionMs >= 0)
-        qInfo() << "Playback: output underrun"
-                << m_timingClock.elapsed() - m_transitionMs
-                << (m_crossfadeActive ? "ms after mix start" : "ms after handoff");
-    });
+  m_underrunStartMs = -1;
+  connect(m_sink.get(), &QAudioSink::stateChanged, this, &AudioPipeline::onSinkStateChanged);
   m_sink->setBufferSize(m_format.bytesForFrames(kSinkFrames));
+  OutputHealth::sinkBufferMs = int(m_sink->bufferSize() / kFrameBytes * 1000 / kSampleRate);
   m_primed = false;
   m_sink->setVolume(m_masterVolume);
   m_sinkDevice = m_sink->start();
+}
+
+void AudioPipeline::onSinkStateChanged(QtAudio::State state) {
+  const qint64 now = m_timingClock.elapsed();
+  if (state != QtAudio::IdleState) {
+    if (state == QtAudio::ActiveState && m_underrunStartMs >= 0)
+      OutputHealth::recordGap(now - m_underrunStartMs);
+    m_underrunStartMs = -1;
+    return;
+  }
+  // Idle while the player still plays means the sink ran dry; a drained
+  // queue at end of media is expected.
+  if (!m_primed || !m_currentPlayer ||
+      m_currentPlayer->playbackState() != QMediaPlayer::PlayingState ||
+      m_currentPlayer->mediaStatus() == QMediaPlayer::EndOfMedia)
+    return;
+  m_underrunStartMs = now;
+  ++OutputHealth::underruns;
+  if (m_transitionMs >= 0 && now - m_transitionMs < 5000)
+    qInfo() << "Playback: output underrun" << now - m_transitionMs
+            << (m_crossfadeActive ? "ms after mix start" : "ms after handoff");
+  else
+    qInfo() << "Playback: output underrun, pending" << m_pending.size() / kFrameBytes << "frames";
+  if (kReprimeOnUnderrun)
+    m_primed = false;
 }
 
 void AudioPipeline::flush() {
@@ -161,6 +183,8 @@ void AudioPipeline::flush() {
   m_clockCorrectionUs = 0;
   m_pending.clear();
   m_primed = false;
+  for (BinauralRenderer &renderer : m_binaural)
+    renderer.reset();
   if (m_sink) {
     m_sink->reset();
     m_sinkDevice = m_sink->start();
@@ -256,11 +280,24 @@ void AudioPipeline::completeCrossfade() {
   emit crossfadeFinished(m_mixSerial);
 }
 
-void AudioPipeline::processBuffer(const QMediaPlayer *source, const QAudioBuffer &buffer) {
+void AudioPipeline::processBuffer(const QMediaPlayer *source, const QAudioBuffer &decoded) {
   const bool outgoing = source == m_currentPlayer;
   const bool incoming = m_crossfadeActive && source == m_crossfadePlayer;
-  if ((!outgoing && !incoming) || !buffer.isValid() || buffer.format() != m_format)
+  if (!outgoing && !incoming)
     return;
+  const QAudioBuffer buffer =
+      decoded.format().channelCount() > 2 ? m_binaural[source].render(decoded, m_format) : decoded;
+  if (!buffer.isValid() || buffer.format() != m_format) {
+    static bool warned = false;
+    if (!warned && decoded.isValid()) {
+      warned = true;
+      const QAudioFormat format = decoded.format();
+      qWarning() << "Playback: dropping decoded audio in an unexpected format:" << format.sampleRate() << "Hz,"
+                 << format.channelCount() << "channels, config" << format.channelConfig() << ", sample format"
+                 << format.sampleFormat();
+    }
+    return;
+  }
   emit decodedAudio(outgoing ? m_activeTrackId : m_crossfadeTrackId, buffer);
   if (m_timing) {
     // A gap longer than the cushion starves the sink.

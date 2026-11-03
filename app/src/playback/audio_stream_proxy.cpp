@@ -36,9 +36,10 @@ public:
     StreamConnection(QTcpSocket *socket, QNetworkAccessManager *network,
                      QJsonObject stream, QByteArray path, bool suspended,
                      std::function<void(int, const QString &)> failure,
-                     AudioStreamProxy::RangeReader reader)
+                     AudioStreamProxy::RangeReader reader, QByteArray head, qint64 replaces)
         : m_socket(socket), m_network(network), m_stream(std::move(stream)),
-          m_path(std::move(path)), m_failure(std::move(failure)),
+          m_path(std::move(path)), m_head(std::move(head)), m_shift(m_head.size() - replaces),
+          m_failure(std::move(failure)),
           m_reader(m_stream.contains("provider") ? std::move(reader) : nullptr),
           m_suspended(suspended) {
         socket->setParent(this);
@@ -83,7 +84,7 @@ private:
         if (first.size() != 3 || first[1] != m_path) { reject(404); return; }
         const bool head = first[0] == "HEAD";
         if (!head && first[0] != "GET") { reject(405); return; }
-        m_length = static_cast<qint64>(m_stream.value("contentLength").toDouble());
+        m_length = static_cast<qint64>(m_stream.value("contentLength").toDouble()) + m_shift;
         m_end = m_length - 1;
         bool ranged = false;
         for (const auto &line : lines) {
@@ -115,6 +116,11 @@ private:
         headers += "\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";
         m_socket->write(headers);
         if (head) { m_socket->disconnectFromHost(); return; }
+        if (m_offset < m_head.size()) {
+            const qint64 stop = qMin(m_end + 1, qint64(m_head.size()));
+            m_socket->write(m_head.mid(m_offset, stop - m_offset));
+            m_offset = stop;
+        }
         if (!m_suspended) fetchChunk();
     }
     void fetchChunk() {
@@ -133,7 +139,7 @@ private:
         request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
         request.setRawHeader("User-Agent", m_stream.value("userAgent").toString().toUtf8());
         request.setRawHeader("Accept-Encoding", "identity");
-        request.setRawHeader("Range", "bytes=" + QByteArray::number(m_offset) + "-" + QByteArray::number(m_chunkEnd));
+        request.setRawHeader("Range", "bytes=" + QByteArray::number(m_offset - m_shift) + "-" + QByteArray::number(m_chunkEnd - m_shift));
         const auto origin = m_stream.value("origin").toString().toUtf8();
         if (!origin.isEmpty()) { request.setRawHeader("Origin", origin); request.setRawHeader("Referer", origin + "/"); }
         m_reply = m_network->get(request);
@@ -151,9 +157,10 @@ private:
                                                       QRegularExpression::CaseInsensitiveOption);
         const auto range = rangePattern.match(QString::fromLatin1(m_reply->rawHeader("Content-Range").trimmed()));
         bool startValid = false, endValid = false, lengthValid = false;
-        const qint64 start = range.captured(1).toLongLong(&startValid);
-        const qint64 end = range.captured(2).toLongLong(&endValid);
-        const qint64 length = range.captured(3).toLongLong(&lengthValid);
+        // Upstream positions mapped past the served head.
+        const qint64 start = range.captured(1).toLongLong(&startValid) + m_shift;
+        const qint64 end = range.captured(2).toLongLong(&endValid) + m_shift;
+        const qint64 length = range.captured(3).toLongLong(&lengthValid) + m_shift;
         const bool unknownLength = range.captured(3) == QStringLiteral("*");
         if (!range.hasMatch() || !startValid || !endValid || start != m_offset ||
             end < start || end > m_chunkEnd || (!unknownLength && (!lengthValid || length != m_length))) {
@@ -260,6 +267,8 @@ private:
     QNetworkAccessManager *m_network;
     QJsonObject m_stream;
     QByteArray m_path, m_request;
+    QByteArray m_head;
+    qint64 m_shift{0};
     std::function<void(int, const QString &)> m_failure;
     AudioStreamProxy::RangeReader m_reader;
     QPointer<QNetworkReply> m_reply;
@@ -281,7 +290,7 @@ AudioStreamProxy::AudioStreamProxy(QObject *parent) : QObject(parent) {
                     m_failed = true;
                     emit streamFailed(status, message);
                 },
-                m_reader);
+                m_reader, m_head, m_headReplaces);
             connection->setParent(this);
             m_connections.append(connection);
             connect(connection, &QObject::destroyed, this, [this, connection] { m_connections.removeAll(connection); });
@@ -290,8 +299,12 @@ AudioStreamProxy::AudioStreamProxy(QObject *parent) : QObject(parent) {
 }
 AudioStreamProxy::~AudioStreamProxy() { clear(); }
 
-QUrl AudioStreamProxy::open(const QJsonObject &stream) {
+QUrl AudioStreamProxy::open(const QJsonObject &stream) { return open(stream, {}, 0); }
+
+QUrl AudioStreamProxy::open(const QJsonObject &stream, const QByteArray &head, qint64 replaces) {
     clear();
+    m_head = head;
+    m_headReplaces = replaces;
     if (!m_server.isListening() && !m_server.listen(QHostAddress::LocalHost, 0)) return {};
     m_stream = stream;
     m_failed = false;
@@ -310,5 +323,7 @@ void AudioStreamProxy::clear() {
     for (auto *connection : connections) delete connection;
     m_stream = {};
     m_path.clear();
+    m_head.clear();
+    m_headReplaces = 0;
     m_suspended = false;
 }

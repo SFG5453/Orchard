@@ -40,6 +40,8 @@ FullscreenPlayerForm {
     readonly property bool fading: OrchardPlayback.crossfadeActive
     property double fadeEndedAt: 0
     property point lastPointer: Qt.point(-1, -1)
+    // Apple's tall loop for the canvas stage; empty when the song has none.
+    property string tallArtworkUrl: ""
     // Controls stay up while paused, while in use, or with the queue open.
     readonly property bool chromeHeld: !OrchardAppearance.fullscreenAutoHide || !OrchardPlayback.playing
         || pane === "queue" || controls.hover.hovered || closeButton.hovered || upNext.area.containsMouse
@@ -65,8 +67,9 @@ FullscreenPlayerForm {
     crossfadeProgress: OrchardPlayback.crossfadeProgress
     queueOriginTitle: String((OrchardPlayback.track.queueOrigin || ({})).title || "")
     animatedArtworkEnabled: OrchardAppearance.animatedArtworkEnabled
-    animatedArtworkUrl: OrchardPlayback.animatedArtworkUrl
-    canvasLoop: /\.cnvs\.mp4/.test(OrchardPlayback.animatedArtworkUrl || "")
+    animatedArtworkUrl: tallArtworkUrl || OrchardPlayback.animatedArtworkUrl
+    canvasLoop: tallArtworkUrl.length > 0 || /\.cnvs\.mp4/.test(OrchardPlayback.animatedArtworkUrl || "")
+    canvasStageEnabled: OrchardAppearance.fullscreenCanvasStage
 
     // Qobuz songs show their tier instead of kbps. Untyped for qmlcachegen's sake.
     function sourceQuality(track) {
@@ -109,6 +112,13 @@ FullscreenPlayerForm {
         return Math.floor(total / 60) + ":" + String(total % 60).padStart(2, "0");
     }
 
+    function requestTallArtwork() {
+        tallArtworkUrl = "";
+        const track = OrchardPlayback.track;
+        if (open && canvasStageEnabled && animatedArtworkEnabled && track.title)
+            OrchardAnimatedArtwork.requestTallVideo(track.title, track.artist || "", track.album || "");
+    }
+
     function togglePane(name) {
         pane = pane === name ? "" : name;
     }
@@ -120,6 +130,7 @@ FullscreenPlayerForm {
     }
 
     onOpenChanged: {
+        requestTallArtwork();
         if (!open)
             return;
         forceActiveFocus();
@@ -143,10 +154,25 @@ FullscreenPlayerForm {
     onCanvasLiveChanged: if (canvasLive && canvasItem.videoAspect > 0) canvasAspect = Math.max(0.5, Math.min(1, canvasItem.videoAspect))
 
     onFadingChanged: if (!fading) fadeEndedAt = Date.now()
+    onCanvasStageEnabledChanged: requestTallArtwork()
+    onAnimatedArtworkEnabledChanged: requestTallArtwork()
     onTrackIdChanged: {
+        queuePane.currentTrack = OrchardPlayback.track;
+        requestTallArtwork();
         if (!visible || fading || Date.now() - fadeEndedAt < 500)
             return;
         bumpAnimation.restart();
+    }
+    Component.onCompleted: queuePane.currentTrack = OrchardPlayback.track
+
+    Connections {
+        target: OrchardAnimatedArtwork
+
+        function onTallVideoResolved(title, artist, url) {
+            const track = OrchardPlayback.track;
+            if (title === track.title && artist === (track.artist || ""))
+                root.tallArtworkUrl = url;
+        }
     }
 
     Timer {
@@ -202,7 +228,8 @@ FullscreenPlayerForm {
     dragHandler.onActiveChanged: if (dragHandler.active) root.Window.window.startSystemMove()
 
     backdrop.warpThrottled: OrchardWindowState.backgroundIdle
-    backdrop.warpRunning: root.visible && OrchardPlayback.playing && root.Window.window !== null && root.Window.window.visibility !== Window.Minimized
+    // The stage wash covers the warp completely.
+    backdrop.warpRunning: root.visible && root.stageShape < 0.999 && OrchardPlayback.playing && root.Window.window !== null && root.Window.window.visibility !== Window.Minimized
     backdrop.warpSpeed: OrchardAppearance.speed
     backdrop.warpIntensity: OrchardAppearance.intensity
     backdrop.warpSaturation: OrchardAppearance.saturation
@@ -218,21 +245,62 @@ FullscreenPlayerForm {
     }
 
     queuePane.queueItems: OrchardPlayback.queue || []
+    queuePane.continuous: OrchardPlayback.queueLayout === "continuous"
+    queuePane.history: queuePane.continuous ? (OrchardPlayback.history || []) : []
+    // Snapshot from onTrackIdChanged; track notifies on every position tick, which would rebuild and rescroll the list.
+    queuePane.currentTrack: ({})
     queuePane.autoplayEnabled: OrchardPlayback.autoplayEnabled
     queuePane.clearButton.onClicked: OrchardPlayback.clearQueue()
-    queuePane.list.delegate: FullscreenQueueRow {
+    queuePane.list.delegate: Item {
+        id: queueEntry
         required property var modelData
         required property int index
+        readonly property bool previous: root.queuePane.continuous && index < root.queuePane.history.length
+        readonly property bool current: root.queuePane.continuous && !previous && index < root.queuePane.leading
+        readonly property int queueIndex: index - root.queuePane.leading
+        readonly property string section: !root.queuePane.continuous ? ""
+            : previous && index === 0 ? qsTr("PLAYED")
+            : current ? qsTr("NOW PLAYING")
+            : queueIndex === 0 ? qsTr("UP NEXT") : ""
         width: root.queuePane.list.width - 8
-        track: modelData
-        rowIndex: index
-        artistText: root.artistLabel(modelData)
-        paneSwap: root.paneSwap
-        accentColor: root.accentColor
-        primaryText: root.primaryText
-        mutedText: root.mutedText
-        onClicked: OrchardPlayback.playQueueIndex(index)
-        removeButton.onClicked: OrchardPlayback.removeFromQueue(index)
+        height: queueRow.height + (section ? 26 : 0)
+
+        Text {
+            visible: queueEntry.section !== ""
+            text: queueEntry.section
+            color: root.mutedText
+            font.family: "Inter"
+            font.pixelSize: 11
+            font.bold: true
+            anchors.left: parent.left
+            anchors.leftMargin: 8
+            anchors.top: parent.top
+            anchors.topMargin: 8
+        }
+
+        FullscreenQueueRow {
+            id: queueRow
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            track: queueEntry.modelData
+            rowIndex: queueEntry.index
+            artistText: root.artistLabel(queueEntry.modelData)
+            paneSwap: root.paneSwap
+            accentColor: root.accentColor
+            primaryText: root.primaryText
+            mutedText: root.mutedText
+            opacity: enter * (queueEntry.previous ? 0.6 : 1)
+            enabled: !queueEntry.current
+            removeButton.visible: !queueEntry.previous && !queueEntry.current
+            onClicked: {
+                if (queueEntry.previous)
+                    OrchardPlayback.playHistoryIndex(queueEntry.index);
+                else if (!queueEntry.current)
+                    OrchardPlayback.playQueueIndex(queueEntry.queueIndex);
+            }
+            removeButton.onClicked: OrchardPlayback.removeFromQueue(queueEntry.queueIndex)
+        }
     }
 
     controls.seekLimit: mixStart >= 0 ? Math.max(0, mixStart - 5, OrchardPlayback.position) : OrchardPlayback.duration

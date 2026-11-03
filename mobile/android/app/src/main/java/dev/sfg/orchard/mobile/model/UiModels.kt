@@ -63,8 +63,13 @@ data class LibrarySnapshot(
 
 data class OrchardSettings(
     val animatedArtwork: Boolean = true,
+    /** Motion cover quality on Wi-Fi and other unmetered networks. */
+    val animatedArtworkQuality: AnimatedArtworkQuality = AnimatedArtworkQuality.AUTOMATIC,
+    /** Motion cover quality on mobile data and other metered networks. */
+    val cellularAnimatedArtworkQuality: AnimatedArtworkQuality = AnimatedArtworkQuality.AUTOMATIC,
     val artworkSourceOrder: List<ArtworkSource> = ArtworkSource.entries,
     val sendYouTubeHistory: Boolean = true,
+    val sendAppleMusicHistory: Boolean = true,
     /** Save motion covers alongside newly downloaded songs for offline playback. */
     val downloadAnimatedArtwork: Boolean = false,
     /** Store new offline songs on removable storage when a card is mounted. */
@@ -77,6 +82,10 @@ data class OrchardSettings(
     val useSystemColors: Boolean = false,
     /** Let the artwork-tinted background drift instead of holding still between tracks. */
     val animatedBackground: Boolean = false,
+    val backdropSpeed: Float = DEFAULT_BACKDROP_SPEED,
+    val backdropIntensity: Float = DEFAULT_BACKDROP_INTENSITY,
+    val backdropSaturation: Float = DEFAULT_BACKDROP_SATURATION,
+    val backdropBrightness: Float = DEFAULT_BACKDROP_BRIGHTNESS,
     /** Overlap the end of a track with the start of the next one. */
     val crossfadeEnabled: Boolean = false,
     val crossfadeSeconds: Int = DEFAULT_CROSSFADE_SECONDS,
@@ -115,6 +124,14 @@ data class OrchardSettings(
     val equalizerConfig: EqualizerConfig = EqualizerConfig(),
     /** Enable swipe and tap gestures on the player artwork. */
     val playerGesturesEnabled: Boolean = true,
+    /** Blur lyric lines by their distance from the current line. */
+    val lyricsFocusBlur: Boolean = true,
+    /** Dim lyric lines by their distance from the current line. */
+    val lyricsDistanceFade: Boolean = true,
+    /** Let lyric lines glide into place one after another when the lyrics advance. */
+    val lyricsStaggeredScroll: Boolean = true,
+    /** Show the current synced lyric line under the title in the player. */
+    val lyricsUnderTitle: Boolean = true,
     /** Whether the phone bottom bar has a Settings tab. */
     val showSettingsTab: Boolean = false,
     /** [HomeSource][dev.sfg.orchard.mobile.home.HomeSource] id that fills Home; others are fallbacks. */
@@ -154,6 +171,8 @@ data class OrchardSettings(
     val lyricTranslationProvider: LyricTranslationProvider = LyricTranslationProvider.LOCAL,
     val lyricTranslationModels: Map<String, String> = emptyMap(),
     val lyricTranslationEndpoint: String = "",
+    /** Show Apple Music's own translation for Apple lyrics; the selected source covers the rest. */
+    val preferAppleTranslation: Boolean = false,
     val lyricsProviders: List<LyricsProviderConfig> = LyricsProvider.entries.map(::LyricsProviderConfig),
 ) {
     /** Clamped, because a persisted value from an older build must not size the cache absurdly. */
@@ -169,6 +188,11 @@ data class OrchardSettings(
         const val MAX_CROSSFADE_SECONDS = 12
         const val DEFAULT_CROSSFADE_SECONDS = 6
 
+        const val DEFAULT_BACKDROP_SPEED = 1.38f
+        const val DEFAULT_BACKDROP_INTENSITY = 1f
+        const val DEFAULT_BACKDROP_SATURATION = 1.22f
+        const val DEFAULT_BACKDROP_BRIGHTNESS = 1f
+
         const val MIN_CACHE_SIZE_MB = 256
         const val MAX_CACHE_SIZE_MB = 8192
         const val DEFAULT_CACHE_SIZE_MB = 1024
@@ -178,7 +202,7 @@ data class OrchardSettings(
     }
 }
 
-enum class AudioQuality { DATA_SAVER, NORMAL, HIGH, MAX }
+enum class AudioQuality { DATA_SAVER, NORMAL, HIGH, ATMOS, MAX }
 
 enum class ArtworkSource(val label: String) {
     M8TEC("m8tec"), BOIDU("boidu"), SPOTIFY("Spotify Canvas")

@@ -61,9 +61,9 @@ ColumnLayout {
 
     SettingsSection {
         Layout.fillWidth: true
-        title: qsTr("Apple Music")
+        title: qsTr("Local API")
 
-        AppleMusic {
+        LocalApi {
             Layout.fillWidth: true
         }
     }

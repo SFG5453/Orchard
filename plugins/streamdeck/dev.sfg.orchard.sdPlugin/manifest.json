@@ -1,0 +1,307 @@
+{
+  "Name": "Orchard",
+  "UUID": "dev.sfg.orchard",
+  "Description": "Control Orchard playback, volume, mixes and song requests.",
+  "Author": "SFG545",
+  "Version": "1.0.0.0",
+  "SDKVersion": 2,
+  "CodePath": "plugin.cjs",
+  "CodePathLin": "plugin.cjs",
+  "Nodejs": {
+    "Version": "20"
+  },
+  "Icon": "icons/plugin",
+  "Category": "Orchard",
+  "CategoryIcon": "icons/category",
+  "Software": {
+    "MinimumVersion": "6.6"
+  },
+  "OS": [
+    {
+      "Platform": "linux"
+    },
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    },
+    {
+      "Platform": "mac",
+      "MinimumVersion": "12"
+    }
+  ],
+  "Actions": [
+    {
+      "UUID": "dev.sfg.orchard.playpause",
+      "Name": "Play / Pause",
+      "Icon": "icons/playpause",
+      "Tooltip": "Play / Pause in Orchard",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": true,
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icons/playpause",
+          "TitleAlignment": "bottom",
+          "FontSize": 12
+        }
+      ]
+    },
+    {
+      "UUID": "dev.sfg.orchard.previous",
+      "Name": "Previous Track",
+      "Icon": "icons/previous",
+      "Tooltip": "Previous Track in Orchard",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": true,
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icons/previous",
+          "TitleAlignment": "bottom",
+          "FontSize": 12
+        }
+      ]
+    },
+    {
+      "UUID": "dev.sfg.orchard.next",
+      "Name": "Next Track",
+      "Icon": "icons/next",
+      "Tooltip": "Next Track in Orchard",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": true,
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icons/next",
+          "TitleAlignment": "bottom",
+          "FontSize": 12
+        }
+      ]
+    },
+    {
+      "UUID": "dev.sfg.orchard.nowplaying",
+      "Name": "Now Playing",
+      "Icon": "icons/nowplaying",
+      "Tooltip": "Now Playing in Orchard",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icons/nowplaying",
+          "TitleAlignment": "bottom",
+          "FontSize": 12
+        }
+      ]
+    },
+    {
+      "UUID": "dev.sfg.orchard.volumeup",
+      "Name": "Volume Up",
+      "Icon": "icons/volumeup",
+      "Tooltip": "Volume Up in Orchard",
+      "Controllers": [
+        "Keypad",
+        "Encoder"
+      ],
+      "SupportedInMultiActions": true,
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icons/volumeup",
+          "TitleAlignment": "bottom",
+          "FontSize": 12
+        }
+      ]
+    },
+    {
+      "UUID": "dev.sfg.orchard.volumedown",
+      "Name": "Volume Down",
+      "Icon": "icons/volumedown",
+      "Tooltip": "Volume Down in Orchard",
+      "Controllers": [
+        "Keypad",
+        "Encoder"
+      ],
+      "SupportedInMultiActions": true,
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icons/volumedown",
+          "TitleAlignment": "bottom",
+          "FontSize": 12
+        }
+      ]
+    },
+    {
+      "UUID": "dev.sfg.orchard.mute",
+      "Name": "Mute",
+      "Icon": "icons/mute",
+      "Tooltip": "Mute in Orchard",
+      "Controllers": [
+        "Keypad",
+        "Encoder"
+      ],
+      "SupportedInMultiActions": true,
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icons/mute",
+          "TitleAlignment": "bottom",
+          "FontSize": 12
+        }
+      ]
+    },
+    {
+      "UUID": "dev.sfg.orchard.shuffle",
+      "Name": "Shuffle",
+      "Icon": "icons/shuffle",
+      "Tooltip": "Shuffle in Orchard",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": true,
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icons/shuffle",
+          "TitleAlignment": "bottom",
+          "FontSize": 12
+        }
+      ]
+    },
+    {
+      "UUID": "dev.sfg.orchard.repeat",
+      "Name": "Repeat",
+      "Icon": "icons/repeat",
+      "Tooltip": "Repeat in Orchard",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": true,
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icons/repeat",
+          "TitleAlignment": "bottom",
+          "FontSize": 12
+        }
+      ]
+    },
+    {
+      "UUID": "dev.sfg.orchard.like",
+      "Name": "Like Track",
+      "Icon": "icons/like",
+      "Tooltip": "Like Track in Orchard",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": true,
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icons/like",
+          "TitleAlignment": "bottom",
+          "FontSize": 12
+        }
+      ]
+    },
+    {
+      "UUID": "dev.sfg.orchard.seekback",
+      "Name": "Seek Back",
+      "Icon": "icons/seekback",
+      "Tooltip": "Seek Back in Orchard",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": true,
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icons/seekback",
+          "TitleAlignment": "bottom",
+          "FontSize": 12
+        }
+      ]
+    },
+    {
+      "UUID": "dev.sfg.orchard.seekforward",
+      "Name": "Seek Forward",
+      "Icon": "icons/seekforward",
+      "Tooltip": "Seek Forward in Orchard",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": true,
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icons/seekforward",
+          "TitleAlignment": "bottom",
+          "FontSize": 12
+        }
+      ]
+    },
+    {
+      "UUID": "dev.sfg.orchard.bestmix",
+      "Name": "Best Mix",
+      "Icon": "icons/bestmix",
+      "Tooltip": "Best Mix in Orchard",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": true,
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icons/bestmix",
+          "TitleAlignment": "bottom",
+          "FontSize": 12
+        }
+      ]
+    },
+    {
+      "UUID": "dev.sfg.orchard.playmix",
+      "Name": "Play Mix / Playlist",
+      "Icon": "icons/playmix",
+      "Tooltip": "Play Mix / Playlist in Orchard",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": true,
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icons/playmix",
+          "TitleAlignment": "bottom",
+          "FontSize": 12
+        }
+      ]
+    },
+    {
+      "UUID": "dev.sfg.orchard.request",
+      "Name": "Song Request",
+      "Icon": "icons/request",
+      "Tooltip": "Song Request in Orchard",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": true,
+      "PropertyInspectorPath": "inspector.html",
+      "States": [
+        {
+          "Image": "icons/request",
+          "TitleAlignment": "bottom",
+          "FontSize": 12
+        }
+      ]
+    }
+  ]
+}

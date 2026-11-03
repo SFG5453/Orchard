@@ -77,7 +77,7 @@ PlaybackController::PlaybackController(YouTubeProvider *provider,
                         .value("playback/streamQuality", QStringLiteral("high"))
                         .toString();
   if (m_streamQuality != "saver" && m_streamQuality != "normal" &&
-      m_streamQuality != "high" && m_streamQuality != "max") {
+      m_streamQuality != "high" && m_streamQuality != "max" && m_streamQuality != "atmos") {
     m_streamQuality = QStringLiteral("high");
   }
   m_persistenceEnabled =
@@ -173,10 +173,11 @@ PlaybackController::PlaybackController(YouTubeProvider *provider,
   // Label lookups and whole-song scans run ahead of playback: current track first, then the queue.
   auto rescan = [this] {
     QVariantList tracks;
-    if (!m_track.isEmpty() && !local::isLocalTrack(m_track))
+    // Local and Apple Music songs have no YouTube Music audio to look up or scan.
+    if (!m_track.isEmpty() && !local::isLocalTrack(m_track) && !isAppleTrack(m_track))
       tracks.append(m_track);
     for (const QVariant &queued : m_queue.mid(0, 25)) {
-      if (!local::isLocalTrack(queued.toMap()))
+      if (!local::isLocalTrack(queued.toMap()) && !isAppleTrack(queued.toMap()))
         tracks.append(queued);
     }
     m_slop.scan(tracks);
@@ -285,7 +286,7 @@ PlaybackController::PlaybackController(YouTubeProvider *provider,
               } else if (kind == QStringLiteral("seek")) {
                 seek(value.toDouble());
               } else if (kind == QStringLiteral("seek-relative")) {
-                seek(position() + value.toDouble());
+                seek(shownPosition() + value.toDouble());
               } else if (kind == QStringLiteral("set-shuffle")) {
                 setShuffleEnabled(value.toBool());
               } else if (kind == QStringLiteral("set-repeat-mode")) {
@@ -307,9 +308,8 @@ PlaybackController::PlaybackController(YouTubeProvider *provider,
 void PlaybackController::applyMasterVolume() {
   const double volume = m_home ? m_home->volume() : 1.0;
   // UI and remote volume values stay in slider space; only output gain is curved.
-  m_audioEngineOutput.setMasterVolume(m_exponentialVolumeEnabled
-                                        ? volume * volume * volume
-                                        : volume);
+  const double gain = m_exponentialVolumeEnabled ? volume * volume * volume : volume;
+  m_audioEngineOutput.setMasterVolume(gain);
 }
 
 void PlaybackController::setExponentialVolumeEnabled(bool enabled) {

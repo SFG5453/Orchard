@@ -1,9 +1,6 @@
 <RCC>
   <qresource prefix="/auth">
     <file alias="AuthWebView.qml">../app/qml-auth/AuthWebView.qml</file>
-    <file alias="BrowserView.qml">../app/qml-auth/webengine/BrowserView.qml</file>
-    <file alias="SpotifyLoginView.qml">../app/qml-auth/SpotifyLoginView.qml</file>
-    <file alias="AppleMusicLoginView.qml">../app/qml-auth/webengine/AppleMusicLoginView.qml</file>
-    <file alias="applemusic-signin.html">../mobile/android/app/src/main/assets/applemusic/signin.html</file>
+    <file alias="BrowserView.qml">../app/qml-auth/qtwebview/BrowserView.qml</file>
   </qresource>
 </RCC>

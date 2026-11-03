@@ -53,7 +53,7 @@ fun LastfmSettingsCard(
 ) {
     val shape = RoundedCornerShape(20.dp)
     Surface(color = Color.Transparent, shape = shape, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             Text(
                 lastfmSubtitle(state),
                 style = MaterialTheme.typography.bodyMedium,

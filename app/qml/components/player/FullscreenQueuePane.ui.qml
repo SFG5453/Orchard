@@ -22,7 +22,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Up next list with queue actions and the sleep timer.
+// Queue list with queue actions and the sleep timer.
 ColumnLayout {
     id: pane
 
@@ -31,6 +31,13 @@ ColumnLayout {
         { title: "Intro", artist: "The xx", duration: "2:07" },
         { title: "Genesis", artist: "Grimes", duration: "4:15" }
     ]
+    property bool continuous: false
+    property var history: []
+    property var currentTrack: ({})
+    readonly property bool hasCurrent: continuous && Boolean(currentTrack.id)
+    readonly property int leading: continuous ? history.length + (hasCurrent ? 1 : 0) : 0
+    readonly property var rows: continuous
+        ? history.concat(hasCurrent ? [currentTrack] : [], queueItems) : queueItems
     property bool autoplayEnabled: true
     property real paneSwap: 1
     property color accentColor: "#f0eee7"
@@ -40,6 +47,15 @@ ColumnLayout {
     property alias list: upNext
     property alias clearButton: clearButton
 
+    function showCurrent() {
+        if (visible && continuous && hasCurrent)
+            Qt.callLater(() => upNext.positionViewAtIndex(history.length, ListView.Beginning));
+    }
+
+    onVisibleChanged: showCurrent()
+    onContinuousChanged: showCurrent()
+    onCurrentTrackChanged: showCurrent()
+
     spacing: 14
 
     RowLayout {
@@ -48,7 +64,7 @@ ColumnLayout {
 
         Text {
             Layout.fillWidth: true
-            text: qsTr("Up next")
+            text: pane.continuous ? qsTr("Queue") : qsTr("Up next")
             color: pane.primaryText
             font.family: "Inter"
             font.pixelSize: 28
@@ -70,7 +86,7 @@ ColumnLayout {
 
         QueueBestMixButton {
             panel: pane
-            count: upNext.count
+            count: pane.queueItems.length
             Layout.maximumWidth: Math.max(0, pane.width - clearButton.implicitWidth - 8)
         }
 
@@ -80,7 +96,7 @@ ColumnLayout {
             id: clearButton
             objectName: "clearFullscreenQueue"
             text: qsTr("Clear")
-            enabled: upNext.count > 0
+            enabled: pane.queueItems.length > 0
             implicitHeight: 28
             leftPadding: 10
             rightPadding: 10
@@ -120,7 +136,7 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         spacing: 4
-        model: pane.queueItems
+        model: pane.rows
         boundsBehavior: Flickable.StopAtBounds
 
         ScrollBar.vertical: ScrollBar {
@@ -154,7 +170,7 @@ ColumnLayout {
     Text {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        visible: upNext.count === 0
+        visible: pane.rows.length === 0
         text: pane.autoplayEnabled ? qsTr("Nothing queued. Autoplay has this covered.") : qsTr("Nothing queued.")
         color: pane.mutedText
         font.family: "Inter"

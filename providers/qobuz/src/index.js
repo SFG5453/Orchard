@@ -17,7 +17,6 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { createQobuzBootstrapLoader } from './bootstrap.js';
 import { createQobuzClient } from './client.js';
 import { createQobuzMatcher } from './matcher.js';
 import { createQobuzPlayback } from './playback.js';
@@ -29,13 +28,10 @@ import { canonicalTrack, normalizeQobuzQuality } from './types.js';
  * and HTTP exposure remain owned by the embedding application.
  */
 export function createQobuz({
-  bootstrap,
-  bootstrapMaxAgeMs,
   credentials,
   fetchImpl = fetch,
   logger = console,
   matcherCacheTtlMs,
-  crypto,
   randomUuid,
   softwareVersion = '@orchardmusic/qobuz'
 } = {}) {
@@ -43,18 +39,13 @@ export function createQobuz({
     throw new TypeError('createQobuz requires a credentials() function');
   }
 
-  const bootstrapLoader = bootstrap || createQobuzBootstrapLoader({
-    fetchImpl,
-    ...(bootstrapMaxAgeMs === undefined ? {} : { maxAgeMs: bootstrapMaxAgeMs })
-  });
   const client = createQobuzClient({
-    bootstrap: bootstrapLoader,
     credentials,
     fetchImpl,
     softwareVersion
   });
   const reporter = createQobuzReporter({ client, logger });
-  const playback = createQobuzPlayback({ client, crypto, fetchImpl, logger, randomUuid, reporter });
+  const playback = createQobuzPlayback({ client, fetchImpl, randomUuid, reporter });
   const matcher = createQobuzMatcher({
     search: client.search,
     onMiss: (miss) => { lastMiss = miss; logger.warn?.(`Qobuz miss: ${JSON.stringify(miss)}`); },
@@ -85,7 +76,6 @@ export function createQobuz({
   }
 
   return {
-    bootstrap: bootstrapLoader,
     client,
     close,
     matchTrack,
@@ -108,22 +98,8 @@ export function createQobuz({
   };
 }
 
-export {
-  createQobuzBootstrapLoader,
-  extractQobuzBootstrap,
-  fetchQobuzBootstrap
-} from './bootstrap.js';
 export { createQobuzClient, qobuzRequestSignature } from './client.js';
-export {
-  QOBUZ_CMAF_UUIDS,
-  decryptQobuzAudioSegment,
-  deriveQobuzSessionKey,
-  parseQobuzAudioSegment,
-  parseQobuzInitSegment,
-  unwrapQobuzContentKey
-} from './cmaf.js';
 export { createQobuzMatcher, normalizedQobuzText, selectQobuzMatch } from './matcher.js';
-export { createQobuzAuthorizationUrl, exchangeQobuzAuthorizationCode } from './oauth.js';
 export { createQobuzPlayback } from './playback.js';
 export { verifyQobuzToken } from './token.js';
 export { createQobuzReporter } from './reports.js';
@@ -132,7 +108,6 @@ export {
   QOBUZ_AUDIO_QUALITIES,
   QOBUZ_BASE_URL,
   QOBUZ_FORMAT_IDS,
-  QOBUZ_PLAY_URL,
   QOBUZ_USER_AGENT,
   canonicalTrack,
   normalizeQobuzQuality

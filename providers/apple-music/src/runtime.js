@@ -48,18 +48,32 @@ const methods = new Map([
   ['catalog.artist.view', async (payload = {}) => ({ items: await appleMusic.artistView(payload.browseId, payload.params) })],
   ['catalog.artist.match', async (payload = {}) => appleMusic.matchArtist(payload.name)],
   ['catalog.album', async (payload = {}) => appleMusic.albumPage(payload.browseId)],
-  ['catalog.playlist', async (payload = {}) => appleMusic.playlistPage(payload.browseId)],
+  ['catalog.playlist', async (payload = {}) => (String(payload.browseId || '').startsWith('am.stations.')
+    ? appleMusic.stationPage(payload.browseId)
+    : appleMusic.playlistPage(payload.browseId, { firstPage: Boolean(payload.firstPage) }))],
+  ['catalog.playlist.more', async (payload = {}) => appleMusic.libraryPlaylistMore(payload.continuation, payload.startIndex)],
+  ['catalog.musicVideo', async (payload = {}) => appleMusic.musicVideoFor(payload.appleId || payload.id)],
+  ['catalog.upNext', async (payload = {}) => ({ items: await appleMusic.upNext(payload.seed) })],
   // Hosts parse the reply as an object, so a miss is {} rather than null.
   ['catalog.artwork', async (payload = {}) => (await appleMusic.artwork(payload)) || {}],
+  ['catalog.audioAnalysis', async (payload = {}) => appleMusic.audioAnalysis(payload.ids || [])],
   ['catalog.search', async (payload = {}) => appleMusic.search(payload.query, payload.filter)],
   ['library', async () => appleMusic.library()],
   ['library.playlists', async () => ({ items: await appleMusic.libraryPlaylists() })],
+  ['library.recent', async () => ({ items: await appleMusic.recentTracks() })],
   ['library.like.status', async (payload = {}) => appleMusic.likeStatus(payload.track)],
   ['library.like.set', async (payload = {}) => appleMusic.setLike(payload.track, Boolean(payload.liked))],
   ['library.playlist.targets', async () => ({ playlists: await appleMusic.playlistTargets() })],
   ['library.playlist.add', async (payload = {}) => appleMusic.addToPlaylist(payload.track, payload.playlistId, payload.title)],
   ['library.playlist.create', async (payload = {}) => appleMusic.createPlaylist(payload.title, payload.track)],
+  ['playback.stream', async (payload = {}) => appleMusic.playback.stream(payload.track, payload.quality)],
+  ['playback.atmos', async (payload = {}) => appleMusic.playback.atmos(payload.id)],
+  ['playback.video', async (payload = {}) => appleMusic.playback.video(payload.id)],
+  ['playback.license', async (payload = {}) => appleMusic.playback.license(payload)],
+  ['history.start', async (payload = {}) => appleMusic.playStarted(payload)],
+  ['history.end', async (payload = {}) => appleMusic.playEnded(payload)],
   ['lyrics', async (payload = {}) => (await appleMusic.lyrics(payload)) || {}],
+  ['lyrics.translation', async (payload = {}) => (await appleMusic.lyricsTranslation(payload)) || {}],
   ['close', async () => {
     session = null;
     return null;

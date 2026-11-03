@@ -20,6 +20,8 @@
 // Music video mode plays the video's own soundtrack, as mobile does, so intros
 // and edits never drift the picture away from the sound.
 
+#include "apple_music_stream.h"
+#include "integrations/catalog_source.h"
 #include "local/local_track.h"
 #include "playback_controller.h"
 
@@ -34,6 +36,15 @@ void PlaybackController::playVideoSource(const QJsonObject &stream) {
   m_videoSourceTrackId = id;
   prepareSourceSwitch(id, position());
   startResolvedStream(stream);
+}
+
+void PlaybackController::resolveAppleVideo(const QString &appleVideoId,
+                                           std::function<void(const QJsonObject &, const QString &)> done) {
+  if (!m_appleStreams || !m_catalogSource || !m_catalogSource->apple()) {
+    done({}, tr("Apple Music videos play while Apple is the music source."));
+    return;
+  }
+  m_appleStreams->resolve(appleVideoId, std::move(done));
 }
 
 void PlaybackController::playAlbumSource() {

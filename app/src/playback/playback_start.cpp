@@ -20,6 +20,7 @@
 // Track starts and quality switches, split out of playback_controller.cpp to
 // keep both files readable.
 
+#include "integrations/apple_music.h"
 #include "playback_controller.h"
 #include "playback_helpers.h"
 #include "gapless_playback.h"
@@ -38,18 +39,14 @@ void PlaybackController::playSong(const QVariantMap &track) {
 
 void PlaybackController::startTrack(const QVariantMap &track, bool replaceQueue,
                                     double initialPosition, bool startPaused) {
-  if (isAppleTrack(track)) {
-    m_error = tr("Apple Music playback is not available yet.");
-    emit stateChanged();
-    return;
-  }
+  const bool apple = isAppleTrack(track);
   const QString type = track.value("type").toString();
   // Video rows still have playable audio. The resolver checks their duration;
   // the type label is not a bouncer with a very small guest list.
   if ((type != "song" && type != "track" && type != "video") ||
       track.value("id").toString().isEmpty() ||
       track.value("unplayable").toBool() ||
-      (!m_auth->isSignedIn() && !local::isLocalTrack(track) && downloadedFileFor(track).isEmpty()))
+      (!apple && !m_auth->isSignedIn() && !local::isLocalTrack(track) && downloadedFileFor(track).isEmpty()))
     return;
   ensurePlaybackBackend();
   if (m_crossfadeActive)
@@ -77,7 +74,7 @@ void PlaybackController::startTrack(const QVariantMap &track, bool replaceQueue,
   // and network request, including loads still in progress, instead of starting
   // the same song over from scratch at the track boundary.
   const bool prepared =
-      m_gaplessEnabled && !replaceQueue && initialPosition == 0.0 &&
+      (!apple || m_appleStreams) && m_gaplessEnabled && !replaceQueue && initialPosition == 0.0 &&
       !startPaused && selected.value("id") == m_preparedTrack.value("id") &&
       !m_nextPlayer->source().isEmpty() &&
       canReuseGaplessMedia(m_nextPlayer->mediaStatus(), m_nextPlayer->error());
@@ -138,7 +135,9 @@ void PlaybackController::startTrack(const QVariantMap &track, bool replaceQueue,
   m_track.remove(QStringLiteral("bitrate"));
   m_loading = true;
   m_lastPublishedPosition = 0.0;
-  if (local::isLocalTrack(m_track)) {
+  if (apple) {
+    startAppleTrack();
+  } else if (local::isLocalTrack(m_track)) {
     startLocalFile();
   } else if (const QString file = downloadedFileFor(m_track); !file.isEmpty()) {
     startDownloadedFile(file);
@@ -157,8 +156,10 @@ void PlaybackController::startTrack(const QVariantMap &track, bool replaceQueue,
 
 void PlaybackController::setStreamQuality(const QString &quality) {
   if ((quality != "saver" && quality != "normal" && quality != "high" &&
-       quality != "max") ||
+       quality != "max" && quality != "atmos") ||
       quality == m_streamQuality)
+    return;
+  if (quality == "atmos" && !(m_appleAccount && m_appleAccount->atmosAvailable()))
     return;
   // MAX is Qobuz; without an account here or on a Connect peer there is nothing to turn up to.
   if (quality == "max" && !qobuzReachable())
@@ -169,7 +170,8 @@ void PlaybackController::setStreamQuality(const QString &quality) {
   if (m_qobuz)
     m_qobuz->setEnabled(quality == "max");
   emit streamQualityChanged();
-  if (m_track.isEmpty() || !m_auth->isSignedIn())
+  // Apple songs switch between 64 kbps, 256 kbps and Atmos from the next song.
+  if (m_track.isEmpty() || !m_auth->isSignedIn() || isAppleTrack(m_track))
     return;
   if ((!m_player || m_player->source().isEmpty()) && m_resumePaused)
     return;

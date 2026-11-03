@@ -39,7 +39,10 @@ class QobuzProviderTest {
 
     @Test fun `desktop bytecode answers through the shared host`() = runBlocking {
         assertEquals(false, provider.invoke("session.set").getBoolean("connected"))
-        assertEquals(true, provider.invoke("session.set", JSONObject().put("token", "t").put("userId", 7)).getBoolean("connected"))
+        val session = JSONObject().put("token", "t").put("userId", 7)
+        assertEquals(false, provider.invoke("session.set", session).getBoolean("connected"))
+        session.put("appId", "123").put("appSecret", "s")
+        assertEquals(true, provider.invoke("session.set", session).getBoolean("connected"))
         assertEquals(0, provider.invokeArray("runtime.warnings").length())
     }
 
@@ -67,12 +70,18 @@ class QobuzProviderTest {
         }
     }
 
-    @Test fun `token sign-in needs both app credentials or neither`() = runBlocking {
+    @Test fun `token sign-in needs the user's own app credentials`() = runBlocking {
+        try {
+            provider.invoke("token.verify", JSONObject().put("userId", 7).put("token", "t"))
+            fail()
+        } catch (error: ProviderException) {
+            assertTrue(error.message.orEmpty().contains("numeric Qobuz app ID"))
+        }
         try {
             provider.invoke("token.verify", JSONObject().put("userId", 7).put("token", "t").put("appId", "123"))
             fail()
         } catch (error: ProviderException) {
-            assertTrue(error.message.orEmpty().contains("both the app ID and the app secret"))
+            assertTrue(error.message.orEmpty().contains("Qobuz app secret"))
         }
     }
 }

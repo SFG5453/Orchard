@@ -56,6 +56,7 @@ function measure(width, height, controlsHeight, split, pane, canvasShape, canvas
     var controlsY = y + artHeight + gap;
     var paneY = stacked ? controlsY + controlHeight + paneGap : top;
     return {
+        dockY: Math.max(top, height - bottom - controlHeight),
         top: top, availableHeight: available, artSize: art,
         artHeight: artHeight, artWidth: artWidth, columnY: y,
         controlsScale: scale, controlsY: controlsY,
@@ -64,5 +65,22 @@ function measure(width, height, controlsHeight, split, pane, canvasShape, canvas
         paneY: paneY,
         paneWidth: stacked ? width - column.margin * 2 : Math.max(0, width - column.paneX - column.margin),
         paneHeight: Math.max(0, available - (paneY - top)), stacked: stacked
+    };
+}
+
+// Canvas stage: the loop fills the player side top to bottom and feathers into the lyrics.
+// Solo layouts centre it and feather both edges.
+function stage(width, height, split, aspect, paneX) {
+    var fraction = Math.max(0, Math.min(1, split));
+    var core = Math.min(width * 0.6, height * Math.max(0.5, Math.min(1, aspect)));
+    var soloFeather = core * 0.3;
+    var soloWidth = Math.min(width, core + soloFeather * 2);
+    var sideFeather = paneX * 0.35;
+    var sideWidth = Math.min(width, paneX + paneX * 0.12);
+    var stageWidth = soloWidth + (sideWidth - soloWidth) * fraction;
+    var right = soloFeather + (sideFeather - soloFeather) * fraction;
+    return {
+        x: (width - soloWidth) / 2 * (1 - fraction), y: 0, width: stageWidth, height: height,
+        leftFeather: soloFeather * (1 - fraction), rightFeather: right
     };
 }

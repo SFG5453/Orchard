@@ -41,6 +41,7 @@ class CrossfadeEngine(
     private val onMarker: (TransitionMarker?) -> Unit = {},
     private val onHandoff: (outgoing: ExoPlayer, incoming: ExoPlayer) -> Unit,
     private val canCrossfadeTo: (String) -> Boolean = { true },
+    private val canCrossfadeFrom: (String) -> Boolean = { true },
 ) {
     /** What the listener asked for, read fresh on every tick so a settings change lands at once. */
     data class Config(val enabled: Boolean, val fadeSeconds: Double, val mode: CrossfadeMode)
@@ -165,6 +166,7 @@ class CrossfadeEngine(
         val nextIndex = player.nextMediaItemIndex
         // Video needs the session's surface, and repeating one track would fade it into itself.
         if (nextIndex == C.INDEX_UNSET || player.repeatMode == Player.REPEAT_MODE_ONE ||
+            !canCrossfadeFrom(player.currentMediaItem?.mediaId.orEmpty()) ||
             !canCrossfadeTo(player.getMediaItemAt(nextIndex).mediaId) ||
             MediaItemMapper.isVideoUri(player.currentMediaItem?.localConfiguration?.uri) ||
             MediaItemMapper.isVideoUri(player.getMediaItemAt(nextIndex).localConfiguration?.uri)

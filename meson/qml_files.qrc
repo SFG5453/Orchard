@@ -22,6 +22,7 @@
     <file alias="app/qml/components/settings/Discord.qml">../app/qml/components/settings/Discord.qml</file>
     <file alias="app/qml/components/settings/DiscordCustomizePopup.qml">../app/qml/components/settings/DiscordCustomizePopup.qml</file>
     <file alias="app/qml/components/settings/LastFm.qml">../app/qml/components/settings/LastFm.qml</file>
+    <file alias="app/qml/components/settings/LocalApi.qml">../app/qml/components/settings/LocalApi.qml</file>
     <file alias="app/qml/components/settings/AppleMusic.qml">../app/qml/components/settings/AppleMusic.qml</file>
     <file alias="app/qml/components/settings/AppleMusicForm.ui.qml">../app/qml/components/settings/AppleMusicForm.ui.qml</file>
     <file alias="app/qml/components/settings/Qobuz.qml">../app/qml/components/settings/Qobuz.qml</file>
@@ -69,6 +70,7 @@
     <file alias="app/qml/components/home/NavigationSidebar.qml">../app/qml/components/home/NavigationSidebar.qml</file>
     <file alias="app/qml/components/home/SidebarSearch.qml">../app/qml/components/home/SidebarSearch.qml</file>
     <file alias="app/qml/components/home/MediaCard.qml">../app/qml/components/home/MediaCard.qml</file>
+    <file alias="app/qml/components/home/VideoCardButton.qml">../app/qml/components/home/VideoCardButton.qml</file>
     <file alias="app/qml/components/home/ShelfView.qml">../app/qml/components/home/ShelfView.qml</file>
     <file alias="app/qml/components/home/FeatureCarousel.qml">../app/qml/components/home/FeatureCarousel.qml</file>
     <file alias="app/qml/components/home/RailArrow.qml">../app/qml/components/home/RailArrow.qml</file>
@@ -87,11 +89,16 @@
     <file alias="app/qml/components/player/PlayerSideControls.qml">../app/qml/components/player/PlayerSideControls.qml</file>
     <file alias="app/qml/components/player/MusicVideoTheater.qml">../app/qml/components/player/MusicVideoTheater.qml</file>
     <file alias="app/qml/components/player/TheaterBottomBar.qml">../app/qml/components/player/TheaterBottomBar.qml</file>
+    <file alias="app/qml/components/player/TheaterQualityMenu.qml">../app/qml/components/player/TheaterQualityMenu.qml</file>
     <file alias="app/qml/components/player/TheaterButton.qml">../app/qml/components/player/TheaterButton.qml</file>
     <file alias="app/qml/components/player/TheaterUpNext.qml">../app/qml/components/player/TheaterUpNext.qml</file>
     <file alias="app/qml/components/player/TheaterSkipButton.qml">../app/qml/components/player/TheaterSkipButton.qml</file>
     <file alias="app/qml/components/player/TheaterTopBar.qml">../app/qml/components/player/TheaterTopBar.qml</file>
     <file alias="app/qml/components/player/TheaterPicture.qml">../app/qml/components/player/TheaterPicture.qml</file>
+    <file alias="app/qml/components/player/MusicVideoPlayer.qml">../app/qml/components/player/MusicVideoPlayer.qml</file>
+    <file alias="app/qml/components/player/PipWindow.qml">../app/qml/components/player/PipWindow.qml</file>
+    <file alias="app/qml/components/player/MiniVideo.qml">../app/qml/components/player/MiniVideo.qml</file>
+    <file alias="app/qml/components/player/PipForm.ui.qml">../app/qml/components/player/PipForm.ui.qml</file>
     <file alias="app/qml/components/PlaylistPicker.qml">../app/qml/components/PlaylistPicker.qml</file>
     <file alias="app/qml/components/DetailListView.qml">../app/qml/components/DetailListView.qml</file>
     <file alias="app/qml/components/WheelGlide.qml">../app/qml/components/WheelGlide.qml</file>
@@ -121,6 +128,7 @@
     <file alias="app/qml/components/player/SleepTimerButton.qml">../app/qml/components/player/SleepTimerButton.qml</file>
     <file alias="app/qml/components/player/VolumePopup.qml">../app/qml/components/player/VolumePopup.qml</file>
     <file alias="app/qml/components/player/LyricsView.qml">../app/qml/components/player/LyricsView.qml</file>
+    <file alias="app/qml/components/player/LyricsLine.qml">../app/qml/components/player/LyricsLine.qml</file>
     <file alias="app/qml/components/player/LyricsWordRows.qml">../app/qml/components/player/LyricsWordRows.qml</file>
     <file alias="app/qml/components/player/LyricsPauseDots.qml">../app/qml/components/player/LyricsPauseDots.qml</file>
     <file alias="app/qml/components/player/LyricsTranslateBar.qml">../app/qml/components/player/LyricsTranslateBar.qml</file>
@@ -142,6 +150,7 @@
     <file alias="app/qml/components/settings/GeneralSectionForm.ui.qml">../app/qml/components/settings/GeneralSectionForm.ui.qml</file>
     <file alias="app/qml/components/settings/IntegrationsSection.ui.qml">../app/qml/components/settings/IntegrationsSection.ui.qml</file>
     <file alias="app/qml/components/settings/LastFmForm.ui.qml">../app/qml/components/settings/LastFmForm.ui.qml</file>
+    <file alias="app/qml/components/settings/LocalApiForm.ui.qml">../app/qml/components/settings/LocalApiForm.ui.qml</file>
     <file alias="app/qml/components/settings/LicenseViewer.ui.qml">../app/qml/components/settings/LicenseViewer.ui.qml</file>
     <file alias="app/qml/components/settings/LyricTranslationSettingsForm.ui.qml">../app/qml/components/settings/LyricTranslationSettingsForm.ui.qml</file>
     <file alias="app/qml/components/settings/MirrorMoveButton.ui.qml">../app/qml/components/settings/MirrorMoveButton.ui.qml</file>
@@ -184,6 +193,9 @@
     <file alias="app/qml/components/player/FullscreenQueueRow.ui.qml">../app/qml/components/player/FullscreenQueueRow.ui.qml</file>
     <file alias="app/qml/components/player/FullscreenTrackInfo.ui.qml">../app/qml/components/player/FullscreenTrackInfo.ui.qml</file>
     <file alias="app/qml/components/player/FullscreenTransportButton.ui.qml">../app/qml/components/player/FullscreenTransportButton.ui.qml</file>
+    <file alias="app/qml/components/player/CanvasStageMask.ui.qml">../app/qml/components/player/CanvasStageMask.ui.qml</file>
+    <file alias="app/qml/components/player/CanvasStageShade.ui.qml">../app/qml/components/player/CanvasStageShade.ui.qml</file>
+    <file alias="app/qml/components/player/CanvasStageWash.qml">../app/qml/components/player/CanvasStageWash.qml</file>
     <file alias="app/qml/components/player/FullscreenUpNext.ui.qml">../app/qml/components/player/FullscreenUpNext.ui.qml</file>
     <file alias="app/qml/components/player/BassPulse.qml">../app/qml/components/player/BassPulse.qml</file>
     <file alias="app/qml/views/home/AppTopBar.qml">../app/qml/views/home/AppTopBar.qml</file>
@@ -201,6 +213,7 @@
     <file alias="app/qml/views/search/SearchView.qml">../app/qml/views/search/SearchView.qml</file>
     <file alias="app/qml/views/home/UnderConstructionView.qml">../app/qml/views/home/UnderConstructionView.qml</file>
     <file alias="app/qml/views/album/AlbumView.qml">../app/qml/views/album/AlbumView.qml</file>
+    <file alias="app/qml/views/album/AlbumShelves.qml">../app/qml/views/album/AlbumShelves.qml</file>
     <file alias="app/qml/views/playlist/PlaylistView.qml">../app/qml/views/playlist/PlaylistView.qml</file>
     <file alias="app/qml/views/login/LoginView.qml">../app/qml/views/login/LoginView.qml</file>
     <file alias="app/qml/components/welcome/WelcomeButton.qml">../app/qml/components/welcome/WelcomeButton.qml</file>

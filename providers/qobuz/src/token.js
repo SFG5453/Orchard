@@ -50,13 +50,12 @@ async function checkAppSecret({ appId, appSecret, fetchImpl, token }) {
 }
 
 /**
- * Checks a pasted user ID and auth token with Qobuz. Tokens are bound to an app
- * ID: the web player's by default, or the user's own app ID and secret.
+ * Checks a user ID and auth token issued to the user's own Qobuz app, then the
+ * app secret that signs stream requests.
  */
 export async function verifyQobuzToken({
   appId,
   appSecret,
-  bootstrap,
   fetchImpl = fetch,
   token,
   userId
@@ -67,21 +66,19 @@ export async function verifyQobuzToken({
   const ownSecret = String(appSecret || '').trim();
   if (!pasted) throw new TypeError('Enter a Qobuz auth token');
   if (!Number.isSafeInteger(id) || id <= 0) throw new TypeError('Enter a numeric Qobuz user ID');
-  if (ownAppId && !/^\d+$/.test(ownAppId)) throw new TypeError('A Qobuz app ID is a number');
-  if (Boolean(ownAppId) !== Boolean(ownSecret)) throw new TypeError('Enter both the app ID and the app secret, or neither');
-  if (!ownAppId && !bootstrap) throw new TypeError('verifyQobuzToken requires a Qobuz bootstrap loader');
-  const app = ownAppId || (await bootstrap.get({ refresh: true })).appId;
+  if (!/^\d+$/.test(ownAppId)) throw new TypeError('Enter your numeric Qobuz app ID');
+  if (!ownSecret) throw new TypeError('Enter your Qobuz app secret');
+  const app = ownAppId;
   const query = formEncode({ user_id: String(id), user_auth_token: pasted, app_id: app });
   const response = await fetchImpl(`${QOBUZ_BASE_URL}/user/login?${query}`, { headers: requestHeaders(app) });
   const body = await response.text();
   if (response.status === 401) throw new Error('Qobuz rejected this user ID and token');
-  if (response.status === 400 && ownAppId) throw new Error('Qobuz rejected the app ID');
+  if (response.status === 400) throw new Error('Qobuz rejected the app ID');
   if (!response.ok) throw new Error(`Qobuz token sign-in failed (${response.status}): ${body.slice(0, 200)}`);
   const data = JSON.parse(body);
   const accountId = Number(data.user?.id ?? id);
   if (accountId !== id) throw new Error('This token belongs to a different Qobuz user ID');
   const account = { token: String(data.user_auth_token || pasted), userId: accountId };
-  if (!ownAppId) return account;
   await checkAppSecret({ appId: ownAppId, appSecret: ownSecret, fetchImpl, token: account.token });
   return { ...account, appId: ownAppId, appSecret: ownSecret };
 }

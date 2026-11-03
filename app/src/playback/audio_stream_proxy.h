@@ -40,6 +40,8 @@ public:
     // Streams carrying "provider" read through this instead of fetching "url".
     void setRangeReader(RangeReader reader) { m_reader = std::move(reader); }
     QUrl open(const QJsonObject &stream);
+    // Serves `head` in place of the first `replaces` upstream bytes; "contentLength" stays upstream's.
+    QUrl open(const QJsonObject &stream, const QByteArray &head, qint64 replaces);
     QJsonObject stream() const { return m_stream; }
     void setSuspended(bool suspended);
     void clear();
@@ -50,6 +52,8 @@ private:
     QNetworkAccessManager m_network;
     QJsonObject m_stream;
     QByteArray m_path;
+    QByteArray m_head;
+    qint64 m_headReplaces{0};
     QList<QObject *> m_connections;
     RangeReader m_reader;
     bool m_suspended{false};

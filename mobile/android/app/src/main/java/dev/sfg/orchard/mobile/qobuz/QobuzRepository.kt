@@ -48,7 +48,8 @@ class QobuzRepository(
     val status: StateFlow<QobuzStatus> = _status.asStateFlow()
 
     private fun loadInitialStatus(): QobuzStatus {
-        val token = prefs.getString(KEY_TOKEN, "").orEmpty()
+        // Sign-ins without the user's own app credentials cannot play; they read as disconnected.
+        val token = if (getCredentials() != null) prefs.getString(KEY_TOKEN, "").orEmpty() else ""
         val enabled = prefs.getBoolean(KEY_ENABLED, false)
         val qualityId = prefs.getString(KEY_QUALITY, QobuzQuality.AUTO.id)
         val quality = QobuzQuality.fromId(qualityId)
@@ -62,16 +63,13 @@ class QobuzRepository(
     fun getCredentials(): QobuzSession? {
         val token = prefs.getString(KEY_TOKEN, "").orEmpty()
         val userId = prefs.getLong(KEY_USER_ID, -1L)
-        if (token.isBlank() || userId <= 0) return null
-        return QobuzSession(
-            token = token,
-            userId = userId,
-            appId = prefs.getString(KEY_APP_ID, "").orEmpty(),
-            appSecret = prefs.getString(KEY_APP_SECRET, "").orEmpty(),
-        )
+        val appId = prefs.getString(KEY_APP_ID, "").orEmpty()
+        val appSecret = prefs.getString(KEY_APP_SECRET, "").orEmpty()
+        if (token.isBlank() || userId <= 0 || appId.isBlank() || appSecret.isBlank()) return null
+        return QobuzSession(token = token, userId = userId, appId = appId, appSecret = appSecret)
     }
 
-    fun connect(token: String, userId: Long, appId: String = "", appSecret: String = "") {
+    fun connect(token: String, userId: Long, appId: String, appSecret: String) {
         prefs.edit {
             putString(KEY_TOKEN, token)
             putLong(KEY_USER_ID, userId)
@@ -104,8 +102,7 @@ class QobuzRepository(
     }
 
     fun setEnabled(enabled: Boolean) {
-        val hasToken = prefs.getString(KEY_TOKEN, "").orEmpty().isNotBlank()
-        val effective = enabled && hasToken
+        val effective = enabled && getCredentials() != null
         prefs.edit { putBoolean(KEY_ENABLED, effective) }
         _status.value = _status.value.copy(enabled = effective)
     }

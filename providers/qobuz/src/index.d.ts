@@ -25,12 +25,6 @@ export interface QobuzLogger {
   warn?(message: string, detail?: unknown): void;
 }
 
-export interface QobuzCrypto {
-  hkdfSha256(input: { key: Uint8Array; salt: Uint8Array; info: Uint8Array; length: number }): Uint8Array;
-  decryptAes128Cbc(input: { key: Uint8Array; iv: Uint8Array; data: Uint8Array }): Uint8Array;
-  decryptAes128Ctr(input: { key: Uint8Array; iv: Uint8Array; data: Uint8Array }): Uint8Array;
-}
-
 export interface QobuzByteRange {
   bytes: Uint8Array;
   start: number;
@@ -42,21 +36,9 @@ export interface QobuzByteRange {
 export interface QobuzCredentials {
   token: string;
   userId: number;
-  /** The user's own app; with appSecret, playback uses track/getFileUrl. */
-  appId?: string;
-  appSecret?: string;
-}
-
-export interface QobuzBootstrap {
+  /** The user's own Qobuz app; the secret signs track/getFileUrl. */
   appId: string;
-  bundlePath?: string;
-  oauthPrivateKey: string;
-  rngInit: string;
-}
-
-export interface QobuzBootstrapLoader {
-  clear(): void;
-  get(options?: { refresh?: boolean }): Promise<QobuzBootstrap>;
+  appSecret: string;
 }
 
 export interface CanonicalTrack {
@@ -114,19 +96,12 @@ export interface QobuzPlaybackSource {
   mimeType: 'audio/flac';
   bitDepth?: number;
   sampleRate?: number;
-  channels: number;
-  expiresAt: number;
   durationSeconds: number;
   formatId: number;
-  segmentCount: number;
-  seekPointCount: number;
-  tableSamples: number;
-  totalSamples: number;
   totalBytes: number;
 }
 
 export interface QobuzClient {
-  ensureSession(options?: { refresh?: boolean }): Promise<unknown>;
   reportStreamingEnd(event: Record<string, unknown>): Promise<unknown>;
   reportStreamingStart(source: Record<string, unknown>): Promise<unknown>;
   reset(): void;
@@ -141,13 +116,12 @@ export interface QobuzClient {
 }
 
 export interface QobuzService {
-  bootstrap: QobuzBootstrapLoader;
   client: QobuzClient;
   close(): Promise<void>;
   matchTrack(track: CanonicalTrackInput): Promise<QobuzMatch | null>;
   playbackEnded(playbackId: string, positionSeconds?: number): Promise<void>;
   playbackStarted(playbackId: string, positionSeconds?: number): Promise<void>;
-  /** Returns metadata or one audio segment, bounded by the requested range. */
+  /** Returns at most one chunk, bounded by the requested range. */
   readChunk(playbackId: string, range?: { start?: number; end?: number }): Promise<QobuzByteRange>;
   readRange(playbackId: string, range?: { start?: number; end?: number }): Promise<QobuzByteRange>;
   release(playbackId: string): void;
@@ -167,40 +141,23 @@ export interface QobuzService {
 }
 
 export interface CreateQobuzOptions {
-  bootstrap?: QobuzBootstrapLoader;
-  bootstrapMaxAgeMs?: number;
   credentials(): Promise<QobuzCredentials | null> | QobuzCredentials | null;
   fetchImpl?: FetchLike;
   logger?: QobuzLogger;
   matcherCacheTtlMs?: number;
-  crypto?: QobuzCrypto;
   randomUuid?(): string;
   softwareVersion?: string;
 }
 
 export function createQobuz(options: CreateQobuzOptions): QobuzService;
-export function createQobuzBootstrapLoader(options?: {
-  fetchImpl?: FetchLike;
-  maxAgeMs?: number;
-}): QobuzBootstrapLoader;
-export function fetchQobuzBootstrap(options?: { fetchImpl?: FetchLike }): Promise<QobuzBootstrap>;
-export function extractQobuzBootstrap(bundle: string, bundlePath?: string): QobuzBootstrap;
-export function createQobuzAuthorizationUrl(options: { appId: string; redirectUrl: string }): string;
-export function exchangeQobuzAuthorizationCode(options: {
-  code: string;
-  fetchImpl?: FetchLike;
-  web: QobuzBootstrap;
-}): Promise<QobuzCredentials>;
 export function verifyQobuzToken(options: {
   token: string;
   userId: number | string;
-  appId?: string;
-  appSecret?: string;
-  bootstrap?: QobuzBootstrapLoader;
+  appId: string;
+  appSecret: string;
   fetchImpl?: FetchLike;
 }): Promise<QobuzCredentials>;
 export function createQobuzClient(options: {
-  bootstrap: QobuzBootstrapLoader;
   credentials: CreateQobuzOptions['credentials'];
   fetchImpl?: FetchLike;
   softwareVersion?: string;
@@ -223,9 +180,7 @@ export function selectQobuzMatch(
 ): QobuzMatch | null;
 export function createQobuzPlayback(options: {
   client: QobuzClient;
-  crypto?: QobuzCrypto;
   fetchImpl?: FetchLike;
-  logger?: QobuzLogger;
   randomUuid?(): string;
   reporter: ReturnType<typeof createQobuzReporter>;
 }): {
@@ -243,34 +198,6 @@ export function createQobuzReporter(options: { client: QobuzClient; logger?: Qob
   started(playbackId: string, source: Record<string, any>, positionSeconds?: number): Promise<void>;
 };
 
-export interface QobuzInitSegment {
-  flacHeader: Uint8Array;
-  segmentTable: Array<{ byteLength: number; sampleCount: number; byteOffset: number }>;
-  totalLength: number;
-  sampleRate: number;
-  channels: number;
-  bitDepth: number;
-  totalSamples: number;
-  seekPoints: Array<{ sampleNumber: number; streamOffset: number; frameSamples: number }>;
-  tableSamples: number;
-}
-
-export interface QobuzAudioSegment {
-  data: Uint8Array;
-  dataOffset: number;
-  frames: Array<{ flags: number; iv: Uint8Array; size: number; skip: number }>;
-  mediaEnd: number;
-}
-
-export function parseQobuzInitSegment(input: ArrayBuffer | Uint8Array): QobuzInitSegment;
-export function parseQobuzAudioSegment(input: ArrayBuffer | Uint8Array): QobuzAudioSegment;
-export function deriveQobuzSessionKey(infos: string, rngInit: string, crypto: QobuzCrypto): Uint8Array;
-export function unwrapQobuzContentKey(sessionKey: Uint8Array, wrappedValue: string, crypto: QobuzCrypto): Uint8Array;
-export function decryptQobuzAudioSegment(
-  input: ArrayBuffer | Uint8Array,
-  contentKey: Uint8Array | null | undefined,
-  crypto?: QobuzCrypto
-): Uint8Array;
 export function canonicalTrack(input?: CanonicalTrackInput): CanonicalTrack;
 export function normalizeQobuzQuality(value: unknown): QobuzQuality;
 export function normalizeQobuzAlbumQuality(raw: unknown, fallbackId?: string): QobuzAlbumQuality;
@@ -278,7 +205,5 @@ export function normalizeQobuzTrackQuality(raw: unknown, fallbackId?: number | s
 
 export const QOBUZ_AUDIO_QUALITIES: readonly QobuzQuality[];
 export const QOBUZ_BASE_URL: string;
-export const QOBUZ_PLAY_URL: string;
 export const QOBUZ_USER_AGENT: string;
 export const QOBUZ_FORMAT_IDS: Readonly<Record<QobuzQuality, number>>;
-export const QOBUZ_CMAF_UUIDS: Readonly<{ init: string; segment: string }>;

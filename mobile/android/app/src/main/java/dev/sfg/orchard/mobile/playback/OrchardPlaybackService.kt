@@ -19,7 +19,7 @@
 
 package dev.sfg.orchard.mobile.playback
 
-import android.app.PendingIntent
+import android.app.NotificationManager
 import android.content.ComponentCallbacks2
 import android.content.Intent
 import android.os.Handler
@@ -29,16 +29,14 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DataSourceBitmapLoader
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import dev.sfg.orchard.connect.R
-import dev.sfg.orchard.connect.app.MainActivity
 import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.model.Track
+import dev.sfg.orchard.mobile.playback.apple.AppleMixAnalysis
 import dev.sfg.orchard.mobile.playback.smart.CrossfadeMode
 import dev.sfg.orchard.mobile.playback.smart.MixSplicer
 import dev.sfg.orchard.mobile.playback.smart.TransitionFilter
@@ -66,7 +64,9 @@ class OrchardPlaybackService : MediaLibraryService() {
     private lateinit var player: ExoPlayer
     private lateinit var spare: ExoPlayer
     private lateinit var crossfade: CrossfadeEngine
+    private lateinit var carErrors: CarPlaybackErrors
     private lateinit var mediaSession: MediaLibrarySession
+    private lateinit var connectSession: ConnectMediaSession
     private lateinit var stateStore: PlaybackStateStore
     private lateinit var streamResolver: YouTubeStreamResolver
     private lateinit var streamCache: StreamCache
@@ -111,10 +111,10 @@ class OrchardPlaybackService : MediaLibraryService() {
         streamResolver = graph.streams
         streamResolver.trackLookup = ::queueTrack
         streamResolver.warmUp()
-        streamCache = StreamCache(context = this, maxBytes = graph.settings.settings.value.cacheSizeBytes, variant = graph::streamVariant)
+        streamCache = StreamCache(context = this, maxBytes = graph.settings.settings.value.cacheSizeBytes, variant = { graph.streamVariant(it) })
         graph.onClearStreamCache = streamCache::clear
         streams = PlayerStreams(this, graph, streamCache, ::queueTrack) { uri, stream -> nowPlaying.onResolved(uri, stream) }
-        nowPlaying = NowPlayingPublisher(graph, handler, ioScope, streamCache, streams::cached) {
+        nowPlaying = NowPlayingPublisher(graph, handler, ioScope, streamCache, streams::cached, streams::atmosBitrateKbps) {
             if (::player.isInitialized) player else null
         }
         recovery = PlaybackRecovery(streamResolver, streams, graph::postWarning)
@@ -140,6 +140,8 @@ class OrchardPlaybackService : MediaLibraryService() {
         unshuffledOrder = stateStore.load().also { it.restoreInto(player) }.unshuffledOrder
         // The restored song is known before anything can ask for it. No more amnesiac cold starts.
         snapshotQueue(player)
+        val sessionActivity = mainActivityIntent(this)
+        carErrors = CarPlaybackErrors(graph, sessionActivity) { mediaSession }
         val callback = OrchardSessionCallback(
             packageName = packageName,
             browseTree = browseTree,
@@ -147,25 +149,26 @@ class OrchardPlaybackService : MediaLibraryService() {
             browseScope = ioScope,
             target = { authoritativePlayer() ?: player },
             onSetVideoMode = ::setVideoMode,
+            onToggleLike = { ioScope.toggleLike(graph, (authoritativePlayer() ?: player).currentMediaItem, carErrors) },
             onLayoutChanged = ::updateCustomLayout,
+            sessionActivity = sessionActivity,
         )
         mediaSession = MediaLibrarySession.Builder(this, OrchardSessionPlayer(player), callback)
-            .setSessionActivity(mainActivityIntent())
-            // The app's OkHttp stack: the default URLConnection loader fails on some provider
-            // artwork URLs, and WearOS then falls back to a gray notification background.
-            .setBitmapLoader(
-                DataSourceBitmapLoader.Builder(this)
-                    .setDataSourceFactory(OkHttpDataSource.Factory(graph.http))
-                    .setMaximumOutputDimension(1024)
-                    .setMakeShared(true)
-                    .build()
-            )
+            .setSessionActivity(sessionActivity)
+            .setBitmapLoader(artworkBitmapLoader(this, graph.http))
             .build()
+        ioScope.notifyLibraryChanges(graph, browseTree, { mediaSession }, ::updateCustomLayout)
+        connectSession = ConnectMediaSession(this, graph.connect, mainActivityIntent(this), artworkBitmapLoader(this, graph.http)) {
+            onUpdateNotification(mediaSession, false)
+        }
         updateCustomLayout()
         handler.post { nowPlaying.hydrateArtwork() }
         // Media3's default small icon is a play glyph, which the media player then badges.
         setMediaNotificationProvider(
-            DefaultMediaNotificationProvider.Builder(this).build().apply { setSmallIcon(R.drawable.ic_notification) }
+            DefaultMediaNotificationProvider.Builder(this)
+                .setNotificationIdProvider(ConnectMediaSession::notificationId)
+                .build()
+                .apply { setSmallIcon(R.drawable.ic_notification) }
         )
         crossfade = CrossfadeEngine(
             handler = handler,
@@ -178,13 +181,19 @@ class OrchardPlaybackService : MediaLibraryService() {
                 )
             },
             // A connected desktop does the heavy lifting; the phone keeps the clock and the speaker.
-            mixer = AdaptiveMixer(this, handler, remote = graph.connect::mixHost),
+            mixer = AdaptiveMixer(this, handler, remote = graph.connect::mixHost, appleAnalysis = { ids ->
+                runBlocking { AppleMixAnalysis.fetch(graph, ids) }
+            }, evidence = { graph.mixEvidence }),
             // Adaptive mixes decode whole songs, so both must be fully cached first.
-            sourceFor = { uri -> if (streamCache.isFullyCached(uri)) ({ streamCache.mediaDataSource(uri) }) else null },
+            sourceFor = { uri ->
+                if (streamCache.isFullyCached(uri)) ({ streamCache.mediaDataSource(uri)?.let { streams.analysisSource(uri, it) } }) else null
+            },
             splicerFor = splicers::get,
             onMarker = { graph.transitionMarker.value = it },
             onHandoff = ::adoptPlayer,
-            canCrossfadeTo = { dev.sfg.orchard.mobile.playback.slop.SlopPlayback.allowsTransition(graph, it) },
+            canCrossfadeTo = { dev.sfg.orchard.mobile.playback.slop.SlopPlayback.allowsTransition(graph, it) &&
+                !(graph.atmosEnabled() && dev.sfg.orchard.mobile.catalog.isAppleMusicId(it)) },
+            canCrossfadeFrom = { !(graph.atmosEnabled() && dev.sfg.orchard.mobile.catalog.isAppleMusicId(it)) },
         )
         crossfade.start(player, spare)
         loadedAudioVariant = graph.streamVariant()
@@ -229,7 +238,7 @@ class OrchardPlaybackService : MediaLibraryService() {
     private fun buildPlayer(filter: TransitionFilter, eq: EqualizerAudioProcessor, handlesAudioFocus: Boolean): ExoPlayer {
         val splicer = MixSplicer()
         return buildOrchardPlayer(this, streams.mediaSourceFactory(), splicer, filter, eq, playbackVolume.state, handlesAudioFocus)
-            .also { splicers[it] = splicer }
+            .also { splicers[it] = splicer; nowPlaying.observeAudioFormat(it) }
     }
 
     /**
@@ -263,6 +272,15 @@ class OrchardPlaybackService : MediaLibraryService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession = mediaSession
+
+    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
+        if (session === mediaSession && ::connectSession.isInitialized && connectSession.hasMedia && !session.player.isPlaying) {
+            getSystemService(NotificationManager::class.java)
+                .cancel(ConnectMediaSession.notificationId(session))
+            return
+        }
+        super.onUpdateNotification(session, startInForegroundRequired)
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val result = super.onStartCommand(intent, flags, startId)
@@ -302,6 +320,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         if (::spare.isInitialized) spare.release()
         if (::playbackVolume.isInitialized) playbackVolume.close()
         if (::mediaSession.isInitialized) mediaSession.release()
+        if (::connectSession.isInitialized) connectSession.release()
         streamResolver.trackLookup = { null }
         queueSnapshot = emptyMap()
         OrchardGraph.from(this).onClearStreamCache = null
@@ -407,6 +426,7 @@ class OrchardPlaybackService : MediaLibraryService() {
             }
             OrchardWidgetUpdater.onPlayerChanged(this@OrchardPlaybackService, this@OrchardPlaybackService.player)
             nowPlaying.updateScrobbling(player)
+            carErrors.onEvents(player)
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
@@ -444,6 +464,7 @@ class OrchardPlaybackService : MediaLibraryService() {
 
         override fun onPlayerError(error: PlaybackException) {
             Log.e(TAG, "onPlayerError: ${error.errorCodeName} - ${error.message}", error)
+            carErrors.onPlayerError(player, error)
             recovery.recover(player, error)
         }
     }
@@ -455,32 +476,11 @@ class OrchardPlaybackService : MediaLibraryService() {
 
     private fun updateCustomLayout() {
         if (!::mediaSession.isInitialized) return
-        OrchardSessionCallback.applyLayout(mediaSession, authoritativePlayer() ?: return)
+        val source = authoritativePlayer() ?: return
+        OrchardSessionCallback.applyLayout(mediaSession, source, likedState(OrchardGraph.from(this), source.currentMediaItem))
     }
 
-    private fun prefetchAround(player: Player) {
-        val wanted = (player.currentMediaItemIndex..player.currentMediaItemIndex + 1)
-            .filter { it in 0 until player.mediaItemCount }
-            .map(player::getMediaItemAt)
-        for (item in wanted) {
-            val uri = item.localConfiguration?.uri
-            // Authenticated progressive items are prefetched through StreamCache below, whose
-            // DataSource invokes their signed-in resolver; a guest resolve beside it would compete.
-            val authenticated = uri != null &&
-                (MediaItemMapper.requiresAuthenticatedHls(uri) || MediaItemMapper.requiresAuthenticatedDirect(uri))
-            if (!authenticated && !MediaItemMapper.isVideoUri(uri)) streamResolver.prefetch(item.mediaId)
-        }
-        val uris = wanted.mapNotNull { it.localConfiguration?.uri }.filterNot(MediaItemMapper::isVideoUri)
-        streamCache.retainOnly(uris)
-        uris.forEach(streamCache::prefetch)
-    }
-
-    private fun mainActivityIntent(): PendingIntent = PendingIntent.getActivity(
-        this,
-        0,
-        Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-    )
+    private fun prefetchAround(player: Player) = prefetchAround(player, streamResolver, streamCache, streams::useAppleAtmos) { ioScope.launch { streams.warmAppleAtmos(it) } }
 
     companion object {
         private const val TAG = "OrchardPlayback"

@@ -11,6 +11,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.playback.smart.AdaptiveMix
+import dev.sfg.orchard.mobile.playback.smart.MixEvidenceStore
 import dev.sfg.orchard.mobile.playback.smart.PreparedMix
 import org.json.JSONObject
 import java.util.concurrent.Executors
@@ -47,6 +48,10 @@ class AdaptiveMixer internal constructor(
     private val handler: Handler,
     /** The desktop mixing for this phone while one is connected; asked per pair. */
     private val remote: () -> RemoteMix? = { null },
+    /** Apple Music's analysis by track id, for songs played from Apple Music. Blocks the worker. */
+    private val appleAnalysis: (List<String>) -> Map<String, JSONObject> = { emptyMap() },
+    /** Song evidence earlier mixes measured, by track id; opened by the first mix. */
+    private val evidence: () -> MixEvidenceStore? = { null },
 ) {
     // QuickJS plans on this thread and allows itself 2 MiB of stack; ART gives threads 1 MiB.
     // One pair at a time: a DJ with two hands, not four.
@@ -84,8 +89,12 @@ class AdaptiveMixer internal constructor(
         handler.removeCallbacks(idleRelease)
         worker.execute {
             val prepared = try {
-                remote()?.prepare(request, outgoing, incoming)
-                    ?: AdaptiveMix.prepare(::loadedModels, outgoing, incoming, request)
+                withAppleAnalysis(request)
+                // Apple Music audio is licensed to this phone; a mix host would receive ciphertext.
+                (if (hasAppleMusic(request)) null else remote())?.prepare(request, outgoing, incoming)
+                    ?: withEvidence(request) { onMeasured ->
+                        AdaptiveMix.prepare(::loadedModels, outgoing, incoming, request, onMeasured)
+                    }
             } catch (error: Throwable) {
                 // Native analysis must never take playback down with it.
                 Log.w(TAG, "Adaptive mix preparation crashed", error)
@@ -101,6 +110,34 @@ class AdaptiveMixer internal constructor(
                 if (key == pair) result = prepared
                 handler.postDelayed(idleRelease, MODEL_IDLE_MS)
             }
+        }
+    }
+
+    /** Adds Apple's analysis of both songs, which stands in for the beat and vocal models. */
+    private fun withAppleAnalysis(request: JSONObject) {
+        val ids = listOf("currentTrack", "nextTrack").map { request.optJSONObject(it)?.optString("id").orEmpty() }
+        val found = appleAnalysis(ids)
+        found[ids[0]]?.let { request.put("outgoingApple", it) }
+        found[ids[1]]?.let { request.put("incomingApple", it) }
+    }
+
+    /**
+     * Sends each song's stored evidence with the request, so a song an earlier mix measured skips
+     * the beat model, and keeps what this mix measures. The native mix checks it is the same audio.
+     */
+    private fun withEvidence(request: JSONObject, prepare: ((JSONObject) -> Unit) -> PreparedMix): PreparedMix {
+        val store = evidence()
+        val songs = listOf(
+            Triple("outgoing", request.optJSONObject("currentTrack")?.optString("id").orEmpty(), request.optDouble("outgoingDuration")),
+            Triple("incoming", request.optJSONObject("nextTrack")?.optString("id").orEmpty(), request.optDouble("incomingDuration")),
+        )
+        if (store != null) for ((side, id, duration) in songs) {
+            // Apple's analysis replaces the beat model for its songs.
+            if (request.has("${side}Apple")) continue
+            store.evidence(id, duration)?.let { request.put("${side}Measured", it) }
+        }
+        return prepare { header ->
+            for ((side, id, duration) in songs) store?.store(id, duration, header.optJSONObject("${side}Measured"))
         }
     }
 
@@ -167,6 +204,10 @@ class AdaptiveMixer internal constructor(
             .put("nextTrack", next.plannerJson())
             .put("fadeSeconds", fadeSeconds.toInt())
             .put("albumSequential", albumSequential)
+
+        private fun hasAppleMusic(request: JSONObject) = listOf("currentTrack", "nextTrack").any {
+            request.optJSONObject(it)?.optString("id").orEmpty().startsWith("am.")
+        }
 
         private fun Track.plannerJson(): JSONObject = JSONObject()
             .put("id", id).put("title", title).put("subtitle", artist)

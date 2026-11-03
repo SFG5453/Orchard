@@ -37,7 +37,7 @@ import dev.sfg.orchard.mobile.playback.slop.SlopAction
 
 @Composable
 internal fun SlopSettingsRow(settings: OrchardSettings, onSettings: (OrchardSettings) -> Unit) {
-    Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+    Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             RowIcon(Icons.Rounded.AutoAwesome)
             Column {

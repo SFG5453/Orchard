@@ -1,6 +1,6 @@
 # Adaptive mix
 
-Local desktop smart-crossfade preparation, ported from OrchardV2’s Beat This
+Local desktop smart-crossfade preparation, ported from OrchardV2’s beat
 tracker and shared Earmark transition engine. The Qt host exposes it as the
 **Adaptive mix** crossfade mode and keeps ordinary crossfade available.
 
@@ -12,8 +12,10 @@ and discards up to its start, so the windows share the analysis timeline and
 match playback sample for sample; an input seek lands tens of milliseconds off
 on Opus/WebM. Stereo fold-down and anti-aliased 44.1 → 22.05 kHz conversion
 run on the CPU. `ort` 2.0.0-rc.13 with the `webgpu`
-feature runs the FP32 Beat This graph; the FP32 UMX-HQ vocal graph runs on
-ORT's CPU provider with two non-spinning threads. The shared planner
+feature runs Nirovi's fp16 beat graph (`models/nirovi`), or its int8 graph on
+two CPU threads without a WebGPU device; the FP32 Syvenu vocal graph
+(`models/syvenu`) reads the same beat spectrogram on ORT's CPU provider
+with two non-spinning threads. The shared planner
 selects beat/bar-aligned overlap positions and a pitch-preserving tempo glide
 for pairs up to 12% apart: one shared tempo moves geometrically from the
 outgoing BPM to the incoming BPM, so the outgoing song starts and the incoming
@@ -31,8 +33,8 @@ early), and fades the render into native playback over its last 5 ms.
 Before planning, the worker measures each song's bass (35-140 Hz, every 0.25 s,
 relative to the song's usual level), its sub-bass weight (25-60 Hz against
 60-250 Hz over the body), local chroma over both render windows (Earmark's
-peak-picked pitch classes every 0.5 s, with each frame's tonal weight), and UMX
-vocal activity across both render windows (about 1 s of CPU per pair). Local
+peak-picked pitch classes every 0.5 s, with each frame's tonal weight), and
+vocal activity across both render windows (about 0.25 s of CPU per pair). Local
 chroma only decides whether a beatless bridge's keys clash; beatmatched blends
 use whole-song keys. The planner uses them to keep a beat going through
 the overlap, drop a beatless intro's first beat on the bass swap, avoid fading in
@@ -42,6 +44,35 @@ vocal curve also shapes the filter sweep. Set `ORCHARD_MIX_DUMP` to a directory
 to save each pair's planner input and decisions for offline replay. Set
 `ORCHARD_MIX_BEATS=earmark` to plan from Earmark's own beat grid without the Beat
 This pass, for A/B listening.
+
+## Stored song evidence
+
+Each song is the incoming deck of one pair and the outgoing deck of the next, so its
+whole-track evidence (`measured.rs`: Earmark's analysis with the beat model's bar phase, the
+bass curve and sub-bass ratio, and the chroma frames local chroma is cut from) is worth keeping.
+Every response, refusals and errors included, carries the evidence it measured as
+`outgoingMeasured` and `incomingMeasured`. Hosts keep it in SQLite by track id: desktop in
+`adaptive-mix/evidence.sqlite` under the cache directory (`MixEvidenceStore`, Qt SQL), Android
+in `adaptive-mix-evidence.db` (`MixEvidenceStore`, `SQLiteOpenHelper`). Both open on first use,
+cap the rows at 32 MiB least recently used first, and match a row when its duration is within
+2 s. The next request sends it back under the same names, and the worker uses it only when the
+version matches `measured::VERSION` and it was measured on the same decoded audio (a 64-bit
+hash of the whole-track mono). Apple Music songs and `ORCHARD_MIX_BEATS=earmark` runs measure
+nothing to keep.
+
+Each row also holds a `beatModel` summary: the beat model's confidence, agreement and bar
+phase. Best Mix sends it beside a song's summaries, and the current song's beside `initial`;
+planning then uses that real confidence and moves the edge's downbeats to the measured bar
+phase in place of assuming confirmation, so a song whose grid the beat model doubted no
+longer plans as a beatmatch.
+
+Songs played from Apple Music carry Apple's own audio analysis (`outgoingApple`,
+`incomingApple`; amp-api `audio-analysis` attributes). `apple.rs` turns its beat and bar grid into
+the whole-track opinion `refine` takes from Nirovi, so Earmark keeps its beats and Apple votes on
+bar phase, and maps its vocal strength spans onto UMX-HQ-scale vocal shares (fitted on 88 replay pairs:
+medium sits on the planner's active-voice threshold). With both songs covered the worker never
+loads the models. Best Mix (`bestMixApple`) builds Apple summaries without audio; they are marked
+`plannable: false`, since the planner needs spectra, so those pairs sort on predicted costs.
 
 The planner returns an `arrangement` the renderer executes exactly: the
 technique (`bass_swap`, `beatmatched_blend`, `drop_in` or `beatless_bridge`),
@@ -73,10 +104,11 @@ whole path (nearest neighbour, then moves of one to three songs until none
 helps), plans every adjacent pair with the shared planner, replaces predictions
 with planned costs and re-optimizes until every neighbour pair is planned or
 three plans per song are spent. Pairs are planned the way playback plans them: with
-the tempo glide on and each grid treated as Beat This-confirmed (confidence
+the tempo glide on and each grid treated as beat-model-confirmed (confidence
 0.95). Earmark's own calibrated confidence clears the planner's 0.55 beatmatch
 floor for about 80-90% of songs on labelled sets; the assumption keeps the rest
-from reading as plain crossfades when playback would confirm them. Three
+from reading as plain crossfades when playback would confirm them. A song an earlier
+mix measured plans with its stored `beatModel` verdict instead (see Stored song evidence). Three
 background download workers resolve authenticated
 **saver** audio, fetch each complete encoded song in 1 MiB ranges, and cache
 the media (up to 128 MiB). Measured features live as CBOR blobs in a bounded
@@ -91,10 +123,11 @@ original order can be restored while the sorted tracks remain in sequence.
 `ort`’s upstream WebGPU provider uses **Dawn**, the only GPU runtime the
 worker loads.
 
-The Beat This session requires WebGPU registration and sets
-`session.disable_cpu_ep_fallback=1`; it has no CPU fallback. The UMX-HQ LSTM
-steps serially, so on WebGPU it issues thousands of tiny dispatches and starves
-the compositor; its CPU session finishes a 960-frame slice in about 0.15 s.
+The fp16 Nirovi session requires WebGPU registration and sets
+`session.disable_cpu_ep_fallback=1`. If it fails, the worker loads
+`nirovi_int8.ort`, a static int8 graph, on two non-spinning CPU threads. Syvenu
+stays on the CPU, about 120 ms for a 60 s window, so the GPU is left
+to the compositor.
 There is no Supabase/cloud analysis. Resampling, decoding, spectrogram
 construction, planning, and audio DSP are ordinary CPU work. Unavailable beat
 inference leaves the natural track boundary intact. An unavailable optional
@@ -125,19 +158,16 @@ not runtime-tested.
 
 Overrides: `ORCHARD_MODELS_DIR` (Qt model directory) and `ORCHARD_FFMPEG`
 (decoder path). No model downloads
-occur during playback. GPU sessions are retained in the isolated worker.
+occur during playback. Model sessions are retained in the isolated worker.
 
 ## Validation
 
 - `cargo test -p orchard-adaptive-mix`
 - `cargo test -p orchard-adaptive-mix --test docs_embed` (CPU only)
 - `cargo clippy -p orchard-adaptive-mix --all-targets -- -D warnings`
-- Hardware test: `cargo test -p orchard-adaptive-mix --test models -- --ignored`.
-- `scripts/validate-vocal-model.py` compares vocal inference with the original
-  PyTorch checkpoint.
+- Model test: `cargo test -p orchard-adaptive-mix --test models -- --ignored`.
 - `ctest --test-dir build -R 'orchard_audio_proxy|orchard_playback_persistence|orchard_adaptive_mix_span' --output-on-failure`
 - `ctest --test-dir build -R orchard_docs_search --output-on-failure` runs the docs search tests against the staged worker.
 
-The FP16 vocal export failed the strict GPU-only session check, so only FP32
-is packaged. Source hashes, licenses, tensor contracts, and measured numerical
+Source hashes, licenses, tensor contracts, and measured numerical
 errors live with the models under `models/`.

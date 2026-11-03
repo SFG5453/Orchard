@@ -21,50 +21,8 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
 
-import {
-  QOBUZ_CMAF_UUIDS,
-  extractQobuzBootstrap,
-  parseQobuzInitSegment,
-  qobuzRequestSignature,
-  selectQobuzMatch
-} from '../src/index.js';
+import { qobuzRequestSignature, selectQobuzMatch } from '../src/index.js';
 import { explainQobuzMiss } from '../src/matcher.js';
-
-function concat(...parts) {
-  const output = new Uint8Array(parts.reduce((size, part) => size + part.length, 0));
-  let offset = 0;
-  for (const part of parts) {
-    output.set(part, offset);
-    offset += part.length;
-  }
-  return output;
-}
-
-function hex(value) {
-  return Uint8Array.from(value.match(/../g), (pair) => Number.parseInt(pair, 16));
-}
-
-function writeU16(output, offset, value) {
-  new DataView(output.buffer).setUint16(offset, value, false);
-}
-
-function writeU24(output, offset, value) {
-  output[offset] = value >>> 16;
-  output[offset + 1] = value >>> 8;
-  output[offset + 2] = value;
-}
-
-function writeU32(output, offset, value) {
-  new DataView(output.buffer).setUint32(offset, value, false);
-}
-
-function box(type, ...parts) {
-  const content = concat(...parts);
-  const header = new Uint8Array(8);
-  writeU32(header, 0, header.length + content.length);
-  header.set([...type].map((character) => character.charCodeAt(0)), 4);
-  return concat(header, content);
-}
 
 test('runtime sources have no Node or Electron dependency', async () => {
   const sourceUrl = new URL('../src/', import.meta.url);
@@ -81,44 +39,6 @@ test('portable MD5 matches the standard vector and request ordering is stable', 
     qobuzRequestSignature('fileurl', { track_id: 42, format_id: 27 }, 123, 'secret'),
     qobuzRequestSignature('fileurl', { format_id: 27, track_id: 42 }, '123', 'secret')
   );
-});
-
-test('bootstrap decoding uses ECMAScript byte utilities', () => {
-  const encoded = Buffer.from('0123456789abcdef0123456789abcdef', 'ascii').toString('base64');
-  const seed = encoded.slice(0, 30);
-  const info = `${encoded.slice(30)}${'x'.repeat(14)}`;
-  const extras = 'y'.repeat(30);
-  const bundle = [
-    'production:{api:{appId:"123456789",appSecret:"unused"',
-    'authenticate({privateKey:"runtime-oauth",code:value})',
-    `initialSeed("${seed}",window.utimezone.berlin)`,
-    `name:"Europe/Berlin",info:"${info}",extras:"${extras}"`
-  ].join(';');
-  assert.equal(extractQobuzBootstrap(bundle).rngInit, '0123456789abcdef0123456789abcdef');
-});
-
-test('CMAF init parsing returns Uint8Array-backed seekable FLAC', () => {
-  const flac = new Uint8Array(42);
-  flac.set([0x66, 0x4c, 0x61, 0x43]);
-  writeU24(flac, 5, 34);
-  writeU16(flac, 8, 4096);
-  writeU16(flac, 10, 4096);
-  const packed = (96000n << 44n) | (1n << 41n) | (23n << 36n) | 480000n;
-  new DataView(flac.buffer).setBigUint64(18, packed, false);
-  const descriptor = new Uint8Array(26);
-  const length = new Uint8Array(2);
-  writeU16(length, 0, flac.length);
-  const table = new Uint8Array(11);
-  writeU16(table, 1, 1);
-  writeU32(table, 3, 5);
-  writeU32(table, 7, 10);
-  const init = box('uuid', hex(QOBUZ_CMAF_UUIDS.init), descriptor, length, flac, table);
-  const parsed = parseQobuzInitSegment(init);
-  assert.ok(parsed.flacHeader instanceof Uint8Array);
-  assert.equal(parsed.bitDepth, 24);
-  assert.equal(parsed.sampleRate, 96000);
-  assert.equal(parsed.channels, 2);
-  assert.equal(parsed.seekPoints.length, 1);
 });
 
 test('matching behavior survived the move', () => {

@@ -229,6 +229,7 @@ Item {
             compact: root.compact
             kind: root.isLocal ? qsTr("Local playlist")
                 : root.isOffline ? (root.detail.collectionKind === "album" ? qsTr("Downloaded album") : qsTr("Downloaded playlist"))
+                : root.detail.station ? qsTr("Station")
                 : qsTr("Playlist")
             title: root.detail.title || qsTr("Playlist")
             byline: root.detail.author || ""
@@ -254,6 +255,12 @@ Item {
             accentSoftColor: root.accentSoftColor
             accentInkColor: root.onAccentColor
             inkColor: root.inkColor
+            onDescriptionLinkClicked: function(link) {
+                if (link.indexOf(".artists.") > 0)
+                    root.artistRequested({browseId: link, type: "artist", title: ""});
+                else if (link.indexOf(".albums.") > 0)
+                    root.albumRequested({browseId: link, type: "album", title: ""});
+            }
             onPlayClicked: root.playOrToggle()
             onShuffleClicked: root.shuffleRequested()
             onShareClicked: OrchardBackend.copySongLink(root.shareId, qsTr("playlist"))

@@ -23,6 +23,7 @@ const API_ORIGIN = 'https://api.music.apple.com';
 // music.apple.com's own API; with its web token it returns editorialVideo and editorialArtwork.
 const EDITORIAL_ORIGIN = 'https://amp-api.music.apple.com';
 const MAX_PAGES = 8;
+const PARALLEL_PAGES = 10;
 
 export class AppleMusicError extends Error {
   constructor(status, code, message) {
@@ -45,6 +46,27 @@ function encodeQuery(query) {
     .filter(([, value]) => value !== undefined && value !== null && value !== '')
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
     .join('&');
+}
+
+const offsetPattern = /([?&]offset=)(\d+)/;
+
+/**
+ * Links to every page after [page], fetched from [path], when Apple reports `meta.total`
+ * and the next link carries an offset; null otherwise. [next] is the first page past
+ * [maxPages], if any.
+ */
+function offsetLinks(path, page, maxPages) {
+  const total = page.meta?.total;
+  const match = page.next ? offsetPattern.exec(page.next) : null;
+  const start = Number(offsetPattern.exec(path)?.[2]) || 0;
+  const first = match ? Number(match[2]) : 0;
+  const step = first - start;
+  if (!Number.isFinite(total) || step <= 0) return null;
+  const at = (offset) => page.next.replace(match[0], `${match[1]}${offset}`);
+  const links = [];
+  for (let offset = first; offset < total && links.length + 1 < maxPages; offset += step) links.push(at(offset));
+  const after = first + step * links.length;
+  return { links, next: after < total ? at(after) : '' };
 }
 
 /** Joins a path that may already carry a query (Apple's `next` links do). */
@@ -127,22 +149,41 @@ export function createAppleMusicClient({ fetchImpl, session }) {
 
   /** Every resource behind a paginated list, following `next` up to [maxPages]. */
   async function all(path, query = {}, maxPages = MAX_PAGES) {
-    const items = [];
     const carried = Object.entries(query)
       .filter(([key]) => key === 'limit' || key === 'include' || key.startsWith('include['));
+    // Apple's next links keep the offset but may drop the page size and includes.
+    const follow = (next) =>
+      get(next, Object.fromEntries(carried.filter(([key]) => !next.includes(`${encodeURIComponent(key)}=`))));
     let page = await get(path, query);
-    for (let count = 1; ; count++) {
-      items.push(...(page.data || []));
-      if (!page.next || count >= maxPages) return { items, next: page.next || '' };
-      // Apple's next links keep the offset but may drop the page size and includes.
-      const next = page.next;
-      page = await get(next, Object.fromEntries(carried.filter(([key]) => !next.includes(`${encodeURIComponent(key)}=`))));
+    const items = [...(page.data || [])];
+    const known = offsetLinks(path, page, maxPages);
+    if (known) {
+      // Library reads take over a second each; fetch the known remaining offsets together.
+      for (let start = 0; start < known.links.length; start += PARALLEL_PAGES) {
+        const pages = await Promise.all(known.links.slice(start, start + PARALLEL_PAGES).map(follow));
+        for (const each of pages) items.push(...(each.data || []));
+      }
+      return { items, next: known.next };
     }
+    for (let count = 1; ; count++) {
+      if (!page.next || count >= maxPages) return { items, next: page.next || '' };
+      page = await follow(page.next);
+      items.push(...(page.data || []));
+    }
+  }
+
+  /** Headers for play.itunes.apple.com, which wants the listener and a page Referer. */
+  function playbackHeaders() {
+    const result = headers(true);
+    if (result.Origin) result.Referer = `${result.Origin}/`;
+    return result;
   }
 
   function storefront() {
     return (session() || {}).storefront || 'us';
   }
 
-  return { get, send, editorial, all, storefront };
+  const userToken = () => (session() || {}).userToken || '';
+
+  return { get, send, editorial, all, storefront, userToken, playbackHeaders };
 }

@@ -32,6 +32,7 @@
 #include "system_media_bridge.h"
 
 #include <QJsonDocument>
+#include <memory>
 
 namespace {
 
@@ -186,17 +187,34 @@ void ConnectService::serveArtwork(const QString &id, const QJsonObject &params) 
     return;
   }
   const QPointer<ConnectService> self(this);
-  const auto done = [self, id, result](quint64, const QString &animated) mutable {
-    if (!self)
-      return;
-    result.insert(QStringLiteral("animated_url"), animated);
-    self->respond(id, true, result);
+  if (kind == QStringLiteral("album")) {
+    m_artwork->resolveAlbumArtwork(title, artist, ++m_artworkRequest,
+                                   [self, id, result](quint64, const QString &animated) mutable {
+                                     if (!self)
+                                       return;
+                                     result.insert(QStringLiteral("animated_url"), animated);
+                                     self->respond(id, true, result);
+                                   });
+    return;
+  }
+  // Square and tall loops resolve in parallel; answer once both are in.
+  struct Pending {
+    QJsonObject result;
+    int remaining = 2;
   };
-  if (kind == QStringLiteral("album"))
-    m_artwork->resolveAlbumArtwork(title, artist, ++m_artworkRequest, done);
-  else
-    m_artwork->resolveTrackArtwork(title, artist, params.value(QStringLiteral("album")).toString().left(256),
-                                   ++m_artworkRequest, done);
+  auto pending = std::make_shared<Pending>(Pending{result});
+  const auto finish = [self, id, pending](const QString &key, const QString &url) {
+    if (!url.isEmpty())
+      pending->result.insert(key, url);
+    if (--pending->remaining == 0 && self)
+      self->respond(id, true, pending->result);
+  };
+  const QString album = params.value(QStringLiteral("album")).toString().left(256);
+  m_artwork->resolveTrackArtwork(title, artist, album, ++m_artworkRequest, [finish](quint64, const QString &animated) {
+    finish(QStringLiteral("animated_url"), animated);
+  });
+  m_artwork->resolveTallArtwork(title, artist, album,
+                                [finish](const QString &tall) { finish(QStringLiteral("animated_vertical_url"), tall); });
 }
 
 bool ConnectService::available(const QString &provider) const {

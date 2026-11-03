@@ -28,7 +28,8 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import dev.sfg.orchard.mobile.model.AudioQuality
+import dev.sfg.orchard.mobile.model.AnimatedArtworkQuality
+import dev.sfg.orchard.mobile.model.storedAudioQuality
 import dev.sfg.orchard.mobile.model.ArtworkSource
 import dev.sfg.orchard.mobile.model.EqualizerConfig
 import dev.sfg.orchard.mobile.model.LyricTranslationLanguage
@@ -59,16 +60,21 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         .map { values ->
             OrchardSettings(
                 animatedArtwork = values[ANIMATED_ARTWORK] ?: true,
+                animatedArtworkQuality = AnimatedArtworkQuality.fromStoredValue(values[ANIMATED_ARTWORK_QUALITY]),
+                cellularAnimatedArtworkQuality = AnimatedArtworkQuality.fromStoredValue(values[CELLULAR_ANIMATED_ARTWORK_QUALITY]),
                 artworkSourceOrder = decodeArtworkOrder(values[ARTWORK_SOURCE_ORDER]),
                 sendYouTubeHistory = values[SEND_YOUTUBE_HISTORY] ?: true,
+                sendAppleMusicHistory = values[SEND_APPLE_MUSIC_HISTORY] ?: true,
                 downloadAnimatedArtwork = values[DOWNLOAD_ANIMATED_ARTWORK] ?: false,
                 downloadToSdCard = values[DOWNLOAD_TO_SD_CARD] ?: false,
-                audioQuality = runCatching { AudioQuality.valueOf(values[AUDIO_QUALITY].orEmpty()) }
-                    .getOrDefault(AudioQuality.HIGH),
-                cellularAudioQuality = runCatching { AudioQuality.valueOf(values[CELLULAR_AUDIO_QUALITY].orEmpty()) }
-                    .getOrDefault(AudioQuality.HIGH),
+                audioQuality = storedAudioQuality(values[AUDIO_QUALITY], values[APPLE_MUSIC_ATMOS] == true),
+                cellularAudioQuality = storedAudioQuality(values[CELLULAR_AUDIO_QUALITY], values[APPLE_MUSIC_ATMOS] == true),
                 useSystemColors = values[SYSTEM_COLORS] ?: false,
                 animatedBackground = values[ANIMATED_BACKGROUND] ?: false,
+                backdropSpeed = values[BACKDROP_SPEED] ?: OrchardSettings.DEFAULT_BACKDROP_SPEED,
+                backdropIntensity = values[BACKDROP_INTENSITY] ?: OrchardSettings.DEFAULT_BACKDROP_INTENSITY,
+                backdropSaturation = values[BACKDROP_SATURATION] ?: OrchardSettings.DEFAULT_BACKDROP_SATURATION,
+                backdropBrightness = values[BACKDROP_BRIGHTNESS] ?: OrchardSettings.DEFAULT_BACKDROP_BRIGHTNESS,
                 crossfadeEnabled = values[CROSSFADE_ENABLED] ?: false,
                 crossfadeSeconds = values[CROSSFADE_SECONDS] ?: OrchardSettings.DEFAULT_CROSSFADE_SECONDS,
                 smartCrossfade = values[SMART_CROSSFADE] ?: false,
@@ -94,6 +100,10 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                     bassBoost = values[EQUALIZER_BASS_BOOST] ?: 0f,
                 ),
                 playerGesturesEnabled = values[PLAYER_GESTURES_ENABLED] ?: true,
+                lyricsFocusBlur = values[LYRICS_FOCUS_BLUR] ?: true,
+                lyricsDistanceFade = values[LYRICS_DISTANCE_FADE] ?: true,
+                lyricsStaggeredScroll = values[LYRICS_STAGGERED_SCROLL] ?: true,
+                lyricsUnderTitle = values[LYRICS_UNDER_TITLE] ?: true,
                 showSettingsTab = values[SHOW_SETTINGS_TAB] ?: false,
                 homeSource = values[HOME_SOURCE] ?: YOUTUBE_SOURCE,
                 homeLayoutOnline = decodeHomeLayout(values[HOME_LAYOUT_ONLINE], true),
@@ -102,6 +112,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 betaChannelEnabled = values[BETA_CHANNEL_ENABLED] ?: false,
                 videoMaxHeight = values[VIDEO_MAX_HEIGHT] ?: OrchardSettings.DEFAULT_VIDEO_MAX_HEIGHT,
                 translateLyrics = values[TRANSLATE_LYRICS] ?: false,
+                preferAppleTranslation = values[PREFER_APPLE_TRANSLATION] ?: false,
                 lyricsProviders = decodeLyricsProviders(values[LYRICS_PROVIDERS]),
                 lyricTranslationLanguage = LyricTranslationLanguage.entries
                     .firstOrNull { it.key == values[LYRIC_TRANSLATION_LANGUAGE] } ?: LyricTranslationLanguage.ENGLISH,
@@ -128,14 +139,22 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         scope.launch {
             store.edit {
                 it[ANIMATED_ARTWORK] = value.animatedArtwork
+                it[ANIMATED_ARTWORK_QUALITY] = value.animatedArtworkQuality.name
+                it[CELLULAR_ANIMATED_ARTWORK_QUALITY] = value.cellularAnimatedArtworkQuality.name
                 it[ARTWORK_SOURCE_ORDER] = value.artworkSourceOrder.joinToString(",") { source -> source.name }
                 it[SEND_YOUTUBE_HISTORY] = value.sendYouTubeHistory
+                it[SEND_APPLE_MUSIC_HISTORY] = value.sendAppleMusicHistory
                 it[DOWNLOAD_ANIMATED_ARTWORK] = value.downloadAnimatedArtwork
                 it[DOWNLOAD_TO_SD_CARD] = value.downloadToSdCard
                 it[AUDIO_QUALITY] = value.audioQuality.name
                 it[CELLULAR_AUDIO_QUALITY] = value.cellularAudioQuality.name
+                it.remove(APPLE_MUSIC_ATMOS)
                 it[SYSTEM_COLORS] = value.useSystemColors
                 it[ANIMATED_BACKGROUND] = value.animatedBackground
+                it[BACKDROP_SPEED] = value.backdropSpeed
+                it[BACKDROP_INTENSITY] = value.backdropIntensity
+                it[BACKDROP_SATURATION] = value.backdropSaturation
+                it[BACKDROP_BRIGHTNESS] = value.backdropBrightness
                 it[CROSSFADE_ENABLED] = value.crossfadeEnabled
                 it[CROSSFADE_SECONDS] = value.crossfadeSeconds
                 it[SMART_CROSSFADE] = value.smartCrossfade
@@ -157,6 +176,10 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[EQUALIZER_PREAMP] = value.equalizerConfig.preampDb
                 it[EQUALIZER_BASS_BOOST] = value.equalizerConfig.bassBoost
                 it[PLAYER_GESTURES_ENABLED] = value.playerGesturesEnabled
+                it[LYRICS_FOCUS_BLUR] = value.lyricsFocusBlur
+                it[LYRICS_DISTANCE_FADE] = value.lyricsDistanceFade
+                it[LYRICS_STAGGERED_SCROLL] = value.lyricsStaggeredScroll
+                it[LYRICS_UNDER_TITLE] = value.lyricsUnderTitle
                 it[SHOW_SETTINGS_TAB] = value.showSettingsTab
                 it[HOME_SOURCE] = value.homeSource
                 it[HOME_LAYOUT_ONLINE] = encodeHomeLayout(value.homeLayoutOnline)
@@ -165,6 +188,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[BETA_CHANNEL_ENABLED] = value.betaChannelEnabled
                 it[VIDEO_MAX_HEIGHT] = value.videoMaxHeight
                 it[TRANSLATE_LYRICS] = value.translateLyrics
+                it[PREFER_APPLE_TRANSLATION] = value.preferAppleTranslation
                 it[LYRICS_PROVIDERS] = encodeLyricsProviders(value.lyricsProviders)
                 it[LYRIC_TRANSLATION_LANGUAGE] = value.lyricTranslationLanguage.key
                 it[LYRIC_TRANSLATION_QUALITY] = value.lyricTranslationQuality.key
@@ -250,23 +274,32 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
 
     private companion object {
         val ANIMATED_ARTWORK = booleanPreferencesKey("animated_artwork")
+        val ANIMATED_ARTWORK_QUALITY = stringPreferencesKey("animated_artwork_quality")
+        val CELLULAR_ANIMATED_ARTWORK_QUALITY = stringPreferencesKey("cellular_animated_artwork_quality")
         val ARTWORK_SOURCE_ORDER = stringPreferencesKey("artwork_source_order")
         val HOME_SOURCE = stringPreferencesKey("home_source")
         val SEND_YOUTUBE_HISTORY = booleanPreferencesKey("send_youtube_history")
+        val SEND_APPLE_MUSIC_HISTORY = booleanPreferencesKey("send_apple_music_history")
         val DOWNLOAD_ANIMATED_ARTWORK = booleanPreferencesKey("download_animated_artwork")
         val DOWNLOAD_TO_SD_CARD = booleanPreferencesKey("download_to_sd_card")
         val AUDIO_QUALITY = stringPreferencesKey("audio_quality")
         val CELLULAR_AUDIO_QUALITY = stringPreferencesKey("cellular_audio_quality")
         val VIDEO_MAX_HEIGHT = intPreferencesKey("video_max_height")
         val TRANSLATE_LYRICS = booleanPreferencesKey("translate_lyrics")
+        val PREFER_APPLE_TRANSLATION = booleanPreferencesKey("prefer_apple_translation")
         val LYRICS_PROVIDERS = stringPreferencesKey("lyrics_providers")
         val LYRIC_TRANSLATION_LANGUAGE = stringPreferencesKey("lyric_translation_language")
         val LYRIC_TRANSLATION_QUALITY = stringPreferencesKey("lyric_translation_quality")
         val LYRIC_TRANSLATION_PROVIDER = stringPreferencesKey("lyric_translation_provider")
         val LYRIC_TRANSLATION_MODELS = stringPreferencesKey("lyric_translation_models")
         val LYRIC_TRANSLATION_ENDPOINT = stringPreferencesKey("lyric_translation_endpoint")
+        val APPLE_MUSIC_ATMOS = booleanPreferencesKey("apple_music_atmos")
         val SYSTEM_COLORS = booleanPreferencesKey("system_colors")
         val ANIMATED_BACKGROUND = booleanPreferencesKey("animated_background")
+        val BACKDROP_SPEED = floatPreferencesKey("backdrop_speed")
+        val BACKDROP_INTENSITY = floatPreferencesKey("backdrop_intensity")
+        val BACKDROP_SATURATION = floatPreferencesKey("backdrop_saturation")
+        val BACKDROP_BRIGHTNESS = floatPreferencesKey("backdrop_brightness")
         val CROSSFADE_ENABLED = booleanPreferencesKey("crossfade_enabled")
         val CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
         val SMART_CROSSFADE = booleanPreferencesKey("smart_crossfade")
@@ -289,6 +322,10 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val EQUALIZER_PREAMP = floatPreferencesKey("equalizer_preamp")
         val EQUALIZER_BASS_BOOST = floatPreferencesKey("equalizer_bass_boost")
         val PLAYER_GESTURES_ENABLED = booleanPreferencesKey("player_gestures_enabled")
+        val LYRICS_FOCUS_BLUR = booleanPreferencesKey("lyrics_focus_blur")
+        val LYRICS_DISTANCE_FADE = booleanPreferencesKey("lyrics_distance_fade")
+        val LYRICS_STAGGERED_SCROLL = booleanPreferencesKey("lyrics_staggered_scroll")
+        val LYRICS_UNDER_TITLE = booleanPreferencesKey("lyrics_under_title")
         val SHOW_SETTINGS_TAB = booleanPreferencesKey("show_settings_tab")
         val HOME_LAYOUT_ONLINE = stringPreferencesKey("home_layout_online")
         val HOME_LAYOUT_OFFLINE = stringPreferencesKey("home_layout_offline")

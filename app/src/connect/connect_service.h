@@ -36,6 +36,8 @@
 #include <memory>
 
 class AnimatedArtworkService;
+class AppleMusic;
+class CatalogSource;
 class ConnectMixHost;
 class AuthManager;
 class HomeController;
@@ -73,6 +75,7 @@ public:
 
   void setCatalog(YouTubeCatalog *catalog);
   void setArtwork(AnimatedArtworkService *artwork);
+  void setAppleMusic(AppleMusic *appleMusic, CatalogSource *source);
 
   [[nodiscard]] bool available() const { return static_cast<bool>(m_node); }
   [[nodiscard]] bool online() const { return m_online; }
@@ -156,6 +159,9 @@ private:
   // connect_target.cpp: this desktop as the target.
   void applyCommand(const QJsonObject &event);
   void applyTransfer(const QJsonObject &snapshot);
+  [[nodiscard]] QJsonObject providerSessions() const;
+  // An Apple song from a controller switches this desktop to the Apple catalog.
+  void preferAppleSource(const QVariantMap &track);
   // connect_rpc.cpp: provider and artwork work requested by a peer.
   void handleRpc(const QJsonObject &event);
   void respond(const QString &id, bool ok, const QJsonValue &result, const QString &error = {});
@@ -172,6 +178,8 @@ private:
   QPointer<QobuzService> m_qobuz;
   QPointer<YouTubeCatalog> m_catalog;
   QPointer<AnimatedArtworkService> m_artwork;
+  QPointer<AppleMusic> m_appleMusic;
+  QPointer<CatalogSource> m_catalogSource;
   ConnectHubSocket m_hub;
   // Smart Crossfade work for a phone target; see connect_mix.h.
   std::unique_ptr<ConnectMixHost> m_mix;

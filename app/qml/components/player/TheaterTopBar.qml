@@ -23,7 +23,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// Upper theater bar: close, artist, Song/Video switch and the Up next toggle.
+// Upper theater bar: minimize, artist, Song/Video switch and the Up next toggle.
 RowLayout {
     id: root
 
@@ -35,9 +35,9 @@ RowLayout {
 
     TheaterButton {
         glyph: "chevron-down"
-        label: qsTr("Close video")
+        label: qsTr("Minimize video")
         outlined: true
-        onClicked: OrchardMusicVideo.hide()
+        onClicked: OrchardMusicVideo.mini = true
     }
 
     ColumnLayout {

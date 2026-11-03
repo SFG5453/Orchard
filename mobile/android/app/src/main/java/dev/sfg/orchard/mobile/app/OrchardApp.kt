@@ -21,9 +21,9 @@ package dev.sfg.orchard.mobile.app
 
 import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.compose.animation.animateColorAsState
@@ -31,6 +31,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -53,10 +55,12 @@ import dev.sfg.orchard.mobile.model.PlaybackTarget
 import androidx.compose.ui.graphics.Color
 import dev.sfg.orchard.mobile.ui.components.ArtworkBackdrop
 import dev.sfg.orchard.mobile.ui.components.CanopyReadout
-import dev.sfg.orchard.mobile.ui.components.OrchardBottomBar
+import dev.sfg.orchard.mobile.ui.components.OrchardDock
+import dev.sfg.orchard.mobile.ui.components.rememberDockCollapse
 import dev.sfg.orchard.mobile.ui.components.SongShareBottomSheet
 import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.LocalPlayerClock
+import dev.sfg.orchard.mobile.ui.components.LocalArtworkMotionEnabled
 import dev.sfg.orchard.mobile.ui.components.rememberHandoffMarker
 import dev.sfg.orchard.mobile.ui.components.rememberPlayerPresentation
 import dev.sfg.orchard.mobile.ui.glass.LocalGlass
@@ -67,6 +71,8 @@ import dev.sfg.orchard.mobile.ui.glass.rememberGlassScene
 import dev.sfg.orchard.mobile.ui.glass.rememberGlassStyle
 import dev.sfg.orchard.mobile.ui.navigation.Routes
 import dev.sfg.orchard.mobile.ui.scroll.OrchardScrollPhysics
+import dev.sfg.orchard.mobile.model.artworkQuality
+import dev.sfg.orchard.mobile.ui.components.LocalAnimatedArtworkQuality
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
 @Composable
@@ -74,12 +80,23 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
+    // Open pages and their back stack belong to the previous source.
+    LaunchedEffect(Unit) {
+        viewModel.sourceSwitch.switches.collect {
+            if (navController.currentDestination?.route == Routes.WELCOME) return@collect
+            navController.navigate(Routes.HOME) {
+                popUpTo(navController.graph.id) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
     // Structural playback only; the clock is handed to the few readers that draw time.
     val playback by viewModel.playbackState.collectAsStateWithLifecycle()
     val playbackClock = viewModel.playbackClock.collectAsStateWithLifecycle()
     val targets by viewModel.targets.collectAsStateWithLifecycle()
     val library by viewModel.library.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val isMetered by viewModel.isNetworkMetered.collectAsStateWithLifecycle()
     val shareState by viewModel.shareState.collectAsStateWithLifecycle()
     val warning by viewModel.warning.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
@@ -120,8 +137,10 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     var readoutArtworkBounds by remember { mutableStateOf<Rect?>(null) }
     // Outlives the player so the cover can fly on the way in as well as on the way out.
     var playerCoverBounds by remember { mutableStateOf<Rect?>(null) }
+    val dockCollapse = rememberDockCollapse()
+    LaunchedEffect(route, searchOpen) { dockCollapse.collapsed = false }
 
-    val chromeHidden = route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME || route == Routes.QOBUZ_LOGIN
+    val chromeHidden = route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME
     // Collection artwork runs under the status bar, so these screens take no top inset and
     // apply it themselves where the content actually needs it.
     val isDetail = route == Routes.DETAIL || route?.startsWith("detail") == true
@@ -158,8 +177,16 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val supportUi = dev.sfg.orchard.mobile.ui.support.rememberSupportUi()
 
     CompositionLocalProvider(
+        LocalAnimatedArtworkQuality provides settings.artworkQuality(isMetered),
         dev.sfg.orchard.mobile.ui.components.LocalLibraryUiLocal provides localLibraryUi,
         dev.sfg.orchard.mobile.ui.support.LocalSupportUi provides supportUi,
+        dev.sfg.orchard.mobile.ui.components.LocalKawarpTuning provides remember(
+            settings.backdropSpeed, settings.backdropIntensity, settings.backdropSaturation, settings.backdropBrightness,
+        ) {
+            dev.sfg.orchard.mobile.ui.components.KawarpTuning(
+                settings.backdropSpeed, settings.backdropIntensity, settings.backdropSaturation, settings.backdropBrightness,
+            )
+        },
         LocalGlass provides glass,
         LocalGlassScene provides glassScene,
         LocalAccent provides effectiveAccent,
@@ -186,89 +213,76 @@ fun OrchardApp(viewModel: OrchardViewModel) {
             // Everything the chrome floats over is recorded here, and only here. A pane cannot
             // blur a recording it is itself part of, which is why the pill and the bar were
             // lifted out of this box and into the overlay below.
-            Box(Modifier.fillMaxSize().glassSceneSource(glassScene)) {
-                Box(Modifier.fillMaxSize().glassWashSource(glassScene)) {
-                    ArtworkBackdrop(
-                        palette = backdropPalette,
-                        animated = settings.animatedBackground,
-                    )
-                    // Home, Settings and Library wear the current song; the shader idles once playback pauses.
-                    dev.sfg.orchard.mobile.ui.components.HomeBackdrop(
-                        visible = route == Routes.HOME || route == Routes.SETTINGS || route == Routes.LIBRARY,
-                        artworkUrl = playerPlayback.currentTrack?.artworkUrl.orEmpty(),
-                        isPlaying = playerPlayback.isPlaying && settings.animatedBackground,
-                    )
-                }
+            CompositionLocalProvider(LocalArtworkMotionEnabled provides !playerOpen) {
+                Box(Modifier.fillMaxSize().glassSceneSource(glassScene)) {
+                    Box(Modifier.fillMaxSize().glassWashSource(glassScene)) {
+                        ArtworkBackdrop(
+                            palette = backdropPalette,
+                            animated = settings.animatedBackground,
+                        )
+                        // Home, Settings and Library wear the current song; the shader idles once playback pauses.
+                        dev.sfg.orchard.mobile.ui.components.HomeBackdrop(
+                            visible = route == Routes.HOME || route == Routes.SETTINGS || route == Routes.LIBRARY,
+                            artworkUrl = playerPlayback.currentTrack?.artworkUrl.orEmpty(),
+                            isPlaying = playerPlayback.isPlaying && settings.animatedBackground,
+                        )
+                    }
 
-                val isFoldable = dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
-                val contentModifier = if (isFoldable && !chromeHidden) {
-                    Modifier
-                        .fillMaxSize()
-                        .padding(start = dev.sfg.orchard.mobile.ui.foldable.FoldableNavRailWidth)
-                        .then(contentInset)
-                } else {
-                    Modifier.fillMaxSize().then(contentInset)
-                }
+                    val contentModifier = Modifier.fillMaxSize().then(contentInset)
 
-                Box(contentModifier) {
-                    OrchardNavigation(navController, viewModel, playback, targets, library, settings, onOpenSearch = { searchOpen = true })
+                    Box(contentModifier.nestedScroll(dockCollapse.connection)) {
+                        OrchardNavigation(navController, viewModel, playback, targets, library, settings, onOpenSearch = { searchOpen = true })
+                    }
                 }
             }
 
-            Box(Modifier.fillMaxSize()) {
-                val isFoldable = dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
-                if (!chromeHidden) {
-                    if (isFoldable) {
-                        dev.sfg.orchard.mobile.ui.foldable.OrchardNavigationRail(
-                            currentRoute = chromeRoute,
-                            onSelect = selectTopLevel,
-                            modifier = Modifier.align(Alignment.CenterStart),
-                        )
+            val isFoldable = dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()
+            val readout: @Composable (Modifier) -> Unit = { readoutModifier ->
+                CanopyReadout(
+                    playback = playerPlayback,
+                    transition = playerMarker,
+                    mixProgress = playerPresentation.mixProgress,
+                    modifier = readoutModifier.onGloballyPositioned { readoutBounds = it.boundsInRoot() },
+                    onArtworkBounds = { readoutArtworkBounds = it },
+                    onOpen = { playerOpen = true },
+                    onToggle = viewModel::togglePlayback,
+                    onNext = viewModel::next,
+                    onPrevious = viewModel::previous,
+                    onClear = {
+                        playerOpen = false
+                        viewModel.clearQueue()
+                    },
+                )
+            }
 
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(start = dev.sfg.orchard.mobile.ui.foldable.FoldableNavRailWidth)
-                                .then(contentInset),
-                            contentAlignment = Alignment.BottomCenter,
-                        ) {
-                            CanopyReadout(
-                                playback = playerPlayback,
-                                transition = playerMarker,
-                                mixProgress = playerPresentation.mixProgress,
-                                modifier = Modifier
-                                    .padding(horizontal = 24.dp, vertical = 12.dp)
-                                    .onGloballyPositioned { readoutBounds = it.boundsInRoot() },
-                                onArtworkBounds = { readoutArtworkBounds = it },
-                                onOpen = { playerOpen = true },
-                                onToggle = viewModel::togglePlayback,
-                                onNext = viewModel::next,
-                                onPrevious = viewModel::previous,
-                                onClear = {
-                                    playerOpen = false
-                                    viewModel.clearQueue()
-                                },
+            Box(Modifier.fillMaxSize()) {
+                if (!chromeHidden) {
+                    Box(Modifier.fillMaxSize().then(contentInset)) {
+                        if (isFoldable) {
+                            dev.sfg.orchard.mobile.ui.foldable.FoldableSidePill(
+                                currentRoute = chromeRoute,
+                                onSelect = selectTopLevel,
+                                onSearch = { searchOpen = true },
+                                showSettings = settings.showSettingsTab,
+                                modifier = Modifier.align(Alignment.BottomEnd),
                             )
-                        }
-                    } else {
-                        Box(Modifier.fillMaxSize().then(contentInset)) {
-                            Column(modifier = Modifier.align(Alignment.BottomCenter)) {
-                                CanopyReadout(
-                                    playback = playerPlayback,
-                                    transition = playerMarker,
-                                    mixProgress = playerPresentation.mixProgress,
-                                    modifier = Modifier.onGloballyPositioned { readoutBounds = it.boundsInRoot() },
-                                    onArtworkBounds = { readoutArtworkBounds = it },
-                                    onOpen = { playerOpen = true },
-                                    onToggle = viewModel::togglePlayback,
-                                    onNext = viewModel::next,
-                                    onPrevious = viewModel::previous,
-                                    onClear = {
-                                        playerOpen = false
-                                        viewModel.clearQueue()
-                                    },
+                            Box(Modifier.align(Alignment.BottomCenter)) {
+                                readout(
+                                    Modifier.widthIn(max = dev.sfg.orchard.mobile.ui.foldable.FoldableReadoutMaxWidth)
+                                        .padding(horizontal = 24.dp, vertical = 12.dp),
                                 )
-                                OrchardBottomBar(chromeRoute, selectTopLevel, showSettings = settings.showSettingsTab)
+                            }
+                        } else {
+                            OrchardDock(
+                                currentRoute = chromeRoute,
+                                onSelect = selectTopLevel,
+                                onSearch = { searchOpen = true },
+                                collapsed = dockCollapse.collapsed && playerPlayback.currentTrack != null,
+                                onExpand = { dockCollapse.collapsed = false },
+                                showSettings = settings.showSettingsTab,
+                                modifier = Modifier.align(Alignment.BottomCenter),
+                            ) {
+                                readout(Modifier)
                             }
                         }
                     }
@@ -331,6 +345,8 @@ fun OrchardApp(viewModel: OrchardViewModel) {
                     onInstall = viewModel::installUpdate,
                     onDismiss = viewModel::dismissUpdate,
                 )
+
+                dev.sfg.orchard.mobile.ui.components.NpuDialogHost(settings, viewModel::updateSettings)
             }
         }
 

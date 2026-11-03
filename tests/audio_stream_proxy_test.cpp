@@ -341,6 +341,35 @@ private slots:
         old->deleteLater(); reply->deleteLater();
     }
 
+    void servesHeadInPlaceOfUpstreamBytes() {
+        QTcpServer upstream;
+        QVERIFY(upstream.listen(QHostAddress::LocalHost));
+        QByteArray upstreamRequest;
+        connect(&upstream, &QTcpServer::newConnection, this, [&] {
+            auto *socket = upstream.nextPendingConnection();
+            connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
+                upstreamRequest += socket->readAll();
+                if (!upstreamRequest.endsWith("\r\n\r\n")) return;
+                socket->write("HTTP/1.1 206 Partial Content\r\nContent-Length: 8\r\nContent-Range: bytes 2-9/10\r\nConnection: close\r\n\r\nCDEFGHIJ");
+                socket->disconnectFromHost();
+            });
+        });
+        AudioStreamProxy proxy;
+        // Upstream "ABCDEFGHIJ" served as "xyzw" + "CDEFGHIJ".
+        const auto url = proxy.open({{"url", QString("http://127.0.0.1:%1/v").arg(upstream.serverPort())},
+                                     {"contentLength", 10}, {"mimeType", "video/mp4"}}, "xyzw", 2);
+        QNetworkAccessManager client;
+        QNetworkRequest request(url);
+        request.setRawHeader("Range", "bytes=2-");
+        auto *reply = client.get(request);
+        QTRY_VERIFY(reply->isFinished());
+        QCOMPARE(reply->error(), QNetworkReply::NoError);
+        QCOMPARE(reply->rawHeader("Content-Range"), QByteArray("bytes 2-11/12"));
+        QCOMPARE(reply->readAll(), QByteArray("zwCDEFGHIJ"));
+        QVERIFY(upstreamRequest.contains("Range: bytes=2-9"));
+        reply->deleteLater();
+    }
+
     void servesProviderStreamsThroughTheRangeReader() {
         // Three provider chunks plus a tail, so the reader is asked more than once.
         QByteArray flac(3 * 512 * 1024 + 100, Qt::Uninitialized);

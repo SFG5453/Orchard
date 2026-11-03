@@ -138,7 +138,9 @@ Menu {
         text: qsTr("Start mix")
         visible: root.isSong && !root.isLocalSong
         height: visible ? implicitHeight : 0
-        enabled: !root.media.unplayable && OrchardAuth.isSignedIn && !OrchardNetwork.offline
+        // Apple Music songs mix from their Apple station, which needs no YouTube sign-in.
+        enabled: !root.media.unplayable && !OrchardNetwork.offline
+            && (OrchardAuth.isSignedIn || root.media.source === "apple_music")
         onTriggered: OrchardPlayback.startMix(root.media)
     }
     Entry {
@@ -152,7 +154,7 @@ Menu {
         text: root.downloadState === "downloaded" ? qsTr("Remove download")
             : root.downloadState === "queued" || root.downloadState === "downloading" ? qsTr("Cancel download")
             : root.downloadState === "failed" ? qsTr("Retry download") : qsTr("Download")
-        visible: root.isSong && !root.isLocalSong
+        visible: root.isSong && !root.isLocalSong && OrchardHome.homeSource !== "apple_music"
         height: visible ? implicitHeight : 0
         enabled: root.downloadState === "downloaded" || root.downloadState === "queued" || root.downloadState === "downloading"
             || (!root.media.unplayable && OrchardAuth.isSignedIn && !OrchardNetwork.offline)
@@ -231,7 +233,7 @@ Menu {
         visible: root.isArtist
         height: visible ? implicitHeight : 0
         enabled: root.artistIds.length > 0
-        onTriggered: OrchardBackend.copyToClipboard("https://music.youtube.com/channel/" + root.artistIds[0], qsTr("Copied artist link to clipboard"))
+        onTriggered: OrchardBackend.copyToClipboard(OrchardBackend.songLink(root.artistIds[0], "artist"), qsTr("Copied artist link to clipboard"))
     }
     Entry {
         visible: !root.isArtist && !root.isLocalSong && !root.isLocalPlaylist

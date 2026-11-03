@@ -70,6 +70,7 @@ Item {
     signal playRequested()
     signal shuffleRequested()
     signal trackRequested(var track, int index)
+    signal videoRequested(var video)
 
     function rgb(value, fallback) {
         const color = value && value.length >= 3 ? value : fallback;
@@ -234,6 +235,12 @@ Item {
             onBylineClicked: function(anchor, x, y) {
                 albumArtistMenu.viewArtist(anchor, x, y);
             }
+            onDescriptionLinkClicked: function(link) {
+                if (link.indexOf(".artists.") > 0)
+                    root.artistRequested({browseId: link, type: "artist", title: ""});
+                else if (link.indexOf(".albums.") > 0)
+                    root.albumRequested({browseId: link, type: "album", title: ""});
+            }
             onPlayClicked: root.playOrToggle()
             onShuffleClicked: root.shuffleRequested()
             onShareClicked: OrchardBackend.copySongLink(root.shareId, qsTr("album"))
@@ -356,6 +363,16 @@ Item {
                     font.pixelSize: 12
                 }
 
+            }
+
+            AlbumShelves {
+                width: parent.width
+                sections: root.detail.sections || []
+                onAlbumRequested: function(album) { root.albumRequested(album); }
+                onArtistRequested: function(artist) { root.artistRequested(artist); }
+                onPlaylistRequested: function(playlist) { root.playlistRequested(playlist); }
+                onVideoRequested: function(video) { root.videoRequested(video); }
+                onVerticalScrollRequested: function(delta, smooth) { scroll.scrollBy(delta, smooth); }
             }
 
         }

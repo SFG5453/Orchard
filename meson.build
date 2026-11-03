@@ -107,13 +107,15 @@ if meson.is_cross_build() and host_machine.system() == 'windows'
   qt_dep = declare_dependency(dependencies: target_qt_deps)
   qt_entry_dep = dependency('Qt6Core', method: 'cmake',
     modules: ['Qt6::EntryPointPrivate'])
+  qt_gui_private = dependency('Qt6GuiPrivate', method: 'cmake',
+    modules: ['Qt6::GuiPrivate'])
 else
   qt_dep = dependency('qt6', version: '>=6.8', modules: qt_modules, main: true)
   qt_entry_dep = []
+  qt_gui_private = dependency('qt6',
+    modules: ['Core', 'Gui'],
+    private_headers: true)
 endif
-qt_gui_private = dependency('qt6',
-  modules: ['Core', 'Gui'],
-  private_headers: true)
 thread_dep = dependency('threads')
 platform_deps = [thread_dep]
 # DBus (Linux) and IOKit (macOS) back the screen wake lock.
@@ -274,11 +276,31 @@ foreach shader : shader_sources
     input: files(shader), output: name + '.qsb',
     command: [qsb, '--glsl', '100 es,120,150', '--hlsl', '50', '--msl', '12', '-o', '@OUTPUT@', '@INPUT@'])
 endforeach
+# FSR 1 includes AMD's headers unchanged; their bit casts need GLSL 330 or ES 300.
+foreach shader : ['app/qml/shaders/fsr_easu.frag', 'app/qml/shaders/fsr_rcas.frag']
+  name = shader.split('/')[-1]
+  shader_resources += custom_target('shader ' + name,
+    input: files(shader), output: name + '.qsb',
+    depfile: name + '.d',
+    command: [qsb, '--glsl', '330,300 es', '--hlsl', '50', '--msl', '12', '--depfile', '@DEPFILE@',
+      '-o', '@OUTPUT@', '@INPUT@'])
+endforeach
 shaders_cpp = custom_target('shader resources', input: shader_resources,
   output: 'qrc_shader_resources.cpp',
   command: [python, files('scripts/meson-rcc.py'), '--rcc', rcc,
     '--name', 'shader_resources', '--prefix', '/shaders',
     '--output', '@OUTPUT@', '@INPUT@'])
+
+# The Apple Music logo is supplied locally and never tracked; the UI falls back without it.
+brand_resources = []
+if import('fs').is_file('mobile/android/local/apple-music/apple-music.svg')
+  brand_resources += custom_target('brand resources',
+    input: files('mobile/android/local/apple-music/apple-music.svg'),
+    output: 'qrc_brand_resources.cpp',
+    command: [python, files('scripts/meson-rcc.py'), '--rcc', rcc,
+      '--name', 'brand_resources', '--prefix', '/brand',
+      '--output', '@OUTPUT@', '@INPUT@'])
+endif
 
 rcc_args = ['--compress-algo', 'zlib']
 licenses_qrc = qt6.compile_resources(sources: files('meson/licenses.qrc'), extra_args: rcc_args)
@@ -286,9 +308,10 @@ docs_qrc = qt6.compile_resources(sources: files('meson/app_docs.qrc'), extra_arg
 release_notes_qrc = qt6.compile_resources(sources: files('meson/release_notes.qrc'), extra_args: rcc_args)
 assets_qrc = qt6.compile_resources(sources: files('meson/qml_assets.qrc'), extra_args: rcc_args)
 qml_files_qrc = qt6.compile_resources(sources: files('meson/qml_files.qrc'), extra_args: rcc_args)
-# Windows sign-in hosts WebView2 directly; other platforms use QtWebView.
-auth_qrc = qt6.compile_resources(sources: files(host_machine.system() == 'windows'
-  ? 'meson/auth_qml_windows.qrc' : 'meson/auth_qml.qrc'), extra_args: rcc_args)
+# Sign-in hosts WebView2 on Windows and WebKitGTK on Linux; other platforms use QtWebView.
+auth_qrc_file = {'windows': 'meson/auth_qml_windows.qrc', 'linux': 'meson/auth_qml_linux.qrc'}.get(
+  host_machine.system(), 'meson/auth_qml.qrc')
+auth_qrc = qt6.compile_resources(sources: files(auth_qrc_file), extra_args: rcc_args)
 
 app_inc = include_directories('app/src', 'app/src/auth',
   'app/src/appearance', 'core/native', 'vendor/litert/include')
@@ -390,7 +413,7 @@ adaptive_stage = custom_target('adaptive mix stage',
 
 orchard = executable('orchard', files(app_executable_sources) + exe_moc +
   qml_module + [qmldir_resources] + qml_files_qrc + assets_qrc + licenses_qrc + docs_qrc + release_notes_qrc +
-  [provider_resources, shaders_cpp],
+  [provider_resources, shaders_cpp] + brand_resources,
   include_directories: app_inc,
   dependencies: [app_dep, qt_dep, qt_gui_private, qt_entry_dep],
   link_depends: adaptive_stage,
@@ -411,14 +434,14 @@ if host_machine.system() == 'windows'
   webview2_arch = host_machine.cpu_family() == 'aarch64' ? 'arm64' : 'x64'
   configure_file(input: 'vendor/webview2/lib' / webview2_arch / 'WebView2Loader.dll',
     output: 'WebView2Loader.dll', copy: true, install: true, install_dir: get_option('bindir'))
+elif host_machine.system() == 'linux'
+  auth_sources += helper_browser_sources + helper_webkit_sources
+  auth_moc_headers += helper_webkit_moc_headers
+  auth_dependencies += [dependency('webkit2gtk-4.1', version: '>=2.40')]
+  auth_args += ['-DORCHARD_WEBKIT_AUTH', '-DORCHARD_NATIVE_COOKIE_AUTH']
 else
-  auth_sources += helper_webengine_sources
+  auth_sources += helper_browser_sources
   auth_dependencies += [dependency('qt6', version: '>=6.8', modules: ['WebView', 'WebViewQuick'])]
-  if host_machine.system() == 'linux'
-    auth_dependencies += [dependency('qt6', version: '>=6.8',
-      modules: ['WebEngineCore', 'WebEngineQuick'])]
-    auth_args += ['-DORCHARD_WEBENGINE_COOKIE_ADAPTER', '-DORCHARD_NATIVE_COOKIE_AUTH']
-  endif
 endif
 helper_moc = qt6.compile_moc(headers: auth_moc_headers,
   sources: ['app/src/providers/runtime/provider_runtime.cpp'],
@@ -429,6 +452,28 @@ auth_helper = executable('orchard-auth-helper', files(auth_sources) + helper_moc
   include_directories: app_inc,
   dependencies: auth_dependencies + [qt_entry_dep], cpp_args: auth_args,
   win_subsystem: 'windows', install: true)
+
+# Apple Music's Widevine streams decrypt here, outside the app and without a browser.
+if host_machine.system() in ['linux', 'windows']
+  widevine_host_args = []
+  widevine_host_deps = [cpp.find_library('dl', required: false)]
+  if host_machine.system() == 'windows'
+    widevine_host_args = ['-DNOMINMAX', '-DWIN32_LEAN_AND_MEAN']
+    # HdcpSession reports and requests HDCP for Widevine keys that require it.
+    if cpp.has_header('windows.media.protection.h')
+      widevine_host_args += ['-DORCHARD_HDCP_SESSION']
+      widevine_host_deps += [cpp.find_library('runtimeobject'), cpp.find_library('user32')]
+    endif
+  endif
+  widevine_host = executable('orchard-widevine-host',
+    files('app/src/widevine_host/widevine_host_main.cpp', 'app/src/widevine_host/cdm_host.cpp',
+      'app/src/widevine_host/cenc_mp4.cpp', 'app/src/widevine_host/annex_b.cpp',
+      'app/src/widevine_host/output_protection.cpp'),
+    include_directories: include_directories('third_party/chromium_cdm'),
+    cpp_args: widevine_host_args,
+    dependencies: widevine_host_deps,
+    install: true)
+endif
 
 qml_startup_test = executable('orchard_qml_startup_test',
   files('tests/qml_startup_test.cpp'),
@@ -452,7 +497,7 @@ if get_option('tests')
   ui_scaling_test = executable('orchard_ui_scaling_tests',
     files('tests/ui_scaling_test.cpp', 'app/src/appearance/appearance_settings.cpp',
       'app/src/appearance/ui_scaling.cpp') + ui_scaling_moc,
-    include_directories: app_inc, dependencies: [qt_test_dep, qt_dep])
+    include_directories: app_inc, dependencies: [qt_test_dep, qt_dep, qt_gui_private])
   test('orchard_ui_scaling', ui_scaling_test, timeout: 120)
   lyrics_providers_moc = qt6.compile_moc(sources: ['tests/lyrics_provider_settings_test.cpp'],
     headers: ['app/src/lyrics/lyrics_provider_settings.h'],
@@ -530,7 +575,11 @@ if get_option('tests')
     ['adaptive_mix_output', 'tests/adaptive_mix_output_test.cpp'],
     ['autoplay_select', 'tests/autoplay_select_test.cpp'],
     ['music_video_match', 'tests/music_video_match_test.cpp'],
+    ['apple_youtube_match', 'tests/apple_youtube_match_test.cpp'],
+    ['apple_music_playlist', 'tests/apple_music_playlist_test.cpp'],
+    ['binaural_renderer', 'tests/binaural_renderer_test.cpp'],
     ['letterbox', 'tests/letterbox_test.cpp'],
+    ['fmp4_index', 'tests/fmp4_index_test.cpp'],
     ['video_ambient', 'tests/video_ambient_test.cpp'],
     ['artist_artwork', 'tests/artist_artwork_test.cpp'],
     ['audiodb_artist', 'tests/audiodb_artist_test.cpp'],
@@ -547,6 +596,12 @@ if get_option('tests')
     test(test_name, test_exe, timeout: 120, env: test_env)
   endforeach
 
+  widevine_host_test = executable('orchard_widevine_host_tests',
+    files('tests/widevine_host_test.cpp', 'app/src/widevine_host/cenc_mp4.cpp', 'app/src/widevine_host/annex_b.cpp'),
+    qt6.compile_moc(sources: ['tests/widevine_host_test.cpp']),
+    include_directories: include_directories('app/src'), dependencies: [qt_test_dep])
+  test('orchard_widevine_host', widevine_host_test, timeout: 60)
+
   auth_test_moc = qt6.compile_moc(
     sources: ['tests/auth_manager_test.cpp'],
     headers: ['app/src/auth/auth_manager.h', 'app/src/auth/auth_session_channel.h',
@@ -557,6 +612,10 @@ if get_option('tests')
   auth_test = executable('orchard_auth_tests', files(
       'tests/auth_manager_test.cpp',
       'app/src/auth/auth_manager.cpp',
+      'app/src/auth/auth_page_auth.cpp',
+      'app/src/auth/auth_cookies.cpp',
+      'app/src/auth/auth_secret_session.cpp',
+      'app/src/auth/auth_profile.cpp',
       'app/src/auth/auth_account_switch.cpp',
       'app/src/auth/auth_session_channel.cpp') + auth_test_moc,
     include_directories: app_inc,

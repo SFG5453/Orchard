@@ -24,10 +24,15 @@ AppearanceSectionForm {
     layoutStyle: OrchardAppearance.layoutStyle
     uiScale: OrchardAppearance.uiScale
     uiScaleRestartRequired: OrchardAppearance.uiScaleRestartRequired
+    autoUiScale: OrchardAppearance.autoUiScale
     showBitrate: OrchardAppearance.showBitrate
     fullscreenWindowed: OrchardAppearance.fullscreenWindowed
     fullscreenAutoHide: OrchardAppearance.fullscreenAutoHide
     fullscreenPulse: OrchardAppearance.fullscreenPulse
+    fullscreenCanvasStage: OrchardAppearance.fullscreenCanvasStage
+    lyricsFocusBlur: OrchardAppearance.lyricsFocusBlur
+    lyricsDistanceFade: OrchardAppearance.lyricsDistanceFade
+    lyricsStaggeredScroll: OrchardAppearance.lyricsStaggeredScroll
     artistVideoBackdrop: OrchardAppearance.artistVideoBackdrop
     animatedArtworkEnabled: OrchardAppearance.animatedArtworkEnabled
     animatedCollageEnabled: OrchardAppearance.animatedCollageEnabled
@@ -37,21 +42,28 @@ AppearanceSectionForm {
     intensity: OrchardAppearance.intensity
     saturation: OrchardAppearance.saturation
     brightness: OrchardAppearance.brightness
+    backgroundQuality: OrchardAppearance.backgroundQuality
     speedText: OrchardAppearance.speed.toFixed(2) + "×"
 
     layoutPicker.onPicked: value => OrchardAppearance.layoutStyle = value
     uiScaleSlider.onMoved: value => OrchardAppearance.uiScale = value
     resetUiScaleButton.onClicked: OrchardAppearance.uiScale = 1.0
+    autoUiScaleSwitch.onToggled: OrchardAppearance.autoUiScale = autoUiScaleSwitch.checked
     bitrateSwitch.onToggled: OrchardAppearance.showBitrate = bitrateSwitch.checked
     windowedSwitch.onToggled: OrchardAppearance.fullscreenWindowed = windowedSwitch.checked
     autoHideSwitch.onToggled: OrchardAppearance.fullscreenAutoHide = autoHideSwitch.checked
     pulseSwitch.onToggled: OrchardAppearance.fullscreenPulse = pulseSwitch.checked
+    canvasStageSwitch.onToggled: OrchardAppearance.fullscreenCanvasStage = canvasStageSwitch.checked
+    lyricsBlurSwitch.onToggled: OrchardAppearance.lyricsFocusBlur = lyricsBlurSwitch.checked
+    lyricsFadeSwitch.onToggled: OrchardAppearance.lyricsDistanceFade = lyricsFadeSwitch.checked
+    lyricsStaggerSwitch.onToggled: OrchardAppearance.lyricsStaggeredScroll = lyricsStaggerSwitch.checked
     artistVideoSwitch.onToggled: OrchardAppearance.artistVideoBackdrop = artistVideoSwitch.checked
     animatedArtworkSwitch.onToggled: OrchardAppearance.animatedArtworkEnabled = animatedArtworkSwitch.checked
     collageSwitch.onToggled: OrchardAppearance.animatedCollageEnabled = collageSwitch.checked
     sourcePicker.onPicked: value => OrchardAppearance.artworkSource = value
     resetOrderButton.onClicked: OrchardAppearance.resetMirrorOrder()
     immersiveSwitch.onToggled: OrchardAppearance.immersiveBackground = immersiveSwitch.checked
+    backgroundQualityPicker.onPicked: value => OrchardAppearance.backgroundQuality = value
 
     speedSlider.onMoved: function(value) { OrchardAppearance.speed = value; }
     intensitySlider.onMoved: function(value) { OrchardAppearance.intensity = value; }

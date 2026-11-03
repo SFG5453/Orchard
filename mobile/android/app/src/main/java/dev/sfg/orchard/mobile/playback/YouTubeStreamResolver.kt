@@ -280,7 +280,7 @@ class YouTubeStreamResolver(
 
     private fun payload(videoId: String, track: Track, quality: String): JSONObject {
         check(!videoId.startsWith("am.") && track.playbackSource != "apple_music") {
-            "Apple Music playback is not available yet."
+            "Apple Music songs play only on this phone."
         }
         return JSONObject()
             .put("session", sessions.session().providerJson())
@@ -317,7 +317,7 @@ class YouTubeStreamResolver(
     private fun streamQuality(): String = when (qualityProvider()) {
         AudioQuality.DATA_SAVER -> "saver"
         AudioQuality.NORMAL -> "normal"
-        AudioQuality.HIGH, AudioQuality.MAX -> "high"
+        AudioQuality.HIGH, AudioQuality.ATMOS, AudioQuality.MAX -> "high"
     }
 
     private fun expiry(json: JSONObject): Long =

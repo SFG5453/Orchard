@@ -21,6 +21,9 @@ package dev.sfg.orchard.mobile
 
 import android.content.Context
 import dev.sfg.orchard.mobile.model.AudioQuality
+import dev.sfg.orchard.mobile.model.atmosQualityAvailable
+import dev.sfg.orchard.mobile.model.audioQualityForNetwork
+import dev.sfg.orchard.mobile.playback.apple.AppleAtmosCapability
 import kotlinx.coroutines.flow.stateIn
 import dev.sfg.orchard.mobile.artwork.ArtistImageRepository
 import dev.sfg.orchard.mobile.artwork.ArtworkRepository
@@ -81,6 +84,7 @@ class OrchardGraph(context: Context) {
     )
     val settings = SettingsRepository(context, applicationScope)
     val bestMixFeatures = BestMixFeatureStore(context)
+    val mixEvidence by lazy { dev.sfg.orchard.mobile.playback.smart.MixEvidenceStore(context) }
     val slopVerdicts by lazy { dev.sfg.orchard.mobile.playback.slop.SlopVerdicts(context) }
     val networkMonitor = dev.sfg.orchard.mobile.network.NetworkMonitor(context)
     val spotifyCanvas = dev.sfg.orchard.mobile.spotify.SpotifyCanvasRepository(context, http, settings)
@@ -113,20 +117,26 @@ class OrchardGraph(context: Context) {
     val homeFeeds = HomeFeeds(listOf(YouTubeHomeSource(catalog),
         dev.sfg.orchard.mobile.home.AppleMusicHomeSource(appleMusic))) { settings.settings.value.homeSource }
     val playlistActions = PlaylistActions(youtube, auth)
-    val videoVersions = VideoVersionResolver(catalog)
+    val videoVersions = VideoVersionResolver(catalog) { track ->
+        val apple = settings.settings.value.homeSource == dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
+        if (!apple || !dev.sfg.orchard.mobile.catalog.isAppleMusicId(track.id) || !appleMusic.signedIn()) null
+        else appleMusic.musicVideo(track.id).ifBlank { null }
+    }
     val library = LibraryRepository(LibraryCache(context), catalog, applicationScope)
-    val lyrics = LyricsRepository(http) { videoId ->
+    val playlistCache = dev.sfg.orchard.mobile.catalog.PlaylistPageCache(context)
+    val lyrics = LyricsRepository(http, appleLyrics = appleMusic::lyrics, appleTranslation = appleMusic::lyricsTranslation) { videoId ->
         youtube.invoke("lyrics.youtube", JSONObject().put("session", auth.session().providerJson()).put("videoId", videoId))
             .text("text")
     }
     /** Lyrics in English, courtesy of a 20 MB model that has never heard a song in its life. */
     val lyricTranslation = dev.sfg.orchard.mobile.lyrics.translation.LyricTranslator(
-        context, http, settings.settings, applicationScope,
+        context, http, settings.settings, applicationScope, lyrics::appleTranslation,
     )
     /** Songs and playlists kept on this phone; no account or network needed. */
     val localLibrary = dev.sfg.orchard.mobile.local.LocalLibraryRepository(context, applicationScope, notify = { postWarning(it) })
     val songLinks = SongLinksRepository()
     val lastfm = LastfmRepository(context, http, applicationScope)
+    val rejectedTallArt = dev.sfg.orchard.mobile.artwork.RejectedTallArtwork(context)
     val listenBrainz = ListenBrainzRepository(context, http, applicationScope)
 
     /**
@@ -157,7 +167,10 @@ class OrchardGraph(context: Context) {
 
     /** The tier for the current network: cellular on metered connections, otherwise the Wi-Fi tier. */
     fun audioQuality(s: dev.sfg.orchard.mobile.model.OrchardSettings = settings.settings.value): AudioQuality =
-        if (networkMonitor.isMetered.value) s.cellularAudioQuality else s.audioQuality
+        s.audioQualityForNetwork(networkMonitor.isMetered.value)
+
+    fun atmosEnabled(): Boolean = audioQuality() == AudioQuality.ATMOS &&
+        atmosQualityAvailable(settings.settings.value.homeSource, appleMusic.signedIn(), AppleAtmosCapability.decoderAvailable)
 
     /** Active Qobuz playback leaves adaptive mix and the equalizer off. */
     val maxActive: kotlinx.coroutines.flow.StateFlow<Boolean> by lazy {
@@ -171,6 +184,10 @@ class OrchardGraph(context: Context) {
     }
 
     /** Names where MAX audio comes from; cached streams and bytes from another source must not be reused. */
+    /** [streamVariant] for the song behind a stable stream URI. */
+    fun streamVariant(uri: android.net.Uri): String =
+        sourceCacheVariant(dev.sfg.orchard.mobile.playback.MediaItemMapper.sourceId(uri), appleMusicStandard(audioQuality()), ::streamVariant)
+
     fun streamVariant(): String {
         val quality = audioQuality()
         val qobuzEnabled = quality == AudioQuality.MAX && qobuzResolver.isAvailable()
@@ -184,6 +201,16 @@ class OrchardGraph(context: Context) {
         catalog = catalog,
         scope = applicationScope,
     )
+
+    /** Replaces [library] on screen while Apple Music is the music source; after [warningEvent], which it posts to. */
+    internal val appleLibrary = dev.sfg.orchard.mobile.library.AppleLibraryRepository(
+        appleMusic,
+        kotlinx.coroutines.flow.combine(settings.settings, appleMusic.connection) { values, apple ->
+            values.homeSource == dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE && apple.connected
+        },
+        applicationScope,
+    ) { postWarning(it) }
+    internal val likes = dev.sfg.orchard.mobile.library.TrackLikes(library, appleLibrary, playlistActions)
 
     fun postWarning(message: String) {
         warningEvent.tryEmit(message)

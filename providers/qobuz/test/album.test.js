@@ -21,7 +21,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { albumCandidates, selectQobuzAlbum } from '../src/album.js';
-import { createQobuzAuthorizationUrl } from '../src/oauth.js';
 import { formEncode, queryParams } from '../src/query.js';
 
 const hiresDeluxe = {
@@ -68,6 +67,4 @@ test('album matching rejects other artists and unstreamable albums', () => {
 test('query helpers stand in for URL and URLSearchParams', () => {
   assert.equal(formEncode({ query: 'a b&c', limit: 20 }), 'query=a+b%26c&limit=20');
   assert.deepEqual(queryParams('https://x.test/s?Expires=1700000000&e=a+b#frag'), { Expires: '1700000000', e: 'a b' });
-  const url = createQobuzAuthorizationUrl({ appId: '123', redirectUrl: 'http://127.0.0.1:5/cb' });
-  assert.equal(url, 'https://www.qobuz.com/signin/oauth?ext_app_id=123&redirect_url=http%3A%2F%2F127.0.0.1%3A5%2Fcb');
 });

@@ -236,6 +236,9 @@ data class HomeFeed(
     val artists: List<Artist> = emptyList(),
 )
 
+/** [CatalogSection.id] of Apple Music's personal mixes, which lead the daily discover carousel. */
+const val APPLE_PERSONAL_MIXES_SECTION = "apple-personal-mixes"
+
 data class LyricLine(
     val text: String,
     val startMs: Long? = null,
@@ -243,6 +246,8 @@ data class LyricLine(
     val words: List<LyricWord> = emptyList(),
     val adlibs: List<LyricWord> = emptyList(),
     val agentLane: String? = null,
+    /** Apple's line key, which its translations are indexed by. */
+    val key: String? = null,
 )
 
 data class LyricWord(

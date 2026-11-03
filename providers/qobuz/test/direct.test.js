@@ -25,16 +25,14 @@ import { createQobuzPlayback } from '../src/playback.js';
 import { queryParams } from '../src/query.js';
 
 const own = { token: 't', userId: 42, appId: '111222333', appSecret: 'secret' };
-const noBootstrap = { get: async () => assert.fail('bootstrap fetched with user app credentials') };
 
 function json(status, body) {
   return { ok: status < 300, status, json: async () => body, text: async () => JSON.stringify(body) };
 }
 
-test('user app credentials sign track/getFileUrl without the web bootstrap', async () => {
+test('user app credentials sign track/getFileUrl', async () => {
   const requests = [];
   const client = createQobuzClient({
-    bootstrap: noBootstrap,
     credentials: async () => own,
     fetchImpl: async (url, init) => {
       requests.push({ url, init });
@@ -42,7 +40,6 @@ test('user app credentials sign track/getFileUrl without the web bootstrap', asy
     }
   });
   const info = await client.streamingInfo(99, 'hires');
-  assert.equal(info.direct, true);
   assert.equal(info.url, 'https://cdn/file.flac');
   const { url, init } = requests[0];
   assert.match(url, /\/track\/getFileUrl\?/);
@@ -55,7 +52,6 @@ test('user app credentials sign track/getFileUrl without the web bootstrap', asy
 
 test('preview clips are refused', async () => {
   const client = createQobuzClient({
-    bootstrap: noBootstrap,
     credentials: async () => own,
     fetchImpl: async () => json(200, { url: 'https://cdn/clip.flac', sample: true })
   });
@@ -90,7 +86,7 @@ test('direct files read exact ranges and renew an expired URL', async () => {
   const playback = createQobuzPlayback({
     client: {
       streamingInfo: async () => ({
-        direct: true, url: urls++ ? 'https://cdn/new.flac' : 'https://cdn/old.flac',
+        url: urls++ ? 'https://cdn/new.flac' : 'https://cdn/old.flac',
         format_id: 27, bit_depth: 24, sampling_rate: 96
       })
     },
@@ -125,5 +121,4 @@ test('token sign-in with app credentials checks the secret', async () => {
     await verifyQobuzToken({ fetchImpl: ok, token: 't', userId: 42, appId: own.appId, appSecret: 's' }),
     { token: 't', userId: 42, appId: own.appId, appSecret: 's' }
   );
-  await assert.rejects(verifyQobuzToken({ fetchImpl: ok, token: 't', userId: 42, appId: own.appId }), /both/);
 });

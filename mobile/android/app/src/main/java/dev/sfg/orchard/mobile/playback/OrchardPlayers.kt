@@ -28,6 +28,8 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.mediacodec.DefaultMediaCodecAdapterFactory
+import androidx.media3.exoplayer.mediacodec.MediaCodecAdapter
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ShuffleOrder
 import dev.sfg.orchard.mobile.playback.smart.MixSplicer
@@ -55,6 +57,9 @@ internal fun buildOrchardPlayer(
     eq: EqualizerAudioProcessor,
     volume: PlaybackVolumeState,
     handlesAudioFocus: Boolean,
+    codecAdapterFactory: MediaCodecAdapter.Factory = OrchardCodecAdapterFactory(
+        DefaultMediaCodecAdapterFactory(context),
+    ),
 ): ExoPlayer {
     val loadControl = DefaultLoadControl.Builder()
         .setBufferDurationsMs(
@@ -69,6 +74,8 @@ internal fun buildOrchardPlayer(
     // The fades, splices and filter rides have to happen inside the sink; player volume only
     // scales the whole signal, and only from the main thread.
     val renderersFactory = object : DefaultRenderersFactory(context) {
+        override fun getCodecAdapterFactory(): MediaCodecAdapter.Factory = codecAdapterFactory
+
         override fun buildAudioSink(
             context: Context,
             enableFloatOutput: Boolean,

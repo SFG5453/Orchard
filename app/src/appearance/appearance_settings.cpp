@@ -52,6 +52,7 @@ QVariantMap preset(const QString &name, const char *hex) {
 }
 AppearanceSettings::AppearanceSettings(QObject *parent) : QObject(parent) {
     m_initialUiScale = m_uiScale = UiScaling::savedScale();
+    m_initialAutoUiScale = m_autoUiScale = UiScaling::autoEnabled();
     m_settings.beginGroup(QStringLiteral("appearance"));
     m_immersive = m_settings.value(QStringLiteral("immersiveBackground"), false).toBool();
     m_showBitrate = m_settings.value(QStringLiteral("showBitrate"), false).toBool();
@@ -59,6 +60,8 @@ AppearanceSettings::AppearanceSettings(QObject *parent) : QObject(parent) {
     m_lastSeenRelease = m_settings.value(QStringLiteral("lastSeenRelease")).toString();
     const QString layout = m_settings.value(QStringLiteral("layoutStyle")).toString();
     if (layout == QLatin1String("canopy")) m_layoutStyle = layout;
+    const QString quality = m_settings.value(QStringLiteral("backgroundQuality")).toString();
+    if (quality == QLatin1String("low") || quality == QLatin1String("high")) m_backgroundQuality = quality;
     m_speed = readNumber(m_settings, QStringLiteral("speed"), 1.38, 0.0, 5.0);
     m_intensity = readNumber(m_settings, QStringLiteral("intensity"), 0.92, 0.0, 1.0);
     m_saturation = readNumber(m_settings, QStringLiteral("saturation"), 1.24, 0.0, 3.0);
@@ -66,6 +69,10 @@ AppearanceSettings::AppearanceSettings(QObject *parent) : QObject(parent) {
     m_fullscreenWindowed = m_settings.value(QStringLiteral("fullscreenWindowed"), false).toBool();
     m_fullscreenAutoHide = m_settings.value(QStringLiteral("fullscreenAutoHide"), true).toBool();
     m_fullscreenPulse = m_settings.value(QStringLiteral("fullscreenPulse"), true).toBool();
+    m_fullscreenCanvasStage = m_settings.value(QStringLiteral("fullscreenCanvasStage"), false).toBool();
+    m_lyricsFocusBlur = m_settings.value(QStringLiteral("lyricsFocusBlur"), true).toBool();
+    m_lyricsDistanceFade = m_settings.value(QStringLiteral("lyricsDistanceFade"), true).toBool();
+    m_lyricsStaggeredScroll = m_settings.value(QStringLiteral("lyricsStaggeredScroll"), true).toBool();
     m_artistVideoBackdrop = m_settings.value(QStringLiteral("artistVideoBackdrop"), false).toBool();
     m_animatedArtwork = m_settings.value(QStringLiteral("animatedArtworkEnabled"), true).toBool();
     m_animatedCollage = m_settings.value(QStringLiteral("animatedCollageEnabled"), false).toBool();
@@ -102,6 +109,15 @@ void AppearanceSettings::setLastSeenRelease(const QString &value) {
     m_settings.setValue(QStringLiteral("lastSeenRelease"), value);
     emit changed();
 }
+void AppearanceSettings::setBackgroundQuality(const QString &value) {
+    if ((value != QLatin1String("low") && value != QLatin1String("medium") && value != QLatin1String("high")) ||
+        value == m_backgroundQuality)
+        return;
+    m_backgroundQuality = value;
+    m_settings.setValue(QStringLiteral("backgroundQuality"), value);
+    emit changed();
+}
+
 void AppearanceSettings::setLayoutStyle(const QString &value) {
     if ((value != QLatin1String("glade") && value != QLatin1String("canopy")) || value == m_layoutStyle) return;
     m_layoutStyle = value;
@@ -121,6 +137,7 @@ void AppearanceSettings::setUiScale(double value) {
     value = std::round(std::clamp(value, UiScaling::minimum, UiScaling::maximum) * 100) / 100;
     setNumber(QStringLiteral("uiScale"), value, m_uiScale, UiScaling::minimum, UiScaling::maximum);
 }
+void AppearanceSettings::setAutoUiScale(bool value) { setFlag(QStringLiteral("autoUiScale"), value, m_autoUiScale); }
 void AppearanceSettings::setSpeed(double value) { setNumber(QStringLiteral("speed"), value, m_speed, 0.0, 5.0); }
 void AppearanceSettings::setIntensity(double value) { setNumber(QStringLiteral("intensity"), value, m_intensity, 0.0, 1.0); }
 void AppearanceSettings::setSaturation(double value) { setNumber(QStringLiteral("saturation"), value, m_saturation, 0.0, 3.0); }
@@ -135,6 +152,10 @@ void AppearanceSettings::setFlag(const QString &key, bool value, bool &field) {
 void AppearanceSettings::setFullscreenWindowed(bool value) { setFlag(QStringLiteral("fullscreenWindowed"), value, m_fullscreenWindowed); }
 void AppearanceSettings::setFullscreenAutoHide(bool value) { setFlag(QStringLiteral("fullscreenAutoHide"), value, m_fullscreenAutoHide); }
 void AppearanceSettings::setFullscreenPulse(bool value) { setFlag(QStringLiteral("fullscreenPulse"), value, m_fullscreenPulse); }
+void AppearanceSettings::setFullscreenCanvasStage(bool value) { setFlag(QStringLiteral("fullscreenCanvasStage"), value, m_fullscreenCanvasStage); }
+void AppearanceSettings::setLyricsFocusBlur(bool value) { setFlag(QStringLiteral("lyricsFocusBlur"), value, m_lyricsFocusBlur); }
+void AppearanceSettings::setLyricsDistanceFade(bool value) { setFlag(QStringLiteral("lyricsDistanceFade"), value, m_lyricsDistanceFade); }
+void AppearanceSettings::setLyricsStaggeredScroll(bool value) { setFlag(QStringLiteral("lyricsStaggeredScroll"), value, m_lyricsStaggeredScroll); }
 void AppearanceSettings::setArtistVideoBackdrop(bool value) { setFlag(QStringLiteral("artistVideoBackdrop"), value, m_artistVideoBackdrop); }
 
 void AppearanceSettings::setAnimatedArtworkEnabled(bool value) {
@@ -311,9 +332,14 @@ void AppearanceSettings::reset() {
     setIntensity(0.92);
     setSaturation(1.24);
     setBrightness(1.0);
+    setBackgroundQuality(QStringLiteral("medium"));
     setFullscreenWindowed(false);
     setFullscreenAutoHide(true);
     setFullscreenPulse(true);
+    setFullscreenCanvasStage(false);
+    setLyricsFocusBlur(true);
+    setLyricsDistanceFade(true);
+    setLyricsStaggeredScroll(true);
     setArtistVideoBackdrop(false);
     setAnimatedArtworkEnabled(true);
     setAnimatedCollageEnabled(false);

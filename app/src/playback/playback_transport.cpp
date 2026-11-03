@@ -134,12 +134,12 @@ void PlaybackController::seekBy(double seconds) {
   seek(position() + seconds);
 }
 
-void PlaybackController::previous() {
+void PlaybackController::previous(bool restart) {
   if (forwardRemote(QStringLiteral("previous")))
     return;
   if (m_loading || m_track.isEmpty())
     return;
-  if (position() > 3.0 || m_history.isEmpty()) {
+  if ((restart && position() > 3.0) || m_history.isEmpty()) {
     seek(0.0);
   } else {
     const QVariantMap prev = m_history.takeLast().toMap();

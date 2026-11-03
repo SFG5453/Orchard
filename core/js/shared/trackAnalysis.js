@@ -354,6 +354,7 @@ export function normalizeTrackAnalysis(raw = {}) {
     frames: normalizeFrames(raw, duration),
     curves: normalizeCurves(raw),
     subBassRatio: finite(raw.subBassRatio),
+    loudnessLufs: finite(raw.loudnessLufs),
     boundaries: dedupeBoundaries([
       ...detectedBoundaries(raw, range, timing),
       ...endpointBoundaries(range),

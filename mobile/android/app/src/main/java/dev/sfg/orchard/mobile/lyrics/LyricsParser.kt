@@ -107,7 +107,8 @@ internal object LyricsParser {
                 val end = paragraph.getAttribute("end").takeIf(String::isNotBlank)?.let(::timeMs)
                     ?: (words + adlibs).mapNotNull(LyricWord::endMs).maxOrNull()
                 val agent = paragraph.resolveAgent()
-                add(LyricLine(text, start, end, words, adlibs) to agent)
+                val key = paragraph.lineKey()
+                add(LyricLine(text, start, end, words, adlibs, key = key) to agent)
             }
         }.sortedBy { it.first.startMs ?: Long.MAX_VALUE }
         return withInferredEnds(withAgentLanes(lines))
@@ -131,6 +132,16 @@ internal object LyricsParser {
             }
             line.copy(agentLane = agentLane)
         }
+    }
+
+    private fun Element.lineKey(): String? {
+        for (index in 0 until attributes.length) {
+            val attribute = attributes.item(index)
+            if ((attribute.localName ?: attribute.nodeName.substringAfter(':')) == "key") {
+                return attribute.nodeValue.takeIf(String::isNotBlank)
+            }
+        }
+        return null
     }
 
     private fun Element.resolveAgent(): String {

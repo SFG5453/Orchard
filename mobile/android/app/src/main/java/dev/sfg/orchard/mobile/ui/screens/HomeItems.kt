@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile.ui.screens
 
 import dev.sfg.orchard.mobile.catalog.PlaylistActions
+import dev.sfg.orchard.mobile.model.APPLE_PERSONAL_MIXES_SECTION
 import dev.sfg.orchard.mobile.model.Album
 import dev.sfg.orchard.mobile.model.Artist
 import dev.sfg.orchard.mobile.model.CatalogItem
@@ -121,77 +122,89 @@ internal fun offlineAlbumItems(downloadedTracks: List<Track>): List<CatalogItem.
     }
 }
 
-/** Spotlight cards: lead album or playlist of each shelf, library shelves last, saved playlists only to fill. */
+private const val DISCOVER_MIXES_MAX = 2
+private const val DISCOVER_MAX = 8
+
+/**
+ * Spotlight cards: up to two Apple Music personal mixes, then albums, songs, artists and
+ * playlists in turn so no one kind fills the carousel. Feed picks rotate each [day]; library
+ * items only back a kind the feed runs short on.
+ */
 internal fun discoverEntries(
     state: LoadState<List<CatalogSection>>,
     library: LibrarySnapshot,
+    day: Long = 0,
 ): List<DiscoverEntry> {
-    val editorial = mutableListOf<DiscoverEntry>()
-    val fromLibrary = mutableListOf<DiscoverEntry>()
+    val random = kotlin.random.Random(day)
+    val mixes = mutableListOf<DiscoverEntry>()
+    val feed = mutableListOf<DiscoverEntry>()
     if (state is LoadState.Content) {
         for (section in state.value) {
-            // Liked Music art is a flat glyph that falls apart at spotlight size.
-            val lead = section.items.firstOrNull {
-                it.artworkUrl.isNotBlank() &&
-                    (it is CatalogItem.Record || it is CatalogItem.Collection) &&
-                    !(it is CatalogItem.Collection && PlaylistActions.isLikedMusicPlaylist(it.playlist.id))
-            } ?: continue
-            val bucket = if (section.title.contains("library", ignoreCase = true)) fromLibrary else editorial
-            bucket.add(DiscoverEntry(lead, section.title))
+            val usable = section.items.filter { it.artworkUrl.isNotBlank() && isDiscoverable(it) }
+            if (section.id == APPLE_PERSONAL_MIXES_SECTION) {
+                usable.forEach { mixes.add(DiscoverEntry(it, section.title)) }
+            } else {
+                usable.forEach { feed.add(DiscoverEntry(it, section.title)) }
+            }
         }
     }
-    val saved = library.savedPlaylists
-        .filterNot { PlaylistActions.isLikedMusicPlaylist(it.id) }
-        .map { DiscoverEntry(CatalogItem.Collection(it), "From your library") }
-    return (editorial + fromLibrary + saved)
-        .distinctBy { it.item.stableId }
-        .take(6)
+    val fromLibrary = buildList {
+        library.likedTracks.shuffled(random).forEach { add(DiscoverEntry(CatalogItem.Song(it), "From your likes")) }
+        library.savedAlbums.forEach { add(DiscoverEntry(CatalogItem.Record(it), "From your library")) }
+        library.savedArtists.forEach { add(DiscoverEntry(CatalogItem.Performer(it), "Artists you follow")) }
+        library.savedPlaylists.forEach { add(DiscoverEntry(CatalogItem.Collection(it), "From your library")) }
+    }.filter { it.item.artworkUrl.isNotBlank() && isDiscoverable(it.item) }
+
+    val queues = DiscoverKind.entries.map { kind ->
+        ArrayDeque(feed.filter { kindOf(it.item) == kind }.shuffled(random) + fromLibrary.filter { kindOf(it.item) == kind })
+    }
+    val picked = mixes.take(DISCOVER_MIXES_MAX).toMutableList()
+    val seen = picked.mapTo(HashSet()) { it.item.stableId }
+    while (picked.size < DISCOVER_MAX && queues.any { it.isNotEmpty() }) {
+        for (queue in queues) {
+            if (picked.size >= DISCOVER_MAX) break
+            while (queue.isNotEmpty()) {
+                val entry = queue.removeFirst()
+                if (seen.add(entry.item.stableId)) {
+                    picked.add(entry)
+                    break
+                }
+            }
+        }
+    }
+    return picked
 }
 
-/** Spotify-style 6-grid: playlists, then saved albums, then catalog items. */
-internal fun quickGridItems(
+private enum class DiscoverKind { ALBUM, SONG, ARTIST, PLAYLIST }
+
+private fun kindOf(item: CatalogItem): DiscoverKind? = when (item) {
+    is CatalogItem.Record -> DiscoverKind.ALBUM
+    is CatalogItem.Song -> DiscoverKind.SONG
+    is CatalogItem.Performer -> DiscoverKind.ARTIST
+    is CatalogItem.Collection -> DiscoverKind.PLAYLIST
+    is CatalogItem.Category -> null
+}
+
+// Liked Music art is a flat glyph that falls apart at spotlight size.
+private fun isDiscoverable(item: CatalogItem): Boolean =
+    kindOf(item) != null && !(item is CatalogItem.Collection && PlaylistActions.isLikedMusicPlaylist(item.playlist.id))
+
+internal const val QUICK_PICKS_PER_PAGE = 4
+private const val QUICK_PICKS_MAX = 20
+
+/**
+ * Songs to start a mix from: liked songs and the feed's songs, reshuffled each [day]. Recent
+ * plays are left out so the list never just echoes the session; they only fill a short pool.
+ */
+internal fun quickPickTracks(
     library: LibrarySnapshot,
-    state: LoadState<List<CatalogSection>>,
-    onOpenDetail: (String) -> Unit,
-    openCatalogItem: (CatalogItem) -> Unit,
-    playCatalogItem: (CatalogItem) -> Unit,
-): List<QuickGridItem> = buildList {
-    library.savedPlaylists.take(6).forEach { playlist ->
-        add(
-            QuickGridItem(
-                id = "pl_${playlist.id}",
-                title = playlist.title,
-                artworkUrl = playlist.artworkUrl,
-                onClick = { onOpenDetail(playlist.id) },
-                onPlay = { playCatalogItem(CatalogItem.Collection(playlist)) },
-            )
-        )
-    }
-    if (size < 6) {
-        library.savedAlbums.take(6 - size).forEach { album ->
-            add(
-                QuickGridItem(
-                    id = "alb_${album.id}",
-                    title = album.title,
-                    artworkUrl = album.artworkUrl,
-                    onClick = { onOpenDetail(album.id) },
-                    onPlay = { playCatalogItem(CatalogItem.Record(album)) },
-                )
-            )
-        }
-    }
-    if (size < 6 && state is LoadState.Content) {
-        val stateItems = state.value.flatMap { it.items }.filter { it.artworkUrl.isNotBlank() }
-        stateItems.distinctBy { it.stableId }.take(6 - size).forEach { item ->
-            add(
-                QuickGridItem(
-                    id = "st_${item.stableId}",
-                    title = item.title,
-                    artworkUrl = item.artworkUrl,
-                    onClick = { openCatalogItem(item) },
-                    onPlay = { playCatalogItem(item) },
-                )
-            )
-        }
-    }
-}.take(6)
+    sections: List<CatalogSection>,
+    day: Long,
+): List<Track> {
+    val recent = library.recentlyPlayed.mapTo(HashSet()) { it.id }
+    val feed = sections.flatMap { it.items }.filterIsInstance<CatalogItem.Song>().map { it.track }
+    val pool = (library.likedTracks + feed).distinctBy { it.id }
+    val fresh = pool.filterNot { it.id in recent }.shuffled(kotlin.random.Random(day))
+    val filler = (pool.filter { it.id in recent } + library.recentlyPlayed).distinctBy { it.id }
+    return (fresh + filler).distinctBy { it.id }.take(QUICK_PICKS_MAX)
+}

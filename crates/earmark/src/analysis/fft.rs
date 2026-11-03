@@ -3,21 +3,21 @@
 
 use std::sync::Arc;
 
-use num_complex::Complex64;
-use realfft::{RealFftPlanner, RealToComplex};
+use num_complex::Complex;
+use realfft::{FftNum, RealFftPlanner, RealToComplex};
 
 use crate::error::{CrossfadeError, Result};
 
-pub(crate) struct FftWorkspace {
-    plan: Arc<dyn RealToComplex<f64>>,
-    input: Vec<f64>,
-    output: Vec<Complex64>,
-    scratch: Vec<Complex64>,
+pub(crate) struct FftWorkspace<T: FftNum = f64> {
+    plan: Arc<dyn RealToComplex<T>>,
+    input: Vec<T>,
+    output: Vec<Complex<T>>,
+    scratch: Vec<Complex<T>>,
 }
 
-impl FftWorkspace {
+impl<T: FftNum> FftWorkspace<T> {
     pub(crate) fn new(size: usize) -> Self {
-        let plan = RealFftPlanner::<f64>::new().plan_fft_forward(size);
+        let plan = RealFftPlanner::<T>::new().plan_fft_forward(size);
         let input = plan.make_input_vec();
         let output = plan.make_output_vec();
         let scratch = plan.make_scratch_vec();
@@ -36,13 +36,13 @@ impl FftWorkspace {
     pub(crate) fn process_windowed(
         &mut self,
         samples: &[f32],
-        window: &[f64],
-    ) -> Result<&[Complex64]> {
+        window: &[T],
+    ) -> Result<&[Complex<T>]> {
         if samples.len() != self.input.len() || window.len() != self.input.len() {
             return Err(CrossfadeError::dsp("FFT frame/window length mismatch"));
         }
         for ((slot, sample), weight) in self.input.iter_mut().zip(samples).zip(window) {
-            *slot = *sample as f64 * *weight;
+            *slot = T::from_f32(*sample).unwrap_or_else(T::zero) * *weight;
         }
         self.plan
             .process_with_scratch(&mut self.input, &mut self.output, &mut self.scratch)

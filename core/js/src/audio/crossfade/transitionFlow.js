@@ -207,7 +207,7 @@ export function beatFlow(pair, outgoing, incoming) {
   };
 }
 
-function voiceRisk(analysis, from, to) {
+export function voiceRisk(analysis, from, to) {
   const activity = curveMean(analysis, 'vocal', from, to);
   return activity === null ? null : rounded(clamp((activity - VOICE_FLOOR) / VOICE_SPAN));
 }
@@ -217,7 +217,11 @@ function voiceRisk(analysis, from, to) {
  * drop-in enters at full level on its anchor, so only a line already running before it counts.
  */
 export function incomingVoiceRisk(pair, incoming) {
-  if (pair.alignment !== 'start') return voiceRisk(incoming, pair.incomingStart - 0.5, pair.incomingStart + 1);
+  if (pair.alignment !== 'start') {
+    // Heard from where its fader starts to move.
+    const heard = pair.incomingStart + (pair.spans?.incoming[0] ?? 0) * pair.durationSeconds * pair.incomingRatio;
+    return voiceRisk(incoming, heard - 0.5, heard + 1);
+  }
   // Nothing sings before a song starts.
   const curve = incoming.curves?.vocal;
   if (curve && pair.incomingStart - 1 < curve.start) return 0;
@@ -230,9 +234,11 @@ export function outgoingExit(pair) {
   return pair.outgoingStart + (pair.outgoingEnd - pair.outgoingStart) * end;
 }
 
-/** Fading the outgoing out in the middle of a line. */
+/** Fading the outgoing out in the middle of a line, or muffling it there. */
 export function outgoingVoiceRisk(pair, outgoing) {
-  const exit = outgoingExit(pair);
+  const exit = pair.voicesUntil === undefined
+    ? outgoingExit(pair)
+    : pair.outgoingStart + (pair.outgoingEnd - pair.outgoingStart) * pair.voicesUntil;
   return voiceRisk(outgoing, exit - 1.5, exit);
 }
 
@@ -279,6 +285,76 @@ export function bassSwapFraction(pair, incoming) {
     if (presence !== null && presence >= 0.5) return fraction;
   }
   return 0.5;
+}
+
+/** Bass level comparable across songs: the song's loudness plus its bass against its usual level. */
+export function bassLevel(analysis, from, to) {
+  const relative = curveMean(analysis, 'bass', from, to);
+  const loudness = analysis.loudnessLufs;
+  return relative > 0 && Number.isFinite(loudness) ? loudness + 20 * Math.log10(relative) : null;
+}
+
+// Swap moves: the old singer mid-line at a bar, clear of it at another, or the new bass rising.
+// The side that carries the bass across the moved bars may be at most this many dB weaker.
+const SWAP_WEAKER_DB = 3;
+const SWAP_SINGING = 0.5;
+const SWAP_CLEAR = 0.3;
+const SWAP_DROP = 0.4;
+const SWAP_FLAT = 0.2;
+
+/**
+ * The bass swap's bar line, chosen from the music. It starts where `bassSwapFraction` lands and
+ * moves only for a reason a listener hears: the old singer is mid-line there but done at another
+ * bar, or the new song's bass drops in at another bar while the old singer is clear of it.
+ * Candidates nearest the middle win, since that is where the fades cross.
+ */
+export function chooseBassSwap(pair, outgoing, incoming) {
+  const start = bassSwapFraction(pair, incoming);
+  const bars = pair.beats >= 8 ? Math.round(pair.beats / 4) : 0;
+  if (!bars || !incoming.curves?.bass || pair.alignment === 'start') return start;
+  const read = (fraction) => {
+    const offsets = sourceOffsets(pair, fraction * pair.durationSeconds);
+    const inAt = pair.incomingStart + offsets.incoming;
+    const outAt = pair.outgoingStart + offsets.outgoing;
+    return {
+      fraction,
+      ready: (beatPresence(incoming, inAt + 0.5) ?? 0) >= 0.5,
+      singing: voiceRisk(outgoing, outAt - 0.5, outAt + 0.5) ?? 0,
+      drop: (curveMean(incoming, 'bass', inAt, inAt + 0.5) ?? 0) - (curveMean(incoming, 'bass', inAt - 0.5, inAt) ?? 0)
+    };
+  };
+  // Moving the swap hands the bars in between to one side's bass, which must be playing there
+  // and be about as strong as the bass it keeps out.
+  const span = (from, to) => [sourceOffsets(pair, from * pair.durationSeconds), sourceOffsets(pair, to * pair.durationSeconds)];
+  const carries = (from, to, side) => {
+    const step = pair.durationSeconds / pair.beats;
+    const [analysis, sourceStart] = side === 'incoming' ? [incoming, pair.incomingStart] : [outgoing, pair.outgoingStart];
+    for (let at = from * pair.durationSeconds; at <= to * pair.durationSeconds + 1e-6; at += step) {
+      if ((beatPresence(analysis, sourceStart + sourceOffsets(pair, at)[side]) ?? 0) < 0.5) return false;
+    }
+    const [a, b] = span(from, to);
+    // Kicks read as bass; a bassline that only drops in between the bars is not there yet.
+    const arrival = side === 'incoming' && bassArrival(incoming, {
+      start: pair.incomingStart + a.incoming, end: pair.incomingStart + b.incoming + step
+    });
+    if (arrival && arrival.time > pair.incomingStart + a.incoming + 0.1) return false;
+    const outLevel = bassLevel(outgoing, pair.outgoingStart + a.outgoing, pair.outgoingStart + b.outgoing);
+    const inLevel = bassLevel(incoming, pair.incomingStart + a.incoming, pair.incomingStart + b.incoming);
+    if (outLevel === null || inLevel === null) return true;
+    return (side === 'incoming' ? inLevel - outLevel : outLevel - inLevel) >= -SWAP_WEAKER_DB;
+  };
+  const here = read(start);
+  const moves = [];
+  for (let bar = 1; bar < bars; bar += 1) {
+    const fraction = bar / bars;
+    if (fraction < 0.25 || fraction > 0.75 || Math.abs(fraction - start) < 1e-6) continue;
+    const there = read(fraction);
+    if (!there.ready || there.singing >= SWAP_CLEAR) continue;
+    if (!(fraction < start ? carries(fraction, start, 'incoming') : carries(start, fraction, 'outgoing'))) continue;
+    if (here.singing >= SWAP_SINGING || (there.drop >= SWAP_DROP && here.drop < SWAP_FLAT)) moves.push(there);
+  }
+  moves.sort((left, right) => Math.abs(left.fraction - 0.5) - Math.abs(right.fraction - 0.5) || left.fraction - right.fraction);
+  return moves[0]?.fraction ?? start;
 }
 
 /** Difference in 808 weight between two productions; null without measurements. */

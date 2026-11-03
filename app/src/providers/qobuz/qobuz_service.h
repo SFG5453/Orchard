@@ -26,7 +26,6 @@
 #include <functional>
 
 class ProviderRuntime;
-class QobuzOAuthCallback;
 
 // The user's own Qobuz subscription as an optional lossless source. YouTube
 // Music stays the catalog; tracks Qobuz can't identify still play from YouTube.
@@ -57,11 +56,10 @@ public:
   QString message() const { return m_message; }
   bool messageIsError() const { return m_messageIsError; }
 
-  Q_INVOKABLE void connectAccount();
-  // Signs in with a user ID and auth token. An optional app ID and secret make
-  // playback use track/getFileUrl with the user's own app.
+  // Signs in with the user's own Qobuz app ID and secret, plus a user ID and
+  // auth token issued to that app.
   Q_INVOKABLE void connectWithToken(const QString &userId, const QString &token,
-                                    const QString &appId = {}, const QString &appSecret = {});
+                                    const QString &appId, const QString &appSecret);
   Q_INVOKABLE void cancelConnection();
   Q_INVOKABLE void disconnectAccount();
 
@@ -86,17 +84,15 @@ private:
   void readBytes(const QString &method, const QString &playbackId, qint64 start, qint64 end, Bytes done);
   quint64 call(const QString &method, const QJsonValue &payload, Reply done = {});
   void restoreSession();
-  // `account` holds token, userId and the optional appId and appSecret.
+  // `account` holds token, userId, appId and appSecret.
   void storeSession(const QJsonObject &account);
   void forgetSession();
   void applySession(const QJsonObject &account);
-  void finishConnection(const QString &code);
   void acceptAccount(quint64 generation, const QJsonValue &result, const QString &error);
   void setStatus(const QString &status);
   void setMessage(const QString &message, bool error = false);
 
   ProviderRuntime *m_runtime;
-  QobuzOAuthCallback *m_callback;
   QHash<quint64, Reply> m_replies;
   QHash<quint64, Bytes> m_reads;
   // Album badges by "title\nartist"; searches cost a round trip each.

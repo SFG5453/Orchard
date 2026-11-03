@@ -104,8 +104,15 @@ class TransitionFilter : BaseAudioProcessor() {
         val corner = lowPassHz
         val bass = bassGain
         var level = gain
+        val normalize = volumeNormalizationEnabled
 
-        if (volumeNormalizationEnabled && channelCount > 0) {
+        if (!normalize && corner >= OPEN && abs(bass - 1.0) < 1e-4 && level == 1.0) {
+            output.put(inputBuffer)
+            output.flip()
+            return
+        }
+
+        if (normalize && channelCount > 0) {
             val startPos = inputBuffer.position()
             var sumSq = 0.0
             val sampleCount = frames * channelCount

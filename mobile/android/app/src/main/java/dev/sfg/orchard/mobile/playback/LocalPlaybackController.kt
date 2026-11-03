@@ -86,6 +86,7 @@ class LocalPlaybackController(
         positionMs: Long = 0,
         play: Boolean = true,
         contextTitle: String = "",
+        shuffle: Boolean = false,
     ) {
         Log.d(TAG, "replaceQueue: count=${tracks.size}, startIndex=$startIndex, play=$play, contextTitle='$contextTitle'")
         val edited = QueueEditor.replaceAndPlay(tracks, startIndex)
@@ -95,8 +96,11 @@ class LocalPlaybackController(
         }
         withController {
             Log.d(TAG, "replaceQueue: dispatching setMediaItems with ${edited.tracks.size} items to MediaController")
+            // Shuffle reorders only on a flag change, so cycle it to shuffle the new queue.
+            if (shuffle) it.shuffleModeEnabled = false
             it.setPlaylistMetadata(MediaMetadata.Builder().setTitle(contextTitle).build())
             it.setMediaItems(edited.tracks.map(MediaItemMapper::toMediaItem), edited.currentIndex, positionMs)
+            if (shuffle) it.shuffleModeEnabled = true
             clearError()
             it.prepare()
             if (play) it.play()
@@ -167,8 +171,8 @@ class LocalPlaybackController(
     }
     fun pause() = withController(Player::pause)
     fun next() = withController { if (it.hasNextMediaItem()) it.seekToNextMediaItem() }
-    fun previous() = withController {
-        if (it.currentPosition > 5_000) it.seekTo(0) else if (it.hasPreviousMediaItem()) it.seekToPreviousMediaItem()
+    fun previous(restart: Boolean = true) = withController {
+        if (restart && it.currentPosition > 5_000 || !it.hasPreviousMediaItem()) it.seekTo(0) else it.seekToPreviousMediaItem()
     }
     fun seek(positionMs: Long) = withController { player ->
         val item = player.currentMediaItem ?: return@withController

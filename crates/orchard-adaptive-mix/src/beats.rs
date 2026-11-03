@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 SFG545. Licensed under the PolyForm Shield License 1.0.0, see LICENSE-POLYFORM-SHIELD. */
 
-//! Port of OrchardV2's beatThisTracker.js peak picking and chunk policy.
+//! Beat logit peak picking and chunk policy, ported from OrchardV2's beatThisTracker.js.
 
 pub const CHUNK: usize = 1500;
 pub const BORDER: usize = 6;
@@ -86,7 +86,7 @@ pub fn grid(beat: &[f32], downbeat: &[f32]) -> Result<Grid, String> {
     let positions = peaks(beat);
     let beats: Vec<_> = positions.iter().map(|f| f / 50.0).collect();
     if beats.len() < 8 {
-        return Err("Beat This found fewer than eight beats".into());
+        return Err("The beat model found fewer than eight beats".into());
     }
     let gaps: Vec<_> = beats.windows(2).map(|w| w[1] - w[0]).collect();
     let rough = median(&gaps);
@@ -98,7 +98,7 @@ pub fn grid(beat: &[f32], downbeat: &[f32]) -> Result<Grid, String> {
     let interval = median(if kept.len() >= 4 { &kept } else { &gaps });
     let bpm = 60.0 / interval;
     if !(40.0..=220.0).contains(&bpm) {
-        return Err("Beat This tempo is outside 40–220 BPM".into());
+        return Err("The beat model's tempo is outside 40–220 BPM".into());
     }
     let mut downbeats: Vec<_> = peaks(downbeat)
         .iter()

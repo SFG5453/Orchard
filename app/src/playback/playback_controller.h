@@ -28,6 +28,7 @@
 #include "local/local_track.h"
 #include <QElapsedTimer>
 #include <QHash>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QMediaPlayer>
 #include <QObject>
@@ -48,6 +49,9 @@ class AnimatedArtworkService;
 class ConnectivityMonitor;
 class DownloadManager;
 class QobuzService;
+class AppleMusic;
+class AppleMusicStreams;
+class CatalogSource;
 
 class PlaybackController final : public QObject {
   Q_OBJECT
@@ -130,41 +134,18 @@ public:
   SlopDetector *slop() { return &m_slop; }
   // Bitrate in kbps. If this reads 0, we are either loading or communicating
   // via smoke signals.
-  int bitrate() const {
-    if (remoteActive())
-      return 0;
-    const int b = m_track.value(QStringLiteral("bitrate")).toInt();
-    if (b <= 0)
-      return 0;
-    return b >= 1000 ? (b + 500) / 1000 : b;
-  }
+  int bitrate() const;
   QString queueError() const { return m_queueError; }
   QVariantList queue() const { return m_queue; }
   BestMixController *bestMix() { return &m_bestMix; }
   bool bestMixSorted() const { return m_bestMixSorted; }
-  bool playing() const {
-    return (m_player && m_player->playbackState() == QMediaPlayer::PlayingState) ||
-           (m_crossfadeActive && m_nextPlayer &&
-            m_nextPlayer->playbackState() == QMediaPlayer::PlayingState);
-  }
+  bool playing() const;
   bool loading() const { return m_loading; }
   QString errorMessage() const { return m_error; }
-  double position() const {
-    if (m_resumePosition > 0.0)
-      return m_resumePosition;
-    return m_player ? m_player->position() / 1000.0 : 0.0;
-  }
+  double position() const;
   // What the speakers play now; lyrics sync to this, the seek bar to position().
-  double audiblePosition() const {
-    const double audible = m_resumePosition > 0.0 || m_crossfadeActive
-                               ? -1.0
-                               : m_audioEngineOutput.audiblePosition();
-    return audible >= 0.0 ? audible : position();
-  }
-  double duration() const {
-    const double playerDuration = m_player ? m_player->duration() / 1000.0 : 0.0;
-    return playerDuration > 0.0 ? playerDuration : m_restoredDuration;
-  }
+  double audiblePosition() const;
+  double duration() const;
   bool gaplessEnabled() const { return m_gaplessEnabled; }
   void setGaplessEnabled(bool enabled);
   bool exponentialVolumeEnabled() const { return m_exponentialVolumeEnabled; }
@@ -174,14 +155,12 @@ public:
   int crossfadeDuration() const { return m_crossfadeDuration; }
   void setCrossfadeDuration(int seconds);
   AdaptiveMixController *adaptiveMix() { return &m_adaptiveMix; }
-  QVariantMap transitionTrack() const { return m_crossfadeTrack; }
+  QVariantMap transitionTrack() const;
   // The incoming song's own clock during a crossfade; 0 otherwise.
-  double transitionPosition() const {
-    return m_crossfadeActive && m_nextPlayer ? std::max(0.0, m_nextPlayer->position() / 1000.0) : 0.0;
-  }
-  double transitionDuration() const { return m_crossfadeActive ? m_crossfadeIncomingDuration : 0.0; }
-  bool crossfadeActive() const { return m_crossfadeActive; }
-  double crossfadeProgress() const { return m_crossfadeProgress; }
+  double transitionPosition() const;
+  double transitionDuration() const;
+  bool crossfadeActive() const;
+  double crossfadeProgress() const;
   double displayPosition() const;
   double displayDuration() const;
   // Outgoing position where the next mix begins, or -1 when none is planned.
@@ -220,19 +199,11 @@ public:
   // Drops transient stream keys so a saved track never carries an expired url.
   static QVariantMap sanitizeTrack(const QVariantMap &track);
   static QVariantList sanitizeTrackList(const QVariantList &tracks, int maxItems = 2500);
-  bool canGoNext() const {
-    return !m_queue.isEmpty() ||
-           // Local songs get no recommendations, so autoplay is never a "next" for them.
-           (m_autoplayEnabled && !m_track.isEmpty() && !local::isLocalTrack(m_track) && !offlineMode() &&
-            m_autoplaySuppressed != m_track.value("id").toString()) ||
-           (m_repeatMode == "all" && !m_track.isEmpty());
-  }
+  bool canGoNext() const;
   void setShuffleEnabled(bool enabled);
   void setRepeatMode(const QString &mode);
   Q_INVOKABLE void cycleRepeatMode();
-  bool canGoPrevious() const {
-    return !m_track.isEmpty() && (position() > 3.0 || !m_history.isEmpty());
-  }
+  bool canGoPrevious() const;
 
   Q_INVOKABLE void playSong(const QVariantMap &track);
   Q_INVOKABLE void startMix(const QVariantMap &track);
@@ -256,12 +227,16 @@ public:
   Q_INVOKABLE void seekBy(double seconds);
   Q_INVOKABLE void stop();
   Q_INVOKABLE void next();
-  Q_INVOKABLE void previous();
+  // restart=false skips back even when the song is past its opening seconds.
+  Q_INVOKABLE void previous(bool restart = true);
 
   // playback_video_source.cpp. Swaps the current track between album audio and its
   // music video's muxed stream at the same position, so picture and sound share a clock.
   void playVideoSource(const QJsonObject &stream);
   void playAlbumSource();
+  // Resolves an Apple music video's soundtrack for playVideoSource; fails when Apple playback is unavailable.
+  void resolveAppleVideo(const QString &appleVideoId,
+                         std::function<void(const QJsonObject &stream, const QString &error)> done);
 
   // playback_remote.cpp. The plain getters above always describe this desktop's
   // own player; QML and other views read these, which follow a Connect target.
@@ -270,6 +245,8 @@ public:
   void setRemoteProvider(RemoteProvider *provider);
   // playback_offline.cpp: downloaded songs play from disk; offline mode limits the queue to them.
   void setOfflineSources(DownloadManager *downloads, ConnectivityMonitor *connectivity);
+  // playback_apple.cpp: Apple Music songs stream through the widevine host while Apple is the music source.
+  void setAppleMusic(AppleMusic *account, CatalogSource *source);
   bool offlineMode() const;
   // Connect roles moved, so a peer's provider session may have come or gone.
   void remoteProviderChanged();
@@ -332,6 +309,8 @@ private:
   QString m_autoplaySeed;
   QString m_autoplaySuppressed;
   QString m_autoplayError;
+  // Adds Autoplay or Start mix rows; Start mix rows are plain queue entries.
+  void applyAutoplay(const QJsonArray &result);
   void appendPlaylistTracks(const QString &playlistId,
                             const QVariantList &tracks);
   void cancelQueueLoading();
@@ -370,6 +349,27 @@ private:
   bool qobuzAvailable() const;
   void resolveQobuz(const QVariantMap &track, std::function<void(const QJsonValue &, const QString &)> done);
   RemoteProvider *m_remoteProvider{nullptr};
+  // playback_apple.cpp
+  void startAppleTrack();
+  // The rest of an Apple Music library playlist queued before it finished loading.
+  void loadAppleQueuePage();
+  // The song's stream through the proxies, on the current or spare player.
+  void resolveAppleStream(const QVariantMap &track, bool prepared);
+  // Catalog id while the song plays from Apple Music as the music source, else empty.
+  QString appleMixId(const QVariantMap &track) const;
+  // Apple's audio analysis of both songs for adaptive mix; false while it is still being fetched.
+  bool appleMixAnalyses(const QVariantMap &current, const QVariantMap &next, QJsonObject &outgoing,
+                        QJsonObject &incoming);
+  // Next songs from Apple's station for [seed] (am.songs or am.stations id); false when unavailable.
+  bool requestAppleAutoplay(const QString &seed, bool mix);
+  // am.stations id while the queue plays a station; it refills even with Autoplay off.
+  QString m_appleStation;
+  QHash<QString, QJsonObject> m_appleAnalyses;
+  bool m_appleAnalysisPending{false};
+  // Exists where orchard-widevine-host can run.
+  AppleMusicStreams *m_appleStreams{nullptr};
+  AppleMusic *m_appleAccount{nullptr};
+  CatalogSource *m_catalogSource{nullptr};
   // playback_offline.cpp
   QString downloadedFileFor(const QVariantMap &track) const;
   void startDownloadedFile(const QString &path);
@@ -387,8 +387,8 @@ private:
 
   YouTubeProvider *m_provider;
   QobuzService *m_qobuz{nullptr};
-  // Invalidates a preload's pending Qobuz lookup; YouTube preloads use m_nextRequest.
-  quint64 m_preparedQobuzToken{0};
+  // Invalidates a preload's pending Qobuz or Apple Music lookup; YouTube preloads use m_nextRequest.
+  quint64 m_preparedResolveToken{0};
   bool m_qobuzWasActive{false};
   bool m_qobuzWasConnected{false};
   AuthManager *m_auth;

@@ -22,6 +22,8 @@ package dev.sfg.orchard.mobile.playback
 import android.util.Log
 import androidx.media3.common.Player
 import dev.sfg.orchard.mobile.OrchardGraph
+import dev.sfg.orchard.mobile.catalog.isAppleMusicId
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.youtube.providerJson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,8 +48,11 @@ internal class YouTubeHistoryReporter(private val graph: OrchardGraph, private v
         val item = player.currentMediaItem
         val currentId = item?.mediaId.orEmpty()
         val local = item?.let(MediaItemMapper::toTrack)?.isLocal == true
-        val eligible = player.isPlaying && !local && !graph.activeTrackIsQobuz.value &&
-            graph.settings.settings.value.sendYouTubeHistory && graph.networkMonitor.isOnline.value &&
+        val settings = graph.settings.settings.value
+        // Apple Music listening stays out of YouTube's history.
+        val apple = settings.homeSource == APPLE_MUSIC_SOURCE || isAppleMusicId(currentId)
+        val eligible = player.isPlaying && !local && !apple && !graph.activeTrackIsQobuz.value &&
+            settings.sendYouTubeHistory && graph.networkMonitor.isOnline.value &&
             graph.auth.session() != null
         if (currentId == trackId) positionMs = player.currentPosition.coerceAtLeast(0)
         if (currentId != trackId || !eligible) finish()

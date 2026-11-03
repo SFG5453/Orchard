@@ -186,7 +186,7 @@ private fun TransportPill(
         onClick = onClick,
         enabled = enabled,
         shape = PillShape,
-        color = Color.White.copy(alpha = if (enabled) 0.14f else 0.06f),
+        color = if (enabled) ControlSurface else ControlSurface.copy(alpha = 0.5f),
         contentColor = Color.White.copy(alpha = if (enabled) 1f else 0.35f),
         interactionSource = interactionSource,
         modifier = modifier.height(PILL_HEIGHT),
@@ -197,8 +197,7 @@ private fun TransportPill(
     }
 }
 
-/** Solid white so the one control that matters most never sinks into the artwork behind it. */
-// Every other button on this screen is a suggestion. This one is a lifestyle.
+/** Brightest fill on the screen so the primary control stays distinct from the side pills. */
 @Composable
 private fun PlayPill(
     isPlaying: Boolean,
@@ -212,16 +211,16 @@ private fun PlayPill(
         onClick = onClick,
         enabled = enabled,
         shape = PillShape,
-        color = Color.White.copy(alpha = if (enabled) 1f else 0.4f),
-        contentColor = PlayGlyph,
+        color = Color.Transparent,
+        contentColor = Color.White,
         interactionSource = interactionSource,
-        modifier = modifier.height(PILL_HEIGHT),
+        modifier = modifier.height(PILL_HEIGHT).coverFill(PillShape, COVER_FILL_ACTIVE, if (enabled) 1f else 0.5f),
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (isBuffering) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(28.dp),
-                    color = PlayGlyph,
+                    color = Color.White,
                     strokeWidth = 3.dp,
                 )
             } else {
@@ -246,7 +245,6 @@ private fun PlayPill(
 
 private val PillShape = RoundedCornerShape(percent = 50)
 private val PILL_HEIGHT = 56.dp
-private val PlayGlyph = Color(0xFF111214)
 private const val SIDE_WEIGHT = 1f
 private const val PLAY_WEIGHT = 1f
 private const val PRESSED_GROWTH = 1.3f

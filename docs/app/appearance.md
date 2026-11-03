@@ -18,6 +18,8 @@ keywords:
   - motion artwork
   - immersive background
   - artwork background
+  - background quality
+  - GPU usage
   - bitrate indicator
   - fullscreen player
   - hide controls
@@ -38,7 +40,7 @@ order: 110
 
 # Appearance
 
-Appearance settings control Orchard's colors, the player layout, the player bar bitrate indicator, the fullscreen player, animated artwork, and the immersive background. They are in Settings, Appearance.
+Appearance settings control Orchard's colors, the player layout, the player bar bitrate indicator, the fullscreen player, lyrics motion, animated artwork, and the immersive background. They are in Settings, Appearance.
 
 ## Pick an accent color
 
@@ -54,9 +56,13 @@ Click **Reset colors** to return to the default accent and popup background.
 
 Open **Settings**, then **Appearance**. In **Display scaling**, adjust **Interface scale** from 75% to 250% in 5% steps. The slider resizes text, buttons, artwork, and menus together. Quit and reopen Orchard to apply the selected scale. If closing the window keeps Orchard in the system tray, use the tray's exit command to quit fully.
 
-The default, 100%, follows your system display scaling. Orchard multiplies the selected scale by each monitor's system scale, including when you move the window between monitors. For example, 125% in Orchard with 200% system scaling gives 250% overall scaling. On a 4K display where controls look too small, try 125% or 150%.
+The default, 100%, follows your system display scaling. Orchard multiplies the selected scale by each monitor's system scale, including when you move the window between monitors. For example, 125% in Orchard with 200% system scaling gives 250% overall scaling.
 
 Select **Reset scale** to return to 100%, then restart Orchard. **Reset controls** in the immersive background section does not change interface scaling.
+
+## Fit large screens
+
+**Fit large screens** in **Display scaling** is on by default. On a screen larger than 1080p that your system leaves at 100%, Orchard enlarges itself so the screen lays out like 1080p: a 1440p display gets 125%, a 3200 × 1800 display 175%, and a 4K display 200%. Screens at 1920 × 1200 or smaller, and screens your system already scales, are unchanged. The **Interface scale** slider multiplies on top. Turn the switch off to keep 100% everywhere, then restart Orchard.
 
 ## Choose a layout
 
@@ -87,6 +93,10 @@ Turn off **Hide controls when idle** in the **Fullscreen player** group. The ful
 
 Turn off **Pulse with the music** in the **Fullscreen player** group. The glow behind the cover then breathes slowly instead of brightening on each bass hit, and the background stays steady. The setting is on by default.
 
+## Fill the fullscreen player with a tall loop
+
+Turn on **Canvas stage** in the **Fullscreen player** group. When a song has a tall moving artwork loop, the loop fills the player side of the fullscreen player from top to bottom and fades into the lyrics. The title, timeline, and controls sit at the bottom of the loop. Tall loops come from Spotify Canvas, and from Apple Music when you are signed in to Apple Music and it is the music source. The setting needs **Enable animated artwork**. It applies only when the window is at least 980 pixels wide; narrower windows show the loop as a tall card. The setting is off by default.
+
 ## Play a music video behind artist pages
 
 Turn on **Play a music video behind the artist** in the **Artist pages** group. The top of each artist page then plays the first video from the artist's **Videos** shelf, muted, in place of the artist photo. The setting is off by default and uses extra network bandwidth.
@@ -110,6 +120,8 @@ Animated artwork is on by default and uses extra network bandwidth. Not every so
 
 On an artist page, hold the pointer over an album card for about half a second. If that album has moving artwork, the cover starts playing in place. Move the pointer away and the cover goes back to the still image. Singles, videos, and playlists do not animate on hover. With the switch off, nothing animates. The Artwork source controls and Mirror query order list are disabled while the switch is off.
 
+On Android, the full player uses the tall version of an album's moving artwork when one exists. Some tall versions zoom into the cover and blur its lower part. To fix one, open the **⋯** menu in the full player and choose **Show Whole Cover**. Orchard plays the square version instead, or the still cover if there is no square version. The choice is saved for that album's artwork. Choose **Show Tall Cover** to undo it.
+
 ## Animate playlist collages
 
 Playlists that Orchard shows with a four-cover collage can play moving artwork inside the collage. This is off by default because it can be system intensive: up to four videos play at once, which uses extra CPU, GPU, and network bandwidth.
@@ -132,6 +144,18 @@ Orchard asks artwork mirrors for motion art in order, from top to bottom. If a m
 
 Select **Reset order** (accessible name "Reset mirror order") to restore the default order.
 
+## Change how lyrics move
+
+Synced lyrics highlight the line being sung. Three switches in the **Lyrics** group of **Settings**, **Appearance** change how the lines around it look. All three are on by default.
+
+- **Blur distant lines**: lines blur more the further they are from the current line. Turn it off if lyrics make the app feel slow, because blur uses extra GPU power.
+- **Fade distant lines**: lines dim the further they are from the current line.
+- **Staggered scrolling**: when the lyrics advance, each line glides into place a moment after the one above it. With it off, the lyrics scroll as one block.
+
+Blur and fade apply only while the lyrics follow the song. Scroll the lyrics by hand and every line shows sharp and bright until the lyrics catch up again. Hovering a line also shows it sharp. During an instrumental gap, three dots fill from left to right as the gap passes.
+
+**Reset controls** turns all three switches back on.
+
 ## Turn on the immersive background
 
 The immersive background paints flowing colors from the current song's artwork behind Orchard. It is off by default.
@@ -150,6 +174,14 @@ Four sliders in the **Immersive background** group shape the effect. They are di
 - **Saturation**: from 0% to 300%, default 124%.
 - **Brightness**: from 0% to 200%, default 100%.
 
+## Set the immersive background quality
+
+The **Quality** row in the **Immersive background** group sets how much GPU the effect uses. It is disabled while **Use artwork background** is off. The choice applies to Home and the fullscreen player.
+
+- **Low**: 20 frames per second at a quarter of the window size, at most 640 × 360. Use it on older or battery-powered computers.
+- **Medium**: 30 frames per second at 40% of the window size, at most 854 × 480. This is the default.
+- **High**: 60 frames per second at 60% of the window size, at most 1280 × 720. Motion is smoother and blob edges are finer.
+
 ## Reset the immersive background controls
 
-Select **Reset controls**. The button restores Speed, Intensity, Saturation, and Brightness to their defaults. It also turns **Hide controls when idle**, **Pulse with the music**, and **Enable animated artwork** back on, sets the artwork source to Apple Music, restores the default mirror order, and turns **Play a music video behind the artist** off. It leaves **Use artwork background** and **Show audio bitrate** as they are.
+Select **Reset controls**. The button restores Speed, Intensity, Saturation, Brightness, and Quality to their defaults. It also turns **Canvas stage** off, turns **Hide controls when idle**, **Pulse with the music**, the three **Lyrics** switches, and **Enable animated artwork** back on, sets the artwork source to Apple Music, restores the default mirror order, and turns **Play a music video behind the artist** off. It leaves **Use artwork background** and **Show audio bitrate** as they are.

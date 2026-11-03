@@ -10,6 +10,7 @@
 namespace {
 // A 30 s overlap at 192 kHz is 46 MB; anything past this is a confused worker.
 constexpr qint64 kMaxPcmBytes = 64ll * 1024 * 1024;
+constexpr qint64 kMaxHeaderBytes = 8ll * 1024 * 1024;
 
 QString program() {
   QString path = QDir(QCoreApplication::applicationDirPath()).filePath("orchard-adaptive-mix");
@@ -63,11 +64,11 @@ void AdaptiveMixWorker::start(const QJsonObject &request) {
     m_process->setStandardErrorFile(QProcess::nullDevice());
     connect(m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError) {
       if (m_busy)
-        fail(tr("The GPU analysis worker could not run."));
+        fail(tr("The analysis worker could not run."));
     });
     connect(m_process, &QProcess::finished, this, [this](int, QProcess::ExitStatus) {
       if (m_busy)
-        fail(tr("The GPU analysis worker stopped."));
+        fail(tr("The analysis worker stopped."));
       else
         cancel(); // Idle crash: the next job starts a fresh worker.
     });
@@ -90,7 +91,8 @@ void AdaptiveMixWorker::receive() {
   if (m_pcmBytes < 0) {
     const auto newline = m_stdout.indexOf('\n');
     if (newline < 0) {
-      if (m_stdout.size() > 65536)
+      // The header carries up to two songs' measured evidence.
+      if (m_stdout.size() > kMaxHeaderBytes)
         fail(tr("Invalid analysis response."));
       return;
     }
@@ -104,11 +106,13 @@ void AdaptiveMixWorker::receive() {
       return;
     }
     const qint64 bytes = m_header.value("bytes").toInteger(-1);
-    if (bytes < 0 || bytes % 8 != 0 || bytes > kMaxPcmBytes) {
+    const qint64 references = m_header.value("referenceBytes").toInteger(0);
+    if (bytes < 0 || bytes % 8 != 0 || bytes > kMaxPcmBytes || references < 0 ||
+        references % 4 != 0 || references > kMaxPcmBytes) {
       fail(tr("Invalid rendered overlap."));
       return;
     }
-    m_pcmBytes = bytes;
+    m_pcmBytes = bytes + references;
     m_stdout.reserve(m_pcmBytes);
   }
   if (m_stdout.size() < m_pcmBytes)

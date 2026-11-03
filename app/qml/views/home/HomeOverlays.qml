@@ -284,7 +284,7 @@ Item {
     Shortcut {
         sequence: "F"
         autoRepeat: false
-        enabled: overlays.shell.visible && !overlays.welcomeOpen && !OrchardMusicVideo.open && Boolean(OrchardPlayback.track.id) && !overlays.overlayOpen(spotlightLoader) && !overlays.overlayOpen(settingsLoader) && !overlays.readerOpen() && !supportHost.popupOpen && !overlays.shell.isEditableFocused()
+        enabled: overlays.shell.visible && !overlays.welcomeOpen && !OrchardMusicVideo.theater && Boolean(OrchardPlayback.track.id) && !overlays.overlayOpen(spotlightLoader) && !overlays.overlayOpen(settingsLoader) && !overlays.readerOpen() && !supportHost.popupOpen && !overlays.shell.isEditableFocused()
         onActivated: overlays.shell.setFullscreen(!overlays.shell.fullscreenOpen)
     }
 
@@ -298,7 +298,7 @@ Item {
 
     Shortcut {
         sequence: "Escape"
-        enabled: overlays.shell.fullscreenOpen && !OrchardMusicVideo.open && !overlays.overlayOpen(settingsLoader) && !overlays.readerOpen() && !supportHost.popupOpen
+        enabled: overlays.shell.fullscreenOpen && !OrchardMusicVideo.theater && !overlays.overlayOpen(settingsLoader) && !overlays.readerOpen() && !supportHost.popupOpen
         onActivated: overlays.shell.setFullscreen(false)
     }
 

@@ -26,6 +26,7 @@
 #include <QStringList>
 #include <QVariantList>
 #include <QVariantMap>
+#include <functional>
 #include "lyrics_provider_settings.h"
 
 class AppleMusic;
@@ -72,6 +73,8 @@ public:
   // While connected, Apple Music's lyrics replace the mirrors that copy them.
   void setAppleMusic(AppleMusic *appleMusic);
   Q_INVOKABLE void reload();
+  // Apple's own translation of the shown lyrics as {line key: text}. Returns false when these lyrics are not Apple's.
+  bool appleTranslation(const QString &language, std::function<void(const QHash<QString, QString> &)> done);
 
 signals:
   void activeChanged();
@@ -91,6 +94,7 @@ private:
   // Sets [generation] and fills m_requestId or m_prefetchId once the provider call starts.
   void resolve(const QVariantMap &track, quint64 &generation);
   QJsonObject payload(const QVariantMap &track) const;
+  QJsonObject appleQuery(const QVariantMap &track, const QJsonObject &song) const;
   void remember(const QString &trackId, const QVariantMap &result);
   void receive(quint64 requestId, const QJsonValue &result);
   void fail(quint64 requestId, const QString &message);

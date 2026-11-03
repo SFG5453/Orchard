@@ -67,6 +67,16 @@ private slots:
     QCOMPARE(track.value("duration").toString(), QStringLiteral("3:20"));
     QVERIFY(connect_tracks::fromWire(QJsonObject{{"title", "no id"}}).isEmpty());
   }
+
+  void appleTrackKeepsSource() {
+    const QVariantMap desktop{{"id", "am.songs.123"}, {"type", "song"}, {"title", "Song"},
+                              {"appleId", "123"}, {"source", "apple_music"}};
+    const QJsonObject wire = connect_tracks::toWire(desktop);
+    QCOMPARE(wire.value("provider").toString(), QStringLiteral("apple_music"));
+    const QVariantMap back = connect_tracks::fromWire(wire);
+    QCOMPARE(back.value("source").toString(), QStringLiteral("apple_music"));
+    QCOMPARE(back.value("appleId").toString(), QStringLiteral("123"));
+  }
 };
 
 QTEST_GUILESS_MAIN(ConnectTracksTest)

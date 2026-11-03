@@ -9,7 +9,8 @@
 #include <utility>
 
 AdaptiveMixController::AdaptiveMixController(QObject *parent)
-    : QObject(parent) {
+    : QObject(parent),
+      m_evidence(QStringLiteral("orchard-mix-evidence-%1").arg(reinterpret_cast<quintptr>(this))) {
   m_mode = QSettings().value("playback/crossfadeMode", "standard").toString();
   if (m_mode != "adaptive")
     m_mode = "standard";
@@ -49,6 +50,8 @@ void AdaptiveMixController::clear() {
   m_technique.clear();
   m_bpm = 0;
   m_pcm.clear();
+  m_references.clear();
+  m_referenceInfo = {};
   m_status.clear();
   m_outgoingStart = m_incomingCue = m_duration = 0;
   emit changed();
@@ -61,6 +64,8 @@ QString AdaptiveMixController::mixStyle() const {
     return tr("Bridge");
   if (m_technique == QStringLiteral("drop_in"))
     return tr("Drop-in");
+  if (m_technique == QStringLiteral("muffle_swap"))
+    return tr("Muffle");
   if (m_strategy == QStringLiteral("beatmatched crossfade"))
     return tr("Beatmatched");
   if (m_strategy == QStringLiteral("bass swap"))
@@ -122,7 +127,8 @@ void AdaptiveMixController::prepare(const QString &pair, const QUrl &outgoing,
                                     const QUrl &incoming, double duration,
                                     double position, const QVariantMap &currentTrack,
                                     const QVariantMap &nextTrack, int fadeSeconds,
-                                    bool albumSequential) {
+                                    bool albumSequential, const QJsonObject &outgoingApple,
+                                    const QJsonObject &incomingApple, bool references) {
   if (!enabled() || pair == m_pair)
     return;
   clear();
@@ -132,19 +138,53 @@ void AdaptiveMixController::prepare(const QString &pair, const QUrl &outgoing,
   m_preparing = true;
   m_status = tr("Preparing adaptive mix…");
   emit changed();
-  m_worker.start(QJsonObject{{"outgoingUrl", outgoing.toString()},
-                             {"incomingUrl", incoming.toString()},
-                             {"outgoingDuration", duration},
-                             {"position", position},
-                             {"incomingDuration", nextTrack.value("durationSeconds").toDouble()},
-                             {"currentTrack", QJsonObject::fromVariantMap(currentTrack)},
-                             {"nextTrack", QJsonObject::fromVariantMap(nextTrack)},
-                             {"fadeSeconds", fadeSeconds},
-                             {"albumSequential", albumSequential}});
+  QJsonObject request{{"outgoingUrl", outgoing.toString()},
+                      {"incomingUrl", incoming.toString()},
+                      {"outgoingDuration", duration},
+                      {"position", position},
+                      {"incomingDuration", nextTrack.value("durationSeconds").toDouble()},
+                      {"currentTrack", QJsonObject::fromVariantMap(currentTrack)},
+                      {"nextTrack", QJsonObject::fromVariantMap(nextTrack)},
+                      {"fadeSeconds", fadeSeconds},
+                      {"albumSequential", albumSequential},
+                      {"references", references}};
+  // Apple's own analysis replaces the beat and vocal models for songs played from Apple Music.
+  if (!outgoingApple.isEmpty())
+    request.insert("outgoingApple", outgoingApple);
+  if (!incomingApple.isEmpty())
+    request.insert("incomingApple", incomingApple);
+  // A song an earlier mix measured skips the beat model; the worker checks it is the same audio.
+  m_outgoingId = currentTrack.value("id").toString();
+  m_incomingId = nextTrack.value("id").toString();
+  m_outgoingDuration = duration;
+  m_incomingDuration = nextTrack.value("durationSeconds").toDouble();
+  if (outgoingApple.isEmpty())
+    if (const QJsonObject stored = m_evidence.evidence(m_outgoingId, m_outgoingDuration); !stored.isEmpty())
+      request.insert("outgoingMeasured", stored);
+  if (incomingApple.isEmpty())
+    if (const QJsonObject stored = m_evidence.evidence(m_incomingId, m_incomingDuration); !stored.isEmpty())
+      request.insert("incomingMeasured", stored);
+  m_worker.start(request);
 }
+
+void AdaptiveMixController::failPair(const QString &pair, const QString &message) {
+  if (!enabled() || pair == m_pair)
+    return;
+  clear();
+  m_pair = pair;
+  m_preparing = true;
+  fail(message);
+}
+void AdaptiveMixController::keepEvidence(const QJsonObject &header) {
+  // Refusals and errors bring it too: the songs were measured before planning.
+  m_evidence.store(m_outgoingId, m_outgoingDuration, header.value("outgoingMeasured").toObject());
+  m_evidence.store(m_incomingId, m_incomingDuration, header.value("incomingMeasured").toObject());
+}
+
 void AdaptiveMixController::receive(const QJsonObject &object, const QByteArray &pcm) {
   if (!m_preparing)
     return;
+  keepEvidence(object);
   if (object.contains("error")) {
     fail(object.value("error").toString());
     return;
@@ -152,13 +192,16 @@ void AdaptiveMixController::receive(const QJsonObject &object, const QByteArray 
   m_outgoingStart = object.value("outgoingStart").toDouble(-1);
   m_incomingCue = object.value("incomingCue").toDouble(-1);
   m_duration = object.value("duration").toDouble(-1);
+  const qint64 renderBytes = object.value("bytes").toInteger(-1);
   if (!std::isfinite(m_outgoingStart) || m_outgoingStart < 0 ||
       !std::isfinite(m_incomingCue) || m_incomingCue < 0 ||
       !std::isfinite(m_duration) || m_duration <= 0 || m_duration > 30 ||
-      pcm.size() != qRound64(m_duration * 48000) * 8) {
+      renderBytes != qRound64(m_duration * 48000) * 8 || pcm.size() < renderBytes) {
     fail(tr("Invalid rendered overlap."));
     return;
   }
+  m_references = pcm.mid(renderBytes);
+  m_referenceInfo = object.value("references").toObject();
   m_shapingUnavailable = !object.value("warning").toString().isEmpty();
   m_strategy = object.value("strategy").toString();
   m_technique = object.value("technique").toString();
@@ -174,7 +217,7 @@ void AdaptiveMixController::receive(const QJsonObject &object, const QByteArray 
                     << (loopBeats > 0 ? QStringLiteral("| loop %1 beats").arg(loopBeats) : QString())
                     << (kickLock != 0 ? QStringLiteral("| kick lock %1 ms").arg(kickLock) : QString())
                     << (m_shapingUnavailable ? "| no vocal shaping" : "");
-  m_pcm = pcm;
+  m_pcm = pcm.left(renderBytes);
   m_preparing = false;
   m_status = m_shapingUnavailable
                  ? tr("Adaptive mix ready · vocal shaping unavailable")

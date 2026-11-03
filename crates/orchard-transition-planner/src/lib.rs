@@ -18,6 +18,7 @@ const SOURCES: &[(&str, &str)] = &[
     ("core/js/src/audio/crossfade/transitionFlow.js", include_str!("../../../core/js/src/audio/crossfade/transitionFlow.js")),
     ("core/js/src/audio/crossfade/outgoingLoop.js", include_str!("../../../core/js/src/audio/crossfade/outgoingLoop.js")),
     ("core/js/src/audio/crossfade/beatlessBridge.js", include_str!("../../../core/js/src/audio/crossfade/beatlessBridge.js")),
+    ("core/js/src/audio/crossfade/muffle.js", include_str!("../../../core/js/src/audio/crossfade/muffle.js")),
     ("core/js/src/audio/crossfade/localHarmony.js", include_str!("../../../core/js/src/audio/crossfade/localHarmony.js")),
     ("core/js/src/audio/crossfade/sectionTempo.js", include_str!("../../../core/js/src/audio/crossfade/sectionTempo.js")),
     ("core/js/src/audio/crossfade/transitionArrangement.js", include_str!("../../../core/js/src/audio/crossfade/transitionArrangement.js")),

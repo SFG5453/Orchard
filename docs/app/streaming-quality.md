@@ -1,6 +1,6 @@
 ---
 title: Streaming quality
-summary: Choose Saver, Normal, High, or MAX audio quality, play lossless from Qobuz, and show the bitrate in the player bar.
+summary: Choose Saver, Normal, High, MAX, or Atmos audio quality, play lossless from Qobuz or Dolby Atmos from Apple Music, and show the bitrate in the player bar.
 group: Sound
 icon: volume-2
 keywords:
@@ -17,6 +17,11 @@ keywords:
   - lossless
   - hi-res
   - flac
+  - atmos
+  - dolby atmos
+  - spatial audio
+  - binaural
+  - surround
 platforms:
   - desktop
 order: 70
@@ -24,26 +29,29 @@ order: 70
 
 # Streaming quality
 
-Streaming quality sets how much audio detail Orchard requests. The default is **High**. **MAX** plays lossless audio from your own Qobuz subscription.
+Streaming quality sets how much audio detail Orchard requests. The default is **High**. **MAX** plays lossless audio from your own Qobuz subscription. **Atmos** plays Dolby Atmos versions of Apple Music songs.
 
 ## Change the streaming quality
 
 1. Open **Settings**.
 2. Select **Playback**.
-3. Under **Streaming quality**, select **Saver**, **Normal**, **High**, or **MAX**.
+3. Under **Streaming quality**, select **Saver**, **Normal**, **High**, **MAX**, or **Atmos**.
 
-The selected button is highlighted. **MAX** is disabled until a Qobuz account is connected.
+The selected button is highlighted. **MAX** is disabled until a Qobuz account is connected. **Atmos** is disabled until Apple Music is connected.
 
-## What Saver, Normal, High, and MAX mean
+## What Saver, Normal, High, MAX, and Atmos mean
 
 - **Saver**: the lowest bitrate audio and 480p video.
 - **Normal**: up to 128 kbps audio and 720p video.
 - **High**: the best available audio and video from YouTube Music. High is the default.
 - **MAX**: lossless and Hi-Res audio from Qobuz, up to 24-bit/192 kHz. Songs Qobuz can't match play at High.
+- **Atmos**: Dolby Atmos for Apple Music songs that have it, rendered for headphones. Other songs play at High.
+
+Apple Music songs have two stereo versions: 64 kbps AAC with **Saver** or **Normal**, and 256 kbps AAC with **High** or **MAX**. A change applies from the next Apple Music song.
 
 ## Use MAX quality with Qobuz
 
-MAX needs a Qobuz account with an active subscription.
+MAX needs a Qobuz subscription and your own Qobuz API app ID and secret.
 
 1. Connect Qobuz in Settings, Integrations. See [Integrations](integrations.md).
 2. Orchard switches **Streaming quality** to **MAX** when the connection finishes.
@@ -53,6 +61,19 @@ With MAX on, Orchard looks up each song on Qobuz and plays the Qobuz recording w
 If your phone is signed in to Qobuz and connected to this computer with Orchard Connect, you can choose **MAX** without connecting Qobuz here. The phone streams the Qobuz audio to this computer. See [Orchard Connect](connect.md).
 
 Choose another quality to stop playing from Qobuz. Disconnecting Qobuz switches MAX back to High. Adaptive mix is unavailable while MAX is on. See [Crossfade and gapless playback](crossfade.md).
+
+## Use Atmos with Apple Music
+
+Atmos needs Apple Music as the **Music source** and a connected Apple Music account. See [Integrations](integrations.md).
+
+1. Under **Streaming quality**, select **Atmos**.
+2. Play an Apple Music song. The setting applies from the next song that starts.
+
+When Apple has a Dolby Atmos version of a song, Orchard plays it. Other songs play in stereo. If the Atmos version cannot be loaded, the song plays in stereo instead. Apple protects some songs' Atmos versions only for its own apps. Those songs also play in stereo, and the player bar shows AAC instead of **Atmos**.
+
+Orchard plays the Atmos version's 5.1 surround mix. It does not play Atmos height or object sound, because those need a Dolby decoder. It places the six channels around your head with head-related filters (binaural rendering), so the mix sounds like surround speakers on headphones. The filters come from the MIT Media Lab KEMAR measurements (Gardner and Martin, 1994). On speakers the song still plays, but the surround effect is weaker. This works the same on Linux and Windows.
+
+The equalizer and crossfade apply to Atmos songs too. While an Atmos song plays, the player bar shows **Atmos** after the bitrate, for example "768 kbps · Atmos", when **Show audio bitrate** is on.
 
 ## See whether a song plays from Qobuz
 

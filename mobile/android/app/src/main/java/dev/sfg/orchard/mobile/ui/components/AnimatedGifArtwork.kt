@@ -25,8 +25,13 @@ import android.net.Uri
 import android.widget.ImageView
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.LifecycleStartEffect
 import java.io.File
 
 /** True for a local GIF cover, which ExoPlayer cannot play but the platform decoder can. */
@@ -39,9 +44,20 @@ internal fun isGifArtwork(url: String): Boolean = url.substringBefore('?').endsW
 @Composable
 internal fun AnimatedGifArtwork(url: String, active: Boolean, modifier: Modifier = Modifier) {
     val path = Uri.parse(url).path ?: return
+    var imageView by remember { mutableStateOf<ImageView?>(null) }
+    LifecycleStartEffect(imageView, path, active) {
+        val drawable = imageView?.drawable as? AnimatedImageDrawable
+        if (active) drawable?.start()
+        onStopOrDispose { drawable?.stop() }
+    }
     AndroidView(
         modifier = modifier.fillMaxSize(),
-        factory = { context -> ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP } },
+        factory = { context ->
+            ImageView(context).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                imageView = this
+            }
+        },
         update = { view ->
             // update runs on every recomposition; decode once per file.
             if (view.tag != path) {
@@ -50,7 +66,7 @@ internal fun AnimatedGifArtwork(url: String, active: Boolean, modifier: Modifier
             }
             (view.drawable as? AnimatedImageDrawable)?.let { drawable ->
                 drawable.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
-                if (active) drawable.start() else drawable.stop()
+                if (!active) drawable.stop()
             }
         },
         onRelease = { view -> (view.drawable as? AnimatedImageDrawable)?.stop() },

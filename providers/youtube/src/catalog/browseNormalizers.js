@@ -21,6 +21,13 @@
 import { releaseTypeFromText } from './musicItemTypes.js';
 import { playlistItemCount, playlistTotalItemCount } from './playlistCount.js';
 import { createBrowseItemNormalizers } from './browseItemNormalizers.js';
+import { withAlbumVideos } from './albumVideos.js';
+import { createBrowseHeaders } from './browseHeaders.js';
+import {
+  continuationTokenFromEndpoint,
+  continuationTokenFromContinuations,
+  playlistContinuationTokenFromItems
+} from './browseContinuations.js';
 export function createBrowseNormalizers({
   asText,
   bestThumbnail,
@@ -41,50 +48,13 @@ export function createBrowseNormalizers({
     hasExplicitBadge,
     textParts
   });
+  const {
+    browseHeaderArtist,
+    browseHeaderArtistId,
+    browseHeaderItemCount,
+    browseHeaderYear
+  } = createBrowseHeaders({ cleanedText, textParts });
 
-  function artistRunBrowseId(run) {
-    const browseId = run?.navigationEndpoint?.browseEndpoint?.browseId || run?.endpoint?.payload?.browseId || '';
-    return browseId.startsWith('UC') ? browseId : '';
-  }
-  function artistRunText(runs = []) {
-    return runs.filter(artistRunBrowseId).map((run) => run.text).filter(Boolean).join(', ');
-  }
-  // Album rows carry no artist runs; the header link is the only artist id.
-  function browseHeaderArtistId(header) {
-    const runs = [
-      ...(header?.strapline_text_one?.runs || header?.straplineTextOne?.runs || []),
-      ...(header?.subtitle?.runs || [])
-    ];
-    return header?.author?.channel_id || runs.map(artistRunBrowseId).find(Boolean) || '';
-  }
-  function browseHeaderArtist(header) {
-    return cleanedText(header?.author?.name) ||
-      artistRunText(header?.strapline_text_one?.runs || header?.straplineTextOne?.runs) ||
-      artistRunText(header?.subtitle?.runs) ||
-      cleanedText(header?.facepile?.avatarStackViewModel?.text?.content) ||
-      '';
-  }
-  function browseHeaderTitle(header) {
-    return cleanedText(header?.title || header?.header?.title) || '';
-  }
-  function browseHeaderDescription(header) {
-    return cleanedText(header?.description?.text || header?.description || header?.header?.description || header?.subtitle || header?.header?.subtitle) || '';
-  }
-  function browseHeaderThumbnail(header) {
-    return header?.thumbnail || header?.thumbnails || header?.foreground_thumbnail || header?.background || header?.header?.thumbnail || null;
-  }
-  function browseHeaderYear(header) {
-    return header?.year || textParts(header?.subtitle).find((part) => (/^[12][0-9]{3}$/).test(part)) || '';
-  }
-  function browseHeaderItemCount(header) {
-    return textParts(header?.second_subtitle).find((part) => /\b(song|songs|track|tracks|video|videos)\b/i.test(part)) || '';
-  }
-  function browseHeaderDuration(header) {
-    return textParts(header?.second_subtitle).find((part) => /\b(hour|hours|minute|minutes)\b/i.test(part)) || '';
-  }
-  function browseHeaderViews(header) {
-    return textParts(header?.second_subtitle).find((part) => /\b(view|views|play|plays)\b/i.test(part)) || '';
-  }
   function normalizeBrowseTrack(item, index = 0) {
     const normalized = normalizeTrack(item);
     return {
@@ -406,44 +376,15 @@ export function createBrowseNormalizers({
       description,
       thumbnail,
       tracks,
-      sections: rawSectionList(album)
+      sections: withAlbumVideos(rawSectionList(album)
         .slice(1)
         .map(normalizeBrowseSection)
-        .filter((section) => section.items.length > 0)
-        .slice(0, 2)
+        .filter((section) => section.items.length > 0), tracks)
     };
   }
 
   function playlistShelf(playlist) {
     return rawSectionList(playlist).find((section) => section.musicPlaylistShelfRenderer)?.musicPlaylistShelfRenderer || null;
-  }
-
-  function continuationTokenFromEndpoint(endpoint) {
-    return endpoint?.continuationCommand?.token ||
-      endpoint?.command?.continuationCommand?.token ||
-      endpoint?.payload?.continuation ||
-      null;
-  }
-
-  function continuationTokenFromContinuations(continuations = []) {
-    return continuations
-      .map((entry) =>
-        entry?.nextContinuationData?.continuation ||
-        entry?.reloadContinuationData?.continuation ||
-        entry?.nextRadioContinuationData?.continuation
-      )
-      .find(Boolean) || null;
-  }
-
-  function playlistContinuationTokenFromItems(items = []) {
-    for (const item of [...items].reverse()) {
-      const renderer = item?.continuationItemRenderer;
-      const token = renderer?.continuationEndpoint?.continuationCommand?.token ||
-        continuationTokenFromEndpoint(renderer?.continuationEndpoint);
-      if (token) return token;
-    }
-
-    return null;
   }
 
   function playlistContinuationTokenFromData(data) {
@@ -532,6 +473,7 @@ export function createBrowseNormalizers({
     normalizePlaylist,
     normalizePlaylistPage,
     playlistContinuationTokenFromData,
+    playlistItemsFromData,
     normalizeRawBrowseItem,
     normalizeRawResponsiveListItem,
     rawBrowseDescription,

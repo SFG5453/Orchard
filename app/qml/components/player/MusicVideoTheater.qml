@@ -33,27 +33,15 @@ Rectangle {
     readonly property real barHeight: 120
     property bool upNextOpen: false
     property bool chromeShown: true
-    // One automatic re-resolve per stream; signed URLs expire mid-session.
-    property bool retried: false
+    // Shared decoder from Main.qml; the picture takes it while live.
+    property MediaPlayer player: null
+    property bool pictureLive: true
     // Controls stay up while something on them is in use or the picture is not playing.
     readonly property bool chromeHeld: upNextOpen || bottomBar.menuOpen || topHover.hovered || bottomHover.hovered
                                       || !OrchardPlayback.playing || OrchardMusicVideo.status !== "ready"
 
     color: "#000000"
     focus: true
-
-    function syncVideo() {
-        if (video.mediaStatus === MediaPlayer.NoMedia || video.mediaStatus === MediaPlayer.LoadingMedia)
-            return;
-        const target = OrchardPlayback.position * 1000;
-        // The audio engine plays the soundtrack and is the clock; the muted picture follows it.
-        if (Math.abs(video.position - target) > 400)
-            video.position = target;
-        if (OrchardPlayback.playing && video.playbackState !== MediaPlayer.PlayingState)
-            video.play();
-        else if (!OrchardPlayback.playing && video.playbackState === MediaPlayer.PlayingState)
-            video.pause();
-    }
 
     function wake() {
         root.chromeShown = true;
@@ -96,36 +84,16 @@ Rectangle {
             if (root.Window.window && root.Window.window.visibility === Window.FullScreen)
                 root.Window.window.showNormal();
             else
-                OrchardMusicVideo.hide();
+                OrchardMusicVideo.mini = true;
         }
-    }
-
-    MediaPlayer {
-        id: video
-
-        source: OrchardMusicVideo.source
-        videoOutput: picture.output
-        onSourceChanged: root.retried = false
-        onMediaStatusChanged: if (mediaStatus === MediaPlayer.LoadedMedia || mediaStatus === MediaPlayer.BufferedMedia) root.syncVideo()
-        onErrorOccurred: {
-            if (!root.retried) {
-                root.retried = true;
-                OrchardMusicVideo.retry();
-            }
-        }
-    }
-
-    Timer {
-        interval: 250
-        repeat: true
-        running: OrchardMusicVideo.status === "ready"
-        onTriggered: root.syncVideo()
     }
 
     TheaterPicture {
         id: picture
 
         anchors.fill: parent
+        player: root.player
+        live: root.pictureLive
         visible: OrchardMusicVideo.status === "ready"
 
         // Single tap waits out the double-tap window so a double click never blips the audio.
@@ -138,8 +106,8 @@ Rectangle {
     BusyIndicator {
         anchors.centerIn: parent
         running: OrchardMusicVideo.status === "checking" || OrchardMusicVideo.status === "loading"
-                 || (OrchardMusicVideo.status === "ready" && video.mediaStatus === MediaPlayer.LoadingMedia)
-                 || video.mediaStatus === MediaPlayer.StalledMedia
+                 || (root.player !== null && (root.player.mediaStatus === MediaPlayer.StalledMedia
+                     || (OrchardMusicVideo.status === "ready" && root.player.mediaStatus === MediaPlayer.LoadingMedia)))
     }
 
     ColumnLayout {

@@ -23,7 +23,11 @@ import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
 /** Finds the music-video companion of an album-audio queue item without changing its identity. */
-class VideoVersionResolver(private val catalog: CatalogRepository) {
+class VideoVersionResolver(
+    private val catalog: CatalogRepository,
+    /** Apple's own video id for an Apple song, or null to match a YouTube video. */
+    private val appleVideo: suspend (Track) -> String? = { null },
+) {
     private data class LookupKey(val id: String, val explicit: Boolean)
 
     private val resolved = mutableMapOf<LookupKey, String?>()
@@ -38,7 +42,7 @@ class VideoVersionResolver(private val catalog: CatalogRepository) {
             if (resolved.containsKey(key)) return@withContext resolved[key]
         }
         val result = runCatching {
-            bestVideoMatch(track, catalog.search("${track.title} ${track.artist}".trim(), "videos", guest = true).videos)?.id
+            appleVideo(track) ?: bestVideoMatch(track, catalog.search("${track.title} ${track.artist}".trim(), "videos", guest = true).videos)?.id
         }
         result.exceptionOrNull()?.let {
             // Do not cache network failures; opening the player later should get another chance.

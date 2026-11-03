@@ -71,7 +71,7 @@ fun QobuzTokenLoginScreen(
 
     Column(Modifier.fillMaxSize().background(CanopyColors.Canvas)) {
         TopAppBar(
-            title = { Text("Sign in with a token") },
+            title = { Text("Connect Qobuz") },
             navigationIcon = {
                 IconButton(onClick = onCancel) {
                     Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
@@ -85,40 +85,12 @@ fun QobuzTokenLoginScreen(
         )
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
             Text(
-                "Signed in at play.qobuz.com, the browser's local storage entry \"localuser\" holds your user ID and auth token.",
+                "Orchard ships no Qobuz app. Enter the app ID and secret Qobuz issued to you, then a user ID and auth token from that app.",
                 style = MaterialTheme.typography.bodySmall,
                 color = CanopyColors.Muted,
                 lineHeight = 18.sp,
             )
             Spacer(Modifier.height(16.dp))
-            OutlinedTextField(
-                value = userId,
-                onValueChange = { userId = it.filter(Char::isDigit) },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("User ID") },
-                singleLine = true,
-                enabled = !checking,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = token,
-                onValueChange = { token = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Auth token") },
-                singleLine = true,
-                enabled = !checking,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            )
-            Spacer(Modifier.height(20.dp))
-            Text(
-                "Optional: with your own app ID and secret, Orchard streams FLAC files from the Qobuz API (track/getFileUrl). The token must come from the same app.",
-                style = MaterialTheme.typography.bodySmall,
-                color = CanopyColors.Muted,
-                lineHeight = 18.sp,
-            )
-            Spacer(Modifier.height(10.dp))
             OutlinedTextField(
                 value = appId,
                 onValueChange = { appId = it.filter(Char::isDigit) },
@@ -139,20 +111,41 @@ fun QobuzTokenLoginScreen(
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             )
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = userId,
+                onValueChange = { userId = it.filter(Char::isDigit) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("User ID") },
+                singleLine = true,
+                enabled = !checking,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = token,
+                onValueChange = { token = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Auth token") },
+                singleLine = true,
+                enabled = !checking,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            )
             if (errorMessage.isNotBlank()) {
                 Spacer(Modifier.height(10.dp))
                 Text(errorMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
             Spacer(Modifier.height(16.dp))
             IntegrationAction(if (checking) "Checking…" else "Sign in") {
-                if (checking || userId.isBlank() || token.isBlank()) return@IntegrationAction
+                if (checking || userId.isBlank() || token.isBlank() || appId.isBlank() || appSecret.isBlank()) return@IntegrationAction
                 checking = true
                 errorMessage = ""
                 scope.launch {
                     try {
                         onSuccess(qobuz.verifyToken(userId, token, appId, appSecret))
                     } catch (e: Exception) {
-                        errorMessage = e.message?.substringBefore('\n')?.ifBlank { null } ?: "Qobuz token sign-in failed"
+                        errorMessage = e.message?.substringBefore('\n')?.ifBlank { null } ?: "Qobuz sign-in failed"
                         checking = false
                     }
                 }

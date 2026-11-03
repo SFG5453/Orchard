@@ -41,6 +41,7 @@ class OrchardApplication : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         graph = OrchardGraph(this)
+        dev.sfg.orchard.mobile.playback.smart.npu.NpuSupport.init(this)
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {

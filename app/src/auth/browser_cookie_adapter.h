@@ -24,8 +24,8 @@
 #include <QNetworkCookie>
 #include <QTimer>
 
-// Reads YouTube cookies from the sign-in browser profile: the QtWebView
-// WebEngine store on Linux, the WebView2 cookie manager on Windows.
+// Reads YouTube cookies from the sign-in browser profile: WebKitGTK's cookie
+// manager on Linux, WebView2's on Windows.
 class BrowserCookieAdapter final : public QObject {
   Q_OBJECT
 public:
@@ -36,7 +36,8 @@ signals:
   void cookiesChanged();
   void errorOccurred(const QString &message);
 private:
-  void readWebView2Cookies();
+  void readCookies();
+  void apply(const QList<QNetworkCookie> &cookies);
   bool keep(const QNetworkCookie &cookie) const;
 
   QMap<QByteArray, QNetworkCookie> m_cookies;
@@ -44,4 +45,6 @@ private:
   QTimer m_poll;
   bool m_started{false};
   bool m_reading{false};
+  // A change arrived during a read; read again after it.
+  bool m_stale{false};
 };

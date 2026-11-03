@@ -111,6 +111,12 @@ internal class Transport(
 
     fun next() = partyOrLocal("next", { connect.command("next") }, local::next)
     fun previous() = partyOrLocal("previous", { connect.command("previous") }, local::previous)
+    /** Back to the previous track even past the opening seconds, as a swipe means. */
+    fun skipBack() = partyOrLocal(
+        "previous",
+        { connect.command("previous", JSONObject().put("restart", false)) },
+        { local.previous(restart = false) },
+    )
     fun seek(positionMs: Long) {
         if (party.requestSeek(positionMs)) return
         remoteOrLocal(

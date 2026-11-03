@@ -38,6 +38,7 @@ class KawarpBackground : public QQuickItem {
     Q_PROPERTY(double intensity READ intensity WRITE setIntensity NOTIFY parametersChanged)
     Q_PROPERTY(double saturation READ saturation WRITE setSaturation NOTIFY parametersChanged)
     Q_PROPERTY(double brightness READ brightness WRITE setBrightness NOTIFY parametersChanged)
+    Q_PROPERTY(int frameRate READ frameRate WRITE setFrameRate NOTIFY parametersChanged)
 public:
     explicit KawarpBackground(QQuickItem *parent = nullptr);
     QUrl source() const { return m_source; }
@@ -48,6 +49,7 @@ public:
     double intensity() const { return m_intensity; }
     double saturation() const { return m_saturation; }
     double brightness() const { return m_brightness; }
+    int frameRate() const { return m_frameRate; }
     void setSource(const QUrl &source);
     void setRunning(bool value);
     void setThrottled(bool value);
@@ -55,6 +57,7 @@ public:
     void setIntensity(double value);
     void setSaturation(double value);
     void setBrightness(double value);
+    void setFrameRate(int value);
 signals:
     void sourceChanged();
     void runningChanged();
@@ -80,4 +83,5 @@ private:
     float m_blend{1};
     bool m_running{false};
     bool m_throttled{false};
+    int m_frameRate{30};
 };

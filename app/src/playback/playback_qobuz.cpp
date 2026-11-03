@@ -20,6 +20,8 @@
 #include "auth/auth_manager.h"
 #include "local/local_track.h"
 #include "offline/download_manager.h"
+#include "apple_music_stream.h"
+#include "integrations/apple_music.h"
 #include "playback_controller.h"
 #include "playback_helpers.h"
 #include "providers/qobuz/qobuz_service.h"
@@ -38,6 +40,8 @@ bool isQobuz(const QJsonObject &stream) {
 // Display name of the codec behind a stream's MIME type; empty when unknown.
 QString codecName(const QString &mime) {
   const QString m = mime.toLower();
+  if (m.contains(QStringLiteral("ec-3")))
+    return QStringLiteral("Atmos");
   if (m.contains(QStringLiteral("flac")))
     return QStringLiteral("FLAC");
   if (m.contains(QStringLiteral("opus")))
@@ -55,9 +59,17 @@ QString codecName(const QString &mime) {
 
 void PlaybackController::installRangeReaders() {
   // ConnectService reinstalls these without itself before it is destroyed.
-  const auto reader = [qobuz = QPointer<QobuzService>(m_qobuz), remote = m_remoteProvider](
+  const auto reader = [qobuz = QPointer<QobuzService>(m_qobuz), remote = m_remoteProvider,
+                       apple = QPointer<AppleMusicStreams>(m_appleStreams)](
                           const QJsonObject &stream, qint64 start, qint64 end,
                           std::function<void(const QByteArray &, int)> done) {
+    if (stream.value(QStringLiteral("provider")).toString() == QStringLiteral("apple")) {
+      if (apple)
+        apple->read(stream.value(QStringLiteral("playbackId")).toString(), start, end, std::move(done));
+      else
+        done({}, 503);
+      return;
+    }
     if (stream.value(QStringLiteral("remote")).toBool()) {
       if (!remote) {
         done({}, 503);
@@ -172,7 +184,7 @@ void PlaybackController::resolveQobuz(const QVariantMap &track,
 
 void PlaybackController::requestStream(bool refreshStream, bool tryQobuz) {
   if (isAppleTrack(m_track)) {
-    fail(tr("Apple Music playback is not available yet."));
+    startAppleTrack();
     return;
   }
   if (!refreshStream && tryQobuz && qobuzEligible(m_track)) {
@@ -201,8 +213,11 @@ void PlaybackController::requestStream(bool refreshStream, bool tryQobuz) {
 
 void PlaybackController::requestPreparedStream(bool refreshStream) {
   const QVariantMap track = m_preparedTrack;
-  if (isAppleTrack(track))
+  if (isAppleTrack(track)) {
+    if (m_appleStreams)
+      resolveAppleStream(track, true);
     return;
+  }
   if (local::isLocalTrack(track)) {
     openPreparedLocal();
     return;
@@ -212,9 +227,9 @@ void PlaybackController::requestPreparedStream(bool refreshStream) {
     return;
   }
   if (!refreshStream && qobuzEligible(track)) {
-    const quint64 token = ++m_preparedQobuzToken;
+    const quint64 token = ++m_preparedResolveToken;
     resolveQobuz(track, [this, token, track](const QJsonValue &result, const QString &) {
-      if (token != m_preparedQobuzToken || m_preparedTrack.value("id") != track.value("id"))
+      if (token != m_preparedResolveToken || m_preparedTrack.value("id") != track.value("id"))
         return;
       const QJsonObject stream = qobuzStream(track, result);
       if (!stream.isEmpty())
@@ -281,6 +296,8 @@ void PlaybackController::reportQobuzEnded(AudioStreamProxy *proxy, QMediaPlayer 
 QString PlaybackController::streamQuality() const {
   if (m_streamQuality == QStringLiteral("max") && !qobuzReachable())
     return QStringLiteral("high");
+  if (m_streamQuality == QStringLiteral("atmos") && !(m_appleAccount && m_appleAccount->atmosAvailable()))
+    return QStringLiteral("high");
   return m_streamQuality;
 }
 
@@ -299,5 +316,6 @@ void PlaybackController::remoteProviderChanged() {
 }
 
 QString PlaybackController::youtubeQuality() const {
-  return m_streamQuality == QStringLiteral("max") ? QStringLiteral("high") : m_streamQuality;
+  return m_streamQuality == QStringLiteral("max") || m_streamQuality == QStringLiteral("atmos") ? QStringLiteral("high")
+                                                                                              : m_streamQuality;
 }

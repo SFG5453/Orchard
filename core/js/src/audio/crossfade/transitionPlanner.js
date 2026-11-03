@@ -84,6 +84,8 @@ export function smartPairPlanningBlockReason({
   if (/\b(podcast|episode|audiobook|live|concert|performance)\b/.test(text)) {
     return 'blocked-speech-or-live';
   }
+  // An album intro or skit is meant to be heard from its start; mixing in lands mid-talk.
+  if (/^\s*(intro|skit)\b/i.test(String(nextTrack?.title || ''))) return 'blocked-speech-or-live';
   if (
     !analysisReadyForTrack(analysis, currentTrack) ||
     !analysisReadyForTrack(nextAnalysis, nextTrack)

@@ -2,419 +2,170 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import fs from 'node:fs';
 import { normalizeTrackAnalysis } from '../shared/trackAnalysis.js';
 import {
-  MAX_DISCARDED_AUDIBLE_SECONDS,
-  MAX_DETAILED_CANDIDATES,
-  MAX_ROLE_CANDIDATES,
-  audibleTailEvidence,
-  buildCandidatePairs,
-  generateTransitionCandidates,
-  glideOffsets,
-  harmonicEvidence,
-  mappedVocalCollision,
-  tempoFit
-} from '../src/audio/crossfade/pairTransitionEvidence.js';
+  planPairTransition
+} from '../src/audio/crossfade/pairTransitionPlanner.js';
+import { cleanPair, reasonCount } from './pairTransitionHelpers.js';
 
-function analysis({
-  duration = 120,
-  bpm = 120,
-  beatConfidence = 0.9,
-  key = 'C major',
-  keyConfidence = 0.9,
-  chroma = [1, 0, 0, 0, 0.7, 0, 0, 0.5, 0, 0, 0, 0],
-  boundaries = [],
-  vocal = () => 0.1,
-  energy = () => 0.6,
-  stability = () => 0.8,
-  novelty = () => 0.2
-} = {}) {
-  const beatInterval = 60 / bpm;
-  const beats = [];
-  const downbeats = [];
-  for (let time = 0, index = 0; time <= duration; time += beatInterval, index += 1) {
-    beats.push(Number(time.toFixed(6)));
-    if (index % 4 === 0) downbeats.push(Number(time.toFixed(6)));
-  }
-  const transitionFeatureFrames = [];
-  for (let time = 0; time <= duration; time += 0.5) {
-    transitionFeatureFrames.push({
-      time,
-      energy: energy(time),
-      low: 0.5,
-      mid: 0.6,
-      high: 0.4,
-      ...(typeof vocal === 'function' ? { vocal: vocal(time) } : {}),
-      novelty: novelty(time),
-      transientDensity: 0.2,
-      stability: stability(time)
-    });
-  }
-  return normalizeTrackAnalysis({
-    duration,
-    bpm,
-    beatInterval,
-    beatConfidence,
-    downbeatConfidence: beatConfidence,
-    beats,
-    downbeats,
-    audibleStartTime: 0,
-    contentEndTime: duration,
-    key,
-    keyConfidence,
-    chroma,
-    transitionFeatureFrames,
-    structuralBoundaryCandidates: boundaries,
-    meter: { beatsPerBar: 4, confidence: 0.8, source: 'detected' }
+test('uses explicitly low-confidence rhythmic fallbacks when structure is unavailable', () => {
+  const plan = planPairTransition(cleanPair({
+    outgoing: { boundaryTimes: [], meterConfidence: 0.15 },
+    incoming: { boundaryTimes: [], meterConfidence: 0.15 }
+  }));
+
+  assert.notEqual(plan.transitionClass, 'full_beatmatched');
+  assert.ok(plan.diagnostics.topCandidates.some((candidate) =>
+    candidate.sources.includes('rhythmic-fallback') || candidate.sources.includes('downbeat-evidence')
+  ));
+});
+
+test('trustworthy downbeats can authorize conservative beatmatching without detected changes', () => {
+  const plan = planPairTransition(cleanPair({
+    outgoing: { boundaryTimes: [], meterConfidence: 0.15 },
+    incoming: { boundaryTimes: [], meterConfidence: 0.15 }
+  }));
+
+  assert.equal(plan.transitionClass, 'conservative_beatmatched');
+  assert.equal(plan.renderMode, 'native');
+  assert.ok(plan.diagnostics.selected.sources.includes('downbeat-evidence'));
+});
+
+test('conflicting low-confidence structural evidence cannot authorize a full mix', () => {
+  const plan = planPairTransition(cleanPair({
+    outgoing: { boundaryConfidence: 0.3, meterConfidence: 0.15 },
+    incoming: { boundaryConfidence: 0.25, meterConfidence: 0.15 }
+  }));
+
+  assert.notEqual(plan.transitionClass, 'full_beatmatched');
+  assert.ok(reasonCount(plan, 'structure-confidence') > 0);
+});
+
+test('keeps a brief vocal crossing eligible for a deliberate transition', () => {
+  const plan = planPairTransition(cleanPair({
+    outgoing: { vocal: (time) => time >= 111.5 && time <= 112 ? 0.9 : 0.05 },
+    incoming: { vocal: (time) => time >= 31.5 && time <= 32 ? 0.9 : 0.05 }
+  }));
+
+  assert.ok(['full_beatmatched', 'conservative_beatmatched'].includes(plan.transitionClass));
+  assert.equal(reasonCount(plan, 'vocal-collision'), 0);
+});
+
+test('unknown harmonic and vocal evidence lower confidence without false vetoes', () => {
+  const plan = planPairTransition(cleanPair({
+    outgoing: { key: '', keyConfidence: 0, chroma: [], vocal: null },
+    incoming: { key: '', keyConfidence: 0, chroma: [], vocal: null }
+  }));
+
+  assert.equal(reasonCount(plan, 'harmonic-clash'), 0);
+  assert.equal(reasonCount(plan, 'vocal-collision'), 0);
+  assert.notEqual(plan.transitionClass, 'normal_boundary');
+  assert.ok(plan.confidence < planPairTransition(cleanPair()).confidence);
+});
+
+test('untrusted key evidence does not force a filtered beatmatch', () => {
+  const plan = planPairTransition(cleanPair({
+    outgoing: { key: '', keyConfidence: 0, chroma: [] },
+    incoming: { key: '', keyConfidence: 0, chroma: [] }
+  }));
+
+  assert.equal(plan.renderMode, 'native');
+  assert.ok(
+    ['beatmatched_crossfade', 'bass_swap'].includes(plan.strategy),
+    `expected an unfiltered beatmatch, got ${plan.strategy}`
+  );
+});
+
+test('keeps selection deterministic and diagnostics bounded', () => {
+  const manyBoundaries = Array.from({ length: 30 }, (_, index) => index * 2 + 2);
+  const input = cleanPair({
+    outgoing: { boundaryTimes: manyBoundaries },
+    incoming: { boundaryTimes: manyBoundaries }
   });
+  const first = planPairTransition(input);
+  const second = planPairTransition(input);
+
+  assert.deepEqual(first, second);
+  assert.ok(first.diagnostics.generated.outgoing <= 12);
+  assert.ok(first.diagnostics.generated.incoming <= 12);
+  assert.ok(first.diagnostics.generated.detailed <= 64);
+  assert.ok(first.diagnostics.topCandidates.length <= 5);
+});
+
+
+const choreographyFixtures = JSON.parse(
+  fs.readFileSync(new URL('./fixtures/transitionChoreography.json', import.meta.url), 'utf8')
+);
+
+function fixturePair(name) {
+  const data = choreographyFixtures[name];
+  return {
+    analysis: normalizeTrackAnalysis(data.outgoing),
+    nextAnalysis: normalizeTrackAnalysis(data.incoming),
+    duration: data.outgoing.duration,
+    nextDuration: data.incoming.duration
+  };
 }
 
-test('folds half-time tempos without demanding a two-times stretch', () => {
-  assert.deepEqual(tempoFit(87, 174), {
-    outgoingBpm: 87,
-    incomingBpm: 87,
-    targetBpm: 87,
-    outgoingRatio: 1,
-    incomingRatio: 1,
-    deviation: 0,
-    beatmatched: true
-  });
-  assert.equal(tempoFit(120, 132).beatmatched, false);
-});
-
-test('a tempo glide matches pairs a constant stretch cannot', () => {
-  assert.equal(tempoFit(120, 127).beatmatched, false);
-  const fit = tempoFit(120, 127, { tempoRamp: true });
-  const logMean = 7 / Math.log(127 / 120);
-  assert.equal(fit.beatmatched, true);
-  assert.equal(fit.tempoRamp, true);
-  assert.ok(Math.abs(fit.targetBpm - logMean) < 1e-5);
-  assert.ok(Math.abs(fit.outgoingRatio * 120 - logMean) < 1e-4);
-  assert.ok(Math.abs(fit.incomingRatio * 127 - logMean) < 1e-4);
-  assert.ok(Math.abs(fit.deviation - 7 / 120) < 1e-6);
-  // Slowing down is measured by the larger of the two per-side deviations.
-  assert.ok(Math.abs(tempoFit(127, 120, { tempoRamp: true }).deviation - 7 / 120) < 1e-6);
-  assert.equal(tempoFit(120, 140, { tempoRamp: true }).beatmatched, false);
-});
-
-test('glide offsets consume each side exactly at the overlap end', () => {
-  const fit = tempoFit(120, 127, { tempoRamp: true });
-  const duration = 16 * 60 / fit.targetBpm;
-  const end = glideOffsets(duration, duration, fit.outgoingRatio, fit.incomingRatio);
-  assert.ok(Math.abs(end.outgoing - 8) < 1e-4);
-  assert.ok(Math.abs(end.incoming - 16 * 60 / 127) < 1e-4);
-  const start = glideOffsets(0, duration, fit.outgoingRatio, fit.incomingRatio);
-  assert.deepEqual(start, { outgoing: 0, incoming: 0 });
-  // The outgoing side starts native, so it trails a constant average stretch mid-glide.
-  const middle = glideOffsets(duration / 2, duration, fit.outgoingRatio, fit.incomingRatio);
-  assert.ok(middle.outgoing < duration / 2 * fit.outgoingRatio);
-  assert.deepEqual(glideOffsets(2, 8, 1, 1), { outgoing: 2, incoming: 2 });
-});
-
-test('glides only use incoming cues the host can replay from', () => {
-  const fit = tempoFit(120, 127, { tempoRamp: true });
-  const range = { audibleRange: { start: 0, end: 120 } };
-  const candidate = (role, anchorTime) => ({
-    id: `${role}:${anchorTime}`,
-    role,
-    anchorTime,
-    source: 'detected-change',
-    confidence: 0.9,
-    summary: {}
-  });
-  const pairs = (anchor) => buildCandidatePairs(
-    [candidate('outgoing', 100)],
-    [candidate('incoming', anchor)],
-    fit,
-    { outgoingAnalysis: range, incomingAnalysis: range }
-  ).finalists.filter((pair) => pair.beats === 16);
-  const ending = (anchor) => pairs(anchor).filter((pair) => pair.alignment === 'end');
-  // Sixteen beats start 7.559 s before the anchor but last 7.775 s.
-  assert.equal(ending(7.6).length, 0);
-  const [accepted] = ending(7.8);
-  assert.equal(accepted.tempoRamp, true);
-  assert.ok(accepted.incomingEnd - accepted.durationSeconds >= 0);
-  // Dropping the same anchor on the swap leaves half the overlap after it to replay from.
-  const [dropped] = pairs(7.6).filter((pair) => pair.alignment === 'mid');
-  assert.ok(dropped.incomingEnd - dropped.durationSeconds >= 0);
-});
-
-test('distinguishes compatible keys from a trusted severe clash', () => {
-  const outgoing = analysis({ key: 'C major', keyConfidence: 0.9 });
-  const fifth = analysis({ key: 'G major', keyConfidence: 0.9 });
-  const tritone = analysis({
-    key: 'F♯ major',
-    keyConfidence: 0.9,
-    chroma: [0, 1, 0, 0, 0, 0, 0.8, 0, 0, 0, 0.5, 0]
-  });
-  const uncertainTritone = analysis({
-    key: 'F♯ major',
-    keyConfidence: 0.2,
-    chroma: tritone.harmonic.chroma
-  });
-
-  assert.ok(harmonicEvidence(outgoing, fifth).score > 0.7);
-  assert.equal(harmonicEvidence(outgoing, fifth).severeClash, false);
-  assert.ok(harmonicEvidence(outgoing, tritone).score < 0.2);
-  assert.equal(harmonicEvidence(outgoing, tritone).severeClash, true);
-  assert.equal(harmonicEvidence(outgoing, uncertainTritone).severeClash, false);
-});
-
-test('measures vocal collision on the stretched candidate timeline', () => {
-  const outgoing = analysis({
-    duration: 30,
-    vocal: (time) => time >= 4 && time <= 13 ? 0.9 : 0.1
-  });
-  const incoming = analysis({
-    duration: 30,
-    vocal: (time) => time >= 2 && time <= 10 ? 0.85 : 0.1
-  });
-
-  const collision = mappedVocalCollision(outgoing, incoming, {
-    outgoingStart: 4,
-    incomingStart: 2,
-    durationSeconds: 8,
-    outgoingRatio: 1.04,
-    incomingRatio: 1,
-    targetBpm: 120
-  });
-
-  assert.ok(collision.longestRunSeconds >= 7.5);
-  assert.ok(collision.activeFraction > 0.9);
-  assert.ok(collision.simultaneousMean > 0.8);
-  assert.ok(collision.coverage > 0.95);
-});
-
-test('keeps a brief vocal crossing distinct from sustained collision', () => {
-  const outgoing = analysis({
-    duration: 20,
-    vocal: (time) => time >= 4 && time <= 12 ? 0.9 : 0.1
-  });
-  const incoming = analysis({
-    duration: 20,
-    vocal: (time) => time >= 9.5 && time <= 10 ? 0.9 : 0.1
-  });
-
-  const collision = mappedVocalCollision(outgoing, incoming, {
-    outgoingStart: 4,
-    incomingStart: 2,
-    durationSeconds: 8,
-    outgoingRatio: 1,
-    incomingRatio: 1,
-    targetBpm: 120
-  });
-
-  assert.ok(collision.longestRunSeconds <= 0.75);
-  assert.ok(collision.activeFraction < 0.15);
-});
-
-test('does not turn missing vocal samples into silence', () => {
-  const outgoing = analysis({ duration: 20, vocal: null });
-  const incoming = analysis({ duration: 20, vocal: null });
-
-  const collision = mappedVocalCollision(outgoing, incoming, {
-    outgoingStart: 4,
-    incomingStart: 2,
-    durationSeconds: 8,
-    outgoingRatio: 1,
-    incomingRatio: 1,
-    targetBpm: 120
-  });
-
-  assert.equal(collision.coverage, 0);
-  assert.equal(collision.simultaneousMean, null);
-  assert.equal(collision.activeFraction, null);
-});
-
-test('keeps credible late incoming cues and caps each candidate side', () => {
-  const detected = Array.from({ length: 30 }, (_, index) => ({
-    time: index * 2 + 1,
-    confidence: 0.4 + index / 100,
-    source: 'detected-change',
-    noveltyPeak: 0.5,
-    energyDelta: 0.4,
-    stabilityBefore: 0.8,
-    stabilityAfter: 0.8,
-    downbeatDistance: 0
-  }));
-  const track = analysis({ duration: 180, boundaries: detected });
-  const candidates = generateTransitionCandidates(track, 'incoming');
-
-  assert.equal(candidates.length, MAX_ROLE_CANDIDATES);
-  assert.ok(candidates.some((candidate) => candidate.anchorTime >= 30));
-  assert.deepEqual(
-    candidates,
-    generateTransitionCandidates(track, 'incoming'),
-    'candidate generation must be deterministic'
+test('regression: Blinding Lights -> Dont Start Now is never beatmatched and has 0-4s overlap', () => {
+  const plan = planPairTransition(fixturePair('blinding_lights_to_dont_start_now'));
+  assert.notEqual(plan.transitionClass, 'full_beatmatched');
+  assert.notEqual(plan.transitionClass, 'conservative_beatmatched');
+  assert.notEqual(plan.strategy, 'beatmatched_crossfade');
+  assert.ok(
+    plan.durationSeconds >= 0 && plan.durationSeconds <= 4.0,
+    `expected 0-4s overlap, got ${plan.durationSeconds}`
   );
-  assert.ok(candidates.every((candidate) => !candidate.id.includes('drop')));
-});
-
-test('rejects early exits that discard continuing music but keeps verified silence trims', () => {
-  const boundary = {
-    time: 80,
-    observedTime: 80,
-    confidence: 0.99,
-    source: 'detected-change',
-    noveltyPeak: 0.95,
-    energyDelta: 0.8,
-    stabilityBefore: 0.9,
-    stabilityAfter: 0.9,
-    downbeatDistance: 0
-  };
-  const continuing = analysis({ duration: 120, boundaries: [boundary], energy: () => 0.8 });
-  const continuingTail = audibleTailEvidence(continuing, 80);
-  const continuingCandidates = generateTransitionCandidates(continuing, 'outgoing');
-
-  assert.ok(continuingTail.audibleSeconds > MAX_DISCARDED_AUDIBLE_SECONDS);
-  assert.equal(continuingTail.classification, 'continuing');
-  assert.ok(!continuingCandidates.some((candidate) => candidate.anchorTime === 80));
-  assert.ok(continuingCandidates.every((candidate) =>
-    candidate.tail.chargedAudibleSeconds <= MAX_DISCARDED_AUDIBLE_SECONDS
-  ));
-
-  const silentTail = analysis({
-    duration: 120,
-    boundaries: [boundary],
-    energy: (time) => time < 80 ? 0.8 : 0
-  });
-  const silenceEvidence = audibleTailEvidence(silentTail, 80);
-  const silenceCandidates = generateTransitionCandidates(silentTail, 'outgoing');
-
-  assert.equal(silenceEvidence.classification, 'silence');
-  assert.ok(silenceEvidence.audibleSeconds < 1);
-  assert.ok(silenceCandidates.some((candidate) =>
-    candidate.anchorTime === 80 && candidate.tail.classification === 'silence'
-  ));
-});
-
-test('missing tail energy errs toward playing the track', () => {
-  const raw = analysis({ duration: 120, boundaries: [{
-    time: 80,
-    confidence: 0.99,
-    source: 'detected-change'
-  }] });
-  const unknown = { ...raw, frames: [] };
-  const tail = audibleTailEvidence(unknown, 80);
-
-  assert.equal(tail.classification, 'unknown');
-  assert.equal(tail.chargedAudibleSeconds, 40);
-  assert.ok(!generateTransitionCandidates(unknown, 'outgoing').some(
-    (candidate) => candidate.anchorTime === 80
-  ));
-});
-
-test('prunes the cue cross-product to a deterministic detailed-search budget', () => {
-  const boundaries = Array.from({ length: 24 }, (_, index) => ({
-    time: index * 4 + 8,
-    confidence: 0.8,
-    source: 'detected-change',
-    noveltyPeak: 0.8,
-    energyDelta: 0.6,
-    stabilityBefore: 0.8,
-    stabilityAfter: 0.8,
-    downbeatDistance: 0
-  }));
-  const outgoing = analysis({ duration: 180, boundaries });
-  const incoming = analysis({ duration: 180, boundaries });
-  const outgoingCandidates = generateTransitionCandidates(outgoing, 'outgoing');
-  const incomingCandidates = generateTransitionCandidates(incoming, 'incoming');
-  const fit = tempoFit(120, 120);
-  const result = buildCandidatePairs(
-    outgoingCandidates,
-    incomingCandidates,
-    fit,
-    { outgoingAnalysis: outgoing, incomingAnalysis: incoming }
+  assert.ok(
+    ['filtered_handoff', 'clean_cut', 'filtered_blend', 'boundary_handoff', 'short_fade'].includes(plan.strategy) ||
+    plan.renderMode === 'boundary' ||
+    plan.renderMode === 'live',
+    `expected filtered handoff or cut, got ${plan.strategy}`
   );
-
-  assert.equal(result.finalists.length, MAX_DETAILED_CANDIDATES);
-  assert.ok(result.diagnostics.combinations > MAX_DETAILED_CANDIDATES);
-  assert.equal(result.diagnostics.detailed, MAX_DETAILED_CANDIDATES);
-  assert.deepEqual(
-    result.finalists,
-    buildCandidatePairs(
-      outgoingCandidates,
-      incomingCandidates,
-      fit,
-      { outgoingAnalysis: outgoing, incomingAnalysis: incoming }
-    ).finalists
+  assert.ok(
+    plan.fallback.durationSeconds <= 4.0,
+    `fallback duration should be capped at 4s, got ${plan.fallback.durationSeconds}`
   );
 });
 
-test('excludes beatmatched candidates shorter than two bars or four seconds', () => {
-  const candidateBeats = (bpm) => {
-    const highRisk = analysis({
-      duration: 180,
-      bpm,
-      boundaries: [
-        { time: 168, confidence: 0.6, source: 'detected-change', noveltyPeak: 0.8 },
-        { time: 24, confidence: 0.6, source: 'detected-change', noveltyPeak: 0.8 }
-      ],
-      vocal: () => 0.8
-    });
-    const outgoing = generateTransitionCandidates(highRisk, 'outgoing')
-      .find((candidate) => candidate.source === 'detected-change' && candidate.anchorTime === 168);
-    const incoming = generateTransitionCandidates(highRisk, 'incoming')
-      .find((candidate) => candidate.source === 'detected-change' && candidate.anchorTime === 24);
-    assert.ok(outgoing);
-    assert.ok(incoming);
-
-    return buildCandidatePairs(
-      [outgoing],
-      [incoming],
-      tempoFit(bpm, bpm),
-      { outgoingAnalysis: highRisk, incomingAnalysis: highRisk }
-    ).finalists;
-  };
-
-  const slowTempo = candidateBeats(60);
-  const highTempo = candidateBeats(160);
-
-  const lengths = (pairs) => [...new Set(pairs.map((candidate) => candidate.beats))].sort((a, b) => a - b);
-  assert.deepEqual(lengths(slowTempo), [8, 16]);
-  assert.deepEqual(lengths(highTempo), [16]);
-  assert.ok([...slowTempo, ...highTempo].every((candidate) => candidate.durationSeconds >= 4));
+test('fixture: safe instrumental blend receives 8-16 beat staged blend with incoming audibly present before arrival', () => {
+  const plan = planPairTransition(fixturePair('safe_instrumental_blend'));
+  assert.ok(['full_beatmatched', 'conservative_beatmatched'].includes(plan.transitionClass));
+  assert.ok(plan.beats >= 8 && plan.beats <= 16, `expected 8-16 beats, got ${plan.beats}`);
+  assert.ok(
+    plan.incoming.start <= plan.incoming.handoff,
+    `incoming cue (${plan.incoming.start}) should be <= arrival (${plan.incoming.handoff})`
+  );
 });
 
-test('allows a 32-beat option only for strong low-vocal structural evidence', () => {
-  const strong = analysis({
-    duration: 180,
-    boundaries: [
-      { time: 168, confidence: 0.9, source: 'detected-change', noveltyPeak: 0.9 },
-      { time: 32, confidence: 0.9, source: 'detected-change', noveltyPeak: 0.9 }
-    ],
-    vocal: () => 0.1
-  });
-  const weak = analysis({
-    duration: 180,
-    boundaries: [
-      { time: 168, confidence: 0.3, source: 'detected-change', noveltyPeak: 0.3 },
-      { time: 32, confidence: 0.3, source: 'detected-change', noveltyPeak: 0.3 }
-    ],
-    vocal: () => 0.8
-  });
-  const fit = tempoFit(120, 120);
-  const strongOutgoing = generateTransitionCandidates(strong, 'outgoing')
-    .find((candidate) => candidate.source === 'detected-change' && candidate.anchorTime === 168);
-  const strongIncoming = generateTransitionCandidates(strong, 'incoming')
-    .find((candidate) => candidate.source === 'detected-change' && candidate.anchorTime === 32);
-  const weakOutgoing = generateTransitionCandidates(weak, 'outgoing')
-    .find((candidate) => candidate.source === 'detected-change' && candidate.anchorTime === 168);
-  const weakIncoming = generateTransitionCandidates(weak, 'incoming')
-    .find((candidate) => candidate.source === 'detected-change' && candidate.anchorTime === 32);
-  const strongPairs = buildCandidatePairs(
-    [strongOutgoing],
-    [strongIncoming],
-    fit,
-    { outgoingAnalysis: strong, incomingAnalysis: strong }
-  ).finalists;
-  const weakPairs = buildCandidatePairs(
-    [weakOutgoing],
-    [weakIncoming],
-    fit,
-    { outgoingAnalysis: weak, incomingAnalysis: weak }
-  ).finalists;
+test('fixture: sustained vocal collision receives short filtered handoff or clean cut', () => {
+  const plan = planPairTransition(fixturePair('sustained_vocal_collision'));
+  assert.notEqual(plan.transitionClass, 'full_beatmatched');
+  assert.ok(
+    plan.durationSeconds <= 4.0 ||
+    ['filtered_handoff', 'clean_cut', 'filtered_blend', 'boundary_handoff'].includes(plan.strategy),
+    `expected short handoff or clean cut, got duration ${plan.durationSeconds} strategy ${plan.strategy}`
+  );
+});
 
-  assert.ok(strongPairs.some((candidate) => candidate.beats === 32));
-  assert.ok(weakPairs.every((candidate) => candidate.beats !== 32));
+test('fixture: weak evidence pair falls back cleanly', () => {
+  const plan = planPairTransition(fixturePair('weak_evidence_pair'));
+  assert.notEqual(plan.transitionClass, 'full_beatmatched');
+  assert.notEqual(plan.transitionClass, 'conservative_beatmatched');
+  assert.ok(['silence_trim', 'normal_boundary', 'simple_crossfade'].includes(plan.transitionClass));
+});
+
+test('every fallback has internally consistent cue, duration, and arrival geometry', () => {
+  const cases = ['blinding_lights_to_dont_start_now', 'safe_instrumental_blend', 'sustained_vocal_collision', 'weak_evidence_pair'];
+  for (const name of cases) {
+    const plan = planPairTransition(fixturePair(name));
+    const fallback = plan.fallback;
+    assert.ok(fallback, `missing fallback for ${name}`);
+    const expectedOutDuration = Math.round((fallback.outgoingEnd - fallback.outgoingStart) * 1e6) / 1e6;
+    assert.ok(
+      Math.abs(expectedOutDuration - fallback.durationSeconds) < 1e-4,
+      `fallback geometry inconsistent for ${name}: outEnd - outStart = ${expectedOutDuration}, durationSeconds = ${fallback.durationSeconds}`
+    );
+  }
 });

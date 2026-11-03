@@ -11,6 +11,7 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -69,6 +70,29 @@ class TransitionFilterTest {
         assertTrue(filter.transparent)
         val level = through(filter, 1_000.0)
         assertEquals("open filter changed the level", 0.354, level, 0.02)
+    }
+
+    @Test
+    fun neutralProcessingPreservesEveryPcm16Value() {
+        val filter = configured()
+        val input = ByteBuffer.allocateDirect(65_536 * 2).order(ByteOrder.nativeOrder())
+        for (value in Short.MIN_VALUE.toInt()..Short.MAX_VALUE.toInt()) input.putShort(value.toShort())
+        input.flip()
+        val expected = ByteArray(input.remaining()).also { input.duplicate().get(it) }
+        filter.queueInput(input.asReadOnlyBuffer())
+        val output = filter.output
+        val actual = ByteArray(output.remaining()).also { output.get(it) }
+        assertArrayEquals(expected, actual)
+    }
+
+    @Test
+    fun automationCanStartAfterNeutralBuffersWithoutReconfiguration() {
+        val filter = configured()
+        through(filter, 1_000.0)
+        filter.gain = 0.5
+        assertEquals(0.177, through(filter, 1_000.0), 0.02)
+        filter.clearAutomation()
+        assertEquals(0.354, through(filter, 1_000.0), 0.02)
     }
 
     @Test

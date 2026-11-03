@@ -25,12 +25,15 @@
 #include <QJsonValue>
 #include <QObject>
 #include <QPointer>
+#include <QRect>
 #include <QRectF>
 #include <QTimer>
 #include <QUrl>
 #include <QVariantList>
 #include <QVariantMap>
 
+class AppleMusic;
+class AppleMusicPicture;
 class AuthManager;
 class QVideoSink;
 class PlaybackController;
@@ -53,11 +56,26 @@ class MusicVideoController final : public QObject {
   // Heights the current video offers, tallest first, and the one playing.
   Q_PROPERTY(QVariantList heights READ heights NOTIFY changed)
   Q_PROPERTY(int height READ height NOTIFY changed)
+  // FSR 1 for pictures smaller than the screen, and its sharpening from 0 to 1; saved across sessions.
+  Q_PROPERTY(bool upscaling READ upscaling WRITE setUpscaling NOTIFY changed)
+  Q_PROPERTY(double sharpness READ sharpness WRITE setSharpness NOTIFY changed)
+  // Why the quality menu stops where it does, or empty.
+  Q_PROPERTY(QString qualityNote READ qualityNote NOTIFY changed)
   // Picture inside black bars baked into the video, in 0..1 frame coordinates.
   Q_PROPERTY(QRectF contentRect READ contentRect NOTIFY contentRectChanged)
+  // The open video plays in a floating window instead of the theater.
+  Q_PROPERTY(bool pip READ pip WRITE setPip NOTIFY changed)
+  // The open video plays in a small player inside the main window.
+  Q_PROPERTY(bool mini READ mini WRITE setMini NOTIFY changed)
+  // Main window corner of the small player, 0 to 3 from top left to bottom right; saved across sessions.
+  Q_PROPERTY(int miniCorner READ miniCorner WRITE setMiniCorner NOTIFY changed)
+  // The full-window theater is showing.
+  Q_PROPERTY(bool theater READ theater NOTIFY changed)
 public:
   MusicVideoController(YouTubeProvider *provider, AuthManager *auth, PlaybackController *playback,
                        QObject *parent = nullptr);
+  // Apple Music videos play their own picture through the account's Widevine host.
+  void setAppleMusic(AppleMusic *account);
 
   [[nodiscard]] QString status() const { return m_status; }
   [[nodiscard]] bool available() const;
@@ -70,6 +88,18 @@ public:
   [[nodiscard]] QVariantList heights() const { return m_heights; }
   [[nodiscard]] int height() const { return m_height; }
   [[nodiscard]] QRectF contentRect() const;
+  [[nodiscard]] bool upscaling() const { return m_upscaling; }
+  void setUpscaling(bool enabled);
+  [[nodiscard]] double sharpness() const { return m_sharpness; }
+  void setSharpness(double sharpness);
+  [[nodiscard]] QString qualityNote() const;
+  [[nodiscard]] bool pip() const { return m_pip; }
+  void setPip(bool enabled);
+  [[nodiscard]] bool mini() const { return m_mini; }
+  void setMini(bool enabled);
+  [[nodiscard]] int miniCorner() const { return m_miniCorner; }
+  void setMiniCorner(int corner);
+  [[nodiscard]] bool theater() const { return m_open && !m_pip && !m_mini; }
 
   Q_INVOKABLE void show();
   // Plays a video row from the catalog and opens the theater on it.
@@ -79,6 +109,11 @@ public:
   Q_INVOKABLE void retry();
   // Samples frames from the theater's VideoOutput sink to find baked-in bars.
   Q_INVOKABLE void watchFrames(QObject *sink);
+  // Drops `sink` only if it is still the one fed, so an outgoing view never blanks its successor.
+  Q_INVOKABLE void releaseFrames(QObject *sink);
+  // Saved floating window geometry, placed on a connected screen.
+  Q_INVOKABLE QRect pipGeometry() const;
+  Q_INVOKABLE void savePipGeometry(const QRect &geometry);
 
 signals:
   void changed();
@@ -87,6 +122,11 @@ signals:
 private:
   void syncTrack();
   void lookup();
+  // Apple's own video for an Apple song, falling back to lookup() when Apple has none.
+  void appleLookup();
+  void useAppleVideo(const QString &videoId);
+  // Asks again after a lookup that failed on the network.
+  void retryLookup();
   void resolveStream();
   void receive(quint64 requestId, const QJsonValue &result);
   void fail(quint64 requestId, const QString &message);
@@ -94,6 +134,7 @@ private:
   void clearStream();
   void sampleFrame();
   void resetContentRect();
+  void loadPipSettings();
 
   YouTubeProvider *m_provider;
   AuthManager *m_auth;
@@ -108,7 +149,12 @@ private:
   quint64 m_searchRequest{0};
   quint64 m_streamRequest{0};
   bool m_open{false};
+  bool m_pip{false};
+  bool m_mini{false};
+  int m_miniCorner{3};
   int m_maxHeight{1080};
+  bool m_upscaling{true};
+  double m_sharpness{0.8};
   int m_height{0};
   QVariantList m_heights;
   QPointer<QVideoSink> m_sink;
@@ -116,4 +162,12 @@ private:
   QRectF m_contentRect;
   // Track id to video id; an empty value records a confirmed miss.
   QHash<QString, QString> m_lookups;
+  // Apple song id to Apple video id, as m_lookups.
+  QHash<QString, QString> m_appleLookups;
+  AppleMusic *m_account{nullptr};
+  AppleMusicPicture *m_applePicture{nullptr};
+  // The picture is an Apple Music video; m_videoId holds its catalog id.
+  bool m_apple{false};
+  // That video belongs to an Apple song, so the engine swaps to the video's soundtrack.
+  bool m_appleSong{false};
 };

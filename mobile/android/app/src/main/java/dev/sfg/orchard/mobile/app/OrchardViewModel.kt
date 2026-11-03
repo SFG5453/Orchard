@@ -36,6 +36,8 @@ import dev.sfg.orchard.mobile.download.DownloadItem
 import dev.sfg.orchard.mobile.lastfm.LastfmState
 import dev.sfg.orchard.mobile.listenbrainz.ListenBrainzState
 import dev.sfg.orchard.mobile.local.toPlaylist
+import dev.sfg.orchard.mobile.library.AppleLibraryRepository
+import dev.sfg.orchard.mobile.library.withHistory
 import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.AudioQuality
 import dev.sfg.orchard.mobile.model.*
@@ -43,17 +45,12 @@ import dev.sfg.orchard.mobile.playback.ListeningPartyManager
 import dev.sfg.orchard.mobile.playback.LocalPlaybackController
 import dev.sfg.orchard.mobile.qobuz.QobuzQuality
 import dev.sfg.orchard.mobile.qobuz.QobuzStatus
-import dev.sfg.orchard.mobile.settings.CacheManager
 import dev.sfg.orchard.mobile.social.PartyState
 import dev.sfg.orchard.mobile.songlinks.LinkResolution
 import dev.sfg.orchard.mobile.songlinks.SongLinksCoordinator
 import dev.sfg.orchard.mobile.songlinks.SongShareState
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /** Presentation state holder for the standalone shell and both playback targets. */
@@ -86,7 +83,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val targets: StateFlow<PlaybackTargetState> = playbackTargets.state
     private val targetPlayback: StateFlow<PlaybackSnapshot> = combine(
         local.snapshot,
-        graph.connect.remote,
+        graph.connect.remotePlayback,
         targets,
     ) { localSnapshot, remoteSnapshot, targetState ->
         when (targetState.selected) {
@@ -130,7 +127,23 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val detailRefreshing: StateFlow<Boolean> = details.refreshing
     val detailArtwork: StateFlow<TrackArtwork?> = details.artwork
     val artistImages: StateFlow<ArtistImages?> = details.artistImages
-    val library: StateFlow<LibrarySnapshot> = graph.library.library
+    /**
+     * Apple Music's library while it is the music source, with Orchard's Apple plays ahead of Apple's
+     * history. The YouTube Music library never stands in for it, and nothing shows until the stored
+     * source is known.
+     */
+    val library: StateFlow<LibrarySnapshot> =
+        combine(
+            graph.library.library,
+            graph.appleLibrary.library,
+            graph.settings.loadedSettings.map<OrchardSettings, Boolean?> { it.homeSource == APPLE_MUSIC_SOURCE }.onStart { emit(null) },
+        ) { own, apple, appleSource ->
+            when (appleSource) {
+                null -> LibrarySnapshot()
+                true -> (apple ?: LibrarySnapshot()).withHistory(own)
+                false -> own
+            }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, LibrarySnapshot())
     /** Songs and playlists kept on this phone, and the one place that edits them. */
     val localLibrary = graph.localLibrary
     val localSnapshot: StateFlow<dev.sfg.orchard.mobile.local.LocalSnapshot> = graph.localLibrary.library
@@ -148,7 +161,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val activeTrackIsQobuz: StateFlow<Boolean> = graph.activeTrackIsQobuz.asStateFlow()
     val activeStreamDetail: StateFlow<dev.sfg.orchard.mobile.model.StreamDetail> = graph.activeStreamDetail.asStateFlow()
 
-    fun connectQobuz(token: String, userId: Long, appId: String = "", appSecret: String = "") =
+    fun connectQobuz(token: String, userId: Long, appId: String, appSecret: String) =
         graph.qobuz.connect(token, userId, appId, appSecret)
     val maxActive: StateFlow<Boolean> = graph.maxActive
 
@@ -174,6 +187,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     val activeBitrate: StateFlow<Int> = graph.activeBitrate.asStateFlow()
     val isOnline: StateFlow<Boolean> = graph.networkMonitor.isOnline
+    val isNetworkMetered: StateFlow<Boolean> = graph.networkMonitor.isMetered
     val downloads: StateFlow<Map<String, DownloadItem>> = graph.downloads.downloads
     val downloadedTrackIds: StateFlow<Set<String>> = graph.downloads.downloadedTrackIds
     val downloadingTrackIds: StateFlow<Set<String>> = graph.downloads.downloadingTrackIds
@@ -186,8 +200,11 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun removeDownloads(tracks: List<Track>) = graph.downloads.removeDownloads(tracks.map { it.id })
 
     /** Playlists a song may join: local songs go to local playlists, online songs to saved ones. */
-    fun playlistChoices(track: Track, saved: List<Playlist>): List<Playlist> =
-        if (track.isLocal) localSnapshot.value.let { snapshot -> snapshot.playlists.map { it.toPlaylist(snapshot) } } else saved
+    fun playlistChoices(track: Track, saved: List<Playlist>): List<Playlist> = when {
+        track.isLocal -> localSnapshot.value.let { snapshot -> snapshot.playlists.map { it.toPlaylist(snapshot) } }
+        graph.appleLibrary.active -> saved.filter(AppleLibraryRepository::canAddTo)
+        else -> saved
+    }
 
     fun createPlaylist(title: String, track: Track?, onCreated: (String) -> Unit = {}) =
         details.createPlaylist(title, track, onCreated)
@@ -203,7 +220,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     }
     fun moveTrackInCurrentPlaylist(fromIndex: Int, toIndex: Int) = details.moveTrackInActivePlaylist(fromIndex, toIndex)
 
-    private val autoplay = AutoplayController(graph, viewModelScope, local, playback, targets)
+    private val stationQueue = MutableStateFlow<StationQueue?>(null)
+    private val autoplay = AutoplayController(graph, viewModelScope, local, playback, targets, stationQueue)
     val autoplayLoading: StateFlow<Boolean> = autoplay.loading
     val autoplayError: StateFlow<String> = autoplay.error
 
@@ -212,11 +230,11 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val nonMusicSegment: StateFlow<dev.sfg.orchard.mobile.model.NonMusicSegment?> = nonMusicSkipper.offered
     fun skipNonMusic() = nonMusicSkipper.skip()
 
-    private val mutableWarning = MutableStateFlow("")
-    val warning: StateFlow<String> = mutableWarning.asStateFlow()
-    private var warningDismissJob: Job? = null
+    private val warnings = WarningBanner(viewModelScope)
+    val warning: StateFlow<String> = warnings.message
 
     private val transport = Transport(graph, viewModelScope, local, party, playback, targets, musicVideo) { showWarning(it) }
+    internal val sourceSwitch = SourceSwitchReset(graph, viewModelScope, local, targets)
     private val sleepTimer = SleepTimer(viewModelScope, playback) {
         transport.remoteOrLocal({ graph.connect.command("pause") }, local::pause)
     }
@@ -225,17 +243,15 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     private val launcher = QueueLauncher(
         graph, viewModelScope, local, playback, targets, BestMixPreparer(graph, application.cacheDir),
-        showWarning = { showWarning(it) }, openDetail = ::openDetail,
+        showWarning = { showWarning(it) }, openDetail = ::openDetail, station = stationQueue,
     )
     private val accountLinks = AccountLinks(graph, viewModelScope) { showWarning(it) }
 
     val updateState: StateFlow<UpdateState> = graph.updates.state
 
-    private val mutableCacheSizeBytes = MutableStateFlow(0L)
-    val cacheSizeBytes: StateFlow<Long> = mutableCacheSizeBytes.asStateFlow()
-
-    private val mutableIsClearingCache = MutableStateFlow(false)
-    val isClearingCache: StateFlow<Boolean> = mutableIsClearingCache.asStateFlow()
+    private val cache = CacheSizeTracker(application, graph, viewModelScope)
+    val cacheSizeBytes: StateFlow<Long> = cache.sizeBytes
+    val isClearingCache: StateFlow<Boolean> = cache.clearing
 
     fun checkForUpdates() = graph.updates.checkForUpdates()
     fun installUpdate(metadata: MobileUpdateMetadata) = graph.updates.downloadAndInstallUpdate(metadata)
@@ -257,9 +273,13 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         nowPlaying.observeMusicVideo(targets)
         autoplay.observe()
         nonMusicSkipper.observe()
+        sourceSwitch.observe()
     }
 
-    fun refreshHome() = homeFeed.refresh()
+    fun refreshHome() {
+        homeFeed.refresh()
+        graph.appleLibrary.refresh()
+    }
 
     fun updateQuery(value: String) = searcher.update(value)
     fun runSearch(value: String = query.value) = searcher.run(value)
@@ -295,10 +315,16 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     fun play(track: Track, contextTitle: String = "") = launcher.play(track, contextTitle)
     fun startMix(track: Track) = launcher.startMix(track)
-    fun playAll(tracks: List<Track>, startIndex: Int = 0, contextTitle: String = "", shuffle: Boolean = false) =
-        launcher.playAll(tracks, startIndex, contextTitle, shuffle)
+    fun playAll(
+        tracks: List<Track>,
+        startIndex: Int = 0,
+        contextTitle: String = "",
+        shuffle: Boolean = false,
+        stationId: String = "",
+    ) = launcher.playAll(tracks, startIndex, contextTitle, shuffle, stationId)
     fun playFromSearch(query: String) = launcher.playFromSearch(query)
-    fun shuffleAll(tracks: List<Track>, contextTitle: String = "") = launcher.shuffleAll(tracks, contextTitle)
+    fun shuffleAll(tracks: List<Track>, contextTitle: String = "", stationId: String = "") =
+        launcher.shuffleAll(tracks, contextTitle, stationId)
     val bestMixJob: StateFlow<dev.sfg.orchard.mobile.model.BestMixJob?> get() = launcher.bestMixJob
     fun playBestMix(tracks: List<Track>, title: String, onProgress: (String) -> Unit = {}, onComplete: () -> Unit = {}) =
         launcher.playBestMix(tracks, title, onProgress, onComplete)
@@ -321,6 +347,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     }
     fun next() = transport.next()
     fun previous() = transport.previous()
+    fun skipBack() = transport.skipBack()
     fun seek(positionMs: Long) = transport.seek(positionMs)
     fun toggleShuffle() = transport.toggleShuffle()
     fun cycleRepeat() = transport.cycleRepeat()
@@ -350,40 +377,12 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun renameDevice(device: PlaybackDevice, newName: String) {
         if (device.isLocal) playbackTargets.renameLocal(newName)
     }
-    fun toggleLiked(track: Track) {
-        val liked = graph.library.library.value.likedTracks.none { it.id == track.id }
-        graph.library.setLiked(track, liked)
-        viewModelScope.launch {
-            runCatching { withContext(Dispatchers.IO) { graph.playlistActions.setLiked(track, liked) } }
-                .onFailure {
-                    graph.library.setLiked(track, !liked)
-                    graph.postWarning(it.message ?: "Could not update liked music.")
-                }
-        }
-    }
+    fun toggleLiked(track: Track) = details.toggleLiked(track)
+    val appleLibraryActive: StateFlow<Boolean> = graph.appleLibrary.enabled
     fun updateSettings(value: OrchardSettings) = graph.settings.updateSettings(value)
 
-    fun refreshCacheSize() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val size = CacheManager.calculateCacheSizeBytes(getApplication())
-            mutableCacheSizeBytes.value = size
-        }
-    }
-
-    fun clearCache(onComplete: ((Long) -> Unit)? = null) {
-        if (mutableIsClearingCache.value) return
-        viewModelScope.launch {
-            mutableIsClearingCache.value = true
-            val bytesCleared = withContext(Dispatchers.IO) {
-                CacheManager.clearAllCache(getApplication(), graph)
-            }
-            mutableCacheSizeBytes.value = withContext(Dispatchers.IO) {
-                CacheManager.calculateCacheSizeBytes(getApplication())
-            }
-            mutableIsClearingCache.value = false
-            onComplete?.invoke(bytesCleared)
-        }
-    }
+    fun refreshCacheSize() = cache.refresh()
+    fun clearCache(onComplete: ((Long) -> Unit)? = null) = cache.clear(onComplete)
 
     fun beginSignIn() = graph.auth.beginSignIn()
     fun completeSignIn(cookie: String, visitorData: String, dataSyncId: String, accountIndex: Int = 0, switchingAccount: Boolean = false, pageAvatarUrl: String = "") =
@@ -399,20 +398,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         else songLinksCoordinator.shareCollection(detail)
     fun dismissShare() = songLinksCoordinator.dismissShare()
 
-    /** Post a warning that auto-dismisses after [durationMs]. */
-    fun showWarning(message: String, durationMs: Long = 8_000L) {
-        mutableWarning.value = message
-        warningDismissJob?.cancel()
-        warningDismissJob = viewModelScope.launch {
-            delay(durationMs)
-            mutableWarning.value = ""
-        }
-    }
-
-    fun dismissWarning() {
-        warningDismissJob?.cancel()
-        mutableWarning.value = ""
-    }
+    fun showWarning(message: String, durationMs: Long = 8_000L) = warnings.show(message, durationMs)
+    fun dismissWarning() = warnings.dismiss()
 
     fun handleIncomingLink(rawUrl: String, onNavigateDetail: (String) -> Unit = {}) {
         viewModelScope.launch {

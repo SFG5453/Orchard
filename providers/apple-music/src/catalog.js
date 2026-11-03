@@ -20,9 +20,13 @@
 import { AppleMusicError } from './client.js';
 import { APPLE_MUSIC_SOURCE, parseBrowseId } from './ids.js';
 import { isLibraryId } from './library.js';
+import { linkNotes, noteTargets } from './notes.js';
 import { ARTIST_INCLUDES, album, artworkUrl, items, notes, playlist, releaseInfo, track, yearOf } from './normalize.js';
 
 const SEARCH_TYPES = { songs: 'songs', albums: 'albums', artists: 'artists', playlists: 'playlists' };
+// Shelves under an album, in page order; the public API serves only PUBLIC_ALBUM_VIEWS.
+const ALBUM_VIEWS = ['related-videos', 'more-by-artist', 'other-versions', 'you-might-also-like', 'appears-on'];
+const PUBLIC_ALBUM_VIEWS = ['related-videos', 'other-versions'];
 
 function requireId(id, type) {
   const parsed = parseBrowseId(id);
@@ -54,6 +58,9 @@ export function createCatalog(client, library) {
     const { resource, tracks } = await resourceWithTracks('albums', id);
     const attributes = resource.attributes || {};
     const card = album(resource);
+    const cards = tracks.map((song, index) => track(song, index)).filter(Boolean);
+    const [discographyItems, views] = await Promise.all([discography(card.artistBrowseId), albumViews(appleId)]);
+    const others = discographyItems.filter((entry) => entry.browseId !== id);
     return {
       kind: 'album',
       browseId: id,
@@ -65,22 +72,58 @@ export function createCatalog(client, library) {
       artistBrowseId: card.artistBrowseId,
       releaseType: releaseInfo(attributes).releaseType,
       year: yearOf(attributes.releaseDate),
-      description: notes(attributes.editorialNotes),
+      description: linkNotes(notes(attributes.editorialNotes), noteTargets(cards, [card, ...others])),
       thumbnail: artworkUrl(attributes.artwork, 1200),
       explicit: attributes.contentRating === 'explicit',
       itemCount: String(attributes.trackCount || tracks.length),
       copyright: attributes.copyright || '',
-      tracks: tracks.map((song, index) => track(song, index)).filter(Boolean),
-      sections: []
+      tracks: cards,
+      sections: ALBUM_VIEWS.map((name) => albumSection(id, name, views[name])).filter(Boolean)
     };
   }
 
-  async function playlistPage(id) {
+  /** The album's related shelves; a failure only costs the shelves. */
+  async function albumViews(appleId) {
+    const path = catalogPath(`albums/${encodeURIComponent(appleId)}`);
+    try {
+      const page = await client.editorial(path, { views: ALBUM_VIEWS.join(','), ...ARTIST_INCLUDES })
+        || await client.get(path, { views: PUBLIC_ALBUM_VIEWS.join(','), ...ARTIST_INCLUDES });
+      return page?.data?.[0]?.views || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function albumSection(id, name, view) {
+    const sectionItems = items(view?.data).filter((entry) => entry.browseId !== id);
+    if (!sectionItems.length) return null;
+    return {
+      key: name,
+      title: view.attributes?.title || name,
+      items: sectionItems,
+      browsePayload: null
+    };
+  }
+
+  /** Albums by the artist, for linking titles in the notes; a failure only costs the links. */
+  async function discography(artistBrowseId) {
+    const parsed = parseBrowseId(artistBrowseId);
+    if (!parsed || parsed.type !== 'artists') return [];
+    try {
+      const path = catalogPath(`artists/${encodeURIComponent(parsed.id)}/albums`);
+      return items((await client.all(path, { limit: 100 }, 2)).items);
+    } catch {
+      return [];
+    }
+  }
+
+  async function playlistPage(id, options = {}) {
     const appleId = requireId(id, 'playlists');
-    if (isLibraryId(appleId)) return library.libraryPlaylistPage(appleId, id);
+    if (isLibraryId(appleId)) return library.libraryPlaylistPage(appleId, id, options);
     const { resource, tracks } = await resourceWithTracks('playlists', id);
     const attributes = resource.attributes || {};
     const card = playlist(resource);
+    const cards = tracks.map((song, index) => track(song, index)).filter(Boolean);
     return {
       kind: 'playlist',
       browseId: id,
@@ -88,10 +131,10 @@ export function createCatalog(client, library) {
       title: card.title,
       author: card.artist,
       subtitle: card.subtitle,
-      description: card.description,
+      description: linkNotes(card.description, noteTargets(cards)),
       thumbnail: artworkUrl(attributes.artwork, 1200),
       itemCount: String(tracks.length),
-      tracks: tracks.map((song, index) => track(song, index)).filter(Boolean),
+      tracks: cards,
       sections: []
     };
   }

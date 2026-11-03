@@ -23,7 +23,10 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.annotation.OptIn
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaConstants
 import dev.sfg.orchard.mobile.model.Track
 
 /** Converts provider-neutral tracks to Media3 items without persisting stream URLs. */
@@ -31,13 +34,19 @@ object MediaItemMapper {
     private const val SCHEME = "orchard"
     private const val AUDIO_AUTHORITY = "stream"
     private const val VIDEO_AUTHORITY = "video"
+    private const val APPLE_VIDEO_PREFIX = "am.music-videos."
     private const val TRACK_JSON = "orchard.track.json"
 
-    fun toMediaItem(track: Track, videoId: String = ""): MediaItem {
+    @OptIn(UnstableApi::class)
+    fun toMediaItem(track: Track, requestedVideoId: String = ""): MediaItem {
+        // An Apple music video has no audio-only stream, so it always loads as video.
+        val videoId = requestedVideoId.ifBlank { track.id.takeIf { it.startsWith(APPLE_VIDEO_PREFIX) }.orEmpty() }
         val storedTrack = track.copy(musicVideoId = track.musicVideoId.ifBlank { videoId })
         val extras = Bundle().apply {
             putString(TRACK_JSON, dev.sfg.orchard.mobile.model.CatalogJson.track(storedTrack).toString())
             putBoolean("explicit", track.explicit)
+            // Media3 copies Long extras into the platform metadata, where Auto and watches read this key.
+            if (track.explicit) putLong(MediaConstants.EXTRAS_KEY_IS_EXPLICIT, MediaConstants.EXTRAS_VALUE_ATTRIBUTE_PRESENT)
         }
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
@@ -167,6 +176,14 @@ object MediaItemMapper {
             .setMimeType(MimeTypes.APPLICATION_M3U8)
             .setRequestMetadata(item.requestMetadata.buildUpon().setMediaUri(uri).build())
             .build()
+    }
+
+    fun requiresAppleStereo(uri: Uri): Boolean = uri.getQueryParameter("apple_stereo") == "1"
+
+    fun asAppleStereoFallback(item: MediaItem): MediaItem {
+        val uri = item.localConfiguration!!.uri.buildUpon().appendQueryParameter("apple_stereo", "1").build()
+        return item.buildUpon().setUri(uri).setMimeType(null)
+            .setRequestMetadata(item.requestMetadata.buildUpon().setMediaUri(uri).build()).build()
     }
 
     private const val VIDEO_HEIGHT = "h"

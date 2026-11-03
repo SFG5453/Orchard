@@ -41,8 +41,8 @@ internal fun parseAppleMusicDeveloperToken(body: String, now: Long): AppleMusicD
     return AppleMusicDeveloperToken(token, expiry)
 }
 
-internal class AppleMusicDeveloperTokenClient(serviceUrl: String) {
-    private val url = "${serviceUrl.trimEnd('/')}/apple/developer-token"
+internal class AppleMusicDeveloperTokenClient(serviceUrl: String, path: String = "/apple/developer-token") {
+    private val url = "${serviceUrl.trimEnd('/')}$path"
     private val http = OkHttpClient.Builder().callTimeout(20, TimeUnit.SECONDS).build()
 
     suspend fun fetch(accessToken: String): AppleMusicDeveloperToken = withContext(Dispatchers.IO) {

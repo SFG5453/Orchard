@@ -1,0 +1,64 @@
+/*
+ * Copyright (C) 2026 SFG545
+ *
+ * This file is part of Orchard.
+ *
+ * Orchard is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * Orchard is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+// Apple's SDK is supplied locally; source-only builds have no recognition dependency.
+def shazamAar = rootProject.file('local/shazam/shazamkit-android-release.aar')
+def shazamEnabled = shazamAar.isFile()
+
+android {
+    defaultConfig {
+        buildConfigField 'boolean', 'SHAZAM_ENABLED', shazamEnabled.toString()
+    }
+    sourceSets.main.kotlin.directories.add(shazamEnabled ? 'src/shazam/java' : 'src/noShazam/java')
+}
+
+if (shazamEnabled) {
+    def sourceManifest = file('src/main/AndroidManifest.xml')
+    def shazamManifest = layout.buildDirectory.file('generated/shazam/AndroidManifest.xml')
+    def prepareManifest = tasks.register('prepareShazamManifest') {
+        inputs.file sourceManifest
+        outputs.file shazamManifest
+        doLast {
+            def target = shazamManifest.get().asFile
+            def source = sourceManifest.getText('UTF-8')
+            def microphoneRule = 'android:name="android.permission.RECORD_AUDIO" tools:node="remove"'
+            if (!source.contains(microphoneRule)) {
+                throw new GradleException('Cannot find the optional microphone permission in the app manifest.')
+            }
+            target.parentFile.mkdirs()
+            target.setText(source.replace(
+                microphoneRule,
+                'android:name="android.permission.RECORD_AUDIO" tools:node="merge"'), 'UTF-8')
+        }
+    }
+    android.sourceSets.main.manifest.srcFile shazamManifest.get().asFile
+    tasks.named('preBuild').configure { dependsOn prepareManifest }
+
+    // The app packages its NDK runtime for Earmark; the SDK's older copy must not replace it.
+    def prepareShazam = tasks.register('prepareShazamKit', Zip) {
+        from(zipTree(shazamAar)) { exclude 'jni/**/libc++_shared.so' }
+        archiveFileName = 'shazamkit.aar'
+        destinationDirectory = layout.buildDirectory.dir('localShazam')
+    }
+    dependencies {
+        implementation files(prepareShazam.flatMap { it.archiveFile })
+        implementation 'com.squareup.retrofit2:retrofit:2.11.0'
+        implementation 'com.squareup.retrofit2:converter-gson:2.11.0'
+    }
+}

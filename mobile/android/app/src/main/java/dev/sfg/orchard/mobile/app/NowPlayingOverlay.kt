@@ -30,8 +30,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import dev.sfg.orchard.mobile.OrchardGraph
+import dev.sfg.orchard.mobile.artwork.LocalTallArtToggle
+import dev.sfg.orchard.mobile.artwork.TallArtToggle
+import dev.sfg.orchard.mobile.artwork.tallArtRejected
+import dev.sfg.orchard.mobile.artwork.withoutRejectedTallArt
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.LocalMaxActive
 import dev.sfg.orchard.mobile.model.LocalStreamDetail
 import dev.sfg.orchard.mobile.model.LibrarySnapshot
@@ -92,11 +99,18 @@ fun NowPlayingOverlay(
 
     val liked = remember(library.likedTracks, currentTrack.id) { library.likedTracks.any { it.id == currentTrack.id } }
 
+    val context = LocalContext.current
+    val rejectedTallArt = remember { OrchardGraph.from(context).rejectedTallArt }
+    val rejectedUrls by rejectedTallArt.urls.collectAsStateWithLifecycle()
+    val tallArtToggle = currentTrack.animatedArtworkVerticalUrl.takeIf { it.isNotBlank() && settings.animatedArtwork }
+        ?.let { url -> TallArtToggle(currentTrack.tallArtRejected(rejectedUrls)) { rejectedTallArt.toggle(url) } }
+
     // The player's own backdrop, so glass inside it blurs the cover or video and not the page behind.
     val glassScene = rememberGlassScene()
     CompositionLocalProvider(
         LocalStreamDetail provides activeStreamDetail.copy(hiRes = activeStreamDetail.hiRes || currentTrack.hires),
         LocalGlassScene provides glassScene,
+        LocalTallArtToggle provides tallArtToggle,
     ) {
         NowPlayingScreen(
             modifier = modifier,
@@ -119,7 +133,7 @@ fun NowPlayingOverlay(
             videoPlayer = videoPlayer,
             onToggleMusicVideo = viewModel::toggleMusicVideo,
             onVideoQuality = viewModel::setVideoMaxHeight,
-            playback = playback,
+            playback = remember(playback, rejectedUrls) { playback.withoutRejectedTallArt(rejectedUrls) },
             transition = transition,
             mixProgress = mixProgress,
             targets = targets,
@@ -136,6 +150,7 @@ fun NowPlayingOverlay(
             onBack = { onOpenChange(false) },
             onToggle = viewModel::togglePlayback,
             onPrevious = viewModel::previous,
+            onSkipBack = viewModel::skipBack,
             onNext = viewModel::next,
             onSeek = { positionMs ->
                 // At the audible handoff the UI is already on the incoming timeline while the engine
@@ -157,7 +172,7 @@ fun NowPlayingOverlay(
             onMoveQueueItem = viewModel::moveQueueItem,
             onClearUpcoming = viewModel::clearUpcoming,
             downloadedTrackIds = downloadedTrackIds,
-            onDownloadTrack = viewModel::downloadTrack,
+            onDownloadTrack = viewModel::downloadTrack.takeUnless { settings.homeSource == APPLE_MUSIC_SOURCE },
             onRemoveDownloadTrack = viewModel::removeDownload,
             onAddToPlaylist = { playlistPickerTrack = it },
             onShare = { viewModel.shareTrack(currentTrack) },

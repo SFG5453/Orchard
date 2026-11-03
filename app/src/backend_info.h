@@ -40,7 +40,7 @@ public:
   // Returns bundled license text so lawyers don't show up at our door.
   Q_INVOKABLE QString licenseText(const QString &key) const;
 
-  // Generates a direct YouTube Music URL for a song, album, or playlist.
+  // Public YouTube Music or Apple Music URL for a song, album, playlist or artist.
   Q_INVOKABLE QString songLink(const QString &idOrUrl,
                                const QString &kind = QString()) const;
 

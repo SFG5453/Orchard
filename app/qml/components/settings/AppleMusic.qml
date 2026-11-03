@@ -30,4 +30,6 @@ AppleMusicForm {
     connectButton.onClicked: OrchardAppleMusic.connectAccount()
     cancelButton.onClicked: OrchardAppleMusic.cancelConnection()
     disconnectButton.onClicked: OrchardAppleMusic.disconnectAccount()
+    historySwitch.checked: OrchardAppleMusic.playHistoryEnabled
+    historySwitch.onToggled: OrchardAppleMusic.playHistoryEnabled = historySwitch.checked
 }

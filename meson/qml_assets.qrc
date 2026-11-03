@@ -73,6 +73,7 @@
     <file alias="app/qml/assets/lucide/video.svg">../app/qml/assets/lucide/video.svg</file>
     <file alias="app/qml/assets/lucide/maximize.svg">../app/qml/assets/lucide/maximize.svg</file>
     <file alias="app/qml/assets/lucide/minimize.svg">../app/qml/assets/lucide/minimize.svg</file>
+    <file alias="app/qml/assets/lucide/picture-in-picture-2.svg">../app/qml/assets/lucide/picture-in-picture-2.svg</file>
     <file alias="app/qml/assets/lucide/list-video.svg">../app/qml/assets/lucide/list-video.svg</file>
     <file alias="app/qml/assets/lucide/laptop.svg">../app/qml/assets/lucide/laptop.svg</file>
     <file alias="app/qml/assets/lucide/monitor.svg">../app/qml/assets/lucide/monitor.svg</file>

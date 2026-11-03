@@ -18,6 +18,7 @@
  */
 
 #include "account/orchard_account.h"
+#include "api/local_api.h"
 #include "auth/auth_manager.h"
 #include "auth/auth_diagnostics.h"
 #include "auth/youtube_session_keeper.h"
@@ -49,6 +50,7 @@
 #include "offline/download_manager.h"
 #include "offline/offline_library.h"
 #include "playback/sleep_timer.h"
+#include "playback/apple_motion_stream.h"
 #include "playback/artist_video_backdrop.h"
 #include "playback/music_video_controller.h"
 #include "playback/playback_controller.h"
@@ -189,6 +191,7 @@ int main(int argc, char *argv[]) {
     shutdownDeadline.exitCode = 1;
     return 1;
   }
+  UiScaling::applyAuto();
 
 #ifdef Q_OS_WIN
   // Analysis workers inherit this; Windows has no ffmpeg on PATH to fall back to.
@@ -291,6 +294,7 @@ int main(int argc, char *argv[]) {
   QObject::connect(&application, &QCoreApplication::aboutToQuit,
                    playback.get(), &PlaybackController::savePlaybackState);
   playback->setOfflineSources(&downloads, &connectivity);
+  playback->setAppleMusic(&appleMusic, &catalogSource);
   auto lyrics = std::make_unique<LyricsController>(&youtubeProvider, &authManager, playback.get());
   auto *discord = integrations->discord();
   // One lyric clock for the karaoke window and Discord; no second tiny conductor.
@@ -309,7 +313,9 @@ int main(int argc, char *argv[]) {
   LyricsTranslator lyricsTranslation(lyrics.get());
   lyricsTranslation.setAccount(&orchardAccount);
   MusicVideoController musicVideo(&youtubeProvider, &authManager, playback.get());
+  musicVideo.setAppleMusic(&appleMusic);
   ArtistVideoBackdrop artistVideo(&youtubeProvider, &authManager);
+  AppleMotionStream appleMotion;
   // Local imports announce themselves through the same pill as copied links.
   QObject::connect(&localLibrary, &LocalLibrary::noticeRequested, &backend, &BackendInfo::noticeRequested);
   QObject::connect(&downloads, &DownloadManager::noticeRequested, &backend, &BackendInfo::noticeRequested);
@@ -321,6 +327,10 @@ int main(int argc, char *argv[]) {
   ConnectService connectService(&orchardAccount, playback.get(), homeController.get(), &authManager, &qobuz);
   connectService.setCatalog(&youtubeCatalog);
   connectService.setArtwork(&animatedArtwork);
+  connectService.setAppleMusic(&appleMusic, &catalogSource);
+  LocalApi localApi(playback.get(), homeController.get(), &youtubeProvider, &authManager,
+                    &appleMusic, &catalogSource, &offlineLibrary, libraryActions.get(), &connectService);
+  localApi.start();
   SystemTray tray(playback.get(), &authManager);
   WindowState windowState;
   StartupSettings startup;
@@ -363,6 +373,7 @@ int main(int argc, char *argv[]) {
                                            playlistController.get());
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardPlayback"), playback.get());
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardConnect"), &connectService);
+  engine.rootContext()->setContextProperty(QStringLiteral("OrchardApi"), &localApi);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardIntegrations"), integrations.get());
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardQobuz"), &qobuz);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardSpotify"), &spotifyCanvas);
@@ -372,6 +383,7 @@ int main(int argc, char *argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardSleep"), &sleepTimer);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardMusicVideo"), &musicVideo);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardArtistVideo"), &artistVideo);
+  engine.rootContext()->setContextProperty(QStringLiteral("OrchardAppleMotion"), &appleMotion);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardLibrary"), libraryActions.get());
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardLocal"), &localLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardNetwork"), &connectivity);

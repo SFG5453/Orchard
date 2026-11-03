@@ -2,8 +2,9 @@
 
 //! Local adaptive mix preparation. Never runs on the audio callback.
 //! Everything outside the `desktop` feature is shared with Android, which links it
-//! through `orchard-transition-mobile`.
+//! through `orchard-transition-mobile`, and with the web build (`web`).
 pub mod analysis;
+pub mod apple;
 pub mod best_mix;
 pub mod best_mix_cost;
 pub mod best_mix_order;
@@ -13,7 +14,9 @@ pub mod decode;
 pub mod downmix;
 pub mod evidence;
 pub mod lock;
+pub mod measured;
 pub mod models;
+pub mod npu;
 pub mod planner;
 pub mod prepare;
 pub mod repeat;

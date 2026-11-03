@@ -51,7 +51,7 @@ Orchard Mobile is the phone half of [Orchard](../) — a standalone native Andro
 
 ### On-device analysis
 
-Orchard listens to the audio rather than trusting a catalog. Smart Crossfade and Best Mix run the desktop adaptive-mix worker's own Rust (`crates/orchard-adaptive-mix`) in process: Earmark's beat tracker and analysis, a quantized [Beat This!](https://github.com/CPJKU/beat_this) bar-phase check, open-unmix vocals, the QuickJS planner (`crates/orchard-transition-planner`) and the Earmark render. Kotlin only decodes the songs at their native rate and splices the rendered overlap into ExoPlayer (`MixSplicer`), so a pair mixes and a queue sorts as it does on desktop. The decoder (MediaCodec here, FFmpeg there) and the model weights (INT8 here) are the only differences.
+Orchard listens to the audio rather than trusting a catalog. Smart Crossfade and Best Mix run the desktop adaptive-mix worker's own Rust (`crates/orchard-adaptive-mix`) in process: Earmark's beat tracker and analysis, the Nirovi beat model's bar-phase check, Syvenu vocal presence, the QuickJS planner (`crates/orchard-transition-planner`) and the Earmark render. Kotlin only decodes the songs at their native rate and splices the rendered overlap into ExoPlayer (`MixSplicer`), so a pair mixes and a queue sorts as it does on desktop. The decoder (MediaCodec here, FFmpeg there) and the beat model's weights (INT8 here, FP16 on desktop GPUs) are the only differences.
 
 ### Library and browsing
 
@@ -61,6 +61,10 @@ Orchard listens to the audio rather than trusting a catalog. Smart Crossfade and
 * Synced and unsynced lyrics with provider switches, saved priority order, and a source picker for each song
 
 Open **Settings → Appearance → Lyrics providers** to enable Bini Lyrics, BetterLyrics, LyricsPlus, LRCLIB, or YouTube Music and move them up or down. The first enabled provider with lyrics wins. In the lyrics player, use **Lyrics source** to choose a different provider for the current song, or return to **Automatic**. Song-specific choices last for the current app session; the global order and switches are saved.
+
+While signed in to Apple Music, Apple Music replaces Bini Lyrics, BetterLyrics, and LyricsPlus in settings and the song source picker. Its synced lyrics lead by default, with LRCLIB and YouTube Music available as fallbacks. Signing out restores the mirror providers and their saved settings.
+
+Animated artwork quality is set separately for Wi-Fi and mobile data under **Settings → Appearance → Player**. Choose **Automatic** to adapt to connection speed, **Data saver** for lower data use, **Balanced** for sharper covers, or **Highest** for the best available rendition. Both default to Automatic. Metered Wi-Fi uses the mobile data setting. Quality choices apply when the source offers multiple qualities; saved covers keep their downloaded quality.
 
 ### Connected listening
 
@@ -148,8 +152,38 @@ Your library remains on YouTube Music. Apple Music playback is not available yet
 Apple Music tracks keep their provider identity and are not matched to YouTube Music.
 
 The Apple Music logo is optional and not tracked in Git. Place a square PNG at
-`mobile/android/local/apple-music/res/drawable-nodpi/apple_music_logo.png` to
-show it in Settings and on the now playing source mark.
+`mobile/android/local/apple-music/res/drawable-nodpi/apple_music_logo.png` and a
+one-color vector at `mobile/android/local/apple-music/res/drawable/apple_music_mark.xml`
+to show it in Settings and on the now playing source mark. CI builds restore both
+from the `APPLE_MUSIC_LOGO_PNG_BASE64` and `APPLE_MUSIC_MARK_XML_BASE64` secrets.
+
+## Shazam song identification
+
+Place the locally supplied `shazamkit-android-release.aar` at
+`mobile/android/local/shazam/shazamkit-android-release.aar` before building.
+The directory is ignored by Git; do not commit Apple's SDK or its documentation.
+Gradle includes the SDK, its Retrofit dependencies, and microphone permission
+only when that file exists. Without it, search has no Shazam control.
+
+CI downloads the SDK from the private R2 object
+`applethings/shazamkit-android-release.aar` through R2's S3 API and checks the
+SHA-256 pinned in the Android workflows. Set `SHAZAM_R2_ENDPOINT`
+(`https://<account id>.r2.cloudflarestorage.com`), `SHAZAM_R2_ACCESS_KEY_ID`
+and `SHAZAM_R2_SECRET_ACCESS_KEY` from an R2 API token with Object Read on that
+bucket only. Update the pinned hash when the SDK changes. Builds without the
+secrets omit Shazam.
+
+In search, tap **Identify song with Shazam**, allow microphone access, and play
+music nearby. Shazam listens for up to ten seconds and searches the selected
+music catalog for the recognized title and artist. Canceling, closing search,
+or putting the app in the background stops recording. Audio stays on the device;
+Shazam receives its generated signature.
+
+Identification uses its own cached developer token from the account service's
+`/apple/shazam-token`, which has no `origin` claim because ShazamKit sends no
+`Origin` header. An Orchard account is required, but an Apple Music
+subscription or sign-in is not. The account worker's Media Services key must
+have ShazamKit enabled.
 
 ## Orchard Connect
 
@@ -168,7 +202,7 @@ cd android
 
 The unit suite covers auth signing, queue edits and restoration, playback state, artwork matching, transition filtering and planning, the Connect wire format, remote commands and transfers, and remote mixes. The protocol itself is tested once, on desktop, with two real nodes talking over loopback sockets and WebRTC. Instrumented tests cover the analysis models, which need a real device.
 
-Deeper notes live in [the beat model's provenance](docs/BEAT_MODEL.md).
+Model provenance lives in [Nirovi's README](../models/nirovi/README.md) and [Syvenu's README](../models/syvenu/README.md).
 
 ### Project map
 
@@ -205,10 +239,10 @@ AGPL rather than GPL so code can move freely between here and Orchard desktop, w
 
 ### Third-party components
 
-Smart Crossfade ships trained models. Both were chosen because their **weights**, carry a permissive license. Most published music-information-retrieval weights, Essentia's included, are CC BY-NC-SA and cannot be distributed in an application.
+Smart Crossfade ships trained models. Both are distilled from teachers whose **weights** carry a permissive license. Most published music-information-retrieval weights, Essentia's included, are CC BY-NC-SA and cannot be distributed in an application.
 
-* **[Beat This!](https://github.com/CPJKU/beat_this)** (Foscarin, Schlüter & Widmer, ISMIR 2024) — beat and downbeat tracking. Code and weights both MIT. Mobile ships the official `final0` checkpoint converted to ONNX and quantized to int8 for CPU inference. See [docs/BEAT_MODEL.md](docs/BEAT_MODEL.md).
-* **open-unmix** (Stöter & Liutkus, Inria/SigSep) — used only to measure how much vocal content is present at a given instant. Code and the umxhq weights both MIT, confirmed on the weights' own [Zenodo deposit](https://zenodo.org/record/3370489). Only the `vocals` target ships. Meta's htdemucs separates better but releases its weights under CC-BY-NC-4.0, which a distributed app cannot ship.
+* **Nirovi**: Orchard's beat and downbeat model, distilled from [Beat This!](https://github.com/CPJKU/beat_this) `final0` (Foscarin, Schlüter & Widmer, ISMIR 2024; code and weights MIT). Mobile ships its INT8 graph. See [models/nirovi/README.md](../models/nirovi/README.md).
+* **Syvenu**: Orchard's vocal presence model, distilled from [open-unmix](https://github.com/sigsep/open-unmix-pytorch) UMX-HQ vocals (Stöter & Liutkus, Inria/SigSep; code and weights MIT) on Creative Commons music from MTG-Jamendo, Jamendo and the Free Music Archive. Used only to measure how much vocal content is present at a given instant. Most of that music carries NonCommercial terms; every training track is credited in `models/syvenu/TRAINING_CREDITS.tsv.gz`. See [models/syvenu/README.md](../models/syvenu/README.md).
 * **ONNX Runtime** (Microsoft) — MIT.
 * **[QuickJS-ng](https://github.com/quickjs-ng/quickjs)**: runs the shared provider and planner JavaScript, from `third_party/quickjs`. MIT.
 * **[SimpMusic](https://github.com/maxrave-dev/SimpMusic)** (maxrave-dev): the full-bleed player's smoothstep scrim and canvas layout are adapted from SimpMusic v2.2.0. GPL-3.0, combined under AGPL-3.0 section 13. See `ui/components/SmoothScrim.kt`.

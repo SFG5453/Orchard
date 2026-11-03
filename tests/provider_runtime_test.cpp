@@ -428,7 +428,7 @@ private slots:
         ProviderRuntime runtime(orchard::provider::qobuzBundle());
         QSignalSpy success(&runtime, &ProviderRuntime::invocationSucceeded);
         QSignalSpy failure(&runtime, &ProviderRuntime::invocationFailed);
-        runtime.invoke("session.set", QJsonObject{{"token", "token"}, {"userId", 42}});
+        runtime.invoke("session.set", QJsonObject{{"token", "token"}, {"userId", 42}, {"appId", "123"}, {"appSecret", "s"}});
         QVERIFY(success.wait(3000));
         QCOMPARE(success.first().at(1).value<QJsonValue>().toObject().value("connected").toBool(), true);
         runtime.invoke("playback.read", QJsonObject{{"playbackId", "missing"}, {"start", 0}});

@@ -61,6 +61,7 @@ Item {
     readonly property real coverSize: compact ? Math.min(width, 240) : width
 
     signal bylineClicked(Item anchor, real x, real y)
+    signal descriptionLinkClicked(string link)
     signal playClicked
     signal shuffleClicked
     signal shareClicked
@@ -282,7 +283,8 @@ Item {
             }
             GhostButton {
                 id: downloadButton
-                visible: root.downloadable
+                // Apple Music songs are DRM streams with no offline copy.
+                visible: root.downloadable && OrchardHome.homeSource !== "apple_music"
                 glyph: root.downloadState === "done" ? "circle-arrow-down" : "download"
                 glyphColor: root.downloadState === "done" ? root.accentSoftColor : "#eef0ec"
                 enabled: root.downloadEnabled
@@ -327,7 +329,11 @@ Item {
             property bool expanded: false
             width: parent.width
             visible: text.length > 0
+            readonly property bool rich: /<\/?(?:a|b|br|i|u)\b/i.test(root.description)
             text: root.description
+            textFormat: rich ? Text.StyledText : Text.PlainText
+            linkColor: "#d8dcd6"
+            onLinkActivated: function(link) { root.descriptionLinkClicked(link); }
             color: "#9aa09a"
             font.family: "Inter"
             font.pixelSize: 12
@@ -335,6 +341,10 @@ Item {
             wrapMode: Text.Wrap
             maximumLineCount: expanded ? 40 : 4
             elide: Text.ElideRight
+
+            HoverHandler {
+                cursorShape: descriptionText.hoveredLink ? Qt.PointingHandCursor : Qt.ArrowCursor
+            }
         }
         Item { width: 1; height: readMore.visible ? 14 : 0 }
         Text {

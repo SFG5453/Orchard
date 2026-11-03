@@ -34,6 +34,7 @@ internal fun playbackErrorMessage(error: Throwable): String {
     var current: Throwable? = error
     while (current != null) {
         val msg = current.message.orEmpty()
+        if (current is dev.sfg.orchard.mobile.playback.apple.AppleMusicPlaybackException && msg.isNotBlank()) return msg
         if (msg.startsWith(UNPLAYABLE_PREFIX)) {
             val reason = msg.removePrefix(UNPLAYABLE_PREFIX).trim()
             return if (reason.isNotBlank()) reason else "This track is unavailable."

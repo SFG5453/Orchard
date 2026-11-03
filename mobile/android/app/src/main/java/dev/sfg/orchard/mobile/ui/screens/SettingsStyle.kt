@@ -58,6 +58,7 @@ internal object SettingsStyle {
     /** Text and control accent; lighter than the switch fill so it holds up on the warped cover. */
     val Sage = Color(0xFF8CC4A0)
     val SageSoft = Color(0xFFC4E0CB)
+    val OnAccent = Color(0xFF14201A)
     val SwitchOn = Color(0xFF5F9A76)
     val SwitchOff = Color(0x2CFFFFFF)
     val ThumbOff = Color(0xFFE4E9E6)

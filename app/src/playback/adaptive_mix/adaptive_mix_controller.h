@@ -2,6 +2,8 @@
 
 #pragma once
 #include "adaptive_mix_worker.h"
+#include "mix_evidence_store.h"
+#include <QJsonObject>
 #include <QObject>
 #include <QUrl>
 #include <QVariantMap>
@@ -35,11 +37,21 @@ public:
   double incomingCue() const { return m_incomingCue; }
   double duration() const { return m_duration; }
   const QByteArray &pcm() const { return m_pcm; }
+  // Mono f32 clips around both splice points, when prepare() asked for them; the worker's
+  // "references" header says where each starts.
+  const QByteArray &references() const { return m_references; }
+  QJsonObject referenceInfo() const { return m_referenceInfo; }
+  bool preparing() const { return m_preparing; }
   bool standardFallback() const { return m_failed && !m_keepBoundary; }
+  bool keepsBoundary() const { return m_failed && m_keepBoundary; }
+  QString pair() const { return m_pair; }
   void prepare(const QString &pair, const QUrl &outgoing, const QUrl &incoming,
                double duration, double position, const QVariantMap &currentTrack,
                const QVariantMap &nextTrack, int fadeSeconds,
-               bool albumSequential);
+               bool albumSequential, const QJsonObject &outgoingApple = {},
+               const QJsonObject &incomingApple = {}, bool references = false);
+  // Records a pair that failed before reaching the worker, e.g. without a source to analyse.
+  void failPair(const QString &pair, const QString &message);
   void clear();
 signals:
   void changed();
@@ -48,6 +60,7 @@ signals:
 private:
   void fail(const QString &message);
   void receive(const QJsonObject &header, const QByteArray &pcm);
+  void keepEvidence(const QJsonObject &header);
   QString m_mode;
   QString m_status;
   QString m_pair;
@@ -56,7 +69,15 @@ private:
   QString m_technique;
   double m_bpm{0};
   QByteArray m_pcm;
+  QByteArray m_references;
+  QJsonObject m_referenceInfo;
   AdaptiveMixWorker m_worker;
+  MixEvidenceStore m_evidence;
+  // The pair being prepared, for storing the evidence its response brings.
+  QString m_outgoingId;
+  QString m_incomingId;
+  double m_outgoingDuration{0};
+  double m_incomingDuration{0};
   bool m_available{true};
   bool m_preparing{false};
   bool m_failed{false};

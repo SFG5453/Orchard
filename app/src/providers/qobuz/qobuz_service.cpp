@@ -18,15 +18,12 @@
  */
 
 #include "qobuz_service.h"
-#include "qobuz_oauth_callback.h"
 #include "providers/runtime/provider_runtime.h"
 #include "provider_host/provider_host.h"
 
 #include <QDebug>
-#include <QDesktopServices>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QUrl>
 #include <qtkeychain/keychain.h>
 
 namespace {
@@ -61,8 +58,7 @@ QJsonObject trackPayload(const QVariantMap &track) {
 
 QobuzService::QobuzService(QObject *parent, bool restore)
     : QObject(parent),
-      m_runtime(new ProviderRuntime(orchard::provider::qobuzBundle(), this)),
-      m_callback(new QobuzOAuthCallback(this)) {
+      m_runtime(new ProviderRuntime(orchard::provider::qobuzBundle(), this)) {
   connect(m_runtime, &ProviderRuntime::invocationSucceeded, this,
           [this](quint64 id, const QJsonValue &result) {
             if (const Reply done = m_replies.take(id))
@@ -85,14 +81,6 @@ QobuzService::QobuzService(QObject *parent, bool restore)
             else if (const Bytes read = m_reads.take(id))
               read({}, error);
           });
-  connect(m_callback, &QobuzOAuthCallback::codeReceived, this, &QobuzService::finishConnection);
-  connect(m_callback, &QobuzOAuthCallback::timedOut, this, [this] {
-    if (m_status != QStringLiteral("connecting"))
-      return;
-    ++m_connectGeneration;
-    setStatus(QStringLiteral("disconnected"));
-    setMessage(tr("Qobuz sign-in timed out. Try again."), true);
-  });
   if (restore)
     restoreSession();
 }
@@ -128,46 +116,6 @@ void QobuzService::setMessage(const QString &message, bool error) {
   emit changed();
 }
 
-void QobuzService::connectAccount() {
-  if (m_status == QStringLiteral("connecting") || m_status == QStringLiteral("restoring"))
-    return;
-  const QUrl redirect = m_callback->listen();
-  if (redirect.isEmpty()) {
-    setMessage(tr("Could not open a local port for the Qobuz sign-in."), true);
-    return;
-  }
-  const quint64 generation = ++m_connectGeneration;
-  setStatus(QStringLiteral("connecting"));
-  setMessage(tr("Opening Qobuz in your browser..."));
-  call(QStringLiteral("oauth.start"), QJsonObject{{QStringLiteral("redirectUrl"), redirect.toString()}},
-       [this, generation](const QJsonValue &result, const QString &error) {
-         if (generation != m_connectGeneration)
-           return;
-         const QUrl url(result.toObject().value(QStringLiteral("url")).toString());
-         if (!error.isEmpty() || url.scheme() != QStringLiteral("https") ||
-             !QDesktopServices::openUrl(url)) {
-           m_callback->close();
-           setStatus(QStringLiteral("disconnected"));
-           setMessage(error.isEmpty() ? tr("Could not open the Qobuz sign-in page.")
-                                      : tr("Qobuz sign-in is unavailable: %1").arg(error),
-                      true);
-           return;
-         }
-         setMessage(tr("Sign in to Qobuz in your browser, then come back here."));
-       });
-}
-
-void QobuzService::finishConnection(const QString &code) {
-  if (m_status != QStringLiteral("connecting"))
-    return;
-  const quint64 generation = m_connectGeneration;
-  setMessage(tr("Finishing the Qobuz connection..."));
-  call(QStringLiteral("oauth.finish"), QJsonObject{{QStringLiteral("code"), code}},
-       [this, generation](const QJsonValue &result, const QString &error) {
-         acceptAccount(generation, result, error);
-       });
-}
-
 void QobuzService::connectWithToken(const QString &userId, const QString &token, const QString &appId,
                                     const QString &appSecret) {
   if (m_status == QStringLiteral("connecting") || m_status == QStringLiteral("restoring"))
@@ -191,7 +139,6 @@ void QobuzService::acceptAccount(quint64 generation, const QJsonValue &result, c
   const QJsonObject account = result.toObject();
   const QString token = account.value(QStringLiteral("token")).toString();
   const qint64 userId = static_cast<qint64>(account.value(QStringLiteral("userId")).toDouble());
-  m_callback->close();
   if (!error.isEmpty() || token.isEmpty() || userId <= 0) {
     setStatus(QStringLiteral("disconnected"));
     setMessage(error.isEmpty() ? tr("Qobuz did not return an account.")
@@ -210,14 +157,12 @@ void QobuzService::cancelConnection() {
   if (m_status != QStringLiteral("connecting"))
     return;
   ++m_connectGeneration;
-  m_callback->close();
   setStatus(QStringLiteral("disconnected"));
   setMessage({});
 }
 
 void QobuzService::disconnectAccount() {
   ++m_connectGeneration;
-  m_callback->close();
   call(QStringLiteral("close"), QJsonValue());
   forgetSession();
   m_albumQuality.clear();
@@ -243,7 +188,10 @@ void QobuzService::restoreSession() {
     const QJsonObject saved = QJsonDocument::fromJson(read->textData().toUtf8()).object();
     const QString token = saved.value(QStringLiteral("token")).toString();
     const qint64 userId = static_cast<qint64>(saved.value(QStringLiteral("userId")).toDouble());
-    if (read->error() == QKeychain::NoError && !token.isEmpty() && userId > 0) {
+    // Sessions without the user's own app credentials cannot play and need a new sign-in.
+    const bool ownApp = !saved.value(QStringLiteral("appId")).toString().isEmpty() &&
+                        !saved.value(QStringLiteral("appSecret")).toString().isEmpty();
+    if (read->error() == QKeychain::NoError && !token.isEmpty() && userId > 0 && ownApp) {
       applySession(saved);
       setStatus(QStringLiteral("connected"));
       return;

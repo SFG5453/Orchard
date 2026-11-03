@@ -9,6 +9,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.random.Random
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -47,6 +48,56 @@ class MixSplicerTest {
             frame += count
         }
         return out.toShortArray()
+    }
+
+    @Test
+    fun `idle stereo preserves pcm in a bounded read only buffer`() {
+        val samples = shortArrayOf(Short.MIN_VALUE, Short.MAX_VALUE, -1, 1, 0, 1234)
+        val input = ByteBuffer.allocateDirect(samples.size * 2 + 8).order(ByteOrder.nativeOrder())
+        input.position(4)
+        samples.forEach { input.putShort(it) }
+        input.limit(input.position()).position(4)
+        val bounded = input.asReadOnlyBuffer()
+        val splicer = splicer(0.0)
+        splicer.queueInput(bounded)
+        assertEquals(bounded.limit(), bounded.position())
+        val actual = ShortArray(samples.size)
+        splicer.output.order(ByteOrder.nativeOrder()).asShortBuffer().get(actual)
+        assertArrayEquals(samples, actual)
+    }
+
+    @Test
+    fun `a fade armed after idle buffers uses the running media clock`() {
+        val splicer = splicer(10.0)
+        val first = noise(rate, seed = 5)
+        assertArrayEquals(first, run(splicer, first))
+        splicer.fade = MixSplicer.Fade(11_000_000, 500_000, fadeIn = false)
+        val out = run(splicer, ShortArray(rate * 2) { 10_000 })
+        assertEquals(10_000.toShort(), out[0])
+        assertEquals(7_071.0, out[rate / 2].toDouble(), 2.0)
+        assertTrue(out.copyOfRange(rate, out.size).all { it == 0.toShort() })
+    }
+
+    @Test
+    fun `multichannel input bypasses the stereo splicer`() {
+        val splicer = MixSplicer()
+        assertEquals(AudioProcessor.AudioFormat.NOT_SET, splicer.configure(AudioProcessor.AudioFormat(rate, 6, C.ENCODING_PCM_16BIT)))
+        splicer.flush(AudioProcessor.StreamMetadata.DEFAULT)
+        assertFalse(splicer.isActive)
+    }
+
+    @Test
+    fun `idle mono still expands to stereo`() {
+        val splicer = MixSplicer().apply {
+            configure(AudioProcessor.AudioFormat(rate, 1, C.ENCODING_PCM_16BIT))
+            flush(AudioProcessor.StreamMetadata.DEFAULT)
+        }
+        val input = ByteBuffer.allocateDirect(4).order(ByteOrder.nativeOrder())
+        input.putShort(Short.MIN_VALUE).putShort(Short.MAX_VALUE).flip()
+        splicer.queueInput(input)
+        val actual = ShortArray(4)
+        splicer.output.order(ByteOrder.nativeOrder()).asShortBuffer().get(actual)
+        assertArrayEquals(shortArrayOf(Short.MIN_VALUE, Short.MIN_VALUE, Short.MAX_VALUE, Short.MAX_VALUE), actual)
     }
 
     @Test

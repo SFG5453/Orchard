@@ -34,8 +34,10 @@ import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Crop
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.Restore
@@ -62,6 +64,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.sfg.orchard.mobile.artwork.TallArtToggle
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.model.LocalStartMix
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -90,8 +93,10 @@ internal fun TrackActionsPopup(
     onDownload: (() -> Unit)? = null,
     onRemoveDownload: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
+    onWatchVideo: (() -> Unit)? = null,
     onViewAlbum: (() -> Unit)? = null,
     onViewArtist: (() -> Unit)? = null,
+    tallArt: TallArtToggle? = null,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -169,6 +174,9 @@ internal fun TrackActionsPopup(
             onRemoveDownload?.let { action ->
                 PopupActionRow(Icons.Rounded.Delete, "Remove Download", slot++) { onDismiss(); action() }
             }
+            onWatchVideo?.let { action ->
+                PopupActionRow(Icons.Rounded.Videocam, "Watch Music Video", slot++) { onDismiss(); action() }
+            }
             onViewAlbum?.let { action ->
                 if (track.albumId.isNotBlank()) {
                     PopupActionRow(Icons.Rounded.Album, "View Album", slot++) { onDismiss(); action() }
@@ -179,6 +187,10 @@ internal fun TrackActionsPopup(
             }
             onShare?.takeUnless { track.isLocal }?.let { action ->
                 PopupActionRow(Icons.Rounded.Share, "Share Song", slot++) { onDismiss(); action() }
+            }
+            tallArt?.let { art ->
+                val label = if (art.rejected) "Show Tall Cover" else "Show Whole Cover"
+                PopupActionRow(Icons.Rounded.Crop, label, slot++) { onDismiss(); art.onToggle() }
             }
             LocalLibraryUiLocal.current?.takeIf { track.isLocal }?.let { ui ->
                 val song = ui.repository.library.collectAsState().value.songsById[track.id]

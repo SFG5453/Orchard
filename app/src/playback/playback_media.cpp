@@ -31,22 +31,27 @@ void PlaybackController::updateSystemMedia() {
     return;
   }
 
+  // A Connect target's song shows in system media while this desktop controls it.
+  const bool remote = remoteActive();
+  const QVariantMap track = shownTrack();
+  const double length = shownDuration();
+
   QVariantMap state;
-  if (!m_track.isEmpty()) {
-    state.insert(QStringLiteral("track"), m_track);
+  if (!track.isEmpty()) {
+    state.insert(QStringLiteral("track"), track);
   }
-  state.insert(QStringLiteral("isPlaying"), playing());
-  state.insert(QStringLiteral("canGoNext"), canGoNext());
-  state.insert(QStringLiteral("canGoPrevious"), canGoPrevious());
+  state.insert(QStringLiteral("isPlaying"), shownPlaying());
+  state.insert(QStringLiteral("canGoNext"), shownCanGoNext());
+  state.insert(QStringLiteral("canGoPrevious"), shownCanGoPrevious());
   state.insert(QStringLiteral("canSeek"),
-               duration() > 0.0 && !m_loading &&
-                   ((m_player && m_player->isSeekable()) || m_resumePaused));
-  state.insert(QStringLiteral("currentTime"), position());
-  state.insert(QStringLiteral("durationSeconds"), duration());
+               length > 0.0 && !shownLoading() &&
+                   (remote || (m_player && m_player->isSeekable()) || m_resumePaused));
+  state.insert(QStringLiteral("currentTime"), shownPosition());
+  state.insert(QStringLiteral("durationSeconds"), length);
   state.insert(QStringLiteral("volume"),
                m_home ? m_home->volume() : 1.0);
-  state.insert(QStringLiteral("repeatMode"), m_repeatMode);
-  state.insert(QStringLiteral("shuffleEnabled"), m_shuffleEnabled);
+  state.insert(QStringLiteral("repeatMode"), shownRepeatMode());
+  state.insert(QStringLiteral("shuffleEnabled"), shownShuffle());
 
   m_systemMedia->publish(state);
   updateIntegrations();
@@ -61,8 +66,8 @@ void PlaybackController::updateIntegrations() {
       m_animatedArtworkTrackId == m_track.value(QStringLiteral("id")).toString())
     track.insert(QStringLiteral("animatedArtworkUrl"), m_animatedArtworkUrl);
   m_integrations->updatePlayback(track, playing(), position(), duration(),
-                                 m_crossfadeActive,
-                                 m_crossfadeTrack.value(QStringLiteral("title")).toString());
+                                 crossfadeActive(),
+                                 transitionTrack().value(QStringLiteral("title")).toString());
 }
 
 // Look ma, no hands! And by hands, we mean static album art from the Bronze

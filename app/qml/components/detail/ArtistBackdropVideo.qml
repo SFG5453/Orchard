@@ -37,6 +37,8 @@ Item {
     readonly property bool live: hasVideo && output.sourceRect.height > 0
                                  && player.playbackState !== MediaPlayer.StoppedState
     readonly property var sink: output.videoSink
+    // Frame width over height; 16:9 until the first frame arrives.
+    readonly property real aspect: output.sourceRect.height > 0 ? output.sourceRect.width / output.sourceRect.height : 16 / 9
     // Visible part of the frame after cover cropping and the hero's parallax clip.
     readonly property rect frameRect: {
         const rect = output.contentRect;

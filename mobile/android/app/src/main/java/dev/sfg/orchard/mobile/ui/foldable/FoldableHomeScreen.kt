@@ -17,20 +17,16 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+
 package dev.sfg.orchard.mobile.ui.foldable
 
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
-import dev.sfg.orchard.mobile.ui.scroll.OrchardLazyColumn as LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.model.BuiltInHomeSection
@@ -39,6 +35,7 @@ import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.ui.components.HomeSectionShimmer
 import dev.sfg.orchard.mobile.ui.screens.HomeData
 import dev.sfg.orchard.mobile.ui.screens.HomeSectionSheet
+import dev.sfg.orchard.mobile.ui.scroll.OrchardLazyColumn as LazyColumn
 
 internal fun catalogItemSubtitle(item: CatalogItem): String =
     when (item) {
@@ -49,143 +46,126 @@ internal fun catalogItemSubtitle(item: CatalogItem): String =
         is CatalogItem.Category -> item.title
     }
 
-// Foldable-optimized Home screen interface with full-bleed cinematic hero presentation.
+private const val MAX_PICKS = 6
+
+private fun isLikedMusic(item: CatalogItem): Boolean =
+    item is CatalogItem.Collection && item.playlist.id.removePrefix("VL") == "LM"
+
+/** First album or playlist of each shelf; library playlists fill in when the shelves run short. */
+private fun topPicks(data: HomeData): List<TopPick> {
+    fun lead(items: List<CatalogItem>) =
+        items.firstOrNull {
+            (it is CatalogItem.Record || it is CatalogItem.Collection) && it.artworkUrl.isNotBlank() && !isLikedMusic(it)
+        }
+    val picks = data.sections.mapNotNull { section -> lead(section.items)?.let { TopPick(section.title, it) } }
+    val library = data.playlists.filter { it.artworkUrl.isNotBlank() && !isLikedMusic(it) }.map { TopPick("Your Playlists", it) }
+    return (picks + library).distinctBy { it.item.stableId }.take(MAX_PICKS)
+}
+
+// Foldable and tablet Home: title, Top Picks, then shelves laid out by content type.
 @Composable
 fun FoldableHomeScreen(data: HomeData) {
-    var selectedCategory by remember { mutableStateOf("All") }
-    val categories = remember { listOf("All", "Playlists", "Artists", "Albums", "Songs") }
     HomeSectionSheet(data)
 
     val actions = data.actions
     val offline = data.offline
-    val featuredHeroItems = data.heroItems
     val openCatalogItem: (CatalogItem) -> Unit = data::open
+    val picks = remember(data.sections, data.playlists) { topPicks(data) }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = FoldableChromeHeight),
-    ) {
-        // Full Bleed Hero Banner
-        if (featuredHeroItems.isNotEmpty()) {
-            item {
-                FoldableFullBleedHero(
-                    items = featuredHeroItems,
-                    auth = data.auth,
-                    categories = categories,
-                    selectedCategory = selectedCategory,
-                    onSelectCategory = {
-                        selectedCategory = if (selectedCategory == it) "All" else it
-                    },
-                    onSearch = actions.search,
-                    onProfile = actions.openProfile,
-                    onPlay = data::play,
-                    onClick = openCatalogItem,
-                )
-            }
-        } else {
-            // Fallback Masthead if library/state is entirely empty
-            item {
-                FoldableMasthead(
-                    auth = data.auth,
-                    categories = categories,
-                    selectedCategory = selectedCategory,
-                    onSelectCategory = {
-                        selectedCategory = if (selectedCategory == it) "All" else it
-                    },
-                    onSearch = actions.search,
-                    onProfile = actions.openProfile,
-                )
-            }
-        }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val available = maxWidth
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = FoldableChromeHeight),
+        ) {
+            item { FoldableHomeHeader(auth = data.auth, onProfile = actions.openProfile) }
 
-        // Offline Mode Banner
-        if (offline) {
-            item {
-                FoldableOfflineBanner(data.downloadedTracks.size)
-                Spacer(Modifier.height(16.dp))
-            }
-        }
-
-        // Loading shimmer state
-        if (data.state is LoadState.Loading) {
-            item { HomeSectionShimmer(title = "Loading...") }
-        }
-
-        // Content Sections filtered dynamically by selected category
-        data.layout.forEach { config ->
-            if (!config.enabled) return@forEach
-
-            when (config.section) {
-                BuiltInHomeSection.YOUR_PLAYLISTS -> {
-                    if (offline) return@forEach
-                    if (selectedCategory !in listOf("All", "Playlists")) return@forEach
-                    val playlistItems = data.playlists
-                    if (playlistItems.isNotEmpty()) {
-                        foldableRail("Your Playlists", playlistItems, data.seeAll("Your Playlists", playlistItems), openCatalogItem)
-                    }
+            if (!offline && picks.size >= 2) {
+                item {
+                    FoldableTopPicks(picks, available, openCatalogItem)
+                    Spacer(Modifier.height(36.dp))
                 }
+            }
 
-                BuiltInHomeSection.SUBSCRIBED_ARTISTS -> {
-                    if (offline) return@forEach
-                    if (selectedCategory !in listOf("All", "Artists")) return@forEach
-                    val artistItems = data.artists
-                    if (artistItems.isNotEmpty()) {
-                        foldableRail("Keep listening", artistItems, data.seeAll("Keep listening", artistItems), openCatalogItem, cardWidth = 150.dp)
-                    }
+            if (offline) {
+                item {
+                    FoldableOfflineBanner(data.downloadedTracks.size)
+                    Spacer(Modifier.height(16.dp))
                 }
+            }
 
-                BuiltInHomeSection.TOP_SONGS -> {
-                    if (offline) return@forEach
-                    if (selectedCategory !in listOf("All", "Songs")) return@forEach
-                    val songItems = data.topSongs.map { CatalogItem.Song(it) }
-                    if (songItems.isNotEmpty()) {
-                        foldableRail("Top Songs", songItems, data.seeAll("Top Songs", songItems), openCatalogItem)
-                    }
-                }
+            if (data.state is LoadState.Loading) {
+                item { HomeSectionShimmer(title = "Loading...") }
+            }
 
-                BuiltInHomeSection.RECOMMENDATIONS -> {
-                    if (offline) return@forEach
-                    if (selectedCategory != "All") return@forEach
-                    data.sections.forEach { section ->
-                        if (section.items.isNotEmpty()) {
-                            foldableRail(
-                                section.title, section.items,
-                                data.seeAll(section.title, section.items, section.browseId, section.params),
-                                openCatalogItem, sectionKey = section.id,
-                            )
+            data.layout.forEach { config ->
+                if (!config.enabled) return@forEach
+
+                when (config.section) {
+                    BuiltInHomeSection.YOUR_PLAYLISTS -> {
+                        if (offline) return@forEach
+                        val items = data.playlists.filter { (it as? CatalogItem.Collection)?.playlist?.trackCount != 0 }
+                        if (items.isNotEmpty()) {
+                            foldableRail("Your Playlists", items, data.seeAll("Your Playlists", items), openCatalogItem)
                         }
                     }
-                }
 
-                BuiltInHomeSection.DOWNLOADED_PLAYLISTS -> {
-                    if (selectedCategory !in listOf("All", "Playlists")) return@forEach
-                    val downloadedPlaylists = data.offlinePlaylists
-                    if (downloadedPlaylists.isNotEmpty()) {
-                        foldableRail("Downloaded Playlists", downloadedPlaylists, data.seeAll("Downloaded Playlists", downloadedPlaylists), openCatalogItem)
+                    BuiltInHomeSection.SUBSCRIBED_ARTISTS -> {
+                        if (offline) return@forEach
+                        val items = data.artists
+                        if (items.isNotEmpty()) {
+                            foldableRail("Keep listening", items, data.seeAll("Keep listening", items), openCatalogItem)
+                        }
                     }
-                }
 
-                BuiltInHomeSection.DOWNLOADED_ARTISTS -> {
-                    if (selectedCategory !in listOf("All", "Artists")) return@forEach
-                    val downloadedArtists = data.offlineArtists
-                    if (downloadedArtists.isNotEmpty()) {
-                        foldableRail("Downloaded Artists", downloadedArtists, data.seeAll("Downloaded Artists", downloadedArtists), openCatalogItem, cardWidth = 150.dp)
+                    BuiltInHomeSection.TOP_SONGS -> {
+                        if (offline) return@forEach
+                        val items = data.topSongs.map { CatalogItem.Song(it) }
+                        if (items.isNotEmpty()) {
+                            foldableSongShelf("Top Songs", items, available, data.seeAll("Top Songs", items), openCatalogItem)
+                        }
                     }
-                }
 
-                BuiltInHomeSection.DOWNLOADED_ALBUMS -> {
-                    if (selectedCategory !in listOf("All", "Albums")) return@forEach
-                    val downloadedAlbums = data.offlineAlbums
-                    if (downloadedAlbums.isNotEmpty()) {
-                        foldableRail("Downloaded Albums", downloadedAlbums, data.seeAll("Downloaded Albums", downloadedAlbums), openCatalogItem)
+                    BuiltInHomeSection.RECOMMENDATIONS -> {
+                        if (offline) return@forEach
+                        data.sections.forEach { section ->
+                            if (section.items.isEmpty()) return@forEach
+                            val seeAll = data.seeAll(section.title, section.items, section.browseId, section.params)
+                            val songs = section.items.filterIsInstance<CatalogItem.Song>()
+                            if (songs.size == section.items.size) {
+                                foldableSongShelf(section.title, songs, available, seeAll, openCatalogItem, sectionKey = section.id)
+                            } else {
+                                foldableRail(section.title, section.items, seeAll, openCatalogItem, sectionKey = section.id)
+                            }
+                        }
                     }
-                }
 
-                BuiltInHomeSection.DOWNLOADED_SONGS -> {
-                    if (selectedCategory !in listOf("All", "Songs")) return@forEach
-                    if (data.downloadedTracks.isNotEmpty()) {
-                        val downloadedSongItems = data.downloadedTracks.map { CatalogItem.Song(it) }
-                        foldableRail("Downloaded Songs", downloadedSongItems, data.seeAll("Downloaded Songs", downloadedSongItems), openCatalogItem)
+                    BuiltInHomeSection.DOWNLOADED_PLAYLISTS -> {
+                        val items = data.offlinePlaylists
+                        if (items.isNotEmpty()) {
+                            foldableRail("Downloaded Playlists", items, data.seeAll("Downloaded Playlists", items), openCatalogItem)
+                        }
+                    }
+
+                    BuiltInHomeSection.DOWNLOADED_ARTISTS -> {
+                        val items = data.offlineArtists
+                        if (items.isNotEmpty()) {
+                            foldableRail("Downloaded Artists", items, data.seeAll("Downloaded Artists", items), openCatalogItem)
+                        }
+                    }
+
+                    BuiltInHomeSection.DOWNLOADED_ALBUMS -> {
+                        val items = data.offlineAlbums
+                        if (items.isNotEmpty()) {
+                            foldableRail("Downloaded Albums", items, data.seeAll("Downloaded Albums", items), openCatalogItem)
+                        }
+                    }
+
+                    BuiltInHomeSection.DOWNLOADED_SONGS -> {
+                        if (data.downloadedTracks.isNotEmpty()) {
+                            val items = data.downloadedTracks.map { CatalogItem.Song(it) }
+                            foldableSongShelf("Downloaded Songs", items, available, data.seeAll("Downloaded Songs", items), openCatalogItem)
+                        }
                     }
                 }
             }

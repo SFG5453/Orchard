@@ -32,6 +32,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QProcess>
+#include <QSettings>
 #include <qtkeychain/keychain.h>
 
 namespace {
@@ -58,6 +59,7 @@ AppleMusic::AppleMusic(OrchardAccount *account, QObject *parent, bool restore)
           [this](quint64 id, const QJsonValue &result) { finishCall(id, result, {}); });
   connect(m_runtime, &ProviderRuntime::invocationFailed, this,
           [this](quint64 id, const QString &error) { finishCall(id, {}, error); });
+  m_playHistoryEnabled = QSettings().value(QStringLiteral("appleMusic/playHistoryEnabled"), true).toBool();
   if (restore)
     restoreSession();
 }

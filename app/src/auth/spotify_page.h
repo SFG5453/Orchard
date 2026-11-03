@@ -24,7 +24,7 @@
 #include <QJsonObject>
 #include <QString>
 
-// Shared by the WebEngine and WebView2 Spotify helpers.
+// Shared by the WebKitGTK and WebView2 Spotify helpers.
 namespace spotify_page {
 
 // Spotify serves its web player to current desktop browsers only.

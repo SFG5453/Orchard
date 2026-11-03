@@ -37,6 +37,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.draw.drawBehind
 import dev.sfg.orchard.mobile.ui.motion.bounceClickable
 import dev.sfg.orchard.mobile.ui.motion.popOnChange
@@ -83,6 +84,10 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.text.style.TextOverflow
@@ -90,6 +95,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
+import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.ui.glass.GlassTone
 import dev.sfg.orchard.mobile.ui.glass.glassPane
@@ -304,10 +310,17 @@ fun HeroAbout(
     modifier: Modifier = Modifier,
     collapsedLines: Int = 3,
     html: Boolean = false,
+    onLink: ((String) -> Unit)? = null,
 ) {
     if (text.isBlank()) return
+    val openLink by rememberUpdatedState(onLink)
     val body = remember(text, html) {
-        if (html) AnnotatedString.fromHtml(text.replace(Regex("\r\n?|\n"), "<br>"))
+        if (html) AnnotatedString.fromHtml(
+            text.replace(Regex("\r\n?|\n"), "<br>"),
+            linkStyles = TextLinkStyles(SpanStyle(textDecoration = TextDecoration.Underline)),
+            // Links carry browse ids, which the host opens as pages.
+            linkInteractionListener = { link -> (link as? LinkAnnotation.Url)?.url?.let { openLink?.invoke(it) } },
+        )
         else AnnotatedString(text.replace(Regex("\\s+"), " ").trim())
     }
     var expanded by rememberSaveable(text) { mutableStateOf(false) }
@@ -409,3 +422,9 @@ fun heroInfoLine(kindLabel: String, year: String, trackCount: Int, totalMs: Long
         append(if (hours > 0) " • ${hours}h ${totalMinutes % 60}m" else " • ${totalMinutes}m")
     }
 }
+
+private val RichDescription = Regex("</?(?:a|b|br|div|em|i|li|ol|p|span|strong|u|ul)\\b", RegexOption.IGNORE_CASE)
+
+/** True when a description carries markup (always for Apple Music, which serves HTML notes). */
+fun BrowseDetail.hasRichDescription(): Boolean =
+    source == "apple_music" || RichDescription.containsMatchIn(description)

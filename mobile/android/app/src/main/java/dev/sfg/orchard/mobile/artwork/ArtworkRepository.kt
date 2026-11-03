@@ -120,7 +120,11 @@ class ArtworkRepository(
         still
     }
 
-    suspend fun artwork(detail: BrowseDetail): TrackArtwork? = withContext(Dispatchers.IO) {
+    /** [onAlbum] receives the album's own answer while the title-track motion lookup still runs. */
+    suspend fun artwork(
+        detail: BrowseDetail,
+        onAlbum: (TrackArtwork) -> Unit = {},
+    ): TrackArtwork? = withContext(Dispatchers.IO) {
         if (detail.title.isBlank()) return@withContext null
         // detail.subtitle is the descriptive line ("Album", "Playlist"), not the performer, so
         // querying with it missed every time and cost the full timeout on the slow providers.
@@ -155,7 +159,9 @@ class ArtworkRepository(
                 fallback.cancel()
                 direct
             } else {
+                direct?.let(onAlbum)
                 val trackArt = fallback.await()
+                // Motion may come from the title track.
                 if (trackArt.hasMotion()) trackArt!!.copy(trackId = detail.id) else direct
             }
         }

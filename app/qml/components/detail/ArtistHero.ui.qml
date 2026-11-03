@@ -59,10 +59,15 @@ Item {
     readonly property bool bannerMode: bannerProbe.status === Image.Ready
                                        && bannerProbe.implicitWidth > bannerProbe.implicitHeight * 1.34
     readonly property bool wideMode: videoWanted || poster.length > 0 || bannerMode
-    // music.apple.com uses about 42% of the page width, capped so the first rows of songs stay in view.
-    readonly property real mediaHeight: wideMode
+    // Video heroes show the whole frame, up to a full viewport. Narrow windows crop the sides.
+    // Other wide art uses about 42% of the page width, capped so the first rows of songs stay in view.
+    readonly property real mediaHeight: videoWanted
+        ? Math.round(Math.max(compact ? 340 : 440, Math.min(width / root.backdropVideo.aspect, viewportHeight)))
+        : wideMode
         ? Math.round(Math.max(compact ? 340 : 440, Math.min(width * 0.42 + topInset * 0.5, viewportHeight * 0.62)))
         : (compact ? 300 : 380) + topInset
+    // Share of the lower picture the blur and fade use; video keeps more of its frame sharp.
+    readonly property real blendDepth: videoWanted ? 0.55 : 1
     readonly property int nameSize: compact ? 32 : title.length > 24 ? 38 : 48
 
     property alias playButton: playButton
@@ -89,10 +94,10 @@ Item {
         layer.enabled: root.masked
         gradient: Gradient {
             GradientStop { position: 0; color: "white" }
-            GradientStop { position: 0.82; color: "white" }
-            GradientStop { position: 0.87; color: "#d7ffffff" }
-            GradientStop { position: 0.93; color: "#68ffffff" }
-            GradientStop { position: 0.98; color: "#09ffffff" }
+            GradientStop { position: 1 - 0.18 * root.blendDepth; color: "white" }
+            GradientStop { position: 1 - 0.13 * root.blendDepth; color: "#d7ffffff" }
+            GradientStop { position: 1 - 0.07 * root.blendDepth; color: "#68ffffff" }
+            GradientStop { position: 1 - 0.02 * root.blendDepth; color: "#09ffffff" }
             GradientStop { position: 1; color: "transparent" }
         }
     }
@@ -128,11 +133,11 @@ Item {
             layer.enabled: root.masked
             gradient: Gradient {
                 GradientStop { position: 0; color: "transparent" }
-                GradientStop { position: 0.58; color: "transparent" }
-                GradientStop { position: 0.66; color: "#28ffffff" }
-                GradientStop { position: 0.75; color: "#80ffffff" }
-                GradientStop { position: 0.84; color: "#d7ffffff" }
-                GradientStop { position: 0.92; color: "white" }
+                GradientStop { position: 1 - 0.42 * root.blendDepth; color: "transparent" }
+                GradientStop { position: 1 - 0.34 * root.blendDepth; color: "#28ffffff" }
+                GradientStop { position: 1 - 0.25 * root.blendDepth; color: "#80ffffff" }
+                GradientStop { position: 1 - 0.16 * root.blendDepth; color: "#d7ffffff" }
+                GradientStop { position: 1 - 0.08 * root.blendDepth; color: "white" }
                 GradientStop { position: 1; color: "white" }
             }
         }
@@ -174,9 +179,9 @@ Item {
             Item {
                 id: drift
                 width: parent.width
-                // Oversized so the parallax never exposes the edge.
-                height: parent.height * 1.2
-                y: -Math.min(Math.max(root.scrollY, 0) * 0.3, parent.height * 0.2)
+                // Oversized so the parallax never exposes the edge; video keeps its full frame and skips it.
+                height: root.videoWanted ? parent.height : parent.height * 1.2
+                y: root.videoWanted ? 0 : -Math.min(Math.max(root.scrollY, 0) * 0.3, parent.height * 0.2)
                 visible: root.wideMode
 
                 Image {

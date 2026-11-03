@@ -17,6 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { createAnalysisCatalog } from './analysis.js';
 import { createArtistCatalog } from './artist.js';
 import { createArtworkCatalog } from './artwork.js';
 import { createCatalog } from './catalog.js';
@@ -24,12 +25,17 @@ import { createHomeCatalog } from './home.js';
 import { createLibraryCatalog } from './library.js';
 import { createLibraryWrites } from './libraryWrite.js';
 import { createLyricsCatalog } from './lyrics.js';
+import { createMusicVideoCatalog } from './musicVideos.js';
+import { createPlayActivity } from './playActivity.js';
+import { createPlayback } from './playback.js';
+import { createStationCatalog } from './stations.js';
 import { createAppleMusicClient } from './client.js';
 
 export { AppleMusicError, apiUrl } from './client.js';
 export { APPLE_MUSIC_SOURCE, browseId, isAppleMusicId, parseBrowseId } from './ids.js';
 export { ARTIST_VIEWS, heroVideo } from './artist.js';
 export { artworkUrl, releaseInfo } from './normalize.js';
+export { parsePlaylist, playbackId } from './playback.js';
 
 /**
  * Host-neutral Apple Music catalog. The host owns sign-in, token storage and
@@ -40,12 +46,17 @@ export function createAppleMusic({ fetchImpl = fetch, session }) {
   const client = createAppleMusicClient({ fetchImpl, session });
   const library = createLibraryCatalog(client);
   return {
+    ...createAnalysisCatalog(client),
     ...createArtistCatalog(client),
     ...createArtworkCatalog(client),
     ...createCatalog(client, library),
     ...createHomeCatalog(client),
     ...library,
     ...createLibraryWrites(client),
-    ...createLyricsCatalog(client)
+    ...createLyricsCatalog(client),
+    ...createMusicVideoCatalog(client),
+    ...createPlayActivity({ fetchImpl, session }),
+    ...createStationCatalog(client),
+    playback: createPlayback(client, fetchImpl)
   };
 }

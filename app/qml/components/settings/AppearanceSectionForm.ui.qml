@@ -28,11 +28,17 @@ ColumnLayout {
     property real uiScale: 1
     property bool uiScaleRestartRequired: false
     property alias uiScaleSlider: uiScaleSlider
+    property bool autoUiScale: true
+    property alias autoUiScaleSwitch: autoUiScaleSwitch
     property alias resetUiScaleButton: resetUiScaleButton
     property bool showBitrate: false
     property bool fullscreenWindowed: false
     property bool fullscreenAutoHide: true
     property bool fullscreenPulse: true
+    property bool fullscreenCanvasStage: false
+    property bool lyricsFocusBlur: true
+    property bool lyricsDistanceFade: true
+    property bool lyricsStaggeredScroll: true
     property bool artistVideoBackdrop: false
     property bool animatedArtworkEnabled: true
     property bool animatedCollageEnabled: false
@@ -42,6 +48,7 @@ ColumnLayout {
     property real intensity: 0.8
     property real saturation: 1
     property real brightness: 1
+    property string backgroundQuality: "medium"
     // Slider caption for speed, formatted by the logic layer.
     property string speedText: "1.00×"
     property alias layoutPicker: layoutPicker
@@ -49,12 +56,17 @@ ColumnLayout {
     property alias windowedSwitch: windowedSwitch
     property alias autoHideSwitch: autoHideSwitch
     property alias pulseSwitch: pulseSwitch
+    property alias canvasStageSwitch: canvasStageSwitch
+    property alias lyricsBlurSwitch: lyricsBlurSwitch
+    property alias lyricsFadeSwitch: lyricsFadeSwitch
+    property alias lyricsStaggerSwitch: lyricsStaggerSwitch
     property alias artistVideoSwitch: artistVideoSwitch
     property alias animatedArtworkSwitch: animatedArtworkSwitch
     property alias collageSwitch: collageSwitch
     property alias sourcePicker: sourcePicker
     property alias resetOrderButton: resetOrderButton
     property alias immersiveSwitch: immersiveSwitch
+    property alias backgroundQualityPicker: backgroundQualityPicker
     property alias speedSlider: speedSlider
     property alias intensitySlider: intensitySlider
     property alias saturationSlider: saturationSlider
@@ -91,6 +103,19 @@ ColumnLayout {
                 stepSize: 0.05
                 value: root.uiScale
                 displayValue: Math.round(root.uiScale * 100) + "%"
+            }
+        }
+
+        SettingsRow {
+            iconName: "maximize"
+            title: qsTr("Fit large screens")
+            description: qsTr("Enlarges Orchard on screens above 1080p that your system leaves at 100%, such as 1440p at 125% and 4K at 200%.")
+
+            SettingsSwitch {
+                id: autoUiScaleSwitch
+                objectName: "autoUiScale"
+                checked: root.autoUiScale
+                Accessible.name: qsTr("Fit large screens automatically")
             }
         }
 
@@ -204,6 +229,65 @@ ColumnLayout {
                 Accessible.name: qsTr("Pulse with the music")
             }
         }
+
+        SettingsRow {
+            iconName: "image"
+            title: qsTr("Canvas stage")
+            description: qsTr("When a song has a tall loop (Spotify Canvas, or Apple Music tall artwork while signed in), it fills the player side of the screen and the controls sit on top of it. Needs animated artwork.")
+
+            SettingsSwitch {
+                id: canvasStageSwitch
+                objectName: "fullscreenCanvasStageToggle"
+                checked: root.fullscreenCanvasStage
+                Accessible.name: qsTr("Canvas stage")
+            }
+        }
+    }
+
+    SettingsSection {
+        Layout.fillWidth: true
+        title: qsTr("Lyrics")
+        rowSpacing: 0
+        verticalPadding: 0
+
+        SettingsRow {
+            iconName: "mic-vocal"
+            title: qsTr("Blur distant lines")
+            description: qsTr("Lines blur more the further they are from the line being sung. Uses extra GPU power.")
+
+            SettingsSwitch {
+                id: lyricsBlurSwitch
+                objectName: "lyricsFocusBlurToggle"
+                checked: root.lyricsFocusBlur
+                Accessible.name: qsTr("Blur distant lines")
+            }
+        }
+
+        SettingsRow {
+            iconName: "moon"
+            title: qsTr("Fade distant lines")
+            description: qsTr("Lines dim the further they are from the line being sung.")
+
+            SettingsSwitch {
+                id: lyricsFadeSwitch
+                objectName: "lyricsDistanceFadeToggle"
+                checked: root.lyricsDistanceFade
+                Accessible.name: qsTr("Fade distant lines")
+            }
+        }
+
+        SettingsRow {
+            iconName: "arrow-up-down"
+            title: qsTr("Staggered scrolling")
+            description: qsTr("Lines glide into place one after another when the lyrics advance.")
+
+            SettingsSwitch {
+                id: lyricsStaggerSwitch
+                objectName: "lyricsStaggeredScrollToggle"
+                checked: root.lyricsStaggeredScroll
+                Accessible.name: qsTr("Staggered scrolling")
+            }
+        }
     }
 
     SettingsSection {
@@ -310,6 +394,24 @@ ColumnLayout {
                 objectName: "immersiveToggle"
                 checked: root.immersiveBackground
                 Accessible.name: qsTr("Use artwork background")
+            }
+        }
+
+        SettingsRow {
+            enabled: root.immersiveBackground
+            iconName: "sliders-horizontal"
+            title: qsTr("Quality")
+            description: qsTr("Higher quality renders smoother motion and finer detail but uses more GPU.")
+
+            SettingsSegmented {
+                id: backgroundQualityPicker
+                objectName: "backgroundQuality"
+                currentValue: root.backgroundQuality
+                model: [
+                    { value: "low", label: qsTr("Low"), name: qsTr("Low background quality") },
+                    { value: "medium", label: qsTr("Medium"), name: qsTr("Medium background quality") },
+                    { value: "high", label: qsTr("High"), name: qsTr("High background quality") }
+                ]
             }
         }
 

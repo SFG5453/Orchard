@@ -46,17 +46,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.util.lerp
+import androidx.compose.ui.unit.IntSize
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.RemoteArtwork
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.rememberUpdatedState
@@ -65,7 +62,6 @@ import android.graphics.Bitmap
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import dev.sfg.orchard.mobile.ui.components.ArtworkPalette
@@ -78,10 +74,10 @@ import dev.sfg.orchard.mobile.ui.components.MessagePanel
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
 /** How far down the collapse must have travelled on release for the dismiss to commit. */
-private const val COMMIT_FRACTION = 0.5f
+private const val COMMIT_FRACTION = 0.3f
 
 /**
- * Swipe-down-to-dismiss. Progress runs 0 (filling the screen) to 1 (sitting exactly on the pill),
+ * Swipe-down-to-dismiss. Progress runs 0 (filling the screen) to 1 (slid fully off the bottom),
  * so the drag, the opening animation and the committed dismiss are all the same motion.
  *
  * The finger writes a plain float and only the settle is animated. Driving the drag through the
@@ -97,7 +93,7 @@ internal class PlayerCollapse(
     private var dragProgress by mutableFloatStateOf(0f)
     private var dragging by mutableStateOf(false)
 
-    /** Finger travel that completes the collapse; longer than the commit threshold so it reads as gradual. */
+    /** Finger travel that completes the collapse; the player height, so the sheet follows the finger. */
     var collapseSpan = 1f
     var dismissVelocity = 1f
 
@@ -138,14 +134,13 @@ internal class PlayerCollapse(
     }
 }
 
-/** Opens the player out of the pill on first composition. */
+/** Slides the player up on first composition. */
 @Composable
 internal fun rememberPlayerCollapse(onBack: () -> Unit): PlayerCollapse {
     val scope = rememberCoroutineScope()
     val currentOnBack = rememberUpdatedState(onBack)
     val collapse = remember { PlayerCollapse(scope, currentOnBack) }
     with(LocalDensity.current) {
-        collapse.collapseSpan = 320.dp.toPx()
         collapse.dismissVelocity = 800.dp.toPx()
     }
     LaunchedEffect(Unit) { collapse.open() }
@@ -219,73 +214,38 @@ internal fun artistOpenAction(
     }
 }
 
-/**
- * The cover, flying between the player and the pill's thumbnail.
- *
- * Drawn outside the body's fade so it stays fully opaque the whole way down: the cover is
- * the one thing both ends of the transition have in common, so it is what carries the eye.
- * It is laid out at [source] and transformed towards [destination] rather than being
- * re-measured, which keeps the flight off the layout pass.
- */
-
+/** [artistOpenAction] plus the picker it opens when the track credits several artists. */
 @Composable
-internal fun SharedCoverFlight(
-    url: String,
-    description: String,
-    /** Read only in layout and draw, so the flight never recomposes the player. */
-    progress: () -> Float,
-    source: Rect?,
-    destination: Rect?,
-) {
-    if (source == null || destination == null || source.width <= 0f) return
-    val density = LocalDensity.current
-    // The player's cover is a tall crop and the thumbnail is square, so the flight scales by
-    // width and lets the clip take up the difference in height.
-    val scale = destination.width / source.width
-    val height = source.height * scale
-    // Aim at the middle of the thumbnail: the crop keeps the subject centred, and the two
-    // shapes only agree on their centre, not their edges.
-    val centreY = destination.center.y - height / 2f
-    Box(
-        Modifier
-            .offset {
-                val progress = progress()
-                IntOffset(
-                    lerp(source.left, destination.left, progress).roundToInt(),
-                    lerp(source.top, centreY, progress).roundToInt(),
-                )
-            }
-            .graphicsLayer {
-                val progress = progress()
-                transformOrigin = TransformOrigin(0f, 0f)
-                scaleX = lerp(1f, scale, progress)
-                scaleY = lerp(1f, scale, progress)
-            }
-            .size(
-                width = with(density) { source.width.toDp() },
-                height = with(density) { source.height.toDp() },
-            )
-            .graphicsLayer {
-                val progress = progress()
-                // Squares off into the thumbnail's own rounding as it lands.
-                // Fully transparent at rest, which also lets the layer skip drawing entirely.
-                if (progress <= 0f) {
-                    alpha = 0f
-                    return@graphicsLayer
-                }
-                shape = RoundedCornerShape((lerp(0f, 10f, progress) / scale.coerceAtLeast(0.01f)).dp)
-                clip = true
-                // Only the last moment, handing over to the real thumbnail underneath.
-                alpha = ((1f - progress) / (1f - COVER_HANDOFF)).coerceIn(0f, 1f)
+internal fun rememberArtistOpen(track: Track, onOpenCollection: ((String) -> Unit)?): (() -> Unit)? {
+    var showArtistDialog by remember(track.id) { mutableStateOf(false) }
+    if (showArtistDialog) {
+        val selectableArtists = remember(track.artists) { selectableTrackArtists(track) }
+        dev.sfg.orchard.mobile.ui.components.ArtistSelectionDialog(
+            artists = selectableArtists,
+            onDismiss = { showArtistDialog = false },
+            onArtistSelected = { id ->
+                showArtistDialog = false
+                onOpenCollection?.invoke(id)
             },
-    ) {
-        RemoteArtwork(url = url, description = description, modifier = Modifier.fillMaxSize())
+        )
     }
+    return artistOpenAction(track, onOpenCollection, onMultipleArtists = { showArtistDialog = true })
 }
 
-/** Where the flying cover starts giving way to the pill's real thumbnail. */
-
-private const val COVER_HANDOFF = 0.88f
+/** The player sliding down off the screen, tracking the finger one to one. */
+internal fun Modifier.collapsingBody(collapse: PlayerCollapse, playerSize: () -> IntSize): Modifier =
+    graphicsLayer {
+        val progress = collapse.progress
+        if (progress <= 0f) return@graphicsLayer
+        if (playerSize().width == 0) {
+            // Not measured yet: stay hidden rather than flashing at full size.
+            alpha = 0f
+            return@graphicsLayer
+        }
+        translationY = size.height * progress
+        shape = RoundedCornerShape(((progress * 4f).coerceAtMost(1f) * 28f).dp)
+        clip = true
+    }
 
 /** Full-bleed artwork behind every player layout, with the blur and scrim each panel needs. */
 @Composable
@@ -295,7 +255,6 @@ internal fun PlayerBackdropLayer(
     panel: PlayerPanel,
     wideLayout: Boolean,
     isFoldable: Boolean,
-    hasRichArtwork: Boolean,
     palette: ArtworkPalette,
     incomingPalette: ArtworkPalette?,
     incomingArtworkUrl: String?,
@@ -343,17 +302,16 @@ internal fun PlayerBackdropLayer(
         label = "ArtworkAlpha",
     )
 
-    val isSplitModeFoldable = isFoldable && panel != PlayerPanel.NONE
     FullBleedPlayerBackdrop(
         track = track,
         // Fully covered by the lyrics room, so its video can rest.
         isPlaying = isPlaying && !lyricsRoom && (panel == PlayerPanel.LYRICS || !panelObscuresArtwork),
-        // A tablet's real motion cover belongs only in the framed square. Its full-screen
-        // layer is either the tiny Kawarp source or the static palette fallback.
-        animatedArtworkEnabled = animatedArtworkEnabled && !wideLayout,
+        // Tablets and foldables frame the motion cover in a square; a near-square screen
+        // would crop tall art down to its middle.
+        animatedArtworkEnabled = animatedArtworkEnabled && !wideLayout && !isFoldable,
         warpedArtworkEnabled = wideLayout && animatedBackgroundEnabled,
-        ambientGlowEnabled = !wideLayout,
-        gesturesEnabled = gesturesEnabled || (isFoldable && hasRichArtwork),
+        ambientGlowEnabled = !wideLayout && animatedBackgroundEnabled,
+        gesturesEnabled = gesturesEnabled,
         onNext = onNext,
         onPrevious = onPrevious,
         onLiked = onLiked,
@@ -367,18 +325,16 @@ internal fun PlayerBackdropLayer(
         swipe = swipe,
         onArtworkSeam = onArtworkSeam,
         artworkRoom = artworkRoom,
-        modifier = Modifier
-            .blur(backdropBlur)
-            .then(if (isSplitModeFoldable) Modifier.fillMaxWidth(0.512f) else Modifier.fillMaxWidth()),
+        modifier = Modifier.blur(backdropBlur),
     )
     val roomAlpha = animateFloatAsState(if (lyricsRoom) 1f else 0f, tween(420), label = "LyricsRoomAlpha")
     if (lyricsRoom || roomAlpha.value > 0.001f) {
-        LyricsRoom(track.artworkUrl, isPlaying, Modifier.graphicsLayer { alpha = roomAlpha.value })
+        LyricsRoom(track.artworkUrl, isPlaying && lyricsRoom && animatedBackgroundEnabled,
+            Modifier.graphicsLayer { alpha = roomAlpha.value })
     }
     // Blur is a no-op below API 31, so darken as well to keep lyrics legible everywhere.
     if (!lyricsRoom && (wideLayout || isFoldable || panel != PlayerPanel.NONE)) {
         val scrimAlpha = when {
-            isFoldable && panel == PlayerPanel.NONE && hasRichArtwork -> 0.05f
             isFoldable && panel == PlayerPanel.NONE -> 0.15f
             isFoldable -> 0.18f
             panel == PlayerPanel.LYRICS -> 0.38f

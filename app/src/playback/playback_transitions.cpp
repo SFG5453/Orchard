@@ -20,38 +20,13 @@
 #include "auth/auth_manager.h"
 #include "local/local_track.h"
 #include "playback_controller.h"
+#include "playback_helpers.h"
 #include "providers/youtube/youtube_provider.h"
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QScopedValueRollback>
 #include <QSettings>
 #include <algorithm>
-
-namespace {
-bool isAlbumPlaythrough(const QVariantMap &current, const QVariantMap &next) {
-  const QVariantMap origin = current.value(QStringLiteral("queueOrigin")).toMap();
-  const QVariantMap nextOrigin = next.value(QStringLiteral("queueOrigin")).toMap();
-  const QString album = QStringLiteral("album");
-  if (origin.value(QStringLiteral("kind")) != album ||
-      nextOrigin.value(QStringLiteral("kind")) != album)
-    return false;
-  const QString title = origin.value(QStringLiteral("title")).toString();
-  if (title.isEmpty() || title != nextOrigin.value(QStringLiteral("title")).toString() ||
-      origin.value(QStringLiteral("artist")).toString() !=
-          nextOrigin.value(QStringLiteral("artist")).toString())
-    return false;
-  bool currentOk = false;
-  bool nextOk = false;
-  const int currentIndex =
-      current.value(QStringLiteral("index")).toString().trimmed().toInt(&currentOk);
-  const int nextIndex =
-      next.value(QStringLiteral("index")).toString().trimmed().toInt(&nextOk);
-  // Missing track numbers leave the shared album origin as the best evidence.
-  if (!currentOk || !nextOk || currentIndex <= 0 || nextIndex <= 0)
-    return true;
-  return nextIndex == currentIndex + 1;
-}
-} // namespace
 
 void PlaybackController::setGaplessEnabled(bool enabled) {
   if (m_gaplessEnabled == enabled)
@@ -95,7 +70,7 @@ void PlaybackController::clearPreparedTrack() {
     cancelCrossfadeTransition();
   m_adaptiveMix.clear();
   m_nextRequest = 0;
-  ++m_preparedQobuzToken;
+  ++m_preparedResolveToken;
   m_preparedTrack.clear();
   m_preparedBitrate = 0;
   if (m_nextPlayer) {
@@ -176,13 +151,10 @@ bool PlaybackController::hasCrossfadeTarget() const {
 
 double PlaybackController::displayDuration() const {
   const double actual = duration();
-  if (m_crossfadeActive) {
-    const double incoming = m_crossfadeIncomingDuration > 0.0
-                                ? m_crossfadeIncomingDuration
-                                : m_crossfadeOutgoingDisplayDuration;
-    return std::max(1.0, m_crossfadeOutgoingDisplayDuration +
-                             (incoming - m_crossfadeOutgoingDisplayDuration) *
-                                 m_crossfadeProgress);
+  if (crossfadeActive()) {
+    const double from = mixStart();
+    const double incoming = transitionDuration() > 0.0 ? transitionDuration() : from;
+    return std::max(1.0, from + (incoming - from) * crossfadeProgress());
   }
   if (hasCrossfadeTarget() && m_adaptiveMix.enabled() &&
       !m_adaptiveMix.standardFallback())
@@ -193,13 +165,9 @@ double PlaybackController::displayDuration() const {
 }
 
 double PlaybackController::displayPosition() const {
-  if (m_crossfadeActive) {
-    const double incomingPosition =
-        m_nextPlayer ? std::max(0.0, m_nextPlayer->position() / 1000.0) : 0.0;
-    return std::max(
-        0.0, m_crossfadeOutgoingDisplayDuration +
-                 (incomingPosition - m_crossfadeOutgoingDisplayDuration) *
-                     m_crossfadeProgress);
+  if (crossfadeActive()) {
+    const double from = mixStart();
+    return std::max(0.0, from + (transitionPosition() - from) * crossfadeProgress());
   }
   return std::min(position(), std::max(0.0, displayDuration()));
 }
@@ -219,10 +187,8 @@ double PlaybackController::mixDuration() const {
   const double start = mixStart();
   if (start < 0.0)
     return 0.0;
-  const bool adaptive = m_crossfadeActive
-                            ? m_audioEngineOutput.adaptiveMixActive()
-                            : m_adaptiveMix.enabled() &&
-                                  !m_adaptiveMix.standardFallback();
+  const bool adaptive = m_crossfadeActive ? m_audioEngineOutput.adaptiveMixActive()
+                                          : m_adaptiveMix.enabled() && !m_adaptiveMix.standardFallback();
   if (adaptive)
     return m_adaptiveMix.duration();
   return std::max(0.0, std::min<double>(m_crossfadeDuration, duration() - start));
@@ -261,9 +227,13 @@ void PlaybackController::maybeStartCrossfade() {
     // Best Mix order and shuffle are mixes, never album playthroughs.
     const bool albumSequential = !m_shuffleEnabled && !m_bestMixSorted &&
                                  isAlbumPlaythrough(m_track, candidate);
+    QJsonObject outgoingApple, incomingApple;
+    if (pair != m_adaptiveMix.pair() &&
+        !appleMixAnalyses(m_track, candidate, outgoingApple, incomingApple))
+      return;
     m_adaptiveMix.prepare(pair, m_player->source(), m_nextPlayer->source(),
                           actualDuration, position(), m_track, candidate,
-                          m_crossfadeDuration, albumSequential);
+                          m_crossfadeDuration, albumSequential, outgoingApple, incomingApple);
     adaptive = !m_adaptiveMix.standardFallback();
     if (adaptive && !m_adaptiveMix.ready())
       return;

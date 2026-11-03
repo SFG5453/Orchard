@@ -1,19 +1,29 @@
 /* Copyright (C) 2026 SFG545. Licensed under the PolyForm Shield License 1.0.0, see LICENSE-POLYFORM-SHIELD. */
 
-//! Beat This and UMX vocals. Desktop runs Beat This on ORT's WebGPU provider; Android runs
-//! the INT8 exports on CPU. Pre- and post-processing are shared, so only the weights differ.
+//! Nirovi beat and Syvenu vocal models. Desktop runs Nirovi's fp16 graph on ORT's WebGPU provider, or
+//! its int8 graph on CPU; Android passes its extracted int8 exports to `from_files`. Pre- and
+//! post-processing are shared, so only the weights differ.
 use crate::{
     beats::{self, Grid},
     downmix,
+    npu::Npu,
 };
 use earmark::{AudioBuffer, WholeTrackAnalyzer};
 use ort::{session::{Session, builder::SessionBuilder}, value::Tensor};
+
+/// Nirovi exports; both take Beat This's `[1, 1500, 128]` spectrogram and return its logits.
+pub const GPU_BEAT: &str = "nirovi/nirovi_fp16.onnx";
+pub const CPU_BEAT: &str = "nirovi/nirovi_int8.ort";
+/// Syvenu, vocal presence distilled from UMX-HQ; reads the beat spectrogram `[1, T, 128]`.
+pub const VOCAL: &str = "syvenu/syvenu.ort";
 
 pub struct Models {
     beat: Session,
     vocal: Option<Session>,
     vocal_error: Option<String>,
     frontend: WholeTrackAnalyzer,
+    /// Runs both models when set; the CPU sessions take over if it ever fails.
+    npu: Option<Npu>,
 }
 
 #[cfg(feature = "desktop")]
@@ -39,12 +49,15 @@ fn cpu_builder(threads: usize) -> Result<SessionBuilder, String> {
         .with_inter_threads(1)
         .map_err(|e| e.to_string())?
         .with_config_entry("session.intra_op.allow_spinning", "0")
+        .map_err(|e| e.to_string())?
+        // The arena and memory patterns keep each run's largest buffers for the worker's lifetime.
+        .with_execution_providers([ort::ep::CPU::default().with_arena_allocator(false).build()])
+        .map_err(|e| e.to_string())?
+        .with_memory_pattern(false)
         .map_err(|e| e.to_string())
 }
 
-// The LSTM steps serially: on WebGPU each step is a tiny dispatch, so a slice
-// pins the GPU for seconds and starves the compositor. Two CPU threads finish it
-// in about 0.15 s.
+// Two CPU threads cover a 60 s window in about 45 ms; the GPU stays free for the compositor.
 #[cfg(feature = "desktop")]
 fn cpu_session(path: &std::path::Path) -> Result<Session, String> {
     cpu_builder(2)?
@@ -55,8 +68,10 @@ fn cpu_session(path: &std::path::Path) -> Result<Session, String> {
 impl Models {
     #[cfg(feature = "desktop")]
     pub fn new(directory: &std::path::Path) -> Result<Self, String> {
-        let beat = session(&directory.join("beat-this/beat_this_webgpu.onnx"))?;
-        let vocal_result = cpu_session(&directory.join("vocal-separation/vocals_umxhq_fp32.onnx"));
+        // int8 on two CPU threads costs about 0.17 s a window where WebGPU is unavailable.
+        let beat = session(&directory.join(GPU_BEAT))
+            .or_else(|gpu| cpu_session(&directory.join(CPU_BEAT)).map_err(|cpu| format!("{gpu}; {cpu}")))?;
+        let vocal_result = cpu_session(&directory.join(VOCAL));
         let (vocal, vocal_error) = match vocal_result {
             Ok(s) => (Some(s), None),
             Err(e) => (None, Some(e)),
@@ -66,16 +81,17 @@ impl Models {
             vocal,
             vocal_error,
             frontend: WholeTrackAnalyzer::new().map_err(|e| e.to_string())?,
+            npu: None,
         })
     }
 
-    /// CPU sessions from model bytes, for hosts that ship models inside a package.
-    pub fn from_memory(beat: &[u8], vocal: &[u8], threads: usize) -> Result<Self, String> {
+    /// CPU sessions from model files, including extracted package assets.
+    pub fn from_files(beat: &std::path::Path, vocal: &std::path::Path, threads: usize) -> Result<Self, String> {
         let beat = cpu_builder(threads)?
-            .commit_from_memory(beat)
+            .commit_from_file(beat)
             .map_err(|e| format!("Beat model: {e}"))?;
         let (vocal, vocal_error) = match cpu_builder(threads.min(2))
-            .and_then(|mut b| b.commit_from_memory(vocal).map_err(|e| format!("Vocal model: {e}")))
+            .and_then(|mut b| b.commit_from_file(vocal).map_err(|e| format!("Vocal model: {e}")))
         {
             Ok(s) => (Some(s), None),
             Err(e) => (None, Some(e)),
@@ -85,7 +101,34 @@ impl Models {
             vocal,
             vocal_error,
             frontend: WholeTrackAnalyzer::new().map_err(|e| e.to_string())?,
+            npu: None,
         })
+    }
+
+    pub fn set_npu(&mut self, npu: Option<Npu>) {
+        self.npu = npu;
+    }
+
+    /// Beat and downbeat logits for one spectrogram chunk.
+    fn beat_logits(&mut self, values: Vec<f32>) -> Result<(Vec<f32>, Vec<f32>), String> {
+        if let Some(npu) = &self.npu {
+            match npu.beat(&values) {
+                Ok(logits) => return Ok(logits),
+                Err(_) => self.npu = None,
+            }
+        }
+        let input = Tensor::from_array(([1, beats::CHUNK, 128], values)).map_err(|e| e.to_string())?;
+        let output = self
+            .beat
+            .run(ort::inputs!["input_spectrogram"=>input])
+            .map_err(|e| e.to_string())?;
+        let (_, b) = output["beat"]
+            .try_extract_tensor::<f32>()
+            .map_err(|e| e.to_string())?;
+        let (_, d) = output["downbeat"]
+            .try_extract_tensor::<f32>()
+            .map_err(|e| e.to_string())?;
+        Ok((b.to_vec(), d.to_vec()))
     }
 
     /// Beat grid for one 44.1 kHz mono window.
@@ -108,23 +151,12 @@ impl Models {
             let mut values = vec![0.0; beats::CHUNK * 128];
             values[left * 128..(left + to - from) * 128]
                 .copy_from_slice(&spec.values[from * 128..to * 128]);
-            let input =
-                Tensor::from_array(([1, beats::CHUNK, 128], values)).map_err(|e| e.to_string())?;
-            let output = self
-                .beat
-                .run(ort::inputs!["input_spectrogram"=>input])
-                .map_err(|e| e.to_string())?;
-            let (_, b) = output["beat"]
-                .try_extract_tensor::<f32>()
-                .map_err(|e| e.to_string())?;
-            let (_, d) = output["downbeat"]
-                .try_extract_tensor::<f32>()
-                .map_err(|e| e.to_string())?;
+            let (b, d) = self.beat_logits(values)?;
             if b.len() != beats::CHUNK
                 || d.len() != beats::CHUNK
-                || b.iter().chain(d).any(|v| !v.is_finite())
+                || b.iter().chain(&d).any(|v| !v.is_finite())
             {
-                return Err("Invalid Beat This output".into());
+                return Err("Invalid beat model output".into());
             }
             let border = if frames < 12 { 0 } else { beats::BORDER };
             for i in border..frames - border {
@@ -140,53 +172,41 @@ impl Models {
 
     // V2 treats vocal masking as optional. A missing model leaves Earmark's
     // flat filter ride in place.
+    /// Vocal share per beat spectrogram frame (`evidence::VOCAL_FRAME`) of a 44.1 kHz window.
     pub fn vocals(&mut self, audio: &AudioBuffer) -> Result<Vec<f64>, String> {
+        let channels = audio.planar();
+        // Trained on ffmpeg's `-ac 1` fold, (L + R) / sqrt(2).
+        let gain = if channels.len() > 1 { std::f32::consts::FRAC_1_SQRT_2 } else { 1.0 };
+        let mono: Vec<f32> = (0..audio.frames())
+            .map(|i| channels.iter().map(|c| c[i]).sum::<f32>() * gain)
+            .collect();
+        let spec = self
+            .frontend
+            .beat_spectrogram(&downmix::beat_mono(&mono)?, 22_050.0)
+            .map_err(|e| e.to_string())?;
+        if spec.frames == 0 {
+            return Err("Vocal window is too short".into());
+        }
+        if let Some(npu) = &self.npu {
+            match npu.vocal(&spec.values, spec.frames) {
+                Ok(presence) => return Ok(presence.iter().map(|v| f64::from(*v)).collect()),
+                Err(_) => self.npu = None,
+            }
+        }
         let session = self
             .vocal
             .as_mut()
             .ok_or_else(|| self.vocal_error.clone().unwrap_or_default())?;
-        const WIDTH: usize = 960;
-        let refs: Vec<_> = audio.planar().iter().map(Vec::as_slice).collect();
-        let spec = self
-            .frontend
-            .vocal_spectrogram(&refs, 44_100.0)
+        let input = Tensor::from_array(([1, spec.frames, 128], spec.values)).map_err(|e| e.to_string())?;
+        let outputs = session
+            .run(ort::inputs!["mel"=>input])
             .map_err(|e| e.to_string())?;
-        let mut curve = vec![0.0; spec.frames];
-        // Cover the entire search slice, not just the first possible overlap.
-        for start in (0..spec.frames).step_by(WIDTH) {
-            let used = (spec.frames - start).min(WIDTH);
-            let mut mix = vec![0.0; 2 * 2049 * WIDTH];
-            for band in 0..2 * 2049 {
-                mix[band * WIDTH..band * WIDTH + used].copy_from_slice(
-                    &spec.values[band * spec.frames + start..band * spec.frames + start + used],
-                );
-            }
-            let input = Tensor::from_array(([1, 2, 2049, WIDTH], mix.clone()))
-                .map_err(|e| e.to_string())?;
-            let outputs = session
-                .run(ort::inputs!["mix_magnitude"=>input])
-                .map_err(|e| e.to_string())?;
-            let (_, target) = outputs["target_magnitude"]
-                .try_extract_tensor::<f32>()
-                .map_err(|e| e.to_string())?;
-            if target.len() != mix.len() || target.iter().any(|v| !v.is_finite()) {
-                return Err("Invalid vocal model output".into());
-            }
-            for frame in 0..used {
-                let mut sum = 0.0;
-                let mut count = 0;
-                for channel in 0..2 {
-                    for bin in 18..=372 {
-                        let i = (channel * 2049 + bin) * WIDTH + frame;
-                        if mix[i] > 1e-6 {
-                            sum += (target[i] / mix[i]).clamp(0.0, 1.0) as f64;
-                            count += 1;
-                        }
-                    }
-                }
-                curve[start + frame] = if count > 0 { sum / count as f64 } else { 0.0 };
-            }
+        let (_, presence) = outputs["presence"]
+            .try_extract_tensor::<f32>()
+            .map_err(|e| e.to_string())?;
+        if presence.len() != spec.frames || presence.iter().any(|v| !v.is_finite()) {
+            return Err("Invalid vocal model output".into());
         }
-        Ok(curve)
+        Ok(presence.iter().map(|v| f64::from(*v)).collect())
     }
 }

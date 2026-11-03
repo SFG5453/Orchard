@@ -32,6 +32,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.model.LocalMaxActive
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.model.PlaybackTarget
@@ -39,6 +40,7 @@ import dev.sfg.orchard.mobile.ui.components.PlaylistPickerSheet
 import dev.sfg.orchard.mobile.ui.motion.NavMotion
 import dev.sfg.orchard.mobile.ui.navigation.Routes
 import dev.sfg.orchard.mobile.ui.screens.DetailScreen
+import dev.sfg.orchard.mobile.ui.screens.HeroArt
 import dev.sfg.orchard.mobile.ui.screens.HomeActions
 import dev.sfg.orchard.mobile.ui.screens.HomeScreen
 import dev.sfg.orchard.mobile.ui.screens.rememberHomeData
@@ -69,6 +71,7 @@ internal fun OrchardNavigation(
     val lastfmState by viewModel.lastfmState.collectAsStateWithLifecycle()
     val listenBrainzState by viewModel.listenBrainzState.collectAsStateWithLifecycle()
     val libraryFilter by viewModel.libraryFilter.collectAsStateWithLifecycle()
+    val appleLibraryActive by viewModel.appleLibraryActive.collectAsStateWithLifecycle()
     val localSnapshot by viewModel.localSnapshot.collectAsStateWithLifecycle()
     val localBusy by viewModel.localLibrary.busy.collectAsStateWithLifecycle()
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
@@ -148,6 +151,7 @@ internal fun OrchardNavigation(
                         fetchSectionItems = viewModel::fetchHomeSectionItems,
                         playItem = viewModel::playItem,
                         playCollection = { id, title -> viewModel.playCollection(id, title) },
+                        startMix = viewModel::startMix,
                     ),
                 )
             )
@@ -169,14 +173,18 @@ internal fun OrchardNavigation(
                 onPlayNext = if (canControlQueue) viewModel::playNext else null,
                 onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
                 onOpenDetail = { id -> viewModel.openDetail(id); nav.navigate(Routes.detail(id)) },
-                onDownloadTrack = viewModel::downloadTrack,
+                onDownloadTrack = viewModel::downloadTrack.takeUnless { settings.homeSource == APPLE_MUSIC_SOURCE },
                 onRemoveDownloadTrack = viewModel::removeDownload,
                 onShare = viewModel::shareTrack,
                 localLibrary = viewModel.localLibrary,
                 localSnapshot = localSnapshot,
                 localBusy = localBusy,
-                youtubeAvailable = auth is dev.sfg.orchard.mobile.auth.AuthState.SignedIn,
-                onCreateYouTubePlaylist = { title -> viewModel.createPlaylist(title, null) },
+                onlineService = when {
+                    appleLibraryActive -> "Apple Music"
+                    auth is dev.sfg.orchard.mobile.auth.AuthState.SignedIn -> "YouTube Music"
+                    else -> null
+                },
+                onCreateOnlinePlaylist = { title -> viewModel.createPlaylist(title, null) },
             )
         }
         composable(Routes.DOWNLOADS) {
@@ -221,8 +229,7 @@ internal fun OrchardNavigation(
                 onDisconnectListenBrainz = viewModel::disconnectListenBrainz,
                 onConnectSpotify = { nav.navigate(Routes.SPOTIFY_LOGIN) },
                 qobuzStatus = qobuzStatus,
-                onConnectQobuz = { nav.navigate(Routes.QOBUZ_LOGIN) },
-                onConnectQobuzToken = { nav.navigate(Routes.QOBUZ_TOKEN_LOGIN) },
+                onConnectQobuz = { nav.navigate(Routes.QOBUZ_TOKEN_LOGIN) },
                 onConnectAppleMusic = { nav.navigate(Routes.APPLE_MUSIC_LOGIN) },
                 onDisconnectQobuz = viewModel::disconnectQobuz,
                 onQobuzEnabledChange = viewModel::setQobuzEnabled,
@@ -280,17 +287,6 @@ internal fun OrchardNavigation(
         composable(Routes.APPLE_MUSIC_LOGIN) {
             dev.sfg.orchard.mobile.ui.screens.AppleMusicLoginScreen(onDone = { nav.popBackStack() })
         }
-        composable(Routes.QOBUZ_LOGIN) {
-            val graph = OrchardGraph.from(context)
-            dev.sfg.orchard.mobile.ui.screens.QobuzLoginScreen(
-                qobuz = graph.qobuzResolver,
-                onSuccess = { token, userId ->
-                    viewModel.connectQobuz(token, userId)
-                    nav.popBackStack()
-                },
-                onCancel = { nav.popBackStack() },
-            )
-        }
         composable(Routes.QOBUZ_TOKEN_LOGIN) {
             dev.sfg.orchard.mobile.ui.screens.QobuzTokenLoginScreen(
                 qobuz = OrchardGraph.from(context).qobuzResolver,
@@ -326,6 +322,7 @@ internal fun OrchardNavigation(
             val animatedArtworkUrl = if (settings.animatedArtwork) {
                 detailArtwork?.let { it.videoUrl.ifBlank { it.videoUrlVertical } }.orEmpty()
             } else ""
+            val heroArt = HeroArt(animatedUrl = animatedArtworkUrl)
 
             // Only artist pages swap in TheAudioDB's photograph; albums keep their cover, which
             // also drives the page palette.
@@ -346,15 +343,20 @@ internal fun OrchardNavigation(
                 )
             }
 
+            // A station page holds its first songs; the queue keeps drawing from the station.
+            val stationId = (shownDetail as? LoadState.Content)?.value?.id
+                ?.takeIf { it.startsWith(QueueLauncher.APPLE_STATION_PREFIX) }.orEmpty()
             DetailScreen(
                 state = shownDetail,
                 localEdit = localEdit,
                 onBack = nav::popBackStack,
-                onPlayAll = { tracks, source -> viewModel.playAll(tracks, contextTitle = source) },
-                onShuffle = { tracks, source -> viewModel.shuffleAll(tracks, source) },
+                onPlayAll = { tracks, source -> viewModel.playAll(tracks, contextTitle = source, stationId = stationId) },
+                onShuffle = { tracks, source -> viewModel.shuffleAll(tracks, source, stationId) },
                 shuffleAvailable = canShuffle,
                 onPlay = { track, source -> viewModel.play(track, source) },
-                onPlayTrack = { tracks, index, source -> viewModel.playAll(tracks, startIndex = index, contextTitle = source) },
+                onPlayTrack = { tracks, index, source ->
+                    viewModel.playAll(tracks, startIndex = index, contextTitle = source, stationId = stationId)
+                },
                 onPlayNext = if (canControlQueue) viewModel::playNext else null,
                 onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
                 onAddToPlaylist = { playlistPickerTrack = it },
@@ -365,11 +367,11 @@ internal fun OrchardNavigation(
                 isSaved = isSaved,
                 downloadedTrackIds = downloadedTrackIds,
                 downloadingTrackIds = downloadingTrackIds,
-                onDownloadTrack = viewModel::downloadTrack,
-                onDownloadTracks = viewModel::downloadTracks,
+                onDownloadTrack = viewModel::downloadTrack.takeUnless { settings.homeSource == APPLE_MUSIC_SOURCE },
+                onDownloadTracks = viewModel::downloadTracks.takeUnless { settings.homeSource == APPLE_MUSIC_SOURCE },
                 onRemoveDownloadTrack = viewModel::removeDownload,
                 onRemoveDownloadTracks = viewModel::removeDownloads,
-                animatedArtworkUrl = animatedArtworkUrl,
+                heroArt = heroArt,
                 artistPortraitUrl = artistImages?.portraitUrl.orEmpty(),
                 onShareTrack = viewModel::shareTrack,
                 onShareCollection = viewModel::shareCollection,

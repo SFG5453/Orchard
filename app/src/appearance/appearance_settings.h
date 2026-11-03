@@ -29,7 +29,11 @@ class AppearanceSettings final : public QObject {
     Q_PROPERTY(bool welcomeSeen READ welcomeSeen WRITE setWelcomeSeen NOTIFY changed)
     Q_PROPERTY(QString lastSeenRelease READ lastSeenRelease WRITE setLastSeenRelease NOTIFY changed)
     Q_PROPERTY(QString layoutStyle READ layoutStyle WRITE setLayoutStyle NOTIFY changed)
+    // Immersive background render quality: low, medium or high.
+    Q_PROPERTY(QString backgroundQuality READ backgroundQuality WRITE setBackgroundQuality NOTIFY changed)
     Q_PROPERTY(double uiScale READ uiScale WRITE setUiScale NOTIFY changed)
+    // Enlarges screens the system leaves at 100% when they are larger than 1080p.
+    Q_PROPERTY(bool autoUiScale READ autoUiScale WRITE setAutoUiScale NOTIFY changed)
     Q_PROPERTY(bool uiScaleRestartRequired READ uiScaleRestartRequired NOTIFY changed)
     Q_PROPERTY(double speed READ speed WRITE setSpeed NOTIFY changed)
     Q_PROPERTY(double intensity READ intensity WRITE setIntensity NOTIFY changed)
@@ -38,6 +42,10 @@ class AppearanceSettings final : public QObject {
     Q_PROPERTY(bool fullscreenWindowed READ fullscreenWindowed WRITE setFullscreenWindowed NOTIFY changed)
     Q_PROPERTY(bool fullscreenAutoHide READ fullscreenAutoHide WRITE setFullscreenAutoHide NOTIFY changed)
     Q_PROPERTY(bool fullscreenPulse READ fullscreenPulse WRITE setFullscreenPulse NOTIFY changed)
+    Q_PROPERTY(bool fullscreenCanvasStage READ fullscreenCanvasStage WRITE setFullscreenCanvasStage NOTIFY changed)
+    Q_PROPERTY(bool lyricsFocusBlur READ lyricsFocusBlur WRITE setLyricsFocusBlur NOTIFY changed)
+    Q_PROPERTY(bool lyricsDistanceFade READ lyricsDistanceFade WRITE setLyricsDistanceFade NOTIFY changed)
+    Q_PROPERTY(bool lyricsStaggeredScroll READ lyricsStaggeredScroll WRITE setLyricsStaggeredScroll NOTIFY changed)
     Q_PROPERTY(bool artistVideoBackdrop READ artistVideoBackdrop WRITE setArtistVideoBackdrop NOTIFY changed)
     Q_PROPERTY(bool animatedArtworkEnabled READ animatedArtworkEnabled WRITE setAnimatedArtworkEnabled NOTIFY changed)
     Q_PROPERTY(bool animatedCollageEnabled READ animatedCollageEnabled WRITE setAnimatedCollageEnabled NOTIFY changed)
@@ -62,8 +70,10 @@ public:
     bool welcomeSeen() const { return m_welcomeSeen; }
     QString lastSeenRelease() const { return m_lastSeenRelease; }
     QString layoutStyle() const { return m_layoutStyle; }
+    QString backgroundQuality() const { return m_backgroundQuality; }
     double uiScale() const { return m_uiScale; }
-    bool uiScaleRestartRequired() const { return m_uiScale != m_initialUiScale; }
+    bool autoUiScale() const { return m_autoUiScale; }
+    bool uiScaleRestartRequired() const { return m_uiScale != m_initialUiScale || m_autoUiScale != m_initialAutoUiScale; }
     double speed() const { return m_speed; }
     double intensity() const { return m_intensity; }
     double saturation() const { return m_saturation; }
@@ -71,6 +81,10 @@ public:
     bool fullscreenWindowed() const { return m_fullscreenWindowed; }
     bool fullscreenAutoHide() const { return m_fullscreenAutoHide; }
     bool fullscreenPulse() const { return m_fullscreenPulse; }
+    bool fullscreenCanvasStage() const { return m_fullscreenCanvasStage; }
+    bool lyricsFocusBlur() const { return m_lyricsFocusBlur; }
+    bool lyricsDistanceFade() const { return m_lyricsDistanceFade; }
+    bool lyricsStaggeredScroll() const { return m_lyricsStaggeredScroll; }
     bool artistVideoBackdrop() const { return m_artistVideoBackdrop; }
     bool animatedArtworkEnabled() const { return m_animatedArtwork; }
     bool animatedCollageEnabled() const { return m_animatedCollage; }
@@ -94,7 +108,9 @@ public:
     void setWelcomeSeen(bool value);
     void setLastSeenRelease(const QString &value);
     void setLayoutStyle(const QString &value);
+    void setBackgroundQuality(const QString &value);
     void setUiScale(double value);
+    void setAutoUiScale(bool value);
     void setSpeed(double value);
     void setIntensity(double value);
     void setSaturation(double value);
@@ -102,6 +118,10 @@ public:
     void setFullscreenWindowed(bool value);
     void setFullscreenAutoHide(bool value);
     void setFullscreenPulse(bool value);
+    void setFullscreenCanvasStage(bool value);
+    void setLyricsFocusBlur(bool value);
+    void setLyricsDistanceFade(bool value);
+    void setLyricsStaggeredScroll(bool value);
     void setArtistVideoBackdrop(bool value);
     void setAnimatedArtworkEnabled(bool value);
     void setAnimatedCollageEnabled(bool value);
@@ -135,8 +155,11 @@ private:
     QString m_lastSeenRelease;
     // "glade" floats the player at the bottom, "canopy" docks it beside search at the top.
     QString m_layoutStyle{QStringLiteral("glade")};
+    QString m_backgroundQuality{QStringLiteral("medium")};
     double m_uiScale{1.0};
     double m_initialUiScale{1.0};
+    bool m_autoUiScale{true};
+    bool m_initialAutoUiScale{true};
     double m_speed{1.38};
     double m_intensity{0.92};
     double m_saturation{1.24};
@@ -145,6 +168,10 @@ private:
     bool m_fullscreenWindowed{false};
     bool m_fullscreenAutoHide{true};
     bool m_fullscreenPulse{true};
+    bool m_fullscreenCanvasStage{false};
+    bool m_lyricsFocusBlur{true};
+    bool m_lyricsDistanceFade{true};
+    bool m_lyricsStaggeredScroll{true};
     // Plays one of the artist's music videos, muted, behind the artist page hero.
     bool m_artistVideoBackdrop{false};
     // Moving album art: when a still image simply isn't consuming enough of your monthly data plan.

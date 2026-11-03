@@ -29,6 +29,13 @@
     <provider android:authorities="androidx.car.app.connection" />
     <!-- Presence goes through the installed Discord app. -->
     <package android:name="com.discord" />
+    <!-- Snapdragon NPU add-ons, one per Hexagon generation (npu-addon/build.sh). -->
+    <package android:name="dev.sfg.orchard.npu.v68" />
+    <package android:name="dev.sfg.orchard.npu.v69" />
+    <package android:name="dev.sfg.orchard.npu.v73" />
+    <package android:name="dev.sfg.orchard.npu.v75" />
+    <package android:name="dev.sfg.orchard.npu.v79" />
+    <package android:name="dev.sfg.orchard.npu.v81" />
   </queries>
 
   <application
@@ -42,6 +49,15 @@
     android:theme="@style/AppTheme"
     android:supportsRtl="true"
     android:usesCleartextTraffic="true">
+
+    <!-- Vendor NPU runtimes for adaptive mix: Snapdragon's DSP RPC, MediaTek's Neuron adapter. -->
+    <uses-native-library android:name="libcdsprpc.so" android:required="false" />
+    <uses-native-library android:name="libneuronusdk_adapter.mtk.so" android:required="false" />
+    <uses-native-library android:name="libneuronusdk_adapter.9.mtk.so" android:required="false" />
+    <uses-native-library android:name="libneuronusdk_adapter.10.mtk.so" android:required="false" />
+    <uses-native-library android:name="libneuronusdk_adapter.so" android:required="false" />
+    <uses-native-library android:name="libneuron_adapter_mgvi.so" android:required="false" />
+    <uses-native-library android:name="libneuron_adapter.so" android:required="false" />
 
     <meta-data
       android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"

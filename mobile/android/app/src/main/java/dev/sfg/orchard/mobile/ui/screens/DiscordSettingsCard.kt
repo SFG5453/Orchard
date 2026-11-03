@@ -60,7 +60,7 @@ fun DiscordSettingsCard(
         shape = shape,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             when (discordStatus) {
                 DiscordPresenceStatus.Unavailable -> Text(
                     "Install and sign in to the Discord app to share what you’re listening to.",

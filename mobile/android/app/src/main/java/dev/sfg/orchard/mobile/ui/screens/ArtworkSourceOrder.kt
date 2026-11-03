@@ -59,7 +59,7 @@ internal fun ArtworkSourceOrder(settings: OrchardSettings, onSettings: (OrchardS
         java.util.Collections.swap(reordered, from, to)
         onSettings(settings.copy(artworkSourceOrder = reordered.flatten()))
     }
-    Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+    Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
         RowTitle("Artwork source order")
         RowSubtitle(
             if (apple) "Try sources from top to bottom for moving artwork. Apple Music replaces m8tec and boidu while you're signed in"

@@ -75,6 +75,17 @@ fun LosslessBadge(
     isQobuz: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    if (LocalStreamDetail.current.codec == "Atmos") {
+        Text(
+            text = if (bitrateKbps > 0) "Atmos · $bitrateKbps kbps" else "Atmos",
+            modifier = modifier,
+            color = Color.White.copy(alpha = 0.85f),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 11.sp, fontFamily = FontFamily.Default, fontWeight = FontWeight.SemiBold,
+            ),
+        )
+        return
+    }
     if (!showBitrate || bitrateKbps <= 0) return
 
     if (!isQobuz) {

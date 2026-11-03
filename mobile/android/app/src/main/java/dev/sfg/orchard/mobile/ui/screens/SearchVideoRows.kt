@@ -62,7 +62,7 @@ internal fun LazyListScope.videoResults(
 ) {
     val all = scope == SearchScope.All
     if (videos.isEmpty() || !(all || scope == SearchScope.Videos)) return
-    item { Column { PanelDivider(); PanelCaption("Videos", "See all".takeIf { all && videos.size > limit }) { onScope(SearchScope.Videos) } } }
+    item { SectionHeading("Videos", "See all".takeIf { all && videos.size > limit }) { onScope(SearchScope.Videos) } }
     itemsIndexed(if (all) videos.take(limit) else videos, key = { index, it -> "video:${it.id}_$index" }) { _, video ->
         VideoResultRow(video) { onPlayVideo(video) }
     }

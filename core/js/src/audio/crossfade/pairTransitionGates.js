@@ -7,7 +7,7 @@ import {
   MAX_ROLE_CANDIDATES,
   MEASURED_CHANGES
 } from './pairTransitionEvidence.js';
-import { STYLE_CLASH_CONTRAST, halfBars } from './transitionFlow.js';
+import { STYLE_CLASH_CONTRAST, firstBeat, halfBars } from './transitionFlow.js';
 
 export const CLASS_RANK = Object.freeze({
   normal_boundary: 0,
@@ -155,6 +155,14 @@ function measuredVoices(voice = {}) {
   return Number.isFinite(voice.incoming) && Number.isFinite(voice.outgoing);
 }
 
+/** True when a muffle fades the new song in after its first beat, false before it. */
+function muffledIntoBeat(pair, incoming) {
+  const opening = firstBeat(incoming);
+  const heard = pair.incomingStart +
+    (pair.spans?.incoming?.[0] ?? 0) * pair.durationSeconds * pair.incomingRatio;
+  return opening !== null && heard >= opening;
+}
+
 export function candidateGates({
   pair, fit, outgoing, incoming, harmonic, collision, vocal, spectral = 1, contrast = null, voice = {}
 }) {
@@ -192,10 +200,19 @@ export function candidateGates({
   // Fading the outgoing singer out mid-line sounds forced even over a clean incoming,
   // unless the voice never stops before the song does. A drop-in pulls the outgoing out
   // within four beats, too fast for any line to ride over.
-  const waived = voice.singsOut && pair.alignment !== 'start';
-  if (measuredVoice && voice.outgoing >= 0.3 && !waived) lower('voice-cut', 'normal_boundary', 'veto');
-  // Blends that only work behind a filter sound forced; they play out.
-  if (needsFilter(harmonic, spectral, collision, measuredVoice)) lower('needs-filter', 'simple_crossfade', 'veto');
+  // A muffle hides a cut line once the new song's beat is playing as it fades in. Over the
+  // new song's beatless intro the cut is all there is to hear, even a line trailing off.
+  const muffled = pair.exitStyle === 'muffle_swap';
+  const intoBeat = muffled && muffledIntoBeat(pair, incoming);
+  const waived = (voice.singsOut && pair.alignment !== 'start') || intoBeat;
+  const cutAt = muffled && !intoBeat ? 0.1 : 0.3;
+  if (measuredVoice && voice.outgoing >= cutAt && !waived) lower('voice-cut', 'normal_boundary', 'veto');
+  // Blends that only work behind a filter sound forced; they play out. A muffle is that
+  // filter, so only voices that still meet inside its short overlap refuse it.
+  const filtered = pair.exitStyle
+    ? (measuredVoice ? (collision.simultaneousMean ?? 0) > 0.25 : sustained(collision))
+    : needsFilter(harmonic, spectral, collision, measuredVoice);
+  if (filtered) lower('needs-filter', 'simple_crossfade', 'veto');
 
   const left = pair.outgoingCandidate;
   const right = pair.incomingCandidate;
@@ -268,6 +285,7 @@ export function compareEvaluations(left, right) {
 export function strategyFor(evaluation) {
   if (evaluation.transitionClass === 'silence_trim') return 'boundary_handoff';
   if (evaluation.transitionClass === 'normal_boundary') return 'boundary_handoff';
+  if (evaluation.pair.exitStyle) return evaluation.pair.exitStyle;
   if (evaluation.transitionClass === 'simple_crossfade') {
     if (
       (evaluation.collision.longestRunBeats ?? 0) >= 4 ||

@@ -101,19 +101,6 @@ fun SettingsHomeLayout(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (selectedTabIndex == 0) {
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            RowTitle("Music source")
-                            RowSubtitle("Choose the catalog for Home, search, albums, artists and playlists.")
-                            SettingsSegmented(
-                                options = listOf("youtube" to "YouTube Music", "apple_music" to "Apple Music"),
-                                selected = settings.homeSource,
-                                onSelect = { onSettings(settings.copy(homeSource = it)) },
-                            )
-                        }
-                    }
-                }
                 item {
                     Text(
                         "Reorder and toggle sections for the Home screen.",
@@ -203,7 +190,7 @@ private fun SectionItemRow(
 private fun BuiltInHomeSection.title(auth: AuthState): String = when (this) {
         BuiltInHomeSection.YOUR_PLAYLISTS -> "Your Playlists"
         BuiltInHomeSection.SUBSCRIBED_ARTISTS -> "Subscribed Artists"
-        BuiltInHomeSection.TOP_SONGS -> if (auth is AuthState.SignedIn) "Listening Review" else "Top Songs"
+        BuiltInHomeSection.TOP_SONGS -> "Quick picks"
         BuiltInHomeSection.RECOMMENDATIONS -> "Recommendations"
         BuiltInHomeSection.DOWNLOADED_PLAYLISTS -> "Downloaded Playlists"
         BuiltInHomeSection.DOWNLOADED_ARTISTS -> "Downloaded Artists"

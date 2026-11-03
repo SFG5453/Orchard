@@ -66,7 +66,7 @@ import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 private enum class CreateStep { NONE, MENU, PLAYLIST }
 
 /**
- * The library's Create button: one sheet with New playlist (YouTube Music or this phone), Add songs
+ * The library's Create button: one sheet with New playlist (the streaming service or this phone), Add songs
  * and Add a folder. Stays composed while closed so picker results still arrive.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,8 +75,8 @@ internal fun LibraryCreateSheet(
     open: Boolean,
     onDismiss: () -> Unit,
     repository: LocalLibraryRepository,
-    youtubeAvailable: Boolean,
-    onCreateYouTubePlaylist: (String) -> Unit,
+    service: String?,
+    onCreateOnlinePlaylist: (String) -> Unit,
     onOpenPlaylist: (String) -> Unit,
 ) {
     var naming by remember { mutableStateOf(false) }
@@ -106,7 +106,7 @@ internal fun LibraryCreateSheet(
                     modifier = Modifier.padding(start = 8.dp, bottom = 8.dp),
                 )
                 CreateRow(Icons.AutoMirrored.Rounded.PlaylistAdd, "New playlist",
-                    if (youtubeAvailable) "On YouTube Music or this phone" else "Kept on this phone", accent = true) {
+                    if (service != null) "On $service or this phone" else "Kept on this phone", accent = true) {
                     naming = true
                     onDismiss()
                 }
@@ -124,12 +124,12 @@ internal fun LibraryCreateSheet(
 
     if (step == CreateStep.PLAYLIST) {
         NewPlaylistSheet(
-            youtubeAvailable = youtubeAvailable,
+            service = service,
             onDismiss = { naming = false },
             onCreate = { title, local, thenAddSongs ->
                 naming = false
                 if (!local) {
-                    onCreateYouTubePlaylist(title)
+                    onCreateOnlinePlaylist(title)
                 } else {
                     val id = repository.createPlaylist(title)
                     if (thenAddSongs) {

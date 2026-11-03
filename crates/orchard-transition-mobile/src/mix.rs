@@ -7,9 +7,9 @@
 //! Handles are boxed Rust values owned by Kotlin, which frees each exactly once.
 
 use jni::JNIEnv;
-use jni::objects::{JByteArray, JClass, JFloatArray, JObject, JString, JValue};
+use jni::objects::{JClass, JFloatArray, JObject, JString, JValue};
 use jni::sys::{jboolean, jbyteArray, jdouble, jint, jlong, jstring};
-use orchard_adaptive_mix::{best_mix, models::Models, prepare, song::{Song, SongBuilder, Windows}};
+use orchard_adaptive_mix::{apple, best_mix, models::Models, npu::Npu, prepare::{self, Measurements}, song::{Song, SongBuilder, Windows}};
 use serde_json::{Value, json};
 use std::sync::OnceLock;
 
@@ -107,6 +107,18 @@ pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nati
     string(&mut env, &output)
 }
 
+/// Desktop's `bestMixApple` response for one song: features from Apple Music's analysis JSON.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nativeBestMixApple(
+    mut env: JNIEnv<'_>, _class: JClass<'_>, analysis: JString<'_>, duration: jdouble,
+) -> jstring {
+    let output = read_string(&mut env, &analysis)
+        .and_then(|text| serde_json::from_str::<Value>(&text).map_err(|e| e.to_string()))
+        .and_then(|analysis| apple::best_mix(&analysis, duration))
+        .map_or_else(error_json, |value| value.to_string());
+    string(&mut env, &output)
+}
+
 /// Desktop's `bestMixSortLazy`: `{"order":[…]}` or `{"error":…}`. Full edges come from
 /// `pairs.pair(left, right)`, which answers like the desktop host does to `needPair`.
 #[unsafe(no_mangle)]
@@ -151,16 +163,22 @@ fn runtime() -> Result<(), String> {
     }).clone()
 }
 
-/// Loads Beat This and UMX from model bytes on `threads` CPU threads. 0 with no models.
+/// Loads Nirovi and Syvenu from model files on `threads` CPU threads. 0 with no models.
+/// A nonzero `npu` is an open `NpuNative` backend, owned from here on (freed even on failure),
+/// with `vtable` from `NpuNative.nativeVtable`; the CPU sessions back it up.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nativeModelsLoad(
-    env: JNIEnv<'_>, _class: JClass<'_>, beat: JByteArray<'_>, vocal: JByteArray<'_>, threads: jint,
+    mut env: JNIEnv<'_>, _class: JClass<'_>, beat: JString<'_>, vocal: JString<'_>, threads: jint,
+    npu: jlong, vtable: jlong,
 ) -> jlong {
+    let npu = unsafe { Npu::from_raw(npu as usize, vtable as usize) };
     let loaded = (|| -> Result<Models, String> {
         runtime()?;
-        let beat = env.convert_byte_array(&beat).map_err(|e| e.to_string())?;
-        let vocal = env.convert_byte_array(&vocal).map_err(|e| e.to_string())?;
-        Models::from_memory(&beat, &vocal, threads.clamp(1, 8) as usize)
+        let beat = read_string(&mut env, &beat)?;
+        let vocal = read_string(&mut env, &vocal)?;
+        let mut models = Models::from_files(beat.as_ref(), vocal.as_ref(), threads.clamp(1, 8) as usize)?;
+        models.set_npu(npu);
+        Ok(models)
     })();
     loaded.map_or(0, |models| Box::into_raw(Box::new(models)) as jlong)
 }
@@ -174,22 +192,36 @@ pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nati
     }
 }
 
+/// False when Apple Music's analysis in `request` covers both songs; true on unreadable JSON.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nativeMixNeedsModels(
+    mut env: JNIEnv<'_>, _class: JClass<'_>, request: JString<'_>,
+) -> jboolean {
+    read_string(&mut env, &request).ok()
+        .and_then(|text| serde_json::from_str::<prepare::MixRequest>(&text).ok())
+        .is_none_or(|request| request.needs_models()) as jboolean
+}
+
 /// Desktop's adaptive-mix worker response for one pair, framed for Kotlin: a big-endian
-/// u32 header length, the header JSON, then interleaved stereo f32 LE at `rate`.
+/// u32 header length, the header JSON, then interleaved stereo f32 LE at `rate`. The header
+/// carries fresh song evidence (`outgoingMeasured`, `incomingMeasured`) even on an error.
 /// Must run on a thread with at least 4 MiB of stack: QuickJS plans in it.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nativeMix(
     mut env: JNIEnv<'_>, _class: JClass<'_>, models: jlong, request: JString<'_>,
     outgoing: jlong, incoming: jlong, rate: jint,
 ) -> jbyteArray {
-    let (header, pcm) = match frame_mix(&mut env, models, &request, outgoing, incoming, rate) {
+    let mut measured = Measurements::default();
+    let (mut header, pcm) = match frame_mix(&mut env, models, &request, outgoing, incoming, rate, &mut measured) {
         Ok((mut header, samples)) => {
             let pcm: Vec<u8> = samples.iter().flat_map(|v| v.to_le_bytes()).collect();
             header["bytes"] = pcm.len().into();
-            (header.to_string(), pcm)
+            (header, pcm)
         }
-        Err(error) => (error_json(error), Vec::new()),
+        Err(error) => (json!({ "error": error }), Vec::new()),
     };
+    measured.attach(&mut header);
+    let header = header.to_string();
     let mut framed = Vec::with_capacity(4 + header.len() + pcm.len());
     framed.extend_from_slice(&(header.len() as u32).to_be_bytes());
     framed.extend_from_slice(header.as_bytes());
@@ -198,13 +230,17 @@ pub extern "system" fn Java_dev_sfg_orchard_mobile_playback_smart_MixNative_nati
 }
 
 fn frame_mix(env: &mut JNIEnv<'_>, models: jlong, request: &JString<'_>, outgoing: jlong,
-             incoming: jlong, rate: jint) -> Result<(Value, Vec<f32>), String> {
+             incoming: jlong, rate: jint, measured: &mut Measurements) -> Result<(Value, Vec<f32>), String> {
     let request: prepare::MixRequest = serde_json::from_str(&read_string(env, request)?)
         .map_err(|e| e.to_string())?;
-    let models = unsafe { borrow::<Models>(models) }.ok_or("Adaptive mix models are unavailable")?;
+    // 0 is allowed when Apple Music's analysis stands in for both models.
+    let models = unsafe { borrow::<Models>(models) };
+    if models.is_none() && request.needs_models() {
+        return Err("Adaptive mix models are unavailable".into());
+    }
     let outgoing = unsafe { borrow::<Song>(outgoing) }.ok_or("Missing outgoing song")?;
     let incoming = unsafe { borrow::<Song>(incoming) }.ok_or("Missing incoming song")?;
-    let (mut prepared, samples) = prepare::mix(models, &request, outgoing, incoming)?;
+    let (mut prepared, samples) = prepare::mix(models, &request, outgoing, incoming, measured)?;
     // The plan is made at 48 kHz like desktop's; only the finished audio meets the player's rate.
     let samples = prepare::resample_to(&mut prepared, samples, u32::try_from(rate).unwrap_or(0))?;
     let header = serde_json::to_value(prepared).map_err(|e| e.to_string())?;

@@ -20,6 +20,9 @@ bytes: the hub WebSocket, playback snapshots, events, RPC answers and audio.
 target when it is a capable desktop, else to a capable desktop controller, else to the target.
 Each provider goes to a signed-in device, target first; no signed-in device means
 `provider_unavailable`.
+An `apple_music` session means the device plays Apple catalog ids itself; a controller sends
+`am.songs.` ids only to a target that hosts `apple_music`, and the desktop target switches its
+catalog source to Apple Music when one arrives.
 
 ## Versioning
 
@@ -85,12 +88,13 @@ Events (`{"event": name, ...}`): `hub`, `devices`, `session`, `session_ended`,
 `initial_playback`, `remote_state`, `roles`, `command`, `command_result`, `rpc`, `rpc_result`,
 `stream_end`, `stream_sent`, `stream_failed`, `flow`, `error`.
 
-Commands (`normalizeCommand`): `play`, `pause`, `toggle`, `next`, `previous`, `clear_queue`,
+Commands (`normalizeCommand`): `play`, `pause`, `toggle`, `next`, `previous {restart?}`, `clear_queue`,
 `seek {position}`, `set_volume {volume}`, `set_repeat {mode}`, `set_shuffle {enabled}`,
 `play_queue_index {index}`, `remove_queue_item {index}`, `move_queue_item {from, to}`,
 `enqueue {track, next}`, `play_track {track, tracks, position, play, context_title}`,
 `replace_queue {tracks, index, position, play, context_title}`. Queue indices count upcoming
-tracks only, from 0.
+tracks only, from 0. `previous` with `restart: false` skips back even past the opening seconds;
+snapshots carry the track it returns to as `previous`.
 
 ## RPC methods
 
@@ -104,7 +108,8 @@ tracks only, from 0.
   provider host's account.
 - `Search {provider, query, filter}`, `GetAlbum {provider, id}`, `GetArtist {provider, id}`:
   catalog calls on the YouTube provider host.
-- `ResolveArtwork {track}`: artwork host answers `{static_url, animated_url}`.
+- `ResolveArtwork {track}`: artwork host answers `{static_url, animated_url, animated_vertical_url?}`.
+  The tall loop comes from Apple Music when it is the host's catalog source.
 - `MixPrepare {mix, request, codecs}`: see below.
 
 ## Audio streams

@@ -63,14 +63,16 @@ Adaptive mix measures where each song's beat and vocals are, then picks the blen
 - **Beat first.** If the next song starts with a beatless intro, Adaptive mix skips ahead so the new beat comes in during the blend. The new beat usually lands halfway through the blend, at the bass swap. If the current song's beat stops near its end, the blend starts while that beat is still playing.
 - **Beat loops.** If the current song's beat stops before the song ends, Adaptive mix can repeat the last one or two bars of that beat under the blend until the next song's beat takes over. It loops only bars without vocals, and only when the loop keeps the beat going better than the song itself does.
 - **Locked kicks.** Adaptive mix lines up the two songs' kick drums by listening to the audio, so the two beats hit together.
-- **One bassline at a time.** Halfway through the blend, the old song's bass drops out and the new song's bass comes in. If the next song opens with kicks but no bassline, the swap lands where its full bass comes in.
+- **One bassline at a time.** Partway through the blend, the old song's bass drops out and the new song's bass comes in. The swap usually lands halfway. It moves a bar earlier or later when the old singer is mid-line at the halfway point but done at another bar line, or when the new song's bass drops in at another bar line. It moves only to a bar where the song carrying the bass actually has a full bassline. The bass keeps its level wherever the swap lands. If the next song opens with kicks but no bassline, the swap lands where its full bass comes in.
 - **Vocals.** Adaptive mix avoids two vocals at once and avoids starting the next song in the middle of a vocal line. When every possible blend would sing over a vocal, would swap one vocal line for another mid-line, or would fade the current singer out mid-line, the current song plays to its end and the next song starts from its beginning. This is common with R&B, where singing runs through most of the song.
 - **Skipping.** Adaptive mix skips a beatless intro, but it avoids starting the next song far past its first beat.
 - **Beatmatched or nothing.** Adaptive mix only blends songs whose beats it can line up, with tempos at most about 8% apart. Otherwise it does not crossfade: the current song plays to its end, and the next song starts from its beginning. The one exception is a bridge.
 - **Bridges.** When the current song ends on a beatless outro and the next song starts with a beatless intro, Adaptive mix overlaps the two without a beat on either side, so the tempos do not need to match. The current song plays to its end, and the next song's beat comes in as the bridge finishes. A bridge lasts 4 to 12 seconds. There is no bridge when a beat would play during it, when two vocals would meet, or when the notes the two songs play there clash, for example a tritone apart.
 - **Drop-ins.** When no ordinary blend fits, for example because the next song starts singing right away, Adaptive mix can drop the next song in at full volume on its first beat. The current song's bass leaves at once and the current song fades out over the next four beats. A drop-in is used only when the current song is not singing as it leaves.
-- **Tempo where the blend happens.** Adaptive mix reads each song's tempo in the part it blends. A song whose ending runs at a different tempo, for example after a beat switch, is matched at that ending's tempo. When the tempo speeds up or slows down during that part, the pair plays without a blend.
-- **Different styles.** When two songs have very different production, for example 90s boom-bap and modern trap, Adaptive mix does not blend them. The current song plays to its end, and the next song starts from its beginning. If a blend would only work by filtering one song, for example because the keys clash, those songs also play without a blend. The same applies when the blend would put two vocals on top of each other.
+- **Muffles.** When a blend would only work by filtering one song, for example because the keys clash, Adaptive mix can muffle the current song instead. The current song keeps its volume while a steep low-pass filter closes over it for up to two bars, the way some songs muffle their own endings. The next song fades in over the same bars and takes the bass on the next downbeat, and the muffled song is gone two beats later. A muffle is used only when no vocals meet before the muffle closes and one singer does not hand over to another inside it. The current song must have a full low end, the next song's beat must not be much weaker, and the next song must have played at least 2 seconds before it fades in. The mix must also land within about 9 seconds of the next song's first beat.
+- **Tempo where the blend happens.** Adaptive mix reads each song's tempo in the part it blends. A song whose ending runs at a different tempo, for example after a beat switch, is matched at that ending's tempo. When the tempo speeds up or slows down during that part, the pair plays without a blend. When tempos do not match, the reason names the tempos where the songs would meet.
+- **Different styles.** When two songs have very different production, for example 90s boom-bap and modern trap, Adaptive mix does not blend them. The current song plays to its end, and the next song starts from its beginning. If a blend would only work by filtering one song and no muffle fits, those songs also play without a blend. The same applies when the blend would put two vocals on top of each other.
+- **Intros and skits.** Adaptive mix does not blend into a song titled Intro or Skit, because those are meant to be heard from their start, often over talking. The current song plays to its end and the intro starts from its beginning. Blending out of an intro works as usual.
 - **Where blends happen.** Blends use the last minute of the current song and the first minute of the next song.
 
 Adaptive mix picks each blend length from the songs.
@@ -87,15 +89,15 @@ If Adaptive mix was selected earlier and the Audio Engine is on, turning Crossfa
 
 ## Adaptive mix requirements
 
-Adaptive mix needs a GPU with WebGPU support and FFmpeg.
+Adaptive mix needs FFmpeg. A GPU with WebGPU support is optional.
 
-- Beat detection runs on the GPU and has no CPU fallback. Without a WebGPU device, songs change at their natural boundary without a mix.
+- Beat detection runs on the GPU when the computer has a WebGPU device. Without one, it runs on two CPU threads instead, which takes a fraction of a second per song.
 - FFmpeg decodes the audio for analysis. Windows builds include FFmpeg. On Linux, install FFmpeg so it is on the PATH, or set the `ORCHARD_FFMPEG` environment variable to the FFmpeg executable.
 - Adaptive mix was runtime-tested on Linux. Other desktop systems were not tested.
 
 ## Adaptive mix on Android
 
-The Android app runs the same analysis, planner, and render code as the desktop app. The same two songs get the same mix on both. Android runs beat detection on the phone's CPU with smaller model weights, so a bar line can rarely land differently.
+The Android app runs the same analysis, planner, and render code as the desktop app. Android detects beats with a different model on the phone's CPU, so the same two songs can get a slightly different mix, for example a bar line in a different place.
 
 A failed Adaptive mix preparation never stops playback.
 
@@ -112,6 +114,8 @@ On Android, the remaining time under the player's progress bar sparkles in rainb
 ## Turn on gapless playback
 
 Use the **Gapless playback** switch in the **Transitions** group. Its description reads "Preload the next song to minimize pauses between tracks." Gapless playback is off by default.
+
+Apple Music songs also crossfade, play gaplessly and use Adaptive mix, which analyses Apple's own audio. When **Music source** is **Apple Music**, Adaptive mix takes each Apple Music song's beat grid and vocal activity from Apple's own analysis of the song instead of running the beat and vocal models, so preparing a mix is faster and the models never load for those songs. A song Apple has not analysed uses the models.
 
 ## Tell when a crossfade is happening
 

@@ -56,7 +56,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.sfg.orchard.connect.BuildConfig
@@ -97,7 +96,6 @@ fun SettingsScreen(
     onConnectSpotify: () -> Unit = {},
     qobuzStatus: dev.sfg.orchard.mobile.qobuz.QobuzStatus = dev.sfg.orchard.mobile.qobuz.QobuzStatus(),
     onConnectQobuz: () -> Unit = {},
-    onConnectQobuzToken: () -> Unit = {},
     onConnectAppleMusic: () -> Unit = {},
     onDisconnectQobuz: () -> Unit = {},
     onQobuzEnabledChange: (Boolean) -> Unit = {},
@@ -141,7 +139,8 @@ fun SettingsScreen(
     )
     val summaries = SettingsSummaries(
         connectedCount = statuses.values.count { it.connected },
-        storage = "${CacheManager.formatStorageSize(cacheSizeBytes)} cached · " + when {
+        storage = "${CacheManager.formatStorageSize(cacheSizeBytes)} cached",
+        about = "Orchard ${BuildConfig.VERSION_NAME} · " + when {
             availableUpdate != null -> "Update available"
             !BuildConfig.UPDATER_ENABLED -> "Updates disabled"
             else -> "Up to date"
@@ -176,7 +175,6 @@ fun SettingsScreen(
                             auth = auth,
                             summaries = summaries,
                             onSettings = onSettings,
-                            onAutoplayEnabled = onAutoplayEnabled,
                             onOpen = {
                                 connection = null
                                 page = it
@@ -186,8 +184,11 @@ fun SettingsScreen(
                             onSignOut = onSignOut,
                             onWelcome = onWelcome,
                         )
-                        SettingsPage.Audio -> AudioPage(settings, onSettings, onAutoplayEnabled)
+                        SettingsPage.Playback -> PlaybackPage(settings, onSettings, onAutoplayEnabled)
+                        SettingsPage.Mixing -> MixingPage(settings, onSettings)
                         SettingsPage.Appearance -> AppearancePage(settings, onSettings, onHomeLayout)
+                        SettingsPage.Artwork -> ArtworkPage(settings, onSettings)
+                        SettingsPage.Lyrics -> LyricsPage(settings, onSettings)
                         SettingsPage.Connections -> if (detail == null) {
                             ConnectionsList(statuses) { connection = it }
                         } else {
@@ -206,7 +207,6 @@ fun SettingsScreen(
                                 onDisconnectListenBrainz = onDisconnectListenBrainz,
                                 onConnectSpotify = onConnectSpotify,
                                 onConnectQobuz = onConnectQobuz,
-                                onConnectQobuzToken = onConnectQobuzToken,
                                 onConnectAppleMusic = onConnectAppleMusic,
                                 onDisconnectQobuz = onDisconnectQobuz,
                                 onQobuzEnabledChange = onQobuzEnabledChange,
@@ -215,31 +215,20 @@ fun SettingsScreen(
                         }
                         SettingsPage.Storage -> StoragePage(
                             settings = settings,
-                            updateState = updateState,
                             cacheSizeBytes = cacheSizeBytes,
                             isClearingCache = isClearingCache,
                             onSettings = onSettings,
                             onClearCache = onClearCache,
                             downloadedBytes = downloadedBytes,
                             onDeleteAllDownloads = onDeleteAllDownloads,
+                        )
+                        SettingsPage.About -> AboutPage(
+                            settings = settings,
+                            updateState = updateState,
+                            onSettings = onSettings,
                             onCheckForUpdates = onCheckForUpdates,
                             onInstallUpdate = onInstallUpdate,
                             onShowNotes = { showNotesDialog = true },
-                        )
-                    }
-                    if (current == SettingsPage.Home) {
-                        Spacer(Modifier.height(28.dp))
-                        val versionText = if (BuildConfig.CODENAME.isNotBlank()) {
-                            "Orchard Mobile ${BuildConfig.VERSION_NAME} \"${BuildConfig.CODENAME}\""
-                        } else {
-                            "Orchard Mobile ${BuildConfig.VERSION_NAME}"
-                        }
-                        Text(
-                            versionText,
-                            color = SettingsStyle.Caption,
-                            style = MaterialTheme.typography.labelMedium,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
                     Spacer(Modifier.height(OrchardChromeHeight + 16.dp))

@@ -20,6 +20,8 @@
 package dev.sfg.orchard.mobile.playback
 
 import dev.sfg.orchard.mobile.model.StreamDetail
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Handler
 import androidx.media3.common.C
 import androidx.media3.common.MediaMetadata
@@ -32,6 +34,7 @@ import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import okhttp3.Request
+import java.io.ByteArrayOutputStream
 
 /**
  * What the rest of the phone learns about the playing song: the bitrate readout, artwork
@@ -44,11 +47,13 @@ internal class NowPlayingPublisher(
     private val scope: CoroutineScope,
     private val cache: StreamCache,
     private val cachedStream: (stableUri: String) -> ResolvedStream?,
+    private val atmosBitrateKbps: (String) -> Int,
     /** The session's local player, or null before it exists. */
     private val player: () -> ExoPlayer?,
 ) {
     private var artworkHydrationId = ""
     private val youtubeHistory = YouTubeHistoryReporter(graph, graph.applicationScope)
+    private val appleHistory = AppleHistoryReporter(graph, graph.applicationScope)
 
     /**
      * Publishes the bitrate of what is actually playing, for the readout under the scrubber.
@@ -68,6 +73,12 @@ internal class NowPlayingPublisher(
         }
         val format = player.audioFormat
         val playerCodec = codecName(format?.sampleMimeType)
+        if (playerCodec == "Atmos") {
+            val bitrate = listOfNotNull(format?.averageBitrate, format?.bitrate)
+                .firstOrNull { it > 0 }?.div(1000) ?: atmosBitrateKbps(item.mediaId)
+            publish(bitrate, qobuz = false, StreamDetail(codec = playerCodec))
+            return
+        }
         val localTrack = MediaItemMapper.toTrack(item).takeIf { it.isLocal }
         if (localTrack != null) {
             // The container's own average, else what the decoder reports once the file is open.
@@ -85,9 +96,10 @@ internal class NowPlayingPublisher(
         val measured = uri?.let { cache.cachedBitrateKbps(it, duration) } ?: 0
         val kbps = if (measured > 0) measured else graph.streams.knownBitrateKbps(item.mediaId)
         // A cache hit skips resolution, so the remembered format keeps the badge on its label.
-        val qobuzSelected = graph.streamVariant().contains("|qobuz|")
+        val variant = uri?.let(graph::streamVariant) ?: graph.streamVariant()
+        val qobuzSelected = variant.contains("|qobuz|")
         val remembered = if (qobuzSelected && resolved == null) {
-            graph.qobuzTiers.detail(item.mediaId, graph.streamVariant())
+            graph.qobuzTiers.detail(item.mediaId, variant)
         } else null
         if (remembered != null) {
             publish(kbps, qobuz = true, remembered)
@@ -98,9 +110,23 @@ internal class NowPlayingPublisher(
 
     private fun ResolvedStream.qobuzDetail() = StreamDetail(hires, bitDepth ?: 0, sampleRate ?: 0, "FLAC")
 
+    /** Audio format can become available after the track-selection event. */
+    fun observeAudioFormat(source: ExoPlayer) {
+        source.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onAudioInputFormatChanged(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                format: androidx.media3.common.Format,
+                decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?,
+            ) {
+                if (player() === source && eventTime.windowIndex == eventTime.currentWindowIndex && eventTime.timeline == eventTime.currentTimeline) publishBitrate()
+            }
+        })
+    }
+
     private fun codecName(mime: String?): String {
         val m = mime.orEmpty().lowercase()
         return when {
+            m == "audio/eac3-joc" -> "Atmos"
             "flac" in m -> "FLAC"
             "opus" in m -> "Opus"
             "mp4a" in m || "aac" in m -> "AAC"
@@ -140,25 +166,29 @@ internal class NowPlayingPublisher(
     }
 
     /**
-     * WearOS media controls do not reliably dereference remote artworkUri values. Embed the
-     * compressed cover in the session metadata as well, which lets the watch render it directly.
+     * WearOS media controls do not reliably dereference remote artworkUri values, so the current
+     * item embeds a watch-sized cover. Media3 sends every queued item's metadata to each controller
+     * in one binder call, so no other item keeps one.
      */
     fun hydrateArtwork() {
-        val item = player()?.currentMediaItem ?: return
+        val player = player() ?: return
+        val item = player.currentMediaItem ?: return
+        dropEmbeddedArtwork(player, keep = player.currentMediaItemIndex)
         val artworkUrl = item.mediaMetadata.artworkUri?.toString().orEmpty()
         if (artworkUrl.isBlank() || item.mediaMetadata.artworkData != null || artworkHydrationId == item.mediaId) return
         artworkHydrationId = item.mediaId
         scope.launch {
             val bytes = runCatching {
-                if (artworkUrl.startsWith("file://")) {
+                val source = if (artworkUrl.startsWith("file://")) {
                     // A cover on this phone: other processes cannot open a file:// URI, so it travels as bytes.
-                    java.io.File(android.net.Uri.parse(artworkUrl).path.orEmpty()).readBytes().takeIf { it.size <= 2 * 1024 * 1024 }
+                    java.io.File(android.net.Uri.parse(artworkUrl).path.orEmpty()).readBytes()
                 } else {
-                    graph.http.newCall(Request.Builder().url(highResolutionArtworkUrl(artworkUrl, 1024)).build()).execute().use { response ->
+                    graph.http.newCall(Request.Builder().url(highResolutionArtworkUrl(artworkUrl, EMBEDDED_ARTWORK_PX)).build()).execute().use { response ->
                         if (!response.isSuccessful) return@use null
-                        response.body.bytes().takeIf { it.size <= 2 * 1024 * 1024 }
+                        response.body.bytes()
                     }
                 }
+                source?.let(::watchSizedJpeg)
             }.getOrNull() ?: return@launch
             handler.post {
                 val player = player() ?: return@post
@@ -166,12 +196,46 @@ internal class NowPlayingPublisher(
                 if (index !in 0 until player.mediaItemCount) return@post
                 val current = player.getMediaItemAt(index)
                 if (current.mediaId != item.mediaId) return@post
+                dropEmbeddedArtwork(player, keep = index)
                 val metadata = current.mediaMetadata.buildUpon()
                     .setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
                     .setExtras(current.mediaMetadata.extras)
                     .build()
                 player.replaceMediaItem(index, current.buildUpon().setMediaMetadata(metadata).build())
             }
+        }
+    }
+
+    private fun dropEmbeddedArtwork(player: Player, keep: Int) {
+        for (index in 0 until player.mediaItemCount) {
+            if (index == keep) continue
+            val item = player.getMediaItemAt(index)
+            if (item.mediaMetadata.artworkData == null) continue
+            val metadata = item.mediaMetadata.buildUpon()
+                .setArtworkData(null, null)
+                .setExtras(item.mediaMetadata.extras)
+                .build()
+            player.replaceMediaItem(index, item.buildUpon().setMediaMetadata(metadata).build())
+        }
+    }
+
+    /** Re-encodes a cover at watch size; a full-size cover per update overflows the binder. */
+    private fun watchSizedJpeg(bytes: ByteArray): ByteArray? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        val longest = maxOf(bounds.outWidth, bounds.outHeight)
+        if (longest <= 0) return null
+        var sample = 1
+        while (longest / (sample * 2) >= EMBEDDED_ARTWORK_PX) sample *= 2
+        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+            ?: return null
+        val scale = EMBEDDED_ARTWORK_PX.toFloat() / maxOf(decoded.width, decoded.height)
+        val sized = if (scale < 1f) {
+            Bitmap.createScaledBitmap(decoded, (decoded.width * scale).toInt().coerceAtLeast(1), (decoded.height * scale).toInt().coerceAtLeast(1), true)
+        } else decoded
+        return ByteArrayOutputStream().use { out ->
+            sized.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            out.toByteArray()
         }
     }
 
@@ -193,7 +257,14 @@ internal class NowPlayingPublisher(
         graph.lastfm.updatePlayback(snapshot)
         graph.listenBrainz.updatePlayback(snapshot)
         youtubeHistory.update(source)
+        appleHistory.update(source)
     }
 
-    fun finishHistory() = youtubeHistory.finish()
+    fun finishHistory() {
+        youtubeHistory.finish()
+        appleHistory.finish()
+    }
 }
+
+/** Longest edge of the cover embedded for watches, which are under 500 px across. */
+private const val EMBEDDED_ARTWORK_PX = 480

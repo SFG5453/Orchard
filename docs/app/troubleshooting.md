@@ -30,7 +30,7 @@ This appears on Windows only. The Google, Spotify, and Apple Music sign-in windo
 
 ## The music video player says "No music video for this song."
 
-Orchard found no official video with the same title and artist and a similar length. Select **Back to song** to return to the regular player. See [Watch music videos](playback.md#watch-music-videos).
+Orchard found no official video with the same title and artist and a similar length. For an Apple Music song, Apple also has no video of it. Select **Back to song** to return to the regular player. See [Watch music videos](playback.md#watch-music-videos).
 
 ## The music video player says "The video couldn't be played."
 
@@ -54,7 +54,7 @@ Check these in order:
 
 1. **Crossfade** is on in Settings, Playback.
 2. In Standard mode, the **Crossfade length** slider is set to a length you can hear. The default is 6 seconds.
-3. In Adaptive mix mode, the status line under the mode buttons says Adaptive mix is ready. Adaptive mix needs a WebGPU-capable GPU and FFmpeg. Without them, songs change at their natural boundary. See [Crossfade and gapless playback](crossfade.md).
+3. In Adaptive mix mode, the status line under the mode buttons says Adaptive mix is ready. Adaptive mix needs FFmpeg. Without it, songs change at their natural boundary. See [Crossfade and gapless playback](crossfade.md).
 
 ## Lyrics show "Lyrics unavailable"
 

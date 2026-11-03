@@ -59,48 +59,7 @@ void PlaybackController::receiveStream(quint64 id, const QJsonValue &result) {
     return;
   }
   if (id == m_autoplayRequest && m_autoplayRequest) {
-    m_autoplayRequest = 0;
-    const bool mix = std::exchange(m_mixRequest, false);
-    // Drop generated rows that repeat an earlier row before refilling.
-    QList<QVariantMap> rows;
-    for (const auto &value : m_queue)
-      rows.append(value.toMap());
-    const auto stale = autoplay::duplicateGeneratedIndices(rows);
-    for (auto it = stale.crbegin(); it != stale.crend(); ++it) {
-      m_orderedQueue.removeOne(m_queue.at(*it));
-      m_queue.removeAt(*it);
-      rows.removeAt(*it);
-    }
-    QList<QVariantMap> existing{m_track, QVariantMap{{"id", m_autoplaySeed}}};
-    existing += rows;
-    for (const auto &value : m_history)
-      existing.append(value.toMap());
-    QList<QVariantMap> candidates;
-    for (const auto &value : result.toArray()) {
-      auto track = value.toObject().toVariantMap();
-      const auto type = track.value("type").toString();
-      if (track.value("unplayable").toBool() ||
-          (type != "song" && type != "track" && type != "video"))
-        continue;
-      candidates.append(track);
-    }
-    const auto picked = autoplay::select(existing, candidates, mix ? 40 : 20);
-    const int added = picked.size();
-    for (auto track : picked) {
-      if (!mix)
-        track.insert("autoplayGenerated", true);
-      m_queue.append(track);
-      m_orderedQueue.append(track);
-    }
-    if (!added)
-      m_autoplayError = tr("No more recommendations were found.");
-    const bool advance = m_waitingForAutoplay && !m_queue.isEmpty();
-    m_waitingForAutoplay = false;
-    emit queueChanged();
-    emit stateChanged();
-    updateSystemMedia();
-    if (advance)
-      next();
+    applyAutoplay(result.toArray());
     return;
   }
   if (id == m_queueRequest && m_queueRequest) {
@@ -147,6 +106,7 @@ void PlaybackController::openPreparedStream(const QJsonObject &stream) {
     return;
   m_preparedBitrate = stream.value("bitrate").toInt();
   rememberStreamTracking(m_preparedTrack.value("id").toString(), stream);
+  m_audioEngineOutput.setSurround(m_nextPlayer, stream.value("atmos").toBool());
   m_nextPlayer->setSource(localUrl);
   m_nextPlayer->pause();
   maybeStartCrossfade();
@@ -163,6 +123,7 @@ void PlaybackController::startResolvedStream(const QJsonObject &stream) {
   rememberStreamTracking(m_track.value("id").toString(), stream);
   applyStreamQuality();
   reportQobuzStarted(m_proxy, m_resumePosition);
+  m_audioEngineOutput.setSurround(m_player, stream.value("atmos").toBool());
   m_player->setSource(localUrl);
   if (m_resumePaused) {
     m_player->pause();
@@ -214,3 +175,47 @@ void PlaybackController::fail(const QString &message) {
   updateSystemMedia();
 }
 
+void PlaybackController::applyAutoplay(const QJsonArray &result) {
+  m_autoplayRequest = 0;
+  const bool mix = std::exchange(m_mixRequest, false);
+  // Drop generated rows that repeat an earlier row before refilling.
+  QList<QVariantMap> rows;
+  for (const auto &value : m_queue)
+    rows.append(value.toMap());
+  const auto stale = autoplay::duplicateGeneratedIndices(rows);
+  for (auto it = stale.crbegin(); it != stale.crend(); ++it) {
+    m_orderedQueue.removeOne(m_queue.at(*it));
+    m_queue.removeAt(*it);
+    rows.removeAt(*it);
+  }
+  QList<QVariantMap> existing{m_track, QVariantMap{{"id", m_autoplaySeed}}};
+  existing += rows;
+  for (const auto &value : m_history)
+    existing.append(value.toMap());
+  QList<QVariantMap> candidates;
+  for (const auto &value : result) {
+    auto track = value.toObject().toVariantMap();
+    const auto type = track.value("type").toString();
+    if (track.value("unplayable").toBool() ||
+        (type != "song" && type != "track" && type != "video"))
+      continue;
+    candidates.append(track);
+  }
+  const auto picked = autoplay::select(existing, candidates, mix ? 40 : 20);
+  const int added = picked.size();
+  for (auto track : picked) {
+    if (!mix)
+      track.insert("autoplayGenerated", true);
+    m_queue.append(track);
+    m_orderedQueue.append(track);
+  }
+  if (!added)
+    m_autoplayError = tr("No more recommendations were found.");
+  const bool advance = m_waitingForAutoplay && !m_queue.isEmpty();
+  m_waitingForAutoplay = false;
+  emit queueChanged();
+  emit stateChanged();
+  updateSystemMedia();
+  if (advance)
+    next();
+}

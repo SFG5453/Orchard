@@ -25,6 +25,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -49,6 +57,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.model.BrowseDetail
@@ -63,8 +73,12 @@ import dev.sfg.orchard.mobile.ui.components.rememberHeroScrimProgress
 import dev.sfg.orchard.mobile.ui.components.MessagePanel
 import dev.sfg.orchard.mobile.ui.components.ReorderControls
 import dev.sfg.orchard.mobile.ui.components.TrackRow
+import dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout
+import dev.sfg.orchard.mobile.ui.components.collectionDownloadAction
 import dev.sfg.orchard.mobile.ui.components.filterTracks
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
+
+private val SidePanelWidth = 340.dp
 
 /** Standard album and playlist presentation. */
 @Composable
@@ -90,7 +104,7 @@ internal fun CollectionDetailContent(
     onDownloadTracks: ((List<Track>) -> Unit)? = null,
     onRemoveDownloadTrack: ((String) -> Unit)? = null,
     onRemoveDownloadTracks: ((List<Track>) -> Unit)? = null,
-    animatedArtworkUrl: String = "",
+    heroArt: HeroArt = HeroArt(),
     artistPortraitUrl: String = "",
     onShareTrack: ((Track) -> Unit)? = null,
     onShareCollection: ((BrowseDetail) -> Unit)? = null,
@@ -107,7 +121,10 @@ internal fun CollectionDetailContent(
     val editRows = editing && canEdit && !isSearching
 
     // The cover's own colours carry the whole screen.
+    val wide = isFoldableOrWideLayout()
+    val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val palette = rememberArtworkPalette(detail.artworkUrl)
+    val context = LocalContext.current
     val listState = rememberLazyListState()
     val scrimProgress = rememberHeroScrimProgress(listState)
     val bestMix = rememberBestMixLauncher(detail, downloadedTrackIds, onPlayAll, onPlayBestMix)
@@ -144,31 +161,36 @@ internal fun CollectionDetailContent(
         Modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(
+                // Phones continue the hero band, so the list sits on one flat tint.
+                if (wide) Brush.verticalGradient(
                     0f to palette.top.copy(alpha = 0.70f),
                     0.25f to palette.bottom.copy(alpha = 0.45f),
                     0.55f to palette.deep,
                     1f to palette.deep,
-                ),
+                ) else SolidColor(palette.edge),
             ),
     ) {
-        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 120.dp)) {
-            item {
-                CollectionHero(
-                    detail = detail,
-                    palette = palette,
-                    shuffleAvailable = shuffleAvailable,
-                    onPlayAll = onPlayAll,
-                    onShuffle = onShuffle,
-                    onSave = onSave,
-                    bestMix = bestMix,
-                    isSaved = isSaved,
-                    animatedArtworkUrl = animatedArtworkUrl,
-                    artistPortraitUrl = artistPortraitUrl,
-                    onOpenArtist = albumArtistId?.let { id -> { onOpen(id) } },
-                    smartCrossfadeEnabled = smartCrossfadeEnabled,
-                )
-            }
+        val hero: @Composable () -> Unit = {
+            CollectionHero(
+                detail = detail,
+                palette = palette,
+                shuffleAvailable = shuffleAvailable,
+                onPlayAll = onPlayAll,
+                onShuffle = onShuffle,
+                onSave = onSave,
+                onShare = { shareCollection(context, detail, onShareCollection) },
+                bestMix = bestMix,
+                isSaved = isSaved,
+                heroArt = heroArt,
+                onDownload = collectionDownloadAction(detail.tracks, downloadedTrackIds, onDownloadTracks, onRemoveDownloadTracks),
+                isDownloaded = detail.tracks.isNotEmpty() && detail.tracks.all { it.id in downloadedTrackIds },
+                artistPortraitUrl = artistPortraitUrl,
+                onOpenArtist = albumArtistId?.let { id -> { onOpen(id) } },
+                onOpenLink = onOpen,
+                smartCrossfadeEnabled = smartCrossfadeEnabled,
+            )
+        }
+        val listBody: LazyListScope.() -> Unit = {
             if (canEdit && !isSearching) {
                 item {
                     PlaylistEditBar(
@@ -366,6 +388,25 @@ internal fun CollectionDetailContent(
                         }
                     }
                 }
+            }
+        }
+        if (wide) {
+            Row(Modifier.fillMaxSize()) {
+                Column(Modifier.width(SidePanelWidth).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                    hero()
+                    Spacer(Modifier.height(120.dp))
+                }
+                LazyColumn(
+                    Modifier.weight(1f).fillMaxHeight(),
+                    state = listState,
+                    contentPadding = PaddingValues(top = topInset + 72.dp, bottom = 120.dp),
+                    content = listBody,
+                )
+            }
+        } else {
+            LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 120.dp)) {
+                item { hero() }
+                listBody()
             }
         }
 

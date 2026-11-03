@@ -34,4 +34,3 @@ internal fun highResolutionArtworkUrl(url: String, pixels: Int = 540): String = 
     else -> url
 }
 
-

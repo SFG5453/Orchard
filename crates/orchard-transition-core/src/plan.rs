@@ -64,7 +64,8 @@ fn strategy(name: &str) -> Result<TransitionStrategy, String> {
     match name {
         "equal_power_crossfade" => Ok(TransitionStrategy::EqualPowerCrossfade),
         "beatmatched_crossfade" => Ok(TransitionStrategy::BeatmatchedCrossfade),
-        "bass_swap" => Ok(TransitionStrategy::BassSwap),
+        // A muffle is a bass swap whose filters `apply_selected_shape` rebuilds.
+        "bass_swap" | "muffle_swap" => Ok(TransitionStrategy::BassSwap),
         "filtered_blend" => Ok(TransitionStrategy::FilteredBlend),
         "short_fade" => Ok(TransitionStrategy::ShortFade),
         other => Err(format!("unknown transition strategy '{other}'")),

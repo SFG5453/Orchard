@@ -22,7 +22,8 @@
   },
   "devDependencies": {
     "@jspm/core": "2.1.0",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "onnxruntime-web": "1.30.0"
   },
   "license": "AGPL-3.0-or-later"
 }

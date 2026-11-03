@@ -18,9 +18,7 @@
  */
 
 export const QOBUZ_BASE_URL = 'https://www.qobuz.com/api.json/0.2';
-export const QOBUZ_PLAY_URL = 'https://play.qobuz.com';
-export const QOBUZ_PARTITION = 'persist:qobuz';
-export const QOBUZ_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+export const QOBUZ_USER_AGENT = 'Orchard/3';
 
 export const QOBUZ_AUDIO_QUALITIES = Object.freeze(['auto', 'lossless', 'hires']);
 export const QOBUZ_FORMAT_IDS = Object.freeze({

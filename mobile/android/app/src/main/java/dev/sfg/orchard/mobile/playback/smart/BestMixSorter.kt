@@ -32,17 +32,34 @@ object BestMixSorter {
         }
     }
 
+    /** Stores features built from Apple Music's [analysis] of [track]; no audio is decoded. */
+    fun analyzeApple(store: BestMixFeatureStore, track: Track, analysis: JSONObject): Boolean {
+        if (!MixNative.available) return false
+        val duration = track.durationMs / 1000.0
+        val result = JSONObject(MixNative.nativeBestMixApple(analysis.toString(), duration))
+        if (result.has("error")) {
+            Log.w(TAG, "Best Mix Apple analysis of ${track.id} failed: ${result.optString("error")}")
+            return false
+        }
+        return store.store(track.id, duration, result)
+    }
+
     /**
      * Orders [queue] to follow [current], as desktop's `BestMixController::sort`. Null when no
-     * queue song has analysis or the native sort refused.
+     * queue song has analysis or the native sort refused. Songs adaptive mix already measured
+     * plan with the beat model's verdict from [evidence].
      */
-    fun sort(store: BestMixFeatureStore, queue: List<Track>, current: Track?): List<Track>? {
+    fun sort(store: BestMixFeatureStore, queue: List<Track>, current: Track?, evidence: MixEvidenceStore? = null): List<Track>? {
         if (queue.size <= 1 || !MixNative.available) return queue
         val snapshot = queue.take(SNAPSHOT)
-        val summaries = snapshot.map { store.summary(it.id) }
+        val summaries = snapshot.map { track ->
+            store.summary(track.id).also { summary -> summary.withBeatModel(evidence, track.id, summary.optJSONObject("head")) }
+        }
         if (summaries.all { it.length() == 0 }) return null
         store.trim()
-        val initial = current?.let { store.summary(it.id).optJSONObject("tail") } ?: JSONObject()
+        val initial = current?.let { track ->
+            store.summary(track.id).optJSONObject("tail")?.also { it.withBeatModel(evidence, track.id, it) }
+        } ?: JSONObject()
         val reply = JSONObject(MixNative.nativeBestMixSort(JSONArray(summaries).toString(), initial.toString()) { left, right ->
             val leftId = if (left == -1) current?.id else snapshot.getOrNull(left)?.id
             val rightId = snapshot.getOrNull(right)?.id
@@ -58,5 +75,11 @@ object BestMixSorter {
         val indices = List(order.length()) { order.getInt(it) }
         if (indices.size != snapshot.size || indices.toSet() != snapshot.indices.toSet()) return null
         return indices.map(snapshot::get) + queue.drop(SNAPSHOT)
+    }
+
+    /** Adds the song's `beatModel` beside its summary, as desktop does; [edge] gives the duration. */
+    private fun JSONObject.withBeatModel(evidence: MixEvidenceStore?, id: String, edge: JSONObject?) {
+        val duration = edge?.optDouble("duration")?.takeIf { it.isFinite() } ?: return
+        evidence?.beatModel(id, duration)?.let { put("beatModel", it) }
     }
 }

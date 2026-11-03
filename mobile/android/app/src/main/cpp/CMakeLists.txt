@@ -1,5 +1,5 @@
-# The desktop QuickJS provider host in js/, the Orchard Connect core in connect/, and the
-# lyric translator in translation/.
+# The desktop QuickJS provider host in js/, the Orchard Connect core in connect/, the lyric
+# translator in translation/, and the NPU runner in npu/.
 # Analysis, Best Mix, the transition planner and rendering come from the Rust
 # library (crates/orchard-transition-mobile).
 
@@ -11,3 +11,4 @@ add_subdirectory(connect)
 add_subdirectory(discord)
 add_subdirectory(translation)
 add_subdirectory(slop)
+add_subdirectory(npu)

@@ -20,8 +20,24 @@
 package dev.sfg.orchard.mobile
 
 import dev.sfg.orchard.mobile.model.AudioQuality
+import dev.sfg.orchard.mobile.model.youtubeAudioQuality
 
 /** Separates playback cache bytes by selected provider and encoding tier. */
+internal const val APPLE_MUSIC_CACHE_VARIANT = "v1|apple|aac256"
+internal const val APPLE_MUSIC_STANDARD_CACHE_VARIANT = "v1|apple|aac64"
+
+/** Apple Music offers 64 kbps AAC for Saver and Normal, 256 kbps for everything above. */
+internal fun appleMusicStandard(quality: AudioQuality): Boolean =
+    quality == AudioQuality.DATA_SAVER || quality == AudioQuality.NORMAL
+
+/** The variant for one song: Apple Music songs ignore the YouTube and Qobuz settings. */
+internal fun sourceCacheVariant(sourceId: String, appleStandard: Boolean = false, providerVariant: () -> String): String =
+    when {
+        !sourceId.startsWith("am.") -> providerVariant()
+        appleStandard -> APPLE_MUSIC_STANDARD_CACHE_VARIANT
+        else -> APPLE_MUSIC_CACHE_VARIANT
+    }
+
 internal fun audioCacheVariant(quality: AudioQuality, qobuzEnabled: Boolean, qobuzTier: String): String =
     if (qobuzEnabled && quality == AudioQuality.MAX) "v2|qobuz|$qobuzTier"
-    else "v2|youtube|${if (quality == AudioQuality.MAX) AudioQuality.HIGH.name else quality.name}"
+    else "v2|youtube|${youtubeAudioQuality(quality).name}"

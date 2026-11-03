@@ -129,6 +129,13 @@ ColumnLayout {
             license: "MIT",
             description: qsTr("JSON messages in the Orchard Connect core, by Niels Lohmann."),
             url: "https://github.com/nlohmann/json"
+        },
+        {
+            key: "fidelityfx-fsr",
+            name: "AMD FidelityFX Super Resolution 1",
+            license: "MIT",
+            description: qsTr("Upscaling and sharpening for music videos smaller than the screen."),
+            url: "https://github.com/GPUOpen-Effects/FidelityFX-FSR"
         }
     ]
 

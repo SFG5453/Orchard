@@ -22,8 +22,7 @@ import test from 'node:test';
 
 import { verifyQobuzToken } from '../src/index.js';
 
-const web = { appId: '123456789', oauthPrivateKey: 'k', rngInit: 'r' };
-const bootstrap = { get: async () => web };
+const app = { appId: '123456789', appSecret: 'secret' };
 
 function reply(status, body) {
   const requests = [];
@@ -36,29 +35,30 @@ function reply(status, body) {
 
 test('token sign-in checks the pasted credentials with user/login', async () => {
   const { fetchImpl, requests } = reply(200, { user: { id: 42 }, user_auth_token: 'fresh' });
-  const account = await verifyQobuzToken({ fetchImpl, token: ' pasted ', userId: ' 42 ', bootstrap });
-  assert.deepEqual(account, { token: 'fresh', userId: 42 });
+  const account = await verifyQobuzToken({ fetchImpl, token: ' pasted ', userId: ' 42 ', ...app });
+  assert.deepEqual(account, { token: 'fresh', userId: 42, ...app });
   assert.match(requests[0].url, /\/user\/login\?/);
   assert.match(requests[0].url, /user_id=42/);
   assert.match(requests[0].url, /user_auth_token=pasted/);
-  assert.equal(requests[0].init.headers['X-App-Id'], web.appId);
+  assert.equal(requests[0].init.headers['X-App-Id'], app.appId);
 });
 
 test('token sign-in rejects bad input before any request', async () => {
   const { fetchImpl, requests } = reply(200, {});
-  const offline = { get: async () => assert.fail('bootstrap fetched for invalid input') };
-  await assert.rejects(verifyQobuzToken({ fetchImpl, token: '', userId: 42, bootstrap: offline }), /auth token/);
-  await assert.rejects(verifyQobuzToken({ fetchImpl, token: 't', userId: 'me@x', bootstrap: offline }), /user ID/);
+  await assert.rejects(verifyQobuzToken({ fetchImpl, token: '', userId: 42, ...app }), /auth token/);
+  await assert.rejects(verifyQobuzToken({ fetchImpl, token: 't', userId: 'me@x', ...app }), /user ID/);
+  await assert.rejects(verifyQobuzToken({ fetchImpl, token: 't', userId: 42 }), /app ID/);
+  await assert.rejects(verifyQobuzToken({ fetchImpl, token: 't', userId: 42, appId: app.appId }), /app secret/);
   assert.equal(requests.length, 0);
 });
 
 test('token sign-in reports a rejected or mismatched token', async () => {
   await assert.rejects(
-    verifyQobuzToken({ ...reply(401, {}), token: 't', userId: 42, bootstrap }),
+    verifyQobuzToken({ ...reply(401, {}), token: 't', userId: 42, ...app }),
     /rejected/
   );
   await assert.rejects(
-    verifyQobuzToken({ ...reply(200, { user: { id: 7 } }), token: 't', userId: 42, bootstrap }),
+    verifyQobuzToken({ ...reply(200, { user: { id: 7 } }), token: 't', userId: 42, ...app }),
     /different Qobuz user ID/
   );
 });

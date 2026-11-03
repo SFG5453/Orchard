@@ -62,9 +62,14 @@ function detailFor(code, evaluation, contrast) {
   }
 }
 
+function sectionsDiffer(nearest, fit) {
+  const off = (section, song) => Number.isFinite(section) && song > 0 && Math.abs(section / song - 1) > 0.035;
+  return off(nearest.outgoingBpm, fit.outgoingBpm) || off(nearest.incomingBpm, fit.incomingBpm);
+}
+
 /** Plain reason for a refusal; `fits` counts cue pairs by tempo outcome. */
 export function explainRefusal({
-  matched = [], fit = {}, fits = {}, rejected = {}, precheck = '', bridge = null, contrast = null
+  matched = [], fit = {}, fits = {}, nearest = null, rejected = {}, precheck = '', bridge = null, contrast = null
 }) {
   if (precheck) {
     return { code: precheck, category: CATEGORY[precheck] || 'room', detail: precheck };
@@ -97,13 +102,19 @@ export function explainRefusal({
   }
   const moving = (fits.moving ?? 0) > 0 && !(fits.far ?? 0);
   const code = moving ? 'moving-tempo' : 'tempo-distance';
+  // Cue sections can run at their own tempo after a beat switch; name the tempos that met.
+  const section = !moving && nearest && sectionsDiffer(nearest, fit) ? nearest : null;
+  const metBpm = section ? [fixed(section.outgoingBpm, 1), fixed(section.incomingBpm, 1)] : [outgoingBpm, incomingBpm];
   return {
     code,
     category: 'tempo',
     detail: moving
       ? 'the tempo moves where the songs would meet'
-      : `${outgoingBpm} vs ${incomingBpm} BPM, ${percent(fit.deviation)} apart`,
-    bpm: [outgoingBpm, incomingBpm],
+      : section
+        ? `${metBpm[0]} vs ${metBpm[1]} BPM where the songs meet, ${percent(section.deviation)} apart ` +
+          `(songs are ${outgoingBpm} and ${incomingBpm} BPM)`
+        : `${outgoingBpm} vs ${incomingBpm} BPM, ${percent(fit.deviation)} apart`,
+    bpm: metBpm,
     ...(bridge ? { bridge } : {})
   };
 }

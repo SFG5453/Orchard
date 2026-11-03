@@ -53,6 +53,12 @@ public:
     void resolveAlbumArtwork(const QString &title, const QString &artist,
                              quint64 requestId, std::function<void(quint64, const QString &)> callback);
 
+    // Apple's tall loop as an HLS url; empty unless Apple Music is the active source.
+    void resolveTallArtwork(const QString &title, const QString &artist, const QString &album,
+                            std::function<void(const QString &)> done);
+    // Tall loop as a playable mp4 for the fullscreen canvas stage; answers through tallVideoResolved.
+    Q_INVOKABLE void requestTallVideo(const QString &title, const QString &artist, const QString &album);
+
     // QML entry point; answers through albumArtworkResolved, synchronously on a cache hit.
     Q_INVOKABLE void requestAlbumArtwork(const QString &title, const QString &artist);
 
@@ -67,6 +73,8 @@ public:
 signals:
     // Empty url means no loop exists for that album.
     void albumArtworkResolved(const QString &title, const QString &artist, const QString &url);
+    // Empty url means no tall loop, or the stage is off.
+    void tallVideoResolved(const QString &title, const QString &artist, const QString &url);
 
 public:
     static QString directMp4FromHlsUrl(const QString &url);

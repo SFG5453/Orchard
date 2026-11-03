@@ -43,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -53,11 +54,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -71,6 +75,9 @@ import dev.sfg.orchard.mobile.download.AnimatedArtworkCache
 import dev.sfg.orchard.mobile.ui.theme.OrchardColors
 import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.delay
+
+/** Covered pages keep their layout for dismissal, while their artwork motion can rest. */
+val LocalArtworkMotionEnabled = compositionLocalOf { true }
 
 @Composable
 fun RemoteArtwork(
@@ -151,13 +158,16 @@ fun AnimatedArtworkVideo(
     onGlassFrame: ((Bitmap) -> Unit)? = null,
 ) {
     if (url.isBlank()) return
+    val playing = active && LocalArtworkMotionEnabled.current
     // GIF covers chosen by the user are not video; the platform decoder animates them.
     if (isGifArtwork(url)) {
-        AnimatedGifArtwork(url, active, modifier)
+        AnimatedGifArtwork(url, playing, modifier)
         return
     }
     val currentOnVideoAspect by rememberUpdatedState(onVideoAspect)
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val quality = LocalAnimatedArtworkQuality.current
     var failed by remember(url) { mutableStateOf(false) }
     var firstFrameReady by remember(url) { mutableStateOf(false) }
     if (failed) return
@@ -166,26 +176,18 @@ fun AnimatedArtworkVideo(
         val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context)
             .setDataSourceFactory(AnimatedArtworkCache.dataSourceFactory(context))
 
-        // Motion covers are short silent loops, so the stock buffering targets (which hold
-        // playback until seconds of video are ready) just delay the first frame. Start as soon
-        // as there is anything to show, but let the buffer run past the 10s that adaptive
-        // selection demands before it will step up a rendition: capped shorter, an HLS cover
-        // stayed pinned to the lowest variant for the entire loop.
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(1_000, 30_000, 120, 240)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
-        // A cover loop is a few seconds long, so there is nothing to gain by easing into it at a
-        // low bitrate the way ABR would for a full track: take the best rendition immediately.
-        // The viewport constraint goes too, since it is sized for the display while the artwork
-        // is drawn zoom-cropped and can use detail beyond it.
-        val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context).apply {
-            setParameters(
-                buildUponParameters()
-                    .setForceHighestSupportedBitrate(true)
-                    .clearViewportSizeConstraints(),
-            )
+        // Short loops need to adapt without waiting for ten seconds of buffered video.
+        val adaptiveSelection = androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection.Factory(
+            1_000, 5_000, 1_000,
+            androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection.DEFAULT_BANDWIDTH_FRACTION,
+        )
+        val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context, adaptiveSelection).apply {
+            setParameters(buildUponParameters().artworkQuality(quality))
         }
 
         ExoPlayer.Builder(context)
@@ -201,7 +203,12 @@ fun AnimatedArtworkVideo(
             }
     }
 
-    LaunchedEffect(url, active) {
+    LaunchedEffect(player, quality) {
+        val selector = player.trackSelector as androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+        selector.setParameters(selector.buildUponParameters().artworkQuality(quality))
+    }
+
+    LifecycleStartEffect(player, url, playing) {
         if (player.currentMediaItem?.localConfiguration?.uri?.toString() != url) {
             val mediaItem = MediaItem.Builder()
                 .setUri(url)
@@ -216,7 +223,8 @@ fun AnimatedArtworkVideo(
             player.setMediaItem(mediaItem)
             player.prepare()
         }
-        player.playWhenReady = active
+        player.playWhenReady = playing
+        onStopOrDispose { player.pause() }
     }
 
     DisposableEffect(player, url) {
@@ -260,30 +268,34 @@ fun AnimatedArtworkVideo(
     // The texture is the zoom-cropped frame as drawn, so a caller tinting the screen
     // around the video can sample it directly without replaying the crop.
     if (onFrame != null) {
-        LaunchedEffect(playerView, firstFrameReady, url) {
+        LaunchedEffect(playerView, firstFrameReady, url, playing, lifecycle) {
             val texture = playerView?.videoSurfaceView as? TextureView ?: return@LaunchedEffect
-            if (!firstFrameReady) return@LaunchedEffect
-            while (true) {
-                if (texture.isAvailable && texture.width > 0 && texture.height > 0) {
-                    val height = (FRAME_SAMPLE_WIDTH * texture.height / texture.width).coerceAtLeast(1)
-                    texture.getBitmap(FRAME_SAMPLE_WIDTH, height)?.let(onFrame)
+            if (!firstFrameReady || !playing) return@LaunchedEffect
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    if (texture.isAvailable && texture.width > 0 && texture.height > 0) {
+                        val height = (FRAME_SAMPLE_WIDTH * texture.height / texture.width).coerceAtLeast(1)
+                        texture.getBitmap(FRAME_SAMPLE_WIDTH, height)?.let(onFrame)
+                    }
+                    delay(FRAME_SAMPLE_INTERVAL_MS)
                 }
-                delay(FRAME_SAMPLE_INTERVAL_MS)
             }
         }
     }
 
     if (onGlassFrame != null) {
         val currentOnGlassFrame by rememberUpdatedState(onGlassFrame)
-        LaunchedEffect(playerView, firstFrameReady, url, active) {
+        LaunchedEffect(playerView, firstFrameReady, url, playing, lifecycle) {
             val texture = playerView?.videoSurfaceView as? TextureView ?: return@LaunchedEffect
-            if (!firstFrameReady || !active) return@LaunchedEffect
-            while (true) {
-                if (texture.isAvailable && texture.width > 0 && texture.height > 0) {
-                    val height = (GLASS_FRAME_WIDTH * texture.height / texture.width).coerceAtLeast(1)
-                    texture.getBitmap(GLASS_FRAME_WIDTH, height)?.let(currentOnGlassFrame)
+            if (!firstFrameReady || !playing) return@LaunchedEffect
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    if (texture.isAvailable && texture.width > 0 && texture.height > 0) {
+                        val height = (GLASS_FRAME_WIDTH * texture.height / texture.width).coerceAtLeast(1)
+                        texture.getBitmap(GLASS_FRAME_WIDTH, height)?.let(currentOnGlassFrame)
+                    }
+                    delay(GLASS_FRAME_INTERVAL_MS)
                 }
-                delay(GLASS_FRAME_INTERVAL_MS)
             }
         }
     }

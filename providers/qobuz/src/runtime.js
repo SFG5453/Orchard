@@ -17,18 +17,11 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// QuickJS entry point. The host owns credentials, the OAuth callback and the
-// loopback audio server; this bundle owns the Qobuz protocol.
+// QuickJS entry point. The host owns credentials and the loopback audio server;
+// this bundle owns the Qobuz protocol.
 import { albumCandidates, selectQobuzAlbum } from './album.js';
 import { createQobuz } from './index.js';
-import { createQobuzAuthorizationUrl, exchangeQobuzAuthorizationCode } from './oauth.js';
 import { verifyQobuzToken } from './token.js';
-
-const hostCrypto = Object.freeze({
-  hkdfSha256: ({ key, salt, info, length }) => globalThis.__orchardHkdfSha256(key, salt, info, length),
-  decryptAes128Cbc: ({ key, iv, data }) => globalThis.__orchardAes128(0, key, iv, data),
-  decryptAes128Ctr: ({ key, iv, data }) => globalThis.__orchardAes128(1, key, iv, data)
-});
 
 // Identifies a playback to Qobuz's reports; nothing secret depends on it.
 function randomUuid() {
@@ -50,7 +43,6 @@ const logger = Object.freeze({
 let credentials = null;
 const qobuz = createQobuz({
   credentials: () => credentials,
-  crypto: hostCrypto,
   fetchImpl: (...args) => fetch(...args),
   logger,
   randomUuid,
@@ -63,23 +55,13 @@ const methods = new Map([
     const userId = Number(payload.userId);
     const appId = String(payload.appId || '');
     const appSecret = String(payload.appSecret || '');
-    credentials = token && Number.isSafeInteger(userId)
-      ? { token, userId, ...(appId && appSecret ? { appId, appSecret } : {}) }
+    credentials = token && Number.isSafeInteger(userId) && appId && appSecret
+      ? { token, userId, appId, appSecret }
       : null;
     qobuz.client.reset();
     return { connected: Boolean(credentials) };
   }],
-  ['oauth.start', async (payload = {}) => {
-    const web = await qobuz.bootstrap.get({ refresh: true });
-    return { url: createQobuzAuthorizationUrl({ appId: web.appId, redirectUrl: payload.redirectUrl }) };
-  }],
-  ['oauth.finish', async (payload = {}) => exchangeQobuzAuthorizationCode({
-    code: payload.code,
-    fetchImpl: (...args) => fetch(...args),
-    web: await qobuz.bootstrap.get()
-  })],
   ['token.verify', async (payload = {}) => verifyQobuzToken({
-    bootstrap: qobuz.bootstrap,
     fetchImpl: (...args) => fetch(...args),
     token: payload.token,
     userId: payload.userId,

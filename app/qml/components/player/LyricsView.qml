@@ -38,6 +38,20 @@ Item {
     readonly property int currentIndex: synced && lines.length ? OrchardLyrics.indexAt(clock) : -1
     readonly property int pauseIndex: synced ? pauseAt(clock) : -2
     readonly property real wordClock: clock + 0.08
+    readonly property int focusIndex: pauseIndex >= 0 ? pauseIndex : currentIndex
+    // Browsing by hand shows every line crisp.
+    readonly property bool depthActive: synced && following
+    readonly property bool fadeDepth: OrchardAppearance.lyricsDistanceFade
+    readonly property bool blurDepth: OrchardAppearance.lyricsFocusBlur
+    readonly property real columnWidth: column.width
+    readonly property real pauseProgress: {
+        if (pauseIndex < -1)
+            return -1;
+        const span = pauseWindow(pauseIndex);
+        return span ? Math.max(0, Math.min(1, (clock - span.start) / (span.end - span.start))) : -1;
+    }
+    signal glide(real delta)
+    signal glideStopped
     readonly property color fillColor: Qt.rgba(accentColor.r * 0.4 + primaryText.r * 0.6,
                                                accentColor.g * 0.4 + primaryText.g * 0.6,
                                                accentColor.b * 0.4 + primaryText.b * 0.6, 1)
@@ -100,11 +114,17 @@ Item {
         const maxY = Math.max(0, flick.contentHeight - flick.height);
         const y = Math.max(0, Math.min(maxY, anchorY - flick.height / 2));
         scroll.stop();
-        if (animated && !fresh) {
+        if (animated && !fresh && OrchardAppearance.lyricsStaggeredScroll) {
+            const delta = y - flick.contentY;
+            flick.contentY = y;
+            // Lines start where they were and catch up one after another.
+            glide(delta);
+        } else if (animated && !fresh) {
             scroll.to = y;
             scroll.start();
         } else {
             flick.contentY = y;
+            glideStopped();
         }
     }
 
@@ -241,6 +261,7 @@ Item {
 
         onMovementStarted: {
             scroll.stop();
+            root.glideStopped();
             root.following = false;
             resumeFollow.stop();
         }
@@ -289,6 +310,7 @@ Item {
                 running: root.running
                 x: root.lines.length && root.lines[0].agentLane === "alternate" ? column.width - implicitWidth : 0
                 active: root.pauseIndex === -1
+                progress: active ? root.pauseProgress : -1
             }
 
             Repeater {
@@ -305,153 +327,10 @@ Item {
                     asynchronous: true
                     onLoaded: Qt.callLater(root.checkBuilt)
 
-                    sourceComponent: Item {
-                        id: line
-                        readonly property var modelData: lineLoader.modelData
-                        readonly property int index: lineLoader.index
-                        // Pause dots appear under the line without dimming it.
-                        readonly property bool current: index === root.currentIndex
-                        readonly property bool alternate: modelData.agentLane === "alternate"
-                        readonly property var words: modelData.words || []
-                        readonly property var adlibs: modelData.adlibs || []
-                        readonly property string translation: root.translationAt(index)
-                        readonly property bool translated: translation.length > 0
-                        readonly property color restColor: root.tint(root.primaryText, !root.synced ? 0.72 : hover.containsMouse ? 0.68 : 0.24)
-
-                        readonly property var wordEnds: words.map((_, i) => wordEnd(words, i))
-                        readonly property var adlibEnds: adlibs.map((_, i) => wordEnd(adlibs, i))
-
-                        function wordEnd(list, i) {
-                            const entry = list[i];
-                            const start = Number(entry.startTime || 0);
-                            const end = Number(entry.endTime || 0);
-                            if (end > start)
-                                return end;
-                            const next = list[i + 1];
-                            const nextStart = next ? Number(next.startTime || 0) : 0;
-                            return nextStart > start ? nextStart : start + 0.4;
-                        }
-
-                        width: column.width
-                        height: body.implicitHeight + 22 + pause.height
-
-                        Item {
-                            id: body
-                            y: 11
-                            width: parent.width
-                            implicitHeight: lineColumn.implicitHeight
-                            height: implicitHeight
-                            scale: line.current ? 1.01 : 1
-                            transformOrigin: line.alternate ? Item.Right : Item.Left
-                            transform: Translate {
-                                x: hover.containsMouse && !line.current && root.synced ? (line.alternate ? -6 : 6) : 0
-                                Behavior on x { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
-                            }
-                            Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
-
-                            layer.enabled: line.current
-                            layer.effect: MultiEffect {
-                                shadowEnabled: true
-                                shadowColor: root.accentColor
-                                shadowOpacity: 0.4
-                                shadowBlur: 1
-                                shadowHorizontalOffset: 0
-                                shadowVerticalOffset: 0
-                            }
-
-                            Column {
-                                id: lineColumn
-                                x: line.alternate ? 34 : 0
-                                width: parent.width - 34
-                                spacing: 4
-
-                                // Translated lines lead with the English; the original shrinks below like an adlib.
-                                Text {
-                                    width: parent.width
-                                    visible: line.words.length === 0 || line.translated
-                                    text: line.translated ? line.translation : line.modelData.text || ""
-                                    color: line.current ? root.primaryText : line.restColor
-                                    horizontalAlignment: line.alternate ? Text.AlignRight : Text.AlignLeft
-                                    font.family: "Inter"
-                                    font.pixelSize: root.synced ? root.pixelSize : 16
-                                    font.weight: root.synced ? Font.Bold : Font.Medium
-                                    font.letterSpacing: root.synced ? -0.4 : 0
-                                    lineHeight: 1.12
-                                    wrapMode: Text.Wrap
-                                    Behavior on color { ColorAnimation { duration: 240 } }
-                                }
-
-                                LyricsWordRows {
-                                    width: parent.width
-                                    visible: line.words.length > 0
-                                    words: line.words
-                                    ends: line.wordEnds
-                                    lit: line.current
-                                    metrics: line.translated ? adlibMetrics : mainMetrics
-                                    gap: metrics.font.pixelSize * (line.translated ? 0.24 : 0.26)
-                                    pixelSize: metrics.font.pixelSize
-                                    weight: line.translated ? Font.Medium : Font.Bold
-                                    alignRight: line.alternate
-                                    baseColor: line.translated ? root.tint(root.primaryText, line.current ? 0.48 : 0.2)
-                                             : line.current ? root.tint(root.primaryText, 0.28) : line.restColor
-                                    fillColor: line.translated ? root.tint(root.accentColor, 0.9) : root.fillColor
-                                    doneColor: root.primaryText
-                                    clockSource: root
-                                }
-
-                                Text {
-                                    width: parent.width
-                                    visible: line.translated && line.words.length === 0
-                                    text: line.modelData.text || ""
-                                    color: root.tint(root.primaryText, line.current ? 0.48 : 0.2)
-                                    horizontalAlignment: line.alternate ? Text.AlignRight : Text.AlignLeft
-                                    font: adlibMetrics.font
-                                    wrapMode: Text.Wrap
-                                }
-
-                                // Background vocals trail the main line in a smaller voice.
-                                LyricsWordRows {
-                                    width: parent.width
-                                    visible: line.adlibs.length > 0
-                                    words: line.adlibs
-                                    ends: line.adlibEnds
-                                    lit: line.current
-                                    metrics: adlibMetrics
-                                    gap: adlibMetrics.font.pixelSize * 0.24
-                                    pixelSize: adlibMetrics.font.pixelSize
-                                    weight: Font.Medium
-                                    alignRight: line.alternate
-                                    baseColor: root.tint(root.primaryText, line.current ? 0.48 : 0.2)
-                                    fillColor: root.tint(root.accentColor, 0.9)
-                                    doneColor: root.primaryText
-                                    clockSource: root
-                                }
-                            }
-                        }
-
-                        LyricsPauseDots {
-                            id: pause
-                            color: root.fillColor
-                            running: root.running
-                            x: line.alternate ? parent.width - implicitWidth : 0
-                            y: body.y + body.height + 11
-                            active: root.pauseIndex === line.index
-                        }
-
-                        MouseArea {
-                            id: hover
-                            anchors.fill: body
-                            hoverEnabled: root.synced
-                            enabled: root.synced
-                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                            onClicked: {
-                                // Same 5s runway before the mix as the fullscreen scrubber.
-                                const start = Number(line.modelData.startTime || 0);
-                                const mix = OrchardPlayback.mixStart;
-                                OrchardPlayback.seek(mix >= 0 ? Math.min(start, Math.max(0, mix - 5, OrchardPlayback.position)) : start);
-                                root.following = true;
-                            }
-                        }
+                    sourceComponent: LyricsLine {
+                        view: root
+                        modelData: lineLoader.modelData
+                        index: lineLoader.index
                     }
                 }
             }

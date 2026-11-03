@@ -54,7 +54,8 @@ import java.util.concurrent.Executors
 class StreamCache(
     context: Context,
     maxBytes: Long,
-    private val variant: () -> String,
+    /** The cache identity of one URI's bytes; each source has its own. */
+    private val variant: (Uri) -> String,
 ) {
     private val cache: SimpleCache = SimpleCache(
         File(context.filesDir, CACHE_DIRECTORY),
@@ -105,9 +106,10 @@ class StreamCache(
     /**
      * Wraps [upstream] so reads are served from disk when possible and written to it when not.
      *
-     * The variant (quality and audio source) is folded into the cache key: the same track at
-     * DATA_SAVER and HIGH, or from YouTube and Qobuz, is different bytes, and keying both as the
-     * track alone would serve whichever was fetched first.
+     * The song's source variant is folded into the cache key: the same track at DATA_SAVER and
+     * HIGH, or from YouTube and Qobuz, is different bytes, and keying both as the track alone would
+     * serve whichever was fetched first. Apple Music songs have one variant of their own, so a
+     * YouTube or Qobuz setting change leaves their bytes in place.
      */
     fun dataSourceFactory(upstream: DataSource.Factory): DataSource.Factory {
         upstreamFactory = upstream
@@ -126,7 +128,7 @@ class StreamCache(
         return readFactory
     }
 
-    private fun cacheKey(uri: Uri): String = "${uri}|${variant()}"
+    private fun cacheKey(uri: Uri): String = "${uri}|${variant(uri)}"
 
     /** True when the whole track is already on disk, so nothing needs fetching. */
     fun isFullyCached(uri: Uri): Boolean {

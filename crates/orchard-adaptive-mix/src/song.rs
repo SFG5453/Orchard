@@ -7,11 +7,11 @@ use earmark::AudioBuffer;
 use earmark::audio::resample::{StreamResampler, resample};
 use std::collections::VecDeque;
 
-/// Beat This windows and the whole-track mono are cut from 44.1 kHz, as in V2.
+/// Beat model windows and the whole-track mono are cut from 44.1 kHz, as in V2.
 pub const RATE: u32 = 44_100;
 /// V2's analysis rate: whole-track evidence is measured on 11,025 Hz mono.
 pub const ANALYSIS_RATE: u32 = 11_025;
-/// V2's Beat This window, sized to one model inference.
+/// V2's beat model window, sized to one inference.
 pub const BEAT_WINDOW: f64 = 29.76;
 /// Render windows: the outgoing tail and incoming head a mix can use.
 pub const WINDOW: f64 = 60.0;
@@ -23,7 +23,7 @@ pub struct Track {
     /// Equal-weight box downmix at `ANALYSIS_RATE`, as V2's analysis worker produced.
     pub mono: Vec<f32>,
     pub duration: f64,
-    /// Head and tail Beat This windows (44.1 kHz mono) with their start offsets.
+    /// Head and tail beat model windows (44.1 kHz mono) with their start offsets.
     /// A short track has one.
     pub beat_windows: Vec<(Vec<f32>, f64)>,
 }
@@ -96,8 +96,9 @@ impl SongBuilder {
             beat_window,
             windows,
             window,
-            head: Vec::new(),
-            tail: VecDeque::new(),
+            // Sized up front: growing by doubling would hold up to twice the window.
+            head: if windows.head { Vec::with_capacity(window * 2) } else { Vec::new() },
+            tail: if windows.tail { VecDeque::with_capacity(window * 2) } else { VecDeque::new() },
         })
     }
 
@@ -118,9 +119,12 @@ impl SongBuilder {
             self.head.extend_from_slice(&stereo[..keep]);
         }
         if self.windows.tail {
-            self.tail.extend(stereo);
-            let excess = self.tail.len().saturating_sub(self.window * 2);
+            // Make room before appending so the buffer never outgrows the window.
+            let limit = self.window * 2;
+            let incoming = &stereo[stereo.len().saturating_sub(limit)..];
+            let excess = (self.tail.len() + incoming.len()).saturating_sub(limit);
             self.tail.drain(..excess);
+            self.tail.extend(incoming);
         }
         let mono: Vec<f32> = stereo.as_chunks::<2>().0.iter().map(|[l, r]| (l + r) * 0.5).collect();
         let mut resampled = std::mem::take(&mut self.scratch);
@@ -163,14 +167,22 @@ impl SongBuilder {
         } else {
             let offset = (self.rate_frames - self.beat_window) as f64 / RATE as f64;
             self.beat_head.truncate(self.beat_window);
-            vec![(self.beat_head, 0.0), (self.beat_tail.into_iter().collect(), offset)]
+            self.beat_head.shrink_to_fit();
+            vec![(self.beat_head, 0.0), (self.beat_tail.into(), offset)]
         };
-        let render = |samples: &[f32]| -> Result<AudioBuffer, String> {
-            let native = AudioBuffer::from_interleaved(samples, 2, self.native).map_err(|e| e.to_string())?;
+        self.mono.shrink_to_fit();
+        // Each window exists in one form at a time; same-rate windows skip the resampler's copy.
+        let native_rate = self.native;
+        let render = |samples: Vec<f32>| -> Result<AudioBuffer, String> {
+            let native = AudioBuffer::from_interleaved(&samples, 2, native_rate).map_err(|e| e.to_string())?;
+            drop(samples);
+            if native_rate == RENDER_RATE {
+                return Ok(native);
+            }
             resample(&native, RENDER_RATE).map_err(|e| e.to_string())
         };
-        let tail: Vec<f32> = self.tail.into_iter().collect();
-        let (head, tail) = (render(&self.head)?, render(&tail)?);
+        let head = render(std::mem::take(&mut self.head))?;
+        let tail = render(Vec::from(std::mem::take(&mut self.tail)))?;
         let tail_offset = self.frames.saturating_sub(self.window) as f64 / self.native as f64;
         Ok(Song { track: Track { mono: self.mono, duration, beat_windows }, head, tail, tail_offset, rate: self.native })
     }

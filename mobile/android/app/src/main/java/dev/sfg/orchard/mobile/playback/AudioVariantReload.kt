@@ -23,6 +23,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import dev.sfg.orchard.mobile.OrchardGraph
+import dev.sfg.orchard.mobile.playback.apple.AppleMusicDataSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
@@ -40,7 +41,7 @@ internal fun observeAudioVariants(graph: OrchardGraph, scope: CoroutineScope, on
     }
 }
 
-/** Reopens the current audio item under the new provider cache identity. */
+/** Reopens the current audio item under the new provider cache identity; Apple Music items keep theirs. */
 @UnstableApi
 internal fun reloadAudioForVariant(
     player: ExoPlayer,
@@ -51,9 +52,13 @@ internal fun reloadAudioForVariant(
 ) {
     crossfade.abort()
     cache.retainOnly(emptyList())
-    streams.clear()
+    streams.clearProviderStreams()
     val item = player.currentMediaItem ?: return
     val uri = item.localConfiguration?.uri ?: return
+    if (AppleMusicDataSource.isApple(uri)) {
+        prefetch(player)
+        return
+    }
     if (!MediaItemMapper.isOrchardUri(uri) || MediaItemMapper.isVideoUri(uri)) return
     val index = player.currentMediaItemIndex
     val position = player.currentPosition.coerceAtLeast(0)

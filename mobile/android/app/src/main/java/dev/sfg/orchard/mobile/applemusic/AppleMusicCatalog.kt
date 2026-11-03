@@ -20,12 +20,15 @@
 package dev.sfg.orchard.mobile.applemusic
 
 import android.content.Context
+import android.util.Base64
 import dev.sfg.orchard.mobile.artwork.TrackArtwork
 import dev.sfg.orchard.mobile.auth.OrchardAccountService
 import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.HomeFeed
+import dev.sfg.orchard.mobile.model.LibrarySnapshot
+import dev.sfg.orchard.mobile.model.Playlist
 import dev.sfg.orchard.mobile.model.SearchResults
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.provider.ProviderBundle
@@ -36,10 +39,14 @@ import dev.sfg.orchard.mobile.youtube.providerDetail
 import dev.sfg.orchard.mobile.youtube.providerItem
 import dev.sfg.orchard.mobile.youtube.providerSections
 import dev.sfg.orchard.mobile.youtube.providerSearch
+import dev.sfg.orchard.mobile.youtube.providerTrack
 import dev.sfg.orchard.mobile.youtube.text
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
 
@@ -53,6 +60,8 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
     private val prefs = context.applicationContext.getSharedPreferences("orchard_apple_music", Context.MODE_PRIVATE)
     private val cipher = AndroidKeystoreCipher("orchard_apple_music_developer_token_v1")
     private val tokens = AppleMusicDeveloperTokenClient(account.serviceUrl)
+    // ShazamKit sends no Origin header, so it needs a token without an origin claim.
+    private val shazamTokens = AppleMusicDeveloperTokenClient(account.serviceUrl, "/apple/shazam-token")
     private val mutex = Mutex()
     private var configuredFor = ""
 
@@ -62,9 +71,53 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
     suspend fun search(query: String): SearchResults =
         call("catalog.search", JSONObject().put("query", query).put("filter", "all")).providerSearch()
 
-    suspend fun home(): HomeFeed = HomeFeed(
-        sections = call("catalog.home", JSONObject()).optJSONArray("sections").providerSections("apple-home"),
-    )
+    suspend fun home(): HomeFeed =
+        HomeFeed(sections = call("catalog.home", JSONObject()).optJSONArray("sections").providerSections("apple-home"))
+
+    /** The listener's saved songs, albums, artists and playlists. */
+    suspend fun library(): LibrarySnapshot {
+        val sections = call("library", JSONObject()).optJSONArray("sections")
+            .mapObjects { it.text("key") to it.optJSONArray("items").mapObjects { item -> item.providerItem() } }
+            .toMap()
+        fun items(key: String) = sections[key].orEmpty()
+        return LibrarySnapshot(
+            likedTracks = items("songs").filterIsInstance<CatalogItem.Song>().map { it.track },
+            savedAlbums = items("albums").filterIsInstance<CatalogItem.Record>().map { it.album },
+            savedArtists = items("artists").filterIsInstance<CatalogItem.Performer>().map { it.artist },
+            savedPlaylists = items("playlists").filterIsInstance<CatalogItem.Collection>().map { it.playlist },
+        )
+    }
+
+    /** Songs played recently anywhere on Apple Music, newest first. */
+    suspend fun recentTracks(): List<Track> =
+        call("library.recent", JSONObject()).optJSONArray("items").mapObjects { it.providerItem() }
+            .filterIsInstance<CatalogItem.Song>().map { it.track }
+
+    /** Loving a song also saves it to the library. */
+    suspend fun setLiked(track: Track, liked: Boolean) {
+        call("library.like.set", JSONObject().put("track", track.payload()).put("liked", liked))
+    }
+
+    /** [playlistId] is the browse id, `am.playlists.p.…`. */
+    suspend fun addToPlaylist(playlistId: String, track: Track) {
+        call("library.playlist.add", JSONObject()
+            .put("track", track.payload())
+            .put("playlistId", playlistId.removePrefix(PLAYLIST_PREFIX)))
+    }
+
+    /** Browse id of the new playlist, seeded with [track] when set. */
+    suspend fun createPlaylist(title: String, track: Track?): String {
+        val payload = JSONObject().put("title", title.trim())
+        if (track != null) payload.put("track", track.payload())
+        return call("library.playlist.create", payload).text("playlistId").let { if (it.isEmpty()) it else PLAYLIST_PREFIX + it }
+    }
+
+    // Non-Apple tracks are matched to a catalog song by the provider.
+    private fun Track.payload() = JSONObject()
+        .put("id", id)
+        .put("title", title)
+        .put("artist", artist)
+        .put("album", album)
 
     suspend fun homeSection(id: String): List<CatalogItem> =
         call("catalog.home.section", JSONObject().put("browseId", id))
@@ -74,12 +127,40 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
         val kind = when (id.split('.').getOrNull(1)) {
             "artists" -> CatalogKind.ARTIST
             "albums" -> CatalogKind.ALBUM
-            "playlists" -> CatalogKind.PLAYLIST
+            "playlists", "stations" -> CatalogKind.PLAYLIST
             else -> throw AppleMusicException("bad_id", "Apple Music cannot open this.")
         }
         val method = "catalog." + kind.name.lowercase()
         return call(method, JSONObject().put("browseId", id)).providerDetail(id, kind)
     }
+
+    /** A page as it fills in: a library playlist's first tracks at once, then all of them. */
+    fun detailPages(id: String): Flow<BrowseDetail> = flow {
+        if (!id.startsWith("am.playlists.")) {
+            emit(detail(id))
+            return@flow
+        }
+        val first = call("catalog.playlist", JSONObject().put("browseId", id).put("firstPage", true))
+        val detail = first.providerDetail(id, CatalogKind.PLAYLIST)
+        emit(detail)
+        val tracks = detail.tracks.toMutableList()
+        var continuation = first.text("continuation")
+        while (continuation.isNotEmpty()) {
+            // A failed page is not worth losing the rows already shown.
+            val page = runCatching {
+                call("catalog.playlist.more", JSONObject().put("continuation", continuation).put("startIndex", tracks.size))
+            }.getOrNull() ?: break
+            page.optJSONArray("tracks").mapObjects { it.providerTrack() }.let(tracks::addAll)
+            emit(detail.copy(tracks = tracks.toList()))
+            val next = page.text("continuation")
+            if (next == continuation) break
+            continuation = next
+        }
+    }
+
+    /** The next songs from a song's station (am.songs id) or from a station (am.stations id). */
+    suspend fun upNext(seed: String): List<Track> =
+        call("catalog.upNext", JSONObject().put("seed", seed)).optJSONArray("items").mapObjects { it.providerTrack() }
 
     /** Browse id of the Apple Music artist named exactly [name], or null. */
     suspend fun matchArtist(name: String): String? {
@@ -112,6 +193,59 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
             videoUrlVertical = result.text("animatedVertical"),
         )
         return artwork.takeIf { it.staticUrl.isNotBlank() || it.videoUrl.isNotBlank() || it.videoUrlVertical.isNotBlank() }
+    }
+
+    /**
+     * Apple's audio analysis (beat and bar grid, vocal activity) keyed by catalog song id, for
+     * `am.songs.` ids or bare catalog ids. Songs Apple has not analysed are missing.
+     */
+    suspend fun audioAnalysis(ids: List<String>): JSONObject =
+        call("catalog.audioAnalysis", JSONObject().put("ids", JSONArray(ids))).optJSONObject("items") ?: JSONObject()
+
+    suspend fun lyrics(track: Track): String {
+        val payload = JSONObject().put("title", track.title).put("artist", track.artist).put("album", track.album)
+        if (track.id.startsWith("am.songs.")) payload.put("appleId", track.id.removePrefix("am.songs."))
+        return call("lyrics", payload).text("ttml")
+    }
+
+    /** Apple's translation of a song's lyrics as `{line key: text}` in [language], a BCP 47 tag; empty when Apple has none. */
+    suspend fun lyricsTranslation(track: Track, language: String): Map<String, String> {
+        val payload = JSONObject().put("title", track.title).put("artist", track.artist).put("album", track.album)
+            .put("language", language)
+        if (track.id.startsWith("am.songs.")) payload.put("appleId", track.id.removePrefix("am.songs."))
+        val translations = call("lyrics.translation", payload).optJSONObject("translations") ?: return emptyMap()
+        return translations.keys().asSequence().associateWith { translations.optString(it) }.filterValues(String::isNotBlank)
+    }
+
+    /** Playlist layout and license details of a catalog song's Widevine stream. */
+    /** [standard] prefers Apple's 64 kbps encode over 256 kbps. */
+    suspend fun stream(id: String, standard: Boolean = false): JSONObject =
+        call("playback.stream", JSONObject().put("track", JSONObject().put("id", id))
+            .put("quality", if (standard) "standard" else "high"))
+
+    /** Reports a played catalog song to Apple; [method] is history.start or history.end. */
+    suspend fun reportPlay(method: String, payload: JSONObject) {
+        call(method, payload)
+    }
+
+    suspend fun atmos(id: String): JSONObject = call("playback.atmos", JSONObject().put("id", id))
+
+    /** A music video's master playlist and license endpoint, for an am.music-videos id. */
+    suspend fun video(id: String): JSONObject = call("playback.video", JSONObject().put("id", id))
+
+    /** The am.music-videos id of a catalog song's music video, or blank when Apple has none. */
+    suspend fun musicVideo(songId: String): String =
+        call("catalog.musicVideo", JSONObject().put("id", songId)).optString("videoId")
+            .takeIf(String::isNotBlank)?.let { "am.music-videos.$it" }.orEmpty()
+
+    /** Apple's license for a Widevine [challenge] against a stream from [stream]. */
+    suspend fun license(stream: JSONObject, challenge: ByteArray): ByteArray {
+        val payload = JSONObject()
+            .put("licenseUrl", stream.text("licenseUrl"))
+            .put("keyUri", stream.text("keyUri"))
+            .put("appleId", stream.text("appleId"))
+            .put("challenge", Base64.encodeToString(challenge, Base64.NO_WRAP))
+        return Base64.decode(call("playback.license", payload).text("license"), Base64.DEFAULT)
     }
 
     private suspend fun call(method: String, payload: JSONObject, retry: Boolean = true): JSONObject {
@@ -149,18 +283,26 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
             .put("origin", AppleMusicWebSession.PAGE_ORIGIN))
     }
 
+    private suspend fun developerToken(): String = cachedToken(tokens, KEY_DEVELOPER_TOKEN, KEY_DEVELOPER_EXPIRY)
+
+    internal suspend fun shazamToken(): String = cachedToken(shazamTokens, KEY_SHAZAM_TOKEN, KEY_SHAZAM_EXPIRY)
+
+    internal fun forgetShazamToken() {
+        prefs.edit().remove(KEY_SHAZAM_TOKEN).remove(KEY_SHAZAM_EXPIRY).apply()
+    }
+
     /** Reuses the stored token until a day before it expires. */
-    private suspend fun developerToken(): String {
+    private suspend fun cachedToken(client: AppleMusicDeveloperTokenClient, tokenKey: String, expiryKey: String): String {
         val now = System.currentTimeMillis() / 1000
-        val stored = runCatching { prefs.getString(KEY_DEVELOPER_TOKEN, null)?.let(cipher::decrypt) }.getOrNull()
-        if (!stored.isNullOrEmpty() && prefs.getLong(KEY_DEVELOPER_EXPIRY, 0) > now + REFRESH_MARGIN_SECONDS) return stored
+        val stored = runCatching { prefs.getString(tokenKey, null)?.let(cipher::decrypt) }.getOrNull()
+        if (!stored.isNullOrEmpty() && prefs.getLong(expiryKey, 0) > now + REFRESH_MARGIN_SECONDS) return stored
         val accessToken = account.accessToken()
             ?: throw AppleMusicException("orchard_account", "Sign in to your Orchard account to use Apple Music.")
-        val token = tokens.fetch(accessToken)
+        val token = client.fetch(accessToken)
         runCatching {
             prefs.edit()
-                .putString(KEY_DEVELOPER_TOKEN, cipher.encrypt(token.value))
-                .putLong(KEY_DEVELOPER_EXPIRY, token.expiresAt)
+                .putString(tokenKey, cipher.encrypt(token.value))
+                .putLong(expiryKey, token.expiresAt)
                 .apply()
         }
         return token.value
@@ -174,6 +316,10 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
     private companion object {
         const val KEY_DEVELOPER_TOKEN = "developer_token"
         const val KEY_DEVELOPER_EXPIRY = "developer_token_expires_at"
+        const val KEY_SHAZAM_TOKEN = "shazam_token"
+        const val KEY_SHAZAM_EXPIRY = "shazam_token_expires_at"
         const val REFRESH_MARGIN_SECONDS = 24 * 60 * 60L
+        const val PLAYLIST_PREFIX = "am.playlists."
     }
 }
+

@@ -15,6 +15,25 @@ headers from `litert_cc_sdk.zip` and the prebuilt runtimes from
 LiteRT is licensed under the Apache License 2.0, preserved in
 [`vendor/litert/LICENSE`](vendor/litert/LICENSE) and shipped with packages.
 
+## Chromium CDM interface
+
+`orchard-widevine-host` uses Chromium's Content Decryption Module interface
+headers from `chromium.googlesource.com/chromium/cdm` at commit
+`d6c4e1ea4c8fc3dcd98ac3ab5a981f63067223a4`, vendored under
+`third_party/chromium_cdm`. They are licensed under the BSD 3-Clause license,
+preserved in [`third_party/chromium_cdm/LICENSE`](third_party/chromium_cdm/LICENSE)
+and shipped with Linux packages. Orchard does not ship the Widevine CDM; it
+loads the copy an installed browser keeps.
+
+## AMD FidelityFX Super Resolution 1
+
+The music video player upscales and sharpens small videos with FSR 1 from
+`github.com/GPUOpen-Effects/FidelityFX-FSR` v1.0.2, a submodule at
+`third_party/FidelityFX-FSR`. Orchard's shaders include `ffx_a.h` and
+`ffx_fsr1.h` unchanged. They are licensed under the MIT license, preserved in
+[`third_party/FidelityFX-FSR/license.txt`](third_party/FidelityFX-FSR/license.txt)
+and shipped with packages.
+
 ## Microsoft Edge WebView2 SDK
 
 The Windows sign-in helper uses the WebView2 SDK 1.0.4258.31 headers and loader
@@ -90,6 +109,14 @@ author's quantized ONNX export unchanged as
 together with the model's `bert-base-uncased` vocabulary
 ([`vocab.txt`](models/docs-search/vocab.txt)). The model is by Benjamin Anderson
 under the MIT License, preserved in [`LICENSE`](models/docs-search/LICENSE).
+
+## Nirovi beat and downbeat model
+
+[`models/nirovi`](models/nirovi/README.md) was trained on the log-mel spectrograms published
+with Beat This (Zenodo record 13922116, CC BY 4.0) and the annotations from
+[`CPJKU/beat_this_annotations`](https://github.com/CPJKU/beat_this_annotations) (MIT
+License), and distilled from the Beat This `final0` model (Foscarin, Schlüter and Widmer,
+ISMIR 2024; MIT License). Only the trained weights ship with Orchard.
 
 ## Earmark beat and downbeat tracker
 

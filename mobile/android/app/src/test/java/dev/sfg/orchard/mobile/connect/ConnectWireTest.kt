@@ -19,6 +19,7 @@
 
 package dev.sfg.orchard.mobile.connect
 
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.Artist
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.PlaybackStatus
@@ -61,6 +62,14 @@ class ConnectWireTest {
     }
 
     @Test
+    fun appleTrackKeepsSource() {
+        val wire = ConnectWire.track(song.copy(id = "am.songs.123", playbackSource = APPLE_MUSIC_SOURCE))
+        assertEquals(APPLE_MUSIC_SOURCE, wire.getString("provider"))
+        assertEquals(APPLE_MUSIC_SOURCE, ConnectWire.track(wire)!!.playbackSource)
+        assertEquals("youtube", ConnectWire.track(ConnectWire.track(song))!!.playbackSource)
+    }
+
+    @Test
     fun desktopTrackWithoutHintsStillPlays() {
         // What desktop sends for a row without artist ids: canonical fields and a sparse extra.
         val wire = JSONObject("""{"id":"x1","title":"T","artist":"A","duration":61.5,"extra":{"type":"song"}}""")
@@ -91,6 +100,20 @@ class ConnectWireTest {
         })
         assertEquals("all", wire.getString("repeat"))
         assertTrue(wire.getBoolean("autoplay"))
+        assertEquals(history.id, wire.getJSONObject("previous").getString("id"))
+    }
+
+    @Test
+    fun remotePreviousSitsBeforeCurrent() {
+        val wire = JSONObject()
+            .put("track", ConnectWire.track(song))
+            .put("previous", ConnectWire.track(song.copy(id = "p")))
+            .put("queue", JSONArray().put(ConnectWire.track(song.copy(id = "n1"))))
+        val shown = ConnectWire.snapshot(wire)
+        assertEquals(listOf("p", "abc123", "n1"), shown.queue.map { it.id })
+        assertEquals(1, shown.currentIndex)
+        assertEquals(0, ConnectWire.upcomingIndex(shown, 2))
+        assertEquals(-1, ConnectWire.upcomingIndex(shown, 0))
     }
 
     @Test
@@ -111,5 +134,14 @@ class ConnectWireTest {
         // The queue UI addresses n2 as index 2; the target knows it as upcoming item 1.
         assertEquals(1, ConnectWire.upcomingIndex(shown, 2))
         assertEquals(-1, ConnectWire.upcomingIndex(shown, 0))
+    }
+
+    @Test
+    fun projectionMovesOnlyWhilePlaying() {
+        val playing = PlaybackSnapshot(status = PlaybackStatus.PLAYING, positionMs = 10_000, durationMs = 11_000, isPlaying = true)
+        assertEquals(10_500, ConnectWire.projected(playing, 500).positionMs)
+        assertEquals(11_000, ConnectWire.projected(playing, 5_000).positionMs)
+        val buffering = playing.copy(status = PlaybackStatus.BUFFERING)
+        assertEquals(10_000, ConnectWire.projected(buffering, 500).positionMs)
     }
 }

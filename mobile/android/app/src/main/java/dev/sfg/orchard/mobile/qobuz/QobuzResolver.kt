@@ -190,17 +190,8 @@ class QobuzResolver(
         }
     }
 
-    /** The Qobuz sign-in page that redirects to [redirectUrl] with an authorization code. */
-    suspend fun authorizationUrl(redirectUrl: String): String =
-        provider.invoke("oauth.start", JSONObject().put("redirectUrl", redirectUrl)).getString("url")
-
-    suspend fun exchangeCode(code: String): QobuzSession {
-        val account = provider.invoke("oauth.finish", JSONObject().put("code", code))
-        return QobuzSession(account.getString("token"), account.getLong("userId"))
-    }
-
-    /** Checks a user ID and auth token, plus an optional app ID and secret, with Qobuz. */
-    suspend fun verifyToken(userId: String, token: String, appId: String = "", appSecret: String = ""): QobuzSession {
+    /** Checks the user's own app ID and secret, plus a user ID and token issued to that app. */
+    suspend fun verifyToken(userId: String, token: String, appId: String, appSecret: String): QobuzSession {
         val account = provider.invoke(
             "token.verify",
             JSONObject()
@@ -212,8 +203,8 @@ class QobuzResolver(
         return QobuzSession(
             account.getString("token"),
             account.getLong("userId"),
-            account.optString("appId"),
-            account.optString("appSecret"),
+            account.getString("appId"),
+            account.getString("appSecret"),
         )
     }
 

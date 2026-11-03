@@ -64,6 +64,7 @@ internal fun PlayerPanelHeader(
     isDownloaded: Boolean,
     onDownload: (() -> Unit)?,
     onRemoveDownload: (() -> Unit)?,
+    onWatchVideo: (() -> Unit)? = null,
     onLiked: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -76,6 +77,7 @@ internal fun PlayerPanelHeader(
             onDownload = if (!isDownloaded) onDownload else null,
             onRemoveDownload = if (isDownloaded) onRemoveDownload else null,
             onShare = onShare,
+            onWatchVideo = onWatchVideo,
             onViewArtist = onOpenArtist,
             onViewAlbum = onOpenAlbum,
         )
@@ -107,9 +109,9 @@ internal fun PlayerPanelHeader(
                 )
             }
             if (showLike) {
-                TrackActionButtons(liked = liked, onLiked = onLiked, onOpenMenu = { menuOpen = true })
+                TrackActionButtons(liked = liked, onLiked = onLiked, onOpenMenu = { menuOpen = true }, glass = false)
             } else {
-                OverflowButton(onClick = { menuOpen = true })
+                OverflowButton(onClick = { menuOpen = true }, glass = false)
             }
         }
     }

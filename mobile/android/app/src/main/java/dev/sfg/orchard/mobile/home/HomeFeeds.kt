@@ -40,9 +40,9 @@ class HomeFeeds(
     /** Source behind the feed on screen; "See all" goes back to it. */
     val activeSource: HomeSource? get() = active
 
-    suspend fun load(): HomeFeedResult {
+    suspend fun load(preferredId: String = preferred()): HomeFeedResult {
         active = null
-        val source = sources.firstOrNull { it.id == preferred() } ?: sources.first()
+        val source = sources.firstOrNull { it.id == preferredId } ?: sources.first()
         check(source.available()) { "${source.name} is not connected." }
         val feed = source.feed()
         active = source

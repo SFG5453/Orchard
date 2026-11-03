@@ -23,7 +23,8 @@ public:
   void cancel();
 signals:
   // The worker's answer. With "error" it refused or could not analyse the pair and `pcm` is
-  // empty; otherwise `pcm` holds exactly header["bytes"] bytes of interleaved stereo f32.
+  // empty; otherwise `pcm` holds exactly header["bytes"] bytes of interleaved stereo f32,
+  // followed by header["referenceBytes"] bytes of mono reference clips when requested.
   void finished(const QJsonObject &header, const QByteArray &pcm);
   // The process broke: it would not start, crashed, timed out or spoke nonsense.
   void failed(const QString &message);

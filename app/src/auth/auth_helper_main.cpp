@@ -37,6 +37,10 @@
 #ifdef ORCHARD_WEBVIEW2_AUTH
 #include "webview2_item.h"
 #include <QQmlEngine>
+#elif defined(ORCHARD_WEBKIT_AUTH)
+#include "webkit_profile.h"
+#include "webkit_view.h"
+#include <QQmlEngine>
 #else
 #include <QtWebView/QtWebView>
 #endif
@@ -44,6 +48,9 @@
 int main(int argc, char *argv[]) {
 #ifdef ORCHARD_WEBVIEW2_AUTH
   qmlRegisterType<WebView2Item>("Orchard.Auth", 1, 0, "WebView2Item");
+#elif defined(ORCHARD_WEBKIT_AUTH)
+  initializeWebKit(argc, argv);
+  qmlRegisterType<WebKitView>("Orchard.Auth", 1, 0, "WebKitView");
 #else
   QtWebView::initialize();
 #endif
@@ -119,7 +126,16 @@ int main(int argc, char *argv[]) {
                      sessionClient->send(socketName, result);
                    });
 
+#ifdef ORCHARD_WEBKIT_AUTH
+  // The page opens its own GTK window; this view only runs the sign-in logic.
+  auto *page = view.rootObject()->findChild<WebKitView *>();
+  if (!page)
+    return 1;
+  QObject::connect(page, &WebKitView::closeRequested, &application, &QCoreApplication::quit);
+  page->show(view.title(), view.size(), true);
+#else
   view.show();
+#endif
   QTimer::singleShot(0, &authManager, &AuthManager::startLogin);
   return application.exec();
 }

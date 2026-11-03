@@ -102,6 +102,8 @@ fun PlayerControlStack(
     gap: @Composable (Dp) -> Unit = { Spacer(Modifier.height(it)) },
     /** Replaces the destinations row when set. */
     bottomBar: (@Composable () -> Unit)? = null,
+    /** Replaces the transport row when set. */
+    transport: (@Composable () -> Unit)? = null,
 ) {
     // Only takes space while a non-music span is under the playhead, so the stack doesn't jump
     // for the ordinary song. Centered above the scrubber where a thumb can reach it.
@@ -117,19 +119,23 @@ fun PlayerControlStack(
         showSource = true,
     )
     gap(20.dp)
-    PlayerTransportControls(
-        isPlaying = playback.isPlaying,
-        status = playback.status,
-        shuffle = playback.shuffle,
-        repeatMode = playback.repeatMode,
-        localControls = canControl,
-        onToggle = onToggle,
-        onPrevious = onPrevious,
-        onNext = onNext,
-        onShuffle = onShuffle,
-        onRepeat = onRepeat,
-        showModes = false,
-    )
+    if (transport != null) {
+        transport()
+    } else {
+        PlayerTransportControls(
+            isPlaying = playback.isPlaying,
+            status = playback.status,
+            shuffle = playback.shuffle,
+            repeatMode = playback.repeatMode,
+            localControls = canControl,
+            onToggle = onToggle,
+            onPrevious = onPrevious,
+            onNext = onNext,
+            onShuffle = onShuffle,
+            onRepeat = onRepeat,
+            showModes = false,
+        )
+    }
     gap(24.dp)
     // The phone has volume keys; a slider only earns its row when they cannot reach the speaker.
     if (!localControls) {

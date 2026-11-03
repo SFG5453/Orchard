@@ -28,11 +28,11 @@ import androidx.compose.ui.unit.dp
 /** Breakpoint in dp where phones transition to foldable (unfolded) or tablet UI. */
 const val FOLDABLE_MIN_WIDTH_DP = 600
 
-/** Width reserved for the vertical navigation rail on foldable and tablet screens. */
-val FoldableNavRailWidth: Dp = 80.dp
+/** Bottom padding that clears the floating mini player. */
+val FoldableChromeHeight: Dp = 96.dp
 
-/** Chrome bottom padding on foldables where only the mini-player floats without a bottom bar. */
-val FoldableChromeHeight: Dp = 84.dp
+/** Widest the mini player grows on large windows. */
+val FoldableReadoutMaxWidth: Dp = 520.dp
 
 /** Returns whether the current device viewport qualifies as foldable unfolded or tablet. */
 @Composable

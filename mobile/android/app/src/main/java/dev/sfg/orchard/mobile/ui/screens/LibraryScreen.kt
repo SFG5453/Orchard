@@ -74,8 +74,9 @@ fun LibraryScreen(
     localLibrary: LocalLibraryRepository? = null,
     localSnapshot: LocalSnapshot = LocalSnapshot(),
     localBusy: Boolean = false,
-    youtubeAvailable: Boolean = false,
-    onCreateYouTubePlaylist: (String) -> Unit = {},
+    /** Where online playlists are created, or null when no account can hold one. */
+    onlineService: String? = null,
+    onCreateOnlinePlaylist: (String) -> Unit = {},
 ) {
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -227,8 +228,8 @@ fun LibraryScreen(
             open = creating,
             onDismiss = { creating = false },
             repository = repository,
-            youtubeAvailable = youtubeAvailable,
-            onCreateYouTubePlaylist = onCreateYouTubePlaylist,
+            service = onlineService,
+            onCreateOnlinePlaylist = onCreateOnlinePlaylist,
             onOpenPlaylist = onOpenDetail,
         )
     }

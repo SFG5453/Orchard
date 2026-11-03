@@ -47,7 +47,8 @@ def main() -> None:
         shutil.rmtree(stage)
     stage.mkdir(parents=True)
 
-    binaries = ("orchard.exe", "orchard-auth-helper.exe", "WebView2Loader.dll", "orchard-adaptive-mix.exe",
+    binaries = ("orchard.exe", "orchard-auth-helper.exe", "orchard-widevine-host.exe", "WebView2Loader.dll",
+                "orchard-adaptive-mix.exe",
                 "webgpu_dawn.dll", "dxil.dll", "dxcompiler.dll", "discord_partner_sdk.dll", "libLiteRt.dll", "ffmpeg.exe", "ffprobe.exe",
                 "ffmpeg-LICENSE.txt")
     for name in binaries:
@@ -71,8 +72,9 @@ def main() -> None:
     shutil.copy2(require(qt / "plugins" / "sqldrivers" / "qsqlite.dll"),
                  stage / "sqldrivers" / "qsqlite.dll")
 
-    required = ("platforms/qwindows.dll", "multimedia/ffmpegmediaplugin.dll", "models/beat-this/beat_this_webgpu.onnx",
-                "models/vocal-separation/vocals_umxhq_fp32.onnx",
+    required = ("platforms/qwindows.dll", "multimedia/ffmpegmediaplugin.dll", "models/nirovi/nirovi_fp16.onnx",
+                "models/nirovi/nirovi_int8.ort",
+                "models/syvenu/syvenu.ort",
                 "models/docs-search/model_quantized.onnx", "models/docs-search/vocab.txt",
                 "models/slop/fakeprint_lr.f32")
     for name in required:

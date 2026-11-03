@@ -24,6 +24,7 @@
 #include <QList>
 #include <QNetworkAccessManager>
 #include <QObject>
+#include <QStringList>
 #include <functional>
 
 class AuthSessionServer;
@@ -39,10 +40,14 @@ class AppleMusic final : public QObject {
   // restoring, disconnected, connecting, connected
   Q_PROPERTY(QString status READ status NOTIFY changed)
   Q_PROPERTY(bool connected READ connected NOTIFY changed)
-  // Sign-in needs Qt WebEngine.
+  // The Atmos streaming quality can play; its 5.1 bed is rendered binaurally.
+  Q_PROPERTY(bool atmosAvailable READ atmosAvailable NOTIFY changed)
+  // Sign-in needs the helper's browser: WebKitGTK on Linux, WebView2 on Windows.
   Q_PROPERTY(bool loginAvailable READ loginAvailable CONSTANT)
   Q_PROPERTY(QString message READ message NOTIFY changed)
   Q_PROPERTY(bool messageIsError READ messageIsError NOTIFY changed)
+  // Songs played in Orchard are reported to Apple so they show in Recently Played.
+  Q_PROPERTY(bool playHistoryEnabled READ playHistoryEnabled WRITE setPlayHistoryEnabled NOTIFY changed)
 
 public:
   // An empty page with an empty error is a plain miss.
@@ -53,13 +58,32 @@ public:
 
   QString status() const { return m_status; }
   bool connected() const { return m_status == QStringLiteral("connected"); }
+  bool atmosAvailable() const {
+#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    return connected();
+#else
+    return false;
+#endif
+  }
   bool loginAvailable() const;
+  bool playHistoryEnabled() const { return m_playHistoryEnabled; }
+  void setPlayHistoryEnabled(bool enabled);
   QString message() const { return m_message; }
   bool messageIsError() const { return m_messageIsError; }
 
   Q_INVOKABLE void connectAccount();
   Q_INVOKABLE void cancelConnection();
   Q_INVOKABLE void disconnectAccount();
+
+  // Developer token for the MusicKit player; empty with an error when it cannot be had.
+  void playbackToken(std::function<void(const QString &token, const QString &error)> done) {
+    withDeveloperToken(std::move(done));
+  }
+
+  // The listener's Music User Token; empty while disconnected.
+  QString userToken() const { return m_userToken; }
+  // The developer token's origin claim names the sign-in page's origin; Apple checks requests against it.
+  static QString tokenOrigin() { return QStringLiteral("https://appassets.androidplatform.net"); }
 
   static bool isAppleMusicId(const QString &browseId) { return browseId.startsWith(QStringLiteral("am.")); }
 
@@ -69,6 +93,10 @@ public:
   void artistPage(const QString &name, PageReply done);
   // An am.artists, am.albums or am.playlists page.
   void detail(const QString &browseId, PageReply done);
+  // A playlist's first page; library playlists carry a continuation for playlistMore.
+  void playlistStart(const QString &browseId, PageReply done);
+  // {tracks, continuation} after a playlistStart continuation, numbered from startIndex.
+  void playlistMore(const QString &continuation, int startIndex, PageReply done);
   // Every item on one artist shelf ("See all").
   void artistView(const QString &browseId, const QString &params, PageReply done);
   // Apple's motion artwork for a song or album (catalog.artwork); an empty page when none matches.
@@ -83,6 +111,18 @@ public:
   void libraryAction(const QString &method, const QJsonObject &payload, PageReply done);
   // {ttml} for a track from any service (appleId, isrc or title/artist/album); empty when Apple has none.
   void lyrics(const QJsonObject &track, PageReply done);
+  // {translations: {lineKey: text}} in track.language (BCP 47) from Apple's own lyric translation; empty when it has none.
+  void lyricsTranslation(const QJsonObject &track, PageReply done);
+  // {items}: the next songs from a song's station (am.songs id) or a station (am.stations id).
+  void upNext(const QString &seed, PageReply done);
+  // {videoId}: Apple's music video for a catalog song (am.songs id or catalog id), or {} when it has none.
+  void musicVideo(const QString &songId, PageReply done);
+  // {items: {catalogId: attributes}}: Apple's audio analysis (beat grid, vocals) for catalog songs.
+  void audioAnalysis(const QStringList &ids, PageReply done);
+  // history.start or history.end for a played catalog song; failures are logged.
+  void reportPlay(const QString &method, const QJsonObject &play);
+  // A catalog song's Atmos master playlist and license endpoint; `available` false without one.
+  void atmos(const QString &appleId, PageReply done);
 
 signals:
   void changed();
@@ -120,5 +160,6 @@ private:
   QString m_status{QStringLiteral("disconnected")};
   QString m_message;
   bool m_messageIsError{false};
+  bool m_playHistoryEnabled{true};
   quint64 m_loginGeneration{0};
 };

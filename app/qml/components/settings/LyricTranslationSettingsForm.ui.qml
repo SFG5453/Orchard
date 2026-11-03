@@ -28,6 +28,7 @@ SettingsSection {
     property bool accountSignedIn: false
     property var providerValues: accountSignedIn ? ["local", "openai", "claude", "gemini", "custom", "orchard"] : ["local", "openai", "claude", "gemini", "custom"]
     property bool translationEnabled: true
+    property bool preferApple: false
     property string targetLanguage: "eng"
     readonly property var languageValues: provider === "local" ? ["", "eng"] : ["", "eng", "spa", "hin", "kor", "jpn", "fra"]
     property string quality: "standard"
@@ -41,6 +42,7 @@ SettingsSection {
     property var installed: []
     property alias languagePicker: languagePicker
     property alias qualityPicker: qualityPicker
+    property alias appleSwitch: appleSwitch
     property alias providerPicker: providerPicker
     property alias modelField: modelField
     property alias endpointField: endpointField
@@ -156,6 +158,19 @@ SettingsSection {
         Layout.fillWidth: true
         text: root.credentialMessage
         color: "#e6a197"
+    }
+
+    SettingsRow {
+        visible: root.translationEnabled
+        iconName: "music-2"
+        title: qsTr("Use Apple Music translations")
+        description: qsTr("For lyrics from Apple Music, show Apple's own translation when it has one. Other songs and misses use the translation above.")
+
+        SettingsSwitch {
+            id: appleSwitch
+            checked: root.preferApple
+            Accessible.name: qsTr("Use Apple Music translations")
+        }
     }
 
     SettingsRow {

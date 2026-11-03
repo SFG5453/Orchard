@@ -19,6 +19,7 @@
 
 package dev.sfg.orchard.mobile.connect
 
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.Artist
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
 import dev.sfg.orchard.mobile.model.PlaybackStatus
@@ -36,6 +37,8 @@ import org.json.JSONObject
 internal object ConnectWire {
     // Desktop caps its queue at this; a longer one is cut to fit.
     const val QUEUE_LIMIT = 2500
+    private const val YOUTUBE = "youtube"
+    private const val APPLE_SONG_PREFIX = "am.songs."
 
     fun track(track: Track): JSONObject {
         val extra = JSONObject()
@@ -53,7 +56,7 @@ internal object ConnectWire {
             .put("album", track.album)
             .put("artwork", track.artworkUrl)
             .put("duration", track.durationMs / 1000.0)
-            .put("provider", "youtube")
+            .put("provider", provider(track))
             .put("album_id", track.albumId)
             .put("artist_id", track.artistId)
             .put("explicit", track.explicit)
@@ -82,9 +85,14 @@ internal object ConnectWire {
             musicVideoType = extra.optString("musicVideoType"),
             musicVideoId = extra.optString("musicVideoId"),
             isUpload = extra.optBoolean("isUpload"),
+            playbackSource = if (json.optString("provider") == APPLE_MUSIC_SOURCE) APPLE_MUSIC_SOURCE else YOUTUBE,
             artists = artists,
         )
     }
+
+    // Peers only know YouTube and Apple Music tracks; anything else plays through YouTube there.
+    private fun provider(track: Track): String =
+        if (track.playbackSource == APPLE_MUSIC_SOURCE || track.id.startsWith(APPLE_SONG_PREFIX)) APPLE_MUSIC_SOURCE else YOUTUBE
 
     fun tracks(list: List<Track>, limit: Int = QUEUE_LIMIT): JSONArray =
         JSONArray().also { array -> list.take(limit).forEach { array.put(track(it)) } }
@@ -97,6 +105,7 @@ internal object ConnectWire {
         val current = local.currentTrack
         return JSONObject()
             .put("track", current?.let(::track) ?: JSONObject.NULL)
+            .put("previous", local.history.lastOrNull()?.let(::track) ?: JSONObject.NULL)
             .put("position", local.positionMs / 1000.0)
             .put("duration", local.durationMs / 1000.0)
             .put("playing", local.isPlaying)
@@ -109,9 +118,10 @@ internal object ConnectWire {
             .put("autoplay", autoplay)
     }
 
-    /** A target's state as the phone shows it: current track first, then what plays next. */
+    /** A target's state as the phone shows it: the track a skip back reaches, the current one, then what plays next. */
     fun snapshot(json: JSONObject): PlaybackSnapshot {
         val current = track(json.optJSONObject("track"))
+        val previous = current?.let { track(json.optJSONObject("previous")) }
         val upcoming = tracks(json.optJSONArray("queue"))
         val playing = json.optBoolean("playing")
         val buffering = json.optBoolean("buffering")
@@ -123,8 +133,8 @@ internal object ConnectWire {
                 else -> PlaybackStatus.IDLE
             },
             currentTrack = current,
-            queue = listOfNotNull(current) + upcoming,
-            currentIndex = if (current != null) 0 else -1,
+            queue = listOfNotNull(previous, current) + upcoming,
+            currentIndex = if (current == null) -1 else if (previous != null) 1 else 0,
             positionMs = (json.optDouble("position", 0.0) * 1000).toLong(),
             durationMs = (json.optDouble("duration", 0.0) * 1000).toLong(),
             isPlaying = playing,
@@ -133,6 +143,13 @@ internal object ConnectWire {
             repeatMode = repeat(json.optString("repeat")),
             contextTitle = json.optString("context_title"),
         )
+    }
+
+    /** [snapshot] played forward [elapsedMs]; a buffering or paused target holds still. */
+    fun projected(snapshot: PlaybackSnapshot, elapsedMs: Long): PlaybackSnapshot {
+        if (snapshot.status != PlaybackStatus.PLAYING || elapsedMs <= 0) return snapshot
+        val position = snapshot.positionMs + elapsedMs
+        return snapshot.copy(positionMs = if (snapshot.durationMs > 0) position.coerceAtMost(snapshot.durationMs) else position)
     }
 
     /** Wire index of an absolute index into [snapshot]'s queue; -1 for history or the current track. */

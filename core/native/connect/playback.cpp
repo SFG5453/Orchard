@@ -98,6 +98,7 @@ Json toJson(const PlaybackSnapshot &snapshot) {
   Json json = snapshot.extra.is_object() ? snapshot.extra : Json::object();
   json["has_media"] = snapshot.hasMedia();
   json["track"] = snapshot.track.is_object() ? snapshot.track : Json();
+  json["previous"] = snapshot.previous.is_object() ? snapshot.previous : Json();
   json["position"] = snapshot.position;
   json["duration"] = snapshot.duration;
   json["playing"] = snapshot.playing;
@@ -118,6 +119,8 @@ PlaybackSnapshot snapshotFromJson(const Json &json, std::size_t queueLimit) {
     return snapshot;
   if (json.contains("track"))
     snapshot.track = sanitizeTrack(json["track"]);
+  if (json.contains("previous"))
+    snapshot.previous = sanitizeTrack(json["previous"]);
   snapshot.position = clampSeconds(jsonNumber(json, "position"));
   snapshot.duration = clampSeconds(jsonNumber(json, "duration"));
   snapshot.playing = jsonBool(json, "playing") && snapshot.hasMedia();
@@ -135,7 +138,7 @@ PlaybackSnapshot snapshotFromJson(const Json &json, std::size_t queueLimit) {
     snapshot.transition = json["transition"];
   snapshot.contextTitle = jsonString(json, "context_title", 256);
   snapshot.extra = Json::object();
-  static const char *known[] = {"has_media", "track", "position", "duration", "playing", "buffering", "queue",
+  static const char *known[] = {"has_media", "track", "previous", "position", "duration", "playing", "buffering", "queue",
                                 "queue_total", "volume", "repeat", "shuffle", "transition", "context_title"};
   for (const auto &[key, value] : json.items()) {
     if (std::none_of(std::begin(known), std::end(known), [&](const char *k) { return key == k; }) &&
@@ -175,7 +178,8 @@ double projectPosition(const PlaybackSnapshot &snapshot, std::int64_t elapsedMs)
 }
 
 bool significantChange(const PlaybackSnapshot &previous, const PlaybackSnapshot &next, std::int64_t elapsedMs) {
-  if (jsonString(previous.track, "id") != jsonString(next.track, "id") || previous.playing != next.playing ||
+  if (jsonString(previous.track, "id") != jsonString(next.track, "id") ||
+      jsonString(previous.previous, "id") != jsonString(next.previous, "id") || previous.playing != next.playing ||
       previous.buffering != next.buffering || previous.repeat != next.repeat || previous.shuffle != next.shuffle ||
       previous.queueTotal != next.queueTotal || !sameQueue(previous.queue, next.queue) ||
       previous.contextTitle != next.contextTitle)
@@ -194,9 +198,12 @@ std::string normalizeCommand(Json &command) {
   Json args = command.contains("args") && command["args"].is_object() ? command["args"] : Json::object();
   Json clean = Json::object();
 
-  if (action == "play" || action == "pause" || action == "toggle" || action == "next" || action == "previous" ||
-      action == "clear_queue") {
+  if (action == "play" || action == "pause" || action == "toggle" || action == "next" || action == "clear_queue") {
     // No arguments.
+  } else if (action == "previous") {
+    // restart=false skips straight to the previous track, as a swipe does.
+    if (args.contains("restart") && args["restart"].is_boolean())
+      clean["restart"] = args["restart"];
   } else if (action == "seek") {
     if (!args.contains("position") || !args["position"].is_number())
       return code::InvalidCommand;

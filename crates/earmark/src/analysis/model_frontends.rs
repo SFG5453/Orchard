@@ -53,6 +53,15 @@ impl VocalSpectrogram {
     }
 }
 
+/// Magnitude response of `resample` (rubato 5 FFT, 11.025 to 22.05 kHz) at FFT bins 231..=256
+/// (21.5 Hz apart); unity below. The half-rate frontend applies it so its top mel bands match.
+const UPSAMPLER_ROLLOFF: [f32; 26] = [
+    0.99996, 0.99980, 0.99920, 0.99743, 0.99267, 0.98195, 0.96072, 0.92368, 0.86565,
+    0.78365, 0.68182, 0.55922, 0.43708, 0.31699, 0.21326, 0.13458, 0.07625, 0.03954,
+    0.01855, 0.00784, 0.00288, 0.00095, 0.00034, 0.00019, 0.00014, 0.00012,
+];
+const ROLLOFF_FIRST_BIN: usize = 231;
+
 #[derive(Debug)]
 struct MelFilter {
     first_bin: usize,
@@ -135,16 +144,33 @@ pub(crate) struct ModelFrontends {
     beat_filters: Vec<MelFilter>,
     vocal_fft: FftWorkspace,
     vocal_window: Vec<f64>,
+    half_fft: FftWorkspace<f32>,
+    half_window: Vec<f32>,
+    /// `beat_filters` in f32: first bin and weights.
+    half_filters: Vec<(usize, Vec<f32>)>,
+    half_frame: Vec<f32>,
 }
 
 impl ModelFrontends {
     pub(crate) fn new() -> Self {
+        let beat_filters = mel_filterbank(BEAT_SPECTROGRAM_SAMPLE_RATE);
+        let half_filters = beat_filters
+            .iter()
+            .map(|filter| (filter.first_bin, filter.weights.iter().map(|w| *w as f32).collect()))
+            .collect();
         Self {
             beat_fft: FftWorkspace::new(BEAT_SPECTROGRAM_FFT),
             beat_window: periodic_hann(BEAT_SPECTROGRAM_FFT),
-            beat_filters: mel_filterbank(BEAT_SPECTROGRAM_SAMPLE_RATE),
+            beat_filters,
             vocal_fft: FftWorkspace::new(VOCAL_SPECTROGRAM_FFT),
             vocal_window: periodic_hann(VOCAL_SPECTROGRAM_FFT),
+            half_fft: FftWorkspace::new(BEAT_SPECTROGRAM_FFT / 2),
+            half_window: periodic_hann(BEAT_SPECTROGRAM_FFT / 2)
+                .into_iter()
+                .map(|w| w as f32)
+                .collect(),
+            half_filters,
+            half_frame: vec![0.0; BEAT_SPECTROGRAM_FFT / 2],
         }
     }
 
@@ -192,6 +218,71 @@ impl ModelFrontends {
             }
         }
         Ok(result)
+    }
+
+    /// The beat spectrogram from audio at half the frontend rate (11.025 kHz). A 512-point
+    /// FFT there has the same bins as 1024 points at 22.05 kHz, so no resampling is needed.
+    /// Odd frames start half a sample early (hop 220.5).
+    pub(crate) fn beat_spectrogram_half_rate(
+        &mut self,
+        samples: &[f32],
+    ) -> Result<BeatSpectrogram> {
+        const SIZE: usize = BEAT_SPECTROGRAM_FFT / 2;
+        let n = samples.len();
+        if n <= SIZE / 2 + 1 {
+            return Ok(BeatSpectrogram::default());
+        }
+        let frames = 2 * n / BEAT_SPECTROGRAM_HOP + 1;
+        let mut result = BeatSpectrogram {
+            values: vec![0.0; frames * BEAT_SPECTROGRAM_MELS],
+            frames,
+        };
+        // Twice the samples per window at 22.05 kHz doubles the DFT sum.
+        let normalization = (BEAT_SPECTROGRAM_FFT as f32).sqrt() / 2.0;
+        let mut magnitudes = vec![0.0f32; BEAT_SPECTROGRAM_FFT / 2 + 1];
+        for frame in 0..frames {
+            // Centred frames; reflect padding is read in place.
+            let start = (frame * BEAT_SPECTROGRAM_HOP / 2) as isize - (SIZE / 2) as isize;
+            if start >= 0 && start as usize + SIZE <= n {
+                self.half_frame.copy_from_slice(&samples[start as usize..start as usize + SIZE]);
+            } else {
+                Self::reflected_frame(samples, start, &mut self.half_frame);
+            }
+            let spectrum = self.half_fft.process_windowed(&self.half_frame, &self.half_window)?;
+            for (slot, value) in magnitudes.iter_mut().zip(spectrum) {
+                *slot = value.norm() / normalization;
+            }
+            for (slot, gain) in magnitudes[ROLLOFF_FIRST_BIN..].iter_mut().zip(UPSAMPLER_ROLLOFF) {
+                *slot *= gain;
+            }
+            let row = &mut result.values
+                [frame * BEAT_SPECTROGRAM_MELS..(frame + 1) * BEAT_SPECTROGRAM_MELS];
+            for (slot, (first, weights)) in row.iter_mut().zip(&self.half_filters) {
+                let energy = weights
+                    .iter()
+                    .zip(&magnitudes[*first..])
+                    .map(|(weight, magnitude)| magnitude * weight)
+                    .sum::<f32>();
+                *slot = (1000.0 * energy.max(1e-10)).ln_1p();
+            }
+        }
+        Ok(result)
+    }
+
+    /// One frame with torch-style reflect padding past either end of `samples`.
+    fn reflected_frame(samples: &[f32], start: isize, frame: &mut [f32]) {
+        let last = samples.len() as isize - 1;
+        for (offset, slot) in frame.iter_mut().enumerate() {
+            let index = start + offset as isize;
+            let index = if index < 0 {
+                -index
+            } else if index > last {
+                2 * last - index
+            } else {
+                index
+            };
+            *slot = samples[index as usize];
+        }
     }
 
     pub(crate) fn vocal_spectrogram(
@@ -327,5 +418,39 @@ mod tests {
         ] {
             assert_abs_diff_eq!(spectrogram.values[index], expected, epsilon = 2e-4);
         }
+    }
+
+    #[test]
+    fn half_rate_beat_frontend_matches_upsampled_path() {
+        use crate::audio::{AudioBuffer, resample::resample};
+        let mut seed = 0x1234_5678u32;
+        let mut noise = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed as f32 / u32::MAX as f32 - 0.5
+        };
+        let samples: Vec<f32> = reference_signal(11_025, 11_025 * 8)
+            .into_iter()
+            .map(|value| value + 0.2 * noise())
+            .collect();
+        let mut frontends = ModelFrontends::new();
+        let buffer = AudioBuffer::new(vec![samples.clone()], 11_025).unwrap();
+        let upsampled = resample(&buffer, 22_050).unwrap();
+        let full = frontends.beat_spectrogram(upsampled.channel(0), 22_050.0).unwrap();
+        let half = frontends.beat_spectrogram_half_rate(&samples).unwrap();
+        assert_eq!(full.frames, half.frames);
+        // Skip the edge frames, where reflect padding meets the resampler's tail.
+        let (mut worst, mut total) = (0.0f32, 0.0f32);
+        for frame in 2..full.frames - 2 {
+            for mel in 0..BEAT_SPECTROGRAM_MELS {
+                let index = frame * BEAT_SPECTROGRAM_MELS + mel;
+                let difference = (full.values[index] - half.values[index]).abs();
+                worst = worst.max(difference);
+                total += difference;
+            }
+        }
+        let mean = total / ((full.frames - 4) * BEAT_SPECTROGRAM_MELS) as f32;
+        assert!(mean < 0.01 && worst < 0.5, "mean {mean} worst {worst}");
     }
 }

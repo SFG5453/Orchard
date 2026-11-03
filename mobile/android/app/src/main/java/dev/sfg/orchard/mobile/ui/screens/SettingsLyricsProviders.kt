@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.model.normalizeLyricsProviders
+import dev.sfg.orchard.mobile.model.visibleLyricsProviders
 
 @Composable
 internal fun LyricsProvidersSection(
@@ -30,16 +31,20 @@ internal fun LyricsProvidersSection(
     onSettings: (OrchardSettings) -> Unit,
     labelIndex: Int,
 ) {
-    val providers = normalizeLyricsProviders(settings.lyricsProviders)
+    val saved = normalizeLyricsProviders(settings.lyricsProviders)
+    val appleConnected = appleMusicConnectionStatus().connected
+    val providers = visibleLyricsProviders(saved, appleConnected)
     fun move(index: Int, destination: Int) {
         if (destination !in providers.indices) return
-        val reordered = providers.toMutableList().apply { add(destination, removeAt(index)) }
+        val from = saved.indexOf(providers[index])
+        val to = saved.indexOf(providers[destination])
+        val reordered = saved.toMutableList().apply { add(to, removeAt(from)) }
         onSettings(settings.copy(lyricsProviders = reordered))
     }
 
     SectionLabel("Lyrics providers", labelIndex)
     SettingsPanel(index = labelIndex + 1) {
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             RowSubtitle("Try enabled providers from top to bottom. The first lyrics found are used. You can also choose a source for one song in the lyrics player.")
         }
         providers.forEachIndexed { index, config ->
@@ -62,8 +67,8 @@ internal fun LyricsProvidersSection(
                 SettingsSwitch(
                     checked = config.enabled,
                     onCheckedChange = { enabled ->
-                        onSettings(settings.copy(lyricsProviders = providers.toMutableList().apply {
-                            set(index, config.copy(enabled = enabled))
+                        onSettings(settings.copy(lyricsProviders = saved.toMutableList().apply {
+                            set(saved.indexOf(config), config.copy(enabled = enabled))
                         }))
                     },
                     modifier = Modifier.semantics { contentDescription = "Enable ${config.provider.label}" },

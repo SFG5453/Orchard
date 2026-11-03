@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.LibrarySnapshot
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.ui.components.PlaylistPickerSheet
@@ -74,7 +75,7 @@ internal fun SearchOverlayHost(
         onPlayNext = viewModel::playNext,
         onAddToQueue = viewModel::addToQueue,
         onAddToPlaylist = { pickerTrack = it },
-        onDownloadTrack = viewModel::downloadTrack,
+        onDownloadTrack = viewModel::downloadTrack.takeUnless { settings.homeSource == APPLE_MUSIC_SOURCE },
         onRemoveDownloadTrack = viewModel::removeDownload,
         onShare = viewModel::shareTrack,
         onOpenDetail = { id ->

@@ -269,7 +269,7 @@ Item {
         BusyIndicator { anchors.horizontalCenter: parent.horizontalCenter; running: root.loading; visible: running }
         Caption {
             width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap
-            text: root.loading ? qsTr("Searching YouTube Music…") : root.errorMessage
+            text: root.loading ? (OrchardHome.homeSource === "apple_music" ? qsTr("Searching Apple Music…") : qsTr("Searching YouTube Music…")) : root.errorMessage
                 || (root.query.trim() ? (OrchardNetwork.offline ? qsTr("Nothing downloaded matches “%1”").arg(root.query.trim()) : qsTr("No results for “%1”").arg(root.query.trim()))
                     : OrchardNetwork.offline ? qsTr("Search the songs and playlists saved on this computer")
                     : qsTr("Search for songs, videos, albums, artists, and playlists"))

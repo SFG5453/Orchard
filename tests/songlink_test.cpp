@@ -82,6 +82,25 @@ private slots:
         QStringLiteral("https://music.youtube.com/playlist?list=OLAK5uy_sample"));
   }
 
+  void resolvesArtistChannel() {
+    BackendInfo backend;
+    QCOMPARE(backend.songLink(QStringLiteral("UC123456789"), QStringLiteral("artist")),
+             QStringLiteral("https://music.youtube.com/channel/UC123456789"));
+  }
+
+  void resolvesAppleMusicIds() {
+    BackendInfo backend;
+    QCOMPARE(backend.songLink(QStringLiteral("am.songs.1440857781"), QStringLiteral("song")),
+             QStringLiteral("https://music.apple.com/song/1440857781"));
+    QCOMPARE(backend.songLink(QStringLiteral("am.artists.605800394"), QStringLiteral("artist")),
+             QStringLiteral("https://music.apple.com/artist/605800394"));
+    QCOMPARE(backend.songLink(QStringLiteral("am.albums.1440857754"), QStringLiteral("album")),
+             QStringLiteral("https://music.apple.com/album/1440857754"));
+    QCOMPARE(backend.songLink(QStringLiteral("am.playlists.pl.u-abc"), QStringLiteral("playlist")),
+             QStringLiteral("https://music.apple.com/playlist/pl.u-abc"));
+    QCOMPARE(backend.songLink(QStringLiteral("am.songs.i.abc")), QString());
+  }
+
   void handlesEmptyInput() {
     BackendInfo backend;
     QCOMPARE(backend.songLink(QString()), QStringLiteral("https://music.youtube.com"));
