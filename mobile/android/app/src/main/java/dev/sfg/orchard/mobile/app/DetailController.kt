@@ -23,6 +23,7 @@ import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.artwork.ArtistImages
 import dev.sfg.orchard.mobile.artwork.TrackArtwork
 import dev.sfg.orchard.mobile.auth.AuthState
+import dev.sfg.orchard.mobile.catalog.CatalogRepository
 import dev.sfg.orchard.mobile.catalog.PlaylistActions
 import dev.sfg.orchard.mobile.catalog.isAppleMusicId
 import dev.sfg.orchard.mobile.download.OfflineDetailSynthesizer
@@ -114,18 +115,39 @@ internal class DetailController(
                 }
             }
 
+            // A cached playlist shows at once and stays until its refresh completes or differs.
+            val cacheKey = playlistCacheKey(id)
+            val cached = if (cacheKey != null && !preserveContent) {
+                withContext(Dispatchers.IO) { graph.playlistCache.read(cacheKey) }?.withSeed(seed)
+            } else null
+            if (cached != null) mutableDetail.value = LoadState.Content(cached)
+
             // Each page replaces the last, so the collection appears as soon as its first page
             // lands and grows underneath the listener instead of holding a spinner until an
             // endless mix exhausts its continuation budget.
             try {
+                var holding = cached != null
+                var latest: BrowseDetail? = null
                 graph.catalogRouter.pages(id, seed).collect { page ->
                     val resolved = page.withSeed(seed)
+                    latest = resolved
+                    if (holding && cached!!.tracks.startsWith(resolved.tracks)) return@collect
+                    holding = false
                     mutableDetail.value = LoadState.Content(resolved)
                     graph.library.cacheDetail(resolved)
+                }
+                latest?.let { complete ->
+                    if (holding) {
+                        mutableDetail.value = LoadState.Content(complete)
+                        graph.library.cacheDetail(complete)
+                    }
+                    if (cacheKey != null) withContext(Dispatchers.IO) { graph.playlistCache.write(cacheKey, complete) }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
+                // A failed refresh keeps the cached copy on screen.
+                if (cached != null) return@launch
                 // Continuation failures are absorbed by the repository, so reaching here means
                 // the first page never arrived and there is nothing on screen to keep.
                 mutableDetail.value = offlineDetail(id, seed)?.takeIf { !graph.networkMonitor.isOnline.value }?.let { LoadState.Content(it) }
@@ -135,6 +157,17 @@ internal class DetailController(
             }
         }
     }
+
+    /** Account-scoped cache name for playlists that load from the network; null for anything else. */
+    private fun playlistCacheKey(id: String): String? {
+        if (isAppleMusicId(id)) return if (id.startsWith("am.playlists.")) "apple|$id" else null
+        if (id.contains(':') || CatalogRepository.kindOf(id) != CatalogKind.PLAYLIST) return null
+        val session = graph.auth.session() ?: return null
+        return "${session.displayName}#${session.accountIndex}#${session.dataSyncId}|$id"
+    }
+
+    private fun List<Track>.startsWith(prefix: List<Track>): Boolean =
+        prefix.size <= size && prefix.indices.all { this[it].id == prefix[it].id }
 
     private fun offlineDetail(id: String, seed: CatalogItem?): BrowseDetail? =
         OfflineDetailSynthesizer.synthesize(

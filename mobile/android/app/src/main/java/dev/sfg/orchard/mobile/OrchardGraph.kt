@@ -123,6 +123,7 @@ class OrchardGraph(context: Context) {
         else appleMusic.musicVideo(track.id).ifBlank { null }
     }
     val library = LibraryRepository(LibraryCache(context), catalog, applicationScope)
+    val playlistCache = dev.sfg.orchard.mobile.catalog.PlaylistPageCache(context)
     val lyrics = LyricsRepository(http, appleLyrics = appleMusic::lyrics, appleTranslation = appleMusic::lyricsTranslation) { videoId ->
         youtube.invoke("lyrics.youtube", JSONObject().put("session", auth.session().providerJson()).put("videoId", videoId))
             .text("text")

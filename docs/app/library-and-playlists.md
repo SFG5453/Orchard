@@ -47,7 +47,9 @@ Playing a song queues the songs in the order you see.
 
 Select the playlist under **PLAYLISTS** in the left sidebar. The sidebar shows "Your saved playlists will appear here." until playlists load.
 
-A long playlist loads in parts. The playlist page shows a line such as "40 of 120 songs loaded" while it loads.
+A long playlist loads in parts. The first 100 songs show first. The playlist page shows a line such as "100 of 1,035 songs loaded" while the rest loads.
+
+Orchard keeps a copy of each playlist you open. The next time you open it, the saved copy shows at once while Orchard checks for changes. The page updates if the playlist changed.
 
 ## Add a song to a playlist
 

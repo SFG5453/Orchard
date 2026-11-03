@@ -30,7 +30,6 @@
 #include "providers/youtube/catalog/youtube_catalog.h"
 
 #include <QByteArray>
-#include <QCollator>
 #include <QFutureWatcher>
 #include <QImage>
 #include <QJsonArray>
@@ -45,7 +44,6 @@
 #include <QtConcurrent/QtConcurrentRun>
 #include <algorithm>
 #include <cstdlib>
-#include <numeric>
 #include <utility>
 
 namespace {
@@ -81,23 +79,6 @@ void copyIfMissing(QVariantMap &target, const QVariantMap &source,
   if (!target.value(key).isValid() ||
       target.value(key).toString().trimmed().isEmpty())
     target.insert(key, source.value(key));
-}
-
-bool isSortKey(const QString &key) {
-  return key.isEmpty() || key == QStringLiteral("title") ||
-         key == QStringLiteral("artist") || key == QStringLiteral("album") ||
-         key == QStringLiteral("duration");
-}
-
-QString sortText(const QVariantMap &track, const QString &key) {
-  if (key != QStringLiteral("artist"))
-    return track.value(key).toString().trimmed();
-  const QString artist = track.value(QStringLiteral("artist")).toString();
-  return (artist.trimmed().isEmpty()
-              ? track.value(QStringLiteral("artists")).toStringList().join(
-                    QStringLiteral(", "))
-              : artist)
-      .trimmed();
 }
 
 } // namespace
@@ -153,6 +134,9 @@ void PlaylistController::openPlaylist(const QVariantMap &item) {
   resetSort();
   m_detail.clear();
   m_sourceTracks.clear();
+  m_heldDetail.clear();
+  m_heldTracks.clear();
+  m_cacheKey.clear();
   m_continuation.clear();
   m_loadedContinuations.clear();
   m_pagesUnpublished = false;
@@ -201,6 +185,7 @@ void PlaylistController::openPlaylist(const QVariantMap &item) {
   m_errorMessage.clear();
   m_loading = true;
   m_loadingPage = false;
+  showCached(browseId);
   if (appleId) {
     // The high bit keeps these ids apart from YouTubeCatalog's request counter.
     const quint64 requestId = (quint64{1} << 63) | ++m_appleRequests;
@@ -260,6 +245,9 @@ void PlaylistController::clear() {
   m_pendingItem.clear();
   m_detail.clear();
   m_sourceTracks.clear();
+  m_heldDetail.clear();
+  m_heldTracks.clear();
+  m_cacheKey.clear();
   m_continuation.clear();
   m_loadedContinuations.clear();
   m_pagesUnpublished = false;
@@ -271,75 +259,6 @@ void PlaylistController::clear() {
   emit stateChanged();
   emit detailChanged();
   emit paletteChanged();
-}
-
-void PlaylistController::setSort(const QString &key, bool descending) {
-  if (!isSortKey(key))
-    return;
-  // Playlist order has no direction worth flipping.
-  descending = descending && !key.isEmpty();
-  if (key == m_sortKey && descending == m_sortDescending)
-    return;
-  m_sortKey = key;
-  m_sortDescending = descending;
-  emit sortChanged();
-  if (!m_detail.isEmpty()) {
-    applySort();
-    emit detailChanged();
-  }
-}
-
-void PlaylistController::resetSort() {
-  if (m_sortKey.isEmpty() && !m_sortDescending)
-    return;
-  m_sortKey.clear();
-  m_sortDescending = false;
-  emit sortChanged();
-}
-
-void PlaylistController::applySort() {
-  if (m_sortKey.isEmpty()) {
-    m_detail.insert(QStringLiteral("tracks"), m_sourceTracks);
-    return;
-  }
-
-  const auto count = m_sourceTracks.size();
-  const bool byDuration = m_sortKey == QStringLiteral("duration");
-  QList<QString> texts(byDuration ? 0 : count);
-  QList<double> seconds(byDuration ? count : 0);
-  for (qsizetype index = 0; index < count; ++index) {
-    const QVariantMap track = m_sourceTracks.at(index).toMap();
-    if (byDuration)
-      seconds[index] =
-          track.value(QStringLiteral("durationSeconds")).toDouble();
-    else
-      texts[index] = sortText(track, m_sortKey);
-  }
-
-  QCollator collator;
-  collator.setCaseSensitivity(Qt::CaseInsensitive);
-  // "Track 2" before "Track 10", as nature intended.
-  collator.setNumericMode(true);
-
-  QList<qsizetype> order(count);
-  std::iota(order.begin(), order.end(), 0);
-  // Stable so ties keep playlist order; blanks sink in both directions.
-  std::stable_sort(order.begin(), order.end(), [&](qsizetype a, qsizetype b) {
-    const bool missingA = byDuration ? seconds[a] <= 0 : texts[a].isEmpty();
-    const bool missingB = byDuration ? seconds[b] <= 0 : texts[b].isEmpty();
-    if (missingA || missingB)
-      return !missingA && missingB;
-    const int compared =
-        byDuration ? (seconds[a] > seconds[b]) - (seconds[a] < seconds[b])
-                   : collator.compare(texts[a], texts[b]);
-    return m_sortDescending ? compared > 0 : compared < 0;
-  });
-
-  QVariantList sorted;
-  sorted.reserve(count);
-  for (const qsizetype index : order)
-    sorted.append(m_sourceTracks.at(index));
-  m_detail.insert(QStringLiteral("tracks"), sorted);
 }
 
 void PlaylistController::receivePlaylist(quint64 requestId,
@@ -381,9 +300,16 @@ void PlaylistController::receivePlaylist(quint64 requestId,
                   qMax(knownTotal, static_cast<int>(tracks.size())));
   // Queue the next page before QML rebuilds the list.
   fetchNextPage();
-  requestArtwork(m_detail.value(QStringLiteral("thumbnail")).toString());
+  if (m_continuation.isEmpty())
+    cacheComplete();
+  const bool held = !m_heldDetail.isEmpty();
+  const QString heldArtwork = m_heldDetail.value(QStringLiteral("thumbnail")).toString();
+  const Settled settled = settleCached(m_continuation.isEmpty());
+  if (!held || m_detail.value(QStringLiteral("thumbnail")).toString() != heldArtwork)
+    requestArtwork(m_detail.value(QStringLiteral("thumbnail")).toString());
   emit stateChanged();
-  emit detailChanged();
+  if (settled == Settled::NotHeld || settled == Settled::Replaced)
+    emit detailChanged();
 }
 
 void PlaylistController::receivePlaylistPage(quint64 requestId,
@@ -417,7 +343,25 @@ void PlaylistController::receivePlaylistPage(quint64 requestId,
   m_pagesUnpublished = true;
   // Request the next page before the UI work.
   fetchNextPage();
-  publishPages(m_continuation.isEmpty());
+  const bool complete = m_continuation.isEmpty() && m_errorMessage.isEmpty();
+  if (complete)
+    cacheComplete();
+  switch (settleCached(complete)) {
+  case Settled::NotHeld:
+    publishPages(m_continuation.isEmpty());
+    break;
+  case Settled::Replaced:
+    publishPages(true);
+    break;
+  case Settled::Unchanged:
+    // QML already shows these rows; a publish would only reset the scroll.
+    m_pagesUnpublished = false;
+    emit stateChanged();
+    break;
+  case Settled::Holding:
+    emit stateChanged();
+    break;
+  }
 }
 
 // Every publish makes QML re-read the whole track list, so streaming pages
@@ -447,7 +391,9 @@ void PlaylistController::receiveFailure(quint64 requestId,
   if (m_loadingPage) {
     m_loadingPage = false;
     m_errorMessage = message;
-    publishPages(true);
+    // A failed refresh leaves the complete cached copy on screen.
+    if (m_heldDetail.isEmpty())
+      publishPages(true);
   } else {
     m_loading = false;
     m_errorMessage = message;
@@ -471,6 +417,13 @@ void PlaylistController::removeTrack(const QString &playlistId, const QString &s
     if (!match)
       continue;
     m_sourceTracks.removeAt(index);
+    const auto held = std::find_if(m_heldTracks.begin(), m_heldTracks.end(), [&](const QVariant &value) {
+      const QVariantMap heldTrack = value.toMap();
+      return setVideoId.isEmpty() ? heldTrack.value(QStringLiteral("id")).toString() == videoId
+                                  : heldTrack.value(QStringLiteral("setVideoId")).toString() == setVideoId;
+    });
+    if (held != m_heldTracks.end())
+      m_heldTracks.erase(held);
     const int total = m_detail.value(QStringLiteral("totalTrackCount")).toInt();
     if (total > 0)
       m_detail.insert(QStringLiteral("totalTrackCount"), total - 1);

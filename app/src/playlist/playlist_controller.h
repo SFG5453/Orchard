@@ -59,10 +59,11 @@ public:
   explicit PlaylistController(YouTubeCatalog *catalog, AuthManager *auth,
                               LocalLibrary *local = nullptr, QObject *parent = nullptr);
 
-  [[nodiscard]] bool loading() const { return m_loading; }
-  [[nodiscard]] bool loadingPage() const { return m_loadingPage; }
-  [[nodiscard]] QString errorMessage() const { return m_errorMessage; }
-  [[nodiscard]] QVariantMap detail() const { return m_detail; }
+  // A cached copy stays on screen, without spinners or errors, while its refresh loads.
+  [[nodiscard]] bool loading() const { return m_loading && m_heldDetail.isEmpty(); }
+  [[nodiscard]] bool loadingPage() const { return m_loadingPage && m_heldDetail.isEmpty(); }
+  [[nodiscard]] QString errorMessage() const { return m_heldDetail.isEmpty() ? m_errorMessage : QString(); }
+  [[nodiscard]] QVariantMap detail() const { return m_heldDetail.isEmpty() ? m_detail : m_heldDetail; }
   [[nodiscard]] QVariantMap palette() const { return m_palette; }
   [[nodiscard]] bool artworkLoading() const { return m_artworkLoading; }
   [[nodiscard]] QVariantList collageAlbums() const { return m_collageAlbums; }
@@ -110,8 +111,15 @@ private:
   // Compares the cover's four quadrants with the first four tracks' art.
   void detectCollage(const QByteArray &coverBytes);
   void setCollageAlbums(QVariantList albums);
+  // playlist_cache.cpp: the last complete copy of each playlist, shown while it refreshes.
+  bool showCached(const QString &browseId);
+  // Drops the cached copy once the refresh completes or stops matching it.
+  enum class Settled { NotHeld, Holding, Replaced, Unchanged };
+  Settled settleCached(bool complete);
+  void cacheComplete();
   void resetSort();
   void applySort();
+  [[nodiscard]] QVariantList sortedTracks(const QVariantList &source) const;
   void publishPages(bool force);
   static QVariantMap defaultPalette();
 
@@ -132,6 +140,11 @@ private:
   QVariantList m_collageAlbums;
   // Tracks in playlist order; m_detail.tracks holds the sorted view.
   QVariantList m_sourceTracks;
+  // The cached copy shown while a refresh loads; empty once the fresh copy takes over.
+  QVariantMap m_heldDetail;
+  QVariantList m_heldTracks;
+  // Account-scoped name of the open playlist's cache entry.
+  QString m_cacheKey;
   QString m_sortKey;
   QString m_errorMessage;
   QString m_continuation;

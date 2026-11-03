@@ -64,6 +64,8 @@ app_sources = [
   'app/src/playlist/playlist_controller.cpp',
   'app/src/playlist/playlist_local.cpp',
   'app/src/playlist/playlist_offline.cpp',
+  'app/src/playlist/playlist_cache.cpp',
+  'app/src/playlist/playlist_sort.cpp',
   'app/src/album/album_controller.h',
   'app/src/playlist/playlist_controller.h',
   'app/src/integrations/discord.cpp',
