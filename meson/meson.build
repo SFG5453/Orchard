@@ -608,6 +608,7 @@ apple_music_sources = [
   'providers/apple-music/src/notes.js',
   'providers/apple-music/src/playback.js',
   'providers/apple-music/src/runtime.js',
+  'providers/apple-music/src/stationArtwork.js',
   'providers/apple-music/src/stations.js',
   'providers/apple-music/src/webToken.js',
 ]

@@ -20,6 +20,7 @@
 import { AppleMusicError } from './client.js';
 import { APPLE_MUSIC_SOURCE, parseBrowseId } from './ids.js';
 import { artworkUrl, station, track } from './normalize.js';
+import { createStationArtwork } from './stationArtwork.js';
 
 // Apple serves station tracks ten at a time; each call continues the station server side.
 const BATCH = 10;
@@ -76,6 +77,8 @@ export function createStationCatalog(client) {
     const resource = info.data?.[0];
     const card = station(resource);
     if (!card) throw new AppleMusicError(0, 'live_station', 'Orchard cannot play live radio.');
+    const cover = { browseId: card.browseId, thumbnail: artworkUrl(resource.attributes.artwork, 1200) };
+    await createStationArtwork(client).fill([cover], 1200);
     return {
       kind: 'playlist',
       station: true,
@@ -85,7 +88,7 @@ export function createStationCatalog(client) {
       author: card.artist,
       subtitle: card.subtitle,
       description: card.description,
-      thumbnail: artworkUrl(resource.attributes.artwork, 1200),
+      thumbnail: cover.thumbnail,
       itemCount: String(tracks.length),
       tracks: tracks.map((entry, index) => ({ ...entry, index: String(index + 1) })),
       sections: []
