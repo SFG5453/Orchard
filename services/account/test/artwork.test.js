@@ -206,6 +206,21 @@ describe("artwork upload", () => {
     assert.equal(env.B2_STORE.has(`${sha256}.webp`), true);
   });
 
+  it("stores the bytes again when a purge claims the row during reuse", async () => {
+    const bytes = animatedWebp();
+    const { sha256 } = await (await uploadFrom("https://cdn.example/claimed.mp4", bytes)).json();
+    const b2Fetch = env.B2_FETCH;
+    env.B2_FETCH = async (request) => {
+      if (request.method === "HEAD") env.DB.raw.prepare("UPDATE artwork SET storage = 'purging'").run();
+      return b2Fetch(request);
+    };
+    const again = await uploadFrom("https://cdn.example/claimed.mp4", bytes);
+    env.B2_FETCH = b2Fetch;
+    assert.equal(again.status, 201);
+    assert.equal((await again.json()).sha256, sha256);
+    assert.equal(env.DB.raw.prepare("SELECT storage FROM artwork").get().storage, "b2");
+  });
+
   it("indexes hosted files by source for the same account", async () => {
     const source = "https://cdn.example/motion.mp4";
     const sha = await sourceSha(source);

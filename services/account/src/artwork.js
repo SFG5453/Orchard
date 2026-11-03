@@ -192,9 +192,12 @@ async function storeArtwork(env, bytes, userId, sourceSha) {
   const existing = await env.DB.prepare("SELECT * FROM artwork WHERE hash = ?").bind(hash).first();
   // The row can outlive its object if a purge raced an earlier reuse.
   if (existing?.storage === "b2" && await getArtworkObject(env, objectKey(hash), "HEAD")) {
+    // A purge can claim the row during HEAD; upload again in that case.
     const row = await touchArtwork(env, hash, now);
-    await linkSource(env, userId, sourceSha, hash, now);
-    return json(describe(row, env, true, !sourceSha));
+    if (row) {
+      await linkSource(env, userId, sourceSha, hash, now);
+      return json(describe(row, env, true, !sourceSha));
+    }
   }
 
   await putArtworkObject(env, objectKey(hash), bytes);
