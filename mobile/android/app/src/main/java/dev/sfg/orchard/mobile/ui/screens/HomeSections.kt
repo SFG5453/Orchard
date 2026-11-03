@@ -33,6 +33,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloudOff
@@ -104,6 +106,32 @@ internal fun LazyListScope.homeTrackSection(
         Box(Modifier.riseIn(index + 1, cascadeOnScroll = true)) { row(index, track) }
     }
     item { Spacer(Modifier.height(4.dp)) }
+}
+
+/** Quick picks: pages of [QUICK_PICKS_PER_PAGE] song rows; the next page peeks in from the right. */
+internal fun LazyListScope.homeQuickPicks(
+    tracks: List<Track>,
+    onSeeAll: () -> Unit,
+    row: @Composable (Track) -> Unit,
+) {
+    item(key = "head:quick_picks") {
+        Box(Modifier.riseIn(distance = 16f)) {
+            HomeSectionHeader(title = "Quick picks", subtitle = "Start a mix from a song", onSeeAll = onSeeAll)
+        }
+    }
+    item(key = "pager:quick_picks") {
+        val pages = tracks.chunked(QUICK_PICKS_PER_PAGE)
+        val state = rememberPagerState { pages.size }
+        HorizontalPager(
+            state = state,
+            // Rows pad 16dp themselves; 4dp more lines the artwork up with the gutter.
+            contentPadding = PaddingValues(start = 4.dp, end = 44.dp),
+            verticalAlignment = Alignment.Top,
+            key = { pages[it].first().id },
+        ) { page ->
+            Column { pages[page].forEach { track -> row(track) } }
+        }
+    }
 }
 
 @Composable

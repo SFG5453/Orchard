@@ -151,6 +151,7 @@ internal fun OrchardNavigation(
                         fetchSectionItems = viewModel::fetchHomeSectionItems,
                         playItem = viewModel::playItem,
                         playCollection = { id, title -> viewModel.playCollection(id, title) },
+                        startMix = viewModel::startMix,
                     ),
                 )
             )

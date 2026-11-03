@@ -27,22 +27,29 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -51,6 +58,7 @@ import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,13 +71,16 @@ import dev.sfg.orchard.mobile.ui.components.ArtworkTile
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
 internal val HomeGutter = 20.dp
-private val HomeSectionGap = 24.dp
-private val HomeCardCorner = 28.dp
+private val HomeSectionGap = 28.dp
+private val HomeCardCorner = 20.dp
 
 /** Spotlight entry: the item plus the line shown at the card's foot. */
 internal data class DiscoverEntry(val item: CatalogItem, val caption: String)
 
-/** Section header: hairline rule, optional avatar and eyebrow, title, outlined action pill. */
+/**
+ * Section header: optional hairline rule, avatar and eyebrow, then the title. A plain "see all"
+ * reads as a chevron after the title; Play all and custom labels get a filled pill.
+ */
 @Composable
 internal fun HomeSectionTitle(
     title: String,
@@ -82,7 +93,6 @@ internal fun HomeSectionTitle(
     actionLabel: String? = null,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        // Separates sections without spending vertical space on a blank gap.
         if (showDivider) {
             HorizontalDivider(
                 thickness = Dp.Hairline,
@@ -95,6 +105,7 @@ internal fun HomeSectionTitle(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(top = if (showDivider) 0.dp else HomeSectionGap - 12.dp)
                 .clickable(enabled = onClick != null) { onClick?.invoke() }
                 .padding(horizontal = HomeGutter, vertical = 12.dp),
         ) {
@@ -107,37 +118,55 @@ internal fun HomeSectionTitle(
                     Text(
                         text = it,
                         style = MaterialTheme.typography.labelLarge,
-                        color = CanopyColors.Text.copy(alpha = 0.6f),
+                        color = CanopyColors.Muted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Text(
-                    text = title,
-                    fontSize = 22.sp,
-                    lineHeight = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.01).em,
-                    color = CanopyColors.Text,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            val action = onPlayAllClick ?: onClick
-            if (action != null) {
-                Surface(
-                    onClick = action,
-                    shape = CircleShape,
-                    color = Color.Transparent,
-                    border = BorderStroke(1.dp, CanopyColors.RuleStrong),
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = actionLabel ?: if (onPlayAllClick != null) "Play all" else "See all",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                        text = title,
+                        fontSize = 22.sp,
+                        lineHeight = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.01).em,
                         color = CanopyColors.Text,
                         maxLines = 1,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    if (onClick != null && onPlayAllClick == null && actionLabel == null) {
+                        Icon(
+                            Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = "See all",
+                            tint = CanopyColors.Muted,
+                            modifier = Modifier.size(26.dp),
+                        )
+                    }
+                }
+            }
+            val pill = onPlayAllClick ?: onClick?.takeIf { actionLabel != null }
+            if (pill != null) {
+                Surface(
+                    onClick = pill,
+                    shape = CircleShape,
+                    color = Color.White.copy(alpha = 0.12f),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = if (onPlayAllClick != null) 10.dp else 14.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
+                    ) {
+                        if (onPlayAllClick != null) {
+                            Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = CanopyColors.Text, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text(
+                            text = actionLabel ?: "Play all",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                            color = CanopyColors.Text,
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }
@@ -156,27 +185,20 @@ internal fun DiscoverCarousel(
     if (entries.isEmpty()) return
     Column(Modifier.fillMaxWidth()) {
         HomeSectionTitle(title = title, onPlayAllClick = onPlayAll, showDivider = false)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(340.dp)
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            val state = rememberCarouselState { entries.size }
-            HorizontalMultiBrowseCarousel(
-                state = state,
-                preferredItemWidth = 320.dp,
-                itemSpacing = 16.dp,
-                modifier = Modifier.fillMaxWidth().height(320.dp),
-            ) { index ->
-                val entry = entries[index]
-                DiscoverCard(
-                    entry = entry,
-                    onClick = { onClick(entry.item) },
-                    modifier = Modifier.maskClip(RoundedCornerShape(HomeCardCorner)),
-                )
-            }
+        val state = rememberCarouselState { entries.size }
+        HorizontalMultiBrowseCarousel(
+            state = state,
+            preferredItemWidth = 280.dp,
+            itemSpacing = 10.dp,
+            contentPadding = PaddingValues(horizontal = HomeGutter),
+            modifier = Modifier.fillMaxWidth().height(232.dp),
+        ) { index ->
+            val entry = entries[index]
+            DiscoverCard(
+                entry = entry,
+                onClick = { onClick(entry.item) },
+                modifier = Modifier.maskClip(RoundedCornerShape(HomeCardCorner)),
+            )
         }
     }
 }
@@ -196,32 +218,36 @@ private fun DiscoverCard(
 
         // Collapsed neighbours stay pure artwork; text only fits the focused card.
         if (maxWidth > 200.dp) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)))
+            // Scrim only the foot so the cover art keeps its colour.
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(
+                        0.45f to Color.Transparent,
+                        1f to Color.Black.copy(alpha = 0.78f),
+                    )
+                )
+            )
             Column(
-                modifier = Modifier.fillMaxSize().padding(24.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(16.dp),
             ) {
-                Column {
-                    Text(
-                        text = entry.item.title,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = catalogSubtitle(entry.item),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
                 Text(
-                    text = entry.caption,
+                    text = entry.caption.uppercase(),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em),
+                    color = Color.White.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = entry.item.title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = catalogSubtitle(entry.item),
                     style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = Color.White.copy(alpha = 0.75f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

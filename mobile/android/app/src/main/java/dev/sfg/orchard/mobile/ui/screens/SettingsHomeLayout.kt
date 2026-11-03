@@ -190,7 +190,7 @@ private fun SectionItemRow(
 private fun BuiltInHomeSection.title(auth: AuthState): String = when (this) {
         BuiltInHomeSection.YOUR_PLAYLISTS -> "Your Playlists"
         BuiltInHomeSection.SUBSCRIBED_ARTISTS -> "Subscribed Artists"
-        BuiltInHomeSection.TOP_SONGS -> if (auth is AuthState.SignedIn) "Listening Review" else "Top Songs"
+        BuiltInHomeSection.TOP_SONGS -> "Quick picks"
         BuiltInHomeSection.RECOMMENDATIONS -> "Recommendations"
         BuiltInHomeSection.DOWNLOADED_PLAYLISTS -> "Downloaded Playlists"
         BuiltInHomeSection.DOWNLOADED_ARTISTS -> "Downloaded Artists"

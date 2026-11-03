@@ -66,7 +66,7 @@ import dev.sfg.orchard.mobile.ui.components.OrchardMark
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 
-/** Compact masthead: wordmark and actions on one row, greeting below. */
+/** Masthead: mark and greeting as an eyebrow over the large title, avatar on the right. */
 @Composable
 internal fun GlassHomeHeader(
     auth: AuthState,
@@ -74,52 +74,57 @@ internal fun GlassHomeHeader(
 ) {
     val firstName = remember(auth) { firstNameOf(auth) }
     val avatarUrl = (auth as? AuthState.SignedIn)?.avatarUrl.orEmpty()
+    val greeting = remember(firstName) { "${greetingFor(java.time.LocalTime.now().hour)}, $firstName" }
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(start = 20.dp, end = 12.dp, top = 6.dp, bottom = 14.dp)
+            .padding(start = 20.dp, end = 12.dp, top = 14.dp, bottom = 16.dp),
+        verticalAlignment = Alignment.Bottom,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().height(48.dp).riseIn(distance = 12f),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // The mark twirls in when Home opens. It is a tree; it has earned a little spin.
-            val spin = remember { Animatable(-120f) }
-            LaunchedEffect(Unit) { spin.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 120f)) }
-            OrchardMark(Modifier.size(26.dp).graphicsLayer { rotationZ = spin.value })
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = "Orchard",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 23.sp,
-                    letterSpacing = (-0.6).sp,
-                ),
-                color = CanopyColors.Text,
-                modifier = Modifier.weight(1f),
-            )
-            HeaderAction(onClick = onProfile, description = "Profile") {
-                ProfileAvatar(avatarUrl, firstName, Modifier.size(34.dp))
+        Column(Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.riseIn(distance = 12f),
+            ) {
+                // The mark twirls in when Home opens. It is a tree; it has earned a little spin.
+                val spin = remember { Animatable(-120f) }
+                LaunchedEffect(Unit) { spin.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 120f)) }
+                OrchardMark(Modifier.size(16.dp).graphicsLayer { rotationZ = spin.value })
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = greeting,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = CanopyColors.MutedStrong,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "Listen now",
+                fontSize = 34.sp,
+                lineHeight = 40.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.02).em,
+                color = CanopyColors.Text,
+                maxLines = 1,
+                modifier = Modifier.riseIn(1, distance = 22f),
+            )
         }
-
-        Spacer(Modifier.height(10.dp))
-
-        // Large title scrolls away with the feed; that is what gives the first screen its weight.
-        Text(
-            text = "Listen now",
-            fontSize = 34.sp,
-            lineHeight = 41.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = (-0.02).em,
-            color = CanopyColors.Text,
-            maxLines = 1,
-            modifier = Modifier.riseIn(1, distance = 22f),
-        )
+        HeaderAction(onClick = onProfile, description = "Profile") {
+            ProfileAvatar(avatarUrl, firstName, Modifier.size(36.dp))
+        }
     }
 }
+
+internal fun greetingFor(hour: Int): String =
+    when (hour) {
+        in 5..11 -> "Good morning"
+        in 12..17 -> "Good afternoon"
+        else -> "Good evening"
+    }
 
 /** 48dp touch target around a smaller glyph. */
 @Composable
@@ -173,8 +178,9 @@ internal fun AccountSectionTitle(
     HomeSectionTitle(
         title = name,
         label = label,
-        thumbnail = { ProfileAvatar(avatarUrl, name, Modifier.size(48.dp)) },
+        thumbnail = { ProfileAvatar(avatarUrl, name, Modifier.size(44.dp)) },
         onClick = onClick,
+        showDivider = false,
     )
 }
 
@@ -185,5 +191,5 @@ internal fun HomeSectionHeader(
     subtitle: String? = null,
     onSeeAll: (() -> Unit)? = null,
 ) {
-    HomeSectionTitle(title = title, label = subtitle?.ifBlank { null }, onClick = onSeeAll)
+    HomeSectionTitle(title = title, label = subtitle?.ifBlank { null }, onClick = onSeeAll, showDivider = false)
 }

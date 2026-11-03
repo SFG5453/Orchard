@@ -50,16 +50,6 @@ import dev.sfg.orchard.mobile.ui.components.MessagePanel
 import dev.sfg.orchard.mobile.ui.components.OrchardChromeHeight
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
-internal data class QuickGridItem(
-    val id: String,
-    val title: String,
-    val artworkUrl: String,
-    val icon: ImageVector? = null,
-    val gradient: Brush? = null,
-    val onClick: () -> Unit,
-    val onPlay: () -> Unit,
-)
-
 @Composable
 fun HomeScreen(data: HomeData) {
     if (dev.sfg.orchard.mobile.ui.foldable.isFoldableOrWideLayout()) {
@@ -70,7 +60,6 @@ fun HomeScreen(data: HomeData) {
 
     val actions = data.actions
     val offline = data.offline
-    val quickGridItems = data.quickGrid
     val spotlight = data.spotlight
     val downloadedTracks = data.downloadedTracks
 
@@ -94,6 +83,18 @@ fun HomeScreen(data: HomeData) {
             onShare = actions.share,
         )
     }
+    val quickPickRow: @Composable (Track) -> Unit = { track ->
+        RankedSongRow(
+            track = track,
+            liked = data.isLiked(track),
+            onPlay = { (actions.startMix ?: actions.play)(track) },
+            onToggleLike = { actions.toggleLike(track) },
+            onPlayNext = actions.playNext,
+            onAddToQueue = actions.addToQueue,
+            onAddToPlaylist = actions.addToPlaylist,
+            onShare = actions.share,
+        )
+    }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -105,20 +106,16 @@ fun HomeScreen(data: HomeData) {
                 GlassHomeHeader(auth = data.auth, onProfile = actions.openProfile)
             }
 
-            if (quickGridItems.isNotEmpty() && !offline) {
-                item {
-                    SpotifyQuickGrid(items = quickGridItems)
-                    Spacer(Modifier.height(24.dp))
-                }
-            }
-
             if (!offline && spotlight.isNotEmpty()) {
                 item {
                     DiscoverCarousel(
                         title = "Your daily discover",
                         entries = spotlight,
                         onPlayAll = { data.play(spotlight.first().item) },
-                        onClick = data::open,
+                        onClick = { item ->
+                            val mix = actions.startMix
+                            if (item is CatalogItem.Song && mix != null) mix(item.track) else data.open(item)
+                        },
                     )
                 }
             }
@@ -158,12 +155,12 @@ fun HomeScreen(data: HomeData) {
                     }
                     BuiltInHomeSection.TOP_SONGS -> {
                         if (offline) return@forEach
-                        val songTracks = data.topSongs
-                        if (songTracks.isNotEmpty()) {
-                            homeTrackSection(
-                                "Latest Songs", songTracks.take(5), "top",
-                                data.seeAll("Latest Songs", songTracks.map { CatalogItem.Song(it) }),
-                                subtitle = "Top picks and recent favorites", row = rankedRow,
+                        val picks = data.quickPicks
+                        if (picks.size >= QUICK_PICKS_PER_PAGE) {
+                            homeQuickPicks(
+                                picks,
+                                data.seeAll("Quick picks", picks.map { CatalogItem.Song(it) }),
+                                row = quickPickRow,
                             )
                         }
                     }
@@ -171,19 +168,13 @@ fun HomeScreen(data: HomeData) {
                         if (offline) return@forEach
                         when (val state = data.state) {
                             is LoadState.Content -> {
-                                state.value.forEachIndexed { sectionIndex, section ->
+                                state.value.forEach { section ->
                                     homeRail(
                                         section.title, section.items, section.id,
                                         data.seeAll(section.title, section.items, section.browseId, section.params),
                                         sectionKey = section.id,
-                                    ) { item ->
-                                        // Alternate card styles so consecutive rails read differently.
-                                        if (sectionIndex % 2 == 1) {
-                                            GlassSquircleCard(item = item, onClick = { data.open(item) }, onPlay = { data.play(item) })
-                                        } else {
-                                            GlassRecentlyPlayedCard(item = item, onClick = { data.open(item) })
-                                        }
-                                    }
+                                        card = collectionCard,
+                                    )
                                 }
                             }
                             LoadState.Loading -> {
@@ -221,9 +212,8 @@ fun HomeScreen(data: HomeData) {
                             homeRail(
                                 "Downloaded Albums", data.offlineAlbums, "off_alb",
                                 data.seeAll("Downloaded Albums", data.offlineAlbums),
-                            ) { item ->
-                                GlassRecentlyPlayedCard(item = item, onClick = { data.open(item) })
-                            }
+                                card = collectionCard,
+                            )
                         }
                     }
                     BuiltInHomeSection.DOWNLOADED_SONGS -> {
@@ -274,8 +264,8 @@ private fun StatusBarScrim() {
             .height(top + 24.dp)
             .background(
                 Brush.verticalGradient(
-                    0f to Color.Black.copy(alpha = 0.85f),
-                    0.6f to Color.Black.copy(alpha = 0.7f),
+                    0f to Color.Black.copy(alpha = 0.6f),
+                    0.5f to Color.Black.copy(alpha = 0.35f),
                     1f to Color.Transparent,
                 )
             )

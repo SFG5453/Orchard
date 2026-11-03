@@ -53,6 +53,8 @@ class HomeActions(
     val fetchSectionItems: (suspend (String, String) -> List<CatalogItem>)?,
     val playItem: ((CatalogItem) -> Unit)?,
     val playCollection: ((String, String) -> Unit)?,
+    /** Plays the song over a queue of its radio. */
+    val startMix: ((Track) -> Unit)? = null,
 )
 
 data class HomeSectionSheetState(
@@ -132,10 +134,8 @@ class HomeData internal constructor(
     val offlineArtists get() = offlineArtistItems(downloadedTracks, library.savedArtists)
     val offlineAlbums get() = offlineAlbumItems(downloadedTracks)
 
-    internal val spotlight get() = discoverEntries(state, library)
-    internal val quickGrid get() = run {
-        quickGridItems(library, state, { actions.openDetail(it) }, ::open, ::play)
-    }
+    internal val spotlight get() = discoverEntries(state, library, java.time.LocalDate.now().toEpochDay())
+    internal val quickPicks get() = quickPickTracks(library, sections, java.time.LocalDate.now().toEpochDay())
     /** Artwork-bearing catalog items first, then saved playlists, albums and likes. */
     val heroItems get() = run {
         (
