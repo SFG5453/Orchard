@@ -20,7 +20,10 @@
 #include "widevine_path.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QVersionNumber>
 
 #include <algorithm>
@@ -39,6 +42,7 @@ QString widevineArch() {
 #endif
 }
 
+#ifdef Q_OS_WIN
 // Newest versioned CDM under a browser's component-updater folder.
 QString newestCdm(const QString &root, const QString &relative) {
   QStringList versions = QDir(root).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
@@ -53,7 +57,6 @@ QString newestCdm(const QString &root, const QString &relative) {
   return {};
 }
 
-#ifdef Q_OS_WIN
 // Edge's component updater installs the CDM on every Windows; Chrome also bundles one beside its binary.
 QString findInstalledCdm() {
   const QString bundled = QStringLiteral("/_platform_specific/") + widevineArch() + QStringLiteral("/widevinecdm.dll");
@@ -81,30 +84,85 @@ QString findInstalledCdm() {
   return {};
 }
 #else
-QString findInstalledCdm() {
-  const QString bundled = QStringLiteral("/_platform_specific/") + widevineArch() + QStringLiteral("/libwidevinecdm.so");
-  for (const char *root : {"/opt/google/chrome/WidevineCdm", "/opt/google/chrome-beta/WidevineCdm",
-                           "/opt/google/chrome-unstable/WidevineCdm", "/usr/lib/chromium/WidevineCdm",
-                           "/usr/lib64/chromium/WidevineCdm", "/usr/lib/chromium-browser/WidevineCdm"}) {
-    const QString path = QString::fromLatin1(root) + bundled;
+struct Candidate {
+  QString path;
+  QVersionNumber version;
+};
+
+QString bundledRelative() {
+  return QStringLiteral("/_platform_specific/") + widevineArch() + QStringLiteral("/libwidevinecdm.so");
+}
+
+// Chromium component-updater layout: <root>/<version>/_platform_specific/...
+void addVersioned(QList<Candidate> &found, const QString &root, const QString &relative) {
+  for (const QString &version : QDir(root).entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+    const QString path = root + QLatin1Char('/') + version + relative;
     if (QFileInfo::exists(path))
-      return path;
+      found.append({path, QVersionNumber::fromString(version)});
   }
+}
+
+// CDM shipped beside a browser binary; its manifest.json carries the version.
+void addBundled(QList<Candidate> &found, const QString &root) {
+  const QString path = root + bundledRelative();
+  if (!QFileInfo::exists(path))
+    return;
+  QFile manifest(root + QStringLiteral("/manifest.json"));
+  QVersionNumber version;
+  if (manifest.open(QIODevice::ReadOnly))
+    version = QVersionNumber::fromString(
+        QJsonDocument::fromJson(manifest.readAll()).object().value(QStringLiteral("version")).toString());
+  found.append({path, version});
+}
+
+QStringList subdirs(const QString &root) {
+  QStringList out;
+  const QDir dir(root);
+  for (const QString &name : dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot))
+    out.append(dir.filePath(name));
+  return out;
+}
+
+// Chromium browsers, Electron and CEF apps all keep a WidevineCdm folder in their config dir.
+void addConfigDirs(QList<Candidate> &found, const QString &config) {
+  QStringList apps = subdirs(config);
+  for (const char *vendor : {"BraveSoftware", "google", "microsoft", "opera"})
+    apps += subdirs(config + QLatin1Char('/') + QString::fromLatin1(vendor));
+  for (const QString &app : apps)
+    addVersioned(found, app + QStringLiteral("/WidevineCdm"), bundledRelative());
+}
+
+// Firefox and its forks keep the CDM per profile: <profile>/gmp-widevinecdm/<version>/.
+void addGeckoRoots(QList<Candidate> &found, const QString &base) {
+  for (const char *root : {"/.mozilla/firefox", "/.config/mozilla/firefox", "/.librewolf", "/.config/librewolf",
+                           "/.zen", "/.config/zen", "/.waterfox", "/.floorp", "/.config/floorp"}) {
+    for (const QString &profile : subdirs(base + QString::fromLatin1(root)))
+      addVersioned(found, profile + QStringLiteral("/gmp-widevinecdm"), QStringLiteral("/libwidevinecdm.so"));
+  }
+}
+
+// Newest copy wins; the license server rejects revoked CDM versions.
+QString findInstalledCdm() {
+  QList<Candidate> found;
+  for (const char *root : {"/opt/google/chrome", "/opt/google/chrome-beta", "/opt/google/chrome-unstable",
+                           "/opt/microsoft/msedge", "/opt/microsoft/msedge-beta", "/opt/microsoft/msedge-dev",
+                           "/opt/vivaldi", "/usr/lib/chromium", "/usr/lib64/chromium", "/usr/lib/chromium-browser",
+                           "/usr/lib64/chromium-browser"})
+    addBundled(found, QString::fromLatin1(root) + QStringLiteral("/WidevineCdm"));
   const QString home = QDir::homePath();
-  for (const char *root : {"/.config/google-chrome/WidevineCdm", "/.config/chromium/WidevineCdm",
-                           "/.config/BraveSoftware/Brave-Browser/WidevineCdm",
-                           "/.var/app/com.google.Chrome/config/google-chrome/WidevineCdm"}) {
-    if (const QString path = newestCdm(home + QString::fromLatin1(root), bundled); !path.isEmpty())
-      return path;
+  addBundled(found, home + QStringLiteral("/.local/lib/vivaldi/WidevineCdm"));
+  const QString xdgConfig = qEnvironmentVariable("XDG_CONFIG_HOME");
+  addConfigDirs(found, xdgConfig.isEmpty() ? home + QStringLiteral("/.config") : xdgConfig);
+  addGeckoRoots(found, home);
+  addGeckoRoots(found, home + QStringLiteral("/snap/firefox/common"));
+  for (const QString &app : subdirs(home + QStringLiteral("/.var/app"))) {
+    addConfigDirs(found, app + QStringLiteral("/config"));
+    addGeckoRoots(found, app);
   }
-  const QDir firefox(home + QStringLiteral("/.mozilla/firefox"));
-  for (const QString &profile : firefox.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
-    const QString path = newestCdm(firefox.filePath(profile) + QStringLiteral("/gmp-widevinecdm"),
-                                   QStringLiteral("/libwidevinecdm.so"));
-    if (!path.isEmpty())
-      return path;
-  }
-  return {};
+  const auto newest = std::max_element(found.cbegin(), found.cend(), [](const Candidate &a, const Candidate &b) {
+    return a.version < b.version;
+  });
+  return newest == found.cend() ? QString() : newest->path;
 }
 #endif
 
