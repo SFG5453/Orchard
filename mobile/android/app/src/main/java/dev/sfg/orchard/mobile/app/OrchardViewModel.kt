@@ -45,17 +45,12 @@ import dev.sfg.orchard.mobile.playback.ListeningPartyManager
 import dev.sfg.orchard.mobile.playback.LocalPlaybackController
 import dev.sfg.orchard.mobile.qobuz.QobuzQuality
 import dev.sfg.orchard.mobile.qobuz.QobuzStatus
-import dev.sfg.orchard.mobile.settings.CacheManager
 import dev.sfg.orchard.mobile.social.PartyState
 import dev.sfg.orchard.mobile.songlinks.LinkResolution
 import dev.sfg.orchard.mobile.songlinks.SongLinksCoordinator
 import dev.sfg.orchard.mobile.songlinks.SongShareState
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /** Presentation state holder for the standalone shell and both playback targets. */
@@ -235,9 +230,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val nonMusicSegment: StateFlow<dev.sfg.orchard.mobile.model.NonMusicSegment?> = nonMusicSkipper.offered
     fun skipNonMusic() = nonMusicSkipper.skip()
 
-    private val mutableWarning = MutableStateFlow("")
-    val warning: StateFlow<String> = mutableWarning.asStateFlow()
-    private var warningDismissJob: Job? = null
+    private val warnings = WarningBanner(viewModelScope)
+    val warning: StateFlow<String> = warnings.message
 
     private val transport = Transport(graph, viewModelScope, local, party, playback, targets, musicVideo) { showWarning(it) }
     internal val sourceSwitch = SourceSwitchReset(graph, viewModelScope, local, targets)
@@ -255,11 +249,9 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
 
     val updateState: StateFlow<UpdateState> = graph.updates.state
 
-    private val mutableCacheSizeBytes = MutableStateFlow(0L)
-    val cacheSizeBytes: StateFlow<Long> = mutableCacheSizeBytes.asStateFlow()
-
-    private val mutableIsClearingCache = MutableStateFlow(false)
-    val isClearingCache: StateFlow<Boolean> = mutableIsClearingCache.asStateFlow()
+    private val cache = CacheSizeTracker(application, graph, viewModelScope)
+    val cacheSizeBytes: StateFlow<Long> = cache.sizeBytes
+    val isClearingCache: StateFlow<Boolean> = cache.clearing
 
     fun checkForUpdates() = graph.updates.checkForUpdates()
     fun installUpdate(metadata: MobileUpdateMetadata) = graph.updates.downloadAndInstallUpdate(metadata)
@@ -389,27 +381,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     val appleLibraryActive: StateFlow<Boolean> = graph.appleLibrary.enabled
     fun updateSettings(value: OrchardSettings) = graph.settings.updateSettings(value)
 
-    fun refreshCacheSize() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val size = CacheManager.calculateCacheSizeBytes(getApplication())
-            mutableCacheSizeBytes.value = size
-        }
-    }
-
-    fun clearCache(onComplete: ((Long) -> Unit)? = null) {
-        if (mutableIsClearingCache.value) return
-        viewModelScope.launch {
-            mutableIsClearingCache.value = true
-            val bytesCleared = withContext(Dispatchers.IO) {
-                CacheManager.clearAllCache(getApplication(), graph)
-            }
-            mutableCacheSizeBytes.value = withContext(Dispatchers.IO) {
-                CacheManager.calculateCacheSizeBytes(getApplication())
-            }
-            mutableIsClearingCache.value = false
-            onComplete?.invoke(bytesCleared)
-        }
-    }
+    fun refreshCacheSize() = cache.refresh()
+    fun clearCache(onComplete: ((Long) -> Unit)? = null) = cache.clear(onComplete)
 
     fun beginSignIn() = graph.auth.beginSignIn()
     fun completeSignIn(cookie: String, visitorData: String, dataSyncId: String, accountIndex: Int = 0, switchingAccount: Boolean = false, pageAvatarUrl: String = "") =
@@ -425,20 +398,8 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         else songLinksCoordinator.shareCollection(detail)
     fun dismissShare() = songLinksCoordinator.dismissShare()
 
-    /** Post a warning that auto-dismisses after [durationMs]. */
-    fun showWarning(message: String, durationMs: Long = 8_000L) {
-        mutableWarning.value = message
-        warningDismissJob?.cancel()
-        warningDismissJob = viewModelScope.launch {
-            delay(durationMs)
-            mutableWarning.value = ""
-        }
-    }
-
-    fun dismissWarning() {
-        warningDismissJob?.cancel()
-        mutableWarning.value = ""
-    }
+    fun showWarning(message: String, durationMs: Long = 8_000L) = warnings.show(message, durationMs)
+    fun dismissWarning() = warnings.dismiss()
 
     fun handleIncomingLink(rawUrl: String, onNavigateDetail: (String) -> Unit = {}) {
         viewModelScope.launch {
