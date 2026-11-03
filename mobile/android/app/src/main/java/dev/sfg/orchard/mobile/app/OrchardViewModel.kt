@@ -240,6 +240,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     private var warningDismissJob: Job? = null
 
     private val transport = Transport(graph, viewModelScope, local, party, playback, targets, musicVideo) { showWarning(it) }
+    internal val sourceSwitch = SourceSwitchReset(graph, viewModelScope, local, targets)
     private val sleepTimer = SleepTimer(viewModelScope, playback) {
         transport.remoteOrLocal({ graph.connect.command("pause") }, local::pause)
     }
@@ -280,6 +281,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         nowPlaying.observeMusicVideo(targets)
         autoplay.observe()
         nonMusicSkipper.observe()
+        sourceSwitch.observe()
     }
 
     fun refreshHome() {

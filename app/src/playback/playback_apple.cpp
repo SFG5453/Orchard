@@ -23,6 +23,7 @@
 #include "apple_history.h"
 #include "playback_controller.h"
 #include "playback_helpers.h"
+#include "local/local_track.h"
 
 namespace {
 QString appleSongId(const QVariantMap &track) {
@@ -41,6 +42,16 @@ void PlaybackController::setAppleMusic(AppleMusic *account, CatalogSource *sourc
   m_bestMix.setAppleMusic(account, source);
   if (!findChild<AppleHistory *>())
     new AppleHistory(this, account);
+  // Each catalog only plays its own songs; local files keep playing across a switch.
+  connect(source, &CatalogSource::changed, this, [this] {
+    if (remoteActive() || m_track.isEmpty() || local::isLocalTrack(m_track) ||
+        isAppleTrack(m_track) == m_catalogSource->apple())
+      return;
+    stop();
+    clearQueue();
+    m_history.clear();
+    emit historyChanged();
+  });
   if (m_appleStreams || !AppleMusicStreams::available())
     return;
   m_appleStreams = new AppleMusicStreams(account, this);

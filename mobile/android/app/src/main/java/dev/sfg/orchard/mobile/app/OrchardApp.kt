@@ -80,6 +80,16 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
+    // Open pages and their back stack belong to the previous source.
+    LaunchedEffect(Unit) {
+        viewModel.sourceSwitch.switches.collect {
+            if (navController.currentDestination?.route == Routes.WELCOME) return@collect
+            navController.navigate(Routes.HOME) {
+                popUpTo(navController.graph.id) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
     // Structural playback only; the clock is handed to the few readers that draw time.
     val playback by viewModel.playbackState.collectAsStateWithLifecycle()
     val playbackClock = viewModel.playbackClock.collectAsStateWithLifecycle()
