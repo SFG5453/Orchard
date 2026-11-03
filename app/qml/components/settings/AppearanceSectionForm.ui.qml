@@ -109,7 +109,7 @@ ColumnLayout {
         SettingsRow {
             iconName: "maximize"
             title: qsTr("Fit large screens")
-            description: qsTr("Enlarges Orchard on screens above 1440p that your system leaves at 100%, such as 4K at 200%.")
+            description: qsTr("Enlarges Orchard on screens above 1080p that your system leaves at 100%, such as 1440p at 125% and 4K at 200%.")
 
             SettingsSwitch {
                 id: autoUiScaleSwitch

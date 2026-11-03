@@ -94,7 +94,8 @@ private slots:
         QTest::addColumn<double>("systemRatio");
         QTest::addColumn<double>("expected");
         QTest::newRow("1080p") << QSize(1920, 1080) << 1.0 << 1.0;
-        QTest::newRow("1440p") << QSize(2560, 1440) << 1.0 << 1.0;
+        QTest::newRow("1200p") << QSize(1920, 1200) << 1.0 << 1.0;
+        QTest::newRow("1440p") << QSize(2560, 1440) << 1.0 << 1.25;
         QTest::newRow("1600p") << QSize(2560, 1600) << 1.0 << 1.5;
         QTest::newRow("1800p") << QSize(3200, 1800) << 1.0 << 1.75;
         QTest::newRow("4k") << QSize(3840, 2160) << 1.0 << 2.0;

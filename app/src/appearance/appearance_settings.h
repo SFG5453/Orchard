@@ -32,7 +32,7 @@ class AppearanceSettings final : public QObject {
     // Immersive background render quality: low, medium or high.
     Q_PROPERTY(QString backgroundQuality READ backgroundQuality WRITE setBackgroundQuality NOTIFY changed)
     Q_PROPERTY(double uiScale READ uiScale WRITE setUiScale NOTIFY changed)
-    // Enlarges screens the system leaves at 100% when they are larger than 1440p.
+    // Enlarges screens the system leaves at 100% when they are larger than 1080p.
     Q_PROPERTY(bool autoUiScale READ autoUiScale WRITE setAutoUiScale NOTIFY changed)
     Q_PROPERTY(bool uiScaleRestartRequired READ uiScaleRestartRequired NOTIFY changed)
     Q_PROPERTY(double speed READ speed WRITE setSpeed NOTIFY changed)

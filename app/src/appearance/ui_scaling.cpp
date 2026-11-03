@@ -35,9 +35,9 @@ void UiScaling::configure() {
 
 double UiScaling::autoFactor(QSize pixels, double systemRatio) {
     const int shortSide = std::min(pixels.width(), pixels.height());
-    if (systemRatio > 1.0 || shortSide <= 1440)
+    if (systemRatio > 1.0 || shortSide <= 1080)
         return 1.0;
-    // Lay an unscaled panel out like 1080p, in quarter steps: 4K gets 200%.
+    // Lay an unscaled panel out like 1080p, in quarter steps: 1440p gets 125%, 4K 200%.
     return std::clamp(std::round(shortSide / 1080.0 * 4) / 4, 1.0, maximum);
 }
 

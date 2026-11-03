@@ -62,7 +62,7 @@ Select **Reset scale** to return to 100%, then restart Orchard. **Reset controls
 
 ## Fit large screens
 
-**Fit large screens** in **Display scaling** is on by default. On a screen taller than 1440 pixels that your system leaves at 100%, Orchard enlarges itself so the screen lays out like 1080p: a 4K display gets 200%, and a 3200 × 1800 display gets 175%. Screens at 1440p or smaller, and screens your system already scales, are unchanged. The **Interface scale** slider multiplies on top. Turn the switch off to keep 100% everywhere, then restart Orchard.
+**Fit large screens** in **Display scaling** is on by default. On a screen larger than 1080p that your system leaves at 100%, Orchard enlarges itself so the screen lays out like 1080p: a 1440p display gets 125%, a 3200 × 1800 display 175%, and a 4K display 200%. Screens at 1920 × 1200 or smaller, and screens your system already scales, are unchanged. The **Interface scale** slider multiplies on top. Turn the switch off to keep 100% everywhere, then restart Orchard.
 
 ## Choose a layout
 
