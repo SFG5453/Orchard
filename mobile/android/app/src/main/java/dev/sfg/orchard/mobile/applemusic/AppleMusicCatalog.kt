@@ -224,6 +224,11 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
         call("playback.stream", JSONObject().put("track", JSONObject().put("id", id))
             .put("quality", if (standard) "standard" else "high"))
 
+    /** Reports a played catalog song to Apple; [method] is history.start or history.end. */
+    suspend fun reportPlay(method: String, payload: JSONObject) {
+        call(method, payload)
+    }
+
     suspend fun atmos(id: String): JSONObject = call("playback.atmos", JSONObject().put("id", id))
 
     /** A music video's master playlist and license endpoint, for an am.music-videos id. */

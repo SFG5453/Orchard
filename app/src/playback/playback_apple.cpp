@@ -20,6 +20,7 @@
 #include "apple_music_stream.h"
 #include "integrations/apple_music.h"
 #include "integrations/catalog_source.h"
+#include "apple_history.h"
 #include "playback_controller.h"
 #include "playback_helpers.h"
 
@@ -38,6 +39,8 @@ void PlaybackController::setAppleMusic(AppleMusic *account, CatalogSource *sourc
   m_appleAccount = account;
   m_catalogSource = source;
   m_bestMix.setAppleMusic(account, source);
+  if (!findChild<AppleHistory *>())
+    new AppleHistory(this, account);
   if (m_appleStreams || !AppleMusicStreams::available())
     return;
   m_appleStreams = new AppleMusicStreams(account, this);

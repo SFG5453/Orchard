@@ -46,6 +46,8 @@ class AppleMusic final : public QObject {
   Q_PROPERTY(bool loginAvailable READ loginAvailable CONSTANT)
   Q_PROPERTY(QString message READ message NOTIFY changed)
   Q_PROPERTY(bool messageIsError READ messageIsError NOTIFY changed)
+  // Songs played in Orchard are reported to Apple so they show in Recently Played.
+  Q_PROPERTY(bool playHistoryEnabled READ playHistoryEnabled WRITE setPlayHistoryEnabled NOTIFY changed)
 
 public:
   // An empty page with an empty error is a plain miss.
@@ -64,6 +66,8 @@ public:
 #endif
   }
   bool loginAvailable() const;
+  bool playHistoryEnabled() const { return m_playHistoryEnabled; }
+  void setPlayHistoryEnabled(bool enabled);
   QString message() const { return m_message; }
   bool messageIsError() const { return m_messageIsError; }
 
@@ -115,6 +119,8 @@ public:
   void musicVideo(const QString &songId, PageReply done);
   // {items: {catalogId: attributes}}: Apple's audio analysis (beat grid, vocals) for catalog songs.
   void audioAnalysis(const QStringList &ids, PageReply done);
+  // history.start or history.end for a played catalog song; failures are logged.
+  void reportPlay(const QString &method, const QJsonObject &play);
   // A catalog song's Atmos master playlist and license endpoint; `available` false without one.
   void atmos(const QString &appleId, PageReply done);
 
@@ -154,5 +160,6 @@ private:
   QString m_status{QStringLiteral("disconnected")};
   QString m_message;
   bool m_messageIsError{false};
+  bool m_playHistoryEnabled{true};
   quint64 m_loginGeneration{0};
 };

@@ -50,6 +50,7 @@ internal class NowPlayingPublisher(
 ) {
     private var artworkHydrationId = ""
     private val youtubeHistory = YouTubeHistoryReporter(graph, graph.applicationScope)
+    private val appleHistory = AppleHistoryReporter(graph, graph.applicationScope)
 
     /**
      * Publishes the bitrate of what is actually playing, for the readout under the scrubber.
@@ -215,7 +216,11 @@ internal class NowPlayingPublisher(
         graph.lastfm.updatePlayback(snapshot)
         graph.listenBrainz.updatePlayback(snapshot)
         youtubeHistory.update(source)
+        appleHistory.update(source)
     }
 
-    fun finishHistory() = youtubeHistory.finish()
+    fun finishHistory() {
+        youtubeHistory.finish()
+        appleHistory.finish()
+    }
 }

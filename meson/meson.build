@@ -215,6 +215,7 @@ app_sources = [
   'app/src/playback/playback_remote.cpp',
   'app/src/playback/playback_remote.h',
   'app/src/playback/playback_apple.cpp',
+  'app/src/playback/apple_history.cpp',
   'app/src/playback/apple_music_atmos.cpp',
   'app/src/playback/apple_music_atmos.h',
   'app/src/playback/apple_music_atmos_stream.cpp',
@@ -606,6 +607,7 @@ apple_music_sources = [
   'providers/apple-music/src/musicVideos.js',
   'providers/apple-music/src/normalize.js',
   'providers/apple-music/src/notes.js',
+  'providers/apple-music/src/playActivity.js',
   'providers/apple-music/src/playback.js',
   'providers/apple-music/src/runtime.js',
   'providers/apple-music/src/stationArtwork.js',
@@ -615,6 +617,7 @@ apple_music_sources = [
 
 
 app_moc_headers = [
+  'app/src/playback/apple_history.h',
   'app/src/api/local_api.h',
   'app/src/lyrics/lyrics_provider_settings.h',
   'app/src/startup_settings.h',

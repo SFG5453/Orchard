@@ -25,6 +25,7 @@
 #include <QJsonArray>
 #include <QJsonValue>
 #include <QLocale>
+#include <QSettings>
 
 namespace {
 QString sessionKey(const QString &developerToken, const QString &userToken) {
@@ -223,6 +224,23 @@ void AppleMusic::audioAnalysis(const QStringList &ids, PageReply done) {
   }
   call(QStringLiteral("catalog.audioAnalysis"), {{QStringLiteral("ids"), QJsonArray::fromStringList(ids)}},
        [done](const QJsonValue &result, const QString &error) { done(result.toObject(), error); });
+}
+
+void AppleMusic::reportPlay(const QString &method, const QJsonObject &play) {
+  if (!connected() || !m_playHistoryEnabled)
+    return;
+  call(method, play, [method](const QJsonValue &, const QString &error) {
+    if (!error.isEmpty())
+      qWarning().noquote() << "Apple Music" << method << "failed:" << error;
+  });
+}
+
+void AppleMusic::setPlayHistoryEnabled(bool enabled) {
+  if (m_playHistoryEnabled == enabled)
+    return;
+  m_playHistoryEnabled = enabled;
+  QSettings().setValue(QStringLiteral("appleMusic/playHistoryEnabled"), enabled);
+  emit changed();
 }
 
 void AppleMusic::atmos(const QString &appleId, PageReply done) {

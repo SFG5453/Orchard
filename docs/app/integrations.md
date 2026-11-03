@@ -209,6 +209,16 @@ Orchard streams Apple Music songs itself and decrypts them in a small separate p
 - Volume, play, pause, seek, next and previous work as usual, including from media keys and the system media controls.
 - Errors: when Apple refuses a song, Orchard shows Apple's own reason, such as a missing subscription, or "Apple Music did not offer this song for playback." On Android, "Sign in to Apple Music again." means the saved sign-in expired; connect Apple Music again.
 
+## Save plays to Apple Music history
+
+Orchard reports each Apple Music song you play to Apple, so it shows in Recently Played and Home on your other Apple Music devices. It is on by default and separate from the YouTube Music history switch.
+
+- Desktop: open **Settings**, **General**, **Apple Music**. With Apple Music connected, the row "Save plays to Apple Music history" has a switch (accessible name "Send listening history to Apple Music").
+- Android: open **Settings**, **Audio & playback**, then **Listening history**. The row is named "Save plays to Apple Music history".
+- A play is reported once the song is audible. Skipping a song still reports it, with the position where you stopped.
+- Turn the switch off to keep Orchard plays out of your Apple Music history. Plays already reported stay.
+- Songs from YouTube Music, Qobuz and local files are never reported to Apple.
+
 ## Play Apple Music stations
 
 With **Music source** set to **Apple**, Apple Music stations appear as cards on Home and in the **Station** shelf at the end of an artist page.

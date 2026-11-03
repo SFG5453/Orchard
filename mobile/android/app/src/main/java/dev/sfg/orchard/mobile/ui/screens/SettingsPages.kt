@@ -129,6 +129,13 @@ internal fun PlaybackPage(
             checked = settings.sendYouTubeHistory,
             onChecked = { onSettings(settings.copy(sendYouTubeHistory = it)) },
         )
+        ToggleRow(
+            title = "Save plays to Apple Music history",
+            subtitle = "Songs you play in Orchard appear in Recently Played on your other Apple Music devices",
+            icon = Icons.Rounded.History,
+            checked = settings.sendAppleMusicHistory,
+            onChecked = { onSettings(settings.copy(sendAppleMusicHistory = it)) },
+        )
     }
 }
 

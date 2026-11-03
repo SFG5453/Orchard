@@ -81,6 +81,7 @@ private val entries = listOf(
     SettingsEntry("Qobuz", "Lossless and Hi-Res audio", SettingsPage.Connections, "hires streaming"),
     SettingsEntry("Orchard Account", "Sign in with Google and manage devices", SettingsPage.Connections, "account devices google"),
     SettingsEntry("Save plays to YouTube Music history", "Add played songs to your YouTube Music history", SettingsPage.Playback, "listening history tracking"),
+    SettingsEntry("Save plays to Apple Music history", "Add played songs to your Apple Music history", SettingsPage.Playback, "listening history tracking recently played"),
     SettingsEntry("Cached audio", "Cache limit for played tracks", SettingsPage.Storage, "size limit"),
     SettingsEntry("Clear cache", "Free temporary audio and artwork", SettingsPage.Storage, "storage delete"),
     SettingsEntry("Check for updates", "Look for newer releases", SettingsPage.About, "version upgrade"),

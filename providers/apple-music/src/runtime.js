@@ -70,6 +70,8 @@ const methods = new Map([
   ['playback.atmos', async (payload = {}) => appleMusic.playback.atmos(payload.id)],
   ['playback.video', async (payload = {}) => appleMusic.playback.video(payload.id)],
   ['playback.license', async (payload = {}) => appleMusic.playback.license(payload)],
+  ['history.start', async (payload = {}) => appleMusic.playStarted(payload)],
+  ['history.end', async (payload = {}) => appleMusic.playEnded(payload)],
   ['lyrics', async (payload = {}) => (await appleMusic.lyrics(payload)) || {}],
   ['lyrics.translation', async (payload = {}) => (await appleMusic.lyricsTranslation(payload)) || {}],
   ['close', async () => {
