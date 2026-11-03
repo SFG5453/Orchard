@@ -84,7 +84,7 @@ ColumnLayout {
                     {
                         value: "atmos", label: qsTr("Atmos"), name: qsTr("Dolby Atmos from Apple Music"),
                         enabled: root.atmosAvailable,
-                        tip: qsTr("Connect Apple Music in Settings, Integrations to use Atmos.")
+                        tip: qsTr("Connect Apple Music in Settings, General to use Atmos.")
                     }
                 ]
             }

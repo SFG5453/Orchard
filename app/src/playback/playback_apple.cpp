@@ -77,7 +77,7 @@ void PlaybackController::startAppleTrack() {
   else if (!m_catalogSource || !m_catalogSource->apple())
     message = tr("Choose Apple as the music source under Settings, General to play Apple Music songs.");
   else if (!m_appleAccount->connected())
-    message = tr("Connect Apple Music under Settings, Integrations to play this song.");
+    message = tr("Connect Apple Music under Settings, General to play this song.");
   else if (id.isEmpty())
     message = tr("This item is missing a playable track identity.");
   if (!message.isEmpty()) {

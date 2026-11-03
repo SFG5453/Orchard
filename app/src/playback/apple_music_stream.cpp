@@ -77,7 +77,7 @@ QString AppleMusicStreams::unavailableReason() {
 
 void AppleMusicStreams::resolve(const QString &appleId, Resolved done) {
   if (!m_account->connected()) {
-    done({}, tr("Connect Apple Music under Settings, Integrations to play this song."));
+    done({}, tr("Connect Apple Music under Settings, General to play this song."));
     return;
   }
   QElapsedTimer clock;

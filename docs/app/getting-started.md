@@ -40,7 +40,7 @@ Clicking an album, playlist, or artist opens its page. Open an album or playlist
 
 The left sidebar lists the main pages of Orchard:
 
-- **Home**: recommendations and shelves of music. Choose **Normal** or **Apple** under Settings, General, Music source; it also decides search, artist, album and playlist pages. Apple requires an Apple Music connection; see [Integrations](integrations.md).
+- **Home**: recommendations and shelves of music. Choose **YouTube** or **Apple** under Settings, General, Music source; it also decides search, artist, album and playlist pages. Apple requires an Apple Music connection; see [Integrations](integrations.md).
 - **Your library**: your subscribed artists, albums, songs, and playlists. See [Library and playlists](library-and-playlists.md).
 - **PLAYLISTS**: your saved playlists, listed under the pages.
 
@@ -53,7 +53,7 @@ Select the **Account and settings** button in the top bar at the top right of th
 - **General**: startup behavior, system tray, listening history, and your accounts. See [Accounts and startup](accounts.md).
 - **Playback**: streaming quality, Audio Engine, crossfade, gapless playback, autoplay, and AI-generated music handling. See [Streaming quality](streaming-quality.md), [Audio Engine](audio-engine.md), [Crossfade and gapless playback](crossfade.md), and [AI-generated music](ai-music.md).
 - **Appearance**: player bar bitrate, animated artwork, and the immersive background. See [Appearance](appearance.md).
-- **Integrations**: Discord Rich Presence, Last.fm, Spotify Canvas, Qobuz, and Apple Music. See [Integrations](integrations.md).
+- **Integrations**: Discord Rich Presence, Last.fm, Spotify Canvas, and Qobuz. Apple Music is under General. See [Integrations](integrations.md).
 - **Shortcuts**: the keyboard shortcut list. See [Keyboard shortcuts](shortcuts.md).
 - **About**: version, credits, and open source licenses.
 

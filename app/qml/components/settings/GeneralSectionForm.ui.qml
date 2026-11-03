@@ -33,6 +33,7 @@ ColumnLayout {
     property alias windowSwitch: windowSwitch
     property alias traySwitch: traySwitch
     property alias homeSourcePicker: homeSourcePicker
+    property bool appleMusicConnected: true
     property alias historySwitch: historySwitch
     property alias account: account
     property bool updatesAvailable: true
@@ -126,10 +127,25 @@ ColumnLayout {
                 id: homeSourcePicker
                 objectName: "settingsHomeSource"
                 model: [
-                    { value: "youtube", label: qsTr("Normal") },
-                    { value: "apple_music", label: qsTr("Apple") }
+                    { value: "youtube", label: qsTr("YouTube") },
+                    {
+                        value: "apple_music", label: qsTr("Apple"),
+                        enabled: root.appleMusicConnected,
+                        tip: qsTr("Connect Apple Music below to use Apple.")
+                    }
                 ]
             }
+        }
+    }
+
+    SettingsSection {
+        Layout.fillWidth: true
+        title: qsTr("Apple Music")
+        rowSpacing: 0
+        verticalPadding: 0
+
+        AppleMusic {
+            Layout.fillWidth: true
         }
     }
 

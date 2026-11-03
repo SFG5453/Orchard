@@ -76,7 +76,7 @@ void AppleMusicPicture::start(const QString &appleId, int maxHeight) {
   m_hardware = kTryHardware && !m_hdcpRefused;
   const quint64 session = m_session;
   if (!m_account || !m_account->connected()) {
-    fail(session, {}, tr("Connect Apple Music under Settings, Integrations to watch this video."));
+    fail(session, {}, tr("Connect Apple Music under Settings, General to watch this video."));
     return;
   }
   m_account->playbackToken([this, session](const QString &token, const QString &error) {

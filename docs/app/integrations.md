@@ -43,7 +43,7 @@ order: 130
 
 # Integrations
 
-Integrations connect Orchard to other apps. Settings, Integrations has cards for **Discord**, **Last.fm**, **Spotify**, **Qobuz**, **Apple Music**, and **Local API**.
+Integrations connect Orchard to other apps. Settings, Integrations has cards for **Discord**, **Last.fm**, **Spotify**, **Qobuz**, and **Local API**. On desktop, Apple Music is in Settings, General, under **Music source**.
 
 ## Turn on Discord Rich Presence
 
@@ -176,8 +176,8 @@ Select **Disconnect** in the **Qobuz** card. Orchard removes the Qobuz sign-in f
 Connect Apple Music to browse Apple Music artist pages, use personal recommendations on Home, and play Apple Music songs. An Apple Music subscription and an Orchard account are required.
 
 1. Sign in to your Orchard account under **Settings**, **General**.
-2. Open **Settings**, then **Integrations**.
-3. In the **Apple Music** card, select **Connect Apple Music**.
+2. Stay in **Settings**, **General**.
+3. In the **Apple Music** section under **Music source**, select **Connect**.
 4. Finish signing in in the Apple Music window. The window closes when sign-in finishes.
 
 Select **Cancel** to stop connecting. Orchard stores the Apple Music token in the system keychain. The sign-in button is disabled when the build cannot open Apple Music sign-in or the Orchard account is signed out.
@@ -186,7 +186,7 @@ On Android, open **Settings**, **Connections**, **Apple Music**, then select **S
 
 ## Choose Apple Music as the music source
 
-On desktop, open **Settings**, **General** and set **Music source** to **Apple**. **Normal**, the default, uses YouTube Music. On Android, open **Settings**, **Appearance**, **Home screen layout**, then choose **Apple Music** under **Music source** on the **Online** tab.
+On desktop, open **Settings**, **General** and set **Music source** to **Apple**. **YouTube** is the default. **Apple** is disabled until Apple Music is connected. On Android, open **Settings**, **Appearance**, **Home screen layout**, then choose **Apple Music** under **Music source** on the **Online** tab.
 
 The music source decides Home, search, artist, album and playlist pages on both platforms. Orchard never mixes the two services and never falls back to the other one. With **Apple** selected, Home shows Apple Music recommendations or charts, the sidebar search uses Apple Music, and an artist named on a YouTube Music song opens its Apple Music page. A YouTube Music album or playlist shows a message asking you to switch to YouTube Music; an Apple Music page shows the matching message under **Normal**. If Apple Music is disconnected or fails, the page shows an error instead of YouTube Music. Changing the source returns to Home on desktop. On desktop, the sidebar and Library show your Apple Music library. On Android, the **Library** tab and Home's **Listen now** grid and **Your playlists** show your Apple Music library: its songs, albums, artists and playlists. **Your daily discover** starts with Apple's personal mixes (such as Your Essentials, New Music, Chill and Heavy Rotation). Apple's stations, such as Discovery Station, appear as cards. See [Play Apple Music stations](integrations.md#play-apple-music-stations). Home's **Latest Songs** and **Recent** in the Library tab show your Apple Music listening history plus Apple Music songs you played in Orchard. Songs you played from YouTube Music are left out.
 
@@ -194,9 +194,9 @@ With **Apple** selected, the like button loves the song in Apple Music and saves
 
 ## Play Apple Music songs
 
-Apple Music songs play from Apple Music when **Music source** is **Apple**. They are not matched to YouTube Music. Under **Normal**, an Apple Music song shows "Choose Apple as the music source under Settings, General to play Apple Music songs." Your YouTube Music session is still required to play YouTube Music songs.
+Apple Music songs play from Apple Music when **Music source** is **Apple**. They are not matched to YouTube Music. Under **YouTube**, an Apple Music song shows "Choose Apple as the music source under Settings, General to play Apple Music songs." Your YouTube Music session is still required to play YouTube Music songs.
 
-Orchard streams Apple Music songs itself and decrypts them in a small separate process, `orchard-widevine-host`, which uses about 80 MB of memory while songs play. It starts with the first Apple Music song and quits two minutes after playback stops, or when you switch **Music source** to **Normal** or disconnect Apple Music. Decrypted audio stays in memory and is never written to disk.
+Orchard streams Apple Music songs itself and decrypts them in a small separate process, `orchard-widevine-host`, which uses about 80 MB of memory while songs play. It starts with the first Apple Music song and quits two minutes after playback stops, or when you switch **Music source** to **YouTube** or disconnect Apple Music. Decrypted audio stays in memory and is never written to disk.
 
 - Platforms: Linux, Windows, and Android. On other systems, an Apple Music song shows "Apple Music playback is not available on this system yet."
 - Android: the phone's own Widevine decrypts Apple Music songs inside Orchard's player, so no extra app or process is needed. Choose **Apple Music** under **Music source** first; otherwise an Apple Music song shows "Choose Apple Music as the music source in Settings to play Apple Music songs." Without a connected account it shows "Connect Apple Music in Settings to play this song." Apple Music songs do not play on a Cast device. They play on an Orchard Connect computer that is connected to Apple Music; otherwise the phone shows "Sign in to Apple Music on the other device to play Apple Music songs there." See [Orchard Connect](connect.md). The stream cache keeps encrypted stereo files, so a cached stereo song still needs a network connection for its license. Atmos streams are not cached. Each source keeps its own cached copies, so changing **Streaming quality** or connecting Qobuz does not download cached Apple Music songs again. Best Mix sorts Apple Music songs from Apple's own analysis, as on desktop.
@@ -246,7 +246,7 @@ An Apple Music song's video button also plays Apple's own video of that song, wh
 
 ## Disconnect Apple Music
 
-Select **Disconnect** in the **Apple Music** card in **Settings**, **Integrations** on desktop or **Settings**, **Connections**, **Apple Music** on Android. Orchard removes the saved Apple Music user token and clears Apple's sign-in cookies and MusicKit page storage. If **Music source** is **Apple** on desktop, Home shows "Connect Apple Music in Settings to load Home." On Android, Home shows an Apple Music connection error until you reconnect or choose YouTube Music.
+Select **Disconnect** in the **Apple Music** section in **Settings**, **General** on desktop or **Settings**, **Connections**, **Apple Music** on Android. Orchard removes the saved Apple Music user token and clears Apple's sign-in cookies and MusicKit page storage. If **Music source** is **Apple** on desktop, Home shows "Connect Apple Music in Settings to load Home." On Android, Home shows an Apple Music connection error until you reconnect or choose YouTube Music.
 
 ## Turn the Local API on or off
 

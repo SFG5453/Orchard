@@ -19,7 +19,9 @@
 
 import QtQuick
 import QtQuick.Layouts
+import ".."
 
+// Apple Music connection rows; sits in a SettingsSection with rowSpacing and verticalPadding 0.
 ColumnLayout {
     id: root
     property string status: "disconnected"
@@ -31,52 +33,119 @@ ColumnLayout {
     property alias connectButton: connectButton
     property alias cancelButton: cancelButton
     property alias disconnectButton: disconnectButton
-    spacing: 20
+    property alias historySwitch: historySwitch
+    spacing: 0
 
-    SettingsHint {
-        text: qsTr("Artist pages, recommendations and playback from Apple Music. Pick Apple as the Music source in General to use it app-wide.")
-    }
-
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: 20
-
-        SettingsHint {
+    SettingsRow {
+        RowLayout {
             Layout.fillWidth: true
-            text: root.status === "restoring" ? qsTr("Checking for a saved Apple Music connection...")
-                : root.status === "connecting" ? qsTr("Finish signing in in the Apple Music window.")
-                : root.connected ? qsTr("Connected to Apple Music.")
-                : !root.loginAvailable ? qsTr("Apple Music sign-in is unavailable in this build.")
-                : !root.accountSignedIn ? qsTr("Sign in to your Orchard account under General first.")
-                : qsTr("An Apple Music subscription is required.")
-        }
+            spacing: 14
 
-        SettingsButton {
-            id: connectButton
-            objectName: "settingsConnectAppleMusic"
-            visible: root.status === "disconnected" || root.status === "restoring"
-            enabled: root.status === "disconnected" && root.loginAvailable && root.accountSignedIn
-            highlighted: true
-            text: qsTr("Connect Apple Music")
-        }
+            Item {
+                Layout.preferredWidth: 48
+                Layout.preferredHeight: 48
 
-        SettingsButton {
-            id: cancelButton
-            visible: root.status === "connecting"
-            text: qsTr("Cancel")
-        }
+                // Builds without the local logo show a plain tile.
+                Rectangle {
+                    anchors.fill: parent
+                    visible: logo.status !== Image.Ready
+                    radius: 10
+                    color: "#fa2d48"
 
-        SettingsButton {
-            id: disconnectButton
-            objectName: "settingsDisconnectAppleMusic"
-            visible: root.connected
-            text: qsTr("Disconnect")
+                    LucideIcon {
+                        anchors.centerIn: parent
+                        width: 24
+                        height: 24
+                        name: "music-2"
+                        color: "#ffffff"
+                    }
+                }
+
+                Image {
+                    id: logo
+                    anchors.fill: parent
+                    source: "qrc:/brand/apple-music.svg"
+                    sourceSize: Qt.size(96, 96)
+                    smooth: true
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 4
+
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Apple Music")
+                    elide: Text.ElideRight
+                    color: "#f0eee7"
+                    font.family: "Inter"
+                    font.pixelSize: 14
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: root.status === "restoring" ? qsTr("Checking for a saved connection...")
+                        : root.status === "connecting" ? qsTr("Finish signing in in the Apple Music window.")
+                        : root.connected ? qsTr("Connected")
+                        : !root.loginAvailable ? qsTr("Sign-in is unavailable in this build.")
+                        : !root.accountSignedIn ? qsTr("Sign in to your Orchard account below first.")
+                        : qsTr("Requires an Apple Music subscription.")
+                    wrapMode: Text.WordWrap
+                    color: "#a4aaa1"
+                    font.family: "Inter"
+                    font.pixelSize: 12
+                }
+            }
+
+            SettingsButton {
+                id: connectButton
+                objectName: "settingsConnectAppleMusic"
+                visible: root.status === "disconnected" || root.status === "restoring"
+                enabled: root.status === "disconnected" && root.loginAvailable && root.accountSignedIn
+                highlighted: true
+                text: qsTr("Connect")
+                Accessible.name: qsTr("Connect Apple Music")
+            }
+
+            SettingsButton {
+                id: cancelButton
+                visible: root.status === "connecting"
+                text: qsTr("Cancel")
+            }
+
+            SettingsButton {
+                id: disconnectButton
+                objectName: "settingsDisconnectAppleMusic"
+                visible: root.connected
+                text: qsTr("Disconnect")
+                Accessible.name: qsTr("Disconnect Apple Music")
+            }
         }
     }
 
-    SettingsHint {
+    SettingsRow {
+        visible: root.connected
+        iconName: "clock"
+        title: qsTr("Save plays to Apple Music history")
+        description: qsTr("Songs you play in Orchard appear in Recently Played on your other Apple Music devices.")
+
+        SettingsSwitch {
+            id: historySwitch
+            objectName: "settingsAppleMusicHistory"
+            Accessible.name: qsTr("Send listening history to Apple Music")
+        }
+    }
+
+    Text {
+        Layout.fillWidth: true
+        Layout.topMargin: 4
+        Layout.bottomMargin: 14
         visible: root.message.length > 0
         text: root.message
+        wrapMode: Text.WordWrap
         color: root.messageIsError ? "#e6a197" : "#8d968e"
+        font.family: "Inter"
+        font.pixelSize: 12
     }
 }

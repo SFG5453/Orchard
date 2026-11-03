@@ -291,6 +291,17 @@ shaders_cpp = custom_target('shader resources', input: shader_resources,
     '--name', 'shader_resources', '--prefix', '/shaders',
     '--output', '@OUTPUT@', '@INPUT@'])
 
+# The Apple Music logo is supplied locally and never tracked; the UI falls back without it.
+brand_resources = []
+if import('fs').is_file('mobile/android/local/apple-music/apple-music.svg')
+  brand_resources += custom_target('brand resources',
+    input: files('mobile/android/local/apple-music/apple-music.svg'),
+    output: 'qrc_brand_resources.cpp',
+    command: [python, files('scripts/meson-rcc.py'), '--rcc', rcc,
+      '--name', 'brand_resources', '--prefix', '/brand',
+      '--output', '@OUTPUT@', '@INPUT@'])
+endif
+
 rcc_args = ['--compress-algo', 'zlib']
 licenses_qrc = qt6.compile_resources(sources: files('meson/licenses.qrc'), extra_args: rcc_args)
 docs_qrc = qt6.compile_resources(sources: files('meson/app_docs.qrc'), extra_args: rcc_args)
@@ -402,7 +413,7 @@ adaptive_stage = custom_target('adaptive mix stage',
 
 orchard = executable('orchard', files(app_executable_sources) + exe_moc +
   qml_module + [qmldir_resources] + qml_files_qrc + assets_qrc + licenses_qrc + docs_qrc + release_notes_qrc +
-  [provider_resources, shaders_cpp],
+  [provider_resources, shaders_cpp] + brand_resources,
   include_directories: app_inc,
   dependencies: [app_dep, qt_dep, qt_gui_private, qt_entry_dep],
   link_depends: adaptive_stage,
