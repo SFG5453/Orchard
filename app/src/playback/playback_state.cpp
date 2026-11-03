@@ -377,8 +377,8 @@ double PlaybackController::crossfadeProgress() const {
 
 bool PlaybackController::canGoNext() const {
   return !m_queue.isEmpty() ||
-         // Local and Apple Music songs get no YouTube recommendations, so autoplay is never a "next" for them.
-         (m_autoplayEnabled && !m_track.isEmpty() && !local::isLocalTrack(m_track) && !isAppleTrack(m_track) &&
+         // Local songs get no recommendations, so autoplay is never a "next" for them.
+         (m_autoplayEnabled && !m_track.isEmpty() && !local::isLocalTrack(m_track) &&
           !offlineMode() && m_autoplaySuppressed != m_track.value("id").toString()) ||
          (m_repeatMode == "all" && !m_track.isEmpty());
 }
