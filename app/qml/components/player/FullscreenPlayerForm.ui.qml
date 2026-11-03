@@ -195,6 +195,14 @@ Item {
         playing: root.visible && root.playing
     }
 
+    CanvasStageWash {
+        anchors.fill: parent
+        source: canvasLoader.item
+        stageRect: Qt.rect(artHolder.x, artHolder.y, artHolder.width, artHolder.height)
+        shape: root.stageShape * backdrop.stage0
+        inkColor: root.inkColor
+    }
+
     // The frameless window still needs a handle while the chrome is covered.
     Item {
         id: dragStrip

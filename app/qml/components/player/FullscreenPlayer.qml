@@ -226,7 +226,8 @@ FullscreenPlayerForm {
     dragHandler.onActiveChanged: if (dragHandler.active) root.Window.window.startSystemMove()
 
     backdrop.warpThrottled: OrchardWindowState.backgroundIdle
-    backdrop.warpRunning: root.visible && OrchardPlayback.playing && root.Window.window !== null && root.Window.window.visibility !== Window.Minimized
+    // The stage wash covers the warp completely.
+    backdrop.warpRunning: root.visible && root.stageShape < 0.999 && OrchardPlayback.playing && root.Window.window !== null && root.Window.window.visibility !== Window.Minimized
     backdrop.warpSpeed: OrchardAppearance.speed
     backdrop.warpIntensity: OrchardAppearance.intensity
     backdrop.warpSaturation: OrchardAppearance.saturation

@@ -128,6 +128,7 @@ qml_sources = [
   'app/qml/components/player/LyricsView.qml',
   'app/qml/components/player/LyricsLine.qml',
   'app/qml/components/player/TransitionArtwork.qml',
+  'app/qml/components/player/CanvasStageWash.qml',
   'app/qml/components/player/MixSwapText.qml',
   'app/qml/components/player/FullscreenPlayer.qml',
   'app/qml/components/settings/CrossfadeMode.qml',
@@ -312,6 +313,7 @@ shader_sources = [
   'app/qml/shaders/liquid_glass_box.frag',
   'app/qml/shaders/liquid_glass_blur.frag',
   'app/qml/shaders/artwork_dissolve.frag',
+  'app/qml/shaders/canvas_stage_wash.frag',
   'app/qml/shaders/rounded_artwork.frag',
   'app/qml/shaders/mix_dots.frag',
 ]
