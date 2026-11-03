@@ -154,7 +154,7 @@ Menu {
         text: root.downloadState === "downloaded" ? qsTr("Remove download")
             : root.downloadState === "queued" || root.downloadState === "downloading" ? qsTr("Cancel download")
             : root.downloadState === "failed" ? qsTr("Retry download") : qsTr("Download")
-        visible: root.isSong && !root.isLocalSong
+        visible: root.isSong && !root.isLocalSong && OrchardHome.homeSource !== "apple_music"
         height: visible ? implicitHeight : 0
         enabled: root.downloadState === "downloaded" || root.downloadState === "queued" || root.downloadState === "downloading"
             || (!root.media.unplayable && OrchardAuth.isSignedIn && !OrchardNetwork.offline)

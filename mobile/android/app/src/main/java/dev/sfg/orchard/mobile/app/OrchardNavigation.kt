@@ -32,6 +32,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.model.LocalMaxActive
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.LoadState
 import dev.sfg.orchard.mobile.model.PlaybackTarget
@@ -171,7 +172,7 @@ internal fun OrchardNavigation(
                 onPlayNext = if (canControlQueue) viewModel::playNext else null,
                 onAddToQueue = if (canControlQueue) viewModel::addToQueue else null,
                 onOpenDetail = { id -> viewModel.openDetail(id); nav.navigate(Routes.detail(id)) },
-                onDownloadTrack = viewModel::downloadTrack,
+                onDownloadTrack = viewModel::downloadTrack.takeUnless { settings.homeSource == APPLE_MUSIC_SOURCE },
                 onRemoveDownloadTrack = viewModel::removeDownload,
                 onShare = viewModel::shareTrack,
                 localLibrary = viewModel.localLibrary,
@@ -365,8 +366,8 @@ internal fun OrchardNavigation(
                 isSaved = isSaved,
                 downloadedTrackIds = downloadedTrackIds,
                 downloadingTrackIds = downloadingTrackIds,
-                onDownloadTrack = viewModel::downloadTrack,
-                onDownloadTracks = viewModel::downloadTracks,
+                onDownloadTrack = viewModel::downloadTrack.takeUnless { settings.homeSource == APPLE_MUSIC_SOURCE },
+                onDownloadTracks = viewModel::downloadTracks.takeUnless { settings.homeSource == APPLE_MUSIC_SOURCE },
                 onRemoveDownloadTrack = viewModel::removeDownload,
                 onRemoveDownloadTracks = viewModel::removeDownloads,
                 heroArt = heroArt,

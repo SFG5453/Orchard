@@ -38,6 +38,7 @@ import dev.sfg.orchard.mobile.artwork.LocalTallArtToggle
 import dev.sfg.orchard.mobile.artwork.TallArtToggle
 import dev.sfg.orchard.mobile.artwork.tallArtRejected
 import dev.sfg.orchard.mobile.artwork.withoutRejectedTallArt
+import dev.sfg.orchard.mobile.model.APPLE_MUSIC_SOURCE
 import dev.sfg.orchard.mobile.model.LocalMaxActive
 import dev.sfg.orchard.mobile.model.LocalStreamDetail
 import dev.sfg.orchard.mobile.model.LibrarySnapshot
@@ -171,7 +172,7 @@ fun NowPlayingOverlay(
             onMoveQueueItem = viewModel::moveQueueItem,
             onClearUpcoming = viewModel::clearUpcoming,
             downloadedTrackIds = downloadedTrackIds,
-            onDownloadTrack = viewModel::downloadTrack,
+            onDownloadTrack = viewModel::downloadTrack.takeUnless { settings.homeSource == APPLE_MUSIC_SOURCE },
             onRemoveDownloadTrack = viewModel::removeDownload,
             onAddToPlaylist = { playlistPickerTrack = it },
             onShare = { viewModel.shareTrack(currentTrack) },

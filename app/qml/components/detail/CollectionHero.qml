@@ -283,7 +283,8 @@ Item {
             }
             GhostButton {
                 id: downloadButton
-                visible: root.downloadable
+                // Apple Music songs are DRM streams with no offline copy.
+                visible: root.downloadable && OrchardHome.homeSource !== "apple_music"
                 glyph: root.downloadState === "done" ? "circle-arrow-down" : "download"
                 glyphColor: root.downloadState === "done" ? root.accentSoftColor : "#eef0ec"
                 enabled: root.downloadEnabled
