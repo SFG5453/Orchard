@@ -26,6 +26,7 @@ import { createArtistCatalog } from '../catalog/artistCatalog.js';
 import { createSearchUtils } from '../catalog/searchUtils.js';
 import { createMainFeeds } from '../catalog/mainFeeds.js';
 import { musicBrowseRequests } from '../catalog/musicBrowse.js';
+import { playlistWave, prefetchPlaylistWave, rememberPlaylistTotal } from './playlistPages.js';
 import { shouldShowHomeItem, shouldShowMusicItem } from '../catalog/musicItemTypes.js';
 import {
   asText,
@@ -47,8 +48,6 @@ const defaultUserAgent = 'Mozilla/5.0 AppleWebKit/537.36 Chrome/126 Safari/537.3
 const maxPlaylistPages = 20;
 // Grid pages (moods, genres, "more" shelves) continue beneath their last shelf.
 const maxBrowsePages = 20;
-// Bounds prefetched playlist pages held for abandoned playlists.
-const maxPrefetchedPages = 4;
 // WEB_REMIX musicSearchType filters, matching youtubei.js's SearchFilter encoding.
 const musicSearchParams = {
   song: 'EgWKAQIIAQ%3D%3D',
@@ -354,30 +353,7 @@ function playlistMetadataShape(data) {
   return headers;
 }
 
-// Continuations are strictly sequential, so start the next page while the
-// current one crosses into C++ and QML. The network gets no coffee break.
-const prefetchedPages = new Map();
-
-function prefetchPlaylistPage(session, continuation) {
-  if (!continuation || prefetchedPages.has(continuation)) return;
-  const request = Promise.resolve()
-    .then(() => createBrowseRequest(session)({ continuation }))
-    .then((data) => ({ data }), (error) => ({ error }));
-  prefetchedPages.set(continuation, { cookie: clean(session.cookie), request });
-  while (prefetchedPages.size > maxPrefetchedPages) {
-    prefetchedPages.delete(prefetchedPages.keys().next().value);
-  }
-}
-
-async function takePrefetchedPage(session, continuation) {
-  const entry = prefetchedPages.get(continuation);
-  if (!entry) return null;
-  prefetchedPages.delete(continuation);
-  // A page fetched for another account must not leak into this one.
-  if (entry.cookie !== clean(session.cookie)) return null;
-  const { data } = await entry.request;
-  return data || null;
-}
+const playlistRows = (data) => normalizers.playlistItemsFromData(data).length;
 
 // Only playlists the account can edit wear this header, wherever YouTube puts it this week.
 function hasEditableHeader(value, depth = 0) {
@@ -400,7 +376,8 @@ export async function loadPlaylist(payload = {}) {
     try {
       const data = await fetchBrowse(request);
       const playlist = normalizers.normalizePlaylist({ data, browseId: request.browseId });
-      prefetchPlaylistPage(sessionFrom(payload), playlist.continuation);
+      rememberPlaylistTotal(request.browseId, data);
+      prefetchPlaylistWave(sessionFrom(payload), fetchBrowse, playlistRows, playlist.continuation);
       return {
         ...playlist,
         ...(payload.diagnostics ? { metadataDiagnostics: playlistMetadataShape(data) } : {}),
@@ -453,13 +430,18 @@ export async function loadPlaylistPage(payload = {}) {
 
   const session = sessionFrom(payload);
   const fetchBrowse = createBrowseRequest(session);
-  const startIndex = Math.max(0, Number(payload.startIndex) || 0);
-  // A failed prefetch falls through to a fresh request.
-  const data = await takePrefetchedPage(session, continuation)
-    || await fetchBrowse({ continuation });
-  // Request the next page before normalizing this one.
-  prefetchPlaylistPage(session, normalizers.playlistContinuationTokenFromData(data));
-  return normalizers.normalizePlaylistPage(data, startIndex);
+  let index = Math.max(0, Number(payload.startIndex) || 0);
+  const pages = await playlistWave(session, fetchBrowse, playlistRows, continuation);
+  const tracks = [];
+  for (const data of pages) {
+    const page = normalizers.normalizePlaylistPage(data, index);
+    tracks.push(...page.tracks);
+    index += page.tracks.length;
+  }
+  const next = normalizers.playlistContinuationTokenFromData(pages.at(-1)) || '';
+  // Request the next wave before this one crosses into the host.
+  prefetchPlaylistWave(session, fetchBrowse, playlistRows, next);
+  return { tracks, continuation: next, hasMoreTracks: Boolean(next) };
 }
 
 // Keep desktop artist filtering, release ordering and metadata hydration in step

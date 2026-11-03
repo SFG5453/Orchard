@@ -532,6 +532,7 @@ export function createBrowseNormalizers({
     normalizePlaylist,
     normalizePlaylistPage,
     playlistContinuationTokenFromData,
+    playlistItemsFromData,
     normalizeRawBrowseItem,
     normalizeRawResponsiveListItem,
     rawBrowseDescription,
