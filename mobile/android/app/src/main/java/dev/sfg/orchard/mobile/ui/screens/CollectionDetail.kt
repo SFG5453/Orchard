@@ -120,11 +120,10 @@ internal fun CollectionDetailContent(
     val canEdit = detail.kind == CatalogKind.PLAYLIST && detail.editable && onMovePlaylistTrack != null
     val editRows = editing && canEdit && !isSearching
 
-    // The cover's own colours carry the whole screen; phones sample its hero crop so they hold before the portrait loads.
+    // The cover's own colours carry the whole screen.
     val wide = isFoldableOrWideLayout()
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val palette = if (wide) rememberArtworkPalette(detail.artworkUrl)
-    else rememberArtworkPalette(detail.artworkUrl, heroArt.phoneAspect)
+    val palette = rememberArtworkPalette(detail.artworkUrl)
     val context = LocalContext.current
     val listState = rememberLazyListState()
     val scrimProgress = rememberHeroScrimProgress(listState)

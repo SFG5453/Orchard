@@ -60,31 +60,17 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import coil3.request.crossfade
 import dev.sfg.orchard.mobile.ui.components.AnimatedArtworkVideo
 import dev.sfg.orchard.mobile.ui.components.ArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.ArtworkTile
 import dev.sfg.orchard.mobile.ui.motion.pressScale
 import dev.sfg.orchard.mobile.ui.motion.riseIn
 
-/** Hero art for a collection page. [tallUrl] is Apple's portrait cover and wins over [animatedUrl] on phones. */
-data class HeroArt(
-    val tallUrl: String = "",
-    val animatedUrl: String = "",
-) {
-    /** Width over height of the phone hero's crop. */
-    val phoneAspect: Float get() = if (tallUrl.isNotBlank()) TALL_ASPECT else 1f
-}
-
-/** Apple's portrait covers are 3:4. */
-private const val TALL_ASPECT = 0.75f
+/** Hero art for a collection page: a square motion loop over the still cover. */
+data class HeroArt(val animatedUrl: String = "")
 
 /** Band fill and the text colours drawn on it. */
 internal data class SeamColors(val band: Color, val text: Color, val secondaryText: Color)
@@ -130,7 +116,7 @@ internal fun SeamHeroFrame(
     details: @Composable ColumnScope.() -> Unit,
 ) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val artHeight = min(maxWidth / art.phoneAspect, SeamArtMaxHeight)
+        val artHeight = min(maxWidth, SeamArtMaxHeight)
         SeamArt(coverUrl, description, art, artHeight)
         // The band rides up into the art's fade; the page behind it is already the band colour.
         Box(Modifier.fillMaxWidth().padding(top = artHeight * (1f - SeamOverlap))) {
@@ -171,7 +157,6 @@ private fun SeamArt(coverUrl: String, description: String, art: HeroArt, height:
         settle.animateTo(1f, tween(1400, easing = FastOutSlowInEasing))
         settled = true
     }
-    val tall = art.tallUrl.isNotBlank()
     Box(
         Modifier
             .fillMaxWidth()
@@ -210,21 +195,14 @@ private fun SeamArt(coverUrl: String, description: String, art: HeroArt, height:
                 )
             },
     ) {
-        // The cached square cover holds the frame while Apple renders the portrait crop.
+        // The cached cover holds the frame until the loop starts.
         ArtworkTile(
             url = coverUrl,
             description = description,
             modifier = Modifier.fillMaxSize(),
             radius = 0,
         )
-        if (tall) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current).data(art.tallUrl).crossfade(300).build(),
-                contentDescription = description,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else if (art.animatedUrl.isNotBlank()) {
+        if (art.animatedUrl.isNotBlank()) {
             AnimatedArtworkVideo(url = art.animatedUrl, active = true, modifier = Modifier.fillMaxSize())
         }
     }
