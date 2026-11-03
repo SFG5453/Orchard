@@ -33,7 +33,8 @@ Item {
     readonly property bool canGoBack: rail.contentX > rail.originX + 1
     readonly property bool canGoForward: rail.contentX < rail.originX + rail.contentWidth - rail.width - 1
     // Full cards plus a 30% peek of the next.
-    readonly property int columns: width >= 1300 ? 5 : width >= 900 ? 4 : width >= 640 ? 3 : 2
+    // Wide windows add columns so cards stay near 350 px and in proportion with the shelves.
+    readonly property int columns: width >= 1300 ? Math.max(5, Math.floor(width / 360)) : width >= 900 ? 4 : width >= 640 ? 3 : 2
     // Floor keeps the zero-width first layout positive; negative delegates leave the rail scrolled to the end.
     readonly property int cardWidth: Math.max(120, Math.floor((width - rail.spacing * columns) / (columns + 0.3)))
     readonly property int footerHeight: 78
