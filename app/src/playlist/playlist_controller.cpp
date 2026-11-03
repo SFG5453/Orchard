@@ -355,7 +355,9 @@ void PlaylistController::receivePlaylistPage(quint64 requestId,
     break;
   case Settled::Unchanged:
     // QML already shows these rows; a publish would only reset the scroll.
+    // detail() still feeds Play, so it needs every page.
     m_pagesUnpublished = false;
+    applySort();
     emit stateChanged();
     break;
   case Settled::Holding:
