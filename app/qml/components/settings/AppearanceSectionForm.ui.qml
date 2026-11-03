@@ -46,6 +46,7 @@ ColumnLayout {
     property real intensity: 0.8
     property real saturation: 1
     property real brightness: 1
+    property string backgroundQuality: "medium"
     // Slider caption for speed, formatted by the logic layer.
     property string speedText: "1.00×"
     property alias layoutPicker: layoutPicker
@@ -63,6 +64,7 @@ ColumnLayout {
     property alias sourcePicker: sourcePicker
     property alias resetOrderButton: resetOrderButton
     property alias immersiveSwitch: immersiveSwitch
+    property alias backgroundQualityPicker: backgroundQualityPicker
     property alias speedSlider: speedSlider
     property alias intensitySlider: intensitySlider
     property alias saturationSlider: saturationSlider
@@ -377,6 +379,24 @@ ColumnLayout {
                 objectName: "immersiveToggle"
                 checked: root.immersiveBackground
                 Accessible.name: qsTr("Use artwork background")
+            }
+        }
+
+        SettingsRow {
+            enabled: root.immersiveBackground
+            iconName: "sliders-horizontal"
+            title: qsTr("Quality")
+            description: qsTr("Higher quality renders smoother motion and finer detail but uses more GPU.")
+
+            SettingsSegmented {
+                id: backgroundQualityPicker
+                objectName: "backgroundQuality"
+                currentValue: root.backgroundQuality
+                model: [
+                    { value: "low", label: qsTr("Low"), name: qsTr("Low background quality") },
+                    { value: "medium", label: qsTr("Medium"), name: qsTr("Medium background quality") },
+                    { value: "high", label: qsTr("High"), name: qsTr("High background quality") }
+                ]
             }
         }
 

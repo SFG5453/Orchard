@@ -18,6 +18,8 @@ keywords:
   - motion artwork
   - immersive background
   - artwork background
+  - background quality
+  - GPU usage
   - bitrate indicator
   - fullscreen player
   - hide controls
@@ -168,6 +170,14 @@ Four sliders in the **Immersive background** group shape the effect. They are di
 - **Saturation**: from 0% to 300%, default 124%.
 - **Brightness**: from 0% to 200%, default 100%.
 
+## Set the immersive background quality
+
+The **Quality** row in the **Immersive background** group sets how much GPU the effect uses. It is disabled while **Use artwork background** is off. The choice applies to Home and the fullscreen player.
+
+- **Low**: 20 frames per second at a quarter of the window size, at most 640 × 360. Use it on older or battery-powered computers.
+- **Medium**: 30 frames per second at 40% of the window size, at most 854 × 480. This is the default.
+- **High**: 60 frames per second at 60% of the window size, at most 1280 × 720. Motion is smoother and blob edges are finer.
+
 ## Reset the immersive background controls
 
-Select **Reset controls**. The button restores Speed, Intensity, Saturation, and Brightness to their defaults. It also turns **Canvas stage** off, turns **Hide controls when idle**, **Pulse with the music**, the three **Lyrics** switches, and **Enable animated artwork** back on, sets the artwork source to Apple Music, restores the default mirror order, and turns **Play a music video behind the artist** off. It leaves **Use artwork background** and **Show audio bitrate** as they are.
+Select **Reset controls**. The button restores Speed, Intensity, Saturation, Brightness, and Quality to their defaults. It also turns **Canvas stage** off, turns **Hide controls when idle**, **Pulse with the music**, the three **Lyrics** switches, and **Enable animated artwork** back on, sets the artwork source to Apple Music, restores the default mirror order, and turns **Play a music video behind the artist** off. It leaves **Use artwork background** and **Show audio bitrate** as they are.

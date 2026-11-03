@@ -29,6 +29,8 @@ class AppearanceSettings final : public QObject {
     Q_PROPERTY(bool welcomeSeen READ welcomeSeen WRITE setWelcomeSeen NOTIFY changed)
     Q_PROPERTY(QString lastSeenRelease READ lastSeenRelease WRITE setLastSeenRelease NOTIFY changed)
     Q_PROPERTY(QString layoutStyle READ layoutStyle WRITE setLayoutStyle NOTIFY changed)
+    // Immersive background render quality: low, medium or high.
+    Q_PROPERTY(QString backgroundQuality READ backgroundQuality WRITE setBackgroundQuality NOTIFY changed)
     Q_PROPERTY(double uiScale READ uiScale WRITE setUiScale NOTIFY changed)
     Q_PROPERTY(bool uiScaleRestartRequired READ uiScaleRestartRequired NOTIFY changed)
     Q_PROPERTY(double speed READ speed WRITE setSpeed NOTIFY changed)
@@ -66,6 +68,7 @@ public:
     bool welcomeSeen() const { return m_welcomeSeen; }
     QString lastSeenRelease() const { return m_lastSeenRelease; }
     QString layoutStyle() const { return m_layoutStyle; }
+    QString backgroundQuality() const { return m_backgroundQuality; }
     double uiScale() const { return m_uiScale; }
     bool uiScaleRestartRequired() const { return m_uiScale != m_initialUiScale; }
     double speed() const { return m_speed; }
@@ -102,6 +105,7 @@ public:
     void setWelcomeSeen(bool value);
     void setLastSeenRelease(const QString &value);
     void setLayoutStyle(const QString &value);
+    void setBackgroundQuality(const QString &value);
     void setUiScale(double value);
     void setSpeed(double value);
     void setIntensity(double value);
@@ -147,6 +151,7 @@ private:
     QString m_lastSeenRelease;
     // "glade" floats the player at the bottom, "canopy" docks it beside search at the top.
     QString m_layoutStyle{QStringLiteral("glade")};
+    QString m_backgroundQuality{QStringLiteral("medium")};
     double m_uiScale{1.0};
     double m_initialUiScale{1.0};
     double m_speed{1.38};

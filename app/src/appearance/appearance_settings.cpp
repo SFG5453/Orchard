@@ -59,6 +59,8 @@ AppearanceSettings::AppearanceSettings(QObject *parent) : QObject(parent) {
     m_lastSeenRelease = m_settings.value(QStringLiteral("lastSeenRelease")).toString();
     const QString layout = m_settings.value(QStringLiteral("layoutStyle")).toString();
     if (layout == QLatin1String("canopy")) m_layoutStyle = layout;
+    const QString quality = m_settings.value(QStringLiteral("backgroundQuality")).toString();
+    if (quality == QLatin1String("low") || quality == QLatin1String("high")) m_backgroundQuality = quality;
     m_speed = readNumber(m_settings, QStringLiteral("speed"), 1.38, 0.0, 5.0);
     m_intensity = readNumber(m_settings, QStringLiteral("intensity"), 0.92, 0.0, 1.0);
     m_saturation = readNumber(m_settings, QStringLiteral("saturation"), 1.24, 0.0, 3.0);
@@ -106,6 +108,15 @@ void AppearanceSettings::setLastSeenRelease(const QString &value) {
     m_settings.setValue(QStringLiteral("lastSeenRelease"), value);
     emit changed();
 }
+void AppearanceSettings::setBackgroundQuality(const QString &value) {
+    if ((value != QLatin1String("low") && value != QLatin1String("medium") && value != QLatin1String("high")) ||
+        value == m_backgroundQuality)
+        return;
+    m_backgroundQuality = value;
+    m_settings.setValue(QStringLiteral("backgroundQuality"), value);
+    emit changed();
+}
+
 void AppearanceSettings::setLayoutStyle(const QString &value) {
     if ((value != QLatin1String("glade") && value != QLatin1String("canopy")) || value == m_layoutStyle) return;
     m_layoutStyle = value;
@@ -319,6 +330,7 @@ void AppearanceSettings::reset() {
     setIntensity(0.92);
     setSaturation(1.24);
     setBrightness(1.0);
+    setBackgroundQuality(QStringLiteral("medium"));
     setFullscreenWindowed(false);
     setFullscreenAutoHide(true);
     setFullscreenPulse(true);

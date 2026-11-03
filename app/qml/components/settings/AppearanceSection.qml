@@ -41,6 +41,7 @@ AppearanceSectionForm {
     intensity: OrchardAppearance.intensity
     saturation: OrchardAppearance.saturation
     brightness: OrchardAppearance.brightness
+    backgroundQuality: OrchardAppearance.backgroundQuality
     speedText: OrchardAppearance.speed.toFixed(2) + "×"
 
     layoutPicker.onPicked: value => OrchardAppearance.layoutStyle = value
@@ -60,6 +61,7 @@ AppearanceSectionForm {
     sourcePicker.onPicked: value => OrchardAppearance.artworkSource = value
     resetOrderButton.onClicked: OrchardAppearance.resetMirrorOrder()
     immersiveSwitch.onToggled: OrchardAppearance.immersiveBackground = immersiveSwitch.checked
+    backgroundQualityPicker.onPicked: value => OrchardAppearance.backgroundQuality = value
 
     speedSlider.onMoved: function(value) { OrchardAppearance.speed = value; }
     intensitySlider.onMoved: function(value) { OrchardAppearance.intensity = value; }

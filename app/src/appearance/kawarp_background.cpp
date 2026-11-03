@@ -36,7 +36,6 @@
 #include <memory>
 
 namespace {
-constexpr int FrameIntervalMs = 33;
 float easedBlend(float progress) { return 0.5f - 0.5f * std::cos(progress * 3.14159265358979323846f); }
 class KawarpShader final : public QSGMaterialShader {
 public:
@@ -81,7 +80,7 @@ void KawarpShader::updateSampledImage(RenderState &state, int binding, QSGTextur
 
 KawarpBackground::KawarpBackground(QQuickItem *parent) : QQuickItem(parent) {
     setFlag(ItemHasContents);
-    m_timer.setInterval(FrameIntervalMs);
+    m_timer.setInterval(1000 / m_frameRate);
     m_timer.setTimerType(Qt::PreciseTimer);
     connect(&m_timer, &QTimer::timeout, this, &KawarpBackground::tick);
     connect(this, &QQuickItem::visibleChanged, this, &KawarpBackground::syncTimer);
@@ -164,7 +163,7 @@ void KawarpBackground::setThrottled(bool value) {
     if (value == m_throttled) return;
     m_throttled = value;
     // One frame per second while throttled.
-    m_timer.setInterval(value ? 1000 : FrameIntervalMs);
+    m_timer.setInterval(value ? 1000 : 1000 / m_frameRate);
     emit throttledChanged();
 }
 void KawarpBackground::setSpeed(double value) {
@@ -201,6 +200,13 @@ void KawarpBackground::setBrightness(double value) {
     m_brightness = value;
     emit parametersChanged();
     update();
+}
+void KawarpBackground::setFrameRate(int value) {
+    value = std::clamp(value, 1, 120);
+    if (value == m_frameRate) return;
+    m_frameRate = value;
+    if (!m_throttled) m_timer.setInterval(1000 / value);
+    emit parametersChanged();
 }
 void KawarpBackground::syncTimer() {
     const bool animate = m_running && isVisible() && ready() && (m_speed > 0 || m_blend < 1);

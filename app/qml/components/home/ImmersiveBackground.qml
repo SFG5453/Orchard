@@ -23,9 +23,13 @@ import QtQuick
 KawarpBackground {
     id: root
 
-    // The blurred artwork needs only 40% of logical size, capped at 480p.
-    // Only the single-sample composite runs at the window's full resolution.
-    readonly property real renderScale: Math.min(0.4, Math.sqrt(854 * 480 / Math.max(1, width * height)))
+    // Warp scale, pixel cap and frame rate per quality; only the single-sample composite runs at full resolution.
+    readonly property string quality: OrchardAppearance.backgroundQuality
+    readonly property real maxScale: quality === "low" ? 0.25 : quality === "high" ? 0.6 : 0.4
+    readonly property real maxPixels: quality === "low" ? 640 * 360 : quality === "high" ? 1280 * 720 : 854 * 480
+    readonly property real renderScale: Math.min(maxScale, Math.sqrt(maxPixels / Math.max(1, width * height)))
+
+    frameRate: quality === "low" ? 20 : quality === "high" ? 60 : 30
 
     layer.enabled: visible && ready
     layer.textureSize: Qt.size(Math.max(2, Math.round(width * renderScale)), Math.max(2, Math.round(height * renderScale)))
