@@ -117,9 +117,9 @@ export function createCatalog(client, library) {
     }
   }
 
-  async function playlistPage(id) {
+  async function playlistPage(id, options = {}) {
     const appleId = requireId(id, 'playlists');
-    if (isLibraryId(appleId)) return library.libraryPlaylistPage(appleId, id);
+    if (isLibraryId(appleId)) return library.libraryPlaylistPage(appleId, id, options);
     const { resource, tracks } = await resourceWithTracks('playlists', id);
     const attributes = resource.attributes || {};
     const card = playlist(resource);

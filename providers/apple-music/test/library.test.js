@@ -149,3 +149,39 @@ test('library playlist tracks keep catalog album and artist ids', async () => {
   assert.deepEqual(track.artistBrowseIds, ['am.artists.333']);
   assert.match(requests.find((request) => request.url.includes('/tracks')).url, /include=catalog/);
 });
+
+test('library playlists fetch every page after the first together when Apple reports a total', async () => {
+  const tracks = '/v1/me/library/playlists/p.big/tracks';
+  const songs = (start) => Array.from({ length: 2 }, (_, index) => librarySong(`i.${start + index}`, '', `Song ${start + index}`));
+  const { client, requests } = appleMusic([
+    [/\/v1\/me\/library\/playlists\/p\.big$/, 200, { data: [{ id: 'p.big', type: 'library-playlists', attributes: { name: 'Big', canEdit: true } }] }],
+    [/tracks\?limit=100&include=catalog/, 200, { data: songs(0), next: `${tracks}?offset=2`, meta: { total: 5 } }],
+    [/tracks\?offset=2&/, 200, { data: songs(2), meta: { total: 5 } }],
+    [/tracks\?offset=4&/, 200, { data: songs(4).slice(0, 1), meta: { total: 5 } }]
+  ]);
+  const page = await client.playlistPage('am.playlists.p.big');
+  assert.deepEqual(page.tracks.map((song) => song.title), ['Song 0', 'Song 1', 'Song 2', 'Song 3', 'Song 4']);
+  assert.equal(requests.filter((request) => request.url.includes('/tracks')).length, 3);
+});
+
+test('a first library playlist page loads the rest in the background for the continuation', async () => {
+  const tracks = '/v1/me/library/playlists/p.big/tracks';
+  const songs = (start, count = 2) => Array.from({ length: count }, (_, index) => librarySong(`i.${start + index}`, '', `Song ${start + index}`));
+  const { client, requests } = appleMusic([
+    [/\/v1\/me\/library\/playlists\/p\.big$/, 200, { data: [{ id: 'p.big', type: 'library-playlists', attributes: { name: 'Big', canEdit: true } }] }],
+    [/tracks\?limit=100&include=catalog/, 200, { data: songs(0), next: `${tracks}?offset=2`, meta: { total: 7 } }],
+    // Resuming mid-list steps by the page size, not by the starting offset.
+    [/tracks\?offset=2&/, 200, { data: songs(2), next: `${tracks}?offset=4`, meta: { total: 7 } }],
+    [/tracks\?offset=4&/, 200, { data: songs(4), meta: { total: 7 } }],
+    [/tracks\?offset=6&/, 200, { data: songs(6, 1), meta: { total: 7 } }]
+  ]);
+  const page = await client.playlistPage('am.playlists.p.big', { firstPage: true });
+  assert.deepEqual(page.tracks.map((song) => song.title), ['Song 0', 'Song 1']);
+  assert.equal(page.continuation, `${tracks}?offset=2`);
+  assert.equal(page.totalTrackCount, 7);
+  const more = await client.libraryPlaylistMore(page.continuation, page.tracks.length);
+  assert.deepEqual(more.tracks.map((song) => [song.title, song.index]), [['Song 2', '3'], ['Song 3', '4'], ['Song 4', '5'], ['Song 5', '6'], ['Song 6', '7']]);
+  assert.equal(more.continuation, '');
+  // The prefetch served the continuation; nothing was fetched twice.
+  assert.equal(requests.filter((request) => request.url.includes('/tracks')).length, 4);
+});

@@ -41,6 +41,8 @@ import dev.sfg.orchard.mobile.youtube.providerSections
 import dev.sfg.orchard.mobile.youtube.providerSearch
 import dev.sfg.orchard.mobile.youtube.providerTrack
 import dev.sfg.orchard.mobile.youtube.text
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
@@ -130,6 +132,30 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
         }
         val method = "catalog." + kind.name.lowercase()
         return call(method, JSONObject().put("browseId", id)).providerDetail(id, kind)
+    }
+
+    /** A page as it fills in: a library playlist's first tracks at once, then all of them. */
+    fun detailPages(id: String): Flow<BrowseDetail> = flow {
+        if (!id.startsWith("am.playlists.")) {
+            emit(detail(id))
+            return@flow
+        }
+        val first = call("catalog.playlist", JSONObject().put("browseId", id).put("firstPage", true))
+        val detail = first.providerDetail(id, CatalogKind.PLAYLIST)
+        emit(detail)
+        val tracks = detail.tracks.toMutableList()
+        var continuation = first.text("continuation")
+        while (continuation.isNotEmpty()) {
+            // A failed page is not worth losing the rows already shown.
+            val page = runCatching {
+                call("catalog.playlist.more", JSONObject().put("continuation", continuation).put("startIndex", tracks.size))
+            }.getOrNull() ?: break
+            page.optJSONArray("tracks").mapObjects { it.providerTrack() }.let(tracks::addAll)
+            emit(detail.copy(tracks = tracks.toList()))
+            val next = page.text("continuation")
+            if (next == continuation) break
+            continuation = next
+        }
     }
 
     /** The next songs from a song's station (am.songs id) or from a station (am.stations id). */

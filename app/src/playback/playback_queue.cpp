@@ -125,8 +125,13 @@ void PlaybackController::cancelQueueLoading() {
 }
 
 void PlaybackController::retryQueueLoading() {
-  if (m_queueRequest || m_playlistId.isEmpty() ||
-      m_queueContinuation.isEmpty() || !m_auth->isSignedIn())
+  if (m_queueRequest || m_playlistId.isEmpty() || m_queueContinuation.isEmpty())
+    return;
+  if (m_playlistId.startsWith(QStringLiteral("am."))) {
+    loadAppleQueuePage();
+    return;
+  }
+  if (!m_auth->isSignedIn())
     return;
   m_queueError.clear();
   m_queueRequest =

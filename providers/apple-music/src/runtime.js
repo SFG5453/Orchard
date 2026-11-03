@@ -50,7 +50,8 @@ const methods = new Map([
   ['catalog.album', async (payload = {}) => appleMusic.albumPage(payload.browseId)],
   ['catalog.playlist', async (payload = {}) => (String(payload.browseId || '').startsWith('am.stations.')
     ? appleMusic.stationPage(payload.browseId)
-    : appleMusic.playlistPage(payload.browseId))],
+    : appleMusic.playlistPage(payload.browseId, { firstPage: Boolean(payload.firstPage) }))],
+  ['catalog.playlist.more', async (payload = {}) => appleMusic.libraryPlaylistMore(payload.continuation, payload.startIndex)],
   ['catalog.musicVideo', async (payload = {}) => appleMusic.musicVideoFor(payload.appleId || payload.id)],
   ['catalog.upNext', async (payload = {}) => ({ items: await appleMusic.upNext(payload.seed) })],
   // Hosts parse the reply as an object, so a miss is {} rather than null.

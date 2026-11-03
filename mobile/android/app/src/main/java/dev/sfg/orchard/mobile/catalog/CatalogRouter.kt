@@ -53,7 +53,7 @@ internal class CatalogRouter(
         },
         object : Source {
             override suspend fun search(query: String) = apple.search(query)
-            override fun pages(id: String) = flow { emit(apple.detail(id)) }
+            override fun pages(id: String) = apple.detailPages(id)
             override suspend fun sectionItems(id: String, params: String) = apple.artistView(id, params)
             override suspend fun artist(name: String) = apple.matchArtist(name)?.let { apple.detail(it) }
         },

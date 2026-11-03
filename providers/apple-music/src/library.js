@@ -26,6 +26,9 @@ import { album, artist, artworkUrl, notes, playlist, releaseInfo, track, yearOf 
 
 const PAGE = 100;
 const PAGES = { artists: 10, albums: 10, songs: 20, playlists: 5 };
+const TRACK_QUERY = { limit: PAGE, include: 'catalog', 'include[songs]': 'artists,albums' };
+// Bounds prefetched playlist rests held for abandoned playlists.
+const MAX_PREFETCHED = 4;
 // Apple serves at most 30 recent tracks per page and about 50 in all.
 const RECENT_PAGE = 30;
 const RECENT_PAGES = 2;
@@ -96,9 +99,44 @@ export function createLibraryCatalog(client) {
   }
 
   async function tracksOf(path) {
-    const query = { limit: PAGE, include: 'catalog', 'include[songs]': 'artists,albums' };
-    const { items } = await client.all(path, query, PAGES.songs);
+    const { items } = await client.all(path, TRACK_QUERY, PAGES.songs);
     return items.filter((song) => song.type === 'library-songs');
+  }
+
+  // The rest of a playlist starts loading while its first page is on screen.
+  const prefetched = new Map();
+  const restOf = (next) => client.all(next, TRACK_QUERY, PAGES.songs - 1);
+
+  function prefetchRest(next) {
+    if (!next || prefetched.has(next)) return;
+    const request = restOf(next).then((rest) => ({ rest }), (error) => ({ error }));
+    prefetched.set(next, { userToken: client.userToken(), request });
+    while (prefetched.size > MAX_PREFETCHED) prefetched.delete(prefetched.keys().next().value);
+  }
+
+  /** {tracks, continuation} after [continuation], numbered from [startIndex]. */
+  async function libraryPlaylistMore(continuation, startIndex = 0) {
+    if (!String(continuation || '').startsWith('/v1/me/library/playlists/'))
+      throw new AppleMusicError(0, 'bad_id', 'Not an Apple Music playlist page.');
+    const entry = prefetched.get(continuation);
+    prefetched.delete(continuation);
+    // Rows fetched for another listener must not leak into this one.
+    const cached = entry && entry.userToken === client.userToken() ? (await entry.request).rest : null;
+    const { items, next } = cached || await restOf(continuation);
+    const first = Math.max(0, Number(startIndex) || 0);
+    const tracks = items.filter((song) => song.type === 'library-songs')
+      .map((song, index) => libraryTrack(song, first + index)).filter(Boolean);
+    return { tracks, continuation: next, hasMoreTracks: Boolean(next) };
+  }
+
+  async function firstTracks(path) {
+    const page = await client.get(path, TRACK_QUERY);
+    prefetchRest(page.next || '');
+    return {
+      songs: (page.data || []).filter((song) => song.type === 'library-songs'),
+      next: page.next || '',
+      total: Number(page.meta?.total) || 0
+    };
   }
 
   async function resource(type, id) {
@@ -107,17 +145,20 @@ export function createLibraryCatalog(client) {
     return found;
   }
 
-  async function libraryPlaylistPage(id, pageId) {
-    const [found, songs] = await Promise.all([
+  /** [firstPage] returns the first page with a continuation for libraryPlaylistMore. */
+  async function libraryPlaylistPage(id, pageId, { firstPage = false } = {}) {
+    const path = `/v1/me/library/playlists/${encodeURIComponent(id)}/tracks`;
+    const [found, loaded] = await Promise.all([
       resource('playlists', id),
-      // A new playlist has no tracks relationship; Apple answers 404.
-      tracksOf(`/v1/me/library/playlists/${encodeURIComponent(id)}/tracks`).catch((error) => {
-        if (error instanceof AppleMusicError && error.code === 'not_found') return [];
-        throw error;
-      })
+      (firstPage ? firstTracks(path) : tracksOf(path).then((songs) => ({ songs, next: '', total: 0 })))
+        // A new playlist has no tracks relationship; Apple answers 404.
+        .catch((error) => {
+          if (error instanceof AppleMusicError && error.code === 'not_found') return { songs: [], next: '', total: 0 };
+          throw error;
+        })
     ]);
     const card = libraryPlaylist(found);
-    const tracks = songs.map((song, index) => libraryTrack(song, index)).filter(Boolean);
+    const tracks = loaded.songs.map((song, index) => libraryTrack(song, index)).filter(Boolean);
     return {
       kind: 'playlist',
       browseId: pageId,
@@ -129,7 +170,10 @@ export function createLibraryCatalog(client) {
       // Playlists without custom artwork borrow their first song's cover, as Apple Music does.
       thumbnail: artworkUrl(found.attributes?.artwork, 1200) || tracks[0]?.thumbnail || '',
       itemCount: String(tracks.length),
+      ...(loaded.total ? { totalTrackCount: loaded.total } : {}),
       tracks,
+      continuation: loaded.next,
+      hasMoreTracks: Boolean(loaded.next),
       sections: []
     };
   }
@@ -171,7 +215,7 @@ export function createLibraryCatalog(client) {
       .filter(Boolean);
   }
 
-  return { library, libraryPlaylists, libraryPlaylistPage, libraryAlbumPage, recentTracks };
+  return { library, libraryPlaylists, libraryPlaylistPage, libraryPlaylistMore, libraryAlbumPage, recentTracks };
 }
 
 /** Library ids start with a lowercase letter and a dot: p.abc for playlists, l.abc for albums. */

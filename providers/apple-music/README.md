@@ -47,7 +47,8 @@ All methods are asynchronous. The table describes the QuickJS `invoke` API;
 | `catalog.artist.view` | `browseId`, `params` (`view:<name>`) | `{items}` from an artist shelf |
 | `catalog.artist.match` | `name` | `{browseId, title}` for an exact name match, or `null` |
 | `catalog.album` | `browseId` | Album page with tracks and available related shelves |
-| `catalog.playlist` | `browseId` | Catalog or library playlist page; station IDs return a station page |
+| `catalog.playlist` | `browseId`, optional `firstPage` | Catalog or library playlist page; station IDs return a station page. With `firstPage`, a library playlist returns its first 100 tracks and a `continuation` |
+| `catalog.playlist.more` | `continuation`, optional `startIndex` | `{tracks, continuation, hasMoreTracks}`: the rest of a library playlist, prefetched when its first page loaded |
 | `catalog.musicVideo` | `appleId` or `id` | `{videoId}` for a catalog song's music video, or `{}` |
 | `catalog.upNext` | `seed` | `{items}` from a song or station browse ID |
 | `catalog.artwork` | `albumId`, `appleId`, `isrc`, or `title`, `artist`, `album`; `kind: "album"` for albums | Album artwork metadata, or `{}` on a miss |

@@ -245,7 +245,7 @@ public:
   void setRemoteProvider(RemoteProvider *provider);
   // playback_offline.cpp: downloaded songs play from disk; offline mode limits the queue to them.
   void setOfflineSources(DownloadManager *downloads, ConnectivityMonitor *connectivity);
-  // playback_apple.cpp: Apple Music songs play in MusicKit while Apple is the music source.
+  // playback_apple.cpp: Apple Music songs stream through the widevine host while Apple is the music source.
   void setAppleMusic(AppleMusic *account, CatalogSource *source);
   bool offlineMode() const;
   // Connect roles moved, so a peer's provider session may have come or gone.
@@ -351,6 +351,8 @@ private:
   RemoteProvider *m_remoteProvider{nullptr};
   // playback_apple.cpp
   void startAppleTrack();
+  // The rest of an Apple Music library playlist queued before it finished loading.
+  void loadAppleQueuePage();
   // The song's stream through the proxies, on the current or spare player.
   void resolveAppleStream(const QVariantMap &track, bool prepared);
   // Catalog id while the song plays from Apple Music as the music source, else empty.

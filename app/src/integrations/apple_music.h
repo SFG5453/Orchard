@@ -89,6 +89,10 @@ public:
   void artistPage(const QString &name, PageReply done);
   // An am.artists, am.albums or am.playlists page.
   void detail(const QString &browseId, PageReply done);
+  // A playlist's first page; library playlists carry a continuation for playlistMore.
+  void playlistStart(const QString &browseId, PageReply done);
+  // {tracks, continuation} after a playlistStart continuation, numbered from startIndex.
+  void playlistMore(const QString &continuation, int startIndex, PageReply done);
   // Every item on one artist shelf ("See all").
   void artistView(const QString &browseId, const QString &params, PageReply done);
   // Apple's motion artwork for a song or album (catalog.artwork); an empty page when none matches.

@@ -145,6 +145,17 @@ void AppleMusic::detail(const QString &browseId, PageReply done) {
        [done](const QJsonValue &page, const QString &error) { done(page.toObject(), error); });
 }
 
+void AppleMusic::playlistStart(const QString &browseId, PageReply done) {
+  call(QStringLiteral("catalog.playlist"), {{QStringLiteral("browseId"), browseId}, {QStringLiteral("firstPage"), true}},
+       [done](const QJsonValue &page, const QString &error) { done(page.toObject(), error); });
+}
+
+void AppleMusic::playlistMore(const QString &continuation, int startIndex, PageReply done) {
+  call(QStringLiteral("catalog.playlist.more"),
+       {{QStringLiteral("continuation"), continuation}, {QStringLiteral("startIndex"), startIndex}},
+       [done](const QJsonValue &page, const QString &error) { done(page.toObject(), error); });
+}
+
 void AppleMusic::artistView(const QString &browseId, const QString &params, PageReply done) {
   call(QStringLiteral("catalog.artist.view"),
        {{QStringLiteral("browseId"), browseId}, {QStringLiteral("params"), params}},

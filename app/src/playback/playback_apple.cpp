@@ -164,3 +164,30 @@ bool PlaybackController::requestAppleAutoplay(const QString &seed, bool mix) {
   });
   return true;
 }
+
+void PlaybackController::loadAppleQueuePage() {
+  if (!m_appleAccount || !m_appleAccount->connected())
+    return;
+  static quint64 counter = 0;
+  const quint64 request = (quint64{1} << 63) | ++counter;
+  m_queueRequest = request;
+  m_queueError.clear();
+  m_appleAccount->playlistMore(m_queueContinuation, m_playlistLoaded,
+                               [this, request](const QJsonObject &page, const QString &error) {
+    if (request != m_queueRequest)
+      return;
+    m_queueRequest = 0;
+    if (page.isEmpty()) {
+      m_queueError = error.isEmpty() ? tr("Apple Music could not load the rest of this playlist.") : error;
+      emit queueChanged();
+      return;
+    }
+    const auto tracks = page.value(QStringLiteral("tracks")).toArray().toVariantList();
+    m_queueContinuation = page.value(QStringLiteral("continuation")).toString();
+    m_playlistLoaded += tracks.size();
+    appendPlaylistTracks(m_playlistId, tracks);
+    retryQueueLoading();
+    ensureAutoplay();
+  });
+  emit queueChanged();
+}

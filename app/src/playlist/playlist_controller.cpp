@@ -205,7 +205,7 @@ void PlaylistController::openPlaylist(const QVariantMap &item) {
     // The high bit keeps these ids apart from YouTubeCatalog's request counter.
     const quint64 requestId = (quint64{1} << 63) | ++m_appleRequests;
     m_requestId = requestId;
-    m_appleMusic->detail(browseId, [this, requestId](const QJsonObject &page, const QString &error) {
+    m_appleMusic->playlistStart(browseId, [this, requestId](const QJsonObject &page, const QString &error) {
       if (page.isEmpty())
         receiveFailure(requestId, error.isEmpty() ? tr("Apple Music could not load this playlist.") : error);
       else
@@ -227,8 +227,20 @@ void PlaylistController::fetchNextPage() {
   m_errorMessage.clear();
   m_loadingPage = true;
   const auto startIndex = static_cast<int>(m_sourceTracks.size());
-  m_requestId = m_catalog->fetchPlaylistPage(m_continuation, startIndex,
-                                             m_auth->sessionObject());
+  if (m_appleMusic && AppleMusic::isAppleMusicId(m_detail.value(QStringLiteral("browseId")).toString())) {
+    const quint64 requestId = (quint64{1} << 63) | ++m_appleRequests;
+    m_requestId = requestId;
+    m_appleMusic->playlistMore(m_continuation, startIndex,
+                               [this, requestId](const QJsonObject &page, const QString &error) {
+      if (page.isEmpty())
+        receiveFailure(requestId, error.isEmpty() ? tr("Apple Music could not load the rest of this playlist.") : error);
+      else
+        receivePlaylistPage(requestId, page);
+    });
+  } else {
+    m_requestId = m_catalog->fetchPlaylistPage(m_continuation, startIndex,
+                                               m_auth->sessionObject());
+  }
   emit stateChanged();
 }
 
