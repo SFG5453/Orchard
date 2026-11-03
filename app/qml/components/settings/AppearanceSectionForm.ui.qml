@@ -28,6 +28,8 @@ ColumnLayout {
     property real uiScale: 1
     property bool uiScaleRestartRequired: false
     property alias uiScaleSlider: uiScaleSlider
+    property bool autoUiScale: true
+    property alias autoUiScaleSwitch: autoUiScaleSwitch
     property alias resetUiScaleButton: resetUiScaleButton
     property bool showBitrate: false
     property bool fullscreenWindowed: false
@@ -101,6 +103,19 @@ ColumnLayout {
                 stepSize: 0.05
                 value: root.uiScale
                 displayValue: Math.round(root.uiScale * 100) + "%"
+            }
+        }
+
+        SettingsRow {
+            iconName: "maximize"
+            title: qsTr("Fit large screens")
+            description: qsTr("Enlarges Orchard on screens above 1440p that your system leaves at 100%, such as 4K at 200%.")
+
+            SettingsSwitch {
+                id: autoUiScaleSwitch
+                objectName: "autoUiScale"
+                checked: root.autoUiScale
+                Accessible.name: qsTr("Fit large screens automatically")
             }
         }
 

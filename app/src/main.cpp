@@ -191,6 +191,7 @@ int main(int argc, char *argv[]) {
     shutdownDeadline.exitCode = 1;
     return 1;
   }
+  UiScaling::applyAuto();
 
 #ifdef Q_OS_WIN
   // Analysis workers inherit this; Windows has no ffmpeg on PATH to fall back to.

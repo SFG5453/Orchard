@@ -497,7 +497,7 @@ if get_option('tests')
   ui_scaling_test = executable('orchard_ui_scaling_tests',
     files('tests/ui_scaling_test.cpp', 'app/src/appearance/appearance_settings.cpp',
       'app/src/appearance/ui_scaling.cpp') + ui_scaling_moc,
-    include_directories: app_inc, dependencies: [qt_test_dep, qt_dep])
+    include_directories: app_inc, dependencies: [qt_test_dep, qt_dep, qt_gui_private])
   test('orchard_ui_scaling', ui_scaling_test, timeout: 120)
   lyrics_providers_moc = qt6.compile_moc(sources: ['tests/lyrics_provider_settings_test.cpp'],
     headers: ['app/src/lyrics/lyrics_provider_settings.h'],

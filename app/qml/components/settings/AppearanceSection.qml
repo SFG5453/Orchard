@@ -24,6 +24,7 @@ AppearanceSectionForm {
     layoutStyle: OrchardAppearance.layoutStyle
     uiScale: OrchardAppearance.uiScale
     uiScaleRestartRequired: OrchardAppearance.uiScaleRestartRequired
+    autoUiScale: OrchardAppearance.autoUiScale
     showBitrate: OrchardAppearance.showBitrate
     fullscreenWindowed: OrchardAppearance.fullscreenWindowed
     fullscreenAutoHide: OrchardAppearance.fullscreenAutoHide
@@ -47,6 +48,7 @@ AppearanceSectionForm {
     layoutPicker.onPicked: value => OrchardAppearance.layoutStyle = value
     uiScaleSlider.onMoved: value => OrchardAppearance.uiScale = value
     resetUiScaleButton.onClicked: OrchardAppearance.uiScale = 1.0
+    autoUiScaleSwitch.onToggled: OrchardAppearance.autoUiScale = autoUiScaleSwitch.checked
     bitrateSwitch.onToggled: OrchardAppearance.showBitrate = bitrateSwitch.checked
     windowedSwitch.onToggled: OrchardAppearance.fullscreenWindowed = windowedSwitch.checked
     autoHideSwitch.onToggled: OrchardAppearance.fullscreenAutoHide = autoHideSwitch.checked

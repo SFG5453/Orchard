@@ -52,6 +52,7 @@ QVariantMap preset(const QString &name, const char *hex) {
 }
 AppearanceSettings::AppearanceSettings(QObject *parent) : QObject(parent) {
     m_initialUiScale = m_uiScale = UiScaling::savedScale();
+    m_initialAutoUiScale = m_autoUiScale = UiScaling::autoEnabled();
     m_settings.beginGroup(QStringLiteral("appearance"));
     m_immersive = m_settings.value(QStringLiteral("immersiveBackground"), false).toBool();
     m_showBitrate = m_settings.value(QStringLiteral("showBitrate"), false).toBool();
@@ -136,6 +137,7 @@ void AppearanceSettings::setUiScale(double value) {
     value = std::round(std::clamp(value, UiScaling::minimum, UiScaling::maximum) * 100) / 100;
     setNumber(QStringLiteral("uiScale"), value, m_uiScale, UiScaling::minimum, UiScaling::maximum);
 }
+void AppearanceSettings::setAutoUiScale(bool value) { setFlag(QStringLiteral("autoUiScale"), value, m_autoUiScale); }
 void AppearanceSettings::setSpeed(double value) { setNumber(QStringLiteral("speed"), value, m_speed, 0.0, 5.0); }
 void AppearanceSettings::setIntensity(double value) { setNumber(QStringLiteral("intensity"), value, m_intensity, 0.0, 1.0); }
 void AppearanceSettings::setSaturation(double value) { setNumber(QStringLiteral("saturation"), value, m_saturation, 0.0, 3.0); }

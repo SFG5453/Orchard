@@ -32,6 +32,8 @@ class AppearanceSettings final : public QObject {
     // Immersive background render quality: low, medium or high.
     Q_PROPERTY(QString backgroundQuality READ backgroundQuality WRITE setBackgroundQuality NOTIFY changed)
     Q_PROPERTY(double uiScale READ uiScale WRITE setUiScale NOTIFY changed)
+    // Enlarges screens the system leaves at 100% when they are larger than 1440p.
+    Q_PROPERTY(bool autoUiScale READ autoUiScale WRITE setAutoUiScale NOTIFY changed)
     Q_PROPERTY(bool uiScaleRestartRequired READ uiScaleRestartRequired NOTIFY changed)
     Q_PROPERTY(double speed READ speed WRITE setSpeed NOTIFY changed)
     Q_PROPERTY(double intensity READ intensity WRITE setIntensity NOTIFY changed)
@@ -70,7 +72,8 @@ public:
     QString layoutStyle() const { return m_layoutStyle; }
     QString backgroundQuality() const { return m_backgroundQuality; }
     double uiScale() const { return m_uiScale; }
-    bool uiScaleRestartRequired() const { return m_uiScale != m_initialUiScale; }
+    bool autoUiScale() const { return m_autoUiScale; }
+    bool uiScaleRestartRequired() const { return m_uiScale != m_initialUiScale || m_autoUiScale != m_initialAutoUiScale; }
     double speed() const { return m_speed; }
     double intensity() const { return m_intensity; }
     double saturation() const { return m_saturation; }
@@ -107,6 +110,7 @@ public:
     void setLayoutStyle(const QString &value);
     void setBackgroundQuality(const QString &value);
     void setUiScale(double value);
+    void setAutoUiScale(bool value);
     void setSpeed(double value);
     void setIntensity(double value);
     void setSaturation(double value);
@@ -154,6 +158,8 @@ private:
     QString m_backgroundQuality{QStringLiteral("medium")};
     double m_uiScale{1.0};
     double m_initialUiScale{1.0};
+    bool m_autoUiScale{true};
+    bool m_initialAutoUiScale{true};
     double m_speed{1.38};
     double m_intensity{0.92};
     double m_saturation{1.24};

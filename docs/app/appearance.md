@@ -56,9 +56,13 @@ Click **Reset colors** to return to the default accent and popup background.
 
 Open **Settings**, then **Appearance**. In **Display scaling**, adjust **Interface scale** from 75% to 250% in 5% steps. The slider resizes text, buttons, artwork, and menus together. Quit and reopen Orchard to apply the selected scale. If closing the window keeps Orchard in the system tray, use the tray's exit command to quit fully.
 
-The default, 100%, follows your system display scaling. Orchard multiplies the selected scale by each monitor's system scale, including when you move the window between monitors. For example, 125% in Orchard with 200% system scaling gives 250% overall scaling. On a 4K display where controls look too small, try 125% or 150%.
+The default, 100%, follows your system display scaling. Orchard multiplies the selected scale by each monitor's system scale, including when you move the window between monitors. For example, 125% in Orchard with 200% system scaling gives 250% overall scaling.
 
 Select **Reset scale** to return to 100%, then restart Orchard. **Reset controls** in the immersive background section does not change interface scaling.
+
+## Fit large screens
+
+**Fit large screens** in **Display scaling** is on by default. On a screen taller than 1440 pixels that your system leaves at 100%, Orchard enlarges itself so the screen lays out like 1080p: a 4K display gets 200%, and a 3200 × 1800 display gets 175%. Screens at 1440p or smaller, and screens your system already scales, are unchanged. The **Interface scale** slider multiplies on top. Turn the switch off to keep 100% everywhere, then restart Orchard.
 
 ## Choose a layout
 
