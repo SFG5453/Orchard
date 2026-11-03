@@ -612,6 +612,10 @@ if get_option('tests')
   auth_test = executable('orchard_auth_tests', files(
       'tests/auth_manager_test.cpp',
       'app/src/auth/auth_manager.cpp',
+      'app/src/auth/auth_page_auth.cpp',
+      'app/src/auth/auth_cookies.cpp',
+      'app/src/auth/auth_secret_session.cpp',
+      'app/src/auth/auth_profile.cpp',
       'app/src/auth/auth_account_switch.cpp',
       'app/src/auth/auth_session_channel.cpp') + auth_test_moc,
     include_directories: app_inc,
