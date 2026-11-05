@@ -384,7 +384,8 @@ Item {
                 function albumTracks() {
                     const detail = OrchardAlbum.detail || {};
                     const origin = { kind: "album", title: detail.title || "", artist: detail.artist || "" };
-                    return (detail.tracks || []).map((item) => Object.assign({}, item, { queueOrigin: origin }));
+                    return (detail.tracks || []).filter((item) => item.id && !item.unplayable)
+                        .map((item) => Object.assign({}, item, { queueOrigin: origin }));
                 }
                 onPlayRequested: OrchardPlayback.playCollection(albumTracks(), 0, false)
                 onShuffleRequested: OrchardPlayback.playCollection(albumTracks(), 0, true)

@@ -44,6 +44,20 @@ function appleMusic(routes) {
   return { client, requests };
 }
 
+test('future library albums preserve missing tracks and release date', async () => {
+  const { client } = appleMusic([
+    [/\/v1\/me\/library\/albums\/l\.future\/tracks/, 200, { data: [] }],
+    [/\/v1\/me\/library\/albums\/l\.future(?:\?|$)/, 200, { data: [{
+      id: 'l.future', type: 'library-albums',
+      attributes: { name: 'Upcoming', artistName: 'Artist', releaseDate: '2099-11-19', trackCount: 2 }
+    }] }]
+  ]);
+  const page = await client.albumPage('am.albums.l.future');
+  assert.equal(page.releaseDate, '2099-11-19');
+  assert.deepEqual(page.tracks.map((entry) => entry.title), ['Track 1', 'Track 2']);
+  assert.ok(page.tracks.every((entry) => entry.unplayable));
+});
+
 const librarySong = (id, catalogId, name) => ({
   id,
   type: 'library-songs',

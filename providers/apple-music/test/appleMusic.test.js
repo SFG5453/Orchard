@@ -220,6 +220,20 @@ test('album pages include every track page', async () => {
   assert.deepEqual(page.tracks.map((t) => [t.title, t.unplayable]), [['Kill Bill', false], ['Snooze', true]]);
 });
 
+test('future albums retain track positions, unavailable tracks and release date', async () => {
+  const resource = albumResource('future', 'Upcoming', '2099-11-19');
+  resource.attributes.trackCount = 4;
+  resource.relationships.tracks = { data: [
+    song('single', 'Single', { trackNumber: 2 }),
+    song('unreleased', 'Not Out Yet', { trackNumber: 4, playParams: undefined })
+  ] };
+  const page = await appleMusic([[/\/albums\/future\?/, 200, { data: [resource] }]]).albumPage('am.albums.future');
+  assert.equal(page.releaseDate, '2099-11-19');
+  assert.deepEqual(page.tracks.map((entry) => [entry.title, entry.unplayable]), [
+    ['Track 1', true], ['Single', false], ['Track 3', true], ['Not Out Yet', true]
+  ]);
+});
+
 test('album search preserves individual artist targets and leaves missing identities empty', async () => {
   const collaboration = albumResource('duet', 'Duet', '2026-01-01');
   collaboration.attributes.artistName = 'SZA & Kendrick Lamar';

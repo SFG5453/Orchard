@@ -22,7 +22,7 @@
 
 import { AppleMusicError } from './client.js';
 import { APPLE_MUSIC_SOURCE } from './ids.js';
-import { album, artist, artworkUrl, notes, playlist, releaseInfo, track, yearOf } from './normalize.js';
+import { album, artist, artworkUrl, futureAlbumTracks, futureReleaseDate, notes, playlist, releaseInfo, track, yearOf } from './normalize.js';
 
 const PAGE = 100;
 const PAGES = { artists: 10, albums: 10, songs: 20, playlists: 5 };
@@ -185,7 +185,8 @@ export function createLibraryCatalog(client) {
     ]);
     const attributes = found.attributes || {};
     const card = album(found);
-    const tracks = songs.map((song, index) => libraryTrack(song, index)).filter(Boolean);
+    const releaseDate = futureReleaseDate(attributes.releaseDate);
+    const tracks = releaseDate ? futureAlbumTracks(songs, attributes, libraryTrack) : songs.map((song, index) => libraryTrack(song, index)).filter(Boolean);
     return {
       kind: 'album',
       browseId: pageId,
@@ -197,6 +198,7 @@ export function createLibraryCatalog(client) {
       artistBrowseId: '',
       releaseType: releaseInfo(attributes).releaseType,
       year: yearOf(attributes.releaseDate),
+      releaseDate,
       description: '',
       thumbnail: artworkUrl(attributes.artwork, 1200),
       explicit: attributes.contentRating === 'explicit',

@@ -171,7 +171,11 @@ fun JSONObject.providerDetail(id: String, kind: CatalogKind): BrowseDetail {
     val title = text("title")
     val artwork = text("thumbnail")
     val artist = text("artist").ifEmpty { text("author") }
-    val tracks = optJSONArray("tracks").mapObjects { it.providerTrack() }.map { track ->
+    val tracks = optJSONArray("tracks").mapObjects { item ->
+        item.providerTrack() ?: if (kind == CatalogKind.ALBUM && text("releaseDate").isNotEmpty() && item.optBoolean("unplayable")) {
+            Track(id = "", title = item.text("title").ifEmpty { "Track" }, artist = item.text("artist"))
+        } else null
+    }.map { track ->
         if (kind == CatalogKind.ALBUM) track.inAlbum(id, title, artist, artwork)
         else if (track.artworkUrl.isEmpty()) track.copy(artworkUrl = artwork) else track
     }
@@ -188,6 +192,7 @@ fun JSONObject.providerDetail(id: String, kind: CatalogKind): BrowseDetail {
         sections = optJSONArray("sections").providerSections(id),
         artist = artist,
         year = text("year"),
+        releaseDate = text("releaseDate"),
         explicit = optBoolean("explicit"),
         editable = optBoolean("editable"),
         source = text("source"),

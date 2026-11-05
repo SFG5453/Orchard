@@ -151,6 +151,7 @@ fun TrackRow(
     Column(modifier = modifier.fillMaxWidth()) {
         Surface(
             onClick = onPlay,
+            enabled = track.id.isNotBlank(),
             color = bgColor,
             shape = RoundedCornerShape(if (compact) 8.dp else 10.dp),
             interactionSource = pressSource,
@@ -281,7 +282,7 @@ fun TrackRow(
                         modifier = Modifier.padding(horizontal = 6.dp)
                     )
                 }
-                IconButton(onClick = { popupOpen = true }, modifier = Modifier.size(36.dp)) {
+                if (track.id.isNotBlank()) IconButton(onClick = { popupOpen = true }, modifier = Modifier.size(36.dp)) {
                     Icon(
                         Icons.Rounded.MoreHoriz,
                         contentDescription = "Actions for ${track.title}",

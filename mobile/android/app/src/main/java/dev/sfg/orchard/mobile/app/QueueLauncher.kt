@@ -105,16 +105,19 @@ internal class QueueLauncher(
     ) {
         Log.d(TAG, "playAll: ${tracks.size} tracks, startIndex=$startIndex, contextTitle='$contextTitle'")
         if (tracks.isEmpty()) return
-        appleMusicBlock(tracks[startIndex.coerceIn(tracks.indices)])?.let {
+        val selectedIndex = startIndex.coerceIn(tracks.indices)
+        if (tracks[selectedIndex].id.isBlank()) return
+        val playable = tracks.filter { it.id.isNotBlank() }
+        val safeIndex = tracks.take(selectedIndex).count { it.id.isNotBlank() }
+        appleMusicBlock(playable[safeIndex])?.let {
             showWarning(it)
             return
         }
         scope.launch {
-            val safeIndex = startIndex.coerceIn(tracks.indices)
             val source = contextTitle.takeIf { it.isMeaningfulPlaybackSource() }
-                ?: tracks[safeIndex].album.takeIf { it.isMeaningfulPlaybackSource() }
+                ?: playable[safeIndex].album.takeIf { it.isMeaningfulPlaybackSource() }
                 ?: "Your queue"
-            replaceQueue(tracks, safeIndex, source, shuffle, stationId)
+            replaceQueue(playable, safeIndex, source, shuffle, stationId)
         }
     }
 

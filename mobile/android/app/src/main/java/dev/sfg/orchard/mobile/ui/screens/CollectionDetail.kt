@@ -261,7 +261,10 @@ internal fun CollectionDetailContent(
                             parentArtist = if (isAlbum) detail.artist else "",
                             showAlbum = false,
                             showDivider = index < filteredTracks.lastIndex,
-                            onPlay = { onPlayTrack(filteredTracks, index, detail.title) },
+                            onPlay = {
+                                val playable = filteredTracks.filter { it.id.isNotBlank() }
+                                onPlayTrack(playable, playable.indexOf(track), detail.title)
+                            },
                             modifier = it,
                             onPlayNext = onPlayNext?.let { action -> { action(track) } },
                             onAddToQueue = onAdd?.let { action -> { action(track) } },
@@ -298,7 +301,7 @@ internal fun CollectionDetailContent(
 
                 if (!isSearching || searchQuery.isBlank()) {
                     item {
-                        val totalMs = remember(detail.tracks) { detail.tracks.sumOf { it.durationMs } }
+                        val totalMs = remember(detail.tracks) { if (detail.tracks.any { it.id.isBlank() }) 0 else detail.tracks.sumOf { it.durationMs } }
                         val totalSeconds = totalMs / 1000
                         val hours = totalSeconds / 3600
                         val remainingMinutes = (totalSeconds % 3600) / 60

@@ -34,6 +34,8 @@ Item {
     property var artworkPalette: OrchardAlbum.palette || ({
     })
     readonly property var tracks: detail.tracks || []
+    readonly property var playableTracks: tracks.filter(track => track.id && !track.unplayable)
+    readonly property string releaseLabel: detail.releaseDate ? Qt.formatDate(new Date(detail.releaseDate + "T12:00:00"), Locale.LongFormat) : (detail.year || "")
     readonly property var downloadInfo: OrchardDownloads.revision >= 0 ? OrchardDownloads.collectionState(tracks) : ({})
     readonly property string downloadState: downloadInfo.total > 0 && downloadInfo.downloaded >= downloadInfo.total ? "done"
         : downloadInfo.pending > 0 ? "busy" : downloadInfo.downloaded > 0 ? "partial" : "none"
@@ -92,7 +94,7 @@ Item {
     }
 
     // Sum of per-track durations; the provider leaves totalDuration empty.
-    readonly property int totalSeconds: tracks.reduce((sum, track) => sum + (Number(track.durationSeconds) || 0), 0)
+    readonly property int totalSeconds: playableTracks.length !== tracks.length ? 0 : tracks.reduce((sum, track) => sum + (Number(track.durationSeconds) || 0), 0)
     readonly property string shareId: detail.audioPlaylistId || detail.playlistId || detail.browseId || detail.id || ""
     readonly property bool containsCurrent: {
         const id = OrchardPlayback.track.id;
@@ -210,7 +212,7 @@ Item {
             title: root.detail.title || qsTr("Album")
             byline: root.detail.artist || qsTr("Unknown artist")
             bylineInteractive: albumArtistMenu.artistIds.length > 0
-            year: root.detail.year || ""
+            year: root.releaseLabel
             meta: [
                 root.tracks.length ? (root.tracks.length === 1 ? qsTr("1 song") : qsTr("%1 songs").arg(root.tracks.length)) : "",
                 root.totalSeconds > 0 ? root.lengthLabel(root.totalSeconds) : ""
@@ -220,11 +222,11 @@ Item {
             animatedArtwork: OrchardAlbum.animatedArtworkUrl
             explicit: Boolean(root.detail.explicit)
             streamQuality: OrchardAlbum.streamQuality
-            actionsEnabled: root.tracks.length > 0 && !OrchardAlbum.loading
+            actionsEnabled: root.playableTracks.length > 0 && !OrchardAlbum.loading
             playing: root.collectionPlaying
             shareLabel: qsTr("Copy album link")
             shareEnabled: Boolean(root.shareId)
-            downloadable: root.tracks.length > 0
+            downloadable: root.playableTracks.length > 0
             downloadState: root.downloadState
             downloadEnabled: root.downloadState === "done"
                 || (!OrchardAlbum.loading && !OrchardNetwork.offline && root.downloadState !== "busy")
@@ -298,6 +300,7 @@ Item {
 
             width: scroll.width
             track: modelData
+            enabled: Boolean(modelData.id) && !modelData.unplayable
             trackIndex: index
             reveal: root.revealRows
             showArtwork: false
@@ -341,7 +344,7 @@ Item {
                 width: parent.width - 24
                 topPadding: 18
                 visible: root.tracks.length > 0
-                text: [root.detail.year || "", root.tracks.length === 1 ? qsTr("1 song") : qsTr("%1 songs").arg(root.tracks.length), root.totalSeconds > 0 ? root.lengthLabel(root.totalSeconds) : ""].filter(Boolean).join("  ·  ")
+                text: [root.releaseLabel, root.tracks.length === 1 ? qsTr("1 song") : qsTr("%1 songs").arg(root.tracks.length), root.totalSeconds > 0 ? root.lengthLabel(root.totalSeconds) : ""].filter(Boolean).join("  ·  ")
                 color: root.tint(root.accentSoftColor, 0.55)
                 font.family: "Inter"
                 font.pixelSize: 12
@@ -369,7 +372,7 @@ Item {
         title: root.detail.title || qsTr("Album")
         artwork: root.detail.thumbnail || ""
         playing: root.collectionPlaying
-        actionsEnabled: root.tracks.length > 0
+        actionsEnabled: root.playableTracks.length > 0
         accentColor: root.accentColor
         accentInkColor: root.onAccentColor
         inkColor: root.inkColor

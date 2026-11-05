@@ -26,6 +26,31 @@ import { cleanNotes } from './notes.js';
 const RELEASE_SUFFIX = /\s+-\s+(Single|EP)$/i;
 export const ARTIST_INCLUDES = { 'include[albums]': 'artists', 'include[songs]': 'artists,albums' };
 
+export function futureReleaseDate(value) {
+  const date = String(value || '');
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) && date > new Date().toISOString().slice(0, 10) ? date : '';
+}
+
+export function futureAlbumTracks(resources, attributes, mapTrack) {
+  const count = Math.min(1000, Math.max(Math.floor(Number(attributes.trackCount) || 0), resources.length));
+  const slots = Array(count);
+  resources.forEach((song, index) => {
+    let position = Number(song.attributes?.trackNumber) || index + 1;
+    if (!Number.isInteger(position) || position < 1 || position > count || slots[position - 1]) {
+      position = slots.findIndex((slot) => !slot) + 1;
+    }
+    if (!position) return;
+    const card = mapTrack(song, position - 1);
+    if (card && !song.attributes?.name) card.title = `Track ${position}`;
+    slots[position - 1] = card || {
+      title: song.attributes?.name || `Track ${position}`, unplayable: true, index: String(position)
+    };
+  });
+  return Array.from({ length: count }, (_, index) => slots[index] || {
+    title: `Track ${index + 1}`, unplayable: true, index: String(index + 1)
+  });
+}
+
 /** Fills an artwork template; Apple sizes covers on its CDN. */
 export function artworkUrl(artwork, size = 600, format = 'jpg') {
   const template = String(artwork?.url || '');

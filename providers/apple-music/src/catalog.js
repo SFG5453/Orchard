@@ -21,7 +21,7 @@ import { AppleMusicError } from './client.js';
 import { APPLE_MUSIC_SOURCE, parseBrowseId } from './ids.js';
 import { isLibraryId } from './library.js';
 import { linkNotes, noteTargets } from './notes.js';
-import { ARTIST_INCLUDES, album, artworkUrl, items, notes, playlist, releaseInfo, track, yearOf } from './normalize.js';
+import { ARTIST_INCLUDES, album, artworkUrl, futureAlbumTracks, futureReleaseDate, items, notes, playlist, releaseInfo, track, yearOf } from './normalize.js';
 
 const SEARCH_TYPES = { songs: 'songs', albums: 'albums', artists: 'artists', playlists: 'playlists' };
 // Shelves under an album, in page order; the public API serves only PUBLIC_ALBUM_VIEWS.
@@ -49,7 +49,7 @@ export function createCatalog(client, library) {
     const resources = [...(relation.data || [])];
     // Long playlists continue past the first page of tracks.
     if (relation.next) resources.push(...(await client.all(relation.next, ARTIST_INCLUDES)).items);
-    return { resource, tracks: resources.filter((song) => song.type === 'songs') };
+    return { resource, tracks: resources.filter((song) => song.type === 'songs' || (type === 'albums' && !song.type)) };
   }
 
   async function albumPage(id) {
@@ -58,7 +58,8 @@ export function createCatalog(client, library) {
     const { resource, tracks } = await resourceWithTracks('albums', id);
     const attributes = resource.attributes || {};
     const card = album(resource);
-    const cards = tracks.map((song, index) => track(song, index)).filter(Boolean);
+    const releaseDate = futureReleaseDate(attributes.releaseDate);
+    const cards = releaseDate ? futureAlbumTracks(tracks, attributes, track) : tracks.map((song, index) => track(song, index)).filter(Boolean);
     const [discographyItems, views] = await Promise.all([discography(card.artistBrowseId), albumViews(appleId)]);
     const others = discographyItems.filter((entry) => entry.browseId !== id);
     return {
@@ -72,6 +73,7 @@ export function createCatalog(client, library) {
       artistBrowseId: card.artistBrowseId,
       releaseType: releaseInfo(attributes).releaseType,
       year: yearOf(attributes.releaseDate),
+      releaseDate,
       description: linkNotes(notes(attributes.editorialNotes), noteTargets(cards, [card, ...others])),
       thumbnail: artworkUrl(attributes.artwork, 1200),
       explicit: attributes.contentRating === 'explicit',

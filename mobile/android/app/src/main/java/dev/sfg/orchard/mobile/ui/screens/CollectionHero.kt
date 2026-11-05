@@ -94,7 +94,7 @@ import dev.sfg.orchard.mobile.ui.theme.LocalAccent
 import dev.sfg.orchard.mobile.ui.theme.legibleOnDarkChrome
 
 private fun BrowseDetail.supportsBestMix(enabled: Boolean) =
-    enabled && (kind == CatalogKind.PLAYLIST || kind == CatalogKind.ALBUM) && tracks.size > 1
+    enabled && (kind == CatalogKind.PLAYLIST || kind == CatalogKind.ALBUM) && tracks.count { it.id.isNotBlank() } > 1
 
 /**
  * Album and playlist hero: art fading into a band in the cover's colour on phones (a
@@ -130,8 +130,9 @@ internal fun CollectionHero(
     val infoLine = remember(detail) {
         val kind = collectionKindLabel(detail)
         // Some release types already carry the year ("Single • 2021").
-        val year = if (kind.contains(detail.year)) "" else detail.year
-        heroInfoLine(kind, year, detail.tracks.size, detail.tracks.sumOf { it.durationMs })
+        val date = runCatching { java.time.LocalDate.parse(detail.releaseDate).format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.LONG)) }.getOrDefault(detail.year)
+        val year = if (kind.contains(date)) "" else date
+        heroInfoLine(kind, year, detail.tracks.size, if (detail.tracks.any { it.id.isBlank() }) 0 else detail.tracks.sumOf { it.durationMs })
     }
     // Only while MAX is on, as on desktop; the lookup is cached per album.
     val loadAlbumQuality = LocalQobuzAlbumQuality.current
@@ -230,8 +231,8 @@ internal fun CollectionHero(
             details()
             Spacer(Modifier.height(20.dp))
             CollectionPanelActions(
-                onPlay = { onPlayAll(detail.tracks, detail.title) },
-                playEnabled = detail.tracks.isNotEmpty(),
+                onPlay = { onPlayAll(detail.tracks.filter { it.id.isNotBlank() }, detail.title) },
+                playEnabled = detail.tracks.any { it.id.isNotBlank() },
                 playFill = Color(0xFFF1EFEA),
                 playInk = Color(0xFF121212),
             ) {
@@ -239,7 +240,7 @@ internal fun CollectionHero(
                     onClick = { onShuffle(detail.tracks, detail.title) },
                     icon = Icons.Rounded.Shuffle,
                     contentDescription = "Shuffle",
-                    enabled = detail.tracks.isNotEmpty() && shuffleAvailable,
+                    enabled = detail.tracks.any { it.id.isNotBlank() } && shuffleAvailable,
                 )
                 if (onDownload != null) {
                     PanelIconButton(
@@ -271,15 +272,15 @@ internal fun CollectionHero(
                 colors = seam,
                 playFill = if (isAlbum) legibleOn(seam.band, albumAccent, Color.White) else Color.White,
                 playIconTint = seam.band,
-                playEnabled = detail.tracks.isNotEmpty(),
-                onPlay = { onPlayAll(detail.tracks, detail.title) },
+                playEnabled = detail.tracks.any { it.id.isNotBlank() },
+                onPlay = { onPlayAll(detail.tracks.filter { it.id.isNotBlank() }, detail.title) },
                 actions = {
                     SeamAction(
                         icon = Icons.Rounded.Shuffle,
                         contentDescription = "Shuffle",
                         tint = seam.text,
                         onClick = { onShuffle(detail.tracks, detail.title) },
-                        enabled = detail.tracks.isNotEmpty() && shuffleAvailable,
+                        enabled = detail.tracks.any { it.id.isNotBlank() } && shuffleAvailable,
                     )
                     if (onDownload != null) {
                         SeamAction(
