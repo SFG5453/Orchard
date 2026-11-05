@@ -17,5 +17,6 @@ hkdf = "0.12.4"
 orchard-system-media = { path = "../orchard-system-media" }
 orchard-transition-core = { path = "../orchard-transition-core" }
 orchard-youtube-extractor = { path = "../orchard-youtube-extractor" }
+serde_json = "1"
 sha2 = "0.10.9"
 signalsmith-stretch = "0.1.3"

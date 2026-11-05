@@ -142,6 +142,7 @@ uint8_t orchard_system_media_set_state(
     OrchardSystemMediaHandle *handle,
     const OrchardSystemMediaState *state
 );
+uint8_t orchard_system_media_set_tracklist(OrchardSystemMediaHandle *handle, const char *json);
 const char *orchard_system_media_last_error(const OrchardSystemMediaHandle *handle);
 void orchard_system_media_stop(OrchardSystemMediaHandle *handle);
 void orchard_system_media_destroy(OrchardSystemMediaHandle *handle);

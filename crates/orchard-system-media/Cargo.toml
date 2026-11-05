@@ -6,4 +6,4 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-playwire = "2.0.0"
+playwire = "2.1.0"

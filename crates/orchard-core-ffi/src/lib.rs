@@ -254,6 +254,10 @@ fn emit_command(
             owned_string = Some(error_string(value));
             c"open-uri"
         }
+        Command::GoTo(value) => {
+            owned_string = Some(error_string(value));
+            c"go-to"
+        }
         Command::Raise => c"raise",
         Command::Quit => c"quit",
         Command::Unknown => c"unknown",
@@ -352,6 +356,62 @@ pub unsafe extern "C" fn orchard_system_media_set_state(
     };
 
     match controls.set_state(&state) {
+        Ok(()) => {
+            handle.last_error = error_string("");
+            1
+        }
+        Err(error) => {
+            handle.last_error = error_string(error);
+            0
+        }
+    }
+}
+
+/// Publishes a JSON array of queue entries supplied by the Qt host.
+///
+/// # Safety
+/// `handle` must be live and `json` must point to a NUL-terminated string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn orchard_system_media_set_tracklist(
+    handle: *mut OrchardSystemMediaHandle,
+    json: *const c_char,
+) -> u8 {
+    if handle.is_null() || json.is_null() {
+        return 0;
+    }
+    let handle = unsafe { &mut *handle };
+    let Ok(values) = serde_json::from_str::<Vec<serde_json::Value>>(&owned_c_string(json)) else {
+        return 0;
+    };
+    let tracks: Vec<(TrackState, Option<f64>)> = values
+        .iter()
+        .map(|v| {
+            let field = |key| v.get(key).and_then(|x| x.as_str()).unwrap_or("").to_owned();
+            (
+                TrackState {
+                    id: field("id"),
+                    title: field("title"),
+                    album: field("album"),
+                    artists: v
+                        .get("artists")
+                        .and_then(|x| x.as_array())
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|x| x.as_str().map(str::to_owned))
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                    artwork_url: field("artwork_url"),
+                    url: field("url"),
+                },
+                v.get("duration").and_then(|x| x.as_f64()),
+            )
+        })
+        .collect();
+    let Some(controls) = handle.controls.as_mut() else {
+        return 0;
+    };
+    match controls.set_tracklist(&tracks) {
         Ok(()) => {
             handle.last_error = error_string("");
             1

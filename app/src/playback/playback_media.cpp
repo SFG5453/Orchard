@@ -40,6 +40,7 @@ void PlaybackController::updateSystemMedia() {
   if (!track.isEmpty()) {
     state.insert(QStringLiteral("track"), track);
   }
+  state.insert(QStringLiteral("queue"), shownQueue());
   state.insert(QStringLiteral("isPlaying"), shownPlaying());
   state.insert(QStringLiteral("canGoNext"), shownCanGoNext());
   state.insert(QStringLiteral("canGoPrevious"), shownCanGoPrevious());

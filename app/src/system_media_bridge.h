@@ -57,4 +57,12 @@ private:
 
     OrchardSystemMediaHandle *m_handle = nullptr;
     QString m_lastError;
+#ifdef Q_OS_LINUX
+    QList<QPair<QString, QString>> m_trackIds;
+    quint64 m_nextTrackId = 0;
+    QByteArray m_tracklistJson;
+    QByteArray m_pendingTracklistJson;
+    QVariantList m_publishedTracks;
+    bool m_hasCurrentTrack = false;
+#endif
 };

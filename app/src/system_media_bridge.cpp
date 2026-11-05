@@ -22,6 +22,9 @@
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QKeyEvent>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMetaObject>
 #include <QPointer>
 #include <QRegularExpression>
@@ -181,7 +184,49 @@ bool SystemMediaBridge::publish(const QVariantMap &state)
     }
 
     const QVariantMap trackMap = state.value(QStringLiteral("track")).toMap();
-    const QByteArray id = bytes(trackMap, "id");
+    QByteArray id = bytes(trackMap, "id");
+#ifdef Q_OS_LINUX
+    QVariantList tracks;
+    if (!trackMap.isEmpty()) tracks.append(trackMap);
+    tracks.append(state.value(QStringLiteral("queue")).toList());
+    m_hasCurrentTrack = !trackMap.isEmpty();
+    if (tracks != m_publishedTracks || m_pendingTracklistJson.isEmpty()) {
+        auto remaining = m_trackIds;
+        QList<QPair<QString, QString>> ids;
+        QJsonArray entries;
+        for (const QVariant &item : std::as_const(tracks)) {
+            const QVariantMap map = item.toMap();
+            const QString sourceId = map.value(QStringLiteral("id")).toString();
+            QString entryId;
+            for (qsizetype i = 0; i < remaining.size(); ++i) {
+                if (remaining.at(i).first == sourceId) {
+                    entryId = remaining.takeAt(i).second;
+                    break;
+                }
+            }
+            if (entryId.isEmpty()) entryId = QStringLiteral("entry%1").arg(++m_nextTrackId);
+            ids.append({sourceId, entryId});
+            QJsonObject entry;
+            entry.insert(QStringLiteral("id"), entryId);
+            entry.insert(QStringLiteral("title"), map.value(QStringLiteral("title")).toString());
+            entry.insert(QStringLiteral("album"), QString::fromUtf8(bytes(map, "album")));
+            QStringList artists = map.value(QStringLiteral("artists")).toStringList();
+            if (artists.isEmpty() && !map.value(QStringLiteral("artist")).toString().isEmpty())
+                artists.append(map.value(QStringLiteral("artist")).toString());
+            entry.insert(QStringLiteral("artists"), QJsonArray::fromStringList(artists));
+            entry.insert(QStringLiteral("artwork_url"), map.value(QStringLiteral("thumbnail")).toString());
+            entry.insert(QStringLiteral("url"), map.value(QStringLiteral("url")).toString());
+            double duration = map.value(QStringLiteral("durationSeconds")).toDouble();
+            if (duration <= 0.0) duration = map.value(QStringLiteral("duration")).toMap().value(QStringLiteral("seconds")).toDouble();
+            if (qIsFinite(duration) && duration > 0.0) entry.insert(QStringLiteral("duration"), duration);
+            entries.append(entry);
+        }
+        m_trackIds = ids;
+        m_publishedTracks = tracks;
+        m_pendingTracklistJson = QJsonDocument(entries).toJson(QJsonDocument::Compact);
+    }
+    if (m_hasCurrentTrack) id = m_trackIds.first().second.toUtf8();
+#endif
     const QByteArray title = bytes(trackMap, "title");
     const QByteArray album = bytes(trackMap, "album");
     QByteArray artworkUrl = bytes(trackMap, "heroThumbnail");
@@ -212,7 +257,7 @@ bool SystemMediaBridge::publish(const QVariantMap &state)
     artworkUrl = highResArtworkUrl(artworkUrl);
     QByteArray url = bytes(trackMap, "url");
     if (url.isEmpty() && !id.isEmpty()) {
-        url = "https://music.youtube.com/watch?v=" + id;
+        url = "https://music.youtube.com/watch?v=" + bytes(trackMap, "id");
     }
 
     QStringList artistStrings;
@@ -281,7 +326,13 @@ bool SystemMediaBridge::publish(const QVariantMap &state)
         .shuffle = static_cast<uint8_t>(state.value(QStringLiteral("shuffleEnabled")).toBool()),
     };
 
-    const bool published = orchard_system_media_set_state(m_handle, &mediaState) != 0;
+    bool published = orchard_system_media_set_state(m_handle, &mediaState) != 0;
+#ifdef Q_OS_LINUX
+    if (published && m_pendingTracklistJson != m_tracklistJson) {
+        published = orchard_system_media_set_tracklist(m_handle, m_pendingTracklistJson.constData()) != 0;
+        if (published) m_tracklistJson = m_pendingTracklistJson;
+    }
+#endif
     const QString error = QString::fromUtf8(orchard_system_media_last_error(m_handle));
     if (m_lastError != error) {
         m_lastError = error;
@@ -331,6 +382,17 @@ void SystemMediaBridge::receiveCommand(
         bridge,
         [guard, kind, value]() {
             if (guard) {
+#ifdef Q_OS_LINUX
+                if (kind == QStringLiteral("go-to")) {
+                    for (qsizetype i = 0; i < guard->m_trackIds.size(); ++i) {
+                        if (guard->m_trackIds.at(i).second == value.toString()) {
+                            emit guard->commandReceived(kind, int(i) - (guard->m_hasCurrentTrack ? 1 : 0));
+                            return;
+                        }
+                    }
+                    return;
+                }
+#endif
                 emit guard->commandReceived(kind, value);
             }
         },
@@ -344,6 +406,12 @@ void SystemMediaBridge::destroyHandle()
         return;
     }
 
+#ifdef Q_OS_LINUX
+    m_tracklistJson.clear();
+    m_pendingTracklistJson.clear();
+    m_publishedTracks.clear();
+    m_trackIds.clear();
+#endif
     orchard_system_media_destroy(m_handle);
     m_handle = nullptr;
 }

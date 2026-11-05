@@ -333,6 +333,7 @@ void PlaybackController::moveQueueItem(int from, int to) {
   // The listener is the DJ now; shuffle does not get a veto.
   m_orderedQueue = m_queue;
   emit queueChanged();
+  updateSystemMedia();
   emit stateChanged();
   ensureAutoplay();
   savePlaybackState();

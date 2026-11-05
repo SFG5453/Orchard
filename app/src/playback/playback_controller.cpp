@@ -283,6 +283,14 @@ PlaybackController::PlaybackController(YouTubeProvider *provider,
                 next();
               } else if (kind == QStringLiteral("previous")) {
                 previous();
+              } else if (kind == QStringLiteral("go-to")) {
+                const int index = value.toInt();
+                if (index >= 0) {
+                  playQueueIndex(index);
+                } else {
+                  seek(0);
+                  play();
+                }
               } else if (kind == QStringLiteral("seek")) {
                 seek(value.toDouble());
               } else if (kind == QStringLiteral("seek-relative")) {

@@ -1422,6 +1422,7 @@ dependencies = [
  "orchard-system-media",
  "orchard-transition-core",
  "orchard-youtube-extractor",
+ "serde_json",
  "sha2",
  "signalsmith-stretch",
 ]
@@ -1803,9 +1804,9 @@ dependencies = [
 
 [[package]]
 name = "playwire"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9c8f7956410cc582ee075d21d6acc1b2241b6467ead416e8ea0216c48b0c60f"
+checksum = "f535dbffc68034cd1b69c3eae2a04381ff0d4a78ea589af50bede32c523050c3"
 dependencies = [
  "block2",
  "objc2",

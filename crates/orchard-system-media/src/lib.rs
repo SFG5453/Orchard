@@ -25,7 +25,9 @@
 
 use std::time::Duration;
 
-use playwire::{Capabilities, Event, MediaControls, PlaybackState, PlayerConfig, Repeat, Track};
+use playwire::{
+    Capabilities, Event, MediaControls, PlaybackState, PlayerConfig, Repeat, Track, TrackListEntry,
+};
 
 /// Object-path prefix used for Orchard tracks on MPRIS.
 const TRACK_ID_PREFIX: &str = "/dev/sfg/orchard/track";
@@ -155,6 +157,8 @@ pub enum Command {
     SetRepeat(RepeatMode),
     /// Open a URI supplied by the platform.
     OpenUri(String),
+    /// Play the identified queue entry.
+    GoTo(String),
     /// Bring Orchard to the foreground.
     Raise,
     /// Quit Orchard.
@@ -202,6 +206,18 @@ impl SystemMediaControls {
         self.controls.set_state(&to_playback_state(state))
     }
 
+    /// Publishes the Linux MPRIS queue.
+    pub fn set_tracklist(&mut self, tracks: &[(TrackState, Option<f64>)]) -> playwire::Result<()> {
+        let entries: Vec<_> = tracks
+            .iter()
+            .map(|(track, duration)| TrackListEntry {
+                track: to_track(track),
+                duration: duration.filter(|v| v.is_finite() && *v > 0.0).map(seconds),
+            })
+            .collect();
+        self.controls.set_tracklist(Some(&entries))
+    }
+
     /// Releases the platform registration early.
     pub fn stop(&mut self) {
         self.controls.detach();
@@ -216,16 +232,20 @@ fn seconds(value: f64) -> Duration {
     }
 }
 
+fn to_track(track: &TrackState) -> Track {
+    Track {
+        id: track.id.clone(),
+        title: track.title.clone(),
+        artists: track.artists.clone(),
+        album: track.album.clone(),
+        artwork_url: track.artwork_url.clone(),
+        url: track.url.clone(),
+    }
+}
+
 fn to_playback_state(state: &MediaState) -> PlaybackState {
     PlaybackState {
-        track: state.track.as_ref().map(|track| Track {
-            id: track.id.clone(),
-            title: track.title.clone(),
-            artists: track.artists.clone(),
-            album: track.album.clone(),
-            artwork_url: track.artwork_url.clone(),
-            url: track.url.clone(),
-        }),
+        track: state.track.as_ref().map(to_track),
         playing: state.playing,
         position: seconds(state.position_seconds),
         duration: state
@@ -265,6 +285,7 @@ fn to_command(event: Event) -> Command {
             Repeat::All => RepeatMode::Queue,
         }),
         Event::OpenUri(uri) => Command::OpenUri(uri),
+        Event::GoTo(id) => Command::GoTo(id),
         Event::Raise => Command::Raise,
         Event::Quit => Command::Quit,
         _ => Command::Unknown,

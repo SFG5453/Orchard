@@ -20,7 +20,10 @@
 #include "system_media_bridge.h"
 
 #include <QDBusConnection>
+#include <QDBusArgument>
 #include <QDBusMessage>
+#include <QDBusObjectPath>
+#include <QDBusVariant>
 #include <QKeyEvent>
 #include <QWindow>
 #include <QtTest>
@@ -110,6 +113,34 @@ private slots:
       QCOMPARE(commands.size(), 1);
       QCOMPARE(commands.first().first().toString(), QString("next"));
     }
+  }
+
+  void tracklistAndGoTo() {
+    SystemMediaBridge bridge;
+    QVERIFY2(bridge.attached(), qPrintable(bridge.lastError()));
+    const QVariantMap song{{"id", "same"}, {"title", "Repeated song"}};
+    QVariantMap state{{"track", song}, {"queue", QVariantList{song, song}}};
+    QVERIFY2(bridge.publish(state), qPrintable(bridge.lastError()));
+    const QString service = QStringLiteral("org.mpris.MediaPlayer2.Orchard");
+    const QString path = QStringLiteral("/org/mpris/MediaPlayer2");
+    auto get = QDBusMessage::createMethodCall(service, path,
+        QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("Get"));
+    get << QStringLiteral("org.mpris.MediaPlayer2.TrackList") << QStringLiteral("Tracks");
+    const auto reply = QDBusConnection::sessionBus().call(get, QDBus::Block, 3000);
+    QVERIFY2(reply.type() != QDBusMessage::ErrorMessage, qPrintable(reply.errorMessage()));
+    const auto paths = qdbus_cast<QList<QDBusObjectPath>>(reply.arguments().first().value<QDBusVariant>().variant());
+    QCOMPARE(paths.size(), 3);
+    QVERIFY(paths.at(0).path() != paths.at(1).path());
+    QVERIFY(paths.at(1).path() != paths.at(2).path());
+    QSignalSpy commands(&bridge, &SystemMediaBridge::commandReceived);
+    auto go = QDBusMessage::createMethodCall(service, path,
+        QStringLiteral("org.mpris.MediaPlayer2.TrackList"), QStringLiteral("GoTo"));
+    go << QVariant::fromValue(paths.at(2));
+    const auto goReply = QDBusConnection::sessionBus().call(go, QDBus::Block, 3000);
+    QVERIFY2(goReply.type() != QDBusMessage::ErrorMessage, qPrintable(goReply.errorMessage()));
+    QTRY_COMPARE(commands.size(), 1);
+    QCOMPARE(commands.first().at(0).toString(), QStringLiteral("go-to"));
+    QCOMPARE(commands.first().at(1).toInt(), 1);
   }
 
   void systemCommands() {
