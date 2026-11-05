@@ -120,6 +120,43 @@ internal fun CacheSizeRow(settings: OrchardSettings, onSettings: (OrchardSetting
     }
 }
 
+@Composable
+internal fun ArtworkCacheSizeRow(settings: OrchardSettings, onSettings: (OrchardSettings) -> Unit) {
+    val steps = OrchardSettings.CACHE_SIZE_STEPS_MB
+    val index = steps.indexOfFirst { it >= settings.artworkCacheSizeMb }.takeIf { it >= 0 } ?: steps.lastIndex
+
+    Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            RowIcon(Icons.Rounded.Inventory2)
+            Column(Modifier.weight(1f)) {
+                RowTitle("Animated artwork")
+                RowSubtitle("Older motion covers are removed when the cache fills, including offline covers")
+            }
+            Text(
+                formatCacheSize(steps[index]),
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+                color = SettingsStyle.SageSoft,
+            )
+        }
+        Column(Modifier.padding(start = 52.dp)) {
+            Slider(
+                value = index.toFloat(),
+                onValueChange = { onSettings(settings.copy(artworkCacheSizeMb = steps[it.roundToInt()])) },
+                valueRange = 0f..steps.lastIndex.toFloat(),
+                steps = steps.size - 2,
+                colors = settingsSliderColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(Modifier.fillMaxWidth()) {
+                Text(formatCacheSize(steps.first()), color = SettingsStyle.Caption,
+                    style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                Text(formatCacheSize(steps.last()), color = SettingsStyle.Caption,
+                    style = MaterialTheme.typography.labelMedium)
+            }
+        }
+    }
+}
+
 /**
  * Row displaying current cache size with an action to clear all temporary caches.
  * Prompts with an alert dialog before wiping stream cache, Coil image cache, and temporary files.
@@ -135,7 +172,7 @@ internal fun ClearCacheRow(
 
     SettingsRow(
         title = "Clear cache",
-        subtitle = "Downloads and your library stay intact ($formattedSize in cache)",
+        subtitle = "Downloaded songs and your library stay intact ($formattedSize in cache)",
         icon = Icons.Rounded.Delete,
         titleColor = CanopyColors.Danger,
         iconTint = CanopyColors.Danger,
@@ -169,7 +206,7 @@ internal fun ClearCacheRow(
                         color = CanopyColors.Text,
                     )
                     Text(
-                        "Your downloaded offline songs and library will remain intact.",
+                        "Downloaded songs and your library will remain intact. Offline motion covers will be removed.",
                         style = MaterialTheme.typography.bodySmall,
                         color = CanopyColors.Muted,
                     )

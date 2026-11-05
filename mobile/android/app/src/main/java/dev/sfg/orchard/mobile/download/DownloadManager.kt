@@ -221,7 +221,7 @@ class DownloadManager(
     }
 
     /** Total storage bytes consumed by completed downloads. */
-    fun totalBytesUsed(): Long = store.totalBytesUsed() + AnimatedArtworkCache.bytesUsed(context)
+    fun totalBytesUsed(): Long = store.totalBytesUsed()
 
     /** Returns the local file for a downloaded track, or null if not downloaded. */
     fun getDownloadedFile(videoId: String): File? {

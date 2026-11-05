@@ -22,6 +22,7 @@ package dev.sfg.orchard.mobile.settings
 import android.content.Context
 import coil3.SingletonImageLoader
 import dev.sfg.orchard.mobile.OrchardGraph
+import dev.sfg.orchard.mobile.download.AnimatedArtworkCache
 import java.io.File
 import java.util.ArrayDeque
 import java.util.Locale
@@ -34,6 +35,7 @@ object CacheManager {
      * - [Context.getCacheDir] (HTTP cache, Coil disk cache, transitions, etc.)
      * - [Context.getExternalCacheDir] (if present)
      * - `filesDir/stream-cache` (ExoPlayer stream cache spans)
+     * - animated artwork shared by streaming and offline playback
      *
      * Offline downloads and library data are excluded.
      */
@@ -41,6 +43,7 @@ object CacheManager {
         var size = 0L
         size += directorySize(context.cacheDir)
         context.externalCacheDir?.let { size += directorySize(it) }
+        size += directorySize(AnimatedArtworkCache.directory(context))
         val streamCacheDir = File(context.filesDir, STREAM_CACHE_DIR)
         if (streamCacheDir.exists()) {
             size += directorySize(streamCacheDir)
@@ -54,6 +57,7 @@ object CacheManager {
      * 2. Stream cache (via [OrchardGraph.onClearStreamCache] if playback service is active,
      *    or by clearing the files in `filesDir/stream-cache` directly)
      * 3. Files inside [Context.getCacheDir] and [Context.getExternalCacheDir]
+     * 4. Animated artwork, including motion covers saved for offline playback
      *
      * Preserves:
      * - Offline downloads in `filesDir/downloads` or `orchard-downloads`
@@ -81,6 +85,7 @@ object CacheManager {
         }
 
         // 3. Application cache directories
+        runCatching { AnimatedArtworkCache.clearNow(context) }
         context.cacheDir?.let { deleteDirectoryContents(it) }
         context.externalCacheDir?.let { deleteDirectoryContents(it) }
 

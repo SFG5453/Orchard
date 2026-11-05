@@ -83,6 +83,13 @@ class OrchardGraph(context: Context) {
         },
     )
     val settings = SettingsRepository(context, applicationScope)
+    init {
+        applicationScope.launch(Dispatchers.IO) {
+            settings.loadedSettings.collect { values ->
+                dev.sfg.orchard.mobile.download.AnimatedArtworkCache.setLimit(context, values.artworkCacheSizeBytes)
+            }
+        }
+    }
     val bestMixFeatures = BestMixFeatureStore(context)
     val mixEvidence by lazy { dev.sfg.orchard.mobile.playback.smart.MixEvidenceStore(context) }
     val slopVerdicts by lazy { dev.sfg.orchard.mobile.playback.slop.SlopVerdicts(context) }

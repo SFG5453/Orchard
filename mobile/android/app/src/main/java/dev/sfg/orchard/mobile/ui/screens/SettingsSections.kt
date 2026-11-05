@@ -68,7 +68,7 @@ internal fun ArtworkPage(settings: OrchardSettings, onSettings: (OrchardSettings
         PanelDivider()
         ToggleRow(
             title = "Download animated artwork",
-            subtitle = "Save motion covers with new downloads for offline playback",
+            subtitle = "Save motion covers for offline playback, within the artwork cache limit",
             icon = Icons.Rounded.Download,
             checked = settings.downloadAnimatedArtwork,
             onChecked = { onSettings(settings.copy(downloadAnimatedArtwork = it)) },

@@ -79,6 +79,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 crossfadeSeconds = values[CROSSFADE_SECONDS] ?: OrchardSettings.DEFAULT_CROSSFADE_SECONDS,
                 smartCrossfade = values[SMART_CROSSFADE] ?: false,
                 cacheSizeMb = values[CACHE_SIZE_MB] ?: OrchardSettings.DEFAULT_CACHE_SIZE_MB,
+                artworkCacheSizeMb = values[ARTWORK_CACHE_SIZE_MB] ?: OrchardSettings.DEFAULT_ARTWORK_CACHE_SIZE_MB,
                 onboardingCompleted = values[ONBOARDING_COMPLETED] ?: false,
                 discordPresenceEnabled = values[DISCORD_PRESENCE_ENABLED] ?: true,
                 showBitrate = values[SHOW_BITRATE] ?: false,
@@ -159,6 +160,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[CROSSFADE_SECONDS] = value.crossfadeSeconds
                 it[SMART_CROSSFADE] = value.smartCrossfade
                 it[CACHE_SIZE_MB] = value.cacheSizeMb
+                it[ARTWORK_CACHE_SIZE_MB] = value.artworkCacheSizeMb
                 it[ONBOARDING_COMPLETED] = value.onboardingCompleted
                 it[DISCORD_PRESENCE_ENABLED] = value.discordPresenceEnabled
                 it[SHOW_BITRATE] = value.showBitrate
@@ -304,6 +306,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val CROSSFADE_SECONDS = intPreferencesKey("crossfade_seconds")
         val SMART_CROSSFADE = booleanPreferencesKey("smart_crossfade")
         val CACHE_SIZE_MB = intPreferencesKey("cache_size_mb")
+        val ARTWORK_CACHE_SIZE_MB = intPreferencesKey("artwork_cache_size_mb")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
         val SHOW_BITRATE = booleanPreferencesKey("show_bitrate")

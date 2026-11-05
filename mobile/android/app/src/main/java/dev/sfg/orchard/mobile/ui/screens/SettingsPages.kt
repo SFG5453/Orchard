@@ -269,6 +269,8 @@ internal fun StoragePage(
         PanelDivider()
         CacheSizeRow(settings, onSettings)
         PanelDivider()
+        ArtworkCacheSizeRow(settings, onSettings)
+        PanelDivider()
         ClearCacheRow(cacheSizeBytes = cacheSizeBytes, isClearing = isClearingCache, onClear = onClearCache)
     }
 

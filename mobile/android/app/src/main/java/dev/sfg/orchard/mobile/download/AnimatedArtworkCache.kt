@@ -27,7 +27,6 @@ import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.cache.NoOpCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.hls.offline.HlsDownloader
@@ -48,7 +47,7 @@ data class CachedAnimatedArtwork(
 )
 
 /**
- * Persistent, non-evicting Media3 cache for motion covers saved with offline tracks.
+ * Bounded Media3 cache shared by streamed and downloaded motion covers.
  *
  * Media3's downloaders understand HLS segment maps, encryption keys and relative URLs, while the
  * shared [CacheDataSource] lets the existing artwork player read the exact same resources offline.
@@ -58,14 +57,17 @@ object AnimatedArtworkCache {
     private const val DIRECTORY = "animated_artwork"
     private const val USER_AGENT = "Orchard Android/2.0"
     private const val MAX_MASTER_DEPTH = 3
+    private val evictor = AdjustableCacheEvictor()
+
+    internal fun directory(context: Context): File = File(DownloadStore.defaultDownloadDir(context), DIRECTORY)
 
     @Volatile
     private var instance: SimpleCache? = null
 
     private fun cache(context: Context): SimpleCache = instance ?: synchronized(this) {
         instance ?: SimpleCache(
-            File(DownloadStore.defaultDownloadDir(context), DIRECTORY).apply { mkdirs() },
-            NoOpCacheEvictor(),
+            directory(context).apply { mkdirs() },
+            evictor,
             StandaloneDatabaseProvider(context.applicationContext),
         ).also { instance = it }
     }
@@ -84,8 +86,14 @@ object AnimatedArtworkCache {
 
     fun bytesUsed(context: Context): Long = cache(context).cacheSpace
 
+    fun setLimit(context: Context, bytes: Long) {
+        evictor.setLimit(cache(context), bytes)
+    }
+
     /** Drops every cached resource, including entries no download item references. */
-    suspend fun clear(context: Context) = withContext(Dispatchers.IO) {
+    suspend fun clear(context: Context) = withContext(Dispatchers.IO) { clearNow(context) }
+
+    fun clearNow(context: Context) {
         val cache = cache(context)
         cache.keys.toList().forEach(cache::removeResource)
     }

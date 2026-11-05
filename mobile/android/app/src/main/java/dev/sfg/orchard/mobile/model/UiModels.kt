@@ -99,6 +99,7 @@ data class OrchardSettings(
      * difference between a few albums and a library, and between instant re-listens and refetching.
      */
     val cacheSizeMb: Int = DEFAULT_CACHE_SIZE_MB,
+    val artworkCacheSizeMb: Int = DEFAULT_ARTWORK_CACHE_SIZE_MB,
     /** Whether the user has completed or dismissed the initial welcome/onboarding setup. */
     val onboardingCompleted: Boolean = false,
     /** Whether to broadcast now playing status to Discord via Rich Presence. */
@@ -179,6 +180,9 @@ data class OrchardSettings(
     val cacheSizeBytes: Long
         get() = cacheSizeMb.coerceIn(MIN_CACHE_SIZE_MB, MAX_CACHE_SIZE_MB) * 1024L * 1024L
 
+    val artworkCacheSizeBytes: Long
+        get() = artworkCacheSizeMb.coerceIn(MIN_CACHE_SIZE_MB, MAX_CACHE_SIZE_MB) * 1024L * 1024L
+
     /** Zero when crossfade is off, which is what the playback engine watches. */
     val crossfadeMs: Long
         get() = if (crossfadeEnabled) crossfadeSeconds.coerceIn(MIN_CROSSFADE_SECONDS, MAX_CROSSFADE_SECONDS) * 1_000L else 0L
@@ -199,6 +203,7 @@ data class OrchardSettings(
         const val MIN_CACHE_SIZE_MB = 256
         const val MAX_CACHE_SIZE_MB = 8192
         const val DEFAULT_CACHE_SIZE_MB = 1024
+        const val DEFAULT_ARTWORK_CACHE_SIZE_MB = 1024
         const val DEFAULT_VIDEO_MAX_HEIGHT = 1080
         /** Slider stops, so the control offers round sizes rather than arbitrary megabytes. */
         val CACHE_SIZE_STEPS_MB = listOf(256, 512, 1024, 2048, 4096, 8192)

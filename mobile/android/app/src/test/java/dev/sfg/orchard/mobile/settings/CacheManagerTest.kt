@@ -42,6 +42,7 @@ class CacheManagerTest {
         override fun getFilesDir(): File = files
         override fun getCacheDir(): File = cache
         override fun getExternalCacheDir(): File? = externalCache
+        override fun getExternalFilesDir(type: String?): File? = null
         override fun getApplicationContext(): Context = this
     }
 
@@ -94,12 +95,13 @@ class CacheManagerTest {
         // Downloads in filesDir (must NOT be counted)
         val downloadsDir = File(filesDir, "downloads").apply { mkdirs() }
         File(downloadsDir, "offline_song.mp3").writeBytes(ByteArray(16384))
+        val artwork = File(filesDir, "offline_downloads/animated_artwork").apply { mkdirs() }
+        File(artwork, "cover").writeBytes(ByteArray(256))
 
         val context = TestContext(filesDir, cacheDir, externalCacheDir)
         val totalSize = CacheManager.calculateCacheSizeBytes(context)
 
-        // 1024 + 2048 + 512 + 4096 = 7680 bytes
-        assertEquals(7680L, totalSize)
+        assertEquals(7936L, totalSize)
     }
 
     @Test
