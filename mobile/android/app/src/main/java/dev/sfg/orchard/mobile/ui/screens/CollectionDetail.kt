@@ -67,6 +67,7 @@ import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.ui.motion.riseIn
 import dev.sfg.orchard.mobile.ui.components.ArtistSectionBottomSheet
+import dev.sfg.orchard.mobile.ui.components.ArtistSelectionDialog
 import dev.sfg.orchard.mobile.ui.components.CatalogCard
 import dev.sfg.orchard.mobile.ui.components.rememberArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.rememberHeroScrimProgress
@@ -129,10 +130,14 @@ internal fun CollectionDetailContent(
     val listState = rememberLazyListState()
     val scrimProgress = rememberHeroScrimProgress(listState)
     val bestMix = rememberBestMixLauncher(detail, downloadedTrackIds, appleMusicMode, onPlayAll, onPlayBestMix)
-    // Albums link their artist chip; playlists mix artists, so the chip stays inert.
-    val albumArtistId = remember(detail) {
-        if (detail.kind != CatalogKind.ALBUM) null
-        else detail.tracks.firstOrNull { it.artistId.isNotBlank() }?.artistId
+    val albumArtists = remember(detail) { detail.albumArtists() }
+    var showAlbumArtists by remember(detail.id) { mutableStateOf(false) }
+    if (showAlbumArtists) {
+        ArtistSelectionDialog(
+            artists = albumArtists,
+            onDismiss = { showAlbumArtists = false },
+            onArtistSelected = onOpen,
+        )
     }
 
     val filteredTracks = remember(detail.tracks, searchQuery, isSearching) {
@@ -186,7 +191,10 @@ internal fun CollectionDetailContent(
                 onDownload = collectionDownloadAction(detail.tracks, downloadedTrackIds, onDownloadTracks, onRemoveDownloadTracks),
                 isDownloaded = detail.tracks.isNotEmpty() && detail.tracks.all { it.id in downloadedTrackIds },
                 artistPortraitUrl = artistPortraitUrl,
-                onOpenArtist = albumArtistId?.let { id -> { onOpen(id) } },
+                onOpenArtist = if (albumArtists.isEmpty()) null else {{
+                    if (detail.isVariousArtists() || albumArtists.size > 1) showAlbumArtists = true
+                    else onOpen(albumArtists.first().id)
+                }},
                 onOpenLink = onOpen,
                 smartCrossfadeEnabled = smartCrossfadeEnabled,
             )

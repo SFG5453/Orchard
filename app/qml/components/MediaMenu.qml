@@ -108,10 +108,10 @@ Menu {
     function artistAt(index) {
         return Navigation.artistAt(media, index);
     }
-    function viewArtist(anchor, x, y) {
-        if (artistIds.length === 1)
+    function viewArtist(anchor, x, y, forceChoices) {
+        if (artistIds.length === 1 && !forceChoices)
             artistRequested(artistAt(0));
-        else if (artistIds.length > 1)
+        else if (artistIds.length > 0)
             root.artistChoices.popup(anchor || root.parent, x === undefined ? root.x : x, y === undefined ? root.y : y);
     }
     // The shell owns the picker; this menu may be destroyed the moment it closes.

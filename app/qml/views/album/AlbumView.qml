@@ -35,6 +35,24 @@ Item {
     })
     readonly property var tracks: detail.tracks || []
     readonly property var playableTracks: tracks.filter(track => track.id && !track.unplayable)
+    readonly property var artistMenuMedia: {
+        if (String(detail.artist || "").trim().toLowerCase() !== "various artists")
+            return detail;
+        const ids = [];
+        const names = [];
+        for (const track of tracks) {
+            const trackIds = track.artistBrowseIds || (track.artistBrowseId || track.artistId ? [track.artistBrowseId || track.artistId] : []);
+            const trackNames = track.artists || [track.artist || ""];
+            for (let i = 0; i < trackIds.length; ++i) {
+                const name = trackNames[i] || (trackIds.length === 1 ? track.artist : "") || "";
+                if (trackIds[i] && name && name.trim().toLowerCase() !== "various artists" && !ids.includes(trackIds[i])) {
+                    ids.push(trackIds[i]);
+                    names.push(name);
+                }
+            }
+        }
+        return Object.assign({}, detail, { artistBrowseIds: ids, artistBrowseId: "", artistId: "", artists: names });
+    }
     readonly property string releaseLabel: detail.releaseDate ? Qt.formatDate(new Date(detail.releaseDate + "T12:00:00"), Locale.LongFormat) : (detail.year || "")
     readonly property var downloadInfo: OrchardDownloads.revision >= 0 ? OrchardDownloads.collectionState(tracks) : ({})
     readonly property string downloadState: downloadInfo.total > 0 && downloadInfo.downloaded >= downloadInfo.total ? "done"
@@ -235,7 +253,7 @@ Item {
             accentInkColor: root.onAccentColor
             inkColor: root.inkColor
             onBylineClicked: function(anchor, x, y) {
-                albumArtistMenu.viewArtist(anchor, x, y);
+                albumArtistMenu.viewArtist(anchor, x, y, String(root.detail.artist || "").trim().toLowerCase() === "various artists");
             }
             onDescriptionLinkClicked: function(link) {
                 if (link.indexOf(".artists.") > 0)
@@ -253,7 +271,7 @@ Item {
             MediaMenu {
                 id: albumArtistMenu
 
-                media: root.detail
+                media: root.artistMenuMedia
                 onArtistRequested: function(artist) {
                     root.artistRequested(artist);
                 }

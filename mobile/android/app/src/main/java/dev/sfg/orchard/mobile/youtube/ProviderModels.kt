@@ -89,9 +89,10 @@ private fun JSONObject.isBrowseTarget(browseId: String): Boolean =
 private val browseTypes = setOf("album", "artist", "playlist", "library_artist")
 
 /** A playable row, or null for albums, artists and playlists. */
-fun JSONObject.providerTrack(): Track? {
-    val id = text("id")
-    if (id.isEmpty() || optBoolean("unplayable")) return null
+fun JSONObject.providerTrack(allowUnplayable: Boolean = false): Track? {
+    val unavailable = text("id").isEmpty() || optBoolean("unplayable")
+    if (unavailable && !allowUnplayable) return null
+    val id = if (unavailable) "" else text("id")
     val names = strings("artists").ifEmpty { listOfNotNull(text("artist").takeIf(String::isNotEmpty)) }
     val ids = strings("artistBrowseIds")
     val artists = names.mapIndexed { index, name -> Artist(ids.getOrElse(index) { "" }, name) }
@@ -172,9 +173,7 @@ fun JSONObject.providerDetail(id: String, kind: CatalogKind): BrowseDetail {
     val artwork = text("thumbnail")
     val artist = text("artist").ifEmpty { text("author") }
     val tracks = optJSONArray("tracks").mapObjects { item ->
-        item.providerTrack() ?: if (kind == CatalogKind.ALBUM && text("releaseDate").isNotEmpty() && item.optBoolean("unplayable")) {
-            Track(id = "", title = item.text("title").ifEmpty { "Track" }, artist = item.text("artist"))
-        } else null
+        item.providerTrack(allowUnplayable = kind == CatalogKind.ALBUM && text("releaseDate").isNotEmpty() && item.optBoolean("unplayable"))
     }.map { track ->
         if (kind == CatalogKind.ALBUM) track.inAlbum(id, title, artist, artwork)
         else if (track.artworkUrl.isEmpty()) track.copy(artworkUrl = artwork) else track
@@ -193,6 +192,9 @@ fun JSONObject.providerDetail(id: String, kind: CatalogKind): BrowseDetail {
         artist = artist,
         year = text("year"),
         releaseDate = text("releaseDate"),
+        artists = strings("artistBrowseIds").mapIndexed { index, artistId ->
+            Artist(artistId, strings("artists").getOrElse(index) { artist })
+        },
         explicit = optBoolean("explicit"),
         editable = optBoolean("editable"),
         source = text("source"),

@@ -30,15 +30,23 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProviderModelsTest {
+    @Test fun `album detail retains credited artists`() {
+        val detail = JSONObject("""{"title":"Album","artist":"A & B",
+            "artists":["A","B"],"artistBrowseIds":["am.artists.1","am.artists.2"]}""")
+            .providerDetail("am.albums.1", CatalogKind.ALBUM)
+        assertEquals(listOf("A", "B"), detail.artists.map { it.name })
+        assertEquals(listOf("am.artists.1", "am.artists.2"), detail.artists.map { it.id })
+    }
     @Test fun `future album retains unavailable tracks and release date`() {
         val detail = JSONObject("""{"title":"Upcoming","source":"apple_music","releaseDate":"2099-11-19",
             "tracks":[{"title":"Track 1","unplayable":true},
                 {"id":"am.songs.2","title":"Single","source":"apple_music"},
-                {"id":"am.songs.3","title":"Track 3","unplayable":true}]}""")
+                {"id":"am.songs.3","title":"Track 3","artists":["Third"],"artistBrowseIds":["am.artists.3"],"unplayable":true}]}""")
             .providerDetail("am.albums.1", CatalogKind.ALBUM)
         assertEquals("2099-11-19", detail.releaseDate)
         assertEquals(listOf("", "am.songs.2", ""), detail.tracks.map { it.id })
         assertEquals(listOf("Track 1", "Single", "Track 3"), detail.tracks.map { it.title })
+        assertEquals("am.artists.3", detail.tracks.last().artists.single().id)
     }
     private val row = """{"id":"abcdefghijk","type":"track","musicVideoType":"MUSIC_VIDEO_TYPE_ATV",
         "title":"Duet","artists":["First","Second"],"artistBrowseIds":["UCfirst","UCsecond"],

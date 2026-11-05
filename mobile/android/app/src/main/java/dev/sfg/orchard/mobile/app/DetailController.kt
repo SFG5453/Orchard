@@ -210,7 +210,7 @@ internal class DetailController(
                             mutableArtwork.value = graph.artwork.artwork(detailVal) { mutableArtwork.value = it }
                             val performer = detailVal.artist
                                 .ifBlank { detailVal.tracks.firstOrNull { it.artist.isNotBlank() }?.artist.orEmpty() }
-                            if (performer.isNotBlank()) {
+                            if (performer.isNotBlank() && !performer.trim().equals("Various Artists", ignoreCase = true)) {
                                 mutableArtistImages.value = graph.artistImages.images(performer)
                             }
                         }

@@ -36,15 +36,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import dev.sfg.orchard.mobile.model.Artist
+import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.ui.theme.CanopyColors
+import kotlinx.coroutines.CancellationException
 
 @Composable
 fun ArtistSelectionDialog(
@@ -52,6 +58,8 @@ fun ArtistSelectionDialog(
     onDismiss: () -> Unit,
     onArtistSelected: (String) -> Unit,
 ) {
+    val context = LocalContext.current
+    val graph = remember(context) { OrchardGraph.from(context) }
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(24.dp),
@@ -68,6 +76,18 @@ fun ArtistSelectionDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 LazyColumn {
                     items(artists) { artist ->
+                        val portrait by produceState(artist.artworkUrl, artist.id, artist.name) {
+                            if (value.isBlank()) {
+                                value = try {
+                                    graph.catalogRouter.browse(artist.id).artworkUrl
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    ""
+                                }
+                                if (value.isBlank()) value = graph.artistImages.images(artist.name)?.portraitUrl.orEmpty()
+                            }
+                        }
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -79,7 +99,7 @@ fun ArtistSelectionDialog(
                                 .padding(horizontal = 24.dp, vertical = 12.dp)
                         ) {
                             ArtworkTile(
-                                url = artist.artworkUrl,
+                                url = portrait,
                                 description = artist.name,
                                 modifier = Modifier
                                     .size(48.dp)
