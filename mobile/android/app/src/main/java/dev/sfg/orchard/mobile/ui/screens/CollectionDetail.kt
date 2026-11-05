@@ -297,8 +297,8 @@ internal fun CollectionDetailContent(
                         Row(rowModifier, verticalAlignment = Alignment.CenterVertically) {
                             trackRow(Modifier.weight(1f))
                             ReorderControls(
-                                onMoveUp = if (index > 0) onMovePlaylistTrack?.let { move -> { move(index, index - 1) } } else null,
-                                onMoveDown = if (index < detail.tracks.lastIndex) onMovePlaylistTrack?.let { move -> { move(index, index + 1) } } else null,
+                                onMoveUp = if (index > 0) {{ onMovePlaylistTrack(index, index - 1) }} else null,
+                                onMoveDown = if (index < detail.tracks.lastIndex) {{ onMovePlaylistTrack(index, index + 1) }} else null,
                                 onRemove = onRemoveFromPlaylist?.let { remove -> { remove(track) } },
                             )
                         }
