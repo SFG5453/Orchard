@@ -127,7 +127,7 @@ fun NowPlayingOverlay(
             onStartSleepTimer = viewModel::startSleepTimer,
             onStartSleepTimerAtEndOfTrack = viewModel::startSleepTimerAtEndOfTrack,
             onCancelSleepTimer = viewModel::cancelSleepTimer,
-            smartCrossfade = settings.smartCrossfade && !LocalMaxActive.current,
+            smartCrossfade = settings.adaptiveMixEnabled && !LocalMaxActive.current,
             onBestMixUpcoming = viewModel::bestMixUpcoming,
             musicVideo = musicVideo,
             videoPlayer = videoPlayer,

@@ -109,6 +109,7 @@ internal fun CollectionDetailContent(
     onShareTrack: ((Track) -> Unit)? = null,
     onShareCollection: ((BrowseDetail) -> Unit)? = null,
     smartCrossfadeEnabled: Boolean = false,
+    appleMusicMode: Boolean = false,
     onPlayBestMix: ((List<Track>, String, (String) -> Unit, () -> Unit) -> Unit)? = null,
     onFetchSectionItems: (suspend (String, String) -> List<CatalogItem>)? = null,
 ) {
@@ -127,7 +128,7 @@ internal fun CollectionDetailContent(
     val context = LocalContext.current
     val listState = rememberLazyListState()
     val scrimProgress = rememberHeroScrimProgress(listState)
-    val bestMix = rememberBestMixLauncher(detail, downloadedTrackIds, onPlayAll, onPlayBestMix)
+    val bestMix = rememberBestMixLauncher(detail, downloadedTrackIds, appleMusicMode, onPlayAll, onPlayBestMix)
     // Albums link their artist chip; playlists mix artists, so the chip stays inert.
     val albumArtistId = remember(detail) {
         if (detail.kind != CatalogKind.ALBUM) null

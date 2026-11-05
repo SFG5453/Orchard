@@ -183,6 +183,9 @@ data class OrchardSettings(
     val crossfadeMs: Long
         get() = if (crossfadeEnabled) crossfadeSeconds.coerceIn(MIN_CROSSFADE_SECONDS, MAX_CROSSFADE_SECONDS) * 1_000L else 0L
 
+    val adaptiveMixEnabled: Boolean
+        get() = crossfadeEnabled && smartCrossfade
+
     companion object {
         const val MIN_CROSSFADE_SECONDS = 1
         const val MAX_CROSSFADE_SECONDS = 12

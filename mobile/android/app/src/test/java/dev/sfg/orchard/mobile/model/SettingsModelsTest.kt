@@ -25,6 +25,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SettingsModelsTest {
+    @Test
+    fun adaptiveMixRequiresCrossfadeAndAdaptiveSettings() {
+        assertFalse(OrchardSettings(crossfadeEnabled = false, smartCrossfade = true).adaptiveMixEnabled)
+        assertFalse(OrchardSettings(crossfadeEnabled = true, smartCrossfade = false).adaptiveMixEnabled)
+        assertTrue(OrchardSettings(crossfadeEnabled = true, smartCrossfade = true).adaptiveMixEnabled)
+    }
 
     @Test
     fun defaultSettingsValues() {

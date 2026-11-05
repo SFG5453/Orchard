@@ -100,6 +100,7 @@ fun DetailScreen(
     onShareCollection: ((BrowseDetail) -> Unit)? = null,
     onFetchSectionItems: (suspend (String, String) -> List<CatalogItem>)? = null,
     smartCrossfadeEnabled: Boolean = false,
+    appleMusicMode: Boolean = false,
     onPlayBestMix: ((List<Track>, String, (String) -> Unit, () -> Unit) -> Unit)? = null,
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
@@ -190,6 +191,7 @@ fun DetailScreen(
                     onShareTrack = onShareTrack,
                     onShareCollection = onShareCollection,
                     smartCrossfadeEnabled = smartCrossfadeEnabled,
+                    appleMusicMode = appleMusicMode,
                     onPlayBestMix = onPlayBestMix,
                     onFetchSectionItems = onFetchSectionItems,
                     )

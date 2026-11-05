@@ -129,10 +129,13 @@ internal class BestMixLauncher(
 internal fun rememberBestMixLauncher(
     detail: BrowseDetail,
     downloadedTrackIds: Set<String>,
+    appleMusicMode: Boolean,
     onPlayAll: (List<Track>, String) -> Unit,
     onPlayBestMix: ((List<Track>, String, (String) -> Unit, () -> Unit) -> Unit)?,
 ): BestMixLauncher {
-    val undownloaded = remember(detail.tracks, downloadedTrackIds) { detail.tracks.filter { it.id !in downloadedTrackIds } }
+    val undownloaded = remember(detail.tracks, downloadedTrackIds, appleMusicMode) {
+        detail.tracks.filter { it.id !in downloadedTrackIds && !(appleMusicMode && it.id.startsWith("am.songs.")) }
+    }
     // Unknown durations count as 3.5 minutes; 20 KB/s approximates the cached stream bitrate.
     val estimatedMb = remember(undownloaded) {
         val ms = undownloaded.sumOf { if (it.durationMs > 0) it.durationMs else 210_000L }

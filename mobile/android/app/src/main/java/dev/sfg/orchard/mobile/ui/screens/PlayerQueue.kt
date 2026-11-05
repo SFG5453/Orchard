@@ -163,7 +163,7 @@ fun PlayerQueuePanel(
                 trailing = if (playback.upcoming.isNotEmpty() && editable) {
                     {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (playback.upcoming.size > 1 && onBestMixUpcoming != null) {
+                            if (smartCrossfade && playback.upcoming.size > 1 && onBestMixUpcoming != null) {
                                 QueueBestMixButton(onBestMixUpcoming)
                                 Spacer(Modifier.width(4.dp))
                             }
