@@ -201,7 +201,7 @@ Window {
                     MiniVideo {
                         area: miniLayer
                         player: musicVideoPlayer.item
-                        live: miniVideo.shown
+                        live: miniVideo.shown && !OrchardWindowState.backgroundIdle
                         topInset: homeShell.item && homeShell.item.canopy ? 96 : 72
                         bottomInset: homeShell.item && homeShell.item.canopy ? 20 : 110
                     }
@@ -224,7 +224,7 @@ Window {
             sourceComponent: Component {
                 MusicVideoTheater {
                     player: musicVideoPlayer.item
-                    pictureLive: theater.shown
+                    pictureLive: theater.shown && !OrchardWindowState.backgroundIdle
                 }
             }
 

@@ -29,6 +29,7 @@ Item {
     property url source: ""
     property real radius: 0
     property bool playing: true
+    readonly property bool shouldPlay: playing && visible && !OrchardWindowState.backgroundIdle
     property int fillMode: VideoOutput.PreserveAspectCrop
 
     readonly property bool hasVideo: Boolean(source && source.toString().length > 0)
@@ -56,10 +57,12 @@ Item {
 
     function resolvePlayable() {
         playableSource = hasVideo ? OrchardArtworkVideos.localUrl(source.toString()) : "";
-        if (playableSource.length > 0 && playing)
+        if (playableSource.length > 0 && shouldPlay)
             player.play();
         else if (playableSource.length === 0)
             player.stop();
+        else
+            player.pause();
     }
 
     Component.onCompleted: resolvePlayable()
@@ -82,9 +85,9 @@ Item {
     Connections {
         target: root
 
-        function onPlayingChanged() {
+        function onShouldPlayChanged() {
             if (root.playableSource.length === 0) return;
-            if (root.playing) {
+            if (root.shouldPlay) {
                 player.play();
             } else {
                 player.pause();

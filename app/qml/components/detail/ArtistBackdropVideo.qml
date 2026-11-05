@@ -27,6 +27,7 @@ Item {
 
     property url source: ""
     property bool playing: true
+    readonly property bool shouldPlay: playing && visible && !OrchardWindowState.backgroundIdle
     // Fraction of the video to skip on first load; intros are often label cards or black.
     property real startAt: 0.22
     property real visibleTop: 0
@@ -72,17 +73,17 @@ Item {
                     if (root.startAt > 0)
                         position = Math.floor(duration * root.startAt);
                 }
-                if (root.playing)
+                if (root.shouldPlay)
                     play();
             }
         }
         onErrorOccurred: root.failed()
     }
 
-    onPlayingChanged: {
+    onShouldPlayChanged: {
         if (!hasVideo)
             return;
-        if (playing)
+        if (shouldPlay)
             player.play();
         else
             player.pause();

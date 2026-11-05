@@ -283,7 +283,7 @@ void AppleMusicPicture::syncClock(bool force) {
 }
 
 void AppleMusicPicture::tick() {
-  if (!m_ready)
+  if (!m_ready || !m_sink)
     return;
   syncClock(false);
   const double position = clock();

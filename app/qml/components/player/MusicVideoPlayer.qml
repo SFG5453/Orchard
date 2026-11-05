@@ -35,16 +35,17 @@ MediaPlayer {
             return;
         const target = OrchardPlayback.position * 1000;
         // The audio engine plays the soundtrack and is the clock; the muted picture follows it.
-        if (Math.abs(video.position - target) > 400)
+        if (video.videoOutput && Math.abs(video.position - target) > 400)
             video.position = target;
-        if (OrchardPlayback.playing && video.playbackState !== MediaPlayer.PlayingState)
+        if (OrchardPlayback.playing && video.videoOutput && video.playbackState !== MediaPlayer.PlayingState)
             video.play();
-        else if (!OrchardPlayback.playing && video.playbackState === MediaPlayer.PlayingState)
+        else if ((!OrchardPlayback.playing || !video.videoOutput) && video.playbackState === MediaPlayer.PlayingState)
             video.pause();
     }
 
     source: OrchardMusicVideo.source
     onSourceChanged: retried = false
+    onVideoOutputChanged: syncVideo()
     onMediaStatusChanged: if (mediaStatus === MediaPlayer.LoadedMedia || mediaStatus === MediaPlayer.BufferedMedia) syncVideo()
     onErrorOccurred: {
         if (!retried) {
