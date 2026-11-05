@@ -19,7 +19,9 @@
 
 import ".."
 import "../home"
+import Orchard
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls
 import QtQuick.Effects
 
@@ -56,8 +58,8 @@ Item {
 
     readonly property bool masked: GraphicsInfo.api !== GraphicsInfo.Software
     // Anything wider than 4:3 is a real banner; squarer images would lose the face to cropping.
-    readonly property bool bannerMode: bannerProbe.status === Image.Ready
-                                       && bannerProbe.implicitWidth > bannerProbe.implicitHeight * 1.34
+    readonly property bool bannerMode: bannerProbe.size.width > 0
+                                       && bannerProbe.size.width > bannerProbe.size.height * 1.34
     readonly property bool wideMode: videoWanted || poster.length > 0 || bannerMode
     // Video heroes show the whole frame, up to a full viewport. Narrow windows crop the sides.
     // Other wide art uses about 42% of the page width, capped so the first rows of songs stay in view.
@@ -78,16 +80,15 @@ Item {
 
     implicitHeight: mediaHeight + 4
 
-    Image {
+    ImageDimensions {
         id: bannerProbe
         source: root.banner
-        asynchronous: true
-        visible: false
     }
 
     // Whole header fades to transparent at the bottom so it melts into the shell's ambient colors.
     Rectangle {
         id: stageFade
+        layer.textureSize: Qt.size(1, Math.max(1, Math.ceil(height * Screen.devicePixelRatio)))
         width: root.width
         height: root.mediaHeight
         visible: false
@@ -127,6 +128,7 @@ Item {
         // Smoothly reveal the blur over the lower picture, before it fades into the page.
         Rectangle {
             id: blurMask
+            layer.textureSize: Qt.size(1, Math.max(1, Math.ceil(height * Screen.devicePixelRatio)))
             width: root.width
             height: root.mediaHeight
             visible: false
@@ -186,6 +188,9 @@ Item {
 
                 Image {
                     id: stillImage
+                    sourceSize: Qt.size(Math.max(1, Math.ceil(width * Screen.devicePixelRatio / 128) * 128),
+                                        Math.max(1, Math.ceil(height * Screen.devicePixelRatio / 128) * 128))
+                    retainWhileLoading: true
                     anchors.fill: parent
                     source: root.poster.length > 0 ? root.poster : root.banner
                     fillMode: Image.PreserveAspectCrop
@@ -266,6 +271,8 @@ Item {
 
         Image {
             id: logoImage
+            sourceSize: Qt.size(Math.max(1, Math.ceil(width * Screen.devicePixelRatio)),
+                                Math.ceil((root.compact ? 64 : 104) * Screen.devicePixelRatio))
             anchors.horizontalCenter: parent.horizontalCenter
             visible: root.logo.length > 0 && status === Image.Ready
             source: root.logo

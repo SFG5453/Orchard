@@ -75,7 +75,7 @@ Item {
         onClicked: menu.popup(options, 0, height)
         background: Rectangle { radius: 7; color: options.hovered || options.activeFocus ? "#20ffffff" : "transparent" }
         contentItem: Caption { text: "⋮"; font.pixelSize: 22; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-        MediaMenu {
+        MediaMenuHost {
             id: menu; media: options.media
             onAlbumRequested: album => root.albumRequested(album)
             onArtistRequested: artist => root.artistRequested(artist)
@@ -190,25 +190,66 @@ Item {
                                 background: Rectangle { radius: 7; color: viewAll.hovered || viewAll.activeFocus ? "#18ffffff" : "transparent" }
                                 contentItem: Caption { text: qsTr("View all  ›"); color: "#c9cac2"; font.pixelSize: 11; verticalAlignment: Text.AlignVCenter }
                             }
-                            Flow {
+                            Item {
                                 id: results
-                                x: panel.tiles ? 14 : 6; y: 40; width: parent.width - x * 2; spacing: panel.tiles ? 14 : 0
+                                x: panel.tiles ? 14 : 6; y: 40; width: parent.width - x * 2
+                                readonly property real spacing: panel.tiles ? 14 : 0
+                                readonly property real entryWidth: panel.tiles ? (width - (panel.columns - 1) * spacing) / panel.columns : width
+                                readonly property real entryHeight: panel.tiles ? entryWidth * (panel.coverGrid ? 1 : 0.66) + 70 : 54
+                                readonly property real stride: entryHeight + spacing
+                                readonly property int rows: Math.ceil(panel.entries.length / panel.columns)
+                                readonly property real viewportTop: scroll.contentY - group.y - panel.y - y
+                                readonly property int firstRow: Math.min(rows, Math.max(0, Math.floor(viewportTop / stride) - 1))
+                                readonly property int endRow: Math.min(rows, Math.max(firstRow, Math.ceil((viewportTop + scroll.height) / stride) + 1))
+                                readonly property int firstIndex: Math.min(panel.entries.length, firstRow * panel.columns)
+                                readonly property int endIndex: Math.min(panel.entries.length, endRow * panel.columns)
+                                property int loadedFirst: 0
+                                height: Math.max(0, rows * stride - spacing)
+                                onFirstIndexChanged: Qt.callLater(syncWindow)
+                                onEndIndexChanged: Qt.callLater(syncWindow)
+                                Component.onCompleted: syncWindow()
+
+                                // Keep overlapping delegates alive so a scroll never reloads their artwork.
+                                function syncWindow() {
+                                    if (firstIndex >= loadedFirst + visibleEntries.count || endIndex <= loadedFirst) {
+                                        visibleEntries.clear();
+                                        loadedFirst = firstIndex;
+                                    }
+                                    if (firstIndex > loadedFirst) {
+                                        visibleEntries.remove(0, firstIndex - loadedFirst);
+                                        loadedFirst = firstIndex;
+                                    }
+                                    while (loadedFirst > firstIndex) {
+                                        --loadedFirst;
+                                        visibleEntries.insert(0, {entryIndex: loadedFirst});
+                                    }
+                                    const count = endIndex - firstIndex;
+                                    if (visibleEntries.count > count)
+                                        visibleEntries.remove(count, visibleEntries.count - count);
+                                    while (visibleEntries.count < count)
+                                        visibleEntries.append({entryIndex: firstIndex + visibleEntries.count});
+                                }
+
+                                ListModel { id: visibleEntries }
                                 Repeater {
-                                    model: panel.entries
+                                    model: visibleEntries
                                     Item {
                                         id: entry
-                                        required property var modelData
-                                        required property int index
+                                        required property int entryIndex
+                                        readonly property var modelData: panel.entries[entryIndex] || ({})
+                                        x: (entryIndex % panel.columns) * (results.entryWidth + results.spacing)
+                                        y: Math.floor(entryIndex / panel.columns) * results.stride
                                         // Cap the stagger so a 50-row tab doesn't make the last row wait a second and a half.
-                                        opacity: 0
-                                        SequentialAnimation on opacity {
-                                            PauseAnimation { duration: Math.min(entry.index, 8) * Motion.stagger }
-                                            NumberAnimation { to: 1; duration: Motion.normal; easing.type: Motion.enter }
+                                        Component.onCompleted: if (resultsEntrance.running) { opacity = 0; entryEntrance.start(); }
+                                        SequentialAnimation {
+                                            id: entryEntrance
+                                            PauseAnimation { duration: Math.min(entry.entryIndex, 8) * Motion.stagger }
+                                            NumberAnimation { target: entry; property: "opacity"; to: 1; duration: Motion.normal; easing.type: Motion.enter }
                                         }
                                         readonly property bool video: panel.modelData.key === "videos"
                                         readonly property bool artist: panel.modelData.key === "artists"
-                                        width: panel.tiles ? (results.width - (panel.columns - 1) * results.spacing) / panel.columns : results.width
-                                        height: panel.tiles ? width * (panel.coverGrid ? 1 : 0.66) + 70 : 54
+                                        width: results.entryWidth
+                                        height: results.entryHeight
                                         Button {
                                             id: itemButton
                                             anchors.fill: parent; padding: 0
@@ -247,7 +288,7 @@ Item {
                                         Options { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; visible: !panel.tiles; media: entry.modelData }
                                         // Albums get a room; their context menu gets a side door.
                                         TapHandler { acceptedButtons: Qt.RightButton; onTapped: entryMenu.popup(entry, 0, entry.height) }
-                                        MediaMenu {
+                                        MediaMenuHost {
                                             id: entryMenu; media: entry.modelData
                                             onAlbumRequested: album => root.albumRequested(album)
                                             onArtistRequested: artist => root.artistRequested(artist)

@@ -20,6 +20,7 @@
 import Orchard
 import QtQuick
 import QtQuick.Controls
+import "mediaNavigation.js" as Navigation
 
 Menu {
     id: root
@@ -66,12 +67,8 @@ Menu {
     // "downloaded", "queued", "downloading", "failed" or "none"; the revision read refreshes it.
     readonly property string downloadState: isSong && !isLocalSong && OrchardDownloads.revision >= 0
         ? OrchardDownloads.stateOf(media.id) : "none"
-    readonly property string albumId: media.type === "album" || media.kind === "album"
-        ? (media.browsePayload || {}).browseId || media.browseId || media.albumId || ""
-        : media.albumId || ""
-    readonly property var artistIds: isArtist
-        ? [media.browseId || (media.browsePayload || {}).browseId].filter(Boolean)
-        : (media.artistBrowseIds && media.artistBrowseIds.length ? media.artistBrowseIds : (media.artistBrowseId || media.artistId ? [media.artistBrowseId || media.artistId] : []))
+    readonly property string albumId: Navigation.albumId(media)
+    readonly property var artistIds: Navigation.artistIds(media)
     readonly property string songLinkId: {
         if (Boolean(root.media.id) && (["song", "track", "video"].includes(root.media.type) || !root.media.type))
             return root.media.id;
@@ -109,8 +106,7 @@ Menu {
             albumRequested({browseId: albumId, title: media.album || (media.type === "album" ? media.title : "")});
     }
     function artistAt(index) {
-        return {browseId: artistIds[index], type: "artist",
-                title: (media.artists || [])[index] || media.artist || media.title || ""};
+        return Navigation.artistAt(media, index);
     }
     function viewArtist(anchor, x, y) {
         if (artistIds.length === 1)

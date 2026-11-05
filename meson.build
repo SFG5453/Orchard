@@ -335,6 +335,7 @@ app_dep = declare_dependency(link_with: app_lib, include_directories: app_inc,
   dependencies: app_dependencies, compile_args: app_args)
 
 qml_type_headers = [
+  'app/src/appearance/image_dimensions.h',
   'app/src/appearance/artwork_palette.h',
   'app/src/appearance/kawarp_background.h',
   'app/src/appearance/liquid_glass.h',
@@ -476,9 +477,10 @@ if host_machine.system() in ['linux', 'windows']
 endif
 
 qml_startup_test = executable('orchard_qml_startup_test',
-  files('tests/qml_startup_test.cpp'),
+  files('tests/qml_startup_test.cpp', 'tests/memory_ui_checks.cpp', 'tests/image_dimensions_checks.cpp'),
   objects: [orchard.extract_objects(qml_module, qmldir_resources, qml_files_qrc, assets_qrc, exe_moc,
     files('app/src/appearance/artwork_palette.cpp',
+      'app/src/appearance/image_dimensions.cpp',
       'app/src/appearance/kawarp_background.cpp',
       'app/src/appearance/liquid_glass.cpp')), app_lib.extract_objects(
     files('app/src/appearance/artwork_sampler.cpp',

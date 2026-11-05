@@ -57,13 +57,15 @@ ItemDelegate {
 
     function tint(color, alpha) { return Qt.rgba(color.r, color.g, color.b, alpha); }
 
+    Keys.onMenuPressed: trackMenu.popup(root, 0, height)
+
     height: showArtwork ? 60 : 54
     padding: 0
     hoverEnabled: true
     Accessible.name: (trackIndex + 1) + ". " + (track.title || qsTr("Untitled track")) + ", " + artistLabel
                      + (downloaded ? ", " + qsTr("downloaded") : "")
 
-    MediaMenu {
+    MediaMenuHost {
         id: trackMenu
         media: root.menuMedia
         removablePlaylistId: root.removablePlaylistId
@@ -81,7 +83,7 @@ ItemDelegate {
         radius: 10
         color: root.searchMatch ? root.tint(root.accentColor, 0.3)
              : root.current ? root.tint(root.accentColor, 0.14)
-             : root.hovered || trackMenu.visible ? "#10ffffff" : "transparent"
+             : root.hovered || trackMenu.opened ? "#10ffffff" : "transparent"
         border.width: root.searchMatch ? 2 : 1
         border.color: root.searchMatch ? root.accentColor
                     : root.activeFocus ? root.accentSoftColor
@@ -269,7 +271,7 @@ ItemDelegate {
             height: 36
             anchors.verticalCenter: parent.verticalCenter
             padding: 10
-            opacity: root.hovered || trackMenu.visible || activeFocus ? 1 : 0
+            opacity: root.hovered || trackMenu.opened || activeFocus ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: 110 } }
             Accessible.name: qsTr("More options for %1").arg(root.track.title || qsTr("track"))
             onClicked: trackMenu.popup(moreButton, 0, moreButton.height)

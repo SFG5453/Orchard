@@ -1,5 +1,6 @@
 # QML, asset and shader lists, kept apart from the C++ and Rust source lists.
 qml_sources = [
+  'app/qml/components/MediaMenuHost.qml',
   'app/qml/components/settings/LyricsProvidersSection.qml',
   'app/qml/components/player/LyricsSourceBar.qml',
   'app/qml/Main.qml',

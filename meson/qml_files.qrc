@@ -1,5 +1,7 @@
 <RCC>
   <qresource prefix="/qt/qml/Orchard">
+    <file alias="app/qml/components/MediaMenuHost.qml">../app/qml/components/MediaMenuHost.qml</file>
+    <file alias="app/qml/components/mediaNavigation.js">../app/qml/components/mediaNavigation.js</file>
     <file alias="app/qml/components/settings/LyricsProvidersSection.qml">../app/qml/components/settings/LyricsProvidersSection.qml</file>
     <file alias="app/qml/components/player/LyricsSourceBar.qml">../app/qml/components/player/LyricsSourceBar.qml</file>
     <file alias="app/qml/Main.qml">../app/qml/Main.qml</file>

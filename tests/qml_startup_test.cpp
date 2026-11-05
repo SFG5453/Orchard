@@ -218,6 +218,9 @@ static bool verifyPlaylistFilter(QQmlEngine &engine, QTextStream &output) {
   return true;
 }
 
+bool verifyMemoryUi(QTextStream &output);
+bool verifyImageDimensions(QTextStream &output);
+
 int main(int argc, char *argv[]) {
   QGuiApplication application(argc, argv);
   QQuickStyle::setStyle(QStringLiteral("Basic"));
@@ -255,6 +258,8 @@ int main(int argc, char *argv[]) {
     output << "Orchard playlist filter failed its runtime check.\n";
     return 1;
   }
+  if (!verifyImageDimensions(output)) return 1;
+  if (!verifyMemoryUi(output)) return 1;
   output << "Orchard QML startup check passed.\n";
   return 0;
 }

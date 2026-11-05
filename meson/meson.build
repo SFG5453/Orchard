@@ -294,6 +294,8 @@ app_sources = [
 ]
 
 app_executable_sources = [
+  'app/src/appearance/image_dimensions.cpp',
+  'app/src/appearance/image_dimensions.h',
   'app/src/appearance/artwork_palette.cpp',
   'app/src/appearance/artwork_palette.h',
   'app/src/appearance/kawarp_background.cpp',

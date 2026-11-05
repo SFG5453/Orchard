@@ -159,7 +159,7 @@ Item {
     Column {
         id: sideColumn
 
-        parent: root.compact ? heroSlot : sideScroll.contentItem
+        parent: root.compact && scroll.headerItem ? scroll.headerItem.heroSlot : sideScroll.contentItem
         y: root.compact ? 0 : 14
         width: root.compact ? root.width - root.pageInset * 2 : root.sideWidth
         spacing: 14
@@ -264,107 +264,89 @@ Item {
 
     }
 
-    DetailFlickable {
+    DetailListView {
         id: scroll
 
         anchors.fill: parent
-        anchors.leftMargin: root.listLeft
-        clip: true
-        contentWidth: width
-        contentHeight: content.height + 28
-        boundsBehavior: Flickable.StopAtBounds
+        anchors.leftMargin: root.listLeft + (root.compact ? root.pageInset : 0)
+        anchors.rightMargin: root.pageInset
+        model: root.tracks
+        cacheBuffer: 162
 
-        Column {
-            id: content
-
-            x: root.compact ? root.pageInset : 0
-            y: 14
-            width: scroll.width - (root.compact ? root.pageInset * 2 : root.pageInset)
-            spacing: 14
-
+        header: Column {
+            property alias heroSlot: heroSlot
+            width: scroll.width
+            topPadding: 14
             Item {
                 id: heroSlot
-
                 width: parent.width
-                height: root.compact ? sideColumn.height : 0
+                height: (root.compact ? sideColumn.height : 0) + 14
+            }
+            CollectionTrackHeader {
+                width: parent.width
+                showArtwork: false
+                labelColor: root.tint(root.accentSoftColor, 0.6)
+            }
+            Item { width: 1; height: 6 }
+        }
+
+        delegate: CollectionTrackRow {
+            id: trackRow
+
+            required property var modelData
+            required property int index
+
+            width: scroll.width
+            track: modelData
+            trackIndex: index
+            reveal: root.revealRows
+            showArtwork: false
+            // Features earn a second line; the headliner is already on the cover.
+            showArtist: trackRow.artistLabel !== (root.detail.artist || "")
+            fallbackArtist: root.detail.artist || ""
+            menuMedia: Object.assign({}, modelData, {
+                "albumId": root.detail.browseId
+            })
+            accentColor: root.accentColor
+            accentSoftColor: root.accentSoftColor
+            onClicked: root.trackRequested(trackRow.modelData, trackRow.index)
+            onAlbumRequested: function(album) {
+                root.albumRequested(album);
+            }
+            onArtistRequested: function(artist) {
+                root.artistRequested(artist);
+            }
+            onPlaylistRequested: function(playlist) {
+                root.playlistRequested(playlist);
+            }
+        }
+
+        footer: Column {
+            width: scroll.width
+            Text {
+                width: parent.width
+                height: visible ? 72 : 0
+                visible: !root.tracks.length
+                text: qsTr("No tracks available for this album.")
+                color: root.accentSoftColor
+                verticalAlignment: Text.AlignVCenter
+                horizontalAlignment: Text.AlignHCenter
+                font.family: "Inter"
+                font.pixelSize: 13
             }
 
-            Column {
-                width: parent.width
-
-                CollectionTrackHeader {
-                    width: parent.width
-                    showArtwork: false
-                    labelColor: root.tint(root.accentSoftColor, 0.6)
-                }
-
-                Item {
-                    width: 1
-                    height: 6
-                }
-
-                Repeater {
-                    model: root.tracks
-
-                    delegate: CollectionTrackRow {
-                        id: trackRow
-
-                        required property var modelData
-                        required property int index
-
-                        width: parent.width
-                        track: modelData
-                        trackIndex: index
-                        reveal: root.revealRows
-                        showArtwork: false
-                        // Features earn a second line; the headliner is already on the cover.
-                        showArtist: trackRow.artistLabel !== (root.detail.artist || "")
-                        fallbackArtist: root.detail.artist || ""
-                        menuMedia: Object.assign({}, modelData, {
-                            "albumId": root.detail.browseId
-                        })
-                        accentColor: root.accentColor
-                        accentSoftColor: root.accentSoftColor
-                        onClicked: root.trackRequested(trackRow.modelData, trackRow.index)
-                        onAlbumRequested: function(album) {
-                            root.albumRequested(album);
-                        }
-                        onArtistRequested: function(artist) {
-                            root.artistRequested(artist);
-                        }
-                        onPlaylistRequested: function(playlist) {
-                            root.playlistRequested(playlist);
-                        }
-                    }
-
-                }
-
-                Text {
-                    width: parent.width
-                    height: visible ? 72 : 0
-                    visible: !root.tracks.length
-                    text: qsTr("No tracks available for this album.")
-                    color: root.accentSoftColor
-                    verticalAlignment: Text.AlignVCenter
-                    horizontalAlignment: Text.AlignHCenter
-                    font.family: "Inter"
-                    font.pixelSize: 13
-                }
-
-                // Liner notes, minus the smell of a fresh CD booklet.
-                Text {
-                    x: 12
-                    width: parent.width - 24
-                    topPadding: 18
-                    visible: root.tracks.length > 0
-                    text: [root.detail.year || "", root.tracks.length === 1 ? qsTr("1 song") : qsTr("%1 songs").arg(root.tracks.length), root.totalSeconds > 0 ? root.lengthLabel(root.totalSeconds) : ""].filter(Boolean).join("  ·  ")
-                    color: root.tint(root.accentSoftColor, 0.55)
-                    font.family: "Inter"
-                    font.pixelSize: 12
-                }
-
+            // Liner notes, minus the smell of a fresh CD booklet.
+            Text {
+                x: 12
+                width: parent.width - 24
+                topPadding: 18
+                visible: root.tracks.length > 0
+                text: [root.detail.year || "", root.tracks.length === 1 ? qsTr("1 song") : qsTr("%1 songs").arg(root.tracks.length), root.totalSeconds > 0 ? root.lengthLabel(root.totalSeconds) : ""].filter(Boolean).join("  ·  ")
+                color: root.tint(root.accentSoftColor, 0.55)
+                font.family: "Inter"
+                font.pixelSize: 12
             }
-
+            Item { width: 1; height: 14 }
             AlbumShelves {
                 width: parent.width
                 sections: root.detail.sections || []
@@ -374,16 +356,16 @@ Item {
                 onVideoRequested: function(video) { root.videoRequested(video); }
                 onVerticalScrollRequested: function(delta, smooth) { scroll.scrollBy(delta, smooth); }
             }
-
+            Item { width: 1; height: 28 }
         }
-
     }
 
     CollectionStickyBar {
         x: root.pageInset
         y: 8
         width: root.width - root.pageInset * 2
-        shown: root.compact && !OrchardAlbum.loading && scroll.contentY > content.y + sideColumn.y + hero.y + hero.height - 40
+        shown: root.compact && !OrchardAlbum.loading && scroll.headerItem
+            && scroll.contentY > scroll.headerItem.y + scroll.headerItem.heroSlot.y + sideColumn.y + hero.y + hero.height - 40
         title: root.detail.title || qsTr("Album")
         artwork: root.detail.thumbnail || ""
         playing: root.collectionPlaying
@@ -392,7 +374,7 @@ Item {
         accentInkColor: root.onAccentColor
         inkColor: root.inkColor
         onPlayClicked: root.playOrToggle()
-        onBackToTopClicked: scroll.contentY = 0
+        onBackToTopClicked: scroll.positionViewAtBeginning()
     }
 
     PageLoadState {
