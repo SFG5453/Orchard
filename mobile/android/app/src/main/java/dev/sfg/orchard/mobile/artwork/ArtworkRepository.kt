@@ -22,6 +22,7 @@ package dev.sfg.orchard.mobile.artwork
 import android.util.Log
 import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.ArtworkSource
+import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.Track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -125,7 +126,7 @@ class ArtworkRepository(
         detail: BrowseDetail,
         onAlbum: (TrackArtwork) -> Unit = {},
     ): TrackArtwork? = withContext(Dispatchers.IO) {
-        if (detail.title.isBlank()) return@withContext null
+        if (detail.kind != CatalogKind.ALBUM || detail.title.isBlank()) return@withContext null
         // detail.subtitle is the descriptive line ("Album", "Playlist"), not the performer, so
         // querying with it missed every time and cost the full timeout on the slow providers.
         val artist = detail.artist.takeIf { it.isNotBlank() }

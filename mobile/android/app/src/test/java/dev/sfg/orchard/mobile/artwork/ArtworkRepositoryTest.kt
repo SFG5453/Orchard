@@ -21,6 +21,8 @@ package dev.sfg.orchard.mobile.artwork
 
 import dev.sfg.orchard.mobile.model.Track
 import dev.sfg.orchard.mobile.model.ArtworkSource
+import dev.sfg.orchard.mobile.model.BrowseDetail
+import dev.sfg.orchard.mobile.model.CatalogKind
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -34,6 +36,23 @@ import org.junit.Test
 class ArtworkRepositoryTest {
     private val repository = ArtworkRepository(OkHttpClient())
     private val espresso = Track("id", "Espresso", "Sabrina Carpenter", "Short n' Sweet")
+
+    @Test
+    fun playlistDoesNotResolveArtworkFromItsTracks() = runBlocking {
+        var lookups = 0
+        val repo = ArtworkRepository(
+            OkHttpClient(),
+            appleSignedIn = { true },
+            appleArtwork = { _, _ ->
+                lookups++
+                TrackArtwork("id", videoUrl = "https://example.test/artwork.m3u8")
+            },
+        )
+        val playlist = BrowseDetail("playlist", CatalogKind.PLAYLIST, "Playlist", tracks = listOf(espresso))
+
+        assertNull(repo.artwork(playlist))
+        assertEquals(0, lookups)
+    }
 
     @Test
     fun m8tecResponseAcceptsCompatibleDeluxeAlbumName() {
