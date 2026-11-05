@@ -194,7 +194,9 @@ fun NowPlayingScreen(
             // One sample feeds the backdrop and the lyrics, so sung words carry the same
             // colour the artwork bleeds into rather than a second, squarer sample of the cover.
             val verticalVideo = track.animatedArtworkVerticalUrl.ifBlank { track.animatedArtworkUrl }
-            val hasRichArtwork = animatedArtworkEnabled && verticalVideo.isNotBlank()
+            val squareMotionCover = !framedCover && !isFoldable && animatedArtworkEnabled &&
+                track.animatedArtworkVerticalUrl.isBlank() && track.animatedArtworkUrl.isNotBlank()
+            val hasRichArtwork = animatedArtworkEnabled && verticalVideo.isNotBlank() && !squareMotionCover
             var videoFrame by remember(verticalVideo) { mutableStateOf<Bitmap?>(null) }
             var artworkSeam by remember { mutableStateOf<Float?>(null) }
             var artworkRoom by remember { mutableStateOf<Float?>(null) }
@@ -210,7 +212,7 @@ fun NowPlayingScreen(
                 palette = palette,
                 incomingPalette = incomingPalette,
                 incomingArtworkUrl = incomingTrack?.artworkUrl,
-                animatedArtworkEnabled = animatedArtworkEnabled,
+                animatedArtworkEnabled = animatedArtworkEnabled && !squareMotionCover,
                 animatedBackgroundEnabled = animatedBackgroundEnabled,
                 gesturesEnabled = gesturesEnabled,
                 transitionProgress = activeMixProgress,
@@ -353,6 +355,7 @@ fun NowPlayingScreen(
                 lyrics = lyrics,
                 lyricAccent = lyricAccent,
                 hasRichArtwork = hasRichArtwork,
+                animatedArtworkEnabled = animatedArtworkEnabled,
                 incomingTrack = incomingTrack,
                 outgoingTrack = outgoingTrack,
                 onCoverBounds = { if (settledOpen()) onRestingCoverBounds(it) },

@@ -89,6 +89,7 @@ internal fun PhonePlayerBody(
     lyricAccent: Color,
     /** Set when the backdrop already shows motion artwork, so no framed cover is drawn. */
     hasRichArtwork: Boolean,
+    animatedArtworkEnabled: Boolean,
     incomingTrack: Track?,
     outgoingTrack: Track,
     onCoverBounds: ((Rect) -> Unit)?,
@@ -285,6 +286,8 @@ internal fun PhonePlayerBody(
                             outgoingTrack = outgoingTrack,
                             transitionProgress = mixProgress,
                             transitionStyle = transition?.style.orEmpty(),
+                            animatedArtworkEnabled = animatedArtworkEnabled,
+                            isPlaying = playback.isPlaying,
                             onArtworkBounds = { onCoverBounds?.invoke(it) },
                             instantTrackChange = swipe.handingOff,
                         )
