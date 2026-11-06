@@ -1,6 +1,6 @@
 # Maintainer: Orchard contributors
 pkgname=orchard-git
-pkgver=1.0.0.canary.10.r726.gb1b95574
+pkgver=2.0.0.canary.1.r733.g0e477500
 pkgrel=1
 pkgdesc='Music player for YouTube Music and Apple Music'
 arch=('x86_64')
