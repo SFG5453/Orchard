@@ -20,6 +20,7 @@
 package dev.sfg.orchard.mobile.playback
 
 import android.util.Log
+import android.os.SystemClock
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import dev.sfg.orchard.mobile.OrchardGraph
@@ -28,12 +29,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import java.util.UUID
 
 /** Reports Apple Music songs played here so they reach the listener's Recently Played. */
 internal class AppleHistoryReporter(private val graph: OrchardGraph, private val scope: CoroutineScope) {
     private var songId = ""
-    private var persistentId = ""
+    private val persistentId = graph.appleMusic.activityId()
+    private var startedAtMs = 0L
+    private var container: JSONObject? = null
     private var startMs = 0L
     private var positionMs = 0L
     private var durationMs = 0L
@@ -51,7 +53,12 @@ internal class AppleHistoryReporter(private val graph: OrchardGraph, private val
             if (!player.isPlaying || position <= 0 || !graph.settings.settings.value.sendAppleMusicHistory ||
                 !graph.networkMonitor.isOnline.value || !graph.appleMusic.signedIn()) return
             songId = id
-            persistentId = UUID.randomUUID().toString()
+            startedAtMs = SystemClock.elapsedRealtime()
+            val track = player.currentMediaItem?.let(MediaItemMapper::toTrack)
+            val albumId = track?.albumId.orEmpty().removePrefix(ALBUM_PREFIX)
+            container = if (track?.albumId?.startsWith(ALBUM_PREFIX) == true && albumId.isNotEmpty()) {
+                JSONObject().put("kind", "album").put("id", albumId).put("name", track.album)
+            } else null
             startMs = position
             positionMs = position
             durationMs = duration(player)
@@ -81,8 +88,10 @@ internal class AppleHistoryReporter(private val graph: OrchardGraph, private val
             .put("durationMs", durationMs)
             .put("startPositionMs", startMs)
             .put("shuffle", shuffle)
+        container?.let { payload.put("container", it) }
         if (end) {
             payload.put("endPositionMs", if (natural) durationMs else positionMs)
+                .put("elapsedMs", (SystemClock.elapsedRealtime() - startedAtMs).coerceAtLeast(0))
                 .put("reason", if (natural) "natural" else "skipped")
         }
         val prior = previousRequest
@@ -96,6 +105,7 @@ internal class AppleHistoryReporter(private val graph: OrchardGraph, private val
     private companion object {
         const val TAG = "AppleHistoryReporter"
         const val SONG_PREFIX = "am.songs."
+        const val ALBUM_PREFIX = "am.albums."
         const val NATURAL_END_MS = 3_000L
     }
 }

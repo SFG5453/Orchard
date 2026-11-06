@@ -20,6 +20,7 @@
 #pragma once
 
 #include <QJsonObject>
+#include <QElapsedTimer>
 #include <QObject>
 #include <QString>
 #include <QTimer>
@@ -46,6 +47,8 @@ private:
   // Ends the play after a pause so a long pause is not counted as listening.
   QTimer m_pauseTimer;
   QString m_persistentId;
+  QJsonObject m_container;
+  QElapsedTimer m_elapsed;
   double m_start{0};
   double m_position{0};
   double m_duration{0};

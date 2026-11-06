@@ -18,7 +18,7 @@ test('a finished play posts MusicKit\'s play-end item with the user token', asyn
   const { client, calls } = music();
   const result = await client.playEnded({
     id: '1440857781', durationMs: 200000, startPositionMs: 0, endPositionMs: 199000,
-    reason: 'natural', container: { kind: 'album', id: '1440857780' }
+    elapsedMs: 198000, reason: 'natural', container: { kind: 'album', id: '1440857780' }
   });
   assert.equal(result.recorded, true);
   const [{ url, init, body }] = calls;
@@ -30,7 +30,7 @@ test('a finished play posts MusicKit\'s play-end item with the user token', asyn
   const [item] = body.data;
   assert.equal(item['event-type'], 0);
   assert.equal(item.type, 1);
-  assert.equal(item['milliseconds-since-play'], 199000);
+  assert.equal(item['milliseconds-since-play'], 198000);
   assert.equal(item['end-reason-type'], 7);
   assert.deepEqual(item.ids, { 'subscription-adam-id': '1440857781' });
   assert.deepEqual(item['container-ids'], { 'album-adam-id': '1440857780' });

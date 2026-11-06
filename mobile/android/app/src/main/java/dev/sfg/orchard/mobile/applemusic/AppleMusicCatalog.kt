@@ -49,6 +49,7 @@ import okhttp3.OkHttpClient
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
+import java.util.UUID
 
 internal class AppleMusicException(val code: String, message: String) : Exception(message)
 
@@ -66,6 +67,11 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
     private var configuredFor = ""
 
     fun signedIn(): Boolean = auth.userToken().isNotBlank()
+    fun activityId(): String = synchronized(prefs) {
+        prefs.getString("activity_id", null)?.takeIf(String::isNotBlank) ?: UUID.randomUUID().toString().also {
+            prefs.edit().putString("activity_id", it).apply()
+        }
+    }
     val connection = auth.state
 
     suspend fun search(query: String): SearchResults =

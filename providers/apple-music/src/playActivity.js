@@ -79,10 +79,8 @@ export function buildPlayEvent(event, play, session) {
     const endMs = Math.max(startMs, Math.round(Number(play.endPositionMs) || 0));
     item['end-position-in-milliseconds'] = endMs;
     item['end-reason-type'] = END_REASONS[play.reason] ?? END_REASONS.other;
-    item['milliseconds-since-play'] = endMs - startMs;
-  } else {
-    item['milliseconds-since-play'] = 0;
   }
+  item['milliseconds-since-play'] = ending ? Math.max(0, Math.round(Number(play.elapsedMs) || 0)) : 0;
   return item;
 }
 

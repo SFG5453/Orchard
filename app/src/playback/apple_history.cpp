@@ -23,6 +23,7 @@
 #include "playback_controller.h"
 
 #include <QUuid>
+#include <QSettings>
 #include <cmath>
 
 namespace {
@@ -53,11 +54,18 @@ AppleHistory::AppleHistory(PlaybackController *playback, AppleMusic *account)
     m_id.clear();
   });
   connect(playback, &PlaybackController::stateChanged, this, &AppleHistory::update);
+  QSettings settings;
+  m_persistentId = settings.value(QStringLiteral("appleMusic/activityId")).toString();
+  if (m_persistentId.isEmpty()) {
+    m_persistentId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    settings.setValue(QStringLiteral("appleMusic/activityId"), m_persistentId);
+  }
 }
 
 void AppleHistory::update() {
   const QString id = songId(m_playback->track());
   if (id != m_id) {
+    m_pauseTimer.stop();
     // Gapless and crossfade swap tracks without stopping, so close the old play here.
     if (!m_id.isEmpty())
       finish(m_duration > 0 && m_position >= m_duration - kNaturalEndSeconds ? QStringLiteral("natural")
@@ -81,13 +89,21 @@ void AppleHistory::update() {
 
 void AppleHistory::begin(const QString &id, double position, double duration) {
   m_id = id;
-  m_persistentId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+  m_elapsed.start();
+  const QVariantMap track = m_playback->track();
+  const QString albumId = track.value(QStringLiteral("albumId")).toString();
+  const QString prefix = QStringLiteral("am.albums.");
+  m_container = {};
+  if (albumId.startsWith(prefix) && !albumId.mid(prefix.size()).isEmpty())
+    m_container = {{"kind", "album"}, {"id", albumId.mid(prefix.size())},
+                   {"name", track.value(QStringLiteral("album")).toString()}};
   m_start = position;
   m_position = position;
   m_duration = duration;
   m_account->reportPlay(QStringLiteral("history.start"),
                         {{"id", m_id},
                          {"persistentId", m_persistentId},
+                         {"container", m_container},
                          {"durationMs", double(millis(duration))},
                          {"startPositionMs", double(millis(position))},
                          {"shuffle", m_playback->shuffleEnabled()}});
@@ -100,6 +116,8 @@ void AppleHistory::finish(const QString &reason) {
   m_account->reportPlay(QStringLiteral("history.end"),
                         {{"id", m_id},
                          {"persistentId", m_persistentId},
+                         {"container", m_container},
+                         {"elapsedMs", double(m_elapsed.elapsed())},
                          {"durationMs", double(millis(m_duration))},
                          {"startPositionMs", double(millis(m_start))},
                          {"endPositionMs", double(millis(natural ? m_duration : m_position))},
