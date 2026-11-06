@@ -14,6 +14,7 @@ namespace orchard::boot {
 enum class Command {
   Launch,           // default: start Orchard, installing first if needed
   Install,          // install (or resume installing), then launch
+  Troubleshoot,     // open the startup troubleshooter
   CheckUpdate,      // network check; prints JSON
   Update,           // download and stage; activates on next launch
   UpdateOnExit,     // wait for --wait-pid, activate the staged update, relaunch

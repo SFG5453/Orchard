@@ -11,8 +11,7 @@
 
 namespace orchard::boot {
 
-// The only window the bootstrapper ever shows. It appears for installs,
-// repairs and foreground updates; a normal launch never creates one.
+// Progress window for installs, repairs and foreground updates.
 class ProgressUi {
 public:
   virtual ~ProgressUi() = default;

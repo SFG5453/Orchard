@@ -25,7 +25,7 @@ private:
   int dispatch();
   int launch();
   int install();
-  int startAndWatch(bool allowRollback);
+  int startAndWatch();
   int checkUpdate();
   int update();
   int updateOnExit();

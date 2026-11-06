@@ -27,7 +27,6 @@ namespace {
 constexpr std::uint64_t kCheckInterval = 6 * 60 * 60;
 // A new version that survives this long without crashing counts as healthy.
 constexpr auto kHealthWindow = std::chrono::seconds(30);
-constexpr std::uint64_t kFailuresBeforeRollback = 2;
 
 std::uint64_t unixNow() {
   return static_cast<std::uint64_t>(
@@ -104,6 +103,7 @@ int Bootstrapper::dispatch() {
   switch (options_.command) {
   case Command::Launch: return launch();
   case Command::Install: return install();
+  case Command::Troubleshoot: platform::troubleshoot(options_.waitPid, false); return 0;
   case Command::CheckUpdate: return checkUpdate();
   case Command::Update: return update();
   case Command::UpdateOnExit: return updateOnExit();
@@ -150,7 +150,7 @@ int Bootstrapper::launch() {
     return delegate();
   removeOldBootstrapper(layout_);
   activatePending(layout_);
-  return startAndWatch(true);
+  return startAndWatch();
 }
 
 int Bootstrapper::install() {
@@ -170,18 +170,14 @@ int Bootstrapper::install() {
   } else if (!runsInstalledCopy()) {
     return delegate();
   }
-  return options_.noLaunch ? 0 : startAndWatch(false);
+  return options_.noLaunch ? 0 : startAndWatch();
 }
 
-int Bootstrapper::startAndWatch(bool allowRollback) {
+int Bootstrapper::startAndWatch() {
   std::optional<InstallState> state = InstallState::load(layout_);
   std::string version = state->current();
   auto info = state->version(version);
-  if (allowRollback && info && !info->healthy && info->launchAttempts >= kFailuresBeforeRollback &&
-      !state->previous().empty()) {
-    rollback(layout_, version + " failed to start " + std::to_string(info->launchAttempts) + " times");
-    return startAndWatch(false);
-  }
+
   std::error_code error;
   if (!info || !fs::is_directory(layout_.versionDir(version), error)) {
     log::warn("current version " + version + " is incomplete; repairing");
@@ -189,37 +185,32 @@ int Bootstrapper::startAndWatch(bool allowRollback) {
     state = InstallState::load(layout_);
     info = state->version(version);
   }
-  if (!info->healthy)
-    InstallState::modify(layout_, [&](InstallState &s) { s.setHealth(version, false, info->launchAttempts + 1); });
-
   // Watched runs keep their output so a startup crash leaves something to report.
   platform::Process process =
-      launchVersion(layout_, *state, version, options_.appArgs, info->healthy ? fs::path() : layout_.appLogFile());
+      launchVersion(layout_, *state, version, options_.appArgs, layout_.appLogFile());
   scheduleBackgroundUpdate(*state);
-  if (info->healthy) {
+  std::optional<int> code;
+  try {
+    code = platform::waitProcess(process, kHealthWindow);
+  } catch (...) {
     platform::releaseProcess(process);
-    return 0;
+    throw;
   }
-  // First runs of a new version are watched; a quick crash counts against it.
-  const std::optional<int> code = platform::waitProcess(process, kHealthWindow);
   platform::releaseProcess(process);
   if (!code || *code == 0) {
-    InstallState::modify(layout_, [&](InstallState &s) { s.setHealth(version, true, 0); });
+    if (!info->healthy)
+      InstallState::modify(layout_, [&](InstallState &s) { s.setHealth(version, true, 0); });
     log::info(version + " started cleanly");
     return 0;
   }
-  log::warn(version + " exited with code " + std::to_string(*code) + " during its first run");
-  state = InstallState::load(layout_);
-  info = state->version(version);
-  if (allowRollback && info && info->launchAttempts >= kFailuresBeforeRollback && !state->previous().empty()) {
-    rollback(layout_, version + " keeps crashing at startup");
-    return startAndWatch(false);
-  }
+  log::warn(version + " exited with code " + std::to_string(*code) + " during startup");
   char hex[16];
   std::snprintf(hex, sizeof hex, "0x%08X", static_cast<unsigned>(*code));
-  throw Error("Orchard " + version + " closed while starting (exit code " + hex + ").\n\nDetails were saved in " +
-              toUtf8(layout_.appLogFile().parent_path().make_preferred()) +
-              ". Please attach app.log and bootstrapper.log when reporting this.");
+  log::error("Orchard " + version + " closed while starting (exit code " + hex + ").\n\nDetails were saved in " +
+             toUtf8(layout_.appLogFile().parent_path().make_preferred()) +
+             ". Please attach app.log and bootstrapper.log when reporting this.");
+  platform::troubleshoot(0, true);
+  return 1;
 }
 
 void Bootstrapper::scheduleBackgroundUpdate(const InstallState &state) const {

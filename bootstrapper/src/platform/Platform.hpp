@@ -85,6 +85,8 @@ Process spawn(const fs::path &program, const SpawnOptions &options);
 // Exit code, or nullopt while the process is still running after `timeout`.
 std::optional<int> waitProcess(Process &process, std::chrono::milliseconds timeout);
 void releaseProcess(Process &process);
+// Open reset actions, waiting for an optional running Orchard process.
+void troubleshoot(int pid, bool crashed);
 // For processes we did not start. True once `pid` has exited.
 bool waitForPid(int pid, std::chrono::milliseconds timeout);
 int currentPid();

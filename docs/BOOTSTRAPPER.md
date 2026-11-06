@@ -163,6 +163,7 @@ Unknown keys survive rewrites, so older bootstrappers keep fields that newer one
 | `--update` | Check, download, verify and stage. The update activates on the next launch. |
 | `--update-on-exit --wait-pid PID` | Wait for PID to exit, activate the staged update, start Orchard. |
 | `--status` | Print install and update state as JSON. |
+| `--troubleshoot` | Open the troubleshooter to reset window settings or clear app data. |
 | `--repair` | Hash every installed file of the current version, redownload only damaged chunks. |
 | `--rollback` | Make `previous` current and skip the abandoned version. |
 | `--channel stable|canary` | Switch channel. Combined with another command, it switches first. |
@@ -187,7 +188,7 @@ Settings > General > Updates shows the state and offers "Update ready. Restart O
 
 ## Launch, health and rollback
 
-A healthy version starts with no waiting. The first launches of a new version are watched for 30 seconds: a non-zero exit in that window counts as a failed start, and after two failed starts the bootstrapper rolls back to `previous` and starts it. Surviving the window, or exiting with code 0, marks the version healthy. The launch attempt counter is written before starting, so a crash that also takes the bootstrapper down still counts.
+Every launch is watched for 30 seconds. A non-zero exit opens the troubleshooter, including on versions already marked healthy; no automatic rollback occurs. A clean exit or surviving the window marks a new version healthy. The troubleshooter is also available from Orchard’s tray menu. It can reset window settings or, after confirmation, clear settings, app data and cache; stored system credentials may remain. Quit Orchard before applying a reset. On Linux the troubleshooter requires Zenity and a graphical session.
 
 After launch, the bootstrapper starts a detached `--background-update` when automatic updates are on and the last check is more than six hours old. That run stages any new release and, once the current version is healthy, deletes versions other than current, previous and pending, plus unreferenced components and staging debris.
 
@@ -200,6 +201,8 @@ Objects download over HTTPS with certificate verification always on: WinHTTP and
 The new bootstrapper is assembled as `Orchard.new.exe` and verified against the signed channel file. The running `Orchard.exe` is renamed to `Orchard.old.exe` (Windows allows renaming a running executable) and the new file takes its name. On Linux a rename swaps the directory entry and the running copy keeps its inode. The fallback is deleted on a later launch.
 
 ## Publishing a release
+
+The publisher sets the minimum bootstrapper version in both the channel and manifests to the version in `bootstrapper/meson.build`.
 
 The normal path is the [desktop release workflow](../.github/workflows/manual-desktop-build.yml).
 It builds both platforms and their bootstrappers, then runs
@@ -227,11 +230,11 @@ The commands below remain useful for local signing and layout checks:
 scripts/release/orchard_release.py keygen --out ~/.config/orchard-release/orchard-release-1.pem   # once
 scripts/release/orchard_release.py manifest --version 4.2.14 --platform win-x86_64 \
     --tree build-windows-msvc-meson/package/Orchard --layout scripts/release/layouts/win-x86_64.json \
-    --out site --key ~/.config/orchard-release/orchard-release-1.pem
+    --minimum-bootstrapper 1.0.3 --out site --key ~/.config/orchard-release/orchard-release-1.pem
 scripts/release/orchard_release.py channel --channel stable --version 4.2.14 \
     --platform win-x86_64 --platform linux-x86_64 \
-    --bootstrapper win-x86_64=build-boot-win/orchard-bootstrapper.exe --bootstrapper-version 1.0.0 \
-    --out site --key ~/.config/orchard-release/orchard-release-1.pem
+    --bootstrapper win-x86_64=build-boot-win/orchard-bootstrapper.exe --bootstrapper-version 1.0.3 \
+    --minimum-bootstrapper 1.0.3 --out site --key ~/.config/orchard-release/orchard-release-1.pem
 ```
 
 Upload `site/objects` and `site/manifests` first and `site/releases` last, so a client never sees a channel file that points at missing objects. Keep the manifests of older releases on the server: repair of an older install fetches its manifest by version. The layouts in `scripts/release/layouts/` map the existing packaging trees (the AppImage AppDir and the windeployqt folder) onto components. Unmapped files fail the build, and every component version must be bumped when its files change. Files above 8 MiB are split into 4 MiB chunks; the client only sees chunk hashes, so the pipeline can switch to content-defined chunking without a client change.

@@ -241,10 +241,16 @@ Process spawn(const fs::path &program, const SpawnOptions &options) {
 
 std::optional<int> waitProcess(Process &process, std::chrono::milliseconds timeout) {
   HANDLE handle = reinterpret_cast<HANDLE>(process.handle);
-  if (!handle || WaitForSingleObject(handle, static_cast<DWORD>(timeout.count())) != WAIT_OBJECT_0)
+  if (!handle)
+    throw Error("cannot wait for Orchard: invalid process handle");
+  const DWORD result = WaitForSingleObject(handle, static_cast<DWORD>(timeout.count()));
+  if (result == WAIT_TIMEOUT)
     return std::nullopt;
+  if (result != WAIT_OBJECT_0)
+    throw Error("cannot wait for Orchard: " + lastErrorText());
   DWORD code = 0;
-  GetExitCodeProcess(handle, &code);
+  if (!GetExitCodeProcess(handle, &code))
+    throw Error("cannot read Orchard exit code: " + lastErrorText());
   return static_cast<int>(code);
 }
 
@@ -257,7 +263,7 @@ void releaseProcess(Process &process) {
 bool waitForPid(int pid, std::chrono::milliseconds timeout) {
   HANDLE handle = OpenProcess(SYNCHRONIZE, FALSE, static_cast<DWORD>(pid));
   if (!handle)
-    return true;
+    return GetLastError() == ERROR_INVALID_PARAMETER;
   const bool exited = WaitForSingleObject(handle, static_cast<DWORD>(timeout.count())) == WAIT_OBJECT_0;
   CloseHandle(handle);
   return exited;

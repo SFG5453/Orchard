@@ -247,6 +247,50 @@ def main():
     check("args=--from-manifest orchard://watch?v=abcdefghijk" in wait_for_app_run(),
           "protocol link passed to the application")
 
+    # A known healthy version is watched as well, including signal deaths.
+    app = ROOT / "versions/1.0.0/orchard"
+    original_app = app.read_bytes()
+    app.write_text("#!/bin/sh\nkill -SEGV $$\n")
+    failed = boot(expect=1)
+    check("exit code 0x0000008B" in failed.stderr, "signal crash on a healthy version is detected")
+    check(state()["versions"]["1.0.0"]["healthy"], "a crash does not change version health")
+    app.write_text("#!/bin/sh\nsleep 31\n")
+    started = time.monotonic()
+    boot()
+    elapsed = time.monotonic() - started
+    check(29 <= elapsed < 35, "healthy launch is watched for 30 seconds")
+    app.write_bytes(original_app)
+
+    print("troubleshooter resets")
+    fake_bin = WORK / "bin"
+    fake_bin.mkdir()
+    zenity = fake_bin / "zenity"
+    zenity.write_text('#!/bin/sh\ncase "$*" in *"Fix window"*) exit "${TEST_WINDOW_CHOICE:-0}";; esac\nexit 0\n')
+    zenity.chmod(0o755)
+    config = WORK / "config/SFG545/Orchard.conf"
+    config.parent.mkdir(parents=True)
+    config.write_text("[General]\nvolume=5\n[window]\nwidth=0\nheight=0\n[tray]\ncloseToTray=true\n")
+    env = {"DISPLAY": ":test", "PATH": str(fake_bin) + os.pathsep + os.environ["PATH"],
+           "XDG_CONFIG_HOME": str(WORK / "config"), "XDG_CACHE_HOME": str(WORK / "cache")}
+    process = subprocess.Popen(["sleep", "10"])
+    try:
+        boot("--troubleshoot", "--wait-pid", str(process.pid), env=env)
+        check("[window]" in config.read_text(), "reset waits for Orchard to exit")
+    finally:
+        process.terminate()
+        process.wait()
+    boot("--troubleshoot", env=env)
+    check(config.read_text() == "[General]\nvolume=5\n[tray]\ncloseToTray=true\n",
+          "window reset preserves other settings")
+    data = WORK / "xdg/SFG545/Orchard/downloads/song"
+    data.parent.mkdir(parents=True)
+    data.write_text("test")
+    cache = WORK / "cache/SFG545/Orchard/cache"
+    cache.parent.mkdir(parents=True)
+    cache.write_text("test")
+    boot("--troubleshoot", env={**env, "TEST_WINDOW_CHOICE": "1"})
+    check(not config.exists() and not data.exists() and not cache.exists(), "clear app data removes settings, data and cache")
+
     print("incremental update")
     qt2 = bytearray(qt1)
     qt2[(3 << 20) + 10] ^= 0xFF  # touch one 1 MiB chunk
@@ -290,17 +334,18 @@ def main():
     out = json.loads(boot("--update").stdout)
     check(out["staged"] == "", "skipped version not restaged")
 
-    print("crash rollback")
+    print("startup crash troubleshooting")
     build_tree("1.2.0", "q2", bytes(qt2), data2 + b"crash", exit_code=7)
     publish("1.2.0")
     boot("--update")
     check("closed while starting (exit code 0x00000007)" in boot(expect=1).stderr, "startup crash reported")
     wait_for_app_run()
     check("fake app exiting" in (ROOT / "logs/app.log").read_text(), "watched run output captured")
-    boot()  # second failed start rolls back and starts 1.0.0 instead
+    boot(expect=1)
     wait_for_app_run()
     s = state()
-    check(s["current"] == "1.0.0" and "1.2.0" in s["skippedVersions"], "crashing version rolled back")
+    check(s["current"] == "1.2.0" and "1.2.0" not in s["skippedVersions"], "startup failures do not roll back")
+    boot("--rollback")
 
     print("resume and cleanup")
     data3 = os.urandom(300_000)

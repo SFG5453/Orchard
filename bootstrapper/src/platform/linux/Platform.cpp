@@ -26,6 +26,7 @@
 #include "util/Files.hpp"
 
 #include <csignal>
+#include <cstring>
 #include <cstdlib>
 #include <fcntl.h>
 #include <sys/file.h>
@@ -185,10 +186,16 @@ std::optional<int> waitProcess(Process &process, std::chrono::milliseconds timeo
   while (process.pid > 0) {
     int status = 0;
     const pid_t done = ::waitpid(process.pid, &status, WNOHANG);
-    if (done == process.pid || (done < 0 && errno == ECHILD)) {
+    if (done == process.pid) {
       process.pid = 0;
-      return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+      if (WIFEXITED(status))
+        return WEXITSTATUS(status);
+      if (WIFSIGNALED(status))
+        return 128 + WTERMSIG(status);
+      throw Error("unexpected Orchard process status");
     }
+    if (done < 0 && errno != EINTR)
+      throw Error("cannot wait for Orchard: " + std::string(std::strerror(errno)));
     if (std::chrono::steady_clock::now() > deadline)
       return std::nullopt;
     std::this_thread::sleep_for(std::chrono::milliseconds(50));

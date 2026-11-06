@@ -3,7 +3,7 @@
 # builds) without Qt, Cargo or npm. Vendored mbedTLS and nlohmann/json come
 # from the parent repository's third_party submodules.
 # The canary boot gets new directions before the orchard moves house.
-project('orchard-bootstrapper', ['c', 'cpp'], version: '1.0.2', meson_version: '>=1.3.0',
+project('orchard-bootstrapper', ['c', 'cpp'], version: '1.0.3', meson_version: '>=1.3.0',
   default_options: ['cpp_std=c++20', 'c_std=c99', 'optimization=s', 'debug=false', 'strip=true',
     'b_ndebug=true', 'warning_level=2', 'b_lto=true', 'b_vscrt=mt'])
 
@@ -82,12 +82,14 @@ if system == 'linux'
     'src/platform/linux/Platform.cpp',
     'src/platform/linux/Spawn.cpp',
     'src/platform/linux/ZenityUi.cpp',
+    'src/platform/linux/Troubleshooter.cpp',
   )
 elif system == 'windows'
   sources += files(
     'src/platform/windows/Integration.cpp',
     'src/platform/windows/Platform.cpp',
     'src/platform/windows/Win32Ui.cpp',
+    'src/platform/windows/Troubleshooter.cpp',
     'src/platform/windows/WinHttpSession.cpp',
   )
   sources += import('windows').compile_resources('src/platform/windows/bootstrapper.rc',

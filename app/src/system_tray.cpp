@@ -26,6 +26,7 @@
 #include <QApplication>
 #include <QIcon>
 #include <QMenu>
+#include <QProcess>
 #include <QSystemTrayIcon>
 #include <QWindow>
 
@@ -61,6 +62,13 @@ SystemTray::SystemTray(PlaybackController *playback, AuthManager *auth, QObject 
     m_next = m_menu->addAction(tr("Next"), m_playback, &PlaybackController::next);
     m_menu->addSeparator();
     m_showHide = m_menu->addAction(tr("Show Orchard"), this, &SystemTray::toggleWindow);
+    const QString bootstrapper = qEnvironmentVariable("ORCHARD_BOOTSTRAPPER");
+    if (!bootstrapper.isEmpty()) {
+        m_menu->addAction(tr("Open troubleshooter"), this, [bootstrapper] {
+            QProcess::startDetached(bootstrapper, {QStringLiteral("--troubleshoot"), QStringLiteral("--wait-pid"),
+                                                   QString::number(QCoreApplication::applicationPid())});
+        });
+    }
     m_menu->addAction(tr("Quit Orchard"), qApp, &QCoreApplication::quit);
 
     m_icon = new QSystemTrayIcon(

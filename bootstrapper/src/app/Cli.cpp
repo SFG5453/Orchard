@@ -16,6 +16,7 @@ Options parseOptions(const std::vector<std::string> &args) {
   static const std::map<std::string, Command> commands = {
       {"--launch", Command::Launch},
       {"--install", Command::Install},
+      {"--troubleshoot", Command::Troubleshoot},
       {"--check-update", Command::CheckUpdate},
       {"--update", Command::Update},
       {"--update-on-exit", Command::UpdateOnExit},
@@ -92,6 +93,7 @@ const char *usage() {
          "Commands:\n"
          "  --launch             Start Orchard (default). Installs first if needed.\n"
          "  --install            Install or finish installing Orchard, then start it.\n"
+         "  --troubleshoot        Open the Orchard troubleshooter.\n"
          "  --check-update       Check the release channel and print JSON.\n"
          "  --update             Download and stage the latest release.\n"
          "  --update-on-exit     Wait for --wait-pid to exit, apply the staged update, restart.\n"
@@ -108,7 +110,7 @@ const char *usage() {
          "Options:\n"
          "  --root DIR           Install directory.\n"
          "  --server URL         Release server (https only; signatures still apply).\n"
-         "  --wait-pid PID       Process to wait for (with --update-on-exit).\n"
+         "  --wait-pid PID       Process to wait for (with --update-on-exit or --troubleshoot).\n"
          "  --no-launch          Do not start Orchard afterwards.\n"
          "  --yes                Answer yes to confirmations.\n"
          "  --verbose            Echo the log to stderr.\n";

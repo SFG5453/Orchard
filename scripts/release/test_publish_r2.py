@@ -32,6 +32,7 @@ class RecordingR2:
 
 class PublishTest(unittest.TestCase):
     def setUp(self):
+        self.release_calls = []
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name) / "source"
@@ -51,8 +52,8 @@ class PublishTest(unittest.TestCase):
         for path in self.paths[2:]:
             path.write_bytes(b"placeholder")
 
-    @staticmethod
-    def fake_release(*args):
+    def fake_release(self, *args):
+        self.release_calls.append(args)
         out = Path(args[args.index("--out") + 1])
         if args[0] == "manifest":
             platform = args[args.index("--platform") + 1]
@@ -82,6 +83,14 @@ class PublishTest(unittest.TestCase):
         self.assertIn(f"downloads/canary/{VERSION}/OrchardSetup.exe", store.keys)
         self.assertIn(f"downloads/canary/{VERSION}/Orchard-Linux-x86_64.AppImage", store.keys)
         self.assertIn(f"downloads/canary/{VERSION}/Orchard-Windows-x86_64.7z", store.keys)
+
+    def test_release_requires_the_published_bootstrapper(self):
+        self.run_publish(RecordingR2())
+        self.assertEqual([args[0] for args in self.release_calls], ["manifest", "manifest", "channel"])
+        for args in self.release_calls:
+            self.assertEqual(args[args.index("--minimum-bootstrapper") + 1], "1.0.1")
+        channel = self.release_calls[-1]
+        self.assertEqual(channel[channel.index("--bootstrapper-version") + 1], "1.0.1")
 
     def test_failed_manifest_upload_leaves_channel_untouched(self):
         store = RecordingR2(fail_at=f"manifests/{VERSION}-win-x86_64.json")
