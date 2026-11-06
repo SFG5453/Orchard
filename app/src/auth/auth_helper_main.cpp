@@ -26,6 +26,7 @@
 #include "youtube_refresh.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QGuiApplication>
 #include <QJsonObject>
 #include <QDebug>
@@ -49,6 +50,11 @@ int main(int argc, char *argv[]) {
 #ifdef ORCHARD_WEBVIEW2_AUTH
   qmlRegisterType<WebView2Item>("Orchard.Auth", 1, 0, "WebView2Item");
 #elif defined(ORCHARD_WEBKIT_AUTH)
+  const QString webkitRoot = qEnvironmentVariable("ORCHARD_WEBKIT_ROOT");
+  if (!webkitRoot.isEmpty() && !QDir::setCurrent(webkitRoot)) {
+    qCritical() << "Cannot access WebKit runtime directory:" << webkitRoot;
+    return 1;
+  }
   initializeWebKit(argc, argv);
   qmlRegisterType<WebKitView>("Orchard.Auth", 1, 0, "WebKitView");
 #else

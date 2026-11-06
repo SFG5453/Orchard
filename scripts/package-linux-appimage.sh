@@ -50,6 +50,9 @@ cat > "$appdir/AppRun" <<'EOF'
 set -e
 here="$(dirname "$(readlink -f "$0")")"
 export PATH="$here/usr/bin:$PATH"
+export LD_LIBRARY_PATH="$here/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export ORCHARD_WEBKIT_ROOT="$here/usr"
+export GSETTINGS_SCHEMA_DIR="$here/usr/share/glib-2.0/schemas"
 exec "$here/usr/bin/orchard" "$@"
 EOF
 chmod +x "$appdir/AppRun"
@@ -78,15 +81,7 @@ export ARCH=x86_64
 export APPIMAGE_EXTRACT_AND_RUN=1
 cd "$output_dir"
 
-# The sign-in helper uses the system WebKitGTK, whose child processes live at fixed
-# system paths. It and the GTK and GLib it is built against stay unbundled.
-system_excludes=()
-for library in libwebkit2gtk-4.1 libjavascriptcoregtk-4.1 libsoup-3.0 libgtk-3 libgdk-3 \
-  libglib-2.0 libgobject-2.0 libgio-2.0 libgmodule-2.0; do
-  system_excludes+=(--exclude-library "$library.so*")
-done
-
-./linuxdeploy-x86_64.AppImage --appdir "$appdir" "${system_excludes[@]}" \
+./linuxdeploy-x86_64.AppImage --appdir "$appdir" \
   -e "$(command -v ffmpeg)" -e "$(command -v ffprobe)" \
   -i "$output_dir/orchard.png" \
   -d "$output_dir/orchard.desktop" --plugin qt
@@ -94,9 +89,15 @@ done
 test -f "$appdir/usr/bin/ffmpeg"
 test -f "$appdir/usr/bin/ffprobe"
 test -f "$appdir/usr/plugins/sqldrivers/libqsqlite.so"
+compgen -G "$appdir/usr/lib/libwebkit2gtk-4.1.so*" > /dev/null
+compgen -G "$appdir/usr/lib/libjavascriptcoregtk-4.1.so*" > /dev/null
 
-./linuxdeploy-x86_64.AppImage --appdir "$appdir" "${system_excludes[@]}" --output appimage
-[[ -z "$(find "$appdir/usr/lib" -name 'libwebkit2gtk*' -o -name 'libgtk-3*' -o -name 'libglib-2.0*')" ]] || { echo "Bundled WebKitGTK stack found in AppDir" >&2; exit 1; }
+python3 "$source_dir/scripts/stage-webkit-appimage.py" "$appdir"
+mkdir -p "$appdir/usr/share/glib-2.0"
+cp -a /usr/share/glib-2.0/schemas "$appdir/usr/share/glib-2.0/"
+glib-compile-schemas "$appdir/usr/share/glib-2.0/schemas"
+
+./linuxdeploy-x86_64.AppImage --appdir "$appdir" --output appimage
 mapfile -t images < <(find "$output_dir" -maxdepth 1 -name '*.AppImage' ! -name 'linuxdeploy*' -print)
 [[ ${#images[@]} -eq 1 ]] || { echo "Expected one AppImage, found ${#images[@]}" >&2; exit 1; }
 mv "${images[0]}" "$output_dir/Orchard-Linux-x86_64.AppImage"

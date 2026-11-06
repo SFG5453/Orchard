@@ -1,5 +1,5 @@
 {
-  "_comment": "Input: the packaged AppDir. Component versions identify immutable file sets. Sign-in uses the system WebKitGTK.",
+  "_comment": "Input: the packaged AppDir. Component versions identify immutable file sets.",
   "exclude": ["AppRun", "*.desktop", ".DirIcon", "usr/bin/qt.conf", "usr/share/applications/*", "usr/share/icons/*"],
   "components": {
     "ffmpeg": {"version": "8.0-3", "map": [
@@ -15,8 +15,10 @@
     "models": {"version": "2", "map": [
       {"from": "usr/bin/models", "to": ""}
     ]},
-    "qt": {"version": "6.12.0-12", "map": [
+    "qt": {"version": "6.12.0-13", "map": [
       {"from": "usr/lib", "to": "lib"},
+      {"from": "usr/libexec", "to": "libexec"},
+      {"from": "usr/share/glib-2.0", "to": "share/glib-2.0"},
       {"from": "usr/plugins", "to": "plugins"},
       {"from": "usr/qml", "to": "qml"},
       {"from": "usr/translations", "to": "translations"}
@@ -34,6 +36,8 @@
     "env": {
       "QT_PLUGIN_PATH": "{component:qt}/plugins",
       "QML_IMPORT_PATH": "{component:qt}/qml",
+      "ORCHARD_WEBKIT_ROOT": "{component:qt}",
+      "GSETTINGS_SCHEMA_DIR": "{component:qt}/share/glib-2.0/schemas",
       "ORCHARD_MODELS_DIR": "{component:models}",
       "ORCHARD_FFMPEG": "{component:ffmpeg}/ffmpeg"
     },

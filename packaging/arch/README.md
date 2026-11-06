@@ -12,7 +12,7 @@ requires network access for the adaptive mix runtime. The package installs the
 application and its staged runtime under `/opt/orchard`; pacman manages updates.
 The application menu lists the package as **Orchard (Arch Linux)** so it can
 be distinguished from an existing Orchard launcher. Apple Music playback additionally requires a Widevine installation, such as
-Google Chrome or Chromium with Widevine.
+Google Chrome, Chromium with Widevine, or Firefox with DRM enabled. These browsers are listed as optional package dependencies.
 
 The manual desktop release workflow builds this package in an Arch Linux
 container on an Ubuntu runner. The resulting package archives are uploaded as

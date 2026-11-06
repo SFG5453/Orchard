@@ -9,6 +9,11 @@ license=('AGPL-3.0-or-later' 'custom:PolyForm-Shield-1.0.0')
 depends=('qt6-base' 'qt6-declarative' 'qt6-multimedia' 'qt6-multimedia-ffmpeg'
          'qt6-websockets' 'libsecret' 'webkit2gtk-4.1' 'ffmpeg' 'hicolor-icon-theme')
 makedepends=('git' 'meson' 'ninja' 'cmake' 'rust' 'clang' 'mold' 'nodejs' 'npm' 'pkgconf' 'qt6-shadertools')
+optdepends=('google-chrome: Widevine for Apple Music playback'
+            'chromium: Apple Music playback with a Widevine CDM installed'
+            'firefox: Widevine for Apple Music playback after enabling DRM')
+# GCC LTO objects from ring cannot be linked by Rust's LLD.
+options=('!lto')
 provides=('orchard')
 conflicts=('orchard')
 
