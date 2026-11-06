@@ -263,6 +263,22 @@ private slots:
         QCOMPARE(success.first().at(1).value<QJsonValue>().toObject().value(QStringLiteral("ready")).toBool(), true);
     }
 
+    void parsesTtmlLyricsInQuickJs()
+    {
+        ProviderRuntime runtime;
+        QSignalSpy success(&runtime, &ProviderRuntime::invocationSucceeded);
+        QSignalSpy failure(&runtime, &ProviderRuntime::invocationFailed);
+        runtime.invoke(QStringLiteral("lyrics.resolve"), QJsonObject{
+            {"provider", "apple"}, {"track", QJsonObject{{"id", "test"}}},
+            {"appleTtml", "<tt><body><p begin=\"1s\"><span begin=\"1s\">Hello</span> <span begin=\"2s\">&#x2665;</span></p></body></tt>"}
+        });
+        QTRY_VERIFY_WITH_TIMEOUT(!success.isEmpty() || !failure.isEmpty(), 5000);
+        QVERIFY2(failure.isEmpty(), failure.isEmpty() ? "" : qPrintable(failure.first().at(1).toString()));
+        const QJsonObject result = success.first().at(1).value<QJsonValue>().toObject();
+        QCOMPARE(result.value("status").toString(), QStringLiteral("ready"));
+        QCOMPARE(result.value("lines").toArray().first().toObject().value("text").toString(), QString::fromUtf8("Hello ♥"));
+    }
+
     void bridgesFetchThroughQtNetwork()
     {
         QTcpServer server;

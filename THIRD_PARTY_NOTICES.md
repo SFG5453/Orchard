@@ -75,6 +75,12 @@ Lucide is licensed under the ISC License. Some Lucide icons are derived from
 Feather Icons and are licensed under the MIT License. Copyright and permission
 notices for both projects are preserved in the bundled license file.
 
+## YouTube lyrics XML parsing
+
+The YouTube provider bundles fast-xml-parser and its dependencies under the MIT
+license. Their notices are preserved in
+[`XML_PARSER_LICENSES.txt`](providers/youtube/XML_PARSER_LICENSES.txt).
+
 ## Native YouTube player extraction
 
 `orchard-youtube-extractor` uses Oxc 0.149.0 for JavaScript parsing and lexical

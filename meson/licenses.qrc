@@ -8,6 +8,7 @@
     <file alias="kawarp.txt">../third_party/kawarp/LICENSE</file>
     <file alias="liquidglass.txt">../third_party/liquidglass/LICENSE</file>
     <file alias="oxc.txt">../crates/orchard-youtube-extractor/OXC_LICENSE</file>
+    <file alias="youtube-xml-parser.txt">../providers/youtube/XML_PARSER_LICENSES.txt</file>
     <file alias="youtubejs.txt">../crates/orchard-youtube-extractor/YOUTUBEJS_LICENSE</file>
     <file alias="ai-music-detector.txt">../app/src/playback/slop_model/LICENSE</file>
     <file alias="inter.txt">../app/qml/assets/fonts/Inter-LICENSE.txt</file>

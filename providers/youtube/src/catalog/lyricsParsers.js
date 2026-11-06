@@ -17,7 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { DOMParser } from '@xmldom/xmldom';
+import { XMLParser } from 'fast-xml-parser';
 
 const lrcTimestamp = /\[(\d+):([0-5]\d)(?:[.:](\d{1,3}))?\]/g;
 const lrcMetadataLine = /^\[[a-z][a-z0-9_-]*:.*\]$/i;
@@ -136,64 +136,96 @@ function makeLyricLine(text, startMs = 0, endMs = 0, words = [], adlibs = [], me
   return line;
 }
 
+const ttmlParser = new XMLParser({
+  preserveOrder: true,
+  ignoreAttributes: false,
+  attributeNamePrefix: '',
+  trimValues: false,
+  parseTagValue: false,
+  parseAttributeValue: false,
+  htmlEntities: true,
+  processEntities: { maxTotalExpansions: 10000, maxExpandedLength: 1000000 }
+});
+
+function ttmlElements(nodes, tag, parent = null) {
+  const result = [];
+  for (let index = 0; index < nodes.length; index++) {
+    const entry = nodes[index];
+    const name = Object.keys(entry).find((key) => key !== ':@');
+    if (!name || name.startsWith('#') || name.startsWith('?')) continue;
+    const node = { name, attributes: entry[':@'] || {}, children: entry[name] || [], parent, next: nodes[index + 1] };
+    if (name === tag) result.push(node);
+    result.push(...ttmlElements(node.children, tag, node));
+  }
+  return result;
+}
+
+function ttmlText(nodes) {
+  return nodes.map((entry) => {
+    if (typeof entry['#text'] === 'string') return entry['#text'];
+    const name = Object.keys(entry).find((key) => key !== ':@');
+    return Array.isArray(entry[name]) ? ttmlText(entry[name]) : '';
+  }).join('');
+}
+
 function hasTimedChildSpan(span) {
-  return Array.from(span.getElementsByTagName('span'))
-    .some((child) => child !== span && child.getAttribute('begin'));
+  return ttmlElements(span.children, 'span', span).some((child) => child.attributes.begin);
 }
 
 function isBackgroundLyricSpan(span) {
-  let node = span;
-  while (node?.getAttribute) {
-    if (node.getAttribute('ttm:role') === 'x-bg') return true;
-    node = node.parentNode;
-  }
+  for (let node = span; node; node = node.parent)
+    if (node.attributes['ttm:role'] === 'x-bg') return true;
   return false;
 }
 
 function spanTextWithTrailingWordBreak(span) {
-  const text = span.textContent || '';
-  const nextText = span.nextSibling?.nodeType === 3 ? span.nextSibling.nodeValue || '' : '';
+  const text = ttmlText(span.children);
+  const nextText = span.next?.['#text'] || '';
   return /\s/.test(nextText) ? `${text} ` : text;
 }
 
 export function parseAmLyricsTtml(ttml = '') {
   if (!ttml.trim()) return [];
 
-  const doc = new DOMParser().parseFromString(ttml, 'text/xml');
-  if (doc.getElementsByTagName('parsererror').length) return [];
+  let document;
+  try {
+    document = ttmlParser.parse(ttml, true);
+  } catch {
+    return [];
+  }
 
-  return Array.from(doc.getElementsByTagName('p'))
+  return ttmlElements(document, 'p')
     .map((node) => {
-      const spans = Array.from(node.getElementsByTagName('span'));
+      const spans = ttmlElements(node.children, 'span', node);
       const timedSpans = spans
-        .filter((span) => span.getAttribute('begin') && span.textContent?.trim() && !hasTimedChildSpan(span));
+        .filter((span) => span.attributes.begin && ttmlText(span.children).trim() && !hasTimedChildSpan(span));
       const wordSpans = timedSpans
         .filter((span) => !isBackgroundLyricSpan(span))
         .map((span) => makeLyricWord(
           spanTextWithTrailingWordBreak(span),
-          amLyricsTimeMs(span.getAttribute('begin')),
-          amLyricsTimeMs(span.getAttribute('end'))
+          amLyricsTimeMs(span.attributes.begin),
+          amLyricsTimeMs(span.attributes.end)
         ));
       const adlibSpans = timedSpans
         .filter((span) => isBackgroundLyricSpan(span))
         .map((span) => makeLyricWord(
           spanTextWithTrailingWordBreak(span),
-          amLyricsTimeMs(span.getAttribute('begin')),
-          amLyricsTimeMs(span.getAttribute('end'))
+          amLyricsTimeMs(span.attributes.begin),
+          amLyricsTimeMs(span.attributes.end)
         ));
       const allSpans = [...wordSpans, ...adlibSpans].sort((a, b) => a.startTime - b.startTime);
       const firstTimedSpan = wordSpans[0] || allSpans[0];
       const lastTimedSpan = [...wordSpans, ...adlibSpans].reverse().find((word) => typeof word.endTime === 'number');
-      const startMs = amLyricsTimeMs(node.getAttribute('begin'), Math.round((firstTimedSpan?.startTime || 0) * 1000));
-      const endMs = amLyricsTimeMs(node.getAttribute('end'), Math.round((lastTimedSpan?.endTime || 0) * 1000));
-      const mainText = wordSpans.map((word) => word.text).join('').trim() || node.textContent || '';
+      const startMs = amLyricsTimeMs(node.attributes.begin, Math.round((firstTimedSpan?.startTime || 0) * 1000));
+      const endMs = amLyricsTimeMs(node.attributes.end, Math.round((lastTimedSpan?.endTime || 0) * 1000));
+      const mainText = wordSpans.map((word) => word.text).join('').trim() || ttmlText(node.children);
       let agentNode = node;
       let agent = '';
-      while (agentNode?.getAttribute && !agent) {
-        agent = agentNode.getAttribute('ttm:agent') || '';
-        agentNode = agentNode.parentNode;
+      while (agentNode && !agent) {
+        agent = agentNode.attributes['ttm:agent'] || '';
+        agentNode = agentNode.parent;
       }
-      return makeLyricLine(mainText, startMs, endMs, wordSpans, adlibSpans, { agent, key: node.getAttribute('itunes:key') || '' });
+      return makeLyricLine(mainText, startMs, endMs, wordSpans, adlibSpans, { agent, key: node.attributes['itunes:key'] || '' });
     })
     .filter((line) => line.text || line.adlibs?.length)
     .sort((a, b) => (a.startTime || 0) - (b.startTime || 0));
