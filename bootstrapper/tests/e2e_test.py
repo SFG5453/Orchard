@@ -294,7 +294,7 @@ def main():
     print("incremental update")
     qt2 = bytearray(qt1)
     qt2[(3 << 20) + 10] ^= 0xFF  # touch one 1 MiB chunk
-    data2 = data1[:-1] + b"!"
+    data2 = data1[:-1] + bytes([data1[-1] ^ 0xFF])
     build_tree("1.1.0", "q2", bytes(qt2), data2)
     publish("1.1.0")
     REQUESTS.clear()
