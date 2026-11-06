@@ -37,6 +37,7 @@ class HomeController final : public QObject {
   Q_PROPERTY(QVariantList sections READ sections NOTIFY stateChanged)
   Q_PROPERTY(QVariantMap hero READ hero NOTIFY stateChanged)
   Q_PROPERTY(QVariantList playlists READ playlists NOTIFY playlistsChanged)
+  Q_PROPERTY(QStringList sidebarPlaylistOrder READ sidebarPlaylistOrder WRITE setSidebarPlaylistOrder NOTIFY sidebarPlaylistOrderChanged)
   Q_PROPERTY(bool playlistsLoading READ playlistsLoading NOTIFY playlistsChanged)
   Q_PROPERTY(QString playlistsError READ playlistsError NOTIFY playlistsChanged)
   Q_PROPERTY(QVariantList librarySections READ librarySections NOTIFY libraryChanged)
@@ -60,6 +61,8 @@ public:
   void setAppleMusic(AppleMusic *appleMusic, CatalogSource *source);
 
   [[nodiscard]] QVariantList playlists() const { return m_playlists; }
+  [[nodiscard]] QStringList sidebarPlaylistOrder() const { return m_sidebarPlaylistOrder; }
+  void setSidebarPlaylistOrder(const QStringList &order);
   [[nodiscard]] bool playlistsLoading() const { return m_playlistsRequestId != 0; }
   [[nodiscard]] QString playlistsError() const { return m_playlistsError; }
   [[nodiscard]] QVariantList librarySections() const { return m_librarySections; }
@@ -74,6 +77,7 @@ public:
 signals:
   void stateChanged();
   void playlistsChanged();
+  void sidebarPlaylistOrderChanged();
   void libraryChanged();
   void volumeChanged();
   void homeSourceChanged();
@@ -99,6 +103,7 @@ private:
   quint64 m_appleRequests{0};
   bool m_appleConnected{false};
   QVariantList m_playlists;
+  QStringList m_sidebarPlaylistOrder;
   QString m_playlistsError;
   quint64 m_playlistsRequestId{0};
   QVariantList m_librarySections;

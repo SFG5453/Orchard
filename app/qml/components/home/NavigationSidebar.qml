@@ -40,6 +40,45 @@ Item {
     function focusSearch() { sidebarSearch.focusSearch(); }
     function clearSearch() { sidebarSearch.clearSearch(); }
 
+    function playlistKey(playlist) {
+        let key = String(playlist.playlistId || playlist.browseId || playlist.id || "");
+        if (key.startsWith("offline-playlist:"))
+            key = key.substring("offline-playlist:".length);
+        if (key.startsWith("VL"))
+            key = key.substring(2);
+        return key;
+    }
+
+    function orderedPlaylists(items, order) {
+        const result = Array.from(items);
+        result.sort((a, b) => {
+            const ai = order.indexOf(playlistKey(a));
+            const bi = order.indexOf(playlistKey(b));
+            return (ai < 0 ? order.length : ai) - (bi < 0 ? order.length : bi);
+        });
+        return result;
+    }
+
+    function movePlaylist(from, to) {
+        const items = playlistList.model;
+        if (from < 0 || to < 0 || from >= items.length || to >= items.length || from === to)
+            return;
+        const source = playlistKey(items[from]);
+        const target = playlistKey(items[to]);
+        if (!source || !target || source === target)
+            return;
+        const order = Array.from(OrchardHome.sidebarPlaylistOrder);
+        for (const item of items) {
+            const key = playlistKey(item);
+            if (key && order.indexOf(key) < 0)
+                order.push(key);
+        }
+        order.splice(order.indexOf(source), 1);
+        const targetIndex = order.indexOf(target);
+        order.splice(targetIndex + (from < to ? 1 : 0), 0, source);
+        OrchardHome.sidebarPlaylistOrder = order;
+    }
+
     clip: true
 
     Behavior on labelOpacity {
@@ -262,17 +301,20 @@ Item {
 
         ListView {
             id: playlistList
+            objectName: "sidebarPlaylists"
+            property int dragFrom: -1
+            property int dropIndex: -1
+            cacheBuffer: dragFrom >= 0 ? contentHeight : 320
 
             width: parent.width
             // Playlists own everything below the nav; the player pill floats clear of the sidebar.
             height: Math.max(0, mainColumn.height - y)
             clip: true
             spacing: 4
-            // Playlists from this computer lead; the catalog service's follow. Offline, only what is saved here.
-            model: OrchardNetwork.offline ? OrchardOffline.playlists
+            model: root.orderedPlaylists(OrchardNetwork.offline ? OrchardOffline.playlists
                 : (OrchardLocal.playlists || []).concat((OrchardHome.playlists || []).filter((p) => {
                     return p.title !== "New playlist";
-                }))
+                })), OrchardHome.sidebarPlaylistOrder)
 
             ScrollBar.vertical: ScrollBar {
                 width: 3
@@ -282,7 +324,15 @@ Item {
                 id: shortcut
 
                 required property var modelData
+                required property int index
                 readonly property bool isLocal: modelData.source === "local" || modelData.source === "download"
+                property real pointerY: 0
+
+                function updateDrop() {
+                    const y = playlistList.contentY + pointerY;
+                    playlistList.dropIndex = Math.max(0, Math.min(playlistList.count - 1,
+                        Math.floor((y - playlistList.originY) / (height + playlistList.spacing))));
+                }
 
                 width: ListView.view.width
                 height: 40
@@ -290,6 +340,70 @@ Item {
                 onClicked: root.playlistRequested(shortcut.modelData)
                 ToolTip.visible: root.visible && root.enabled && hovered
                 ToolTip.text: modelData.title || ""
+
+                MouseArea {
+                    id: dragArea
+                    anchors.fill: parent
+                    preventStealing: true
+                    property real pressY: 0
+                    property bool dragging: false
+                    onPressed: function(mouse) {
+                        pressY = mapToItem(playlistList, mouse.x, mouse.y).y;
+                        shortcut.pointerY = pressY;
+                        dragging = false;
+                    }
+                    onPositionChanged: function(mouse) {
+                        if (!pressed) return;
+                        shortcut.pointerY = mapToItem(playlistList, mouse.x, mouse.y).y;
+                        if (!dragging && Math.abs(shortcut.pointerY - pressY) >= Qt.styleHints.startDragDistance) {
+                            dragging = true;
+                            playlistList.dragFrom = shortcut.index;
+                        }
+                        if (dragging) shortcut.updateDrop();
+                    }
+                    onReleased: {
+                        if (dragging) {
+                            const from = playlistList.dragFrom;
+                            const to = playlistList.dropIndex;
+                            playlistList.dragFrom = -1;
+                            playlistList.dropIndex = -1;
+                            root.movePlaylist(from, to);
+                        } else {
+                            root.playlistRequested(shortcut.modelData);
+                        }
+                        dragging = false;
+                    }
+                    onCanceled: {
+                        playlistList.dragFrom = -1;
+                        playlistList.dropIndex = -1;
+                        dragging = false;
+                    }
+                }
+
+                Timer {
+                    interval: 30
+                    repeat: true
+                    running: dragArea.dragging
+                    onTriggered: {
+                        const y = shortcut.pointerY;
+                        const bottom = Math.max(playlistList.originY, playlistList.originY + playlistList.contentHeight - playlistList.height);
+                        if (y < 35)
+                            playlistList.contentY = Math.max(playlistList.originY, playlistList.contentY - 10);
+                        else if (y > playlistList.height - 35)
+                            playlistList.contentY = Math.min(bottom, playlistList.contentY + 10);
+                        shortcut.updateDrop();
+                    }
+                }
+
+                Rectangle {
+                    visible: playlistList.dropIndex === shortcut.index && playlistList.dragFrom !== shortcut.index
+                    y: playlistList.dragFrom > shortcut.index ? 0 : parent.height - height
+                    width: parent.width
+                    height: 2
+                    radius: 1
+                    color: OrchardAppearance.accent
+                    z: 2
+                }
 
                 background: Rectangle {
                     radius: 8

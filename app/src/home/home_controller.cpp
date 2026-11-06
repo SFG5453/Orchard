@@ -45,6 +45,7 @@ HomeController::HomeController(YouTubeCatalog *catalog, AuthManager *auth,
   Q_ASSERT(m_auth);
 
   QSettings settings;
+  m_sidebarPlaylistOrder = settings.value(QStringLiteral("sidebar/playlistOrder")).toStringList();
   settings.beginGroup(QStringLiteral("playback"));
   m_volume = qBound(
       0.0, settings.value(QStringLiteral("volume"), 1.0).toDouble(), 1.0);
@@ -83,6 +84,14 @@ HomeController::HomeController(YouTubeCatalog *catalog, AuthManager *auth,
     if (m_auth->isSignedIn() && m_sections.isEmpty())
       refresh();
   });
+}
+
+void HomeController::setSidebarPlaylistOrder(const QStringList &order) {
+  if (m_sidebarPlaylistOrder == order)
+    return;
+  m_sidebarPlaylistOrder = order;
+  QSettings().setValue(QStringLiteral("sidebar/playlistOrder"), order);
+  emit sidebarPlaylistOrderChanged();
 }
 
 void HomeController::resetLibrary() {

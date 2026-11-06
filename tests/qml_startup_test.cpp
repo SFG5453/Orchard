@@ -22,6 +22,7 @@
 #include <QFile>
 #include <QEventLoop>
 #include <QKeyEvent>
+#include <QMouseEvent>
 #include <QJSValue>
 #include <QQmlComponent>
 #include <QQmlContext>
@@ -221,6 +222,67 @@ static bool verifyPlaylistFilter(QQmlEngine &engine, QTextStream &output) {
 bool verifyMemoryUi(QTextStream &output);
 bool verifyImageDimensions(QTextStream &output);
 
+static bool verifySidebarReorder(QQmlEngine &engine, QTextStream &output) {
+  SettingsMap appearance, home, local, network, offline;
+  appearance.insert("accent", "#80b080");
+  home.insert("playlists", QVariantList{
+      QVariantMap{{"playlistId", "one"}, {"title", "One"}},
+      QVariantMap{{"playlistId", "two"}, {"title", "Two"}},
+      QVariantMap{{"playlistId", "three"}, {"title", "Three"}}});
+  home.insert("sidebarPlaylistOrder", QStringList{});
+  home.insert("playlistsLoading", false);
+  home.insert("playlistsError", "");
+  local.insert("playlists", QVariantList{});
+  offline.insert("playlists", QVariantList{});
+  network.insert("offline", false);
+  auto *context = engine.rootContext();
+  context->setContextProperty("OrchardAppearance", &appearance);
+  context->setContextProperty("OrchardHome", &home);
+  context->setContextProperty("OrchardLocal", &local);
+  context->setContextProperty("OrchardNetwork", &network);
+  context->setContextProperty("OrchardOffline", &offline);
+  QQuickWindow window;
+  window.resize(300, 600);
+  QQmlComponent component(&engine, QUrl("qrc:/qt/qml/Orchard/app/qml/components/home/NavigationSidebar.qml"));
+  std::unique_ptr<QObject> object(component.create());
+  auto *sidebar = qobject_cast<QQuickItem *>(object.get());
+  if (!sidebar) {
+    for (const auto &error : component.errors()) output << error.toString() << '\n';
+    return false;
+  }
+  sidebar->setParentItem(window.contentItem());
+  sidebar->setSize(QSizeF(300, 600));
+  window.show();
+  QEventLoop wait;
+  QTimer::singleShot(100, &wait, &QEventLoop::quit);
+  wait.exec();
+  auto *list = sidebar->findChild<QQuickItem *>("sidebarPlaylists");
+  if (!list || list->property("count").toInt() != 3) return false;
+  const QPointF start = list->mapToScene(QPointF(80, 20));
+  const auto sendMouse = [&](QEvent::Type type, QPointF pos, Qt::MouseButton button, Qt::MouseButtons buttons) {
+    QMouseEvent event(type, pos, pos, button, buttons, Qt::NoModifier);
+    QCoreApplication::sendEvent(&window, &event);
+    QCoreApplication::processEvents();
+  };
+  sendMouse(QEvent::MouseButtonPress, start, Qt::LeftButton, Qt::LeftButton);
+  sendMouse(QEvent::MouseMove, start + QPointF(0, 20), Qt::NoButton, Qt::LeftButton);
+  sendMouse(QEvent::MouseMove, start + QPointF(0, 95), Qt::NoButton, Qt::LeftButton);
+  sendMouse(QEvent::MouseButtonRelease, start + QPointF(0, 95), Qt::LeftButton, Qt::NoButton);
+  if (home.value("sidebarPlaylistOrder").toStringList() != QStringList({"two", "three", "one"})) {
+    output << "Sidebar drag did not save the playlist order.\n";
+    return false;
+  }
+  home.insert("playlists", QVariantList{QVariantMap{{"playlistId", "one"}, {"title", "One"}},
+                                        QVariantMap{{"playlistId", "two"}, {"title", "Two"}}});
+  QCoreApplication::processEvents();
+  QMetaObject::invokeMethod(sidebar, "movePlaylist", Q_ARG(QVariant, 1), Q_ARG(QVariant, 0));
+  if (home.value("sidebarPlaylistOrder").toStringList() != QStringList({"one", "two", "three"})) {
+    output << "Sidebar reorder lost an unavailable playlist.\n";
+    return false;
+  }
+  return true;
+}
+
 int main(int argc, char *argv[]) {
   QGuiApplication application(argc, argv);
   QQuickStyle::setStyle(QStringLiteral("Basic"));
@@ -258,6 +320,7 @@ int main(int argc, char *argv[]) {
     output << "Orchard playlist filter failed its runtime check.\n";
     return 1;
   }
+  if (!verifySidebarReorder(engine, output)) return 1;
   if (!verifyImageDimensions(output)) return 1;
   if (!verifyMemoryUi(output)) return 1;
   output << "Orchard QML startup check passed.\n";
