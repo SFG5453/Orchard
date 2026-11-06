@@ -158,7 +158,9 @@ def cmd_manifest(a) -> None:
         files = entries(groups[name])
         if not files:
             raise SystemExit(f"component {name} matched no files")
-        components[name] = {"version": spec["version"], "files": files}
+        # Component directories are immutable; derive their identity from their contents.
+        version = f"{spec['version'][:15]}-{component_digest(files)[:48]}"
+        components[name] = {"version": version, "files": files}
     payload = {
         "schema": SCHEMA,
         "version": a.version,
@@ -180,7 +182,7 @@ def cmd_manifest(a) -> None:
             mine = components.get(name)
             if mine and mine["version"] == comp["version"] and \
                     component_digest(mine["files"]) != component_digest(comp["files"]):
-                raise SystemExit(f"component {name} {comp['version']} differs from {other.name}; bump its version")
+                raise SystemExit(f"component {name} {comp['version']} differs from {other.name}")
 
     target = manifests / f"{a.version}-{a.platform}.json"
     target.write_bytes(sign(json.dumps(payload, separators=(",", ":")).encode(), Path(a.key), a.key_id))
