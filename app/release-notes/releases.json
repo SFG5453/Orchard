@@ -1,60 +1,133 @@
 [
   {
-    "version": "1.0.0-canary.10",
-    "date": "2026-10-17",
-    "title": "More reliable playback",
+    "version": "2.0.0-canary.1",
+    "date": "2026-11-06",
+    "title": "Apple Music and a more customizable desktop",
     "sections": [
       {
-        "title": "Fixes",
+        "title": "Apple Music",
         "items": [
-          "Fixed audio stopping after repeated download interruptions. Playback recovers without restarting the song and preserves its paused state."
-        ]
-      }
-    ]
-  },
-  {
-    "version": "1.0.0-canary.9",
-    "date": "2026-10-12",
-    "title": "Fullscreen, artist pages, and smarter mixes",
-    "sections": [
-      {
-        "title": "New",
-        "items": [
-          "Fullscreen player hides its controls and cursor after 3 seconds of no input, shows an up next card near the end of a song, pulses with bass hits, and keeps the screen awake. Two Appearance settings turn off the idle hide and the pulse.",
-          "Artist pages have a redesigned top with a credit row (genre, origin, subscribers, active since) and an optional muted music video behind it. Turn it on in Settings > Appearance > Artist pages.",
-          "Continuous queue style lists played songs above the current song.",
-          "Songs and albums with several artists show all of them.",
-          "A Release notes window with search, New marks, and a prompt after an update.",
-          "The progress bar fills with the next song's accent dots while a mix plays.",
-          "Canopy has a vertical volume popup, and the error pill stays above the player bar."
+          "Apple Music is a full music source alongside YouTube Music. Connect it in Settings > General, then choose Apple under Music source to use its recommendations, search, artists, albums, playlists, and personal library throughout Orchard.",
+          "Apple Music songs play natively on Linux and Windows, including Orchard's queue and transition controls. Setup requires an Orchard account, an Apple Music subscription, and Widevine from an installed browser. On Linux, install Chrome or Chromium with Widevine; on Windows, open Edge or Chrome once to let it download Widevine, then restart Orchard. Native Apple Music playback is not available on macOS.",
+          "Browse your Apple Music library's songs, albums, artists, and playlists. Love or unlove songs, create playlists, and add songs to editable playlists; loving a catalog song also adds it to your Apple Music library. Library tracks retain their catalog album and artist links for navigation.",
+          "Apple Music library playlists load in pages, so you can start listening while the rest loads. The playback queue continues loading the remaining tracks when you start a playlist before all its pages have arrived.",
+          "Play song and artist stations, or use Start mix on an Apple Music song to build a related queue. Station queues keep fetching songs, and ordinary song queues can continue through Autoplay when they reach the end. Live radio streams are not supported.",
+          "Choose Atmos under Settings > Playback > Streaming quality on Linux or Windows to request an available Apple Music Atmos rendition. Orchard renders its decoded 5.1 channel mix to stereo headphones using KEMAR spatial filters; it does not decode individual Atmos objects or provide head tracking. Songs fall back to stereo when an Atmos stream cannot be obtained.",
+          "Saver and Normal quality prefer 64 kbps AAC for Apple Music, while High prefers 256 kbps AAC, with fallback to an available rendition. Quality changes apply to the next song. Recently played streams retain prefetched and decrypted audio so seeking back can reuse it without repeatedly requesting licenses.",
+          "Apple Music playback can contribute to Recently Played on your other Apple Music devices. Save plays to Apple Music history is enabled by default and can be turned off in Settings > General. Reporting includes album context and elapsed listening time rather than treating a seek forward as time spent listening.",
+          "While Apple Music is selected and connected, Orchard can use Apple's own motion artwork and editorial imagery. Artist motion headers start as their video loads and show the full frame on wide layouts. Stations with unusable composite artwork fall back to an artist photo.",
+          "Upcoming Apple Music albums show their release date and unreleased track placeholders. Only available tracks are queued for playback. Apple album and artist descriptions also retain formatting and clickable editorial links.",
+          "Changing music source stops an incompatible catalog song and clears its queue and playback history; local-file playback and a controlled Connect device are exempt. Apple Music mode hides download actions because offline Apple Music downloads are not supported. Library-only uploads without an Apple catalog song ID cannot be streamed."
         ]
       },
       {
-        "title": "Mixing and sound",
+        "title": "Music videos",
         "items": [
-          "Adaptive mix matches blends at each section's tempo for songs that change tempo.",
-          "Blends that only work behind a filter and R&B pairs that cannot blend cleanly play out at their natural boundary.",
-          "Best Mix sees these blends when it scores a queue.",
-          "Qobuz FLAC streams start and seek faster."
+          "Apple Music videos play inside Orchard on Linux and Windows. When you open a video from an Apple Music song, Orchard checks for Apple's associated video first and searches YouTube if none is available. A failed video can be retried while the song continues through its regular audio stream.",
+          "Move a music video into a draggable mini-player inside Orchard or pop it into a separate, resizable, always-on-top picture-in-picture window. The player remembers its placement and provides playback controls and a way back to the main video view.",
+          "The video quality menu adds FSR 1 upscaling and adjustable sharpening for videos enlarged beyond their source resolution. Upscaling is unavailable with Qt's OpenGL rendering backend. On Windows, Apple Music video playback tries higher-quality renditions that require display protection and falls back to the software-compatible rendition if they are refused; available resolution depends on the stream and system.",
+          "Album pages can show Music Videos, More by this artist, and Other Versions shelves when the selected service supplies them, making related videos and alternate releases easier to find."
         ]
       },
       {
-        "title": "Improvements",
+        "title": "Playback and queue improvements",
         "items": [
-          "Mouse wheel scrolling is faster and consistent on every page.",
-          "Large playlists load with fewer UI updates and keep the scroll position.",
-          "Artwork corners are rounded in one shader pass without offscreen layers.",
-          "The account button shows only the avatar.",
-          "Music video search runs as a guest so plays stay out of YouTube search history.",
-          "The installer saves app output from first runs and shows an error when a new version fails to start."
+          "The Audio Engine adds playback speed from 0.5x to 2x and pitch adjustment up to 12 semitones in either direction. Keep pitch independent of speed, or enable pitch following speed for a turntable-style change. The [ and ] shortcuts adjust speed when playback shortcuts are active. Implemented by @Julian-FF2000.",
+          "Start mix is available from a song's menu to begin a related-song queue from that selection, without waiting for the current queue to run out.",
+          "Autoplay avoids repeating the same recording under different YouTube IDs or common video-title suffixes, while preserving distinct versions such as live performances and remixes. Appending an Autoplay refill also preserves an active Best Mix operation.",
+          "The fullscreen player follows the continuous queue, showing played songs, the current song, and upcoming tracks together. You can return to a played song from that view. Playback progress no longer rebuilds the queue and repeatedly disturbs its scroll position.",
+          "Fixed playback stopping at a crossfade handoff when an end-of-media event arrived during the switch to the incoming player. The incoming song also stays selected on screen throughout the handoff.",
+          "YouTube audio-only matching checks the artist as well as the title and duration, including artist credits without a channel link. This avoids substituting a different artist's same-named song and retains the selected audio track when it already matches.",
+          "The output-device selector retains the chosen device when you reopen Settings. Media keys sent directly to the Orchard window also control playback, including on SteamOS setups where those keys do not arrive through the system media service."
         ]
       },
       {
-        "title": "Fixes",
+        "title": "AdaptiveMix and Best Mix",
         "items": [
-          "Fixed Discord crashing on startup when a pending artist lookup was cancelled.",
-          "Fixed uploaded songs not playing because their c.youtube.com stream host was rejected.",
-          "Fixed Windows adaptive mix missing the DXC libraries it needs."
+          "AdaptiveMix plans each pair as a bass swap, beatmatched blend, drop-in, or beatless bridge. It checks tempo, vocal timing, local musical key, and production compatibility before choosing an arrangement. When a pair cannot be blended, the Adaptive mix status explains why it uses a plain handoff.",
+          "Muffle transitions filter the outgoing song before handing the bass to the next one. Beat and vocal timing guide the swap, allow suitable entries partway into an incoming verse, and keep a trailing vocal clear when the incoming intro has no beat. Tracks titled Intro or Skit are kept out of blends that would skip their opening.",
+          "Best Mix reuses saved per-track beat, vocal, and transition evidence when evaluating the queue. Compatible cached analysis survives later sessions, reducing repeated analysis and letting queue ordering use measured transition information.",
+          "Apple Music songs use Apple's beat and vocal analysis for AdaptiveMix and Best Mix when available, with local analysis as a fallback. Apple Music crossfades appear in the player bar, queue, and fullscreen player.",
+          "Local analysis uses the Nirovi beat model and Syvenu vocal-presence model. Smaller quantized CPU models and shared audio preparation reduce model and buffer overhead; supported GPU beat analysis retains a CPU fallback. Vocal analysis also handles 44.1 kHz songs at the correct duration."
+        ]
+      },
+      {
+        "title": "Browsing and library improvements",
+        "items": [
+          "Search moves into the sidebar and follows the music source selected in General settings. Artist pages gain larger headers, top-song layouts, expandable catalog sections, and clearer retry states when a section fails to load.",
+          "Drag playlists in the sidebar to arrange them in your preferred order. Orchard saves that order between launches. Playlist pickers also gain search so adding a song does not require scrolling through every playlist.",
+          "Reopening a playlist shows its cached contents while it refreshes. Caches are separated by service and account, and YouTube playlist pages load in parallel where continuation data permits. Refreshing a cached playlist retains all fetched pages, so playing it does not silently lose the later songs.",
+          "Choose a YouTube Music language in Settings > General to control the language of catalog titles and metadata independently of your system default. This setting affects YouTube Music content, not Orchard's interface language.",
+          "The YouTube Music settings card can show your profile when you are not signed in to an Orchard account, and includes a link to open YouTube Music Recap in your browser.",
+          "Orchard's AI-generated music handling also recognizes YouTube's Made with AI disclosure. Songs carrying that disclosure follow your existing Mark, Skip, or Remove preference.",
+          "Compilation albums resolve their participating artists from the track list so artist navigation works for Various Artists releases. Library tabs and filters have refreshed styling, and the enclosing glass panel around the song table is removed.",
+          "Album, playlist, song, and artist cards use more consistent spacing and artwork corners, including circular artist images. Home carousels keep cards at a readable size on wide windows and show more columns instead of stretching the cards."
+        ]
+      },
+      {
+        "title": "Appearance and settings",
+        "items": [
+          "Settings gains section search, with documentation and support links in its sidebar. Integrations settings puts advanced Discord options behind Customize, keeping the main connection controls easier to find.",
+          "Choose a custom accent color or derive it from the current cover, and customize popup backgrounds with presets or your own color. Appearance settings include reset controls for returning to the defaults.",
+          "Interface scale lets you adjust the size of Orchard's controls after a restart. Fit large screens automatically enlarges the interface on high-resolution displays that the operating system leaves at 100%: an unscaled 1440p display uses 125% and an unscaled 4K display uses 200%. You can turn automatic fitting off, and screens already scaled by the operating system are left to that scaling.",
+          "Keep the expanded player inside the application window with the windowed-player option. F11 toggles fullscreen for the application window and restores its previous windowed or maximized state when you leave it.",
+          "Enable Canvas stage in Appearance to let a song's tall Spotify Canvas or Apple Music artwork fill the player side of the fullscreen layout, with controls over the video. The surrounding background uses blurred colors from the loop. This is optional and requires animated artwork.",
+          "Immersive background quality offers Low, Medium, and High settings, changing the background's resolution and frame rate so you can choose how much rendering work it uses."
+        ]
+      },
+      {
+        "title": "Lyrics and translation",
+        "items": [
+          "Choose which lyric providers Orchard uses and reorder their priority in Settings. The lyrics view also lets you choose a source for the current song. While Apple Music is connected, its signed-in lyrics can replace unofficial Apple lyric mirrors and supply word timing where available.",
+          "Lyrics gain staggered line movement, animated held words, and progress dots during instrumental gaps. Appearance controls let you adjust the motion and the blur and fading of lines away from the currently sung line.",
+          "Orchard Account is a new lyric-translation provider for signed-in users. Settings shows the account's daily allowance and reset time, and cached translations do not consume another allowance. API and account translation can target English, Spanish, Hindi, Korean, Japanese, or French; downloaded local models continue to translate to English.",
+          "Use Apple Music translations prefers Apple's own translation when Apple lyrics include one for the chosen language. If no translation is available, Orchard falls back to your selected translation provider. The preference can be disabled in translation settings."
+        ]
+      },
+      {
+        "title": "Connect, sharing, and automation",
+        "items": [
+          "A desktop connected to Apple Music can accept Apple Music tracks from an Orchard Connect controller and switch to the Apple catalog for playback. Previous-track commands that explicitly request a skip also change tracks instead of restarting the current song.",
+          "When the desktop controls another Connect device, system media controls show that device's song, artwork, and progress, and send playback and seek commands to it. Shuffling a collection on the remote device generates a fresh order even if shuffle was already enabled.",
+          "Connect ignores a private network address shared by both peers, such as Cloudflare WARP's common address, and can use its WebRTC route instead of repeatedly trying to reach the other device at that address.",
+          "On Linux, system media integrations that support MPRIS TrackList can display Orchard's current song and queued tracks and jump directly to a selected entry.",
+          "The local scripting API lets applications on the same computer control playback and queues, search the selected catalog, access library information, configure mixing, and subscribe to state changes. Settings > Integrations > Local API controls whether it is enabled and which port it uses. It binds only to loopback and requires an authentication token; an Orchard Connect account is not required.",
+          "A separately installed Stream Deck/OpenDeck plugin supplies playback, volume, seek, shuffle, repeat, like, Best Mix, playlist, and song-request actions. It discovers the running desktop through the local API. Tacto can use these actions through OpenDeck.",
+          "Share actions produce public Apple Music song, album, artist, and playlist links when a public catalog item is available. YouTube sharing uses direct service links. Linux and Windows installations register orchard:// links, and supported YouTube links passed to Orchard can open songs and collections in an already-running app.",
+          "Discord Rich Presence identifies Apple Music playback and can offer a Listen on Apple Music link. Hosted Discord artwork expires after a day without use, and Orchard can upload it again if cleanup overlaps with reuse."
+        ]
+      },
+      {
+        "title": "Sign-in, installation, and platform fixes",
+        "items": [
+          "Qobuz connection setup changes: enter the app ID and secret issued to you by Qobuz, plus a user ID and auth token issued for that app. Orchard does not supply shared app credentials. Valid credentials retain access to Qobuz matching and FLAC playback; saved connections without the required app credentials need to be reconnected.",
+          "Windows sign-in uses the Microsoft Edge WebView2 Runtime directly, and Linux uses WebKitGTK for YouTube Music, Spotify, and Apple Music account windows. Windows builds require WebView2 to be installed. Linux release packaging includes the WebKit helper files and dependencies needed for sign-in.",
+          "Windows YouTube Music sessions refresh from the saved sign-in browser profile at startup, periodically, and after authentication is rejected, reducing repeated manual sign-ins. The refresh verifies the account before replacing the saved session. Fixed by @garrys859 in PR #219.",
+          "Windows local-library import accepts ordinary drive-letter paths such as C:/Music, instead of interpreting the drive letter as a URL scheme. Fixed by @garrys859 in PR #221.",
+          "Start with Windows opens Orchard when you sign in while leaving music paused. Windows also uses the native window frame and snapping behavior.",
+          "Windows audio output primes a larger buffer and refills after underruns to better tolerate short stalls in the interface. Audio diagnostics record underruns. Windows packages also bundle FFmpeg and ffprobe for media processing and inspection.",
+          "On Linux, Widevine discovery checks more browser, profile, and Flatpak locations and selects the newest available copy. The offscreen WebKit authentication helper disables accelerated rendering on Wayland to avoid crashes during background session checks.",
+          "The Linux and Windows launcher adds a startup troubleshooter for early crashes, also available through Open troubleshooter in the tray menu when using the launcher. Fix window resets saved window placement; Clear app data separately confirms deletion of settings, downloads, and local-library data. This replaces automatic rollback after repeated startup crashes. Linux's dialog requires Zenity.",
+          "Arch Linux packaging is added for x86_64. Packaged installs, including the Arch package and AppImage, can notify you when a newer release is available; you install the replacement package yourself. These checks verify the release metadata signature and follow the installed stable or canary channel."
+        ]
+      },
+      {
+        "title": "Performance improvements",
+        "items": [
+          "Hidden-window animation throttling covers Windows and X11, and background-idle detection pauses artwork when Orchard is unfocused outside fullscreen playback. Video and animation visibility checks avoid keeping offscreen visuals running, while picture-in-picture can remain active in its own window.",
+          "Animated cover loops are downloaded and cached before playback, avoiding repeated network reads for each loop. Invalid cached video is discarded, while temporary offline failures do not remove a valid cached file.",
+          "Opaque warp backgrounds release the blur resources hidden behind them, and Canvas stage hides the warp layer it covers. Ambient video colors are sampled without making a cropped copy of each supported frame, and inactive lyric rows no longer receive every word-clock update.",
+          "Album track lists and search results create fewer offscreen rows and menus. Artwork dimension checks avoid decoding full images just to measure them, and displayed images use bounded decode sizes, reducing memory used while browsing large collections.",
+          "AdaptiveMix audio preparation avoids redundant resampling and duplicate render-window buffers. On Linux systems using glibc, the mix worker and YouTube extractor return freed heap memory after requests. The Apple Music playback helper also shuts down when idle instead of remaining resident indefinitely."
+        ]
+      },
+      {
+        "title": "Contributors",
+        "items": [
+          "@SFG5453 implemented the main Apple Music catalog and native audio/video playback integration, Atmos rendering, AdaptiveMix and Best Mix changes, lyrics and appearance controls, local API and Stream Deck integration, Connect fixes, service updates, packaging, and the other desktop fixes described here. Apple Music integration was brought together in PR #232; native Windows sign-in was introduced in PR #181.",
+          "@Julian-FF2000 implemented playback speed and pitch, large-screen scaling, Home card sizing, immersive background quality, Canvas stage color wash, playlist pagination and caching, fullscreen queue refresh improvements, broader Widevine discovery, Apple Music source-switch handling, history controls and initial reporting, station artwork fallback, and download-action visibility. Apple motion and editorial artwork was co-authored with @SFG5453; subsequent history reporting and playlist-cache fixes were by @SFG5453.",
+          "@dieogfr polished media-card spacing and artwork corners in PR #197.",
+          "@garrys859 fixed Windows YouTube Music session renewal in PR #219 and Windows local-library paths in PR #221."
         ]
       }
     ]

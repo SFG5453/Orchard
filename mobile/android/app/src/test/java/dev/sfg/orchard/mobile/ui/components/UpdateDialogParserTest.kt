@@ -119,22 +119,26 @@ class UpdateDialogParserTest {
         val notes = dev.sfg.orchard.mobile.MobileChangelog.CURRENT_RELEASE_NOTES
         val sections = parseReleaseNoteSections(notes)
 
-        assertEquals(4, sections.size)
-        assertEquals("Added", sections[0].title)
-        assertEquals(ReleaseNoteCategory.NEW, sections[0].category)
-        assertEquals(2, sections[0].items.size)
-
-        assertEquals("Changed", sections[1].title)
-        assertEquals(ReleaseNoteCategory.CHANGED, sections[1].category)
-        assertEquals(4, sections[1].items.size)
-
-        assertEquals("Fixed", sections[2].title)
-        assertEquals(ReleaseNoteCategory.FIXED, sections[2].category)
-        assertEquals(5, sections[2].items.size)
-
-        assertEquals("Maintenance", sections[3].title)
-        assertEquals(ReleaseNoteCategory.CHANGED, sections[3].category)
-        assertEquals(2, sections[3].items.size)
+        assertEquals(
+            listOf(
+                "Apple Music",
+                "Phone player and navigation",
+                "Tablets and foldables",
+                "Library and discovery improvements",
+                "Lyrics and translation",
+                "Artwork and storage improvements",
+                "Mixing and playback improvements",
+                "Connect and Android Auto",
+                "Sign-in and compatibility fixes",
+                "Contributors",
+            ),
+            sections.map { it.title },
+        )
+        assertEquals(57, sections.sumOf { it.items.size })
+        assertTrue(sections.all { it.items.isNotEmpty() })
+        assertEquals(ReleaseNoteCategory.FIXED, sections[8].category)
+        assertTrue(sections[0].items.any { it.startsWith("**Atmos on supported phones**:") })
+        assertTrue(sections[9].items.any { it.startsWith("**@Julian-FF2000**:") })
     }
 
     @Test
