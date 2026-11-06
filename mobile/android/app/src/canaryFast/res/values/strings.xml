@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Orchard Canary Fast</string>
+    <color name="ic_launcher_background">#F5C518</color>
+    <color name="ic_launcher_foreground">#1A1300</color>
+</resources>

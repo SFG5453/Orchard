@@ -120,9 +120,6 @@ android {
         canaryX86 {
             res.srcDir 'src/canary/res'
         }
-        canaryFast {
-            res.srcDir 'src/canary/res'
-        }
         canaryFastX86 {
             res.srcDir 'src/canary/res'
         }
@@ -184,7 +181,6 @@ android {
             minifyEnabled = false
             shrinkResources = false
             versionNameSuffix = '-canary-fast'
-            resValue 'string', 'app_name', 'Orchard Canary Fast'
             matchingFallbacks = ['release']
         }
         canaryX86 {

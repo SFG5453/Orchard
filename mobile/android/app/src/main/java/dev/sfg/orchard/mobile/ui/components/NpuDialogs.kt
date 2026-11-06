@@ -97,7 +97,7 @@ internal fun NpuDialogHost(settings: OrchardSettings, onSettings: (OrchardSettin
     when {
         npu.compiling && device != null -> NpuCompilingDialog(device.vendor.brand)
         npu.error != null -> NpuErrorDialog(npu.error!!) { NpuSupport.dismissError() }
-        offer && device != null -> NpuOfferDialog(
+        offer -> NpuOfferDialog(
             brand = device.vendor.brand,
             downloadMb = if (device.vendor == NpuVendor.QUALCOMM) (npu.downloadBytes + (1 shl 20) - 1) / (1 shl 20) else null,
             downloading = npu.downloading,
