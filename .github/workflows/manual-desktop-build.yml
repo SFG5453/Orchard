@@ -3,6 +3,11 @@ name: Build and publish desktop release
 on:
   workflow_dispatch:
     inputs:
+      build_only:
+        description: Build and upload artifacts without publishing to R2
+        required: true
+        default: false
+        type: boolean
       channel:
         description: Signed update channel to publish
         required: true
@@ -367,6 +372,7 @@ jobs:
 
   publish:
     name: Publish signed release to R2
+    if: ${{ !inputs.build_only }}
     needs: [linux, windows, arch]
     runs-on: ubuntu-24.04
     timeout-minutes: 180
