@@ -1,0 +1,135 @@
+name: Publish Android NPU add-ons
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orchard-android-npu-publish
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build signed NPU packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      ORT_SRC: ${{ github.workspace }}/artifacts/npu/onnxruntime
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check publisher
+        run: python3 -m unittest discover -s scripts/release -p 'test_publish_npu.py'
+
+      - name: Check out ONNX Runtime 1.31.0
+        uses: actions/checkout@v4
+        with:
+          repository: microsoft/onnxruntime
+          ref: 402979ac1bef89dcd55add41eaa7277c407599eb
+          path: artifacts/npu/onnxruntime
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: temurin
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0 ndk;28.2.13676358'
+
+      - name: Download QAIRT 2.51.0
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            https://softwarecenter.qualcomm.com/api/download/software/sdks/Qualcomm_AI_Runtime_Community/All/2.51.0.260929/v2.51.0.260929.zip \
+            --output "$RUNNER_TEMP/qairt.zip"
+          unzip -q "$RUNNER_TEMP/qairt.zip" -d "$RUNNER_TEMP/qairt"
+          rm "$RUNNER_TEMP/qairt.zip"
+          qnn_sdk="$RUNNER_TEMP/qairt/qairt/2.51.0.260929"
+          test -f "$qnn_sdk/sdk.yaml"
+          echo "QNN_SDK=$qnn_sdk" >> "$GITHUB_ENV"
+
+      - name: Cache reduced ONNX Runtime
+        id: ort-cache
+        uses: actions/cache@v4
+        with:
+          path: mobile/android/npu-addon/prebuilt/libonnxruntime.so
+          key: npu-ort-${{ runner.os }}-${{ runner.arch }}-1.31.0-qnn2.51.0-ndk28.2.13676358-${{ hashFiles('mobile/android/npu-addon/build-ort.sh', 'mobile/android/npu-addon/ops.config') }}
+
+      - name: Build reduced ONNX Runtime with QNN
+        if: steps.ort-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          python -m pip install 'cmake>=3.28,<4' ninja flatbuffers
+          export CMAKE_GENERATOR=Ninja
+          export CMAKE_BUILD_PARALLEL_LEVEL="$(nproc)"
+          bash mobile/android/npu-addon/build-ort.sh
+
+      - name: Restore Android release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/orchard-release.jks"
+          chmod 600 "$RUNNER_TEMP/orchard-release.jks"
+
+      - name: Build and verify all six signed APKs
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/orchard-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          bash mobile/android/npu-addon/build.sh
+          for apk in mobile/android/npu-addon/build/orchard-npu-*.apk; do
+            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$apk"
+          done
+          python scripts/release/publish_npu.py mobile/android/npu-addon/build --dry-run
+
+      - name: Remove release keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/orchard-release.jks"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-npu-addons
+          path: |
+            mobile/android/npu-addon/build/orchard-npu-*.apk
+            mobile/android/npu-addon/build/npu-addons.json
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish NPU packages to depot
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-npu-addons
+          path: dist/npu
+      - name: Upload APKs, then publish download manifest
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          python -m pip install 'boto3>=1.40,<2'
+          python scripts/release/publish_npu.py dist/npu
