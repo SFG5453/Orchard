@@ -114,7 +114,7 @@ internal fun psshKeyId(box: ByteArray): ByteArray? {
     while (p < end) {
         val tag = box[p++].toInt() and 0xff
         when (tag and 7) {
-            0 -> while (p < end && box[p++].toInt() and 0x80 != 0) Unit
+            0 -> { while (p < end && box[p++].toInt() and 0x80 != 0) {} }
             2 -> {
                 val length = box[p++].toInt() and 0xff
                 if (tag shr 3 == 2 && length == 16 && p + 16 <= end) return box.copyOfRange(p, p + 16)

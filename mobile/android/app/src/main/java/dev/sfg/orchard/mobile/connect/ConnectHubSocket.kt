@@ -58,7 +58,7 @@ internal class ConnectHubSocket(
     private var generation = 0L
     @Volatile private var lastToken = ""
 
-    fun start() = synchronized(lock) {
+    fun start(): Unit = synchronized(lock) {
         if (job?.isActive == true) return
         val current = ++generation
         job = scope.launch {

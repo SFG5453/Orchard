@@ -63,8 +63,8 @@ internal class SlopDownload(private val http: OkHttpClient) {
             val call = http.newCall(request)
             continuation.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
-                override fun onFailure(call: Call, error: IOException) {
-                    if (continuation.isActive) continuation.resumeWithException(error)
+                override fun onFailure(call: Call, e: IOException) {
+                    if (continuation.isActive) continuation.resumeWithException(e)
                 }
                 override fun onResponse(call: Call, response: Response) {
                     val result = runCatching {

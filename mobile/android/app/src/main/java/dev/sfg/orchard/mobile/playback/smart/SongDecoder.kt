@@ -21,12 +21,12 @@ internal object SongDecoder {
     fun decode(source: MediaDataSource, head: Boolean = false, tail: Boolean = false): DecodedSong? {
         if (!MixNative.available) return null
         var builder = 0L
-        var rate = 0
+        var decodedRate = 0
         val sink = object : PcmSink {
-            override fun begin(sampleRate: Int): Boolean {
+            override fun begin(rate: Int): Boolean {
                 if (builder != 0L) MixNative.nativeBuilderFree(builder)
-                builder = MixNative.nativeSongBegin(sampleRate, head, tail)
-                rate = sampleRate
+                builder = MixNative.nativeSongBegin(rate, head, tail)
+                decodedRate = rate
                 return builder != 0L
             }
             override fun push(samples: FloatArray, count: Int) = MixNative.nativeSongPush(builder, samples, count)
@@ -35,7 +35,7 @@ internal object SongDecoder {
             if (!PcmDecoder.decode(source, sink)) return null
             val song = MixNative.nativeSongFinish(builder)
             builder = 0L
-            return if (song == 0L) null else DecodedSong(song, rate)
+            return if (song == 0L) null else DecodedSong(song, decodedRate)
         } finally {
             if (builder != 0L) MixNative.nativeBuilderFree(builder)
         }

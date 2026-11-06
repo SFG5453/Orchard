@@ -104,7 +104,7 @@ fun FoldableHomeScreen(data: HomeData) {
                 when (config.section) {
                     BuiltInHomeSection.YOUR_PLAYLISTS -> {
                         if (offline) return@forEach
-                        val items = data.playlists.filter { (it as? CatalogItem.Collection)?.playlist?.trackCount != 0 }
+                        val items = data.playlists.filter { it.playlist.trackCount != 0 }
                         if (items.isNotEmpty()) {
                             foldableRail("Your Playlists", items, data.seeAll("Your Playlists", items), openCatalogItem)
                         }
