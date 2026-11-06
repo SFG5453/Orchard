@@ -20,11 +20,14 @@
 package dev.sfg.orchard.mobile.ui.screens
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
 import android.webkit.CookieManager
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -108,7 +111,7 @@ fun SpotifyLoginScreen(
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { context ->
-                    WebView(context).apply {
+                    val loginView = WebView(context).apply {
                         webView = this
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
@@ -121,9 +124,13 @@ fun SpotifyLoginScreen(
                         }
 
                         webViewClient = object : WebViewClient() {
+                            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                                super.onPageStarted(view, url, favicon)
+                                pageError = ""
+                            }
+
                             override fun onPageFinished(view: WebView, url: String?) {
                                 super.onPageFinished(view, url)
-                                pageError = ""
                                 checkAndCaptureCookie(cookieManager)
                             }
 
@@ -138,10 +145,34 @@ fun SpotifyLoginScreen(
                                         .ifBlank { "The Spotify login page could not be loaded." }
                                 }
                             }
+
+                            override fun onReceivedHttpError(
+                                view: WebView,
+                                request: WebResourceRequest,
+                                errorResponse: WebResourceResponse,
+                            ) {
+                                super.onReceivedHttpError(view, request, errorResponse)
+                                if (request.isForMainFrame) {
+                                    pageError = "Spotify returned an error (${errorResponse.statusCode})."
+                                }
+                            }
                         }
 
                         loadUrl("https://accounts.spotify.com/en/login")
                     }
+                    // Compose's direct WebView interop can leave the page blank.
+                    FrameLayout(context).apply {
+                        addView(loginView, FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                        ))
+                    }
+                },
+                onRelease = { container ->
+                    val view = container.getChildAt(0) as WebView
+                    container.removeView(view)
+                    webView = null
+                    view.destroy()
                 },
             )
 

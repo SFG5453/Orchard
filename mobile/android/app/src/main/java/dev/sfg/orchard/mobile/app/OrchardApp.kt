@@ -140,7 +140,8 @@ fun OrchardApp(viewModel: OrchardViewModel) {
     val dockCollapse = rememberDockCollapse()
     LaunchedEffect(route, searchOpen) { dockCollapse.collapsed = false }
 
-    val chromeHidden = route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME
+    val chromeHidden = route == Routes.LOGIN || route == Routes.ACCOUNT_SWITCH || route == Routes.WELCOME ||
+        route == Routes.SPOTIFY_LOGIN || route == Routes.APPLE_MUSIC_LOGIN
     // Collection artwork runs under the status bar, so these screens take no top inset and
     // apply it themselves where the content actually needs it.
     val isDetail = route == Routes.DETAIL || route?.startsWith("detail") == true
@@ -214,7 +215,7 @@ fun OrchardApp(viewModel: OrchardViewModel) {
             // blur a recording it is itself part of, which is why the pill and the bar were
             // lifted out of this box and into the overlay below.
             CompositionLocalProvider(LocalArtworkMotionEnabled provides !playerOpen) {
-                Box(Modifier.fillMaxSize().glassSceneSource(glassScene)) {
+                Box(Modifier.fillMaxSize().then(if (chromeHidden) Modifier else Modifier.glassSceneSource(glassScene))) {
                     Box(Modifier.fillMaxSize().glassWashSource(glassScene)) {
                         ArtworkBackdrop(
                             palette = backdropPalette,
