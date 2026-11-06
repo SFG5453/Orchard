@@ -138,6 +138,8 @@ void WebKitView::show(const QString &title, const QSize &size, bool navigation) 
 void WebKitView::showOffscreen(const QSize &size) {
   if (m_window)
     return;
+  webkit_settings_set_hardware_acceleration_policy(webkit_web_view_get_settings(m_view),
+                                                   WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER);
   m_window = gtk_offscreen_window_new();
   gtk_window_set_default_size(GTK_WINDOW(m_window), size.width(), size.height());
   gtk_container_add(GTK_CONTAINER(m_window), GTK_WIDGET(m_view));
