@@ -899,3 +899,27 @@ test('catalog track reads every credited artist from the queue row', async () =>
   assert.deepEqual(track.artistBrowseIds, ['UCfirst', 'UCsecond']);
   assert.equal(track.durationSeconds, 190);
 });
+
+
+test('catalog requests send the chosen language for signed-in and guest sessions', async () => {
+  const { createBrowseRequest } = await import('../src/runtime/catalogRequest.js');
+  for (const guest of [false, true]) {
+    let body;
+    const request = createBrowseRequest({ cookie: 'SAPISID=test', language: 'ko' }, { guest }, async (_url, init) => {
+      body = JSON.parse(init.body);
+      return { ok: true, text: async () => '{}' };
+    });
+    await request({ browseId: 'test' });
+    assert.equal(body.context.client.hl, 'ko');
+    assert.equal(body.context.client.gl, 'US');
+  }
+});
+
+
+test('playlist prefetch does not reuse a different language', async () => {
+  const { prefetchPlaylistWave, playlistWave } = await import('../src/runtime/playlistPages.js');
+  const session = { cookie: 'same-account', language: 'en' };
+  prefetchPlaylistWave(session, async () => ({ title: 'English' }), () => 1, 'language-test');
+  const pages = await playlistWave({ ...session, language: 'ko' }, async () => ({ title: '한국어' }), () => 1, 'language-test');
+  assert.equal(pages[0].title, '한국어');
+});

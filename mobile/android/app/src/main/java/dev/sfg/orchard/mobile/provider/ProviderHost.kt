@@ -73,9 +73,11 @@ open class ProviderHost(
     private val calls = HashMap<Long, Call>()
     private val timers = HashMap<Int, ScheduledFuture<*>>()
 
-    private suspend fun call(method: String, payload: JSONObject): Reply =
-        suspendCancellableCoroutine { continuation ->
-            val body = payload.toString().toByteArray()
+    protected open suspend fun preparePayload(method: String, payload: JSONObject): JSONObject = payload
+
+    private suspend fun call(method: String, payload: JSONObject): Reply {
+        val body = preparePayload(method, payload).toString().toByteArray()
+        return suspendCancellableCoroutine { continuation ->
             thread.execute {
                 if (handle == 0L) handle = ProviderNative.create(this, bundleKind.ordinal)
                 val id = ++nextRequest
@@ -86,6 +88,7 @@ open class ProviderHost(
                 ProviderNative.invoke(handle, id, method, body)
             }
         }
+    }
 
     /** Resolves with the method's JSON result text. */
     suspend fun invokeRaw(method: String, payload: JSONObject = JSONObject()): String {

@@ -163,7 +163,7 @@ internal class DetailController(
         if (isAppleMusicId(id)) return if (id.startsWith("am.playlists.")) "apple|$id" else null
         if (id.contains(':') || CatalogRepository.kindOf(id) != CatalogKind.PLAYLIST) return null
         val session = graph.auth.session() ?: return null
-        return "${session.displayName}#${session.accountIndex}#${session.dataSyncId}|$id"
+        return "${session.displayName}#${session.accountIndex}#${session.dataSyncId}#${dev.sfg.orchard.mobile.youtube.effectiveYouTubeLanguage(graph.settings.settings.value.youtubeLanguage)}|$id"
     }
 
     private fun List<Track>.startsWith(prefix: List<Track>): Boolean =
@@ -180,7 +180,7 @@ internal class DetailController(
     fun observeArtwork() {
         scope.launch {
             combine(
-                graph.settings.settings.map { it.homeSource }.distinctUntilChanged(),
+                graph.settings.loadedSettings.map { it.homeSource to it.youtubeLanguage }.distinctUntilChanged(),
                 graph.appleMusic.connection.map { it.connected }.distinctUntilChanged(),
             ) { source, connected -> source to connected }.drop(1).collect {
                 if (requestedId.isNotBlank() && !isLocalPlaylistId(requestedId))

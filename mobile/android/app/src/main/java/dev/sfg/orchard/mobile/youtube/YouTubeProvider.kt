@@ -23,13 +23,20 @@ import dev.sfg.orchard.mobile.provider.ProviderBundle
 import dev.sfg.orchard.mobile.provider.ProviderHost
 import java.io.File
 import okhttp3.OkHttpClient
+import org.json.JSONObject
 
 /** The desktop YouTube provider (`providers/youtube`) in the shared QuickJS host. */
 class YouTubeProvider(
     http: OkHttpClient,
     private val cacheDir: File,
+    private val language: suspend () -> String = { effectiveYouTubeLanguage("system") },
     bundle: (String) -> ByteArray?,
 ) : ProviderHost(http, ProviderBundle.YouTube, bundle) {
+    override suspend fun preparePayload(method: String, payload: JSONObject): JSONObject {
+        if (payload.optJSONObject("session") == null) return payload
+        return withYouTubeLanguage(payload, language())
+    }
+
     private val playerCache get() = File(cacheDir, "youtube-player-v1.json")
 
     override fun readPlayerCache(): ByteArray? = runCatching { playerCache.readBytes() }.getOrNull()

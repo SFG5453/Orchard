@@ -74,7 +74,8 @@ bool PlaylistController::showCached(const QString &browseId) {
   const QString account = AppleMusic::isAppleMusicId(browseId)
                               ? QStringLiteral("apple")
                               : m_auth->userHandle() + QLatin1Char('#') +
-                                    m_auth->sessionObject().value(QStringLiteral("accountIndex")).toVariant().toString();
+                                    m_auth->sessionObject().value(QStringLiteral("accountIndex")).toVariant().toString() +
+                                    QLatin1Char('#') + m_auth->effectiveYoutubeLanguage();
   m_cacheKey = account + QLatin1Char('|') + browseId;
   QFile file(cachePath(m_cacheKey));
   if (!file.open(QIODevice::ReadOnly))

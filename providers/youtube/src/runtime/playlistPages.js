@@ -159,7 +159,7 @@ export function prefetchPlaylistWave(session, fetchBrowse, rowCount, continuatio
   const request = Promise.resolve()
     .then(() => fetchWave(fetchBrowse, rowCount, continuation))
     .then((pages) => ({ pages }), (error) => ({ error }));
-  prefetched.set(continuation, { cookie: String(session?.cookie || '').trim(), request });
+  prefetched.set(continuation, { cookie: String(session?.cookie || '').trim(), language: String(session?.language || ''), request });
   while (prefetched.size > maxPrefetched) prefetched.delete(prefetched.keys().next().value);
 }
 
@@ -168,7 +168,8 @@ export async function playlistWave(session, fetchBrowse, rowCount, continuation)
   const entry = prefetched.get(continuation);
   prefetched.delete(continuation);
   // A wave fetched for another account must not leak into this one.
-  if (entry && entry.cookie === String(session?.cookie || '').trim()) {
+  if (entry && entry.cookie === String(session?.cookie || '').trim() &&
+      entry.language === String(session?.language || '')) {
     const { pages } = await entry.request;
     if (pages) return pages;
   }

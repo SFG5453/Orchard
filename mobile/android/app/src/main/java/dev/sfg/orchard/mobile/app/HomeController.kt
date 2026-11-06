@@ -53,7 +53,7 @@ internal class HomeController(
             }
         }
         scope.launch {
-            graph.settings.loadedSettings.map { it.homeSource }.distinctUntilChanged().drop(1).collect { refresh() }
+            graph.settings.loadedSettings.map { it.homeSource to it.youtubeLanguage }.distinctUntilChanged().drop(1).collect { refresh() }
         }
         scope.launch {
             graph.appleMusic.connection.map { it.connected }.distinctUntilChanged().drop(1).collect {

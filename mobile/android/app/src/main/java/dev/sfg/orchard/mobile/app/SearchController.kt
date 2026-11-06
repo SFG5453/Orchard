@@ -63,7 +63,7 @@ internal class SearchController(
         scope.launch {
             combine(
                 mutableQuery.debounce(350).distinctUntilChanged(),
-                graph.settings.settings.map { it.homeSource }.distinctUntilChanged(),
+                graph.settings.loadedSettings.map { it.homeSource to it.youtubeLanguage }.distinctUntilChanged(),
                 graph.appleMusic.connection.map { it.connected }.distinctUntilChanged(),
             ) { value, _, _ -> value }.collectLatest { value ->
                 if (value.isBlank()) {

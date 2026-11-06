@@ -90,7 +90,7 @@ function browserContext(session, clientVersion, clientName = 'WEB_REMIX') {
       client: {
         clientName,
         clientVersion,
-        hl: 'en',
+        hl: clean(session.language) || 'en',
         gl: 'US',
         visitorData: clean(session.visitorData) || undefined
       },
@@ -102,6 +102,7 @@ function browserContext(session, clientVersion, clientName = 'WEB_REMIX') {
 }
 
 export function createBrowseRequest(session, options = {}, fetchImpl = globalThis.fetch) {
+  if (options.guest) session = { language: session.language };
   const origin = options.origin || musicOrigin;
   const clientName = options.clientName || 'WEB_REMIX';
   const clientNumber = options.clientNumber || '67';

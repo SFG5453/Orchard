@@ -43,6 +43,10 @@ GeneralSectionForm {
     traySwitch.checked: OrchardTray.closeToTray
     traySwitch.onToggled: OrchardTray.closeToTray = traySwitch.checked
 
+    youtubeLanguagePicker.model: OrchardAuth.youtubeLanguages
+    youtubeLanguagePicker.currentIndex: youtubeLanguagePicker.indexOfValue(OrchardAuth.youtubeLanguage)
+    youtubeLanguagePicker.onActivated: OrchardAuth.youtubeLanguage = youtubeLanguagePicker.currentValue
+
     historySwitch.checked: OrchardPlayback.youtubeHistoryEnabled
     historySwitch.onToggled: OrchardPlayback.youtubeHistoryEnabled = historySwitch.checked
 

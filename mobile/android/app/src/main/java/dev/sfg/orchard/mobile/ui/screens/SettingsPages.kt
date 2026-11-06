@@ -120,6 +120,9 @@ internal fun PlaybackPage(
     SectionLabel("Devices", 6)
     SettingsPanel(index = 7) { ChromecastSettingsRow() }
 
+    SectionLabel("YouTube Music", 8)
+    SettingsPanel(index = 9) { YouTubeLanguageRow(settings.youtubeLanguage) { onSettings(settings.copy(youtubeLanguage = it)) } }
+
     SectionLabel("Listening history", 8)
     SettingsPanel(index = 9) {
         ToggleRow(

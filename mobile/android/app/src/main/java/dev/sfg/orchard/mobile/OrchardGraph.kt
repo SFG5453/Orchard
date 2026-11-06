@@ -52,6 +52,7 @@ import org.json.JSONObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -69,8 +70,11 @@ class OrchardGraph(context: Context) {
     private val providerAsset = { name: String ->
         runCatching { context.assets.open("providers/$name").use { it.readBytes() } }.getOrNull()
     }
+    val settings = SettingsRepository(context, applicationScope)
     /** The desktop YouTube provider in QuickJS: catalog, library, lyrics and stream URLs. */
-    val youtube = YouTubeProvider(http, context.cacheDir, providerAsset)
+    val youtube = YouTubeProvider(http, context.cacheDir, language = {
+        dev.sfg.orchard.mobile.youtube.effectiveYouTubeLanguage(settings.loadedSettings.first().youtubeLanguage)
+    }, bundle = providerAsset)
     val auth = NativeYouTubeAuthRepository(
         store = SecureYouTubeSessionStore(context),
         scope = applicationScope,
@@ -82,7 +86,6 @@ class OrchardGraph(context: Context) {
             youtube.invokeArray("catalog.playlists", JSONObject().put("session", session.providerJson()))
         },
     )
-    val settings = SettingsRepository(context, applicationScope)
     init {
         applicationScope.launch(Dispatchers.IO) {
             settings.loadedSettings.collect { values ->

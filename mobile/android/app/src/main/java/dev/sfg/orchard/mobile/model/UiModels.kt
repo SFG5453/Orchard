@@ -69,6 +69,7 @@ data class OrchardSettings(
     val cellularAnimatedArtworkQuality: AnimatedArtworkQuality = AnimatedArtworkQuality.AUTOMATIC,
     val artworkSourceOrder: List<ArtworkSource> = ArtworkSource.entries,
     val sendYouTubeHistory: Boolean = true,
+    val youtubeLanguage: String = "system",
     val sendAppleMusicHistory: Boolean = true,
     /** Save motion covers alongside newly downloaded songs for offline playback. */
     val downloadAnimatedArtwork: Boolean = false,

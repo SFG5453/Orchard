@@ -33,6 +33,9 @@
 #include <QJsonObject>
 #include <QTimer>
 #include <QUrl>
+#include <QLocale>
+#include <QVariantMap>
+#include <algorithm>
 
 AuthManager::AuthManager(YouTubeProvider *youtubeProvider, bool embeddedWebAuth,
                          QObject *parent)
@@ -320,8 +323,50 @@ void AuthManager::setErrorMessage(const QString &error) {
   }
 }
 
+QString AuthManager::youtubeLanguage() const {
+  return QSettings().value(QStringLiteral("youtube/language"), QStringLiteral("system")).toString();
+}
+
+QVariantList AuthManager::youtubeLanguages() const {
+  QMap<QString, QString> names;
+  for (const QLocale &locale : QLocale::matchingLocales(QLocale::AnyLanguage, QLocale::AnyScript, QLocale::AnyTerritory)) {
+    const QString code = locale.name().section(QLatin1Char('_'), 0, 0);
+    if (code == QStringLiteral("C") || locale.nativeLanguageName().isEmpty()) continue;
+    names.insert(code, locale.nativeLanguageName());
+  }
+  QVariantList languages;
+  for (auto it = names.cbegin(); it != names.cend(); ++it)
+    languages.append(QVariantMap{{QStringLiteral("id"), it.key()}, {QStringLiteral("label"), it.value()}});
+  std::sort(languages.begin(), languages.end(), [](const QVariant &a, const QVariant &b) {
+    return QString::localeAwareCompare(a.toMap().value(QStringLiteral("label")).toString(),
+                                       b.toMap().value(QStringLiteral("label")).toString()) < 0;
+  });
+  languages.prepend(QVariantMap{{QStringLiteral("id"), QStringLiteral("system")},
+                                {QStringLiteral("label"), tr("System default")}});
+  return languages;
+}
+
+void AuthManager::setYoutubeLanguage(const QString &language) {
+  if (youtubeLanguage() == language) return;
+  bool valid = false;
+  for (const QVariant &entry : youtubeLanguages())
+    if (entry.toMap().value(QStringLiteral("id")).toString() == language) { valid = true; break; }
+  if (!valid) return;
+  QSettings().setValue(QStringLiteral("youtube/language"), language);
+  emit youtubeLanguageChanged();
+  emit sessionChanged();
+}
+
+QString AuthManager::effectiveYoutubeLanguage() const {
+  if (youtubeLanguage() != QStringLiteral("system")) return youtubeLanguage();
+  const QStringList languages = QLocale::system().uiLanguages();
+  const QString language = languages.isEmpty() ? QString() : languages.first().section(QLatin1Char('-'), 0, 0);
+  return language.isEmpty() || language == QStringLiteral("C") ? QStringLiteral("en") : language;
+}
+
 QJsonObject AuthManager::sessionObject() const {
-  return {{QStringLiteral("cookie"), m_cookie},
+  return {{QStringLiteral("language"), effectiveYoutubeLanguage()},
+          {QStringLiteral("cookie"), m_cookie},
           {QStringLiteral("visitorData"), m_visitorData},
           {QStringLiteral("dataSyncId"), m_dataSyncId},
           {QStringLiteral("clientVersion"), m_clientVersion},

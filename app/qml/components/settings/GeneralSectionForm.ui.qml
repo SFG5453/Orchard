@@ -34,6 +34,7 @@ ColumnLayout {
     property alias traySwitch: traySwitch
     property alias homeSourcePicker: homeSourcePicker
     property bool appleMusicConnected: true
+    property alias youtubeLanguagePicker: youtubeLanguagePicker
     property alias historySwitch: historySwitch
     property alias account: account
     property bool updatesAvailable: true
@@ -221,6 +222,21 @@ ColumnLayout {
             AccountSetting {
                 id: account
                 Layout.fillWidth: true
+            }
+        }
+
+        SettingsRow {
+            iconName: "languages"
+            title: qsTr("YouTube Music language")
+            description: qsTr("Choose the language YouTube Music uses for song titles and other catalog information.")
+
+            SettingsComboBox {
+                id: youtubeLanguagePicker
+                objectName: "settingsYouTubeLanguage"
+                Layout.preferredWidth: 220
+                textRole: "label"
+                valueRole: "id"
+                Accessible.name: qsTr("YouTube Music language")
             }
         }
 

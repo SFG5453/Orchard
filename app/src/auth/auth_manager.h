@@ -36,6 +36,8 @@ class AuthManager final : public QObject
 {
     Q_OBJECT
 
+    Q_PROPERTY(QString youtubeLanguage READ youtubeLanguage WRITE setYoutubeLanguage NOTIFY youtubeLanguageChanged)
+    Q_PROPERTY(QVariantList youtubeLanguages READ youtubeLanguages CONSTANT)
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
     Q_PROPERTY(bool isSignedIn READ isSignedIn NOTIFY statusChanged)
     Q_PROPERTY(QString userName READ userName NOTIFY userChanged)
@@ -59,6 +61,10 @@ public:
                          bool embeddedWebAuth = false,
                          QObject *parent = nullptr);
 
+    [[nodiscard]] QString youtubeLanguage() const;
+    [[nodiscard]] QVariantList youtubeLanguages() const;
+    void setYoutubeLanguage(const QString &language);
+    [[nodiscard]] QString effectiveYoutubeLanguage() const;
     [[nodiscard]] QString status() const { return m_status; }
     [[nodiscard]] bool isSignedIn() const { return m_status == QStringLiteral("signed_in"); }
     [[nodiscard]] QString userName() const { return m_userName; }
@@ -101,6 +107,7 @@ public:
     void acceptHelperResult(const QJsonObject &result);
 
 signals:
+    void youtubeLanguageChanged();
     void statusChanged();
     void userChanged();
     void sessionChanged();

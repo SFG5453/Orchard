@@ -64,6 +64,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 cellularAnimatedArtworkQuality = AnimatedArtworkQuality.fromStoredValue(values[CELLULAR_ANIMATED_ARTWORK_QUALITY]),
                 artworkSourceOrder = decodeArtworkOrder(values[ARTWORK_SOURCE_ORDER]),
                 sendYouTubeHistory = values[SEND_YOUTUBE_HISTORY] ?: true,
+                youtubeLanguage = values[YOUTUBE_LANGUAGE] ?: "system",
                 sendAppleMusicHistory = values[SEND_APPLE_MUSIC_HISTORY] ?: true,
                 downloadAnimatedArtwork = values[DOWNLOAD_ANIMATED_ARTWORK] ?: false,
                 downloadToSdCard = values[DOWNLOAD_TO_SD_CARD] ?: false,
@@ -144,6 +145,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
                 it[CELLULAR_ANIMATED_ARTWORK_QUALITY] = value.cellularAnimatedArtworkQuality.name
                 it[ARTWORK_SOURCE_ORDER] = value.artworkSourceOrder.joinToString(",") { source -> source.name }
                 it[SEND_YOUTUBE_HISTORY] = value.sendYouTubeHistory
+                it[YOUTUBE_LANGUAGE] = value.youtubeLanguage
                 it[SEND_APPLE_MUSIC_HISTORY] = value.sendAppleMusicHistory
                 it[DOWNLOAD_ANIMATED_ARTWORK] = value.downloadAnimatedArtwork
                 it[DOWNLOAD_TO_SD_CARD] = value.downloadToSdCard
@@ -281,6 +283,7 @@ class SettingsRepository(context: Context, private val scope: CoroutineScope) {
         val ARTWORK_SOURCE_ORDER = stringPreferencesKey("artwork_source_order")
         val HOME_SOURCE = stringPreferencesKey("home_source")
         val SEND_YOUTUBE_HISTORY = booleanPreferencesKey("send_youtube_history")
+        val YOUTUBE_LANGUAGE = stringPreferencesKey("youtube_language")
         val SEND_APPLE_MUSIC_HISTORY = booleanPreferencesKey("send_apple_music_history")
         val DOWNLOAD_ANIMATED_ARTWORK = booleanPreferencesKey("download_animated_artwork")
         val DOWNLOAD_TO_SD_CARD = booleanPreferencesKey("download_to_sd_card")

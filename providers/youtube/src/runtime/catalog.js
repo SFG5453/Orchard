@@ -58,7 +58,7 @@ export async function loadSearch(payload = {}) {
     : 'all';
   const collection = {
     // Guest lookups keep internal searches out of the account's search history.
-    search: createMusicSearch(payload.guest ? {} : sessionFrom(payload), {
+    search: createMusicSearch(sessionFrom(payload), {
       guest: payload.guest === true,
       // Search is useful with a valid signed-in session even though the response
       // itself is not personalized in every YouTube account configuration.
@@ -145,7 +145,7 @@ export async function loadLibrary(payload = {}) {
   const feeds = mainFeedsForSession(session);
   // Share the landing page's category endpoints. Recommendations do not get
   // to sneak into the library wearing a fake membership card.
-  const landing = createBrowseRequest(session)({ browseId: 'FEmusic_library_landing' });
+  const landing = createBrowseRequest({ ...session, language: 'en' })({ browseId: 'FEmusic_library_landing' });
   const categories = ['artists', 'albums', 'songs', 'playlists'];
   const results = await Promise.allSettled([
     feeds.fetchBrowserSubscribedArtists(),
@@ -268,7 +268,7 @@ export async function loadAlbum(payload = {}) {
   // retry without the saved account if the authenticated browse fails.
   for (const guest of [false, true]) {
     try {
-      const fetchBrowse = createBrowseRequest(guest ? {} : sessionFrom(payload), {
+      const fetchBrowse = createBrowseRequest(sessionFrom(payload), {
         guest,
         allowGuestResponse: true
       });
@@ -326,7 +326,7 @@ export async function loadArtist(payload = {}) {
   let lastError;
   for (const guest of [false, true]) {
     try {
-      const browse = createBrowseRequest(guest ? {} : sessionFrom(payload), {
+      const browse = createBrowseRequest(sessionFrom(payload), {
         guest, allowGuestResponse: true
       });
       const data = await browse({ browseId });
@@ -334,7 +334,7 @@ export async function loadArtist(payload = {}) {
         throw new Error(data.error?.message || 'YouTube did not return the requested artist.');
       const collection = {
         data, browseId, browse, continue: continuation => browse({ continuation }),
-        search: createMusicSearch(guest ? {} : sessionFrom(payload), {
+        search: createMusicSearch(sessionFrom(payload), {
           guest, allowGuestResponse: true
         })
       };

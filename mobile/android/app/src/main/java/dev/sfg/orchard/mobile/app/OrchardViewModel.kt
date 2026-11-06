@@ -268,6 +268,11 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
         details.observeArtwork()
         nowPlaying.observeLyrics(playback)
         observeAuthentication()
+        viewModelScope.launch {
+            graph.settings.loadedSettings.map { it.youtubeLanguage }.distinctUntilChanged().drop(1).collectLatest {
+                if (graph.auth.session() != null) graph.library.refreshSignedInLibrary()
+            }
+        }
         observeDiscordPresence()
         observeWarnings()
         nowPlaying.observeMusicVideo(targets)
