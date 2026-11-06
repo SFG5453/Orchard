@@ -1,0 +1,57 @@
+# Maintainer: Orchard contributors
+pkgname=orchard-git
+pkgver=1.0.0.canary.10.r726.gb1b95574
+pkgrel=1
+pkgdesc='Music player for YouTube Music and Apple Music'
+arch=('x86_64')
+url='https://github.com/SFG5453/Orchard'
+license=('AGPL-3.0-or-later' 'custom:PolyForm-Shield-1.0.0')
+depends=('qt6-base' 'qt6-declarative' 'qt6-multimedia' 'qt6-multimedia-ffmpeg'
+         'qt6-websockets' 'libsecret' 'webkit2gtk-4.1' 'ffmpeg' 'hicolor-icon-theme')
+makedepends=('git' 'meson' 'ninja' 'cmake' 'rust' 'clang' 'mold' 'nodejs' 'npm' 'pkgconf' 'qt6-shadertools')
+provides=('orchard')
+conflicts=('orchard')
+
+pkgver() {
+  cd "$startdir/../.."
+  local version
+  version=$(sed -n "1s/.*, version: '\([^']*\)'.*/\1/p" meson.build)
+  [[ -n $version ]] || return 1
+  printf '%s.r%s.g%s' "${version//-/.}" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+  cd "$startdir/../.."
+  git submodule update --init --recursive
+  npm install --prefix providers/youtube
+}
+
+build() {
+  cd "$startdir/../.."
+  export CARGO_BUILD_JOBS="$(nproc)"
+  export CMAKE_BUILD_PARALLEL_LEVEL="$(nproc)"
+  local meson_args=(--prefix=/usr --buildtype=release -Dtests=false)
+  if [[ -n ${ORCHARD_MESON_NATIVE_FILE:-} ]]; then
+    meson_args+=(--native-file "$ORCHARD_MESON_NATIVE_FILE")
+  fi
+  meson setup build/arch "${meson_args[@]}"
+  meson compile -C build/arch -j "$(nproc)"
+}
+
+package() {
+  cd "$startdir/../.."
+  local appdir="$pkgdir/opt/orchard"
+  install -d "$appdir" "$pkgdir/usr/bin"
+  install -m755 build/arch/{orchard,orchard-auth-helper,orchard-widevine-host,orchard-adaptive-mix} "$appdir/"
+  install -m755 build/arch/{libwebgpu_dawn.so,libdiscord_partner_sdk.so,libLiteRt.so} "$appdir/"
+  cp -a build/arch/models "$appdir/"
+  install -Dm755 packaging/arch/orchard "$pkgdir/usr/bin/orchard"
+  install -Dm644 packaging/arch/orchard.desktop "$pkgdir/usr/share/applications/orchard-arch.desktop"
+  install -Dm644 app/qml/assets/orchard-logo.png "$pkgdir/usr/share/icons/hicolor/512x512/apps/orchard.png"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 LICENSE-POLYFORM-SHIELD "$pkgdir/usr/share/licenses/$pkgname/LICENSE-POLYFORM-SHIELD"
+  install -Dm644 THIRD_PARTY_NOTICES.md "$pkgdir/usr/share/licenses/$pkgname/THIRD_PARTY_NOTICES.md"
+  install -Dm644 vendor/discord_social_sdk/License-Notices.txt "$pkgdir/usr/share/licenses/$pkgname/DiscordSocialSdk-Notices.txt"
+  install -Dm644 vendor/litert/LICENSE "$pkgdir/usr/share/licenses/$pkgname/LiteRT-LICENSE.txt"
+  install -Dm644 third_party/chromium_cdm/LICENSE "$pkgdir/usr/share/licenses/$pkgname/ChromiumCdm-LICENSE.txt"
+}

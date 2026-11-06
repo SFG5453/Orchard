@@ -60,6 +60,7 @@ WelcomePage {
     }
 
     WelcomeRow {
+        visible: OrchardUpdates.managed
         title: qsTr("Download updates automatically")
         hint: qsTr("New versions install the next time Orchard starts.")
 

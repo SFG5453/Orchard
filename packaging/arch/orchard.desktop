@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Orchard (Arch Linux)
+Exec=/usr/bin/orchard %U
+Icon=orchard
+MimeType=x-scheme-handler/orchard;
+Categories=AudioVideo;Audio;Player;

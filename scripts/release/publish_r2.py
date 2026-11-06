@@ -84,7 +84,7 @@ def put_file(s3, bucket: str, key: str, path: Path, cache_control: str) -> None:
 
 
 def publish(s3, bucket: str, channel: str, linux_tree: Path, windows_tree: Path,
-            linux_appimage: Path, windows_archive: Path, linux_boot: Path,
+            linux_appimage: Path, arch_package: Path, windows_archive: Path, linux_boot: Path,
             windows_boot: Path, windows_setup: Path,
             key_path: Path) -> None:
     version = project_version(ROOT / "meson.build")
@@ -94,7 +94,7 @@ def publish(s3, bucket: str, channel: str, linux_tree: Path, windows_tree: Path,
         raise ValueError("The newest bundled release notes must match the app version")
     if (channel == "canary") != ("-canary" in version):
         raise ValueError(f"Version {version} does not belong on the {channel} channel")
-    for path in (linux_tree, windows_tree, linux_appimage, windows_archive,
+    for path in (linux_tree, windows_tree, linux_appimage, arch_package, windows_archive,
                  linux_boot, windows_boot, windows_setup):
         if not path.exists():
             raise FileNotFoundError(path)
@@ -149,6 +149,7 @@ def publish(s3, bucket: str, channel: str, linux_tree: Path, windows_tree: Path,
         for name, path in (("orchard", linux_boot), ("Orchard.exe", windows_boot),
                            ("OrchardSetup.exe", windows_setup),
                            ("Orchard-Linux-x86_64.AppImage", linux_appimage),
+                           (arch_package.name, arch_package),
                            ("Orchard-Windows-x86_64.7z", windows_archive)):
             key = f"downloads/{channel}/{version}/{name}"
             put_file(s3, bucket, key, path, "public, max-age=31536000, immutable")
@@ -162,6 +163,7 @@ def main() -> None:
     parser.add_argument("--linux-tree", type=Path, required=True)
     parser.add_argument("--windows-tree", type=Path, required=True)
     parser.add_argument("--linux-appimage", type=Path, required=True)
+    parser.add_argument("--arch-package", type=Path, required=True)
     parser.add_argument("--windows-archive", type=Path, required=True)
     parser.add_argument("--linux-bootstrapper", type=Path, required=True)
     parser.add_argument("--windows-bootstrapper", type=Path, required=True)
@@ -180,7 +182,7 @@ def main() -> None:
         key.write_text(secret)
         key.chmod(0o600)
         publish(s3, bucket, args.channel, args.linux_tree, args.windows_tree,
-                args.linux_appimage, args.windows_archive, args.linux_bootstrapper,
+                args.linux_appimage, args.arch_package, args.windows_archive, args.linux_bootstrapper,
                 args.windows_bootstrapper, args.windows_setup, key)
 
 

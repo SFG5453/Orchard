@@ -24,7 +24,7 @@ order: 145
 
 # Updates
 
-Orchard downloads updates in the background and installs them the next time it starts. You never wait for an update when you open Orchard.
+When installed with the Orchard installer, Orchard downloads updates in the background and installs them the next time it starts. Packaged installs notify you about new releases so you can update them yourself.
 
 After an update, Orchard opens the **Release notes** window once to show what changed. Releases you have not opened yet are marked **New**.
 
@@ -42,7 +42,7 @@ If you do nothing, the update installs the next time you start Orchard.
 
 Open **Settings** > **General** > **Updates** and select **Check for updates**. The row shows the download size while it downloads. Select **Cancel** to stop; the next check resumes where it stopped.
 
-The **Updates** section only appears when Orchard was installed with the Orchard installer. Builds you compiled yourself do not update.
+Packaged installs, including the Arch package and AppImage, check for a newer release at startup and show it under **Updates**. Install a new package or AppImage yourself; Orchard does not install it automatically. The check follows the stable or canary channel of your installed version. Builds you compiled yourself do not check for updates. Other package maintainers can enable read-only checks by setting `ORCHARD_PACKAGE_MANAGED=1` in their launcher.
 
 ## How big updates are
 

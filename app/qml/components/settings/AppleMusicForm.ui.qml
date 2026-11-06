@@ -48,7 +48,7 @@ ColumnLayout {
                 // Builds without the local logo show a plain tile.
                 Rectangle {
                     anchors.fill: parent
-                    visible: logo.status !== Image.Ready
+                    visible: logo.status !== Image.Ready && svgLogo.status !== Image.Ready
                     radius: 10
                     color: "#fa2d48"
 
@@ -64,6 +64,15 @@ ColumnLayout {
                 Image {
                     id: logo
                     anchors.fill: parent
+                    source: "qrc:/brand/apple-music.png"
+                    sourceSize: Qt.size(96, 96)
+                    smooth: true
+                }
+
+                Image {
+                    id: svgLogo
+                    anchors.fill: parent
+                    visible: logo.status !== Image.Ready
                     source: "qrc:/brand/apple-music.svg"
                     sourceSize: Qt.size(96, 96)
                     smooth: true

@@ -27,6 +27,10 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include "update/package_release.h"
 
 namespace {
 
@@ -50,8 +54,20 @@ BootstrapperClient::BootstrapperClient(QObject *parent) : QObject(parent)
 {
     const QString bootstrapper = qEnvironmentVariable("ORCHARD_BOOTSTRAPPER");
     m_root = qEnvironmentVariable("ORCHARD_INSTALL_ROOT");
-    if (bootstrapper.isEmpty() || m_root.isEmpty() || !QFileInfo::exists(bootstrapper))
+    if (bootstrapper.isEmpty() || m_root.isEmpty() || !QFileInfo::exists(bootstrapper)) {
+        m_packaged = qEnvironmentVariableIntValue("ORCHARD_PACKAGE_MANAGED") == 1 ||
+                     !qEnvironmentVariableIsEmpty("APPIMAGE");
+        if (m_packaged) {
+            m_current = QCoreApplication::applicationVersion();
+            m_channel = m_current.contains(QLatin1String("-canary")) ? QStringLiteral("canary") : QStringLiteral("stable");
+            m_network = new QNetworkAccessManager(this);
+            QTimer::singleShot(0, this, &BootstrapperClient::checkForUpdates);
+            m_poll.setInterval(6 * 60 * 60 * 1000);
+            connect(&m_poll, &QTimer::timeout, this, &BootstrapperClient::checkForUpdates);
+            m_poll.start();
+        }
         return;
+    }
     m_bootstrapper = bootstrapper;
     m_current = qEnvironmentVariable("ORCHARD_INSTALLED_VERSION");
     // Two small file reads; the background updater can finish while we run.
@@ -93,7 +109,7 @@ void BootstrapperClient::refresh()
 
 void BootstrapperClient::run(const QStringList &arguments, bool detached)
 {
-    if (!available())
+    if (!managed())
         return;
     if (detached) {
         QProcess::startDetached(m_bootstrapper, arguments);
@@ -114,6 +130,12 @@ void BootstrapperClient::checkForUpdates()
 {
     if (busy(m_state))
         return;
+    if (m_packaged) {
+        checkPackageUpdates();
+        return;
+    }
+    if (!managed())
+        return;
     m_state = QStringLiteral("checking");
     m_error.clear();
     emit changed();
@@ -127,7 +149,7 @@ void BootstrapperClient::cancelDownload()
 
 void BootstrapperClient::restartToUpdate()
 {
-    if (!available())
+    if (!managed())
         return;
     QProcess::startDetached(m_bootstrapper, {QStringLiteral("--update-on-exit"), QStringLiteral("--wait-pid"),
                                              QString::number(QCoreApplication::applicationPid())});
@@ -136,7 +158,7 @@ void BootstrapperClient::restartToUpdate()
 
 void BootstrapperClient::setChannel(const QString &channel)
 {
-    if (!available() || channel == m_channel)
+    if (!managed() || channel == m_channel)
         return;
     m_channel = channel;
     emit changed();
@@ -152,7 +174,44 @@ void BootstrapperClient::setChannel(const QString &channel)
 
 void BootstrapperClient::setAutoUpdate(bool enabled)
 {
+    if (!managed())
+        return;
     m_autoUpdate = enabled;
     emit changed();
     run({QStringLiteral("--auto-update"), enabled ? QStringLiteral("on") : QStringLiteral("off")}, false);
+}
+
+void BootstrapperClient::checkPackageUpdates()
+{
+    m_state = QStringLiteral("checking");
+    m_error.clear();
+    emit changed();
+    QNetworkRequest request(QUrl(QStringLiteral("https://depot.sfg545.dev/releases/") + m_channel + QStringLiteral(".json")));
+    request.setTransferTimeout(15000);
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    auto *reply = m_network->get(request);
+    connect(reply, &QNetworkReply::readyRead, reply, [reply] {
+        if (reply->bytesAvailable() > 1024 * 1024)
+            reply->abort();
+    });
+    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+        const QByteArray response = reply->readAll();
+        const QString networkError = reply->error() == QNetworkReply::NoError ? QString() : reply->errorString();
+        reply->deleteLater();
+        QString version;
+        m_error = networkError;
+        if (m_error.isEmpty() && (response.size() > 1024 * 1024 || !packageReleaseVersion(response, m_channel, &version)))
+            m_error = tr("Could not verify release information.");
+        if (!m_error.isEmpty()) {
+            m_state = QStringLiteral("error");
+        } else {
+            m_latest = version;
+            m_state = packageVersionIsNewer(m_current, m_latest) ? QStringLiteral("available") : QStringLiteral("up-to-date");
+            if (m_state == QLatin1String("available") && m_notifiedVersion != m_latest) {
+                m_notifiedVersion = m_latest;
+                emit noticeRequested(tr("Orchard %1 is available. Install it using your usual update method.").arg(m_latest));
+            }
+        }
+        emit changed();
+    });
 }

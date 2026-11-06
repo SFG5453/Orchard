@@ -293,14 +293,18 @@ shaders_cpp = custom_target('shader resources', input: shader_resources,
 
 # The Apple Music logo is supplied locally and never tracked; the UI falls back without it.
 brand_resources = []
-if import('fs').is_file('mobile/android/local/apple-music/apple-music.svg')
-  brand_resources += custom_target('brand resources',
-    input: files('mobile/android/local/apple-music/apple-music.svg'),
-    output: 'qrc_brand_resources.cpp',
+foreach format : ['png', 'svg']
+  brand_image = 'mobile/android/local/apple-music/apple-music.' + format
+  if not import('fs').is_file(brand_image)
+    continue
+  endif
+  brand_resources += custom_target('brand resources ' + format,
+    input: files(brand_image),
+    output: 'qrc_brand_resources_' + format + '.cpp',
     command: [python, files('scripts/meson-rcc.py'), '--rcc', rcc,
-      '--name', 'brand_resources', '--prefix', '/brand',
+      '--name', 'brand_resources_' + format, '--prefix', '/brand',
       '--output', '@OUTPUT@', '@INPUT@'])
-endif
+endforeach
 
 rcc_args = ['--compress-algo', 'zlib']
 licenses_qrc = qt6.compile_resources(sources: files('meson/licenses.qrc'), extra_args: rcc_args)
@@ -314,7 +318,7 @@ auth_qrc_file = {'windows': 'meson/auth_qml_windows.qrc', 'linux': 'meson/auth_q
 auth_qrc = qt6.compile_resources(sources: files(auth_qrc_file), extra_args: rcc_args)
 
 app_inc = include_directories('app/src', 'app/src/auth',
-  'app/src/appearance', 'core/native', 'vendor/litert/include')
+  'app/src/appearance', 'core/native', 'vendor/litert/include', 'bootstrapper/src')
 app_dependencies = [qt_dep, qt_gui_private, connect_dep, rust_dep, discord_sdk_dep,
   qjs_dep, keychain_dep] + platform_deps
 app_args = ['-DORCHARD_VERSION="' + meson.project_version() + '"']
@@ -489,6 +493,12 @@ qml_startup_test = executable('orchard_qml_startup_test',
   dependencies: [qt_dep, qt_gui_private], build_by_default: false)
 
 if get_option('tests')
+  package_release_test = executable('orchard_package_release_test',
+    files('tests/package_release_test.cpp', 'app/src/update/package_release.cpp',
+      'bootstrapper/src/util/Version.cpp'),
+    include_directories: app_inc, dependencies: [qt_core, mbedcrypto_dep])
+  test('orchard_package_release', package_release_test, timeout: 15)
+
   test('orchard_qml_startup', qml_startup_test, timeout: 60,
     env: ['QT_QPA_PLATFORM=offscreen', 'QT_QUICK_BACKEND=software'])
   # Core too: the Windows qmake lookup does not add it for Test the way pkg-config does.

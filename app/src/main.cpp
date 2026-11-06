@@ -335,8 +335,8 @@ int main(int argc, char *argv[]) {
   WindowState windowState;
   StartupSettings startup;
   ScreenWakeLock screenWake;
-  // Talks to the bootstrapper that launched us; inert in development builds.
   BootstrapperClient updates;
+  QObject::connect(&updates, &BootstrapperClient::noticeRequested, &backend, &BackendInfo::noticeRequested);
 
   QQmlApplicationEngine engine;
   QObject::connect(&engine, &QQmlEngine::warnings, &application,

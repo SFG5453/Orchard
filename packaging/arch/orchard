@@ -1,0 +1,4 @@
+#!/bin/sh
+export ORCHARD_PACKAGE_MANAGED=1
+export LD_LIBRARY_PATH="/opt/orchard${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec /opt/orchard/orchard "$@"

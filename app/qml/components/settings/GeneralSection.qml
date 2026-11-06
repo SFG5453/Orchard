@@ -63,6 +63,8 @@ GeneralSectionForm {
     function updateTitleFor(state, latest) {
         switch (state) {
         case "ready": return qsTr("Update ready. Restart Orchard to install.");
+        case "available": return qsTr("Orchard %1 is available").arg(latest);
+        case "idle": return qsTr("Check for updates");
         case "checking": return qsTr("Checking for updates");
         case "downloading": return qsTr("Downloading Orchard %1").arg(latest);
         case "staging": return qsTr("Installing update");
@@ -75,6 +77,7 @@ GeneralSectionForm {
     function updateDetailFor(state, current, latest, channel, done, total, error) {
         switch (state) {
         case "ready": return qsTr("Orchard %1 is downloaded and verified.").arg(latest);
+        case "available": return qsTr("Install the update using your usual update method.");
         case "downloading": return total > 0 ? qsTr("%1 of %2").arg(root.megabytes(done)).arg(root.megabytes(total)) : "";
         case "staging": return qsTr("Putting files in place next to the running version.");
         case "error": return error;
@@ -94,6 +97,7 @@ GeneralSectionForm {
     }
 
     updatesAvailable: OrchardUpdates.available
+    updatesManaged: OrchardUpdates.managed
     updateTitle: root.updateTitleFor(OrchardUpdates.state, OrchardUpdates.latestVersion)
     updateDetail: root.updateDetailFor(OrchardUpdates.state, OrchardUpdates.currentVersion, OrchardUpdates.latestVersion,
                                   OrchardUpdates.channel, OrchardUpdates.downloaded, OrchardUpdates.total,

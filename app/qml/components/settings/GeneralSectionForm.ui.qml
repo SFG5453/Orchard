@@ -38,6 +38,7 @@ ColumnLayout {
     property alias historySwitch: historySwitch
     property alias account: account
     property bool updatesAvailable: true
+    property bool updatesManaged: true
     property string updateTitle: qsTr("Orchard is up to date")
     property string updateDetail: qsTr("Version 4.2.14 on the stable channel")
     property string updateActionText: qsTr("Check for updates")
@@ -150,7 +151,6 @@ ColumnLayout {
         }
     }
 
-    // Only installs managed by the Orchard bootstrapper can update themselves.
     SettingsSection {
         Layout.fillWidth: true
         visible: root.updatesAvailable
@@ -188,6 +188,7 @@ ColumnLayout {
         }
 
         SettingsRow {
+            visible: root.updatesManaged
             iconName: "download"
             title: qsTr("Download updates automatically")
             description: qsTr("Orchard fetches new versions in the background and installs them the next time it starts.")
@@ -200,6 +201,7 @@ ColumnLayout {
         }
 
         SettingsRow {
+            visible: root.updatesManaged
             iconName: "sparkles"
             title: qsTr("Canary builds")
             description: qsTr("Get new features early. Canary builds are less tested.")

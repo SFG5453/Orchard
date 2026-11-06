@@ -33,6 +33,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Restore Apple Music logo
+        env:
+          APPLE_MUSIC_LOGO_PNG_BASE64: ${{ secrets.APPLE_MUSIC_LOGO_PNG_BASE64 }}
+        run: python scripts/restore-apple-music-logo.py
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -123,6 +127,74 @@ jobs:
           path: ${{ env.CCACHE_DIR }}
           key: orchard-linux-clang-mold-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
 
+  arch:
+    name: Arch Linux x86_64 package
+    runs-on: ubuntu-24.04
+    container: archlinux:latest
+    timeout-minutes: 360
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/build-cache/arch-ccache
+      CCACHE_MAXSIZE: 2G
+      CCACHE_COMPRESS: 'true'
+      CCACHE_COMPILERCHECK: content
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+    steps:
+      - name: Install packaging tools
+        run: |
+          pacman -Syu --noconfirm --needed base-devel git sudo python ccache
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore Arch compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: orchard-arch-clang-mold-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            orchard-arch-clang-mold-v1-
+      - name: Restore Apple Music logo
+        env:
+          APPLE_MUSIC_LOGO_PNG_BASE64: ${{ secrets.APPLE_MUSIC_LOGO_PNG_BASE64 }}
+        run: python scripts/restore-apple-music-logo.py
+      - name: Build Arch package
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/arch-packages" "$CCACHE_DIR"
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          su builder -c 'ccache --zero-stats && cd "$1/packaging/arch" && ORCHARD_MESON_NATIVE_FILE="$1/scripts/release/linux-clang-mold.ini" PKGDEST="$1/arch-packages" makepkg -sf --noconfirm' _ "$GITHUB_WORKSPACE"
+      - name: Check package dependencies
+        shell: bash
+        run: |
+          package=$(find "$GITHUB_WORKSPACE/arch-packages" -maxdepth 1 -name 'orchard-git-*.pkg.tar.zst' ! -name 'orchard-git-debug-*' -print -quit)
+          test -n "$package"
+          mkdir -p "$RUNNER_TEMP/orchard-arch-check"
+          bsdtar -xf "$package" -C "$RUNNER_TEMP/orchard-arch-check"
+          appdir="$RUNNER_TEMP/orchard-arch-check/opt/orchard"
+          for binary in orchard orchard-auth-helper orchard-widevine-host orchard-adaptive-mix; do
+            output="$(LD_LIBRARY_PATH="$appdir" ldd "$appdir/$binary")"
+            echo "$output"
+            if [[ "$output" == *'not found'* ]]; then exit 1; fi
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orchard-arch-x86_64
+          path: ${{ github.workspace }}/arch-packages/*.pkg.tar.zst
+          if-no-files-found: error
+          retention-days: 14
+      - name: Arch compiler cache stats
+        if: always()
+        run: su builder -c 'ccache --show-stats'
+      - name: Save Arch compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: orchard-arch-clang-mold-v1-${{ github.run_id }}-${{ github.run_attempt }}
+
   windows:
     name: Windows x86_64 app and bootstrapper
     runs-on: windows-2025-vs2026
@@ -141,6 +213,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Restore Apple Music logo
+        env:
+          APPLE_MUSIC_LOGO_PNG_BASE64: ${{ secrets.APPLE_MUSIC_LOGO_PNG_BASE64 }}
+        run: python scripts/restore-apple-music-logo.py
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -291,7 +367,7 @@ jobs:
 
   publish:
     name: Publish signed release to R2
-    needs: [linux, windows]
+    needs: [linux, windows, arch]
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     concurrency:
@@ -310,6 +386,10 @@ jobs:
         with:
           name: orchard-windows-publish
           path: dist/windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: orchard-arch-x86_64
+          path: dist/arch
       - name: Unpack both platform trees
         run: |
           sudo apt-get update
@@ -331,11 +411,17 @@ jobs:
           RELEASE_CHANNEL: ${{ inputs.channel }}
         run: |
           python -m pip install 'cryptography>=45,<51' 'boto3>=1.40,<2'
+          mapfile -t arch_packages < <(find dist/arch -maxdepth 1 -name 'orchard-git-*.pkg.tar.zst' ! -name 'orchard-git-debug-*' -print)
+          if [[ ${#arch_packages[@]} -ne 1 ]]; then
+            echo "Expected one Arch package, found ${#arch_packages[@]}" >&2
+            exit 1
+          fi
           python scripts/release/publish_r2.py \
             --channel "$RELEASE_CHANNEL" \
             --linux-tree dist/linux/AppDir \
             --windows-tree dist/windows/staged/Orchard \
             --linux-appimage dist/linux/Orchard-Linux-x86_64.AppImage \
+            --arch-package "${arch_packages[0]}" \
             --windows-archive dist/windows/Orchard-Windows-x86_64.7z \
             --linux-bootstrapper dist/linux/orchard-bootstrapper \
             --windows-bootstrapper dist/windows/orchard-bootstrapper.exe \

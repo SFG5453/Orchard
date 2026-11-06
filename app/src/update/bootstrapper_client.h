@@ -23,14 +23,14 @@
 #include <QString>
 #include <QTimer>
 
-// The app's side of the bootstrapper IPC. Reads install.json and
-// update-state.json from the install root, and runs the bootstrapper
-// (ORCHARD_BOOTSTRAPPER) for every action. Inert in development builds,
-// which are not started by a bootstrapper.
+// Handles bootstrapper updates and read-only checks for packaged builds.
+class QNetworkAccessManager;
+
 class BootstrapperClient final : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool available READ available CONSTANT)
+    Q_PROPERTY(bool managed READ managed CONSTANT)
     Q_PROPERTY(QString state READ state NOTIFY changed)
     Q_PROPERTY(QString currentVersion READ currentVersion NOTIFY changed)
     Q_PROPERTY(QString latestVersion READ latestVersion NOTIFY changed)
@@ -43,8 +43,9 @@ class BootstrapperClient final : public QObject
 public:
     explicit BootstrapperClient(QObject *parent = nullptr);
 
-    [[nodiscard]] bool available() const { return !m_bootstrapper.isEmpty(); }
-    // idle | checking | up-to-date | downloading | staging | ready | error | cancelled
+    [[nodiscard]] bool available() const { return managed() || m_packaged; }
+    [[nodiscard]] bool managed() const { return !m_bootstrapper.isEmpty(); }
+    // idle | checking | up-to-date | available | downloading | staging | ready | error | cancelled
     [[nodiscard]] QString state() const { return m_state; }
     [[nodiscard]] QString currentVersion() const { return m_current; }
     [[nodiscard]] QString latestVersion() const { return m_latest; }
@@ -64,17 +65,22 @@ public:
 
 signals:
     void changed();
+    void noticeRequested(const QString &message);
 
 private:
     void refresh();
+    void checkPackageUpdates();
     void run(const QStringList &arguments, bool detached);
 
+    bool m_packaged{false};
+    QNetworkAccessManager *m_network{nullptr};
     QString m_bootstrapper;
     QString m_root;
     QTimer m_poll;
     QString m_state{QStringLiteral("idle")};
     QString m_current;
     QString m_latest;
+    QString m_notifiedVersion;
     QString m_channel;
     QString m_error;
     qint64 m_downloaded{0};

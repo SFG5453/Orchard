@@ -45,6 +45,7 @@ class PublishTest(unittest.TestCase):
             json.dumps([{"version": VERSION}]))
         self.paths = [Path(self.temp.name) / name for name in
                       ("linux", "windows", "Orchard-Linux-x86_64.AppImage",
+                       "orchard-git-0.3.0.canary.1.r1.g1234567-1-x86_64.pkg.tar.zst",
                        "Orchard-Windows-x86_64.7z", "orchard", "Orchard.exe",
                        "OrchardSetup.exe", "signing.pem")]
         for path in self.paths[:2]:
@@ -83,6 +84,7 @@ class PublishTest(unittest.TestCase):
         self.assertIn(f"downloads/canary/{VERSION}/OrchardSetup.exe", store.keys)
         self.assertIn(f"downloads/canary/{VERSION}/Orchard-Linux-x86_64.AppImage", store.keys)
         self.assertIn(f"downloads/canary/{VERSION}/Orchard-Windows-x86_64.7z", store.keys)
+        self.assertIn(f"downloads/canary/{VERSION}/{self.paths[3].name}", store.keys)
 
     def test_release_requires_the_published_bootstrapper(self):
         self.run_publish(RecordingR2())
@@ -94,6 +96,12 @@ class PublishTest(unittest.TestCase):
 
     def test_failed_manifest_upload_leaves_channel_untouched(self):
         store = RecordingR2(fail_at=f"manifests/{VERSION}-win-x86_64.json")
+        with self.assertRaisesRegex(RuntimeError, "simulated R2"):
+            self.run_publish(store)
+        self.assertNotIn("releases/canary.json", store.keys)
+
+    def test_failed_arch_upload_leaves_channel_untouched(self):
+        store = RecordingR2(fail_at=f"downloads/canary/{VERSION}/{self.paths[3].name}")
         with self.assertRaisesRegex(RuntimeError, "simulated R2"):
             self.run_publish(store)
         self.assertNotIn("releases/canary.json", store.keys)
