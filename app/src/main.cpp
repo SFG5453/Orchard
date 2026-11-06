@@ -201,7 +201,7 @@ int main(int argc, char *argv[]) {
     qputenv("ORCHARD_FFMPEG", QDir::toNativeSeparators(bundledFfmpeg).toUtf8());
 #endif
 
-#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID) && QT_CONFIG(vulkan) && __has_include(<vulkan/vulkan.h>)
   if (!qEnvironmentVariableIsSet("QSG_RHI_BACKEND") &&
       !qEnvironmentVariableIsSet("QT_QUICK_BACKEND")) {
     QVulkanInstance vulkanProbe;
