@@ -22,7 +22,7 @@ import Orchard
 import QtQuick
 import QtQuick.Controls
 
-// Pill button for the library header: category tabs and Refresh.
+// Header actions and category filters.
 Button {
     id: root
 
@@ -31,14 +31,18 @@ Button {
     property string detail
     property bool busy: false
 
-    implicitHeight: 32
+    implicitHeight: 36
     implicitWidth: content.implicitWidth + (iconName ? 28 : 30)
     hoverEnabled: true
 
     background: Rectangle {
-        radius: height / 2
-        color: root.checked ? "#f1f0ec" : root.hovered ? "#20ffffff" : "#08ffffff"
-        border.color: root.activeFocus ? OrchardAppearance.accentStrong : "#18ffffff"
+        radius: root.checkable ? 8 : height / 2
+        color: root.checked ? "#d2e4d3"
+            : root.down ? "#454b46"
+            : root.hovered ? "#3a403b"
+            : root.checkable ? "transparent" : "#303630"
+        border.color: root.visualFocus ? OrchardAppearance.accentStrong
+            : root.checkable && !root.checked ? "#7e8880" : "transparent"
         opacity: root.enabled ? 1 : 0.5
         Behavior on color { ColorAnimation { duration: Motion.normal } }
     }
@@ -55,7 +59,7 @@ Button {
                 width: 14
                 height: 14
                 name: root.iconName
-                color: root.checked ? "#171b17" : "#d2d1cc"
+                color: root.checked ? "#17231a" : "#eceee9"
 
                 // Finishes the turn it is on, so the icon never freezes crooked.
                 RotationAnimator on rotation {
@@ -70,7 +74,7 @@ Button {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.text
-                color: root.checked ? "#171b17" : "#d2d1cc"
+                color: root.checked ? "#17231a" : "#eceee9"
                 font.family: "Inter"
                 font.pixelSize: 13
                 Behavior on color { ColorAnimation { duration: Motion.normal } }
@@ -79,7 +83,7 @@ Button {
                 visible: root.detail !== ""
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.detail
-                color: root.checked ? "#5b635a" : "#8d968e"
+                color: root.checked ? "#405044" : "#aeb6ae"
                 font.family: "Inter"
                 font.pixelSize: 12
                 font.features: { "tnum": 1 }

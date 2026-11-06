@@ -23,7 +23,7 @@ import "../../components"
 import "../../components/detail"
 import QtQuick
 
-// Saved songs as a sortable table inside a translucent panel.
+// Saved songs as a sortable table.
 Item {
     id: root
 
@@ -43,19 +43,9 @@ Item {
         list.positionViewAtBeginning();
     }
 
-    // Same recipe as the settings panels, so every glass surface agrees.
-    Rectangle {
-        anchors.fill: parent
-        radius: 16
-        color: "#0affffff"
-        border.color: "#1cffffff"
-    }
-
     CollectionTrackHeader {
         id: head
-        x: 8
-        y: 4
-        width: parent.width - 16
+        width: parent.width
         showArtwork: true
         showAlbum: true
         labelColor: "#8d968e"
@@ -72,8 +62,6 @@ Item {
         anchors.right: parent.right
         anchors.top: head.bottom
         anchors.bottom: parent.bottom
-        anchors.leftMargin: 8
-        anchors.rightMargin: 8
         cacheBuffer: 400
         model: root.tracks
 

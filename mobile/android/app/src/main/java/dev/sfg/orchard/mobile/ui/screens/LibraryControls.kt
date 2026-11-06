@@ -20,7 +20,6 @@
 package dev.sfg.orchard.mobile.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,6 +41,8 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -65,15 +66,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.sfg.orchard.mobile.ui.glass.GlassTone
-import dev.sfg.orchard.mobile.ui.glass.glassPane
 
 internal enum class LibrarySort(val label: String) {
     ADDED("Recently added"),
     TITLE("A to Z"),
 }
-
-private val ControlFill = Color(0x0FFFFFFF)
 
 /** Count on the left; sort menu and grid or list toggle on the right when given. */
 @Composable
@@ -92,7 +89,7 @@ internal fun LibraryToolbar(
         Text(
             count,
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-            color = SettingsStyle.Description,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
@@ -115,8 +112,8 @@ private fun SortButton(sort: LibrarySort, onSort: (LibrarySort) -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Icon(Icons.AutoMirrored.Rounded.Sort, null, tint = SettingsStyle.Title, modifier = Modifier.size(16.dp))
-            Text(sort.label, style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = SettingsStyle.Title)
+            Icon(Icons.AutoMirrored.Rounded.Sort, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(16.dp))
+            Text(sort.label, style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             LibrarySort.entries.forEach { option ->
@@ -133,7 +130,7 @@ private fun SortButton(sort: LibrarySort, onSort: (LibrarySort) -> Unit) {
 @Composable
 private fun ViewToggle(grid: Boolean, onGrid: (Boolean) -> Unit) {
     Row(
-        Modifier.clip(RoundedCornerShape(12.dp)).background(ControlFill).padding(2.dp),
+        Modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(2.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         ToggleSegment(Icons.Rounded.GridView, "Grid view", grid) { onGrid(true) }
@@ -148,12 +145,12 @@ private fun ToggleSegment(icon: ImageVector, label: String, on: Boolean, onClick
         Modifier
             .size(width = 40.dp, height = 36.dp)
             .clip(shape)
-            .background(if (on) SettingsStyle.Selected else Color.Transparent, shape)
+            .background(if (on) MaterialTheme.colorScheme.primary else Color.Transparent, shape)
             .clickable(role = Role.RadioButton, onClick = onClick)
             .semantics { contentDescription = label; selected = on },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, tint = if (on) SettingsStyle.Title else SettingsStyle.Description, modifier = Modifier.size(18.dp))
+        Icon(icon, null, tint = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -171,19 +168,13 @@ internal fun LibraryPlayButtons(onPlay: () -> Unit, onShuffle: () -> Unit) {
 
 @Composable
 private fun PillButton(label: String, icon: ImageVector, filled: Boolean, onClick: () -> Unit, modifier: Modifier) {
-    val shape = RoundedCornerShape(22.dp)
-    val surface = if (filled) Modifier.background(SettingsStyle.Sage, shape)
-    else Modifier.glassPane(shape, GlassTone.CONTROL).border(1.dp, SettingsStyle.ButtonBorder, shape)
-    Row(
-        modifier.height(44.dp).clip(shape).then(surface).clickable(role = Role.Button, onClick = onClick),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val tint = if (filled) OnSage else SettingsStyle.Title
-        Icon(icon, null, tint = tint, modifier = Modifier.size(18.dp))
+    val content: @Composable () -> Unit = {
+        Icon(icon, null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
-        Text(label, style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold), color = tint)
+        Text(label)
     }
+    if (filled) Button(onClick = onClick, modifier = modifier.height(48.dp)) { content() }
+    else OutlinedButton(onClick = onClick, modifier = modifier.height(48.dp)) { content() }
 }
 
 /** Liked songs and Downloads tiles above the playlist grid. */
@@ -195,11 +186,11 @@ internal fun LibraryShortcuts(likedCount: Int, downloadedCount: Int, onLiked: ()
     ) {
         ShortcutTile(
             "Liked songs", songCountLabel(likedCount), Icons.Rounded.Favorite,
-            Color(0xFF3B5A47), SettingsStyle.SageSoft, onLiked, Modifier.weight(1f),
+            onLiked, Modifier.weight(1f),
         )
         ShortcutTile(
             "Downloads", if (downloadedCount == 0) "None yet" else "${songCountLabel(downloadedCount)} offline", Icons.Rounded.DownloadDone,
-            Color(0xFF2E3F52), Color(0xFFBFD3EA), onDownloads, Modifier.weight(1f),
+            onDownloads, Modifier.weight(1f),
         )
     }
 }
@@ -209,8 +200,6 @@ private fun ShortcutTile(
     title: String,
     subtitle: String,
     icon: ImageVector,
-    iconFill: Color,
-    iconTint: Color,
     onClick: () -> Unit,
     modifier: Modifier,
 ) {
@@ -219,19 +208,18 @@ private fun ShortcutTile(
         modifier
             .height(60.dp)
             .clip(shape)
-            .glassPane(shape, GlassTone.CONTROL)
-            .border(1.dp, SettingsStyle.PanelBorder, shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant, shape)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(start = 8.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(iconFill), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = iconTint, modifier = Modifier.size(20.dp))
+        Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold), color = SettingsStyle.Title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = SettingsStyle.Description, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
