@@ -49,6 +49,7 @@ public:
     // The shared sign-in profile when null.
     WebKitProfile *profile{nullptr};
     QString userAgent;
+    bool allowAutomaticPopups{false};
     // Injected into the top frame at document start, before page scripts.
     QStringList startupScripts;
   };

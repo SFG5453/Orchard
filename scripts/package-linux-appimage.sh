@@ -53,6 +53,7 @@ export PATH="$here/usr/bin:$PATH"
 export LD_LIBRARY_PATH="$here/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export ORCHARD_WEBKIT_ROOT="$here/usr"
 export GSETTINGS_SCHEMA_DIR="$here/usr/share/glib-2.0/schemas"
+export GIO_EXTRA_MODULES="$here/usr/lib/gio/modules${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}"
 exec "$here/usr/bin/orchard" "$@"
 EOF
 chmod +x "$appdir/AppRun"
@@ -81,8 +82,11 @@ export ARCH=x86_64
 export APPIMAGE_EXTRACT_AND_RUN=1
 cd "$output_dir"
 
+gio_tls="$(pkg-config --variable=giomoduledir gio-2.0)/libgiognutls.so"
+test -f "$gio_tls"
 ./linuxdeploy-x86_64.AppImage --appdir "$appdir" \
   -e "$(command -v ffmpeg)" -e "$(command -v ffprobe)" \
+  -l "$gio_tls" \
   -i "$output_dir/orchard.png" \
   -d "$output_dir/orchard.desktop" --plugin qt
 
@@ -92,6 +96,10 @@ test -f "$appdir/usr/plugins/sqldrivers/libqsqlite.so"
 compgen -G "$appdir/usr/lib/libwebkit2gtk-4.1.so*" > /dev/null
 compgen -G "$appdir/usr/lib/libjavascriptcoregtk-4.1.so*" > /dev/null
 
+mkdir -p "$appdir/usr/lib/gio/modules"
+cp "$gio_tls" "$appdir/usr/lib/gio/modules/"
+gio-querymodules "$appdir/usr/lib/gio/modules"
+test -s "$appdir/usr/lib/gio/modules/giomodule.cache"
 python3 "$source_dir/scripts/stage-webkit-appimage.py" "$appdir"
 mkdir -p "$appdir/usr/share/glib-2.0"
 cp -a /usr/share/glib-2.0/schemas "$appdir/usr/share/glib-2.0/"

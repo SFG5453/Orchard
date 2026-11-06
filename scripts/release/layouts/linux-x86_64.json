@@ -15,7 +15,7 @@
     "models": {"version": "3", "map": [
       {"from": "usr/bin/models", "to": ""}
     ]},
-    "qt": {"version": "6.12.0-13", "map": [
+    "qt": {"version": "6.12.0-14", "map": [
       {"from": "usr/lib", "to": "lib"},
       {"from": "usr/libexec", "to": "libexec"},
       {"from": "usr/share/glib-2.0", "to": "share/glib-2.0"},
@@ -42,6 +42,7 @@
       "ORCHARD_FFMPEG": "{component:ffmpeg}/ffmpeg"
     },
     "prependPaths": {
+      "GIO_EXTRA_MODULES": ["{component:qt}/lib/gio/modules"],
       "LD_LIBRARY_PATH": ["{component:qt}/lib", "{component:ffmpeg}/lib", "{component:onnxruntime}"],
       "PATH": ["{component:ffmpeg}"]
     }

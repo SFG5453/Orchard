@@ -1,5 +1,19 @@
 [
   {
+    "version": "2.0.1-canary.1",
+    "date": "2026-11-06",
+    "title": "Linux Apple Music sign-in",
+    "sections": [
+      {
+        "title": "Fixes",
+        "items": [
+          "The Linux AppImage and updater include the TLS support needed to load Apple Music sign-in.",
+          "Apple Music sign-in offers a sign-in button and allows its authorization window to open on Linux."
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.0.0-canary.1",
     "date": "2026-11-06",
     "title": "Apple Music and a more customizable desktop",

@@ -67,6 +67,8 @@ WebKitView::WebKitView(const Options &options, QObject *parent) : QObject(parent
                                         "user-content-manager", content, nullptr));
   g_object_unref(content);
   g_object_ref_sink(m_view);
+  webkit_settings_set_javascript_can_open_windows_automatically(webkit_web_view_get_settings(m_view),
+                                                                 options.allowAutomaticPopups);
   if (!options.userAgent.isEmpty())
     webkit_settings_set_user_agent(webkit_web_view_get_settings(m_view), options.userAgent.toUtf8().constData());
 

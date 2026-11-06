@@ -63,7 +63,7 @@ async function boot() {
   button.onclick = () => authorize(mk);
   // A session left in the cookie jar authorizes without showing Apple's sign-in.
   if (mk.isAuthorized && mk.musicUserToken) post({ type: 'authorized', token: mk.musicUserToken });
-  else await authorize(mk);
+  else showButton('Sign in to connect your Apple Music subscription.');
 }
 
 boot().catch((e) => post({ type: 'error', message: String(e && e.message || e) }));

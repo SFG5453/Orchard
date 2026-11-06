@@ -58,6 +58,7 @@ int runAppleMusicLogin(const QString &socketName) {
     return 1;
   WebKitView::Options options;
   options.profile = WebKitProfile::named(QString::fromLatin1(kProfileName));
+  options.allowAutomaticPopups = true;
   options.startupScripts = {
       QString::fromLatin1(kBridge).arg(jsString(QString::fromLatin1(kOrigin)), jsString(developerToken))};
   WebKitView view(options);
