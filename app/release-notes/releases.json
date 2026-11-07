@@ -1,5 +1,18 @@
 [
   {
+    "version": "2.0.2-canary.1",
+    "date": "2026-11-07",
+    "title": "Windows playback",
+    "sections": [
+      {
+        "title": "Fixes",
+        "items": [
+          "Attempted fix for Windows playback stopping or going silent partway through a song. If it still happens, please send a report from the app."
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.0.1-canary.1",
     "date": "2026-11-06",
     "title": "Linux Apple Music sign-in",
