@@ -166,6 +166,12 @@ def publish(version, **extra):
     release(*args)
 
 
+def component_versions(version, platform):
+    envelope = json.loads((SITE / "manifests" / f"{version}-{platform}.json").read_text())
+    payload = json.loads(base64.b64decode(envelope["payload"]))
+    return {name: component["version"] for name, component in payload["components"].items()}
+
+
 def boot(*args, expect=0, env=None):
     # No zenity windows popping up on the developer's desktop.
     full_env = {k: v for k, v in os.environ.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
@@ -215,12 +221,13 @@ def main():
 
     print("fresh install")
     build_tree("1.0.0", "q1", bytes(qt1), data1)
+    components1 = component_versions("1.0.0", "linux-x86_64")
     publish("1.0.0")
     boot("--install", "--no-launch")
     s = state()
-    check(s["current"] == "1.0.0" and s["components"] == {"qt": "q1", "models": "m1"}, "install.json records 1.0.0")
+    check(s["current"] == "1.0.0" and s["components"] == components1, "install.json records 1.0.0")
     check((ROOT / "versions/1.0.0/data.bin").read_bytes() == data1, "app files assembled")
-    check((ROOT / "components/qt/q1/lib/libQt6Core.so").read_bytes() == bytes(qt1), "chunked file reassembled")
+    check((ROOT / "components/qt" / components1["qt"] / "lib/libQt6Core.so").read_bytes() == bytes(qt1), "chunked file reassembled")
     check(os.access(ROOT / "versions/1.0.0/orchard", os.X_OK), "executable bit kept")
     check((ROOT / "orchard").exists(), "bootstrapper copied into the root")
     check((WORK / "xdg/applications/orchard.desktop").exists(), "desktop entry created")
@@ -237,8 +244,8 @@ def main():
     boot("--", "song.flac")
     run = wait_for_app_run()
     check("args=--from-manifest song.flac" in run, "manifest and user arguments passed")
-    check(f"ORCHARD_MODELS_DIR={ROOT}/components/models/m1" in run, "component placeholder expanded")
-    check(f"LD_LIBRARY_PATH={ROOT}/components/qt/q1/lib" in run, "library path prepended")
+    check(f"ORCHARD_MODELS_DIR={ROOT}/components/models/{components1['models']}" in run, "component placeholder expanded")
+    check(f"LD_LIBRARY_PATH={ROOT}/components/qt/{components1['qt']}/lib" in run, "library path prepended")
     check(f"ORCHARD_BOOTSTRAPPER={ROOT}/orchard" in run, "app can find the bootstrapper")
     time.sleep(0.3)
     check(state()["versions"]["1.0.0"]["healthy"], "clean exit marks the version healthy")
@@ -296,6 +303,9 @@ def main():
     qt2[(3 << 20) + 10] ^= 0xFF  # touch one 1 MiB chunk
     data2 = data1[:-1] + bytes([data1[-1] ^ 0xFF])
     build_tree("1.1.0", "q2", bytes(qt2), data2)
+    components2 = component_versions("1.1.0", "linux-x86_64")
+    check(components1["models"] == components2["models"] and components1["qt"] != components2["qt"],
+          "component identities follow their contents")
     publish("1.1.0")
     REQUESTS.clear()
     out = json.loads(boot("--check-update").stdout)
@@ -313,11 +323,12 @@ def main():
     wait_for_app_run()
     s = state()
     check(s["current"] == "1.1.0" and s["previous"] == "1.0.0" and "pending" not in s, "launch activated 1.1.0")
-    check((ROOT / "components/models/m1").is_dir() and not (ROOT / "components/models/m2").exists(),
+    check((ROOT / "components/models" / components1["models"]).is_dir() and
+          s["components"]["models"] == components1["models"],
           "unchanged component shared")
 
     print("repair")
-    lib = ROOT / "components/qt/q2/lib/libQt6Core.so"
+    lib = ROOT / "components/qt" / components2["qt"] / "lib/libQt6Core.so"
     damaged = bytearray(lib.read_bytes())
     damaged[(3 << 20) + 100] ^= 1  # the chunk only q2 has; shared chunks would come from q1
     lib.write_bytes(bytes(damaged))
