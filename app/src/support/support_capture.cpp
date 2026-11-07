@@ -183,10 +183,18 @@ void SupportCenter::updateDiagnostics(QQuickWindow *window, const QString &page)
     info.insert(QStringLiteral("page"), page);
   if (OutputHealth::sinkBufferMs > 0)
     info.insert(QStringLiteral("audioOutput"),
-                QStringLiteral("%1 ms buffer, %2 underruns, longest gap %3 ms")
+                QStringLiteral("%1 ms buffer, %2 underruns, longest gap %3 ms, %4 sink failures")
                     .arg(OutputHealth::sinkBufferMs.load())
                     .arg(OutputHealth::underruns.load())
-                    .arg(OutputHealth::longestGapMs.load()));
+                    .arg(OutputHealth::longestGapMs.load())
+                    .arg(OutputHealth::sinkFailures.load()));
+  if (OutputHealth::streamRefreshes || OutputHealth::streamFailures || OutputHealth::decoderErrors)
+    info.insert(QStringLiteral("audioStream"),
+                QStringLiteral("%1 refreshes, %2 failures, %3 decoder errors, last HTTP %4")
+                    .arg(OutputHealth::streamRefreshes.load())
+                    .arg(OutputHealth::streamFailures.load())
+                    .arg(OutputHealth::decoderErrors.load())
+                    .arg(OutputHealth::lastStreamStatus.load()));
   m_diagnostics = QString::fromUtf8(QJsonDocument(info).toJson(QJsonDocument::Indented)).trimmed();
   emit diagnosticsChanged();
 }

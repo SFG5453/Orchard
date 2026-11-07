@@ -36,6 +36,8 @@ AudioPipeline::AudioPipeline(QObject *parent) : QObject(parent), m_format(format
   m_timingClock.start();
   m_flushTimer.setInterval(5);
   connect(&m_flushTimer, &QTimer::timeout, this, &AudioPipeline::flushPending);
+  m_sinkRetryTimer.setSingleShot(true);
+  connect(&m_sinkRetryTimer, &QTimer::timeout, this, &AudioPipeline::retrySink);
   // The pretty bars get their own fast refresh; Auto EQ keeps its slower
   // analysis window so it doesn't develop caffeinated opinions about every kick.
   m_meterTimer.setInterval(50);
@@ -113,8 +115,15 @@ void AudioPipeline::setMasterVolume(double volume) {
 }
 
 void AudioPipeline::setPlaying(bool playing) {
-  if (playing)
-    ensureSink();
+  m_playing = playing;
+  if (playing) {
+    if (m_sink && !m_sinkDevice)
+      retrySink();
+    else
+      ensureSink();
+  } else {
+    m_sinkRetryTimer.stop();
+  }
   if (!m_sink)
     return;
   const auto state = m_sink->state();
@@ -149,10 +158,45 @@ void AudioPipeline::rebuildSink() {
   OutputHealth::sinkBufferMs = int(m_sink->bufferSize() / kFrameBytes * 1000 / kSampleRate);
   m_primed = false;
   m_sink->setVolume(m_masterVolume);
+  startSink();
+}
+
+void AudioPipeline::startSink() {
   m_sinkDevice = m_sink->start();
+  if (m_sinkDevice)
+    m_sinkRetryTimer.stop();
+  else
+    sinkFailed();
+}
+
+void AudioPipeline::sinkFailed() {
+  // Qt destroys the stream and its writer device on error, so the pointer dangles.
+  m_sinkDevice = nullptr;
+  m_underrunStartMs = -1;
+  ++OutputHealth::sinkFailures;
+  qWarning() << "Playback: audio sink failed with error" << m_sink->error();
+  if (!m_playing)
+    return;
+  m_sinkRetryTimer.start(m_sinkRetryMs);
+  m_sinkRetryMs = std::min(m_sinkRetryMs * 2, kSinkRetryMaxMs);
+}
+
+void AudioPipeline::retrySink() {
+  if (!m_playing)
+    return;
+  // Queued audio is still the newest decoded, and replaying it skips a full re-prime.
+  const QByteArray pending = m_pending;
+  rebuildSink();
+  m_pending = pending;
 }
 
 void AudioPipeline::onSinkStateChanged(QtAudio::State state) {
+  // Stopping emits before clearing the error, and an underrun leaves its own error behind.
+  if (state == QtAudio::StoppedState && m_sink->error() != QtAudio::NoError &&
+      m_sink->error() != QtAudio::UnderrunError) {
+    sinkFailed();
+    return;
+  }
   const qint64 now = m_timingClock.elapsed();
   if (state != QtAudio::IdleState) {
     if (state == QtAudio::ActiveState && m_underrunStartMs >= 0)
@@ -187,7 +231,7 @@ void AudioPipeline::flush() {
     renderer.reset();
   if (m_sink) {
     m_sink->reset();
-    m_sinkDevice = m_sink->start();
+    startSink();
     m_sink->setVolume(m_masterVolume);
   }
   orchard_audio_engine_reset(m_engine);
@@ -435,5 +479,6 @@ void AudioPipeline::flushPending() {
     if (written <= 0)
       break;
     m_pending.remove(0, written);
+    m_sinkRetryMs = kSinkRetryMinMs;
   }
 }

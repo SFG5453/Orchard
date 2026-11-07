@@ -566,12 +566,15 @@ if get_option('tests')
   endif
   app_test_specs = [
     ['audio_proxy', 'tests/audio_stream_proxy_test.cpp'],
+    ['audio_refresh', 'tests/audio_stream_refresh_test.cpp'],
+    ['audio_pipeline_sink', 'tests/audio_pipeline_sink_test.cpp'],
     ['account', 'tests/orchard_account_test.cpp'],
     ['support', 'tests/support_center_test.cpp'],
     ['discord_artwork', 'tests/discord_artwork_test.cpp'],
     ['lastfm', 'tests/lastfm_test.cpp'],
     ['playback_persistence', 'tests/playback_persistence_test.cpp'],
     ['playback_recovery', 'tests/playback_recovery_test.cpp'],
+    ['playback_stream_refresh', 'tests/playback_stream_refresh_test.cpp'],
     ['songlink', 'tests/songlink_test.cpp'],
     ['music_link', 'tests/music_link_test.cpp'],
     ['animated_artwork', 'tests/animated_artwork_test.cpp'],

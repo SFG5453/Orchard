@@ -26,20 +26,26 @@
 #include <QTimer>
 #include <QUuid>
 #include <functional>
+#include <utility>
 
 namespace {
 // Provider reads stay small so a seek never waits behind a large decrypt.
 constexpr qint64 kProviderChunkBytes = 512 * 1024;
+
+bool refreshableStatus(int status) {
+    return status == 403 || status == 410 || status == 429 || status >= 500;
+}
 
 class StreamConnection final : public QObject {
 public:
     StreamConnection(QTcpSocket *socket, QNetworkAccessManager *network,
                      QJsonObject stream, QByteArray path, bool suspended,
                      std::function<void(int, const QString &)> failure,
+                     std::function<void(int)> refresh,
                      AudioStreamProxy::RangeReader reader, QByteArray head, qint64 replaces)
         : m_socket(socket), m_network(network), m_stream(std::move(stream)),
           m_path(std::move(path)), m_head(std::move(head)), m_shift(m_head.size() - replaces),
-          m_failure(std::move(failure)),
+          m_failure(std::move(failure)), m_refresh(std::move(refresh)),
           m_reader(m_stream.contains("provider") ? std::move(reader) : nullptr),
           m_suspended(suspended) {
         socket->setParent(this);
@@ -67,6 +73,13 @@ public:
         if (m_started && m_socket->state() == QAbstractSocket::ConnectedState &&
             !m_reply && m_offset <= m_end)
             fetchChunk();
+    }
+    // An empty stream means the refresh failed.
+    void applyRefresh(const QJsonObject &fresh, int status) {
+        if (!fresh.isEmpty()) m_stream = fresh;
+        if (!std::exchange(m_awaitingRefresh, false)) return;
+        if (fresh.isEmpty()) fail(status);
+        else fetchChunk();
     }
 private:
     void reject(int status) {
@@ -125,7 +138,7 @@ private:
     }
     void fetchChunk() {
         if (m_reader) { pump(); return; }
-        if (m_suspended || m_reply || m_socket->state() != QAbstractSocket::ConnectedState)
+        if (m_suspended || m_awaitingRefresh || m_reply || m_socket->state() != QAbstractSocket::ConnectedState)
             return;
         if (m_offset > m_end) {
             m_socket->disconnectFromHost();
@@ -149,6 +162,14 @@ private:
     }
     bool validateRange(int status) {
         if (status != 206) {
+            // One refresh per offset: a fresh URL rejected at the same byte will not recover here.
+            if (m_refresh && refreshableStatus(status) && m_refreshedAt != m_offset) {
+                m_refreshedAt = m_offset;
+                m_awaitingRefresh = true;
+                releaseReply();
+                m_refresh(status);
+                return false;
+            }
             fail(status, status >= 400 ? QString() :
                 AudioStreamProxy::tr("The audio server did not return the requested byte range."));
             return false;
@@ -270,11 +291,14 @@ private:
     QByteArray m_head;
     qint64 m_shift{0};
     std::function<void(int, const QString &)> m_failure;
+    std::function<void(int)> m_refresh;
     AudioStreamProxy::RangeReader m_reader;
     QPointer<QNetworkReply> m_reply;
     qint64 m_length{0}, m_offset{0}, m_end{0}, m_chunkEnd{0}, m_chunkRemaining{0};
+    qint64 m_refreshedAt{-1};
     bool m_started{false};
     bool m_headersValidated{false};
+    bool m_awaitingRefresh{false};
     bool m_suspended{false};
     bool m_reading{false};
     int m_retries{0};
@@ -290,6 +314,7 @@ AudioStreamProxy::AudioStreamProxy(QObject *parent) : QObject(parent) {
                     m_failed = true;
                     emit streamFailed(status, message);
                 },
+                m_refresher ? std::function<void(int)>([this](int status) { refreshStream(status); }) : nullptr,
                 m_reader, m_head, m_headReplaces);
             connection->setParent(this);
             m_connections.append(connection);
@@ -318,9 +343,28 @@ void AudioStreamProxy::setSuspended(bool suspended) {
     for (auto *connection : connections)
         static_cast<StreamConnection *>(connection)->setSuspended(suspended);
 }
+void AudioStreamProxy::refreshStream(int status) {
+    if (m_refreshing) return;
+    m_refreshing = true;
+    m_refresher(status, [self = QPointer<AudioStreamProxy>(this), path = m_path, status](const QJsonObject &fresh) {
+        if (self && self->m_path == path) self->finishRefresh(fresh, status);
+    });
+}
+void AudioStreamProxy::finishRefresh(const QJsonObject &fresh, int status) {
+    m_refreshing = false;
+    // Offsets carry over only when the replacement addresses the same bytes.
+    const auto same = [&](const char *key) { return fresh.value(key) == m_stream.value(key); };
+    const bool usable = !fresh.value("url").toString().isEmpty() && same("contentLength") &&
+                        same("itag") && same("youtubeVideoId");
+    if (usable) m_stream = fresh;
+    const auto connections = m_connections;
+    for (auto *connection : connections)
+        static_cast<StreamConnection *>(connection)->applyRefresh(usable ? fresh : QJsonObject{}, status);
+}
 void AudioStreamProxy::clear() {
     const auto connections = m_connections;
     for (auto *connection : connections) delete connection;
+    m_refreshing = false;
     m_stream = {};
     m_path.clear();
     m_head.clear();

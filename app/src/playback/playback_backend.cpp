@@ -17,6 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "output_health.h"
 #include "playback_controller.h"
 #include <QDebug>
 #include <cmath>
@@ -122,6 +123,7 @@ void PlaybackController::wirePlayer(QMediaPlayer *source) {
           [this, source](QMediaPlayer::Error error, const QString &message) {
             if (source->source().isEmpty())
               return;
+            ++OutputHealth::decoderErrors;
             if (qEnvironmentVariableIsSet("ORCHARD_PLAYBACK_TIMING"))
               qInfo() << "Playback:" << (source == m_player ? "current" : "preload")
                       << "decoder error" << error << message;

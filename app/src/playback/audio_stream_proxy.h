@@ -35,10 +35,15 @@ public:
     using RangeReader = std::function<void(const QJsonObject &stream, qint64 start, qint64 end,
                                            std::function<void(const QByteArray &, int status)> done)>;
 
+    // Resolves a replacement for a stream upstream rejected. `done` gets an empty object on failure.
+    using StreamRefresher = std::function<void(int status, std::function<void(const QJsonObject &)> done)>;
+
     explicit AudioStreamProxy(QObject *parent = nullptr);
     ~AudioStreamProxy() override;
     // Streams carrying "provider" read through this instead of fetching "url".
     void setRangeReader(RangeReader reader) { m_reader = std::move(reader); }
+    // Without one, a rejected chunk reports streamFailed.
+    void setStreamRefresher(StreamRefresher refresher) { m_refresher = std::move(refresher); }
     QUrl open(const QJsonObject &stream);
     // Serves `head` in place of the first `replaces` upstream bytes; "contentLength" stays upstream's.
     QUrl open(const QJsonObject &stream, const QByteArray &head, qint64 replaces);
@@ -48,6 +53,8 @@ public:
 signals:
     void streamFailed(int status, const QString &message);
 private:
+    void refreshStream(int status);
+    void finishRefresh(const QJsonObject &fresh, int status);
     QTcpServer m_server;
     QNetworkAccessManager m_network;
     QJsonObject m_stream;
@@ -56,6 +63,8 @@ private:
     qint64 m_headReplaces{0};
     QList<QObject *> m_connections;
     RangeReader m_reader;
+    StreamRefresher m_refresher;
+    bool m_refreshing{false};
     bool m_suspended{false};
     // One report per opened stream; clients that reconnect would repeat it.
     bool m_failed{false};

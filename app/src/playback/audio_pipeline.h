@@ -92,10 +92,14 @@ signals:
 
 private:
   friend class AdaptiveMixOutputTest;
+  friend class AudioPipelineSinkTest;
   OrchardAudioEngineConfig trackConfiguration(const QString &trackId) const;
   void applyConfiguration();
   void ensureSink();
   void rebuildSink();
+  void startSink();
+  void sinkFailed();
+  void retrySink();
   void resetCrossfade();
   void mixCrossfadePending();
   // Raw stereo float frames after the tempo and pitch stage; empty on failure.
@@ -133,6 +137,8 @@ private:
   static constexpr qint64 kSinkFrames = 12000;
   static constexpr bool kReprimeOnUnderrun = false;
 #endif
+  static constexpr int kSinkRetryMinMs = 250;
+  static constexpr int kSinkRetryMaxMs = 5000;
 
   QAudioFormat m_format;
   QAudioDevice m_device;
@@ -140,9 +146,12 @@ private:
   QIODevice *m_sinkDevice{nullptr};
   QByteArray m_pending;
   bool m_primed{false};
+  bool m_playing{false};
   double m_masterVolume{1.0};
   QTimer m_flushTimer{this};
   QTimer m_meterTimer{this};
+  QTimer m_sinkRetryTimer{this};
+  int m_sinkRetryMs{kSinkRetryMinMs};
   OrchardAudioEngineHandle *m_engine{nullptr};
   OrchardAudioEngineHandle *m_crossfadeEngine{nullptr};
   OrchardAudioEngineConfig m_config{};

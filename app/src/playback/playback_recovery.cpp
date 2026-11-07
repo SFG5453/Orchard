@@ -17,12 +17,56 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "auth/auth_manager.h"
+#include "output_health.h"
 #include "playback_controller.h"
+#include "providers/youtube/youtube_provider.h"
 #include <QDebug>
 
 void PlaybackController::wireStreamProxy(AudioStreamProxy *proxy) {
+  // GVS checks tokens past the first chunk, so a song can be rejected mid-playback.
+  // Replacing the URL inside the proxy keeps the decoder and its buffer alive.
+  proxy->setStreamRefresher([this, proxy](int status, std::function<void(const QJsonObject &)> done) {
+    const QVariantMap track = proxy == m_proxy ? m_track : m_preparedTrack;
+    if (track.isEmpty()) {
+      done({});
+      return;
+    }
+    ++OutputHealth::streamRefreshes;
+    OutputHealth::lastStreamStatus = status;
+    qInfo() << "Playback: refreshing stream after HTTP" << status;
+    const quint64 request = m_provider->invoke(
+        "playback.resolve",
+        QJsonObject{{"track", QJsonObject::fromVariantMap(track)},
+                    {"session", m_auth->sessionObject()},
+                    {"streamQuality", youtubeQuality()},
+                    {"refreshStream", true}});
+    auto *waiter = new QObject(this);
+    connect(m_provider, &YouTubeProvider::resultReady, waiter,
+            [request, waiter, done](quint64 id, const QJsonValue &result) {
+              if (id != request)
+                return;
+              waiter->deleteLater();
+              const auto fresh = result.toObject();
+              const QUrl url(fresh.value("url").toString());
+              const bool valid = url.scheme() == "https" && (url.host().endsWith(".googlevideo.com") ||
+                                                              url.host().endsWith(".c.youtube.com"));
+              done(valid ? fresh : QJsonObject{});
+            });
+    connect(m_provider, &YouTubeProvider::requestFailed, waiter,
+            [request, waiter, done](quint64 id, const QString &) {
+              if (id != request)
+                return;
+              waiter->deleteLater();
+              done({});
+            });
+  });
   connect(proxy, &AudioStreamProxy::streamFailed, this,
           [this, proxy](int status, const QString &message) {
+            ++OutputHealth::streamFailures;
+            OutputHealth::lastStreamStatus = status;
+            qInfo() << "Playback:" << (proxy == m_proxy ? "current" : "preload")
+                    << "stream failed with HTTP" << status << message;
             if (qEnvironmentVariableIsSet("ORCHARD_PLAYBACK_TIMING"))
               qInfo() << "Playback:" << (proxy == m_proxy ? "current" : "preload")
                       << "stream failed with HTTP" << status << message;
