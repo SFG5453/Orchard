@@ -99,6 +99,19 @@ test('library playlists open from the library with their tracks', async () => {
   assert.equal(page.author, 'You');
   assert.equal(page.thumbnail, 'https://is1.mzstatic.com/image/600x600bb.jpg');
   assert.deepEqual(page.tracks.map((song) => song.id), ['am.songs.111']);
+  assert.equal(page.saved, null);
+  assert.equal(page.playlistId, '');
+});
+
+test('a saved catalog playlist links to its catalog id', async () => {
+  const { client } = appleMusic([
+    [/\/v1\/me\/library\/playlists\/p\.kept\/tracks/, 200, { data: [] }],
+    [/\/v1\/me\/library\/playlists\/p\.kept$/, 200, { data: [{ id: 'p.kept', type: 'library-playlists',
+      attributes: { name: 'Hits', canEdit: false, playParams: { id: 'p.kept', globalId: 'pl.hits' } } }] }]
+  ]);
+  const page = await client.playlistPage('am.playlists.p.kept');
+  assert.equal(page.saved, true);
+  assert.equal(page.playlistId, 'am.playlists.pl.hits');
 });
 
 test('an empty library playlist is a page with no tracks', async () => {

@@ -21,7 +21,7 @@
 // Library ids (p., l., i., r.) differ from catalog ids; cards prefer the catalog id when Apple has one.
 
 import { AppleMusicError } from './client.js';
-import { APPLE_MUSIC_SOURCE } from './ids.js';
+import { APPLE_MUSIC_SOURCE, browseId } from './ids.js';
 import { album, artist, artworkUrl, futureAlbumTracks, futureReleaseDate, notes, playlist, releaseInfo, track, yearOf } from './normalize.js';
 
 const PAGE = 100;
@@ -173,6 +173,8 @@ export function createLibraryCatalog(client) {
       ...(loaded.total ? { totalTrackCount: loaded.total } : {}),
       // The listener's own playlists have no save toggle.
       saved: found.attributes?.canEdit ? null : true,
+      // A saved catalog playlist keeps its pl. id, which is the public link.
+      playlistId: browseId('playlists', found.attributes?.playParams?.globalId || ''),
       tracks,
       continuation: loaded.next,
       hasMoreTracks: Boolean(loaded.next),

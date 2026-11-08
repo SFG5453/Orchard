@@ -247,6 +247,7 @@ Item {
             searchable: true
             shareLabel: qsTr("Copy playlist link")
             shareEnabled: Boolean(root.shareId) && !root.isLocal && !root.isOffline
+                && !String(root.shareId).startsWith("am.playlists.p.")
             // Own playlists are already in the library; Apple reports them with no saved state.
             saveVisible: !root.isLocal && !root.isOffline && !root.detail.editable && Boolean(root.shareId)
                 && !(String(root.detail.browseId || "").startsWith("am.playlists.p.") && root.detail.saved !== true)
