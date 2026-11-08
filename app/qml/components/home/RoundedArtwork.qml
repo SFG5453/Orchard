@@ -29,11 +29,17 @@ Item {
     // Square bottom corners let a card footer sit flush under the cover.
     property real bottomRadius: radius
     // Stepped so a resizing cover refetches a few times instead of every frame.
-    readonly property int artworkPixels: Math.max(128, Math.ceil(Math.max(width, height) * Screen.devicePixelRatio * 1.15 / 128) * 128)
+    readonly property int artworkPixels: Math.max(64, Math.ceil(Math.max(width, height) * Screen.devicePixelRatio / 32) * 32)
     property url shownSource: ""
 
     function sizedSource(value) {
         const url = value.toString();
+        // Apple thumbnails take any size in the path; query-string URLs are signed.
+        const apple = /^(https:\/\/[^/]*mzstatic\.com\/image\/thumb\/.*\/)(\d+)x(\d+)([a-z]{2}\.(?:jpg|png|webp))$/i.exec(url);
+        if (apple) {
+            const height = Math.round(artworkPixels * Number(apple[3]) / Math.max(1, Number(apple[2])));
+            return apple[1] + artworkPixels + "x" + height + apple[4];
+        }
         // More pixels, fewer witness-protection portraits. Only resize Google's
         // image CDN URLs; other providers may use signed image addresses.
         if (!/^https:\/\/[^/]*(?:googleusercontent\.com|ggpht\.com)\//i.test(url))
