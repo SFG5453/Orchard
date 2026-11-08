@@ -8,6 +8,12 @@ function transport(width) {
     return { sizes: sizes, spacing: Math.min(compact ? 10 : 18, Math.max(0, (width - total) / 4)) };
 }
 
+// Smootherstep of t over [from, to], clamped to 0..1.
+function ease(t, from, to) {
+    var x = Math.max(0, Math.min(1, (t - from) / (to - from)));
+    return x * x * x * (x * (x * 6 - 15) + 10);
+}
+
 // focus (0..1) narrows the player column so an idle lyrics pane can take the room.
 function columns(width, split, focus) {
     var wide = width >= 980;

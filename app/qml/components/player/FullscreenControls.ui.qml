@@ -41,8 +41,9 @@ ColumnLayout {
     property real handoff: 0
     property real timeSwap: 1
     property real mixGlow: 0
-    // 1 awake, 0 idle. Idle keeps the title and a faint timeline and folds the rest away.
+    // 1 awake, 0 idle. Idle keeps the title and a faint timeline; chrome fades, fold collapses rows.
     property real chrome: 1
+    property real fold: 1
     property bool mixing: false
     property var currentTrack: ({})
     property var incomingTrack: ({})
@@ -217,10 +218,10 @@ ColumnLayout {
     RowLayout {
         id: timeRow
         Layout.fillWidth: true
-        Layout.topMargin: 4 * controls.chrome
-        Layout.preferredHeight: implicitHeight * controls.chrome
+        Layout.topMargin: 4 * controls.fold
+        Layout.preferredHeight: implicitHeight * controls.fold
         clip: true
-        visible: controls.chrome > 0.01
+        visible: controls.fold > 0.01
         opacity: controls.stage40 * controls.chrome
 
         Text {
@@ -326,9 +327,9 @@ ColumnLayout {
     // Transport. Each button pops in on its own beat, left to right.
     RowLayout {
         Layout.alignment: Qt.AlignHCenter
-        Layout.topMargin: 14 * controls.chrome
-        Layout.preferredHeight: implicitHeight * controls.chrome
-        visible: controls.chrome > 0.01
+        Layout.topMargin: 14 * controls.fold
+        Layout.preferredHeight: implicitHeight * controls.fold
+        visible: controls.fold > 0.01
         opacity: controls.chrome
         spacing: controls.transport.spacing
 
@@ -389,9 +390,9 @@ ColumnLayout {
     // Volume and the pane toggles.
     RowLayout {
         Layout.fillWidth: true
-        Layout.topMargin: 18 * controls.chrome
-        Layout.preferredHeight: implicitHeight * controls.chrome
-        visible: controls.chrome > 0.01
+        Layout.topMargin: 18 * controls.fold
+        Layout.preferredHeight: implicitHeight * controls.fold
+        visible: controls.fold > 0.01
         spacing: 10
         opacity: controls.stage60 * controls.chrome
         transform: Translate { y: 16 * (1 - controls.stage60) }

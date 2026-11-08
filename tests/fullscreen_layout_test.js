@@ -8,7 +8,7 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname,
     '../app/qml/components/player/FullscreenLayout.js'), 'utf8');
 const layout = vm.runInNewContext(source.replace(/^\.pragma library\s*$/m, '')
-    + '\n({ columns, measure, transport })');
+    + '\n({ columns, ease, measure, transport })');
 
 function inside(rect, width, height, label) {
     for (const value of Object.values(rect)) assert.ok(Number.isFinite(value), label);
@@ -102,5 +102,18 @@ test('split and Canvas animation fractions preserve viewport bounds', () => {
         inside({ x: result.controlsX, y: result.controlsY,
             width: column.width * result.controlsScale,
             height: 250 * result.controlsScale }, 980, 480, 'animated controls');
+    }
+});
+
+test('chrome easing clamps and stays monotonic', () => {
+    assert.equal(layout.ease(-1, 0.4, 1), 0);
+    assert.equal(layout.ease(0.4, 0.4, 1), 0);
+    assert.equal(layout.ease(1, 0.4, 1), 1);
+    assert.equal(layout.ease(2, 0, 0.7), 1);
+    let last = 0;
+    for (let t = 0; t <= 1; t += 0.01) {
+        const value = layout.ease(t, 0, 0.7);
+        assert.ok(value >= last - 1e-12);
+        last = value;
     }
 });

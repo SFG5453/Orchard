@@ -67,9 +67,12 @@ Item {
     // Controls fade out after the pointer rests; the logic layer drives this.
     property bool chromeShown: true
     property real chrome: chromeShown ? 1 : 0
-    Behavior on chrome { NumberAnimation { duration: root.chromeShown ? 260 : 900; easing.type: Easing.InOutCubic } }
+    Behavior on chrome { NumberAnimation { duration: root.chromeShown ? 480 : 1100 } }
+    // Staggered so hiding fades before the layout folds and showing unfolds before it fades in.
+    readonly property real chromeFade: FullscreenLayout.ease(chrome, 0.4, 1)
+    readonly property real chromeFold: FullscreenLayout.ease(chrome, 0, 0.7)
     // An idle lyrics pane widens and the cover steps back.
-    readonly property real lyricsFocus: (1 - chrome) * (pane === "lyrics" && shownPane === "lyrics" ? 1 : 0)
+    readonly property real lyricsFocus: (1 - chromeFold) * (pane === "lyrics" && shownPane === "lyrics" ? 1 : 0)
     // Bass onset level from the audio engine; reactive is false when there is no spectrum.
     property real pulse: 0
     Behavior on pulse { NumberAnimation { duration: 60 } }
@@ -112,7 +115,7 @@ Item {
     // Column width is independent of control height to keep measurement acyclic.
     readonly property var columns: FullscreenLayout.columns(width, split, lyricsFocus)
     readonly property var layout: FullscreenLayout.measure(width, height, controls.implicitHeight,
-        split, pane, canvasShape, canvasAspect, lyricsFocus, 1 - chrome)
+        split, pane, canvasShape, canvasAspect, lyricsFocus, 1 - chromeFold)
     readonly property real columnWidth: columns.width
     readonly property real columnX: columns.x
     readonly property real columnY: layout.columnY
@@ -229,8 +232,8 @@ Item {
         glyph: "chevron-left"
         glyphSize: 20
         ToolTip.text: qsTr("Close (Esc)")
-        visible: root.chrome > 0.01
-        opacity: root.stage25 * root.chrome
+        visible: root.chromeFade > 0.01
+        opacity: root.stage25 * root.chromeFade
         transform: Translate { x: -16 * (1 - root.stage25) }
     }
 
@@ -249,12 +252,12 @@ Item {
         font.weight: Font.DemiBold
         font.letterSpacing: 1.6
         z: 3
-        opacity: root.stage35 * root.chrome
+        opacity: root.stage35 * root.chromeFade
     }
 
     FullscreenUpNext {
         id: upNext
-        x: 22 + (closeButton.width + 12) * root.chrome
+        x: 22 + (closeButton.width + 12) * root.chromeFold
         y: closeButton.y + (closeButton.height - height) / 2
         z: 3
         width: Math.min(implicitWidth, Math.max(0, root.width / 2 - x))
@@ -428,7 +431,8 @@ Item {
         handoff: root.handoff
         timeSwap: root.timeSwap
         mixGlow: root.mixGlow
-        chrome: root.chrome
+        chrome: root.chromeFade
+        fold: root.chromeFold
         mixing: root.mixing
         mixAccentColor: root.mixAccentColor
         currentTrack: root.currentTrack
