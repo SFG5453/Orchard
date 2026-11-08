@@ -456,18 +456,16 @@ Item {
         opacity: shown * root.paneSwap
         transform: Translate { x: (root.wide ? 70 * (1 - sidePane.shown) : 0) + 24 * (1 - root.paneSwap) }
 
-        LyricsView {
-            id: lyricsView
+        FullscreenLyrics {
             anchors.fill: parent
             visible: root.shownPane === "lyrics"
-            // The outgoing lyrics leave before the swap; the incoming set fades in right after it, mid-mix.
-            opacity: root.swapped ? lyricsIn : 1 - Math.min(1, root.handoff / 0.5)
-            property real lyricsIn: root.swapped && lyricsView.built ? 1 : 0
-            Behavior on lyricsIn { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
-            // Read the source conditions; the view's own effective visibility loops back through the parent.
-            incoming: root.swapped
+            playerWidth: root.width
+            split: root.split
+            stacked: root.layout.stacked
+            focusAmount: root.lyricsFocus
+            swapped: root.swapped
+            handoff: root.handoff
             running: root.shownPane === "lyrics" && sidePane.visible
-            pixelSize: Math.round(Math.max(24, Math.min(40, root.width * 0.022)) * (1 + 0.2 * root.lyricsFocus))
             accentColor: root.accentColor
             primaryText: root.primaryText
             mutedText: root.mutedText

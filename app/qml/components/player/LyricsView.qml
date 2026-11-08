@@ -33,6 +33,8 @@ Item {
     readonly property var lines: OrchardLyrics.lines || []
     readonly property bool synced: OrchardLyrics.mode === "synced"
     property int pixelSize: 21
+    // Parent scale; layers render at it so scaled text stays sharp.
+    property real renderScale: 1
     // A line stays lit until the next one starts; providers often end lines before the last word trails off.
     // Read lines here so a new track refreshes the highlight even at the same clock value.
     readonly property int currentIndex: synced && lines.length ? OrchardLyrics.indexAt(clock) : -1
@@ -252,6 +254,7 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         layer.enabled: true
+        layer.textureSize: Qt.size(Math.ceil(width * root.renderScale), Math.ceil(height * root.renderScale))
         layer.effect: MultiEffect {
             maskEnabled: true
             maskSource: edgeMask

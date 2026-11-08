@@ -8,7 +8,7 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname,
     '../app/qml/components/player/FullscreenLayout.js'), 'utf8');
 const layout = vm.runInNewContext(source.replace(/^\.pragma library\s*$/m, '')
-    + '\n({ columns, ease, measure, transport })');
+    + '\n({ columns, ease, lyrics, measure, transport })');
 
 function inside(rect, width, height, label) {
     for (const value of Object.values(rect)) assert.ok(Number.isFinite(value), label);
@@ -116,4 +116,18 @@ test('chrome easing clamps and stays monotonic', () => {
         assert.ok(value >= last - 1e-12);
         last = value;
     }
+});
+
+test('idle lyrics scale without changing their wrap width', () => {
+    for (const width of [980, 1366, 1920, 3840]) {
+        const rest = layout.measure(width, 1080, 250, 1, 'lyrics', 0, 1, 0, 0);
+        const lean = layout.measure(width, 1080, 250, 1, 'lyrics', 0, 1, 1, 1);
+        const a = layout.lyrics(width, 1, false, rest.paneWidth, 0);
+        const b = layout.lyrics(width, 1, false, lean.paneWidth, 1);
+        assert.equal(a.width, b.width);
+        assert.ok(a.width * a.scale <= rest.paneWidth + 0.001);
+        assert.ok(b.width * b.scale <= lean.paneWidth + 0.001);
+    }
+    const stacked = layout.lyrics(600, 0, true, 560, 1);
+    assert.ok(Math.abs(stacked.width * stacked.scale - 560) < 0.001);
 });

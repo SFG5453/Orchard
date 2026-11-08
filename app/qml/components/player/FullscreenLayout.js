@@ -74,6 +74,18 @@ function measure(width, height, controlsHeight, split, pane, canvasShape, canvas
     };
 }
 
+// Idle lyrics scale up instead of reflowing; the wrap width fits both ends so lines never re-wrap.
+function lyrics(width, split, stacked, paneWidth, focus) {
+    var scale = 1 + 0.2 * Math.max(0, Math.min(1, focus || 0));
+    if (stacked)
+        return { scale: scale, width: paneWidth / scale };
+    var rest = columns(width, split, 0);
+    var lean = columns(width, split, 1);
+    var restWidth = width - rest.paneX - rest.margin;
+    var leanWidth = width - lean.paneX - lean.margin;
+    return { scale: scale, width: Math.max(0, Math.min(restWidth, leanWidth / 1.2)) };
+}
+
 // Canvas stage: the loop fills the player side top to bottom and feathers into the lyrics.
 // Solo layouts centre it and feather both edges.
 function stage(width, height, split, aspect, paneX) {
