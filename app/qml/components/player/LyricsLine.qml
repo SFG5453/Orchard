@@ -113,7 +113,8 @@ Item {
         Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
 
         layer.enabled: line.current || line.blur > 0.01
-        layer.textureSize: Qt.size(Math.ceil(body.width * view.renderScale), Math.ceil(body.height * view.renderScale))
+        layer.textureSize: Qt.size(Math.ceil(body.width * view.layerScale), Math.ceil(body.height * view.layerScale))
+        layer.smooth: true
         layer.effect: MultiEffect {
             blurEnabled: line.blur > 0.01
             blur: line.blur
