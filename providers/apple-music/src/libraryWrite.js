@@ -131,7 +131,14 @@ export function createLibraryWrites(client) {
     if (ref.type === 'playlists' && (await client.get(path)).data?.[0]?.attributes?.canEdit) {
       throw new AppleMusicError(0, 'own_playlist', 'Delete your own playlists in Apple Music.');
     }
-    await client.send('DELETE', path);
+    if (!(await client.webSend('DELETE', path))) {
+      try {
+        await client.send('DELETE', path);
+      } catch (error) {
+        if (error instanceof AppleMusicError && error.code === 'not_signed_in') throw error;
+        throw new AppleMusicError(error?.status || 0, 'remove_unsupported', 'Apple Music would not remove this. Remove it in the Music app.');
+      }
+    }
     return { browseId, saved: false };
   }
 

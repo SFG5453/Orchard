@@ -116,11 +116,24 @@ test('removing deletes the library copy but never an own playlist', async () => 
   const { client, requests } = appleMusic([
     [/^GET .*\/v1\/catalog\/us\/playlists\/pl\.x\?relate=library$/, 200, saved],
     [/^GET .*\/v1\/me\/library\/playlists\/p\.mine$/, 200, { data: [{ attributes: { canEdit: false } }] }],
-    [/^DELETE .*\/v1\/me\/library\/playlists\/p\.mine$/, 204, null],
+    [/^GET https:\/\/music\.apple\.com\/us\/new$/, 200, '<script type="module" src="/assets/index~abc.js"></script>'],
+    [/^GET https:\/\/music\.apple\.com\/assets\/index~abc\.js$/, 200, 'eyJweb.eyJtoken.sig'],
+    [/^DELETE https:\/\/amp-api\.music\.apple\.com\/v1\/me\/library\/playlists\/p\.mine$/, 204, null],
     [/^GET .*\/v1\/me\/library\/playlists\/p\.own$/, 200, { data: [{ attributes: { canEdit: true } }] }]
   ]);
   assert.equal(await client.collectionSaved('am.playlists.pl.x'), true);
   assert.deepEqual(await client.setCollectionSaved('am.playlists.pl.x', false), { browseId: 'am.playlists.pl.x', saved: false });
-  assert.ok(requests.some((request) => request.method === 'DELETE'));
+  const removal = requests.find((request) => request.method === 'DELETE');
+  assert.equal(removal.headers['Media-User-Token'], 'user');
+  assert.match(removal.headers.Authorization, /^Bearer eyJweb\./);
   await assert.rejects(client.setCollectionSaved('am.playlists.p.own', false), /own playlists/);
+});
+
+test('removal falls back to the public API and explains a refusal', async () => {
+  const { client } = appleMusic([
+    [/^GET https:\/\/music\.apple\.com\/us\/new$/, 500, ''],
+    [/^GET .*\/v1\/me\/library\/albums\/l\.gone$/, 200, { data: [{ id: 'l.gone' }] }],
+    [/^DELETE https:\/\/api\.music\.apple\.com\/v1\/me\/library\/albums\/l\.gone$/, 405, '']
+  ]);
+  await assert.rejects(client.setCollectionSaved('am.albums.l.gone', false), /Remove it in the Music app/);
 });

@@ -148,6 +148,28 @@ export function createAppleMusicClient({ fetchImpl, session }) {
     return null;
   }
 
+  /**
+   * A library write through music.apple.com's API; false when its web token is unavailable.
+   * The public API has no library removal, so DELETE goes here first.
+   */
+  async function webSend(method, path) {
+    const userToken = (session() || {}).userToken;
+    if (!userToken) throw new AppleMusicError(0, 'not_signed_in', 'Sign in to Apple Music first.');
+    const token = await webToken.get();
+    if (!token) return false;
+    const response = await fetchImpl(apiUrl(path, {}, EDITORIAL_ORIGIN), {
+      method,
+      headers: { Authorization: `Bearer ${token}`, 'Media-User-Token': userToken, Origin: WEB_ORIGIN, Referer: `${WEB_ORIGIN}/` }
+    });
+    if (response.ok) return true;
+    if (response.status === 401) {
+      webToken.reset();
+      return false;
+    }
+    const [code, message] = statusCodes.get(response.status) || ['http', `Apple Music returned ${response.status}.`];
+    throw new AppleMusicError(response.status, code, message);
+  }
+
   /** Every resource behind a paginated list, following `next` up to [maxPages]. */
   async function all(path, query = {}, maxPages = MAX_PAGES) {
     const carried = Object.entries(query)
@@ -186,5 +208,5 @@ export function createAppleMusicClient({ fetchImpl, session }) {
 
   const userToken = () => (session() || {}).userToken || '';
 
-  return { get, send, editorial, all, storefront, userToken, playbackHeaders };
+  return { get, send, webSend, editorial, all, storefront, userToken, playbackHeaders };
 }
