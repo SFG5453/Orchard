@@ -9,7 +9,7 @@ source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 appdir="$output_dir/AppDir"
 mkdir -p "$output_dir" "$appdir/usr/bin" "$appdir/usr/share/orchard"
 
-for name in orchard orchard-auth-helper orchard-widevine-host orchard-adaptive-mix libwebgpu_dawn.so libdiscord_partner_sdk.so libLiteRt.so; do
+for name in orchard orchard-auth-helper orchard-widevine-host orchard-adaptive-mix libwebgpu_dawn.so libdiscord_partner_sdk.so orchard-discord.so libLiteRt.so; do
   cp "$build_dir/$name" "$appdir/usr/bin/$name"
 done
 cp -a "$build_dir/models" "$appdir/usr/bin/models"

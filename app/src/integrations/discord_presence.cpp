@@ -18,6 +18,7 @@
  */
 
 #include "discord.h"
+#include "discord_sdk_loader.h"
 #include "auth/auth_manager.h"
 #include "apple_music_links.h"
 #include "youtube_links.h"
@@ -78,7 +79,7 @@ QString listenUrl(const QVariantMap &track)
 
 void Discord::refresh(bool force)
 {
-    if (!m_enabled || m_handle == nullptr) {
+    if (!m_enabled) {
         clearPresence();
         return;
     }
@@ -86,6 +87,10 @@ void Discord::refresh(bool force)
     const QString song = m_track.value(QStringLiteral("title")).toString().trimmed();
     if (song.isEmpty()) {
         clearPresence();
+        return;
+    }
+
+    if (!ensureClient()) {
         return;
     }
 
@@ -136,8 +141,8 @@ void Discord::refresh(bool force)
         {QStringLiteral("isPlaying"), m_playing},
     };
     const QByteArray encoded = QJsonDocument(payload).toJson(QJsonDocument::Compact);
-    if (orchard_discord_rpc_set_presence(m_handle, encoded.constData()) == 0) {
-        setLastError(QString::fromUtf8(orchard_discord_rpc_last_error(m_handle)));
+    if (m_api->setPresence(m_handle, encoded.constData()) == 0) {
+        setLastError(QString::fromUtf8(m_api->lastError(m_handle)));
         return;
     }
 

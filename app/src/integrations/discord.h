@@ -32,6 +32,7 @@ class OrchardAccount;
 class AuthManager;
 class YouTubeCatalog;
 class QNetworkReply;
+struct DiscordSdkApi;
 
 class Discord final : public QObject
 {
@@ -101,6 +102,8 @@ signals:
 private:
     static void receiveEvent(void *context, const char *message, uint8_t connected);
     void clearPresence();
+    bool ensureClient();
+    void releaseClient();
     void updateArtwork();
     void connectArtistCatalog();
     void updateArtistArtwork();
@@ -113,6 +116,7 @@ private:
     void setLastError(const QString &message);
     void setConnected(bool connected);
 
+    const DiscordSdkApi *m_api = nullptr;
     OrchardDiscordRpcHandle *m_handle = nullptr;
     bool m_enabled = true;
     QString m_activityText;

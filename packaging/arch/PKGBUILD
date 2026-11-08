@@ -48,7 +48,7 @@ package() {
   local appdir="$pkgdir/opt/orchard"
   install -d "$appdir" "$pkgdir/usr/bin"
   install -m755 build/arch/{orchard,orchard-auth-helper,orchard-widevine-host,orchard-adaptive-mix} "$appdir/"
-  install -m755 build/arch/{libwebgpu_dawn.so,libdiscord_partner_sdk.so,libLiteRt.so} "$appdir/"
+  install -m755 build/arch/{libwebgpu_dawn.so,libdiscord_partner_sdk.so,orchard-discord.so,libLiteRt.so} "$appdir/"
   cp -a build/arch/models "$appdir/"
   install -Dm755 packaging/arch/orchard "$pkgdir/usr/bin/orchard"
   install -Dm644 packaging/arch/orchard.desktop "$pkgdir/usr/share/applications/orchard-arch.desktop"

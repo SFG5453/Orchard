@@ -18,6 +18,7 @@
  */
 
 #include "discord.h"
+#include "discord_sdk_loader.h"
 #include "auth/auth_manager.h"
 #include "apple_music_links.h"
 #include "youtube_links.h"
@@ -88,17 +89,39 @@ Discord::Discord(OrchardAccount *account, YouTubeCatalog *catalog, AuthManager *
     m_showSyncedLyrics = settings.value(QStringLiteral("showSyncedLyrics"), false).toBool();
     settings.endGroup();
 
-    const QByteArray applicationId(kApplicationId);
-    m_handle = orchard_discord_rpc_create(applicationId.constData(), &Discord::receiveEvent, this);
-
     connectArtistCatalog();
 }
 
 Discord::~Discord()
 {
     clearPresence();
+    releaseClient();
+}
+
+// The SDK module and client start with the first presence to show.
+bool Discord::ensureClient()
+{
     if (m_handle != nullptr) {
-        orchard_discord_rpc_destroy(m_handle);
+        return true;
+    }
+    QString error;
+    m_api = DiscordSdkApi::get(&error);
+    if (m_api == nullptr) {
+        setLastError(error);
+        return false;
+    }
+    const QByteArray applicationId(kApplicationId);
+    m_handle = m_api->create(applicationId.constData(), &Discord::receiveEvent, this);
+    if (m_handle == nullptr) {
+        setLastError(QStringLiteral("Unable to start the Discord SDK"));
+    }
+    return m_handle != nullptr;
+}
+
+void Discord::releaseClient()
+{
+    if (m_handle != nullptr) {
+        m_api->destroy(m_handle);
         m_handle = nullptr;
     }
 }
@@ -118,6 +141,7 @@ void Discord::setEnabled(bool enabled)
         refresh(true);
     } else {
         clearPresence();
+        releaseClient();
     }
 }
 
@@ -313,8 +337,8 @@ void Discord::updateArtwork()
 void Discord::clearPresence()
 {
     if (m_handle != nullptr && m_presenceSent) {
-        if (orchard_discord_rpc_clear_presence(m_handle) == 0) {
-            setLastError(QString::fromUtf8(orchard_discord_rpc_last_error(m_handle)));
+        if (m_api->clearPresence(m_handle) == 0) {
+            setLastError(QString::fromUtf8(m_api->lastError(m_handle)));
         }
     }
 

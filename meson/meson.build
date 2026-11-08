@@ -74,10 +74,8 @@ app_sources = [
   'app/src/playlist/playlist_controller.h',
   'app/src/integrations/discord.cpp',
   'app/src/integrations/discord_presence.cpp',
-  'app/src/integrations/discord_sdk_bridge.cpp',
-  'app/src/integrations/discord_sdk_implementation.cpp',
-  'app/src/integrations/discord_sdk_presence.cpp',
-  'app/src/integrations/discord_sdk_presence.h',
+  'app/src/integrations/discord_sdk_loader.cpp',
+  'app/src/integrations/discord_sdk_loader.h',
   'app/src/integrations/discord_artwork.cpp',
   'app/src/integrations/discord_artwork_format.cpp',
   'app/src/integrations/discord_artwork_internal.h',
@@ -298,6 +296,14 @@ app_sources = [
   'app/src/window_occlusion.h',
   'app/src/window_state.cpp',
   'app/src/window_state.h',
+]
+
+# Linked against the Discord SDK; the app loads it only when presence has something to show.
+discord_module_sources = [
+  'app/src/integrations/discord_sdk_bridge.cpp',
+  'app/src/integrations/discord_sdk_implementation.cpp',
+  'app/src/integrations/discord_sdk_presence.cpp',
+  'app/src/integrations/discord_sdk_presence.h',
 ]
 
 app_executable_sources = [

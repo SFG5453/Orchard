@@ -32,6 +32,13 @@
 
 using namespace std::chrono_literals;
 
+// Entry points the app resolves from this module at runtime.
+#if defined(_WIN32)
+#define ORCHARD_DISCORD_EXPORT extern "C" __declspec(dllexport)
+#else
+#define ORCHARD_DISCORD_EXPORT extern "C" __attribute__((visibility("default")))
+#endif
+
 struct OrchardDiscordRpcHandle {
     OrchardDiscordRpcCallback callback = nullptr;
     void *context = nullptr;
@@ -119,7 +126,7 @@ void runWorker(OrchardDiscordRpcHandle *handle)
 }
 } // namespace
 
-extern "C" OrchardDiscordRpcHandle *orchard_discord_rpc_create(
+ORCHARD_DISCORD_EXPORT OrchardDiscordRpcHandle *orchard_discord_rpc_create(
     const char *application_id, OrchardDiscordRpcCallback callback, void *context)
 {
     auto handle = std::make_unique<OrchardDiscordRpcHandle>();
@@ -134,7 +141,7 @@ extern "C" OrchardDiscordRpcHandle *orchard_discord_rpc_create(
     return handle.release();
 }
 
-extern "C" uint8_t orchard_discord_rpc_set_presence(OrchardDiscordRpcHandle *handle,
+ORCHARD_DISCORD_EXPORT uint8_t orchard_discord_rpc_set_presence(OrchardDiscordRpcHandle *handle,
                                                        const char *payload)
 {
     if (!handle || !payload) return 0;
@@ -158,7 +165,7 @@ extern "C" uint8_t orchard_discord_rpc_set_presence(OrchardDiscordRpcHandle *han
     return 1;
 }
 
-extern "C" uint8_t orchard_discord_rpc_clear_presence(OrchardDiscordRpcHandle *handle)
+ORCHARD_DISCORD_EXPORT uint8_t orchard_discord_rpc_clear_presence(OrchardDiscordRpcHandle *handle)
 {
     if (!handle) return 0;
     {
@@ -175,12 +182,12 @@ extern "C" uint8_t orchard_discord_rpc_clear_presence(OrchardDiscordRpcHandle *h
     return 1;
 }
 
-extern "C" const char *orchard_discord_rpc_last_error(const OrchardDiscordRpcHandle *handle)
+ORCHARD_DISCORD_EXPORT const char *orchard_discord_rpc_last_error(const OrchardDiscordRpcHandle *handle)
 {
     return handle ? handle->lastError.c_str() : "Invalid Discord SDK handle";
 }
 
-extern "C" void orchard_discord_rpc_destroy(OrchardDiscordRpcHandle *handle)
+ORCHARD_DISCORD_EXPORT void orchard_discord_rpc_destroy(OrchardDiscordRpcHandle *handle)
 {
     if (!handle) return;
     {

@@ -319,7 +319,7 @@ auth_qrc = qt6.compile_resources(sources: files(auth_qrc_file), extra_args: rcc_
 
 app_inc = include_directories('app/src', 'app/src/auth',
   'app/src/appearance', 'core/native', 'vendor/litert/include', 'bootstrapper/src')
-app_dependencies = [qt_dep, qt_gui_private, connect_dep, rust_dep, discord_sdk_dep,
+app_dependencies = [qt_dep, qt_gui_private, connect_dep, rust_dep,
   qjs_dep, keychain_dep] + platform_deps
 app_args = ['-DORCHARD_VERSION="' + meson.project_version() + '"']
 if host_machine.system() == 'windows' or host_machine.system() == 'linux'
@@ -423,6 +423,14 @@ orchard = executable('orchard', files(app_executable_sources) + exe_moc +
   dependencies: [app_dep, qt_dep, qt_gui_private, qt_entry_dep],
   link_depends: adaptive_stage,
   win_subsystem: 'windows', install: true)
+
+discord_module_suffix = {'windows': 'dll', 'darwin': 'dylib'}.get(host_machine.system(), 'so')
+discord_module_rpath = host_machine.system() == 'darwin' ? '@loader_path' : '$ORIGIN'
+discord_module = shared_module('orchard-discord', files(discord_module_sources),
+  name_prefix: '', name_suffix: discord_module_suffix,
+  include_directories: app_inc, dependencies: [qt_dep, discord_sdk_dep],
+  build_rpath: discord_module_rpath, install_rpath: discord_module_rpath,
+  install: true, install_dir: get_option('bindir'))
 
 auth_dependencies = [qt_dep, rust_dep, qjs_dep, keychain_dep] + platform_deps
 auth_args = []

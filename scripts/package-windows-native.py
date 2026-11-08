@@ -49,7 +49,7 @@ def main() -> None:
 
     binaries = ("orchard.exe", "orchard-auth-helper.exe", "orchard-widevine-host.exe", "WebView2Loader.dll",
                 "orchard-adaptive-mix.exe",
-                "webgpu_dawn.dll", "dxil.dll", "dxcompiler.dll", "discord_partner_sdk.dll", "libLiteRt.dll", "ffmpeg.exe", "ffprobe.exe",
+                "webgpu_dawn.dll", "dxil.dll", "dxcompiler.dll", "discord_partner_sdk.dll", "orchard-discord.dll", "libLiteRt.dll", "ffmpeg.exe", "ffprobe.exe",
                 "ffmpeg-LICENSE.txt")
     for name in binaries:
         shutil.copy2(require(build / name), stage / name)
