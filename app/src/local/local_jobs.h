@@ -38,6 +38,10 @@ struct ImportResult {
 // `known` holds ids already in the library, which are not probed again.
 ImportResult importPaths(const QStringList &paths, const QSet<QString> &known, const QString &coversDir);
 
+// Probes tracks again and returns those ffprobe could read. Gives up after a run
+// of failures so a missing ffprobe costs a few spawns, not one per song.
+QList<TrackRecord> reprobeTracks(const QList<TrackRecord> &tracks);
+
 struct CoverResult {
   bool ok{false};
   QString still;    // JPEG or the original image.

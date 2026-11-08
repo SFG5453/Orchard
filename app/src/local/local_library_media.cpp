@@ -53,6 +53,39 @@ void LocalLibrary::importFiles(const QVariantList &files, const QString &playlis
       });
 }
 
+// An empty codec means ffprobe never read the file, e.g. a build that lacked it.
+void LocalLibrary::reprobeUnreadTracks() {
+  QList<TrackRecord> unread;
+  for (const TrackRecord &track : std::as_const(m_store.tracks)) {
+    if (track.codec.isEmpty())
+      unread.append(track);
+  }
+  if (unread.isEmpty())
+    return;
+  beginJob();
+  runAsync<QList<TrackRecord>>(
+      this, [unread] { return reprobeTracks(unread); },
+      [this](const QList<TrackRecord> &updated) {
+        for (const TrackRecord &record : updated) {
+          const auto it = m_store.tracks.find(record.id);
+          if (it == m_store.tracks.end())
+            continue;
+          it->title = record.title;
+          it->artist = record.artist;
+          it->album = record.album;
+          it->codec = record.codec;
+          it->durationSeconds = record.durationSeconds;
+          it->bitrate = record.bitrate;
+          it->sampleRate = record.sampleRate;
+          it->bitDepth = record.bitDepth;
+          it->embeddedLyrics = record.embeddedLyrics;
+        }
+        if (!updated.isEmpty())
+          commit();
+        endJob();
+      });
+}
+
 void LocalLibrary::finishImport(const ImportResult &result, const QString &playlistId) {
   for (const TrackRecord &record : result.records) {
     if (m_store.tracks.contains(record.id))

@@ -21,6 +21,7 @@
 #include "local/local_library.h"
 #include "local/local_lyrics.h"
 #include "local/local_metadata.h"
+#include "local/local_store.h"
 #include "local/local_track.h"
 
 #include <QFile>
@@ -203,6 +204,29 @@ private slots:
     LocalLibrary reopened(store.path());
     QCOMPARE(reopened.playlists().size(), 1);
     QCOMPARE(reopened.songs().size(), 2);
+  }
+
+  void unreadTracksAreProbedOnOpen() {
+    if (!toolAvailable(local::ffprobeProgram()))
+      QSKIP("ffprobe is not installed");
+    QTemporaryDir music, store;
+    const QString path = writeWav(music.path(), QStringLiteral("17 Heard It.wav"));
+    {
+      // Shape of a track imported while ffprobe was missing.
+      local::LocalStore seeded(store.path());
+      local::TrackRecord track;
+      track.id = local::trackIdForPath(path);
+      track.path = path;
+      track.title = QStringLiteral("17 Heard It");
+      seeded.tracks.insert(track.id, track);
+      seeded.trackOrder.append(track.id);
+      QVERIFY(seeded.save());
+    }
+    LocalLibrary library(store.path());
+    settle(library);
+    const QVariantMap song = library.songs().value(0).toMap();
+    QVERIFY(qAbs(song.value("durationSeconds").toDouble() - 1.0) < 0.1);
+    QVERIFY(song.value("localBitrate").toInt() > 0);
   }
 
   void collageFollowsCoversUntilTheUserPicksOne() {

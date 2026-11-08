@@ -110,6 +110,34 @@ ImportResult importPaths(const QStringList &paths, const QSet<QString> &known, c
   return result;
 }
 
+QList<TrackRecord> reprobeTracks(const QList<TrackRecord> &tracks) {
+  constexpr int kMaxConsecutiveFailures = 16;
+  QList<TrackRecord> updated;
+  int failures = 0;
+  for (TrackRecord record : tracks) {
+    if (!QFileInfo::exists(record.path))
+      continue;
+    const Metadata metadata = probe(record.path);
+    if (!metadata.probed) {
+      if (++failures >= kMaxConsecutiveFailures)
+        break;
+      continue;
+    }
+    failures = 0;
+    record.title = metadata.title;
+    record.artist = metadata.artist;
+    record.album = metadata.album;
+    record.codec = metadata.codec;
+    record.durationSeconds = metadata.durationSeconds;
+    record.bitrate = metadata.bitrate;
+    record.sampleRate = metadata.sampleRate;
+    record.bitDepth = metadata.bitDepth;
+    record.embeddedLyrics = metadata.lyrics;
+    updated.append(record);
+  }
+  return updated;
+}
+
 CoverResult ingestCover(const QString &source, const QString &base, const QString &coversDir,
                         const QString &animatedDir) {
   CoverResult result;

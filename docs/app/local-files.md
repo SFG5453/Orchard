@@ -42,7 +42,7 @@ Added songs appear in the **Local songs** filter, newest first. Select **Local p
 
 Orchard reads the title, artist, album, duration, and embedded cover from each file's tags. If a file has no tags, Orchard uses its name, so `Daft Punk - Digital Love.mp3` becomes the artist Daft Punk and the title Digital Love. If there is no embedded cover, Orchard uses a `cover.jpg`, `folder.jpg`, or similar picture from the same folder.
 
-Reading tags uses `ffprobe`, which comes with FFmpeg. Without it, songs are still added, but only with the name-based details and no duration until they play.
+Reading tags uses `ffprobe`, which comes with FFmpeg. Without it, songs are still added, but only with the name-based details and no duration. When Orchard starts and `ffprobe` is available, it reads those songs again and fills in their tags and duration.
 
 ## Make a playlist
 

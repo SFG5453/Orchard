@@ -107,6 +107,7 @@ private:
   void refreshCollage(local::PlaylistRecord &playlist);
   void refreshDetail();
   void scheduleSave();
+  void reprobeUnreadTracks();
   void finishImport(const local::ImportResult &result, const QString &playlistId);
   void applyCover(const QString &ownerId, bool playlist, const local::CoverResult &result);
   void dropCoverFiles(const QString &still, const QString &animated);

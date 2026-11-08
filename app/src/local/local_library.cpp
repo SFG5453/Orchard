@@ -39,6 +39,7 @@ LocalLibrary::LocalLibrary(QString rootDir, QObject *parent)
   m_saveTimer.setSingleShot(true);
   m_saveTimer.setInterval(400);
   connect(&m_saveTimer, &QTimer::timeout, this, [this] { m_store.save(); });
+  reprobeUnreadTracks();
 }
 
 // Pending edits are flushed here, because "I swear I saved it" is not a backup strategy.
