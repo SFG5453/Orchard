@@ -26,8 +26,11 @@
 
 #include <QJsonObject>
 #include <QPointer>
+#include <QTimer>
 
 namespace {
+constexpr int kSettleMs = 3000;
+
 bool isApple(const QString &id) { return id.startsWith(QStringLiteral("am.")); }
 } // namespace
 
@@ -136,6 +139,13 @@ void CollectionLibrary::finish(const QString &id, bool saved, const QString &err
   ++m_revision;
   emit changed();
   emit noticeRequested(saved ? tr("Saved to your library") : tr("Removed from your library"));
+  refreshLists();
+  // Library listings can trail the write by a few seconds; read them again once it settles.
+  QTimer::singleShot(kSettleMs, this, &CollectionLibrary::refreshLists);
+}
+
+void CollectionLibrary::refreshLists() {
+  m_home->refreshPlaylists();
   m_home->refreshLibrary();
 }
 

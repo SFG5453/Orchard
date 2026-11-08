@@ -59,6 +59,8 @@ private:
   void set(const QString &id, bool saved);
   void finish(const QString &id, bool saved, const QString &error);
   void forget();
+  // Sidebar playlists and the library page.
+  void refreshLists();
   void receive(quint64 requestId, const QJsonValue &result);
   void fail(quint64 requestId, const QString &message);
 
