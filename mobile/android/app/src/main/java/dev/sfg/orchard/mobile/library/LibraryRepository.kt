@@ -45,6 +45,9 @@ class LibraryRepository(
     private val mutableLibrary = MutableStateFlow(cache.load())
     val library: StateFlow<LibrarySnapshot> = mutableLibrary.asStateFlow()
     private val cacheUpdates = Channel<LibrarySnapshot>(Channel.CONFLATED)
+    // Account saves made this run; the library feed can lag behind like/like.
+    private val pendingAlbums = mutableMapOf<String, Pair<Album, Boolean>>()
+    private val pendingPlaylists = mutableMapOf<String, Pair<Playlist, Boolean>>()
 
     init {
         // One writer prevents rapid likes/history updates from finishing out of
@@ -82,6 +85,16 @@ class LibraryRepository(
         current.copy(savedPlaylists = toggle(current.savedPlaylists, playlist, Playlist::id))
     }
 
+    fun setAlbumSaved(album: Album, saved: Boolean, pending: Boolean = true) = update { current ->
+        if (pending) synchronized(pendingAlbums) { pendingAlbums[album.id] = album to saved }
+        current.copy(savedAlbums = current.savedAlbums.withMember(album, saved) { it.id })
+    }
+
+    fun setPlaylistSaved(playlist: Playlist, saved: Boolean, pending: Boolean = true) = update { current ->
+        if (pending) synchronized(pendingPlaylists) { pendingPlaylists[playlist.id.removePrefix("VL")] = playlist to saved }
+        current.copy(savedPlaylists = current.savedPlaylists.withMember(playlist, saved) { it.id.removePrefix("VL") })
+    }
+
     fun removePlaylist(playlistId: String) = update { current ->
         current.copy(savedPlaylists = current.savedPlaylists.filterNot { it.id == playlistId.removePrefix("VL") })
     }
@@ -96,6 +109,7 @@ class LibraryRepository(
 
     /** Stores full collection membership after a browse page loads, without changing saved state. */
     fun cacheDetail(detail: BrowseDetail) {
+        syncAccountSaved(detail)
         val saved = when (detail.kind) {
             CatalogKind.PLAYLIST -> mutableLibrary.value.savedPlaylists.any {
                 it.id.removePrefix("VL") == detail.id.removePrefix("VL")
@@ -140,6 +154,27 @@ class LibraryRepository(
         }
     }
 
+    // The page header reports the account's bookmark; follow it unless a save from this run is in flight.
+    private fun syncAccountSaved(detail: BrowseDetail) {
+        val accountSaved = detail.saved ?: return
+        when (detail.kind) {
+            CatalogKind.ALBUM -> {
+                if (synchronized(pendingAlbums) { pendingAlbums[detail.id] }?.second?.let { it != accountSaved } == true) return
+                if (mutableLibrary.value.savedAlbums.any { it.id == detail.id } != accountSaved) {
+                    setAlbumSaved(detail.asSavedAlbum(), accountSaved, pending = false)
+                }
+            }
+            CatalogKind.PLAYLIST -> {
+                val id = detail.id.removePrefix("VL")
+                if (synchronized(pendingPlaylists) { pendingPlaylists[id] }?.second?.let { it != accountSaved } == true) return
+                if (mutableLibrary.value.savedPlaylists.any { it.id.removePrefix("VL") == id } != accountSaved) {
+                    setPlaylistSaved(detail.asSavedPlaylist(), accountSaved, pending = false)
+                }
+            }
+            else -> Unit
+        }
+    }
+
     fun recordPlayed(track: Track) = update { current ->
         val currentCount = current.playCounts[track.id] ?: 0
         val updatedCounts = current.playCounts + (track.id to currentCount + 1)
@@ -167,17 +202,19 @@ class LibraryRepository(
             .map { it.playlist }
             .distinctBy(Playlist::id)
         val current = mutableLibrary.value
+        val remoteAlbums = savedAlbums
+            .ifEmpty { items.filterIsInstance<CatalogItem.Record>().map { it.album }.distinctBy(Album::id) }
+            .ifEmpty { current.savedAlbums }
+        val remotePlaylists = savedPlaylists
+            .ifEmpty { items.filterIsInstance<CatalogItem.Collection>().map { it.playlist }.distinctBy(Playlist::id) }
+            .ifEmpty { current.savedPlaylists }
+            .map { remote -> remote.withCachedTracksFrom(current.savedPlaylists) }
         val refreshed = current.copy(
             likedTracks = liked.ifEmpty { current.likedTracks },
             // Never let a failed or empty remote fetch wipe a collection already cached by Orchard.
-            savedAlbums = savedAlbums
-                .ifEmpty { items.filterIsInstance<CatalogItem.Record>().map { it.album }.distinctBy(Album::id) }
-                .ifEmpty { current.savedAlbums },
+            savedAlbums = overlayPending(remoteAlbums, pendingAlbums) { it.id },
             savedArtists = items.filterIsInstance<CatalogItem.Performer>().map { it.artist }.distinctBy(Artist::id),
-            savedPlaylists = savedPlaylists
-                .ifEmpty { items.filterIsInstance<CatalogItem.Collection>().map { it.playlist }.distinctBy(Playlist::id) }
-                .ifEmpty { current.savedPlaylists }
-                .map { remote -> remote.withCachedTracksFrom(current.savedPlaylists) },
+            savedPlaylists = overlayPending(remotePlaylists, pendingPlaylists) { it.id.removePrefix("VL") },
         )
         mutableLibrary.value = refreshed
         cacheUpdates.trySend(refreshed).getOrThrow()
@@ -188,6 +225,14 @@ class LibraryRepository(
         mutableLibrary.value = next
         cacheUpdates.trySend(next).getOrThrow()
     }
+
+    // Applies saves the feed has not caught up with, and forgets the ones it now agrees with.
+    private fun <T> overlayPending(remote: List<T>, pending: MutableMap<String, Pair<T, Boolean>>, id: (T) -> String): List<T> =
+        synchronized(pending) {
+            val remoteIds = remote.mapTo(HashSet(), id)
+            pending.entries.removeAll { (key, entry) -> (key in remoteIds) == entry.second }
+            pending.values.fold(remote) { list, (item, saved) -> list.withMember(item, saved, id) }
+        }
 
     private fun <T> toggle(values: List<T>, candidate: T, id: (T) -> String): List<T> {
         val existing = values.indexOfFirst { id(it) == id(candidate) }
@@ -206,6 +251,24 @@ private fun LibrarySnapshot.withLiked(track: Track, liked: Boolean): LibrarySnap
     val withoutTrack = likedTracks.filterNot { it.id == track.id }
     return copy(likedTracks = if (liked) listOf(track) + withoutTrack else withoutTrack)
 }
+
+private fun <T> List<T>.withMember(item: T, member: Boolean, id: (T) -> String): List<T> {
+    val without = filterNot { id(it) == id(item) }
+    return if (member) listOf(item) + without else without
+}
+
+internal fun BrowseDetail.asSavedAlbum() = Album(
+    id = id,
+    title = title,
+    // `subtitle` is the whole browse line ("Album • 2017"), so it never goes in the artist field.
+    artist = artist.ifBlank { tracks.firstOrNull()?.artist.orEmpty() },
+    artworkUrl = artworkUrl,
+    year = year,
+    tracks = tracks,
+    explicit = explicit,
+)
+
+internal fun BrowseDetail.asSavedPlaylist() = Playlist(id, title, subtitle, artworkUrl, description, tracks)
 
 /** Carries the grid count across an add or remove; both track lists come from the same loaded pages. */
 private fun Playlist.editedCount(edited: Playlist): Int? {

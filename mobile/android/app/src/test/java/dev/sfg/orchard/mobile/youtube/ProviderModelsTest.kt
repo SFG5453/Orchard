@@ -103,6 +103,12 @@ class ProviderModelsTest {
         assertEquals("cover", track.artworkUrl)
     }
 
+    @Test fun `collection saved state is unknown unless the header reports it`() {
+        assertEquals(true, JSONObject("""{"title":"A","saved":true}""").providerDetail("VLPLa", CatalogKind.PLAYLIST).saved)
+        assertEquals(null, JSONObject("""{"title":"A","saved":null}""").providerDetail("VLPLa", CatalogKind.PLAYLIST).saved)
+        assertEquals(null, JSONObject("""{"title":"A"}""").providerDetail("MPREb_a", CatalogKind.ALBUM).saved)
+    }
+
     @Test fun `search sections split by key`() {
         val results = JSONObject("""{"sections":[
             {"key":"songs","items":[$row]},

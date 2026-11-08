@@ -242,3 +242,16 @@ test('subscriptions and playlist deletion use the signed-in Music session', asyn
   assert.deepEqual(yt.calls[0].body.channelIds, ['UCartist']);
   assert.equal(yt.calls[2].body.playlistId, 'PLmine');
 });
+
+test('albums and playlists save through their playlist id', async () => {
+  const yt = fakeYouTube({ 'like/like': () => response({}), 'like/removelike': () => response({}) });
+  const library = createRuntimeLibrary(yt.fetchImpl);
+  assert.deepEqual(await library.setCollectionSaved({ session, playlistId: 'VLPLshared', saved: true }),
+    { playlistId: 'PLshared', saved: true });
+  await library.setCollectionSaved({ session, playlistId: 'OLAK5uy_album', saved: false });
+  assert.deepEqual(yt.calls.map((call) => [call.endpoint, call.body.target]), [
+    ['like/like', { playlistId: 'PLshared' }],
+    ['like/removelike', { playlistId: 'OLAK5uy_album' }]
+  ]);
+  await assert.rejects(library.setCollectionSaved({ session, playlistId: 'MPREb_album', saved: true }), /cannot be saved/);
+});

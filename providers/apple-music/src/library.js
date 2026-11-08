@@ -171,6 +171,8 @@ export function createLibraryCatalog(client) {
       thumbnail: artworkUrl(found.attributes?.artwork, 1200) || tracks[0]?.thumbnail || '',
       itemCount: String(tracks.length),
       ...(loaded.total ? { totalTrackCount: loaded.total } : {}),
+      // The listener's own playlists have no save toggle.
+      saved: found.attributes?.canEdit ? null : true,
       tracks,
       continuation: loaded.next,
       hasMoreTracks: Boolean(loaded.next),
@@ -198,6 +200,7 @@ export function createLibraryCatalog(client) {
       artistBrowseId: '',
       releaseType: releaseInfo(attributes).releaseType,
       year: yearOf(attributes.releaseDate),
+      saved: true,
       releaseDate,
       description: '',
       thumbnail: artworkUrl(attributes.artwork, 1200),

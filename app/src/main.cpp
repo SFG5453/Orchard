@@ -42,6 +42,7 @@
 #include "integrations/spotify_canvas.h"
 #include "instance_coordinator.h"
 #include "music_link_controller.h"
+#include "library/collection_library.h"
 #include "library/library_actions.h"
 #include "local/local_library.h"
 #include "lyrics/lyrics_controller.h"
@@ -321,6 +322,8 @@ int main(int argc, char *argv[]) {
   QObject::connect(&downloads, &DownloadManager::noticeRequested, &backend, &BackendInfo::noticeRequested);
   auto libraryActions = std::make_unique<LibraryActions>(&youtubeProvider, &authManager, playback.get(), homeController.get());
   libraryActions->setAppleMusic(&appleMusic, &catalogSource);
+  CollectionLibrary collectionLibrary(&youtubeProvider, &authManager, &appleMusic, homeController.get());
+  QObject::connect(&collectionLibrary, &CollectionLibrary::noticeRequested, &backend, &BackendInfo::noticeRequested);
   QObject::connect(libraryActions.get(), &LibraryActions::removedFromPlaylist,
                    playlistController.get(), &PlaylistController::removeTrack);
   // Phone in one hand, desktop in the other, and only one of them gets to be the DJ.
@@ -385,6 +388,7 @@ int main(int argc, char *argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardArtistVideo"), &artistVideo);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardAppleMotion"), &appleMotion);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardLibrary"), libraryActions.get());
+  engine.rootContext()->setContextProperty(QStringLiteral("OrchardCollections"), &collectionLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardLocal"), &localLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardNetwork"), &connectivity);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardDownloads"), &downloads);

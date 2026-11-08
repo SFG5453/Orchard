@@ -99,3 +99,28 @@ test('new playlists start empty or with the seed song', async () => {
   await client.createPlaylist('Road trip', catalogTrack);
   assert.deepEqual(requests[1].body.relationships, { tracks: { data: [{ id: '111', type: 'songs' }] } });
 });
+
+test('saving a catalog album adds it once and reports the library copy', async () => {
+  const { client, requests } = appleMusic([
+    [/^GET .*\/v1\/catalog\/us\/albums\/42\?relate=library$/, 200, { data: [{ id: '42' }] }],
+    [/^POST .*\/v1\/me\/library\?ids%5Balbums%5D=42$/, 202, null]
+  ]);
+  assert.equal(await client.collectionSaved('am.albums.42'), false);
+  assert.deepEqual(await client.setCollectionSaved('am.albums.42', true), { browseId: 'am.albums.42', saved: true });
+  assert.equal(requests[0].headers['Music-User-Token'], 'user');
+  assert.deepEqual(requests.map((request) => request.method), ['GET', 'GET', 'POST']);
+});
+
+test('removing deletes the library copy but never an own playlist', async () => {
+  const saved = { data: [{ id: 'pl.x', relationships: { library: { data: [{ id: 'p.mine' }] } } }] };
+  const { client, requests } = appleMusic([
+    [/^GET .*\/v1\/catalog\/us\/playlists\/pl\.x\?relate=library$/, 200, saved],
+    [/^GET .*\/v1\/me\/library\/playlists\/p\.mine$/, 200, { data: [{ attributes: { canEdit: false } }] }],
+    [/^DELETE .*\/v1\/me\/library\/playlists\/p\.mine$/, 204, null],
+    [/^GET .*\/v1\/me\/library\/playlists\/p\.own$/, 200, { data: [{ attributes: { canEdit: true } }] }]
+  ]);
+  assert.equal(await client.collectionSaved('am.playlists.pl.x'), true);
+  assert.deepEqual(await client.setCollectionSaved('am.playlists.pl.x', false), { browseId: 'am.playlists.pl.x', saved: false });
+  assert.ok(requests.some((request) => request.method === 'DELETE'));
+  await assert.rejects(client.setCollectionSaved('am.playlists.p.own', false), /own playlists/);
+});

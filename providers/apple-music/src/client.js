@@ -95,8 +95,9 @@ export function createAppleMusicClient({ fetchImpl, session }) {
     return result;
   }
 
-  async function get(path, query = {}) {
-    const personal = /^\/?v1\/me\//.test(path);
+  // [personal] sends the user token on catalog paths too, for relate=library.
+  async function get(path, query = {}, { personal: forcePersonal = false } = {}) {
+    const personal = forcePersonal || /^\/?v1\/me\//.test(path);
     const response = await fetchImpl(apiUrl(path, query), { headers: headers(personal) });
     if (!response.ok) {
       const [code, message] = statusCodes.get(response.status) || ['http', `Apple Music returned ${response.status}.`];

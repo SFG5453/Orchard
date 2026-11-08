@@ -22,10 +22,12 @@
 
 import { AppleMusicError } from './client.js';
 import { parseBrowseId } from './ids.js';
+import { isLibraryId } from './library.js';
 import { findSong } from './match.js';
 import { artworkUrl } from './normalize.js';
 
 const PLAYLIST_PAGES = 5;
+const COLLECTION_TYPES = new Set(['albums', 'playlists']);
 
 export function createLibraryWrites(client) {
   /** {id, type} as Apple's library endpoints name a song. */
@@ -95,5 +97,43 @@ export function createLibraryWrites(client) {
     return { playlistId: created?.id || '', title: created?.attributes?.name || name };
   }
 
-  return { likeStatus, setLike, playlistTargets, addToPlaylist, createPlaylist };
+  /** {type, id, libraryId} for an album or playlist; library copies are their own library id. */
+  async function collectionRef(browseId) {
+    const parsed = parseBrowseId(browseId);
+    if (!parsed || !COLLECTION_TYPES.has(parsed.type)) {
+      throw new AppleMusicError(0, 'bad_id', 'Only Apple Music albums and playlists can be saved.');
+    }
+    if (isLibraryId(parsed.id)) return { ...parsed, libraryId: parsed.id };
+    const path = `/v1/catalog/${client.storefront()}/${parsed.type}/${encodeURIComponent(parsed.id)}`;
+    const resource = (await client.get(path, { relate: 'library' }, { personal: true })).data?.[0];
+    return { ...parsed, libraryId: resource?.relationships?.library?.data?.[0]?.id || '' };
+  }
+
+  /** True or false for a signed-in listener; null when Apple cannot say. */
+  async function collectionSaved(browseId) {
+    if (!client.userToken()) return null;
+    try {
+      return Boolean((await collectionRef(browseId)).libraryId);
+    } catch {
+      return null;
+    }
+  }
+
+  async function setCollectionSaved(browseId, saved) {
+    const ref = await collectionRef(browseId);
+    if (saved) {
+      if (!ref.libraryId) await client.send('POST', `/v1/me/library?ids%5B${ref.type}%5D=${encodeURIComponent(ref.id)}`);
+      return { browseId, saved: true };
+    }
+    if (!ref.libraryId) return { browseId, saved: false };
+    const path = `/v1/me/library/${ref.type}/${encodeURIComponent(ref.libraryId)}`;
+    // Apple removes and deletes playlists the same way; never delete the listener's own.
+    if (ref.type === 'playlists' && (await client.get(path)).data?.[0]?.attributes?.canEdit) {
+      throw new AppleMusicError(0, 'own_playlist', 'Delete your own playlists in Apple Music.');
+    }
+    await client.send('DELETE', path);
+    return { browseId, saved: false };
+  }
+
+  return { likeStatus, setLike, playlistTargets, addToPlaylist, createPlaylist, collectionSaved, setCollectionSaved };
 }

@@ -27,8 +27,9 @@ import dev.sfg.orchard.mobile.catalog.CatalogRepository
 import dev.sfg.orchard.mobile.catalog.PlaylistActions
 import dev.sfg.orchard.mobile.catalog.isAppleMusicId
 import dev.sfg.orchard.mobile.download.OfflineDetailSynthesizer
+import dev.sfg.orchard.mobile.library.asSavedAlbum
+import dev.sfg.orchard.mobile.library.asSavedPlaylist
 import dev.sfg.orchard.mobile.local.isLocalPlaylistId
-import dev.sfg.orchard.mobile.model.Album
 import dev.sfg.orchard.mobile.model.Artist
 import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.CatalogItem
@@ -227,23 +228,65 @@ internal class DetailController(
 
     fun save(detail: BrowseDetail) {
         when (detail.kind) {
-            // `subtitle` is the whole browse line ("Album • 2017"), so it never goes in the artist field.
-            CatalogKind.ALBUM -> graph.library.saveAlbum(
-                Album(
-                    id = detail.id,
-                    title = detail.title,
-                    artist = detail.artist.ifBlank { detail.tracks.firstOrNull()?.artist.orEmpty() },
-                    artworkUrl = detail.artworkUrl,
-                    year = detail.year,
-                    tracks = detail.tracks,
-                    explicit = detail.explicit,
-                ),
-            )
+            CatalogKind.ALBUM, CatalogKind.PLAYLIST -> saveCollection(detail)
             CatalogKind.ARTIST -> setArtistSubscription(detail)
-            // A playlist on this phone is already stored; it has no YouTube library to join.
-            CatalogKind.PLAYLIST -> if (!isLocalPlaylistId(detail.id)) graph.library.savePlaylist(detail.asPlaylist())
             CatalogKind.TRACK -> Unit
         }
+    }
+
+    // Collections save to the signed-in account (YouTube Music or Apple Music), so library refreshes keep them.
+    private fun saveCollection(detail: BrowseDetail) {
+        val album = detail.kind == CatalogKind.ALBUM
+        // A playlist on this phone is already stored; it has no online library to join.
+        if (!album && isLocalPlaylistId(detail.id)) return
+        val library = graph.library
+        val saved = !(detail.saved ?: if (album) library.library.value.savedAlbums.any { it.id == detail.id }
+        else library.library.value.savedPlaylists.any { it.id.removePrefix("VL") == detail.id.removePrefix("VL") })
+        if (isAppleMusicId(detail.id)) return saveAppleCollection(detail, saved)
+        val setLocal = { member: Boolean ->
+            if (album) library.setAlbumSaved(detail.asSavedAlbum(), member)
+            else library.setPlaylistSaved(detail.asSavedPlaylist(), member)
+            updateOpenDetail(detail.id) { it.copy(saved = member) }
+        }
+        if (graph.auth.state.value !is AuthState.SignedIn) {
+            setLocal(saved)
+            return
+        }
+        val target = if (album) detail.audioPlaylistId else detail.id.removePrefix("VL")
+        if (target.isBlank() || target.startsWith("MPRE")) {
+            showWarning("This album cannot be saved to your YouTube Music library.")
+            return
+        }
+        setLocal(saved)
+        scope.launch {
+            runCatching { withContext(Dispatchers.IO) { graph.catalog.setCollectionSaved(target, saved) } }
+                .onFailure { error ->
+                    setLocal(!saved)
+                    showWarning(error.message ?: if (saved) "Could not save to your library." else "Could not remove from your library.")
+                }
+        }
+    }
+
+    // Apple ids its library copies separately (l./p.), so the page's own flag drives the button.
+    private fun saveAppleCollection(detail: BrowseDetail, saved: Boolean) {
+        if (!graph.appleMusic.signedIn()) {
+            showWarning("Connect Apple Music in Settings to save to your library.")
+            return
+        }
+        updateOpenDetail(detail.id) { it.copy(saved = saved) }
+        scope.launch {
+            runCatching { withContext(Dispatchers.IO) { graph.appleMusic.setCollectionSaved(detail.id, saved) } }
+                .onSuccess { graph.appleLibrary.refresh() }
+                .onFailure { error ->
+                    updateOpenDetail(detail.id) { it.copy(saved = !saved) }
+                    showWarning(error.message ?: if (saved) "Could not save to your library." else "Could not remove from your library.")
+                }
+        }
+    }
+
+    private fun updateOpenDetail(id: String, change: (BrowseDetail) -> BrowseDetail) {
+        val open = (mutableDetail.value as? LoadState.Content)?.value?.takeIf { it.id == id } ?: return
+        mutableDetail.value = LoadState.Content(change(open))
     }
 
     private fun setArtistSubscription(detail: BrowseDetail) {
@@ -375,7 +418,7 @@ internal class DetailController(
                 if (current.id.removePrefix("VL") != moving.id.removePrefix("VL")) return@onSuccess
                 val updated = current.withPlaylistTrackMoved(fromIndex, toIndex)
                 mutableDetail.value = LoadState.Content(updated)
-                graph.library.refreshPlaylist(updated.asPlaylist())
+                graph.library.refreshPlaylist(updated.asSavedPlaylist())
             }.onFailure { graph.postWarning(it.message ?: "Could not reorder the playlist.") }
         }
     }
@@ -390,15 +433,13 @@ internal class DetailController(
         val updated = current.withPlaylistTrackRemoved(videoId)
         if (updated === current) return
         mutableDetail.value = LoadState.Content(updated)
-        graph.library.refreshPlaylist(updated.asPlaylist())
+        graph.library.refreshPlaylist(updated.asSavedPlaylist())
     }
 
     private fun applyRefreshedPlaylist(refreshed: BrowseDetail) {
         if (activeId.removePrefix("VL") == refreshed.id.removePrefix("VL")) {
             mutableDetail.value = LoadState.Content(refreshed)
         }
-        graph.library.refreshPlaylist(refreshed.asPlaylist())
+        graph.library.refreshPlaylist(refreshed.asSavedPlaylist())
     }
 }
-
-private fun BrowseDetail.asPlaylist() = Playlist(id, title, subtitle, artworkUrl, description, tracks)

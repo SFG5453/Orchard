@@ -34,7 +34,7 @@ function requireId(id, type) {
   return parsed.id;
 }
 
-export function createCatalog(client, library) {
+export function createCatalog(client, library, writes) {
   const catalogPath = (path) => `/v1/catalog/${client.storefront()}/${path}`;
 
   async function resourceWithTracks(type, id) {
@@ -60,7 +60,9 @@ export function createCatalog(client, library) {
     const card = album(resource);
     const releaseDate = futureReleaseDate(attributes.releaseDate);
     const cards = releaseDate ? futureAlbumTracks(tracks, attributes, track) : tracks.map((song, index) => track(song, index)).filter(Boolean);
-    const [discographyItems, views] = await Promise.all([discography(card.artistBrowseId), albumViews(appleId)]);
+    const [discographyItems, views, saved] = await Promise.all([
+      discography(card.artistBrowseId), albumViews(appleId), writes.collectionSaved(id)
+    ]);
     const others = discographyItems.filter((entry) => entry.browseId !== id);
     return {
       kind: 'album',
@@ -79,6 +81,7 @@ export function createCatalog(client, library) {
       explicit: attributes.contentRating === 'explicit',
       itemCount: String(attributes.trackCount || tracks.length),
       copyright: attributes.copyright || '',
+      saved,
       tracks: cards,
       sections: ALBUM_VIEWS.map((name) => albumSection(id, name, views[name])).filter(Boolean)
     };
@@ -122,7 +125,7 @@ export function createCatalog(client, library) {
   async function playlistPage(id, options = {}) {
     const appleId = requireId(id, 'playlists');
     if (isLibraryId(appleId)) return library.libraryPlaylistPage(appleId, id, options);
-    const { resource, tracks } = await resourceWithTracks('playlists', id);
+    const [{ resource, tracks }, saved] = await Promise.all([resourceWithTracks('playlists', id), writes.collectionSaved(id)]);
     const attributes = resource.attributes || {};
     const card = playlist(resource);
     const cards = tracks.map((song, index) => track(song, index)).filter(Boolean);
@@ -136,6 +139,7 @@ export function createCatalog(client, library) {
       description: linkNotes(card.description, noteTargets(cards)),
       thumbnail: artworkUrl(attributes.artwork, 1200),
       itemCount: String(tracks.length),
+      saved,
       tracks: cards,
       sections: []
     };

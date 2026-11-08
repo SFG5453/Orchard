@@ -247,6 +247,11 @@ Item {
             searchable: true
             shareLabel: qsTr("Copy playlist link")
             shareEnabled: Boolean(root.shareId) && !root.isLocal && !root.isOffline
+            // Own playlists are already in the library; Apple reports them with no saved state.
+            saveVisible: !root.isLocal && !root.isOffline && !root.detail.editable && Boolean(root.shareId)
+                && !(String(root.detail.browseId || "").startsWith("am.playlists.p.") && root.detail.saved !== true)
+            saved: OrchardCollections.revision >= 0 && OrchardCollections.saved(root.detail)
+            saveBusy: OrchardCollections.revision >= 0 && OrchardCollections.busy(root.detail)
             downloadable: !root.isLocal && root.tracks.length > 0
             downloadState: root.downloadState
             downloadEnabled: root.downloadState === "done"
@@ -264,6 +269,7 @@ Item {
             onPlayClicked: root.playOrToggle()
             onShuffleClicked: root.shuffleRequested()
             onShareClicked: OrchardBackend.copySongLink(root.shareId, qsTr("playlist"))
+            onSaveClicked: OrchardCollections.toggle(Object.assign({}, root.detail, { kind: "playlist" }))
             onShareOpenRequested: OrchardBackend.openSongLink(root.shareId, "playlist")
             onSearchClicked: quickSearch.openWithQuery("")
             onDownloadClicked: OrchardDownloads.downloadAll(root.tracks, root.detail)

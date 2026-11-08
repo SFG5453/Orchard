@@ -244,6 +244,10 @@ Item {
             playing: root.collectionPlaying
             shareLabel: qsTr("Copy album link")
             shareEnabled: Boolean(root.shareId)
+            saveVisible: !OrchardAlbum.loading && Boolean(root.detail.browseId || root.detail.id)
+                && root.detail.kind !== "artist" && root.detail.source !== "local" && root.detail.source !== "download"
+            saved: OrchardCollections.revision >= 0 && OrchardCollections.saved(root.detail)
+            saveBusy: OrchardCollections.revision >= 0 && OrchardCollections.busy(root.detail)
             downloadable: root.playableTracks.length > 0
             downloadState: root.downloadState
             downloadEnabled: root.downloadState === "done"
@@ -264,6 +268,7 @@ Item {
             onPlayClicked: root.playOrToggle()
             onShuffleClicked: root.shuffleRequested()
             onShareClicked: OrchardBackend.copySongLink(root.shareId, qsTr("album"))
+            onSaveClicked: OrchardCollections.toggle(Object.assign({}, root.detail, { kind: "album" }))
             onShareOpenRequested: OrchardBackend.openSongLink(root.shareId, "album")
             onDownloadClicked: OrchardDownloads.downloadAll(root.tracks, Object.assign({}, root.detail, { kind: "album" }))
             onRemoveDownloadsClicked: OrchardDownloads.removeAll(root.tracks, OrchardOffline.collectionIdFor(root.detail))

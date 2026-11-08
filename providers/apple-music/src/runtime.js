@@ -65,6 +65,7 @@ const methods = new Map([
   ['library.like.set', async (payload = {}) => appleMusic.setLike(payload.track, Boolean(payload.liked))],
   ['library.playlist.targets', async () => ({ playlists: await appleMusic.playlistTargets() })],
   ['library.playlist.add', async (payload = {}) => appleMusic.addToPlaylist(payload.track, payload.playlistId, payload.title)],
+  ['library.collection.save', async (payload = {}) => appleMusic.setCollectionSaved(payload.browseId, Boolean(payload.saved))],
   ['library.playlist.create', async (payload = {}) => appleMusic.createPlaylist(payload.title, payload.track)],
   ['playback.stream', async (payload = {}) => appleMusic.playback.stream(payload.track, payload.quality)],
   ['playback.atmos', async (payload = {}) => appleMusic.playback.atmos(payload.id)],

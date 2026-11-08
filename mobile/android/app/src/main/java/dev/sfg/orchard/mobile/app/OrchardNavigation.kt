@@ -310,8 +310,9 @@ internal fun OrchardNavigation(
             }
             val isSaved = (detail as? LoadState.Content)?.value?.let { detailVal ->
                 when (detailVal.kind) {
-                    CatalogKind.ALBUM -> library.savedAlbums.any { it.id == detailVal.id }
-                    CatalogKind.PLAYLIST -> library.savedPlaylists.any { it.id == detailVal.id }
+                    CatalogKind.ALBUM -> detailVal.saved ?: library.savedAlbums.any { it.id == detailVal.id }
+                    CatalogKind.PLAYLIST -> detailVal.saved
+                        ?: library.savedPlaylists.any { it.id.removePrefix("VL") == detailVal.id.removePrefix("VL") }
                     CatalogKind.ARTIST -> library.savedArtists.any { it.id == detailVal.id }
                     CatalogKind.TRACK -> false
                 }

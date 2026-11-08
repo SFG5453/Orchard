@@ -130,6 +130,11 @@ class CatalogRepository(
         provider.invoke("library.artist.subscribe", payload().put("channelId", channelId).put("subscribed", subscribed))
     }
 
+    /** Saves an album (by its OLAK audio playlist) or a playlist to the account library. */
+    suspend fun setCollectionSaved(playlistId: String, saved: Boolean) {
+        provider.invoke("library.collection.save", payload().put("playlistId", playlistId).put("saved", saved))
+    }
+
     suspend fun likedSongs(): BrowseDetail = browse(LIKED_MUSIC)
 
     /** Every item behind a shelf's "more" link, continuations included. */

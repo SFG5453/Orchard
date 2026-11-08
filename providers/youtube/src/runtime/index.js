@@ -262,7 +262,8 @@ const methods = new Map([
   ['library.playlist.remove', library.removeFromPlaylist],
   ['library.playlist.move', library.movePlaylistItem],
   ['library.playlist.delete', library.deletePlaylist],
-  ['library.artist.subscribe', library.setArtistSubscription]
+  ['library.artist.subscribe', library.setArtistSubscription],
+  ['library.collection.save', library.setCollectionSaved]
 ]);
 
 async function resolveLyrics(payload = {}) {

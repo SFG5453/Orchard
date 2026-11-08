@@ -1,11 +1,14 @@
 ---
 title: Library and playlists
-summary: Browse your library, add songs to playlists, create a playlist, remove songs, and copy share links.
+summary: Browse your library, save albums and playlists, add songs to playlists, create a playlist, remove songs, and copy share links.
 group: Basics
 icon: library-big
 keywords:
   - library
   - playlist
+  - save album
+  - save playlist
+  - add to library
   - add to playlist
   - create playlist
   - new playlist
@@ -50,6 +53,14 @@ Select the playlist under **PLAYLISTS** in the left sidebar. The sidebar shows "
 A long playlist loads in parts. The first 100 songs show first. The playlist page shows a line such as "100 of 1,035 songs loaded" while the rest loads.
 
 Orchard keeps a copy of each playlist you open. The next time you open it, the saved copy shows at once while Orchard checks for changes. The page updates if the playlist changed.
+
+## Save an album or playlist to your library
+
+Open the album or playlist page. Select the **+** button next to **Shuffle**. The button turns into a check mark, and Orchard shows "Saved to your library". The album or playlist goes into your YouTube Music library, or your Apple Music library when the page is from Apple Music. It stays in your library after you restart Orchard and shows on your phone too.
+
+Select the check mark to remove it. Orchard shows "Removed from your library".
+
+You must be signed in to YouTube, or connected to Apple Music, to save. Your own playlists, local playlists, and downloads have no save button. To remove one of your own Apple Music playlists, delete it in Apple Music.
 
 ## Add a song to a playlist
 

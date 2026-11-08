@@ -51,6 +51,10 @@ Item {
     property bool downloadEnabled: true
     property string shareLabel
     property bool shareEnabled: true
+    // Account library bookmark; see CollectionLibrary.
+    property bool saveVisible: false
+    property bool saved: false
+    property bool saveBusy: false
 
     property color accentColor: OrchardAppearance.accent
     property color accentSoftColor: OrchardAppearance.accent
@@ -65,6 +69,7 @@ Item {
     signal playClicked
     signal shuffleClicked
     signal shareClicked
+    signal saveClicked
     signal shareOpenRequested
     signal searchClicked
     signal downloadClicked
@@ -280,6 +285,15 @@ Item {
                 Accessible.name: qsTr("Shuffle")
                 ToolTip.text: qsTr("Shuffle")
                 onClicked: root.shuffleClicked()
+            }
+            GhostButton {
+                visible: root.saveVisible
+                glyph: root.saved ? "check" : "plus"
+                glyphColor: root.saved ? root.accentSoftColor : "#eef0ec"
+                enabled: !root.saveBusy
+                Accessible.name: ToolTip.text
+                ToolTip.text: root.saved ? qsTr("Remove from library") : qsTr("Save to library")
+                onClicked: root.saveClicked()
             }
             GhostButton {
                 id: downloadButton

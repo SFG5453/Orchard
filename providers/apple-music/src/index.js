@@ -45,14 +45,15 @@ export function createAppleMusic({ fetchImpl = fetch, session }) {
   if (typeof session !== 'function') throw new TypeError('createAppleMusic requires a session() function');
   const client = createAppleMusicClient({ fetchImpl, session });
   const library = createLibraryCatalog(client);
+  const writes = createLibraryWrites(client);
   return {
     ...createAnalysisCatalog(client),
     ...createArtistCatalog(client),
     ...createArtworkCatalog(client),
-    ...createCatalog(client, library),
+    ...createCatalog(client, library, writes),
     ...createHomeCatalog(client),
     ...library,
-    ...createLibraryWrites(client),
+    ...writes,
     ...createLyricsCatalog(client),
     ...createMusicVideoCatalog(client),
     ...createPlayActivity({ fetchImpl, session }),

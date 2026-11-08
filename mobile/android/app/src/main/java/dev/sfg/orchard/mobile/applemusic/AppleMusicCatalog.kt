@@ -104,6 +104,11 @@ internal class AppleMusicCatalog(context: Context, http: OkHttpClient, bundle: (
         call("library.like.set", JSONObject().put("track", track.payload()).put("liked", liked))
     }
 
+    /** Adds or removes an album or playlist browse id in the listener's Apple Music library. */
+    suspend fun setCollectionSaved(browseId: String, saved: Boolean) {
+        call("library.collection.save", JSONObject().put("browseId", browseId).put("saved", saved))
+    }
+
     /** [playlistId] is the browse id, `am.playlists.p.…`. */
     suspend fun addToPlaylist(playlistId: String, track: Track) {
         call("library.playlist.add", JSONObject()

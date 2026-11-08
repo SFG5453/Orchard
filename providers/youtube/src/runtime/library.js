@@ -220,6 +220,19 @@ export function createRuntimeLibrary(fetchImpl = globalThis.fetch) {
       return { playlistId: id };
     },
 
+    // Albums save through their OLAK audio playlist; YouTube rejects the MPREb browse id.
+    setCollectionSaved: async (payload = {}) => {
+      const id = playlistId(payload.playlistId);
+      if (!id || id.startsWith('MPRE')) throw new Error('This collection cannot be saved to your library.');
+      const saved = Boolean(payload.saved);
+      try {
+        await requestFor(payload)({ target: { playlistId: id } }, saved ? 'like/like' : 'like/removelike');
+      } catch (error) {
+        throw writeError(error, saved ? 'Could not save to your library.' : 'Could not remove from your library.');
+      }
+      return { playlistId: id, saved };
+    },
+
     setArtistSubscription: async (payload = {}) => {
       const channelId = clean(payload.channelId);
       if (!channelId) throw new Error('Artist channel ID is required.');

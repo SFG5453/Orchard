@@ -215,6 +215,8 @@ data class BrowseDetail(
     val explicit: Boolean = false,
     /** True when YouTube identifies this as a playlist the signed-in listener may edit. */
     val editable: Boolean = false,
+    /** Whether the signed-in account has this album or playlist saved; null when unknown. */
+    val saved: Boolean? = null,
     /** The catalog supplying the page, such as "apple_music". */
     val source: String = "",
     /** The artist's name as artwork, when Apple has one. */

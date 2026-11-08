@@ -197,6 +197,7 @@ fun JSONObject.providerDetail(id: String, kind: CatalogKind): BrowseDetail {
         },
         explicit = optBoolean("explicit"),
         editable = optBoolean("editable"),
+        saved = if (has("saved") && !isNull("saved")) optBoolean("saved") else null,
         source = text("source"),
         logoUrl = text("logo"),
     )

@@ -59,6 +59,12 @@ export function createBrowseHeaders({ cleanedText, textParts }) {
   function browseHeaderDuration(header) {
     return textParts(header?.second_subtitle).find((part) => /\b(hour|hours|minute|minutes)\b/i.test(part)) || '';
   }
+  // Library bookmark state; null when the response has no signed-in save button.
+  function browseHeaderSaved(header) {
+    const toggle = (header?.buttons || []).map((button) => button?.toggleButtonRenderer).find((button) =>
+      button?.defaultServiceEndpoint?.likeEndpoint || button?.toggledServiceEndpoint?.likeEndpoint);
+    return toggle ? Boolean(toggle.isToggled) : null;
+  }
   function browseHeaderViews(header) {
     return textParts(header?.second_subtitle).find((part) => /\b(view|views|play|plays)\b/i.test(part)) || '';
   }
@@ -74,6 +80,7 @@ export function createBrowseHeaders({ cleanedText, textParts }) {
     browseHeaderYear,
     browseHeaderItemCount,
     browseHeaderDuration,
-    browseHeaderViews
+    browseHeaderViews,
+    browseHeaderSaved
   };
 }

@@ -52,7 +52,8 @@ export function createBrowseNormalizers({
     browseHeaderArtist,
     browseHeaderArtistId,
     browseHeaderItemCount,
-    browseHeaderYear
+    browseHeaderYear,
+    browseHeaderSaved
   } = createBrowseHeaders({ cleanedText, textParts });
 
   function normalizeBrowseTrack(item, index = 0) {
@@ -370,6 +371,7 @@ export function createBrowseNormalizers({
       ),
       explicit,
       year: browseHeaderYear(header),
+      saved: browseHeaderSaved(header),
       itemCount: tracks.length ? `${tracks.length} tracks` : '',
       totalDuration: '',
       views: '',
@@ -451,6 +453,7 @@ export function createBrowseNormalizers({
         cleanedText(rawHeader(playlist).straplineTextOne || rawHeader(playlist).strapline_text_one),
       artist: '',
       year: '',
+      saved: browseHeaderSaved(rawHeader(playlist)),
       itemCount: totalItemCount ? `${totalItemCount.count.toLocaleString('en-US')} tracks` : headerItemCount || (page.tracks.length ? `${page.tracks.length} tracks` : ''),
       totalTrackCount: totalItemCount?.count || 0,
       totalDuration: '',
