@@ -143,6 +143,7 @@ Item {
                 width: 32
                 height: 32
                 source: "../../assets/orchard-logo.png"
+                sourceSize: Qt.size(64, 64)
                 fillMode: Image.PreserveAspectFit
             }
 

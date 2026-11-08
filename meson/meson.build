@@ -290,6 +290,8 @@ app_sources = [
   'bootstrapper/src/security/TrustedKeys.cpp',
   'bootstrapper/src/util/Version.cpp',
   'app/src/update/bootstrapper_client.h',
+  'app/src/app_icon.cpp',
+  'app/src/app_icon.h',
   'app/src/heap_trim.cpp',
   'app/src/heap_trim.h',
   'app/src/window_occlusion.cpp',

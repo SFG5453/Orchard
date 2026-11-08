@@ -49,6 +49,7 @@ Item {
                 width: 60
                 height: 60
                 source: "qrc:/qt/qml/Orchard/app/qml/assets/orchard-logo.png"
+                sourceSize: Qt.size(128, 128)
                 fillMode: Image.PreserveAspectFit
                 smooth: true
                 mipmap: true

@@ -34,6 +34,7 @@
 #include "appearance/ui_scaling.h"
 #include "appearance/animated_artwork_service.h"
 #include "appearance/artwork_video_cache.h"
+#include "app_icon.h"
 #include "heap_trim.h"
 #include "home/home_controller.h"
 #include "integrations/integrations.h"
@@ -215,7 +216,7 @@ int main(int argc, char *argv[]) {
   QObject::connect(&application, &QCoreApplication::aboutToQuit, &application, [] {
     authDiagnostic(QStringLiteral("application-quitting"));
   });
-  application.setWindowIcon(QIcon(QStringLiteral(":/qt/qml/Orchard/app/qml/assets/orchard-logo.png")));
+  application.setWindowIcon(appIcon());
   // Custom control backgrounds, content items, and handles need a non-native style.
   QQuickStyle::setStyle(QStringLiteral("Basic"));
 

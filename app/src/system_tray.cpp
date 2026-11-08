@@ -19,6 +19,7 @@
 
 #include "system_tray.h"
 
+#include "app_icon.h"
 #include "auth/auth_manager.h"
 #include "playback/playback_controller.h"
 
@@ -71,8 +72,7 @@ SystemTray::SystemTray(PlaybackController *playback, AuthManager *auth, QObject 
     }
     m_menu->addAction(tr("Quit Orchard"), qApp, &QCoreApplication::quit);
 
-    m_icon = new QSystemTrayIcon(
-        QIcon(QStringLiteral(":/qt/qml/Orchard/app/qml/assets/orchard-logo.png")), this);
+    m_icon = new QSystemTrayIcon(appIcon(), this);
     m_icon->setContextMenu(m_menu);
     connect(m_icon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
         if (reason == QSystemTrayIcon::Trigger)
