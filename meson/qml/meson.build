@@ -99,6 +99,7 @@ qml_sources = [
   'app/qml/components/player/PipWindow.qml',
   'app/qml/components/player/MiniVideo.qml',
   'app/qml/components/PlaylistPicker.qml',
+  'app/qml/components/PlaylistPickerHost.qml',
   'app/qml/components/DetailListView.qml',
   'app/qml/components/WheelGlide.qml',
   'app/qml/components/ScrollWheelHandler.qml',

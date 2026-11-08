@@ -340,7 +340,7 @@ Item {
         target: OrchardBackend
     }
 
-    PlaylistPicker {
+    PlaylistPickerHost {
         id: playlistPicker
     }
 

@@ -102,6 +102,7 @@
     <file alias="app/qml/components/player/MiniVideo.qml">../app/qml/components/player/MiniVideo.qml</file>
     <file alias="app/qml/components/player/PipForm.ui.qml">../app/qml/components/player/PipForm.ui.qml</file>
     <file alias="app/qml/components/PlaylistPicker.qml">../app/qml/components/PlaylistPicker.qml</file>
+    <file alias="app/qml/components/PlaylistPickerHost.qml">../app/qml/components/PlaylistPickerHost.qml</file>
     <file alias="app/qml/components/DetailListView.qml">../app/qml/components/DetailListView.qml</file>
     <file alias="app/qml/components/WheelGlide.qml">../app/qml/components/WheelGlide.qml</file>
     <file alias="app/qml/components/ScrollWheelHandler.qml">../app/qml/components/ScrollWheelHandler.qml</file>

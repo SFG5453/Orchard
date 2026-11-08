@@ -150,12 +150,15 @@ Window {
             }
         }
 
-        LoginView {
-            id: loginView
-
-            visible: !OrchardAuth.isSignedIn && !OrchardAuth.authWebViewActive && !OrchardAuth.profileLoading
-            onLoginRequested: OrchardAuth.startLogin()
-            onTroubleRequested: mainWindow.troubleModalOpen = true
+        Loader {
+            anchors.fill: parent
+            active: !OrchardAuth.isSignedIn && !OrchardAuth.authWebViewActive && !OrchardAuth.profileLoading
+            sourceComponent: Component {
+                LoginView {
+                    onLoginRequested: OrchardAuth.startLogin()
+                    onTroubleRequested: mainWindow.troubleModalOpen = true
+                }
+            }
         }
 
         Loader {
