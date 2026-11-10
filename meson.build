@@ -315,9 +315,9 @@ docs_qrc = qt6.compile_resources(sources: files('meson/app_docs.qrc'), extra_arg
 release_notes_qrc = qt6.compile_resources(sources: files('meson/release_notes.qrc'), extra_args: rcc_args)
 assets_qrc = qt6.compile_resources(sources: files('meson/qml_assets.qrc'), extra_args: rcc_args)
 qml_files_qrc = qt6.compile_resources(sources: files('meson/qml_files.qrc'), extra_args: rcc_args)
-# Sign-in hosts WebView2 on Windows and WebKitGTK on Linux; other platforms use QtWebView.
-auth_qrc_file = {'windows': 'meson/auth_qml_windows.qrc', 'linux': 'meson/auth_qml_linux.qrc'}.get(
-  host_machine.system(), 'meson/auth_qml.qrc')
+# Sign-in hosts WebView2 on Windows, WebKitGTK on Linux and WKWebView on macOS; other platforms use QtWebView.
+auth_qrc_file = {'windows': 'meson/auth_qml_windows.qrc', 'linux': 'meson/auth_qml_webkit.qrc',
+  'darwin': 'meson/auth_qml_webkit.qrc'}.get(host_machine.system(), 'meson/auth_qml.qrc')
 auth_qrc = qt6.compile_resources(sources: files(auth_qrc_file), extra_args: rcc_args)
 
 app_inc = include_directories('app/src', 'app/src/auth',
@@ -325,7 +325,7 @@ app_inc = include_directories('app/src', 'app/src/auth',
 app_dependencies = [qt_dep, qt_gui_private, connect_dep, rust_dep,
   qjs_dep, keychain_dep] + platform_deps
 app_args = ['-DORCHARD_VERSION="' + meson.project_version() + '"']
-if host_machine.system() == 'windows' or host_machine.system() == 'linux'
+if host_machine.system() in ['windows', 'linux', 'darwin']
   app_args += ['-DORCHARD_NATIVE_COOKIE_AUTH']
 endif
 if host_machine.system() == 'linux' and xcb_dep.found()
@@ -457,6 +457,12 @@ elif host_machine.system() == 'linux'
   auth_moc_headers += helper_webkit_moc_headers
   auth_dependencies += [dependency('webkit2gtk-4.1', version: '>=2.40')]
   auth_args += ['-DORCHARD_WEBKIT_AUTH', '-DORCHARD_NATIVE_COOKIE_AUTH']
+elif host_machine.system() == 'darwin'
+  add_languages('objcpp', native: false)
+  auth_sources += helper_browser_sources + helper_wkwebview_sources
+  auth_moc_headers += helper_webkit_moc_headers
+  auth_dependencies += [dependency('appleframeworks', modules: ['WebKit'])]
+  auth_args += ['-DORCHARD_WEBKIT_AUTH', '-DORCHARD_NATIVE_COOKIE_AUTH']
 else
   auth_sources += helper_browser_sources
   auth_dependencies += [dependency('qt6', version: '>=6.8', modules: ['WebView', 'WebViewQuick'])]
@@ -469,6 +475,7 @@ auth_helper = executable('orchard-auth-helper', files(auth_sources) + helper_moc
   auth_qrc + [auth_provider_resources],
   include_directories: app_inc,
   dependencies: auth_dependencies + [qt_entry_dep], cpp_args: auth_args,
+  objcpp_args: auth_args + ['-std=c++20', '-fobjc-arc'],
   win_subsystem: 'windows', install: true)
 
 # Apple Music's Widevine streams decrypt here, outside the app and without a browser.

@@ -25,7 +25,7 @@
 #include <QJsonObject>
 #include <QString>
 
-// Shared by the WebKitGTK and WebView2 Apple Music sign-in helpers.
+// Shared by the WebKitGTK, WKWebView and WebView2 Apple Music sign-in helpers.
 namespace apple_music_page {
 
 // The developer token's origin claim names this origin; Android serves the same page from it.

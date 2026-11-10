@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
                    });
 
 #ifdef ORCHARD_WEBKIT_AUTH
-  // The page opens its own GTK window; this view only runs the sign-in logic.
+  // The page opens its own native window; this view only runs the sign-in logic.
   auto *page = view.rootObject()->findChild<WebKitView *>();
   if (!page)
     return 1;
