@@ -66,7 +66,7 @@ Item {
     Behavior on fallbackOpacity { NumberAnimation { duration: 500 } }
     property real fallbackRotation: 0
     RotationAnimation on fallbackRotation {
-        running: backdrop.visible && backdrop.playing
+        running: backdrop.visible && backdrop.playing && !OrchardWindowState.idle
         from: 0
         to: 360
         duration: 180000

@@ -65,7 +65,7 @@ Item {
             fragmentShader: "qrc:/shaders/mix_dots.frag.qsb"
 
             NumberAnimation on time {
-                running: root.visible
+                running: root.visible && !OrchardWindowState.idle
                 from: 0
                 to: 600
                 duration: 600000

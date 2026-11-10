@@ -251,7 +251,7 @@ ColumnLayout {
             opacity: controls.mixGlow
 
             NumberAnimation on sweep {
-                running: mixLabel.visible && controls.visible
+                running: mixLabel.visible && controls.visible && !OrchardWindowState.idle
                 from: -2
                 to: 9
                 duration: 1800
