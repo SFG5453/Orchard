@@ -27,15 +27,18 @@
 #include <QUrl>
 
 #include <functional>
+#include <memory>
 
+#ifndef __APPLE__
 typedef struct _WebKitWebContext WebKitWebContext;
+#endif
 
-// Starts GTK for WebKitGTK; call before QGuiApplication. Qt's GLib event loop
+// Call before QGuiApplication. On Linux it starts GTK, and Qt's GLib event loop
 // then runs GTK and WebKit as well.
 void initializeWebKit(int &argc, char **&argv);
 
-// A WebKitGTK browser profile: cookies, storage and cache under Orchard's data
-// folder, or in memory only.
+// A WebKitGTK or WKWebView browser profile: cookies, storage and cache kept by
+// the platform's web engine, or in memory only.
 class WebKitProfile final : public QObject {
   Q_OBJECT
 
@@ -47,7 +50,12 @@ public:
 
   ~WebKitProfile() override;
 
+#ifdef __APPLE__
+  struct Native;
+  Native *native() const { return m_native.get(); }
+#else
   WebKitWebContext *context() const { return m_context; }
+#endif
 
   // Cookies the profile would send to `url`, HttpOnly ones included.
   void cookies(const QUrl &url, std::function<void(const QList<QNetworkCookie> &)> done);
@@ -63,5 +71,9 @@ signals:
 private:
   WebKitProfile(const QString &directory, QObject *parent);
 
+#ifdef __APPLE__
+  std::unique_ptr<Native> m_native;
+#else
   WebKitWebContext *m_context{nullptr};
+#endif
 };

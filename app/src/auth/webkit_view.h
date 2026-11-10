@@ -28,14 +28,18 @@
 #include <QUrl>
 
 #include <functional>
+#include <memory>
 
 class WebKitProfile;
+#ifndef __APPLE__
 typedef struct _GtkWidget GtkWidget;
 typedef struct _WebKitWebView WebKitWebView;
+#endif
 
-// One WebKitGTK page. It runs without a window until show() gives it a GTK one with
-// a header bar, since a GTK widget cannot live inside a Qt Quick scene. Pages post
-// strings to the helper with window.webkit.messageHandlers.orchard.postMessage().
+// One WebKitGTK or WKWebView page. It runs without a window until show() gives it a
+// native one with back and reload controls, since neither view can live inside a Qt
+// Quick scene. Pages post strings to the helper with
+// window.webkit.messageHandlers.orchard.postMessage().
 class WebKitView : public QObject {
   Q_OBJECT
   Q_PROPERTY(QUrl url READ url WRITE setUrl NOTIFY urlChanged)
@@ -88,6 +92,10 @@ signals:
 
 private:
   void sync();
+#ifdef __APPLE__
+  struct Native;
+  std::unique_ptr<Native> m_native;
+#else
   void openPopup(WebKitWebView *popup);
 
   WebKitWebView *m_view{nullptr};
@@ -96,6 +104,7 @@ private:
   GtkWidget *m_backButton{nullptr};
   GtkWidget *m_progressBar{nullptr};
   QList<GtkWidget *> m_popups;
+#endif
   QString m_windowTitle;
   QUrl m_url;
   QString m_title;

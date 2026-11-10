@@ -347,7 +347,7 @@ helper_sources = [
   'app/src/orchard_core.h',
 ]
 
-# Spotify and Apple Music modes; without WebKitGTK they report no sign-in browser.
+# Spotify and Apple Music modes; without WebKitGTK or WKWebView they report no sign-in browser.
 helper_browser_sources = [
   'app/src/auth/spotify_helper.cpp',
   'app/src/auth/apple_music_helper.cpp',
@@ -359,6 +359,16 @@ helper_webkit_sources = [
   'app/src/auth/webkit_profile.h',
   'app/src/auth/webkit_view.cpp',
   'app/src/auth/webkit_view.h',
+]
+
+helper_wkwebview_sources = [
+  'app/src/auth/webkit_mac.h',
+  'app/src/auth/webkit_profile.h',
+  'app/src/auth/webkit_profile_mac.mm',
+  'app/src/auth/webkit_view.h',
+  'app/src/auth/webkit_view_mac.mm',
+  'app/src/auth/webkit_view_mac_delegate.h',
+  'app/src/auth/webkit_view_mac_delegate.mm',
 ]
 
 helper_webkit_moc_headers = [
