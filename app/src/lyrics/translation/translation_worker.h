@@ -35,6 +35,8 @@ public:
   explicit TranslationWorker(std::shared_ptr<std::atomic_int> current);
   // libLiteRt beside the executable, or ORCHARD_LITERT_LIBRARY.
   static QString liteRtLibraryPath();
+  // False where no LiteRT runtime exists for the platform (Intel Macs).
+  static bool localSupported();
   ~TranslationWorker() override;
 
 public slots:

@@ -92,7 +92,10 @@ litert_libdir = 'vendor/litert/lib'
 if host_machine.system() == 'windows'
   configure_file(input: litert_libdir / 'windows/libLiteRt.dll', output: 'libLiteRt.dll', copy: true)
 elif host_machine.system() == 'darwin'
-  configure_file(input: litert_libdir / 'macos/libLiteRt.dylib', output: 'libLiteRt.dylib', copy: true)
+  # LiteRT ships only an arm64 macOS runtime; Intel Macs build without local translation.
+  if host_machine.cpu_family() == 'aarch64'
+    configure_file(input: litert_libdir / 'macos/libLiteRt.dylib', output: 'libLiteRt.dylib', copy: true)
+  endif
 elif host_machine.cpu_family() == 'x86_64'
   configure_file(input: litert_libdir / 'linux/libLiteRt.so', output: 'libLiteRt.so', copy: true)
 endif
@@ -129,7 +132,7 @@ if host_machine.system() == 'linux'
 elif host_machine.system() == 'windows'
   platform_deps += [cpp.find_library('dbghelp'), cpp.find_library('shell32'), cpp.find_library('dwmapi')]
 elif host_machine.system() == 'darwin'
-  platform_deps += [dependency('appleframeworks', modules: ['IOKit', 'CoreFoundation'])]
+  platform_deps += [dependency('appleframeworks', modules: ['IOKit', 'CoreFoundation', 'Foundation', 'AppKit', 'MediaPlayer'])]
 endif
 
 python = find_program('python3')
@@ -373,6 +376,8 @@ qmldir_resources = custom_target('Orchard module manifest', input: qmldir_file,
   command: [python, files('scripts/meson-rcc.py'), '--rcc', rcc,
     '--name', 'orchard_manifest', '--prefix', '/qt/qml/Orchard',
     '--output', '@OUTPUT@', '@INPUT@'])
+# Qt's macOS moc drops QML_ELEMENT once -I<qt>/include repeats, which every Qt module adds.
+qml_moc_dep = host_machine.system() == 'darwin' ? dependency('qt6', modules: ['Core']) : qt_dep
 qml_module = qt6.qml_module('Orchard', version: '1.0',
   qml_sources: qml_wrappers,
   qml_singletons: qml_singletons,
@@ -381,7 +386,7 @@ qml_module = qt6.qml_module('Orchard', version: '1.0',
   moc_headers: qml_type_headers,
   resources_prefix: 'qt/qml',
   include_directories: app_inc,
-  dependencies: [qt_dep])
+  dependencies: [qml_moc_dep])
 exe_moc = qt6.compile_moc(sources: ['app/src/appearance/liquid_glass.cpp'],
   include_directories: app_inc, dependencies: [qt_dep, qt_gui_private])
 

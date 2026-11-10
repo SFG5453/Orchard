@@ -26,7 +26,8 @@ SettingsSection {
     id: root
 
     property bool accountSignedIn: false
-    property var providerValues: accountSignedIn ? ["local", "openai", "claude", "gemini", "custom", "orchard"] : ["local", "openai", "claude", "gemini", "custom"]
+    property bool localSupported: true
+    property var providerValues: (localSupported ? ["local"] : []).concat(["openai", "claude", "gemini", "custom"], accountSignedIn ? ["orchard"] : [])
     property bool translationEnabled: true
     property bool preferApple: false
     property string targetLanguage: "eng"
@@ -87,9 +88,9 @@ SettingsSection {
         SettingsSelect {
             id: providerPicker
             Layout.preferredWidth: 185
-            model: root.accountSignedIn
-                ? [qsTr("Local"), qsTr("OpenAI"), qsTr("Claude"), qsTr("Gemini"), qsTr("Custom API"), qsTr("Orchard Account")]
-                : [qsTr("Local"), qsTr("OpenAI"), qsTr("Claude"), qsTr("Gemini"), qsTr("Custom API")]
+            model: (root.localSupported ? [qsTr("Local")] : []).concat(
+                [qsTr("OpenAI"), qsTr("Claude"), qsTr("Gemini"), qsTr("Custom API")],
+                root.accountSignedIn ? [qsTr("Orchard Account")] : [])
             currentIndex: root.providerValues.indexOf(root.provider)
             displayText: currentIndex < 0 ? qsTr("Choose source") : currentText
             Accessible.name: qsTr("Translation source")

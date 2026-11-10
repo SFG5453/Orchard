@@ -24,6 +24,7 @@ LyricTranslationSettingsForm {
     id: root
 
     accountSignedIn: OrchardAccount.isSignedIn
+    localSupported: OrchardTranslation.localSupported
     translationEnabled: OrchardTranslation.enabled
     targetLanguage: OrchardTranslation.targetLanguage
     quality: OrchardTranslation.quality
