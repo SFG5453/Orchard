@@ -147,6 +147,13 @@ const char *orchard_system_media_last_error(const OrchardSystemMediaHandle *hand
 void orchard_system_media_stop(OrchardSystemMediaHandle *handle);
 void orchard_system_media_destroy(OrchardSystemMediaHandle *handle);
 
+// MSVC requires dllexport on the first declaration, so the module build sets it here.
+#if defined(_WIN32) && defined(ORCHARD_DISCORD_MODULE_BUILD)
+#define ORCHARD_DISCORD_API __declspec(dllexport)
+#else
+#define ORCHARD_DISCORD_API
+#endif
+
 typedef struct OrchardDiscordRpcHandle OrchardDiscordRpcHandle;
 
 typedef void (*OrchardDiscordRpcCallback)(
@@ -155,18 +162,18 @@ typedef void (*OrchardDiscordRpcCallback)(
     uint8_t connected
 );
 
-OrchardDiscordRpcHandle *orchard_discord_rpc_create(
+ORCHARD_DISCORD_API OrchardDiscordRpcHandle *orchard_discord_rpc_create(
     const char *application_id,
     OrchardDiscordRpcCallback callback,
     void *callback_context
 );
-uint8_t orchard_discord_rpc_set_presence(
+ORCHARD_DISCORD_API uint8_t orchard_discord_rpc_set_presence(
     OrchardDiscordRpcHandle *handle,
     const char *payload
 );
-uint8_t orchard_discord_rpc_clear_presence(OrchardDiscordRpcHandle *handle);
-const char *orchard_discord_rpc_last_error(const OrchardDiscordRpcHandle *handle);
-void orchard_discord_rpc_destroy(OrchardDiscordRpcHandle *handle);
+ORCHARD_DISCORD_API uint8_t orchard_discord_rpc_clear_presence(OrchardDiscordRpcHandle *handle);
+ORCHARD_DISCORD_API const char *orchard_discord_rpc_last_error(const OrchardDiscordRpcHandle *handle);
+ORCHARD_DISCORD_API void orchard_discord_rpc_destroy(OrchardDiscordRpcHandle *handle);
 
 #ifdef __cplusplus
 }

@@ -16,6 +16,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
+#define ORCHARD_DISCORD_MODULE_BUILD
 #include "discord_sdk_presence.h"
 #include "orchard_core.h"
 
