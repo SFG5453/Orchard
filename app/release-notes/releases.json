@@ -1,5 +1,41 @@
 [
   {
+    "version": "2.0.3-canary.1",
+    "date": "2026-11-09",
+    "title": "Windows audio and library saving",
+    "sections": [
+      {
+        "title": "Fixes",
+        "items": [
+          "Windows playback no longer stays silent at the start of a song or after resuming while the timeline keeps moving. Fixed by @AlejandroMY190106.",
+          "Local tracks imported on Windows without duration or tag details are probed again when the library opens, restoring their titles and durations.",
+          "Saved Apple Music playlists link to their catalog playlist, so they can be shared. Library-only playlists disable the share button.",
+          "Removing songs, albums, and playlists from the Apple Music library works through the Apple Music web service.",
+          "The sidebar playlist list refreshes after saving or removing an album or playlist."
+        ]
+      },
+      {
+        "title": "Library",
+        "items": [
+          "Album and playlist pages have a save button that adds the album or playlist to your YouTube Music or Apple Music account library, and show whether it is already saved."
+        ]
+      },
+      {
+        "title": "Fullscreen",
+        "items": [
+          "Idle fullscreen lyrics scale smoothly instead of reflowing, and stay sharp on high-DPI displays.",
+          "Fullscreen controls fade and fold in a staggered sequence."
+        ]
+      },
+      {
+        "title": "Performance",
+        "items": [
+          "Reduced memory use: cover artwork and the app logo decode at their displayed size, the sign-in view and playlist picker load on demand, and the Discord SDK loads only when Rich Presence has something to show."
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.0.2-canary.1",
     "date": "2026-11-07",
     "title": "Windows playback",

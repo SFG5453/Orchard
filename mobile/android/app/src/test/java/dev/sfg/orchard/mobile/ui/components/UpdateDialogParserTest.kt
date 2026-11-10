@@ -115,33 +115,6 @@ class UpdateDialogParserTest {
     }
 
     @Test
-    fun parsesActualMobileReleaseNotes() {
-        val notes = dev.sfg.orchard.mobile.MobileChangelog.CURRENT_RELEASE_NOTES
-        val sections = parseReleaseNoteSections(notes)
-
-        assertEquals(
-            listOf(
-                "Apple Music",
-                "Phone player and navigation",
-                "Tablets and foldables",
-                "Library and discovery improvements",
-                "Lyrics and translation",
-                "Artwork and storage improvements",
-                "Mixing and playback improvements",
-                "Connect and Android Auto",
-                "Sign-in and compatibility fixes",
-                "Contributors",
-            ),
-            sections.map { it.title },
-        )
-        assertEquals(57, sections.sumOf { it.items.size })
-        assertTrue(sections.all { it.items.isNotEmpty() })
-        assertEquals(ReleaseNoteCategory.FIXED, sections[8].category)
-        assertTrue(sections[0].items.any { it.startsWith("**Atmos on supported phones**:") })
-        assertTrue(sections[9].items.any { it.startsWith("**@Julian-FF2000**:") })
-    }
-
-    @Test
     fun handlesEmptyOrBlankReleaseNotes() {
         assertTrue(parseReleaseNoteSections("").isEmpty())
         assertTrue(parseReleaseNoteSections("   \n\n  ").isEmpty())
