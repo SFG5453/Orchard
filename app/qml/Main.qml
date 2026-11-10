@@ -87,20 +87,13 @@ Window {
         property real time: 0.0
         property vector2d extent: Qt.vector2d(width, height)
 
-        // One frame per second while idle.
+        // The mesh drifts under 20 px/s, so a few frames a second look the same as
+        // vsync and spare a full-window redraw every frame. One per second when unfocused.
         Timer {
-            running: meshBackground.visible && OrchardWindowState.idle && mainWindow.visible
-            interval: 1000
-            repeat: true
-            onTriggered: meshBackground.time = (meshBackground.time + 1.0) % 1000.0
-        }
-
-        NumberAnimation on time {
             running: meshBackground.visible && !OrchardWindowState.idle && mainWindow.visible
-            loops: Animation.Infinite
-            from: 0.0
-            to: 1000.0
-            duration: 1000000
+            interval: OrchardWindowState.backgroundIdle ? 1000 : 100
+            repeat: true
+            onTriggered: meshBackground.time = (meshBackground.time + interval / 1000) % 1000.0
         }
 
         fragmentShader: "qrc:/shaders/mesh.frag.qsb"
