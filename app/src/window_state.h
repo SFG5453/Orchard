@@ -111,7 +111,9 @@ private:
     QTimer m_unfocusedTimer;
     WindowOcclusion m_occlusion;
     FramelessSnap m_snap;
+#ifdef Q_OS_MACOS
     std::unique_ptr<FullscreenWatch> m_fullscreenWatch;
+#endif
     bool m_idle{false};
     bool m_unfocused{false};
     bool m_backgroundIdle{false};
