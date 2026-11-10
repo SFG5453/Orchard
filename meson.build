@@ -335,9 +335,14 @@ app_moc = qt6.compile_moc(headers: app_moc_headers,
   sources: ['app/src/providers/runtime/provider_runtime.cpp'],
   include_directories: app_inc, dependencies: app_dependencies,
   extra_args: app_args)
-app_lib = static_library('orchard_app', files(app_sources) + app_moc,
+app_platform_sources = []
+if host_machine.system() == 'darwin'
+  add_languages('objcpp', native: false)
+  app_platform_sources += files('app/src/fullscreen_watch_mac.h', 'app/src/fullscreen_watch_mac.mm')
+endif
+app_lib = static_library('orchard_app', files(app_sources) + app_platform_sources + app_moc,
   include_directories: app_inc, dependencies: app_dependencies,
-  cpp_args: app_args, pic: true)
+  cpp_args: app_args, objcpp_args: app_args + ['-std=c++20', '-fobjc-arc'], pic: true)
 app_dep = declare_dependency(link_with: app_lib, include_directories: app_inc,
   dependencies: app_dependencies, compile_args: app_args)
 
