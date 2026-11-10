@@ -70,7 +70,9 @@ LyricsTranslator::LyricsTranslator(LyricsController *lyrics, QObject *parent)
   const QString savedProvider = QSettings().value(kProviderKey).toString();
   if (QStringList{QStringLiteral("orchard"), QStringLiteral("openai"), QStringLiteral("claude"), QStringLiteral("gemini"), QStringLiteral("custom")}.contains(savedProvider))
     m_provider = savedProvider;
-  m_model = QSettings().value(QStringLiteral("lyrics/model/%1").arg(m_provider)).toString();
+  else if (!localSupported())
+    m_provider = QStringLiteral("custom");
+  m_model =QSettings().value(QStringLiteral("lyrics/model/%1").arg(m_provider)).toString();
   m_endpoint = QSettings().value(QStringLiteral("lyrics/customEndpoint")).toString();
   if (m_provider != QStringLiteral("local") && m_provider != QStringLiteral("orchard")) loadApiKey();
 
@@ -155,8 +157,12 @@ void LyricsTranslator::setPreferAppleTranslation(bool prefer) {
   sync();
 }
 
+bool LyricsTranslator::localSupported() { return TranslationWorker::localSupported(); }
+
 void LyricsTranslator::setProvider(const QString &provider) {
   if (!QStringList{QStringLiteral("local"), QStringLiteral("orchard"), QStringLiteral("openai"), QStringLiteral("claude"), QStringLiteral("gemini"), QStringLiteral("custom")}.contains(provider) || m_provider == provider)
+    return;
+  if (provider == QStringLiteral("local") && !localSupported())
     return;
   ++m_keyGeneration;
   m_packs->cancel();

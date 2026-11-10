@@ -2,6 +2,7 @@
 
 """Stage the worker, ORT's Dawn runtime, FFmpeg and model files beside orchard."""
 import argparse
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -37,7 +38,13 @@ for directory in directories:
         if (directory / name).exists():
             shutil.copy2(directory / name, a.destination / name)
             dxc.add(name)
-if not found:
+# A user-built ONNX Runtime has no Dawn; stage its shared libraries beside the worker instead.
+user_ort = os.environ.get("ORT_LIB_LOCATION") or os.environ.get("ORT_LIB_PATH")
+if user_ort:
+    for library in Path(user_ort).glob("libonnxruntime.*"):
+        (a.destination / library.name).unlink(missing_ok=True)
+        shutil.copy2(library, a.destination / library.name, follow_symlinks=False)
+elif not found:
     raise SystemExit("ort's Dawn runtime was not found in Cargo's linker output")
 if a.platform == "windows-x86_64-msvc" and dxc != {"dxil.dll", "dxcompiler.dll"}:
     raise SystemExit("ort's DXC libraries were not found in Cargo's linker output")
@@ -48,6 +55,10 @@ if a.platform in ("windows-x86_64-msvc", "windows-x86_64-gnu"):
     ], check=True)
 worker = "orchard-adaptive-mix" + (".exe" if a.platform.startswith("windows") else "")
 shutil.copy2(a.profile / worker, a.destination / worker)
+if user_ort and a.platform.startswith("macos"):
+    # The worker finds libonnxruntime beside itself; editing the load commands voids its signature.
+    subprocess.run(["install_name_tool", "-add_rpath", "@loader_path", str(a.destination / worker)], check=True)
+    subprocess.run(["codesign", "--force", "--sign", "-", str(a.destination / worker)], check=True)
 # Stage only the validated runtime graphs and their documentation/licenses.
 for relative in ("nirovi/nirovi_fp16.onnx", "nirovi/nirovi_int8.ort", "nirovi/README.md",
                  "syvenu/syvenu.ort", "syvenu/README.md", "syvenu/TRAINING_CREDITS.tsv.gz",

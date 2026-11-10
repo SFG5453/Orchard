@@ -87,7 +87,9 @@
 #include <QTextStream>
 #include <QTimer>
 #include <QUrl>
+#ifndef Q_OS_MACOS
 #include <QVulkanInstance>
+#endif
 #include <chrono>
 #include <cstdlib>
 #include <memory>

@@ -47,6 +47,7 @@ class LyricsTranslator final : public QObject {
   Q_PROPERTY(QString targetLanguage READ targetLanguage WRITE setTargetLanguage NOTIFY targetLanguageChanged)
   // Use Apple Music's own translation for Apple lyrics; the selected provider covers everything else.
   Q_PROPERTY(bool preferAppleTranslation READ preferAppleTranslation WRITE setPreferAppleTranslation NOTIFY providerChanged)
+  Q_PROPERTY(bool localSupported READ localSupported CONSTANT)
   Q_PROPERTY(QString provider READ provider WRITE setProvider NOTIFY providerChanged)
   Q_PROPERTY(QString model READ model WRITE setModel NOTIFY providerChanged)
   Q_PROPERTY(QString endpoint READ endpoint WRITE setEndpoint NOTIFY providerChanged)
@@ -76,6 +77,7 @@ public:
   void setQuality(const QString &quality);
   [[nodiscard]] bool preferAppleTranslation() const { return m_preferApple; }
   void setPreferAppleTranslation(bool prefer);
+  [[nodiscard]] static bool localSupported();
   [[nodiscard]] QString provider() const { return m_provider; }
   void setProvider(const QString &provider);
   [[nodiscard]] QString model() const { return m_model; }

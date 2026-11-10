@@ -47,6 +47,14 @@ QString TranslationWorker::liteRtLibraryPath() {
   return QDir(QCoreApplication::applicationDirPath()).filePath(name);
 }
 
+bool TranslationWorker::localSupported() {
+#if defined(Q_OS_MACOS) && defined(Q_PROCESSOR_X86_64)
+  return false;
+#else
+  return true;
+#endif
+}
+
 TranslationWorker::TranslationWorker(std::shared_ptr<std::atomic_int> current) : m_current(std::move(current)) {}
 
 TranslationWorker::~TranslationWorker() = default;
