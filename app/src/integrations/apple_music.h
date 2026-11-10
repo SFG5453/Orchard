@@ -59,7 +59,7 @@ public:
   QString status() const { return m_status; }
   bool connected() const { return m_status == QStringLiteral("connected"); }
   bool atmosAvailable() const {
-#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+#if defined(Q_OS_LINUX) || defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     return connected();
 #else
     return false;

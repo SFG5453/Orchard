@@ -66,7 +66,7 @@ WidevineClient::~WidevineClient() {
 }
 
 bool WidevineClient::available() {
-#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+#if defined(Q_OS_LINUX) || defined(Q_OS_WIN) || defined(Q_OS_MACOS)
   return QFileInfo(hostPath()).isExecutable() && !findWidevineCdm().isEmpty();
 #else
   return false;

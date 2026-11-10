@@ -35,6 +35,10 @@ QString widevineArch() {
   return QStringLiteral("win_arm64");
 #elif defined(Q_OS_WIN)
   return QStringLiteral("win_x64");
+#elif defined(Q_OS_MACOS) && defined(Q_PROCESSOR_ARM_64)
+  return QStringLiteral("mac_arm64");
+#elif defined(Q_OS_MACOS)
+  return QStringLiteral("mac_x64");
 #elif defined(Q_PROCESSOR_ARM_64)
   return QStringLiteral("linux_arm64");
 #else
@@ -89,8 +93,16 @@ struct Candidate {
   QVersionNumber version;
 };
 
+QString libraryName() {
+#ifdef Q_OS_MACOS
+  return QStringLiteral("libwidevinecdm.dylib");
+#else
+  return QStringLiteral("libwidevinecdm.so");
+#endif
+}
+
 QString bundledRelative() {
-  return QStringLiteral("/_platform_specific/") + widevineArch() + QStringLiteral("/libwidevinecdm.so");
+  return QStringLiteral("/_platform_specific/") + widevineArch() + QLatin1Char('/') + libraryName();
 }
 
 // Chromium component-updater layout: <root>/<version>/_platform_specific/...
@@ -126,22 +138,52 @@ QStringList subdirs(const QString &root) {
 // Chromium browsers, Electron and CEF apps all keep a WidevineCdm folder in their config dir.
 void addConfigDirs(QList<Candidate> &found, const QString &config) {
   QStringList apps = subdirs(config);
-  for (const char *vendor : {"BraveSoftware", "google", "microsoft", "opera"})
+  for (const char *vendor : {"BraveSoftware", "google", "microsoft", "opera", "Google", "Microsoft"})
     apps += subdirs(config + QLatin1Char('/') + QString::fromLatin1(vendor));
   for (const QString &app : apps)
     addVersioned(found, app + QStringLiteral("/WidevineCdm"), bundledRelative());
 }
 
+// Newest copy wins; the license server rejects revoked CDM versions.
+QString newest(const QList<Candidate> &found) {
+  const auto best = std::max_element(found.cbegin(), found.cend(), [](const Candidate &a, const Candidate &b) {
+    return a.version < b.version;
+  });
+  return best == found.cend() ? QString() : best->path;
+}
+
+#ifdef Q_OS_MACOS
+// Chrome bundles the CDM inside its framework and also keeps component-updater copies.
+QString findInstalledCdm() {
+  QList<Candidate> found;
+  const QString home = QDir::homePath();
+  for (const QString &apps : {QStringLiteral("/Applications"), home + QStringLiteral("/Applications")}) {
+    for (const char *framework : {"Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework",
+                                  "Google Chrome Beta.app/Contents/Frameworks/Google Chrome Framework.framework",
+                                  "Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework",
+                                  "Brave Browser.app/Contents/Frameworks/Brave Browser Framework.framework"})
+      addBundled(found, apps + QLatin1Char('/') + QString::fromUtf8(framework) +
+                            QStringLiteral("/Versions/Current/Libraries/WidevineCdm"));
+  }
+  const QString support = home + QStringLiteral("/Library/Application Support");
+  addConfigDirs(found, support);
+  // Firefox and its forks keep the CDM per profile: <profile>/gmp-widevinecdm/<version>/.
+  for (const char *gecko : {"Firefox", "librewolf", "zen", "Waterfox", "Floorp"}) {
+    for (const QString &profile : subdirs(support + QLatin1Char('/') + QString::fromLatin1(gecko) + QStringLiteral("/Profiles")))
+      addVersioned(found, profile + QStringLiteral("/gmp-widevinecdm"), QLatin1Char('/') + libraryName());
+  }
+  return newest(found);
+}
+#else
 // Firefox and its forks keep the CDM per profile: <profile>/gmp-widevinecdm/<version>/.
 void addGeckoRoots(QList<Candidate> &found, const QString &base) {
   for (const char *root : {"/.mozilla/firefox", "/.config/mozilla/firefox", "/.librewolf", "/.config/librewolf",
                            "/.zen", "/.config/zen", "/.waterfox", "/.floorp", "/.config/floorp"}) {
     for (const QString &profile : subdirs(base + QString::fromLatin1(root)))
-      addVersioned(found, profile + QStringLiteral("/gmp-widevinecdm"), QStringLiteral("/libwidevinecdm.so"));
+      addVersioned(found, profile + QStringLiteral("/gmp-widevinecdm"), QLatin1Char('/') + libraryName());
   }
 }
 
-// Newest copy wins; the license server rejects revoked CDM versions.
 QString findInstalledCdm() {
   QList<Candidate> found;
   for (const char *root : {"/opt/google/chrome", "/opt/google/chrome-beta", "/opt/google/chrome-unstable",
@@ -159,11 +201,9 @@ QString findInstalledCdm() {
     addConfigDirs(found, app + QStringLiteral("/config"));
     addGeckoRoots(found, app);
   }
-  const auto newest = std::max_element(found.cbegin(), found.cend(), [](const Candidate &a, const Candidate &b) {
-    return a.version < b.version;
-  });
-  return newest == found.cend() ? QString() : newest->path;
+  return newest(found);
 }
+#endif
 #endif
 
 } // namespace

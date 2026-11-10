@@ -71,6 +71,9 @@ QString AppleMusicStreams::unavailableReason() {
 #elif defined(Q_OS_WIN)
   if (findWidevineCdm().isEmpty())
     return tr("Apple Music playback needs Widevine. Open Microsoft Edge or Google Chrome once so it downloads Widevine, then restart Orchard.");
+#elif defined(Q_OS_MACOS)
+  if (findWidevineCdm().isEmpty())
+    return tr("Apple Music playback needs Widevine. Install Google Chrome or Firefox and play a protected video once, then restart Orchard.");
 #endif
   return tr("Apple Music playback is not available on this system yet.");
 }
