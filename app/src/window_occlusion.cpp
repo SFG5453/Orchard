@@ -28,6 +28,8 @@
 #elif defined(Q_OS_WIN)
 #include <windows.h>
 #include <dwmapi.h>
+#elif defined(Q_OS_MACOS)
+#include "occlusion_watch_mac.h"
 #endif
 
 #if defined(Q_OS_WIN)
@@ -117,6 +119,8 @@ void WindowOcclusion::setWindow(QWindow *window)
 #elif defined(Q_OS_WIN)
     m_timer.start();
     pollWindows();
+#elif defined(Q_OS_MACOS)
+    m_macWatch = std::make_unique<OcclusionWatch>(window, [this](bool occluded) { setOccluded(occluded); });
 #endif
 }
 
