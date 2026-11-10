@@ -42,6 +42,7 @@ class WindowState final : public QObject
     Q_PROPERTY(bool idle READ idle NOTIFY idleChanged)
     Q_PROPERTY(bool unfocused READ unfocused NOTIFY unfocusedChanged)
     Q_PROPERTY(bool backgroundIdle READ backgroundIdle NOTIFY backgroundIdleChanged)
+    Q_PROPERTY(bool artworkIdle READ artworkIdle NOTIFY artworkIdleChanged)
 
 public:
     explicit WindowState(QObject *parent = nullptr);
@@ -60,6 +61,10 @@ public:
     [[nodiscard]] bool unfocused() const { return m_unfocused; }
     // Idle, or unfocused outside fullscreen. Drives the immersive background frame rate.
     [[nodiscard]] bool backgroundIdle() const { return m_backgroundIdle; }
+    // When looping artwork should pause: backgroundIdle, or only minimized/hidden when the
+    // listener keeps artwork running in the background.
+    [[nodiscard]] bool artworkIdle() const { return m_artworkIdle; }
+    void setPauseArtworkInBackground(bool value);
 
 signals:
     void availableGeometryChanged();
@@ -67,6 +72,7 @@ signals:
     void idleChanged();
     void unfocusedChanged();
     void backgroundIdleChanged();
+    void artworkIdleChanged();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -78,6 +84,7 @@ private:
     void setIdle(bool value);
     void setUnfocused(bool value);
     void syncBackgroundIdle();
+    void syncArtworkIdle();
 
     QSettings m_settings;
     QPointer<QWindow> m_window;
@@ -89,6 +96,10 @@ private:
     bool m_idle{false};
     bool m_unfocused{false};
     bool m_backgroundIdle{false};
+    // Minimized, hidden or unexposed; ignores focus and the occlusion heuristic.
+    bool m_hidden{false};
+    bool m_pauseArtworkInBackground{true};
+    bool m_artworkIdle{false};
     bool m_enabled{true};
     int m_width{1360};
     int m_height{820};

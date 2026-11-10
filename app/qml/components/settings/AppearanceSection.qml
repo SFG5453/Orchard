@@ -36,7 +36,7 @@ AppearanceSectionForm {
     artistVideoBackdrop: OrchardAppearance.artistVideoBackdrop
     animatedArtworkEnabled: OrchardAppearance.animatedArtworkEnabled
     animatedCollageEnabled: OrchardAppearance.animatedCollageEnabled
-    artworkSource: OrchardAppearance.artworkSource
+    pauseArtworkInBackground: OrchardAppearance.pauseArtworkInBackground
     immersiveBackground: OrchardAppearance.immersiveBackground
     speed: OrchardAppearance.speed
     intensity: OrchardAppearance.intensity
@@ -60,7 +60,7 @@ AppearanceSectionForm {
     artistVideoSwitch.onToggled: OrchardAppearance.artistVideoBackdrop = artistVideoSwitch.checked
     animatedArtworkSwitch.onToggled: OrchardAppearance.animatedArtworkEnabled = animatedArtworkSwitch.checked
     collageSwitch.onToggled: OrchardAppearance.animatedCollageEnabled = collageSwitch.checked
-    sourcePicker.onPicked: value => OrchardAppearance.artworkSource = value
+    backgroundPauseSwitch.onToggled: OrchardAppearance.pauseArtworkInBackground = backgroundPauseSwitch.checked
     resetOrderButton.onClicked: OrchardAppearance.resetMirrorOrder()
     immersiveSwitch.onToggled: OrchardAppearance.immersiveBackground = immersiveSwitch.checked
     backgroundQualityPicker.onPicked: value => OrchardAppearance.backgroundQuality = value

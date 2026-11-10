@@ -337,6 +337,11 @@ int main(int argc, char *argv[]) {
   localApi.start();
   SystemTray tray(playback.get(), &authManager);
   WindowState windowState;
+  const auto syncArtworkPause = [&] {
+    windowState.setPauseArtworkInBackground(appearance.pauseArtworkInBackground());
+  };
+  syncArtworkPause();
+  QObject::connect(&appearance, &AppearanceSettings::changed, &windowState, syncArtworkPause);
   StartupSettings startup;
   ScreenWakeLock screenWake;
   BootstrapperClient updates;

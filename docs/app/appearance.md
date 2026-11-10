@@ -1,6 +1,6 @@
 ---
 title: Appearance
-summary: Pick an accent color and popup background, adjust interface scaling, show the bitrate, set how the fullscreen player behaves, play music videos behind artist pages, turn animated artwork on or off, set the artwork source order, and tune the immersive background.
+summary: Pick an accent color and popup background, adjust interface scaling, show the bitrate, set how the fullscreen player behaves, play music videos behind artist pages, turn animated artwork on or off, set the mirror order, and tune the immersive background.
 group: Customize
 icon: palette
 keywords:
@@ -30,6 +30,8 @@ keywords:
   - glade
   - canopy
   - mirror order
+  - pause in the background
+  - second monitor
   - speed
   - saturation
   - brightness
@@ -118,7 +120,7 @@ Animated artwork streams moving cover art for supported songs and albums.
 
 Animated artwork is on by default and uses extra network bandwidth. Not every song or album has moving artwork.
 
-On an artist page, hold the pointer over an album card for about half a second. If that album has moving artwork, the cover starts playing in place. Move the pointer away and the cover goes back to the still image. Singles, videos, and playlists do not animate on hover. With the switch off, nothing animates. The Artwork source controls and Mirror query order list are disabled while the switch is off.
+On an artist page, hold the pointer over an album card for about half a second. If that album has moving artwork, the cover starts playing in place. Move the pointer away and the cover goes back to the still image. Singles, videos, and playlists do not animate on hover. With the switch off, nothing animates. The other controls in the group are disabled while the switch is off.
 
 On Android, the full player uses the tall version of an album's moving artwork when one exists. Some tall versions zoom into the cover and blur its lower part. To fix one, open the **⋯** menu in the full player and choose **Show Whole Cover**. Orchard plays the square version instead, or the still cover if there is no square version. The choice is saved for that album's artwork. Choose **Show Tall Cover** to undo it.
 
@@ -131,9 +133,14 @@ Playlists that Orchard shows with a four-cover collage can play moving artwork i
 
 The switch only works while **Enable animated artwork** is on. Orchard checks that each quarter of the cover looks like the artwork of the first four songs with different artwork, in order. A custom cover fails the check and stays still. Those four albums are looked up for motion artwork. Each album that has it plays in its own quarter of the cover. The other quarters stay still. Only the cover on the playlist page animates, not playlist cards.
 
-## Choose the animated artwork source
+## Keep animated artwork moving in the background
 
-The **Artwork source** setting says where motion artwork is fetched from. **Apple Music** is the only source.
+Motion artwork pauses while Orchard is unfocused or covered by another window, and shows a still frame. To keep it moving, for example on a second monitor while you work in another app:
+
+1. Open **Settings**, then **Appearance**.
+2. In the **Animated artwork** group, turn off **Pause in the background**.
+
+The switch is on by default and only works while **Enable animated artwork** is on. With it off, motion artwork and the artist page video still pause while Orchard is minimized or hidden.
 
 ## Change the mirror query order
 
@@ -184,4 +191,4 @@ The **Quality** row in the **Immersive background** group sets how much GPU the 
 
 ## Reset the immersive background controls
 
-Select **Reset controls**. The button restores Speed, Intensity, Saturation, Brightness, and Quality to their defaults. It also turns **Canvas stage** off, turns **Hide controls when idle**, **Pulse with the music**, the three **Lyrics** switches, and **Enable animated artwork** back on, sets the artwork source to Apple Music, restores the default mirror order, and turns **Play a music video behind the artist** off. It leaves **Use artwork background** and **Show audio bitrate** as they are.
+Select **Reset controls**. The button restores Speed, Intensity, Saturation, Brightness, and Quality to their defaults. It also turns **Canvas stage** off, turns **Hide controls when idle**, **Pulse with the music**, the three **Lyrics** switches, **Enable animated artwork**, and **Pause in the background** back on, restores the default mirror order, and turns **Play a music video behind the artist** off. It leaves **Use artwork background** and **Show audio bitrate** as they are.

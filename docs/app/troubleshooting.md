@@ -64,6 +64,7 @@ Select **Try again** in the lyrics view. If the message returns, none of the lyr
 
 1. Turn on **Enable animated artwork** in Settings, Appearance.
 2. Remember that only some songs and albums have moving artwork.
+3. If the cover shows a still frame while Orchard is not the focused window, turn off **Pause in the background** in Settings, Appearance.
 
 If the artwork still does not move, select **Reset mirror order** to try the default mirrors. See [Appearance](appearance.md).
 

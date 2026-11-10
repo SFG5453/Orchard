@@ -47,7 +47,7 @@ static bool verifyScaleControls(QQmlEngine &engine, QTextStream &output) {
       {"showBitrate", false}, {"fullscreenWindowed", false}, {"fullscreenAutoHide", true},
       {"fullscreenPulse", true}, {"lyricsFocusBlur", true},
       {"lyricsDistanceFade", true}, {"lyricsStaggeredScroll", true}, {"artistVideoBackdrop", false}, {"animatedArtworkEnabled", true},
-      {"animatedCollageEnabled", false}, {"artworkSource", "apple_music"},
+      {"animatedCollageEnabled", false}, {"pauseArtworkInBackground", true},
       {"immersiveBackground", false}, {"speed", 1.38}, {"intensity", 0.92},
       {"saturation", 1.24}, {"brightness", 1.0}, {"availableMirrors", QVariantList{}}};
   for (auto it = values.cbegin(); it != values.cend(); ++it)

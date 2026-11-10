@@ -519,6 +519,17 @@ if get_option('tests')
       'app/src/appearance/ui_scaling.cpp') + ui_scaling_moc,
     include_directories: app_inc, dependencies: [qt_test_dep, qt_dep, qt_gui_private])
   test('orchard_ui_scaling', ui_scaling_test, timeout: 120)
+  artwork_pause_moc = qt6.compile_moc(sources: ['tests/artwork_pause_test.cpp'],
+    headers: ['app/src/appearance/appearance_settings.h', 'app/src/window_state.h',
+      'app/src/window_occlusion.h'],
+    include_directories: app_inc, dependencies: [qt_test_dep, qt_dep])
+  artwork_pause_test = executable('orchard_artwork_pause_tests',
+    files('tests/artwork_pause_test.cpp', 'app/src/appearance/appearance_settings.cpp',
+      'app/src/appearance/ui_scaling.cpp', 'app/src/window_state.cpp',
+      'app/src/window_occlusion.cpp') + artwork_pause_moc,
+    include_directories: app_inc, dependencies: [qt_test_dep, qt_dep, qt_gui_private] + platform_deps)
+  test('orchard_artwork_pause', artwork_pause_test, timeout: 30,
+    env: ['QT_QPA_PLATFORM=offscreen'])
   lyrics_providers_moc = qt6.compile_moc(sources: ['tests/lyrics_provider_settings_test.cpp'],
     headers: ['app/src/lyrics/lyrics_provider_settings.h'],
     include_directories: app_inc, dependencies: [qt_test_dep, qt_dep])

@@ -27,7 +27,7 @@ Item {
 
     property url source: ""
     property bool playing: true
-    readonly property bool shouldPlay: playing && visible && !OrchardWindowState.backgroundIdle
+    readonly property bool shouldPlay: playing && visible && !OrchardWindowState.artworkIdle
     // Fraction of the video to skip on first load; intros are often label cards or black.
     property real startAt: 0.22
     property real visibleTop: 0

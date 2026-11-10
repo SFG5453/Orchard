@@ -115,8 +115,8 @@ void WindowState::updateState()
         return;
     const bool minimized = m_window->visibility() == QWindow::Minimized
         || m_window->visibility() == QWindow::Hidden;
-    setIdle(minimized || !m_window->isVisible() || !m_window->isExposed()
-        || m_occlusion.occluded());
+    m_hidden = minimized || !m_window->isVisible() || !m_window->isExposed();
+    setIdle(m_hidden || m_occlusion.occluded());
 
     if (qGuiApp->applicationState() == Qt::ApplicationActive) {
         m_unfocusedTimer.stop();
@@ -149,10 +149,26 @@ void WindowState::syncBackgroundIdle()
 {
     const bool fullscreen = m_window && m_window->visibility() == QWindow::FullScreen;
     const bool value = m_idle || (m_unfocused && !fullscreen);
-    if (value == m_backgroundIdle)
+    if (value != m_backgroundIdle) {
+        m_backgroundIdle = value;
+        emit backgroundIdleChanged();
+    }
+    syncArtworkIdle();
+}
+
+void WindowState::setPauseArtworkInBackground(bool value)
+{
+    m_pauseArtworkInBackground = value;
+    syncArtworkIdle();
+}
+
+void WindowState::syncArtworkIdle()
+{
+    const bool value = m_pauseArtworkInBackground ? m_backgroundIdle : m_hidden;
+    if (value == m_artworkIdle)
         return;
-    m_backgroundIdle = value;
-    emit backgroundIdleChanged();
+    m_artworkIdle = value;
+    emit artworkIdleChanged();
 }
 
 void WindowState::save()

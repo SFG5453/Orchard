@@ -76,7 +76,9 @@ AppearanceSettings::AppearanceSettings(QObject *parent) : QObject(parent) {
     m_artistVideoBackdrop = m_settings.value(QStringLiteral("artistVideoBackdrop"), false).toBool();
     m_animatedArtwork = m_settings.value(QStringLiteral("animatedArtworkEnabled"), true).toBool();
     m_animatedCollage = m_settings.value(QStringLiteral("animatedCollageEnabled"), false).toBool();
-    m_artworkSource = m_settings.value(QStringLiteral("artworkSource"), QStringLiteral("apple_music")).toString();
+    m_pauseArtworkInBackground = m_settings.value(QStringLiteral("pauseArtworkInBackground"), true).toBool();
+    // Retired key: motion artwork has a single source.
+    m_settings.remove(QStringLiteral("artworkSource"));
     const QStringList savedMirrors = m_settings.value(QStringLiteral("mirrorOrder")).toStringList();
     if (m_settings.value(QStringLiteral("accentMode")).toString() == QLatin1String("artwork"))
         m_accentMode = QStringLiteral("artwork");
@@ -172,11 +174,10 @@ void AppearanceSettings::setAnimatedCollageEnabled(bool value) {
     emit changed();
 }
 
-void AppearanceSettings::setArtworkSource(const QString &value) {
-    const QString cleaned = value.trimmed().isEmpty() ? QStringLiteral("apple_music") : value.trimmed();
-    if (cleaned == m_artworkSource) return;
-    m_artworkSource = cleaned;
-    m_settings.setValue(QStringLiteral("artworkSource"), cleaned);
+void AppearanceSettings::setPauseArtworkInBackground(bool value) {
+    if (value == m_pauseArtworkInBackground) return;
+    m_pauseArtworkInBackground = value;
+    m_settings.setValue(QStringLiteral("pauseArtworkInBackground"), value);
     emit changed();
 }
 
@@ -222,16 +223,6 @@ QStringList AppearanceSettings::sanitizeMirrorOrder(const QStringList &order) co
         }
     }
     return sanitized;
-}
-
-QVariantList AppearanceSettings::availableSources() const {
-    return QVariantList{
-        QVariantMap{
-            {QStringLiteral("id"), QStringLiteral("apple_music")},
-            {QStringLiteral("name"), QStringLiteral("Apple Music")},
-            {QStringLiteral("description"), QStringLiteral("High-resolution animated cover artwork from Apple Music")}
-        }
-    };
 }
 
 QVariantList AppearanceSettings::availableMirrors() const {
@@ -343,7 +334,7 @@ void AppearanceSettings::reset() {
     setArtistVideoBackdrop(false);
     setAnimatedArtworkEnabled(true);
     setAnimatedCollageEnabled(false);
-    setArtworkSource(QStringLiteral("apple_music"));
+    setPauseArtworkInBackground(true);
     resetMirrorOrder();
 }
 

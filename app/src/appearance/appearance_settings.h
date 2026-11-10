@@ -49,9 +49,8 @@ class AppearanceSettings final : public QObject {
     Q_PROPERTY(bool artistVideoBackdrop READ artistVideoBackdrop WRITE setArtistVideoBackdrop NOTIFY changed)
     Q_PROPERTY(bool animatedArtworkEnabled READ animatedArtworkEnabled WRITE setAnimatedArtworkEnabled NOTIFY changed)
     Q_PROPERTY(bool animatedCollageEnabled READ animatedCollageEnabled WRITE setAnimatedCollageEnabled NOTIFY changed)
-    Q_PROPERTY(QString artworkSource READ artworkSource WRITE setArtworkSource NOTIFY changed)
+    Q_PROPERTY(bool pauseArtworkInBackground READ pauseArtworkInBackground WRITE setPauseArtworkInBackground NOTIFY changed)
     Q_PROPERTY(QStringList mirrorOrder READ mirrorOrder WRITE setMirrorOrder NOTIFY changed)
-    Q_PROPERTY(QVariantList availableSources READ availableSources CONSTANT)
     Q_PROPERTY(QVariantList availableMirrors READ availableMirrors NOTIFY changed)
     Q_PROPERTY(QString accentMode READ accentMode WRITE setAccentMode NOTIFY themeChanged)
     Q_PROPERTY(QColor accentColor READ accentColor WRITE setAccentColor NOTIFY themeChanged)
@@ -88,9 +87,8 @@ public:
     bool artistVideoBackdrop() const { return m_artistVideoBackdrop; }
     bool animatedArtworkEnabled() const { return m_animatedArtwork; }
     bool animatedCollageEnabled() const { return m_animatedCollage; }
-    QString artworkSource() const { return m_artworkSource; }
+    bool pauseArtworkInBackground() const { return m_pauseArtworkInBackground; }
     QStringList mirrorOrder() const { return m_mirrorOrder; }
-    QVariantList availableSources() const;
     QVariantList availableMirrors() const;
     QString accentMode() const { return m_accentMode; }
     QColor accentColor() const { return m_accentColor; }
@@ -125,7 +123,7 @@ public:
     void setArtistVideoBackdrop(bool value);
     void setAnimatedArtworkEnabled(bool value);
     void setAnimatedCollageEnabled(bool value);
-    void setArtworkSource(const QString &value);
+    void setPauseArtworkInBackground(bool value);
     void setMirrorOrder(const QStringList &value);
     void setAccentMode(const QString &value);
     void setAccentColor(const QColor &value);
@@ -178,7 +176,8 @@ private:
     bool m_animatedArtwork{true};
     // Four videos at once: off by default, because your GPU didn't sign up for a lava lamp.
     bool m_animatedCollage{false};
-    QString m_artworkSource{QStringLiteral("apple_music")};
+    // Off keeps loops running while the window is unfocused or reported as covered.
+    bool m_pauseArtworkInBackground{true};
     // Mirror order: because if one mirror stumbles, the other one better catch the falling MP4.
     QStringList m_mirrorOrder{QStringLiteral("m8tec"), QStringLiteral("boidu"), QStringLiteral("spotify")};
     // "custom" uses m_accentColor; "artwork" follows the playing cover and falls back to it.

@@ -42,7 +42,7 @@ ColumnLayout {
     property bool artistVideoBackdrop: false
     property bool animatedArtworkEnabled: true
     property bool animatedCollageEnabled: false
-    property string artworkSource: "apple_music"
+    property bool pauseArtworkInBackground: true
     property bool immersiveBackground: true
     property real speed: 1
     property real intensity: 0.8
@@ -63,7 +63,7 @@ ColumnLayout {
     property alias artistVideoSwitch: artistVideoSwitch
     property alias animatedArtworkSwitch: animatedArtworkSwitch
     property alias collageSwitch: collageSwitch
-    property alias sourcePicker: sourcePicker
+    property alias backgroundPauseSwitch: backgroundPauseSwitch
     property alias resetOrderButton: resetOrderButton
     property alias immersiveSwitch: immersiveSwitch
     property alias backgroundQualityPicker: backgroundQualityPicker
@@ -345,14 +345,15 @@ ColumnLayout {
 
         SettingsRow {
             enabled: root.animatedArtworkEnabled
-            iconName: "compass"
-            title: qsTr("Artwork source")
-            description: qsTr("Where motion artwork is fetched from.")
+            iconName: "pause"
+            title: qsTr("Pause in the background")
+            description: qsTr("Pause motion artwork while Orchard is unfocused or covered by another window. Turn off to keep it moving, for example on a second monitor.")
 
-            SettingsSegmented {
-                id: sourcePicker
-                currentValue: root.artworkSource
-                model: [{ value: "apple_music", label: qsTr("Apple Music"), name: qsTr("Apple Music source") }]
+            SettingsSwitch {
+                id: backgroundPauseSwitch
+                objectName: "artworkBackgroundPauseToggle"
+                checked: root.pauseArtworkInBackground
+                Accessible.name: qsTr("Pause motion artwork in the background")
             }
         }
 

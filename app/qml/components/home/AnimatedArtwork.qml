@@ -29,7 +29,7 @@ Item {
     property url source: ""
     property real radius: 0
     property bool playing: true
-    readonly property bool shouldPlay: playing && visible && !OrchardWindowState.backgroundIdle
+    readonly property bool shouldPlay: playing && visible && !OrchardWindowState.artworkIdle
     property int fillMode: VideoOutput.PreserveAspectCrop
 
     readonly property bool hasVideo: Boolean(source && source.toString().length > 0)
