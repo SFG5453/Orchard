@@ -130,7 +130,7 @@ private:
   // After an underrun, audio goes out as it arrives: waiting to re-prime
   // leaves the speakers silent while the player clock keeps running.
 #ifdef Q_OS_WIN
-  static constexpr qint64 kPrimeFrames = 19200;
+  static constexpr qint64 kPrimeFrames = 7200;
   static constexpr qint64 kSinkFrames = 48000;
 #else
   static constexpr qint64 kPrimeFrames = 7200;
