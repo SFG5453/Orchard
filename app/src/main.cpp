@@ -63,6 +63,9 @@
 #include "support/support_center.h"
 #include "system_media_bridge.h"
 #include "system_tray.h"
+#ifdef Q_OS_MACOS
+#include "mac_menus.h"
+#endif
 #include "startup_settings.h"
 #include "update/bootstrapper_client.h"
 #include "window_state.h"
@@ -336,6 +339,9 @@ int main(int argc, char *argv[]) {
                     &appleMusic, &catalogSource, &offlineLibrary, libraryActions.get(), &connectService);
   localApi.start();
   SystemTray tray(playback.get(), &authManager);
+#ifdef Q_OS_MACOS
+  MacMenus macMenus(playback.get());
+#endif
   WindowState windowState;
   const auto syncArtworkPause = [&] {
     windowState.setPauseArtworkInBackground(appearance.pauseArtworkInBackground());
@@ -423,6 +429,9 @@ int main(int argc, char *argv[]) {
 
   if (auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().constFirst())) {
     tray.setWindow(window);
+#ifdef Q_OS_MACOS
+    macMenus.setWindow(window);
+#endif
     windowState.setWindow(window);
 #ifdef Q_OS_WIN
     systemMedia.start(window->winId());
