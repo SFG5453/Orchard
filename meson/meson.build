@@ -7,6 +7,8 @@ app_sources = [
   'app/src/account/orchard_account.cpp',
   'app/src/account/orchard_account.h',
   'app/src/appearance/appearance_settings.cpp',
+  'app/src/appearance/lucide_icon_provider.cpp',
+  'app/src/appearance/lucide_icon_provider.h',
   'app/src/appearance/ui_scaling.cpp',
   'app/src/appearance/ui_scaling.h',
   'app/src/appearance/video_ambient.cpp',

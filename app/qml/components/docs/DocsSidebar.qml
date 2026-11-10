@@ -308,7 +308,6 @@ ColumnLayout {
                         name: row.isGroup ? "" : row.entry.icon
                         color: item.current ? OrchardAppearance.accentStrong : "#a4aaa1"
                         scale: item.current ? 1.1 : 1.0
-                        Behavior on color { ColorAnimation { duration: 140 } }
                         Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutBack } }
                     }
                     ColumnLayout {

@@ -32,6 +32,7 @@
 #include "appearance/appearance_settings.h"
 #include "appearance/ui_scaling.h"
 #include "appearance/animated_artwork_service.h"
+#include "appearance/lucide_icon_provider.h"
 #include "appearance/artwork_video_cache.h"
 #include "app_icon.h"
 #include "heap_trim.h"
@@ -377,6 +378,7 @@ int main(int argc, char *argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardSupport"), &support);
   // The engine owns the provider; support outlives the engine.
   engine.addImageProvider(QStringLiteral("support"), new SupportImageProvider(&support));
+  engine.addImageProvider(QStringLiteral("lucide"), new LucideIconProvider);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardHome"),
                                            homeController.get());
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardSearch"),

@@ -214,10 +214,6 @@ Item {
                         height: 19
                         name: nav.modelData.icon
                         color: root.currentPage === nav.modelData.key ? OrchardAppearance.accent : "#c1c7ca"
-
-                        Behavior on color {
-                            ColorAnimation { duration: Motion.normal }
-                        }
                     }
 
                     Text {
