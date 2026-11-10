@@ -30,6 +30,9 @@ Window {
 
     property bool troubleModalOpen: false
     readonly property bool nativeWindowFrame: Qt.platform.os === "windows" && OrchardWindowState.systemTitleBar
+    // macOS keeps a titled window with the content under a transparent titlebar, so the
+    // traffic lights, edge resizing and fullscreen stay native.
+    readonly property bool macWindowFrame: Qt.platform.os === "osx"
     // Height the floating player overlaps at the bottom of scrolling pages.
     property real playerInset: 0
 
@@ -51,7 +54,9 @@ Window {
             mainWindow.showMaximized();
     }
     color: "#0d0f12"
-    flags: nativeWindowFrame ? Qt.Window : Qt.Window | Qt.FramelessWindowHint
+    flags: nativeWindowFrame ? Qt.Window
+        : macWindowFrame ? Qt.Window | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint
+        : Qt.Window | Qt.FramelessWindowHint
     onClosing: close => {
         // Closing to the tray keeps the music going; the tray menu holds the real exit.
         if (OrchardTray.available && OrchardTray.closeToTray && OrchardAuth.isSignedIn) {
@@ -127,7 +132,7 @@ Window {
         anchors.top: parent.top
         targetWindow: mainWindow
         z: 10
-        visible: OrchardWindowState.showWindowButtons && (!mainWindow.nativeWindowFrame || mainWindow.visibility === Window.FullScreen) && reveal > 0.01
+        visible: OrchardWindowState.showWindowButtons && !mainWindow.macWindowFrame && (!mainWindow.nativeWindowFrame || mainWindow.visibility === Window.FullScreen) && reveal > 0.01
         autoHide: mainWindow.visibility === Window.FullScreen && homeShell.item !== null && homeShell.item.fullscreenOpen
     }
 
@@ -258,7 +263,7 @@ Window {
     // Above everything, including window controls, so edges stay grabbable.
     WindowResizeHandles {
         targetWindow: mainWindow
-        enabled: !mainWindow.nativeWindowFrame
+        enabled: !mainWindow.nativeWindowFrame && !mainWindow.macWindowFrame
         z: 100
     }
 }

@@ -26,6 +26,7 @@
 
 #ifdef Q_OS_MACOS
 #include "fullscreen_watch_mac.h"
+#include "window_chrome_mac.h"
 #endif
 
 namespace {
@@ -106,7 +107,13 @@ void WindowState::setWindow(QWindow *window)
     m_snap.attach(window);
     m_snap.setActive(!m_systemTitleBar);
 #ifdef Q_OS_MACOS
-    m_fullscreenWatch = std::make_unique<FullscreenWatch>(window, [this] { emit fullscreenExited(); });
+    // Qt restores the titlebar material when the window leaves fullscreen.
+    useTransparentTitlebar(window);
+    connect(window, &QWindow::visibilityChanged, this, [window] { useTransparentTitlebar(window); });
+    m_fullscreenWatch = std::make_unique<FullscreenWatch>(window, [this, window] {
+        useTransparentTitlebar(window);
+        emit fullscreenExited();
+    });
 #endif
     updateState();
 }

@@ -338,7 +338,9 @@ app_moc = qt6.compile_moc(headers: app_moc_headers,
 app_platform_sources = []
 if host_machine.system() == 'darwin'
   add_languages('objcpp', native: false)
-  app_platform_sources += files('app/src/fullscreen_watch_mac.h', 'app/src/fullscreen_watch_mac.mm')
+  app_platform_sources += files('app/src/fullscreen_watch_mac.h', 'app/src/fullscreen_watch_mac.mm',
+    'app/src/occlusion_watch_mac.h', 'app/src/occlusion_watch_mac.mm',
+    'app/src/window_chrome_mac.h', 'app/src/window_chrome_mac.mm')
 endif
 app_lib = static_library('orchard_app', files(app_sources) + app_platform_sources + app_moc,
   include_directories: app_inc, dependencies: app_dependencies,
