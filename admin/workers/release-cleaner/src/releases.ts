@@ -1,6 +1,8 @@
 const HASH = /^[0-9a-f]{64}$/;
 const MANIFEST_KEY = /^manifests\/[A-Za-z0-9._-]+\.json$/;
 const OBJECT_KEY = /^objects\/[0-9a-f]{64}$/;
+// Unsigned release notes published beside each channel; they reference nothing.
+const NOTES_KEY = /^releases\/[A-Za-z0-9._-]+-notes\.json$/;
 const MAX_CHANNELS = 32;
 const MAX_MANIFESTS = 400;
 const MAX_CHANNEL_BYTES = 1 << 20;
@@ -134,7 +136,10 @@ export interface Inventory {
 
 // The bucket has no crystal ball for old installs; every current channel stays protected.
 export async function inventory(bucket: R2Bucket): Promise<Inventory> {
-  const channelObjects = await listAll(bucket, "releases/", MAX_CHANNELS);
+  const channelObjects = (await listAll(bucket, "releases/", 2 * MAX_CHANNELS))
+    .filter((entry) => !NOTES_KEY.test(entry.key));
+  if (channelObjects.length > MAX_CHANNELS)
+    throw new BadBucket(`Too many releases/ entries (limit ${MAX_CHANNELS}); cleanup stopped`);
   if (channelObjects.length === 0) throw new BadBucket("No release channels found; cleanup stopped");
   const manifests = await listAll(bucket, "manifests/", MAX_MANIFESTS);
   const known = new Set(manifests.map((entry) => entry.key));

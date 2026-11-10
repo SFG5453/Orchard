@@ -99,6 +99,15 @@ test("every live channel is protected, and a changed channel invalidates an old 
   await assert.rejects(liveHashes(bucket as never, state), /Release channel changed during scan/);
 });
 
+test("release notes beside a channel are skipped", async () => {
+  const bucket = fixture();
+  bucket.put("releases/canary-notes.json", JSON.stringify([{ version: "2.0.0-canary.1", archPackage: "orchard.pkg.tar.zst" }]));
+  const state = await inventory(bucket as never);
+  assert.deepEqual(state.channels, ["releases/stable.json"]);
+  assert.deepEqual(state.channelDetails.map(({ name }) => name), ["stable"]);
+  await liveHashes(bucket as never, state);
+});
+
 test("objects need a minimum age, even when unreferenced", () => {
   assert.equal(isOldEnough(new Date("2026-10-01T00:00:00Z"), 7, Date.parse("2026-10-07T00:00:00Z")), false);
   assert.equal(isOldEnough(new Date("2026-09-30T00:00:00Z"), 7, Date.parse("2026-10-07T00:00:00Z")), true);
