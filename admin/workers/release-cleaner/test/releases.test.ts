@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
-import { BadBucket, channelReferences, inventory, isOldEnough, liveHashes, manifestHashes, signedPayload } from "../src/releases.ts";
+import { BadBucket, channelReferences, inventory, isOldEnough, liveHashes, manifestHashes, objectAgeDays, signedPayload } from "../src/releases.ts";
 
 const old = new Date("2026-08-01T00:00:00Z");
 const hash = (letter: string) => letter.repeat(64);
@@ -112,4 +112,8 @@ test("objects need a minimum age, even when unreferenced", () => {
   assert.equal(isOldEnough(new Date("2026-10-01T00:00:00Z"), 7, Date.parse("2026-10-07T00:00:00Z")), false);
   assert.equal(isOldEnough(new Date("2026-09-30T00:00:00Z"), 7, Date.parse("2026-10-07T00:00:00Z")), true);
   assert.equal(signedPayload(envelope({ channel: "stable" }), "channel").channel, "stable");
+  assert.equal(objectAgeDays("0"), 0);
+  assert.equal(isOldEnough(new Date("2026-10-07T00:00:00Z"), 0, Date.parse("2026-10-07T00:00:00Z")), true);
+  assert.throws(() => objectAgeDays("-1"), BadBucket);
+  assert.throws(() => objectAgeDays("366"), BadBucket);
 });

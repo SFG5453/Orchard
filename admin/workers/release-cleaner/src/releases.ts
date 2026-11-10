@@ -205,7 +205,7 @@ export function isOldEnough(uploaded: Date, days: number, now = Date.now()): boo
 
 export function objectAgeDays(value: string): number {
   const days = Number(value);
-  if (!Number.isSafeInteger(days) || days < 1 || days > 365)
-    throw new BadBucket("MIN_OBJECT_AGE_DAYS must be an integer from 1 to 365");
+  if (!Number.isSafeInteger(days) || days < 0 || days > 365)
+    throw new BadBucket("MIN_OBJECT_AGE_DAYS must be an integer from 0 to 365");
   return days;
 }
