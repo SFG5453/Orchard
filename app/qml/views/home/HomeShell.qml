@@ -64,6 +64,7 @@ Item {
     function openDocs(page) { overlays.openDocs(page); }
     function openSupport(reportId) { overlays.openSupport(reportId); }
     function openSpotlight(query) { overlays.openSpotlight(query); }
+    function toggleWindowFullscreen() { overlays.toggleWindowFullscreen(); }
 
     function navigateTo(page) {
         searchDebounce.stop();

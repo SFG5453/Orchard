@@ -339,6 +339,7 @@ app_platform_sources = []
 if host_machine.system() == 'darwin'
   add_languages('objcpp', native: false)
   app_platform_sources += files('app/src/fullscreen_watch_mac.h', 'app/src/fullscreen_watch_mac.mm',
+    'app/src/mac_menus.h', 'app/src/mac_menus.cpp',
     'app/src/occlusion_watch_mac.h', 'app/src/occlusion_watch_mac.mm',
     'app/src/window_chrome_mac.h', 'app/src/window_chrome_mac.mm')
 endif

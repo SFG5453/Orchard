@@ -36,6 +36,17 @@ Window {
     // Height the floating player overlaps at the bottom of scrolling pages.
     property real playerInset: 0
 
+    // The macOS menu bar calls these on the window.
+    function openSettings() {
+        if (homeShell.item && homeShell.visible)
+            homeShell.item.openSettings();
+    }
+
+    function toggleFullScreen() {
+        if (homeShell.item && homeShell.visible)
+            homeShell.item.toggleWindowFullscreen();
+    }
+
     function toggleMaximized() {
         if (mainWindow.visibility === Window.Maximized)
             mainWindow.showNormal();
