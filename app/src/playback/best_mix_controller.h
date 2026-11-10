@@ -8,6 +8,7 @@
 #include <QNetworkAccessManager>
 #include <QObject>
 #include <QPointer>
+#include <QProcess>
 #include <QSet>
 #include <QSqlDatabase>
 #include <QVariantList>
@@ -17,7 +18,6 @@ class AuthManager;
 class CatalogSource;
 class YouTubeProvider;
 class QNetworkReply;
-class QProcess;
 class QSaveFile;
 
 class BestMixController final : public QObject {

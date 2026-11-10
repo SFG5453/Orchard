@@ -126,16 +126,15 @@ private:
   // The render fades into native incoming playback over its last 5 ms.
   static constexpr qint64 kHandoffFade = 256;
   // Decoders deliver in real time, so the prime is the only cushion against
-  // stalls on this thread. WASAPI has no server-side buffer to absorb them,
-  // and re-priming after an underrun rebuilds the cushion.
+  // stalls on this thread. WASAPI has no server-side buffer to absorb them.
+  // After an underrun, audio goes out as it arrives: waiting to re-prime
+  // leaves the speakers silent while the player clock keeps running.
 #ifdef Q_OS_WIN
   static constexpr qint64 kPrimeFrames = 19200;
   static constexpr qint64 kSinkFrames = 48000;
-  static constexpr bool kReprimeOnUnderrun = true;
 #else
   static constexpr qint64 kPrimeFrames = 7200;
   static constexpr qint64 kSinkFrames = 12000;
-  static constexpr bool kReprimeOnUnderrun = false;
 #endif
   static constexpr int kSinkRetryMinMs = 250;
   static constexpr int kSinkRetryMaxMs = 5000;

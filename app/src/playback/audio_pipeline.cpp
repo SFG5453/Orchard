@@ -217,8 +217,6 @@ void AudioPipeline::onSinkStateChanged(QtAudio::State state) {
             << (m_crossfadeActive ? "ms after mix start" : "ms after handoff");
   else
     qInfo() << "Playback: output underrun, pending" << m_pending.size() / kFrameBytes << "frames";
-  if (kReprimeOnUnderrun)
-    m_primed = false;
 }
 
 void AudioPipeline::flush() {
