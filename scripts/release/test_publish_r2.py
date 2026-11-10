@@ -21,13 +21,14 @@ VERSION = "0.3.0-canary.1"
 class RecordingR2:
     def __init__(self, fail_at=None):
         self.keys = []
+        self.bodies = {}
         self.fail_at = fail_at
 
     def put_object(self, *, Bucket, Key, Body, **_kwargs):
         if Key == self.fail_at:
             raise RuntimeError("simulated R2 write failure")
         self.keys.append(Key)
-        Body.read()
+        self.bodies[Key] = Body.read()
 
 
 class PublishTest(unittest.TestCase):
@@ -85,6 +86,13 @@ class PublishTest(unittest.TestCase):
         self.assertIn(f"downloads/canary/{VERSION}/Orchard-Linux-x86_64.AppImage", store.keys)
         self.assertIn(f"downloads/canary/{VERSION}/Orchard-Windows-x86_64.7z", store.keys)
         self.assertIn(f"downloads/canary/{VERSION}/{self.paths[3].name}", store.keys)
+
+    def test_notes_name_the_arch_package_before_the_channel_moves(self):
+        store = RecordingR2()
+        self.run_publish(store)
+        self.assertEqual(store.keys[-2], "releases/canary-notes.json")
+        notes = json.loads(store.bodies["releases/canary-notes.json"])
+        self.assertEqual(notes[0]["archPackage"], self.paths[3].name)
 
     def test_release_requires_the_published_bootstrapper(self):
         self.run_publish(RecordingR2())

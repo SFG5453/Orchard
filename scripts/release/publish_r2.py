@@ -92,6 +92,8 @@ def publish(s3, bucket: str, channel: str, linux_tree: Path, windows_tree: Path,
     notes = json.loads((ROOT / "app/release-notes/releases.json").read_text())
     if not notes or notes[0]["version"] != version:
         raise ValueError("The newest bundled release notes must match the app version")
+    # makepkg names embed the built commit, so only publish can know the Arch file name.
+    notes[0]["archPackage"] = arch_package.name
     if (channel == "canary") != ("-canary" in version):
         raise ValueError(f"Version {version} does not belong on the {channel} channel")
     for path in (linux_tree, windows_tree, linux_appimage, arch_package, windows_archive,
@@ -153,6 +155,10 @@ def publish(s3, bucket: str, channel: str, linux_tree: Path, windows_tree: Path,
                            ("Orchard-Windows-x86_64.7z", windows_archive)):
             key = f"downloads/{channel}/{version}/{name}"
             put_file(s3, bucket, key, path, "public, max-age=31536000, immutable")
+        notes_key = f"releases/{channel}-notes.json"
+        (out / notes_key).parent.mkdir(parents=True, exist_ok=True)
+        (out / notes_key).write_text(json.dumps(notes, indent=2, ensure_ascii=False) + "\n")
+        put_file(s3, bucket, notes_key, out / notes_key, "no-store, max-age=0")
         put_file(s3, bucket, current_key, out / current_key, "no-store, max-age=0")
         print(f"Published {channel} {version}: {len(objects)} new objects and both manifests")
 
