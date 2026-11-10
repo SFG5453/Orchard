@@ -563,13 +563,17 @@ export function createSearchUtils({
     }));
   }
 
+  // Fold Latin accents so "Yoü" matches "You". Mixed-script titles keep only their
+  // Latin part; fully non-Latin titles keep their own letters instead of going blank.
   function normalizedLookupText(value = '') {
-    return String(value)
+    const text = String(value)
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .normalize('NFC')
       .toLowerCase()
       .replace(/\([^)]*(official|video|visualizer|lyrics?|audio|remaster|hd|4k)[^)]*\)/gi, '')
-      .replace(/\[[^\]]*(official|video|visualizer|lyrics?|audio|remaster|hd|4k)[^\]]*\]/gi, '')
-      .replace(/[^a-z0-9]+/g, ' ')
-      .trim();
+      .replace(/\[[^\]]*(official|video|visualizer|lyrics?|audio|remaster|hd|4k)[^\]]*\]/gi, '');
+    return text.replace(/[^a-z0-9]+/g, ' ').trim() || text.replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   }
 
   return {

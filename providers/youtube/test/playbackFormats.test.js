@@ -25,6 +25,7 @@ import {
   playbackAudioBitrate,
   rawPlayableAudioFormats
 } from '../src/playback/playbackFormats.js';
+import { createSearchUtils } from '../src/catalog/searchUtils.js';
 
 test('selects YouTube HE-AAC audio when Chromium reports support', () => {
   const heAac = { itag: 139, mime_type: 'audio/mp4; codecs="mp4a.40.5"', bitrate: 48_000 };
@@ -179,4 +180,19 @@ test('selects appropriate audio formats across quality tiers', () => {
     { mimeType: 'audio/mp4; codecs="mp4a.40.2"', support: 'probably' }
   ], { streamQuality: 'saver' });
   assert.equal(restricted.itag, 249);
+});
+
+// Issue 250: "Yoü And I" lost its ü, missed "You And I" and fell back to the longer video.
+test('matches album audio across accents and fully non-Latin titles', async () => {
+  const { normalizedLookupText } = createSearchUtils({});
+  const preferredAudioTrack = createPreferredAudioTrack({ normalizedLookupText, shelfItems: (items) => items });
+  const pick = (target, songs) => preferredAudioTrack({ music: { search: async () => ({ songs }) } },
+    { ...target, preferAudioOnly: true, musicVideoType: 'MUSIC_VIDEO_TYPE_OMV' });
+  assert.equal(await pick({ videoId: 'gaga-video', title: 'Yoü And I', artist: 'Lady Gaga', duration: '5:08' }, [
+    { id: 'gaga-audio', title: 'You And I', artist: 'Lady Gaga', duration: '5:08', isAudioOnly: true }
+  ]), 'gaga-audio');
+  assert.equal(await pick({ videoId: 'idol-video', title: 'アイドル', artist: 'YOASOBI', duration: '3:34' }, [
+    { id: 'other-audio', title: 'ハルカ', artist: 'YOASOBI', duration: '3:34', isAudioOnly: true },
+    { id: 'idol-audio', title: 'アイドル', artist: 'YOASOBI', duration: '3:34', isAudioOnly: true }
+  ]), 'idol-audio');
 });
