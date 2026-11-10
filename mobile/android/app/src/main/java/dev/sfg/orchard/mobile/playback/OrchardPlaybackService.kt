@@ -117,7 +117,7 @@ class OrchardPlaybackService : MediaLibraryService() {
         nowPlaying = NowPlayingPublisher(graph, handler, ioScope, streamCache, streams::cached, streams::atmosBitrateKbps) {
             if (::player.isInitialized) player else null
         }
-        recovery = PlaybackRecovery(streamResolver, streams, graph::postWarning)
+        recovery = PlaybackRecovery(streamResolver, streams, graph::postWarning, streamCache::evict)
         // Caching finishes seconds after the player events that asked for it, so completion has
         // to re-drive prefetch itself, on the main thread because that reads player state.
         streamCache.onCached = {

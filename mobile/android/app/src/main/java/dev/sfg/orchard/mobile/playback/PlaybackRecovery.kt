@@ -31,6 +31,7 @@ internal class PlaybackRecovery(
     private val resolver: YouTubeStreamResolver,
     private val streams: PlayerStreams,
     private val postWarning: (String) -> Unit,
+    private val evictCached: (android.net.Uri) -> Unit,
 ) {
     /** Stream refreshes already spent per media id, cleared when the queue moves on. */
     private val retried = mutableMapOf<String, Int>()
@@ -61,6 +62,23 @@ internal class PlaybackRecovery(
             Log.w(TAG, "Atmos playback failed; continuing in stereo", error)
             replace(player, MediaItemMapper.asAppleStereoFallback(failedItem), player.currentPosition.coerceAtLeast(0), player.playWhenReady)
             postWarning("Atmos unavailable. Continuing in stereo.")
+            return
+        }
+        // Unparseable bytes usually come from the disk cache, which a cache hit serves without
+        // resolving, so the checks below would give up and the song would fail on every play.
+        if (error.errorCode in UNREADABLE_MEDIA) {
+            streams.forget(failedUri.toString())
+            resolver.resetForRetry(sourceId)
+            evictCached(failedUri)
+            val attempts = retried.getOrDefault(mediaId, 0)
+            if (attempts >= 1) {
+                Log.e(TAG, "Media still unreadable after refetching it", error)
+                return
+            }
+            retried[mediaId] = attempts + 1
+            Log.w(TAG, "Unreadable media; dropped the cached copy and refetching", error)
+            player.prepare()
+            player.play()
             return
         }
         val resolvedStream = streams.forget(failedUri.toString())
@@ -125,6 +143,12 @@ internal class PlaybackRecovery(
          * "how many client families are worth walking while the listener waits".
          */
         const val MAX_CLIENT_ROTATION_RETRIES = 3
+
+        val UNREADABLE_MEDIA = setOf(
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+            PlaybackException.ERROR_CODE_DECODING_FAILED,
+        )
 
         val UNRECOVERABLE = listOf(
             "inappropriate for some users",

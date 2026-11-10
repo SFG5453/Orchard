@@ -278,6 +278,7 @@ internal class PlayerStreams(
             }
             resolvedStreams[stableUri] = stream
             if (freshlyResolved && !MediaItemMapper.isVideoUri(original.uri)) {
+                if (stream.contentLength > 0) cache.adoptSource(original.uri, "${stream.mimeType}|${stream.contentLength}")
                 if (stream.isQobuz) {
                     graph.qobuzTiers.record(videoId, selectedVariant, StreamDetail(
                         hiRes = stream.hires,

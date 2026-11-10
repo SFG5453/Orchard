@@ -57,6 +57,7 @@ class LocalPlaybackController(
     val player: StateFlow<Player?> = mutablePlayer.asStateFlow()
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
+    private var closed = false
     private var progressJob: Job? = null
     private val pendingActions = ArrayDeque<(MediaController) -> Unit>()
 
@@ -267,6 +268,7 @@ class LocalPlaybackController(
     }
 
     override fun close() {
+        closed = true
         progressJob?.cancel()
         queueCache = null
         controller?.removeListener(listener)
@@ -280,7 +282,11 @@ class LocalPlaybackController(
     private fun connect() {
         Log.d(TAG, "connect: initializing MediaController...")
         val token = SessionToken(context, ComponentName(context, OrchardPlaybackService::class.java))
-        val future = MediaController.Builder(context, token).buildAsync()
+        val future = MediaController.Builder(context, token)
+            .setListener(object : MediaController.Listener {
+                override fun onDisconnected(controller: MediaController) = forget(controller)
+            })
+            .buildAsync()
         controllerFuture = future
         future.addListener(
             {
@@ -304,7 +310,25 @@ class LocalPlaybackController(
         )
     }
 
+    /**
+     * A released session (the service destroyed, or killed by the OS) leaves a controller that
+     * drops every command, so nothing would play again until the process restarts.
+     */
+    private fun forget(lost: MediaController) {
+        if (lost !== controller) return
+        Log.w(TAG, "forget: playback session lost; reconnecting on the next command")
+        controller = null
+        lost.removeListener(listener)
+        lost.release()
+        mutablePlayer.value = null
+        queueCache = null
+        syncProgress(false)
+    }
+
     private fun withController(action: (MediaController) -> Unit) {
+        controller?.takeUnless { it.isConnected }?.let(::forget)
+        // Reconnect lazily so a stopped service is only recreated when the listener asks for playback.
+        if (controller == null && !closed && controllerFuture?.isDone != false) connect()
         val connected = controller
         if (connected != null) {
             action(connected)

@@ -435,6 +435,23 @@ class StreamCache(
         return CacheReadMediaDataSource(readFactory, uri, key, totalLength)
     }
 
+    /** Drops [uri]'s cached bytes so the next read refetches them. */
+    fun evict(uri: Uri) {
+        val key = cacheKey(uri)
+        inFlight.remove(key)?.let { writers -> synchronized(writers) { writers.forEach { it.cancel() } } }
+        synchronized(cache) { runCatching { cache.removeResource(key) } }
+    }
+
+    /** Spans from two different files under one key fail to parse, so a changed source evicts first. */
+    fun adoptSource(uri: Uri, identity: String) {
+        val key = cacheKey(uri)
+        val known = cache.getContentMetadata(key).get(SOURCE_KEY, null as String?)
+        if (known == identity) return
+        known?.let { Log.w(TAG, "Source of $uri changed ($it -> $identity); dropping cached bytes"); evict(uri) }
+        cache.applyContentMetadataMutations(key,
+            androidx.media3.datasource.cache.ContentMetadataMutations().set(SOURCE_KEY, identity))
+    }
+
     fun clear() {
         for ((_, writers) in inFlight) synchronized(writers) { writers.forEach { it.cancel() } }
         inFlight.clear()
@@ -459,6 +476,7 @@ class StreamCache(
 
     private companion object {
         const val TAG = "OrchardStreamCache"
+        const val SOURCE_KEY = "orchard_source"
         /**
          * Held in the app's own files directory rather than the cache directory: Android empties
          * the latter under storage pressure without warning, and losing a track mid-analysis is
