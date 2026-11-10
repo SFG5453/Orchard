@@ -24,9 +24,12 @@
 #include <QSettings>
 #include <QTimer>
 
+#include <memory>
+
 #include "frameless_snap.h"
 #include "window_occlusion.h"
 
+class FullscreenWatch;
 class QWindow;
 class QScreen;
 
@@ -46,9 +49,11 @@ class WindowState final : public QObject
     Q_PROPERTY(bool unfocused READ unfocused NOTIFY unfocusedChanged)
     Q_PROPERTY(bool backgroundIdle READ backgroundIdle NOTIFY backgroundIdleChanged)
     Q_PROPERTY(bool artworkIdle READ artworkIdle NOTIFY artworkIdleChanged)
+    Q_PROPERTY(bool reportsFullscreenExit READ reportsFullscreenExit CONSTANT)
 
 public:
     explicit WindowState(QObject *parent = nullptr);
+    ~WindowState() override;
 
     [[nodiscard]] bool enabled() const { return m_enabled; }
     void setEnabled(bool value);
@@ -72,6 +77,8 @@ public:
     // listener keeps artwork running in the background.
     [[nodiscard]] bool artworkIdle() const { return m_artworkIdle; }
     void setPauseArtworkInBackground(bool value);
+    // True where fullscreenExited fires once the exit animation ends (macOS).
+    [[nodiscard]] bool reportsFullscreenExit() const;
 
 signals:
     void availableGeometryChanged();
@@ -82,6 +89,7 @@ signals:
     void unfocusedChanged();
     void backgroundIdleChanged();
     void artworkIdleChanged();
+    void fullscreenExited();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -103,6 +111,7 @@ private:
     QTimer m_unfocusedTimer;
     WindowOcclusion m_occlusion;
     FramelessSnap m_snap;
+    std::unique_ptr<FullscreenWatch> m_fullscreenWatch;
     bool m_idle{false};
     bool m_unfocused{false};
     bool m_backgroundIdle{false};

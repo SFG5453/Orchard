@@ -198,6 +198,7 @@ qml_sources = [
   'app/qml/views/home/HomeScene.qml',
   'app/qml/views/home/HomeOverlays.qml',
   'app/qml/views/home/HomeView.qml',
+  'app/qml/views/home/FullscreenRestore.qml',
   'app/qml/views/home/PageMemory.qml',
   'app/qml/views/library/LibraryView.qml',
   'app/qml/views/library/LibraryHeader.qml',

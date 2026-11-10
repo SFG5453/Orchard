@@ -186,19 +186,7 @@ Item {
     }
 
     function leaveFullScreen(win, before) {
-        // Go through Windowed so the compositor issues a fresh maximize configure.
-        win.showNormal();
-        before === Window.Maximized ? restoreMaximize.restart() : root.restoreWindowedSize(win);
-    }
-
-    function restoreWindowedSize(win) {
-        const size = root.sizeBeforeFullscreen;
-        if (size.width <= 0 || size.height <= 0)
-            return;
-        win.width = size.width;
-        win.height = size.height;
-        // Some compositors apply their own size after the state change lands.
-        restoreSize.restart();
+        fullscreenRestore.leave(win, before);
     }
 
     function openFromFullscreen(page, item) {
@@ -262,29 +250,10 @@ Item {
         }
     }
 
-    Timer {
-        id: restoreMaximize
-        // Gives fullscreen a moment to let go before we ask for the big window again.
-        interval: 100
-        onTriggered: {
-            const win = root.Window.window;
-            // Skip if the player reopened fullscreen in the meantime.
-            if (win && win.visibility === Window.Windowed && !root.fullscreenOpen)
-                win.showMaximized();
-        }
-    }
-
-    Timer {
-        id: restoreSize
-        interval: 150
-        onTriggered: {
-            const win = root.Window.window;
-            const size = root.sizeBeforeFullscreen;
-            if (win && win.visibility === Window.Windowed && size.width > 0) {
-                win.width = size.width;
-                win.height = size.height;
-            }
-        }
+    FullscreenRestore {
+        id: fullscreenRestore
+        fullscreenOpen: root.fullscreenOpen
+        windowedSize: root.sizeBeforeFullscreen
     }
 
     Timer {
