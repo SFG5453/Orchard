@@ -66,6 +66,7 @@
 #include "system_media_bridge.h"
 #include "system_tray.h"
 #ifdef Q_OS_MACOS
+#include "dock_reopen_mac.h"
 #include "mac_menus.h"
 #endif
 #include "startup_settings.h"
@@ -344,6 +345,7 @@ int main(int argc, char *argv[]) {
   SystemTray tray(playback.get(), &authManager);
 #ifdef Q_OS_MACOS
   MacMenus macMenus(playback.get());
+  DockReopen dockReopen([&tray] { tray.showWindow(); });
 #endif
   WindowState windowState;
   const auto syncArtworkPause = [&] {
