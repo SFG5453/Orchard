@@ -4,6 +4,18 @@ project('Orchard', ['c', 'cpp'], version: '2.0.6-canary.1', meson_version: '>=1.
 cmake = import('cmake')
 qt6 = import('qt6')
 
+# Qt 6.12's frameworks target macOS 14.4. Without a pin, clang targets the build machine's macOS.
+macos_min = '14.4'
+macos_env = {}
+if host_machine.system() == 'darwin'
+  add_languages('objcpp', native: false)
+  foreach language : ['c', 'cpp', 'objcpp']
+    add_global_arguments('-mmacosx-version-min=' + macos_min, language: language)
+    add_global_link_arguments('-mmacosx-version-min=' + macos_min, language: language)
+  endforeach
+  macos_env = {'MACOSX_DEPLOYMENT_TARGET': macos_min}
+endif
+
 # Upstream stays on CMake; Meson imports its checked-out submodule targets.
 quickjs_options = cmake.subproject_options()
 quickjs_options.add_cmake_defines({
@@ -166,6 +178,7 @@ rust_archive = custom_target('orchard Rust core',
   command: [python, files('scripts/meson-cargo-build.py'),
     '--package', 'orchard-core-ffi', '--target-dir', cargo_target_dir,
     '--target', rust_target, '--profile', rust_profile, '--output', '@OUTPUT@'],
+  env: macos_env,
 )
 rust_platform_deps = []
 if host_machine.system() == 'windows'
@@ -202,6 +215,7 @@ keychain_archive = custom_target('qtkeychain archive',
     '--build-dir', meson.current_build_dir() / 'qtkeychain-cmake',
     '--output', '@OUTPUT@', '--build-type', get_option('buildtype') == 'debug' ? 'Debug' : 'Release',
     '--toolchain', meson.current_build_dir() / 'third_party/quickjs/__CMake_build/CMakeMesonToolchainFile.cmake'],
+  env: macos_env,
   build_always_stale: true)
 keychain_deps = [qt_dep]
 if host_machine.system() == 'linux'
@@ -337,7 +351,6 @@ app_moc = qt6.compile_moc(headers: app_moc_headers,
   extra_args: app_args)
 app_platform_sources = []
 if host_machine.system() == 'darwin'
-  add_languages('objcpp', native: false)
   app_platform_sources += files('app/src/fullscreen_watch_mac.h', 'app/src/fullscreen_watch_mac.mm',
     'app/src/mac_menus.h', 'app/src/mac_menus.cpp',
     'app/src/occlusion_watch_mac.h', 'app/src/occlusion_watch_mac.mm',
@@ -427,6 +440,7 @@ adaptive_stage = custom_target('adaptive mix stage',
     '--profile', rust_profile, '--platform', adaptive_platform,
     '--source-root', source_root,
     '--output', meson.current_build_dir() / 'adaptive-mix.stamp'],
+  env: macos_env,
   build_by_default: true)
 
 orchard = executable('orchard', files(app_executable_sources) + exe_moc +
@@ -466,7 +480,6 @@ elif host_machine.system() == 'linux'
   auth_dependencies += [dependency('webkit2gtk-4.1', version: '>=2.40')]
   auth_args += ['-DORCHARD_WEBKIT_AUTH', '-DORCHARD_NATIVE_COOKIE_AUTH']
 elif host_machine.system() == 'darwin'
-  add_languages('objcpp', native: false)
   auth_sources += helper_browser_sources + helper_wkwebview_sources
   auth_moc_headers += helper_webkit_moc_headers
   auth_dependencies += [dependency('appleframeworks', modules: ['WebKit'])]

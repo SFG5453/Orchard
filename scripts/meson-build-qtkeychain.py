@@ -2,6 +2,7 @@
 """Build qtkeychain with its upstream CMake rules until Meson can import them."""
 
 import argparse
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -24,6 +25,9 @@ def main() -> None:
         "-DBUILD_TEST_APPLICATION=OFF", "-DBUILD_QTQUICK_DEMO=OFF",
         "-DBUILD_TESTING=OFF",
     ]
+    # CMake reads the environment only on first configure, so an existing cache keeps an old target.
+    if os.environ.get("MACOSX_DEPLOYMENT_TARGET"):
+        configure.append("-DCMAKE_OSX_DEPLOYMENT_TARGET=" + os.environ["MACOSX_DEPLOYMENT_TARGET"])
     subprocess.run(configure, check=True)
     subprocess.run(["cmake", "--build", str(args.build_dir), "--target", "qt6keychain"], check=True)
 
