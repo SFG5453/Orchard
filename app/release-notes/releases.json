@@ -1,13 +1,39 @@
 [
   {
-    "version": "2.0.3-canary.1",
-    "date": "2026-11-09",
-    "title": "Windows audio and library saving",
+    "version": "2.0.4-canary.1",
+    "date": "2026-11-10",
+    "title": "Windows audio and background artwork",
     "sections": [
       {
         "title": "Fixes",
         "items": [
           "Windows playback no longer stays silent at the start of a song or after resuming while the timeline keeps moving. Fixed by @AlejandroMY190106.",
+          "Songs with accented or non-Latin titles, such as \"Yoü And I\", play their album audio instead of being refused after falling back to the longer music video."
+        ]
+      },
+      {
+        "title": "Appearance",
+        "items": [
+          "A Pause in the background switch in Settings, Appearance keeps animated artwork and the artist page video moving while Orchard is unfocused or covered, for example on a second monitor. It is on by default; turned off, motion only pauses while the window is minimized or hidden.",
+          "Removed the Artwork source setting, which had only one choice."
+        ]
+      },
+      {
+        "title": "Windows",
+        "items": [
+          "Windows builds use Qt 6.12.0, the same version as Linux."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "2.0.3-canary.1",
+    "date": "2026-11-09",
+    "title": "Library saving",
+    "sections": [
+      {
+        "title": "Fixes",
+        "items": [
           "Local tracks imported on Windows without duration or tag details are probed again when the library opens, restoring their titles and durations.",
           "Saved Apple Music playlists link to their catalog playlist, so they can be shared. Library-only playlists disable the share button.",
           "Removing songs, albums, and playlists from the Apple Music library works through the Apple Music web service.",
