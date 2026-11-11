@@ -38,6 +38,30 @@ NSString *safariUserAgentSuffix() {
   return [NSString stringWithFormat:@"Version/%@ Safari/605.1.15", version.length ? version : @"18.0"];
 }
 
+// WKWebView only receives copy, paste and undo through Edit menu key equivalents.
+void installEditMenu() {
+  NSMenu *main = NSApp.mainMenu;
+  if (!main) {
+    main = [[NSMenu alloc] init];
+    NSApp.mainMenu = main;
+  }
+  NSString *title = ns(QObject::tr("Edit"));
+  if ([main indexOfItemWithTitle:title] >= 0)
+    return;
+  NSMenu *edit = [[NSMenu alloc] initWithTitle:title];
+  [edit addItemWithTitle:ns(QObject::tr("Undo")) action:@selector(undo:) keyEquivalent:@"z"];
+  NSMenuItem *redo = [edit addItemWithTitle:ns(QObject::tr("Redo")) action:@selector(redo:) keyEquivalent:@"z"];
+  redo.keyEquivalentModifierMask = NSEventModifierFlagCommand | NSEventModifierFlagShift;
+  [edit addItem:NSMenuItem.separatorItem];
+  [edit addItemWithTitle:ns(QObject::tr("Cut")) action:@selector(cut:) keyEquivalent:@"x"];
+  [edit addItemWithTitle:ns(QObject::tr("Copy")) action:@selector(copy:) keyEquivalent:@"c"];
+  [edit addItemWithTitle:ns(QObject::tr("Paste")) action:@selector(paste:) keyEquivalent:@"v"];
+  [edit addItemWithTitle:ns(QObject::tr("Select All")) action:@selector(selectAll:) keyEquivalent:@"a"];
+  NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""];
+  item.submenu = edit;
+  [main addItem:item];
+}
+
 } // namespace
 
 struct WebKitView::Native {
@@ -161,6 +185,7 @@ void WebKitView::show(const QString &title, const QSize &size, bool navigation) 
 
   [window center];
   sync();
+  installEditMenu();
   [NSApp activate];
   [window makeKeyAndOrderFront:nil];
   [window makeFirstResponder:m_native->view];
