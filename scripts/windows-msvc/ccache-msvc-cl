@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# cl.exe under ccache. Name ends in "cl" so cc-rs detects the MSVC family.
+set -euo pipefail
+dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ "${ORCHARD_MSVC_CCACHE:-1}" == 0 ]] || ! command -v ccache >/dev/null 2>&1; then
+  exec "$dir/msvc-cl" "$@"
+fi
+exec ccache compiler_type=msvc "compiler_check=%compiler% --print-toolchain-id" "$dir/msvc-cl" "$@"

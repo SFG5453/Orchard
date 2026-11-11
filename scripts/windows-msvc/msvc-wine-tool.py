@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -40,6 +41,12 @@ if sys.argv[1:] == ["--print-bindgen-includes"]:
     print(SDK / f"Include/{SDK_VERSION}/ucrt")
     sys.exit(0)
 
+# ccache compiler_check: the wrapper script is constant, so identify the toolset instead.
+if sys.argv[1:] == ["--print-toolchain-id"]:
+    print(MSVC)
+    print(SDK_VERSION)
+    sys.exit(0)
+
 
 def windows_path(value: str) -> str:
     return "Z:" + value.replace("/", "\\")
@@ -56,6 +63,16 @@ def translate(argument: str) -> str:
     if argument.startswith("/") and Path(argument).exists():
         return windows_path(argument)
     return argument
+
+
+def unix_line_markers(text: bytes) -> bytes:
+    # ccache direct mode stats every #line path; Z:\\ paths do not exist on the host.
+    return re.sub(
+        rb'^(#line \d+ ")Z:((?:\\\\[^"\\\r\n]*)+)"',
+        lambda m: m.group(1) + m.group(2).replace(b"\\\\", b"/") + b'"',
+        text,
+        flags=re.MULTILINE,
+    )
 
 
 tool = os.environ.get("ORCHARD_MSVC_TOOL") or Path(sys.argv[0]).name.removeprefix("msvc-")
@@ -110,7 +127,10 @@ with tempfile.TemporaryDirectory(prefix="orchard-msvc-") as temporary_dir:
             stderr=stderr_file,
             check=False,
         )
-    sys.stdout.buffer.write(stdout_path.read_bytes())
+    stdout = stdout_path.read_bytes()
+    if tool == "cl" and {"-E", "/E", "-EP", "/EP"} & set(arguments):
+        stdout = unix_line_markers(stdout)
+    sys.stdout.buffer.write(stdout)
     sys.stderr.buffer.write(stderr_path.read_bytes())
 # mt.exe uses 0x41020001 to report that /notify_update changed a manifest.
 # Unix exposes only its low byte (1), while CMake expects success here.

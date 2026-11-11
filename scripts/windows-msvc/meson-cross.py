@@ -18,8 +18,8 @@ def main() -> None:
     host_qt = args.host_qt_root.resolve()
     entries = [
         "[binaries]",
-        "c = " + repr(str(wrap / "msvc-cl")),
-        "cpp = " + repr(str(wrap / "msvc-cl")),
+        "c = " + repr(str(wrap / "ccache-msvc-cl")),
+        "cpp = " + repr(str(wrap / "ccache-msvc-cl")),
         "c_ld = " + repr(str(wrap / "msvc-link")),
         "cpp_ld = " + repr(str(wrap / "msvc-link")),
         "ar = " + repr(str(wrap / "msvc-lib")),

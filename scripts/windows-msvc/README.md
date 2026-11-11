@@ -23,6 +23,10 @@ fresh directory after a Qt version change; Meson caches the Qt paths.
 Set `ORCHARD_QT_HOST_PATH` to reuse a matching Linux SDK. Packaging verifies Qt imports in the staged
 executables and plugins, including the Qt Serial Port dependency of the NMEA plugin.
 
+C and C++ compiles go through `ccache-msvc-cl` when `ccache` is installed, including Rust `cc` builds and CMake
+subprojects. It uses the normal ccache directory; `ORCHARD_MSVC_CCACHE=0` disables it. Build directories configured
+before the wrapper existed need `--wipe` to pick it up.
+
 ## Overrides
 
 Set any of these to reuse an existing install: `ORCHARD_WIN_TOOLS`, `ORCHARD_MSVC_BUILD_DIR`,

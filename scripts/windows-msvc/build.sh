@@ -11,8 +11,8 @@ fi
 
 export ORCHARD_MSVC_QT_ROOT ORCHARD_QT_HOST_PATH
 export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER="$orchard_win_dir/msvc-link"
-export CC_x86_64_pc_windows_msvc="$orchard_win_dir/msvc-cl"
-export CXX_x86_64_pc_windows_msvc="$orchard_win_dir/msvc-cl"
+export CC_x86_64_pc_windows_msvc="$orchard_win_dir/ccache-msvc-cl"
+export CXX_x86_64_pc_windows_msvc="$orchard_win_dir/ccache-msvc-cl"
 export AR_x86_64_pc_windows_msvc="$orchard_win_dir/msvc-lib"
 
 mapfile -t bindgen_include_dirs < <("$orchard_win_dir/msvc-wine-tool.py" --print-bindgen-includes)
