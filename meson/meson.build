@@ -288,6 +288,8 @@ app_sources = [
   'app/src/update/bootstrapper_client.h',
   'app/src/app_icon.cpp',
   'app/src/app_icon.h',
+  'app/src/graphics_memory.cpp',
+  'app/src/graphics_memory.h',
   'app/src/heap_trim.cpp',
   'app/src/heap_trim.h',
   'app/src/frameless_snap.cpp',

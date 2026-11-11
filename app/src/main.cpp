@@ -35,6 +35,7 @@
 #include "appearance/lucide_icon_provider.h"
 #include "appearance/artwork_video_cache.h"
 #include "app_icon.h"
+#include "graphics_memory.h"
 #include "heap_trim.h"
 #include "home/home_controller.h"
 #include "integrations/integrations.h"
@@ -181,6 +182,7 @@ int main(int argc, char *argv[]) {
   QCoreApplication::setOrganizationName(QStringLiteral("SFG545"));
   QCoreApplication::setApplicationName(QStringLiteral("Orchard"));
   UiScaling::configure();
+  configureGraphicsMemory();
 
   // QApplication for QSystemTrayIcon, whose menus are still widgets in 2026.
   QApplication application(argc, argv);
