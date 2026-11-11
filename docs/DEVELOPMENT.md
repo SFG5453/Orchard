@@ -8,7 +8,7 @@ Requirements:
 
 - Meson 1.12+, CMake 3.24+ for the vendored CMake submodules, and Ninja.
 - A C++20 toolchain and Rust 1.96+ (required by the native YouTube player parser).
-- Qt 6.8+ with QML, Quick, Network, and Multimedia. Linux sign-in also needs WebKitGTK 4.1 2.40+ with its headers (`webkit2gtk4.1-devel` on Fedora, `libwebkit2gtk-4.1-dev` on Debian and Ubuntu). The release workflow uses Qt 6.12.0 on Linux and Qt 6.11.2 on Windows.
+- Qt 6.8+ with QML, Quick, Network, and Multimedia. Linux sign-in also needs WebKitGTK 4.1 2.40+ with its headers (`webkit2gtk4.1-devel` on Fedora, `libwebkit2gtk-4.1-dev` on Debian and Ubuntu). The release workflow uses Qt 6.12.0 on Linux and Windows.
 - Node.js/npm for build-time provider bundling.
 - On Linux, Qt DBus and libsecret development packages for the keychain backend.
 
@@ -48,7 +48,7 @@ The helper loads `WebView2Loader.dll` from its own directory. Meson copies it fr
 
 Linux sign-in uses WebKitGTK (`app/src/auth/webkit_*`), also with no Qt web modules. A GTK widget cannot sit inside a Qt Quick scene, so each page opens in its own GTK window with a header bar; the YouTube sign-in logic still runs in `AuthWebView.qml` in a QQuickView that is never shown. The YouTube session comes from WebKit's cookie manager, which includes HttpOnly cookies. Apple Music keeps its own `AppleMusic` profile. Browser data lives in `~/.local/share/SFG545/Orchard/webkit` and `~/.cache/SFG545/Orchard/webkit`. The Linux release bundles WebKitGTK and its matching child processes. The authentication helper resolves their packaged paths relative to the WebKit runtime directory.
 
-On Windows, use the Qt 6.11.2 `msvc2022_64` SDK from an MSVC developer shell, and configure with `--buildtype debugoptimized` rather than `debug`: the Rust core always links the release C runtime (`/MD`), which debug C++ objects (`/MDd`) cannot link against. Windows packaging checks that all imported Qt symbols exist in the staged DLLs. A complete native YouTube cookie session completes sign-in on both platforms. Account name/avatar probing is best effort and cannot reject a session with an `accounts_list` error.
+On Windows, use the Qt 6.12.0 `msvc2022_64` SDK from an MSVC developer shell, and configure with `--buildtype debugoptimized` rather than `debug`: the Rust core always links the release C runtime (`/MD`), which debug C++ objects (`/MDd`) cannot link against. Windows packaging checks that all imported Qt symbols exist in the staged DLLs. A complete native YouTube cookie session completes sign-in on both platforms. Account name/avatar probing is best effort and cannot reject a session with an `accounts_list` error.
 
 ### Cross compilation
 

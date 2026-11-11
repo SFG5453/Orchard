@@ -246,9 +246,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: orchard-windows-msvc-qt6112-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          key: orchard-windows-msvc-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            orchard-windows-msvc-qt6112-v1-
+            orchard-windows-msvc-qt6120-v1-
       - name: Install build tools
         shell: pwsh
         run: |
@@ -288,12 +288,12 @@ jobs:
           New-Item -ItemType Directory -Force $env:CCACHE_DIR | Out-Null
           & $ccache --zero-stats
           & $ccache --version
-      - name: Install Qt 6.11.2
+      - name: Install Qt 6.12.0
         shell: pwsh
         run: |
-          python -m aqt install-qt windows desktop 6.11.2 win64_msvc2022_64 -m qtmultimedia qtshadertools qtserialport qtwebsockets -O "$env:RUNNER_TEMP\Qt"
+          python -m aqt install-qt windows desktop 6.12.0 win64_msvc2022_64 -m qtmultimedia qtshadertools qtserialport qtwebsockets -O "$env:RUNNER_TEMP\Qt"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $qt = "$env:RUNNER_TEMP\Qt\6.11.2\msvc2022_64"
+          $qt = "$env:RUNNER_TEMP\Qt\6.12.0\msvc2022_64"
           if (!(Test-Path "$qt\lib\cmake\Qt6\Qt6Config.cmake")) { throw "Qt installation missing at $qt" }
           $rcc = Get-ChildItem $qt -Filter rcc.exe -File -Recurse | Select-Object -First 1
           $qsb = Get-ChildItem $qt -Filter qsb.exe -File -Recurse | Select-Object -First 1
@@ -368,7 +368,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: orchard-windows-msvc-qt6112-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          key: orchard-windows-msvc-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
 
   publish:
     name: Publish signed release to R2

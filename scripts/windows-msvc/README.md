@@ -1,7 +1,7 @@
 # Windows cross build (MSVC under Wine)
 
 Builds `orchard.exe` on Linux with the real MSVC toolchain, Qt's official MSVC kit, and Wine.
-The Windows Qt kit is pinned to 6.11.2; downloads land in `.cache/windows-msvc/` (git-ignored).
+The Windows Qt kit is pinned to 6.12.0; downloads land in `.cache/windows-msvc/` (git-ignored).
 
 Host requirements: `wine`, `meson` 1.12+, `cmake`, `ninja`, `python3`, `7z`, `msiextract` (msitools), `cargo` with the
 `x86_64-pc-windows-msvc` target, and `uv` or `pipx`. The scripts use `/usr` only
@@ -12,7 +12,7 @@ download matching Linux Qt tools into `.cache/windows-msvc/host-qt/`.
 ```sh
 scripts/windows-msvc/setup.sh --accept-msvc-license   # one time: Wine prefix, MSVC, Qt, host qjsc
 scripts/windows-msvc/configure.sh                     # extra args go to meson setup
-scripts/windows-msvc/build.sh                         # output: build-windows-msvc-6.11.2/orchard.exe
+scripts/windows-msvc/build.sh                         # output: build-windows-msvc-6.12.0/orchard.exe
 scripts/package-windows-msvc.sh                       # 7z package
 ```
 

@@ -4,7 +4,7 @@
 orchard_win_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 orchard_source_dir="$(cd -- "$orchard_win_dir/../.." && pwd)"
 
-: "${ORCHARD_QT_VERSION:=6.11.2}"
+: "${ORCHARD_QT_VERSION:=6.12.0}"
 
 # Other pinned inputs (override only to test a new toolchain).
 : "${ORCHARD_QT_ARCH:=win64_msvc2022_64}"
