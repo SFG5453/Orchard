@@ -19,8 +19,10 @@
 
 #include "instance_coordinator.h"
 
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
+#include <QFileOpenEvent>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLocalSocket>
@@ -45,6 +47,8 @@ QString serverName() {
 
 InstanceCoordinator::InstanceCoordinator()
     : m_serverName(serverName()), m_lock(QDir(dataDirectory()).filePath(QStringLiteral("instance.lock"))) {
+  if (QCoreApplication *application = QCoreApplication::instance())
+    application->installEventFilter(this);
   m_server.setSocketOptions(QLocalServer::UserAccessOption);
   connect(&m_server, &QLocalServer::newConnection, this, [this] {
     while (auto *socket = m_server.nextPendingConnection()) {
@@ -142,6 +146,18 @@ void InstanceCoordinator::receiveArguments(const QStringList &arguments) {
     else
       m_pendingLinks.append(argument);
   }
+}
+
+bool InstanceCoordinator::eventFilter(QObject *watched, QEvent *event) {
+  if (event->type() == QEvent::FileOpen) {
+    const QUrl url = static_cast<QFileOpenEvent *>(event)->url();
+    if (!url.isLocalFile() && !url.scheme().isEmpty()) {
+      receiveArguments({url.toString(QUrl::FullyEncoded)});
+      activate();
+      return true;
+    }
+  }
+  return QObject::eventFilter(watched, event);
 }
 
 void InstanceCoordinator::setLinkHandler(std::function<void(const QString &)> handler) {
