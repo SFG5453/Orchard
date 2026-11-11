@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include "appearance/image_dimensions.h"
+#include "appearance/lucide_icon_provider.h"
 
 #include <QEventLoop>
 #include <QImage>
@@ -54,6 +55,7 @@ std::unique_ptr<QObject> create(QQmlEngine &engine, const QString &path, QTextSt
 
 bool verifyMemoryUi(QTextStream &out) {
   QQmlEngine engine;
+  engine.addImageProvider(QStringLiteral("lucide"), new LucideIconProvider);
   QQmlComponent mocks(&engine);
   mocks.setData(R"(
     import QtQuick

@@ -131,6 +131,15 @@ else
     modules: ['Core', 'Gui'],
     private_headers: true)
 endif
+# pkg-config adds QT_<MODULE>_LIB, but Meson's qmake lookup on macOS does not. QTEST_MAIN picks
+# its application class from them, and without a GUI application there is no screen.
+if host_machine.system() == 'darwin'
+  qt_module_args = []
+  foreach module : qt_modules
+    qt_module_args += '-DQT_' + module.to_upper() + '_LIB'
+  endforeach
+  qt_dep = declare_dependency(dependencies: qt_dep, compile_args: qt_module_args)
+endif
 thread_dep = dependency('threads')
 platform_deps = [thread_dep]
 # DBus (Linux) and IOKit (macOS) back the screen wake lock.
@@ -530,7 +539,8 @@ qml_startup_test = executable('orchard_qml_startup_test',
       'app/src/appearance/kawarp_background.cpp',
       'app/src/appearance/liquid_glass.cpp')), app_lib.extract_objects(
     files('app/src/appearance/artwork_sampler.cpp',
-      'app/src/appearance/kawarp_artwork.cpp'))],
+      'app/src/appearance/kawarp_artwork.cpp',
+      'app/src/appearance/lucide_icon_provider.cpp'))],
   include_directories: app_inc,
   dependencies: [qt_dep, qt_gui_private], build_by_default: false)
 
