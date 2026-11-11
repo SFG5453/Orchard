@@ -27,23 +27,28 @@ Item {
     // Set while the app wants fullscreen again, so a pending restore stands down.
     property bool fullscreenOpen: false
     property size windowedSize: Qt.size(0, 0)
-    property bool maximizeOnExit: false
+    // "maximize" or "size" while waiting for the macOS exit animation to finish.
+    property string pendingRestore: ""
 
     function leave(win, before) {
         // Go through Windowed so the compositor issues a fresh maximize configure.
         win.showNormal();
-        restore.maximizeOnExit = false;
-        if (before !== Window.Maximized)
-            restore.restoreWindowedSize(win);
-        else if (OrchardWindowState.reportsFullscreenExit)
-            restore.maximizeOnExit = true;
-        else
+        restore.pendingRestore = "";
+        // Fullscreen that began outside the app has no saved state; the old size would be stale.
+        if (before === -1)
+            return;
+        const action = before === Window.Maximized ? "maximize" : "size";
+        if (OrchardWindowState.reportsFullscreenExit)
+            restore.pendingRestore = action;
+        else if (action === "maximize")
             restoreMaximize.restart();
+        else
+            restore.restoreWindowedSize(win);
     }
 
     function restoreWindowedSize(win) {
         const size = restore.windowedSize;
-        if (size.width <= 0 || size.height <= 0)
+        if (!win || size.width <= 0 || size.height <= 0)
             return;
         win.width = size.width;
         win.height = size.height;
@@ -60,12 +65,14 @@ Item {
 
     Connections {
         target: OrchardWindowState
-        // Maximizing during the macOS exit animation strands a frozen fullscreen window.
+        // Resizing during the macOS exit animation strands a frozen fullscreen window.
         function onFullscreenExited() {
-            if (!restore.maximizeOnExit)
-                return;
-            restore.maximizeOnExit = false;
-            restore.maximize();
+            const action = restore.pendingRestore;
+            restore.pendingRestore = "";
+            if (action === "maximize")
+                restore.maximize();
+            else if (action === "size" && !restore.fullscreenOpen)
+                restore.restoreWindowedSize(restore.Window.window);
         }
     }
 
