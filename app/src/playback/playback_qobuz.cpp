@@ -108,7 +108,7 @@ void PlaybackController::attachQobuz() {
   connect(m_qobuz, &QobuzService::accountConnected, this,
           [this] { setStreamQuality(QStringLiteral("max")); });
   connect(m_qobuz, &QobuzService::accountDisconnected, this, [this] {
-    if (m_streamQuality == QStringLiteral("max") && !(m_appleAccount && m_appleAccount->losslessAvailable()))
+    if (m_streamQuality == QStringLiteral("max"))
       setStreamQuality(QStringLiteral("high"));
   });
   connect(m_qobuz, &QobuzService::changed, this, [this] {
@@ -294,8 +294,7 @@ void PlaybackController::reportQobuzEnded(AudioStreamProxy *proxy, QMediaPlayer 
 }
 
 QString PlaybackController::streamQuality() const {
-  if (m_streamQuality == QStringLiteral("max") && !qobuzReachable() &&
-      !(m_appleAccount && m_appleAccount->losslessAvailable()))
+  if (m_streamQuality == QStringLiteral("max") && !qobuzReachable())
     return QStringLiteral("high");
   if (m_streamQuality == QStringLiteral("atmos") && !(m_appleAccount && m_appleAccount->atmosAvailable()))
     return QStringLiteral("high");

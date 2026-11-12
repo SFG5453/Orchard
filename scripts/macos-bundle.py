@@ -58,7 +58,7 @@ team = profile["TeamIdentifier"][0]
 app_id = profile["Entitlements"]["com.apple.application-identifier"]
 bundle_id = app_id.split(".", 1)[1]
 if "*" in bundle_id:
-    fail(f"{a.profile} is a wildcard profile; MusicKit needs an explicit App ID")
+    fail(f"{a.profile} is a wildcard profile; the bundle needs an explicit App ID")
 if profile["ExpirationDate"].replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
     fail(f"{a.profile} expired on {profile['ExpirationDate']:%Y-%m-%d}")
 

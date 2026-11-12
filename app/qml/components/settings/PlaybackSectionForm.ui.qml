@@ -27,9 +27,6 @@ ColumnLayout {
     property string streamQuality: "high"
     property bool qobuzReachable: false
     property bool atmosAvailable: false
-    // Apple Music lossless through MusicKit, which only the signed macOS app has.
-    property bool losslessAvailable: false
-    property string losslessSource: "apple"
     property bool crossfadeEnabled: true
     property string adaptiveMode: "standard"
     property real crossfadeDuration: 6
@@ -41,7 +38,6 @@ ColumnLayout {
     property string nonMusicSkipMode: "button"
     property string queueLayout: "upNext"
     property alias streamQualityPicker: streamQualityPicker
-    property alias losslessSourcePicker: losslessSourcePicker
     property alias crossfadeSwitch: crossfadeSwitch
     property alias crossfadeLength: crossfadeLength
     property alias gaplessSwitch: gaplessSwitch
@@ -67,11 +63,9 @@ ColumnLayout {
             description: (root.streamQuality === "saver" ? qsTr("Lowest bitrate audio and 480p video.")
                 : root.streamQuality === "normal" ? qsTr("Up to 128 kbps audio and 720p video.")
                 : root.streamQuality === "atmos" ? qsTr("Dolby Atmos for Apple Music songs that have it, from the next song, rendered for headphones. Other songs play at High.")
-                : root.streamQuality === "max" && root.qobuzReachable && root.losslessAvailable ? qsTr("Lossless and Hi-Res from Qobuz or Apple Music, whichever plays Apple Music songs below.")
-                : root.streamQuality === "max" && root.losslessAvailable ? qsTr("Apple Music Lossless and Hi-Res Lossless played by macOS, from the next song. The equalizer, crossfades and Orchard's volume don't apply; use the system volume.")
                 : root.streamQuality === "max" ? qsTr("Lossless and Hi-Res from your Qobuz subscription, up to 24-bit/192 kHz. Songs Qobuz can't match play at High.")
                 : qsTr("Best available audio and video."))
-                + (root.qobuzReachable || root.losslessAvailable ? "" : " " + qsTr("MAX needs a Qobuz account. Connect one in Settings, Integrations."))
+                + (root.qobuzReachable ? "" : " " + qsTr("MAX needs a Qobuz account. Connect one in Settings, Integrations."))
 
             SettingsSegmented {
                 id: streamQualityPicker
@@ -80,11 +74,11 @@ ColumnLayout {
                     { value: "saver", label: qsTr("Saver"), name: qsTr("Saver quality") },
                     { value: "normal", label: qsTr("Normal"), name: qsTr("Normal quality") },
                     { value: "high", label: qsTr("High"), name: qsTr("High quality") },
-                    // Members only: the velvet rope is a Qobuz login, or Apple Music on a Mac.
+                    // Members only: the velvet rope is a Qobuz login.
                     {
-                        value: "max", label: qsTr("MAX"), name: qsTr("MAX lossless quality"),
+                        value: "max", label: qsTr("MAX"), name: qsTr("MAX quality from Qobuz"),
                         // A connected phone's Qobuz sign-in counts too; Connect streams its bytes here.
-                        enabled: root.qobuzReachable || root.losslessAvailable,
+                        enabled: root.qobuzReachable,
                         tip: qsTr("Connect Qobuz in Settings, Integrations to use MAX.")
                     },
                     {
@@ -92,25 +86,6 @@ ColumnLayout {
                         enabled: root.atmosAvailable,
                         tip: qsTr("Connect Apple Music in Settings, General to use Atmos.")
                     }
-                ]
-            }
-        }
-
-        SettingsRow {
-            // Only a choice when both can play Apple Music songs in lossless.
-            visible: root.qobuzReachable && root.losslessAvailable
-            iconName: "music-2"
-            title: qsTr("Lossless source")
-            description: root.losslessSource === "qobuz"
-                ? qsTr("MAX plays Apple Music songs from their Qobuz match, through Orchard's audio engine. Songs Qobuz can't match play at High.")
-                : qsTr("MAX plays Apple Music songs in Apple Music Lossless, played by macOS. The equalizer, crossfades and Orchard's volume don't apply.")
-
-            SettingsSegmented {
-                id: losslessSourcePicker
-                currentValue: root.losslessSource
-                model: [
-                    { value: "apple", label: qsTr("Apple Music"), name: qsTr("Apple Music Lossless") },
-                    { value: "qobuz", label: qsTr("Qobuz"), name: qsTr("Qobuz match") }
                 ]
             }
         }

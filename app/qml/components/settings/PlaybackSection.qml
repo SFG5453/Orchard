@@ -26,8 +26,6 @@ PlaybackSectionForm {
     streamQuality: OrchardPlayback.streamQuality
     qobuzReachable: OrchardPlayback.qobuzReachable
     atmosAvailable: OrchardAppleMusic.atmosAvailable
-    losslessAvailable: OrchardAppleMusic.losslessAvailable
-    losslessSource: OrchardAppleMusic.losslessSource
     crossfadeEnabled: OrchardPlayback.crossfadeEnabled
     adaptiveMode: OrchardPlayback.adaptiveMix.mode
     crossfadeDuration: OrchardPlayback.crossfadeDuration
@@ -40,7 +38,6 @@ PlaybackSectionForm {
     queueLayout: OrchardPlayback.queueLayout
 
     streamQualityPicker.onPicked: value => OrchardPlayback.streamQuality = value
-    losslessSourcePicker.onPicked: value => OrchardAppleMusic.losslessSource = value
     slopPicker.onPicked: value => OrchardPlayback.slop.action = value
     nonMusicPicker.onPicked: value => OrchardPlayback.nonMusicSkipMode = value
     queueLayoutPicker.onPicked: value => OrchardPlayback.queueLayout = value

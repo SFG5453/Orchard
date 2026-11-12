@@ -19,7 +19,6 @@
 
 #include "auth/auth_manager.h"
 #include "playback_controller.h"
-#include "native_apple_player.h"
 #include "playback_helpers.h"
 #include "providers/youtube/youtube_provider.h"
 #include <QDebug>
@@ -333,8 +332,6 @@ int PlaybackController::bitrate() const {
 }
 
 bool PlaybackController::playing() const {
-  if (const auto *native = activeNativeApple(this))
-    return native->playing();
   return (m_player && m_player->playbackState() == QMediaPlayer::PlayingState) ||
          (m_crossfadeActive && m_nextPlayer &&
           m_nextPlayer->playbackState() == QMediaPlayer::PlayingState);
@@ -343,22 +340,18 @@ bool PlaybackController::playing() const {
 double PlaybackController::position() const {
   if (m_resumePosition > 0.0)
     return m_resumePosition;
-  if (const auto *native = activeNativeApple(this))
-    return native->position();
   return m_player ? m_player->position() / 1000.0 : 0.0;
 }
 
 double PlaybackController::audiblePosition() const {
-  // MusicKit plays outside the audio engine, so its clock is the audible one.
-  const double audible = m_resumePosition > 0.0 || m_crossfadeActive || activeNativeApple(this)
+  const double audible = m_resumePosition > 0.0 || m_crossfadeActive
                              ? -1.0
                              : m_audioEngineOutput.audiblePosition();
   return audible >= 0.0 ? audible : position();
 }
 
 double PlaybackController::duration() const {
-  const auto *native = activeNativeApple(this);
-  const double playerDuration = native ? native->duration() : m_player ? m_player->duration() / 1000.0 : 0.0;
+  const double playerDuration = m_player ? m_player->duration() / 1000.0 : 0.0;
   return playerDuration > 0.0 ? playerDuration : m_restoredDuration;
 }
 

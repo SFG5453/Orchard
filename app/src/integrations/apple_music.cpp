@@ -21,7 +21,6 @@
 
 #include "account/orchard_account.h"
 #include "auth/auth_session_channel.h"
-#include "playback/native_apple_player.h"
 #include "provider_host/provider_host.h"
 #include "providers/runtime/provider_runtime.h"
 
@@ -61,8 +60,6 @@ AppleMusic::AppleMusic(OrchardAccount *account, QObject *parent, bool restore)
   connect(m_runtime, &ProviderRuntime::invocationFailed, this,
           [this](quint64 id, const QString &error) { finishCall(id, {}, error); });
   m_playHistoryEnabled = QSettings().value(QStringLiteral("appleMusic/playHistoryEnabled"), true).toBool();
-  if (QSettings().value(QStringLiteral("appleMusic/losslessSource")).toString() == QLatin1String("qobuz"))
-    m_losslessSource = QStringLiteral("qobuz");
   if (restore)
     restoreSession();
 }
@@ -73,16 +70,6 @@ AppleMusic::~AppleMusic() {
     m_helper->kill();
     m_helper->waitForFinished(1000);
   }
-}
-
-bool AppleMusic::losslessAvailable() const { return connected() && NativeApplePlayer::available(); }
-
-void AppleMusic::setLosslessSource(const QString &source) {
-  if ((source != QLatin1String("apple") && source != QLatin1String("qobuz")) || source == m_losslessSource)
-    return;
-  m_losslessSource = source;
-  QSettings().setValue(QStringLiteral("appleMusic/losslessSource"), source);
-  emit changed();
 }
 
 bool AppleMusic::loginAvailable() const {
@@ -257,52 +244,30 @@ void AppleMusic::withDeveloperToken(TokenReply done) {
   m_tokenWaiters.append(std::move(done));
   if (m_tokenWaiters.size() > 1)
     return;
-  requestToken(QStringLiteral("/apple/developer-token"), m_tokenWaiters, [this](const QString &token, qint64 expiresAt) {
-    m_developerToken = token;
-    m_developerExpiresAt = expiresAt;
-    if (!m_userToken.isEmpty())
-      persistSession();
-  });
-}
-
-void AppleMusic::withNativeDeveloperToken(std::function<void(const QString &, const QString &)> done) {
-  if (!m_nativeToken.isEmpty() && m_nativeExpiresAt > nowSeconds() + kRefreshMarginSeconds) {
-    done(m_nativeToken, {});
-    return;
-  }
-  m_nativeTokenWaiters.append(std::move(done));
-  if (m_nativeTokenWaiters.size() > 1)
-    return;
-  // The Worker's origin-free token, the one ShazamKit and Android's catalog client use.
-  requestToken(QStringLiteral("/apple/shazam-token"), m_nativeTokenWaiters, [this](const QString &token, qint64 expiresAt) {
-    m_nativeToken = token;
-    m_nativeExpiresAt = expiresAt;
-  });
-}
-
-void AppleMusic::requestToken(const QString &path, QList<TokenReply> &waiters,
-                              std::function<void(const QString &, qint64)> store) {
-  const auto finish = [&waiters](const QString &token, const QString &error) {
-    for (const auto &waiter : std::exchange(waiters, {}))
+  const auto finish = [this](const QString &token, const QString &error) {
+    for (const auto &waiter : std::exchange(m_tokenWaiters, {}))
       waiter(token, error);
   };
-  m_account->withAccessToken([this, path, finish, store](const QString &accessToken) {
+  m_account->withAccessToken([this, finish](const QString &accessToken) {
     if (accessToken.isEmpty()) {
       finish({}, tr("Sign in to your Orchard account to use Apple Music."));
       return;
     }
-    QNetworkRequest request(m_account->serviceUrl().resolved(QUrl(path)));
+    QNetworkRequest request(m_account->serviceUrl().resolved(QUrl(QStringLiteral("/apple/developer-token"))));
     request.setRawHeader("Authorization", "Bearer " + accessToken.toUtf8());
     request.setTransferTimeout(15000);
     auto *reply = m_network.get(request);
-    connect(reply, &QNetworkReply::finished, this, [reply, finish, store] {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, finish] {
       reply->deleteLater();
       const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       const QJsonObject body = QJsonDocument::fromJson(reply->readAll()).object();
       const QString token = body.value(QStringLiteral("developer_token")).toString();
       const qint64 expiresAt = body.value(QStringLiteral("expires_at")).toInteger();
       if (status == 200 && !token.isEmpty() && expiresAt > nowSeconds() + 60) {
-        store(token, expiresAt);
+        m_developerToken = token;
+        m_developerExpiresAt = expiresAt;
+        if (!m_userToken.isEmpty())
+          persistSession();
         finish(token, {});
         return;
       }
