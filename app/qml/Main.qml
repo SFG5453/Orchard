@@ -127,7 +127,7 @@ Window {
         anchors.top: parent.top
         targetWindow: mainWindow
         z: 10
-        visible: (!mainWindow.nativeWindowFrame || mainWindow.visibility === Window.FullScreen) && reveal > 0.01
+        visible: OrchardWindowState.showWindowButtons && (!mainWindow.nativeWindowFrame || mainWindow.visibility === Window.FullScreen) && reveal > 0.01
         autoHide: mainWindow.visibility === Window.FullScreen && homeShell.item !== null && homeShell.item.fullscreenOpen
     }
 

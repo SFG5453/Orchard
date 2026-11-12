@@ -34,6 +34,7 @@ class WindowState final : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool enabled READ enabled WRITE setEnabled NOTIFY enabledChanged)
+    Q_PROPERTY(bool showWindowButtons READ showWindowButtons WRITE setShowWindowButtons NOTIFY showWindowButtonsChanged)
     Q_PROPERTY(int initialWidth READ initialWidth CONSTANT)
     Q_PROPERTY(int initialHeight READ initialHeight CONSTANT)
     Q_PROPERTY(bool initialMaximized READ initialMaximized CONSTANT)
@@ -49,6 +50,8 @@ public:
 
     [[nodiscard]] bool enabled() const { return m_enabled; }
     void setEnabled(bool value);
+    [[nodiscard]] bool showWindowButtons() const { return m_showWindowButtons; }
+    void setShowWindowButtons(bool value);
     [[nodiscard]] int initialWidth() const { return m_width; }
     [[nodiscard]] int initialHeight() const { return m_height; }
     [[nodiscard]] bool initialMaximized() const { return m_maximized; }
@@ -69,6 +72,7 @@ public:
 signals:
     void availableGeometryChanged();
     void enabledChanged();
+    void showWindowButtonsChanged();
     void idleChanged();
     void unfocusedChanged();
     void backgroundIdleChanged();
@@ -101,6 +105,7 @@ private:
     bool m_pauseArtworkInBackground{true};
     bool m_artworkIdle{false};
     bool m_enabled{true};
+    bool m_showWindowButtons{true};
     int m_width{1360};
     int m_height{820};
     bool m_maximized{false};

@@ -35,6 +35,7 @@ WindowState::WindowState(QObject *parent) : QObject(parent)
 {
     watchScreen(qGuiApp->primaryScreen());
     m_enabled = m_settings.value(QStringLiteral("window/remember"), true).toBool();
+    m_showWindowButtons = m_settings.value(QStringLiteral("window/showButtons"), true).toBool();
     if (m_enabled) {
         m_width = qMax(m_settings.value(QStringLiteral("window/width"), kDefaultWidth).toInt(), 1);
         m_height = qMax(m_settings.value(QStringLiteral("window/height"), kDefaultHeight).toInt(), 1);
@@ -61,6 +62,15 @@ void WindowState::setEnabled(bool value)
     if (value)
         save();
     emit enabledChanged();
+}
+
+void WindowState::setShowWindowButtons(bool value)
+{
+    if (value == m_showWindowButtons)
+        return;
+    m_showWindowButtons = value;
+    m_settings.setValue(QStringLiteral("window/showButtons"), value);
+    emit showWindowButtonsChanged();
 }
 
 void WindowState::setWindow(QWindow *window)

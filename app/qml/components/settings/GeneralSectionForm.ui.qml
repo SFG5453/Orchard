@@ -24,6 +24,7 @@ ColumnLayout {
     id: root
 
     property bool trayAvailable: true
+    property bool windowButtonsAvailable: false
     property bool startupAvailable: false
     property string startupError: ""
     property alias startupSwitch: startupSwitch
@@ -31,6 +32,7 @@ ColumnLayout {
     property string authError: ""
     property alias persistSwitch: persistSwitch
     property alias windowSwitch: windowSwitch
+    property alias windowButtonsSwitch: windowButtonsSwitch
     property alias traySwitch: traySwitch
     property alias homeSourcePicker: homeSourcePicker
     property bool appleMusicConnected: true
@@ -97,6 +99,19 @@ ColumnLayout {
                 id: windowSwitch
                 objectName: "settingsRememberWindow"
                 Accessible.name: qsTr("Remember window size")
+            }
+        }
+
+        SettingsRow {
+            visible: root.windowButtonsAvailable
+            iconName: "app-window"
+            title: qsTr("Show window buttons")
+            description: qsTr("Minimize, maximize and close buttons in the top right corner. Turn off if your window manager provides its own.")
+
+            SettingsSwitch {
+                id: windowButtonsSwitch
+                objectName: "settingsShowWindowButtons"
+                Accessible.name: qsTr("Show window buttons")
             }
         }
 
