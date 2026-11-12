@@ -52,7 +52,7 @@ macOS sign-in uses the system WKWebView (`app/src/auth/webkit_*_mac.mm`) behind 
 
 ### Signed macOS app
 
-Native MusicKit only authorizes a bundle signed under an App ID with the MusicKit app service. In the Apple developer account, register an explicit App ID with MusicKit enabled, register the Mac's Provisioning UDID, create an Apple Development certificate from a signing request made on that Mac, and download a macOS App Development profile covering all three. Then point the build at the profile:
+A team-signed bundle keeps one identity across rebuilds, so keychain access and privacy grants persist. In the Apple developer account, register an explicit App ID, register the Mac's Provisioning UDID, create an Apple Development certificate from a signing request made on that Mac, and download a macOS App Development profile covering all three. Then point the build at the profile:
 
 ```sh
 meson configure build -Dmacos_provisioning_profile=/path/to/Orchard.provisionprofile

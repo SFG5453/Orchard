@@ -24,8 +24,6 @@
 	<string>public.app-category.music</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>@MIN_MACOS@</string>
-	<key>NSAppleMusicUsageDescription</key>
-	<string>Orchard plays your Apple Music library and catalog, including lossless audio.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>

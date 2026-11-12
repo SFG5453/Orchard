@@ -42,10 +42,6 @@ class AppleMusic final : public QObject {
   Q_PROPERTY(bool connected READ connected NOTIFY changed)
   // The Atmos streaming quality can play; its 5.1 bed is rendered binaurally.
   Q_PROPERTY(bool atmosAvailable READ atmosAvailable NOTIFY changed)
-  // MAX can play Apple Music songs in lossless: MusicKit inside the signed macOS app.
-  Q_PROPERTY(bool losslessAvailable READ losslessAvailable NOTIFY changed)
-  // Where MAX gets Apple Music songs while Qobuz is signed in too: "apple" or "qobuz".
-  Q_PROPERTY(QString losslessSource READ losslessSource WRITE setLosslessSource NOTIFY changed)
   // Sign-in needs the helper's browser: WebKitGTK on Linux, WebView2 on Windows.
   Q_PROPERTY(bool loginAvailable READ loginAvailable CONSTANT)
   Q_PROPERTY(QString message READ message NOTIFY changed)
@@ -69,9 +65,6 @@ public:
     return false;
 #endif
   }
-  bool losslessAvailable() const;
-  QString losslessSource() const { return m_losslessSource; }
-  void setLosslessSource(const QString &source);
   bool loginAvailable() const;
   bool playHistoryEnabled() const { return m_playHistoryEnabled; }
   void setPlayHistoryEnabled(bool enabled);
@@ -130,8 +123,6 @@ public:
   void reportPlay(const QString &method, const QJsonObject &play);
   // A catalog song's Atmos master playlist and license endpoint; `available` false without one.
   void atmos(const QString &appleId, PageReply done);
-  // A developer token without an origin claim, for native clients such as MusicKit.
-  void withNativeDeveloperToken(std::function<void(const QString &token, const QString &error)> done);
 
 signals:
   void changed();
@@ -146,8 +137,6 @@ private:
   void persistSession();
   void runHelper(const QString &mode, const QByteArray &input, std::function<void(const QJsonObject &)> done);
   void withDeveloperToken(TokenReply done);
-  void requestToken(const QString &path, QList<TokenReply> &waiters,
-                    std::function<void(const QString &token, qint64 expiresAt)> store);
   void forgetDeveloperToken();
   // apple_music_catalog.cpp
   void call(const QString &method, const QJsonObject &payload, CallReply done, bool retry = true);
@@ -165,9 +154,6 @@ private:
   QString m_developerToken;
   qint64 m_developerExpiresAt{0};
   QList<TokenReply> m_tokenWaiters;
-  QString m_nativeToken;
-  qint64 m_nativeExpiresAt{0};
-  QList<TokenReply> m_nativeTokenWaiters;
   // Developer and user token hash the provider session was configured with.
   QString m_configuredFor;
   QHash<quint64, std::function<void(const QJsonValue &, const QString &)>> m_calls;
@@ -175,6 +161,5 @@ private:
   QString m_message;
   bool m_messageIsError{false};
   bool m_playHistoryEnabled{true};
-  QString m_losslessSource{QStringLiteral("apple")};
   quint64 m_loginGeneration{0};
 };

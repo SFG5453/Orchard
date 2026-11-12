@@ -22,7 +22,6 @@
 
 #include "integrations/apple_music.h"
 #include "playback_controller.h"
-#include "native_apple_player.h"
 #include "playback_helpers.h"
 #include "gapless_playback.h"
 #include "auth/auth_manager.h"
@@ -89,7 +88,6 @@ void PlaybackController::startTrack(const QVariantMap &track, bool replaceQueue,
     m_request = 0;
     m_nextRequest = 0;
     reportQobuzEnded(m_proxy, m_player);
-    stopNativeApple(this);
     m_player->stop();
     // Keep each decoder attached to its output. Musical chairs are for parties,
     // not audio sinks that already have the next song buffered.
@@ -163,8 +161,8 @@ void PlaybackController::setStreamQuality(const QString &quality) {
     return;
   if (quality == "atmos" && !(m_appleAccount && m_appleAccount->atmosAvailable()))
     return;
-  // MAX is Qobuz, here or on a Connect peer, or Apple Music lossless on this Mac.
-  if (quality == "max" && !qobuzReachable() && !(m_appleAccount && m_appleAccount->losslessAvailable()))
+  // MAX is Qobuz; without an account here or on a Connect peer there is nothing to turn up to.
+  if (quality == "max" && !qobuzReachable())
     return;
   clearPreparedTrack();
   m_streamQuality = quality;
