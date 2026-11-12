@@ -370,6 +370,218 @@ jobs:
           path: ${{ env.CCACHE_DIR }}
           key: orchard-windows-msvc-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
 
+  macos:
+    name: macOS ${{ matrix.arch }} app
+    runs-on: macos-15
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
+    env:
+      ORT_VERSION: v1.31.0
+      CCACHE_DIR: ${{ github.workspace }}/build-cache/macos-${{ matrix.arch }}-ccache
+      CCACHE_MAXSIZE: 2G
+      CCACHE_COMPRESS: 'true'
+      CCACHE_COMPILERCHECK: content
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CC: ccache clang
+      CXX: ccache clang++
+      OBJC: ccache clang
+      OBJCXX: ccache clang++
+      SIGNING_CERT_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+      SIGNING_CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      SIGNING_IDENTITY_NAME: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      NOTARY_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_KEY_P8_BASE64 }}
+      NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+      NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Restore Apple Music logo
+        env:
+          APPLE_MUSIC_LOGO_PNG_BASE64: ${{ secrets.APPLE_MUSIC_LOGO_PNG_BASE64 }}
+        run: python3 scripts/restore-apple-music-logo.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install build tools
+        run: |
+          brew install ninja ccache
+          python -m pip install 'meson>=1.12,<2' 'git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7'
+          rustup update stable
+          if [[ "${{ matrix.arch }}" == x86_64 ]]; then rustup target add x86_64-apple-darwin; fi
+      - name: Restore macOS compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: orchard-macos-${{ matrix.arch }}-ccache-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            orchard-macos-${{ matrix.arch }}-ccache-qt6120-v1-
+      - name: Restore Rust build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cache/ort.pyke.io
+            build/desktop/cargo-target
+          key: orchard-macos-${{ matrix.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            orchard-macos-${{ matrix.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}-
+            orchard-macos-${{ matrix.arch }}-cargo-
+      - name: Prepare macOS compiler cache
+        id: ccache-setup
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          ccache --zero-stats
+          ccache --version | head -1
+      - name: Install Qt 6.12.0
+        run: |
+          python -m aqt install-qt mac desktop 6.12.0 clang_64 -m qtmultimedia qtshadertools qtwebsockets -O "$RUNNER_TEMP/Qt"
+          qt_root="$RUNNER_TEMP/Qt/6.12.0/macos"
+          rcc="$(find "$qt_root" -type f -name rcc -perm +111 -print -quit)"
+          qsb="$(find "$qt_root" -type f -name qsb -perm +111 -print -quit)"
+          test -x "$rcc" && test -x "$qsb"
+          echo "QT_ROOT=$qt_root" >> "$GITHUB_ENV"
+          echo "QT_RCC=$rcc" >> "$GITHUB_ENV"
+          echo "QT_QSB=$qsb" >> "$GITHUB_ENV"
+          echo "$qt_root/bin" >> "$GITHUB_PATH"
+          echo "$(dirname "$rcc")" >> "$GITHUB_PATH"
+          echo "$(dirname "$qsb")" >> "$GITHUB_PATH"
+          echo "CMAKE_PREFIX_PATH=$qt_root" >> "$GITHUB_ENV"
+      - name: Restore Intel ONNX Runtime
+        if: matrix.arch == 'x86_64'
+        id: ort-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ort-x86_64
+          key: orchard-macos-ort-x86_64-${{ env.ORT_VERSION }}-v1
+      # ort-sys ships no x86_64 macOS binaries, so the worker links a source build.
+      - name: Build Intel ONNX Runtime
+        if: matrix.arch == 'x86_64' && steps.ort-cache.outputs.cache-hit != 'true'
+        env:
+          CC: clang
+          CXX: clang++
+          OBJC: clang
+          OBJCXX: clang++
+        run: |
+          git clone --depth 1 --branch "$ORT_VERSION" https://github.com/microsoft/onnxruntime "$RUNNER_TEMP/onnxruntime"
+          cd "$RUNNER_TEMP/onnxruntime"
+          ./build.sh --config Release --build_shared_lib --parallel --skip_tests --compile_no_warning_as_error \
+            --apple_deploy_target 14.4 --cmake_extra_defines CMAKE_OSX_ARCHITECTURES=x86_64
+          mkdir -p "$RUNNER_TEMP/ort-x86_64"
+          cp -a build/MacOS/Release/libonnxruntime*.dylib "$RUNNER_TEMP/ort-x86_64/"
+          lipo -archs "$RUNNER_TEMP/ort-x86_64/libonnxruntime.dylib" | grep -qx x86_64
+      - name: Build host qjsc
+        if: matrix.arch == 'x86_64'
+        run: |
+          cmake -S third_party/quickjs -B build-qjsc-host -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-qjsc-host --target qjsc -j 4
+          echo "HOST_QJSC=$PWD/build-qjsc-host/qjsc" >> "$GITHUB_ENV"
+          echo "ORT_LIB_LOCATION=$RUNNER_TEMP/ort-x86_64" >> "$GITHUB_ENV"
+          echo "ORT_PREFER_DYNAMIC_LINK=1" >> "$GITHUB_ENV"
+      - name: Import signing certificate
+        run: |
+          for name in SIGNING_CERT_P12_BASE64 SIGNING_CERT_PASSWORD SIGNING_IDENTITY_NAME \
+              NOTARY_KEY_P8_BASE64 NOTARY_KEY_ID NOTARY_ISSUER_ID; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing the secret behind $name. macOS releases are always signed and notarized."
+              exit 1
+            fi
+          done
+          keychain="$RUNNER_TEMP/orchard-build.keychain-db"
+          password="$(uuidgen)"
+          echo "$SIGNING_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$SIGNING_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/certificate.p12"
+          echo "CODESIGN_IDENTITY=$SIGNING_IDENTITY_NAME" >> "$GITHUB_ENV"
+          echo "SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+      - name: Build Orchard
+        run: |
+          npm ci --prefix providers/youtube
+          args=(--buildtype release -Dtests=false -Dmacos_distribution=true
+            "-Dmacos_codesign_identity=$CODESIGN_IDENTITY" "-Dhost_rcc=$QT_RCC" "-Dhost_qsb=$QT_QSB")
+          if [[ "${{ matrix.arch }}" == x86_64 ]]; then
+            args+=(--cross-file scripts/release/macos-x86_64-cross.ini
+              -Dorchard_rust_target=x86_64-apple-darwin "-Dhost_qjsc=$HOST_QJSC")
+          fi
+          meson setup build/desktop "${args[@]}"
+          meson compile -C build/desktop
+          app=build/desktop/Orchard.app
+          test -d "$app"
+          lipo -archs "$app/Contents/MacOS/orchard" | grep -qx '${{ matrix.arch }}'
+      - name: Check macOS QML startup
+        if: matrix.arch == 'arm64'
+        run: |
+          meson compile -C build/desktop orchard_qml_startup_test
+          QT_QPA_PLATFORM=offscreen ./build/desktop/orchard_qml_startup_test
+      - name: Notarize app
+        run: |
+          echo "$NOTARY_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          ditto -c -k --keepParent build/desktop/Orchard.app "$RUNNER_TEMP/Orchard-notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/Orchard-notarize.zip" --key "$RUNNER_TEMP/notary.p8" \
+            --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait
+          xcrun stapler staple build/desktop/Orchard.app
+          xcrun stapler validate build/desktop/Orchard.app
+          spctl --assess --type execute --verbose build/desktop/Orchard.app
+      - name: Package macOS disk image
+        run: |
+          output="$RUNNER_TEMP/orchard-macos"
+          stage="$RUNNER_TEMP/dmg-stage"
+          dmg="$output/Orchard-macOS-${{ matrix.arch }}.dmg"
+          mkdir -p "$output" "$stage"
+          ditto build/desktop/Orchard.app "$stage/Orchard.app"
+          ln -s /Applications "$stage/Applications"
+          hdiutil create -volname Orchard -srcfolder "$stage" -ov -format UDZO "$dmg"
+          codesign --force --timestamp --sign "$CODESIGN_IDENTITY" "$dmg"
+          xcrun notarytool submit "$dmg" --key "$RUNNER_TEMP/notary.p8" \
+            --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait
+          xcrun stapler staple "$dmg"
+          xcrun stapler validate "$dmg"
+          hdiutil verify "$dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orchard-macos-${{ matrix.arch }}
+          path: ${{ runner.temp }}/orchard-macos/Orchard-macOS-${{ matrix.arch }}.dmg
+          if-no-files-found: error
+          retention-days: 14
+      - name: macOS compiler cache stats
+        if: always() && steps.ccache-setup.outcome == 'success'
+        run: ccache --show-stats
+      - name: Save macOS compiler cache
+        if: always() && steps.ccache-setup.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: orchard-macos-${{ matrix.arch }}-ccache-qt6120-v1-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Save Rust build cache
+        if: always() && steps.ccache-setup.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cache/ort.pyke.io
+            build/desktop/cargo-target
+          key: orchard-macos-${{ matrix.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Remove signing material
+        if: always()
+        run: |
+          if [[ -n "${SIGNING_KEYCHAIN:-}" ]]; then security delete-keychain "$SIGNING_KEYCHAIN"; fi
+          rm -f "$RUNNER_TEMP/notary.p8"
+
   publish:
     name: Publish signed release to R2
     if: ${{ !inputs.build_only }}

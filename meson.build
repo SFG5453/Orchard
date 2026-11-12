@@ -532,19 +532,32 @@ if host_machine.system() in ['linux', 'windows', 'darwin']
 endif
 
 # A team-signed bundle keeps one identity across rebuilds, so keychain access and privacy grants persist.
+# A distribution bundle ships Qt inside the app and signs with the hardened runtime.
 macos_profile = get_option('macos_provisioning_profile')
-if host_machine.system() == 'darwin' and macos_profile != ''
+macos_distribution = get_option('macos_distribution')
+if host_machine.system() == 'darwin' and (macos_profile != '' or macos_distribution)
+  macos_bundle_inputs = [orchard, auth_helper, widevine_host, files('packaging/macos/Info.plist.in')]
+  macos_bundle_args = [
+    '--executable', '@INPUT0@', '--helper', '@INPUT1@', '--helper', '@INPUT2@',
+    '--helper', meson.current_build_dir() / 'orchard-adaptive-mix',
+    '--info-plist', '@INPUT3@',
+    '--version', meson.project_version(), '--min-macos', macos_min,
+    '--identity', get_option('macos_codesign_identity'),
+    '--qmake', find_program('qmake6', 'qmake', dirs: qt_tool_dirs),
+    '--output', '@OUTPUT@']
+  if macos_distribution
+    macos_bundle_args += ['--distribution',
+      '--macdeployqt', find_program('macdeployqt', dirs: qt_tool_dirs),
+      '--qml-dir', source_root / 'app/qml',
+      '--entitlements', files('packaging/macos/Orchard.entitlements')]
+  else
+    macos_bundle_inputs += files(macos_profile)
+    macos_bundle_args += ['--profile', '@INPUT4@']
+  endif
   custom_target('Orchard.app',
-    input: [orchard, auth_helper, widevine_host, files('packaging/macos/Info.plist.in', macos_profile)],
+    input: macos_bundle_inputs,
     output: 'Orchard.app',
-    command: [python, files('scripts/macos-bundle.py'),
-      '--executable', '@INPUT0@', '--helper', '@INPUT1@', '--helper', '@INPUT2@',
-      '--helper', meson.current_build_dir() / 'orchard-adaptive-mix',
-      '--info-plist', '@INPUT3@', '--profile', '@INPUT4@',
-      '--version', meson.project_version(), '--min-macos', macos_min,
-      '--identity', get_option('macos_codesign_identity'),
-      '--qmake', find_program('qmake6', 'qmake', dirs: qt_tool_dirs),
-      '--output', '@OUTPUT@'],
+    command: [python, files('scripts/macos-bundle.py')] + macos_bundle_args,
     depends: adaptive_stage,
     build_by_default: true)
 endif

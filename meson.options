@@ -6,3 +6,4 @@ option('host_qsb', type: 'string', value: '', description: 'Absolute path to the
 option('adaptive_platform', type: 'string', value: '', description: 'Adaptive mix staging platform override')
 option('macos_provisioning_profile', type: 'string', value: '', description: 'Provisioning profile that signs a development Orchard.app (empty skips the bundle)')
 option('macos_codesign_identity', type: 'string', value: 'Apple Development', description: 'Keychain signing identity for Orchard.app, by name or SHA-1')
+option('macos_distribution', type: 'boolean', value: false, description: 'Build a relocatable Orchard.app with bundled Qt, signed with the hardened runtime')
