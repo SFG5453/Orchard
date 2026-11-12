@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Assemble a signed development Orchard.app from the build directory.
+"""Assemble a signed Orchard.app from the build directory.
 
-The bundle links Qt from the SDK through an added rpath rather than copying the
-frameworks, so it only runs on the machine that built it.
+A development bundle links Qt from the SDK through an added rpath rather than
+copying the frameworks, so it only runs on the machine that built it. A
+distribution bundle runs macdeployqt, signs every Mach-O file inside out with
+the hardened runtime and leaves notarization to the caller.
 """
 import argparse
 import hashlib
@@ -21,9 +23,14 @@ p.add_argument("--helper", type=Path, action="append", default=[])
 p.add_argument("--info-plist", type=Path, required=True)
 p.add_argument("--version", required=True)
 p.add_argument("--min-macos", required=True)
-p.add_argument("--profile", type=Path, required=True)
+p.add_argument("--profile", type=Path)
 p.add_argument("--identity", required=True)
 p.add_argument("--qmake", required=True)
+p.add_argument("--distribution", action="store_true")
+p.add_argument("--bundle-id", default="dev.sfg545.orchard")
+p.add_argument("--macdeployqt", type=Path)
+p.add_argument("--qml-dir", type=Path)
+p.add_argument("--entitlements", type=Path)
 p.add_argument("--output", type=Path, required=True)
 a = p.parse_args()
 
@@ -53,23 +60,33 @@ def rpath_libraries(path):
     return [line.split()[0] for line in lines if line.strip().startswith("@rpath/")]
 
 
-profile = plistlib.loads(run("security", "cms", "-D", "-i", str(a.profile), capture=True).encode())
-team = profile["TeamIdentifier"][0]
-app_id = profile["Entitlements"]["com.apple.application-identifier"]
-bundle_id = app_id.split(".", 1)[1]
-if "*" in bundle_id:
-    fail(f"{a.profile} is a wildcard profile; the bundle needs an explicit App ID")
-if profile["ExpirationDate"].replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
-    fail(f"{a.profile} expired on {profile['ExpirationDate']:%Y-%m-%d}")
+if a.distribution:
+    if not (a.macdeployqt and a.entitlements):
+        fail("--distribution needs --macdeployqt and --entitlements")
+    if not a.identity.startswith("Developer ID Application"):
+        fail("a distribution bundle must be signed with a Developer ID Application identity")
+    bundle_id = a.bundle_id
+    identity = a.identity
+else:
+    if not a.profile:
+        fail("--profile is required without --distribution")
+    profile = plistlib.loads(run("security", "cms", "-D", "-i", str(a.profile), capture=True).encode())
+    team = profile["TeamIdentifier"][0]
+    app_id = profile["Entitlements"]["com.apple.application-identifier"]
+    bundle_id = app_id.split(".", 1)[1]
+    if "*" in bundle_id:
+        fail(f"{a.profile} is a wildcard profile; the bundle needs an explicit App ID")
+    if profile["ExpirationDate"].replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+        fail(f"{a.profile} expired on {profile['ExpirationDate']:%Y-%m-%d}")
 
-# AMFI kills a binary whose signing certificate is not in its embedded profile.
-identities = run("security", "find-identity", "-v", "-p", "codesigning", capture=True)
-hashes = {line.split()[1] for line in identities.splitlines()
-          if f'"{a.identity}' in line or line.split()[1:2] == [a.identity]}
-allowed = {hashlib.sha1(cert).hexdigest().upper() for cert in profile["DeveloperCertificates"]}
-if not hashes & allowed:
-    fail(f'no "{a.identity}" identity in the keychain matches a certificate in {a.profile}')
-identity = sorted(hashes & allowed)[0]
+    # AMFI kills a binary whose signing certificate is not in its embedded profile.
+    identities = run("security", "find-identity", "-v", "-p", "codesigning", capture=True)
+    hashes = {line.split()[1] for line in identities.splitlines()
+              if f'"{a.identity}' in line or line.split()[1:2] == [a.identity]}
+    allowed = {hashlib.sha1(cert).hexdigest().upper() for cert in profile["DeveloperCertificates"]}
+    if not hashes & allowed:
+        fail(f'no "{a.identity}" identity in the keychain matches a certificate in {a.profile}')
+    identity = sorted(hashes & allowed)[0]
 
 app = a.output
 contents = app / "Contents"
@@ -86,7 +103,8 @@ for key, value in {"BUNDLE_ID": bundle_id, "SHORT_VERSION": a.version.split("-")
 plistlib.loads(info.encode())
 (contents / "Info.plist").write_text(info)
 (contents / "PkgInfo").write_text("APPL????")
-shutil.copy2(a.profile, contents / "embedded.provisionprofile")
+if not a.distribution:
+    shutil.copy2(a.profile, contents / "embedded.provisionprofile")
 
 build_dir = a.executable.parent
 origins = {}
@@ -121,8 +139,40 @@ while pending:
                 origins[macos / name] = candidate
                 pending.append(macos / name)
                 break
-    if any(r.startswith("@rpath/Qt") for r in references) and qt_libs not in rpaths(path):
+    if (not a.distribution and any(r.startswith("@rpath/Qt") for r in references)
+            and qt_libs not in rpaths(path)):
         run("install_name_tool", "-add_rpath", qt_libs, str(path))
+
+def sign_distribution():
+    helpers = [path for path in sorted(macos.iterdir()) if not path.is_symlink() and is_macho(path)]
+    command = [str(a.macdeployqt), str(app), "-always-overwrite"]
+    if a.qml_dir:
+        command.append(f"-qmldir={a.qml_dir}")
+    command += [f"-executable={path}" for path in helpers if path.name != a.executable.name]
+    run(*command)
+    machos = [path for path in app.rglob("*") if not path.is_symlink() and path.is_file()
+              and is_macho(path)]
+    flags = ["--force", "--timestamp", "--options", "runtime", "--sign", identity]
+    for path in sorted(machos, key=lambda item: len(item.parts), reverse=True):
+        extra = ["--entitlements", str(a.entitlements)] if path.parent == macos else []
+        run("codesign", *flags, *extra, str(path))
+    frameworks = sorted(app.glob("Contents/Frameworks/*.framework"), reverse=True)
+    for framework in frameworks:
+        run("codesign", *flags, str(framework))
+    run("codesign", *flags, "--entitlements", str(a.entitlements), str(app))
+    run("codesign", "--verify", "--strict", "--deep", str(app))
+    for path in machos:
+        for line in run("otool", "-L", str(path), capture=True).splitlines()[1:]:
+            name = line.split()[0]
+            if not name.startswith(("@", "/usr/lib/", "/System/")):
+                fail(f"{path.relative_to(app)} links outside the bundle: {name}")
+    print(f"macos-bundle: signed {app} for distribution as {bundle_id}")
+
+
+if a.distribution:
+    sign_distribution()
+    sys.exit(0)
+
 
 signed = [path for path in sorted(macos.iterdir())
           if path.name != a.executable.name and not path.is_symlink() and is_macho(path)]
