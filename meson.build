@@ -531,6 +531,24 @@ if host_machine.system() in ['linux', 'windows', 'darwin']
     install: true)
 endif
 
+# MusicKit authorizes only a bundle signed with its App ID's provisioning profile.
+macos_profile = get_option('macos_provisioning_profile')
+if host_machine.system() == 'darwin' and macos_profile != ''
+  custom_target('Orchard.app',
+    input: [orchard, auth_helper, widevine_host, files('packaging/macos/Info.plist.in', macos_profile)],
+    output: 'Orchard.app',
+    command: [python, files('scripts/macos-bundle.py'),
+      '--executable', '@INPUT0@', '--helper', '@INPUT1@', '--helper', '@INPUT2@',
+      '--helper', meson.current_build_dir() / 'orchard-adaptive-mix',
+      '--info-plist', '@INPUT3@', '--profile', '@INPUT4@',
+      '--version', meson.project_version(), '--min-macos', macos_min,
+      '--identity', get_option('macos_codesign_identity'),
+      '--qmake', find_program('qmake6', 'qmake', dirs: qt_tool_dirs),
+      '--output', '@OUTPUT@'],
+    depends: adaptive_stage,
+    build_by_default: true)
+endif
+
 qml_startup_test = executable('orchard_qml_startup_test',
   files('tests/qml_startup_test.cpp', 'tests/memory_ui_checks.cpp', 'tests/image_dimensions_checks.cpp'),
   objects: [orchard.extract_objects(qml_module, qmldir_resources, qml_files_qrc, assets_qrc, exe_moc,
