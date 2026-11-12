@@ -25,6 +25,22 @@ private struct Reply: @unchecked Sendable {
     }
 }
 
+// Hands MusicKit Orchard's own developer token; the automatic one is rejected
+// for some App IDs even with the MusicKit service enabled.
+private final class OrchardTokenProvider: MusicUserTokenProvider, MusicDeveloperTokenProvider, @unchecked Sendable {
+    private let token: String
+
+    init(token: String) {
+        self.token = token
+        super.init()
+    }
+
+    func developerToken(options: MusicTokenRequestOptions) async throws -> String {
+        token
+    }
+}
+
+@MainActor private var providedToken = ""
 @MainActor private var loadSerial: UInt64 = 0
 @MainActor private var songDuration: Double = 0
 
@@ -76,6 +92,16 @@ private struct Superseded: Error {}
 @_cdecl("orchard_musickit_available")
 public func orchardMusicKitAvailable() -> Int32 {
     Bundle.main.bundleIdentifier == nil ? 0 : 1
+}
+
+@_cdecl("orchard_musickit_set_developer_token")
+public func orchardMusicKitSetDeveloperToken(_ token: UnsafePointer<CChar>) {
+    let value = String(cString: token)
+    MainActor.assumeIsolated {
+        guard !value.isEmpty, value != providedToken else { return }
+        providedToken = value
+        MusicDataRequest.tokenProvider = OrchardTokenProvider(token: value)
+    }
 }
 
 @_cdecl("orchard_musickit_play")

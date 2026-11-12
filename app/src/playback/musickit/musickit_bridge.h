@@ -18,6 +18,8 @@ typedef void (*OrchardMusicKitDone)(void *context, int32_t ok, const char *error
 
 // Nonzero inside an app bundle, the only place MusicKit issues tokens.
 int32_t orchard_musickit_available(void);
+// Developer token for MusicKit's catalog requests, in place of the one it generates.
+void orchard_musickit_set_developer_token(const char *token);
 // Replaces the player's queue with one catalog song. done reports the outcome
 // unless a later play or stop supersedes it, in which case it reports an empty error.
 void orchard_musickit_play(const char *song_id, double start_seconds, int32_t paused, void *context,

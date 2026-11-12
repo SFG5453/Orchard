@@ -30,6 +30,8 @@ public:
   double duration() const { return m_duration; }
   Variant variant() const { return m_variant; }
 
+  // Orchard's origin-free developer token; MusicKit's own is used until one is set.
+  void setDeveloperToken(const QString &token);
   // Replaces whatever plays; started() or failed() follows unless stop() comes first.
   void start(const QString &songId, double position, bool paused);
   void resume();
