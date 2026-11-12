@@ -1,5 +1,31 @@
 [
   {
+    "version": "2.0.6-canary.1",
+    "date": "2026-11-12",
+    "title": "Cleaner video theater and better song matching",
+    "sections": [
+      {
+        "title": "Fixes",
+        "items": [
+          "Songs with featured artists, such as \"Song (feat. Artist)\", play their album audio instead of falling back to the longer music video.",
+          "Clicks, hovers, and scrolling in the music video theater no longer reach the page underneath. Fixed by @AlejandroMY190106."
+        ]
+      },
+      {
+        "title": "Settings",
+        "items": [
+          "A Show window buttons switch in Settings, General hides Orchard's own minimize, maximize, and close buttons on Linux. Turn it off if your window manager provides its own."
+        ]
+      },
+      {
+        "title": "Docs",
+        "items": [
+          "The in-app docs search is faster and smaller. It no longer ships a language model."
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.0.5-canary.1",
     "date": "2026-11-11",
     "title": "Steadier streaming and sharper lyrics",
