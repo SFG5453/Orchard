@@ -64,6 +64,8 @@ void PlaybackController::setAppleMusic(AppleMusic *account, CatalogSource *sourc
   m_bestMix.setAppleMusic(account, source);
   if (!findChild<AppleHistory *>())
     new AppleHistory(this, account);
+  // MAX and Atmos read as High until the account can back them.
+  connect(account, &AppleMusic::changed, this, &PlaybackController::streamQualityChanged);
   if (!findChild<NativeApplePlayer *>() && NativeApplePlayer::available()) {
     auto *native = new NativeApplePlayer(this);
     connect(native, &NativeApplePlayer::started, this, [this, native] {
@@ -152,10 +154,14 @@ void PlaybackController::setAppleMusic(AppleMusic *account, CatalogSource *sourc
 void PlaybackController::startAppleTrack() {
   const QString id = appleSongId(m_track);
   auto *native = findChild<NativeApplePlayer *>();
-  // MusicKit needs no Widevine, so lossless works without it.
-  const bool lossless = native && streamQuality() == QStringLiteral("lossless");
+  const bool max = streamQuality() == QStringLiteral("max");
+  const bool appleLossless = max && native && m_appleAccount && m_appleAccount->losslessAvailable();
+  // With both signed in the Lossless source setting decides; otherwise MAX uses whichever exists.
+  const bool viaMusicKit =
+      appleLossless && (!qobuzReachable() || m_appleAccount->losslessSource() == QStringLiteral("apple"));
   QString message;
-  if (!m_appleStreams && !lossless)
+  // MusicKit needs no Widevine.
+  if (!m_appleStreams && !viaMusicKit)
     message = AppleMusicStreams::unavailableReason();
   else if (!m_catalogSource || !m_catalogSource->apple())
     message = tr("Choose Apple as the music source under Settings, General to play Apple Music songs.");
@@ -168,19 +174,44 @@ void PlaybackController::startAppleTrack() {
     return;
   }
   // A restored song loads when play is pressed, like the other sources.
-  if (m_resumePaused)
+  if (m_resumePaused) {
     m_loading = false;
-  else if (lossless)
-    native->start(id, m_resumePosition, false);
-  else
+    return;
+  }
+  const quint64 generation = m_generation;
+  if (viaMusicKit) {
+    m_appleAccount->withNativeDeveloperToken([this, native, generation, id](const QString &token, const QString &error) {
+      if (generation != m_generation)
+        return;
+      if (token.isEmpty())
+        qWarning().noquote() << "AppleMusic: no Orchard developer token for MusicKit |" << error;
+      else
+        native->setDeveloperToken(token);
+      native->start(id, m_resumePosition, false);
+    });
+  } else if (max && qobuzEligible(m_track)) {
+    const QVariantMap track = m_track;
+    resolveQobuz(track, [this, generation, track](const QJsonValue &result, const QString &) {
+      if (generation != m_generation)
+        return;
+      QJsonObject stream = qobuzStream(track, result);
+      // An Apple song has no YouTube recording to point history or SponsorBlock at.
+      stream.remove(QStringLiteral("youtubeVideoId"));
+      if (!stream.isEmpty())
+        startResolvedStream(stream);
+      else
+        resolveAppleStream(track, false);
+    });
+  } else {
     resolveAppleStream(m_track, false);
+  }
 }
 
 void PlaybackController::resolveAppleStream(const QVariantMap &track, bool prepared) {
   const QString id = appleSongId(track);
-  // MusicKit plays one song at a time, so lossless never preloads an AAC copy.
+  // MAX plays Apple songs from MusicKit or a Qobuz match, so an AAC preload would go unused.
   if (prepared && (id.isEmpty() || !m_catalogSource->apple() || !m_appleAccount->connected() ||
-                   streamQuality() == QStringLiteral("lossless")))
+                   streamQuality() == QStringLiteral("max")))
     return;
   const quint64 generation = m_generation;
   const quint64 token = prepared ? ++m_preparedResolveToken : 0;

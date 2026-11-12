@@ -78,8 +78,7 @@ PlaybackController::PlaybackController(YouTubeProvider *provider,
                         .value("playback/streamQuality", QStringLiteral("high"))
                         .toString();
   if (m_streamQuality != "saver" && m_streamQuality != "normal" &&
-      m_streamQuality != "high" && m_streamQuality != "max" && m_streamQuality != "atmos" &&
-      m_streamQuality != "lossless") {
+      m_streamQuality != "high" && m_streamQuality != "max" && m_streamQuality != "atmos") {
     m_streamQuality = QStringLiteral("high");
   }
   m_persistenceEnabled =

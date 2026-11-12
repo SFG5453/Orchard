@@ -108,7 +108,7 @@ void PlaybackController::attachQobuz() {
   connect(m_qobuz, &QobuzService::accountConnected, this,
           [this] { setStreamQuality(QStringLiteral("max")); });
   connect(m_qobuz, &QobuzService::accountDisconnected, this, [this] {
-    if (m_streamQuality == QStringLiteral("max"))
+    if (m_streamQuality == QStringLiteral("max") && !(m_appleAccount && m_appleAccount->losslessAvailable()))
       setStreamQuality(QStringLiteral("high"));
   });
   connect(m_qobuz, &QobuzService::changed, this, [this] {
@@ -294,11 +294,10 @@ void PlaybackController::reportQobuzEnded(AudioStreamProxy *proxy, QMediaPlayer 
 }
 
 QString PlaybackController::streamQuality() const {
-  if (m_streamQuality == QStringLiteral("max") && !qobuzReachable())
+  if (m_streamQuality == QStringLiteral("max") && !qobuzReachable() &&
+      !(m_appleAccount && m_appleAccount->losslessAvailable()))
     return QStringLiteral("high");
   if (m_streamQuality == QStringLiteral("atmos") && !(m_appleAccount && m_appleAccount->atmosAvailable()))
-    return QStringLiteral("high");
-  if (m_streamQuality == QStringLiteral("lossless") && !(m_appleAccount && m_appleAccount->losslessAvailable()))
     return QStringLiteral("high");
   return m_streamQuality;
 }
@@ -318,6 +317,6 @@ void PlaybackController::remoteProviderChanged() {
 }
 
 QString PlaybackController::youtubeQuality() const {
-  const bool appleOnly = m_streamQuality == QStringLiteral("atmos") || m_streamQuality == QStringLiteral("lossless");
-  return m_streamQuality == QStringLiteral("max") || appleOnly ? QStringLiteral("high") : m_streamQuality;
+  return m_streamQuality == QStringLiteral("max") || m_streamQuality == QStringLiteral("atmos") ? QStringLiteral("high")
+                                                                                              : m_streamQuality;
 }

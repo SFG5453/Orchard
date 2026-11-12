@@ -46,6 +46,14 @@ bool NativeApplePlayer::available() {
 
 double NativeApplePlayer::position() const { return m_loaded || m_played ? m_position : m_startPosition; }
 
+void NativeApplePlayer::setDeveloperToken(const QString &token) {
+#ifdef Q_OS_MACOS
+  orchard_musickit_set_developer_token(token.toUtf8().constData());
+#else
+  Q_UNUSED(token)
+#endif
+}
+
 void NativeApplePlayer::start(const QString &songId, double position, bool paused) {
   stop();
   m_active = true;

@@ -158,15 +158,13 @@ void PlaybackController::startTrack(const QVariantMap &track, bool replaceQueue,
 
 void PlaybackController::setStreamQuality(const QString &quality) {
   if ((quality != "saver" && quality != "normal" && quality != "high" &&
-       quality != "max" && quality != "atmos" && quality != "lossless") ||
+       quality != "max" && quality != "atmos") ||
       quality == m_streamQuality)
     return;
   if (quality == "atmos" && !(m_appleAccount && m_appleAccount->atmosAvailable()))
     return;
-  if (quality == "lossless" && !(m_appleAccount && m_appleAccount->losslessAvailable()))
-    return;
-  // MAX is Qobuz; without an account here or on a Connect peer there is nothing to turn up to.
-  if (quality == "max" && !qobuzReachable())
+  // MAX is Qobuz, here or on a Connect peer, or Apple Music lossless on this Mac.
+  if (quality == "max" && !qobuzReachable() && !(m_appleAccount && m_appleAccount->losslessAvailable()))
     return;
   clearPreparedTrack();
   m_streamQuality = quality;
