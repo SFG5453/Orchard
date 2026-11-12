@@ -221,6 +221,8 @@ app_sources = [
   'app/src/playback/playback_remote.cpp',
   'app/src/playback/playback_remote.h',
   'app/src/playback/playback_apple.cpp',
+  'app/src/playback/native_apple_player.cpp',
+  'app/src/playback/native_apple_player.h',
   'app/src/playback/apple_history.cpp',
   'app/src/playback/apple_music_atmos.cpp',
   'app/src/playback/apple_music_atmos.h',
@@ -658,6 +660,7 @@ apple_music_sources = [
 
 app_moc_headers = [
   'app/src/playback/apple_history.h',
+  'app/src/playback/native_apple_player.h',
   'app/src/api/local_api.h',
   'app/src/lyrics/lyrics_provider_settings.h',
   'app/src/startup_settings.h',

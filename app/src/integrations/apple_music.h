@@ -42,6 +42,8 @@ class AppleMusic final : public QObject {
   Q_PROPERTY(bool connected READ connected NOTIFY changed)
   // The Atmos streaming quality can play; its 5.1 bed is rendered binaurally.
   Q_PROPERTY(bool atmosAvailable READ atmosAvailable NOTIFY changed)
+  // The Lossless streaming quality can play: MusicKit inside the signed macOS app.
+  Q_PROPERTY(bool losslessAvailable READ losslessAvailable NOTIFY changed)
   // Sign-in needs the helper's browser: WebKitGTK on Linux, WebView2 on Windows.
   Q_PROPERTY(bool loginAvailable READ loginAvailable CONSTANT)
   Q_PROPERTY(QString message READ message NOTIFY changed)
@@ -65,6 +67,7 @@ public:
     return false;
 #endif
   }
+  bool losslessAvailable() const;
   bool loginAvailable() const;
   bool playHistoryEnabled() const { return m_playHistoryEnabled; }
   void setPlayHistoryEnabled(bool enabled);

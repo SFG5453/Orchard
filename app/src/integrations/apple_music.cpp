@@ -21,6 +21,7 @@
 
 #include "account/orchard_account.h"
 #include "auth/auth_session_channel.h"
+#include "playback/native_apple_player.h"
 #include "provider_host/provider_host.h"
 #include "providers/runtime/provider_runtime.h"
 
@@ -71,6 +72,8 @@ AppleMusic::~AppleMusic() {
     m_helper->waitForFinished(1000);
   }
 }
+
+bool AppleMusic::losslessAvailable() const { return connected() && NativeApplePlayer::available(); }
 
 bool AppleMusic::loginAvailable() const {
 #ifdef ORCHARD_NATIVE_COOKIE_AUTH

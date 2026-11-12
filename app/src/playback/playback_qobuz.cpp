@@ -298,6 +298,8 @@ QString PlaybackController::streamQuality() const {
     return QStringLiteral("high");
   if (m_streamQuality == QStringLiteral("atmos") && !(m_appleAccount && m_appleAccount->atmosAvailable()))
     return QStringLiteral("high");
+  if (m_streamQuality == QStringLiteral("lossless") && !(m_appleAccount && m_appleAccount->losslessAvailable()))
+    return QStringLiteral("high");
   return m_streamQuality;
 }
 
@@ -316,6 +318,6 @@ void PlaybackController::remoteProviderChanged() {
 }
 
 QString PlaybackController::youtubeQuality() const {
-  return m_streamQuality == QStringLiteral("max") || m_streamQuality == QStringLiteral("atmos") ? QStringLiteral("high")
-                                                                                              : m_streamQuality;
+  const bool appleOnly = m_streamQuality == QStringLiteral("atmos") || m_streamQuality == QStringLiteral("lossless");
+  return m_streamQuality == QStringLiteral("max") || appleOnly ? QStringLiteral("high") : m_streamQuality;
 }

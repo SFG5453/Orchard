@@ -27,6 +27,9 @@ ColumnLayout {
     property string streamQuality: "high"
     property bool qobuzReachable: false
     property bool atmosAvailable: false
+    property bool losslessAvailable: false
+    // MusicKit lossless exists only on macOS; other platforms never list it.
+    property bool losslessSupported: false
     property bool crossfadeEnabled: true
     property string adaptiveMode: "standard"
     property real crossfadeDuration: 6
@@ -64,6 +67,7 @@ ColumnLayout {
                 : root.streamQuality === "normal" ? qsTr("Up to 128 kbps audio and 720p video.")
                 : root.streamQuality === "atmos" ? qsTr("Dolby Atmos for Apple Music songs that have it, from the next song, rendered for headphones. Other songs play at High.")
                 : root.streamQuality === "max" ? qsTr("Lossless and Hi-Res from your Qobuz subscription, up to 24-bit/192 kHz. Songs Qobuz can't match play at High.")
+                : root.streamQuality === "lossless" ? qsTr("Apple Music Lossless and Hi-Res Lossless played by macOS, from the next song. The equalizer, crossfades and Orchard's volume don't apply; use the system volume.")
                 : qsTr("Best available audio and video."))
                 + (root.qobuzReachable ? "" : " " + qsTr("MAX needs a Qobuz account. Connect one in Settings, Integrations."))
 
@@ -86,7 +90,11 @@ ColumnLayout {
                         enabled: root.atmosAvailable,
                         tip: qsTr("Connect Apple Music in Settings, General to use Atmos.")
                     }
-                ]
+                ].concat(root.losslessSupported ? [{
+                    value: "lossless", label: qsTr("Lossless"), name: qsTr("Apple Music Lossless played by macOS"),
+                    enabled: root.losslessAvailable,
+                    tip: qsTr("Connect Apple Music in Settings, General, and run the signed Orchard app to use Lossless.")
+                }] : [])
             }
         }
     }

@@ -26,6 +26,8 @@ PlaybackSectionForm {
     streamQuality: OrchardPlayback.streamQuality
     qobuzReachable: OrchardPlayback.qobuzReachable
     atmosAvailable: OrchardAppleMusic.atmosAvailable
+    losslessAvailable: OrchardAppleMusic.losslessAvailable
+    losslessSupported: Qt.platform.os === "osx"
     crossfadeEnabled: OrchardPlayback.crossfadeEnabled
     adaptiveMode: OrchardPlayback.adaptiveMix.mode
     crossfadeDuration: OrchardPlayback.crossfadeDuration

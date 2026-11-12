@@ -18,6 +18,7 @@
  */
 
 #include "playback_controller.h"
+#include "native_apple_player.h"
 #include "autoplay_select.h"
 #include "playback_helpers.h"
 #include <QDebug>
@@ -121,6 +122,8 @@ void PlaybackController::startResolvedStream(const QJsonObject &stream) {
     return;
   }
   rememberStreamTracking(m_track.value("id").toString(), stream);
+  // Music videos and the AAC fallback take over from MusicKit on the same track.
+  stopNativeApple(this);
   applyStreamQuality();
   reportQobuzStarted(m_proxy, m_resumePosition);
   m_audioEngineOutput.setSurround(m_player, stream.value("atmos").toBool());
@@ -160,6 +163,7 @@ void PlaybackController::fail(const QString &message) {
   m_proxy->clear();
   m_request = 0;
   m_loading = false;
+  stopNativeApple(this);
   m_player->stop();
   m_track.remove(QStringLiteral("bitrate"));
   m_resumePosition = 0.0;

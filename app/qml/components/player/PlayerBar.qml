@@ -110,6 +110,10 @@ Item {
 
     // Untyped on purpose: a compiled binding reading the track map trips qmlcachegen.
     function qobuzLabel(track) {
+        if (track && track.playbackSource === "musickit")
+            return track.streamCodec === "ALAC"
+                ? (track.hires ? qsTr("Hi-Res Lossless") : qsTr("Lossless")) + " · ALAC"
+                : (track.streamCodec || "");
         if (!track || track.playbackSource !== "qobuz")
             return "";
         const parts = [track.hires ? qsTr("Hi-Res") : qsTr("Lossless")];
