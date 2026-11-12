@@ -1,5 +1,31 @@
 [
   {
+    "version": "2.0.5-canary.1",
+    "date": "2026-11-11",
+    "title": "Steadier streaming and sharper lyrics",
+    "sections": [
+      {
+        "title": "Fixes",
+        "items": [
+          "Song streams no longer reconnect about every 40 seconds on connections with a small receive buffer, such as Windows. Orchard downloads up to 8 MiB ahead of the decoder, retries stalled downloads sooner, and no longer restarts playback with \"Loading audio\" when a reconnect fails.",
+          "The sidebar and player bar stay aligned at the minimum window size."
+        ]
+      },
+      {
+        "title": "Lyrics",
+        "items": [
+          "The focused lyric line stays sharp. The accent glow is removed so the text is no longer resampled or washed out."
+        ]
+      },
+      {
+        "title": "Support",
+        "items": [
+          "Bug-report diagnostics count resumed downloads."
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.0.4-canary.1",
     "date": "2026-11-10",
     "title": "Windows audio and background artwork",
