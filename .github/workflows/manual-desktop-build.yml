@@ -8,6 +8,12 @@ on:
         required: true
         default: false
         type: boolean
+      platforms:
+        description: Platforms to build; publishing needs all
+        required: true
+        default: all
+        type: choice
+        options: [all, linux, arch, windows, macos, macos-arm64, macos-x86_64]
       channel:
         description: Signed update channel to publish
         required: true
@@ -21,6 +27,7 @@ permissions:
 jobs:
   linux:
     name: Linux x86_64 app and bootstrapper
+    if: ${{ inputs.platforms == 'all' || inputs.platforms == 'linux' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
@@ -134,6 +141,7 @@ jobs:
 
   arch:
     name: Arch Linux x86_64 package
+    if: ${{ inputs.platforms == 'all' || inputs.platforms == 'arch' }}
     runs-on: ubuntu-24.04
     container: archlinux:latest
     timeout-minutes: 360
@@ -202,6 +210,7 @@ jobs:
 
   windows:
     name: Windows x86_64 app and bootstrapper
+    if: ${{ inputs.platforms == 'all' || inputs.platforms == 'windows' }}
     runs-on: windows-2025-vs2026
     timeout-minutes: 360
     env:
@@ -372,12 +381,13 @@ jobs:
 
   macos:
     name: macOS ${{ matrix.arch }} app
+    if: ${{ inputs.platforms == 'all' || startsWith(inputs.platforms, 'macos') }}
     runs-on: macos-15
     timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
-        arch: [arm64, x86_64]
+        arch: ${{ fromJSON(inputs.platforms == 'macos-arm64' && '["arm64"]' || inputs.platforms == 'macos-x86_64' && '["x86_64"]' || '["arm64","x86_64"]') }}
     env:
       ORT_VERSION: v1.31.0
       CCACHE_DIR: ${{ github.workspace }}/build-cache/macos-${{ matrix.arch }}-ccache
@@ -584,7 +594,7 @@ jobs:
 
   publish:
     name: Publish signed release to R2
-    if: ${{ !inputs.build_only }}
+    if: ${{ !inputs.build_only && inputs.platforms == 'all' }}
     needs: [linux, windows, arch]
     runs-on: ubuntu-24.04
     timeout-minutes: 180
