@@ -87,20 +87,35 @@ export function createPreferredAudioTrack({ normalizedLookupText, shelfItems }) 
     return item.artist || (typeof first === 'string' ? first : first?.name) || '';
   }
 
+  // Album rows omit the "(feat. X)" that the audio track's title carries.
+  function matchTitle(value = '') {
+    return normalizedLookupText(String(value)
+      .replace(/[([]\s*(?:feat\.?|ft\.?|featuring)\s[^)\]]*[)\]]/gi, ' ')
+      .replace(/\s(?:feat\.|ft\.|featuring)\s.*$/i, ''));
+  }
+
+  function creditedArtists(item = {}) {
+    const names = [item.artist, ...(Array.isArray(item.artists) ? item.artists : [])]
+      .map((entry) => normalizedLookupText(typeof entry === 'string' ? entry : entry?.name || ''));
+    return new Set(names.filter(Boolean));
+  }
+
   function trackMatchScore(candidate, target) {
-    const candidateTitle = normalizedLookupText(candidate.title);
-    const targetTitle = normalizedLookupText(target.title);
+    const candidateTitle = matchTitle(candidate.title);
+    const targetTitle = matchTitle(target.title);
     const candidateArtist = normalizedLookupText(artistName(candidate));
     const targetArtist = normalizedLookupText(artistName(target));
-    const targetQualifiers = titleVariantQualifiers(target.title);
-    const candidateQualifiers = titleVariantQualifiers(candidate.title);
+    const targetQualifiers = titleVariantQualifiers(targetTitle);
+    const candidateQualifiers = titleVariantQualifiers(candidateTitle);
     const matchingDuration = durationMatches(candidate, target);
     const titleTokenCount = targetTitle.split(/\s+/).filter(Boolean).length;
     let score = 0;
 
     if (!candidateTitle || !targetTitle || candidateTitle !== targetTitle) return -Infinity;
     // An unknown candidate artist could be any act with a same-named song.
-    if (targetArtist && candidateArtist !== targetArtist) return -Infinity;
+    // Search may lead with a different credited artist than the album row does.
+    if (targetArtist && candidateArtist !== targetArtist &&
+        !creditedArtists(candidate).has(targetArtist) && !creditedArtists(target).has(candidateArtist)) return -Infinity;
     if (targetQualifiers.some((qualifier) => !candidateQualifiers.includes(qualifier))) return -Infinity;
     if (matchingDuration === false) return -Infinity;
     if (titleTokenCount <= 1 && matchingDuration !== true && target.album && candidate.album && normalizedLookupText(candidate.album) !== normalizedLookupText(target.album)) {

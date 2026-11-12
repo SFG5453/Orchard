@@ -196,3 +196,22 @@ test('matches album audio across accents and fully non-Latin titles', async () =
     { id: 'idol-audio', title: 'アイドル', artist: 'YOASOBI', duration: '3:34', isAudioOnly: true }
   ]), 'idol-audio');
 });
+
+// Issue 256: album video rows omit "(feat. X)" and search may lead with another credited artist.
+test('matches album audio across featuring credits and reordered artists', async () => {
+  const { normalizedLookupText } = createSearchUtils({});
+  const preferredAudioTrack = createPreferredAudioTrack({ normalizedLookupText, shelfItems: (items) => items });
+  const pick = (target, songs) => preferredAudioTrack({ music: { search: async () => ({ songs }) } },
+    { ...target, preferAudioOnly: true, musicVideoType: 'MUSIC_VIDEO_TYPE_OMV' });
+  assert.equal(await pick({ videoId: 'high-video', title: 'Blow My High', artist: 'Ozer', artists: ['Ozer', 'Sussy'], duration: '3:48' }, [
+    { id: 'other-audio', title: 'Blow My High (feat. Lil Moses)', artist: 'Mondo Rahzel', artists: ['Mondo Rahzel'], duration: '3:48', isAudioOnly: true },
+    { id: 'high-audio', title: 'Blow My High (feat. Sussy)', artist: 'Ozer', artists: ['Ozer'], duration: '3:48', isAudioOnly: true }
+  ]), 'high-audio');
+  assert.equal(await pick({ videoId: 'space-video', title: 'Deep Space', artist: 'Lord Jamar', artists: [{ name: 'Lord Jamar' }, { name: 'RZA' }], duration: '4:26' }, [
+    { id: 'space-instrumental', title: 'Deep Space (Instrumental)', artist: 'Lord Jamar', artists: ['Lord Jamar', 'RZA'], duration: '4:29', isAudioOnly: true },
+    { id: 'space-audio', title: 'Deep Space', artist: 'Wu-Tang Clan', artists: ['Wu-Tang Clan', 'Lord Jamar', 'RZA'], duration: '4:26', isAudioOnly: true }
+  ]), 'space-audio');
+  assert.equal(await pick({ videoId: 'solo-video', title: 'Deep Space', artist: 'Lord Jamar', duration: '4:26' }, [
+    { id: 'stranger-audio', title: 'Deep Space', artist: 'Someone Else', artists: ['Someone Else'], duration: '4:26', isAudioOnly: true }
+  ]), 'solo-video');
+});
