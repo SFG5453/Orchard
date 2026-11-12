@@ -523,7 +523,8 @@ jobs:
           rm "$RUNNER_TEMP/certificate.p12"
           # Without Apple's intermediate the identity is listed but never valid for codesign.
           curl -fsSL --retry 5 -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
-          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain"
+          # The .p12 may already carry the intermediate, which makes this import fail.
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain" || true
           # The identity is read from the keychain so stray whitespace in a secret cannot break it.
           identities="$(security find-identity -v -p codesigning "$keychain")"
           identity="$(sed -n 's/.*"\(Developer ID Application: .*\)".*/\1/p' <<< "$identities" | head -n 1)"
