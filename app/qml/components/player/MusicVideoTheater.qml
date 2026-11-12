@@ -88,6 +88,21 @@ Rectangle {
         }
     }
 
+    // Swallows clicks, hovers and wheel scrolls so the background stays inert.
+    MouseArea {
+        id: blocker
+
+        anchors.fill: parent
+        hoverEnabled: true
+        acceptedButtons: Qt.AllButtons
+        onWheel: function(wheel) { wheel.accepted = true; }
+    }
+
+    TapHandler {
+        gesturePolicy: TapHandler.WithinBounds
+        onTapped: root.wake()
+    }
+
     TheaterPicture {
         id: picture
 
@@ -98,7 +113,11 @@ Rectangle {
 
         // Single tap waits out the double-tap window so a double click never blips the audio.
         TapHandler {
-            onSingleTapped: OrchardPlayback.toggle()
+            gesturePolicy: TapHandler.WithinBounds
+            onSingleTapped: {
+                OrchardPlayback.toggle();
+                root.wake();
+            }
             onDoubleTapped: root.toggleFullScreen()
         }
     }
