@@ -403,7 +403,6 @@ jobs:
       OBJCXX: ccache clang++
       SIGNING_CERT_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
       SIGNING_CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-      SIGNING_IDENTITY_NAME: ${{ secrets.MACOS_SIGNING_IDENTITY }}
       NOTARY_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_KEY_P8_BASE64 }}
       NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
       NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
@@ -505,7 +504,7 @@ jobs:
           echo "ORT_PREFER_DYNAMIC_LINK=1" >> "$GITHUB_ENV"
       - name: Import signing certificate
         run: |
-          for name in SIGNING_CERT_P12_BASE64 SIGNING_CERT_PASSWORD SIGNING_IDENTITY_NAME \
+          for name in SIGNING_CERT_P12_BASE64 SIGNING_CERT_PASSWORD \
               NOTARY_KEY_P8_BASE64 NOTARY_KEY_ID NOTARY_ISSUER_ID; do
             if [[ -z "${!name}" ]]; then
               echo "::error::Missing the secret behind $name. macOS releases are always signed and notarized."
@@ -525,11 +524,14 @@ jobs:
           # Without Apple's intermediate the identity is listed but never valid for codesign.
           curl -fsSL --retry 5 -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
           security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain"
-          if ! security find-identity -v -p codesigning "$keychain" | grep -qF "\"$SIGNING_IDENTITY_NAME\""; then
-            echo "::error::MACOS_SIGNING_IDENTITY matches no valid identity in the signing keychain."
+          # The identity is read from the keychain so stray whitespace in a secret cannot break it.
+          identities="$(security find-identity -v -p codesigning "$keychain")"
+          identity="$(sed -n 's/.*"\(Developer ID Application: .*\)".*/\1/p' <<< "$identities" | head -n 1)"
+          if [[ -z "$identity" ]]; then
+            echo "::error::No valid Developer ID Application identity in the signing keychain ($(security find-identity -p codesigning "$keychain" | tail -n 1))."
             exit 1
           fi
-          echo "CODESIGN_IDENTITY=$SIGNING_IDENTITY_NAME" >> "$GITHUB_ENV"
+          echo "CODESIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
           echo "SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
       - name: Build Orchard
         run: |
