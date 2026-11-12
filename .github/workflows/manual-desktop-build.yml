@@ -424,7 +424,13 @@ jobs:
       - name: Install build tools
         run: |
           brew install ninja ccache
-          python -m pip install 'meson>=1.12,<2' 'git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7'
+          export GIT_TERMINAL_PROMPT=0
+          # GitHub occasionally refuses an anonymous clone; retry before failing.
+          for attempt in 1 2 3 4 5; do
+            python -m pip install 'meson>=1.12,<2' 'git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7' && break
+            if [[ $attempt == 5 ]]; then exit 1; fi
+            sleep $((attempt * 15))
+          done
           rustup update stable
           if [[ "${{ matrix.arch }}" == x86_64 ]]; then rustup target add x86_64-apple-darwin; fi
       - name: Restore macOS compiler cache
