@@ -112,19 +112,13 @@ Item {
         }
         Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
 
-        layer.enabled: line.current || line.blur > 0.01
+        layer.enabled: line.blur > 0.01
         layer.textureSize: Qt.size(Math.ceil(body.width * view.layerScale), Math.ceil(body.height * view.layerScale))
         layer.smooth: true
         layer.effect: MultiEffect {
             blurEnabled: line.blur > 0.01
             blur: line.blur
             blurMax: 16
-            shadowEnabled: line.current
-            shadowColor: view.accentColor
-            shadowOpacity: 0.4
-            shadowBlur: 1
-            shadowHorizontalOffset: 0
-            shadowVerticalOffset: 0
         }
 
         Column {
