@@ -554,7 +554,8 @@ jobs:
         if: matrix.arch == 'arm64'
         run: |
           meson compile -C build/desktop orchard_qml_startup_test
-          QT_QPA_PLATFORM=offscreen ./build/desktop/orchard_qml_startup_test
+          # The test binary has no Qt rpath.
+          DYLD_FRAMEWORK_PATH="$QT_ROOT/lib" QT_QPA_PLATFORM=offscreen ./build/desktop/orchard_qml_startup_test
       - name: Notarize app
         run: |
           echo "$NOTARY_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
