@@ -18,6 +18,7 @@
  */
 
 #include "playback_controller.h"
+#include "native_apple_player.h"
 #include "playback_helpers.h"
 #include <QSettings>
 #include <algorithm>
@@ -38,6 +39,15 @@ void PlaybackController::play() {
     startTrack(m_track);
     return;
   }
+  if (auto *native = activeNativeApple(this)) {
+    // A finished song starts over through the controller, at any position seeked to since.
+    if (native->loaded())
+      native->resume();
+    else
+      startTrack(m_track, false, m_resumePosition, false);
+    updateSystemMedia();
+    return;
+  }
   if (!playing()) {
     m_proxy->setSuspended(false);
     if (m_crossfadeActive && m_nextProxy)
@@ -53,6 +63,11 @@ void PlaybackController::pause() {
   if (forwardRemote(QStringLiteral("pause")))
     return;
   m_waitingForAutoplay = false;
+  if (auto *native = activeNativeApple(this)) {
+    native->pause();
+    updateSystemMedia();
+    return;
+  }
   if (playing()) {
     m_player->pause();
     if (m_crossfadeActive && m_nextPlayer)
@@ -85,7 +100,10 @@ void PlaybackController::toggle() {
   }
   if (playing())
     pause();
-  else {
+  else if (activeNativeApple(this)) {
+    play();
+    return;
+  } else {
     m_proxy->setSuspended(false);
     if (m_crossfadeActive && m_nextProxy)
       m_nextProxy->setSuspended(false);
@@ -105,7 +123,13 @@ void PlaybackController::seek(double seconds) {
       cancelCrossfadeTransition();
       clearPreparedTrack();
     }
-    if (m_player && m_player->isSeekable()) {
+    if (auto *native = activeNativeApple(this); native && native->loaded()) {
+      const double target = qBound(0.0, seconds, duration());
+      native->seek(target);
+      m_resumePosition = 0.0;
+      m_lastPublishedPosition = target;
+      updateSystemMedia();
+    } else if (m_player && m_player->isSeekable()) {
       const double target = qBound(0.0, seconds, duration());
       m_playerTimelines[m_player].position = target;
       m_resumePosition = 0.0;

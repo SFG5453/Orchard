@@ -347,6 +347,28 @@ app_inc = include_directories('app/src', 'app/src/auth',
   'app/src/appearance', 'core/native', 'vendor/litert/include', 'bootstrapper/src')
 app_dependencies = [qt_dep, qt_gui_private, connect_dep, rust_dep,
   qjs_dep, keychain_dep] + platform_deps
+if host_machine.system() == 'darwin'
+  # MusicKit's player is Swift-only; the bridge exports a C API (musickit_bridge.h).
+  swiftc = find_program('swiftc')
+  swift_triple = (host_machine.cpu_family() == 'aarch64' ? 'arm64' : 'x86_64') + '-apple-macos' + macos_min
+  musickit_archive = custom_target('MusicKit bridge',
+    input: files('app/src/playback/musickit/musickit_bridge.swift'),
+    output: 'liborchard_musickit.a',
+    command: [swiftc, '-parse-as-library', '-emit-library', '-static', '-module-name', 'OrchardMusicKit',
+      '-target', swift_triple, '-swift-version', '5', '-O',
+      '-module-cache-path', meson.current_build_dir() / 'swift-module-cache', '-o', '@OUTPUT@', '@INPUT@'],
+    env: macos_env)
+  # Clang links the archive, so it needs the Swift runtime's search paths that swiftc would add.
+  swift_lib_dirs = run_command(python, '-c',
+    'import json,subprocess,sys;print(chr(10).join(json.loads(subprocess.check_output([sys.argv[1], ' +
+    '"-print-target-info", "-target", sys.argv[2]]))["paths"]["runtimeLibraryPaths"]))',
+    swiftc.full_path(), swift_triple, check: true).stdout().strip().split('\n')
+  swift_link_args = ['-Wl,-rpath,/usr/lib/swift']
+  foreach directory : swift_lib_dirs
+    swift_link_args += ['-L' + directory]
+  endforeach
+  app_dependencies += [declare_dependency(link_with: musickit_archive, link_args: swift_link_args)]
+endif
 app_args = ['-DORCHARD_VERSION="' + meson.project_version() + '"']
 if host_machine.system() in ['windows', 'linux', 'darwin']
   app_args += ['-DORCHARD_NATIVE_COOKIE_AUTH']

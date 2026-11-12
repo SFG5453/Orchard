@@ -24,6 +24,11 @@
 #include "playback_controller.h"
 #include "playback_helpers.h"
 #include "local/local_track.h"
+#include "native_apple_player.h"
+
+#include <QDebug>
+
+#include <cmath>
 
 namespace {
 QString appleSongId(const QVariantMap &track) {
@@ -34,6 +39,23 @@ QString appleSongId(const QVariantMap &track) {
   const QString prefix = QStringLiteral("am.songs.");
   return browseId.startsWith(prefix) ? browseId.mid(prefix.size()) : QString();
 }
+
+// Badge keys for a song MusicKit plays; the variant is what macOS actually streams.
+void applyNativeQuality(QVariantMap &track, NativeApplePlayer::Variant variant) {
+  for (const auto key : {"playbackSource", "bitDepth", "sampleRate", "hires", "streamCodec", "bitrate"})
+    track.remove(QString::fromLatin1(key));
+  track.insert(QStringLiteral("playbackSource"), QStringLiteral("musickit"));
+  using Variant = NativeApplePlayer::Variant;
+  const QString codec = variant == Variant::Lossless || variant == Variant::HiResLossless ? QStringLiteral("ALAC")
+                        : variant == Variant::Lossy                                      ? QStringLiteral("AAC")
+                        : variant == Variant::Atmos                                      ? QStringLiteral("Dolby Atmos")
+                        : variant == Variant::DolbyAudio                                 ? QStringLiteral("Dolby Audio")
+                        : variant == Variant::Spatial ? QStringLiteral("Spatial Audio")
+                                                      : QString();
+  if (!codec.isEmpty())
+    track.insert(QStringLiteral("streamCodec"), codec);
+  track.insert(QStringLiteral("hires"), variant == Variant::HiResLossless);
+}
 } // namespace
 
 void PlaybackController::setAppleMusic(AppleMusic *account, CatalogSource *source) {
@@ -42,6 +64,64 @@ void PlaybackController::setAppleMusic(AppleMusic *account, CatalogSource *sourc
   m_bestMix.setAppleMusic(account, source);
   if (!findChild<AppleHistory *>())
     new AppleHistory(this, account);
+  if (!findChild<NativeApplePlayer *>() && NativeApplePlayer::available()) {
+    auto *native = new NativeApplePlayer(this);
+    connect(native, &NativeApplePlayer::started, this, [this, native] {
+      m_loading = false;
+      m_resumePosition = 0.0;
+      m_resumePaused = false;
+      m_restoringPlayback = false;
+      m_error.clear();
+      m_retried = false;
+      applyNativeQuality(m_track, native->variant());
+      if (m_persistenceEnabled)
+        m_persistTimer.start();
+      emit stateChanged();
+      updateSystemMedia();
+      savePlaybackState();
+    });
+    connect(native, &NativeApplePlayer::variantChanged, this, [this, native] {
+      applyNativeQuality(m_track, native->variant());
+      emit stateChanged();
+    });
+    // Authorization, subscription or catalog trouble still leaves the song playable over Widevine.
+    connect(native, &NativeApplePlayer::failed, this, [this](const QString &message) {
+      qWarning().noquote() << "AppleMusic: lossless playback unavailable |" << message;
+      if (!isAppleTrack(m_track))
+        return;
+      if (m_appleStreams)
+        resolveAppleStream(m_track, false);
+      else
+        fail(message);
+    });
+    connect(native, &NativeApplePlayer::changed, this,
+            [this, native, wasPlaying = false]() mutable {
+      const bool playingNow = native->playing();
+      if (playingNow != wasPlaying) {
+        wasPlaying = playingNow;
+        if (playingNow && m_persistenceEnabled)
+          m_persistTimer.start();
+        if (!playingNow) {
+          m_persistTimer.stop();
+          savePlaybackState();
+        }
+        m_lastPublishedPosition = native->position();
+        updateSystemMedia();
+      } else if (std::abs(native->position() - m_lastPublishedPosition) >= 1.0) {
+        m_lastPublishedPosition = native->position();
+        updateSystemMedia();
+      }
+      emit stateChanged();
+    });
+    connect(native, &NativeApplePlayer::ended, this, [this] {
+      if (m_repeatMode == QStringLiteral("one") && !m_track.isEmpty())
+        startTrack(m_track);
+      else if (canGoNext())
+        next();
+      else
+        updateSystemMedia();
+    }, Qt::QueuedConnection);
+  }
   // Each catalog only plays its own songs; local files keep playing across a switch.
   connect(source, &CatalogSource::changed, this, [this] {
     if (remoteActive() || m_track.isEmpty() || local::isLocalTrack(m_track) ||
@@ -71,8 +151,11 @@ void PlaybackController::setAppleMusic(AppleMusic *account, CatalogSource *sourc
 
 void PlaybackController::startAppleTrack() {
   const QString id = appleSongId(m_track);
+  auto *native = findChild<NativeApplePlayer *>();
+  // MusicKit needs no Widevine, so lossless works without it.
+  const bool lossless = native && streamQuality() == QStringLiteral("lossless");
   QString message;
-  if (!m_appleStreams)
+  if (!m_appleStreams && !lossless)
     message = AppleMusicStreams::unavailableReason();
   else if (!m_catalogSource || !m_catalogSource->apple())
     message = tr("Choose Apple as the music source under Settings, General to play Apple Music songs.");
@@ -87,13 +170,17 @@ void PlaybackController::startAppleTrack() {
   // A restored song loads when play is pressed, like the other sources.
   if (m_resumePaused)
     m_loading = false;
+  else if (lossless)
+    native->start(id, m_resumePosition, false);
   else
     resolveAppleStream(m_track, false);
 }
 
 void PlaybackController::resolveAppleStream(const QVariantMap &track, bool prepared) {
   const QString id = appleSongId(track);
-  if (prepared && (id.isEmpty() || !m_catalogSource->apple() || !m_appleAccount->connected()))
+  // MusicKit plays one song at a time, so lossless never preloads an AAC copy.
+  if (prepared && (id.isEmpty() || !m_catalogSource->apple() || !m_appleAccount->connected() ||
+                   streamQuality() == QStringLiteral("lossless")))
     return;
   const quint64 generation = m_generation;
   const quint64 token = prepared ? ++m_preparedResolveToken : 0;
