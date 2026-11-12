@@ -135,8 +135,10 @@ Item {
         spacing: 8
 
         Row {
+            width: parent.width
             height: 66
             spacing: 9
+            leftPadding: root.compact ? Math.max(0, (width - 32) / 2) : 0
 
             Image {
                 anchors.verticalCenter: parent.verticalCenter
@@ -204,6 +206,7 @@ Item {
 
                 contentItem: Row {
                     spacing: 13
+                    leftPadding: root.compact ? Math.max(0, (width - 19) / 2) : 0
 
                     LucideIcon {
                         anchors.verticalCenter: parent.verticalCenter
@@ -271,7 +274,7 @@ Item {
 
             contentItem: Row {
                 spacing: 10
-                leftPadding: 4
+                leftPadding: root.compact ? Math.max(0, (width - 16) / 2) : 4
 
                 LucideIcon {
                     anchors.verticalCenter: parent.verticalCenter
@@ -418,6 +421,7 @@ Item {
 
                 contentItem: Row {
                     spacing: 10
+                    leftPadding: root.compact ? Math.max(0, (width - 28) / 2) : 0
 
                     RoundedArtwork {
                         width: 28

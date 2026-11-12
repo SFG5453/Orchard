@@ -38,7 +38,8 @@ Item {
     signal playlistRequested(var playlist)
 
     readonly property bool canopy: OrchardAppearance.layoutStyle === "canopy"
-    readonly property bool compact: width < (canopy ? 960 : 760)
+    // The full layout needs about 940px.
+    readonly property bool compact: width < 960
     readonly property bool showTrackInfo: !canopy || width >= 500
     readonly property bool showProgress: !canopy || width >= 700
     readonly property real cornerRadius: canopy ? 10 : height / 2
