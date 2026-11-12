@@ -426,7 +426,7 @@ jobs:
           export GIT_TERMINAL_PROMPT=0
           # GitHub occasionally refuses an anonymous clone; retry before failing.
           for attempt in 1 2 3 4 5; do
-            python -m pip install 'meson>=1.12,<2' 'git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7' && break
+            python -m pip install 'meson>=1.12,<2' 'dmgbuild>=1.6,<2' 'git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7' && break
             if [[ $attempt == 5 ]]; then exit 1; fi
             sleep $((attempt * 15))
           done
@@ -568,12 +568,9 @@ jobs:
       - name: Package macOS disk image
         run: |
           output="$RUNNER_TEMP/orchard-macos"
-          stage="$RUNNER_TEMP/dmg-stage"
           dmg="$output/Orchard-macOS-${{ matrix.arch }}.dmg"
-          mkdir -p "$output" "$stage"
-          ditto build/desktop/Orchard.app "$stage/Orchard.app"
-          ln -s /Applications "$stage/Applications"
-          hdiutil create -volname Orchard -srcfolder "$stage" -ov -format UDZO "$dmg"
+          mkdir -p "$output"
+          dmgbuild -s packaging/macos/dmg-settings.py -D app=build/desktop/Orchard.app Orchard "$dmg"
           codesign --force --timestamp --sign "$CODESIGN_IDENTITY" "$dmg"
           xcrun notarytool submit "$dmg" --key "$RUNNER_TEMP/notary.p8" \
             --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait
