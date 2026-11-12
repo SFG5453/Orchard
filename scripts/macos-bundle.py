@@ -149,8 +149,20 @@ def sign_distribution():
         command.append(f"-qmldir={a.qml_dir}")
     command += [f"-executable={path}" for path in helpers if path.name != a.executable.name]
     run(*command)
+    # macdeployqt deploys every SQL driver, and the ODBC and Postgres ones link outside the bundle.
+    for plugin in app.glob("Contents/PlugIns/sqldrivers/*.dylib"):
+        if "sqlite" not in plugin.name:
+            plugin.unlink()
+    for library in macos.glob("*.dylib"):
+        if not library.is_symlink() and is_macho(library):
+            run("install_name_tool", "-id", f"@rpath/{library.name}", str(library))
     machos = [path for path in app.rglob("*") if not path.is_symlink() and path.is_file()
               and is_macho(path)]
+    for path in machos:
+        for line in run("otool", "-L", str(path), capture=True).splitlines()[1:]:
+            name = line.split()[0]
+            if "Orchard.app/" in name and not name.startswith("@"):
+                run("install_name_tool", "-change", name, f"@rpath/{Path(name).name}", str(path))
     flags = ["--force", "--timestamp", "--options", "runtime", "--sign", identity]
     for path in sorted(machos, key=lambda item: len(item.parts), reverse=True):
         extra = ["--entitlements", str(a.entitlements)] if path.parent == macos else []
