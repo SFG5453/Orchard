@@ -530,7 +530,9 @@ jobs:
           args=(--buildtype release -Dtests=false -Dmacos_distribution=true
             "-Dmacos_codesign_identity=$CODESIGN_IDENTITY" "-Dhost_rcc=$QT_RCC" "-Dhost_qsb=$QT_QSB")
           if [[ "${{ matrix.arch }}" == x86_64 ]]; then
-            args+=(--cross-file scripts/release/macos-x86_64-cross.ini
+            # Meson ignores PATH for host tools in cross builds, so name qmake in a second cross file.
+            printf "[binaries]\nqmake6 = '%s'\n" "$QT_ROOT/bin/qmake6" > "$RUNNER_TEMP/macos-qt.ini"
+            args+=(--cross-file scripts/release/macos-x86_64-cross.ini --cross-file "$RUNNER_TEMP/macos-qt.ini"
               -Dorchard_rust_target=x86_64-apple-darwin "-Dhost_qjsc=$HOST_QJSC")
           fi
           meson setup build/desktop "${args[@]}"

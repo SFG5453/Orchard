@@ -139,8 +139,7 @@ while pending:
                 origins[macos / name] = candidate
                 pending.append(macos / name)
                 break
-    if (not a.distribution and any(r.startswith("@rpath/Qt") for r in references)
-            and qt_libs not in rpaths(path)):
+    if any(r.startswith("@rpath/Qt") for r in references) and qt_libs not in rpaths(path):
         run("install_name_tool", "-add_rpath", qt_libs, str(path))
 
 def sign_distribution():
