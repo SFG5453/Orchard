@@ -60,13 +60,20 @@ meson compile -C build Orchard.app
 ```
 
 `scripts/macos-bundle.py` takes the bundle ID and team from the profile, checks that the keychain identity (`macos_codesign_identity`, default `Apple Development`) is one of its certificates, and writes `build/Orchard.app`. Executables and staged dylibs sit in `Contents/MacOS`, models in `Contents/Resources/models`, and Qt loads from the SDK through an added rpath, so the bundle runs only on the machine that built it. It is signed without the hardened runtime, which distribution builds need along with `macdeployqt` and a Developer ID profile.
- It is signed without the hardened runtime.
 
 ### macOS release
 
 The desktop release workflow builds `Orchard-macOS-arm64.dmg` natively and `Orchard-macOS-x86_64.dmg` by cross-compiling on the same Apple silicon runner (`scripts/release/macos-x86_64-cross.ini`, a host `qjsc`, and an x86_64 ONNX Runtime built from source because `ort-sys` ships no Intel macOS binaries). `-Dmacos_distribution=true` makes `scripts/macos-bundle.py` run `macdeployqt` and sign every Mach-O file inside out with the hardened runtime and `packaging/macos/Orchard.entitlements`. It requires a `Developer ID Application` identity and fails on anything else.
 
 The workflow signs, notarizes and staples the app and the disk image, and fails when any of these repository secrets is missing: `MACOS_CERTIFICATE_P12_BASE64`, `MACOS_CERTIFICATE_PASSWORD`, `MACOS_NOTARY_KEY_P8_BASE64`, `MACOS_NOTARY_KEY_ID` and `MACOS_NOTARY_ISSUER_ID`. The disk images are uploaded as workflow artifacts; the R2 publish job does not include macOS.
+
+The disk image is laid out by [dmgbuild](https://github.com/dmgbuild/dmgbuild) from `packaging/macos/dmg-settings.py`, which writes the Finder layout without AppleScript. To build one locally from the repository root:
+
+```sh
+uvx dmgbuild -s packaging/macos/dmg-settings.py -D app=build/Orchard.app Orchard build/Orchard.dmg
+```
+
+`packaging/macos/Orchard.icns` and `dmg-background.tiff` are committed. They draw the mark from `mobile/android/app/src/main/res/drawable/ic_widget_orchard.xml`; regenerate them with `uv run --with pillow python scripts/macos-artwork.py`.
 
 On Windows, use the Qt 6.12.0 `msvc2022_64` SDK from an MSVC developer shell, and configure with `--buildtype debugoptimized` rather than `debug`: the Rust core always links the release C runtime (`/MD`), which debug C++ objects (`/MDd`) cannot link against. Windows packaging checks that all imported Qt symbols exist in the staged DLLs. A complete native YouTube cookie session completes sign-in on both platforms. Account name/avatar probing is best effort and cannot reject a session with an `accounts_list` error.
 

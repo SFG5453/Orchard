@@ -540,7 +540,7 @@ if host_machine.system() == 'darwin' and (macos_profile != '' or macos_distribut
   macos_bundle_args = [
     '--executable', '@INPUT0@', '--helper', '@INPUT1@', '--helper', '@INPUT2@',
     '--helper', meson.current_build_dir() / 'orchard-adaptive-mix',
-    '--info-plist', '@INPUT3@',
+    '--info-plist', '@INPUT3@', '--icon', files('packaging/macos/Orchard.icns'),
     '--version', meson.project_version(), '--min-macos', macos_min,
     '--identity', get_option('macos_codesign_identity'),
     '--qmake', find_program('qmake6', 'qmake', dirs: qt_tool_dirs),
@@ -558,6 +558,7 @@ if host_machine.system() == 'darwin' and (macos_profile != '' or macos_distribut
     input: macos_bundle_inputs,
     output: 'Orchard.app',
     command: [python, files('scripts/macos-bundle.py')] + macos_bundle_args,
+    depend_files: files('packaging/macos/Orchard.icns'),
     depends: adaptive_stage,
     build_by_default: true)
 endif

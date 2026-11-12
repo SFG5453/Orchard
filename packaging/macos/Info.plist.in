@@ -8,6 +8,8 @@
 	<string>Orchard</string>
 	<key>CFBundleExecutable</key>
 	<string>orchard</string>
+	<key>CFBundleIconFile</key>
+	<string>Orchard</string>
 	<key>CFBundleIdentifier</key>
 	<string>@BUNDLE_ID@</string>
 	<key>CFBundleInfoDictionaryVersion</key>
