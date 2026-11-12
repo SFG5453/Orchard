@@ -522,6 +522,14 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
           rm "$RUNNER_TEMP/certificate.p12"
+          # Without Apple's intermediate the identity is listed but never valid for codesign.
+          curl -fsSL --retry 5 -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain"
+          if ! security find-identity -v -p codesigning "$keychain" | grep -F "\"$SIGNING_IDENTITY_NAME\""; then
+            echo "::error::No valid identity named '$SIGNING_IDENTITY_NAME' in the signing keychain."
+            security find-identity -p codesigning "$keychain"
+            exit 1
+          fi
           echo "CODESIGN_IDENTITY=$SIGNING_IDENTITY_NAME" >> "$GITHUB_ENV"
           echo "SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
       - name: Build Orchard
