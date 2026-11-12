@@ -188,10 +188,12 @@ void SupportCenter::updateDiagnostics(QQuickWindow *window, const QString &page)
                     .arg(OutputHealth::underruns.load())
                     .arg(OutputHealth::longestGapMs.load())
                     .arg(OutputHealth::sinkFailures.load()));
-  if (OutputHealth::streamRefreshes || OutputHealth::streamFailures || OutputHealth::decoderErrors)
+  if (OutputHealth::streamRefreshes || OutputHealth::streamResumes || OutputHealth::streamFailures ||
+      OutputHealth::decoderErrors)
     info.insert(QStringLiteral("audioStream"),
-                QStringLiteral("%1 refreshes, %2 failures, %3 decoder errors, last HTTP %4")
+                QStringLiteral("%1 refreshes, %2 resumes, %3 failures, %4 decoder errors, last HTTP %5")
                     .arg(OutputHealth::streamRefreshes.load())
+                    .arg(OutputHealth::streamResumes.load())
                     .arg(OutputHealth::streamFailures.load())
                     .arg(OutputHealth::decoderErrors.load())
                     .arg(OutputHealth::lastStreamStatus.load()));

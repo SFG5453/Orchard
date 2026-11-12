@@ -29,8 +29,9 @@ inline std::atomic<long long> longestGapMs{0};
 inline std::atomic<int> sinkBufferMs{0};
 // Failed sink starts and sinks Qt stopped on an error. Neither goes idle, so neither counts as an underrun.
 inline std::atomic<int> sinkFailures{0};
-// Stream interruptions since launch: refreshes keep playing, failures and decoder errors restart it.
+// Stream interruptions since launch: refreshes and resumes keep playing, failures and decoder errors restart it.
 inline std::atomic<int> streamRefreshes{0};
+inline std::atomic<int> streamResumes{0};
 inline std::atomic<int> streamFailures{0};
 inline std::atomic<int> decoderErrors{0};
 inline std::atomic<int> lastStreamStatus{0};

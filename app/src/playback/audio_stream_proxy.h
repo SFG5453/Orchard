@@ -44,6 +44,8 @@ public:
     void setRangeReader(RangeReader reader) { m_reader = std::move(reader); }
     // Without one, a rejected chunk reports streamFailed.
     void setStreamRefresher(StreamRefresher refresher) { m_refresher = std::move(refresher); }
+    // Bytes queued ahead of the player before the next chunk waits. Applies to connections opened afterwards.
+    void setReadAhead(qint64 bytes) { m_readAhead = bytes; }
     QUrl open(const QJsonObject &stream);
     // Serves `head` in place of the first `replaces` upstream bytes; "contentLength" stays upstream's.
     QUrl open(const QJsonObject &stream, const QByteArray &head, qint64 replaces);
@@ -61,6 +63,7 @@ private:
     QByteArray m_path;
     QByteArray m_head;
     qint64 m_headReplaces{0};
+    qint64 m_readAhead{128 * 1024};
     QList<QObject *> m_connections;
     RangeReader m_reader;
     StreamRefresher m_refresher;

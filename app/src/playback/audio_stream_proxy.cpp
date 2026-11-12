@@ -19,6 +19,7 @@
 
 #include "audio_stream_proxy.h"
 #include "audio_ranges.h"
+#include "output_health.h"
 #include <QNetworkReply>
 #include <QPointer>
 #include <QRegularExpression>
@@ -31,6 +32,9 @@
 namespace {
 // Provider reads stay small so a seek never waits behind a large decrypt.
 constexpr qint64 kProviderChunkBytes = 512 * 1024;
+// Chunks are queued whole, so a response that moves no bytes for this long is dead.
+constexpr int kStallTimeoutMs = 10000;
+constexpr int kRetryDelaysMs[] = {200, 600, 1800};
 
 bool refreshableStatus(int status) {
     return status == 403 || status == 410 || status == 429 || status >= 500;
@@ -42,9 +46,10 @@ public:
                      QJsonObject stream, QByteArray path, bool suspended,
                      std::function<void(int, const QString &)> failure,
                      std::function<void(int)> refresh,
-                     AudioStreamProxy::RangeReader reader, QByteArray head, qint64 replaces)
+                     AudioStreamProxy::RangeReader reader, QByteArray head, qint64 replaces, qint64 readAhead)
         : m_socket(socket), m_network(network), m_stream(std::move(stream)),
           m_path(std::move(path)), m_head(std::move(head)), m_shift(m_head.size() - replaces),
+          m_readAhead(readAhead),
           m_failure(std::move(failure)), m_refresh(std::move(refresh)),
           m_reader(m_stream.contains("provider") ? std::move(reader) : nullptr),
           m_suspended(suspended) {
@@ -138,17 +143,20 @@ private:
     }
     void fetchChunk() {
         if (m_reader) { pump(); return; }
-        if (m_suspended || m_awaitingRefresh || m_reply || m_socket->state() != QAbstractSocket::ConnectedState)
+        if (m_suspended || m_awaitingRefresh || m_backoff || m_reply ||
+            m_socket->state() != QAbstractSocket::ConnectedState)
             return;
         if (m_offset > m_end) {
             m_socket->disconnectFromHost();
             return;
         }
+        // bytesWritten() calls back as the player drains the queue.
+        if (m_socket->bytesToWrite() >= m_readAhead) return;
         m_chunkEnd = qMin(m_end, audioRangeEnd(m_offset, m_length));
         m_chunkRemaining = m_chunkEnd - m_offset + 1;
         m_headersValidated = false;
         QNetworkRequest request(QUrl(m_stream.value("url").toString()));
-        request.setTransferTimeout(30000);
+        request.setTransferTimeout(kStallTimeoutMs);
         request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
         request.setRawHeader("User-Agent", m_stream.value("userAgent").toString().toUtf8());
         request.setRawHeader("Accept-Encoding", "identity");
@@ -224,9 +232,12 @@ private:
             fail(0, AudioStreamProxy::tr("The audio download was interrupted repeatedly. Please try again."));
             return;
         }
+        ++OutputHealth::streamResumes;
         // Resume after bytes already handed to the player, without duplicates.
         releaseReply();
-        QTimer::singleShot(100 * m_retries, this, [this] {
+        m_backoff = true;
+        QTimer::singleShot(m_retries ? kRetryDelaysMs[m_retries - 1] : 0, this, [this] {
+            m_backoff = false;
             if (!m_suspended) fetchChunk();
         });
     }
@@ -256,11 +267,13 @@ private:
     }
     void pump() {
         if (m_reader) { readProvider(); return; }
-        if (!m_reply || m_socket->state() != QAbstractSocket::ConnectedState) return;
+        if (!m_reply) { fetchChunk(); return; }
+        if (m_socket->state() != QAbstractSocket::ConnectedState) return;
         const int status = m_reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (!status) { if (m_reply->isFinished()) retryChunk(); return; }
         if (!m_headersValidated && !validateRange(status)) return;
-        while (m_reply->bytesAvailable() && m_socket->bytesToWrite() < 128 * 1024) {
+        // Queue the whole chunk however slowly the player reads; a chunk is at most 1 MiB.
+        while (m_reply->bytesAvailable()) {
             if (m_chunkRemaining == 0) {
                 fail(status, AudioStreamProxy::tr("The audio server sent more data than its byte range declared."));
                 return;
@@ -270,7 +283,7 @@ private:
             m_socket->write(data);
             m_chunkRemaining -= data.size();
         }
-        if (!m_reply->isFinished() || m_reply->bytesAvailable()) return;
+        if (!m_reply->isFinished()) return;
         if (m_chunkRemaining != 0) { retryChunk(); return; }
         // All declared bytes arrived, even if the peer closed just afterward.
         releaseReply();
@@ -290,6 +303,7 @@ private:
     QByteArray m_path, m_request;
     QByteArray m_head;
     qint64 m_shift{0};
+    qint64 m_readAhead{0};
     std::function<void(int, const QString &)> m_failure;
     std::function<void(int)> m_refresh;
     AudioStreamProxy::RangeReader m_reader;
@@ -301,6 +315,7 @@ private:
     bool m_awaitingRefresh{false};
     bool m_suspended{false};
     bool m_reading{false};
+    bool m_backoff{false};
     int m_retries{0};
 };
 }
@@ -315,7 +330,7 @@ AudioStreamProxy::AudioStreamProxy(QObject *parent) : QObject(parent) {
                     emit streamFailed(status, message);
                 },
                 m_refresher ? std::function<void(int)>([this](int status) { refreshStream(status); }) : nullptr,
-                m_reader, m_head, m_headReplaces);
+                m_reader, m_head, m_headReplaces, m_readAhead);
             connection->setParent(this);
             m_connections.append(connection);
             connect(connection, &QObject::destroyed, this, [this, connection] { m_connections.removeAll(connection); });

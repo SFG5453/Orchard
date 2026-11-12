@@ -23,7 +23,13 @@
 #include "providers/youtube/youtube_provider.h"
 #include <QDebug>
 
+namespace {
+// Holds most songs whole. The CDN resets a response read at playback rate after about 30 s.
+constexpr qint64 kSongReadAheadBytes = 8 * 1024 * 1024;
+}
+
 void PlaybackController::wireStreamProxy(AudioStreamProxy *proxy) {
+  proxy->setReadAhead(kSongReadAheadBytes);
   // GVS checks tokens past the first chunk, so a song can be rejected mid-playback.
   // Replacing the URL inside the proxy keeps the decoder and its buffer alive.
   proxy->setStreamRefresher([this, proxy](int status, std::function<void(const QJsonObject &)> done) {

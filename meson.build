@@ -586,6 +586,7 @@ if get_option('tests')
   app_test_specs = [
     ['audio_proxy', 'tests/audio_stream_proxy_test.cpp'],
     ['audio_refresh', 'tests/audio_stream_refresh_test.cpp'],
+    ['audio_readahead', 'tests/audio_stream_readahead_test.cpp'],
     ['audio_pipeline_sink', 'tests/audio_pipeline_sink_test.cpp'],
     ['account', 'tests/orchard_account_test.cpp'],
     ['support', 'tests/support_center_test.cpp'],
