@@ -104,18 +104,6 @@ preserved in [`slop_model/LICENSE`](app/src/playback/slop_model/LICENSE). The
 method follows Afchar et al., "A Fourier Explanation of AI-music Artifacts"
 (ISMIR 2025).
 
-## Docs search model
-
-The docs window matches plain-language questions to docs sections with
-[`TaylorAI/bge-micro-v2`](https://huggingface.co/TaylorAI/bge-micro-v2), a sentence
-embedding model distilled from `BAAI/bge-small-en-v1.5`. Orchard ships the
-author's quantized ONNX export unchanged as
-[`models/docs-search/model_quantized.onnx`](models/docs-search/model_quantized.onnx)
-(SHA-256 `ed65e36025aa94cb74207dab863c85452919ec0ab7df3512092932aa22c9a33a`)
-together with the model's `bert-base-uncased` vocabulary
-([`vocab.txt`](models/docs-search/vocab.txt)). The model is by Benjamin Anderson
-under the MIT License, preserved in [`LICENSE`](models/docs-search/LICENSE).
-
 ## Nirovi beat and downbeat model
 
 [`models/nirovi`](models/nirovi/README.md) was trained on the log-mel spectrograms published

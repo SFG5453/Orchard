@@ -21,5 +21,3 @@ pub mod planner;
 pub mod prepare;
 pub mod repeat;
 pub mod song;
-#[cfg(feature = "desktop")]
-pub mod text_embed;

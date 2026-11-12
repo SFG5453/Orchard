@@ -29,10 +29,6 @@ required-features = ["desktop"]
 name = "models"
 required-features = ["desktop"]
 
-[[test]]
-name = "docs_embed"
-required-features = ["desktop"]
-
 [dependencies]
 orchard-transition-planner = { path = "../orchard-transition-planner" }
 earmark = { path = "../earmark" }

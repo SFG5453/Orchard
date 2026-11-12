@@ -48,8 +48,7 @@ shutil.copy2(a.profile / worker, a.destination / worker)
 # Stage only the validated runtime graphs and their documentation/licenses.
 for relative in ("nirovi/nirovi_fp16.onnx", "nirovi/nirovi_int8.ort", "nirovi/README.md",
                  "syvenu/syvenu.ort", "syvenu/README.md", "syvenu/TRAINING_CREDITS.tsv.gz",
-                 "docs-search/model_quantized.onnx", "docs-search/vocab.txt", "docs-search/README.md",
-                 "docs-search/LICENSE", "slop/fakeprint_lr.f32"):
+                 "slop/fakeprint_lr.f32"):
     target = a.destination / "models" / relative
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(a.models / relative, target)

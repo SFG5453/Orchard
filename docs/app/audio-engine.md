@@ -55,7 +55,7 @@ Selecting a preset sets all ten band sliders at once, and the selected preset is
 
 ## Shape the equalizer by hand
 
-Turn on **Manual equalizer**, then drag the band sliders. There are ten bands: 31 Hz, 62 Hz, 125 Hz, 250 Hz, 500 Hz, 1 kHz, 2 kHz, 4 kHz, 8 kHz, and 16 kHz. Each band goes from -12 dB to +12 dB in 0.5 dB steps and starts at 0 dB.
+Turn on **Manual equalizer**, then drag the band sliders. There are ten bands: 31 Hz, 62 Hz, 125 Hz, 250 Hz, 500 Hz, 1 kHz, 2 kHz, 4 kHz, 8 kHz, and 16 kHz. Each band goes from -12 dB to +12 dB in 0.5 dB steps and starts at 0 dB. To make the bass louder, raise the 31 Hz, 62 Hz, and 125 Hz bands, or select the **Bass boost** preset.
 
 **EQ preamp** sets the level before the bands. It goes from -12 dB to +6 dB and starts at 0 dB. The band sliders and EQ preamp need the Audio Engine and Manual equalizer on.
 

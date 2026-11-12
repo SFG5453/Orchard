@@ -17,22 +17,18 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+
 #pragma once
 
-#include "bert_tokenizer.h"
-#include "docs_embedder.h"
 #include "docs_index.h"
 
 #include <QObject>
 #include <QTimer>
 #include <QVariantList>
-#include <memory>
 
 class DocsLibrary;
 
 // Answers plain-language questions ("how do I open the queue") with the docs sections that fit.
-// Everything runs on this machine: the docs are embedded once per run, then each question is
-// embedded and compared. Without the model files the assistant reports itself unavailable.
 class DocsAssistant final : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool available READ available NOTIFY availableChanged)
@@ -44,8 +40,8 @@ class DocsAssistant final : public QObject {
     Q_PROPERTY(QVariantList answers READ answers NOTIFY answersChanged)
 
 public:
-    // docs and embedder must outlive the assistant.
-    DocsAssistant(const DocsLibrary *docs, DocsEmbedder *embedder, BertTokenizer tokenizer, QObject *parent = nullptr);
+    // docs must outlive the assistant.
+    explicit DocsAssistant(const DocsLibrary *docs, QObject *parent = nullptr);
 
     [[nodiscard]] bool available() const { return m_available; }
     [[nodiscard]] bool busy() const { return m_busy; }
@@ -63,21 +59,11 @@ signals:
     void answersChanged();
 
 private:
-    struct Build;
-
     void process();
-    void buildIndex();
-    void embedNextBatch(std::shared_ptr<Build> build);
-    void finishBuild(const Build &build);
-    void embedQuestion();
-    void fail(const QString &error);
     void setBusy(bool busy);
     void setAnswers(const QString &question, const QVariantList &answers);
-    void refreshAvailability();
 
     const DocsLibrary *m_docs;
-    DocsEmbedder *m_embedder;
-    BertTokenizer m_tokenizer;
     DocsIndex m_index;
     QTimer m_debounce;
     QString m_pending;
@@ -85,7 +71,4 @@ private:
     QVariantList m_answers;
     bool m_available = false;
     bool m_busy = false;
-    bool m_building = false;
-    bool m_disabled = false;
-    int m_failures = 0;
 };

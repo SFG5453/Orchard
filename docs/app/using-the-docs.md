@@ -53,9 +53,9 @@ Type a question the way you would say it, for example "how do I open the queue" 
 
 Each row shows the name of a section and the page it belongs to. The page opens at that section, and the section's card lights up for a moment. A row that shows a page name with a description opens the top of that page. The row you opened stays marked.
 
-While Orchard looks for answers, a thin green bar sweeps under the search box. The first question after Orchard starts takes about a second longer, because Orchard reads the docs first.
+While Orchard looks for answers, a thin green bar sweeps under the search box.
 
-A small search model that ships with Orchard runs on your computer. Your question does not leave your computer.
+The search runs on your computer. Your question does not leave your computer.
 
 Clear the search box to see every page again. If no **Best matches** appear, see [Troubleshooting](troubleshooting.md).
 

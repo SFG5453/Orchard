@@ -692,12 +692,9 @@ if get_option('tests')
     include_directories: app_inc, dependencies: [app_dep, qt_test_dep],
     cpp_args: [
       '-DORCHARD_DOCS_DIR="' + source_root / 'docs/app' + '"',
-      '-DORCHARD_DOCS_MODEL_DIR="' + source_root / 'models/docs-search' + '"',
-      '-DORCHARD_MODELS_SOURCE_DIR="' + source_root / 'models' + '"',
       '-DORCHARD_TEST_DATA_DIR="' + source_root / 'tests/data' + '"',
     ])
-  test('orchard_docs_search', docs_search, timeout: 120,
-    env: ['ORCHARD_MODELS_DIR=' + source_root / 'models'])
+  test('orchard_docs_search', docs_search, timeout: 120)
 
   connect_test_specs = [
     ['connect_core', 'tests/connect/connect_core_test.cpp'],

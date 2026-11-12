@@ -23,26 +23,68 @@
 
 #include <QVariantMap>
 #include <algorithm>
+#include <cmath>
 
 namespace {
-// Weights come from 63 hand-written questions over docs/app (top 3 holds the right section 95% of the time).
-constexpr float kBodyWeight = 0.7f;
-constexpr float kTitleWeight = 0.3f;
-constexpr float kWordOverlapWeight = 0.1f;
+constexpr float kK1 = 1.5f;
+constexpr float kB = 0.6f;
+// Title words count this many times over body words.
+constexpr float kTitleBoost = 3.0f;
 // A page-level hit loses ties to a section that says the same thing.
-constexpr float kPagePenalty = 0.06f;
-// Unrelated questions top out near 0.60 and the weakest real question scores 0.66.
-constexpr float kFloor = 0.62f;
-// Results more than this below the best one are noise.
-constexpr float kWindow = 0.08f;
+constexpr float kPageFactor = 0.8f;
+// A synonym match counts for less than the word the question used.
+constexpr float kSynonymFactor = 0.7f;
+// Unrelated questions top out near 0.32 and the weakest real question scores 0.34.
+constexpr float kFloor = 0.33f;
+// Results this far below the best one are noise.
+constexpr float kWindow = 0.6f;
 constexpr qsizetype kSnippetChars = 110;
 
-float dot(const QList<float> &a, const QList<float> &b)
+const QSet<QString> &filler()
 {
-    float sum = 0;
-    for (qsizetype i = 0; i < a.size(); ++i)
-        sum += a.at(i) * b.at(i);
-    return sum;
+    static const QSet<QString> words = {
+        "an", "the", "to", "of", "in", "on", "at", "for", "and", "or", "is", "are", "was", "be", "been", "do", "does",
+        "did", "can", "could", "should", "would", "will", "you", "we", "my", "me", "it", "its", "this", "that", "these",
+        "those", "how", "what", "whats", "where", "when", "why", "which", "who", "with", "from", "by", "as", "into",
+        "about", "so", "if", "then", "than", "there", "their", "them", "they", "your", "our", "us", "not", "no", "yes",
+        "please", "go", "get", "want", "way", "some", "any"};
+    return words;
+}
+
+// Question wording mapped to docs wording, by stem.
+const QHash<QString, QStringList> &synonyms()
+{
+    static const QHash<QString, QStringList> table = {
+        {"log", {"sign"}},
+        {"logout", {"sign"}},
+        {"login", {"sign"}},
+        {"exit", {"clos", "leav"}},
+        {"quit", {"clos"}},
+        {"leav", {"clos"}},
+        {"greyed", {"disabl"}},
+        {"grey", {"disabl"}},
+        {"gray", {"disabl"}},
+        {"shortcut", {"keyboard", "key"}},
+        {"hotkey", {"shortcut", "keyboard"}},
+        {"bass", {"equalizer"}},
+        {"treble", {"equalizer"}},
+        {"eq", {"equalizer"}},
+        {"louder", {"volum"}},
+        {"quieter", {"volum"}},
+        {"loop", {"repeat"}},
+        {"track", {"song"}},
+        {"tune", {"song"}},
+        {"remov", {"delet", "clear"}},
+        {"delet", {"remov"}},
+        {"start", {"open", "turn"}},
+        {"restart", {"start", "launch"}},
+        {"reopen", {"start", "launch"}},
+        {"enabl", {"turn"}},
+        {"disabl", {"turn"}},
+        {"broken", {"troubleshoot", "fix"}},
+        {"work", {"troubleshoot"}},
+    };
+    return table;
 }
 
 QString stem(QString word)
@@ -129,7 +171,7 @@ QList<DocsChunk> DocsIndex::chunksOf(const DocsLibrary &docs)
             chunk.icon = icon;
             chunk.section = name;
             chunk.snippet = snippetOf(text);
-            chunk.titleText = name;
+            chunk.titleText = title + QLatin1Char(' ') + name;
             chunk.bodyText = title + QStringLiteral(": ") + name + QLatin1Char('\n') + text;
             chunks.append(chunk);
         }
@@ -137,19 +179,13 @@ QList<DocsChunk> DocsIndex::chunksOf(const DocsLibrary &docs)
     return chunks;
 }
 
-QSet<QString> DocsIndex::stems(const QString &text)
+QStringList DocsIndex::terms(const QString &text)
 {
-    static const QSet<QString> filler = {
-        "an", "the", "to", "of", "in", "on", "at", "for", "and", "or", "is", "are", "was", "be", "been", "do", "does",
-        "did", "can", "could", "should", "would", "will", "you", "we", "my", "me", "it", "its", "this", "that", "these",
-        "those", "how", "what", "whats", "where", "when", "why", "which", "who", "with", "from", "by", "as", "into",
-        "about", "so", "if", "then", "than", "there", "their", "them", "they", "your", "our", "us", "not", "no", "yes",
-        "please"};
-    QSet<QString> out;
+    QStringList out;
     QString word;
     const auto flush = [&] {
-        if (word.size() > 1 && !filler.contains(word))
-            out.insert(stem(word));
+        if (word.size() > 1 && !filler().contains(word))
+            out.append(stem(word));
         word.clear();
     };
     for (const QChar c : text.toLower()) {
@@ -162,63 +198,92 @@ QSet<QString> DocsIndex::stems(const QString &text)
     return out;
 }
 
-void DocsIndex::setChunks(QList<DocsChunk> chunks)
+QSet<QString> DocsIndex::stems(const QString &text)
 {
-    m_chunks = std::move(chunks);
-    m_body.clear();
-    m_title.clear();
-    m_stems.clear();
-    m_stems.reserve(m_chunks.size());
-    for (const DocsChunk &chunk : std::as_const(m_chunks))
-        m_stems.append(stems(chunk.pageTitle + QLatin1Char(' ') + chunk.section + QLatin1Char(' ') + chunk.bodyText));
+    const QStringList list = terms(text);
+    return {list.begin(), list.end()};
 }
 
-void DocsIndex::setVectors(QList<Vector> body, QList<Vector> title)
+void DocsIndex::setChunks(QList<DocsChunk> chunks)
 {
-    const bool sized = body.size() == m_chunks.size() && title.size() == m_chunks.size();
-    const qsizetype width = body.isEmpty() ? 0 : body.first().size();
-    const auto uniform = [width](const QList<Vector> &vectors) {
-        return std::all_of(vectors.begin(), vectors.end(), [width](const Vector &v) { return v.size() == width; });
-    };
-    if (!sized || width == 0 || !uniform(body) || !uniform(title)) {
-        m_body.clear();
-        m_title.clear();
-        return;
+    clear();
+    m_chunks = std::move(chunks);
+    m_stats.reserve(m_chunks.size());
+    float total = 0;
+    for (const DocsChunk &chunk : std::as_const(m_chunks)) {
+        Stats stats;
+        const QStringList body = terms(chunk.bodyText);
+        for (const QString &term : body)
+            stats.tf[term] += 1;
+        for (const QString &term : terms(chunk.titleText))
+            stats.tf[term] += kTitleBoost;
+        stats.length = static_cast<float>(body.size());
+        total += stats.length;
+        for (auto it = stats.tf.cbegin(); it != stats.tf.cend(); ++it)
+            m_df[it.key()] += 1;
+        m_stats.append(std::move(stats));
     }
-    m_body = std::move(body);
-    m_title = std::move(title);
+    m_averageLength = m_chunks.isEmpty() ? 0 : total / static_cast<float>(m_chunks.size());
 }
 
 void DocsIndex::clear()
 {
     m_chunks.clear();
-    m_stems.clear();
-    m_body.clear();
-    m_title.clear();
+    m_stats.clear();
+    m_df.clear();
+    m_averageLength = 0;
 }
 
-QVariantList DocsIndex::rank(const Vector &query, const QString &question, int limit) const
+float DocsIndex::idf(const QString &term) const
 {
-    if (!ready() || query.size() != m_body.first().size())
-        return {};
+    const auto n = static_cast<float>(m_chunks.size());
+    const auto df = static_cast<float>(m_df.value(term));
+    return std::log(1.0f + (n - df + 0.5f) / (df + 0.5f));
+}
 
+float DocsIndex::termScore(const Stats &stats, const QString &term) const
+{
+    const float tf = stats.tf.value(term);
+    if (tf <= 0)
+        return 0;
+    const float norm = kK1 * (1 - kB + kB * stats.length / std::max(m_averageLength, 1.0f));
+    return idf(term) * tf * (kK1 + 1) / (tf + norm);
+}
+
+QList<std::pair<float, qsizetype>> DocsIndex::scoreAll(const QString &question) const
+{
     const QSet<QString> wanted = stems(question);
     QList<std::pair<float, qsizetype>> scored;
+    float best = 0;
+    for (const QString &term : wanted)
+        best += idf(term) * (kK1 + 1);
+    if (wanted.isEmpty() || best <= 0)
+        return scored;
     scored.reserve(m_chunks.size());
     for (qsizetype i = 0; i < m_chunks.size(); ++i) {
-        float score = kBodyWeight * dot(query, m_body.at(i)) + kTitleWeight * dot(query, m_title.at(i));
-        if (!wanted.isEmpty()) {
-            const QSet<QString> &have = m_stems.at(i);
-            const auto shared = std::count_if(wanted.begin(), wanted.end(), [&have](const QString &w) { return have.contains(w); });
-            score += kWordOverlapWeight * static_cast<float>(shared) / static_cast<float>(wanted.size());
+        const Stats &stats = m_stats.at(i);
+        float score = 0;
+        for (const QString &term : wanted) {
+            float hit = termScore(stats, term);
+            for (const QString &other : synonyms().value(term))
+                hit = std::max(hit, kSynonymFactor * idf(term) / std::max(idf(other), 0.01f) * termScore(stats, other));
+            score += hit;
         }
         if (m_chunks.at(i).section.isEmpty())
-            score -= kPagePenalty;
-        scored.append({score, i});
+            score *= kPageFactor;
+        // Divided by the question's best possible score so one floor fits every question.
+        scored.append({score / best, i});
     }
     std::stable_sort(scored.begin(), scored.end(), [](const auto &a, const auto &b) { return a.first > b.first; });
+    return scored;
+}
 
-    const float cutoff = std::max(kFloor, scored.first().first - kWindow);
+QVariantList DocsIndex::rank(const QString &question, int limit) const
+{
+    const QList<std::pair<float, qsizetype>> scored = scoreAll(question);
+    if (scored.isEmpty())
+        return {};
+    const float cutoff = std::max(kFloor, scored.first().first * kWindow);
     QVariantList out;
     for (const auto &[score, index] : scored) {
         if (score < cutoff || out.size() >= limit)

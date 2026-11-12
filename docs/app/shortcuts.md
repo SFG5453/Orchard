@@ -24,6 +24,8 @@ Settings, Shortcuts shows the same list in the app. Orchard turns playback short
 
 ## Shortcut list
 
+These are all of the keyboard shortcuts in Orchard.
+
 - `Space`: play or pause. Media Play does the same.
 - `Left` and `Right`: jump 5 seconds back or forward in the current song.
 - `[` and `]`: slow down or speed up playback by 0.05x. They need the Audio Engine on.

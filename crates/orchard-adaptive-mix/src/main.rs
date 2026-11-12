@@ -6,7 +6,6 @@ use orchard_adaptive_mix::{
     best_mix,
     models::Models,
     prepare::{Measurements, Request, prepare},
-    text_embed::{self, TextEmbedder},
 };
 use std::{
     io::{self, BufRead, Write},
@@ -30,7 +29,6 @@ fn run() {
     let mut args = std::env::args().skip(1);
     let directory = PathBuf::from(args.next().unwrap_or_else(|| "models".into()));
     let mut models: Option<Models> = None;
-    let mut embedder: Option<TextEmbedder> = None;
     let stdin = io::stdin();
     let mut input = stdin.lock();
     loop {
@@ -69,8 +67,6 @@ fn run() {
                         })?;
                         return Ok(serde_json::json!({"order":order}));
                     }
-                    // Docs questions run in their own worker instance, so no Best Mix job ever delays one.
-                    Some("embed") => return text_embed::handle(&mut embedder, &directory, &value),
                     _ => {}
                 }
             }

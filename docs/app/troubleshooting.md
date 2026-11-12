@@ -134,4 +134,4 @@ Select **Reset engine** at the bottom of the **Audio Engine** group. Reset engin
 
 ## The docs show no Best matches
 
-Type at least three characters and ask about something the docs cover, such as "how do I open the queue". The docs show no **Best matches** and say "No pages match" when nothing fits. If the box reads **Search the docs** instead of **Search or ask a question**, the search model is missing from this copy of Orchard, and the box only matches words. See [Use the docs](using-the-docs.md).
+Type at least three characters and ask about something the docs cover, such as "how do I open the queue". The docs show no **Best matches** and say "No pages match" when nothing fits. Try the words the docs use, for example "close" instead of "exit". See [Use the docs](using-the-docs.md).

@@ -17,11 +17,14 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+
 #pragma once
 
+#include <QHash>
 #include <QList>
 #include <QSet>
 #include <QString>
+#include <QStringList>
 #include <QVariantList>
 
 class DocsLibrary;
@@ -33,35 +36,43 @@ struct DocsChunk {
     QString icon;
     QString section;
     QString snippet;
-    // Embedded for the title vector.
+    // Page title and section title, weighted above the body.
     QString titleText;
-    // Embedded for the body vector: page title, section title and the section text.
+    // Page title, section title and the section text.
     QString bodyText;
 };
 
-// Ranks docs chunks against a question vector. Holds no model; vectors come from DocsEmbedder.
+// BM25 over docs chunks with a small synonym table for question wording.
 class DocsIndex {
 public:
-    using Vector = QList<float>;
-
     static QList<DocsChunk> chunksOf(const DocsLibrary &docs);
-    // Lowercased content words with light suffix stripping, for the word-overlap bonus.
+    // Content-word stems in order, repeats kept.
+    static QStringList terms(const QString &text);
+    // Distinct content-word stems.
     static QSet<QString> stems(const QString &text);
 
     void setChunks(QList<DocsChunk> chunks);
-    // One body and one title vector per chunk, in chunk order.
-    void setVectors(QList<Vector> body, QList<Vector> title);
     void clear();
 
     [[nodiscard]] const QList<DocsChunk> &chunks() const { return m_chunks; }
-    [[nodiscard]] bool ready() const { return !m_chunks.isEmpty() && m_body.size() == m_chunks.size(); }
+    [[nodiscard]] bool ready() const { return !m_chunks.isEmpty(); }
 
     // Best first: {pageId, pageTitle, icon, section, snippet, score}. Empty when nothing is relevant.
-    [[nodiscard]] QVariantList rank(const Vector &query, const QString &question, int limit = 6) const;
+    [[nodiscard]] QVariantList rank(const QString &question, int limit = 6) const;
+    // Every chunk with its score, best first; for tuning.
+    [[nodiscard]] QList<std::pair<float, qsizetype>> scoreAll(const QString &question) const;
 
 private:
+    struct Stats {
+        QHash<QString, float> tf;
+        float length = 0;
+    };
+
+    [[nodiscard]] float idf(const QString &term) const;
+    [[nodiscard]] float termScore(const Stats &stats, const QString &term) const;
+
     QList<DocsChunk> m_chunks;
-    QList<QSet<QString>> m_stems;
-    QList<Vector> m_body;
-    QList<Vector> m_title;
+    QList<Stats> m_stats;
+    QHash<QString, int> m_df;
+    float m_averageLength = 0;
 };

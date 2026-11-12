@@ -135,18 +135,6 @@ vocal model leaves the frame-based vocal estimate in charge of planning and the
 planned filter sweep unchanged.
 Settings show preparation/availability; worker crashes cannot stop playback.
 
-## Docs search embeddings
-
-The docs window's question search (`models/docs-search`) uses this worker as a
-text embedder. The Qt host starts a separate instance for it, so a Best Mix run
-never delays a docs question. A request is one line,
-`{"kind":"embed","ids":[[101, ...], ...]}`, holding token ids from the host's
-WordPiece tokenizer. The reply is `{"vectors":[[...], ...]}`: one unit-length,
-384-dimension vector per sequence. The CPU session loads on the first request,
-runs one sequence per call on one non-spinning thread, and holds about 50 MB
-while the worker lives; the host closes an idle worker after a minute. The model,
-tokenizer contract and ranking are described in `models/docs-search/README.md`.
-
 ## Build and runtime
 
 The main CMake build compiles and stages the worker, ORT's Dawn runtime,
@@ -163,11 +151,9 @@ occur during playback. Model sessions are retained in the isolated worker.
 ## Validation
 
 - `cargo test -p orchard-adaptive-mix`
-- `cargo test -p orchard-adaptive-mix --test docs_embed` (CPU only)
 - `cargo clippy -p orchard-adaptive-mix --all-targets -- -D warnings`
 - Model test: `cargo test -p orchard-adaptive-mix --test models -- --ignored`.
 - `ctest --test-dir build -R 'orchard_audio_proxy|orchard_playback_persistence|orchard_adaptive_mix_span' --output-on-failure`
-- `ctest --test-dir build -R orchard_docs_search --output-on-failure` runs the docs search tests against the staged worker.
 
 Source hashes, licenses, tensor contracts, and measured numerical
 errors live with the models under `models/`.

@@ -28,7 +28,6 @@
 #include "connect/connect_service.h"
 #include "crash_handler.h"
 #include "docs/docs_assistant.h"
-#include "docs/docs_embedder.h"
 #include "docs/docs_library.h"
 #include "appearance/appearance_settings.h"
 #include "appearance/ui_scaling.h"
@@ -244,8 +243,7 @@ int main(int argc, char *argv[]) {
   // The manual nobody reads, with a copy button for the robots that will.
   DocsLibrary docs;
   // The manual answers back, which is more than most manuals manage.
-  DocsEmbedder docsEmbedder(DocsEmbedder::defaultProgram(), DocsEmbedder::defaultModels());
-  DocsAssistant docsAssistant(&docs, &docsEmbedder, BertTokenizer());
+  DocsAssistant docsAssistant(&docs);
   SystemMediaBridge systemMedia;
   YouTubeProvider youtubeProvider;
   AuthManager authManager(&youtubeProvider);

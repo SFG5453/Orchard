@@ -75,7 +75,6 @@ def main() -> None:
     required = ("platforms/qwindows.dll", "multimedia/ffmpegmediaplugin.dll", "models/nirovi/nirovi_fp16.onnx",
                 "models/nirovi/nirovi_int8.ort",
                 "models/syvenu/syvenu.ort",
-                "models/docs-search/model_quantized.onnx", "models/docs-search/vocab.txt",
                 "models/slop/fakeprint_lr.f32")
     for name in required:
         require(stage / name)
