@@ -93,14 +93,10 @@ Rectangle {
         id: blocker
 
         anchors.fill: parent
+        // hoverEnabled keeps hover from reaching items underneath.
         hoverEnabled: true
         acceptedButtons: Qt.AllButtons
         onWheel: function(wheel) { wheel.accepted = true; }
-    }
-
-    TapHandler {
-        gesturePolicy: TapHandler.WithinBounds
-        onTapped: root.wake()
     }
 
     TheaterPicture {
@@ -113,7 +109,6 @@ Rectangle {
 
         // Single tap waits out the double-tap window so a double click never blips the audio.
         TapHandler {
-            gesturePolicy: TapHandler.WithinBounds
             onSingleTapped: {
                 OrchardPlayback.toggle();
                 root.wake();
