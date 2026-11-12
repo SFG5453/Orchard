@@ -55,9 +55,14 @@ def rpaths(path):
             if line.strip() == "cmd LC_RPATH"]
 
 
+def linked_libraries(path):
+    # Dependency lines are indented; fat binaries add a header line per architecture.
+    lines = run("otool", "-arch", "all", "-L", str(path), capture=True).splitlines()
+    return [line.split()[0] for line in lines if line.startswith("\t")]
+
+
 def rpath_libraries(path):
-    lines = run("otool", "-L", str(path), capture=True).splitlines()[1:]
-    return [line.split()[0] for line in lines if line.strip().startswith("@rpath/")]
+    return [name for name in linked_libraries(path) if name.startswith("@rpath/")]
 
 
 if a.distribution:
@@ -159,8 +164,7 @@ def sign_distribution():
     machos = [path for path in app.rglob("*") if not path.is_symlink() and path.is_file()
               and is_macho(path)]
     for path in machos:
-        for line in run("otool", "-L", str(path), capture=True).splitlines()[1:]:
-            name = line.split()[0]
+        for name in linked_libraries(path):
             if "Orchard.app/" in name and not name.startswith("@"):
                 run("install_name_tool", "-change", name, f"@rpath/{Path(name).name}", str(path))
     flags = ["--force", "--timestamp", "--options", "runtime", "--sign", identity]
@@ -173,8 +177,7 @@ def sign_distribution():
     run("codesign", *flags, "--entitlements", str(a.entitlements), str(app))
     run("codesign", "--verify", "--strict", "--deep", str(app))
     for path in machos:
-        for line in run("otool", "-L", str(path), capture=True).splitlines()[1:]:
-            name = line.split()[0]
+        for name in linked_libraries(path):
             if not name.startswith(("@", "/usr/lib/", "/System/")):
                 fail(f"{path.relative_to(app)} links outside the bundle: {name}")
     print(f"macos-bundle: signed {app} for distribution as {bundle_id}")
