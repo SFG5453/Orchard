@@ -50,6 +50,17 @@ Linux sign-in uses WebKitGTK (`app/src/auth/webkit_*`), also with no Qt web modu
 
 macOS sign-in uses the system WKWebView (`app/src/auth/webkit_*_mac.mm`) behind the same `WebKitView` and `WebKitProfile` interface as Linux, with no Qt web modules. Each page opens in its own AppKit window with back and reload toolbar buttons, and the YouTube session comes from the data store's `WKHTTPCookieStore`, which includes HttpOnly cookies. Every profile gets its own `WKWebsiteDataStore`, so Apple Music keeps its own `AppleMusic` profile. The macOS build targets macOS 14.4, the minimum of the Qt 6.12 frameworks, so Orchard needs macOS 14.4 or later.
 
+### Signed macOS app
+
+Native MusicKit only authorizes a bundle signed under an App ID with the MusicKit app service. In the Apple developer account, register an explicit App ID with MusicKit enabled, register the Mac's Provisioning UDID, create an Apple Development certificate from a signing request made on that Mac, and download a macOS App Development profile covering all three. Then point the build at the profile:
+
+```sh
+meson configure build -Dmacos_provisioning_profile=/path/to/Orchard.provisionprofile
+meson compile -C build Orchard.app
+```
+
+`scripts/macos-bundle.py` takes the bundle ID and team from the profile, checks that the keychain identity (`macos_codesign_identity`, default `Apple Development`) is one of its certificates, and writes `build/Orchard.app`. Executables and staged dylibs sit in `Contents/MacOS`, models in `Contents/Resources/models`, and Qt loads from the SDK through an added rpath, so the bundle runs only on the machine that built it. It is signed without the hardened runtime, which distribution builds need along with `macdeployqt` and a Developer ID profile.
+
 On Windows, use the Qt 6.12.0 `msvc2022_64` SDK from an MSVC developer shell, and configure with `--buildtype debugoptimized` rather than `debug`: the Rust core always links the release C runtime (`/MD`), which debug C++ objects (`/MDd`) cannot link against. Windows packaging checks that all imported Qt symbols exist in the staged DLLs. A complete native YouTube cookie session completes sign-in on both platforms. Account name/avatar probing is best effort and cannot reject a session with an `accounts_list` error.
 
 ### Cross compilation

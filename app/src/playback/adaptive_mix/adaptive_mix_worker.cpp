@@ -1,5 +1,6 @@
 /* Copyright (C) 2026 SFG545. Licensed under the PolyForm Shield License 1.0.0, see LICENSE-POLYFORM-SHIELD. */
 #include "adaptive_mix_worker.h"
+#include "model_paths.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -72,9 +73,7 @@ void AdaptiveMixWorker::start(const QJsonObject &request) {
       else
         cancel(); // Idle crash: the next job starts a fresh worker.
     });
-    const QString models = qEnvironmentVariable(
-        "ORCHARD_MODELS_DIR", QDir(QCoreApplication::applicationDirPath()).filePath("models"));
-    m_process->start(program(), {models});
+    m_process->start(program(), {orchardModelsDirectory()});
     // Windows reports FailedToStart synchronously; fail() has already nulled the process.
     // Writing to a process that never existed is a bold strategy. It did not pay off.
     if (!m_process)

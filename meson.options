@@ -4,3 +4,5 @@ option('host_qjsc', type: 'string', value: '', description: 'Host qjsc built fro
 option('host_rcc', type: 'string', value: '', description: 'Absolute path to the host Qt resource compiler')
 option('host_qsb', type: 'string', value: '', description: 'Absolute path to the host Qt shader baker')
 option('adaptive_platform', type: 'string', value: '', description: 'Adaptive mix staging platform override')
+option('macos_provisioning_profile', type: 'string', value: '', description: 'Provisioning profile that signs a development Orchard.app (empty skips the bundle)')
+option('macos_codesign_identity', type: 'string', value: 'Apple Development', description: 'Keychain signing identity for Orchard.app, by name or SHA-1')
