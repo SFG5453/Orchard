@@ -288,6 +288,8 @@ app_sources = [
   'app/src/app_icon.h',
   'app/src/heap_trim.cpp',
   'app/src/heap_trim.h',
+  'app/src/frameless_snap.cpp',
+  'app/src/frameless_snap.h',
   'app/src/window_occlusion.cpp',
   'app/src/window_occlusion.h',
   'app/src/window_state.cpp',

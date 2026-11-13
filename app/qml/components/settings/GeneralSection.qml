@@ -40,7 +40,11 @@ GeneralSectionForm {
     windowSwitch.checked: OrchardWindowState.enabled
     windowSwitch.onToggled: OrchardWindowState.enabled = windowSwitch.checked
 
-    windowButtonsAvailable: Qt.platform.os !== "windows"
+    systemTitleBarAvailable: Qt.platform.os === "windows"
+    systemTitleBarSwitch.checked: OrchardWindowState.systemTitleBar
+    systemTitleBarSwitch.onToggled: OrchardWindowState.systemTitleBar = systemTitleBarSwitch.checked
+
+    windowButtonsAvailable: Qt.platform.os !== "windows" || !OrchardWindowState.systemTitleBar
     windowButtonsSwitch.checked: OrchardWindowState.showWindowButtons
     windowButtonsSwitch.onToggled: OrchardWindowState.showWindowButtons = windowButtonsSwitch.checked
 

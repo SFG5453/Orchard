@@ -97,9 +97,13 @@ Turn the switch off to start Orchard with an empty player on the Home page. Turn
 
 The **Launch** group has a row named "Remember window size" with a switch. Its description reads "Reopen Orchard at the size you last used it." It is on by default. With the switch on, Orchard reopens at the last window size, and maximized if it was maximized when you quit. The window position is left to your desktop. With the switch off, Orchard opens at its default size.
 
+## Use the system title bar (Windows)
+
+The **Launch** group has a row named "Use system title bar" on Windows. It is on by default and Windows draws the title bar. Turn it off to use Orchard's own title bar and window buttons, the same as on Linux. Dragging the window to a screen edge or corner still snaps it, and the maximize button and double-clicking the top strip still maximize.
+
 ## Hide the window buttons
 
-The **Launch** group has a row named "Show window buttons" with a switch. Its description reads "Minimize, maximize and close buttons in the top right corner. Turn off if your window manager provides its own." It is on by default. The row appears on Linux, where Orchard draws its own buttons. With the switch off, the buttons are hidden at once, including in the fullscreen player. Close the window with your window manager or the tray exit command.
+The **Launch** group has a row named "Show window buttons" with a switch. Its description reads "Minimize, maximize and close buttons in the top right corner. Turn off if your window manager provides its own." It is on by default. The row appears on Linux, where Orchard draws its own buttons, and on Windows when "Use system title bar" is off. With the switch off, the buttons are hidden at once, including in the fullscreen player. Close the window with your window manager or the tray exit command.
 
 ## Keep Orchard playing in the system tray
 

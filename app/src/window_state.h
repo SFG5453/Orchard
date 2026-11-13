@@ -24,6 +24,7 @@
 #include <QSettings>
 #include <QTimer>
 
+#include "frameless_snap.h"
 #include "window_occlusion.h"
 
 class QWindow;
@@ -35,6 +36,7 @@ class WindowState final : public QObject
     Q_OBJECT
     Q_PROPERTY(bool enabled READ enabled WRITE setEnabled NOTIFY enabledChanged)
     Q_PROPERTY(bool showWindowButtons READ showWindowButtons WRITE setShowWindowButtons NOTIFY showWindowButtonsChanged)
+    Q_PROPERTY(bool systemTitleBar READ systemTitleBar WRITE setSystemTitleBar NOTIFY systemTitleBarChanged)
     Q_PROPERTY(int initialWidth READ initialWidth CONSTANT)
     Q_PROPERTY(int initialHeight READ initialHeight CONSTANT)
     Q_PROPERTY(bool initialMaximized READ initialMaximized CONSTANT)
@@ -52,6 +54,8 @@ public:
     void setEnabled(bool value);
     [[nodiscard]] bool showWindowButtons() const { return m_showWindowButtons; }
     void setShowWindowButtons(bool value);
+    [[nodiscard]] bool systemTitleBar() const { return m_systemTitleBar; }
+    void setSystemTitleBar(bool value);
     [[nodiscard]] int initialWidth() const { return m_width; }
     [[nodiscard]] int initialHeight() const { return m_height; }
     [[nodiscard]] bool initialMaximized() const { return m_maximized; }
@@ -73,6 +77,7 @@ signals:
     void availableGeometryChanged();
     void enabledChanged();
     void showWindowButtonsChanged();
+    void systemTitleBarChanged();
     void idleChanged();
     void unfocusedChanged();
     void backgroundIdleChanged();
@@ -97,6 +102,7 @@ private:
     QTimer m_saveTimer;
     QTimer m_unfocusedTimer;
     WindowOcclusion m_occlusion;
+    FramelessSnap m_snap;
     bool m_idle{false};
     bool m_unfocused{false};
     bool m_backgroundIdle{false};
@@ -106,6 +112,7 @@ private:
     bool m_artworkIdle{false};
     bool m_enabled{true};
     bool m_showWindowButtons{true};
+    bool m_systemTitleBar{true};
     int m_width{1360};
     int m_height{820};
     bool m_maximized{false};

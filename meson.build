@@ -526,7 +526,7 @@ if get_option('tests')
   artwork_pause_test = executable('orchard_artwork_pause_tests',
     files('tests/artwork_pause_test.cpp', 'app/src/appearance/appearance_settings.cpp',
       'app/src/appearance/ui_scaling.cpp', 'app/src/window_state.cpp',
-      'app/src/window_occlusion.cpp') + artwork_pause_moc,
+      'app/src/frameless_snap.cpp', 'app/src/window_occlusion.cpp') + artwork_pause_moc,
     include_directories: app_inc, dependencies: [qt_test_dep, qt_dep, qt_gui_private] + platform_deps)
   test('orchard_artwork_pause', artwork_pause_test, timeout: 30,
     env: ['QT_QPA_PLATFORM=offscreen'])

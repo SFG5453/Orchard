@@ -29,7 +29,7 @@ Window {
     id: mainWindow
 
     property bool troubleModalOpen: false
-    readonly property bool nativeWindowFrame: Qt.platform.os === "windows"
+    readonly property bool nativeWindowFrame: Qt.platform.os === "windows" && OrchardWindowState.systemTitleBar
     // Height the floating player overlaps at the bottom of scrolling pages.
     property real playerInset: 0
 

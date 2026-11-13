@@ -25,6 +25,7 @@ ColumnLayout {
 
     property bool trayAvailable: true
     property bool windowButtonsAvailable: false
+    property bool systemTitleBarAvailable: false
     property bool startupAvailable: false
     property string startupError: ""
     property alias startupSwitch: startupSwitch
@@ -33,6 +34,7 @@ ColumnLayout {
     property alias persistSwitch: persistSwitch
     property alias windowSwitch: windowSwitch
     property alias windowButtonsSwitch: windowButtonsSwitch
+    property alias systemTitleBarSwitch: systemTitleBarSwitch
     property alias traySwitch: traySwitch
     property alias homeSourcePicker: homeSourcePicker
     property bool appleMusicConnected: true
@@ -99,6 +101,19 @@ ColumnLayout {
                 id: windowSwitch
                 objectName: "settingsRememberWindow"
                 Accessible.name: qsTr("Remember window size")
+            }
+        }
+
+        SettingsRow {
+            visible: root.systemTitleBarAvailable
+            iconName: "app-window"
+            title: qsTr("Use system title bar")
+            description: qsTr("Windows draws the title bar. Turn off for Orchard's own title bar and window buttons.")
+
+            SettingsSwitch {
+                id: systemTitleBarSwitch
+                objectName: "settingsSystemTitleBar"
+                Accessible.name: qsTr("Use system title bar")
             }
         }
 

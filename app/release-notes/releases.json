@@ -14,7 +14,8 @@
       {
         "title": "Settings",
         "items": [
-          "A Show window buttons switch in Settings, General hides Orchard's own minimize, maximize, and close buttons on Linux. Turn it off if your window manager provides its own."
+          "A Show window buttons switch in Settings, General hides Orchard's own minimize, maximize, and close buttons on Linux. Turn it off if your window manager provides its own.",
+          "A Use system title bar switch in Settings, General on Windows turns off the system title bar for Orchard's own title bar and window buttons, the same as on Linux. Window snapping and maximize keep working. Fixes #259."
         ]
       },
       {
