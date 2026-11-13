@@ -18,6 +18,10 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
+    # ort-sys copy-dylibs symlinks into examples/ and fails when it is missing.
+    profile_dir = args.target_dir / args.target / args.profile
+    (profile_dir / "examples").mkdir(parents=True, exist_ok=True)
+
     command = ["cargo", "build", "--package", "orchard-adaptive-mix",
                "--target-dir", str(args.target_dir)]
     if args.profile == "release":
