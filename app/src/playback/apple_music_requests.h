@@ -35,7 +35,9 @@ extern const QUrl kWebPlaybackUrl;
 // A JSON POST carrying the developer and listener tokens from Apple's web origin.
 QNetworkRequest request(const QUrl &url, const QString &developerToken, const QString &userToken);
 QByteArray webPlaybackBody(const QString &appleId);
-QByteArray licenseBody(const QByteArray &challenge, const QString &keyUri, const QString &appleId);
+// `keySystem` is com.widevine.alpha or, for FairPlay, com.apple.fps.
+QByteArray licenseBody(const QByteArray &challenge, const QString &keyUri, const QString &appleId,
+                       const QString &keySystem = QStringLiteral("com.widevine.alpha"));
 // The license from a license reply, or empty with `error` set.
 QByteArray license(QNetworkReply *reply, QString &error);
 QString replyError(QNetworkReply *reply);

@@ -20,6 +20,9 @@
 #include "music_video_controller.h"
 
 #include "apple_music_picture.h"
+#ifdef Q_OS_MACOS
+#include "apple_music_fairplay.h"
+#endif
 #include "apple_music_stream.h"
 #include "integrations/apple_music.h"
 #include "auth/auth_manager.h"
@@ -31,6 +34,7 @@
 
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QQuickItem>
 #include <QRegularExpression>
 #include <QSettings>
 #include <QVideoFrame>
@@ -90,7 +94,38 @@ void MusicVideoController::setAppleMusic(AppleMusic *account) {
   });
   connect(m_applePicture, &AppleMusicPicture::failed, this,
           [this](const QString &message) { setStatus(QStringLiteral("error"), message); });
+#ifdef Q_OS_MACOS
+  m_fairPlay = new AppleMusicFairPlay(account, m_playback, this);
+  m_fairPlay->setSurface(qobject_cast<QQuickItem *>(m_nativeSurface));
+  connect(m_fairPlay, &AppleMusicFairPlay::started, this, [this] { setStatus(QStringLiteral("ready")); });
+  connect(m_fairPlay, &AppleMusicFairPlay::heightChanged, this, [this] {
+    m_height = m_fairPlay->height();
+    m_heights = m_fairPlay->heights();
+    emit changed();
+  });
+  // Widevine still shows the 486p picture when FairPlay is refused.
+  connect(m_fairPlay, &AppleMusicFairPlay::failed, this, [this] {
+    m_fairPlayFailed = true;
+    m_native = false;
+    emit changed();
+    if (m_open && m_apple)
+      m_applePicture->start(m_videoId, m_maxHeight);
+  });
+#endif
   syncTrack();
+}
+
+void MusicVideoController::attachNative(QObject *item) {
+  m_nativeSurface = item;
+#ifdef Q_OS_MACOS
+  if (m_fairPlay)
+    m_fairPlay->setSurface(qobject_cast<QQuickItem *>(item));
+#endif
+}
+
+void MusicVideoController::detachNative(QObject *item) {
+  if (item == m_nativeSurface)
+    attachNative(nullptr);
 }
 
 QRectF MusicVideoController::contentRect() const {
@@ -248,6 +283,7 @@ void MusicVideoController::syncTrack() {
   m_track = track;
   m_trackId = id;
   m_videoId.clear();
+  m_fairPlayFailed = false;
   m_searchRequest = 0;
   m_streamRequest = 0;
   clearStream();
@@ -337,7 +373,13 @@ void MusicVideoController::resolveStream() {
   clearStream();
   setStatus(QStringLiteral("loading"));
   if (m_apple) {
-    m_applePicture->start(m_videoId, m_maxHeight);
+    m_native = m_fairPlay && !m_fairPlayFailed;
+#ifdef Q_OS_MACOS
+    if (m_native)
+      m_fairPlay->start(m_videoId, m_maxHeight);
+#endif
+    if (!m_native)
+      m_applePicture->start(m_videoId, m_maxHeight);
     // An Apple music video item already plays its own soundtrack; a song swaps to it.
     if (!m_appleSong)
       return;
@@ -418,6 +460,11 @@ void MusicVideoController::setStatus(const QString &status, const QString &error
 void MusicVideoController::clearStream() {
   if (m_applePicture)
     m_applePicture->stop();
+#ifdef Q_OS_MACOS
+  if (m_fairPlay)
+    m_fairPlay->stop();
+#endif
+  m_native = false;
   resetContentRect();
   m_height = 0;
   m_heights.clear();

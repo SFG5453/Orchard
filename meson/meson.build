@@ -317,6 +317,8 @@ app_executable_sources = [
   'app/src/appearance/kawarp_background.h',
   'app/src/appearance/liquid_glass.cpp',
   'app/src/appearance/liquid_glass.h',
+  'app/src/appearance/video_hole.cpp',
+  'app/src/appearance/video_hole.h',
   'app/src/main.cpp',
   'app/src/instance_coordinator.cpp',
   'app/src/instance_coordinator.h',

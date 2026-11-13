@@ -153,7 +153,8 @@ if host_machine.system() == 'linux'
 elif host_machine.system() == 'windows'
   platform_deps += [cpp.find_library('dbghelp'), cpp.find_library('shell32'), cpp.find_library('dwmapi')]
 elif host_machine.system() == 'darwin'
-  platform_deps += [dependency('appleframeworks', modules: ['IOKit', 'CoreFoundation', 'Foundation', 'AppKit', 'MediaPlayer'])]
+  platform_deps += [dependency('appleframeworks', modules: ['IOKit', 'CoreFoundation', 'Foundation', 'AppKit', 'MediaPlayer',
+    'AVFoundation', 'CoreMedia', 'QuartzCore'])]
 endif
 
 python = find_program('python3')
@@ -354,6 +355,9 @@ endif
 if host_machine.system() == 'linux' and xcb_dep.found()
   app_args += ['-DORCHARD_HAVE_XCB']
 endif
+if host_machine.system() == 'darwin'
+  app_moc_headers += ['app/src/playback/apple_music_fairplay.h']
+endif
 app_moc = qt6.compile_moc(headers: app_moc_headers,
   sources: ['app/src/providers/runtime/provider_runtime.cpp'],
   include_directories: app_inc, dependencies: app_dependencies,
@@ -364,7 +368,8 @@ if host_machine.system() == 'darwin'
     'app/src/fullscreen_watch_mac.h', 'app/src/fullscreen_watch_mac.mm',
     'app/src/mac_menus.h', 'app/src/mac_menus.cpp',
     'app/src/occlusion_watch_mac.h', 'app/src/occlusion_watch_mac.mm',
-    'app/src/window_chrome_mac.h', 'app/src/window_chrome_mac.mm')
+    'app/src/window_chrome_mac.h', 'app/src/window_chrome_mac.mm',
+    'app/src/playback/apple_music_fairplay.h', 'app/src/playback/apple_music_fairplay.mm')
 endif
 app_lib = static_library('orchard_app', files(app_sources) + app_platform_sources + app_moc,
   include_directories: app_inc, dependencies: app_dependencies,
@@ -377,6 +382,7 @@ qml_type_headers = [
   'app/src/appearance/artwork_palette.h',
   'app/src/appearance/kawarp_background.h',
   'app/src/appearance/liquid_glass.h',
+  'app/src/appearance/video_hole.h',
 ]
 # Meson's Qt helper puts every source at the module root. Thin wrappers keep
 # each real QML file beside the relative imports it expects.
@@ -569,7 +575,8 @@ qml_startup_test = executable('orchard_qml_startup_test',
     files('app/src/appearance/artwork_palette.cpp',
       'app/src/appearance/image_dimensions.cpp',
       'app/src/appearance/kawarp_background.cpp',
-      'app/src/appearance/liquid_glass.cpp')), app_lib.extract_objects(
+      'app/src/appearance/liquid_glass.cpp',
+      'app/src/appearance/video_hole.cpp')), app_lib.extract_objects(
     files('app/src/appearance/artwork_sampler.cpp',
       'app/src/appearance/kawarp_artwork.cpp',
       'app/src/appearance/lucide_icon_provider.cpp'))],

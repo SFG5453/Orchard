@@ -32,6 +32,8 @@ Item {
     property MediaPlayer player: null
     // Only one picture is fed at a time; a live picture takes the frames from any other.
     property bool live: true
+    // macOS FairPlay pictures are a layer under the window; this item only clears a hole for it.
+    readonly property bool nativePicture: OrchardMusicVideo.nativePicture
     readonly property real frameWidth: output.sourceRect.width
     readonly property real frameHeight: output.sourceRect.height
     readonly property bool known: frameWidth > 0 && frameHeight > 0
@@ -45,7 +47,7 @@ Item {
     readonly property real pixelRatio: Screen.devicePixelRatio
     // FSR 1 only pays off when the frame is shown larger than it is. Its shaders need GLSL 330,
     // and Qt's OpenGL backend runs a 2.0 context that only takes GLSL 120.
-    readonly property bool upscaled: known && OrchardMusicVideo.upscaling
+    readonly property bool upscaled: known && !nativePicture && OrchardMusicVideo.upscaling
         && output.width * pixelRatio > frameWidth * 1.05 && GraphicsInfo.api !== GraphicsInfo.OpenGL
 
     clip: true
@@ -58,6 +60,7 @@ Item {
     VideoOutput {
         id: output
 
+        visible: !root.nativePicture
         // Stretch is exact here: the size below keeps the frame's own aspect.
         fillMode: root.known ? VideoOutput.Stretch : VideoOutput.PreserveAspectFit
         width: root.known ? root.frameWidth * root.zoom : root.width
@@ -103,16 +106,23 @@ Item {
         }
     }
 
+    VideoHole {
+        anchors.fill: parent
+        visible: root.nativePicture
+    }
+
     function claim() {
         if (player)
             player.videoOutput = output;
         OrchardMusicVideo.watchFrames(output.videoSink);
+        OrchardMusicVideo.attachNative(root);
     }
 
     function release() {
         if (player && player.videoOutput === output)
             player.videoOutput = null;
         OrchardMusicVideo.releaseFrames(output.videoSink);
+        OrchardMusicVideo.detachNative(root);
     }
 
     onLiveChanged: live ? claim() : release()
