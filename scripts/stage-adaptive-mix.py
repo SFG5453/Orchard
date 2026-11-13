@@ -20,20 +20,23 @@ a.destination.mkdir(parents=True, exist_ok=True)
 a.cache.mkdir(parents=True, exist_ok=True)
 found = False
 dxc = set()
+directories = []
 for output in (a.profile / "build").glob("ort-sys*/**/output"):
     for line in output.read_text().splitlines():
-        if "rustc-link-search=" not in line:
-            continue
-        directory = Path(line.split("rustc-link-search=", 1)[1].removeprefix("native="))
-        for library in directory.glob("*webgpu*dawn*"):
-            if library.suffix in (".so", ".dll", ".dylib"):
-                shutil.copy2(library, a.destination / library.name)
-                found = True
-        # Dawn's D3D12 backend loads DXC from beside the worker.
-        for name in ("dxil.dll", "dxcompiler.dll"):
-            if (directory / name).exists():
-                shutil.copy2(directory / name, a.destination / name)
-                dxc.add(name)
+        if "rustc-link-search=" in line:
+            directories.append(Path(line.split("rustc-link-search=", 1)[1].removeprefix("native=")))
+# copy-dylibs links the runtime into build/ and the profile dir.
+directories += [a.profile / "build", a.profile]
+for directory in directories:
+    for library in directory.glob("*webgpu*dawn*"):
+        if library.suffix in (".so", ".dll", ".dylib"):
+            shutil.copy2(library, a.destination / library.name)
+            found = True
+    # Dawn's D3D12 backend loads DXC from beside the worker.
+    for name in ("dxil.dll", "dxcompiler.dll"):
+        if (directory / name).exists():
+            shutil.copy2(directory / name, a.destination / name)
+            dxc.add(name)
 if not found:
     raise SystemExit("ort's Dawn runtime was not found in Cargo's linker output")
 if a.platform == "windows-x86_64-msvc" and dxc != {"dxil.dll", "dxcompiler.dll"}:
