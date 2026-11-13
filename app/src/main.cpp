@@ -184,6 +184,11 @@ int main(int argc, char *argv[]) {
   QCoreApplication::setApplicationName(QStringLiteral("Orchard"));
   UiScaling::configure();
   configureGraphicsMemory();
+#ifdef Q_OS_MACOS
+  // Native FairPlay video sits under the window and shows through a transparent hole;
+  // without an alpha channel Qt keeps its Metal layer opaque and the hole draws black.
+  QQuickWindow::setDefaultAlphaBuffer(true);
+#endif
 
   // QApplication for QSystemTrayIcon, whose menus are still widgets in 2026.
   QApplication application(argc, argv);

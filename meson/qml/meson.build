@@ -320,4 +320,6 @@ shader_sources = [
   'app/qml/shaders/canvas_stage_wash.frag',
   'app/qml/shaders/rounded_artwork.frag',
   'app/qml/shaders/mix_dots.frag',
+  'app/qml/shaders/video_hole.vert',
+  'app/qml/shaders/video_hole.frag',
 ]

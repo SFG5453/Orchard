@@ -42,9 +42,10 @@ QByteArray webPlaybackBody(const QString &appleId) {
   return QJsonDocument(QJsonObject{{QStringLiteral("salableAdamId"), appleId}}).toJson(QJsonDocument::Compact);
 }
 
-QByteArray licenseBody(const QByteArray &challenge, const QString &keyUri, const QString &appleId) {
+QByteArray licenseBody(const QByteArray &challenge, const QString &keyUri, const QString &appleId,
+                       const QString &keySystem) {
   const QJsonObject body{{QStringLiteral("challenge"), QString::fromLatin1(challenge.toBase64())},
-                         {QStringLiteral("key-system"), QStringLiteral("com.widevine.alpha")},
+                         {QStringLiteral("key-system"), keySystem},
                          {QStringLiteral("uri"), keyUri},
                          // Library songs license by their catalog id too.
                          {QStringLiteral("adamId"), appleId},
