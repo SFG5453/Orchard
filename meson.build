@@ -168,7 +168,7 @@ rust_platform_deps = []
 if host_machine.system() == 'windows'
   # rustc --print native-static-libs; release links without the last three only because LTO drops the references.
   rust_platform_deps += [cpp.find_library('ntdll'), cpp.find_library('bcrypt'), cpp.find_library('ws2_32'),
-    cpp.find_library('userenv'), cpp.find_library('dbghelp')]
+    cpp.find_library('userenv'), cpp.find_library('dbghelp'), cpp.find_library('synchronization')]
 endif
 rust_dep = declare_dependency(link_with: rust_archive,
   dependencies: rust_platform_deps)
