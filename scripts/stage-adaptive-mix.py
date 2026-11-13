@@ -20,7 +20,7 @@ a.destination.mkdir(parents=True, exist_ok=True)
 a.cache.mkdir(parents=True, exist_ok=True)
 found = False
 dxc = set()
-for output in (a.profile / "build").glob("ort-sys-*/output"):
+for output in (a.profile / "build").glob("ort-sys*/**/output"):
     for line in output.read_text().splitlines():
         if "rustc-link-search=" not in line:
             continue

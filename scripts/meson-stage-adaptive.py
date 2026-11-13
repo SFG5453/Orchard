@@ -18,9 +18,12 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
-    # ort-sys copy-dylibs symlinks into examples/ and fails when it is missing.
+    # ort-sys copy-dylibs symlinks into <dir>/{examples,deps} for the profile dir and, with
+    # Cargo's per-package build layout, for build/ as well.
     profile_dir = args.target_dir / args.target / args.profile
-    (profile_dir / "examples").mkdir(parents=True, exist_ok=True)
+    for base in (profile_dir, profile_dir / "build"):
+        for name in ("examples", "deps"):
+            (base / name).mkdir(parents=True, exist_ok=True)
 
     command = ["cargo", "build", "--package", "orchard-adaptive-mix",
                "--target-dir", str(args.target_dir)]
