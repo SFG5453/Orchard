@@ -1,5 +1,33 @@
 [
   {
+    "version": "2.0.7-canary.1",
+    "date": "2026-11-14",
+    "title": "Local albums and a tidier top edge",
+    "sections": [
+      {
+        "title": "Library",
+        "items": [
+          "Local music groups into albums from file tags on desktop and Android. Songs without an album artist group by folder, so compilations and CD subfolders stay whole. Albums open as read-only pages in disc and track order. Fixes #260."
+        ]
+      },
+      {
+        "title": "Fixes",
+        "items": [
+          "Mixes and autoplay no longer queue both the album cut and its music video. Tags such as \"(Visualiser Video)\" are recognized, and YouTube Music generated mixes collapse these duplicates. Fixes #262.",
+          "Taps in the music video theater wake the controls and toggle playback again. Fixed by @AlejandroMY190106.",
+          "The maximize button shows the restore glyph while the window is maximized.",
+          "The top bar moves up when window buttons are hidden, removing the empty strip above it. Fixes #264."
+        ]
+      },
+      {
+        "title": "Appearance",
+        "items": [
+          "The canvas stage wash behind lyrics is a coarse colour field that keeps the video's colours without its shapes. Bright frames are compressed to keep lyrics readable, and dithering hides banding."
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.0.6-canary.1",
     "date": "2026-11-12",
     "title": "Cleaner video theater and better song matching",
