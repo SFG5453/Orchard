@@ -99,6 +99,12 @@ Rectangle {
         onWheel: function(wheel) { wheel.accepted = true; }
     }
 
+    // Takes an immediate exclusive grab so the blocker MouseArea cannot steal taps.
+    TapHandler {
+        gesturePolicy: TapHandler.WithinBounds
+        onTapped: root.wake()
+    }
+
     TheaterPicture {
         id: picture
 
@@ -109,6 +115,7 @@ Rectangle {
 
         // Single tap waits out the double-tap window so a double click never blips the audio.
         TapHandler {
+            gesturePolicy: TapHandler.WithinBounds
             onSingleTapped: {
                 OrchardPlayback.toggle();
                 root.wake();
