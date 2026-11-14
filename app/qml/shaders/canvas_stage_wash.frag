@@ -59,18 +59,21 @@ vec4 bspline(vec2 uv) {
 
 void main() {
     vec2 p = (qt_TexCoord0 - stage.xy) / stage.zw;
-    // Past the stage the edge colours carry on, spreading vertically so details smear into a gradient.
     float beyond = max(0.0, p.x - 1.0) + max(0.0, -p.x);
-    float spread = min(0.45, beyond * 0.5);
-    p = clamp(p, 0.0, 1.0);
-    vec3 c = bspline(p).rgb * 0.4;
-    c += bspline(vec2(p.x, p.y - spread * 0.5)).rgb * 0.2;
-    c += bspline(vec2(p.x, p.y + spread * 0.5)).rgb * 0.2;
-    c += bspline(vec2(p.x, p.y - spread)).rgb * 0.1;
-    c += bspline(vec2(p.x, p.y + spread)).rgb * 0.1;
+    // Past the stage the field folds back on itself, so it keeps varying in both axes.
+    p.x = clamp(p.x, 0.0, 1.0) - sign(p.x) * beyond * 0.6;
+    vec3 c = bspline(clamp(p, 0.0, 1.0)).rgb;
     float grey = dot(c, vec3(0.299, 0.587, 0.114));
-    c = clamp(mix(vec3(grey), c, 1.25), 0.0, 1.0);
-    // Matches the stage shade at its edge, then darkens toward the lyrics so text stays readable.
-    c = mix(c, ink.rgb, mix(0.2, 0.55, smoothstep(0.0, 0.6, beyond)));
+    c = clamp(mix(vec3(grey), c, 1.2), 0.0, 1.0);
+    // Matches the stage shade at its edge, then darkens toward the lyrics.
+    float depth = smoothstep(0.0, 0.5, beyond);
+    c = mix(c, ink.rgb, mix(0.2, 0.5, depth));
+    // Bright frames compress toward a ceiling so white text keeps its contrast.
+    float luma = dot(c, vec3(0.299, 0.587, 0.114));
+    float ceiling = mix(0.6, 0.3, depth);
+    c *= min(1.0, ceiling * (1.0 - exp(-luma / ceiling)) / max(luma, 0.001));
+    // Half an 8-bit step of noise hides banding in the slow gradient.
+    float noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    c += (noise - 0.5) / 255.0;
     fragColor = vec4(c, 1.0) * qt_Opacity;
 }

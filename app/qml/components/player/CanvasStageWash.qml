@@ -19,7 +19,7 @@
 
 import QtQuick
 
-// Stage background: a blurred copy of the loop under the stage, its edge colours carried toward the lyrics.
+// Stage background: a soft colour field from the loop, folded past the stage edge toward the lyrics.
 Item {
     id: root
 
@@ -32,11 +32,14 @@ Item {
     opacity: root.shape
     visible: root.shape > 0.001 && root.source !== null
 
-    // Drawn small from mipmaps so each texel averages its patch; a direct 16x16 render point-samples and shimmers.
+    // Coarse on purpose: the wash keeps the loop's colours and drops its shapes.
+    readonly property int grid: 6
+
+    // Drawn small from mipmaps so each texel averages its patch; a direct render at grid size point-samples and shimmers.
     ShaderEffectSource {
         id: detailed
-        width: 16
-        height: 16
+        width: root.grid
+        height: root.grid
         sourceItem: root.visible ? root.source : null
         textureSize: Qt.size(256, 256)
         mipmap: true
@@ -48,7 +51,7 @@ Item {
     ShaderEffectSource {
         id: averaged
         sourceItem: detailed
-        textureSize: Qt.size(16, 16)
+        textureSize: Qt.size(root.grid, root.grid)
         live: true
         hideSource: true
         smooth: true
@@ -57,7 +60,7 @@ Item {
     ShaderEffect {
         anchors.fill: parent
         property var frame: averaged
-        property size texels: Qt.size(16, 16)
+        property size texels: Qt.size(root.grid, root.grid)
         property color ink: root.inkColor
         property rect stage: Qt.rect(root.stageRect.x / Math.max(1, root.width), root.stageRect.y / Math.max(1, root.height),
                                      root.stageRect.width / Math.max(1, root.width), root.stageRect.height / Math.max(1, root.height))
