@@ -64,6 +64,26 @@ class LocalLibraryRepository(
     init {
         // One writer, so rapid edits cannot finish out of order and leave an older file on disk.
         scope.launch(Dispatchers.IO) { for (snapshot in saves) runCatching { store.save(snapshot) } }
+        refreshStaleTags()
+    }
+
+    /** Reads songs again whose tags predate the current reader or whose files changed. */
+    private fun refreshStaleTags() = background {
+        val updated = mutableLibrary.value.songs.mapNotNull { song -> runCatching { importer.refresh(song) }.getOrNull() }
+        if (updated.isEmpty()) return@background
+        val byId = updated.associateBy { it.id }
+        edit { snapshot ->
+            snapshot.copy(songs = snapshot.songs.map { song ->
+                // Only the tag fields: a cover or lyrics picked meanwhile must survive.
+                byId[song.id]?.let { fresh ->
+                    song.copy(
+                        title = fresh.title, artist = fresh.artist, album = fresh.album, albumArtist = fresh.albumArtist,
+                        trackNumber = fresh.trackNumber, discNumber = fresh.discNumber, year = fresh.year,
+                        tagsVersion = fresh.tagsVersion, fileModified = fresh.fileModified, durationMs = fresh.durationMs,
+                    )
+                } ?: song
+            })
+        }
     }
 
     private inline fun background(crossinline work: suspend () -> Unit) {
@@ -252,8 +272,10 @@ class LocalLibraryRepository(
 
     /** The playlist as the detail screen shows it, kept in step with every edit. */
     fun detailFlow(id: String): Flow<BrowseDetail?> =
-        library.map { snapshot -> snapshot.playlists.firstOrNull { it.id == id }?.let { detail(it, snapshot) } }
-            .distinctUntilChanged()
+        library.map { snapshot ->
+            if (isLocalAlbumId(id)) snapshot.albums().firstOrNull { it.id == id }?.toDetail()
+            else snapshot.playlists.firstOrNull { it.id == id }?.let { detail(it, snapshot) }
+        }.distinctUntilChanged()
 
     fun animatedCoverOf(id: String): String =
         formatLocalFileUri(library.value.playlists.firstOrNull { it.id == id }?.animatedPath.orEmpty())

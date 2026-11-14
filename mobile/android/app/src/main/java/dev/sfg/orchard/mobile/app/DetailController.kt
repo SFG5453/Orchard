@@ -29,6 +29,8 @@ import dev.sfg.orchard.mobile.catalog.isAppleMusicId
 import dev.sfg.orchard.mobile.download.OfflineDetailSynthesizer
 import dev.sfg.orchard.mobile.library.asSavedAlbum
 import dev.sfg.orchard.mobile.library.asSavedPlaylist
+import dev.sfg.orchard.mobile.local.isLocalAlbumId
+import dev.sfg.orchard.mobile.local.isLocalCollectionId
 import dev.sfg.orchard.mobile.local.isLocalPlaylistId
 import dev.sfg.orchard.mobile.model.Artist
 import dev.sfg.orchard.mobile.model.BrowseDetail
@@ -74,7 +76,7 @@ internal class DetailController(
     private val active: BrowseDetail? get() = (mutableDetail.value as? LoadState.Content)?.value
     val activeId: String get() = active?.id.orEmpty()
 
-    /** A playlist on this phone: no network, and it follows every edit as it happens. */
+    /** A playlist or album on this phone: no network, and it follows every edit as it happens. */
     private fun loadLocal(id: String) {
         job?.cancel()
         loadGeneration++
@@ -82,7 +84,7 @@ internal class DetailController(
         job = scope.launch {
             graph.localLibrary.detailFlow(id).collect { local ->
                 mutableDetail.value = local?.let { LoadState.Content(it) }
-                    ?: LoadState.Error("This playlist no longer exists.")
+                    ?: LoadState.Error(if (isLocalAlbumId(id)) "This album no longer exists." else "This playlist no longer exists.")
             }
         }
     }
@@ -90,7 +92,7 @@ internal class DetailController(
     fun load(id: String, seed: CatalogItem?, preserveContent: Boolean) {
         requestedId = id
         requestedSeed = seed
-        if (isLocalPlaylistId(id)) {
+        if (isLocalCollectionId(id)) {
             loadLocal(id)
             return
         }
@@ -184,7 +186,7 @@ internal class DetailController(
                 graph.settings.loadedSettings.map { it.homeSource to it.youtubeLanguage }.distinctUntilChanged(),
                 graph.appleMusic.connection.map { it.connected }.distinctUntilChanged(),
             ) { source, connected -> source to connected }.drop(1).collect {
-                if (requestedId.isNotBlank() && !isLocalPlaylistId(requestedId))
+                if (requestedId.isNotBlank() && !isLocalCollectionId(requestedId))
                     load(requestedId, requestedSeed, preserveContent = false)
             }
         }
@@ -207,7 +209,10 @@ internal class DetailController(
                                 mutableArtistImages.value = graph.artistImages.images(performer)
                             }
                         }
-                        CatalogKind.ALBUM -> {
+                        // Tag-built albums show their files' art; nothing is looked up online.
+                        CatalogKind.ALBUM -> if (isLocalAlbumId(detailVal.id)) {
+                            mutableArtwork.value = TrackArtwork(detailVal.id, detailVal.artworkUrl, "")
+                        } else {
                             mutableArtwork.value = graph.artwork.artwork(detailVal) { mutableArtwork.value = it }
                             val performer = detailVal.artist
                                 .ifBlank { detailVal.tracks.firstOrNull { it.artist.isNotBlank() }?.artist.orEmpty() }
@@ -237,8 +242,8 @@ internal class DetailController(
     // Collections save to the signed-in account (YouTube Music or Apple Music), so library refreshes keep them.
     private fun saveCollection(detail: BrowseDetail) {
         val album = detail.kind == CatalogKind.ALBUM
-        // A playlist on this phone is already stored; it has no online library to join.
-        if (!album && isLocalPlaylistId(detail.id)) return
+        // Collections on this phone are already stored; they have no online library to join.
+        if (isLocalCollectionId(detail.id)) return
         val library = graph.library
         val saved = !(detail.saved ?: if (album) library.library.value.savedAlbums.any { it.id == detail.id }
         else library.library.value.savedPlaylists.any { it.id.removePrefix("VL") == detail.id.removePrefix("VL") })

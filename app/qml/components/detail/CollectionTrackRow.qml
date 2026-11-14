@@ -244,7 +244,7 @@ ItemDelegate {
             MouseArea {
                 id: albumMouse
                 anchors.fill: parent
-                enabled: Boolean(trackMenu.albumId) && !OrchardNetwork.offline
+                enabled: Boolean(trackMenu.albumId) && (!OrchardNetwork.offline || trackMenu.albumId.startsWith("local-album:"))
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: trackMenu.viewAlbum()

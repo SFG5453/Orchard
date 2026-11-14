@@ -31,6 +31,9 @@ const val LOCAL_PLAYLIST_PREFIX = "local-playlist:"
 fun isLocalTrackId(id: String): Boolean = id.startsWith(LOCAL_TRACK_PREFIX)
 fun isLocalPlaylistId(id: String): Boolean = id.startsWith(LOCAL_PLAYLIST_PREFIX)
 
+/** Bump when the metadata reader learns a field that existing songs should pick up. */
+const val LOCAL_TAGS_VERSION = 2
+
 /**
  * A song file on this phone. The audio is never copied: [uri] is a persisted document URI, and
  * Orchard keeps only the tags, covers and lyrics it found or was given.
@@ -41,6 +44,14 @@ data class LocalSong(
     val title: String,
     val artist: String = "",
     val album: String = "",
+    val albumArtist: String = "",
+    val trackNumber: Int = 0,
+    val discNumber: Int = 0,
+    val year: Int = 0,
+    /** Below [LOCAL_TAGS_VERSION] means the file is read again for newer fields. */
+    val tagsVersion: Int = 0,
+    /** The document's last-modified time when its tags were read; a change means they may have too. */
+    val fileModified: Long = 0,
     val durationMs: Long = 0,
     /** Bits per second divided by a thousand, as probed from the file. */
     val bitrateKbps: Int = 0,
@@ -100,6 +111,7 @@ fun LocalSong.toTrack(): Track = Track(
     title = title,
     artist = artist.ifBlank { "Unknown artist" },
     album = album,
+    albumId = localAlbumId(this),
     artworkUrl = formatLocalFileUri(coverPath),
     animatedArtworkUrl = formatLocalFileUri(animatedPath),
     durationMs = durationMs,

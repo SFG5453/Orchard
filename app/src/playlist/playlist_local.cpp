@@ -20,6 +20,7 @@
 // Playlists that live on this computer. The library owns the data; this just
 // mirrors it into the same detail map the YouTube pages use.
 
+#include "local/local_albums.h"
 #include "local/local_library.h"
 #include "playlist_controller.h"
 
@@ -53,7 +54,9 @@ void PlaylistController::syncLocal() {
     // Deleted from somewhere else; the page shows the message instead of a ghost.
     m_detail.clear();
     m_sourceTracks.clear();
-    m_errorMessage = tr("This playlist no longer exists.");
+    m_errorMessage = local::isLocalAlbumId(m_pendingItem.value(QStringLiteral("id")).toString())
+                         ? tr("This album no longer exists.")
+                         : tr("This playlist no longer exists.");
     emit stateChanged();
     emit detailChanged();
     return;

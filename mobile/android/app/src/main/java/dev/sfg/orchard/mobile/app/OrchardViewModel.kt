@@ -399,7 +399,7 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun shareTrack(track: Track) =
         if (track.isLocal) showWarning("Files on your phone cannot be shared as links.") else songLinksCoordinator.shareTrack(track)
     fun shareCollection(detail: BrowseDetail) =
-        if (dev.sfg.orchard.mobile.local.isLocalPlaylistId(detail.id)) showWarning("Playlists on your phone cannot be shared as links.")
+        if (dev.sfg.orchard.mobile.local.isLocalCollectionId(detail.id)) showWarning("Music on your phone cannot be shared as links.")
         else songLinksCoordinator.shareCollection(detail)
     fun dismissShare() = songLinksCoordinator.dismissShare()
 

@@ -40,6 +40,8 @@ import dev.sfg.orchard.mobile.download.DownloadItem
 import dev.sfg.orchard.mobile.download.DownloadStatus
 import dev.sfg.orchard.mobile.local.LocalLibraryRepository
 import dev.sfg.orchard.mobile.local.LocalSnapshot
+import dev.sfg.orchard.mobile.local.albums
+import dev.sfg.orchard.mobile.local.toAlbum
 import dev.sfg.orchard.mobile.local.toPlaylist
 import dev.sfg.orchard.mobile.local.toTrack
 import dev.sfg.orchard.mobile.model.CatalogItem
@@ -191,11 +193,18 @@ fun LibraryScreen(
             LibraryFilter.LOCAL -> {
                 val playlists = filterCatalogItems(localSnapshot.playlists.map { CatalogItem.Collection(it.toPlaylist()) }, searchQuery)
                 val songs = filterTracks(localSnapshot.songs.map { it.toTrack() }, searchQuery)
+                val albums = filterCatalogItems(localSnapshot.albums().map { CatalogItem.Record(it.toAlbum()) }, searchQuery)
                 item(key = "local:playlists-label") { LibraryLabel("Playlists on this phone") }
                 shelf(
                     "local-playlists", playlists, "playlist" to "playlists", 2,
                     if (searching) ShelfEmpty(Icons.Rounded.LibraryMusic, "No matching playlists", "No playlists matching \"$searchQuery\"")
                     else ShelfEmpty(Icons.Rounded.LibraryMusic, "No local playlists", "Tap + and choose New playlist, then add songs from this phone."),
+                )
+                item(key = "local:albums-label") { LibraryLabel("Albums on this phone") }
+                shelf(
+                    "local-albums", albums, "album" to "albums", 2,
+                    if (searching) ShelfEmpty(Icons.Rounded.Album, "No matching albums", "No albums matching \"$searchQuery\"")
+                    else ShelfEmpty(Icons.Rounded.Album, "No local albums", "Songs with an album tag are grouped into albums here."),
                 )
                 item(key = "local:songs-label") { LibraryLabel("Songs on this phone") }
                 songs(

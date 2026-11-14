@@ -43,6 +43,7 @@ Item {
           empty: root.apple ? qsTr("Songs you add to your Apple Music library will appear here.") : qsTr("Songs you save to your YouTube Music library will appear here.") },
         { key: "playlists", title: qsTr("Playlists"),
           empty: root.apple ? qsTr("Playlists in your Apple Music library will appear here.") : qsTr("Playlists you create or save on YouTube Music will appear here.") },
+        { key: "localAlbums", title: qsTr("Local albums"), empty: qsTr("Songs with an album tag are grouped into albums here.") },
         { key: "localPlaylists", title: qsTr("Local playlists"), empty: qsTr("Playlists made from files on this computer will appear here.") },
         { key: "localSongs", title: qsTr("Local songs"), empty: qsTr("Use Add local files to bring in music from this computer.") }
     ]
@@ -68,6 +69,8 @@ Item {
             return { items: OrchardLocal.playlists };
         if (key === "localSongs")
             return { items: OrchardLocal.songs };
+        if (key === "localAlbums")
+            return { items: OrchardLocal.albums };
         return (OrchardHome.librarySections || []).find(section => section.key === key) || {};
     }
 

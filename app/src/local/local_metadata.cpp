@@ -67,6 +67,14 @@ QString tagValue(const QJsonObject &tags, std::initializer_list<const char *> na
   return {};
 }
 
+// "3/12" and "2004-05-17" both start with the number that matters.
+int leadingInt(const QString &text) {
+  qsizetype end = 0;
+  while (end < text.size() && end < 9 && text.at(end).isDigit())
+    ++end;
+  return text.left(end).toInt();
+}
+
 int intValue(const QJsonValue &value) {
   if (value.isString())
     return value.toString().toInt();
@@ -171,6 +179,10 @@ Metadata parseProbe(const QJsonObject &probeJson, qint64 fileSize) {
   metadata.title = tagValue(tags, {"title"});
   metadata.artist = tagValue(tags, {"artist", "album_artist", "albumartist"});
   metadata.album = tagValue(tags, {"album"});
+  metadata.albumArtist = tagValue(tags, {"album_artist", "albumartist", "album artist"});
+  metadata.trackNumber = leadingInt(tagValue(tags, {"track", "tracknumber"}));
+  metadata.discNumber = leadingInt(tagValue(tags, {"disc", "discnumber"}));
+  metadata.year = leadingInt(tagValue(tags, {"date", "year", "originaldate", "original_year"}).left(4));
   metadata.lyrics = tagValue(tags, {"lyrics", "unsyncedlyrics", "uslt", "lyrics-eng"});
   metadata.codec = audio.value(QStringLiteral("codec_name")).toString();
   metadata.sampleRate = intValue(audio.value(QStringLiteral("sample_rate")));

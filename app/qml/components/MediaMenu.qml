@@ -64,6 +64,7 @@ Menu {
     // Files and playlists kept on this computer: no YouTube links, no sign-in needed.
     readonly property bool isLocalSong: isSong && String(media.id).indexOf("local:") === 0
     readonly property bool isLocalPlaylist: isPlaylist && String(media.id || "").indexOf("local-playlist:") === 0
+    readonly property bool isLocalAlbum: String(media.id || media.browseId || "").indexOf("local-album:") === 0
     // "downloaded", "queued", "downloading", "failed" or "none"; the revision read refreshes it.
     readonly property string downloadState: isSong && !isLocalSong && OrchardDownloads.revision >= 0
         ? OrchardDownloads.stateOf(media.id) : "none"
@@ -213,7 +214,7 @@ Menu {
     }
     Entry {
         text: qsTr("View album")
-        enabled: Boolean(root.albumId) && !OrchardNetwork.offline
+        enabled: Boolean(root.albumId) && (!OrchardNetwork.offline || root.albumId.indexOf("local-album:") === 0)
         onTriggered: root.viewAlbum()
     }
     // Playlist owners are users. Nobody needs the discography of a mixtape curator.
@@ -232,7 +233,7 @@ Menu {
         onTriggered: OrchardBackend.copyToClipboard(OrchardBackend.songLink(root.artistIds[0], "artist"), qsTr("Copied artist link to clipboard"))
     }
     Entry {
-        visible: !root.isArtist && !root.isLocalSong && !root.isLocalPlaylist
+        visible: !root.isArtist && !root.isLocalSong && !root.isLocalPlaylist && !root.isLocalAlbum
         height: visible ? implicitHeight : 0
         text: root.songLinkKind === qsTr("album")
             ? qsTr("Copy album link")

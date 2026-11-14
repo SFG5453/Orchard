@@ -32,7 +32,7 @@ Orchard reads your YouTube Music library and playlists after you sign in, and it
 
 Select **Your library** in the left sidebar. The page shows how many songs, albums, artists, and playlists are loaded under the title.
 
-The page has these filters: **All**, **Subscribed artists**, **Albums**, **Songs**, **Playlists**, **Local playlists**, and **Local songs**. Each filter shows its item count. The two local filters hold music from your own computer; see [Local files and local playlists](local-files.md). In **All**, select **See all** on a shelf to open that category. Select **Refresh** to reload the library. The Refresh icon spins while the library loads.
+The page has these filters: **All**, **Subscribed artists**, **Albums**, **Songs**, **Playlists**, **Local albums**, **Local playlists**, and **Local songs**. Each filter shows its item count. The three local filters hold music from your own computer; see [Local files and local playlists](local-files.md). In **All**, select **See all** on a shelf to open that category. Select **Refresh** to reload the library. The Refresh icon spins while the library loads.
 
 Each empty category says what fills it. For example, the Albums category says "Albums you save to your YouTube Music library will appear here." The page shows "Loading your library…" while it loads and "Refresh to try again." when a category fails.
 

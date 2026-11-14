@@ -35,6 +35,9 @@ Item {
     readonly property var tracks: detail.tracks || []
     // Playlists kept on this computer can be edited, reordered and never leave it.
     readonly property bool isLocal: detail.source === "local"
+    // Albums grouped from tags; their songs and order follow the files.
+    readonly property bool isLocalAlbum: isLocal && detail.kind === "album"
+    readonly property bool isLocalPlaylist: isLocal && !isLocalAlbum
     // Saved for offline listening; shows only the songs still downloaded.
     readonly property bool isOffline: detail.source === "download"
     readonly property var downloadInfo: OrchardDownloads.revision >= 0 ? OrchardDownloads.collectionState(tracks) : ({})
@@ -227,7 +230,7 @@ Item {
             id: hero
             width: parent.width
             compact: root.compact
-            kind: root.isLocal ? qsTr("Local playlist")
+            kind: root.isLocalAlbum ? qsTr("Local album") : root.isLocal ? qsTr("Local playlist")
                 : root.isOffline ? (root.detail.collectionKind === "album" ? qsTr("Downloaded album") : qsTr("Downloaded playlist"))
                 : root.detail.station ? qsTr("Station")
                 : qsTr("Playlist")
@@ -311,7 +314,7 @@ Item {
                 }
 
                 LocalPlaylistToolbar {
-                    visible: root.isLocal
+                    visible: root.isLocalPlaylist
                     width: parent.width
                     playlist: root.detail
                     accentColor: root.accentColor
@@ -349,7 +352,7 @@ Item {
             required property var modelData
             view: scroll
             // Only the playlist's own order can be rearranged; a sorted view is a lens, not a list.
-            reorderable: root.isLocal && !OrchardPlaylist.sortKey
+            reorderable: root.isLocalPlaylist && !OrchardPlaylist.sortKey
             accentColor: root.accentColor
             onMoveRequested: function(from, to) { OrchardLocal.moveTrack(root.detail.id, from, to); }
 
@@ -436,7 +439,7 @@ Item {
     // Audio files dragged in from the file manager land at the end of the playlist.
     DropArea {
         anchors.fill: parent
-        enabled: root.isLocal
+        enabled: root.isLocalPlaylist
         keys: ["text/uri-list"]
         onDropped: function(drop) {
             if (drop.hasUrls)

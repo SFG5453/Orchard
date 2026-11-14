@@ -75,6 +75,12 @@ class LocalStore(val root: File) {
         .put("title", song.title)
         .put("artist", song.artist)
         .put("album", song.album)
+        .put("albumArtist", song.albumArtist)
+        .put("trackNumber", song.trackNumber)
+        .put("discNumber", song.discNumber)
+        .put("year", song.year)
+        .put("tagsVersion", song.tagsVersion)
+        .put("fileModified", song.fileModified)
         .put("durationMs", song.durationMs)
         .put("bitrateKbps", song.bitrateKbps)
         .put("mimeType", song.mimeType)
@@ -95,6 +101,12 @@ class LocalStore(val root: File) {
             title = json.optString("title"),
             artist = json.optString("artist"),
             album = json.optString("album"),
+            albumArtist = json.optString("albumArtist"),
+            trackNumber = json.optInt("trackNumber"),
+            discNumber = json.optInt("discNumber"),
+            year = json.optInt("year"),
+            tagsVersion = json.optInt("tagsVersion"),
+            fileModified = json.optLong("fileModified"),
             durationMs = json.optLong("durationMs"),
             bitrateKbps = json.optInt("bitrateKbps"),
             mimeType = json.optString("mimeType"),

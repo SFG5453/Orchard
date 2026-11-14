@@ -22,6 +22,7 @@ package dev.sfg.orchard.mobile.local
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 
 /** What a song file says about itself. Every field may be blank: tags are a suggestion. */
@@ -29,6 +30,10 @@ data class LocalMetadata(
     val title: String,
     val artist: String = "",
     val album: String = "",
+    val albumArtist: String = "",
+    val trackNumber: Int = 0,
+    val discNumber: Int = 0,
+    val year: Int = 0,
     val durationMs: Long = 0,
     val bitrateKbps: Int = 0,
     val mimeType: String = "",
@@ -58,6 +63,11 @@ class LocalMetadataReader(private val context: Context) {
                 title = title.ifBlank { fallback.title },
                 artist = artist.ifBlank { fallback.artist },
                 album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM).clean(),
+                albumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST).clean(),
+                trackNumber = leadingNumber(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)),
+                discNumber = leadingNumber(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER)),
+                year = leadingNumber(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)?.take(4))
+                    .takeIf { it > 0 } ?: leadingNumber(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE)?.take(4)),
                 durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L,
                 bitrateKbps = ((retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull() ?: 0L) / 1000).toInt(),
                 mimeType = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE).clean(),
@@ -73,7 +83,18 @@ class LocalMetadataReader(private val context: Context) {
 
     private fun String?.clean(): String = this?.trim().orEmpty()
 
+    /** The document's last-modified time, or 0 when the provider does not report one. */
+    fun lastModified(uri: Uri): Long =
+        runCatching {
+            context.contentResolver.query(uri, arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getLong(0) else 0L
+            }
+        }.getOrNull() ?: 0L
+
     companion object {
+        /** "3/12" and "2004" both start with the number that matters. */
+        fun leadingNumber(text: String?): Int = text.orEmpty().trim().takeWhile(Char::isDigit).take(9).toIntOrNull() ?: 0
+
         /** "01 - Artist - Title.mp3" becomes artist and title; anything else is just a title. */
         fun metadataFromFileName(name: String): LocalMetadata {
             var base = name.substringBeforeLast('.', name).replace('_', ' ')

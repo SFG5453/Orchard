@@ -32,6 +32,10 @@ struct Metadata {
   QString title;
   QString artist;
   QString album;
+  QString albumArtist;
+  int trackNumber{0};
+  int discNumber{0};
+  int year{0};
   QString lyrics; // Embedded (USLT / LYRICS) text, if any.
   QString codec;
   double durationSeconds{0};

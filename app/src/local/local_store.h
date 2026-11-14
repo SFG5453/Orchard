@@ -28,6 +28,9 @@
 
 namespace local {
 
+// Bump when probe() learns a field that existing records should pick up.
+inline constexpr int kTagsVersion = 2;
+
 // One song file Orchard knows about. The audio itself is never copied: the
 // path points at wherever the user keeps it.
 struct TrackRecord {
@@ -36,6 +39,12 @@ struct TrackRecord {
   QString title;
   QString artist;
   QString album;
+  QString albumArtist;
+  int trackNumber{0};
+  int discNumber{0};
+  int year{0};
+  int tagsVersion{0}; // Below kTagsVersion means the file is probed again for newer fields.
+  qint64 fileModified{0}; // File mtime when last probed; a change means the tags may have too.
   QString codec;
   double durationSeconds{0};
   int bitrate{0}; // bits per second

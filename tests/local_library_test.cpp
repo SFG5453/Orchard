@@ -17,6 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "local/local_albums.h"
 #include "local/local_collage.h"
 #include "local/local_library.h"
 #include "local/local_lyrics.h"
@@ -24,7 +25,9 @@
 #include "local/local_store.h"
 #include "local/local_track.h"
 
+#include <QDateTime>
 #include <QFile>
+#include <QFileInfo>
 #include <QImage>
 #include <QJsonDocument>
 #include <QProcess>
@@ -67,6 +70,31 @@ QString writePng(const QString &dir, const QString &name, QColor color) {
   const QString path = dir + QLatin1Char('/') + name;
   image.save(path, "PNG");
   return path;
+}
+
+// Encodes a tagged FLAC from a WAV; empty on failure.
+QString writeTaggedFlac(const QString &wav, const QString &out, const QStringList &tags) {
+  QStringList args{QStringLiteral("-v"), QStringLiteral("error"), QStringLiteral("-y"), QStringLiteral("-i"), wav};
+  for (const QString &tag : tags)
+    args << QStringLiteral("-metadata") << tag;
+  args << out;
+  QProcess process;
+  process.start(local::ffmpegProgram(), args);
+  return process.waitForFinished(15000) && process.exitCode() == 0 ? out : QString();
+}
+
+local::TrackRecord albumTrack(const QString &path, const QString &album, const QString &albumArtist,
+                              const QString &artist, int disc, int track) {
+  local::TrackRecord record;
+  record.id = local::trackIdForPath(path);
+  record.path = path;
+  record.title = QFileInfo(path).completeBaseName();
+  record.album = album;
+  record.albumArtist = albumArtist;
+  record.artist = artist;
+  record.discNumber = disc;
+  record.trackNumber = track;
+  return record;
 }
 
 bool toolAvailable(const QString &program) {
@@ -227,6 +255,82 @@ private slots:
     const QVariantMap song = library.songs().value(0).toMap();
     QVERIFY(qAbs(song.value("durationSeconds").toDouble() - 1.0) < 0.1);
     QVERIFY(song.value("localBitrate").toInt() > 0);
+  }
+
+  void probeJsonReadsAlbumFields() {
+    const QByteArray json = R"({"streams": [{"codec_type": "audio", "codec_name": "mp3"}],
+      "format": {"tags": {"artist": "Guest", "album_artist": "Various", "album": "Hits",
+                          "track": "3/12", "disc": "2/2", "date": "2004-05-17"}}})";
+    const auto metadata = local::parseProbe(QJsonDocument::fromJson(json).object(), 0);
+    QCOMPARE(metadata.artist, QStringLiteral("Guest"));
+    QCOMPARE(metadata.albumArtist, QStringLiteral("Various"));
+    QCOMPARE(metadata.trackNumber, 3);
+    QCOMPARE(metadata.discNumber, 2);
+    QCOMPARE(metadata.year, 2004);
+  }
+
+  void albumsGroupByTagsAndFolder() {
+    QTemporaryDir dir;
+    local::LocalStore store(dir.path());
+    const QList<local::TrackRecord> records{
+        albumTrack(QStringLiteral("/m/dp/02.flac"), QStringLiteral("Discovery"), QStringLiteral("Daft Punk"),
+                   QStringLiteral("Daft Punk"), 1, 2),
+        albumTrack(QStringLiteral("/other/01.flac"), QStringLiteral("discovery "), QStringLiteral("daft punk"),
+                   QStringLiteral("Daft Punk"), 1, 1),
+        albumTrack(QStringLiteral("/m/hits/CD 2/b.mp3"), QStringLiteral("Hits"), {}, QStringLiteral("Y"), 2, 1),
+        albumTrack(QStringLiteral("/m/hits/CD 1/a.mp3"), QStringLiteral("Hits"), {}, QStringLiteral("X"), 1, 1),
+        albumTrack(QStringLiteral("/m/elsewhere/c.mp3"), QStringLiteral("Hits"), {}, QStringLiteral("X"), 0, 0),
+        albumTrack(QStringLiteral("/m/loose.mp3"), {}, {}, QStringLiteral("X"), 0, 0),
+    };
+    for (const auto &record : records) {
+      store.tracks.insert(record.id, record);
+      store.trackOrder.append(record.id);
+    }
+    const QVariantList albums = local::albumsToVariant(store);
+    QCOMPARE(albums.size(), 3);
+    QVERIFY(local::albumIdFor(records[5]).isEmpty());
+    QCOMPARE(local::albumIdFor(records[0]), local::albumIdFor(records[1]));
+    QCOMPARE(local::albumIdFor(records[2]), local::albumIdFor(records[3]));
+    QVERIFY(local::albumIdFor(records[3]) != local::albumIdFor(records[4]));
+
+    const QVariantMap discovery = local::albumDetail(local::albumIdFor(records[0]), store);
+    QCOMPARE(discovery.value("kind").toString(), QStringLiteral("album"));
+    QCOMPARE(discovery.value("source").toString(), QStringLiteral("local"));
+    QCOMPARE(discovery.value("tracks").toList()[0].toMap().value("title").toString(), QStringLiteral("01"));
+    QCOMPARE(discovery.value("tracks").toList()[0].toMap().value("albumId").toString(),
+             local::albumIdFor(records[0]));
+
+    const QVariantMap hits = local::albumDetail(local::albumIdFor(records[2]), store);
+    QCOMPARE(hits.value("artist").toString(), QStringLiteral("Various Artists"));
+    const QVariantList hitTracks = hits.value("tracks").toList();
+    QCOMPARE(hitTracks.size(), 2);
+    QCOMPARE(hitTracks[0].toMap().value("title").toString(), QStringLiteral("a"));
+    QVERIFY(local::albumDetail(QStringLiteral("local-album:nope"), store).isEmpty());
+  }
+
+  void editedTagsAreReadOnNextOpen() {
+    if (!toolAvailable(local::ffprobeProgram()) || !toolAvailable(local::ffmpegProgram()))
+      QSKIP("ffmpeg is not installed");
+    QTemporaryDir music, store;
+    const QString wav = writeWav(music.path(), QStringLiteral("source.wav"));
+    const QString flac = music.path() + QStringLiteral("/song.flac");
+    QVERIFY(!writeTaggedFlac(wav, flac, {QStringLiteral("album=First"), QStringLiteral("track=4")}).isEmpty());
+    {
+      LocalLibrary library(store.path());
+      library.importFiles({flac});
+      settle(library);
+      QCOMPARE(library.albums().size(), 1);
+      QCOMPARE(library.albums()[0].toMap().value("title").toString(), QStringLiteral("First"));
+      QCOMPARE(library.songs()[0].toMap().value("trackNumber").toInt(), 4);
+    }
+    QVERIFY(!writeTaggedFlac(wav, flac, {QStringLiteral("album=Second")}).isEmpty());
+    QFile file(flac);
+    QVERIFY(file.open(QIODevice::ReadWrite));
+    QVERIFY(file.setFileTime(QDateTime::currentDateTime().addSecs(60), QFileDevice::FileModificationTime));
+    file.close();
+    LocalLibrary reopened(store.path());
+    settle(reopened);
+    QCOMPARE(reopened.albums()[0].toMap().value("title").toString(), QStringLiteral("Second"));
   }
 
   void collageFollowsCoversUntilTheUserPicksOne() {

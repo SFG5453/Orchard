@@ -90,6 +90,8 @@ Item {
     }
 
     function openDetail(page, item) {
+        if (String(detailKey(item)).startsWith("local-album:")) // Tag-built albums open as read-only local playlists.
+            [page, item] = ["playlist", Object.assign({}, item, { id: detailKey(item), playlistId: detailKey(item) })];
         // Re-opening the visible page would push a duplicate history entry and replay the load.
         const key = detailKey(item);
         if (key && page === currentPage && key === detailKey(currentItem))

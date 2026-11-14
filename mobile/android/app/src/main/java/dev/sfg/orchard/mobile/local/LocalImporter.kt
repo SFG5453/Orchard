@@ -67,6 +67,12 @@ class LocalImporter(private val context: Context, private val store: LocalStore)
                 title = metadata.title,
                 artist = metadata.artist,
                 album = metadata.album,
+                albumArtist = metadata.albumArtist,
+                trackNumber = metadata.trackNumber,
+                discNumber = metadata.discNumber,
+                year = metadata.year,
+                tagsVersion = LOCAL_TAGS_VERSION,
+                fileModified = reader.lastModified(uri),
                 durationMs = metadata.durationMs,
                 bitrateKbps = metadata.bitrateKbps.takeIf { it > 0 } ?: estimateBitrate(uri, metadata.durationMs),
                 mimeType = metadata.mimeType,
@@ -75,6 +81,30 @@ class LocalImporter(private val context: Context, private val store: LocalStore)
             )
         }
         return Result(songs, ids, rejected)
+    }
+
+    /**
+     * Reads [song] again when its tags predate [LOCAL_TAGS_VERSION] or the file changed since.
+     * Null when it is current or unreadable; covers, lyrics and the user's picks are kept.
+     */
+    fun refresh(song: LocalSong): LocalSong? {
+        val uri = Uri.parse(song.uri)
+        val modified = reader.lastModified(uri)
+        if (song.tagsVersion >= LOCAL_TAGS_VERSION && modified == song.fileModified) return null
+        val metadata = reader.read(uri)
+        if (metadata.durationMs <= 0 && metadata.mimeType.isBlank()) return null
+        return song.copy(
+            title = metadata.title,
+            artist = metadata.artist,
+            album = metadata.album,
+            albumArtist = metadata.albumArtist,
+            trackNumber = metadata.trackNumber,
+            discNumber = metadata.discNumber,
+            year = metadata.year,
+            tagsVersion = LOCAL_TAGS_VERSION,
+            fileModified = modified,
+            durationMs = metadata.durationMs.takeIf { it > 0 } ?: song.durationMs,
+        )
     }
 
     /** When the tags carry no bitrate, file size over duration is the honest average. */

@@ -22,6 +22,7 @@
 #include "integrations/catalog_source.h"
 
 #include "auth/auth_manager.h"
+#include "local/local_albums.h"
 #include "local/local_library.h"
 #include "local/local_track.h"
 #include "offline/offline_library.h"
@@ -118,7 +119,8 @@ QVariantMap PlaylistController::defaultPalette() {
 }
 
 void PlaylistController::openPlaylist(const QVariantMap &item) {
-  if (m_local && local::isLocalPlaylistId(item.value(QStringLiteral("id")).toString())) {
+  const QString itemId = item.value(QStringLiteral("id")).toString();
+  if (m_local && (local::isLocalPlaylistId(itemId) || local::isLocalAlbumId(itemId))) {
     openLocal(item);
     return;
   }

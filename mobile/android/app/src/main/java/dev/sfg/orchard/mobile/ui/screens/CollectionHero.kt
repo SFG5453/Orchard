@@ -77,7 +77,7 @@ import dev.sfg.orchard.mobile.ui.components.QobuzAlbumQualityChip
 import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.CatalogKind
 import dev.sfg.orchard.mobile.model.Track
-import dev.sfg.orchard.mobile.local.isLocalPlaylistId
+import dev.sfg.orchard.mobile.local.isLocalCollectionId
 import dev.sfg.orchard.mobile.ui.components.AnimatedArtworkVideo
 import dev.sfg.orchard.mobile.ui.components.ArtworkPalette
 import dev.sfg.orchard.mobile.ui.components.ArtworkTile
@@ -251,8 +251,8 @@ internal fun CollectionHero(
                     )
                 }
                 PanelIconButton(onShare, Icons.Rounded.IosShare, "Share")
-                // A playlist on this phone is already in the library; there is nothing to add.
-                if (!isLocalPlaylistId(detail.id)) {
+                // Collections on this phone are already in the library; there is nothing to add.
+                if (!isLocalCollectionId(detail.id)) {
                     PanelIconButton(
                         onClick = { onSave(detail) },
                         icon = if (isSaved) Icons.Rounded.Check else Icons.Rounded.Add,
@@ -382,6 +382,6 @@ internal fun CollectionChrome(
         isDownloaded = detail.tracks.isNotEmpty() && detail.tracks.all { it.id in downloadedTrackIds },
         // Phones carry save beside search; share and download sit in the hero band.
         saveInBar = !isFoldableOrWideLayout(),
-        canSave = !isLocalPlaylistId(detail.id),
+        canSave = !isLocalCollectionId(detail.id),
     )
 }

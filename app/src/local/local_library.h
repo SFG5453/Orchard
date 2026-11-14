@@ -37,7 +37,9 @@ class LocalLibrary final : public QObject {
   Q_OBJECT
   Q_PROPERTY(QVariantList playlists READ playlists NOTIFY changed)
   Q_PROPERTY(QVariantList songs READ songs NOTIFY changed)
-  // The playlist opened with openPlaylist(), in the shape PlaylistView reads.
+  // Grouped from tags; open one with openPlaylist() and its id.
+  Q_PROPERTY(QVariantList albums READ albums NOTIFY changed)
+  // The playlist or album opened with openPlaylist(), in the shape PlaylistView reads.
   Q_PROPERTY(QVariantMap detail READ detail NOTIFY detailChanged)
   Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
   Q_PROPERTY(QStringList audioNameFilters READ audioNameFilters CONSTANT)
@@ -52,6 +54,7 @@ public:
 
   [[nodiscard]] QVariantList playlists() const;
   [[nodiscard]] QVariantList songs() const;
+  [[nodiscard]] QVariantList albums() const;
   [[nodiscard]] QVariantMap detail() const { return m_detail; }
   [[nodiscard]] bool busy() const { return m_jobs > 0; }
   [[nodiscard]] QStringList audioNameFilters() const;

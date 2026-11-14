@@ -18,6 +18,7 @@
  */
 
 #include "local_library.h"
+#include "local_albums.h"
 #include "local_collage.h"
 #include "local_metadata.h"
 #include "local_track.h"
@@ -97,6 +98,8 @@ QVariantList LocalLibrary::songs() const {
   return list;
 }
 
+QVariantList LocalLibrary::albums() const { return albumsToVariant(m_store); }
+
 QVariantMap LocalLibrary::track(const QString &trackId) const {
   const auto it = m_store.tracks.constFind(trackId);
   return it == m_store.tracks.cend() ? QVariantMap() : trackToVariant(it.value());
@@ -164,6 +167,8 @@ void LocalLibrary::refreshDetail() {
   QVariantMap next;
   if (const PlaylistRecord *playlist = m_store.playlist(m_openId))
     next = playlistDetail(*playlist, m_store);
+  else if (isLocalAlbumId(m_openId))
+    next = albumDetail(m_openId, m_store);
   if (next == m_detail)
     return;
   m_detail = next;

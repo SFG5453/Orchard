@@ -25,6 +25,8 @@
 
 namespace local {
 
+struct Metadata;
+
 // Blocking work the library runs off the GUI thread. Nothing in here touches
 // the store, so it is safe on the pool and easy to test with a temp folder.
 
@@ -34,11 +36,15 @@ struct ImportResult {
   int rejected{0};            // Not audio, unreadable, or ffprobe said no.
 };
 
+// Copies everything probe() reads into the record and marks its tags current.
+void applyMetadata(TrackRecord &record, const Metadata &metadata);
+
 // Expands folders, drops non-audio, probes new files and extracts their covers.
 // `known` holds ids already in the library, which are not probed again.
 ImportResult importPaths(const QStringList &paths, const QSet<QString> &known, const QString &coversDir);
 
-// Probes tracks again and returns those ffprobe could read. Gives up after a run
+// Probes tracks that are unread, older than kTagsVersion or changed on disk, and
+// returns those ffprobe could read. Gives up after a run
 // of failures so a missing ffprobe costs a few spawns, not one per song.
 QList<TrackRecord> reprobeTracks(const QList<TrackRecord> &tracks);
 

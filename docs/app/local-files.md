@@ -1,11 +1,14 @@
 ---
 title: Local files and local playlists
-summary: Add songs from your computer, make local playlists, set your own covers and lyrics, reorder by drag and drop, and see each file's bitrate.
+summary: Add songs from your computer, browse them as albums, make local playlists, set your own covers and lyrics, reorder by drag and drop, and see each file's bitrate.
 group: Basics
 icon: hard-drive
 keywords:
   - local files
   - local playlist
+  - local albums
+  - album artist
+  - track number
   - import music
   - mp3
   - flac
@@ -36,13 +39,25 @@ Local songs play without a network connection. Orchard never looks up lyrics or 
 
 The button spins while Orchard reads the files. A message tells you how many songs were added. Orchard reads these formats: MP3, FLAC, M4A, AAC, OGG, Opus, WAV, WMA, AIFF, ALAC, APE, WV, and MKA.
 
-Added songs appear in the **Local songs** filter, newest first. Select **Local playlists** to see your local playlists.
+Added songs appear in the **Local songs** filter, newest first. Select **Local albums** to see them grouped by album, or **Local playlists** to see your local playlists.
 
 ## What Orchard reads from a file
 
-Orchard reads the title, artist, album, duration, and embedded cover from each file's tags. If a file has no tags, Orchard uses its name, so `Daft Punk - Digital Love.mp3` becomes the artist Daft Punk and the title Digital Love. If there is no embedded cover, Orchard uses a `cover.jpg`, `folder.jpg`, or similar picture from the same folder.
+Orchard reads the title, artist, album, album artist, track number, disc number, year, duration, and embedded cover from each file's tags. If a file has no tags, Orchard uses its name, so `Daft Punk - Digital Love.mp3` becomes the artist Daft Punk and the title Digital Love. If there is no embedded cover, Orchard uses a `cover.jpg`, `folder.jpg`, or similar picture from the same folder.
 
-Reading tags uses `ffprobe`, which comes with FFmpeg. Without it, songs are still added, but only with the name-based details and no duration. When Orchard starts and `ffprobe` is available, it reads those songs again and fills in their tags and duration.
+Reading tags uses `ffprobe`, which comes with FFmpeg. Without it, songs are still added, but only with the name-based details and no duration. When Orchard starts and `ffprobe` is available, it reads those songs again and fills in their tags and duration. Songs added by an older version are also read once more to pick up their album details.
+
+## Albums
+
+The **Local albums** filter groups songs that have an album tag. Songs without one stay in **Local songs** only.
+
+- Songs with the same album and album artist tags form one album.
+- If a song has no album artist tag, Orchard groups it with songs of the same album in the same folder. A compilation with a different artist on every track therefore stays one album. Folders named `CD 1`, `Disc 2`, and so on count as their parent folder.
+- An album with several artists and no album artist tag shows **Various Artists**.
+
+Open an album to see its songs in disc and track order. Songs without a track number come last, sorted by file name. The album cover is the first song's cover.
+
+An album page is read-only: its songs and order come from the files' tags. To change an album, edit the files' tags with a tag editor. Orchard reads the changed files again the next time it starts. Select the album name in a local song's row, or **View album** in its menu, to open its album. This works without a network connection.
 
 ## Make a playlist
 

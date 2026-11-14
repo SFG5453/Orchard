@@ -71,6 +71,24 @@ QString adoptByContent(const QString &temporary, const QString &coversDir) {
 
 } // namespace
 
+void applyMetadata(TrackRecord &record, const Metadata &metadata) {
+  record.title = metadata.title;
+  record.artist = metadata.artist;
+  record.album = metadata.album;
+  record.albumArtist = metadata.albumArtist;
+  record.trackNumber = metadata.trackNumber;
+  record.discNumber = metadata.discNumber;
+  record.year = metadata.year;
+  record.codec = metadata.codec;
+  record.durationSeconds = metadata.durationSeconds;
+  record.bitrate = metadata.bitrate;
+  record.sampleRate = metadata.sampleRate;
+  record.bitDepth = metadata.bitDepth;
+  record.embeddedLyrics = metadata.lyrics;
+  record.tagsVersion = kTagsVersion;
+  record.fileModified = QFileInfo(record.path).lastModified().toMSecsSinceEpoch();
+}
+
 ImportResult importPaths(const QStringList &paths, const QSet<QString> &known, const QString &coversDir) {
   ImportResult result;
   QSet<QString> seen;
@@ -91,15 +109,7 @@ ImportResult importPaths(const QStringList &paths, const QSet<QString> &known, c
     TrackRecord record;
     record.id = id;
     record.path = QFileInfo(file).absoluteFilePath();
-    record.title = metadata.title;
-    record.artist = metadata.artist;
-    record.album = metadata.album;
-    record.codec = metadata.codec;
-    record.durationSeconds = metadata.durationSeconds;
-    record.bitrate = metadata.bitrate;
-    record.sampleRate = metadata.sampleRate;
-    record.bitDepth = metadata.bitDepth;
-    record.embeddedLyrics = metadata.lyrics;
+    applyMetadata(record, metadata);
     record.addedAt = QDateTime::currentMSecsSinceEpoch();
 
     const QString temporary = coversDir + QStringLiteral("/tmp-") + id.mid(kTrackPrefix.size()) + QStringLiteral(".jpg");
@@ -115,7 +125,12 @@ QList<TrackRecord> reprobeTracks(const QList<TrackRecord> &tracks) {
   QList<TrackRecord> updated;
   int failures = 0;
   for (TrackRecord record : tracks) {
-    if (!QFileInfo::exists(record.path))
+    const QFileInfo info(record.path);
+    if (!info.exists())
+      continue;
+    const bool current = !record.codec.isEmpty() && record.tagsVersion >= kTagsVersion &&
+                         record.fileModified == info.lastModified().toMSecsSinceEpoch();
+    if (current)
       continue;
     const Metadata metadata = probe(record.path);
     if (!metadata.probed) {
@@ -124,15 +139,7 @@ QList<TrackRecord> reprobeTracks(const QList<TrackRecord> &tracks) {
       continue;
     }
     failures = 0;
-    record.title = metadata.title;
-    record.artist = metadata.artist;
-    record.album = metadata.album;
-    record.codec = metadata.codec;
-    record.durationSeconds = metadata.durationSeconds;
-    record.bitrate = metadata.bitrate;
-    record.sampleRate = metadata.sampleRate;
-    record.bitDepth = metadata.bitDepth;
-    record.embeddedLyrics = metadata.lyrics;
+    applyMetadata(record, metadata);
     updated.append(record);
   }
   return updated;

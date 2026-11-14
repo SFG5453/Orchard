@@ -18,6 +18,7 @@
  */
 
 #include "local_store.h"
+#include "local_albums.h"
 #include "local_track.h"
 
 #include <QDir>
@@ -70,6 +71,12 @@ QJsonObject LocalStore::toJson(const TrackRecord &track) {
           {QStringLiteral("title"), track.title},
           {QStringLiteral("artist"), track.artist},
           {QStringLiteral("album"), track.album},
+          {QStringLiteral("albumArtist"), track.albumArtist},
+          {QStringLiteral("trackNumber"), track.trackNumber},
+          {QStringLiteral("discNumber"), track.discNumber},
+          {QStringLiteral("year"), track.year},
+          {QStringLiteral("tagsVersion"), track.tagsVersion},
+          {QStringLiteral("fileModified"), static_cast<double>(track.fileModified)},
           {QStringLiteral("codec"), track.codec},
           {QStringLiteral("duration"), track.durationSeconds},
           {QStringLiteral("bitrate"), track.bitrate},
@@ -90,6 +97,12 @@ TrackRecord LocalStore::trackFromJson(const QJsonObject &object) {
   track.title = object.value(QStringLiteral("title")).toString();
   track.artist = object.value(QStringLiteral("artist")).toString();
   track.album = object.value(QStringLiteral("album")).toString();
+  track.albumArtist = object.value(QStringLiteral("albumArtist")).toString();
+  track.trackNumber = object.value(QStringLiteral("trackNumber")).toInt();
+  track.discNumber = object.value(QStringLiteral("discNumber")).toInt();
+  track.year = object.value(QStringLiteral("year")).toInt();
+  track.tagsVersion = object.value(QStringLiteral("tagsVersion")).toInt();
+  track.fileModified = static_cast<qint64>(object.value(QStringLiteral("fileModified")).toDouble());
   track.codec = object.value(QStringLiteral("codec")).toString();
   track.durationSeconds = object.value(QStringLiteral("duration")).toDouble();
   track.bitrate = object.value(QStringLiteral("bitrate")).toInt();
@@ -194,6 +207,10 @@ QVariantMap trackToVariant(const TrackRecord &track) {
       {QStringLiteral("artist"), track.artist},
       {QStringLiteral("artists"), track.artist.isEmpty() ? QStringList() : QStringList{track.artist}},
       {QStringLiteral("album"), track.album},
+      {QStringLiteral("albumArtist"), track.albumArtist},
+      {QStringLiteral("trackNumber"), track.trackNumber},
+      {QStringLiteral("discNumber"), track.discNumber},
+      {QStringLiteral("year"), track.year},
       {QStringLiteral("durationSeconds"), track.durationSeconds},
       {QStringLiteral("duration"), formatDuration(track.durationSeconds)},
       {QStringLiteral("thumbnail"), fileUrl(track.coverPath)},
@@ -209,6 +226,9 @@ QVariantMap trackToVariant(const TrackRecord &track) {
       {QStringLiteral("hasCustomLyrics"), !track.lyricsPath.isEmpty()},
       {QStringLiteral("missing"), !QFileInfo::exists(track.path)},
   };
+  // Lets "View album" and the crossfade planner's same-album check find the local album.
+  if (const QString albumId = albumIdFor(track); !albumId.isEmpty())
+    map.insert(QStringLiteral("albumId"), albumId);
   return map;
 }
 

@@ -145,6 +145,8 @@ app_sources = [
   'app/src/local/local_lyrics.h',
   'app/src/local/local_metadata.cpp',
   'app/src/local/local_metadata.h',
+  'app/src/local/local_albums.cpp',
+  'app/src/local/local_albums.h',
   'app/src/local/local_store.cpp',
   'app/src/local/local_store.h',
   'app/src/local/local_track.cpp',
