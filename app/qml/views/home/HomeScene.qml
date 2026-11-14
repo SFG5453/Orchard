@@ -349,7 +349,8 @@ Item {
         anchors.left: home.left
         anchors.right: home.right
         anchors.top: parent.top
-        anchors.topMargin: 32
+        // Reserve room for the window buttons only when they are drawn.
+        anchors.topMargin: OrchardWindowState.showWindowButtons && !(Qt.platform.os === "windows" && OrchardWindowState.systemTitleBar) ? 32 : 12
         height: 62
         // Floats over the artist page, which runs under it.
         z: 1
