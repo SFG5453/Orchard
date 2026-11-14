@@ -31,6 +31,12 @@ bool isSameSong(const QVariantMap &a, const QVariantMap &b);
 // alternate cuts, keeping the album version. At most `limit` entries.
 QList<QVariantMap> select(const QList<QVariantMap> &existing, const QList<QVariantMap> &candidates, int limit);
 
+// True for YouTube Music generated mixes (Supermix, My Mix, radio), which repeat songs as videos.
+bool isGeneratedMix(const QString &playlistId);
+
+// Rows of a generated mix with alternate cuts collapsed. `pinned` leading rows stay as given.
+QVariantList collapseMix(const QVariantList &tracks, const QList<QVariantMap> &existing, int pinned);
+
 // Indices of autoplayGenerated rows that repeat an earlier row.
 QList<int> duplicateGeneratedIndices(const QList<QVariantMap> &queue);
 

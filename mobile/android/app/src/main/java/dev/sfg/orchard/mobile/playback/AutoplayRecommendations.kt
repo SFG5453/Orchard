@@ -76,6 +76,8 @@ object AutoplayRecommendations {
         if (title.songTitleKey() != other.title.songTitleKey()) return false
         if (!hasSamePrimaryArtist(other)) return false
 
+        // Music videos pad intros and skits, so length only separates two cuts of the same kind.
+        if (isVideoUpload != other.isVideoUpload && (isAudioOnly || other.isAudioOnly)) return true
         // Different ids for audio and video normally differ by only an intro or outro. A much
         // larger difference is more likely an extended, acoustic or live performance whose title
         // omitted the qualifier, so retain it.
@@ -120,8 +122,11 @@ object AutoplayRecommendations {
 
     private const val MAX_VARIANT_DURATION_DRIFT_MS = 45_000L
 
+    // One or more descriptor words, e.g. "Official Music Video", "Visualiser Video", "Lyric Video".
+    private const val VERSION_DESCRIPTOR =
+        """(?:(?:official|music|video|audio|lyrics?|visuali[sz]er|hd|4k|radio\s+edit|single\s+version|album\s+version|remaster(?:ed)?(?:\s+\d{4})?)\s*)+"""
     private val BRACKETED_VERSION = Regex(
-        """\s*[\[(]\s*(?:official\s+)?(?:music\s+)?(?:video|audio|lyrics?(?:\s+video)?|visuali[sz]er|radio\s+edit|single\s+version|album\s+version|remaster(?:ed)?(?:\s+\d{4})?)\s*[\])]\s*""",
+        """\s*[\[(]\s*$VERSION_DESCRIPTOR[\])]\s*""",
         RegexOption.IGNORE_CASE,
     )
     private val BRACKETED_COLLABORATOR = Regex(
@@ -129,7 +134,7 @@ object AutoplayRecommendations {
         RegexOption.IGNORE_CASE,
     )
     private val TRAILING_VERSION = Regex(
-        """\s*[-\u2013\u2014]\s*(?:official\s+)?(?:music\s+)?(?:video|audio|lyrics?(?:\s+video)?|visuali[sz]er|radio\s+edit|single\s+version|album\s+version|remaster(?:ed)?(?:\s+\d{4})?)\s*$""",
+        """\s*[-\u2013\u2014]\s*$VERSION_DESCRIPTOR$""",
         RegexOption.IGNORE_CASE,
     )
     private val COLLABORATOR = Regex(

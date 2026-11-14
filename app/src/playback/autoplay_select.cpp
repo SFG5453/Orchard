@@ -37,16 +37,16 @@ QString titleKey(QString title) {
   static const QRegularExpression collaborator(
       QStringLiteral("\\s*[\\[(]\\s*(?:feat(?:uring)?\\.?|ft\\.?|with)\\s+[^\\])]+[\\])]\\s*"),
       QRegularExpression::CaseInsensitiveOption);
-  static const QRegularExpression version(
-      QStringLiteral("\\s*[\\[(]\\s*(?:official\\s+)?(?:music\\s+)?(?:video|audio|lyrics?(?:\\s+video)?|"
-                     "visuali[sz]er|radio\\s+edit|single\\s+version|album\\s+version|"
-                     "remaster(?:ed)?(?:\\s+\\d{4})?)\\s*[\\])]\\s*"),
-      QRegularExpression::CaseInsensitiveOption);
-  static const QRegularExpression trailing(
-      QStringLiteral("\\s*[-\\x{2013}\\x{2014}]\\s*(?:official\\s+)?(?:music\\s+)?(?:video|audio|"
-                     "lyrics?(?:\\s+video)?|visuali[sz]er|radio\\s+edit|single\\s+version|"
-                     "album\\s+version|remaster(?:ed)?(?:\\s+\\d{4})?)\\s*$"),
-      QRegularExpression::CaseInsensitiveOption);
+  // One or more descriptor words, e.g. "Official Music Video", "Visualiser Video", "Lyric Video".
+  static const QString descriptor = QStringLiteral(
+      "(?:(?:official|music|video|audio|lyrics?|visuali[sz]er|hd|4k|radio\\s+edit|single\\s+version|"
+      "album\\s+version|remaster(?:ed)?(?:\\s+\\d{4})?)\\s*)+");
+  static const QRegularExpression version(QStringLiteral("\\s*[\\[(]\\s*") + descriptor +
+                                              QStringLiteral("[\\])]\\s*"),
+                                          QRegularExpression::CaseInsensitiveOption);
+  static const QRegularExpression trailing(QStringLiteral("\\s*[-\\x{2013}\\x{2014}]\\s*") + descriptor +
+                                               QStringLiteral("$"),
+                                           QRegularExpression::CaseInsensitiveOption);
   title = title.normalized(QString::NormalizationForm_KC);
   title.replace(collaborator, QStringLiteral(" "));
   title.replace(version, QStringLiteral(" "));
@@ -67,6 +67,13 @@ QString artistOf(const QVariantMap &track) {
     return artist;
   const QVariantList artists = track.value(QStringLiteral("artists")).toList();
   return artists.isEmpty() ? QString() : artists.first().toString();
+}
+
+bool isAudioOnly(const QVariantMap &track) { return track.value(QStringLiteral("isAudioOnly")).toBool(); }
+
+bool isMusicVideo(const QVariantMap &track) {
+  const QString type = track.value(QStringLiteral("musicVideoType")).toString();
+  return type == QLatin1String("MUSIC_VIDEO_TYPE_OMV") || type == QLatin1String("MUSIC_VIDEO_TYPE_UGC");
 }
 
 int versionPreference(const QVariantMap &track) {
@@ -91,6 +98,9 @@ bool isSameSong(const QVariantMap &a, const QVariantMap &b) {
   const QString artistB = artistOf(b);
   if (textKey(artistA) != textKey(artistB) && primaryArtistKey(artistA) != primaryArtistKey(artistB))
     return false;
+  // Music videos pad intros and skits, so length only separates two cuts of the same kind.
+  if (isMusicVideo(a) != isMusicVideo(b) && (isAudioOnly(a) || isAudioOnly(b)))
+    return true;
   // A large length gap is more likely an extended, acoustic or live cut than an alternate upload.
   const double durA = a.value(QStringLiteral("durationSeconds")).toDouble();
   const double durB = b.value(QStringLiteral("durationSeconds")).toDouble();
@@ -125,6 +135,23 @@ QList<QVariantMap> select(const QList<QVariantMap> &existing, const QList<QVaria
     }
   }
   return selected;
+}
+
+bool isGeneratedMix(const QString &playlistId) {
+  return (playlistId.startsWith(QLatin1String("VL")) ? playlistId.mid(2) : playlistId).startsWith(QLatin1String("RD"));
+}
+
+QVariantList collapseMix(const QVariantList &tracks, const QList<QVariantMap> &existing, int pinned) {
+  QVariantList out = tracks.mid(0, pinned);
+  QList<QVariantMap> known = existing;
+  QList<QVariantMap> candidates;
+  for (const auto &value : out)
+    known.append(value.toMap());
+  for (const auto &value : tracks.mid(pinned))
+    candidates.append(value.toMap());
+  for (const auto &track : select(known, candidates, int(candidates.size())))
+    out.append(track);
+  return out;
 }
 
 QList<int> duplicateGeneratedIndices(const QList<QVariantMap> &queue) {

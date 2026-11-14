@@ -132,6 +132,22 @@ class AutoplayRecommendationsTest {
         assertEquals(listOf("next"), selected.map(Track::id))
     }
 
+    @Test
+    fun `visualiser uploads and long music videos collapse to the album cut`() {
+        val selected = AutoplayRecommendations.select(
+            existing = emptyList(),
+            candidates = listOf(
+                track("a1", "I Must Apologise", "PinkPantheress", MUSIC_VIDEO_TYPE_ATV, 109_000),
+                track("v1", "I must apologise (Visualiser Video)", "PinkPantheress", MUSIC_VIDEO_TYPE_OMV, 109_000),
+                track("v2", "AAA", "FLO", MUSIC_VIDEO_TYPE_OMV, 363_000),
+                track("a2", "AAA", "FLO", MUSIC_VIDEO_TYPE_ATV, 205_000),
+            ),
+            limit = 20,
+        )
+
+        assertEquals(listOf("a1", "a2"), selected.map(Track::id))
+    }
+
     private fun track(
         id: String,
         title: String,

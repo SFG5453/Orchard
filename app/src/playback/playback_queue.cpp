@@ -18,6 +18,7 @@
  */
 
 #include "auth/auth_manager.h"
+#include "autoplay_select.h"
 #include "local/local_track.h"
 #include "playback_controller.h"
 #include "playback_helpers.h"
@@ -79,6 +80,8 @@ void PlaybackController::playCollection(const QVariantList &tracks,
   }
   if (valid.isEmpty())
     return;
+  if (autoplay::isGeneratedMix(playlistId))
+    valid = autoplay::collapseMix(valid, {}, shuffle ? 0 : 1);
 
   QVariantList ordered = valid;
 
@@ -147,7 +150,15 @@ void PlaybackController::appendPlaylistTracks(const QString &playlistId,
   if (playlistId.isEmpty() || playlistId != m_playlistId)
     return;
   const int pinned = qMin(20, static_cast<int>(m_queue.size()));
-  for (const auto &value : tracks) {
+  QVariantList rows = tracks;
+  if (autoplay::isGeneratedMix(playlistId)) {
+    QList<QVariantMap> existing{m_track};
+    for (const auto &list : {m_queue, m_history})
+      for (const auto &value : list)
+        existing.append(value.toMap());
+    rows = autoplay::collapseMix(tracks, existing, 0);
+  }
+  for (const auto &value : rows) {
     const auto track = value.toMap();
     const auto type = track.value("type").toString();
     if ((type == "song" || type == "track" || type == "video") &&

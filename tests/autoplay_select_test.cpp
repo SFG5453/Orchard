@@ -68,6 +68,37 @@ private slots:
     QVERIFY(!autoplay::isSameSong(track("a", "Song", "Artist"), track("b", "Song", "Someone Else")));
   }
 
+  void compoundDescriptorsMatch() {
+    QVERIFY(autoplay::isSameSong(track("a", "I Must Apologise", "PinkPantheress", 109, "MUSIC_VIDEO_TYPE_ATV"),
+                                 track("b", "I must apologise (Visualiser Video)", "PinkPantheress", 109,
+                                       "MUSIC_VIDEO_TYPE_OMV")));
+    QVERIFY(autoplay::isSameSong(track("a", "Song", "Artist"), track("b", "Song - Official Lyric Video", "Artist")));
+  }
+
+  void musicVideoLengthIgnoredAgainstAudio() {
+    QVERIFY(autoplay::isSameSong(track("a", "Shirt", "SZA", 182, "MUSIC_VIDEO_TYPE_ATV"),
+                                 track("b", "Shirt", "SZA", 294, "MUSIC_VIDEO_TYPE_OMV")));
+    QVERIFY(!autoplay::isSameSong(track("a", "Song", "Artist", 200, "MUSIC_VIDEO_TYPE_ATV"),
+                                  track("b", "Song", "Artist", 400, "MUSIC_VIDEO_TYPE_ATV")));
+  }
+
+  void generatedMixCollapsesVariants() {
+    QVERIFY(autoplay::isGeneratedMix("RDTMAK5uy_abc"));
+    QVERIFY(autoplay::isGeneratedMix("VLRDCLAK5uy_abc"));
+    QVERIFY(!autoplay::isGeneratedMix("PLabc"));
+    const QVariantList rows{track("v", "AAA", "FLO", 363, "MUSIC_VIDEO_TYPE_OMV"), track("x", "Other", "FLO"),
+                            track("a", "AAA", "FLO", 205, "MUSIC_VIDEO_TYPE_ATV"),
+                            track("y", "Other (Official Video)", "FLO", 210, "MUSIC_VIDEO_TYPE_OMV")};
+    QStringList pinned;
+    for (const auto &t : autoplay::collapseMix(rows, {}, 1))
+      pinned << t.toMap().value("id").toString();
+    QCOMPARE(pinned, (QStringList{"v", "x"}));
+    QStringList free;
+    for (const auto &t : autoplay::collapseMix(rows, {}, 0))
+      free << t.toMap().value("id").toString();
+    QCOMPARE(free, (QStringList{"a", "x"}));
+  }
+
   void limitIsHonored() {
     const auto picked = autoplay::select({}, {track("a", "A", "X"), track("b", "B", "X"), track("c", "C", "X")}, 2);
     QCOMPARE(ids(picked), (QStringList{"a", "b"}));
