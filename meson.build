@@ -606,10 +606,16 @@ if get_option('tests')
     headers: ['app/src/appearance/appearance_settings.h', 'app/src/window_state.h',
       'app/src/window_occlusion.h'],
     include_directories: app_inc, dependencies: [qt_test_dep, qt_dep])
+  artwork_pause_objects = []
+  if host_machine.system() == 'darwin'
+    artwork_pause_objects += [app_lib.extract_objects(files('app/src/fullscreen_watch_mac.mm',
+      'app/src/occlusion_watch_mac.mm', 'app/src/window_chrome_mac.mm'))]
+  endif
   artwork_pause_test = executable('orchard_artwork_pause_tests',
     files('tests/artwork_pause_test.cpp', 'app/src/appearance/appearance_settings.cpp',
       'app/src/appearance/ui_scaling.cpp', 'app/src/window_state.cpp',
       'app/src/frameless_snap.cpp', 'app/src/window_occlusion.cpp') + artwork_pause_moc,
+    objects: artwork_pause_objects,
     include_directories: app_inc, dependencies: [qt_test_dep, qt_dep, qt_gui_private] + platform_deps)
   test('orchard_artwork_pause', artwork_pause_test, timeout: 30,
     env: ['QT_QPA_PLATFORM=offscreen'])
