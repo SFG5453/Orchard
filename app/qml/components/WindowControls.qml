@@ -90,15 +90,38 @@ Row {
         color: maxArea.containsPress ? "#25282e" : (maxArea.containsMouse ? "#1e2126" : "transparent")
 
         Item {
+            readonly property bool maximized: root.targetWindow && root.targetWindow.visibility === Window.Maximized
+            readonly property color glyphColor: maxArea.containsMouse ? "#ffffff" : "#9ba1ad"
+
             anchors.centerIn: parent
             width: 10
             height: 10
 
             Rectangle {
-                anchors.fill: parent
+                x: 0
+                y: parent.maximized ? 2 : 0
+                width: parent.maximized ? 8 : 10
+                height: parent.maximized ? 8 : 10
                 color: "transparent"
-                border.color: maxArea.containsMouse ? "#ffffff" : "#9ba1ad"
+                border.color: parent.glyphColor
                 border.width: 1
+            }
+
+            // Restore glyph: top and right edges of the back window.
+            Rectangle {
+                visible: parent.maximized
+                x: 2
+                width: 8
+                height: 1
+                color: parent.glyphColor
+            }
+
+            Rectangle {
+                visible: parent.maximized
+                x: 9
+                width: 1
+                height: 8
+                color: parent.glyphColor
             }
         }
 
