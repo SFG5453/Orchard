@@ -77,6 +77,8 @@ SystemTray::SystemTray(PlaybackController *playback, AuthManager *auth, QObject 
     connect(m_icon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
         if (reason == QSystemTrayIcon::Trigger)
             toggleWindow();
+        else if (reason == QSystemTrayIcon::MiddleClick)
+            m_toggle->trigger();
     });
     connect(m_playback, &PlaybackController::stateChanged, this, &SystemTray::refresh);
     connect(m_auth, &AuthManager::statusChanged, this, &SystemTray::refresh);
