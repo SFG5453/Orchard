@@ -68,13 +68,6 @@ ColumnLayout {
             url: "https://github.com/Better-Lyrics/kawarp"
         },
         {
-            key: "oxc",
-            name: "Oxc",
-            license: "MIT",
-            description: qsTr("High-performance JavaScript parser and lexical analyzer used in native player extraction."),
-            url: "https://oxc.rs"
-        },
-        {
             key: "youtubejs",
             name: "YouTube.js",
             license: "MIT",

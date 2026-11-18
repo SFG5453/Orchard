@@ -22,7 +22,8 @@ target_compile_definitions(orchard_js PRIVATE _GNU_SOURCE QUICKJS_NG_BUILD)
 # An -O0 interpreter makes every debug-build transition feel like vinyl at 16 rpm.
 target_compile_options(orchard_js PRIVATE -O2 -fvisibility=hidden
     $<$<COMPILE_LANGUAGE:C>:-funsigned-char -w>)
-target_link_libraries(orchard_js PRIVATE m ${CMAKE_DL_LIBS})
+add_subdirectory("${ORCHARD_ROOT}/core/native/youtube_extractor" youtube_extractor)
+target_link_libraries(orchard_js PRIVATE orchard_youtube_extractor m)
 
 if(ANDROID)
     target_link_libraries(orchard_js PRIVATE log)

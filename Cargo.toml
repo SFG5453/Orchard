@@ -3,7 +3,6 @@ resolver = "3"
 members = [
     "crates/earmark",
     "crates/orchard-adaptive-mix",
-    "crates/orchard-youtube-extractor",
     "crates/orchard-core-ffi",
     "crates/orchard-system-media",
     "crates/orchard-transition-core",

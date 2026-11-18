@@ -519,11 +519,6 @@ rust_sources = [
   'crates/orchard-transition-planner/src/lib.rs',
   'crates/orchard-transition-planner/tests/parity.rs',
   'crates/orchard-transition-planner/tests/session.rs',
-  'crates/orchard-youtube-extractor/Cargo.toml',
-  'crates/orchard-youtube-extractor/examples/extract.rs',
-  'crates/orchard-youtube-extractor/src/builtins.rs',
-  'crates/orchard-youtube-extractor/src/ffi.rs',
-  'crates/orchard-youtube-extractor/src/lib.rs',
   'Cargo.toml',
   'Cargo.lock',
   # The transition planner embeds these with include_str!, so editing one rebuilds the worker.

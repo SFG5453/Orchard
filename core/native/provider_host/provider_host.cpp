@@ -106,7 +106,7 @@ void ProviderHost::initialize() {
     m_initializationError = "Could not create the QuickJS runtime.";
     return;
   }
-  // The large player AST lives in the native extractor's short-lived arena.
+  // Player parsing runs in the native extractor, outside this heap.
   JS_SetMemoryLimit(m_runtime, 256 * 1024 * 1024);
   JS_SetMaxStackSize(m_runtime, 2 * 1024 * 1024);
   m_context = JS_NewContext(m_runtime);

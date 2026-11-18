@@ -63,7 +63,6 @@ QString BackendInfo::licenseText(const QString &key) const
         {QStringLiteral("quickjs"), QStringLiteral(":/licenses/quickjs.txt")},
         {QStringLiteral("qtkeychain"), QStringLiteral(":/licenses/qtkeychain.txt")},
         {QStringLiteral("kawarp"), QStringLiteral(":/licenses/kawarp.txt")},
-        {QStringLiteral("oxc"), QStringLiteral(":/licenses/oxc.txt")},
         {QStringLiteral("youtubejs"), QStringLiteral(":/licenses/youtubejs.txt")},
         {QStringLiteral("inter"), QStringLiteral(":/licenses/inter.txt")},
         {QStringLiteral("libdatachannel"), QStringLiteral(":/licenses/libdatachannel.txt")},

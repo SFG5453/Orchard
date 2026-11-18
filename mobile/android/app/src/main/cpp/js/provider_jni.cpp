@@ -17,7 +17,6 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <dlfcn.h>
 #include <jni.h>
 
 #include <memory>
@@ -26,6 +25,7 @@
 #include <utility>
 
 #include "provider_host/provider_host.h"
+#include "youtube_extractor/youtube_extractor.h"
 
 // Android side of the shared provider host. Kotlin owns the host thread and
 // delivers fetch and timer completions back on it.
@@ -112,18 +112,11 @@ std::string fromBytes(JNIEnv *env, jbyteArray data) {
   return out;
 }
 
-// The extractor lives in the Rust library; unit tests on the build JVM run without it.
-std::string extractWithRust(std::string_view source) {
-  using Extract = char *(*)(const uint8_t *, std::size_t);
-  using Release = void (*)(char *);
-  static void *library = dlopen("liborchard_earmark.so", RTLD_NOW);
-  static auto extract = library ? reinterpret_cast<Extract>(dlsym(library, "orchard_youtube_extract")) : nullptr;
-  static auto release = library ? reinterpret_cast<Release>(dlsym(library, "orchard_youtube_extract_free")) : nullptr;
-  if (!extract || !release) return {};
-  char *json = extract(reinterpret_cast<const uint8_t *>(source.data()), source.size());
+std::string extractPlayerSource(std::string_view source) {
+  char *json = orchard_youtube_extract(reinterpret_cast<const uint8_t *>(source.data()), source.size());
   if (!json) return {};
   std::string result(json);
-  release(json);
+  orchard_youtube_extract_free(json);
   return result;
 }
 
@@ -217,7 +210,7 @@ public:
     return !clearException(jni) && saved;
   }
 
-  std::string extractPlayer(std::string_view source) override { return extractWithRust(source); }
+  std::string extractPlayer(std::string_view source) override { return extractPlayerSource(source); }
 
   void settled(std::uint64_t requestId, bool ok, std::string result) override {
     JNIEnv *jni = env();

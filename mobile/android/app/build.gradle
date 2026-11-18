@@ -13,7 +13,6 @@ def orchardReleaseSigningReady = [orchardReleaseKeystore, orchardReleaseStorePas
 def earmarkCrateDir = file('../../../crates/orchard-transition-mobile')
 def earmarkCoreDir = file('../../../crates/orchard-transition-core/src')
 def earmarkEngineDir = file('../../../crates/earmark/src')
-def youtubeExtractorDir = file('../../../crates/orchard-youtube-extractor/src')
 // The desktop adaptive-mix worker's code and its QuickJS planner, compiled into the same library.
 def adaptiveMixDir = file('../../../crates/orchard-adaptive-mix/src')
 def plannerCrateDir = file('../../../crates/orchard-transition-planner')
@@ -236,7 +235,6 @@ tasks.register('buildEarmarkLibrary', Exec) {
     inputs.files(fileTree(earmarkCrateDir) { exclude 'target/**' })
     inputs.dir earmarkCoreDir
     inputs.dir earmarkEngineDir
-    inputs.dir youtubeExtractorDir
     inputs.dir adaptiveMixDir
     inputs.files(fileTree(plannerCrateDir) { include 'src/**', 'js/**', 'build.rs' })
     inputs.files(fileTree(plannerScriptsDir) { include 'src/audio/crossfade/*.js', 'shared/*.js' })

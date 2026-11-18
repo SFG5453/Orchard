@@ -72,6 +72,7 @@ json_dep = json.dependency('nlohmann_json')
 subdir('meson')
 
 cpp = meson.get_compiler('cpp')
+cc = meson.get_compiler('c')
 discord_sdk_root = meson.project_source_root() / 'vendor/discord_social_sdk'
 if host_machine.system() == 'windows'
   discord_sdk_libdir = discord_sdk_root / 'lib/windows'
@@ -183,6 +184,28 @@ connect_lib = static_library('orchard_connect', files(connect_sources),
 connect_dep = declare_dependency(link_with: connect_lib,
   include_directories: connect_inc,
   dependencies: [datachannel_dep, mbedtls_dep, mbedx509_dep, mbedcrypto_dep, json_dep])
+
+youtube_extractor_sources = files(
+  'core/native/youtube_extractor/yte_defs.c',
+  'core/native/youtube_extractor/yte_expr.c',
+  'core/native/youtube_extractor/yte_extract.c',
+  'core/native/youtube_extractor/yte_func.c',
+  'core/native/youtube_extractor/yte_lex.c',
+  'core/native/youtube_extractor/yte_primary.c',
+  'core/native/youtube_extractor/yte_scope.c',
+  'core/native/youtube_extractor/yte_stmt.c',
+)
+youtube_extractor_deps = [dependency('threads')]
+if host_machine.system() != 'windows'
+  youtube_extractor_deps += [cc.find_library('m', required: false)]
+endif
+youtube_extractor_args = host_machine.system() == 'windows' ? [] : ['-D_POSIX_C_SOURCE=200809L']
+youtube_extractor_lib = static_library('orchard_youtube_extractor', youtube_extractor_sources,
+  c_args: youtube_extractor_args, dependencies: youtube_extractor_deps,
+  override_options: ['c_std=c11'], pic: true)
+youtube_extractor_dep = declare_dependency(link_with: youtube_extractor_lib,
+  include_directories: include_directories('core/native/youtube_extractor'),
+  dependencies: youtube_extractor_deps)
 
 # Meson's CMake translator invents an empty moc byproduct for qtkeychain.
 # The empty file has career ambitions, but Meson quite reasonably objects.
@@ -319,7 +342,7 @@ auth_qrc = qt6.compile_resources(sources: files(auth_qrc_file), extra_args: rcc_
 
 app_inc = include_directories('app/src', 'app/src/auth',
   'app/src/appearance', 'core/native', 'vendor/litert/include', 'bootstrapper/src')
-app_dependencies = [qt_dep, qt_gui_private, connect_dep, rust_dep,
+app_dependencies = [qt_dep, qt_gui_private, connect_dep, rust_dep, youtube_extractor_dep,
   qjs_dep, keychain_dep] + platform_deps
 app_args = ['-DORCHARD_VERSION="' + meson.project_version() + '"']
 if host_machine.system() == 'windows' or host_machine.system() == 'linux'
@@ -432,7 +455,7 @@ discord_module = shared_module('orchard-discord', files(discord_module_sources),
   build_rpath: discord_module_rpath, install_rpath: discord_module_rpath,
   install: true, install_dir: get_option('bindir'))
 
-auth_dependencies = [qt_dep, rust_dep, qjs_dep, keychain_dep] + platform_deps
+auth_dependencies = [qt_dep, rust_dep, youtube_extractor_dep, qjs_dep, keychain_dep] + platform_deps
 auth_args = []
 auth_sources = helper_sources
 auth_moc_headers = helper_moc_headers
@@ -676,6 +699,10 @@ if get_option('tests')
     files('tests/provider_runtime_test.cpp') + provider_test_moc + [test_provider_qrc],
     include_directories: app_inc, dependencies: [app_dep, qt_test_dep])
   test('orchard_provider_runtime', provider_test, timeout: 120)
+  youtube_extractor_test = executable('orchard_youtube_extractor_tests',
+    files('core/native/youtube_extractor/test/test_extractor.c'),
+    dependencies: youtube_extractor_dep, override_options: ['c_std=c11'])
+  test('orchard_youtube_extractor', youtube_extractor_test)
 
   docs_test_moc = qt6.compile_moc(sources: ['tests/docs_library_test.cpp'],
     include_directories: app_inc, dependencies: [qt_test_dep, app_dep])

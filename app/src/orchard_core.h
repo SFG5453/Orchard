@@ -64,11 +64,6 @@ uint8_t orchard_audio_engine_spectrum(const OrchardAudioEngineHandle *handle,
                                       float levels[10]);
 void orchard_audio_engine_destroy(OrchardAudioEngineHandle *handle);
 
-// Returns owned UTF-8 JSON containing extraction data or an error. Source is
-// borrowed for this call only. Release the result with orchard_youtube_extract_free.
-char *orchard_youtube_extract(const uint8_t *source, size_t length);
-void orchard_youtube_extract_free(char *result);
-
 // Media keys for segmented provider streams. Each returns 1 on success.
 uint8_t orchard_hkdf_sha256(const uint8_t *key, size_t key_length,
                             const uint8_t *salt, size_t salt_length,

@@ -63,14 +63,14 @@ Pass the executable path with `-Dhost_qjsc=/absolute/path/to/qjsc` at `meson set
 
 ## Provider and playback runtime
 
-YouTube player parsing and dependency extraction run in Rust using Oxc. QuickJS executes the extracted signature program. `ORCHARD_PLAYBACK_TIMING=1` prints download, native parsing/analysis/emission, and JavaScript compilation times.
+YouTube player parsing and dependency extraction run in the C extractor in `core/native/youtube_extractor`. QuickJS executes the extracted signature program. `ORCHARD_PLAYBACK_TIMING=1` prints download, native parsing/analysis/emission, and JavaScript compilation times.
 
 For a cold resolver check that bypasses both player caches:
 
 ```sh
 ORCHARD_TEST_LIVE_YOUTUBE=1 ORCHARD_TEST_COLD_PLAYER=1 \
   ./build/dev/orchard_provider_runtime_tests liveBrowserPlayerRunsInQuickJs
-cargo test -p orchard-youtube-extractor -p orchard-core-ffi --lib
+cargo test -p orchard-core-ffi --lib
 ```
 
 - `core/js` holds platform-neutral playback policy.

@@ -20,6 +20,7 @@
 #include "providers/runtime/provider_runtime.h"
 #include "provider_host/provider_host.h"
 #include "orchard_core.h"
+#include "youtube_extractor/youtube_extractor.h"
 
 extern "C" {
 #include <quickjs.h>

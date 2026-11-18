@@ -17,14 +17,33 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-fn main() {
-    let path = std::env::args().nth(1).expect("usage: extract <player.js>");
-    let source = std::fs::read_to_string(path).expect("read player source");
-    match orchard_youtube_extractor::extract(&source) {
-        Ok(result) => println!("{}", serde_json::to_string(&result).unwrap()),
-        Err(error) => {
-            eprintln!("{error}");
-            std::process::exit(1);
-        }
-    }
+// Prints the extractor JSON for one player file.
+
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "youtube_extractor.h"
+
+int main(int argc, char **argv) {
+  if (argc != 2) {
+    fprintf(stderr, "usage: yte_cli <player.js>\n");
+    return 2;
+  }
+  FILE *f = fopen(argv[1], "rb");
+  if (!f) {
+    perror(argv[1]);
+    return 2;
+  }
+  fseek(f, 0, SEEK_END);
+  long size = ftell(f);
+  fseek(f, 0, SEEK_SET);
+  unsigned char *data = malloc(size > 0 ? (size_t)size : 1);
+  if (!data || fread(data, 1, (size_t)size, f) != (size_t)size) return 2;
+  fclose(f);
+  char *json = orchard_youtube_extract(data, (size_t)size);
+  free(data);
+  if (!json) return 3;
+  puts(json);
+  orchard_youtube_extract_free(json);
+  return 0;
 }

@@ -96,7 +96,7 @@
               libsecret # qtkeychain's Linux backend
               webkitgtk_4_1 # the sign-in helper's browser
 
-              # Rust core (the YouTube extractor needs rustc >= 1.96)
+              # Rust core
               rustToolchain
               cargo-ndk # Gradle shells out to `cargo ndk` for Earmark
               rustPlatform.bindgenHook # signalsmith-stretch runs bindgen

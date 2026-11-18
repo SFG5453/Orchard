@@ -17,7 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Parsing and dependency analysis run in the Rust host. The provider receives
+// Parsing and dependency analysis run in the native extractor. The provider receives
 // only the small extracted program and compiles it in QuickJS.
 export function extract(source) {
   if (typeof globalThis.__orchardExtractPlayer !== 'function') {

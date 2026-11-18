@@ -83,13 +83,9 @@ license. Their notices are preserved in
 
 ## Native YouTube player extraction
 
-`orchard-youtube-extractor` uses Oxc 0.149.0 for JavaScript parsing and lexical
-binding analysis. Oxc is MIT licensed; its notice is preserved in
-[`OXC_LICENSE`](crates/orchard-youtube-extractor/OXC_LICENSE).
-
 The player matchers, built-in names, and initializer policy are based on
 YouTube.js 18.0.0 by LuanRT. Its MIT license is preserved in
-[`YOUTUBEJS_LICENSE`](crates/orchard-youtube-extractor/YOUTUBEJS_LICENSE).
+[`YOUTUBEJS_LICENSE`](core/native/youtube_extractor/YOUTUBEJS_LICENSE).
 
 ## AI-generated music detector
 

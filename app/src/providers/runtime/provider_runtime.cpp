@@ -19,6 +19,7 @@
 
 #include "provider_runtime.h"
 #include "orchard_core.h"
+#include "youtube_extractor/youtube_extractor.h"
 
 #include <memory>
 #include <utility>
