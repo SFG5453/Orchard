@@ -188,9 +188,16 @@ static bool find_timestamp(P *p, const Coll *c, uint32_t *value) {
 }
 
 static double now_ms(void) {
+#ifdef _WIN32
+  LARGE_INTEGER count, freq;
+  QueryPerformanceCounter(&count);
+  QueryPerformanceFrequency(&freq);
+  return count.QuadPart * 1000.0 / freq.QuadPart;
+#else
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
   return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
+#endif
 }
 
 static void json_string(P *p, Buf *b, const char *s, size_t n) {
