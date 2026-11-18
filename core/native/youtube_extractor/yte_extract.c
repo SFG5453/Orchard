@@ -17,6 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -346,7 +347,22 @@ static bool utf8_valid(const uint8_t *s, size_t n) {
 
 typedef struct { const char *src; uint32_t len; char *result; } Job;
 
-static void run_job(Job *job) { job->result = extract(job->src, job->len); }
+static void run_job(Job *job) {
+  // JavaScript and JSON numbers require a decimal point.
+#ifdef _WIN32
+  bool locale_ready = _configthreadlocale(_ENABLE_PER_THREAD_LOCALE) != -1 &&
+                      setlocale(LC_NUMERIC, "C") != NULL;
+#else
+  locale_t numeric = newlocale(LC_NUMERIC_MASK, "C", (locale_t)0);
+  locale_t previous = numeric ? uselocale(numeric) : (locale_t)0;
+  bool locale_ready = previous != (locale_t)0;
+#endif
+  job->result = locale_ready ? extract(job->src, job->len) : error_json("Could not set player numeric locale");
+#ifndef _WIN32
+  if (previous) uselocale(previous);
+  if (numeric) freelocale(numeric);
+#endif
+}
 
 #ifdef _WIN32
 static DWORD WINAPI job_entry(LPVOID arg) {

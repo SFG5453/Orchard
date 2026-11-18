@@ -17,6 +17,7 @@
  * along with Orchard. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,7 +50,7 @@ static const char kPlayer[] =
   "q=Q.prototype;q.set=function(a,b){this.a[a]=b};q.clone=function(){return new Q(H(this.a))};\n"
   "var H=function(a){var b={};for(let c in a)b[c]=a[c];return b},\n"
   "svc=document.createElement(\"div\"),\n"
-  "V=function(){return{signatureTimestamp:20767}},\n"
+  "V=function(){return{signatureTimestamp:2.0767e4}},\n"
   "T=function(a,b){var c=w[0],H=1;return b?a+H+svc+cfg.x:c},cfg={x:1,y:[2]},lst=[1,init],init=new Map;\n"
   "g.url=function(a){this.u=a};\n"
   "g.url.prototype=Q.prototype;\n"
@@ -124,6 +125,13 @@ static void test_matches_reference_output(void) {
   CHECK(strncmp(json + 11, escaped, n) == 0 && json[11 + n] == '"');
   CHECK(strstr(json, "\"exportedRawValues\":{\"signatureTimestampVar\":\"20767\"}") != NULL);
   CHECK(strstr(json, "\"exported\":[\"nsigFunction\"]") != NULL);
+  const char *timings = strstr(json, "\"timings\":");
+  int end = 0;
+  if (timings) {
+    sscanf(timings, "\"timings\":{\"parseMs\":%*[0-9].%*3[0-9],"
+                    "\"analyzeMs\":%*[0-9].%*3[0-9],\"emitMs\":%*[0-9].%*3[0-9]}}%n", &end);
+  }
+  CHECK(end > 0 && timings[end] == '\0');
   free(escaped);
   orchard_youtube_extract_free(json);
 }
@@ -143,6 +151,7 @@ static void test_deep_nesting_fails_cleanly(void) {
 }
 
 int main(void) {
+  setlocale(LC_NUMERIC, "");
   test_rejects_invalid_or_unrecognized_players();
   test_does_not_match_markers_in_strings_or_comments();
   test_matches_reference_output();
