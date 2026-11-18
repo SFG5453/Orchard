@@ -1,5 +1,24 @@
 [
   {
+    "version": "2.0.8-canary.1",
+    "date": "2026-11-17",
+    "title": "Lighter YouTube playback and tray play/pause",
+    "sections": [
+      {
+        "title": "Playback",
+        "items": [
+          "YouTube songs start faster and use far less memory. A new native extractor from the Upcoming Mobile app reads the YouTube player in about half the time and peaks at about 7 MB of memory, down from 60 to 80 MB. It also makes the app smaller."
+        ]
+      },
+      {
+        "title": "Desktop",
+        "items": [
+          "Middle-clicking the tray icon plays or pauses. Added by @vegiii."
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.0.7-canary.1",
     "date": "2026-11-14",
     "title": "Local albums and a tidier top edge",
