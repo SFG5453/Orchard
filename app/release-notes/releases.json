@@ -1,5 +1,18 @@
 [
   {
+    "version": "2.0.9-canary.1",
+    "date": "2026-11-18",
+    "title": "YouTube playback fix",
+    "sections": [
+      {
+        "title": "Playback",
+        "items": [
+          "YouTube playback works again on systems that use a comma as the decimal separator. Fixes #269."
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.0.8-canary.1",
     "date": "2026-11-17",
     "title": "Lighter YouTube playback and tray play/pause",
