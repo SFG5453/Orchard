@@ -7,6 +7,7 @@
     radius and 18dp stroke put the mark inside the 66dp adaptive safe zone with room to spare.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
@@ -17,8 +18,19 @@
         android:rotation="-8">
         <path
             android:pathData="M77.64,45.86 A25,25 0 1 1 66.12,32.13"
-            android:strokeColor="@color/ic_launcher_foreground"
             android:strokeWidth="18"
-            android:strokeLineCap="butt" />
+            android:strokeLineCap="butt">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="20"
+                    android:startY="20"
+                    android:endX="88"
+                    android:endY="88"
+                    android:startColor="@color/ic_launcher_gradient_start"
+                    android:centerColor="@color/ic_launcher_gradient_center"
+                    android:endColor="@color/ic_launcher_gradient_end" />
+            </aapt:attr>
+        </path>
     </group>
 </vector>

@@ -35,19 +35,18 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.sfg.orchard.connect.R
-import dev.sfg.orchard.mobile.ui.theme.CanopyColors
 
 @Composable
 fun OrchardMark(
     modifier: Modifier = Modifier,
     contentDescription: String? = "Orchard",
-    tint: Color = CanopyColors.Accent,
+    tint: Color? = null,
 ) {
     Image(
         painter = painterResource(R.drawable.ic_launcher_foreground),
         contentDescription = contentDescription,
-        // Build types recolour the launcher layer (canary is dark on yellow), so tint in app.
-        colorFilter = ColorFilter.tint(tint),
+        // Untinted shows the launcher gradient; pass a tint for a flat mark.
+        colorFilter = tint?.let { ColorFilter.tint(it) },
         // The launcher layer keeps the mark inside the adaptive safe zone; in app there is no
         // mask to clear, so it is scaled back up to fill its slot.
         modifier = modifier.graphicsLayer(scaleX = 1.55f, scaleY = 1.55f),

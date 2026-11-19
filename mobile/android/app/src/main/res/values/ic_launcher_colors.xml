@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The launcher mark's two colours live here rather than inside the vector so a
-    build type can restyle the icon by overriding this file alone, leaving the
-    single copy of the path untouched.
+    Launcher colours live here so a build type can restyle the icon by
+    overriding this file alone. All build types share the GTA VI week palette.
 -->
 <resources>
-    <color name="ic_launcher_background">#0D3B33</color>
-    <color name="ic_launcher_foreground">#E9F5D8</color>
+    <color name="ic_launcher_background">#1A0B2E</color>
+    <color name="ic_launcher_gradient_start">#FFB648</color>
+    <color name="ic_launcher_gradient_center">#FF4D8D</color>
+    <color name="ic_launcher_gradient_end">#8E44D6</color>
 </resources>
