@@ -1,5 +1,26 @@
 [
   {
+    "version": "2.0.10-canary.1",
+    "date": "2026-11-18",
+    "title": "Linux sign-in fixes and GTA VI week",
+    "sections": [
+      {
+        "title": "Fixes",
+        "items": [
+          "Google sign-in no longer crashes on Linux distributions whose image loaders do not match the bundled GTK, such as Kubuntu 26.04. The AppImage and installer ship their own image loaders for the sign-in window. Fixes #270.",
+          "The Linux installer's sign-in helper uses the bundled Qt runtime, so it starts on systems with an older Qt, such as Ubuntu 26.04 with Qt 6.10. Start Orchard from its desktop entry or the orchard launcher in the install folder. Fixes #271."
+        ]
+      },
+      {
+        "title": "Appearance",
+        "items": [
+          "For GTA VI release week, the Orchard logo wears an amber, pink and violet sunset gradient on a night-purple background. This covers the desktop app, window and installer icons, the Android launcher and in-app mark, and the Stream Deck plugin. The usual green returns after the week.",
+          "Canary builds use the same gradient icon this week, so they no longer show the yellow canary icon."
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.0.9-canary.1",
     "date": "2026-11-18",
     "title": "YouTube playback fix",
