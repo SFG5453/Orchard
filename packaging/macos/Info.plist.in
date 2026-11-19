@@ -18,6 +18,17 @@
 	<string>Orchard</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Orchard links</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>orchard</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleShortVersionString</key>
 	<string>@SHORT_VERSION@</string>
 	<key>CFBundleVersion</key>
