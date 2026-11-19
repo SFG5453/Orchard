@@ -41,6 +41,7 @@
 #elif defined(ORCHARD_WEBKIT_AUTH)
 #include "webkit_profile.h"
 #include "webkit_view.h"
+#include <QFile>
 #include <QQmlEngine>
 #else
 #include <QtWebView/QtWebView>
@@ -51,9 +52,13 @@ int main(int argc, char *argv[]) {
   qmlRegisterType<WebView2Item>("Orchard.Auth", 1, 0, "WebView2Item");
 #elif defined(ORCHARD_WEBKIT_AUTH)
   const QString webkitRoot = qEnvironmentVariable("ORCHARD_WEBKIT_ROOT");
-  if (!webkitRoot.isEmpty() && !QDir::setCurrent(webkitRoot)) {
-    qCritical() << "Cannot access WebKit runtime directory:" << webkitRoot;
-    return 1;
+  if (!webkitRoot.isEmpty()) {
+    if (!QDir::setCurrent(webkitRoot)) {
+      qCritical() << "Cannot access WebKit runtime directory:" << webkitRoot;
+      return 1;
+    }
+    const QString pixbufCache = QDir::current().filePath(QStringLiteral("lib/gdk-pixbuf-2.0/loaders.cache"));
+    qputenv("GDK_PIXBUF_MODULE_FILE", QFile::encodeName(pixbufCache));
   }
   initializeWebKit(argc, argv);
   qmlRegisterType<WebKitView>("Orchard.Auth", 1, 0, "WebKitView");

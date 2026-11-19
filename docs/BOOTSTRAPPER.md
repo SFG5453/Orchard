@@ -40,6 +40,8 @@ The `orchard-bootstrapper-test` binary is the same code compiled with `ORCHARD_B
 
 Install roots: `%LOCALAPPDATA%\Programs\Orchard` on Windows, `$XDG_DATA_HOME/orchard` (normally `~/.local/share/orchard`) on Linux. User data stays where Qt puts it (`SFG545/Orchard`) and is never touched.
 
+On Linux, start Orchard from its desktop entry or run the `orchard` executable at the install root. The launcher selects the installed version's bundled Qt and WebKitGTK runtimes for Orchard and its sign-in helper.
+
 The GUI app never replaces itself. A release is assembled in `.<name>.staging` next to the running one, verified, renamed into place, and then activated by changing `current` in `install.json`.
 
 ## Server layout

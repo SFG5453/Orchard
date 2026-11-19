@@ -15,7 +15,7 @@
     "models": {"version": "3", "map": [
       {"from": "usr/bin/models", "to": ""}
     ]},
-    "qt": {"version": "6.12.0-14", "map": [
+    "qt": {"version": "6.12.0-15", "map": [
       {"from": "usr/lib", "to": "lib"},
       {"from": "usr/libexec", "to": "libexec"},
       {"from": "usr/share/glib-2.0", "to": "share/glib-2.0"},

@@ -84,17 +84,62 @@ cd "$output_dir"
 
 gio_tls="$(pkg-config --variable=giomoduledir gio-2.0)/libgiognutls.so"
 test -f "$gio_tls"
+pixbuf_dir="$(pkg-config --variable=gdk_pixbuf_moduledir gdk-pixbuf-2.0)"
+pixbuf_query="$(pkg-config --variable=gdk_pixbuf_query_loaders gdk-pixbuf-2.0)"
+test -d "$pixbuf_dir"
+test -x "$pixbuf_query"
+pixbuf_loaders=("$pixbuf_dir"/*.so)
+pixbuf_args=()
+for loader in "${pixbuf_loaders[@]}"; do
+  pixbuf_args+=(-l "$loader")
+done
+
 ./linuxdeploy-x86_64.AppImage --appdir "$appdir" \
   -e "$(command -v ffmpeg)" -e "$(command -v ffprobe)" \
-  -l "$gio_tls" \
+  -l "$gio_tls" "${pixbuf_args[@]}" \
   -i "$output_dir/orchard.png" \
   -d "$output_dir/orchard.desktop" --plugin qt
 
 test -f "$appdir/usr/bin/ffmpeg"
 test -f "$appdir/usr/bin/ffprobe"
 test -f "$appdir/usr/plugins/sqldrivers/libqsqlite.so"
+test -f "$appdir/usr/lib/libgdk_pixbuf-2.0.so.0"
+test -f "$appdir/usr/lib/librsvg-2.so.2"
 compgen -G "$appdir/usr/lib/libwebkit2gtk-4.1.so*" > /dev/null
 compgen -G "$appdir/usr/lib/libjavascriptcoregtk-4.1.so*" > /dev/null
+dependencies="$(LD_LIBRARY_PATH="$appdir/usr/lib" ldd "$appdir/usr/bin/orchard-auth-helper" 2>&1)" || {
+  printf '%s\n' "$dependencies" >&2
+  exit 1
+}
+if ! awk -v lib="$appdir/usr/lib/" '
+  /not found/ { bad = 1 }
+  $1 ~ /^libQt6/ && index($0, "=> " lib) == 0 { bad = 1 }
+  $1 == "libQt6Core.so.6" { core = 1 }
+  END { exit (bad || !core) }
+' <<< "$dependencies"; then
+  printf 'Orchard auth helper needs the packaged Qt runtime:\n%s\n' "$dependencies" >&2
+  exit 1
+fi
+
+pixbuf_bundle="lib/gdk-pixbuf-2.0"
+mkdir -p "$appdir/usr/$pixbuf_bundle/loaders"
+for loader in "${pixbuf_loaders[@]}"; do
+  mv "$appdir/usr/lib/${loader##*/}" "$appdir/usr/$pixbuf_bundle/loaders/"
+done
+(
+  cd "$appdir/usr"
+  export LD_LIBRARY_PATH="$PWD/lib"
+  # The helper uses this runtime root as its working directory.
+  "$pixbuf_query" "$PWD/$pixbuf_bundle"/loaders/*.so |
+    sed -E 's|^".*/(lib/gdk-pixbuf-2\.0/loaders/[^"/]+\.so)"$|"./\1"|' > "$pixbuf_bundle/loaders.cache"
+  if ! grep -Eq '^"\./lib/gdk-pixbuf-2\.0/loaders/libpixbufloader[-_]svg\.so"$' "$pixbuf_bundle/loaders.cache"; then
+    echo "The packaged GdkPixbuf cache is missing the SVG loader" >&2
+    exit 1
+  fi
+  GDK_PIXBUF_MODULE_FILE="$PWD/$pixbuf_bundle/loaders.cache" \
+    gdk-pixbuf-thumbnailer "$source_dir/app/qml/assets/lucide/circle-alert.svg" "$output_dir/pixbuf-smoke.png"
+  rm "$output_dir/pixbuf-smoke.png"
+)
 
 mkdir -p "$appdir/usr/lib/gio/modules"
 cp "$gio_tls" "$appdir/usr/lib/gio/modules/"
