@@ -208,12 +208,19 @@ int main(int argc, char *argv[]) {
   }
   UiScaling::applyAuto();
 
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+  // Analysis workers inherit this; packaged builds use their bundled FFmpeg.
 #ifdef Q_OS_WIN
-  // Analysis workers inherit this; Windows has no ffmpeg on PATH to fall back to.
   const QString bundledFfmpeg =
       QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("ffmpeg.exe"));
   if (!qEnvironmentVariableIsSet("ORCHARD_FFMPEG") && QFileInfo::exists(bundledFfmpeg))
     qputenv("ORCHARD_FFMPEG", QDir::toNativeSeparators(bundledFfmpeg).toUtf8());
+#else
+  const QString bundledFfmpeg =
+      QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("ffmpeg"));
+  if (!qEnvironmentVariableIsSet("ORCHARD_FFMPEG") && QFileInfo::exists(bundledFfmpeg))
+    qputenv("ORCHARD_FFMPEG", QFile::encodeName(bundledFfmpeg));
+#endif
 #endif
 
 #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID) && QT_CONFIG(vulkan) && __has_include(<vulkan/vulkan.h>)

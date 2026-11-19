@@ -11,6 +11,7 @@ import hashlib
 import os
 import plistlib
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -95,6 +96,7 @@ else:
     identity = sorted(hashes & allowed)[0]
 
 app = a.output
+root = Path(__file__).resolve().parent.parent
 contents = app / "Contents"
 macos = contents / "MacOS"
 if app.exists():
@@ -124,6 +126,19 @@ for source in [a.executable, *a.helper]:
 for library in build_dir.glob("*.dylib"):
     shutil.copy2(library, macos / library.name, follow_symlinks=False)
     origins.setdefault(macos / library.name, library)
+# FFmpeg tools are staged with the adaptive worker and signed as bundle code.
+for name in ("ffmpeg", "ffprobe", "ffmpeg-LICENSE.txt"):
+    source = build_dir / name
+    if not source.is_file():
+        fail(f"missing {source}")
+    shutil.copy2(source, macos / name)
+    if name != "ffmpeg-LICENSE.txt":
+        (macos / name).chmod((macos / name).stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        origins[macos / name] = source
+(contents / "Resources").mkdir(exist_ok=True)
+shutil.copy2(root / "LICENSE", contents / "Resources/LICENSE")
+shutil.copy2(root / "THIRD_PARTY_NOTICES.md", contents / "Resources/THIRD_PARTY_NOTICES.md")
+shutil.copy2(build_dir / "ffmpeg-LICENSE.txt", contents / "Resources/FFmpeg-LICENSE.txt")
 # Contents/MacOS is sealed as code, so data lives in Resources.
 if (build_dir / "models").is_dir():
     shutil.copytree(build_dir / "models", contents / "Resources/models", symlinks=True)

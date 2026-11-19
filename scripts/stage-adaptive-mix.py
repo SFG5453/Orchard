@@ -53,6 +53,11 @@ if a.platform in ("windows-x86_64-msvc", "windows-x86_64-gnu"):
         sys.executable, str(Path(__file__).with_name("stage-ffmpeg-windows.py")),
         str(a.destination), str(a.cache),
     ], check=True)
+elif a.platform.startswith("macos-"):
+    subprocess.run([
+        sys.executable, str(Path(__file__).with_name("stage-ffmpeg-macos.py")),
+        str(a.destination), str(a.cache), a.platform.removeprefix("macos-"),
+    ], check=True)
 worker = "orchard-adaptive-mix" + (".exe" if a.platform.startswith("windows") else "")
 shutil.copy2(a.profile / worker, a.destination / worker)
 if user_ort and a.platform.startswith("macos"):

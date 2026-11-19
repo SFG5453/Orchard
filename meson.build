@@ -450,6 +450,8 @@ endif
 ffmpeg_stage_sources = files(
   'scripts/stage-ffmpeg-windows.py',
   'scripts/build-ffmpeg-windows.sh',
+  'scripts/stage-ffmpeg-macos.py',
+  'scripts/build-ffmpeg-macos.sh',
   '.gitmodules'
 )
 adaptive_stage = custom_target('adaptive mix stage',
@@ -545,11 +547,12 @@ endif
 # A distribution bundle ships Qt inside the app and signs with the hardened runtime.
 macos_profile = get_option('macos_provisioning_profile')
 if host_machine.system() == 'darwin' and (macos_profile != '' or macos_distribution)
-  macos_bundle_inputs = [orchard, auth_helper, widevine_host, files('packaging/macos/Info.plist.in')]
+  macos_bundle_inputs = [orchard, auth_helper, widevine_host, adaptive_stage,
+    files('packaging/macos/Info.plist.in')]
   macos_bundle_args = [
     '--executable', '@INPUT0@', '--helper', '@INPUT1@', '--helper', '@INPUT2@',
     '--helper', meson.current_build_dir() / 'orchard-adaptive-mix',
-    '--info-plist', '@INPUT3@', '--icon', files('packaging/macos/Orchard.icns'),
+    '--info-plist', '@INPUT4@', '--icon', files('packaging/macos/Orchard.icns'),
     '--version', meson.project_version(), '--min-macos', macos_min,
     '--identity', get_option('macos_codesign_identity'),
     '--qmake', find_program('qmake6', 'qmake', dirs: qt_tool_dirs),
@@ -561,14 +564,13 @@ if host_machine.system() == 'darwin' and (macos_profile != '' or macos_distribut
       '--entitlements', files('packaging/macos/Orchard.entitlements')]
   else
     macos_bundle_inputs += files(macos_profile)
-    macos_bundle_args += ['--profile', '@INPUT4@']
+    macos_bundle_args += ['--profile', '@INPUT5@']
   endif
   custom_target('Orchard.app',
     input: macos_bundle_inputs,
     output: 'Orchard.app',
     command: [python, files('scripts/macos-bundle.py')] + macos_bundle_args,
     depend_files: files('packaging/macos/Orchard.icns'),
-    depends: adaptive_stage,
     build_by_default: true)
 endif
 
