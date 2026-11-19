@@ -9,7 +9,8 @@
 #include <QRegularExpression>
 #include <mbedtls/pk.h>
 
-bool packageReleaseVersion(const QByteArray &envelope, const QString &channel, QString *version)
+bool packageReleaseVersion(const QByteArray &envelope, const QString &channel, QString *version,
+                           QJsonObject *macosDownloads)
 {
     const QJsonObject doc = QJsonDocument::fromJson(envelope).object();
     if (doc.value(QStringLiteral("format")) != QLatin1String("orchard-signed-v1") ||
@@ -48,6 +49,8 @@ bool packageReleaseVersion(const QByteArray &envelope, const QString &channel, Q
         release.value(QStringLiteral("channel")).toString() != channel || !validVersion.match(found).hasMatch())
         return false;
     *version = found;
+    if (macosDownloads)
+        *macosDownloads = release.value(QStringLiteral("macos")).toObject();
     return true;
 }
 

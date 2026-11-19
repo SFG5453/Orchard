@@ -611,7 +611,7 @@ jobs:
   publish:
     name: Publish signed release to R2
     if: ${{ !inputs.build_only && inputs.platforms == 'all' }}
-    needs: [linux, windows, arch]
+    needs: [linux, windows, arch, macos]
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     concurrency:
@@ -634,7 +634,15 @@ jobs:
         with:
           name: orchard-arch-x86_64
           path: dist/arch
-      - name: Unpack both platform trees
+      - uses: actions/download-artifact@v4
+        with:
+          name: orchard-macos-arm64
+          path: dist/macos
+      - uses: actions/download-artifact@v4
+        with:
+          name: orchard-macos-x86_64
+          path: dist/macos
+      - name: Unpack Linux and Windows trees
         run: |
           sudo apt-get update
           sudo apt-get install -y p7zip-full
@@ -669,4 +677,6 @@ jobs:
             --windows-archive dist/windows/Orchard-Windows-x86_64.7z \
             --linux-bootstrapper dist/linux/orchard-bootstrapper \
             --windows-bootstrapper dist/windows/orchard-bootstrapper.exe \
-            --windows-setup dist/windows/OrchardSetup.exe
+            --windows-setup dist/windows/OrchardSetup.exe \
+            --macos-arm64-dmg dist/macos/Orchard-macOS-arm64.dmg \
+            --macos-x86-64-dmg dist/macos/Orchard-macOS-x86_64.dmg

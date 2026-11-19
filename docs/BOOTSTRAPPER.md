@@ -205,7 +205,8 @@ The new bootstrapper is assembled as `Orchard.new.exe` and verified against the 
 The publisher sets the minimum bootstrapper version in both the channel and manifests to the version in `bootstrapper/meson.build`.
 
 The normal path is the [desktop release workflow](../.github/workflows/manual-desktop-build.yml).
-It builds both platforms and their bootstrappers, then runs
+It builds the Linux, Windows, Arch, and macOS packages and the Linux and
+Windows bootstrappers, then runs
 [`publish_r2.py`](../scripts/release/publish_r2.py) on Ubuntu 24.04. The publisher
 downloads retained manifests to check component versions, signs new manifests
 and the channel file, uploads objects and manifests plus versioned installer
@@ -219,8 +220,9 @@ Required repository secrets are `ORCHARD_RELEASE_PRIVATE_KEY` (PEM),
 The bucket lives in the US jurisdiction, so the publisher uses the matching
 S3 endpoint. Generated installers are available at
 `downloads/<channel>/<version>/orchard`, `Orchard.exe`, and
-`OrchardSetup.exe` under that directory. The AppImage and Windows `.7z` are
-published in the same directory. A workflow-built Windows setup selects its
+`OrchardSetup.exe` under that directory. The AppImage, Windows `.7z`, and
+`Orchard-macOS-arm64.dmg` and `Orchard-macOS-x86_64.dmg` are published in the
+same directory. A workflow-built Windows setup selects its
 published channel by default. For the Linux canary bootstrapper, pass
 `--channel canary --install` on first run.
 

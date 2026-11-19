@@ -14,6 +14,8 @@ hh9H+o3Yara26ngBw1FhmvDDZj1LufhLewsD49/Zlqf9pg3CgFHq9dEviA==
 int main() {
   QByteArray data = R"json({"format": "orchard-signed-v1", "algorithm": "ecdsa-p256-sha256", "keyId": "test", "payload": "eyJzY2hlbWEiOjEsImNoYW5uZWwiOiJzdGFibGUiLCJ2ZXJzaW9uIjoiMS4yLjQifQ==", "signature": "MEQCIEBYiYV8kSU0ZJH8Vp+ha/Sdimoa5B4mXWh3Y9LmbG+TAiBt6fXEmvq7cMstjJdzJbYE7XVsjf5eRLx8PxwB9Brolw=="})json"; QString version;
   CHECK(packageReleaseVersion(data, "stable", &version) && version == "1.2.4");
+  QJsonObject macosDownloads{{"arm64", "old.dmg"}};
+  CHECK(packageReleaseVersion(data, "stable", &version, &macosDownloads) && macosDownloads.isEmpty());
   CHECK(!packageReleaseVersion(data, "canary", &version));
   QJsonObject object = QJsonDocument::fromJson(data).object(); object["payload"] = "e30=";
   CHECK(!packageReleaseVersion(QJsonDocument(object).toJson(), "stable", &version));

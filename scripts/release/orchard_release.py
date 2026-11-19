@@ -209,6 +209,12 @@ def cmd_channel(a) -> None:
                "platforms": platforms}
     if a.minimum_bootstrapper:
         payload["minimumBootstrapperVersion"] = a.minimum_bootstrapper
+    if a.macos_arm64_dmg or a.macos_x86_64_dmg:
+        payload["macos"] = {
+            arch: name for arch, name in (
+                ("arm64", a.macos_arm64_dmg), ("x86_64", a.macos_x86_64_dmg)
+            ) if name
+        }
     if a.bootstrapper:
         if not a.bootstrapper_version:
             raise SystemExit("--bootstrapper needs --bootstrapper-version")
@@ -270,6 +276,8 @@ def main() -> None:
     c.add_argument("--minimum-bootstrapper")
     c.add_argument("--bootstrapper", action="append", help="PLATFORM=PATH")
     c.add_argument("--bootstrapper-version")
+    c.add_argument("--macos-arm64-dmg", metavar="FILENAME")
+    c.add_argument("--macos-x86-64-dmg", metavar="FILENAME")
     c.set_defaults(run=cmd_channel)
 
     a = p.parse_args()

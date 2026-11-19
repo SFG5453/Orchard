@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (C) 2026 SFG545
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Publish both desktop builds to R2, switching the signed channel last."""
+"""Publish desktop releases to R2, switching the signed channel last."""
 
 import argparse
 import ast
@@ -86,7 +86,7 @@ def put_file(s3, bucket: str, key: str, path: Path, cache_control: str) -> None:
 def publish(s3, bucket: str, channel: str, linux_tree: Path, windows_tree: Path,
             linux_appimage: Path, arch_package: Path, windows_archive: Path, linux_boot: Path,
             windows_boot: Path, windows_setup: Path,
-            key_path: Path) -> None:
+            key_path: Path, *, macos_arm64_dmg: Path, macos_x86_64_dmg: Path) -> None:
     version = project_version(ROOT / "meson.build")
     bootstrapper_version = project_version(ROOT / "bootstrapper/meson.build")
     notes = json.loads((ROOT / "app/release-notes/releases.json").read_text())
@@ -94,10 +94,15 @@ def publish(s3, bucket: str, channel: str, linux_tree: Path, windows_tree: Path,
         raise ValueError("The newest bundled release notes must match the app version")
     # makepkg names embed the built commit, so only publish can know the Arch file name.
     notes[0]["archPackage"] = arch_package.name
+    macos_downloads = {
+        "arm64": ("Orchard-macOS-arm64.dmg", macos_arm64_dmg),
+        "x86_64": ("Orchard-macOS-x86_64.dmg", macos_x86_64_dmg),
+    }
+    notes[0]["macos"] = {arch: name for arch, (name, _) in macos_downloads.items()}
     if (channel == "canary") != ("-canary" in version):
         raise ValueError(f"Version {version} does not belong on the {channel} channel")
     for path in (linux_tree, windows_tree, linux_appimage, arch_package, windows_archive,
-                 linux_boot, windows_boot, windows_setup):
+                 linux_boot, windows_boot, windows_setup, macos_arm64_dmg, macos_x86_64_dmg):
         if not path.exists():
             raise FileNotFoundError(path)
     check_signing_key(key_path)
@@ -132,6 +137,8 @@ def publish(s3, bucket: str, channel: str, linux_tree: Path, windows_tree: Path,
                         "--minimum-bootstrapper", bootstrapper_version)
         run_release("channel", "--channel", channel, "--version", version,
                     "--platform", "linux-x86_64", "--platform", "win-x86_64",
+                    "--macos-arm64-dmg", macos_downloads["arm64"][0],
+                    "--macos-x86-64-dmg", macos_downloads["x86_64"][0],
                     "--bootstrapper", f"linux-x86_64={linux_boot}",
                     "--bootstrapper", f"win-x86_64={windows_boot}",
                     "--bootstrapper-version", bootstrapper_version,
@@ -152,7 +159,8 @@ def publish(s3, bucket: str, channel: str, linux_tree: Path, windows_tree: Path,
                            ("OrchardSetup.exe", windows_setup),
                            ("Orchard-Linux-x86_64.AppImage", linux_appimage),
                            (arch_package.name, arch_package),
-                           ("Orchard-Windows-x86_64.7z", windows_archive)):
+                           ("Orchard-Windows-x86_64.7z", windows_archive),
+                           *macos_downloads.values()):
             key = f"downloads/{channel}/{version}/{name}"
             put_file(s3, bucket, key, path, "public, max-age=31536000, immutable")
         notes_key = f"releases/{channel}-notes.json"
@@ -174,6 +182,8 @@ def main() -> None:
     parser.add_argument("--linux-bootstrapper", type=Path, required=True)
     parser.add_argument("--windows-bootstrapper", type=Path, required=True)
     parser.add_argument("--windows-setup", type=Path, required=True)
+    parser.add_argument("--macos-arm64-dmg", type=Path, required=True)
+    parser.add_argument("--macos-x86-64-dmg", type=Path, required=True)
     args = parser.parse_args()
     import boto3
 
@@ -189,7 +199,8 @@ def main() -> None:
         key.chmod(0o600)
         publish(s3, bucket, args.channel, args.linux_tree, args.windows_tree,
                 args.linux_appimage, args.arch_package, args.windows_archive, args.linux_bootstrapper,
-                args.windows_bootstrapper, args.windows_setup, key)
+                args.windows_bootstrapper, args.windows_setup, key,
+                macos_arm64_dmg=args.macos_arm64_dmg, macos_x86_64_dmg=args.macos_x86_64_dmg)
 
 
 if __name__ == "__main__":

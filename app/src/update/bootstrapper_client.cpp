@@ -34,6 +34,8 @@
 
 namespace {
 
+const auto depot = QStringLiteral("https://depot.sfg545.dev/");
+
 QJsonObject readJson(const QString &path)
 {
     QFile file(path);
@@ -55,7 +57,12 @@ BootstrapperClient::BootstrapperClient(QObject *parent) : QObject(parent)
     const QString bootstrapper = qEnvironmentVariable("ORCHARD_BOOTSTRAPPER");
     m_root = qEnvironmentVariable("ORCHARD_INSTALL_ROOT");
     if (bootstrapper.isEmpty() || m_root.isEmpty() || !QFileInfo::exists(bootstrapper)) {
-        m_packaged = qEnvironmentVariableIntValue("ORCHARD_PACKAGE_MANAGED") == 1 ||
+#if defined(ORCHARD_MACOS_DISTRIBUTION) && defined(Q_PROCESSOR_ARM_64)
+        m_macosArch = QStringLiteral("arm64");
+#elif defined(ORCHARD_MACOS_DISTRIBUTION) && defined(Q_PROCESSOR_X86_64)
+        m_macosArch = QStringLiteral("x86_64");
+#endif
+        m_packaged = !m_macosArch.isEmpty() || qEnvironmentVariableIntValue("ORCHARD_PACKAGE_MANAGED") == 1 ||
                      !qEnvironmentVariableIsEmpty("APPIMAGE");
         if (m_packaged) {
             m_current = QCoreApplication::applicationVersion();
@@ -75,6 +82,13 @@ BootstrapperClient::BootstrapperClient(QObject *parent) : QObject(parent)
     connect(&m_poll, &QTimer::timeout, this, &BootstrapperClient::refresh);
     m_poll.start();
     refresh();
+}
+
+QString BootstrapperClient::downloadUrl() const
+{
+    if (m_macosArch.isEmpty() || m_state != QLatin1String("available"))
+        return {};
+    return depot + QStringLiteral("downloads/%1/%2/Orchard-macOS-%3.dmg").arg(m_channel, m_latest, m_macosArch);
 }
 
 void BootstrapperClient::refresh()
@@ -186,7 +200,7 @@ void BootstrapperClient::checkPackageUpdates()
     m_state = QStringLiteral("checking");
     m_error.clear();
     emit changed();
-    QNetworkRequest request(QUrl(QStringLiteral("https://depot.sfg545.dev/releases/") + m_channel + QStringLiteral(".json")));
+    QNetworkRequest request(QUrl(depot + QStringLiteral("releases/") + m_channel + QStringLiteral(".json")));
     request.setTransferTimeout(15000);
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     auto *reply = m_network->get(request);
@@ -199,17 +213,23 @@ void BootstrapperClient::checkPackageUpdates()
         const QString networkError = reply->error() == QNetworkReply::NoError ? QString() : reply->errorString();
         reply->deleteLater();
         QString version;
+        QJsonObject macosDownloads;
         m_error = networkError;
-        if (m_error.isEmpty() && (response.size() > 1024 * 1024 || !packageReleaseVersion(response, m_channel, &version)))
+        if (m_error.isEmpty() && (response.size() > 1024 * 1024 ||
+                                  !packageReleaseVersion(response, m_channel, &version, &macosDownloads)))
             m_error = tr("Could not verify release information.");
         if (!m_error.isEmpty()) {
             m_state = QStringLiteral("error");
         } else {
-            m_latest = version;
+            const bool hasDownload = m_macosArch.isEmpty() ||
+                macosDownloads.value(m_macosArch).toString() == QStringLiteral("Orchard-macOS-%1.dmg").arg(m_macosArch);
+            m_latest = hasDownload ? version : m_current;
             m_state = packageVersionIsNewer(m_current, m_latest) ? QStringLiteral("available") : QStringLiteral("up-to-date");
             if (m_state == QLatin1String("available") && m_notifiedVersion != m_latest) {
                 m_notifiedVersion = m_latest;
-                emit noticeRequested(tr("Orchard %1 is available. Install it using your usual update method.").arg(m_latest));
+                emit noticeRequested(m_macosArch.isEmpty()
+                    ? tr("Orchard %1 is available. Install it using your usual update method.").arg(m_latest)
+                    : tr("Orchard %1 is available. Download the update from Settings → General.").arg(m_latest));
             }
         }
         emit changed();

@@ -349,6 +349,10 @@ app_inc = include_directories('app/src', 'app/src/auth',
 app_dependencies = [qt_dep, qt_gui_private, connect_dep, rust_dep,
   qjs_dep, keychain_dep] + platform_deps
 app_args = ['-DORCHARD_VERSION="' + meson.project_version() + '"']
+macos_distribution = get_option('macos_distribution')
+if host_machine.system() == 'darwin' and macos_distribution
+  app_args += ['-DORCHARD_MACOS_DISTRIBUTION']
+endif
 if host_machine.system() in ['windows', 'linux', 'darwin']
   app_args += ['-DORCHARD_NATIVE_COOKIE_AUTH']
 endif
@@ -540,7 +544,6 @@ endif
 # A team-signed bundle keeps one identity across rebuilds, so keychain access and privacy grants persist.
 # A distribution bundle ships Qt inside the app and signs with the hardened runtime.
 macos_profile = get_option('macos_provisioning_profile')
-macos_distribution = get_option('macos_distribution')
 if host_machine.system() == 'darwin' and (macos_profile != '' or macos_distribution)
   macos_bundle_inputs = [orchard, auth_helper, widevine_host, files('packaging/macos/Info.plist.in')]
   macos_bundle_args = [
