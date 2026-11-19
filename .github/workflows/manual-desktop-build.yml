@@ -478,6 +478,14 @@ jobs:
         with:
           path: ${{ runner.temp }}/ort-x86_64
           key: orchard-macos-ort-x86_64-${{ env.ORT_VERSION }}-v1
+      - name: Checkout Intel ONNX Runtime
+        if: matrix.arch == 'x86_64' && steps.ort-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: microsoft/onnxruntime
+          ref: ${{ env.ORT_VERSION }}
+          path: onnxruntime
+          persist-credentials: false
       # ort-sys ships no x86_64 macOS binaries, so the worker links a source build.
       - name: Build Intel ONNX Runtime
         if: matrix.arch == 'x86_64' && steps.ort-cache.outputs.cache-hit != 'true'
@@ -487,8 +495,7 @@ jobs:
           OBJC: clang
           OBJCXX: clang++
         run: |
-          git clone --depth 1 --branch "$ORT_VERSION" https://github.com/microsoft/onnxruntime "$RUNNER_TEMP/onnxruntime"
-          cd "$RUNNER_TEMP/onnxruntime"
+          cd "$GITHUB_WORKSPACE/onnxruntime"
           ./build.sh --config Release --build_shared_lib --parallel --skip_tests --compile_no_warning_as_error \
             --apple_deploy_target 14.4 --cmake_extra_defines CMAKE_OSX_ARCHITECTURES=x86_64
           mkdir -p "$RUNNER_TEMP/ort-x86_64"
