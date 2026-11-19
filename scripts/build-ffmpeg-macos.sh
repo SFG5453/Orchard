@@ -4,7 +4,9 @@ set -euo pipefail
 arch="${1:?usage: build-ffmpeg-macos.sh ARCH BUILD_DIRECTORY}"
 build_root="${2:?usage: build-ffmpeg-macos.sh ARCH BUILD_DIRECTORY}"
 case "$arch" in
-  arm64|x86_64) ;;
+  # Rust target names say aarch64; clang and FFmpeg want arm64.
+  aarch64|arm64) arch=arm64 ;;
+  x86_64) ;;
   *) echo "Unsupported macOS FFmpeg architecture: $arch" >&2; exit 1 ;;
 esac
 
