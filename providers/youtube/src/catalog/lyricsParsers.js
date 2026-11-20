@@ -329,22 +329,60 @@ function lrcSeconds(minutes, seconds, fraction = '') {
   return Number(minutes) * 60 + Number(seconds) + (fraction ? Number(fraction) / 10 ** fraction.length : 0);
 }
 
+const lrcOffsetLine = /^\[offset:\s*([+-]?\d+)\s*\]$/i;
+const lrcWordStamp = /<(\d+):([0-5]\d)(?:[.:](\d{1,3}))?>/g;
+
+// Enhanced LRC: "<00:12.00>Hello <00:12.50>world <00:13.10>". A trailing stamp ends the last word.
+function lrcWords(body, shift) {
+  const stamps = [...body.matchAll(lrcWordStamp)];
+  if (!stamps.length) return { text: body.trim(), words: [] };
+  const words = [];
+  stamps.forEach((stamp, index) => {
+    const end = stamps[index + 1];
+    const text = body.slice(stamp.index + stamp[0].length, end ? end.index : body.length);
+    if (!text.trim()) return;
+    const word = { text, startTime: Math.max(0, lrcSeconds(stamp[1], stamp[2], stamp[3]) + shift) };
+    if (end) word.endTime = Math.max(word.startTime, lrcSeconds(end[1], end[2], end[3]) + shift);
+    words.push(word);
+  });
+  return { text: body.replace(lrcWordStamp, '').replace(/\s+/g, ' ').trim(), words: normalizeTimedLyricWords(words) };
+}
+
 export function parseLocalLyrics(lyrics = '') {
+  const rows = String(lyrics).replace(/\r\n?/g, '\n').split('\n').map((row) => row.trim());
+  // [offset:+500] means the lyrics run 500 ms early, so every stamp moves back.
+  const offsetRow = rows.find((row) => lrcOffsetLine.test(row));
+  const shift = offsetRow ? -Number(offsetRow.match(lrcOffsetLine)[1]) / 1000 : 0;
   const synced = [];
   const unsynced = [];
-  for (const rawLine of String(lyrics).replace(/\r\n?/g, '\n').split('\n')) {
-    const line = rawLine.trim();
+  const gaps = [];
+  for (const line of rows) {
     if (!line || lrcMetadataLine.test(line)) continue;
     const matches = [...line.matchAll(lrcTimestamp)];
     if (!matches.length) {
       unsynced.push({ text: line });
       continue;
     }
-    const text = line.replace(lrcTimestamp, '').trim();
-    if (!text) continue;
-    // Repeated choruses share one line with several stamps.
-    for (const match of matches) synced.push({ text, startTime: lrcSeconds(match[1], match[2], match[3]) });
+    const starts = matches.map((match) => Math.max(0, lrcSeconds(match[1], match[2], match[3]) + shift));
+    const { text, words } = lrcWords(line.replace(lrcTimestamp, ''), shift);
+    // A bare stamp marks where the previous line stops singing.
+    if (!text) {
+      gaps.push(...starts);
+      continue;
+    }
+    // Repeated choruses share one line with several stamps; word timing only fits the first.
+    starts.forEach((startTime, index) => {
+      const entry = { text, startTime };
+      if (index === 0 && words.length > 1) entry.words = words;
+      synced.push(entry);
+    });
   }
   synced.sort((a, b) => a.startTime - b.startTime);
+  gaps.sort((a, b) => a - b);
+  synced.forEach((line, index) => {
+    const next = synced[index + 1]?.startTime ?? Infinity;
+    const gap = gaps.find((time) => time > line.startTime && time <= next);
+    if (gap !== undefined) line.endTime = gap;
+  });
   return { synced: synced.length ? synced : null, unsynced };
 }
