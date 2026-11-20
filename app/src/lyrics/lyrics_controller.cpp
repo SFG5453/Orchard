@@ -294,6 +294,8 @@ QJsonObject LyricsController::appleQuery(const QVariantMap &track, const QJsonOb
       {QStringLiteral("title"), song.value(QStringLiteral("title"))},
       {QStringLiteral("artist"), song.value(QStringLiteral("artist"))},
       {QStringLiteral("album"), song.value(QStringLiteral("album"))},
+      // Picks the studio cut over "(Live)" or "(Acoustic)" so Apple's timings fit the audio.
+      {QStringLiteral("durationSeconds"), song.value(QStringLiteral("durationSeconds"))},
   };
 }
 
