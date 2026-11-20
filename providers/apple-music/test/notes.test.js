@@ -22,3 +22,10 @@ test('album cards and artist cards become link targets', () => {
   ]);
   assert.equal(linkNotes('<i>Ctrl</i> and Kendrick Lamar', targets), '<i><a href="am.albums.5">Ctrl</a></i> and <a href="am.artists.7">Kendrick Lamar</a>');
 });
+
+test('cleanNotes cannot be tricked into rebuilding a dropped tag', () => {
+  assert.equal(cleanNotes('<<p>a href="x">link<</p>/a>'), '&lt;a href="x"&gt;link&lt;<br><br>/a&gt;');
+  assert.equal(cleanNotes('<<span>img src="https://x.test/p.png">'), '&lt;img src="https://x.test/p.png"&gt;');
+  assert.equal(cleanNotes('a < b and c > d'), 'a &lt; b and c &gt; d');
+  assert.equal(cleanNotes('<B>ok</B><script>x</script>'), '<b>ok</b>x');
+});

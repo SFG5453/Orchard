@@ -59,19 +59,30 @@ function searchText(value) {
     .trim();
 }
 
-function pickSong(songs, { title, artist, album }) {
-  const matches = songs.filter((song) =>
+// Catalog clocks and Apple's durationInMillis disagree by a second or two at most.
+const DURATION_TOLERANCE_MS = 3000;
+
+function pickSong(songs, { title, artist, album, durationSeconds }) {
+  let matches = songs.filter((song) =>
     sameTitle(song.attributes?.name, title) && sameArtist(song.attributes?.artistName, artist));
+  // editionless() folds "(Live)" and "(Acoustic)" into the studio title, so a known length
+  // decides between cuts; lyrics timed to another cut drift from what is playing.
+  const wantedMs = Number(durationSeconds) * 1000;
+  if (wantedMs > 0) {
+    const gap = (song) => Math.abs(Number(song.attributes?.durationInMillis) - wantedMs);
+    const close = matches.filter((song) => gap(song) <= DURATION_TOLERANCE_MS).sort((left, right) => gap(left) - gap(right));
+    if (close.length) matches = close;
+  }
   return matches.find((song) => album && sameTitle(song.attributes?.albumName, album)) || matches[0] || null;
 }
 
 /** The catalog song resource for an Apple id, an ISRC, or title/artist/album text; null when none matches. */
-export async function findSong(client, { appleId, isrc, title, artist, album } = {}) {
+export async function findSong(client, { appleId, isrc, title, artist, album, durationSeconds } = {}) {
   const path = (suffix = '') => `/v1/catalog/${client.storefront()}/${suffix}`;
   // Library-only ids (i.xxx) have no catalog song.
   if (appleId && !String(appleId).includes('.'))
     return (await client.get(path(`songs/${encodeURIComponent(appleId)}`))).data?.[0] || null;
-  const query = { title: searchText(title), artist: searchText(artist), album };
+  const query = { title: searchText(title), artist: searchText(artist), album, durationSeconds };
   if (isrc) {
     const songs = (await client.get(path('songs'), { 'filter[isrc]': isrc })).data || [];
     const song = pickSong(songs, query) || songs[0];

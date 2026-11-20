@@ -64,18 +64,22 @@ export async function verifyJwt(token, privateJwkJson, { issuer, now = Math.floo
   if (parts.length !== 3) return null;
   let header;
   let claims;
+  let signature;
   try {
     header = decodeJsonSegment(parts[0]);
     claims = decodeJsonSegment(parts[1]);
+    // atob throws on stray characters; a garbled signature is a bad token, not a server error.
+    signature = fromBase64url(parts[2]);
   } catch {
     return null;
   }
+  if (!header || typeof header !== "object" || !claims || typeof claims !== "object") return null;
   const jwk = parseJwk(privateJwkJson);
   if (header.alg !== "EdDSA" || header.kid !== jwk.kid) return null;
   const valid = await crypto.subtle.verify(
     { name: "Ed25519" },
     await importKey(jwk, "verify"),
-    fromBase64url(parts[2]),
+    signature,
     encoder.encode(`${parts[0]}.${parts[1]}`),
   );
   if (!valid) return null;

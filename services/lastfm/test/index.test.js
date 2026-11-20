@@ -70,3 +70,21 @@ test('callLastfm signs and sends HTTPS form requests', async () => {
   assert.equal(captured.options.body.get('api_key'), 'api-key');
   assert.match(captured.options.body.get('api_sig'), /^[a-f0-9]{32}$/);
 });
+
+test('gateway answers 429 once the per-IP limiter says no', async () => {
+  const { default: worker } = await import('../src/index.js');
+  const keys = [];
+  const env = {
+    LASTFM_API_KEY: 'key', LASTFM_SHARED_SECRET: 'secret',
+    LASTFM_LIMITER: { limit: async ({ key }) => { keys.push(key); return { success: false }; } }
+  };
+  const request = new Request('https://lastfm.test/now-playing', {
+    method: 'POST', headers: { 'cf-connecting-ip': '203.0.113.7', 'content-type': 'application/json' }, body: '{}'
+  });
+  const response = await worker.fetch(request, env);
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get('retry-after'), '60');
+  assert.deepEqual(keys, ['203.0.113.7']);
+  const health = await worker.fetch(new Request('https://lastfm.test/health'), env);
+  assert.equal(health.status, 200);
+});
