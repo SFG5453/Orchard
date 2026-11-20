@@ -263,13 +263,18 @@ export const lyricsProviders = Object.freeze(['bini', 'betterlyrics', 'lyricsplu
 
 export async function resolveLyricsChain(resolveLyrics, track = {}, providers = lyricsProviders) {
   const order = Array.isArray(providers) ? [...new Set(providers)].filter((id) => lyricsProviders.includes(id)) : lyricsProviders;
+  // Plain text from an early provider must not hide timed lyrics from a later one;
+  // it is kept only as the answer when nobody further down has them synced.
+  let plain = null;
   for (const provider of order) {
     try {
       const data = await resolveLyrics(track, provider);
-      if (data?.status === 'ready' && data.lines?.length > 0) return data;
+      if (data?.status !== 'ready' || !(data.lines?.length > 0)) continue;
+      if (data.mode === 'synced') return data;
+      plain ||= data;
     } catch {
       // A provider failure is handled the same as an unavailable result.
     }
   }
-  return { status: 'unavailable', mode: '', lines: [], source: '' };
+  return plain || { status: 'unavailable', mode: '', lines: [], source: '' };
 }
