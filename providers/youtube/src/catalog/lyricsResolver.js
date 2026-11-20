@@ -63,8 +63,50 @@ function lyricsMetadata(track = {}) {
   };
 }
 
-function lyricsQuery(track = {}) {
-  const metadata = lyricsMetadata(track);
+const featuringPart = /\s*[([]\s*(?:feat\.?|ft\.?|featuring|with)\s[^)\]]*[)\]]/gi;
+const featuringTail = /\s+(?:feat\.?|ft\.?|featuring)\s.+$/i;
+const versionTail = /\s+-\s+(?:(?:\d{4}\s+)?remaster(?:ed)?(?:\s+\d{4})?(?:\s+version)?|radio edit|single version|album version|mono|stereo)\s*$/i;
+const artistSeparator = /\s*[,&、]\s*|\s+(?:x|feat\.?|ft\.?|featuring|with)\s+/i;
+
+function bareTitle(title) {
+  return title.replace(featuringPart, '').replace(featuringTail, '').replace(versionTail, '').replace(/\s+/g, ' ').trim();
+}
+
+function primaryArtist(track, fallback) {
+  const listed = (Array.isArray(track.artists) ? track.artists : [])
+    .map((artist) => lyricsLookupText(typeof artist === 'string' ? artist : artist?.name))
+    .find(Boolean);
+  return listed || fallback.split(artistSeparator)[0].trim() || fallback;
+}
+
+// The catalog's exact strings first; then the bare song for databases that file
+// "Song (feat. Guest)" as "Song" by its lead artist, and "Song - 2011 Remaster" as "Song".
+export function lyricsLookups(track = {}) {
+  const exact = lyricsMetadata(track);
+  if (!exact) return [];
+  const bare = { ...exact, title: bareTitle(exact.title) || exact.title, artist: primaryArtist(track, exact.artist) };
+  const key = (item) => `${item.title}\u001f${item.artist}`.toLowerCase();
+  return key(bare) === key(exact) ? [exact] : [exact, bare];
+}
+
+// First synced answer across lookups, else the first plain one.
+async function firstLyrics(lookups, resolveOne) {
+  let plain = null;
+  for (const metadata of lookups) {
+    let result = null;
+    try {
+      result = await resolveOne(metadata);
+    } catch {
+      // A failed lookup lets the next spelling try.
+    }
+    if (result?.status !== 'ready' || !(result.lines?.length > 0)) continue;
+    if (result.mode === 'synced') return result;
+    plain ||= result;
+  }
+  return plain;
+}
+
+function lyricsQuery(metadata) {
   if (!metadata) return null;
 
   return {
@@ -205,7 +247,12 @@ export function pickLrclibResult(results, durationSeconds) {
 }
 
 async function resolveLrclibLyrics(track = {}) {
-  const query = lyricsQuery(track);
+  return await firstLyrics(lyricsLookups(track), resolveLrclibLookup) ||
+    { status: 'unavailable', mode: '', lines: [], source: 'lrclib' };
+}
+
+async function resolveLrclibLookup(metadata) {
+  const query = lyricsQuery(metadata);
   if (!query) return { status: 'unavailable', mode: '', lines: [], source: 'lrclib' };
 
   const duration = query.duration ? query.duration / 1000 : undefined;
@@ -270,20 +317,14 @@ export function createLyricsResolver({ loadYouTubeLyricsText, appleTtml = '' }) 
       }
       return { status: 'unavailable', mode: '', lines: [], source: 'apple' };
     }
-    const metadata = lyricsMetadata(track);
-    if (metadata) {
-      try {
-        let lines = [];
-        if (provider === 'bini') lines = await resolveBiniLyrics(metadata);
-        else if (provider === 'betterlyrics')
-          lines = await resolveBetterLyrics(metadata, { fetchWithTimeout, parseTtml: parseAmLyricsTtml });
-        else if (provider === 'lyricsplus') lines = await resolveLyricsPlusLyrics(metadata);
-        return normalizeAmLyricsLines(lines || [], provider);
-      } catch {
-        // A failed provider lets the configured chain continue.
-      }
-    }
-    return { status: 'unavailable', mode: '', lines: [], source: provider };
+    const mirror = {
+      bini: (metadata) => resolveBiniLyrics(metadata),
+      betterlyrics: (metadata) => resolveBetterLyrics(metadata, { fetchWithTimeout, parseTtml: parseAmLyricsTtml }),
+      lyricsplus: (metadata) => resolveLyricsPlusLyrics(metadata)
+    }[provider];
+    const found = mirror && await firstLyrics(lyricsLookups(track),
+      async (metadata) => normalizeAmLyricsLines(await mirror(metadata) || [], provider));
+    return found || { status: 'unavailable', mode: '', lines: [], source: provider };
   };
 }
 
