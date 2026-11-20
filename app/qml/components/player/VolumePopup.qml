@@ -20,7 +20,7 @@
 import QtQuick
 import QtQuick.Controls
 
-// Vertical volume slider that opens below the player bar volume button.
+// Vertical slider that opens toward the page from the player bar.
 Popup {
     id: root
 
@@ -31,7 +31,7 @@ Popup {
     height: 164
     padding: 0
     x: (parent.width - width) / 2
-    y: parent.height + 8
+    y: bar.canopy ? parent.height + 8 : (parent.height - bar.height) / 2 - height - 8
     // Presses on the volume button toggle the popup instead of dismissing it.
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 

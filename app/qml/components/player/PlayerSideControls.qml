@@ -29,9 +29,12 @@ RowLayout {
 
     // The player bar this lives in; it owns the colours and helpers.
     required property Item bar
+    readonly property bool useVolumePopup: bar.canopy || bar.compact
 
     Layout.alignment: Qt.AlignVCenter
     spacing: 4
+
+    onUseVolumePopupChanged: if (!useVolumePopup) volumePopup.close()
 
     Button {
         id: videoButton
@@ -85,11 +88,10 @@ RowLayout {
         ToolTip.visible: hovered
         ToolTip.delay: 500
         ToolTip.text: qsTr("Volume")
-        onClicked: if (bar.canopy) volumePopup.visible ? volumePopup.close() : volumePopup.open()
+        onClicked: if (sideControls.useVolumePopup) volumePopup.visible ? volumePopup.close() : volumePopup.open()
 
-        // Canopy has no room for an inline slider, so the button opens a vertical one.
         WheelHandler {
-            enabled: bar.canopy
+            enabled: sideControls.useVolumePopup
             target: null
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
             onWheel: function(event) {
@@ -124,7 +126,7 @@ RowLayout {
     Slider {
         id: volume
 
-        visible: !bar.compact && !bar.canopy
+        visible: !sideControls.useVolumePopup
         Layout.preferredWidth: 72
         from: 0
         to: 1
