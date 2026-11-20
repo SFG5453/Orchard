@@ -180,26 +180,54 @@ function normalizeLyricsResult(result) {
   return { status: 'unavailable', mode: '', lines: [], source: 'lrclib' };
 }
 
+// LRCLIB's own get endpoint accepts ±2 s; a little more covers rounding in catalog clocks.
+const lrclibDurationToleranceSeconds = 3;
+
+// Search returns every cut of a song (album, radio edit, live). Timings only fit the one
+// whose length matches; other cuts can still lend their words, untimed.
+export function pickLrclibResult(results, durationSeconds) {
+  const candidates = (Array.isArray(results) ? results : [])
+    .filter((item) => item && (item.syncedLyrics || item.plainLyrics || item.instrumental));
+  if (!(durationSeconds > 0)) return candidates.find((item) => item.syncedLyrics) || candidates[0] || null;
+
+  const gap = (item) => Math.abs(Number(item.duration) - durationSeconds);
+  const matching = candidates
+    .filter((item) => Number(item.duration) > 0 && gap(item) <= lrclibDurationToleranceSeconds)
+    .sort((left, right) => gap(left) - gap(right));
+  const timed = matching.find((item) => item.syncedLyrics);
+  if (timed || matching.length) return timed || matching[0];
+
+  const other = candidates[0];
+  if (!other) return null;
+  const plainLyrics = other.plainLyrics ||
+    (parseLocalLyrics(other.syncedLyrics || '').synced || []).map((line) => line.text).join('\n');
+  return { ...other, syncedLyrics: null, plainLyrics };
+}
+
 async function resolveLrclibLyrics(track = {}) {
   const query = lyricsQuery(track);
   if (!query) return { status: 'unavailable', mode: '', lines: [], source: 'lrclib' };
 
   const duration = query.duration ? query.duration / 1000 : undefined;
+  let exact = null;
   try {
-    return normalizeLyricsResult(await lrclibRequest('get', { ...query, duration }));
+    exact = await lrclibRequest('get', { ...query, duration });
+    // An exact match with timings (or a known instrumental) needs no search.
+    if (exact?.syncedLyrics || exact?.instrumental) return normalizeLyricsResult(exact);
   } catch {
-    try {
-      const search = await lrclibRequest('search', {
-        track_name: query.track_name,
-        artist_name: query.artist_name,
-        duration
-      });
-      const firstWithLyrics = (Array.isArray(search) ? search : [])
-        .find((item) => item.syncedLyrics || item.plainLyrics || item.instrumental);
-      return normalizeLyricsResult(firstWithLyrics);
-    } catch {
-      return { status: 'unavailable', mode: '', lines: [], source: 'lrclib' };
-    }
+    // 404 for no exact match; search below.
+  }
+
+  try {
+    const search = await lrclibRequest('search', {
+      track_name: query.track_name,
+      artist_name: query.artist_name
+    });
+    const picked = pickLrclibResult(search, duration);
+    if (picked?.syncedLyrics) return normalizeLyricsResult(picked);
+    return normalizeLyricsResult(exact?.plainLyrics ? exact : picked);
+  } catch {
+    return normalizeLyricsResult(exact);
   }
 }
 
