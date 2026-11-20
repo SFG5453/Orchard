@@ -21,16 +21,32 @@
 const KEEP = new Set(['b', 'i', 'u', 'br']);
 const ALIAS = { strong: 'b', em: 'i' };
 
+const TAG = /<\/?([a-z][a-z0-9]*)\b[^>]*>/gi;
+const escapeAngles = (text) => text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function keepTag(tag, name) {
+  const lower = name.toLowerCase();
+  const kept = KEEP.has(lower) ? lower : ALIAS[lower];
+  if (!kept) return '';
+  return kept === 'br' ? '<br>' : tag.startsWith('</') ? `</${kept}>` : `<${kept}>`;
+}
+
+// Text between tags is escaped rather than passed through: dropping a tag must
+// never splice two fragments into a new one (`<<p>a href=…>` becoming `<a href=…>`).
+function filterTags(html) {
+  let out = '';
+  let last = 0;
+  for (const match of html.matchAll(TAG)) {
+    out += escapeAngles(html.slice(last, match.index)) + keepTag(match[0], match[1]);
+    last = match.index + match[0].length;
+  }
+  return out + escapeAngles(html.slice(last));
+}
+
 export function cleanNotes(value) {
-  return String(value || '')
+  return filterTags(String(value || '')
     .replace(/\r\n?/g, '\n')
-    .replace(/<\/(?:p|div|li)>/gi, '<br><br>')
-    .replace(/<\/?([a-z][a-z0-9]*)\b[^>]*>/gi, (tag, name) => {
-      const lower = name.toLowerCase();
-      const kept = KEEP.has(lower) ? lower : ALIAS[lower];
-      if (!kept) return '';
-      return kept === 'br' ? '<br>' : tag.startsWith('</') ? `</${kept}>` : `<${kept}>`;
-    })
+    .replace(/<\/(?:p|div|li)>/gi, '<br><br>'))
     .replace(/\n/g, '<br>')
     .replace(/(?:<br>){3,}/g, '<br><br>')
     .replace(/^(?:<br>)+|(?:<br>)+$/g, '')
