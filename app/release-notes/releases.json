@@ -1,5 +1,18 @@
 [
   {
+    "version": "2.0.11-canary.1",
+    "date": "2026-11-20",
+    "title": "Compact Glade volume fix",
+    "sections": [
+      {
+        "title": "Fixes",
+        "items": [
+          "In compact Glade, click the volume button to open a slider or scroll over the button to adjust the volume. Fixes #267."
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.0.10-canary.1",
     "date": "2026-11-18",
     "title": "Linux sign-in fixes and GTA VI week",
