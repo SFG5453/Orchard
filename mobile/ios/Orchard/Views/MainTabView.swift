@@ -77,8 +77,13 @@ public struct MainTabView: View {
                     .animation(.spring(response: 0.4, dampingFraction: 0.8), value: player.currentTrack)
             }
         }
-        .fullScreenCover(isPresented: $isPlayerPresented) {
+        .sheet(isPresented: $isPlayerPresented) {
             PlayerView(isPresented: $isPlayerPresented)
+                .presentationDragIndicator(.hidden)
+                .presentationCornerRadius(32)
+                .presentationBackground {
+                    Color.black
+                }
         }
     }
 }

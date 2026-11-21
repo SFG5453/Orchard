@@ -20,7 +20,6 @@ public struct PlayerView: View {
     @State private var isShuffleEnabled: Bool = false
     @State private var isRepeatEnabled: Bool = false
     @State private var isAutoplayEnabled: Bool = true
-    @State private var dragOffset: CGFloat = 0
     @State private var isScrubbing: Bool = false
     @State private var scrubTime: Double = 0
 
@@ -33,11 +32,9 @@ public struct PlayerView: View {
     }
 
     private func closePlayer() {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
-            dragOffset = 0
-            isPresented = false
-            dismiss()
-        }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        isPresented = false
+        dismiss()
     }
 
     public var body: some View {
@@ -142,23 +139,6 @@ public struct PlayerView: View {
                     .padding(.top, safeTop - 10)
                     .padding(.bottom, 4)
                     .contentShape(Rectangle())
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 15)
-                            .onChanged { value in
-                                if value.translation.height > 0 {
-                                    dragOffset = value.translation.height
-                                }
-                            }
-                            .onEnded { value in
-                                if value.translation.height > 70 || value.predictedEndTranslation.height > 150 {
-                                    closePlayer()
-                                } else {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                        dragOffset = 0
-                                    }
-                                }
-                            }
-                    )
 
                     // Middle Dynamic View: Artwork vs Lyrics vs Queue
                     Group {
@@ -177,24 +157,6 @@ public struct PlayerView: View {
                     dockedBottomControls(safeBottom: safeBottom)
                 }
                 .frame(width: screenWidth, height: screenHeight)
-                .offset(y: max(dragOffset, 0))
-                .gesture(
-                    DragGesture()
-                        .onChanged { value in
-                            if value.translation.height > 0 {
-                                dragOffset = value.translation.height
-                            }
-                        }
-                        .onEnded { value in
-                            if value.translation.height > 100 || value.predictedEndTranslation.height > 250 {
-                                closePlayer()
-                            } else {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                    dragOffset = 0
-                                }
-                            }
-                        }
-                )
             }
         }
         .sheet(isPresented: $isQualitySheetPresented) {
@@ -263,7 +225,7 @@ public struct PlayerView: View {
                 }
             } else {
                 // Large Artwork Card matching Apple Music
-                let artworkSize = min(screenWidth - 48, screenHeight * 0.40)
+                let artworkSize = min(screenWidth - 56, screenHeight * 0.38)
 
                 if let track = player.currentTrack {
                     AsyncImage(url: track.artworkUrl) { phase in
@@ -620,21 +582,16 @@ public struct PlayerView: View {
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                             isQualitySheetPresented = true
                         } label: {
-                            HStack(spacing: 4) {
-                                Circle()
-                                    .fill(Color.green)
-                                    .frame(width: 4, height: 4)
-                                Text(player.selectedQuality.badge)
-                                    .font(.system(size: 10, weight: .bold))
-                                    .tracking(0.3)
-                                    .foregroundColor(.white.opacity(0.85))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(
-                                Capsule()
-                                    .fill(Color.white.opacity(0.12))
-                            )
+                            Text(player.selectedQuality.badge)
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .tracking(0.5)
+                                .foregroundColor(.white.opacity(0.70))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.white.opacity(0.12))
+                                )
                         }
                         .buttonStyle(.plain)
 
@@ -723,8 +680,16 @@ public struct PlayerView: View {
 
                 Spacer()
 
-                AirPlayRoutePicker()
-                    .frame(width: 44, height: 44)
+                ZStack {
+                    Image(systemName: "airplayaudio")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.60))
+                        .frame(width: 44, height: 44)
+
+                    AirPlayRoutePicker()
+                        .frame(width: 44, height: 44)
+                        .opacity(0.015)
+                }
 
                 Spacer()
 
@@ -745,7 +710,7 @@ public struct PlayerView: View {
                 }
             }
             .padding(.horizontal, 36)
-            .padding(.bottom, max(safeBottom - 4, 12))
+            .padding(.bottom, max(safeBottom + 4, 20))
         }
     }
 
@@ -807,27 +772,35 @@ struct SleekProgressBar: View {
 
 // MARK: - UIKit System Volume Slider
 
-struct SystemVolumeSlider: UIViewRepresentable {
-    func makeUIView(context: Context) -> MPVolumeView {
-        let volumeView = MPVolumeView(frame: .zero)
-        volumeView.showsRouteButton = false
-        volumeView.tintColor = .white
-        for view in volumeView.subviews {
+final class SleekMPVolumeView: MPVolumeView {
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        showsRouteButton = false
+        for view in subviews {
             if let slider = view as? UISlider {
                 slider.tintColor = .white
-                slider.maximumTrackTintColor = UIColor.white.withAlphaComponent(0.25)
-                let renderer = UIGraphicsImageRenderer(size: CGSize(width: 12, height: 12))
+                slider.maximumTrackTintColor = UIColor.white.withAlphaComponent(0.20)
+                let renderer = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8))
                 let thumb = renderer.image { ctx in
                     ctx.cgContext.setFillColor(UIColor.white.cgColor)
-                    ctx.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: 12, height: 12))
+                    ctx.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: 8, height: 8))
                 }
                 slider.setThumbImage(thumb, for: .normal)
+                slider.setThumbImage(thumb, for: .highlighted)
             }
         }
+    }
+}
+
+struct SystemVolumeSlider: UIViewRepresentable {
+    func makeUIView(context: Context) -> SleekMPVolumeView {
+        let volumeView = SleekMPVolumeView(frame: .zero)
+        volumeView.showsRouteButton = false
+        volumeView.tintColor = .white
         return volumeView
     }
 
-    func updateUIView(_ uiView: MPVolumeView, context: Context) {}
+    func updateUIView(_ uiView: SleekMPVolumeView, context: Context) {}
 }
 
 // MARK: - Native AirPlay Audio Route Picker
