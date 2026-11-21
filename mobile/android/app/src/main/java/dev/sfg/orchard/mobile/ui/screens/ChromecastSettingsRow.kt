@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -166,7 +168,7 @@ internal fun ChromecastSettingsRow(modifier: Modifier = Modifier) {
     ) {
         Column(Modifier.weight(1f).padding(end = 16.dp)) {
             Text(
-                "Chromecast",
+                tr("Chromecast"),
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Normal),
                 color = CanopyColors.Text,
             )
@@ -226,7 +228,7 @@ internal fun ChromecastConnectRow(modifier: Modifier = Modifier) {
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Chromecast",
+                    text = tr("Chromecast"),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = CanopyColors.Text,
                 )

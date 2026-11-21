@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -128,7 +130,7 @@ internal fun WelcomeHeroHeader() {
         Spacer(Modifier.height(16.dp))
 
         Text(
-            text = "Welcome to Orchard",
+            text = tr("Welcome to Orchard"),
             style = MaterialTheme.typography.headlineLarge.copy(
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = 28.sp,
@@ -141,7 +143,7 @@ internal fun WelcomeHeroHeader() {
         Spacer(Modifier.height(6.dp))
 
         Text(
-            text = "Personalize your sound, visuals, and music experience",
+            text = tr("Personalize your sound, visuals, and music experience"),
             style = MaterialTheme.typography.bodyLarge,
             color = CanopyColors.Muted,
             textAlign = TextAlign.Center,
@@ -157,8 +159,8 @@ internal fun WelcomeAuthSection(
     onSignOut: () -> Unit,
 ) {
     WelcomeSectionCard(
-        title = "YouTube Music Account",
-        subtitle = "Connect to sync your library, likes, and recommendations",
+        title = tr("YouTube Music Account"),
+        subtitle = tr("Connect to sync your library, likes, and recommendations"),
     ) {
         val isSignedIn = auth is AuthState.SignedIn
         val avatarUrl = (auth as? AuthState.SignedIn)?.avatarUrl.orEmpty()
@@ -217,7 +219,7 @@ internal fun WelcomeAuthSection(
                     shape = CircleShape,
                     modifier = Modifier.fillMaxWidth().height(44.dp),
                 ) {
-                    Text("Sign out / Switch account", color = CanopyColors.Danger)
+                    Text(tr("Sign out / Switch account"), color = CanopyColors.Danger)
                 }
             } else {
                 Button(
@@ -229,7 +231,7 @@ internal fun WelcomeAuthSection(
                     ),
                     modifier = Modifier.fillMaxWidth().height(46.dp),
                 ) {
-                    Text("Sign in with YouTube Music", fontWeight = FontWeight.Bold)
+                    Text(tr("Sign in with YouTube Music"), fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -243,29 +245,29 @@ internal fun WelcomeVisualsSection(
     onUpdateSettings: (OrchardSettings) -> Unit,
 ) {
     WelcomeSectionCard(
-        title = "Visuals & Appearance",
-        subtitle = "Customize ambient lighting and animated artwork",
+        title = tr("Visuals & Appearance"),
+        subtitle = tr("Customize ambient lighting and animated artwork"),
     ) {
         WelcomeToggleRow(
             icon = Icons.Rounded.Gradient,
-            title = "Animated Background",
-            subtitle = "Drifting cover colors behind the app",
+            title = tr("Animated Background"),
+            subtitle = tr("Drifting cover colors behind the app"),
             checked = settings.animatedBackground,
             onChecked = { onUpdateSettings(settings.copy(animatedBackground = it)) },
         )
         WelcomeDivider()
         WelcomeToggleRow(
             icon = Icons.Rounded.Image,
-            title = "Animated Artwork",
-            subtitle = "Play dynamic motion artwork for supported tracks",
+            title = tr("Animated Artwork"),
+            subtitle = tr("Play dynamic motion artwork for supported tracks"),
             checked = settings.animatedArtwork,
             onChecked = { onUpdateSettings(settings.copy(animatedArtwork = it)) },
         )
         WelcomeDivider()
         WelcomeToggleRow(
             icon = Icons.Rounded.Palette,
-            title = "System Colours",
-            subtitle = "Match accent colors to your device wallpaper",
+            title = tr("System Colours"),
+            subtitle = tr("Match accent colors to your device wallpaper"),
             checked = settings.useSystemColors,
             onChecked = { onUpdateSettings(settings.copy(useSystemColors = it)) },
         )
@@ -278,12 +280,12 @@ internal fun WelcomeCrossfadeSection(
     onUpdateSettings: (OrchardSettings) -> Unit,
 ) {
     WelcomeSectionCard(
-        title = "Crossfade & Transitions",
-        subtitle = "Seamless blending between tracks",
+        title = tr("Crossfade & Transitions"),
+        subtitle = tr("Seamless blending between tracks"),
     ) {
         WelcomeToggleRow(
             icon = Icons.Rounded.MultipleStop,
-            title = "Crossfade Playback",
+            title = tr("Crossfade Playback"),
             subtitle = if (settings.crossfadeEnabled) "Tracks blend for ${settings.crossfadeSeconds}s" else "Smooth transition between songs",
             checked = settings.crossfadeEnabled,
             onChecked = { onUpdateSettings(settings.copy(crossfadeEnabled = it)) },
@@ -297,7 +299,7 @@ internal fun WelcomeCrossfadeSection(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "Duration",
+                        tr("Duration"),
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                         color = CanopyColors.Text,
                     )
@@ -324,7 +326,7 @@ internal fun WelcomeCrossfadeSection(
                 Spacer(Modifier.height(8.dp))
 
                 Text(
-                    "Transition Type",
+                    tr("Transition Type"),
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                     color = CanopyColors.Text,
                 )
@@ -338,16 +340,16 @@ internal fun WelcomeCrossfadeSection(
                 ) {
                     val smart = settings.smartCrossfade
                     WelcomeOptionChip(
-                        title = "Adaptive mix",
-                        subtitle = "Beat-matched overlap",
+                        title = tr("Adaptive mix"),
+                        subtitle = tr("Beat-matched overlap"),
                         icon = Icons.Rounded.AutoAwesome,
                         selected = smart,
                         modifier = Modifier.weight(1f),
                         onClick = { onUpdateSettings(settings.copy(smartCrossfade = true)) },
                     )
                     WelcomeOptionChip(
-                        title = "Standard",
-                        subtitle = "Linear volume ramp",
+                        title = tr("Standard"),
+                        subtitle = tr("Linear volume ramp"),
                         icon = Icons.Rounded.GraphicEq,
                         selected = !smart,
                         modifier = Modifier.weight(1f),
@@ -368,13 +370,13 @@ internal fun WelcomeQualityAndStorageSection(
     val linked = LocalQobuzLinked.current
     val quality = visibleAudioQuality(settings.audioQuality, atmosAvailable, linked)
     WelcomeSectionCard(
-        title = "Audio Quality & Cache",
-        subtitle = "Streaming fidelity and offline cache limit",
+        title = tr("Audio Quality & Cache"),
+        subtitle = tr("Streaming fidelity and offline cache limit"),
     ) {
         WelcomeToggleRow(
             icon = Icons.AutoMirrored.Rounded.VolumeUp,
-            title = "Exponential volume",
-            subtitle = "Finer control at low volumes with the media-volume buttons",
+            title = tr("Exponential volume"),
+            subtitle = tr("Finer control at low volumes with the media-volume buttons"),
             checked = settings.exponentialVolumeEnabled,
             onChecked = { onUpdateSettings(settings.copy(exponentialVolumeEnabled = it)) },
         )
@@ -385,12 +387,12 @@ internal fun WelcomeQualityAndStorageSection(
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
-                        "Streaming Quality",
+                        tr("Streaming Quality"),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = CanopyColors.Text,
                     )
                     Text(
-                        quality.label,
+                        tr(quality.label),
                         style = MaterialTheme.typography.bodySmall,
                         color = LocalAccent.current,
                     )
@@ -422,7 +424,7 @@ internal fun WelcomeQualityAndStorageSection(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = option.label,
+                            text = tr(option.label),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) Color.Black else CanopyColors.Muted,
@@ -443,7 +445,7 @@ internal fun WelcomeQualityAndStorageSection(
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Audio Cache Size",
+                        tr("Audio Cache Size"),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = CanopyColors.Text,
                     )

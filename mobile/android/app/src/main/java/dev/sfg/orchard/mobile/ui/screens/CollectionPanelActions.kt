@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -66,7 +68,7 @@ internal fun CollectionPanelActions(
             Row(Modifier.padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = playInk, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Play", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold), color = playInk)
+                Text(tr("Play"), style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold), color = playInk)
             }
         }
         actions()

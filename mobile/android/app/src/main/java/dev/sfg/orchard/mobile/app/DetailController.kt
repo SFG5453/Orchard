@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.app
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.artwork.ArtistImages
 import dev.sfg.orchard.mobile.artwork.TrackArtwork
@@ -259,7 +261,7 @@ internal class DetailController(
         }
         val target = if (album) detail.audioPlaylistId else detail.id.removePrefix("VL")
         if (target.isBlank() || target.startsWith("MPRE")) {
-            showWarning("This album cannot be saved to your YouTube Music library.")
+            showWarning(tr("This album cannot be saved to your YouTube Music library."))
             return
         }
         setLocal(saved)
@@ -275,7 +277,7 @@ internal class DetailController(
     // Apple ids its library copies separately (l./p.), so the page's own flag drives the button.
     private fun saveAppleCollection(detail: BrowseDetail, saved: Boolean) {
         if (!graph.appleMusic.signedIn()) {
-            showWarning("Connect Apple Music in Settings to save to your library.")
+            showWarning(tr("Connect Apple Music in Settings to save to your library."))
             return
         }
         updateOpenDetail(detail.id) { it.copy(saved = saved) }
@@ -301,7 +303,7 @@ internal class DetailController(
             return
         }
         if (graph.auth.state.value !is AuthState.SignedIn) {
-            showWarning("Sign in to YouTube Music to follow artists.")
+            showWarning(tr("Sign in to YouTube Music to follow artists."))
             return
         }
         val artist = Artist(detail.id, detail.title, detail.artworkUrl, detail.subtitle)

@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -97,7 +99,7 @@ fun SmartCrossfadeWaveform(
             animation = tween(520, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse,
         ),
-        label = "Bar1",
+        label = tr("Bar1"),
     )
     val phase2 by transition.animateFloat(
         initialValue = 0.90f,
@@ -106,7 +108,7 @@ fun SmartCrossfadeWaveform(
             animation = tween(440, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse,
         ),
-        label = "Bar2",
+        label = tr("Bar2"),
     )
     val phase3 by transition.animateFloat(
         initialValue = 0.40f,
@@ -115,7 +117,7 @@ fun SmartCrossfadeWaveform(
             animation = tween(610, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse,
         ),
-        label = "Bar3",
+        label = tr("Bar3"),
     )
 
     Row(
@@ -194,7 +196,7 @@ fun SmartCrossfadeBadge(
                 SmartCrossfadeWaveform(color = Color.White.copy(alpha = 0.92f))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = styleLabel,
+                    text = tr(styleLabel),
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,

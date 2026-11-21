@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -134,7 +136,7 @@ fun ArtistSectionBottomSheet(
             ) {
                 Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
-                        text = title,
+                        text = tr(title),
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 22.sp,
@@ -169,7 +171,7 @@ fun ArtistSectionBottomSheet(
                         ) {
                             Icon(
                                 if (showSearchBar) Icons.Rounded.Close else Icons.Rounded.Search,
-                                contentDescription = "Search in section",
+                                contentDescription = tr("Search in section"),
                                 tint = CanopyColors.Muted,
                                 modifier = Modifier.size(20.dp),
                             )

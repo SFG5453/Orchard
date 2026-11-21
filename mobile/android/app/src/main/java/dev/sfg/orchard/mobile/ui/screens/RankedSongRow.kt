@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -140,7 +142,7 @@ internal fun RankedSongRow(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = track.title,
+                        text = tr(track.title),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 14.5.sp,
@@ -182,7 +184,7 @@ internal fun RankedSongRow(
             ) {
                 Icon(
                     Icons.Rounded.MoreHoriz,
-                    contentDescription = "Options",
+                    contentDescription = tr("Options"),
                     tint = CanopyColors.Muted,
                     modifier = Modifier.size(18.dp),
                 )

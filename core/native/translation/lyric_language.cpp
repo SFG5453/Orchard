@@ -309,6 +309,10 @@ SongPlan remotePlan(const std::vector<std::string> &lines, std::string_view targ
   return out;
 }
 
+std::string autoTarget(const std::vector<std::string> &lines) {
+  return remotePlan(lines, "spa").source == "spa" ? "eng" : "spa";
+}
+
 std::string displayName(std::string_view code) {
   static constexpr std::pair<std::string_view, std::string_view> kNames[] = {
       {"hin", "Hindi"}, {"eng", "English"}, {"kor", "Korean"},  {"jpn", "Japanese"}, {"zho", "Chinese"},  {"rus", "Russian"},

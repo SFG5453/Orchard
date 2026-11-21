@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -51,13 +53,13 @@ internal fun PlaybackSourceMark(source: String, tint: Color, modifier: Modifier 
     when (source.lowercase()) {
         YOUTUBE_SOURCE -> Image(
             painter = painterResource(R.drawable.ic_source_youtube_music_mark),
-            contentDescription = "Playing from YouTube Music",
+            contentDescription = tr("Playing from YouTube Music"),
             modifier = modifier.size(size),
             colorFilter = ColorFilter.tint(tint),
         )
         // The logo only ships in builds that bundle the local Apple Music artwork.
         APPLE_MUSIC_SOURCE -> if (BuildConfig.APPLE_MUSIC_LOGO) {
-            Box(modifier.size(size).semantics { contentDescription = "Playing from Apple Music" }) {
+            Box(modifier.size(size).semantics { contentDescription = tr("Playing from Apple Music") }) {
                 AppleMusicMark(Modifier.size(size), tint)
             }
         }

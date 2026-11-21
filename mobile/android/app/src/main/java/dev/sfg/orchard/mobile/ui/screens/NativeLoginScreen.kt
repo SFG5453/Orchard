@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.annotation.SuppressLint
 import android.net.Uri
 import android.webkit.CookieManager
@@ -163,7 +165,7 @@ fun NativeLoginScreen(
             title = { Text(if (switchingAccount) "Choose a YouTube account" else "Sign in to YouTube Music") },
             navigationIcon = {
                 IconButton(onClick = ::close) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = tr("Back"))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -242,7 +244,7 @@ fun NativeLoginScreen(
                     shape = MaterialTheme.shapes.medium,
                 ) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                        Text(message, style = MaterialTheme.typography.bodyMedium)
+                        Text(tr(message), style = MaterialTheme.typography.bodyMedium)
                         TextButton(
                             onClick = {
                                 captureStarted = false

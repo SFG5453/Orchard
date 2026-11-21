@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -64,19 +66,19 @@ fun SpotifySettingsCard(
     ) {
         Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             SpotifyToggleRow(
-                title = "Spotify Canvas",
-                subtitle = "Animated artwork from Spotify",
+                title = tr("Spotify Canvas"),
+                subtitle = tr("Animated artwork from Spotify"),
                 checked = settings.spotifyCanvasEnabled,
                 onChecked = { onSettings(settings.copy(spotifyCanvasEnabled = it)) },
             )
             Spacer(Modifier.height(8.dp))
             if (isConnected) {
-                IntegrationAction("Sign out of Spotify", destructive = true) {
+                IntegrationAction(tr("Sign out of Spotify"), destructive = true) {
                     onSettings(settings.copy(spotifySpdc = ""))
                 }
             } else {
-                IntegrationAction("Sign in to Spotify", onClick = onConnectSpotify)
-                IntegrationAction("Use a session cookie") { showSpdcDialog = true }
+                IntegrationAction(tr("Sign in to Spotify"), onClick = onConnectSpotify)
+                IntegrationAction(tr("Use a session cookie")) { showSpdcDialog = true }
             }
         }
     }
@@ -85,11 +87,11 @@ fun SpotifySettingsCard(
         var input by remember { mutableStateOf(settings.spotifySpdc) }
         AlertDialog(
             onDismissRequest = { showSpdcDialog = false },
-            title = { Text("Spotify sp_dc Cookie", color = CanopyColors.Text) },
+            title = { Text(tr("Spotify sp_dc Cookie"), color = CanopyColors.Text) },
             text = {
                 Column {
                     Text(
-                        "Paste your sp_dc cookie value from spotify.com browser session:",
+                        tr("Paste your sp_dc cookie value from spotify.com browser session:"),
                         style = MaterialTheme.typography.bodySmall,
                         color = CanopyColors.Muted,
                     )
@@ -97,7 +99,7 @@ fun SpotifySettingsCard(
                     OutlinedTextField(
                         value = input,
                         onValueChange = { input = it },
-                        placeholder = { Text("Paste sp_dc cookie here...") },
+                        placeholder = { Text(tr("Paste sp_dc cookie here...")) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
@@ -109,12 +111,12 @@ fun SpotifySettingsCard(
                     onSettings(settings.copy(spotifySpdc = extracted))
                     showSpdcDialog = false
                 }) {
-                    Text("Save", color = LocalAccent.current)
+                    Text(tr("Save"), color = LocalAccent.current)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showSpdcDialog = false }) {
-                    Text("Cancel", color = CanopyColors.Muted)
+                    Text(tr("Cancel"), color = CanopyColors.Muted)
                 }
             },
             containerColor = CanopyColors.Surface,
@@ -135,12 +137,12 @@ private fun SpotifyToggleRow(
     ) {
         Column(Modifier.weight(1f).padding(end = 16.dp)) {
             Text(
-                title,
+                tr(title),
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                 color = CanopyColors.Text,
             )
             Text(
-                subtitle,
+                tr(subtitle),
                 style = MaterialTheme.typography.bodySmall,
                 color = CanopyColors.Muted,
             )

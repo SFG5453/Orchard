@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.app
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.util.Log
 import dev.sfg.orchard.mobile.OrchardGraph
 import dev.sfg.orchard.mobile.catalog.isAppleMusicId
@@ -90,7 +92,7 @@ internal class QueueLauncher(
                 if (isAppleMusicId(track.id)) graph.appleMusic.upNext(track.id) else graph.catalog.upNext(track.id)
             }.getOrDefault(emptyList())
             val additions = AutoplayRecommendations.select(listOf(track), related, MIX_LIMIT)
-            if (additions.isEmpty()) showWarning("No songs for a mix were found.")
+            if (additions.isEmpty()) showWarning(tr("No songs for a mix were found."))
             replaceQueue(listOf(track) + additions, 0, "Mix: ${track.title}", shuffle = false)
         }
     }
@@ -232,7 +234,7 @@ internal class QueueLauncher(
             bestMix.prepare(listOf(first) + rest.take(BestMixSorter.SNAPSHOT), "Best Mix") { reportBestMix(it, onProgress) }
             reportBestMix("Sorting Best Mix...", onProgress)
             val sorted = withContext(Dispatchers.IO) { BestMixSorter.sort(graph.bestMixFeatures, rest, first, graph.mixEvidence) }
-            if (sorted == null) showWarning("No songs could be analyzed for Best Mix.")
+            if (sorted == null) showWarning(tr("No songs could be analyzed for Best Mix."))
             playAll(listOf(first) + (sorted ?: rest), contextTitle = bestMixTitle)
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -241,7 +243,7 @@ internal class QueueLauncher(
             Log.w(TAG, "Best Mix preparation failed; playing the original order", error)
             if (playable.isNotEmpty()) {
                 playAll(playable, contextTitle = bestMixTitle)
-                showWarning("Best Mix could not finish analyzing every song. Playing the original order.")
+                showWarning(tr("Best Mix could not finish analyzing every song. Playing the original order."))
             }
         } finally {
             bestMixJobState.value = null
@@ -267,7 +269,7 @@ internal class QueueLauncher(
             val sortedUpcoming = withContext(Dispatchers.IO) {
                 BestMixSorter.sort(graph.bestMixFeatures, upcoming, currentTrack, graph.mixEvidence)
             } ?: run {
-                showWarning("No songs could be analyzed for Best Mix.")
+                showWarning(tr("No songs could be analyzed for Best Mix."))
                 return@launch
             }
             val reconciled = queueRequest.reconcile(playback.value, sortedUpcoming) ?: return@launch
@@ -282,7 +284,7 @@ internal class QueueLauncher(
             throw cancelled
         } catch (error: Throwable) {
             Log.w(TAG, "Could not prepare Best Mix for the upcoming queue", error)
-            showWarning("Best Mix could not finish preparing the queue.")
+            showWarning(tr("Best Mix could not finish preparing the queue."))
         } finally {
             bestMixJobState.value = null
             onComplete()
@@ -306,7 +308,7 @@ internal class QueueLauncher(
                     stationId = id.takeIf { it.startsWith(APPLE_STATION_PREFIX) }.orEmpty(),
                 )
             } else {
-                showWarning("No playable tracks found")
+                showWarning(tr("No playable tracks found"))
             }
         }
     }

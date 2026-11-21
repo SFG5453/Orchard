@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -91,12 +93,12 @@ fun WarningBanner(
                 ) {
                     Icon(
                         Icons.Rounded.Warning,
-                        contentDescription = "Warning",
+                        contentDescription = tr("Warning"),
                         tint = CanopyColors.Warning,
                         modifier = Modifier.size(20.dp),
                     )
                     Text(
-                        text = message,
+                        text = tr(message),
                         modifier = Modifier
                             .weight(1f)
                             .padding(horizontal = 10.dp),
@@ -114,7 +116,7 @@ fun WarningBanner(
                     ) {
                         Icon(
                             Icons.Rounded.Close,
-                            contentDescription = "Dismiss",
+                            contentDescription = tr("Dismiss"),
                             tint = CanopyColors.Warning,
                             modifier = Modifier.size(16.dp),
                         )

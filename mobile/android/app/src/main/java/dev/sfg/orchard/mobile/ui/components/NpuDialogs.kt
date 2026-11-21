@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -119,7 +121,7 @@ internal fun NpuDialogHost(settings: OrchardSettings, onSettings: (OrchardSettin
 @Composable
 private fun NpuOfferDialog(brand: String, downloadMb: Long?, downloading: Boolean, onAccept: () -> Unit, onDecline: () -> Unit) {
     NpuDialog(Icons.Rounded.Memory, pulse = downloading, onDismiss = if (downloading) null else onDecline) {
-        DialogTitle("WOAH THERE!")
+        DialogTitle(tr("WOAH THERE!"))
         Spacer(Modifier.height(10.dp))
         DialogBody(
             "Your device has a supported $brand NPU, a chip built for AI. Adaptive Mix can use it to find " +
@@ -145,7 +147,7 @@ private fun NpuOfferDialog(brand: String, downloadMb: Long?, downloading: Boolea
         PrimaryButton(if (downloadMb != null) "Download and enable now" else "Enable", onAccept)
         Spacer(Modifier.height(6.dp))
         TextButton(onClick = onDecline, shape = CircleShape, modifier = Modifier.fillMaxWidth().height(44.dp)) {
-            Text("Not now", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold), color = CanopyColors.Muted)
+            Text(tr("Not now"), style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold), color = CanopyColors.Muted)
         }
     }
 }
@@ -153,7 +155,7 @@ private fun NpuOfferDialog(brand: String, downloadMb: Long?, downloading: Boolea
 @Composable
 private fun NpuCompilingDialog(brand: String) {
     NpuDialog(Icons.Rounded.Memory, pulse = true, onDismiss = null) {
-        DialogTitle("Optimizing for your NPU")
+        DialogTitle(tr("Optimizing for your NPU"))
         Spacer(Modifier.height(10.dp))
         DialogBody("Orchard is preparing Adaptive Mix's models for your $brand NPU. This only happens once.")
         Spacer(Modifier.height(18.dp))
@@ -168,7 +170,7 @@ private fun NpuCompilingDialog(brand: String) {
 @Composable
 private fun NpuErrorDialog(message: String, onDismiss: () -> Unit) {
     NpuDialog(Icons.Rounded.ErrorOutline, pulse = false, onDismiss = onDismiss, tint = CanopyColors.Danger) {
-        DialogTitle("NPU support")
+        DialogTitle(tr("NPU support"))
         Spacer(Modifier.height(10.dp))
         DialogBody(message)
         Spacer(Modifier.height(20.dp))
@@ -240,5 +242,5 @@ private fun PrimaryButton(label: String, onClick: () -> Unit) = Button(
     colors = ButtonDefaults.buttonColors(containerColor = LocalAccent.current, contentColor = Color.Black),
     modifier = Modifier.fillMaxWidth().height(46.dp),
 ) {
-    Text(label, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+    Text(tr(label), style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
 }

@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -239,14 +241,14 @@ fun MiniPlayer(
                 ) { (title, artist) ->
                     Column {
                         Text(
-                            text = title,
+                            text = tr(title),
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = CanopyColors.Text,
                             maxLines = 1,
                             modifier = Modifier.basicMarquee()
                         )
                         Text(
-                            text = artist,
+                            text = tr(artist),
                             style = MaterialTheme.typography.bodySmall,
                             color = CanopyColors.Muted,
                             maxLines = 1
@@ -342,7 +344,7 @@ fun PlaybackTargetLabel(name: String, isLocal: Boolean, onClick: () -> Unit) {
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                name,
+                tr(name),
                 style = MaterialTheme.typography.labelSmall,
                 color = if (isLocal) CanopyColors.Text else LocalAccent.current,
             )

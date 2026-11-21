@@ -22,6 +22,7 @@
 #include "auth/auth_manager.h"
 #include "auth/auth_diagnostics.h"
 #include "auth/youtube_session_keeper.h"
+#include "i18n/ui_language.h"
 #include "album/album_controller.h"
 #include "playlist/playlist_controller.h"
 #include "backend_info.h"
@@ -178,6 +179,7 @@ int main(int argc, char *argv[]) {
 
   // QApplication for QSystemTrayIcon, whose menus are still widgets in 2026.
   QApplication application(argc, argv);
+  UiLanguage uiLanguage;
   // The running binary is the source of truth; About should not time travel to 0.2.0.
   QCoreApplication::setApplicationVersion(QStringLiteral(ORCHARD_VERSION));
   // Declared before every other local so it arms only once they are all destroyed.
@@ -392,6 +394,8 @@ int main(int argc, char *argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardArtistVideo"), &artistVideo);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardAppleMotion"), &appleMotion);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardLibrary"), libraryActions.get());
+  uiLanguage.setEngine(&engine);
+  engine.rootContext()->setContextProperty(QStringLiteral("OrchardLanguage"), &uiLanguage);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardCollections"), &collectionLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardLocal"), &localLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("OrchardNetwork"), &connectivity);

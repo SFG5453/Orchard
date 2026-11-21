@@ -27,6 +27,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -116,7 +118,7 @@ internal fun HomeSectionTitle(
             ) {
                 label?.let {
                     Text(
-                        text = it,
+                        text = tr(it),
                         style = MaterialTheme.typography.labelLarge,
                         color = CanopyColors.Muted,
                         maxLines = 1,
@@ -125,7 +127,7 @@ internal fun HomeSectionTitle(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = title,
+                        text = tr(title),
                         fontSize = 22.sp,
                         lineHeight = 28.sp,
                         fontWeight = FontWeight.Bold,
@@ -138,7 +140,7 @@ internal fun HomeSectionTitle(
                     if (onClick != null && onPlayAllClick == null && actionLabel == null) {
                         Icon(
                             Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                            contentDescription = "See all",
+                            contentDescription = tr("See all"),
                             tint = CanopyColors.Muted,
                             modifier = Modifier.size(26.dp),
                         )
@@ -231,14 +233,14 @@ private fun DiscoverCard(
                 modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(16.dp),
             ) {
                 Text(
-                    text = entry.caption.uppercase(),
+                    text = tr(entry.caption.uppercase()),
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em),
                     color = Color.White.copy(alpha = 0.7f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = entry.item.title,
+                    text = tr(entry.item.title),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = Color.White,
                     maxLines = 1,

@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,7 +79,7 @@ internal fun LyricTranslationSection(
         }
     }
     var languageMenu by remember { mutableStateOf(false) }
-    val languages = if (provider == LyricTranslationProvider.LOCAL) listOf(LyricTranslationLanguage.ENGLISH)
+    val languages = if (provider == LyricTranslationProvider.LOCAL) listOf(LyricTranslationLanguage.ENGLISH, LyricTranslationLanguage.AUTO)
         else LyricTranslationLanguage.entries
     var sourceDialog by remember { mutableStateOf(false) }
     var modelDraft by remember(provider, settings.lyricTranslationModels[provider.key]) {
@@ -86,10 +88,10 @@ internal fun LyricTranslationSection(
     var endpointDraft by remember(settings.lyricTranslationEndpoint) { mutableStateOf(settings.lyricTranslationEndpoint) }
     var keyDraft by remember(provider) { mutableStateOf("") }
 
-    SectionLabel("Lyrics", labelIndex)
+    SectionLabel(tr("Lyrics"), labelIndex)
     SettingsPanel(index = labelIndex + 1) {
         SettingsRow(
-            title = "Translate lyrics to",
+            title = tr("Translate lyrics to"),
             subtitle = if (provider == LyricTranslationProvider.LOCAL)
                 "Local models translate to English on this phone. Choose an API or Orchard Account for other target languages."
             else if (provider == LyricTranslationProvider.ORCHARD)
@@ -97,16 +99,17 @@ internal fun LyricTranslationSection(
             else "Sends lyric lines to ${provider.label}; your provider may charge for requests.",
         ) {
             Box {
-                val label = if (!settings.translateLyrics) "Off" else
-                    (if (provider == LyricTranslationProvider.LOCAL) LyricTranslationLanguage.ENGLISH else settings.lyricTranslationLanguage).label
+                val label = if (!settings.translateLyrics) tr("Off") else
+                    tr((settings.lyricTranslationLanguage.takeIf { provider != LyricTranslationProvider.LOCAL || it == LyricTranslationLanguage.AUTO }
+                        ?: LyricTranslationLanguage.ENGLISH).label)
                 SettingsPill("$label ▾", onClick = { languageMenu = true })
                 DropdownMenu(expanded = languageMenu, onDismissRequest = { languageMenu = false }) {
-                    DropdownMenuItem(text = { Text("Off") }, onClick = {
+                    DropdownMenuItem(text = { Text(tr("Off")) }, onClick = {
                         onSettings(settings.copy(translateLyrics = false))
                         languageMenu = false
                     })
                     languages.forEach { language ->
-                        DropdownMenuItem(text = { Text(language.label) }, onClick = {
+                        DropdownMenuItem(text = { Text(tr(language.label)) }, onClick = {
                             onSettings(settings.copy(translateLyrics = true, lyricTranslationLanguage = language))
                             languageMenu = false
                         })
@@ -116,30 +119,30 @@ internal fun LyricTranslationSection(
         }
         PanelDivider()
         ToggleRow(
-            title = "Use Apple Music translations",
-            subtitle = "For lyrics from Apple Music, show Apple's own translation when it has one. Other songs and misses use the source below.",
+            title = tr("Use Apple Music translations"),
+            subtitle = tr("For lyrics from Apple Music, show Apple's own translation when it has one. Other songs and misses use the source below."),
             checked = settings.preferAppleTranslation,
             onChecked = { onSettings(settings.copy(preferAppleTranslation = it)) },
         )
         PanelDivider()
         SettingsRow(
-            title = "Translation source",
-            subtitle = "Local models are private. API translation also works with other languages.",
+            title = tr("Translation source"),
+            subtitle = tr("Local models are private. API translation also works with other languages."),
         ) {
             SettingsPill(if (provider == LyricTranslationProvider.ORCHARD && !account.signedIn) "Choose source" else provider.label, onClick = { sourceDialog = true })
         }
         if (provider != LyricTranslationProvider.LOCAL && provider != LyricTranslationProvider.ORCHARD) {
             PanelDivider()
             Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-                RowTitle("Model ID")
+                RowTitle(tr("Model ID"))
                 RowSubtitle("Enter a model supported by ${provider.label}.")
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = modelDraft, onValueChange = { modelDraft = it }, modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Model ID") }, singleLine = true,
+                    label = { Text(tr("Model ID")) }, singleLine = true,
                 )
                 Spacer(Modifier.height(10.dp))
-                SettingsPill("Save model", onClick = {
+                SettingsPill(tr("Save model"), onClick = {
                     onSettings(settings.copy(lyricTranslationModels = settings.lyricTranslationModels +
                         (provider.key to modelDraft.trim())))
                 })
@@ -147,8 +150,8 @@ internal fun LyricTranslationSection(
             if (provider == LyricTranslationProvider.CUSTOM) {
                 PanelDivider()
                 Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-                    RowTitle("API base URL")
-                    RowSubtitle("OpenAI compatible; keyless HTTP APIs and localhost are allowed.")
+                    RowTitle(tr("API base URL"))
+                    RowSubtitle(tr("OpenAI compatible; keyless HTTP APIs and localhost are allowed."))
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
                         value = endpointDraft, onValueChange = { endpointDraft = it },
@@ -156,14 +159,14 @@ internal fun LyricTranslationSection(
                         singleLine = true,
                     )
                     Spacer(Modifier.height(10.dp))
-                    SettingsPill("Save URL", onClick = {
+                    SettingsPill(tr("Save URL"), onClick = {
                         onSettings(settings.copy(lyricTranslationEndpoint = endpointDraft.trim()))
                     })
                 }
             }
             PanelDivider()
             Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-                RowTitle("API key")
+                RowTitle(tr("API key"))
                 RowSubtitle(if (apiKeys.has(provider)) "Saved with Android Keystore encryption."
                     else if (provider == LyricTranslationProvider.CUSTOM) "Optional for a keyless API."
                     else "Required for ${provider.label}; saved with Android Keystore encryption.")
@@ -175,11 +178,11 @@ internal fun LyricTranslationSection(
                 )
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (keyDraft.isNotBlank()) SettingsPill("Save key", onClick = {
+                    if (keyDraft.isNotBlank()) SettingsPill(tr("Save key"), onClick = {
                         translator.saveApiKey(provider, keyDraft)
                         keyDraft = ""
                     })
-                    if (apiKeys.has(provider)) SettingsPill("Remove key", destructive = true,
+                    if (apiKeys.has(provider)) SettingsPill(tr("Remove key"), destructive = true,
                         onClick = { translator.removeApiKey(provider) })
                 }
                 if (apiKeys.message.isNotBlank()) {
@@ -194,7 +197,7 @@ internal fun LyricTranslationSection(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     RowIcon(Icons.Rounded.Tune)
                     Column {
-                        RowTitle("Translation quality")
+                        RowTitle(tr("Translation quality"))
                         RowSubtitle(
                             when (settings.lyricTranslationQuality) {
                                 LyricTranslationQuality.STANDARD -> "About 20 MB per language and quickest"
@@ -216,24 +219,24 @@ internal fun LyricTranslationSection(
                     title = pack.name + if (pack.quality == "high") " (High)" else "",
                     subtitle = "%.0f MB · %s".format(pack.bytes / 1e6, pack.credit),
                 ) {
-                    SettingsPill(label = "Remove", destructive = true, onClick = { translator.remove(pack) })
+                    SettingsPill(label = tr("Remove"), destructive = true, onClick = { translator.remove(pack) })
                 }
             }
         }
     }
     if (sourceDialog) AlertDialog(
         onDismissRequest = { sourceDialog = false },
-        title = { Text("Translation source") },
+        title = { Text(tr("Translation source")) },
         text = {
             Column {
                 LyricTranslationProvider.entries.filter { it != LyricTranslationProvider.ORCHARD || account.signedIn }.forEach { choice ->
                     TextButton(onClick = {
                         onSettings(settings.copy(lyricTranslationProvider = choice))
                         sourceDialog = false
-                    }, modifier = Modifier.fillMaxWidth()) { Text(choice.label) }
+                    }, modifier = Modifier.fillMaxWidth()) { Text(tr(choice.label)) }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { sourceDialog = false }) { Text("Close") } },
+        confirmButton = { TextButton(onClick = { sourceDialog = false }) { Text(tr("Close")) } },
     )
 }

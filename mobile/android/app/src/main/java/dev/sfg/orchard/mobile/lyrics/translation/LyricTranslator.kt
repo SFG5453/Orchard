@@ -21,6 +21,8 @@ package dev.sfg.orchard.mobile.lyrics.translation
 
 import android.content.Context
 import android.os.Process
+import dev.sfg.orchard.mobile.i18n.tr
+import dev.sfg.orchard.mobile.i18n.trf
 import dev.sfg.orchard.mobile.model.LyricLine
 import dev.sfg.orchard.mobile.model.OrchardSettings
 import dev.sfg.orchard.mobile.model.LyricTranslationProvider
@@ -214,14 +216,21 @@ class LyricTranslator(
         }
     }
 
-    private suspend fun run(lines: List<LyricLine>?, config: Config, songId: String) {
-        if (!config.enabled) {
+    private suspend fun run(lines: List<LyricLine>?, wanted: Config, songId: String) {
+        if (!wanted.enabled) {
             mutableState.value = LyricTranslationState()
             return
         }
         // Nobody is looking; keep what is on screen for when they come back.
         if (lines == null) return
         activePack = ""
+        val config = if (wanted.target == LyricTranslationLanguage.AUTO) wanted.copy(target = autoTarget(lines)) else wanted
+        if (config.provider == LyricTranslationProvider.LOCAL && config.target == LyricTranslationLanguage.SPANISH) {
+            mutableState.value = LyricTranslationState(LyricTranslationState.Status.UNSUPPORTED, lines = lines,
+                translations = List(lines.size) { null },
+                message = tr("Translating into Spanish needs Orchard Account or an API."))
+            return
+        }
         if (config.preferApple && runApple(lines, songId, config)) return
         if (config.provider == LyricTranslationProvider.ORCHARD) {
             runAccount(lines, songId, config.target)
@@ -245,13 +254,13 @@ class LyricTranslator(
         val pack = packs.resolve(source, config.quality)
         if (pack == null || pack.baseUrl.isEmpty()) {
             mutableState.value = base.copy(status = LyricTranslationState.Status.UNSUPPORTED,
-                message = "$sourceName lyrics can't be translated yet.")
+                message = trf("%1 lyrics can't be translated yet.", tr(sourceName)))
             return
         }
         activePack = pack.id
         if (removed?.let { it.first == pack.id && it.second === lines } == true) {
             mutableState.value = base.copy(status = LyricTranslationState.Status.FAILED,
-                message = "The $sourceName model was removed.")
+                message = trf("The %1 model was removed.", tr(sourceName)))
             return
         }
 
@@ -262,7 +271,7 @@ class LyricTranslator(
         val results = arrayOfNulls<String>(lines.size)
         val cached = withContext(Dispatchers.IO) { store.lookup(pack.revision, pending.keys) }
         cached.forEach { (text, translation) -> pending.remove(text)?.forEach { results[it] = shown(text, translation) } }
-        val ready = base.copy(status = LyricTranslationState.Status.READY, message = "Translated from $sourceName")
+        val ready = base.copy(status = LyricTranslationState.Status.READY, message = trf("Translated from %1", tr(sourceName)))
         if (pending.isEmpty()) {
             mutableState.value = ready.copy(translations = results.toList())
             return
@@ -271,7 +280,7 @@ class LyricTranslator(
         try {
             if (!packs.installed(pack)) {
                 mutableState.value = base.copy(status = LyricTranslationState.Status.DOWNLOADING,
-                    message = "Downloading the $sourceName model", translations = results.toList())
+                    message = trf("Downloading the %1 model", tr(sourceName)), translations = results.toList())
                 packs.download(pack) { fraction ->
                     // Whole percents only; a 20 MB download would otherwise recompose the lyrics thousands of times.
                     mutableState.update { if ((it.progress * 100).toInt() == (fraction * 100).toInt()) it else it.copy(progress = fraction) }
@@ -279,7 +288,7 @@ class LyricTranslator(
                 mutableInstalled.value = withContext(Dispatchers.IO) { packs.installedPacks() }
             }
             mutableState.value = base.copy(status = LyricTranslationState.Status.TRANSLATING,
-                message = "Translating from $sourceName", translations = results.toList())
+                message = trf("Translating from %1", tr(sourceName)), translations = results.toList())
             val job = generation.get()
             withContext(modelThread) {
                 unload?.cancel()
@@ -317,7 +326,7 @@ class LyricTranslator(
         val language = appleLanguage(target)
         if (lines.all { it.key == null }) return false
         mutableState.value = LyricTranslationState(LyricTranslationState.Status.TRANSLATING,
-            message = "Checking Apple Music for a translation", lines = lines, translations = List(lines.size) { null })
+            message = tr("Checking Apple Music for a translation"), lines = lines, translations = List(lines.size) { null })
         val found = try {
             appleTranslation(songId, language)
         } catch (cancelled: CancellationException) {
@@ -327,7 +336,7 @@ class LyricTranslator(
         }
         if (found.isEmpty()) return false
         mutableState.value = LyricTranslationState(LyricTranslationState.Status.READY,
-            message = "Translated by Apple Music", lines = lines,
+            message = tr("Translated by Apple Music"), lines = lines,
             translations = lines.map { line -> line.key?.let(found::get)?.let { shown(lineText(line), it) } })
         return true
     }
@@ -343,7 +352,7 @@ class LyricTranslator(
         }
         val results = arrayOfNulls<String>(lines.size)
         if (pending.isEmpty()) {
-            mutableState.value = base.copy(message = "Lyrics are already in the selected language")
+            mutableState.value = base.copy(message = tr("Lyrics are already in the selected language"))
             return
         }
         try {
@@ -361,7 +370,7 @@ class LyricTranslator(
                 return
             }
             mutableState.value = base.copy(status = LyricTranslationState.Status.TRANSLATING,
-                message = "Translating with ${config.provider.label}", translations = results.toList())
+                message = trf("Translating with %1", config.provider.label), translations = results.toList())
             // Twenty-four lines fit comfortably in a response without losing chorus alignment.
             pending.keys.toList().chunked(RemoteLyricTranslation.BATCH_SIZE).forEach { batch ->
                 val output = remote.translate(config.provider, config.model, config.endpoint, key, batch, config.target)
@@ -372,7 +381,7 @@ class LyricTranslator(
                     pending.remove(text)?.forEach { results[it] = shown(text, translated) }
                 }
                 mutableState.value = base.copy(status = LyricTranslationState.Status.TRANSLATING,
-                    message = "Translating with ${config.provider.label}", translations = results.toList())
+                    message = trf("Translating with %1", config.provider.label), translations = results.toList())
             }
             mutableState.value = ready.copy(translations = results.toList())
         } catch (cancelled: CancellationException) {
@@ -388,10 +397,10 @@ class LyricTranslator(
         val mask = remoteMask(texts, target)
         val wanted = texts.filterIndexed { index, text -> mask[index] && text.isNotEmpty() }.distinct()
         val base = LyricTranslationState(LyricTranslationState.Status.TRANSLATING,
-            message = "Translating with Orchard Account", lines = lines, translations = List(lines.size) { null })
+            message = tr("Translating with Orchard Account"), lines = lines, translations = List(lines.size) { null })
         if (wanted.isEmpty()) {
             mutableState.value = base.copy(status = LyricTranslationState.Status.IDLE,
-                message = "Lyrics are already in the selected language")
+                message = tr("Lyrics are already in the selected language"))
             return
         }
         mutableState.value = base
@@ -400,7 +409,7 @@ class LyricTranslator(
             val output = accountRemote.translate(songId, wanted, target.key)
             val translations = wanted.zip(output).toMap()
             mutableState.value = base.copy(status = LyricTranslationState.Status.READY,
-                message = "Translated with Orchard Account",
+                message = tr("Translated with Orchard Account"),
                 translations = texts.map { text -> translations[text]?.let { shown(text, it) } })
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -408,6 +417,14 @@ class LyricTranslator(
             mutableState.value = base.copy(status = LyricTranslationState.Status.FAILED,
                 message = error.message ?: "Account translation failed")
         }
+    }
+
+    /** English or unclear lyrics go to Spanish; Spanish lyrics go to English. */
+    private fun autoTarget(lines: List<LyricLine>): LyricTranslationLanguage {
+        if (!TranslationNative.available) return LyricTranslationLanguage.SPANISH
+        val texts = lines.map(::lineText).map { it.encodeToByteArray() }.toTypedArray()
+        val source = runCatching { JSONObject(TranslationNative.plan(texts).decodeToString()).getString("source") }.getOrDefault("")
+        return if (source == "spa") LyricTranslationLanguage.ENGLISH else LyricTranslationLanguage.SPANISH
     }
 
     private fun remoteMask(texts: List<String>, target: LyricTranslationLanguage): List<Boolean> {
@@ -447,6 +464,7 @@ class LyricTranslator(
             LyricTranslationLanguage.KOREAN -> "ko"
             LyricTranslationLanguage.JAPANESE -> "ja"
             LyricTranslationLanguage.FRENCH -> "fr-FR"
+            LyricTranslationLanguage.AUTO -> "es-MX"
         }
 
         fun lineText(line: LyricLine): String =

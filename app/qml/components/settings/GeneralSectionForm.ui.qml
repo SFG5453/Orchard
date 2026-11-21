@@ -37,6 +37,7 @@ ColumnLayout {
     property alias systemTitleBarSwitch: systemTitleBarSwitch
     property alias traySwitch: traySwitch
     property alias homeSourcePicker: homeSourcePicker
+    property alias interfaceLanguagePicker: interfaceLanguagePicker
     property bool appleMusicConnected: true
     property alias youtubeLanguagePicker: youtubeLanguagePicker
     property alias historySwitch: historySwitch
@@ -149,6 +150,22 @@ ColumnLayout {
         title: qsTr("Music")
         rowSpacing: 0
         verticalPadding: 0
+
+        SettingsRow {
+            iconName: "languages"
+            title: qsTr("Language")
+            description: qsTr("Choose the language Orchard uses for menus, buttons and messages.")
+
+            SettingsSegmented {
+                id: interfaceLanguagePicker
+                objectName: "settingsInterfaceLanguage"
+                model: [
+                    { value: "system", label: qsTr("System") },
+                    { value: "en", label: "English" },
+                    { value: "es", label: "Español" }
+                ]
+            }
+        }
 
         SettingsRow {
             iconName: "music-2"

@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -52,7 +54,7 @@ internal fun CrossfadeRow(settings: OrchardSettings, onSettings: (OrchardSetting
     val npu by NpuSupport.state.collectAsStateWithLifecycle()
     Column {
         ToggleRow(
-            title = "Crossfade",
+            title = tr("Crossfade"),
             subtitle = if (settings.crossfadeEnabled) {
                 "Tracks overlap for ${settings.crossfadeSeconds}s"
             } else {
@@ -92,7 +94,7 @@ internal fun CrossfadeRow(settings: OrchardSettings, onSettings: (OrchardSetting
                 }
                 PanelDivider()
                 ToggleRow(
-                    title = "Adaptive mix",
+                    title = tr("Adaptive mix"),
                     subtitle = if (maxActive) {
                         "Unavailable while audio quality is Max"
                     } else {
@@ -111,7 +113,7 @@ internal fun CrossfadeRow(settings: OrchardSettings, onSettings: (OrchardSetting
                     Column {
                         PanelDivider()
                         ToggleRow(
-                            title = "NPU Support",
+                            title = tr("NPU Support"),
                             subtitle = when {
                                 npu.compiling -> "Optimizing for your ${npu.device?.vendor?.brand} NPU…"
                                 npu.enabled -> "Adaptive mix runs on your ${npu.device?.vendor?.brand} NPU"

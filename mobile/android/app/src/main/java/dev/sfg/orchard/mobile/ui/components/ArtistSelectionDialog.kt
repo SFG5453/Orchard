@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -68,7 +70,7 @@ fun ArtistSelectionDialog(
         ) {
             Column(modifier = Modifier.padding(vertical = 24.dp)) {
                 Text(
-                    text = "View Artist",
+                    text = tr("View Artist"),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = CanopyColors.Text,
                     modifier = Modifier.padding(horizontal = 24.dp)
@@ -108,7 +110,7 @@ fun ArtistSelectionDialog(
                             )
                             Spacer(modifier = Modifier.width(16.dp))
                             Text(
-                                text = artist.name,
+                                text = tr(artist.name),
                                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                                 color = CanopyColors.Text,
                                 maxLines = 1,

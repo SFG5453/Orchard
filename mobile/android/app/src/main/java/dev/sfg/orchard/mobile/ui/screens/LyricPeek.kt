@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -78,7 +80,7 @@ internal fun LyricPeek(
             .fillMaxWidth()
             .heightIn(min = 44.dp)
             .clip(RoundedCornerShape(14.dp))
-            .clickable(onClickLabel = "Show lyrics", onClick = onOpen)
+            .clickable(onClickLabel = tr("Show lyrics"), onClick = onOpen)
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -91,7 +93,7 @@ internal fun LyricPeek(
             label = "LyricPeekLine",
         ) { line ->
             Text(
-                text = line,
+                text = tr(line),
                 color = Color.White.copy(alpha = if (line == INSTRUMENTAL) 0.40f else 0.72f),
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                 textAlign = TextAlign.Center,

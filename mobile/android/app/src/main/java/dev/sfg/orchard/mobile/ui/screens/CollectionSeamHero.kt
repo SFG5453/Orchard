@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -229,7 +231,7 @@ private fun PlayDisc(
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 Icons.Rounded.PlayArrow,
-                contentDescription = "Play",
+                contentDescription = tr("Play"),
                 tint = iconTint,
                 // The play glyph is visually left-heavy; nudge it to the optical centre.
                 modifier = Modifier.size(34.dp).offset(x = 2.dp),

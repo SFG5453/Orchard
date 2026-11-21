@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.playback
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.content.Context
 import android.util.Log
 import dev.sfg.orchard.mobile.model.PlaybackSnapshot
@@ -98,7 +100,7 @@ class ListeningPartyManager(
 
     suspend fun joinParty(code: String) {
         runClient { it.joinRoom(code, displayName) }
-        mutableMessages.tryEmit("Joined the listening party.")
+        mutableMessages.tryEmit(tr("Joined the listening party."))
     }
 
     private suspend fun runClient(start: suspend (ListeningPartyClient) -> PartyState) {
@@ -164,10 +166,10 @@ class ListeningPartyManager(
                     is PartyEvent.Request -> if (self.isHost) handleRequest(event)
                     is PartyEvent.HostChanged ->
                         if (event.hostId == self.participant?.id) {
-                            mutableMessages.tryEmit("You are now hosting the listening party.")
+                            mutableMessages.tryEmit(tr("You are now hosting the listening party."))
                         }
                     is PartyEvent.Closed -> {
-                        mutableMessages.tryEmit("The listening party ended.")
+                        mutableMessages.tryEmit(tr("The listening party ended."))
                         leaveParty(closeRoom = false)
                     }
                     is PartyEvent.Failed -> mutableMessages.tryEmit(event.message)

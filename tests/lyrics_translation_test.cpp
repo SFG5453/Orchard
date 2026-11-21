@@ -126,6 +126,12 @@ private slots:
     QCOMPARE(lyric_language::displayName("hin"), std::string("Hindi"));
   }
 
+  void autoTargetSwapsEnglishAndSpanish() {
+    QCOMPARE(lyric_language::autoTarget({"Te quiero más que a mi vida", "No puedo vivir sin ti"}), std::string("eng"));
+    QCOMPARE(lyric_language::autoTarget({"I can't stop thinking about you", "I know you want me"}), std::string("spa"));
+    QCOMPARE(lyric_language::autoTarget({"오늘 밤 너와 춤추고 싶어"}), std::string("spa"));
+  }
+
   void remoteTargetsKeepMixedSongAlignment() {
     const std::vector<std::string> lines{"Te quiero más que a mi vida", "I know you want me", "사랑해", "", "123 🎵"};
     QVERIFY(lyric_language::remotePlan(lines, "spa").translate == bools({false, true, true, false, false}));

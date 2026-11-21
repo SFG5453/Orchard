@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.Icons
@@ -131,7 +133,7 @@ fun CollectionTopBar(
                 }
                 if (saveInBar) {
                     DropdownMenuItem(
-                        text = { Text("Share") },
+                        text = { Text(tr("Share")) },
                         onClick = {
                             menuOpen = false
                             onShare()
@@ -148,7 +150,7 @@ fun CollectionTopBar(
                 }
                 if (onAbout != null) {
                     DropdownMenuItem(
-                        text = { Text(aboutLabel) },
+                        text = { Text(tr(aboutLabel)) },
                         onClick = {
                             menuOpen = false
                             onAbout()
@@ -157,7 +159,7 @@ fun CollectionTopBar(
                 }
                 if (onBestMix != null) {
                     DropdownMenuItem(
-                        text = { Text("Play with Best Mix") },
+                        text = { Text(tr("Play with Best Mix")) },
                         onClick = {
                             menuOpen = false
                             onBestMix()

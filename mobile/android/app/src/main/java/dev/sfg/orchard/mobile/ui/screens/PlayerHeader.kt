@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -94,7 +96,7 @@ internal fun PlayerHeader(
         IconButton(onClick = onCollapse) {
             Icon(
                 Icons.Rounded.ExpandMore,
-                contentDescription = "Close player",
+                contentDescription = tr("Close player"),
                 tint = Color.White,
                 modifier = Modifier.size(30.dp),
             )
@@ -104,7 +106,7 @@ internal fun PlayerHeader(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "PLAYING FROM",
+                text = tr("PLAYING FROM"),
                 color = Color.White.copy(alpha = 0.60f),
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontWeight = FontWeight.SemiBold,
@@ -112,7 +114,7 @@ internal fun PlayerHeader(
                 ),
             )
             Text(
-                text = playingFrom,
+                text = tr(playingFrom),
                 color = Color.White,
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 maxLines = 1,
@@ -123,7 +125,7 @@ internal fun PlayerHeader(
         IconButton(onClick = { menuOpen = true }) {
             Icon(
                 Icons.Filled.MoreHoriz,
-                contentDescription = "More options",
+                contentDescription = tr("More options"),
                 tint = Color.White,
                 modifier = Modifier.size(26.dp),
             )

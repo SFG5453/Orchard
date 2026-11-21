@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -91,7 +93,7 @@ fun OrchardSectionHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = title,
+            text = tr(title),
             style = MaterialTheme.typography.titleLarge.copy(
                 fontWeight = FontWeight.Bold,
                 letterSpacing = (-0.3).sp,
@@ -109,7 +111,7 @@ fun OrchardSectionHeader(
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) {
                     Text(
-                        text = action,
+                        text = tr(action),
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                         color = LocalAccent.current,
                     )
@@ -150,7 +152,7 @@ fun CatalogCard(item: CatalogItem, onClick: () -> Unit, modifier: Modifier = Mod
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                item.title,
+                tr(item.title),
                 style = MaterialTheme.typography.titleMedium,
                 color = CanopyColors.Text,
                 maxLines = 1,
@@ -206,7 +208,7 @@ fun CategoryCard(
             )
             Spacer(Modifier.width(12.dp))
             Text(
-                text = item.title,
+                text = tr(item.title),
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = CanopyColors.Text,
                 maxLines = 1,
@@ -256,7 +258,7 @@ fun TopPickCard(item: CatalogItem, onClick: () -> Unit, modifier: Modifier = Mod
                 ExplicitBadge(modifier = Modifier.padding(bottom = 6.dp))
             }
             Text(
-                item.title,
+                tr(item.title),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 color = Color.White,
                 maxLines = 2,
@@ -347,9 +349,9 @@ fun MessagePanel(title: String, message: String, actionLabel: String? = null, on
             .glassPane(shape)
     ) {
         Column(Modifier.padding(20.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge, color = CanopyColors.Text)
+            Text(tr(title), style = MaterialTheme.typography.titleLarge, color = CanopyColors.Text)
             Spacer(Modifier.height(8.dp))
-            Text(message, color = CanopyColors.Muted, style = MaterialTheme.typography.bodyLarge)
+            Text(tr(message), color = CanopyColors.Muted, style = MaterialTheme.typography.bodyLarge)
             if (actionLabel != null && onAction != null) {
                 Spacer(Modifier.height(16.dp))
                 Surface(
@@ -359,7 +361,7 @@ fun MessagePanel(title: String, message: String, actionLabel: String? = null, on
                     modifier = Modifier.height(36.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 18.dp)) {
-                        Text(actionLabel, color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(tr(actionLabel), color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
             }

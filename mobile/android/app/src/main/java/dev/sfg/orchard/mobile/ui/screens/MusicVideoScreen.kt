@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -205,7 +207,7 @@ private fun MusicVideoPortrait(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        track.title,
+                        tr(track.title),
                         color = CanopyColors.Text,
                         fontSize = 26.sp,
                         fontWeight = FontWeight.Bold,
@@ -213,7 +215,7 @@ private fun MusicVideoPortrait(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        track.artist,
+                        tr(track.artist),
                         color = CanopyColors.MutedStrong,
                         fontSize = 16.sp,
                         maxLines = 1,
@@ -278,7 +280,7 @@ private fun UpNextPeek(next: Track, onNext: () -> Unit) {
             .clip(RoundedCornerShape(16.dp))
             .background(CanopyColors.Canvas)
             .border(1.dp, CanopyColors.Rule, RoundedCornerShape(16.dp))
-            .clickable(onClickLabel = "Play next", onClick = onNext)
+            .clickable(onClickLabel = tr("Play next"), onClick = onNext)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -290,7 +292,7 @@ private fun UpNextPeek(next: Track, onNext: () -> Unit) {
             modifier = Modifier.width(54.dp).aspectRatio(1f).clip(RoundedCornerShape(8.dp)),
         )
         Column(Modifier.weight(1f)) {
-            Text("UP NEXT", color = CanopyColors.Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.5.sp)
+            Text(tr("UP NEXT"), color = CanopyColors.Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.5.sp)
             Text(next.title, color = CanopyColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(next.artist, color = CanopyColors.Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -302,7 +304,7 @@ private fun UpNextPeek(next: Track, onNext: () -> Unit) {
 @Composable
 internal fun SongTab(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Text(
-        "Song",
+        tr("Song"),
         color = CanopyColors.Text,
         fontSize = 15.sp,
         fontWeight = FontWeight.SemiBold,

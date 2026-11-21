@@ -22,4 +22,6 @@ package dev.sfg.orchard.mobile.model
 enum class LyricTranslationLanguage(val key: String, val label: String) {
     ENGLISH("eng", "English"), SPANISH("spa", "Spanish"), HINDI("hin", "Hindi"),
     KOREAN("kor", "Korean"), JAPANESE("jpn", "Japanese"), FRENCH("fra", "French"),
+    /** Spanish songs go to English, everything else to Spanish. */
+    AUTO("auto", "English ↔ Spanish"),
 }

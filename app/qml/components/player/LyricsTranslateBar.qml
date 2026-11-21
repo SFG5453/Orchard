@@ -54,7 +54,9 @@ Row {
         width: 30
         height: 30
         hoverEnabled: true
-        Accessible.name: bar.on ? qsTr("Stop translating lyrics") : qsTr("Translate lyrics")
+        Accessible.name: bar.on ? qsTr("Stop translating lyrics")
+            : OrchardTranslation.targetLanguage === "auto" && OrchardTranslation.activeTargetName.length > 0
+                ? qsTr("Translate lyrics to %1").arg(OrchardTranslation.activeTargetName) : qsTr("Translate lyrics")
         ToolTip.visible: hovered
         ToolTip.delay: 500
         ToolTip.text: Accessible.name

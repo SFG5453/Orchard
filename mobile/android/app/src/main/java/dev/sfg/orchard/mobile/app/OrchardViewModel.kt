@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.app
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.app.Application
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
@@ -397,9 +399,9 @@ class OrchardViewModel(application: Application) : AndroidViewModel(application)
     fun signOut() = graph.auth.signOut()
 
     fun shareTrack(track: Track) =
-        if (track.isLocal) showWarning("Files on your phone cannot be shared as links.") else songLinksCoordinator.shareTrack(track)
+        if (track.isLocal) showWarning(tr("Files on your phone cannot be shared as links.")) else songLinksCoordinator.shareTrack(track)
     fun shareCollection(detail: BrowseDetail) =
-        if (dev.sfg.orchard.mobile.local.isLocalCollectionId(detail.id)) showWarning("Music on your phone cannot be shared as links.")
+        if (dev.sfg.orchard.mobile.local.isLocalCollectionId(detail.id)) showWarning(tr("Music on your phone cannot be shared as links."))
         else songLinksCoordinator.shareCollection(detail)
     fun dismissShare() = songLinksCoordinator.dismissShare()
 

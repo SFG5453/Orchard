@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import dev.sfg.orchard.mobile.catalog.PlaylistActions
 import dev.sfg.orchard.mobile.model.APPLE_PERSONAL_MIXES_SECTION
 import dev.sfg.orchard.mobile.model.Album
@@ -42,14 +44,14 @@ internal fun offlinePlaylistItems(
             CatalogItem.Collection(
                 Playlist(
                     id = "offline_downloads",
-                    title = "Downloaded Music",
+                    title = tr("Downloaded Music"),
                     author = "Orchard",
                     artworkUrl =
                         downloadedTracks
                             .firstOrNull { it.artworkUrl.isNotBlank() }
                             ?.artworkUrl
                             .orEmpty(),
-                    description = "All offline tracks on this device",
+                    description = tr("All offline tracks on this device"),
                     tracks = downloadedTracks,
                 )
             )

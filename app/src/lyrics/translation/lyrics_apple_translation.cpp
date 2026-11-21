@@ -37,7 +37,7 @@ QString appleLanguage(const QString &target) {
 
 // Starts Apple's own translation for Apple lyrics. A miss runs the selected provider.
 bool LyricsTranslator::tryApple() {
-  const QString language = appleLanguage(m_targetLanguage);
+  const QString language = appleLanguage(m_activeTarget);
   if (!m_preferApple || language.isEmpty() || m_lyrics->source() != QStringLiteral("apple"))
     return false;
   QStringList keys;

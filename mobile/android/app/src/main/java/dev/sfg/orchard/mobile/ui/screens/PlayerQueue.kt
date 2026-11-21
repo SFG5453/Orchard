@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -159,7 +161,7 @@ fun PlayerQueuePanel(
         }
         item {
             QueueSectionHeader(
-                title = "Playing next",
+                title = tr("Playing next"),
                 trailing = if (playback.upcoming.isNotEmpty() && editable) {
                     {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -221,7 +223,7 @@ fun QueueTopControls(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 QueueModeTile(
                     icon = Icons.Rounded.Shuffle,
-                    title = "Shuffle",
+                    title = tr("Shuffle"),
                     status = if (shuffle) "On" else "Off",
                     active = shuffle,
                     tint = ShuffleTint,
@@ -230,7 +232,7 @@ fun QueueTopControls(
                 )
                 QueueModeTile(
                     icon = if (repeatMode == RepeatMode.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                    title = "Repeat",
+                    title = tr("Repeat"),
                     status = when (repeatMode) {
                         RepeatMode.OFF -> "Off"
                         RepeatMode.ALL -> "All"
@@ -246,7 +248,7 @@ fun QueueTopControls(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             QueueModeTile(
                 icon = Icons.Rounded.Bedtime,
-                title = "Sleep timer",
+                title = tr("Sleep timer"),
                 status = when {
                     sleepTimerEndOfTrack -> "End of track"
                     sleepTimerRemainingSeconds > 0 -> "${(sleepTimerRemainingSeconds + 59) / 60} min left"
@@ -260,7 +262,7 @@ fun QueueTopControls(
             if (onAutoplayEnabled != null) {
                 QueueModeTile(
                     icon = Icons.Rounded.AllInclusive,
-                    title = "Autoplay",
+                    title = tr("Autoplay"),
                     status = when {
                         !autoplayEnabled -> "Off"
                         autoplayLoading -> "Finding songs…"
@@ -313,13 +315,13 @@ private fun QueueModeTile(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    title,
+                    tr(title),
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = Color.White,
                     maxLines = 1,
                 )
                 Text(
-                    status,
+                    tr(status),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (active) tint else Color.White.copy(alpha = 0.55f),
                     maxLines = 1,

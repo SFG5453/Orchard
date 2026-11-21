@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -60,7 +62,7 @@ internal fun VideoQualityButton(state: MusicVideoState, onSelect: (Int) -> Unit,
                 .clip(shape)
                 .background(Color.Black.copy(alpha = 0.5f))
                 .border(1.dp, Color.White.copy(alpha = 0.16f), shape)
-                .clickable(onClickLabel = "Video quality") { open = true }
+                .clickable(onClickLabel = tr("Video quality")) { open = true }
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -85,7 +87,7 @@ internal fun VideoQualityButton(state: MusicVideoState, onSelect: (Int) -> Unit,
 @Composable
 private fun QualityItem(label: String, chosen: Boolean, onClick: () -> Unit) {
     DropdownMenuItem(
-        text = { Text(label, color = CanopyColors.Text, fontWeight = if (chosen) FontWeight.SemiBold else FontWeight.Normal) },
+        text = { Text(tr(label), color = CanopyColors.Text, fontWeight = if (chosen) FontWeight.SemiBold else FontWeight.Normal) },
         trailingIcon = { if (chosen) Icon(Icons.Rounded.Check, "Selected", tint = CanopyColors.Accent) },
         onClick = onClick,
     )

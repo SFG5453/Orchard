@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -219,7 +221,7 @@ fun TrackRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text(
-                            track.title,
+                            tr(track.title),
                             color = if (highlighted) LocalAccent.current else Color.White,
                             style = titleStyle,
                             maxLines = 1,
@@ -241,7 +243,7 @@ fun TrackRow(
                     if (subtitle.isNotBlank()) {
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            subtitle,
+                            tr(subtitle),
                             color = Color.White.copy(alpha = 0.60f),
                             style = subtitleStyle,
                             maxLines = 1,
@@ -267,7 +269,7 @@ fun TrackRow(
                         )
                         2 -> Icon(
                             Icons.Rounded.DownloadDone,
-                            contentDescription = "Downloaded offline",
+                            contentDescription = tr("Downloaded offline"),
                             tint = LocalAccent.current.copy(alpha = 0.85f),
                             modifier = Modifier.size(16.dp),
                         )
@@ -276,7 +278,7 @@ fun TrackRow(
                 }
                 if (trailingText.isNotBlank()) {
                     Text(
-                        trailingText,
+                        tr(trailingText),
                         color = Color.White.copy(alpha = 0.45f),
                         style = subtitleStyle,
                         modifier = Modifier.padding(horizontal = 6.dp)

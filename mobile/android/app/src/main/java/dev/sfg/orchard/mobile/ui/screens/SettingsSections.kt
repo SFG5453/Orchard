@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -42,43 +44,43 @@ import dev.sfg.orchard.mobile.model.OrchardSettings
 
 @Composable
 internal fun MixingPage(settings: OrchardSettings, onSettings: (OrchardSettings) -> Unit) {
-    SectionLabel("Transitions")
+    SectionLabel(tr("Transitions"))
     SettingsPanel(index = 1) { CrossfadeRow(settings, onSettings) }
 
-    SectionLabel("Non-music", 2)
+    SectionLabel(tr("Non-music"), 2)
     SettingsPanel(index = 3) {
         NonMusicSkipRow(settings.nonMusicSkip) { onSettings(settings.copy(nonMusicSkip = it)) }
     }
 
-    SectionLabel("AI-generated music", 4)
+    SectionLabel(tr("AI-generated music"), 4)
     SettingsPanel(index = 5) { SlopSettingsRow(settings, onSettings) }
 }
 
 @Composable
 internal fun ArtworkPage(settings: OrchardSettings, onSettings: (OrchardSettings) -> Unit) {
-    SectionLabel("Motion")
+    SectionLabel(tr("Motion"))
     SettingsPanel(index = 1) {
         ToggleRow(
-            title = "Animated artwork",
-            subtitle = "Move artwork while music plays",
+            title = tr("Animated artwork"),
+            subtitle = tr("Move artwork while music plays"),
             icon = Icons.Rounded.Image,
             checked = settings.animatedArtwork,
             onChecked = { onSettings(settings.copy(animatedArtwork = it)) },
         )
         PanelDivider()
         ToggleRow(
-            title = "Download animated artwork",
-            subtitle = "Save motion covers for offline playback, within the artwork cache limit",
+            title = tr("Download animated artwork"),
+            subtitle = tr("Save motion covers for offline playback, within the artwork cache limit"),
             icon = Icons.Rounded.Download,
             checked = settings.downloadAnimatedArtwork,
             onChecked = { onSettings(settings.copy(downloadAnimatedArtwork = it)) },
         )
     }
 
-    SectionLabel("Quality", 2)
+    SectionLabel(tr("Quality"), 2)
     SettingsPanel(index = 3) { ArtworkQualityRows(settings, onSettings) }
 
-    SectionLabel("Sources", 4)
+    SectionLabel(tr("Sources"), 4)
     SettingsPanel(index = 5) { ArtworkSourceOrder(settings, onSettings) }
 }
 
@@ -107,7 +109,7 @@ internal fun AboutPage(
         if (BuildConfig.CODENAME.isNotBlank()) RowSubtitle("\"${BuildConfig.CODENAME}\"")
     }
 
-    SectionLabel("Updates", 1)
+    SectionLabel(tr("Updates"), 1)
     SettingsPanel(index = 2) {
         val available = (updateState as? UpdateState.Available)?.metadata
         if (available != null) {
@@ -119,14 +121,14 @@ internal fun AboutPage(
             )
             PanelDivider()
             ActionRow(
-                title = "Release notes",
+                title = tr("Release notes"),
                 subtitle = "View changes in Orchard ${available.version}",
                 icon = Icons.Rounded.Description,
                 onClick = onShowNotes,
             )
         } else {
             ActionRow(
-                title = "Release notes",
+                title = tr("Release notes"),
                 subtitle = updateSubtitle(settings),
                 icon = Icons.Rounded.Description,
                 onClick = onShowNotes,
@@ -134,8 +136,8 @@ internal fun AboutPage(
             if (BuildConfig.UPDATER_ENABLED) {
                 PanelDivider()
                 ActionRow(
-                    title = "Check for updates",
-                    subtitle = "Check for newer Orchard releases",
+                    title = tr("Check for updates"),
+                    subtitle = tr("Check for newer Orchard releases"),
                     icon = Icons.Rounded.SystemUpdate,
                     onClick = onCheckForUpdates,
                 )
@@ -144,8 +146,8 @@ internal fun AboutPage(
         if (BuildConfig.UPDATER_ENABLED) {
             PanelDivider()
             ToggleRow(
-                title = "Beta channel",
-                subtitle = "Get beta builds from GitHub releases. Beta builds may be less stable.",
+                title = tr("Beta channel"),
+                subtitle = tr("Get beta builds from GitHub releases. Beta builds may be less stable."),
                 icon = Icons.Rounded.Science,
                 checked = settings.betaChannelEnabled,
                 onChecked = { onSettings(settings.copy(betaChannelEnabled = it)) },

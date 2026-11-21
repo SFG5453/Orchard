@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -110,7 +112,7 @@ internal fun FrostedDevicesScreenContent(
                 Spacer(Modifier.height(14.dp))
             }
 
-            FrostedSectionHeader(title = "Orchard Connect")
+            FrostedSectionHeader(title = tr("Orchard Connect"))
             Spacer(Modifier.height(8.dp))
             when {
                 !connect.available -> FrostedMessageBanner(
@@ -140,7 +142,7 @@ internal fun FrostedDevicesScreenContent(
             Spacer(Modifier.height(14.dp))
 
             // Google Cast / Chromecast
-            FrostedSectionHeader(title = "Chromecast")
+            FrostedSectionHeader(title = tr("Chromecast"))
             Spacer(Modifier.height(8.dp))
             Box(Modifier.riseIn(4)) { ChromecastConnectRow() }
             Spacer(Modifier.height(14.dp))
@@ -176,7 +178,7 @@ internal fun FrostedDevicesScreenContent(
 @Composable
 private fun FrostedHeader() {
     Text(
-        "Connect",
+        tr("Connect"),
         style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
         color = CanopyColors.Text,
         modifier = Modifier.padding(bottom = 12.dp),
@@ -221,7 +223,7 @@ private fun FrostedActiveDeviceHeroCard(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Current output",
+                        text = tr("Current output"),
                         style =
                             MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
@@ -231,7 +233,7 @@ private fun FrostedActiveDeviceHeroCard(
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = device.displayName,
+                            text = tr(device.displayName),
                             style =
                                 MaterialTheme.typography.titleLarge.copy(
                                     fontWeight = FontWeight.Bold
@@ -287,7 +289,7 @@ private fun FrostedActiveDeviceHeroCard(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "Connecting…",
+                        text = tr("Connecting…"),
                         style =
                             MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                         color = CanopyColors.Text,

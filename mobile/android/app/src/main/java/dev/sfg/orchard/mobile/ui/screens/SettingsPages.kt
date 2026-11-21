@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -62,7 +64,7 @@ internal fun PlaybackPage(
     onAutoplayEnabled: ((Boolean) -> Unit)?,
 ) {
     val atmosAvailable = appleAtmosQualityAvailable(settings)
-    SectionLabel("Quality")
+    SectionLabel(tr("Quality"))
     SettingsPanel(index = 1) {
         QualityRow(settings.audioQuality, { onSettings(settings.copy(audioQuality = it)) }, atmosAvailable = atmosAvailable)
         PanelDivider()
@@ -70,45 +72,45 @@ internal fun PlaybackPage(
             settings.cellularAudioQuality,
             { onSettings(settings.copy(cellularAudioQuality = it)) },
             atmosAvailable = atmosAvailable,
-            title = "Mobile data quality",
+            title = tr("Mobile data quality"),
             icon = Icons.Rounded.SignalCellularAlt,
         )
         PanelDivider()
         ToggleRow(
-            title = "Show audio bitrate",
-            subtitle = "Display streaming bitrate under the scrubber",
+            title = tr("Show audio bitrate"),
+            subtitle = tr("Display streaming bitrate under the scrubber"),
             icon = Icons.Rounded.Speed,
             checked = settings.showBitrate,
             onChecked = { onSettings(settings.copy(showBitrate = it)) },
         )
     }
 
-    SectionLabel("Sound", 2)
+    SectionLabel(tr("Sound"), 2)
     SettingsPanel(index = 3) {
         EqualizerRow(settings, onSettings)
         PanelDivider()
         ToggleRow(
-            title = "Exponential volume",
-            subtitle = "Finer control at low volumes with the media-volume buttons",
+            title = tr("Exponential volume"),
+            subtitle = tr("Finer control at low volumes with the media-volume buttons"),
             icon = Icons.AutoMirrored.Rounded.VolumeUp,
             checked = settings.exponentialVolumeEnabled,
             onChecked = { onSettings(settings.copy(exponentialVolumeEnabled = it)) },
         )
         PanelDivider()
         ToggleRow(
-            title = "Volume normalization",
-            subtitle = "Even out volume differences between songs",
+            title = tr("Volume normalization"),
+            subtitle = tr("Even out volume differences between songs"),
             icon = Icons.AutoMirrored.Rounded.VolumeUp,
             checked = settings.volumeNormalizationEnabled,
             onChecked = { onSettings(settings.copy(volumeNormalizationEnabled = it)) },
         )
     }
 
-    SectionLabel("Queue", 4)
+    SectionLabel(tr("Queue"), 4)
     SettingsPanel(index = 5) {
         ToggleRow(
-            title = "Autoplay",
-            subtitle = "Keep playing related music when the queue runs out",
+            title = tr("Autoplay"),
+            subtitle = tr("Keep playing related music when the queue runs out"),
             icon = Icons.Rounded.Loop,
             checked = settings.autoplayEnabled,
             onChecked = { enabled ->
@@ -117,24 +119,27 @@ internal fun PlaybackPage(
         )
     }
 
-    SectionLabel("Devices", 6)
+    SectionLabel(tr("Devices"), 6)
     SettingsPanel(index = 7) { ChromecastSettingsRow() }
 
-    SectionLabel("YouTube Music", 8)
+    SectionLabel(tr("Language"), 8)
+    SettingsPanel(index = 9) { InterfaceLanguageRow(settings.uiLanguage) { onSettings(settings.copy(uiLanguage = it)) } }
+
+    SectionLabel(tr("YouTube Music"), 8)
     SettingsPanel(index = 9) { YouTubeLanguageRow(settings.youtubeLanguage) { onSettings(settings.copy(youtubeLanguage = it)) } }
 
-    SectionLabel("Listening history", 8)
+    SectionLabel(tr("Listening history"), 8)
     SettingsPanel(index = 9) {
         ToggleRow(
-            title = "Save plays to YouTube Music history",
-            subtitle = "Add songs you play in Orchard to your YouTube Music history",
+            title = tr("Save plays to YouTube Music history"),
+            subtitle = tr("Add songs you play in Orchard to your YouTube Music history"),
             icon = Icons.Rounded.History,
             checked = settings.sendYouTubeHistory,
             onChecked = { onSettings(settings.copy(sendYouTubeHistory = it)) },
         )
         ToggleRow(
-            title = "Save plays to Apple Music history",
-            subtitle = "Songs you play in Orchard appear in Recently Played on your other Apple Music devices",
+            title = tr("Save plays to Apple Music history"),
+            subtitle = tr("Songs you play in Orchard appear in Recently Played on your other Apple Music devices"),
             icon = Icons.Rounded.History,
             checked = settings.sendAppleMusicHistory,
             onChecked = { onSettings(settings.copy(sendAppleMusicHistory = it)) },
@@ -148,46 +153,46 @@ internal fun AppearancePage(
     onSettings: (OrchardSettings) -> Unit,
     onHomeLayout: () -> Unit,
 ) {
-    SectionLabel("Colours")
+    SectionLabel(tr("Colours"))
     SettingsPanel(index = 1) { ColourSourceRow(settings, onSettings) }
 
-    SectionLabel("Home", 2)
+    SectionLabel(tr("Home"), 2)
     SettingsPanel(index = 3) {
         ActionRow(
-            title = "Home screen layout",
-            subtitle = "Reorder and hide sections on Home",
+            title = tr("Home screen layout"),
+            subtitle = tr("Reorder and hide sections on Home"),
             icon = Icons.Rounded.GridView,
             onClick = onHomeLayout,
         )
     }
 
-    SectionLabel("Navigation", 4)
+    SectionLabel(tr("Navigation"), 4)
     SettingsPanel(index = 5) {
         ToggleRow(
-            title = "Settings tab",
-            subtitle = "Show Settings in the bottom bar",
+            title = tr("Settings tab"),
+            subtitle = tr("Show Settings in the bottom bar"),
             icon = Icons.Rounded.Settings,
             checked = settings.showSettingsTab,
             onChecked = { onSettings(settings.copy(showSettingsTab = it)) },
         )
     }
 
-    SectionLabel("Player", 6)
+    SectionLabel(tr("Player"), 6)
     SettingsPanel(index = 7) {
         ToggleRow(
-            title = "Player gestures",
-            subtitle = "Swipe to skip and tap to like on artwork",
+            title = tr("Player gestures"),
+            subtitle = tr("Swipe to skip and tap to like on artwork"),
             icon = Icons.Rounded.TouchApp,
             checked = settings.playerGesturesEnabled,
             onChecked = { onSettings(settings.copy(playerGesturesEnabled = it)) },
         )
     }
 
-    SectionLabel("Background", 8)
+    SectionLabel(tr("Background"), 8)
     SettingsPanel(index = 9) {
         ToggleRow(
-            title = "Animated background",
-            subtitle = "Let the cover's colours drift behind the app",
+            title = tr("Animated background"),
+            subtitle = tr("Let the cover's colours drift behind the app"),
             icon = Icons.Rounded.AutoAwesome,
             checked = settings.animatedBackground,
             onChecked = { onSettings(settings.copy(animatedBackground = it)) },
@@ -216,7 +221,7 @@ private fun ColourSourceRow(settings: OrchardSettings, onSettings: (OrchardSetti
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             RowIcon(Icons.Rounded.Palette)
             Column {
-                RowTitle("Colour source")
+                RowTitle(tr("Colour source"))
                 RowSubtitle(if (system) "Match your wallpaper" else "The Orchard green palette")
             }
         }
@@ -227,7 +232,7 @@ private fun ColourSourceRow(settings: OrchardSettings, onSettings: (OrchardSetti
                 onSelect = { onSettings(settings.copy(useSystemColors = it)) },
             )
             if (swatches.isEmpty()) {
-                Text("System colours need Android 12 or newer", color = SettingsStyle.Description, fontSize = 13.sp)
+                Text(tr("System colours need Android 12 or newer"), color = SettingsStyle.Description, fontSize = 13.sp)
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     swatches.forEach {
@@ -259,7 +264,7 @@ internal fun StoragePage(
     downloadedBytes: Long,
     onDeleteAllDownloads: () -> Unit,
 ) {
-    SectionLabel("Cache")
+    SectionLabel(tr("Cache"))
     SettingsPanel(index = 1) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp)) {
             Text(
@@ -267,7 +272,7 @@ internal fun StoragePage(
                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
                 color = SettingsStyle.Title,
             )
-            RowSubtitle("Temporary audio, artwork and network cache")
+            RowSubtitle(tr("Temporary audio, artwork and network cache"))
         }
         PanelDivider()
         CacheSizeRow(settings, onSettings)
@@ -277,7 +282,7 @@ internal fun StoragePage(
         ClearCacheRow(cacheSizeBytes = cacheSizeBytes, isClearing = isClearingCache, onClear = onClearCache)
     }
 
-    SectionLabel("Downloads", 2)
+    SectionLabel(tr("Downloads"), 2)
     SettingsPanel(index = 3) {
         SdCardDownloadsRow(settings, onSettings)
         PanelDivider()

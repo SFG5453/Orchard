@@ -70,6 +70,8 @@ data class OrchardSettings(
     val artworkSourceOrder: List<ArtworkSource> = ArtworkSource.entries,
     val sendYouTubeHistory: Boolean = true,
     val youtubeLanguage: String = "system",
+    /** Interface language: "system", "en" or "es". */
+    val uiLanguage: String = "system",
     val sendAppleMusicHistory: Boolean = true,
     /** Save motion covers alongside newly downloaded songs for offline playback. */
     val downloadAnimatedArtwork: Boolean = false,

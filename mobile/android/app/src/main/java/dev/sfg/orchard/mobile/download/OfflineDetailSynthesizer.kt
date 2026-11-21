@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.download
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import dev.sfg.orchard.mobile.model.BrowseDetail
 import dev.sfg.orchard.mobile.model.CatalogItem
 import dev.sfg.orchard.mobile.model.CatalogKind
@@ -83,7 +85,7 @@ object OfflineDetailSynthesizer {
             val likedTracks = library.likedTracks.mapNotNull { completedById[it.id] }
             return BrowseDetail(
                 id = id,
-                title = "Liked Songs",
+                title = tr("Liked Songs"),
                 subtitle =
                     "${likedTracks.size} downloaded ${if (likedTracks.size == 1) "song" else "songs"}",
                 artworkUrl = likedTracks.firstOrNull { it.artworkUrl.isNotBlank() }?.artworkUrl.orEmpty(),
@@ -95,7 +97,7 @@ object OfflineDetailSynthesizer {
         if (id == "offline_downloads" || id == "downloads" || id == "local_downloads") {
             return BrowseDetail(
                 id = id,
-                title = "Downloaded Music",
+                title = tr("Downloaded Music"),
                 subtitle =
                     "${completedTracks.size} downloaded ${if (completedTracks.size == 1) "song" else "songs"}",
                 artworkUrl =

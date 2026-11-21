@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -147,7 +149,7 @@ fun WelcomeScreen(
                     horizontalArrangement = Arrangement.Center,
                 ) {
                     Text(
-                        "Get Started",
+                        tr("Get Started"),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     )
                     Spacer(Modifier.width(8.dp))

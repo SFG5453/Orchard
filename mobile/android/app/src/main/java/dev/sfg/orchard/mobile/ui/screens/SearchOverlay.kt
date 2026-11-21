@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -214,7 +216,7 @@ private fun SearchBar(query: String, actions: SearchActions, focus: FocusRequest
                     Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .clickable(onClickLabel = "Clear search") { actions.onQueryChange("") },
+                        .clickable(onClickLabel = tr("Clear search")) { actions.onQueryChange("") },
                     contentAlignment = Alignment.Center,
                 ) {
                     Box(Modifier.size(22.dp).background(BoxClear, CircleShape), contentAlignment = Alignment.Center) {
@@ -228,7 +230,7 @@ private fun SearchBar(query: String, actions: SearchActions, focus: FocusRequest
             Modifier.height(48.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = actions.onClose).padding(horizontal = 12.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text("Cancel", style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.Medium), color = BoxText)
+            Text(tr("Cancel"), style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.Medium), color = BoxText)
         }
     }
 }
@@ -260,7 +262,7 @@ private fun SearchPanel(
                     item { PanelMessage(Icons.Rounded.CloudOff, "Search is unavailable", state.message) }
                     item {
                         Text(
-                            "Try again",
+                            tr("Try again"),
                             style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
                             color = SettingsStyle.Sage,
                             modifier = Modifier.fillMaxWidth().clickable { actions.onSubmit(query) }.padding(horizontal = 16.dp, vertical = 14.dp),

@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -88,7 +90,7 @@ internal fun GlassRecentlyPlayedCard(
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            text = item.title,
+            text = tr(item.title),
             style = MaterialTheme.typography.titleMedium.copy(
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp,
@@ -128,7 +130,7 @@ internal fun CircularArtistCard(item: CatalogItem, onClick: () -> Unit) {
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            text = item.title,
+            text = tr(item.title),
             style = MaterialTheme.typography.labelMedium.copy(
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 13.sp,

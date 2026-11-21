@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -102,7 +104,7 @@ internal fun ReleaseNoteSectionCard(section: ReleaseNoteSection) {
                     }
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        section.title,
+                        tr(section.title),
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = CanopyColors.Text,
                     )
@@ -205,7 +207,7 @@ fun ReleaseNotesDialog(
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text(
-                                "What's new",
+                                tr("What's new"),
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                 color = CanopyColors.Text,
                             )
@@ -222,7 +224,7 @@ fun ReleaseNotesDialog(
                     ) {
                         Icon(
                             Icons.Rounded.Close,
-                            contentDescription = "Close release notes",
+                            contentDescription = tr("Close release notes"),
                             tint = CanopyColors.Muted,
                             modifier = Modifier.size(20.dp),
                         )
@@ -247,7 +249,7 @@ fun ReleaseNotesDialog(
                     ) {
                         Column {
                             Text(
-                                "CURRENT VERSION",
+                                tr("CURRENT VERSION"),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
@@ -269,7 +271,7 @@ fun ReleaseNotesDialog(
                                 shape = RoundedCornerShape(6.dp),
                             ) {
                                 Text(
-                                    codename,
+                                    tr(codename),
                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
                                     color = LocalAccent.current,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
@@ -290,7 +292,7 @@ fun ReleaseNotesDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "Release notes",
+                        tr("Release notes"),
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp,
@@ -334,7 +336,7 @@ fun ReleaseNotesDialog(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
-                                "Includes general performance improvements and bug fixes.",
+                                tr("Includes general performance improvements and bug fixes."),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = CanopyColors.Muted,
                                 modifier = Modifier.padding(14.dp),
@@ -357,7 +359,7 @@ fun ReleaseNotesDialog(
                         .height(46.dp),
                 ) {
                     Text(
-                        "Done",
+                        tr("Done"),
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                     )
                 }

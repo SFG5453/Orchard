@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -230,7 +232,7 @@ internal fun CollectionDetailContent(
                             color = Color.White.copy(alpha = 0.12f),
                         ) {
                             Text(
-                                text = "Clear",
+                                text = tr("Clear"),
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                 color = Color.White,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -242,9 +244,9 @@ internal fun CollectionDetailContent(
                 if (filteredTracks.isEmpty()) {
                     item {
                         MessagePanel(
-                            title = "No matching tracks",
+                            title = tr("No matching tracks"),
                             message = "No songs matching \"$searchQuery\" found in ${detail.title}.",
-                            actionLabel = "Clear search",
+                            actionLabel = tr("Clear search"),
                             onAction = { searchQuery = "" },
                         )
                     }
@@ -338,7 +340,7 @@ internal fun CollectionDetailContent(
                                 Spacer(Modifier.height(2.dp))
                             }
                             Text(
-                                text = countSummary,
+                                text = tr(countSummary),
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                                 color = Color.White.copy(alpha = 0.50f),
                             )
@@ -383,7 +385,7 @@ internal fun CollectionDetailContent(
                     }
                 }
             } else if ((!isSearching || searchQuery.isBlank()) && detail.related.isNotEmpty()) {
-                item { HomeSectionTitle(title = "More like this") }
+                item { HomeSectionTitle(title = tr("More like this")) }
                 item {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 20.dp),

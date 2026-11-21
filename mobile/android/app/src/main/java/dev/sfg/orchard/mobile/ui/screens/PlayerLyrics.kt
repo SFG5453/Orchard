@@ -5,6 +5,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -85,7 +87,7 @@ private fun LyricsSourcePicker(trackId: String, accent: Color) {
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text("Automatic (saved provider order)") },
+                text = { Text(tr("Automatic (saved provider order)")) },
                 onClick = { graph.lyrics.selectProvider(trackId, null); expanded = false },
                 trailingIcon = { if (selected == null) Icon(Icons.Rounded.Check, "Selected") },
             )
@@ -97,7 +99,7 @@ private fun LyricsSourcePicker(trackId: String, accent: Color) {
                 )
             }
             if (enabled.isEmpty()) DropdownMenuItem(
-                text = { Text("No providers enabled") }, onClick = {}, enabled = false,
+                text = { Text(tr("No providers enabled")) }, onClick = {}, enabled = false,
             )
         }
     }

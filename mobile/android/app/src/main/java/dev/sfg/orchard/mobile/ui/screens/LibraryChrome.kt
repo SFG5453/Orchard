@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -84,12 +86,12 @@ internal fun LibraryHeader(
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                "Library",
+                tr("Library"),
                 style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.riseIn(distance = 18f),
             )
-            Text(summary, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(tr(summary), style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (showSearch) HeaderButton(
@@ -141,7 +143,7 @@ private fun LibraryChip(label: String, on: Boolean, onClick: () -> Unit) {
     FilterChip(
         selected = on,
         onClick = onClick,
-        label = { Text(label) },
+        label = { Text(tr(label)) },
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = MaterialTheme.colorScheme.primary,
             selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
@@ -158,11 +160,11 @@ internal fun LibraryFilterField(query: String, placeholder: String, autoFocus: B
         onValueChange = onChange,
         modifier = Modifier.padding(horizontal = LibraryGutter).padding(top = 12.dp)
             .fillMaxWidth().focusRequester(focus).semantics { contentDescription = placeholder },
-        placeholder = { Text(placeholder, maxLines = 1) },
+        placeholder = { Text(tr(placeholder), maxLines = 1) },
         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
         trailingIcon = {
             if (query.isNotEmpty()) {
-                IconButton(onClick = { onChange("") }) { Icon(Icons.Rounded.Close, contentDescription = "Clear") }
+                IconButton(onClick = { onChange("") }) { Icon(Icons.Rounded.Close, contentDescription = tr("Clear")) }
             }
         },
         singleLine = true,
@@ -174,7 +176,7 @@ internal fun LibraryFilterField(query: String, placeholder: String, autoFocus: B
 @Composable
 internal fun LibraryLabel(value: String, color: Color = MaterialTheme.colorScheme.primary) {
     Text(
-        value,
+        tr(value),
         style = MaterialTheme.typography.titleSmall,
         color = color,
         modifier = Modifier.padding(start = LibraryGutter, top = 20.dp, bottom = 6.dp).riseIn(distance = 12f),
@@ -199,10 +201,10 @@ internal fun LibraryEmpty(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         RowIcon(icon)
-        Text(title, style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
-        Text(message, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp), color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        Text(tr(title), style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+        Text(tr(message), style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp), color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         if (actionLabel != null) {
-            TextButton(onClick = onAction) { Text(actionLabel) }
+            TextButton(onClick = onAction) { Text(tr(actionLabel)) }
         }
     }
 }

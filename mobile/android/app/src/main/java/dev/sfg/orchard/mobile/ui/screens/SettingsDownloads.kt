@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -50,7 +52,7 @@ internal fun SdCardDownloadsRow(settings: OrchardSettings, onSettings: (OrchardS
     val context = LocalContext.current
     val available = remember { DownloadStore.sdCardDownloadDir(context) != null }
     ToggleRow(
-        title = "Download to SD card",
+        title = tr("Download to SD card"),
         subtitle = if (available) {
             "Save new downloads to removable storage. Existing downloads stay where they are"
         } else {
@@ -70,7 +72,7 @@ internal fun DeleteDownloadsRow(downloadedBytes: Long, onDelete: () -> Unit) {
     val formattedSize = remember(downloadedBytes) { CacheManager.formatStorageSize(downloadedBytes) }
 
     SettingsRow(
-        title = "Delete all downloads",
+        title = tr("Delete all downloads"),
         subtitle = "Removes offline songs and motion covers ($formattedSize used)",
         icon = Icons.Rounded.DeleteForever,
         titleColor = CanopyColors.Danger,
@@ -82,7 +84,7 @@ internal fun DeleteDownloadsRow(downloadedBytes: Long, onDelete: () -> Unit) {
         AlertDialog(
             onDismissRequest = { showConfirmDialog = false },
             title = {
-                Text("Delete all downloads?", color = CanopyColors.Text, fontWeight = FontWeight.Bold)
+                Text(tr("Delete all downloads?"), color = CanopyColors.Text, fontWeight = FontWeight.Bold)
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -92,7 +94,7 @@ internal fun DeleteDownloadsRow(downloadedBytes: Long, onDelete: () -> Unit) {
                         color = CanopyColors.Text,
                     )
                     Text(
-                        "Songs remain in your library and can be downloaded again.",
+                        tr("Songs remain in your library and can be downloaded again."),
                         style = MaterialTheme.typography.bodySmall,
                         color = CanopyColors.Muted,
                     )
@@ -105,12 +107,12 @@ internal fun DeleteDownloadsRow(downloadedBytes: Long, onDelete: () -> Unit) {
                         onDelete()
                     },
                 ) {
-                    Text("Delete", color = CanopyColors.Danger, fontWeight = FontWeight.Bold)
+                    Text(tr("Delete"), color = CanopyColors.Danger, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showConfirmDialog = false }) {
-                    Text("Cancel", color = CanopyColors.Muted)
+                    Text(tr("Cancel"), color = CanopyColors.Muted)
                 }
             },
             containerColor = CanopyColors.Surface,

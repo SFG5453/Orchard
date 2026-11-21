@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -111,10 +113,10 @@ internal fun SettingsHub(
 
     Column(Modifier.padding(top = 16.dp)) { AccountCard(auth, onSignIn, onSwitchAccount, onSignOut) }
 
-    SectionLabel("Music service", 2)
+    SectionLabel(tr("Music service"), 2)
     SettingsPanel(index = 3) {
         Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            RowSubtitle("Powers Home, search, albums, artists and playlists.")
+            RowSubtitle(tr("Powers Home, search, albums, artists and playlists."))
             SettingsSegmented(
                 options = listOf(YOUTUBE_SOURCE to "YouTube Music", APPLE_MUSIC_SOURCE to "Apple Music"),
                 selected = settings.homeSource,
@@ -124,14 +126,14 @@ internal fun SettingsHub(
     }
 
     val quality = visibleAudioQuality(settings.audioQuality, appleAtmosQualityAvailable(settings), LocalQobuzLinked.current).label
-    SectionLabel("Listening", 4)
+    SectionLabel(tr("Listening"), 4)
     SettingsPanel(index = 5) {
         PageRow(SettingsPage.Playback, "$quality quality · Equalizer ${if (settings.equalizerConfig.enabled) "on" else "off"}", onOpen)
         PanelDivider()
         PageRow(SettingsPage.Mixing, if (settings.crossfadeEnabled) "Crossfade on" else "Crossfade off", onOpen)
     }
 
-    SectionLabel("Look & feel", 6)
+    SectionLabel(tr("Look & feel"), 6)
     SettingsPanel(index = 7) {
         PageRow(SettingsPage.Appearance, if (settings.useSystemColors) "System colours" else "Orchard green", onOpen)
         PanelDivider()
@@ -140,7 +142,7 @@ internal fun SettingsHub(
         PageRow(SettingsPage.Lyrics, SettingsPage.Lyrics.blurb, onOpen)
     }
 
-    SectionLabel("App", 8)
+    SectionLabel(tr("App"), 8)
     SettingsPanel(index = 9) {
         PageRow(
             SettingsPage.Connections,
@@ -160,7 +162,7 @@ internal fun SettingsHub(
             if (support != null) {
                 val unread = support.service.state.collectAsStateWithLifecycle().value.unread
                 ActionRow(
-                    title = "Report a bug",
+                    title = tr("Report a bug"),
                     subtitle = if (unread > 0) "Your reports have news" else "Send a bug, idea or feedback with a screenshot",
                     icon = Icons.Rounded.BugReport,
                     value = unread.takeIf { it > 0 }?.toString(),
@@ -169,8 +171,8 @@ internal fun SettingsHub(
                 PanelDivider()
             }
             ActionRow(
-                title = "Welcome & setup walkthrough",
-                subtitle = "Revisit the initial setup guide",
+                title = tr("Welcome & setup walkthrough"),
+                subtitle = tr("Revisit the initial setup guide"),
                 icon = Icons.Rounded.Explore,
                 onClick = onWelcome,
             )
@@ -216,7 +218,7 @@ private fun SettingsSearchField(query: String, onQuery: (String) -> Unit) {
         cursorBrush = SolidColor(SettingsStyle.SageSoft),
         modifier = Modifier
             .fillMaxWidth()
-            .semantics { contentDescription = "Search settings" },
+            .semantics { contentDescription = tr("Search settings") },
         decorationBox = { field ->
             Row(
                 Modifier
@@ -231,7 +233,7 @@ private fun SettingsSearchField(query: String, onQuery: (String) -> Unit) {
                 Icon(Icons.Rounded.Search, contentDescription = null, tint = SettingsStyle.Description, modifier = Modifier.size(20.dp))
                 Box(Modifier.weight(1f)) {
                     if (query.isEmpty()) {
-                        Text("Search settings", color = SettingsStyle.Description, fontSize = 15.sp)
+                        Text(tr("Search settings"), color = SettingsStyle.Description, fontSize = 15.sp)
                     }
                     field()
                 }
@@ -240,7 +242,7 @@ private fun SettingsSearchField(query: String, onQuery: (String) -> Unit) {
                         Modifier.size(48.dp).clickable(role = Role.Button) { onQuery("") },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.Rounded.Close, contentDescription = "Clear search", tint = SettingsStyle.Description, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Rounded.Close, contentDescription = tr("Clear search"), tint = SettingsStyle.Description, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -290,15 +292,15 @@ private fun AccountCard(
                 }
             }
             when (auth) {
-                AuthState.SignedOut -> SettingsPill("Sign in", onSignIn, Modifier.fillMaxWidth())
-                is AuthState.Error -> SettingsPill("Try again", onSignIn, Modifier.fillMaxWidth())
+                AuthState.SignedOut -> SettingsPill(tr("Sign in"), onSignIn, Modifier.fillMaxWidth())
+                is AuthState.Error -> SettingsPill(tr("Try again"), onSignIn, Modifier.fillMaxWidth())
                 is AuthState.SignedIn -> {
                     val uriHandler = LocalUriHandler.current
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        SettingsPill("Switch account", onSwitchAccount, Modifier.weight(1f))
-                        SettingsPill("Sign out", onSignOut, Modifier.weight(1f), destructive = true)
+                        SettingsPill(tr("Switch account"), onSwitchAccount, Modifier.weight(1f))
+                        SettingsPill(tr("Sign out"), onSignOut, Modifier.weight(1f), destructive = true)
                     }
-                    SettingsPill("YouTube Music Recap", { uriHandler.openUri("https://music.youtube.com/recap") }, Modifier.fillMaxWidth())
+                    SettingsPill(tr("YouTube Music Recap"), { uriHandler.openUri("https://music.youtube.com/recap") }, Modifier.fillMaxWidth())
                 }
                 else -> Unit
             }
@@ -309,12 +311,12 @@ private fun AccountCard(
 @Composable
 private fun AccountText(title: String, subtitle: String, titleColor: Color = SettingsStyle.Title) {
     Text(
-        title,
+        tr(title),
         style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, fontWeight = FontWeight.SemiBold),
         color = titleColor,
     )
     Text(
-        subtitle,
+        tr(subtitle),
         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
         color = SettingsStyle.Description,
     )

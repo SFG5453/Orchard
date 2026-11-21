@@ -119,7 +119,7 @@ void LyricsTranslator::runAccountRemote() {
     QJsonArray input;
     for (const QString &text : texts) input.append(text);
     const QJsonObject payload{{QStringLiteral("song_id"), songId}, {QStringLiteral("lines"), input},
-                              {QStringLiteral("target_language"), self->m_targetLanguage}};
+                              {QStringLiteral("target_language"), self->m_activeTarget}};
     auto *reply = self->m_network->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
     self->m_reply = reply;
     // Qt's transfer timeout is an inactivity timeout; this bounds total wait too.

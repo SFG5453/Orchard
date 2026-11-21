@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -117,7 +119,7 @@ private fun CollectionRow(item: CatalogItem, onClick: () -> Unit, modifier: Modi
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                item.title,
+                tr(item.title),
                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
                 color = SettingsStyle.Title,
                 maxLines = 1,
@@ -126,7 +128,7 @@ private fun CollectionRow(item: CatalogItem, onClick: () -> Unit, modifier: Modi
             val subtitle = catalogSubtitle(item)
             if (subtitle.isNotBlank()) {
                 Text(
-                    subtitle,
+                    tr(subtitle),
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                     color = SettingsStyle.Description,
                     maxLines = 1,
@@ -183,7 +185,7 @@ internal fun LazyListScope.downloadsList(
     if (active.isEmpty() && completed.isEmpty() && failed.isEmpty()) {
         emptyShelf(
             "downloads",
-            ShelfEmpty(Icons.Rounded.Download, "No downloaded tracks", "Tap the download icon on any track, album, or playlist to listen offline."),
+            ShelfEmpty(Icons.Rounded.Download, tr("No downloaded tracks"), "Tap the download icon on any track, album, or playlist to listen offline."),
         )
         return
     }

@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -163,7 +165,7 @@ fun OverflowButton(onClick: () -> Unit, modifier: Modifier = Modifier, glass: Bo
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 imageVector = Icons.Filled.MoreHoriz,
-                contentDescription = "More options",
+                contentDescription = tr("More options"),
                 tint = Color.White.copy(alpha = 0.85f),
                 modifier = Modifier.size(20.dp),
             )
@@ -269,7 +271,7 @@ fun TrackInfoRow(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = currentTrack.title,
+                        text = tr(currentTrack.title),
                         style =
                             MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
@@ -297,7 +299,7 @@ fun TrackInfoRow(
                 }
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = currentTrack.artist,
+                    text = tr(currentTrack.artist),
                     color = Color.White.copy(alpha = 0.65f),
                     style =
                         MaterialTheme.typography.bodyLarge.copy(

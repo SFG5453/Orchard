@@ -75,3 +75,7 @@ Spotlight search lists a **Settings** entry.
 ## Where to go next
 
 See [Search and Spotlight](search.md) for finding music and [Troubleshooting](troubleshooting.md) when something does not work.
+
+## Change the interface language
+
+Orchard is available in English and Spanish. On desktop, open **Settings → General** and choose **System**, **English**, or **Español** under **Language**. On Android, open **Settings → Playback** and find **Language**. **System** follows your device language. The change applies right away.

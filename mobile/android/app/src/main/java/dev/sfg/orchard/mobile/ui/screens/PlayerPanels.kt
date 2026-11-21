@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -189,7 +191,7 @@ fun LyricsNotice(
                 )
             }
             Text(
-                message,
+                tr(message),
                 style = MaterialTheme.typography.titleMedium,
                 color = Color.White.copy(alpha = 0.70f),
                 textAlign = TextAlign.Center,

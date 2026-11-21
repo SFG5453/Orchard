@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -99,7 +101,7 @@ internal fun FrostedDeviceRow(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = device.displayName,
+                    text = tr(device.displayName),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = CanopyColors.Text,
                 )
@@ -138,7 +140,7 @@ internal fun FrostedDeviceRow(
                     IconButton(onClick = onRename, modifier = Modifier.size(34.dp)) {
                         Icon(
                             Icons.Rounded.Edit,
-                            contentDescription = "Rename",
+                            contentDescription = tr("Rename"),
                             tint = CanopyColors.Muted,
                             modifier = Modifier.size(16.dp),
                         )
@@ -149,7 +151,7 @@ internal fun FrostedDeviceRow(
                     IconButton(onClick = onRemove, modifier = Modifier.size(34.dp)) {
                         Icon(
                             Icons.Rounded.DeleteOutline,
-                            contentDescription = "Forget device",
+                            contentDescription = tr("Forget device"),
                             tint = CanopyColors.Danger.copy(alpha = 0.7f),
                             modifier = Modifier.size(16.dp),
                         )
@@ -174,7 +176,7 @@ internal fun FrostedDeviceRow(
                             modifier = Modifier.size(14.dp),
                         )
                         Text(
-                            text = "Switch",
+                            text = tr("Switch"),
                             style =
                                 MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold

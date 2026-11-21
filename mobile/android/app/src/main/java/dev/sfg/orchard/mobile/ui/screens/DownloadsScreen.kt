@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -86,7 +88,7 @@ fun DownloadsScreen(
         item {
             Column(Modifier.padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 12.dp)) {
                 Text(
-                    "Downloads",
+                    tr("Downloads"),
                     style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold),
                     color = CanopyColors.Text,
                 )
@@ -134,8 +136,8 @@ fun DownloadsScreen(
         } else if (active.isEmpty() && failed.isEmpty()) {
             item {
                 MessagePanel(
-                    title = "No downloaded tracks",
-                    message = "Tap the '...' menu on any track to download it for offline listening.",
+                    title = tr("No downloaded tracks"),
+                    message = tr("Tap the '...' menu on any track to download it for offline listening."),
                 )
             }
         }
@@ -180,7 +182,7 @@ internal fun DownloadedTrackRow(
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        item.track.title,
+                        tr(item.track.title),
                         style = MaterialTheme.typography.titleMedium,
                         color = CanopyColors.Text,
                         maxLines = 1,
@@ -201,10 +203,10 @@ internal fun DownloadedTrackRow(
                 )
             }
             IconButton(onClick = onPlay) {
-                Icon(Icons.Rounded.PlayArrow, contentDescription = "Play offline", tint = CanopyColors.Text)
+                Icon(Icons.Rounded.PlayArrow, contentDescription = tr("Play offline"), tint = CanopyColors.Text)
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Rounded.Delete, contentDescription = "Delete download", tint = CanopyColors.Muted)
+                Icon(Icons.Rounded.Delete, contentDescription = tr("Delete download"), tint = CanopyColors.Muted)
             }
         }
     }
@@ -229,7 +231,7 @@ internal fun DownloadingRow(
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    item.track.title,
+                    tr(item.track.title),
                     style = MaterialTheme.typography.titleMedium,
                     color = CanopyColors.Text,
                     maxLines = 1,
@@ -258,7 +260,7 @@ internal fun DownloadingRow(
                 )
             } else {
                 Text(
-                    "Queued...",
+                    tr("Queued..."),
                     style = MaterialTheme.typography.bodySmall,
                     color = CanopyColors.Muted,
                 )
@@ -266,7 +268,7 @@ internal fun DownloadingRow(
         }
         Spacer(Modifier.width(8.dp))
         IconButton(onClick = onCancel) {
-            Icon(Icons.Rounded.Delete, contentDescription = "Cancel download", tint = CanopyColors.Muted)
+            Icon(Icons.Rounded.Delete, contentDescription = tr("Cancel download"), tint = CanopyColors.Muted)
         }
     }
 }

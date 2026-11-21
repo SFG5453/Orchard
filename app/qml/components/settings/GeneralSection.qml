@@ -59,6 +59,8 @@ GeneralSectionForm {
     historySwitch.onToggled: OrchardPlayback.youtubeHistoryEnabled = historySwitch.checked
 
     appleMusicConnected: OrchardAppleMusic.connected
+    interfaceLanguagePicker.currentValue: OrchardLanguage.language
+    interfaceLanguagePicker.onPicked: function(value) { OrchardLanguage.language = value; }
     homeSourcePicker.currentValue: OrchardHome.homeSource
     homeSourcePicker.onPicked: function(value) { OrchardHome.homeSource = value; }
 

@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -74,7 +76,7 @@ private fun VideoResultRow(video: Track, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .height(68.dp)
-            .clickable(onClickLabel = "Play video", onClick = onClick)
+            .clickable(onClickLabel = tr("Play video"), onClick = onClick)
             .padding(start = 12.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -108,14 +110,14 @@ private fun VideoResultRow(video: Track, onClick: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                video.title,
+                tr(video.title),
                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.Medium),
                 color = SettingsStyle.Title,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                video.artist,
+                tr(video.artist),
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
                 color = SettingsStyle.Description,
                 maxLines = 1,

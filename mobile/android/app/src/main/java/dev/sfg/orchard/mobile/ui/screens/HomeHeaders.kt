@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -94,7 +96,7 @@ internal fun GlassHomeHeader(
                 OrchardMark(Modifier.size(16.dp).graphicsLayer { rotationZ = spin.value })
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = greeting,
+                    text = tr(greeting),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = CanopyColors.MutedStrong,
                     maxLines = 1,
@@ -103,7 +105,7 @@ internal fun GlassHomeHeader(
             }
             Spacer(Modifier.height(2.dp))
             Text(
-                text = "Listen now",
+                text = tr("Listen now"),
                 fontSize = 34.sp,
                 lineHeight = 40.sp,
                 fontWeight = FontWeight.Bold,
@@ -113,7 +115,7 @@ internal fun GlassHomeHeader(
                 modifier = Modifier.riseIn(1, distance = 22f),
             )
         }
-        HeaderAction(onClick = onProfile, description = "Profile") {
+        HeaderAction(onClick = onProfile, description = tr("Profile")) {
             ProfileAvatar(avatarUrl, firstName, Modifier.size(36.dp))
         }
     }

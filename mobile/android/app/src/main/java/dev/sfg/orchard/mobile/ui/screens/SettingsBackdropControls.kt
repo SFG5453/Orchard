@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -48,8 +50,8 @@ internal fun BackdropControls(settings: OrchardSettings, onSettings: (OrchardSet
             }
             PanelDivider()
             SettingsRow(
-                title = "Reset controls",
-                subtitle = "Restore the default background look",
+                title = tr("Reset controls"),
+                subtitle = tr("Restore the default background look"),
                 modifier = Modifier.clickable {
                     onSettings(
                         settings.copy(
@@ -73,7 +75,7 @@ private fun BackdropSlider(
     onValue: (Float) -> Unit,
 ) {
     Row(Modifier.fillMaxWidth()) {
-        Text(label, color = SettingsStyle.Caption, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+        Text(tr(label), color = SettingsStyle.Caption, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
         Text("${(value * 100).roundToInt()}%", color = SettingsStyle.Caption, style = MaterialTheme.typography.labelMedium)
     }
     Slider(

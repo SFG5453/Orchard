@@ -6,6 +6,8 @@
  */
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,15 +32,15 @@ internal fun YouTubeLanguageRow(language: String, onSelect: (String) -> Unit) {
     val choices = remember { listOf("system" to "System default") + youTubeLanguages() }
     val label = choices.firstOrNull { it.first == language }?.second ?: language
     ActionRow(
-        title = "YouTube Music language",
-        subtitle = "Language for song titles and catalog information",
+        title = tr("YouTube Music language"),
+        subtitle = tr("Language for song titles and catalog information"),
         icon = Icons.Rounded.Language,
         value = label,
         onClick = { open = true },
     )
     if (open) AlertDialog(
         onDismissRequest = { open = false },
-        title = { Text("YouTube Music language") },
+        title = { Text(tr("YouTube Music language")) },
         text = {
             LazyColumn(Modifier.heightIn(max = 400.dp)) {
                 items(choices, key = { it.first }) { (value, name) ->
@@ -48,6 +50,34 @@ internal fun YouTubeLanguageRow(language: String, onSelect: (String) -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { open = false }) { Text("Close") } },
+        confirmButton = { TextButton(onClick = { open = false }) { Text(tr("Close")) } },
+    )
+}
+
+@Composable
+internal fun InterfaceLanguageRow(language: String, onSelect: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val choices = listOf("system" to tr("System default"), "en" to "English", "es" to "Español")
+    val label = choices.firstOrNull { it.first == language }?.second ?: language
+    ActionRow(
+        title = tr("Language"),
+        subtitle = tr("Choose the language Orchard uses for menus, buttons and messages."),
+        icon = Icons.Rounded.Language,
+        value = label,
+        onClick = { open = true },
+    )
+    if (open) AlertDialog(
+        onDismissRequest = { open = false },
+        title = { Text(tr("Language")) },
+        text = {
+            LazyColumn(Modifier.heightIn(max = 400.dp)) {
+                items(choices, key = { it.first }) { (value, name) ->
+                    TextButton(onClick = { onSelect(value); open = false }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (value == language) "✓ $name" else name)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { open = false }) { Text(tr("Close")) } },
     )
 }

@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import dev.kawarp.KawarpEngine
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -166,7 +168,7 @@ internal fun SleepTimerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Sleep timer") },
+        title = { Text(tr("Sleep timer")) },
         text = {
             Column {
                 val status = when {
@@ -174,22 +176,22 @@ internal fun SleepTimerDialog(
                     remainingSeconds > 0 -> "Playback will pause in ${remainingSeconds / 60}:${(remainingSeconds % 60).toString().padStart(2, '0')}."
                     else -> "Choose when playback should pause."
                 }
-                Text(status)
+                Text(tr(status))
                 listOf(15, 30, 45, 60, 90).forEach { minutes ->
                     TextButton(onClick = { onStart(minutes); onDismiss() }) {
                         Text("$minutes minutes")
                     }
                 }
                 TextButton(onClick = { onStartAtEndOfTrack(); onDismiss() }) {
-                    Text("End of current track")
+                    Text(tr("End of current track"))
                 }
             }
         },
         confirmButton = {
             if (remainingSeconds > 0 || endOfTrack) {
-                TextButton(onClick = { onCancel(); onDismiss() }) { Text("Cancel timer") }
+                TextButton(onClick = { onCancel(); onDismiss() }) { Text(tr("Cancel timer")) }
             } else {
-                TextButton(onClick = onDismiss) { Text("Close") }
+                TextButton(onClick = onDismiss) { Text(tr("Close")) }
             }
         },
     )

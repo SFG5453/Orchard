@@ -43,6 +43,9 @@ SongPlan plan(const std::vector<std::string> &lines);
 SongPlan remotePlan(const std::vector<std::string> &lines, std::string_view target);
 bool supportedTarget(std::string_view code);
 
+// "auto" target: Spanish lyrics go to English, everything else goes to Spanish.
+std::string autoTarget(const std::vector<std::string> &lines);
+
 // English display name for a code, for the lyrics badge.
 std::string displayName(std::string_view code);
 

@@ -18,6 +18,8 @@
  */
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -71,10 +73,10 @@ fun QobuzTokenLoginScreen(
 
     Column(Modifier.fillMaxSize().background(CanopyColors.Canvas)) {
         TopAppBar(
-            title = { Text("Connect Qobuz") },
+            title = { Text(tr("Connect Qobuz")) },
             navigationIcon = {
                 IconButton(onClick = onCancel) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = tr("Back"))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -85,7 +87,7 @@ fun QobuzTokenLoginScreen(
         )
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
             Text(
-                "Orchard ships no Qobuz app. Enter the app ID and secret Qobuz issued to you, then a user ID and auth token from that app.",
+                tr("Orchard ships no Qobuz app. Enter the app ID and secret Qobuz issued to you, then a user ID and auth token from that app."),
                 style = MaterialTheme.typography.bodySmall,
                 color = CanopyColors.Muted,
                 lineHeight = 18.sp,
@@ -95,7 +97,7 @@ fun QobuzTokenLoginScreen(
                 value = appId,
                 onValueChange = { appId = it.filter(Char::isDigit) },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("App ID") },
+                label = { Text(tr("App ID")) },
                 singleLine = true,
                 enabled = !checking,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -105,7 +107,7 @@ fun QobuzTokenLoginScreen(
                 value = appSecret,
                 onValueChange = { appSecret = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("App secret") },
+                label = { Text(tr("App secret")) },
                 singleLine = true,
                 enabled = !checking,
                 visualTransformation = PasswordVisualTransformation(),
@@ -116,7 +118,7 @@ fun QobuzTokenLoginScreen(
                 value = userId,
                 onValueChange = { userId = it.filter(Char::isDigit) },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("User ID") },
+                label = { Text(tr("User ID")) },
                 singleLine = true,
                 enabled = !checking,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -126,7 +128,7 @@ fun QobuzTokenLoginScreen(
                 value = token,
                 onValueChange = { token = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Auth token") },
+                label = { Text(tr("Auth token")) },
                 singleLine = true,
                 enabled = !checking,
                 visualTransformation = PasswordVisualTransformation(),
@@ -134,7 +136,7 @@ fun QobuzTokenLoginScreen(
             )
             if (errorMessage.isNotBlank()) {
                 Spacer(Modifier.height(10.dp))
-                Text(errorMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                Text(tr(errorMessage), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
             Spacer(Modifier.height(16.dp))
             IntegrationAction(if (checking) "Checking…" else "Sign in") {

@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -106,7 +108,7 @@ fun SongShareBottomSheet(
                     color = CanopyColors.Text,
                 )
                 IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Rounded.Close, contentDescription = "Close", tint = CanopyColors.Muted)
+                    Icon(Icons.Rounded.Close, contentDescription = tr("Close"), tint = CanopyColors.Muted)
                 }
             }
 
@@ -148,7 +150,7 @@ fun SongShareBottomSheet(
                         if (state.subtitle.isNotBlank()) {
                             Spacer(Modifier.height(2.dp))
                             Text(
-                                text = state.subtitle,
+                                text = tr(state.subtitle),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = CanopyColors.Muted,
                                 maxLines = 1,
@@ -183,7 +185,7 @@ fun SongShareBottomSheet(
                         ) {
                             Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Share Link", fontWeight = FontWeight.SemiBold)
+                            Text(tr("Share Link"), fontWeight = FontWeight.SemiBold)
                         }
 
                         FilledTonalButton(
@@ -220,7 +222,7 @@ fun SongShareBottomSheet(
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
-                            text = state.message,
+                            text = tr(state.message),
                             style = MaterialTheme.typography.bodyMedium,
                             color = CanopyColors.Muted,
                         )
@@ -258,5 +260,5 @@ private fun copyToClipboard(context: Context, text: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
     val clip = ClipData.newPlainText("Orchard Link", text)
     clipboard.setPrimaryClip(clip)
-    Toast.makeText(context, "Copied link to clipboard", Toast.LENGTH_SHORT).show()
+    Toast.makeText(context, tr("Copied link to clipboard"), Toast.LENGTH_SHORT).show()
 }

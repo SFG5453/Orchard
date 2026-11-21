@@ -26,6 +26,8 @@
 
 package dev.sfg.orchard.mobile.ui.components
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -92,7 +94,7 @@ fun ArtistCollapsedHeader(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = CanopyColors.Text)
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = tr("Back"), tint = CanopyColors.Text)
             }
             ArtistName(
                 detail = detail,
@@ -127,7 +129,7 @@ fun ArtistCollapsedHeader(
                         modifier = Modifier.height(36.dp),
                     ) {
                         Text(
-                            text = anchor.label,
+                            text = tr(anchor.label),
                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                             modifier = Modifier.padding(horizontal = 14.dp).wrapContentHeight(),
                         )

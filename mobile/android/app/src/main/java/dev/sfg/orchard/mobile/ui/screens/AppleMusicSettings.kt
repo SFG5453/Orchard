@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -62,7 +64,7 @@ internal fun AppleMusicSettingsCard(onConnect: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (BuildConfig.APPLE_MUSIC_LOGO) AppleMusicLogo(Modifier.size(44.dp))
-            Text("Apple Music", style = MaterialTheme.typography.titleMedium, color = SettingsStyle.Title)
+            Text(tr("Apple Music"), style = MaterialTheme.typography.titleMedium, color = SettingsStyle.Title)
         }
         Text(
             if (state.connected) "Your Apple Music account is connected to Orchard."
@@ -70,16 +72,16 @@ internal fun AppleMusicSettingsCard(onConnect: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium, color = SettingsStyle.Description,
         )
         if (state.error.isNotBlank()) {
-            Text(state.error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            Text(tr(state.error), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
         when {
-            state.connected -> IntegrationAction("Disconnect", destructive = true, onClick = auth::disconnect)
+            state.connected -> IntegrationAction(tr("Disconnect"), destructive = true, onClick = auth::disconnect)
             // The worker only issues developer tokens to Orchard sessions.
             !accountState.signedIn -> Text(
-                "Sign in to your Orchard account first, under Orchard Account in Connections.",
+                tr("Sign in to your Orchard account first, under Orchard Account in Connections."),
                 style = MaterialTheme.typography.bodySmall, color = SettingsStyle.Description,
             )
-            else -> IntegrationAction("Sign in to Apple Music", onClick = onConnect)
+            else -> IntegrationAction(tr("Sign in to Apple Music"), onClick = onConnect)
         }
     }
 }

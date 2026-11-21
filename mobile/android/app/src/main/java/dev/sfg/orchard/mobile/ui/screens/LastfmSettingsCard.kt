@@ -19,6 +19,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,12 +65,12 @@ fun LastfmSettingsCard(
             Spacer(Modifier.height(12.dp))
             when (state) {
                 LastfmState.SignedOut,
-                is LastfmState.Error -> IntegrationAction("Connect Last.fm", onClick = onConnect)
-                LastfmState.Connecting -> IntegrationAction("Connecting…", onClick = {})
+                is LastfmState.Error -> IntegrationAction(tr("Connect Last.fm"), onClick = onConnect)
+                LastfmState.Connecting -> IntegrationAction(tr("Connecting…"), onClick = {})
                 is LastfmState.Pending ->
-                    IntegrationAction("Finish connection", onClick = onComplete)
+                    IntegrationAction(tr("Finish connection"), onClick = onComplete)
                 is LastfmState.Connected ->
-                    IntegrationAction("Sign out of Last.fm", destructive = true, onClick = onDisconnect)
+                    IntegrationAction(tr("Sign out of Last.fm"), destructive = true, onClick = onDisconnect)
             }
         }
     }

@@ -28,6 +28,8 @@
 
 package dev.sfg.orchard.mobile.ui.screens
 
+import dev.sfg.orchard.mobile.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -148,7 +150,7 @@ internal fun CollectionHero(
         val textAlign = TextAlign.Start
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = detail.title,
+                text = tr(detail.title),
                 style = MaterialTheme.typography.headlineMedium.copy(
                     fontWeight = if (wide) FontWeight.Bold else FontWeight.ExtraBold,
                     fontSize = 30.sp,
@@ -181,7 +183,7 @@ internal fun CollectionHero(
                 Spacer(Modifier.width(8.dp))
             }
             Text(
-                text = infoLine,
+                text = tr(infoLine),
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (wide) CanopyColors.Text.copy(alpha = 0.7f) else seam.secondaryText,
                 textAlign = textAlign,
@@ -239,7 +241,7 @@ internal fun CollectionHero(
                 PanelIconButton(
                     onClick = { onShuffle(detail.tracks, detail.title) },
                     icon = Icons.Rounded.Shuffle,
-                    contentDescription = "Shuffle",
+                    contentDescription = tr("Shuffle"),
                     enabled = detail.tracks.any { it.id.isNotBlank() } && shuffleAvailable,
                 )
                 if (onDownload != null) {
@@ -277,7 +279,7 @@ internal fun CollectionHero(
                 actions = {
                     SeamAction(
                         icon = Icons.Rounded.Shuffle,
-                        contentDescription = "Shuffle",
+                        contentDescription = tr("Shuffle"),
                         tint = seam.text,
                         onClick = { onShuffle(detail.tracks, detail.title) },
                         enabled = detail.tracks.any { it.id.isNotBlank() } && shuffleAvailable,
@@ -332,7 +334,7 @@ private fun ArtistChip(
             Spacer(Modifier.width(8.dp))
         }
         Text(
-            text = name,
+            text = tr(name),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             color = accent,
             maxLines = 1,
