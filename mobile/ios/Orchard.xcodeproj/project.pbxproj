@@ -1,0 +1,434 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0E4C1FD36DC0FCB357B8B72B /* FavoritesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E03B9BBC3E5698EAA1A3801A /* FavoritesService.swift */; };
+		10C55CFA2B158BAD676BB0EB /* AudioQualitySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F35C3938CECB055BC77C3010 /* AudioQualitySheet.swift */; };
+		11FFA69983C194A330F1D0C7 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEFBC507C47CB43CBC997D2F /* Color+Hex.swift */; };
+		124FF07F3E2E939F8C8FEF4F /* YouTubeMusicService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77EB1C0F03B920155775CDD3 /* YouTubeMusicService.swift */; };
+		42B993E5C49D1A3F1690EDAD /* LyricsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 880DCB02D53F75F4636E2B4B /* LyricsView.swift */; };
+		4991BA1AB6E62044490105B6 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9141913A3EDE4CD1CE3D0B1 /* SearchView.swift */; };
+		49A0C727AFD67ED2CCD09853 /* Track.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE7E974330F70B92AE1106E /* Track.swift */; };
+		4B042ED5282B2474318CCF2F /* OrchardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A2D3DEA42B0C6045418B26 /* OrchardApp.swift */; };
+		530F7A332E1D46C4FB629BA0 /* TrackContextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7773A9D06E7D0976A02123D8 /* TrackContextMenu.swift */; };
+		6B7652A5C4B787884212C4D6 /* AudioPlayerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B7E833D46DDCF11F3EE8672 /* AudioPlayerService.swift */; };
+		6DD0EC13F791D86A64EF31F1 /* MiniPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B964C4E8C9019F71D14595C3 /* MiniPlayerView.swift */; };
+		81918CD07B679C51D73C225E /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA57B9138395237CC1832B45 /* PlayerView.swift */; };
+		88D1BA8F710CA4FBB9D78CC5 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7960A0C83C6565898CB5560 /* HomeView.swift */; };
+		9E864F71EC2C2042F5DFC785 /* LyricLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ECA868FB278B0D01E5819D7 /* LyricLine.swift */; };
+		B3F52857A9B26678B5B8BA1B /* AudioQuality.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49ABC82A92009F413582EA06 /* AudioQuality.swift */; };
+		C0568DE8657FDA025F09EE99 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D13B03F1E2F12D4DCD7E805F /* MainTabView.swift */; };
+		D8F0EB6FCF41E04471CE1F43 /* QueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80A191D6F88A7C6F982CDA40 /* QueueView.swift */; };
+		DFBB0F1D7A9027673B9E674A /* LyricsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12FCDD54219466746E3FE524 /* LyricsService.swift */; };
+		E1FC752B05E1630483F72A0E /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D8405ADAC861E3FA17B631 /* LibraryView.swift */; };
+		F5A7A44F1AA4C169EEDD8CD4 /* ShimmerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D0F7FA48A98F32CDEEA5F63 /* ShimmerView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		09D8405ADAC861E3FA17B631 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		12FCDD54219466746E3FE524 /* LyricsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsService.swift; sourceTree = "<group>"; };
+		49ABC82A92009F413582EA06 /* AudioQuality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioQuality.swift; sourceTree = "<group>"; };
+		6B7E833D46DDCF11F3EE8672 /* AudioPlayerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerService.swift; sourceTree = "<group>"; };
+		7773A9D06E7D0976A02123D8 /* TrackContextMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackContextMenu.swift; sourceTree = "<group>"; };
+		77EB1C0F03B920155775CDD3 /* YouTubeMusicService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouTubeMusicService.swift; sourceTree = "<group>"; };
+		7ECA868FB278B0D01E5819D7 /* LyricLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricLine.swift; sourceTree = "<group>"; };
+		80A191D6F88A7C6F982CDA40 /* QueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueView.swift; sourceTree = "<group>"; };
+		880DCB02D53F75F4636E2B4B /* LyricsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsView.swift; sourceTree = "<group>"; };
+		9D0F7FA48A98F32CDEEA5F63 /* ShimmerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShimmerView.swift; sourceTree = "<group>"; };
+		A89D75D34A70C095C247D9D6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		B964C4E8C9019F71D14595C3 /* MiniPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerView.swift; sourceTree = "<group>"; };
+		BDED28506F494BA8764489E8 /* Orchard.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Orchard.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D13B03F1E2F12D4DCD7E805F /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		E03B9BBC3E5698EAA1A3801A /* FavoritesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesService.swift; sourceTree = "<group>"; };
+		E7960A0C83C6565898CB5560 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		F35C3938CECB055BC77C3010 /* AudioQualitySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioQualitySheet.swift; sourceTree = "<group>"; };
+		F6A2D3DEA42B0C6045418B26 /* OrchardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrchardApp.swift; sourceTree = "<group>"; };
+		F9141913A3EDE4CD1CE3D0B1 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
+		FA57B9138395237CC1832B45 /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
+		FDE7E974330F70B92AE1106E /* Track.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Track.swift; sourceTree = "<group>"; };
+		FEFBC507C47CB43CBC997D2F /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		1A56095A5782D21A5D4D115D /* Orchard */ = {
+			isa = PBXGroup;
+			children = (
+				CDD2577D4AEB3B4292E5D6A3 /* App */,
+				814F5110E98D0FDD21303B20 /* Models */,
+				E94F66BDAF0003AA79526A0D /* Services */,
+				CCD80482A9A065A31011000B /* Views */,
+			);
+			path = Orchard;
+			sourceTree = "<group>";
+		};
+		36747EF97F505FD2EC814928 = {
+			isa = PBXGroup;
+			children = (
+				1A56095A5782D21A5D4D115D /* Orchard */,
+				708939E69BF58367C122AE1E /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		708939E69BF58367C122AE1E /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BDED28506F494BA8764489E8 /* Orchard.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		814F5110E98D0FDD21303B20 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				49ABC82A92009F413582EA06 /* AudioQuality.swift */,
+				FEFBC507C47CB43CBC997D2F /* Color+Hex.swift */,
+				7ECA868FB278B0D01E5819D7 /* LyricLine.swift */,
+				FDE7E974330F70B92AE1106E /* Track.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		CCD80482A9A065A31011000B /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				F35C3938CECB055BC77C3010 /* AudioQualitySheet.swift */,
+				E7960A0C83C6565898CB5560 /* HomeView.swift */,
+				09D8405ADAC861E3FA17B631 /* LibraryView.swift */,
+				880DCB02D53F75F4636E2B4B /* LyricsView.swift */,
+				D13B03F1E2F12D4DCD7E805F /* MainTabView.swift */,
+				B964C4E8C9019F71D14595C3 /* MiniPlayerView.swift */,
+				FA57B9138395237CC1832B45 /* PlayerView.swift */,
+				80A191D6F88A7C6F982CDA40 /* QueueView.swift */,
+				F9141913A3EDE4CD1CE3D0B1 /* SearchView.swift */,
+				9D0F7FA48A98F32CDEEA5F63 /* ShimmerView.swift */,
+				7773A9D06E7D0976A02123D8 /* TrackContextMenu.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		CDD2577D4AEB3B4292E5D6A3 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				A89D75D34A70C095C247D9D6 /* Info.plist */,
+				F6A2D3DEA42B0C6045418B26 /* OrchardApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		E94F66BDAF0003AA79526A0D /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				6B7E833D46DDCF11F3EE8672 /* AudioPlayerService.swift */,
+				E03B9BBC3E5698EAA1A3801A /* FavoritesService.swift */,
+				12FCDD54219466746E3FE524 /* LyricsService.swift */,
+				77EB1C0F03B920155775CDD3 /* YouTubeMusicService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		2B7E2C1B4DBEACC4E41DDD40 /* Orchard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 88C45955271DE740EE0BCB6F /* Build configuration list for PBXNativeTarget "Orchard" */;
+			buildPhases = (
+				B10658D0089FA37ABB49975A /* Sources */,
+				AA0000000000000000000001 /* Compile Asset Catalog & App Icon */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Orchard;
+			packageProductDependencies = (
+			);
+			productName = Orchard;
+			productReference = BDED28506F494BA8764489E8 /* Orchard.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		68AC9F6DC3A33252B5BFDD46 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					2B7E2C1B4DBEACC4E41DDD40 = {
+						DevelopmentTeam = X57399C8MD;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 751150A25C83ACCD8D06491C /* Build configuration list for PBXProject "Orchard" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 36747EF97F505FD2EC814928;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 708939E69BF58367C122AE1E /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				2B7E2C1B4DBEACC4E41DDD40 /* Orchard */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B10658D0089FA37ABB49975A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6B7652A5C4B787884212C4D6 /* AudioPlayerService.swift in Sources */,
+				B3F52857A9B26678B5B8BA1B /* AudioQuality.swift in Sources */,
+				10C55CFA2B158BAD676BB0EB /* AudioQualitySheet.swift in Sources */,
+				11FFA69983C194A330F1D0C7 /* Color+Hex.swift in Sources */,
+				0E4C1FD36DC0FCB357B8B72B /* FavoritesService.swift in Sources */,
+				88D1BA8F710CA4FBB9D78CC5 /* HomeView.swift in Sources */,
+				E1FC752B05E1630483F72A0E /* LibraryView.swift in Sources */,
+				9E864F71EC2C2042F5DFC785 /* LyricLine.swift in Sources */,
+				DFBB0F1D7A9027673B9E674A /* LyricsService.swift in Sources */,
+				42B993E5C49D1A3F1690EDAD /* LyricsView.swift in Sources */,
+				C0568DE8657FDA025F09EE99 /* MainTabView.swift in Sources */,
+				6DD0EC13F791D86A64EF31F1 /* MiniPlayerView.swift in Sources */,
+				4B042ED5282B2474318CCF2F /* OrchardApp.swift in Sources */,
+				81918CD07B679C51D73C225E /* PlayerView.swift in Sources */,
+				D8F0EB6FCF41E04471CE1F43 /* QueueView.swift in Sources */,
+				4991BA1AB6E62044490105B6 /* SearchView.swift in Sources */,
+				F5A7A44F1AA4C169EEDD8CD4 /* ShimmerView.swift in Sources */,
+				49A0C727AFD67ED2CCD09853 /* Track.swift in Sources */,
+				530F7A332E1D46C4FB629BA0 /* TrackContextMenu.swift in Sources */,
+				124FF07F3E2E939F8C8FEF4F /* YouTubeMusicService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		AA0000000000000000000001 /* Compile Asset Catalog & App Icon */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Compile Asset Catalog & App Icon";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "xcrun actool --output-format human-readable-text --notices --warnings --output-partial-info-plist \"${DERIVED_FILE_DIR}/partial.plist\" --app-icon AppIcon --target-device iphone --minimum-deployment-target 17.0 --platform \"${PLATFORM_NAME}\" --compile \"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app\" \"${SRCROOT}/Orchard/Assets.xcassets\"\ncp -f \"${SRCROOT}/Orchard/Assets.xcassets/AppIcon.appiconset/\"*.png \"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/\" 2>/dev/null || true\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		23B6D1E81F3721DD18136638 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = X57399C8MD;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Orchard/App/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lohittech.orchard;
+				PRODUCT_NAME = Orchard;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		87161BD45C311DF415E8A675 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = X57399C8MD;
+				INFOPLIST_FILE = Orchard/App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.lohittech.orchard;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		D7777A37597B332BA4DBA4F5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = X57399C8MD;
+				INFOPLIST_FILE = Orchard/App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.lohittech.orchard;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		F8DDFC0F1DBC58C84F22322D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = X57399C8MD;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Orchard/App/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lohittech.orchard;
+				PRODUCT_NAME = Orchard;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		751150A25C83ACCD8D06491C /* Build configuration list for PBXProject "Orchard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F8DDFC0F1DBC58C84F22322D /* Debug */,
+				23B6D1E81F3721DD18136638 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		88C45955271DE740EE0BCB6F /* Build configuration list for PBXNativeTarget "Orchard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D7777A37597B332BA4DBA4F5 /* Debug */,
+				87161BD45C311DF415E8A675 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 68AC9F6DC3A33252B5BFDD46 /* Project object */;
+}

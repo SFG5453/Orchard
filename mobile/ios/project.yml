@@ -1,0 +1,30 @@
+name: Orchard
+options:
+  bundleIdPrefix: com.lohittech
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.0"
+settings:
+  base:
+    DEVELOPMENT_TEAM: X57399C8MD
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: "Apple Development"
+    PRODUCT_NAME: Orchard
+    PRODUCT_BUNDLE_IDENTIFIER: com.lohittech.orchard
+    GENERATE_INFOPLIST_FILE: false
+    INFOPLIST_FILE: Orchard/App/Info.plist
+    TARGETED_DEVICE_FAMILY: "1"
+    SWIFT_VERSION: "5.0"
+targets:
+  Orchard:
+    type: application
+    platform: iOS
+    sources:
+      - path: Orchard
+    settings:
+      base:
+        INFOPLIST_FILE: Orchard/App/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.lohittech.orchard
+        DEVELOPMENT_TEAM: X57399C8MD
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_STYLE: Automatic
